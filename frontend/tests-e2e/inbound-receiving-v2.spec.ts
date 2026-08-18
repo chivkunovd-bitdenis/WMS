@@ -53,7 +53,7 @@ test('inbound receiving v2 — scan, manual edit, finish with discrepancy', asyn
   await page.getByTestId('nav-ff-reception').click();
   await expect(page.getByTestId('ff-inbound-queue-document').first()).toContainText('№');
   await expect(page.getByTestId('ff-inbound-queue-row').first()).toContainText('Box Seller');
-  await expect(page.getByTestId('ff-inbound-queue-composition').first()).toContainText('0 из 1 коробов');
+  await expect(page.getByTestId('ff-inbound-queue-composition').first()).toContainText('0 из 1 короба');
   await expect(page.getByTestId('ff-inbound-queue-composition').first()).toContainText('3 ед.');
   await expect(page.getByTestId('ff-inbound-queue-status').first()).toContainText('Передано');
   await page.getByTestId('ff-inbound-queue-row').first().focus();
@@ -516,15 +516,15 @@ test('inbound receiving v2 — return accepts seller catalog discrepancy and dim
   await loginSellerPortal(page, seed.sellerEmail, seed.password);
   await page.getByTestId('nav-seller-documents').click();
   await page.locator(`[data-testid="seller-documents-row"][data-doc-id="${requestId}"]`).click();
-  await expect(page.getByTestId('seller-inbound-fact-card')).toBeVisible();
+  await expect(page.getByTestId('seller-inbound-draft-form')).toBeVisible();
   const sellerFactRow = page.getByTestId('seller-inbound-line-row').filter({ hasText: factSku });
   await expect(sellerFactRow).toBeVisible();
   await expect(sellerFactRow.getByTestId('seller-inbound-line-added-by-ff')).toContainText(
     'Добавлено ФФ',
   );
-  await expect(sellerFactRow.getByTestId('seller-inbound-line-expected')).toHaveText('0');
-  await expect(sellerFactRow.getByTestId('seller-inbound-line-actual')).toHaveText('2');
-  await expect(sellerFactRow.getByTestId('seller-inbound-line-discrepancy')).toHaveText('Излишек 2');
+  await expect(sellerFactRow.getByTestId('seller-inbound-line-qty')).toHaveValue('0');
+  await expect(sellerFactRow.getByTestId('seller-inbound-line-fact')).toContainText('Принято: 2');
+  await expect(sellerFactRow.getByTestId('seller-inbound-line-fact')).toContainText('Излишек 2');
 });
 
 // TC-NEW-IN-05 — F19 negative: successful return scan without wb_barcode shows an operator error and never prints SKU.
@@ -704,12 +704,13 @@ test('inbound receiving v2 — seller sees conducted factual card after FF short
 
   await expect(page.getByRole('heading', { name: /Карточка приёмки.*Поставка/ })).toBeVisible();
   await expect(page.getByText('Новая заявка на поставку', { exact: true })).toHaveCount(0);
-  await expect(page.getByTestId('seller-inbound-fact-card')).toBeVisible();
-  await expect(page.getByTestId('seller-inbound-draft-form')).toHaveCount(0);
+  // BL-2: read-only status must render the same document form as the draft, not a
+  // different compact report table — only action availability may change.
+  await expect(page.getByTestId('seller-inbound-draft-form')).toBeVisible();
 
-  await expect(page.getByTestId('seller-inbound-summary-status')).toContainText('В сортировке');
-  await expect(page.getByTestId('seller-inbound-summary-operation')).toContainText('Поставка');
-  await expect(page.getByTestId('seller-inbound-summary-warehouse')).toContainText('WH');
+  await expect(page.getByTestId('seller-inbound-status-chip')).toContainText('В сортировке');
+  await expect(page.getByTestId('seller-inbound-operation-type')).toContainText('Поставка');
+  await expect(page.getByTestId('seller-inbound-warehouse-label')).toContainText('WH');
   await expect(page.getByTestId('seller-inbound-fact-summary')).toHaveCount(0);
   await expect(page.getByText('Итог приемки')).toHaveCount(0);
   await expect(page.getByText('Что не так')).toHaveCount(0);
@@ -718,50 +719,41 @@ test('inbound receiving v2 — seller sees conducted factual card after FF short
   const sellerFactLayout = await page.getByTestId('seller-inbound-lines-table').evaluate((table) => {
     const headCells = Array.from(table.querySelectorAll('thead th'));
     const rows = Array.from(table.querySelectorAll('tbody tr[data-testid="seller-inbound-line-row"]'));
-    const productIndex = headCells.findIndex((cell) => cell.textContent?.trim() === 'Товар');
-    const expectedIndex = headCells.findIndex((cell) => cell.textContent?.trim() === 'Заявлено');
-    const productWidths = rows.map((row) => row.children[productIndex]?.getBoundingClientRect().width ?? 0);
-    const rowHeights = rows.map((row) => row.getBoundingClientRect().height);
-    const headerBottom = Math.max(...headCells.map((cell) => cell.getBoundingClientRect().bottom));
-    const firstBodyTop = rows[0]?.getBoundingClientRect().top ?? 0;
-    const firstProductRight = rows[0]?.children[productIndex]?.getBoundingClientRect().right ?? 0;
-    const firstExpectedLeft = rows[0]?.children[expectedIndex]?.getBoundingClientRect().left ?? 0;
     return {
       headerTexts: headCells.map((cell) => cell.textContent?.trim() ?? ''),
       headerCells: headCells.length,
       bodyCells: rows[0]?.children.length ?? 0,
-      minProductWidth: Math.min(...productWidths),
-      maxRowHeight: Math.max(...rowHeights),
-      headerBottom,
-      firstBodyTop,
-      firstProductRight,
-      firstExpectedLeft,
     };
   });
-  expect(sellerFactLayout.headerTexts).toEqual(['Товар', 'Заявлено', 'Принято', 'Итог', '']);
+  expect(sellerFactLayout.headerTexts).toEqual([
+    'Фото',
+    'Артикул',
+    'ШК',
+    'Артикул продавца',
+    'Наименование',
+    'Кол-во',
+    'Артикул WB',
+    'Действия',
+  ]);
   expect(sellerFactLayout.headerCells).toBe(sellerFactLayout.bodyCells);
-  expect(sellerFactLayout.headerCells).toBe(5);
-  expect(sellerFactLayout.minProductWidth).toBeGreaterThanOrEqual(360);
-  expect(sellerFactLayout.maxRowHeight).toBeLessThanOrEqual(120);
-  expect(sellerFactLayout.headerBottom).toBeLessThanOrEqual(sellerFactLayout.firstBodyTop + 1);
-  expect(sellerFactLayout.firstProductRight).toBeLessThanOrEqual(sellerFactLayout.firstExpectedLeft + 1);
+  expect(sellerFactLayout.headerCells).toBe(8);
 
   const sellerShortageRow = page.getByTestId('seller-inbound-line-row').filter({ hasText: seed.sku });
   await expect(sellerShortageRow).toBeVisible();
-  await expect(sellerShortageRow.getByTestId('seller-inbound-line-expected')).toHaveText('3');
-  await expect(sellerShortageRow.getByTestId('seller-inbound-line-actual')).toHaveText('2');
-  await expect(sellerShortageRow.getByTestId('seller-inbound-line-discrepancy')).toHaveText('Недостача 1');
+  await expect(sellerShortageRow.getByTestId('seller-inbound-line-qty')).toHaveValue('3');
+  await expect(sellerShortageRow.getByTestId('seller-inbound-line-fact')).toContainText('Принято: 2');
+  await expect(sellerShortageRow.getByTestId('seller-inbound-line-fact')).toContainText('Недостача 1');
 
   const sellerAddedRow = page.getByTestId('seller-inbound-line-row').filter({ hasText: addedSku });
   await expect(sellerAddedRow).toBeVisible();
   await expect(sellerAddedRow.getByTestId('seller-inbound-line-added-by-ff')).toContainText('Добавлено ФФ');
-  await expect(sellerAddedRow.getByTestId('seller-inbound-line-expected')).toHaveText('0');
-  await expect(sellerAddedRow.getByTestId('seller-inbound-line-actual')).toHaveText('1');
-  await expect(sellerAddedRow.getByTestId('seller-inbound-line-discrepancy')).toHaveText('Излишек 1');
+  await expect(sellerAddedRow.getByTestId('seller-inbound-line-qty')).toHaveValue('0');
+  await expect(sellerAddedRow.getByTestId('seller-inbound-line-fact')).toContainText('Принято: 1');
+  await expect(sellerAddedRow.getByTestId('seller-inbound-line-fact')).toContainText('Излишек 1');
 
-  const discrepancyTexts = await page.getByTestId('seller-inbound-line-discrepancy').allTextContents();
-  expect(discrepancyTexts).not.toContain('+1');
-  expect(discrepancyTexts).not.toContain('-1');
+  const factTexts = await page.getByTestId('seller-inbound-line-fact').allTextContents();
+  expect(factTexts.some((t) => t.includes('+1'))).toBe(false);
+  expect(factTexts.some((t) => t.includes('-1'))).toBe(false);
   await expect(page.getByTestId('seller-inbound-add-products')).toHaveCount(0);
   await expect(page.getByTestId('seller-inbound-submit-warehouse')).toHaveCount(0);
   await expect(page.getByTestId('seller-inbound-save-draft')).toHaveCount(0);
@@ -798,10 +790,9 @@ test('inbound receiving v2 — seller factual card uses human warehouse fallback
   await expect(sellerDocRow).toBeVisible();
   await sellerDocRow.click();
 
-  await expect(page.getByTestId('seller-inbound-fact-card')).toBeVisible();
-  await expect(page.getByTestId('seller-inbound-draft-form')).toHaveCount(0);
+  await expect(page.getByTestId('seller-inbound-draft-form')).toBeVisible();
 
-  const warehouseSummary = page.getByTestId('seller-inbound-summary-warehouse');
+  const warehouseSummary = page.getByTestId('seller-inbound-warehouse-label');
   await expect(warehouseSummary).toContainText('Склад ФФ');
   await expect(warehouseSummary).not.toContainText(seed.warehouseId);
   const warehouseSummaryText = (await warehouseSummary.textContent()) ?? '';

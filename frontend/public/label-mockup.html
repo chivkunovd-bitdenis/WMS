@@ -1,0 +1,1654 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Конструктор этикетки ШК Wildberries — макет для согласования</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --navy-900:#0b1f3a;
+    --navy-800:#12294d;
+    --navy-700:#1c3f76;
+    --navy-600:#2c4a7c;
+    --blue-accent:#2f5fa8;
+    --blue-soft:#e7edf7;
+    --bg:#f2f5fa;
+    --panel-bg:#ffffff;
+    --border:#c9d6ec;
+    --border-strong:#9fb4d9;
+    --text:#1b2434;
+    --muted:#5b6b85;
+    --amber:#8a5a05;
+    --amber-bg:#fdf1de;
+    --amber-border:#e9c583;
+    --red:#a3283c;
+    --red-bg:#fbe9ec;
+    --red-border:#e6b3bd;
+    --green:#1c6e4a;
+
+    /* Физические размеры содержимого этикетки (в px, но выведены из мм/pt реальной печати —
+       см. JS labelGeom(), портированный из frontend/src/utils/printProductThermalLabel.ts).
+       Значения ниже — просто дефолт до первого JS-рендера (размер 58×40), чтобы не было
+       вспышки нестилизованного контента; сразу после загрузки их перезаписывает render(). */
+    --lb-pad-top:7.2px;
+    --lb-pad-side:10.8px;
+    --lb-pad-bottom:4.8px;
+    --lb-barcode-w:312px;
+    --lb-barcode-bars-h:72px;
+    --lb-barcode-gap:1.8px;
+    --lb-barcode-margin-bottom:2.7px;
+    --lb-digits-font:18.97px;
+    --lb-body-margin-top:2.35px;
+    --lb-body-row-gap:1.21px;
+    --lb-text-font:16.12px;
+    --lb-name-font:16.6px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:"Segoe UI","SF Pro Text",Roboto,Arial,sans-serif;
+    line-height:1.45;
+  }
+  .topbar{
+    background:var(--navy-900);
+    color:#eaf0fb;
+    padding:14px 24px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  .topbar h1{
+    font-size:17px;
+    margin:0;
+    font-weight:600;
+    letter-spacing:.2px;
+  }
+  .topbar .tag{
+    font-size:12px;
+    color:#b9c9e8;
+    background:rgba(255,255,255,.08);
+    border:1px solid rgba(255,255,255,.18);
+    padding:4px 10px;
+    border-radius:100px;
+  }
+  .notice{
+    max-width:1240px;
+    margin:12px auto 0;
+    padding:10px 24px;
+    color:var(--muted);
+    font-size:13px;
+  }
+  .app{
+    max-width:1240px;
+    margin:0 auto;
+    padding:16px 24px 48px;
+  }
+  .layout{
+    display:flex;
+    gap:20px;
+    align-items:flex-start;
+    flex-wrap:wrap;
+  }
+  .panel{
+    background:var(--panel-bg);
+    border:1px solid var(--border);
+    border-radius:10px;
+  }
+  .panel-left{
+    flex:0 0 400px;
+    max-width:400px;
+    padding:18px 18px 20px;
+  }
+  .panel-right{
+    flex:1 1 420px;
+    min-width:360px;
+    padding:22px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:14px;
+  }
+  h2{
+    font-size:14px;
+    text-transform:uppercase;
+    letter-spacing:.5px;
+    color:var(--navy-700);
+    margin:0 0 10px;
+    font-weight:700;
+  }
+  .section{
+    margin-bottom:22px;
+  }
+  .section:last-child{margin-bottom:0;}
+
+  /* size selector */
+  .size-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+  }
+  .size-btn{
+    border:1.5px solid var(--border-strong);
+    background:#fbfcfe;
+    border-radius:8px;
+    padding:10px 8px;
+    text-align:center;
+    cursor:pointer;
+    font-size:13px;
+    color:var(--navy-800);
+    font-weight:600;
+    transition:.12s;
+  }
+  .size-btn:hover{border-color:var(--blue-accent);}
+  .size-btn.active{
+    background:var(--navy-700);
+    border-color:var(--navy-700);
+    color:#fff;
+    box-shadow:0 2px 8px rgba(28,63,118,.35);
+  }
+  .size-btn .mm-w{
+    display:block;
+    font-size:11px;
+    font-weight:400;
+    color:inherit;
+    opacity:.75;
+    margin-top:2px;
+  }
+
+  /* field list */
+  .field-row{
+    display:flex;
+    align-items:flex-start;
+    gap:9px;
+    padding:7px 6px;
+    border-radius:7px;
+    cursor:pointer;
+    user-select:none;
+  }
+  .field-row:hover{background:var(--blue-soft);}
+  .field-row.locked{cursor:not-allowed;}
+  .field-row.locked:hover{background:transparent;}
+  .field-row input[type=checkbox]{
+    margin-top:2px;
+    width:16px;height:16px;
+    accent-color:var(--navy-700);
+    cursor:inherit;
+    flex-shrink:0;
+  }
+  .field-row.disabled-permanent{opacity:.55;}
+  .field-row .field-body{
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+    min-width:0;
+  }
+  .field-name{
+    font-size:13.5px;
+    font-weight:600;
+    color:var(--text);
+  }
+  .field-row.locked .field-name{color:var(--muted);}
+  .field-hint{
+    font-size:11.5px;
+    color:var(--muted);
+  }
+  .badge{
+    display:inline-block;
+    font-size:10.5px;
+    font-weight:700;
+    padding:2px 7px;
+    border-radius:100px;
+    letter-spacing:.2px;
+    white-space:nowrap;
+  }
+  .badge-missing{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border);}
+  .badge-icon{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border);}
+  .badge-locked{background:#eef1f7;color:var(--muted);border:1px solid var(--border);}
+
+  .freetext-input{
+    margin-top:6px;
+    width:100%;
+    padding:8px 10px;
+    border:1.5px solid var(--border-strong);
+    border-radius:7px;
+    font-size:13px;
+    font-family:inherit;
+    color:var(--text);
+    display:none;
+  }
+  .freetext-input.visible{display:block;}
+  .freetext-input:focus{outline:none;border-color:var(--blue-accent);}
+
+  /* counter */
+  .counter-wrap{
+    border:1.5px solid var(--border-strong);
+    border-radius:8px;
+    padding:10px 12px;
+    background:#fbfcfe;
+  }
+  .counter-top{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    font-size:13px;
+    font-weight:700;
+    color:var(--navy-800);
+    margin-bottom:6px;
+  }
+  .counter-track{
+    height:7px;
+    border-radius:100px;
+    background:#e4eaf4;
+    overflow:hidden;
+  }
+  .counter-fill{
+    height:100%;
+    background:var(--blue-accent);
+    border-radius:100px;
+    transition:width .15s ease;
+  }
+  .counter-wrap.full .counter-fill{background:var(--amber);}
+  .counter-wrap.full .counter-top{color:var(--amber);}
+  .counter-note{
+    margin-top:6px;
+    font-size:11.5px;
+    color:var(--muted);
+  }
+
+  /* demo toggle */
+  .segmented{
+    display:flex;
+    border:1.5px solid var(--border-strong);
+    border-radius:8px;
+    overflow:hidden;
+  }
+  .segmented button{
+    flex:1;
+    border:none;
+    background:#fbfcfe;
+    padding:9px 6px;
+    font-size:12.5px;
+    font-weight:600;
+    color:var(--navy-800);
+    cursor:pointer;
+  }
+  .segmented button + button{border-left:1.5px solid var(--border-strong);}
+  .segmented button.active{background:var(--navy-700);color:#fff;}
+  .segmented button.warn.active{background:var(--red);}
+  .segmented button.locked{cursor:not-allowed;color:var(--muted);}
+  .segmented button.locked:hover{background:#fbfcfe;}
+
+  .section-note{
+    margin-top:7px;
+    font-size:11px;
+    color:var(--muted);
+  }
+
+  /* template name + seller binding bar (full-width, above the two-column layout) */
+  .template-bar{
+    max-width:1240px;
+    margin:14px auto 0;
+    padding:16px 20px;
+  }
+  .template-row{
+    display:flex;
+    gap:20px;
+    flex-wrap:wrap;
+  }
+  .template-field{
+    flex:1 1 260px;
+    min-width:220px;
+  }
+  .template-field label{
+    display:block;
+    font-size:12px;
+    font-weight:700;
+    color:var(--navy-700);
+    text-transform:uppercase;
+    letter-spacing:.4px;
+    margin-bottom:6px;
+  }
+  .template-input{
+    width:100%;
+    padding:9px 11px;
+    border:1.5px solid var(--border-strong);
+    border-radius:7px;
+    font-size:13.5px;
+    font-family:inherit;
+    color:var(--text);
+  }
+  .template-input:focus{outline:none;border-color:var(--blue-accent);}
+
+  .seller-multiselect{position:relative;}
+  .seller-chips{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    margin-bottom:8px;
+  }
+  .seller-chip{
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+    background:var(--blue-soft);
+    border:1px solid var(--border-strong);
+    color:var(--navy-800);
+    font-size:12.5px;
+    font-weight:600;
+    padding:4px 4px 4px 10px;
+    border-radius:100px;
+  }
+  .seller-chip button{
+    border:none;
+    background:transparent;
+    color:var(--navy-700);
+    font-size:14px;
+    line-height:1;
+    cursor:pointer;
+    padding:3px 6px;
+    border-radius:100px;
+  }
+  .seller-chip button:hover{background:rgba(28,63,118,.15);}
+  .seller-add-btn{
+    border:1.5px dashed var(--border-strong);
+    background:#fbfcfe;
+    color:var(--navy-700);
+    font-size:12.5px;
+    font-weight:600;
+    padding:7px 12px;
+    border-radius:7px;
+    cursor:pointer;
+  }
+  .seller-add-btn:hover{border-color:var(--blue-accent);color:var(--blue-accent);}
+  .seller-dropdown{
+    display:none;
+    position:absolute;
+    top:calc(100% + 4px);
+    left:0;
+    right:0;
+    background:#fff;
+    border:1.5px solid var(--border-strong);
+    border-radius:8px;
+    box-shadow:0 8px 20px rgba(11,31,58,.18);
+    z-index:10;
+    max-height:220px;
+    overflow-y:auto;
+  }
+  .seller-dropdown.open{display:block;}
+  .seller-dropdown-item{
+    padding:8px 12px;
+    font-size:13px;
+    color:var(--text);
+    cursor:pointer;
+  }
+  .seller-dropdown-item:hover{background:var(--blue-soft);}
+  .seller-dropdown-empty{
+    padding:8px 12px;
+    font-size:12px;
+    color:var(--muted);
+  }
+  .template-hint{
+    margin-top:12px;
+    font-size:11.5px;
+    color:var(--muted);
+    background:#fbfcfe;
+    border:1px solid var(--border);
+    border-radius:7px;
+    padding:8px 11px;
+  }
+  .template-hint b{color:var(--navy-800);}
+
+  /* standard-template reset */
+  .standard-bar{
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    gap:6px;
+    margin-bottom:12px;
+  }
+  .btn-outline{
+    border:1.5px solid var(--navy-700);
+    background:#fff;
+    color:var(--navy-700);
+    font-size:12.5px;
+    font-weight:700;
+    padding:8px 14px;
+    border-radius:8px;
+    cursor:pointer;
+    transition:.12s;
+  }
+  .btn-outline:hover{background:var(--navy-700);color:#fff;}
+  .standard-bar .field-hint{margin:0;}
+
+  /* "where this template is used" list */
+  .where-used-list{
+    margin:0;
+    padding-left:18px;
+    font-size:12px;
+    color:var(--text);
+  }
+  .where-used-list li{margin-bottom:7px;}
+  .where-used-list b{color:var(--navy-800);}
+  .where-used-note{
+    margin-top:8px;
+    font-size:11px;
+    color:var(--muted);
+  }
+
+  details.howto{
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:8px 12px;
+    background:#fbfcfe;
+  }
+  details.howto summary{
+    cursor:pointer;
+    font-size:12.5px;
+    font-weight:700;
+    color:var(--navy-700);
+    list-style:none;
+  }
+  details.howto summary::-webkit-details-marker{display:none;}
+  details.howto summary::before{content:"▸ ";}
+  details.howto[open] summary::before{content:"▾ ";}
+  details.howto ol{
+    margin:10px 0 2px;
+    padding-left:18px;
+    font-size:12px;
+    color:var(--muted);
+  }
+  details.howto li{margin-bottom:6px;}
+
+  /* preview area */
+  .preview-surface{
+    width:100%;
+    min-height:520px;
+    background:
+      linear-gradient(90deg,rgba(0,0,0,.03) 1px,transparent 1px) 0 0/16px 16px,
+      linear-gradient(0deg,rgba(0,0,0,.03) 1px,transparent 1px) 0 0/16px 16px,
+      #eef1f7;
+    border:1px solid var(--border);
+    border-radius:10px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:28px 16px;
+  }
+  #label{
+    background:#ffffff;
+    border:1.5px solid var(--navy-700);
+    border-radius:3px;
+    box-shadow:0 6px 18px rgba(11,31,58,.18);
+    padding:var(--lb-pad-top) var(--lb-pad-side) var(--lb-pad-bottom);
+    display:flex;
+    flex-direction:column;
+    position:relative;
+  }
+  #label.is-overflow{
+    box-shadow:0 0 0 3px var(--red-bg), 0 6px 18px rgba(163,40,60,.35);
+    border-color:var(--red);
+  }
+  /* Ширина/высота полос и шрифт цифр под ними — из реального printProductThermalLabel.ts
+     (barcodeMaxHeightMm, digits font-size), не выдуманные пиксели. */
+  .label-barcode{
+    width:var(--lb-barcode-w);
+    flex:0 0 auto;
+    align-self:flex-start;
+    display:flex;
+    flex-direction:column;
+    gap:var(--lb-barcode-gap);
+    margin-bottom:var(--lb-barcode-margin-bottom);
+  }
+  .barcode-bars{
+    height:var(--lb-barcode-bars-h);
+    background-image:repeating-linear-gradient(90deg,
+      #10203a 0 2px, transparent 2px 3px,
+      #10203a 3px 4px, transparent 4px 6px,
+      #10203a 6px 9px, transparent 9px 10px,
+      #10203a 10px 11px, transparent 11px 13px,
+      #10203a 13px 16px, transparent 16px 17px,
+      #10203a 17px 19px, transparent 19px 21px,
+      #10203a 21px 22px, transparent 22px 24px);
+    background-size:24px 100%;
+    background-repeat:repeat-x;
+    border:1px solid #dfe4ee;
+  }
+  .barcode-digits{
+    font-family:"Courier New",monospace;
+    font-size:var(--lb-digits-font);
+    letter-spacing:.04em;
+    text-align:center;
+    color:var(--navy-900);
+    line-height:1.2;
+  }
+  #labelContent{
+    margin-top:var(--lb-body-margin-top);
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    row-gap:var(--lb-body-row-gap);
+  }
+  .label-block{
+    min-width:0;
+  }
+  .label-block .lb-text{
+    font-size:var(--lb-text-font);
+    line-height:1.35;
+    color:#141b2b;
+    word-break:break-word;
+  }
+  .field-name-block .lb-text{
+    font-size:var(--lb-name-font);
+    line-height:1.35;
+    font-weight:700;
+  }
+  .is-mid.field-name-block .lb-text,
+  .is-mid.field-composition .lb-text{
+    display:-webkit-box;
+    -webkit-line-clamp:2;
+    -webkit-box-orient:vertical;
+    overflow:hidden;
+  }
+  .is-mid.field-sellerArticle .lb-text,
+  .is-mid.field-wbArticle .lb-text,
+  .is-mid.field-size .lb-text,
+  .is-mid.field-color .lb-text,
+  .is-mid.field-brand .lb-text{
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  /* EAC base size = legal minimum height (5mm) at screen SCALE=6px/mm. The real mark is a
+     SQUARE (1:1 w:h), per Решение КТС №711 ("форма правильного квадрата") and the official
+     reference artwork (Wikimedia Commons EAC_b-on-w.svg, canvas 55×55мм) — see JS
+     EAC_MIN_HEIGHT_MM / EAC_ASPECT below. NOTE: this is NOT the 44:56 ratio from
+     eacMarkSvg.ts — that file's proportions/frame/vertical layout were found to be wrong
+     during this fix, see the report. */
+  .label-block.field-eac .lb-eac{
+    width:30px;height:30px;
+  }
+  .label-block.is-last .lb-text{
+    white-space:normal;
+  }
+  /* Ужимаем последнюю строку от базового кегля --lb-text-font, а не фиксированными px —
+     иначе на крупных этикетках "ужатая" строка была бы крупнее обычной строки на 58×40. */
+  .label-block.is-last.shrink-1 .lb-text{font-size:calc(var(--lb-text-font) * 0.86);}
+  .label-block.is-last.shrink-2 .lb-text{
+    font-size:calc(var(--lb-text-font) * 0.74);
+    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
+  }
+  .label-block.is-last.shrink-1.field-eac .lb-eac{width:24px;height:24px;}
+  .label-block.is-last.shrink-2.field-eac .lb-eac{width:18px;height:18px;}
+
+  /* EAC corner overlay (does not participate in document flow / block budget).
+     Position (which of the four corners) is set via one of the .pos-* modifier classes below,
+     applied in JS from state.eacPlacement — see render(). */
+  .eac-corner{
+    position:absolute;
+    width:30px;
+    height:30px;
+    z-index:3;
+  }
+  .eac-corner.pos-tl{top:0;left:0;}
+  .eac-corner.pos-tr{top:0;right:0;}
+  .eac-corner.pos-bl{bottom:0;left:0;}
+  .eac-corner.pos-br{bottom:0;right:0;}
+  .eac-corner .lb-eac{width:100%;height:100%;display:block;}
+  .eac-corner.eac-collide{
+    outline:2px solid var(--red);
+    outline-offset:1px;
+    background:rgba(163,40,60,.18);
+    border-radius:2px;
+  }
+  .corner-collision-banner{
+    display:none;
+    align-items:center;
+    gap:6px;
+    background:var(--amber-bg);
+    color:var(--amber);
+    border:1px solid var(--amber-border);
+    border-radius:6px;
+    padding:6px 9px;
+    font-size:11.5px;
+    font-weight:700;
+    margin-top:6px;
+    max-width:400px;
+  }
+
+  /* EAC placement toggle (under the EAC checkbox row).
+     Four-corner picker (2×2 grid, arranged to match the actual corners on the label) plus a
+     separate full-width "own line" button below it — replaces the old two-way segmented toggle. */
+  .eac-placement{
+    margin-top:7px;
+    display:none;
+  }
+  .eac-placement.visible{display:block;}
+  .eac-corner-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:4px;
+    margin-bottom:4px;
+  }
+  .eac-corner-btn{
+    border:1.5px solid var(--border-strong);
+    background:#fbfcfe;
+    border-radius:6px;
+    padding:6px 4px;
+    text-align:center;
+    font-size:10.5px;
+    font-weight:600;
+    color:var(--navy-800);
+    cursor:pointer;
+    transition:.12s;
+  }
+  .eac-corner-btn:hover{border-color:var(--blue-accent);}
+  .eac-corner-btn.active{
+    background:var(--navy-700);
+    border-color:var(--navy-700);
+    color:#fff;
+  }
+  .eac-line-btn{
+    display:block;
+    width:100%;
+    border:1.5px solid var(--border-strong);
+    background:#fbfcfe;
+    border-radius:6px;
+    padding:7px 6px;
+    font-size:11px;
+    font-weight:600;
+    color:var(--navy-800);
+    cursor:pointer;
+    transition:.12s;
+  }
+  .eac-line-btn:hover{border-color:var(--blue-accent);}
+  .eac-line-btn.active{
+    background:var(--navy-700);
+    border-color:var(--navy-700);
+    color:#fff;
+  }
+  .eac-line-btn.locked{cursor:not-allowed;color:var(--muted);}
+  .eac-line-btn.locked:hover{border-color:var(--border-strong);}
+  .eac-note{
+    margin-top:5px;
+    font-size:11px;
+    color:var(--muted);
+  }
+  .eac-note b{color:var(--navy-800);}
+  .freetext-placeholder{
+    font-size:10.5px;
+    color:#9aa6bb;
+    border:1px dashed #c7d0e2;
+    border-radius:4px;
+    padding:2px 5px;
+    display:inline-block;
+  }
+
+  .overflow-banner{
+    display:none;
+    align-items:center;
+    gap:6px;
+    background:var(--red-bg);
+    color:var(--red);
+    border:1px solid var(--red-border);
+    border-radius:6px;
+    padding:6px 9px;
+    font-size:11.5px;
+    font-weight:700;
+    margin-top:6px;
+    max-width:400px;
+  }
+  .label-caption{
+    text-align:center;
+    font-size:12.5px;
+    color:var(--muted);
+  }
+  .label-caption b{color:var(--navy-800);}
+
+  .legend{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    font-size:11px;
+    color:var(--muted);
+    margin-bottom:10px;
+  }
+  .legend span{display:inline-flex;align-items:center;gap:5px;}
+  .legend i{
+    width:9px;height:9px;border-radius:2px;display:inline-block;
+  }
+  .legend i.ok{background:#c9d6ec;}
+  .legend i.missing{background:var(--red);}
+  .legend i.icon{background:var(--amber);}
+
+  footer.credit{
+    max-width:1240px;
+    margin:0 auto 30px;
+    padding:0 24px;
+    color:var(--muted);
+    font-size:11.5px;
+  }
+
+  @media (max-width:860px){
+    .panel-left{flex:1 1 100%;max-width:100%;}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Конструктор состава этикетки ШК Wildberries</h1>
+  <span class="tag">кликабельный макет · не рабочий код продукта</span>
+</div>
+<div class="notice">
+  Это HTML-макет для согласования с заказчиком: он показывает поведение будущего конструктора,
+  но данные товара, штрихкод и печать — иллюстративные. Меняйте настройки слева — этикетка справа
+  перестраивается вживую.
+</div>
+
+<div class="app">
+
+  <div class="panel template-bar">
+    <div class="template-row">
+      <div class="template-field">
+        <label for="templateNameInput">Название шаблона</label>
+        <input type="text" id="templateNameInput" class="template-input" value="Стандартный ШК-шаблон" maxlength="80">
+      </div>
+      <div class="template-field template-field-sellers">
+        <label>Селлеры, к которым применяется</label>
+        <div class="seller-multiselect" id="sellerMultiselect">
+          <div class="seller-chips" id="sellerChips"></div>
+          <button type="button" class="seller-add-btn" id="sellerAddBtn">+ добавить селлера</button>
+          <div class="seller-dropdown" id="sellerDropdown"></div>
+        </div>
+      </div>
+    </div>
+    <div class="template-hint">
+      <b>Правило:</b> один селлер может быть привязан только к одному шаблону. Если привязать селлера
+      к этому шаблону, а он уже закреплён за другим, — он автоматически отвяжется от прежнего.
+      Иначе при печати непонятно, какой шаблон применять.
+    </div>
+  </div>
+
+  <div class="layout">
+
+    <!-- LEFT: settings -->
+    <aside class="panel panel-left">
+
+      <div class="section">
+        <h2>Размер этикетки</h2>
+        <div class="size-grid" id="sizeGrid"></div>
+      </div>
+
+      <div class="section">
+        <h2>Поля на этикетке</h2>
+        <div class="standard-bar">
+          <button type="button" class="btn-outline" id="btnResetStandard">Сбросить к стандартному</button>
+          <div class="field-hint">
+            Стандартный шаблон: Бренд, Артикул WB, Артикул продавца, Название товара — по левому краю,
+            без EAC. Применяется ко всем селлерам, у которых нет собственного шаблона.
+          </div>
+        </div>
+        <div class="legend">
+          <span><i class="ok"></i>берём из карточки WB</span>
+          <span><i class="icon"></i>есть, но не подключено</span>
+          <span><i class="missing"></i>нет в данных</span>
+        </div>
+        <div id="fieldList"></div>
+      </div>
+
+      <div class="section">
+        <h2>Выравнивание текста</h2>
+        <div class="segmented" id="alignSegmented">
+          <button id="btnAlignLeft" class="active">По левому краю</button>
+          <button id="btnAlignCenter">По центру</button>
+          <button id="btnAlignRight">По правому краю</button>
+        </div>
+        <div class="section-note">
+          Действует на весь текстовый блок сразу — все включённые строки выравниваются одинаково.
+          Штрихкод и цифры под ним всегда остаются по центру, это выравнивание на них не влияет.
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Счётчик строк</h2>
+        <div class="counter-wrap" id="counterWrap">
+          <div class="counter-top">
+            <span id="counterText">Занято 4 из 5 строк</span>
+          </div>
+          <div class="counter-track"><div class="counter-fill" id="counterFill"></div></div>
+          <div class="counter-note" id="counterNote"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Крайний случай</h2>
+        <div class="segmented">
+          <button id="btnDemoNormal" class="active">Обычные значения</button>
+          <button id="btnDemoLong" class="warn">Длинное название и состав</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Где применится этот шаблон</h2>
+        <ul class="where-used-list">
+          <li><b>Кабинет продавца — заявка на поставку.</b> Печать штрихкода товара прямо из таблицы позиций заявки.</li>
+          <li><b>Склад — приёмка поставки</b> (включая режим «Сортировка» при приёмке).</li>
+          <li><b>Склад — каталог товаров.</b></li>
+          <li><b>Склад — упаковка отправлений</b> (задания на маркировку и упаковку).</li>
+          <li><b>Маркетплейс (FBS) — сборка и упаковка заказов поставки.</b></li>
+          <li><b>Экран «Честный знак»</b> (и в кабинете продавца, и на складе) — там же, где печатают коды маркировки, есть отдельная кнопка обычной печати ШК.</li>
+        </ul>
+        <div class="where-used-note">
+          Печать кодов Честного знака и печать этикеток коробов — другие формы со своими шаблонами,
+          сюда не входят.
+        </div>
+      </div>
+
+      <div class="section">
+        <details class="howto">
+          <summary>Как устроен конструктор (7 правил)</summary>
+          <ol>
+            <li>Все поля, кроме свободного текста, берутся из карточки товара WB — руками их не вводят.</li>
+            <li>Число блоков на этикетке ограничено тем, сколько физически влезает по высоте. Для маленьких этикеток это жёсткий предел.</li>
+            <li>Порядок блоков фиксирован — можно только включать и выключать, не переставлять.</li>
+            <li>Штрихкод нельзя убрать и нельзя изменить его размер — он всегда первый и всегда одного размера.</li>
+            <li>Если текста много, ужимается только нижняя (последняя включённая) строка — остальные держат свой размер.</li>
+            <li>Один блок — это свободный текст, который вводит пользователь сам.</li>
+            <li>Выключенный блок не оставляет пустого места — остальные блоки поднимаются и занимают освободившееся место.</li>
+          </ol>
+        </details>
+      </div>
+
+    </aside>
+
+    <!-- RIGHT: preview -->
+    <main class="panel panel-right">
+      <div class="preview-surface">
+        <div id="label">
+          <div class="label-barcode">
+            <div class="barcode-bars"></div>
+            <div class="barcode-digits">2 000000 123456</div>
+          </div>
+          <div id="labelContent"></div>
+        </div>
+      </div>
+      <div class="overflow-banner" id="overflowBanner">⚠ Не помещается на этикетку — уберите поле или сократите текст</div>
+      <div class="corner-collision-banner" id="cornerCollisionBanner">⚠ Текст наезжает на знак EAC в углу — сократите текст или уберите поле</div>
+      <div class="label-caption">Размер: <b id="labelDimsCaption">58 × 40 мм</b> · <span id="labelScaleCaption"></span></div>
+    </main>
+
+  </div>
+</div>
+
+<footer class="credit">Макет статичный, работает офлайн из одного файла. Правки состава полей и веса дизайна — по итогам согласования.</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- data ----------
+  var SIZES = {
+    "58x40": {w:58, h:40, label:"58 × 40 мм"},
+    "60x40": {w:60, h:40, label:"60 × 40 мм"},
+    "60x80": {w:60, h:80, label:"60 × 80 мм"},
+    "70x120":{w:70, h:120, label:"70 × 120 мм"}
+  };
+  var SIZE_ORDER = ["58x40","60x40","60x80","70x120"];
+
+  // ---------- real print geometry (ported from frontend/src/utils/printProductThermalLabel.ts) ----------
+  // Раньше здесь всё — высота полос ШК, кегль строк, зазоры — было нарисовано "на глаз" в px,
+  // без связи с тем, что реально печатается. Из-за этого макет выглядел так, будто на этикетке
+  // куча свободного места, хотя на самом деле контент был примерно в 2.5 раза мельче настоящего.
+  // Ниже — те же формулы (labelScale/labelTextFontScale/buildProductLabelContentCss/
+  // buildProductThermalLabelCss), что и в реальной печати, только в JS макета. Все величины —
+  // в миллиметрах, в px переводятся один раз, через общий коэффициент SCALE (см. ниже).
+  var PT_TO_MM = 25.4 / 72;
+  var TEXT_LINE_HEIGHT = 1.35;   // TEXT_LINE_HEIGHT в printProductThermalLabel.ts
+  var DIGITS_LINE_HEIGHT = 1.2;  // .digits{line-height:1.2} там же
+
+  function labelGeom(size){
+    var w = size.w / 58;
+    var h = size.h / 40;
+    var uniform = Math.min(w, h);
+    var compact = h <= 1.01; // isCompactLabel()
+    // labelTextFontScale()
+    var textFont = Math.min(w * 1.12, uniform * 1.25, 1.28);
+
+    // buildProductLabelContentCss(): баркод-блок
+    var barcodeBarsMm = (compact ? 12 : 14) * uniform;      // barcodeMaxHeightMm
+    var barcodeWidthMm = 52 * uniform;                       // barcodeWidthMm
+    var digitsFontPt = 8 * textFont;
+    var digitsLineBoxMm = digitsFontPt * PT_TO_MM * DIGITS_LINE_HEIGHT;
+    var digitsMarginTopMm = 0.3 * uniform;
+    var barcodeWrapMarginBottomMm = (compact ? 0.45 : 0.8) * uniform;
+
+    // buildProductLabelContentCss(): текстовые строки (.meta / .seller, 6.8pt) и название (7pt)
+    var bodyFontPt = 6.8 * textFont;
+    var bodyLineBoxMm = bodyFontPt * PT_TO_MM * TEXT_LINE_HEIGHT;
+    var nameFontPt = 7 * textFont;
+    var nameLineBoxMm = nameFontPt * PT_TO_MM * TEXT_LINE_HEIGHT;
+    // textLineGapMm() / bodyTopGapMm()
+    var lineGapMm = (compact ? 0.18 : 0.85) * textFont;
+    var bodyTopGapMm = (compact ? 0.35 : 0.55) * textFont;
+
+    // buildProductThermalLabelCss(): поля этикетки
+    var padTopMm = (compact ? 1.2 : 1.4) * uniform;
+    var padBottomMm = (compact ? 0.8 : 1) * uniform;
+    var padSideMm = 1.8 * uniform;
+
+    // Сколько мм реально остаётся под стопку текстовых строк после полей, штрихкода и его цифр —
+    // и сколько строк такой высоты (с учётом зазора между ними) в это физически помещается.
+    var barcodeZoneMm = barcodeBarsMm + digitsMarginTopMm + digitsLineBoxMm + barcodeWrapMarginBottomMm;
+    var availableForLinesMm = size.h - padTopMm - padBottomMm - barcodeZoneMm - bodyTopGapMm;
+    var maxBodyLines = Math.max(0, Math.floor(
+      (availableForLinesMm + lineGapMm) / (bodyLineBoxMm + lineGapMm)
+    ));
+
+    return {
+      uniform: uniform, compact: compact, textFont: textFont,
+      barcodeBarsMm: barcodeBarsMm, barcodeWidthMm: barcodeWidthMm,
+      digitsFontPt: digitsFontPt, digitsLineBoxMm: digitsLineBoxMm, digitsMarginTopMm: digitsMarginTopMm,
+      barcodeWrapMarginBottomMm: barcodeWrapMarginBottomMm,
+      bodyFontPt: bodyFontPt, bodyLineBoxMm: bodyLineBoxMm,
+      nameFontPt: nameFontPt, nameLineBoxMm: nameLineBoxMm,
+      lineGapMm: lineGapMm, bodyTopGapMm: bodyTopGapMm,
+      padTopMm: padTopMm, padBottomMm: padBottomMm, padSideMm: padSideMm,
+      barcodeZoneMm: barcodeZoneMm,
+      availableForLinesMm: availableForLinesMm,
+      maxBodyLines: maxBodyLines
+    };
+  }
+
+  // CAPACITY — сколько текстовых строк (полей) физически влезает по высоте при реальном
+  // масштабе шрифта/штрихкода для каждого размера (см. labelGeom() выше). Штрихкод сюда
+  // не входит: он несъёмный, всегда один и всегда наверху, и занимает свою фиксированную
+  // зону (geom.barcodeZoneMm) отдельно от этого предела — считать его "строкой" неверно и
+  // вводит в заблуждение про то, что счётчик реально измеряет.
+  var CAPACITY = {};
+  SIZE_ORDER.forEach(function(key){
+    CAPACITY[key] = labelGeom(SIZES[key]).maxBodyLines;
+  });
+
+  var FIELD_DEFS = [
+    {key:"name",          label:"Название товара",     group:"ok"},
+    {key:"sellerArticle",  label:"Артикул продавца",    group:"ok"},
+    {key:"wbArticle",      label:"Артикул WB",          group:"ok"},
+    {key:"size",           label:"Размер",               group:"ok"},
+    {key:"color",          label:"Цвет",                 group:"ok"},
+    {key:"brand",          label:"Бренд",                group:"ok"},
+    {key:"composition",    label:"Состав",               group:"ok"},
+    {key:"country",        label:"Страна изготовления",  group:"missing",
+      badge:"нет в данных",
+      hint:"Этого поля нет в карточке товара WB сегодня. Нужна доработка, чтобы его получать."},
+    {key:"eac",             label:"Значок EAC",          group:"icon",
+      badge:"есть, не подключено",
+      hint:"Изображение уже нарисовано в проекте (eacMarkSvg.ts), но пока нигде не используется на печати."},
+    {key:"freeText",        label:"Свободный текст",     group:"free",
+      hint:"Единственное поле, куда текст вводится вручную."}
+  ];
+
+  // Выдуманные селлеры для демонстрации привязки шаблона (мультивыбор сверху) — реального
+  // списка селлеров в макете нет, это просто иллюстрация UI.
+  var SELLERS = [
+    "ООО Актив Стиль",
+    "ИП Гончаров",
+    "Текстиль Групп",
+    "ООО Северный Дом",
+    "ИП Белова",
+    "ООО Ромашка Трейд"
+  ];
+
+  // Состав "стандартного" шаблона по заданию заказчика. Порядок здесь — это порядок в списке
+  // задания заказчика, а не порядок строк на этикетке: физический порядок строк на этикетке
+  // остаётся жёстко зашит через FIELD_DEFS (name, sellerArticle, wbArticle, ..., brand, ...) —
+  // делать его настраиваемым в этом макете не стали, см. комментарий в отчёте.
+  var STANDARD_FIELD_KEYS = ["brand", "wbArticle", "sellerArticle", "name"];
+
+  var PRODUCTS = {
+    normal: {
+      name:"Футболка мужская хлопковая базовая",
+      sellerArticle:"FT-2041-CH-L",
+      wbArticle:"187345219",
+      size:"L",
+      color:"чёрный",
+      brand:"Актив Стиль",
+      composition:"95% хлопок, 5% эластан"
+    },
+    long: {
+      name:"Костюм спортивный мужской демисезонный с капюшоном на молнии и светоотражающими вставками, комплект для тренировок",
+      sellerArticle:"KS-2026-MUZH-SPORT-DEMISEZON-CHERNY-XXL-01",
+      wbArticle:"187345219",
+      size:"XXL",
+      color:"тёмно-синий меланж",
+      brand:"Актив Стиль Профешнл",
+      composition:"95% хлопок, 5% эластан, подкладка 100% полиэстер, наполнитель — синтепон 100 г/м², плотность ткани 320 г/м²"
+    }
+  };
+
+  // Real EAC mark drawing — corrected from research, NOT taken from frontend/src/utils/eacMarkSvg.ts
+  // (that file draws a bordered box with E/A/C stacked vertically, which is wrong; see the report).
+  // Letterforms below are traced from the official reference artwork on Wikimedia Commons
+  // (File:EAC_b-on-w.svg — "recreated in accordance with the officially documented proportions"),
+  // whose 55×55mm square canvas matches the shape described in Решение КТС №711 "О едином знаке
+  // обращения продукции...": three block letters E, A, C of equal height, placed in a horizontal
+  // row, no frame/border, forming an overall square (1:1) proportion. Coordinates here are that
+  // official artwork's letter paths, transformed back into a plain axis-aligned 0..55 viewBox.
+  var EAC_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 55 55" aria-hidden="true" class="lb-eac">'+
+    '<path fill="#111" d="M 5 5 L 5 50 L 15 50 L 15 45 L 10 45 L 10 30 L 15 30 L 15 25 L 10 25 L 10 10 L 15 10 L 15 5 Z"/>'+
+    '<path fill="#111" d="M 20 5 L 20 50 L 25 50 L 25 30 L 30 30 L 30 50 L 35 50 L 35 5 L 20 5 Z M 25 10 L 30 10 L 30 25 L 25 25 L 25 10 Z"/>'+
+    '<path fill="#111" d="M 40 5 L 40 50 L 50 50 L 50 45 L 45 45 L 45 10 L 50 10 L 50 5 L 40 5 Z"/>'+
+    '</svg>';
+
+  // Minimum legible height of the EAC mark: 5 mm. Below this the letters stop being readable and
+  // the mark is non-compliant — regulatory minimum used for "ЕАС" conformity marking on goods
+  // (Решение КТС №711 — знак должен иметь высоту и ширину не менее 5 мм, верхний предел не
+  // ограничен). We render the mark at exactly this floor so the mockup shows the smallest — and most
+  // common on small labels — real printed size, not an arbitrary icon.
+  var EAC_MIN_HEIGHT_MM = 5;
+  var EAC_ASPECT = 1; // width / height — the real mark is a square (1:1), see comment above
+
+  // ---------- state ----------
+  var state = {
+    sizeKey: "58x40",
+    demo: "normal",
+    freeText: "",
+    eacPlacement: "br", // "tl" | "tr" | "bl" | "br" = overlaid on free space in that corner,
+                          // free of the block budget; "line" = old behaviour, occupies its own
+                          // block/line. Default stays "br" (bottom-right), same as before.
+    textAlign: "left",       // "left" | "center" | "right" — весь текстовый блок целиком,
+                              // штрихкод и цифры под ним в это не входят (см. CSS .barcode-digits)
+    templateName: "Стандартный ШК-шаблон",
+    sellers: [],              // выбранные селлеры, к которым привязан этот шаблон
+    checked: {
+      name:true, sellerArticle:true, wbArticle:false,
+      size:true, color:true, brand:false, composition:false,
+      country:false, eac:false, freeText:false
+    }
+  };
+
+  // Единственный общий коэффициент масштаба: 1 мм реальной этикетки = SCALE px на экране.
+  // Всё внутри этикетки (штрихкод, шрифты, зазоры, поля) пересчитывается в px только через
+  // него — см. labelGeom() выше и applyGeomToLabel() ниже. Крупнее натуральной величины:
+  // при типичном экране ~96dpi (1мм ≈ 3.78px) это ×1.6 увеличения — см. подпись под этикеткой.
+  var SCALE = 6;
+
+  // ---------- build left panel: size buttons ----------
+  var sizeGrid = document.getElementById("sizeGrid");
+  SIZE_ORDER.forEach(function(key){
+    var s = SIZES[key];
+    var btn = document.createElement("div");
+    btn.className = "size-btn" + (key === state.sizeKey ? " active" : "");
+    btn.id = "size-" + key;
+    btn.innerHTML = (s.w + "×" + s.h) + '<span class="mm-w">мм</span>';
+    btn.addEventListener("click", function(){ selectSize(key); });
+    sizeGrid.appendChild(btn);
+  });
+
+  // ---------- build left panel: field checklist ----------
+  var fieldList = document.getElementById("fieldList");
+  FIELD_DEFS.forEach(function(f){
+    var row = document.createElement("label");
+    row.className = "field-row" + (f.group === "missing" ? " disabled-permanent" : "");
+    row.id = "row-" + f.key;
+
+    var cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.id = "chk-" + f.key;
+    cb.checked = !!state.checked[f.key];
+    if (f.group === "missing") {
+      cb.disabled = true;
+    } else {
+      cb.addEventListener("change", function(){ toggleField(f.key, cb.checked); });
+    }
+    row.appendChild(cb);
+
+    var body = document.createElement("div");
+    body.className = "field-body";
+
+    var nameLine = document.createElement("div");
+    nameLine.style.display = "flex";
+    nameLine.style.alignItems = "center";
+    nameLine.style.gap = "7px";
+    nameLine.style.flexWrap = "wrap";
+    var nm = document.createElement("span");
+    nm.className = "field-name";
+    nm.textContent = f.label;
+    nameLine.appendChild(nm);
+    if (f.badge) {
+      var b = document.createElement("span");
+      b.className = "badge " + (f.group === "missing" ? "badge-missing" : "badge-icon");
+      b.textContent = f.badge;
+      nameLine.appendChild(b);
+    }
+    body.appendChild(nameLine);
+
+    if (f.hint) {
+      var hint = document.createElement("div");
+      hint.className = "field-hint";
+      hint.textContent = f.hint;
+      body.appendChild(hint);
+    }
+
+    if (f.key === "freeText") {
+      var input = document.createElement("input");
+      input.type = "text";
+      input.className = "freetext-input";
+      input.id = "freeTextInput";
+      input.placeholder = "Например: срок годности до 12.2027";
+      input.maxLength = 60;
+      input.addEventListener("input", function(){
+        state.freeText = input.value;
+        render();
+      });
+      body.appendChild(input);
+    }
+
+    if (f.key === "eac") {
+      var eacWrap = document.createElement("div");
+      eacWrap.className = "eac-placement";
+      eacWrap.id = "eacPlacementWrap";
+
+      // 2×2 grid of corner buttons, laid out in the same visual order as the corners
+      // they represent (top row = top of label, left column = left of label).
+      var eacGrid = document.createElement("div");
+      eacGrid.className = "eac-corner-grid";
+      var CORNER_BTN_LABELS = {
+        tl: "↖ Слева сверху",
+        tr: "↗ Справа сверху",
+        bl: "↙ Слева снизу",
+        br: "↘ Справа снизу"
+      };
+      ["tl", "tr", "bl", "br"].forEach(function(corner){
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "eac-corner-btn";
+        b.id = "btnEac" + corner.toUpperCase();
+        b.textContent = CORNER_BTN_LABELS[corner];
+        b.addEventListener("click", function(){ setEacPlacement(corner); });
+        eacGrid.appendChild(b);
+      });
+      eacWrap.appendChild(eacGrid);
+
+      var btnLineMode = document.createElement("button");
+      btnLineMode.type = "button";
+      btnLineMode.className = "eac-line-btn";
+      btnLineMode.id = "btnEacLine";
+      btnLineMode.textContent = "Отдельной строкой";
+      btnLineMode.addEventListener("click", function(){ setEacPlacement("line"); });
+      eacWrap.appendChild(btnLineMode);
+
+      var eacNote = document.createElement("div");
+      eacNote.className = "eac-note";
+      eacNote.id = "eacPlacementNote";
+      eacWrap.appendChild(eacNote);
+
+      body.appendChild(eacWrap);
+    }
+
+    row.appendChild(body);
+    fieldList.appendChild(row);
+  });
+
+  // ---------- demo toggle ----------
+  var btnNormal = document.getElementById("btnDemoNormal");
+  var btnLong = document.getElementById("btnDemoLong");
+  btnNormal.addEventListener("click", function(){ state.demo = "normal"; syncDemoButtons(); render(); });
+  btnLong.addEventListener("click", function(){ state.demo = "long"; syncDemoButtons(); render(); });
+  function syncDemoButtons(){
+    btnNormal.classList.toggle("active", state.demo === "normal");
+    btnLong.classList.toggle("active", state.demo === "long");
+  }
+
+  // ---------- template name + seller binding (top bar) ----------
+  document.getElementById("templateNameInput").addEventListener("input", function(e){
+    state.templateName = e.target.value;
+  });
+
+  var sellerChipsEl = document.getElementById("sellerChips");
+  var sellerDropdownEl = document.getElementById("sellerDropdown");
+  var sellerAddBtn = document.getElementById("sellerAddBtn");
+  var sellerMultiselectEl = document.getElementById("sellerMultiselect");
+
+  function renderSellerChips(){
+    sellerChipsEl.innerHTML = "";
+    state.sellers.forEach(function(name){
+      var chip = document.createElement("span");
+      chip.className = "seller-chip";
+      var txt = document.createElement("span");
+      txt.textContent = name;
+      chip.appendChild(txt);
+      var xBtn = document.createElement("button");
+      xBtn.type = "button";
+      xBtn.textContent = "×";
+      xBtn.setAttribute("aria-label", "Убрать селлера " + name);
+      xBtn.addEventListener("click", function(){
+        state.sellers = state.sellers.filter(function(s){ return s !== name; });
+        renderSellerChips();
+      });
+      chip.appendChild(xBtn);
+      sellerChipsEl.appendChild(chip);
+    });
+  }
+
+  function renderSellerDropdown(){
+    sellerDropdownEl.innerHTML = "";
+    var available = SELLERS.filter(function(s){ return state.sellers.indexOf(s) === -1; });
+    if (!available.length) {
+      var empty = document.createElement("div");
+      empty.className = "seller-dropdown-empty";
+      empty.textContent = "Все селлеры уже выбраны";
+      sellerDropdownEl.appendChild(empty);
+      return;
+    }
+    available.forEach(function(name){
+      var item = document.createElement("div");
+      item.className = "seller-dropdown-item";
+      item.textContent = name;
+      item.addEventListener("click", function(){
+        state.sellers.push(name);
+        renderSellerChips();
+        renderSellerDropdown();
+        sellerDropdownEl.classList.remove("open");
+      });
+      sellerDropdownEl.appendChild(item);
+    });
+  }
+
+  sellerAddBtn.addEventListener("click", function(e){
+    e.stopPropagation();
+    renderSellerDropdown();
+    sellerDropdownEl.classList.toggle("open");
+  });
+  document.addEventListener("click", function(e){
+    if (!sellerMultiselectEl.contains(e.target)) {
+      sellerDropdownEl.classList.remove("open");
+    }
+  });
+
+  renderSellerChips();
+
+  // ---------- text alignment (segmented, same pattern as EAC placement) ----------
+  var btnAlignLeft = document.getElementById("btnAlignLeft");
+  var btnAlignCenter = document.getElementById("btnAlignCenter");
+  var btnAlignRight = document.getElementById("btnAlignRight");
+
+  function syncAlignButtons(){
+    btnAlignLeft.classList.toggle("active", state.textAlign === "left");
+    btnAlignCenter.classList.toggle("active", state.textAlign === "center");
+    btnAlignRight.classList.toggle("active", state.textAlign === "right");
+  }
+  function setTextAlign(align){
+    state.textAlign = align;
+    syncAlignButtons();
+    render();
+  }
+  btnAlignLeft.addEventListener("click", function(){ setTextAlign("left"); });
+  btnAlignCenter.addEventListener("click", function(){ setTextAlign("center"); });
+  btnAlignRight.addEventListener("click", function(){ setTextAlign("right"); });
+
+  // ---------- reset to standard template ----------
+  document.getElementById("btnResetStandard").addEventListener("click", function(){
+    optionalOrder().forEach(function(k){
+      var isStandard = STANDARD_FIELD_KEYS.indexOf(k) !== -1;
+      state.checked[k] = isStandard;
+      var cb = document.getElementById("chk-" + k);
+      if (cb) cb.checked = isStandard;
+    });
+    var ftInput = document.getElementById("freeTextInput");
+    if (ftInput) ftInput.classList.remove("visible");
+    state.eacPlacement = "br";
+    document.getElementById("eacPlacementWrap").classList.remove("visible");
+    syncEacButtons();
+    setTextAlign("left"); // also calls render()
+  });
+
+  // ---------- interaction ----------
+  function optionalOrder(){
+    return FIELD_DEFS.filter(function(f){ return f.group !== "missing"; }).map(function(f){ return f.key; });
+  }
+
+  // EAC in any corner placement (tl/tr/bl/br) overlays free space and never takes a block from
+  // the budget — only "line" placement does. This filters it out wherever we count blocks
+  // against CAPACITY.
+  function isEacCornerMode(){
+    return state.eacPlacement !== "line";
+  }
+  function costsBudget(key){
+    return !(key === "eac" && isEacCornerMode());
+  }
+
+  function checkedOptionalCount(){
+    var n = 0;
+    optionalOrder().forEach(function(k){ if (state.checked[k] && costsBudget(k)) n++; });
+    return n;
+  }
+
+  // Switching EAC from a free corner (tl/tr/bl/br) to "line" (costs a block) can push the block
+  // count past CAPACITY if there's no free row left — the counter would then show "6 из 5" and
+  // the switch button needs to be locked, the same way a field checkbox locks when the cap is full.
+  function eacLineWouldOverflow(){
+    if (!state.checked.eac) return false;
+    if (state.eacPlacement === "line") return false; // already there, nothing changes
+    return checkedOptionalCount() + 1 > CAPACITY[state.sizeKey];
+  }
+
+  function toggleField(key, isChecked){
+    state.checked[key] = isChecked;
+    if (key === "freeText") {
+      var input = document.getElementById("freeTextInput");
+      input.classList.toggle("visible", isChecked);
+      if (!isChecked) { /* keep typed text remembered but block disappears */ }
+    }
+    if (key === "eac") {
+      document.getElementById("eacPlacementWrap").classList.toggle("visible", isChecked);
+    }
+    render();
+  }
+
+  function setEacPlacement(mode){
+    if (mode === "line" && eacLineWouldOverflow()) return; // no free row — refuse the switch
+    state.eacPlacement = mode;
+    syncEacButtons();
+    render();
+  }
+
+  var CORNER_NOTE_NAMES = {
+    tl: "левом верхнем",
+    tr: "правом верхнем",
+    bl: "левом нижнем",
+    br: "правом нижнем"
+  };
+
+  function syncEacButtons(){
+    ["tl", "tr", "bl", "br"].forEach(function(corner){
+      var btn = document.getElementById("btnEac" + corner.toUpperCase());
+      if (btn) btn.classList.toggle("active", state.eacPlacement === corner);
+    });
+    document.getElementById("btnEacLine").classList.toggle("active", state.eacPlacement === "line");
+    var note = document.getElementById("eacPlacementNote");
+    if (isEacCornerMode()) {
+      note.innerHTML = "Не входит в счётчик строк — накладывается на свободное поле в " +
+        CORNER_NOTE_NAMES[state.eacPlacement] + " углу, отдельной строки не занимает.";
+    } else {
+      note.innerHTML = "Занимает отдельную строку и входит в счётчик строк — как остальные поля.";
+    }
+  }
+
+  function selectSize(key){
+    state.sizeKey = key;
+    SIZE_ORDER.forEach(function(k){
+      document.getElementById("size-" + k).classList.toggle("active", k === key);
+    });
+    // if the new size can't fit currently selected fields, trim from the tail
+    // of the fixed order (last-listed fields lose first) until it fits again
+    var cap = CAPACITY[key];
+    var order = optionalOrder();
+    var trimmed = false;
+    for (var i = order.length - 1; i >= 0; i--) {
+      if (checkedOptionalCount() <= cap) break;
+      var k2 = order[i];
+      if (!costsBudget(k2)) continue; // disabling a free-floating EAC wouldn't free a block anyway
+      if (state.checked[k2]) {
+        state.checked[k2] = false;
+        var cbEl = document.getElementById("chk-" + k2);
+        if (cbEl) cbEl.checked = false;
+        if (k2 === "freeText") {
+          var ftInput = document.getElementById("freeTextInput");
+          if (ftInput) ftInput.classList.remove("visible");
+        }
+        trimmed = true;
+      }
+    }
+    render();
+    if (trimmed) {
+      var note = document.getElementById("counterNote");
+      note.textContent = "На этом размере часть полей не помещалась — их пришлось выключить.";
+    }
+  }
+
+  // ---------- render ----------
+  function fieldText(key){
+    var p = PRODUCTS[state.demo];
+    switch(key){
+      case "name": return p.name;
+      case "sellerArticle": return "Арт. продавца: " + p.sellerArticle;
+      case "wbArticle": return "Артикул WB: " + p.wbArticle;
+      case "size": return "Размер: " + p.size;
+      case "color": return "Цвет: " + p.color;
+      case "brand": return "Бренд: " + p.brand;
+      case "composition": return "Состав: " + p.composition;
+      case "freeText": return state.freeText;
+      default: return "";
+    }
+  }
+
+  function render(){
+    var size = SIZES[state.sizeKey];
+    var cap = CAPACITY[state.sizeKey];
+    var geom = labelGeom(size);
+
+    // size label + physical dimensions
+    var labelEl = document.getElementById("label");
+    var wPx = size.w * SCALE, hPx = size.h * SCALE;
+    labelEl.style.width = wPx + "px";
+    labelEl.style.height = hPx + "px";
+    labelEl.classList.remove("is-overflow");
+    document.getElementById("labelDimsCaption").textContent = size.label;
+
+    // Все внутренние размеры этикетки — из мм реальной печати (labelGeom), переведённых
+    // в px тем же коэффициентом SCALE, что и корпус этикетки. Прописываем их как CSS-переменные
+    // (см. :root в <style>), чтобы штрихкод, цифры под ним и текст были в одном честном масштабе.
+    var root = document.documentElement.style;
+    root.setProperty("--lb-pad-top", (geom.padTopMm * SCALE) + "px");
+    root.setProperty("--lb-pad-side", (geom.padSideMm * SCALE) + "px");
+    root.setProperty("--lb-pad-bottom", (geom.padBottomMm * SCALE) + "px");
+    root.setProperty("--lb-barcode-w", (geom.barcodeWidthMm * SCALE) + "px");
+    root.setProperty("--lb-barcode-bars-h", (geom.barcodeBarsMm * SCALE) + "px");
+    root.setProperty("--lb-barcode-gap", (geom.digitsMarginTopMm * SCALE) + "px");
+    root.setProperty("--lb-barcode-margin-bottom", (geom.barcodeWrapMarginBottomMm * SCALE) + "px");
+    root.setProperty("--lb-digits-font", (geom.digitsFontPt * PT_TO_MM * SCALE) + "px");
+    root.setProperty("--lb-body-margin-top", (geom.bodyTopGapMm * SCALE) + "px");
+    root.setProperty("--lb-body-row-gap", (geom.lineGapMm * SCALE) + "px");
+    root.setProperty("--lb-text-font", (geom.bodyFontPt * PT_TO_MM * SCALE) + "px");
+    root.setProperty("--lb-name-font", (geom.nameFontPt * PT_TO_MM * SCALE) + "px");
+
+    document.getElementById("labelScaleCaption").textContent =
+      "содержимое (ШК, цифры, текст) в реальном масштабе печати, крупнее натуральной величины в ≈1.6× (6px/мм при экране ~96dpi)";
+
+    // available height for stacked field blocks — та же геометрия, что и в CAPACITY,
+    // чтобы визуальное обрезание совпадало с тем, что показывает счётчик строк.
+    var contentH = geom.availableForLinesMm * SCALE;
+    if (contentH < 0) contentH = 0;
+
+    var contentEl = document.getElementById("labelContent");
+    contentEl.style.height = contentH + "px";
+    contentEl.innerHTML = "";
+    // Выравнивание применяется ко всему текстовому блоку разом (наследуется всеми .lb-text
+    // внутри) — счётчик и штрихкод с цифрами лежат вне #labelContent и не наследуют его.
+    contentEl.style.textAlign = state.textAlign;
+
+    var order = optionalOrder();
+    // EAC in any corner placement is rendered separately as an absolute overlay (see below),
+    // not as a block in the flow — so it's excluded here from both layout and the block count.
+    var enabled = order.filter(function(k){
+      if (!state.checked[k]) return false;
+      if (k === "eac" && isEacCornerMode()) return false;
+      return true;
+    });
+
+    enabled.forEach(function(key, idx){
+      var block = document.createElement("div");
+      block.className = "label-block field-" + key;
+      if (key === "name") block.className += " field-name-block";
+
+      if (key === "eac") {
+        block.innerHTML = EAC_SVG;
+      } else {
+        var textVal = fieldText(key);
+        var span = document.createElement("div");
+        span.className = "lb-text";
+        if (key === "freeText" && !textVal) {
+          span.innerHTML = '<span class="freetext-placeholder">текст не задан</span>';
+        } else {
+          span.textContent = textVal;
+        }
+        block.appendChild(span);
+      }
+      contentEl.appendChild(block);
+    });
+
+    // mark first/last for clamp + shrink rules
+    var kids = Array.prototype.slice.call(contentEl.children);
+    kids.forEach(function(c, i){
+      c.classList.remove("is-mid", "is-last", "shrink-1", "shrink-2");
+      c.classList.add(i === kids.length - 1 ? "is-last" : "is-mid");
+    });
+
+    // shrink only the bottom (last enabled) block, progressively, until it fits
+    var overflowBanner = document.getElementById("overflowBanner");
+    overflowBanner.style.display = "none";
+    if (kids.length) {
+      var last = kids[kids.length - 1];
+      var fits = function(){ return contentEl.scrollHeight <= contentEl.clientHeight; };
+      if (!fits()) {
+        last.classList.add("shrink-1");
+      }
+      if (!fits()) {
+        last.classList.add("shrink-2");
+      }
+      if (!fits()) {
+        overflowBanner.style.display = "flex";
+        labelEl.classList.add("is-overflow");
+      }
+    }
+
+    // EAC corner overlay: rendered independently of the block flow, at its true minimum
+    // legible size (5mm), pinned to whichever corner the user picked (state.eacPlacement:
+    // tl/tr/bl/br). We then check whether the corner box visually overlaps something real —
+    // either a rendered text line, or (relevant mainly for the top corners, which sit right
+    // next to the wide barcode) the barcode block itself — using the same rectangle-overlap
+    // test for both, just applied to a different obstacle. If it overlaps, the mockup must
+    // show that collision rather than hide it.
+    var cornerBanner = document.getElementById("cornerCollisionBanner");
+    cornerBanner.style.display = "none";
+    var existingCorner = labelEl.querySelector(".eac-corner");
+    if (existingCorner) existingCorner.parentNode.removeChild(existingCorner);
+
+    if (state.checked.eac && isEacCornerMode()) {
+      var eacHeightPx = EAC_MIN_HEIGHT_MM * SCALE;
+      var eacWidthPx = eacHeightPx * EAC_ASPECT;
+      var corner = document.createElement("div");
+      corner.className = "eac-corner pos-" + state.eacPlacement;
+      corner.style.width = eacWidthPx + "px";
+      corner.style.height = eacHeightPx + "px";
+      corner.title = "Знак ЕАС: минимальная высота по требованиям к маркировке — 5 мм, меньше знак нечитаем";
+      corner.innerHTML = EAC_SVG;
+      labelEl.appendChild(corner);
+
+      var eacRect = corner.getBoundingClientRect();
+      function overlapsEac(r){
+        return r.left < eacRect.right && r.right > eacRect.left && r.top < eacRect.bottom && r.bottom > eacRect.top;
+      }
+
+      var collide = false;
+      var collideWithBarcode = false;
+
+      // Same rectangle-overlap test as for text below, applied to the barcode block's own
+      // box first — this is the case that matters for the top-left/top-right corners, since
+      // the barcode is wide (52mm of the label's width) and sits right where those corners are.
+      var barcodeWrap = labelEl.querySelector(".label-barcode");
+      if (barcodeWrap && overlapsEac(barcodeWrap.getBoundingClientRect())) {
+        collide = true;
+        collideWithBarcode = true;
+      }
+
+      if (!collide) {
+        var textEls = contentEl.querySelectorAll(".lb-text");
+        for (var ti = 0; ti < textEls.length && !collide; ti++) {
+          var range = document.createRange();
+          range.selectNodeContents(textEls[ti]);
+          var rects = range.getClientRects();
+          for (var ri = 0; ri < rects.length; ri++) {
+            if (overlapsEac(rects[ri])) { collide = true; break; }
+          }
+        }
+      }
+
+      corner.classList.toggle("eac-collide", collide);
+      cornerBanner.style.display = collide ? "flex" : "none";
+      if (collide) {
+        cornerBanner.textContent = collideWithBarcode
+          ? "⚠ Знак EAC в углу налезает на штрихкод — в этом углу на этом размере этикетки не хватает места, выберите другой угол или «Отдельной строкой»"
+          : "⚠ Текст наезжает на знак EAC в углу — сократите текст или уберите поле";
+      }
+    }
+
+    // counter + capacity lock
+    // used/cap считают только текстовые строки, которые выбирает пользователь. Штрихкод
+    // несъёмный и всегда один — включать его в счёт незачем и вводит в заблуждение (заказчик
+    // читал "6 из 6" как "шесть полей", хотя реально выбираемых строк было пять). Штрихкод и
+    // его зона показаны отдельно, в мм, в пояснении ниже.
+    var used = enabled.length;
+    document.getElementById("counterText").textContent = "Занято " + used + " из " + cap + " строк";
+    var pct = Math.min(100, Math.round((used / cap) * 100));
+    document.getElementById("counterFill").style.width = pct + "%";
+    var wrap = document.getElementById("counterWrap");
+    wrap.classList.toggle("full", used >= cap);
+    var noteEl = document.getElementById("counterNote");
+    var geomNote = "Предел — не число из головы: строка текста ≈ " +
+      (geom.bodyLineBoxMm + geom.lineGapMm).toFixed(1) + " мм. Штрихкод с цифрами занимает свою " +
+      "фиксированную зону наверху ≈ " + geom.barcodeZoneMm.toFixed(1) + " мм из " + size.h +
+      " мм высоты этикетки и в счёт строк не входит — как и знак EAC в углу.";
+    if (used >= cap) {
+      noteEl.textContent = "Свободных строк не осталось — чтобы включить другое поле, сначала выключите текущее. " + geomNote;
+    } else if (!noteEl.textContent || noteEl.textContent.indexOf("не помещалась") === -1) {
+      noteEl.textContent = geomNote;
+    }
+
+    var atCap = used >= cap;
+    order.forEach(function(k){
+      var cb = document.getElementById("chk-" + k);
+      var row = document.getElementById("row-" + k);
+      // a free-floating EAC (corner placement) doesn't cost a block, so it's never locked by cap
+      if (!state.checked[k] && atCap && costsBudget(k)) {
+        cb.disabled = true;
+        row.classList.add("locked");
+        row.title = "Свободных строк не осталось — сначала уберите другое поле";
+      } else {
+        cb.disabled = false;
+        row.classList.remove("locked");
+        row.removeAttribute("title");
+      }
+    });
+
+    // EAC "line" placement button: locked the same way a field checkbox locks at cap — refuse
+    // to let the user switch into a mode that would take a block with no free row for it.
+    var btnEacLine = document.getElementById("btnEacLine");
+    if (btnEacLine) {
+      var lineLocked = eacLineWouldOverflow();
+      btnEacLine.disabled = lineLocked;
+      btnEacLine.classList.toggle("locked", lineLocked);
+      if (lineLocked) {
+        btnEacLine.title = "Нет свободной строки — уберите одно поле или оставьте знак в углу";
+      } else {
+        btnEacLine.removeAttribute("title");
+      }
+    }
+  }
+
+  // initial paint
+  var initFreeText = document.getElementById("freeTextInput");
+  if (state.checked.freeText) initFreeText.classList.add("visible");
+  if (state.checked.eac) document.getElementById("eacPlacementWrap").classList.add("visible");
+  syncEacButtons();
+  syncAlignButtons();
+  render();
+
+})();
+</script>
+</body>
+</html>

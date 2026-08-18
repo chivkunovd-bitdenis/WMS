@@ -138,6 +138,9 @@ async def test_wb_tokens_patch_get_roundtrip_and_clear(async_client: AsyncClient
     b1 = p1.json()
     assert b1["has_content_token"] is True
     assert b1["has_supplies_token"] is True
+    # marketplace_api_token не был передан в патче, но поле маркетплейс-токена было
+    # пустым (первое сохранение) -> один ключ на всё, контентный ключ подставляется
+    # и туда.
     assert b1["has_marketplace_token"] is True
 
     async with SessionLocal() as session:
@@ -163,7 +166,9 @@ async def test_wb_tokens_patch_get_roundtrip_and_clear(async_client: AsyncClient
     assert p2.status_code == 200
     assert p2.json()["has_content_token"] is False
     assert p2.json()["has_supplies_token"] is True
-    assert p2.json()["has_marketplace_token"] is False
+    # Маркетплейс-токен уже был установлен (из p1) -> очистка контентного поля его
+    # не трогает: SKIP значит "не менять", а не "стереть, если контент стал пустым".
+    assert p2.json()["has_marketplace_token"] is True
 
 
 @pytest.mark.asyncio
@@ -515,3 +520,76 @@ async def test_wb_tokens_seller_not_found(async_client: AsyncClient) -> None:
         headers=ah,
     )
     assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_self_content_token_failed_marketplace_check_preserves_existing_marketplace_token(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: неудачная проверка доступа к Marketplace API не должна стирать уже
+    рабочий маркетплейс-токен. До фикса `patch_seller_tokens` вызывался с
+    `marketplace_api_token=None` при провале проверки, что безусловно стирало любой ранее
+    сохранённый маркетплейс-ключ — даже полностью рабочий."""
+
+    async def fake_fetch_cards_list(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return {"cards": [], "cursor": {"total": 0}}
+
+    async def ok_fetch_marketplace_seller_warehouses(
+        *_args: object, **_kwargs: object
+    ) -> list[dict[str, object]]:
+        return []
+
+    async def fail_fetch_marketplace_seller_warehouses(
+        *_args: object, **_kwargs: object
+    ) -> list[dict[str, object]]:
+        raise WildberriesClientError("upstream_error", status_code=401)
+
+    monkeypatch.setattr(
+        "app.api.wildberries_integration.fetch_cards_list",
+        fake_fetch_cards_list,
+    )
+
+    headers, tenant_id, seller_id = await _create_authenticated_seller(async_client)
+
+    # Шаг 1: селлер сохраняет ключ с областью "Маркетплейс" -> маркетплейс-токен сохраняется.
+    monkeypatch.setattr(
+        "app.api.wildberries_integration.fetch_marketplace_seller_warehouses",
+        ok_fetch_marketplace_seller_warehouses,
+    )
+    first = await async_client.post(
+        "/integrations/wildberries/self/content-token",
+        headers=headers,
+        json={"content_api_token": "working-marketplace-key"},
+    )
+    assert first.status_code == 200, first.text
+    assert first.json()["validation_ok"] is True
+
+    async with SessionLocal() as session:
+        marketplace_before = await get_decrypted_marketplace_token(session, tenant_id, seller_id)
+    assert marketplace_before == "working-marketplace-key"
+
+    # Шаг 2: селлер пересохраняет только контентный ключ; проверка доступа к Marketplace API
+    # падает (например, WB отдал таймаут или у ключа нет нужной области). Ранее сохранённый
+    # рабочий маркетплейс-токен обязан выжить нетронутым.
+    monkeypatch.setattr(
+        "app.api.wildberries_integration.fetch_marketplace_seller_warehouses",
+        fail_fetch_marketplace_seller_warehouses,
+    )
+    second = await async_client.post(
+        "/integrations/wildberries/self/content-token",
+        headers=headers,
+        json={"content_api_token": "new-content-only-key"},
+    )
+    assert second.status_code == 200, second.text
+    assert second.json()["validation_ok"] is False
+    assert second.json()["validation_error"] == "missing_marketplace_scope"
+
+    async with SessionLocal() as session:
+        content_after, _supplies_after = await get_decrypted_tokens_for_seller(
+            session, tenant_id, seller_id
+        ) or (None, None)
+        marketplace_after = await get_decrypted_marketplace_token(session, tenant_id, seller_id)
+
+    assert content_after == "new-content-only-key"
+    assert marketplace_after == "working-marketplace-key"

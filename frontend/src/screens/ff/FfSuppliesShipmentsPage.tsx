@@ -39,8 +39,10 @@ import {
   Typography,
   Snackbar,
 } from '@mui/material'
+import { alpha } from '@mui/material/styles'
 import { FfProductLineCells, FfProductTableHeadCells } from '../../components/FfProductLineCells'
 import { WbProductPickerDialog, type WbProductPickerCatalogRow } from '../../components/WbProductPickerDialog'
+import { FfMpUnloadPickPanel } from './FfMpUnloadPickPanel'
 import { useWbProductCatalog } from '../../hooks/useWbProductCatalog'
 import { apiUrl } from '../../api'
 import { WmsDateField } from '../../components/WmsDateField'
@@ -55,6 +57,8 @@ import {
 } from './FfPackagingPage'
 import { FfMarketplaceUnloadBoxAddDialog } from './FfMarketplaceUnloadBoxAddDialog'
 import { BoxImportDialog } from '../../components/BoxImportDialog'
+import { BoxLabelPrintDialog } from '../../components/BoxLabelPrintDialog'
+import type { LabelSize } from '../../utils/labelSize'
 import { formatHumanDocumentNumber } from './documentDisplay'
 import { formatDateTimeLocal } from '../../utils/formatDateTimeLocal'
 import { printBarcodeLabel } from '../../utils/printBarcodeLabel'
@@ -163,7 +167,7 @@ type DiscrepancyActDetail = {
 
 type DocKind = 'inbound' | 'outbound' | 'marketplace_unload' | 'discrepancy_act'
 
-type MpUnloadTab = 'plan' | 'packaging'
+type MpUnloadTab = 'plan' | 'pick' | 'packaging'
 
 /** Быстрые фильтры без операционной «Отгрузки» — только «Отгрузки на МП». */
 type QuickFilterKind = 'all' | 'inbound' | 'marketplace_unload' | 'discrepancy_act'
@@ -215,11 +219,22 @@ function formatSignedQty(value: number): string {
 
 const mpUnloadSteps: { value: MpUnloadTab; label: string; testId: string }[] = [
   { value: 'plan', label: 'Товары', testId: 'ff-mp-tab-products' },
+  // MPFBO-01: «Если план утверждён, вкладка "Подбор" должна становиться доступной».
+  // Шаг был потерян 28.06 в коммите 304abf2, когда поле скана ячейки/товара переподписали
+  // на короба; бэкенд подбора при этом остался рабочим.
+  { value: 'pick', label: 'Подбор', testId: 'ff-mp-tab-pick' },
   { value: 'packaging', label: 'Упаковка', testId: 'ff-mp-tab-packaging' },
 ]
 
 function mpUnloadStepLabel(step: MpUnloadTab): string {
   return mpUnloadSteps.find((item) => item.value === step)?.label ?? step
+}
+
+/** Человеческий размер короба вместо служебного кода пресета («60_40_40»). */
+function mpBoxPresetLabel(preset: string): string {
+  if (preset === '60_40_40') return '60×40×40 см'
+  if (preset === '30_20_30') return '30×20×30 см'
+  return preset
 }
 
 type ProductPick = { id: string; sku_code: string; name: string }
@@ -328,6 +343,10 @@ export function FfSuppliesShipmentsPage({
   const [boxImportOpen, setBoxImportOpen] = useState(false)
   const mpTabInitForRef = useRef<string | null>(null)
   const docDetailRequests = useRef(createLatestRequestSequence())
+  // Пункт 2 итерации 2026-08-14: статус документа не должен меняться молча
+  // (например «Утверждено» → «На сборке» как побочный эффект скана/создания короба).
+  const prevMpStatusRef = useRef<{ id: string; status: string } | null>(null)
+  const [statusChangeMsg, setStatusChangeMsg] = useState<string | null>(null)
 
   const authHeaders = useMemo(
     () => (token ? { Authorization: `Bearer ${token}` } : null),
@@ -449,6 +468,11 @@ export function FfSuppliesShipmentsPage({
         if (!docDetailRequests.current.isLatest(docDetailRequestId)) {
           return
         }
+        const prevStatusInfo = prevMpStatusRef.current
+        if (prevStatusInfo && prevStatusInfo.id === j.id && prevStatusInfo.status !== j.status) {
+          setStatusChangeMsg(`Статус документа изменился: «${statusRu(prevStatusInfo.status)}» → «${statusRu(j.status)}».`)
+        }
+        prevMpStatusRef.current = { id: j.id, status: j.status }
         setUnloadDetail({
           id: j.id,
           document_number: j.document_number ?? null,
@@ -504,16 +528,23 @@ export function FfSuppliesShipmentsPage({
           stockParams.set('seller_id', j.seller_id)
         }
         stockParams.set('exclude_request_id', j.id)
-        const stockRes = await fetch(
-          apiUrl(
-            `/operations/marketplace-unload-requests/available-products?${stockParams.toString()}`,
-          ),
-          { headers: authHeaders },
-        )
+        // Эндпоинт требует warehouse_id и seller_id: без seller_id он отвечает 422
+        // seller_id_required, а без warehouse_id в запрос уходит строка "null".
+        // У свежесозданной отгрузки этих полей может не быть — тогда не стучимся вовсе,
+        // иначе 422 превращается в «пустой список» и выглядит как отсутствие товара.
+        const stockRes =
+          j.warehouse_id && j.seller_id
+            ? await fetch(
+                apiUrl(
+                  `/operations/marketplace-unload-requests/available-products?${stockParams.toString()}`,
+                ),
+                { headers: authHeaders },
+              )
+            : null
         if (!docDetailRequests.current.isLatest(docDetailRequestId)) {
           return
         }
-        if (stockRes.ok) {
+        if (stockRes && stockRes.ok) {
           const stockRows = (await stockRes.json()) as {
             product_id: string
             sku_code: string
@@ -534,7 +565,14 @@ export function FfSuppliesShipmentsPage({
               })),
           )
         } else {
+          // Раньше сбой запроса молча давал пустой список, и это выглядело как «нет остатка».
+          // Отличить поломку от честного нуля было невозможно — теперь ошибка видна.
           setWarehouseAvailableProductPicklist([])
+          setModalError(
+            stockRes
+              ? `Не удалось получить остатки для отгрузки (${stockRes.status}). Список товаров может быть пустым не потому, что товара нет.`
+              : 'Список товаров не собрать: у отгрузки не заданы склад и селлер. Заполните их и откройте документ заново.',
+          )
         }
         setDivergeDetail(null)
       } else {
@@ -958,16 +996,29 @@ export function FfSuppliesShipmentsPage({
     setBoxMenuTargetId(null)
   }
 
-  const printBoxBarcode = (box: MarketplaceUnloadBox) => {
+  const [printBoxTarget, setPrintBoxTarget] = useState<MarketplaceUnloadBox | null>(null)
+
+  const requestPrintBoxBarcode = (box: MarketplaceUnloadBox) => {
     const barcode = box.internal_barcode?.trim()
     if (!barcode) {
       setModalError('У короба нет штрихкода.')
+      return
+    }
+    setPrintBoxTarget(box)
+  }
+
+  const confirmPrintBoxBarcode = (size: LabelSize) => {
+    const box = printBoxTarget
+    setPrintBoxTarget(null)
+    const barcode = box?.internal_barcode?.trim()
+    if (!box || !barcode) {
       return
     }
     printBarcodeLabel({
       title: 'Короб отгрузки',
       barcode,
       barcodeDataUrl: renderBarcodeDataUrl(barcode),
+      labelSize: size,
     })
   }
 
@@ -1101,6 +1152,18 @@ export function FfSuppliesShipmentsPage({
     [mpVisibleBoxes],
   )
 
+  // MPU-04б (18.08): заказчик увидел свёрнутый блок «Короба» и не понял, что там вообще
+  // есть содержимое. Счётчик в заголовке — сколько коробов и сколько единиц в них —
+  // виден без раскрытия аккордеона.
+  const mpBoxesSummary = useMemo(() => {
+    const boxCount = mpVisibleBoxes.length
+    const unitCount = mpVisibleBoxes.reduce(
+      (sum, box) => sum + box.lines.reduce((lineSum, ln) => lineSum + ln.quantity, 0),
+      0,
+    )
+    return { boxCount, unitCount }
+  }, [mpVisibleBoxes])
+
   const mpBoxPanelSx = (hasLines: boolean) => ({
     borderRadius: 1,
     overflow: 'hidden',
@@ -1124,15 +1187,6 @@ export function FfSuppliesShipmentsPage({
     bgcolor: 'background.paper',
   }
 
-  const mpBoxTableHeadCellSx = {
-    fontWeight: 600,
-    color: 'text.secondary',
-    bgcolor: 'transparent',
-    borderBottom: 1,
-    borderColor: 'divider',
-    py: 0.75,
-  }
-
   const mpBoxActionsSx = {
     display: 'flex',
     alignItems: 'center',
@@ -1146,11 +1200,6 @@ export function FfSuppliesShipmentsPage({
     mt: 1,
     maxWidth: '100%',
     overflowX: 'auto',
-  }
-
-  const mpBoxTableSx = {
-    tableLayout: 'fixed',
-    width: '100%',
   }
 
   const renderBoxActions = (box: MarketplaceUnloadBox) => {
@@ -1186,7 +1235,7 @@ export function FfSuppliesShipmentsPage({
           aria-label="Печать ШК короба"
           data-testid={`ff-mp-box-print-${box.id}`}
           disabled={modalBusy || !box.internal_barcode}
-          onClick={() => printBoxBarcode(box)}
+          onClick={() => requestPrintBoxBarcode(box)}
         >
           <Typography variant="caption" sx={{ fontWeight: 700 }}>
             ШК
@@ -1228,43 +1277,55 @@ export function FfSuppliesShipmentsPage({
             <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.25 }}>
               {boxLabel}
             </Typography>
+            {/* Дизайн-разбор 2026-08-16: раньше здесь была одна строка «60_40_40 ·
+                WHB-2A67351D829F» — служебный код пресета и штрихкод наравне, человек
+                это не читает и не называет вслух. Человеческий размер — основная
+                подпись, штрихкод — мелкая техническая строка ниже, для сверки со
+                сканером, а не для чтения. */}
             <Typography variant="body2" color="text.secondary" sx={{ minWidth: 0 }}>
-              {box.box_preset}
-              {boxBarcode ? ` · ${boxBarcode}` : ''}
+              {mpBoxPresetLabel(box.box_preset)}
               {!hasLines ? ' · готов к наполнению' : ''}
             </Typography>
+            {boxBarcode ? (
+              <Typography
+                variant="caption"
+                color="text.disabled"
+                sx={{ display: 'block', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+              >
+                {boxBarcode}
+              </Typography>
+            ) : null}
           </Box>
           {renderBoxActions(box)}
         </Box>
 
         {hasLines ? (
-          <Box sx={{ ...mpBoxBodySx, ...mpBoxTableWrapSx, mt: 0 }}>
-              <Table
-                size="small"
-                sx={mpBoxTableSx}
-                data-testid={tableTestId ?? `ff-mp-box-lines-${box.id}`}
-              >
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ ...mpBoxTableHeadCellSx, width: '28%' }}>Артикул</TableCell>
-                    <TableCell sx={mpBoxTableHeadCellSx}>Товар</TableCell>
-                    <TableCell align="right" sx={{ ...mpBoxTableHeadCellSx, width: 104 }}>
-                      В коробе
-                    </TableCell>
-                    {canUseMpBoxDestructiveControls ? (
-                      <TableCell align="right" sx={{ ...mpBoxTableHeadCellSx, width: 64 }} />
-                    ) : null}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {box.lines.map((ln) => (
+          <Box
+            sx={{ ...mpBoxBodySx, ...mpBoxTableWrapSx, mt: 0 }}
+            data-testid={tableTestId ?? `ff-mp-box-lines-${box.id}`}
+          >
+            {/* MPU-07 (18.08): раньше строка товара в коробе была обезличенной —
+                артикул/название/число. Заказчик просил ту же строку товара, что и
+                везде в системе (фото, ШК, артикул продавца, артикул WB, размер) —
+                переиспользуем FfProductLineCells/FfProductTableHeadCells, как на
+                вкладке «Товары» этого же экрана (ff-supplies-doc-lines) и в
+                диалоге наполнения короба. */}
+            <Table size="small" sx={{ tableLayout: 'fixed', width: '100%' }}>
+              <TableHead>
+                <TableRow>
+                  <FfProductTableHeadCells showPrint={false} />
+                  <TableCell align="right" sx={{ width: 104 }}>
+                    В коробе
+                  </TableCell>
+                  {canUseMpBoxDestructiveControls ? <TableCell sx={{ width: 40 }} /> : null}
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {box.lines.map((ln) => {
+                  const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
+                  return (
                     <TableRow key={ln.id}>
-                      <TableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {ln.sku_code}
-                      </TableCell>
-                      <TableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {ln.product_name}
-                      </TableCell>
+                      <FfProductLineCells meta={displayMeta} showPrint={false} />
                       <TableCell align="right">{ln.quantity}</TableCell>
                       {canUseMpBoxDestructiveControls ? (
                         <TableCell align="right">
@@ -1282,9 +1343,10 @@ export function FfSuppliesShipmentsPage({
                         </TableCell>
                       ) : null}
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  )
+                })}
+              </TableBody>
+            </Table>
           </Box>
         ) : null}
       </Paper>
@@ -1718,7 +1780,16 @@ export function FfSuppliesShipmentsPage({
       return null
     }
     const planned = unloadDetail.lines.reduce((sum, ln) => sum + ln.quantity, 0)
-    const distributed = unloadDetail.lines.reduce((sum, ln) => sum + (ln.picked_qty ?? 0), 0)
+    // MPU-03: ln.picked_qty приходит с бэкенда посчитанным по содержимому коробов
+    // (backend/app/api/marketplace_unload_requests.py, _picked_by_product), а подбор
+    // с 2026-08-16 короба не трогает вообще — поэтому это поле всегда 0 и счётчик
+    // «Подобрано» не сходился с реальным подбором. Настоящий источник — аллокации
+    // подбора (unloadDetail.pick_allocations), как и написано в комментарии ниже
+    // про «Раньше подпись была...».
+    const distributed = unloadDetail.pick_allocations.reduce(
+      (sum, alloc) => sum + alloc.quantity,
+      0,
+    )
     return {
       planned,
       distributed,
@@ -1737,24 +1808,72 @@ export function FfSuppliesShipmentsPage({
       if (step === 'plan') {
         return true
       }
+      if (step === 'pick') {
+        // Подбор открывается после утверждения плана — так требует MPFBO-01.
+        return mpSubmitted || mpConfirmed || mpCollecting
+      }
       if (step === 'packaging') {
         return Boolean(unloadDetail.linked_packaging_task)
       }
       return false
     },
-    [docModal, unloadDetail],
+    [docModal, unloadDetail, mpSubmitted, mpConfirmed, mpCollecting],
   )
-  const mpNextStep = useMemo(() => {
+  // Соседний шаг вкладок, а не «следующий доступный» — иначе кнопка «Далее» молча
+  // перепрыгивает через заблокированный шаг вместо того, чтобы объяснить блокировку
+  // (см. mpStepBlockedReason ниже и требование по большим кнопкам переходов 2026-08-17).
+  const mpImmediateNextStep = useMemo(() => {
     const currentIdx = mpUnloadSteps.findIndex((step) => step.value === mpUnloadTab)
     if (currentIdx < 0) {
       return null
     }
-    return (
-      mpUnloadSteps
-        .slice(currentIdx + 1)
-        .find((step) => mpStepEnabled(step.value))?.value ?? null
-    )
-  }, [mpStepEnabled, mpUnloadTab])
+    return mpUnloadSteps[currentIdx + 1] ?? null
+  }, [mpUnloadTab])
+  const mpNextStepEnabled = mpImmediateNextStep ? mpStepEnabled(mpImmediateNextStep.value) : false
+  /** Тот же текст — и на disabled-вкладке при наведении, и под кнопкой «Далее». */
+  const mpStepBlockedReason = useCallback(
+    (step: MpUnloadTab): string => {
+      if (step === 'pick') {
+        return 'Утвердите план поставки, чтобы открыть подбор.'
+      }
+      if (step === 'packaging') {
+        const remaining = mpCollectSummary?.remaining ?? 0
+        if (remaining > 0) {
+          return `Подберите ещё ${remaining} шт., чтобы перейти к упаковке.`
+        }
+        return 'Задание на упаковку появится после утверждения плана поставки.'
+      }
+      return ''
+    },
+    [mpCollectSummary],
+  )
+  // Дизайн-разбор 2026-08-16: галочка раньше означала «шаг разблокирован», а не
+  // «шаг закончен» — на утверждённой отгрузке с планом 4 и подобрано 0 «Товары ✓»
+  // и «Подбор ✓» стояли одновременно, хотя подбор ещё не начинался. Бригадир на
+  // складе читает галочку однозначно: «этап закрыт, не проверяю». Здесь — факт
+  // завершения по каждому шагу отдельно, а не доступность перехода.
+  const mpStepDone = useCallback(
+    (step: MpUnloadTab): boolean => {
+      if (!unloadDetail || docModal !== 'marketplace_unload') {
+        return false
+      }
+      if (step === 'plan') {
+        // План закрыт, когда он больше не редактируется (черновик утверждён).
+        return mpSubmitted || mpConfirmed || mpCollecting
+      }
+      if (step === 'pick') {
+        // Подбор закончен, когда подбирать больше нечего — «осталось ноль».
+        const planned = mpCollectSummary?.planned ?? 0
+        const remaining = mpCollectSummary?.remaining ?? planned
+        return planned > 0 && remaining <= 0
+      }
+      if (step === 'packaging') {
+        return Boolean(unloadDetail.linked_packaging_task?.is_complete)
+      }
+      return false
+    },
+    [docModal, unloadDetail, mpSubmitted, mpConfirmed, mpCollecting, mpCollectSummary],
+  )
 
   useEffect(() => {
     if (!unloadDetail || docModal !== 'marketplace_unload') {
@@ -2302,8 +2421,13 @@ export function FfSuppliesShipmentsPage({
                   </Typography>
                 </Box>
                 <Box>
+                  {/* Раньше подпись была «В коробах / распределено» — короб тут ни при чём:
+                      подбор с 2026-08-16 коробов не трогает вообще, это чистое количество
+                      подобранного со склада. Старая подпись рядом с «Упаковано» из другого
+                      знаменателя (сколько из уже подобранного упаковано) читалась как одно
+                      противоречивое число — развели подписями, что к чему относится. */}
                   <Typography variant="caption" color="text.secondary">
-                    В коробах / распределено
+                    Подобрано
                   </Typography>
                   <Typography
                     variant="body2"
@@ -2315,7 +2439,7 @@ export function FfSuppliesShipmentsPage({
                 </Box>
                 <Box>
                   <Typography variant="caption" color="text.secondary">
-                    Осталось
+                    Осталось подобрать
                   </Typography>
                   <Typography
                     variant="body2"
@@ -2330,7 +2454,7 @@ export function FfSuppliesShipmentsPage({
                 </Box>
                 <Box>
                   <Typography variant="caption" color="text.secondary">
-                    Упаковано
+                    Упаковано (из подобранного)
                   </Typography>
                   <Typography
                     variant="body2"
@@ -2357,15 +2481,32 @@ export function FfSuppliesShipmentsPage({
                 sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}
                 data-testid="ff-mp-process-tabs"
               >
-                {mpUnloadSteps.map((step) => (
-                  <Tab
-                    key={step.value}
-                    label={step.label}
-                    value={step.value}
-                    disabled={!mpStepEnabled(step.value)}
-                    data-testid={step.testId}
-                  />
-                ))}
+                {mpUnloadSteps.map((step) => {
+                  // Три разных состояния шага не сжимаются в один суффикс:
+                  // ✓ — фактически закончен; … — доступен, но работа ещё идёт;
+                  // без значка и серым (disabled) — пока недоступен.
+                  const done = mpStepDone(step.value)
+                  const enabled = mpStepEnabled(step.value)
+                  const label = done ? `${step.label} ✓` : enabled ? `${step.label} …` : step.label
+                  const tab = (
+                    <Tab
+                      key={step.value}
+                      // Пункт 1 итерации 2026-08-14: назад можно, вперёд нельзя — как в FBS
+                      // (frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx, STAGES/currentStageIndex).
+                      label={label}
+                      value={step.value}
+                      disabled={!enabled}
+                      data-testid={step.testId}
+                    />
+                  )
+                  if (enabled) return tab
+                  // Disabled-таб MUI без обёртки <span> не показывает Tooltip.
+                  return (
+                    <Tooltip key={step.value} title={mpStepBlockedReason(step.value)}>
+                      <span>{tab}</span>
+                    </Tooltip>
+                  )
+                })}
               </Tabs>
               {mpUnloadTab === 'plan' ? (
                 <Stack spacing={2} data-testid="ff-mp-tab-plan-panel">
@@ -2374,11 +2515,23 @@ export function FfSuppliesShipmentsPage({
                       Селлер: <strong>{unloadDetail.seller_name}</strong>
                     </Typography>
                   ) : null}
-                  {mpLineDraft && mpDraft ? (
+                  {mpLineDraft ? (
                     <Paper variant="outlined" sx={{ p: 1.5 }} data-testid="ff-mp-add-products-panel">
                       <Typography variant="subtitle2" sx={{ mb: 1.25 }}>
                         Добавление товаров
                       </Typography>
+                      {/* MPFBO-01: элемент не исчезает, а объясняет, почему недоступен —
+                          иначе оператор не понимает, потерял он кнопку или система сломалась. */}
+                      {!mpDraft ? (
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ mb: 1.25 }}
+                          data-testid="ff-mp-add-products-locked"
+                        >
+                          Состав можно менять только в черновике — план уже утверждён.
+                        </Typography>
+                      ) : null}
                       <Stack
                         direction={{ xs: 'column', sm: 'row' }}
                         spacing={1}
@@ -2407,7 +2560,7 @@ export function FfSuppliesShipmentsPage({
                           />
                           <Button
                             variant="outlined"
-                            disabled={modalBusy || !mpLineBarcodeScan.trim()}
+                            disabled={modalBusy || !mpDraft || !mpLineBarcodeScan.trim()}
                             onClick={() => void addMpLineByBarcode()}
                             data-testid="ff-mp-line-barcode-add"
                           >
@@ -2416,7 +2569,7 @@ export function FfSuppliesShipmentsPage({
                         </Stack>
                         <Button
                           variant="contained"
-                          disabled={modalBusy}
+                          disabled={modalBusy || !mpDraft}
                           onClick={() => void openMpProductPicker()}
                           data-testid="ff-mp-add-products"
                         >
@@ -2435,10 +2588,7 @@ export function FfSuppliesShipmentsPage({
                         <FfProductTableHeadCells showPrint={false} />
                         <TableCell align="right">План</TableCell>
                         {mpExecutionPhase ? (
-                          <>
-                            <TableCell align="right">Распределено</TableCell>
-                            <TableCell align="right">Осталось</TableCell>
-                          </>
+                          <TableCell align="right">Осталось</TableCell>
                         ) : null}
                         {canDeleteMpUnloadLine ? <TableCell align="right" width={56} /> : null}
                       </TableRow>
@@ -2447,7 +2597,7 @@ export function FfSuppliesShipmentsPage({
                       {(() => {
                         const lines = unloadDetail.lines
                         const productCols = 6
-                        const mpCols = mpExecutionPhase ? 2 : 0
+                        const mpCols = mpExecutionPhase ? 1 : 0
                         const emptySpan = productCols + 1 + mpCols + (canDeleteMpUnloadLine ? 1 : 0)
                         if (lines.length === 0) {
                           return (
@@ -2492,20 +2642,12 @@ export function FfSuppliesShipmentsPage({
                                 {ln.quantity}
                               </TableCell>
                               {mpExecutionPhase ? (
-                                <>
-                                  <TableCell
-                                    align="right"
-                                    data-testid={`ff-mp-line-picked-${ln.id}`}
-                                  >
-                                    {picked}
-                                  </TableCell>
-                                  <TableCell
-                                    align="right"
-                                    data-testid={`ff-mp-line-remaining-${ln.id}`}
-                                  >
-                                    {remaining}
-                                  </TableCell>
-                                </>
+                                <TableCell
+                                  align="right"
+                                  data-testid={`ff-mp-line-remaining-${ln.id}`}
+                                >
+                                  {remaining}
+                                </TableCell>
                               ) : null}
                               {canDeleteMpUnloadLine ? (
                                 <TableCell align="right">
@@ -2531,42 +2673,19 @@ export function FfSuppliesShipmentsPage({
                       })()}
                     </TableBody>
                   </Table>
-                  {mpExecutionPhase && unloadDetail.pick_allocations.length > 0 ? (
-                    <Table
-                      size="small"
-                      data-testid="ff-mp-picking-allocations"
-                      sx={{ tableLayout: 'fixed', width: '100%' }}
-                    >
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={{ width: '24%' }}>Ячейка</TableCell>
-                          <TableCell sx={{ width: '28%' }}>Артикул</TableCell>
-                          <TableCell>Товар</TableCell>
-                          <TableCell align="right" sx={{ width: 120 }}>
-                            Подобрать
-                          </TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {unloadDetail.pick_allocations.map((allocation) => (
-                          <TableRow
-                            key={allocation.id}
-                            data-testid={`ff-mp-picking-allocation-${allocation.id}`}
-                          >
-                            <TableCell>{allocation.location_code}</TableCell>
-                            <TableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {allocation.sku_code}
-                            </TableCell>
-                            <TableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {allocation.product_name}
-                            </TableCell>
-                            <TableCell align="right">{allocation.quantity}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  ) : null}
                 </Stack>
+              ) : null}
+              {mpUnloadTab === 'pick' && unloadDetail && token && authHeaders ? (
+                <Box data-testid="ff-mp-tab-pick-panel">
+                  <FfMpUnloadPickPanel
+                    token={token}
+                    authHeaders={authHeaders}
+                    requestId={unloadDetail.id}
+                    disabled={modalBusy}
+                    onChanged={() => void loadDocDetail()}
+                    catalogById={catalogById}
+                  />
+                </Box>
               ) : null}
               {mpUnloadTab === 'packaging' ? (
                 <Box data-testid="ff-mp-tab-packaging-panel">
@@ -2581,6 +2700,9 @@ export function FfSuppliesShipmentsPage({
                       task={packagingTask}
                       hideDocumentHeader
                       compactLayout
+                      // Пункт 10 итерации 2026-08-14: единое поле скана на упаковке различает
+                      // короб и товар — скан короба делегируется существующему флоу привязки.
+                      onBoxBarcodeScan={requestAttachBoxScan}
                       onUpdated={(task) => {
                         setPackagingTask(task)
                         void loadDocDetail()
@@ -2609,12 +2731,35 @@ export function FfSuppliesShipmentsPage({
                     sx={{ mt: 2 }}
                     data-testid="ff-mp-boxes-accordion"
                   >
-                    <AccordionSummary expandIcon={<ExpandMoreOutlined />} data-testid="ff-mp-boxes-summary">
-                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                        <Typography variant="subtitle2">Короба</Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {mpCollectSummary?.distributed ?? 0}/{mpCollectSummary?.planned ?? 0} шт
+                    <AccordionSummary
+                      expandIcon={<ExpandMoreOutlined />}
+                      data-testid="ff-mp-boxes-summary"
+                      sx={{
+                        bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08),
+                      }}
+                    >
+                      {/* Пункт 12 итерации 2026-08-14: числа «распределено/план» уже есть в шапке
+                          (ff-mp-shipment-summary) — здесь не дублируем, только заголовок раздела.
+                          MPU-04б (18.08): заказчик не видел, что блок вообще раскрывается и что
+                          внутри есть содержимое — счётчики коробов и единиц в них по образцу
+                          «Короба и грузоместа» на приёмке (FfInboundRequestView).
+                          MPU-08 (18.08): заголовок сливался с фоном, заказчик просил несколько
+                          раз сделать его заметным — лёгкая подложка фирменным цветом темы
+                          (primary, 8% непрозрачности) и жирный заголовок, не полная заливка. */}
+                      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                          Короба
                         </Typography>
+                        <Chip
+                          size="small"
+                          label={`Коробов: ${mpBoxesSummary.boxCount}`}
+                          data-testid="ff-mp-boxes-count-chip"
+                        />
+                        <Chip
+                          size="small"
+                          label={`Единиц: ${mpBoxesSummary.unitCount}`}
+                          data-testid="ff-mp-boxes-units-chip"
+                        />
                       </Stack>
                     </AccordionSummary>
                     <AccordionDetails>
@@ -2745,7 +2890,7 @@ export function FfSuppliesShipmentsPage({
                           onClick={() => {
                             const box = boxMenuTargetId ? boxById.get(boxMenuTargetId) : null
                             if (box) {
-                              printBoxBarcode(box)
+                              requestPrintBoxBarcode(box)
                             }
                             closeBoxMenu()
                           }}
@@ -2939,7 +3084,7 @@ export function FfSuppliesShipmentsPage({
           ) : null}
         </DialogContent>
         <DialogActions
-          sx={{ flexWrap: 'wrap', gap: 1, justifyContent: 'space-between' }}
+          sx={{ flexWrap: 'wrap', gap: 1 }}
           data-testid="ff-mp-footer-bar"
         >
           <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
@@ -2948,6 +3093,7 @@ export function FfSuppliesShipmentsPage({
                 <Button
                   variant="contained"
                   color="secondary"
+                  size="large"
                   disabled={
                     modalBusy ||
                     !confirmDate.trim() ||
@@ -2956,9 +3102,9 @@ export function FfSuppliesShipmentsPage({
                   }
                   onClick={() => void submitDoc()}
                   data-testid="ff-supplies-doc-submit"
-	                >
-		                  Утвердить
-	                </Button>
+                >
+                  Утвердить
+                </Button>
                 {mpSubmitted ? (
                   <Button
                     variant="outlined"
@@ -2972,35 +3118,65 @@ export function FfSuppliesShipmentsPage({
                 ) : null}
               </>
             ) : null}
-	            {docModal === 'marketplace_unload' && unloadDetail && mpExecutionPhase ? (
-	              <>
-		                {mpNextStep ? (
-		                  <Button
-		                    variant="contained"
-	                    color="primary"
-	                    endIcon={<ArrowForwardOutlined fontSize="small" />}
-	                    disabled={modalBusy}
-	                    onClick={() => setMpUnloadTab(mpNextStep)}
-	                    data-testid="ff-mp-next-step"
-		                  >
-		                    Далее: {mpUnloadStepLabel(mpNextStep)}
-		                  </Button>
-		                ) : (
-		                  <Button
-		                    variant="contained"
-		                    color="primary"
-		                    disabled={
-		                      modalBusy ||
-		                      (mpCollectSummary?.distributed ?? 0) < 1 ||
-		                      !mpPackagingComplete
-		                    }
-		                    onClick={() => requestShipMpUnload()}
-		                    data-testid="ff-mp-ship"
-		                  >
-		                    Завершить
-		                  </Button>
-		                )}
-	                {mpCancellable ? (
+            {docModal === 'marketplace_unload' && unloadDetail && mpExecutionPhase ? (
+              <>
+                {mpImmediateNextStep ? (
+                  <Stack spacing={0.5} sx={{ alignItems: 'flex-start', maxWidth: 420 }}>
+                    {mpNextStepEnabled ? (
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        size="large"
+                        endIcon={<ArrowForwardOutlined />}
+                        disabled={modalBusy}
+                        onClick={() => setMpUnloadTab(mpImmediateNextStep.value)}
+                        data-testid="ff-mp-next-step"
+                      >
+                        Далее: {mpUnloadStepLabel(mpImmediateNextStep.value)}
+                      </Button>
+                    ) : (
+                      <>
+                        <Tooltip title={mpStepBlockedReason(mpImmediateNextStep.value)}>
+                          <span>
+                            <Button
+                              variant="contained"
+                              color="primary"
+                              size="large"
+                              endIcon={<ArrowForwardOutlined />}
+                              disabled
+                              data-testid="ff-mp-next-step"
+                            >
+                              Далее: {mpUnloadStepLabel(mpImmediateNextStep.value)}
+                            </Button>
+                          </span>
+                        </Tooltip>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          data-testid="ff-mp-next-step-reason"
+                        >
+                          {mpStepBlockedReason(mpImmediateNextStep.value)}
+                        </Typography>
+                      </>
+                    )}
+                  </Stack>
+                ) : (
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    size="large"
+                    disabled={
+                      modalBusy ||
+                      (mpCollectSummary?.distributed ?? 0) < 1 ||
+                      !mpPackagingComplete
+                    }
+                    onClick={() => requestShipMpUnload()}
+                    data-testid="ff-mp-ship"
+                  >
+                    Завершить
+                  </Button>
+                )}
+                {mpCancellable ? (
                   <Button
                     variant="outlined"
                     color="error"
@@ -3067,7 +3243,14 @@ export function FfSuppliesShipmentsPage({
         availableColumnLabel="Доступно FBO"
         getAvailable={mpPickerGetAvailable}
         filterRow={mpPickerFilterRow}
-        emptyMessage="Нет свободного FBO остатка для отгрузки."
+        // Остаток ищется строго по складу документа: JOIN StorageLocation по warehouse_id.
+        // Пустой список чаще всего значит «отгрузка создана не на том складе», поэтому
+        // склад назван прямо в сообщении — иначе оператор упирается в тупик без подсказки.
+        emptyMessage={
+          unloadDetail?.warehouse_name
+            ? `На складе «${unloadDetail.warehouse_name}» нет свободного остатка по этому селлеру. Проверьте, тот ли склад указан в отгрузке.`
+            : 'Нет свободного остатка по этому селлеру на складе отгрузки.'
+        }
         onClose={() => setMpPickerOpen(false)}
         onApply={applyMpProductPicker}
       />
@@ -3138,6 +3321,23 @@ export function FfSuppliesShipmentsPage({
           sx={{ width: '100%' }}
         >
           {boxAddSuccessMsg}
+        </Alert>
+      </Snackbar>
+      {/* Пункт 2 итерации 2026-08-14: смена статуса документа больше не проходит молча. */}
+      <Snackbar
+        open={statusChangeMsg !== null}
+        autoHideDuration={4000}
+        onClose={() => setStatusChangeMsg(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity="info"
+          variant="filled"
+          onClose={() => setStatusChangeMsg(null)}
+          data-testid="ff-mp-status-change-snackbar"
+          sx={{ width: '100%' }}
+        >
+          {statusChangeMsg}
         </Alert>
       </Snackbar>
       <Dialog
@@ -3263,6 +3463,14 @@ export function FfSuppliesShipmentsPage({
           </Button>
         </DialogActions>
       </Dialog>
+      <BoxLabelPrintDialog
+        open={printBoxTarget !== null}
+        title="Печать штрихкода короба"
+        busy={modalBusy}
+        onClose={() => setPrintBoxTarget(null)}
+        onConfirm={confirmPrintBoxBarcode}
+        testId="ff-mp-box-print-dialog"
+      />
     </Box>
   )
 }

@@ -57,6 +57,13 @@ from app.services.wb_card_enrichment import (
 
 STATUS_GROUP_MAP: dict[str, frozenset[str]] = {
     "new": frozenset({FBS_ORDER_STATUS_NEW}),
+    # BL-3 (16.08, FBS-03): заказы со статусом NEW, у которых истёк срок сборки
+    # (deadline_at < server_now) — WB их уже не примет, но статус в БД остаётся "new",
+    # WB его не меняет. Тот же набор статусов, что у "new" — реальное разделение идёт
+    # по deadline_at в _fetch_orders_page/_fetch_warehouse_options, а не по статусу.
+    # Тот же приём, что для "cancelled": отдельная вкладка через status_group,
+    # без изменения данных в БД.
+    "expired": frozenset({FBS_ORDER_STATUS_NEW}),
     "active": frozenset(
         {
             FBS_ORDER_STATUS_IN_SUPPLY,
@@ -66,9 +73,12 @@ STATUS_GROUP_MAP: dict[str, frozenset[str]] = {
         }
     ),
     "delivery": frozenset({FBS_ORDER_STATUS_IN_DELIVERY, FBS_ORDER_STATUS_SORTED}),
-    "done": frozenset(
-        {FBS_ORDER_STATUS_DONE, FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DEFECT}
-    ),
+    "done": frozenset({FBS_ORDER_STATUS_DONE}),
+    # Решение пользователя 16.08 («сделай как в WB — отменённые заказы») + FBS-06
+    # («убирает из "Новых" либо показывает в корректной вкладке»): отменённые и брак
+    # раньше сваливались в "done" вместе с реально завершёнными — отвал был не виден.
+    # Теперь у них своя группа, как отдельная вкладка «Отменённые» в кабинете WB.
+    "cancelled": frozenset({FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DEFECT}),
 }
 
 MISSING_WMS_WAREHOUSE = "Склад не привязан"
@@ -146,6 +156,7 @@ async def fetch_worklist_page(
         search=search,
         limit=limit,
         cursor=cursor,
+        server_now=server_now,
     )
     items = await build_worklist_items(session, tenant_id, orders, server_now=server_now)
     warehouse_options = await _fetch_warehouse_options(
@@ -153,6 +164,7 @@ async def fetch_worklist_page(
         tenant_id,
         seller_id=seller_id,
         status_group=status_group,
+        server_now=server_now,
     )
     next_cursor: str | None = None
     if len(orders) == limit:
@@ -176,6 +188,7 @@ async def _fetch_orders_page(
     search: str | None,
     limit: int,
     cursor: str | None,
+    server_now: datetime,
 ) -> list[FbsOrder]:
     stmt = select(FbsOrder).where(FbsOrder.tenant_id == tenant_id)
     if seller_id is not None:
@@ -188,6 +201,12 @@ async def _fetch_orders_page(
         stmt = stmt.where(FbsOrder.status.in_(allowed))
         if status_group == "new":
             stmt = stmt.where(_supplier_new_clause())
+            # BL-3: "Новые" показывают только заказы, которые WB ещё реально примет.
+            stmt = stmt.where(FbsOrder.deadline_at >= server_now)
+        elif status_group == "expired":
+            stmt = stmt.where(_supplier_new_clause())
+            # BL-3: "Просрочены" — зеркало "new", но с истёкшим дедлайном.
+            stmt = stmt.where(FbsOrder.deadline_at < server_now)
     if wb_warehouse_id is not None:
         stmt = stmt.where(FbsOrder.wb_warehouse_id == wb_warehouse_id)
     if search and search.strip():
@@ -246,6 +265,7 @@ async def _fetch_warehouse_options(
     *,
     seller_id: uuid.UUID | None,
     status_group: str | None,
+    server_now: datetime,
 ) -> list[dict[str, Any]]:
     stmt = (
         select(
@@ -272,6 +292,10 @@ async def _fetch_warehouse_options(
         stmt = stmt.where(FbsOrder.status.in_(allowed))
         if status_group == "new":
             stmt = stmt.where(_supplier_new_clause())
+            stmt = stmt.where(FbsOrder.deadline_at >= server_now)
+        elif status_group == "expired":
+            stmt = stmt.where(_supplier_new_clause())
+            stmt = stmt.where(FbsOrder.deadline_at < server_now)
     stmt = stmt.order_by(TenantWbMpWarehouse.name.asc(), FbsOrder.wb_warehouse_id.asc())
     res = await session.execute(stmt)
     options: dict[str, dict[str, Any]] = {}
@@ -635,7 +659,10 @@ def compute_selection_blockers(
         )
     if order.warehouse_id is None:
         blockers.append(
-            {"code": "warehouse_unmapped", "message": "Склад WB не привязан к WMS."}
+            {
+                "code": "warehouse_unmapped",
+                "message": "Склад WB не привязан к WMS — привяжите его на вкладке «Остатки WB».",
+            }
         )
     if _as_utc(order.deadline_at) < _as_utc(server_now):
         blockers.append(

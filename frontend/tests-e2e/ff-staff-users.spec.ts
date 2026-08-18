@@ -81,7 +81,12 @@ async function expectNoPayrollUi(page: Page): Promise<void> {
 // Then: only the right warehouse work block is clickable, direct forbidden routes are closed,
 // expected: settings-staff sees no payroll columns, raw permission labels, or technical error codes.
 test('ff staff rights: four compact work blocks pass UI and direct-route gates', async ({ page }) => {
-  test.setTimeout(120_000)
+  // Тест тяжёлый: регистрация организации, шесть сотрудников по четыре запроса
+  // на каждого и полтора десятка полных перезагрузок SPA. При лимите 120 с запаса
+  // не оставалось вовсе (18.08 шёл 1.7 мин), и под нагрузкой машины он падал
+  // по времени, а не по существу — при 300 с проходит целиком, включая проверки
+  // закрытых разделов. Даём реальный запас.
+  test.setTimeout(240_000)
   const suffix = Date.now()
   const adminEmail = `e2e-staff-admin-${suffix}@example.com`
   const password = 'password123'

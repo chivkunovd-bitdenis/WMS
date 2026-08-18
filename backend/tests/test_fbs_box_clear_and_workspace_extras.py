@@ -16,6 +16,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
+from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.fbs_order import (
     MARKING_KIND_SGTIN,
@@ -35,6 +36,11 @@ from tests.test_fbs_picking import (
 )
 
 
+@pytest.fixture
+def enable_wb_marketplace_supplies_mock(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "e2e_mock_wb_marketplace_supplies", True)
+
+
 async def _packed_supply(
     async_client: AsyncClient,
     *,
@@ -44,6 +50,14 @@ async def _packed_supply(
     seller_id, warehouse_id, location_id = await _create_seller_and_warehouse(
         async_client, headers, suffix
     )
+    # Box creation always registers a WB cargo place now, so tests that create
+    # boxes need a marketplace token — see enable_wb_marketplace_supplies_mock.
+    token = await async_client.patch(
+        f"/integrations/wildberries/sellers/{seller_id}/tokens",
+        headers=headers,
+        json={"marketplace_api_token": "wb-marketplace-token"},
+    )
+    assert token.status_code == 200, token.text
     product_id = await _create_product(
         async_client,
         headers,
@@ -72,7 +86,10 @@ async def _packed_supply(
 
 
 @pytest.mark.asyncio
-async def test_clear_box_returns_orders_to_unassigned(async_client: AsyncClient) -> None:
+async def test_clear_box_returns_orders_to_unassigned(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
     headers, supply_id, order_ids, _product_id, _tenant_id = await _packed_supply(async_client)
 
     created = await async_client.post(
@@ -114,7 +131,10 @@ async def test_clear_box_returns_orders_to_unassigned(async_client: AsyncClient)
 
 
 @pytest.mark.asyncio
-async def test_clear_box_on_empty_box_is_idempotent(async_client: AsyncClient) -> None:
+async def test_clear_box_on_empty_box_is_idempotent(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
     headers, supply_id, _order_ids, _product_id, _tenant_id = await _packed_supply(async_client)
 
     created = await async_client.post(
@@ -141,7 +161,10 @@ async def test_clear_box_on_empty_box_is_idempotent(async_client: AsyncClient) -
 
 
 @pytest.mark.asyncio
-async def test_clear_box_after_supply_delivered_is_rejected(async_client: AsyncClient) -> None:
+async def test_clear_box_after_supply_delivered_is_rejected(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
     headers, supply_id, order_ids, _product_id, _tenant_id = await _packed_supply(async_client)
 
     created = await async_client.post(

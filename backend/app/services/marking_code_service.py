@@ -226,6 +226,7 @@ class MarkingImportPreviewResult:
 class MarkingInventoryResult:
     rows: list[ProductMarkingInventoryRow]
     unlinked_available_count: int
+    defective_count: int
 
 
 @dataclass(frozen=True)
@@ -1320,8 +1321,11 @@ async def list_inventory(
     available_by_pool: dict[uuid.UUID, int] = {}
     printed_by_pool: dict[uuid.UUID, int] = {}
     unlinked_available = 0
+    defective_total = 0
     for product_id, pool_id, status, cnt in count_rows:
         count = int(cnt)
+        if status == STATUS_DEFECTIVE:
+            defective_total += count
         if product_id is None and pool_id is None:
             if status == STATUS_AVAILABLE:
                 unlinked_available = count
@@ -1421,6 +1425,7 @@ async def list_inventory(
     return MarkingInventoryResult(
         rows=rows,
         unlinked_available_count=unlinked_available,
+        defective_count=defective_total,
     )
 
 
@@ -2876,6 +2881,7 @@ async def get_code_history(
 @dataclass(frozen=True)
 class PrintedCodeRow:
     id: uuid.UUID
+    cis_code: str
     cis_masked: str
     status: str
 
@@ -2919,7 +2925,12 @@ async def list_printed_codes_for_packaging_line(
     )
     codes = list((await session.execute(stmt)).scalars().all())
     return [
-        PrintedCodeRow(id=code.id, cis_masked=mask_cis_code(code.cis_code), status=code.status)
+        PrintedCodeRow(
+            id=code.id,
+            cis_code=code.cis_code,
+            cis_masked=mask_cis_code(code.cis_code),
+            status=code.status,
+        )
         for code in codes
     ]
 

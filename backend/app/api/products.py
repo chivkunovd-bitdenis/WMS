@@ -156,6 +156,8 @@ class ProductOut(BaseModel):
     wb_vendor_code: str | None = None
     wb_barcode: str | None = None
     wb_size: str | None = None
+    wb_country_of_origin: str | None = None
+    wb_shelf_life: str | None = None
     packaging_instructions: str | None = None
     requires_honest_sign: bool = False
     is_manual: bool = False
@@ -301,6 +303,8 @@ def _product_out(p: object) -> ProductOut:
         wb_vendor_code=p.wb_vendor_code,
         wb_barcode=p.wb_barcode,
         wb_size=p.wb_size,
+        wb_country_of_origin=p.wb_country_of_origin,
+        wb_shelf_life=p.wb_shelf_life,
         packaging_instructions=p.packaging_instructions,
         requires_honest_sign=bool(p.requires_honest_sign),
         # Manual until WB sync/link sets nmID on same barcode.

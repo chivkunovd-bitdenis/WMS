@@ -55,6 +55,8 @@ class Product(Base):
     wb_chrt_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
     wb_barcode: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     wb_size: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    wb_country_of_origin: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    wb_shelf_life: Mapped[str | None] = mapped_column(String(255), nullable=True)
     length_mm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     width_mm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     height_mm: Mapped[int | None] = mapped_column(Integer, nullable=True)

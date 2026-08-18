@@ -10,7 +10,7 @@ import {
   DialogContent,
   DialogTitle,
   FormControlLabel,
-  Snackbar,
+  Paper,
   Stack,
   TextField,
   ToggleButton,
@@ -18,6 +18,7 @@ import {
   Typography,
 } from '@mui/material'
 import { apiUrl } from '../api'
+import { plural } from '../utils/plural'
 import {
   MARKING_PRINT_PRESETS,
   blockLabel,
@@ -29,7 +30,7 @@ import {
   tapeToLayout,
   type TapeBlock,
 } from '../utils/markingPrintPresets'
-import { createPrintTemplate, resolvePrintTemplate, type PrintLayout } from '../utils/printTemplate'
+import { resolvePrintTemplate, type PrintLayout } from '../utils/printTemplate'
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
 import {
   beginPrintUserGesture,
@@ -54,9 +55,11 @@ import {
 } from '../utils/labelSize'
 import {
   refreshSeparateMarkingPrintEnabled,
+  setSeparateMarkingPrintEnabled,
   useSeparateMarkingPrint,
 } from '../utils/separateMarkingPrint'
 import { LabelSizeSelect } from './LabelSizeSelect'
+import { MarkingLabelPreview } from './MarkingLabelPreview'
 
 type PrintedCodeOption = {
   id: string
@@ -191,8 +194,6 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const [catalogPrintQty, setCatalogPrintQty] = useState(1)
   const [wbBarcodeQty, setWbBarcodeQty] = useState(1)
   const [printDoubleWbBarcode, setPrintDoubleWbBarcode] = useState(false)
-  const [saveName, setSaveName] = useState('')
-  const [toast, setToast] = useState<string | null>(null)
   const [reprintCodes, setReprintCodes] = useState<PrintedCodeOption[]>([])
   const [selectedReprintCodeIds, setSelectedReprintCodeIds] = useState<string[]>([])
   const [reprintCodesLoading, setReprintCodesLoading] = useState(false)
@@ -201,6 +202,12 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const separateEnabledFromStore = useSeparateMarkingPrint()
   const [separateEnabledFromProfile, setSeparateEnabledFromProfile] = useState<boolean | null>(null)
   const [separateSettingLoading, setSeparateSettingLoading] = useState(false)
+  /**
+   * FBS-10: переключатель «раздельно / вместе» теперь живёт на самой форме печати,
+   * а не только в настройках тенанта (см. FfSettingsScreen). Оператор решает
+   * в момент печати; null — использовать значение по умолчанию из профиля/стора.
+   */
+  const [separateModeChoice, setSeparateModeChoice] = useState<boolean | null>(null)
   const [czLabelSize, setCzLabelSize] = useState<LabelSize>(() =>
     resolveLabelSize(loadLabelSizeId('cz')),
   )
@@ -213,17 +220,35 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const [sepCzQty, setSepCzQty] = useState(2)
   const [sepWbQty, setSepWbQty] = useState(1)
   const [sepCzDone, setSepCzDone] = useState(false)
-  const [sepWbDone, setSepWbDone] = useState(false)
 
   const requiresHonestSign = ctx?.requiresHonestSign ?? true
   const fbsTapeMode = Boolean(ctx?.fbsTape)
   const fbsTapeOrders = ctx?.fbsTape?.orders ?? []
   const fbsHonestSignOrders = fbsTapeOrders.filter((order) => order.requiresHonestSign)
+  /**
+   * PRN-01: «Печать всего» на поставке FBS (openBulkOrderMarkingPrint) всегда
+   * включает fbsTape.includeOrderQr — на ленту реально уходит QR заказа WB вместе
+   * с ЧЗ/ШК (см. printFbsTape ниже). Раньше предпросмотр этот QR не показывал
+   * вообще, а заголовок диалога назывался «Печать ШК ВБ», хотя печаталось всё —
+   * заказчик жаловался, что кнопка обещает «всё», а окно показывает один элемент.
+   * Флаг ниже включает QR в предпросмотр (MarkingLabelPreview) и правит заголовок
+   * под фактический состав ленты; сама печать (что уходит на принтер) не меняется.
+   */
+  const includesOrderQr = fbsTapeMode && Boolean(ctx?.fbsTape?.includeOrderQr)
   const isCatalogSource = ctx?.source === 'catalog'
-  const effectiveReprint = reprint || inlineReprint
+  /**
+   * Перепечатка существует только чтобы не жечь коды ЧЗ повторно (FBS-11) — у товара
+   * без ЧЗ печатать нечего повторно, там нет расходуемого пула. Поэтому режим
+   * повторной печати для таких товаров не включаем, даже если вызывающий экран
+   * попросил reprint:true — это тот же признак requiresHonestSign, что и у
+   * NON_HONEST_SIGN_LABEL_LAYOUT выше.
+   */
+  const effectiveReprint = (reprint || inlineReprint) && requiresHonestSign
   const markingAlreadyPrinted = (ctx?.qtyMarkingPrinted ?? 0) > 0
-  const canOpenInlineReprint = Boolean(ctx?.lineId && markingAlreadyPrinted && !fbsTapeMode)
-  const separateEnabled = separateEnabledFromProfile ?? separateEnabledFromStore
+  const canOpenInlineReprint = Boolean(
+    ctx?.lineId && markingAlreadyPrinted && !fbsTapeMode && requiresHonestSign,
+  )
+  const separateEnabled = separateModeChoice ?? (separateEnabledFromProfile ?? separateEnabledFromStore)
   /** Раздельный режим: только для товаров с ЧЗ и не для перепечатки (там печатается один ЧЗ). */
   const separateMode = separateEnabled && requiresHonestSign && !effectiveReprint && !fbsTapeMode
   const separateModeResolving =
@@ -234,7 +259,8 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     !effectiveReprint &&
     !separateEnabledFromStore &&
     separateSettingLoading &&
-    separateEnabledFromProfile === null
+    separateEnabledFromProfile === null &&
+    separateModeChoice === null
   const resolvedCzPrintSize = useMemo(
     () => resolvePrintPageSize(czLabelSize, czPrintOrientation),
     [czLabelSize, czPrintOrientation],
@@ -301,21 +327,35 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     }
   }, [open, ctx?.token, requiresHonestSign, effectiveReprint, separateEnabledFromStore, fbsTapeMode])
 
+  /**
+   * ВАЖНО: этот эффект — единственное место, которое обнуляет состояние диалога
+   * между печатями. Сам диалог смонтирован постоянно (open только переключает
+   * видимость MUI <Dialog>, компонент MarkingPrintDialog не пересоздаётся), поэтому
+   * любой счётчик/флаг, заведённый через useState и не сброшенный здесь, протекает
+   * из прошлой печати в следующую — даже если это печать того же товара по другой
+   * строке упаковки. Если добавляешь новое поле состояния в этот компонент —
+   * впиши его сброс сюда же, иначе получишь тот же класс бага, что был здесь раньше
+   * (зависимость эффекта была точечной — ctx?.productId/ctx?.token — и не ловила
+   * смену lineId при том же товаре).
+   */
   useEffect(() => {
     if (!open || !ctx) {
       return
     }
     setError(null)
     setAllowPartial(false)
-    setSaveName('')
-    setWbBarcodeQty(1)
+    setSeparateModeChoice(null)
+    // Этикетка ШК ВБ клеится на единицу товара: разумное первое значение — сколько
+    // единиц нужно напечатать/упаковать, а не жёсткая «1» (иначе оператор по умолчанию
+    // печатает одну этикетку на несколько единиц и должен сам это заметить).
+    const wbDefaultQty = ctx.source === 'catalog' ? 1 : Math.max(1, ctx.qtyNeedPack || 1)
+    setWbBarcodeQty(wbDefaultQty)
     setPrintDoubleWbBarcode(false)
     setCatalogPrintQty(1)
     setDragTapeIndex(null)
     setSepCzQty(2)
-    setSepWbQty(1)
+    setSepWbQty(wbDefaultQty)
     setSepCzDone(false)
-    setSepWbDone(false)
     setCzLabelSize(resolveLabelSize(loadLabelSizeId('cz')))
     setCzPrintOrientation(loadLabelPrintOrientation())
     setWbLabelSize(resolveLabelSize(loadLabelSizeId('label')))
@@ -360,7 +400,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         setLayout(cloneLayout(defaultPreset.layout))
       }
     })()
-  }, [open, ctx?.productId, ctx?.token, requiresHonestSign])
+  }, [open, ctx, requiresHonestSign])
 
   const reprintLineId = fbsTapeMode ? undefined : ctx?.lineId
   const reprintToken = ctx?.token
@@ -431,6 +471,18 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         ? fbsHonestSignOrders.length || fbsTapeOrders.length
         : (ctx?.qtyNeedPack ?? 0)
   const totalWbLabels = resolveManualWbLabelCount(wbBarcodeQty, printDoubleWbBarcode)
+  /**
+   * PRN-04: printFbsTape (ниже) печатает циклом по заказам — на каждый заказ
+   * сначала QR, потом его этикетки. Раньше предпросмотр строил один общий QR +
+   * один список «единиц» независимо от заказов, поэтому при нескольких заказах в
+   * «Печать всего» показывал не то, что реально уходит на ленту. fbsPreviewOrders —
+   * тот же ctx.fbsTape.orders, что видит printFbsTape; fbsPreviewLabelCopies —
+   * то же правило числа копий ШК-only этикетки на заказ без ЧЗ (fallbackLabelCopies
+   * в printFbsTape). Сама печать этим не затронута.
+   */
+  const fbsPreviewOrders = includesOrderQr ? fbsTapeOrders : undefined
+  const fbsPreviewLabelCopies =
+    fbsHonestSignOrders.length > 0 ? Math.max(1, labelCopiesFromLayout(layout)) : Math.max(1, totalWbLabels)
   const available = ctx?.markingAvailable ?? 0
   const quantitySummaryText = requiresHonestSign
     ? effectiveReprint
@@ -444,8 +496,19 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       ? `К печати: ${totalWbLabels}`
       : `К упаковке: ${qtyNeed}`
   const shortage = requiresHonestSign && !effectiveReprint && available < qtyNeed ? qtyNeed - available : 0
+  /**
+   * PRN-02: перепечатка ленты FBS не строится по выбору конкретных КМ
+   * (`selectedReprintCodeIds` там всегда пуст — построчный список кодов на выбор
+   * не используется в fbsTapeMode, см. условие `!fbsTapeMode` ниже у самого списка),
+   * поэтому для предпросмотра берём то же количество, что уже показывает счётчик
+   * в шапке диалога (qtyNeed уже учитывает fbsTapeMode). Раньше здесь безусловно
+   * стоял selectedReprintCodeIds.length, из-за чего в перепечатке FBS предпросмотр
+   * ленты получал canPrintCount=0 и превью не строилось вовсе.
+   */
   const canPrintCount = effectiveReprint
-    ? selectedReprintCodeIds.length
+    ? fbsTapeMode
+      ? qtyNeed
+      : selectedReprintCodeIds.length
     : requiresHonestSign
       ? allowPartial
         ? Math.min(available, qtyNeed)
@@ -454,10 +517,18 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
           : 0
       : totalWbLabels
 
-  const previewUnits = useMemo(() => buildTapePreviewUnits(layout, 3), [layout])
+  // Превью показывает фактическое количество к печати, но не больше трёх единиц,
+  // чтобы при печати полусотни лента не превращалась в простыню. Если единиц больше —
+  // подпись под превью честно говорит, что показаны первые три.
+  const previewUnitCount = Math.min(Math.max(canPrintCount, 1), 3)
+
+  const previewUnits = useMemo(
+    () => buildTapePreviewUnits(layout, previewUnitCount),
+    [layout, previewUnitCount],
+  )
   const previewTapeCount = useMemo(
-    () => countTapeBlocksFromTape(tapeOrder, 3),
-    [tapeOrder],
+    () => countTapeBlocksFromTape(tapeOrder, previewUnitCount),
+    [tapeOrder, previewUnitCount],
   )
   const totalTapeCount = useMemo(
     () => countTapeBlocksFromTape(tapeOrder, canPrintCount),
@@ -492,11 +563,10 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   }
 
   const markSectionDone = (markDone: 'cz' | 'wb' | null) => {
+    // ШК — не расходуемый ресурс (в отличие от кодов ЧЗ), поэтому печать ШК
+    // никогда не блокируется повторным нажатием; отмечаем «сделано» только для ЧЗ.
     if (markDone === 'cz') {
       setSepCzDone(true)
-    }
-    if (markDone === 'wb') {
-      setSepWbDone(true)
     }
   }
 
@@ -793,7 +863,17 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     setError(null)
     try {
       if (ctx.fbsTape) {
-        await printFbsTape({ layout, size: czTapePrintSize, closeAfter: true })
+        // PRN-05 (18.08.2026): для пачки, где ни одному заказу не нужен Честный знак,
+        // размер надо брать тот, который оператор реально видит и меняет в поле
+        // «Размер ШК ВБ» (nonCzPrintSize). czTapePrintSize читает другое хранилище,
+        // которое в этой ветке не показывается, — оператор выбирал 60×80, а
+        // печаталось 58×40. Соседняя ветка одиночной печати без ЧЗ (ниже) уже
+        // использует nonCzPrintSize, приводим ленту к тому же правилу.
+        await printFbsTape({
+          layout,
+          size: requiresHonestSign ? czTapePrintSize : nonCzPrintSize,
+          closeAfter: true,
+        })
       } else if (!requiresHonestSign) {
         if (wbBarcodeQty >= 1) {
           await printLabelOnlyTape(totalWbLabels, nonCzPrintSize, true)
@@ -876,26 +956,10 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     }
   }
 
-  const handleSaveTemplate = async () => {
-    if (!ctx || !saveName.trim()) {
-      setError('Укажите название шаблона.')
-      return
-    }
-    onBusyChange(true)
-    setError(null)
-    try {
-      await createPrintTemplate(ctx.token, {
-        name: saveName.trim(),
-        layout,
-        product_id: ctx.productId,
-      })
-      setToast('Шаблон сохранён')
-      setSaveName('')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось сохранить шаблон.')
-    } finally {
-      onBusyChange(false)
-    }
+  /** FBS-10: оператор переключает конструктор «вместе / раздельно» прямо на форме печати. */
+  const handleSeparateModeToggle = (next: boolean) => {
+    setSeparateModeChoice(next)
+    setSeparateMarkingPrintEnabled(next)
   }
 
   const printDisabled =
@@ -912,9 +976,13 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
 
   const dialogTitle = effectiveReprint
     ? 'Повторная печать'
-    : requiresHonestSign
-      ? 'Печать ЧЗ'
-      : 'Печать ШК ВБ'
+    : includesOrderQr
+      ? requiresHonestSign
+        ? 'Печать ЧЗ, ШК и QR заказа'
+        : 'Печать ШК и QR заказа'
+      : requiresHonestSign
+        ? 'Печать ЧЗ'
+        : 'Печать ШК ВБ'
 
   return (
     <>
@@ -925,13 +993,13 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
             onClose()
           }
         }}
-        maxWidth="sm"
+        maxWidth="md"
         fullWidth
         data-testid="marking-print-dialog"
       >
         <DialogTitle>{dialogTitle}</DialogTitle>
         <DialogContent>
-          <Stack spacing={2} sx={{ pt: 0.5 }}>
+          <Stack spacing={3} sx={{ pt: 0.5 }}>
             {ctx ? (
               <Box data-testid="marking-print-header">
                 <Typography variant="subtitle2">{ctx.productName}</Typography>
@@ -942,6 +1010,34 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                 <Typography variant="body2" data-testid="marking-print-qty">
                   {quantitySummaryText}
                 </Typography>
+              </Box>
+            ) : null}
+
+            {requiresHonestSign && !effectiveReprint && !fbsTapeMode && !separateModeResolving ? (
+              <Box data-testid="marking-print-mode-toggle" data-task-id="FBS-10">
+                <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                  Как печатать ЧЗ и ШК ВБ
+                </Typography>
+                <ToggleButtonGroup
+                  exclusive
+                  size="small"
+                  value={separateEnabled ? 'separate' : 'joint'}
+                  onChange={(_event, next: 'joint' | 'separate' | null) => {
+                    if (!next) {
+                      return
+                    }
+                    handleSeparateModeToggle(next === 'separate')
+                  }}
+                  disabled={busy}
+                  data-testid="marking-print-mode-toggle-group"
+                >
+                  <ToggleButton value="joint" data-testid="marking-print-mode-joint">
+                    Вместе на одной ленте
+                  </ToggleButton>
+                  <ToggleButton value="separate" data-testid="marking-print-mode-separate">
+                    Раздельно: ЧЗ и ШК отдельно
+                  </ToggleButton>
+                </ToggleButtonGroup>
               </Box>
             ) : null}
 
@@ -972,6 +1068,26 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               />
             )}
 
+            {!effectiveReprint && requiresHonestSign && !separateMode && !separateModeResolving ? (
+              <ToggleButtonGroup
+                exclusive
+                size="small"
+                value={czPrintOrientation}
+                onChange={(_event, next: LabelPrintOrientation | null) => {
+                  if (!next) {
+                    return
+                  }
+                  setCzPrintOrientation(next)
+                  saveLabelPrintOrientation(next)
+                }}
+                disabled={busy}
+                data-testid="marking-print-orientation"
+              >
+                <ToggleButton value="portrait">Вертикальная</ToggleButton>
+                <ToggleButton value="landscape">Горизонтальная</ToggleButton>
+              </ToggleButtonGroup>
+            ) : null}
+
             {separateModeResolving ? (
               <Typography
                 variant="body2"
@@ -982,7 +1098,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               </Typography>
             ) : null}
 
-            {shortage > 0 && !forceReprintOnConfirm ? (
+            {shortage > 0 && !forceReprintOnConfirm && !separateMode ? (
               <Alert severity="error" data-testid="marking-print-shortage-banner">
                 Не хватает {shortage} из {qtyNeed} КМ
               </Alert>
@@ -1000,7 +1116,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               </Alert>
             ) : null}
 
-            {!effectiveReprint && !forceReprintOnConfirm && shortage > 0 ? (
+            {!effectiveReprint && !forceReprintOnConfirm && shortage > 0 && available > 0 ? (
               <FormControlLabel
                 control={
                   <Checkbox
@@ -1027,16 +1143,36 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                   data-testid="marking-print-wb-qty"
                   sx={{ maxWidth: 280 }}
                 />
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={printDoubleWbBarcode}
-                      onChange={(e) => setPrintDoubleWbBarcode(e.target.checked)}
-                      data-testid="marking-print-wb-double"
-                    />
-                  }
-                  label="Печатать 2 ШК"
-                />
+                <Box>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={printDoubleWbBarcode}
+                        onChange={(e) => setPrintDoubleWbBarcode(e.target.checked)}
+                        data-testid="marking-print-wb-double"
+                      />
+                    }
+                    label="Печатать 2 ШК"
+                  />
+                  {printDoubleWbBarcode ? (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 4 }}>
+                      × 2 к введённому количеству — итого {totalWbLabels} шт.
+                    </Typography>
+                  ) : null}
+                </Box>
+                <Box sx={{ mt: 1 }}>
+                  <MarkingLabelPreview
+                    variant="product"
+                    productLabel={ctx?.productLabel ?? null}
+                    size={nonCzPrintSize}
+                    unitsToShow={Math.max(1, totalWbLabels)}
+                    totalUnits={Math.max(1, totalWbLabels)}
+                    showOrderQr={includesOrderQr}
+                    fbsOrders={fbsPreviewOrders}
+                    fbsNonHonestLabelCopies={fbsPreviewLabelCopies}
+                    testId="marking-print-wb-only-preview"
+                  />
+                </Box>
               </>
             ) : null}
 
@@ -1058,7 +1194,12 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                   />
                 ) : null}
 
-                <Box data-testid="marking-print-separate-cz">
+                <Paper
+                  variant="outlined"
+                  sx={{ p: 2.5 }}
+                  data-testid="marking-print-separate-cz"
+                  data-task-id="FBS-10"
+                >
                   <Typography variant="subtitle2" sx={{ mb: 1 }}>
                     Честный знак
                   </Typography>
@@ -1114,15 +1255,42 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                     <Typography
                       variant="caption"
                       color="text.secondary"
-                      sx={{ mt: 0.5, display: 'block' }}
+                      sx={{ mt: 0.75, display: 'block' }}
                       data-testid="marking-print-sep-cz-total"
                     >
                       К печати: {sepCzTotal} ЧЗ ({canPrintCount} ед. × {Math.max(1, sepCzQty)})
                     </Typography>
+                  ) : !canOpenInlineReprint && !sepCzDone ? (
+                    <Typography
+                      variant="caption"
+                      color="error"
+                      sx={{ mt: 0.75, display: 'block' }}
+                      data-testid="marking-print-sep-cz-disabled-reason"
+                      data-task-id="FBS-10"
+                    >
+                      {available < 1
+                        ? 'Печать ЧЗ недоступна: в пуле нет свободных кодов маркировки. Пополните пул или обратитесь к администратору.'
+                        : `Печать ЧЗ недоступна: нужно ${qtyNeed} КМ, в пуле доступно только ${available}. Включите «Печатать доступные» или пополните пул.`}
+                    </Typography>
                   ) : null}
-                </Box>
+                  <Box sx={{ mt: 1.5 }}>
+                    <MarkingLabelPreview
+                      variant="tape"
+                      layout={sepCzLayout}
+                      size={resolvedCzPrintSize}
+                      unitsToShow={1}
+                      productLabel={null}
+                      testId="marking-print-sep-cz-preview"
+                    />
+                  </Box>
+                </Paper>
 
-                <Box data-testid="marking-print-separate-wb">
+                <Paper
+                  variant="outlined"
+                  sx={{ p: 2.5 }}
+                  data-testid="marking-print-separate-wb"
+                  data-task-id="FBS-10"
+                >
                   <Typography variant="subtitle2" sx={{ mb: 1 }}>
                     ШК ВБ
                   </Typography>
@@ -1135,55 +1303,86 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                       onChange={(e) =>
                         setSepWbQty(Math.max(1, Math.min(999, Number(e.target.value) || 1)))
                       }
-                      disabled={busy || sepWbDone}
+                      disabled={busy}
                       slotProps={{ htmlInput: { min: 1, max: 999 } }}
                       data-testid="marking-print-sep-wb-qty"
                       sx={{ width: 180 }}
                     />
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={printDoubleWbBarcode}
-                          onChange={(e) => setPrintDoubleWbBarcode(e.target.checked)}
-                          disabled={busy || sepWbDone}
-                          data-testid="marking-print-sep-wb-double"
-                        />
-                      }
-                      label="Печатать 2 ШК"
-                    />
+                    <Box>
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={printDoubleWbBarcode}
+                            onChange={(e) => setPrintDoubleWbBarcode(e.target.checked)}
+                            disabled={busy}
+                            data-testid="marking-print-sep-wb-double"
+                          />
+                        }
+                        label="Печатать 2 ШК"
+                      />
+                      {printDoubleWbBarcode ? (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 4 }}>
+                          × 2 к введённому количеству — итого {sepWbTotal} шт.
+                        </Typography>
+                      ) : null}
+                    </Box>
                     <LabelSizeSelect
                       value={wbLabelSize.id}
                       onChange={setWbLabelSize}
-                      disabled={busy || sepWbDone}
+                      disabled={busy}
                       scope="label"
                       label="Размер ШК ВБ"
                       testId="marking-print-wb-label-size"
                     />
                     <Button
                       variant="contained"
-                      disabled={busy || sepWbDone || sepWbTotal < 1}
+                      disabled={busy || sepWbTotal < 1}
                       onClick={() => void handleSeparateWbPrint()}
                       data-testid="marking-print-sep-wb-print"
                     >
-                      {sepWbDone ? 'ШК напечатаны ✓' : 'Печать ШК ВБ'}
+                      {/* Печать ШК — не расходуемый ресурс (в отличие от кодов ЧЗ), поэтому
+                          кнопка не блокируется после первой печати: повторная печать должна
+                          работать сколько угодно раз. */}
+                      Печать ШК ВБ
                     </Button>
                   </Stack>
                   {sepWbTotal > 0 ? (
                     <Typography
                       variant="caption"
                       color="text.secondary"
-                      sx={{ mt: 0.5, display: 'block' }}
+                      sx={{ mt: 0.75, display: 'block' }}
                       data-testid="marking-print-sep-wb-total"
                     >
                       К печати: {sepWbTotal} ШК ВБ
                       {printDoubleWbBarcode ? ' (× 2)' : ''}
                     </Typography>
                   ) : null}
-                </Box>
+                  <Box sx={{ mt: 1.5 }}>
+                    <MarkingLabelPreview
+                      variant="product"
+                      size={wbLabelSize}
+                      unitsToShow={Math.max(1, sepWbTotal)}
+                      totalUnits={Math.max(1, sepWbTotal)}
+                      productLabel={ctx?.productLabel ?? null}
+                      testId="marking-print-sep-wb-preview"
+                    />
+                  </Box>
+                </Paper>
               </>
             ) : null}
 
-            {!effectiveReprint && requiresHonestSign && !separateMode && !separateModeResolving ? (
+            {/*
+              PRN-02: в перепечатке ленты FBS (`fbsTapeMode && effectiveReprint`) построчный
+              список кодов на выбор ниже не рендерится (он завязан на `!fbsTapeMode` — для
+              ленты нет самой концепции «выбрать конкретный код»), поэтому единственная ветка
+              предпросмотра, которая вообще что-то показывает — эта, обычно предназначенная
+              только для первой печати. Раньше её тоже закрывало условие `!effectiveReprint`,
+              и в итоге окно перепечатки ленты FBS оставалось пустым — ни ленты, ни QR заказа,
+              ни ЧЗ/ШК, только счётчик количества в шапке. Показываем эту же ветку и в
+              перепечатке ленты FBS: то же самое, что видит оператор при первой печати —
+              что уходит на принтер (printFbsTape ниже), эта правка не меняет.
+            */}
+            {(!effectiveReprint || fbsTapeMode) && requiresHonestSign && !separateMode && !separateModeResolving ? (
               <>
                 {isCatalogSource ? (
                   <TextField
@@ -1230,7 +1429,10 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                     sx={{ mb: 0.5, display: 'block' }}
                     data-testid="marking-print-preview-tape-count"
                   >
-                    Лента на одну единицу · {tapeOrder.length} блоков · {previewTapeCount} блоков на 3 ед.
+                    Лента на одну единицу · {tapeOrder.length} {plural(tapeOrder.length, ['блок', 'блока', 'блоков'])}
+                    {canPrintCount > previewUnitCount
+                      ? ` · ниже показаны первые ${previewUnitCount} ед. из ${canPrintCount}`
+                      : ` · ниже вся лента: ${previewTapeCount} ${plural(previewTapeCount, ['блок', 'блока', 'блоков'])} на ${canPrintCount} ед.`}
                   </Typography>
                   <Stack
                     direction="row"
@@ -1291,25 +1493,23 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                   ))}
                 </Box>
 
-                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                  <TextField
-                    size="small"
-                    label="Название шаблона"
-                    value={saveName}
-                    onChange={(e) => setSaveName(e.target.value)}
-                    data-testid="marking-print-save-name"
-                    sx={{ flex: 1 }}
+                <Box sx={{ mt: 1 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                    Реальный макет ленты
+                  </Typography>
+                  <MarkingLabelPreview
+                    variant="tape"
+                    layout={layout}
+                    size={czTapePrintSize}
+                    unitsToShow={previewUnitCount}
+                    totalUnits={canPrintCount}
+                    productLabel={ctx?.productLabel ?? null}
+                    showOrderQr={includesOrderQr}
+                    fbsOrders={fbsPreviewOrders}
+                    fbsNonHonestLabelCopies={fbsPreviewLabelCopies}
+                    testId="marking-print-tape-preview"
                   />
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    disabled={busy || !saveName.trim()}
-                    onClick={() => void handleSaveTemplate()}
-                    data-testid="marking-print-save-template"
-                  >
-                    Сохранить
-                  </Button>
-                </Stack>
+                </Box>
               </>
             ) : null}
 
@@ -1376,13 +1576,14 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
 
             {!effectiveReprint && requiresHonestSign && !separateMode && canPrintCount > 0 ? (
               <Typography variant="body2" data-testid="marking-print-will-print">
-                К печати: {canPrintCount} ед. · {totalTapeCount} блоков в ленте
+                К печати: {canPrintCount} ед. · {czQty * canPrintCount} ЧЗ + {wbQty * canPrintCount} ШК ВБ ·{' '}
+                {totalTapeCount} {plural(totalTapeCount, ['блок', 'блока', 'блоков'])} в ленте
               </Typography>
             ) : null}
 
             {!effectiveReprint && !requiresHonestSign && totalWbLabels > 0 ? (
               <Typography variant="body2" data-testid="marking-print-will-print">
-                К печати: {totalWbLabels} ШК ВБ
+                К печати: {totalWbLabels} ШК ВБ{printDoubleWbBarcode ? ' (× 2)' : ''}
               </Typography>
             ) : null}
 
@@ -1419,13 +1620,6 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
           )}
         </DialogActions>
       </Dialog>
-      <Snackbar
-        open={toast !== null}
-        autoHideDuration={4000}
-        onClose={() => setToast(null)}
-        message={toast ?? ''}
-        data-testid="marking-print-toast"
-      />
     </>
   )
 }

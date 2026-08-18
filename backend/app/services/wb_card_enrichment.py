@@ -14,6 +14,21 @@ _COMPOSITION_CHAR_NAMES = frozenset(
         "материал",
     }
 )
+_COUNTRY_CHAR_NAMES = frozenset(
+    {
+        "страна производства",
+        "страна изготовления",
+        "страна происхождения",
+    }
+)
+_SHELF_LIFE_CHAR_NAMES = frozenset(
+    {
+        "срок годности",
+        "срок годности, мес",
+        "срок годности (мес.)",
+        "срок годности мес",
+    }
+)
 
 
 def brand_from_card(card: dict[str, Any]) -> str | None:
@@ -148,6 +163,16 @@ def color_from_card(card: dict[str, Any]) -> str | None:
 def composition_from_card(card: dict[str, Any]) -> str | None:
     """Material composition from card ``characteristics`` (name «Состав» etc.)."""
     return _characteristic_from_card(card, names=_COMPOSITION_CHAR_NAMES)
+
+
+def country_of_origin_from_card(card: dict[str, Any]) -> str | None:
+    """Country of manufacture from card ``characteristics`` (name «Страна производства» etc.)."""
+    return _characteristic_from_card(card, names=_COUNTRY_CHAR_NAMES)
+
+
+def shelf_life_from_card(card: dict[str, Any]) -> str | None:
+    """Shelf life (срок годности) from card ``characteristics``, kept as WB sends it (free text)."""
+    return _characteristic_from_card(card, names=_SHELF_LIFE_CHAR_NAMES)
 
 
 def _characteristic_from_card(

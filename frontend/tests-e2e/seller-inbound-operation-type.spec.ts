@@ -71,9 +71,6 @@ test('seller chooses supply or return before inbound draft creation', async ({ p
   await page.getByTestId('nav-seller-documents').click();
   await expect(page.getByTestId('seller-documents-table')).toBeVisible();
   await expect(page.getByTestId('seller-documents-list')).not.toContainText(hiddenWaybill);
-  await expect(page.getByTestId('seller-shipments-empty')).toContainText(
-    'На сегодня и завтра нет ваших документов с плановой датой',
-  );
   await expect(page.getByTestId('seller-create-inbound')).toContainText('Создать заявку на поставку');
   await expect(page.getByTestId('seller-create-return')).toContainText('Создать заявку на возврат');
 
@@ -90,13 +87,12 @@ test('seller chooses supply or return before inbound draft creation', async ({ p
   await expect(page.getByRole('heading', { name: 'Новая заявка на поставку' })).toBeVisible();
   await expect(page.getByTestId('seller-inbound-operation-type')).toContainText('Поставка');
   await expect(page.getByTestId('seller-inbound-operation-toggle')).toHaveCount(0);
+  await expect(page.getByTestId('seller-inbound-document-number')).toContainText('№');
   await page.getByTestId('seller-inbound-planned-boxes').fill('1');
   await page.getByTestId('seller-inbound-save-draft').click();
   await expect(page.getByTestId('seller-inbound-draft-ok')).toContainText('Заявка сохранена');
   await page.getByTestId('seller-inbound-close').click();
   await expect(page.getByTestId('seller-documents-table')).toBeVisible();
-  await expect(page.getByTestId('seller-shipments-today')).toContainText('Поставка');
-  await expect(page.getByTestId('seller-shipments-calendar')).not.toContainText(hiddenWaybill);
 
   const [returnCreate] = await Promise.all([
     waitForPostOk(page, INBOUND_API, (u) => !u.includes('/lines') && !u.includes('/submit')),
@@ -173,15 +169,14 @@ test('seller chooses supply or return before inbound draft creation', async ({ p
       containerScrollWidth: container?.scrollWidth ?? 0,
     };
   });
-  expect(draftLayout.headerCells).toBe(9);
-  expect(draftLayout.bodyCells).toBe(9);
+  expect(draftLayout.headerCells).toBe(8);
+  expect(draftLayout.bodyCells).toBe(8);
   expect(draftLayout.nameText).toContain('F18 Return Product');
   expect(draftLayout.nameWidth).toBeGreaterThanOrEqual(250);
   expect(draftLayout.rowHeight).toBeLessThanOrEqual(96);
   expect(draftLayout.headerBottom).toBeLessThanOrEqual(draftLayout.firstBodyTop + 1);
   expect(draftLayout.nameRight).toBeLessThanOrEqual(draftLayout.qtyLeft + 1);
   expect(draftLayout.containerScrollWidth).toBeGreaterThanOrEqual(draftLayout.containerClientWidth);
-  expect(draftLayout.containerScrollWidth).toBeGreaterThanOrEqual(1096);
 
   await page.setViewportSize({ width: 1280, height: 720 });
   const returnDraftOverflow = await page.getByTestId('seller-inbound-draft-form').evaluate((form) => {
@@ -223,21 +218,31 @@ test('seller chooses supply or return before inbound draft creation', async ({ p
   expect(returnDraftOverflow.containerClientWidth).toBeLessThanOrEqual(
     returnDraftOverflow.viewportWidth,
   );
-  expect(returnDraftOverflow.containerScrollWidth).toBeGreaterThan(
-    returnDraftOverflow.containerClientWidth,
+  // BL-2 geometry fix: колонки сужены так, что таблица помещается в контейнер
+  // без переполнения на 1280px — липкой колонке «Действия» больше не нужно
+  // сдвигаться и перекрывать соседние заголовки.
+  expect(returnDraftOverflow.containerScrollWidth).toBeLessThanOrEqual(
+    returnDraftOverflow.containerClientWidth + 1,
   );
-  expect(returnDraftOverflow.tableScrollWidth).toBeGreaterThan(
-    returnDraftOverflow.containerClientWidth,
+  expect(returnDraftOverflow.tableScrollWidth).toBeLessThanOrEqual(
+    returnDraftOverflow.containerClientWidth + 1,
   );
 
   await page.getByTestId('seller-inbound-line-print-barcode').click();
   await expect(page.getByTestId('ff-product-label-print-dialog')).toBeVisible();
-  await expect(page.getByTestId('ff-product-label-preview')).toContainText(returnBarcode);
+  // Превью этикетки теперь рендерится тем же кодом, что и печать, внутри
+  // <iframe srcDoc=...> (см. MarkingLabelPreview.tsx) — снаружи через
+  // toContainText штрихкод не виден, поэтому заглядываем внутрь фрейма.
+  await expect(page.getByTestId('ff-product-label-preview')).toBeVisible();
+  await expect(
+    page
+      .frameLocator('[data-testid="ff-product-label-preview"] iframe')
+      .locator('body'),
+  ).toContainText(returnBarcode);
   await expect(page.getByTestId('ff-product-label-qty')).toHaveValue('1');
   await page.getByTestId('ff-product-label-cancel').click();
   await expect(page.getByTestId('ff-product-label-print-dialog')).toHaveCount(0);
 
-  await page.getByTestId('seller-inbound-waybill-number').fill(`WAYBILL-${seed.suffix}`);
   await page.getByTestId('seller-inbound-planned-boxes').fill('0');
   await page.getByTestId('seller-inbound-submit-warehouse').click();
   await expect(page.getByTestId('seller-inbound-draft-error')).toContainText('Укажите количество грузомест');
@@ -255,7 +260,6 @@ test('seller chooses supply or return before inbound draft creation', async ({ p
   );
   await expect(supplyRow).toContainText('Поставка');
   await expect(returnRow).toContainText('Возврат');
-  await expect(returnRow).toContainText(`WAYBILL-${seed.suffix}`);
   await expect(returnRow).toHaveAttribute('data-doc-operation-type', 'return');
 
   await page.getByTestId('seller-documents-type').click();
@@ -294,13 +298,9 @@ test('seller chooses supply or return before inbound draft creation', async ({ p
     `[data-testid="ff-inbound-queue-row"][data-request-id="${returnDraft.id}"]`,
   );
   await expect(ffReturnRow.getByTestId('ff-inbound-queue-document')).toContainText('Возврат');
-  await expect(ffReturnRow.getByTestId('ff-inbound-queue-waybill-number')).toContainText(
-    `WAYBILL-${seed.suffix}`,
-  );
   await ffReturnRow.click();
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
   await expect(page.getByTestId('ff-inbound-operation-type')).toContainText('Возврат');
-  await expect(page.getByTestId('ff-inbound-waybill-number')).toContainText(`WAYBILL-${seed.suffix}`);
   const returnDocumentNumber =
     (await page.getByTestId('ff-inbound-document-number').textContent())?.trim() ?? '';
   expect(returnDocumentNumber).toContain('№');

@@ -89,6 +89,7 @@ test('fbs seller warehouses: row binding, manual sync, status panel', async ({ p
   ])
   await expect(page.getByTestId('fbs-stock-sync-feedback')).toBeVisible()
 
+  await row.getByTestId('fbs-stock-row-menu-btn').click()
   await Promise.all([
     waitForGetOk(page, '/stocks/sync-status'),
     page.getByTestId('fbs-stock-status-btn').click(),
@@ -97,7 +98,8 @@ test('fbs seller warehouses: row binding, manual sync, status panel', async ({ p
 
   // Disable binding — real DELETE
   await page.getByRole('button', { name: 'Закрыть' }).click()
-  await row.getByTestId('fbs-stock-disable-binding').click()
+  await row.getByTestId('fbs-stock-row-menu-btn').click()
+  await page.getByTestId('fbs-stock-disable-binding').click()
   await Promise.all([
     page.waitForResponse(
       (r) =>

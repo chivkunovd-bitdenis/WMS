@@ -72,8 +72,10 @@ test('ff reception can create inbound draft and open it', async ({ page }) => {
   );
 });
 
-// TC-NEW-REC-LIST-001 — REC-10/REC-13/REC-14: список приёмок фильтруется, ищет по товару и красит строки по расхождению/статусу.
-test('ff reception list has filters search sorting and row state colors', async ({ page }) => {
+// TC-NEW-REC-LIST-001 — REC-10/REC-13/REC-14: список приёмок фильтруется, ищет по товару, сортируется
+// и помечает расхождение. Решение заказчика 17.08.2026: подсветки строки нет — расхождение показывается
+// красным текстом в колонке «Состав». Атрибут data-row-discrepancy на строке остаётся (невидимый, для теста).
+test('ff reception list has filters search sorting and discrepancy marking', async ({ page }) => {
   const suffix = String(Date.now());
   const email = `e2e-rec-list-${suffix}@example.com`;
 
@@ -196,10 +198,12 @@ test('ff reception list has filters search sorting and row state colors', async 
   const redRow = page.locator(`[data-testid="ff-inbound-queue-row"][data-request-id="${redId}"]`);
   const greenRow = page.locator(`[data-testid="ff-inbound-queue-row"][data-request-id="${greenId}"]`);
   const freshRow = page.locator(`[data-testid="ff-inbound-queue-row"][data-request-id="${freshId}"]`);
-  await expect(redRow).toHaveAttribute('data-row-discrepancy', 'mismatch');
-  await expect(greenRow).toHaveAttribute('data-row-discrepancy', 'matched');
+  // redId принят с actual_qty=4 при expected_qty=5 — расхождение, строка помечена.
+  // greenId принят ровно по плану (actual_qty=3 из 3) — расхождения нет, пометки нет.
+  await expect(redRow).toHaveAttribute('data-row-discrepancy', 'yes');
+  await expect(greenRow).toHaveAttribute('data-row-discrepancy', 'no');
   await expect(freshRow).toHaveAttribute('data-row-status', 'submitted');
-  await expect(freshRow.getByTestId('ff-inbound-queue-composition')).toContainText('0 из 1 коробов');
+  await expect(freshRow.getByTestId('ff-inbound-queue-composition')).toContainText('0 из 1 короба');
   await expect(freshRow.getByTestId('ff-inbound-queue-composition')).toContainText('7 ед.');
 
   await page.getByTestId('ff-inbound-search').fill(`REC-RED-${suffix}`);

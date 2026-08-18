@@ -48,19 +48,28 @@ export function truncateProductLabelComposition(text: string, maxLen = 48): stri
   return `${trimmed.slice(0, Math.max(1, maxLen - 1))}…`
 }
 
-/** Sub-lines under barcode in table ШК column (size, composition). */
-export function productBarcodeColumnSubLines(meta: {
-  wb_size?: string | null
-  wb_composition?: string | null
-}): string[] {
+/**
+ * Sub-lines under barcode in table ШК column.
+ * Состав ткани — только для печати этикетки (см. productLabelDetailLines), в рабочей
+ * таблице кладовщику он не нужен и включается лишь по явному запросу (includeComposition).
+ */
+export function productBarcodeColumnSubLines(
+  meta: {
+    wb_size?: string | null
+    wb_composition?: string | null
+  },
+  options: { includeComposition?: boolean } = {},
+): string[] {
   const lines: string[] = []
   const size = meta.wb_size?.trim()
-  const composition = meta.wb_composition?.trim()
   if (size) {
     lines.push(`Размер: ${size}`)
   }
-  if (composition) {
-    lines.push(`Состав: ${truncateProductLabelComposition(composition, 42)}`)
+  if (options.includeComposition) {
+    const composition = meta.wb_composition?.trim()
+    if (composition) {
+      lines.push(`Состав: ${truncateProductLabelComposition(composition, 42)}`)
+    }
   }
   return lines
 }

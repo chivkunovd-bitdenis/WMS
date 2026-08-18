@@ -27,7 +27,6 @@ import {
   type FfPermissions,
   type FfStaffAccessKey,
 } from '../../utils/ffPermissions'
-import { setSeparateMarkingPrintEnabled } from '../../utils/separateMarkingPrint'
 
 type StaffPackagingBilling = {
   billing_month: string
@@ -89,7 +88,8 @@ export function FfSettingsScreen({
   canManageStaff,
   addressStorageEnabled = true,
   onAddressStorageChange,
-  separateMarkingPrintEnabled = false,
+  // separateMarkingPrintEnabled больше не используется здесь: переключатель
+  // «раздельная печать ЧЗ/ШК» переехал на форму печати (MarkingPrintDialog, FBS-10).
   fbsShipmentCutoffTime = null,
 }: Props) {
   const [rows, setRows] = useState<StaffAccountRow[]>([])
@@ -102,8 +102,6 @@ export function FfSettingsScreen({
     message: string
     testId: string
   } | null>(null)
-  const [separatePrint, setSeparatePrint] = useState(separateMarkingPrintEnabled)
-  const [separatePrintBusy, setSeparatePrintBusy] = useState(false)
   const [fbsCutoff, setFbsCutoff] = useState(fbsShipmentCutoffTime ?? '')
   const [fbsCutoffSaved, setFbsCutoffSaved] = useState(fbsShipmentCutoffTime ?? '')
   const [fbsCutoffBusy, setFbsCutoffBusy] = useState(false)
@@ -147,10 +145,6 @@ export function FfSettingsScreen({
   useEffect(() => {
     setAddressStorage(addressStorageEnabled)
   }, [addressStorageEnabled])
-
-  useEffect(() => {
-    setSeparatePrint(separateMarkingPrintEnabled)
-  }, [separateMarkingPrintEnabled])
 
   useEffect(() => {
     setFbsCutoff(fbsShipmentCutoffTime ?? '')
@@ -318,36 +312,6 @@ export function FfSettingsScreen({
     }
   }
 
-  async function onSeparatePrintToggle(checked: boolean) {
-    if (!token || !isFulfillmentAdmin) {
-      return
-    }
-    const previous = separatePrint
-    setSeparatePrint(checked)
-    setSeparatePrintBusy(true)
-    setError(null)
-    try {
-      const res = await fetch(apiUrl('/tenant/settings'), {
-        method: 'PATCH',
-        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ separate_marking_print_enabled: checked }),
-      })
-      if (!res.ok) {
-        setSeparatePrint(previous)
-        setError(await readApiErrorMessage(res))
-        return
-      }
-      const data = (await res.json()) as { separate_marking_print_enabled: boolean }
-      setSeparatePrint(data.separate_marking_print_enabled)
-      setSeparateMarkingPrintEnabled(data.separate_marking_print_enabled)
-    } catch (err) {
-      setSeparatePrint(previous)
-      setError(err instanceof Error ? err.message : 'Не удалось сохранить настройку печати.')
-    } finally {
-      setSeparatePrintBusy(false)
-    }
-  }
-
   async function onFbsCutoffSave(nextValue = fbsCutoff) {
     if (!token || !isFulfillmentAdmin) {
       return
@@ -382,7 +346,7 @@ export function FfSettingsScreen({
         Настройки
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Сотрудники фулфилмента и доступ к рабочим разделам.
+        Склад, печать и сотрудники фулфилмента.
       </Typography>
 
       {isFulfillmentAdmin ? (
@@ -421,27 +385,8 @@ export function FfSettingsScreen({
             {addressStorageBusy ? <CircularProgress size={20} /> : null}
           </Stack>
 
-          <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-              В модалках печати — отдельные кнопки для ЧЗ и ШК ВБ со своими размерами этикеток (для складов, где ЧЗ и ШК печатаются на разных лентах).
-            </Typography>
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={separatePrint}
-                    disabled={separatePrintBusy}
-                    onChange={(e) => void onSeparatePrintToggle(e.target.checked)}
-                    data-testid="ff-settings-separate-marking-print"
-                  />
-                }
-                label="Раздельная печать ЧЗ и ШК ВБ"
-              />
-              {separatePrintBusy ? <CircularProgress size={20} /> : null}
-            </Stack>
-          </Box>
-
           <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider' }} data-testid="cal-03-fbs-cutoff-section" data-task-id="CAL-03">
+            {/* GLOBAL-02: заголовок секции несёт название, поле ниже подписано просто «Время» */}
             <Typography variant="subtitle2" gutterBottom data-task-id="CAL-03">
               Время отсечки FBS
             </Typography>
@@ -449,7 +394,7 @@ export function FfSettingsScreen({
               <TextField
                 type="time"
                 size="small"
-                label="Время отсечки FBS"
+                label="Время"
                 value={fbsCutoff}
                 onChange={(event) => setFbsCutoff(event.target.value)}
                 disabled={fbsCutoffBusy}
@@ -504,6 +449,10 @@ export function FfSettingsScreen({
             </Alert>
           ) : null}
 
+          <Typography variant="subtitle2" gutterBottom data-testid="ff-settings-staff-heading">
+            Сотрудники
+          </Typography>
+
           <Stack spacing={2}>
             {isFulfillmentAdmin ? (
               <Stack
@@ -545,30 +494,30 @@ export function FfSettingsScreen({
               >
                 <Table size="small" data-testid="ff-staff-table">
                   <TableHead>
-	                    <TableRow>
-	                      <TableCell sx={{ minWidth: 220 }}>Email</TableCell>
-	                      {FF_STAFF_ACCESS_BLOCKS.map((block) => (
-	                        <TableCell key={block.key} align="center" sx={{ minWidth: 116 }}>
+                    <TableRow>
+                      <TableCell sx={{ minWidth: 220 }}>Email</TableCell>
+                      {FF_STAFF_ACCESS_BLOCKS.map((block) => (
+                        <TableCell key={block.key} align="center" sx={{ minWidth: 116 }}>
                           <Typography variant="caption" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
                             {block.label}
                           </Typography>
-	                        </TableCell>
-	                      ))}
-	                      {isFulfillmentAdmin ? (
-	                        <>
-	                          <TableCell align="right" sx={{ minWidth: 120 }}>
-	                            Ставка за ед., ₽
-	                          </TableCell>
-	                          <TableCell align="right" sx={{ minWidth: 110 }}>
-	                            Упаковано, шт
-	                          </TableCell>
-	                          <TableCell align="right" sx={{ minWidth: 110 }}>
-	                            Начислено, ₽
-	                          </TableCell>
-	                        </>
-	                      ) : null}
-	                    </TableRow>
-	                  </TableHead>
+                        </TableCell>
+                      ))}
+                      {isFulfillmentAdmin ? (
+                        <>
+                          <TableCell align="right" sx={{ minWidth: 120 }}>
+                            Ставка за ед., ₽
+                          </TableCell>
+                          <TableCell align="right" sx={{ minWidth: 110 }}>
+                            Упаковано, шт
+                          </TableCell>
+                          <TableCell align="right" sx={{ minWidth: 110 }}>
+                            Начислено, ₽
+                          </TableCell>
+                        </>
+                      ) : null}
+                    </TableRow>
+                  </TableHead>
                   <TableBody>
                     {rows.map((row) => {
                       const access = ffPermissionsToStaffAccess(row.permissions)
@@ -595,8 +544,8 @@ export function FfSettingsScreen({
                               {row.must_set_password ? 'ожидает первый вход' : 'сотрудник'}
                             </Typography>
                           </TableCell>
-	                          {FF_STAFF_ACCESS_BLOCKS.map((block) => (
-	                            <TableCell key={block.key} align="center" padding="checkbox">
+                          {FF_STAFF_ACCESS_BLOCKS.map((block) => (
+                            <TableCell key={block.key} align="center" padding="checkbox">
                               <Checkbox
                                 size="small"
                                 checked={access[block.key]}
@@ -613,57 +562,57 @@ export function FfSettingsScreen({
                                   void onTogglePermission(row, block.key, e.target.checked)
                                 }
                               />
-	                            </TableCell>
-	                          ))}
-	                          {isFulfillmentAdmin ? (
-	                            <>
-	                              <TableCell align="right">
-	                                <TextField
-	                                  size="small"
-	                                  type="number"
-	                                  inputMode="decimal"
-	                                  value={rateDrafts[row.id] ?? row.packaging_rate_rub ?? '0.00'}
-	                                  disabled={rateBusyId === row.id}
-	                                  onChange={(e) =>
-	                                    setRateDrafts((prev) => ({
-	                                      ...prev,
-	                                      [row.id]: e.target.value,
-	                                    }))
-	                                  }
-	                                  onBlur={() => {
-	                                    const draft = rateDrafts[row.id]
-	                                    if (draft !== undefined && draft !== row.packaging_rate_rub) {
-	                                      void savePackagingRate(row)
-	                                    }
-	                                  }}
-	                                  onKeyDown={(e) => {
-	                                    if (e.key === 'Enter') {
-	                                      e.preventDefault()
-	                                      void savePackagingRate(row)
-	                                    }
-	                                  }}
-	                                  slotProps={{
-	                                    htmlInput: {
-	                                      'data-testid': `ff-staff-rate-${row.id}`,
-	                                      min: 0,
-	                                      step: 0.01,
-	                                      style: { textAlign: 'right' },
-	                                    },
-	                                  }}
-	                                  sx={{ width: 108 }}
-	                                />
-	                              </TableCell>
-	                              <TableCell align="right" data-testid={`ff-staff-units-${row.id}`}>
-	                                {row.packaging_billing?.units_packed ?? 0}
-	                              </TableCell>
-	                              <TableCell align="right" data-testid={`ff-staff-earned-${row.id}`}>
-	                                {formatRubDisplay(row.packaging_billing?.earned_rub ?? '0')}
-	                              </TableCell>
-	                            </>
-	                          ) : null}
-	                        </TableRow>
-	                      )
-	                    })}
+                            </TableCell>
+                          ))}
+                          {isFulfillmentAdmin ? (
+                            <>
+                              <TableCell align="right">
+                                <TextField
+                                  size="small"
+                                  type="number"
+                                  inputMode="decimal"
+                                  value={rateDrafts[row.id] ?? row.packaging_rate_rub ?? '0.00'}
+                                  disabled={rateBusyId === row.id}
+                                  onChange={(e) =>
+                                    setRateDrafts((prev) => ({
+                                      ...prev,
+                                      [row.id]: e.target.value,
+                                    }))
+                                  }
+                                  onBlur={() => {
+                                    const draft = rateDrafts[row.id]
+                                    if (draft !== undefined && draft !== row.packaging_rate_rub) {
+                                      void savePackagingRate(row)
+                                    }
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault()
+                                      void savePackagingRate(row)
+                                    }
+                                  }}
+                                  slotProps={{
+                                    htmlInput: {
+                                      'data-testid': `ff-staff-rate-${row.id}`,
+                                      min: 0,
+                                      step: 0.01,
+                                      style: { textAlign: 'right' },
+                                    },
+                                  }}
+                                  sx={{ width: 108 }}
+                                />
+                              </TableCell>
+                              <TableCell align="right" data-testid={`ff-staff-units-${row.id}`}>
+                                {row.packaging_billing?.units_packed ?? 0}
+                              </TableCell>
+                              <TableCell align="right" data-testid={`ff-staff-earned-${row.id}`}>
+                                {formatRubDisplay(row.packaging_billing?.earned_rub ?? '0')}
+                              </TableCell>
+                            </>
+                          ) : null}
+                        </TableRow>
+                      )
+                    })}
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -726,26 +675,26 @@ export function FfSettingsScreen({
             >
               {permSavedNotice}
             </Alert>
-	          </Snackbar>
+          </Snackbar>
 
-	          <Snackbar
-	            open={rateSavedNotice !== null}
-	            autoHideDuration={2500}
-	            onClose={() => setRateSavedNotice(null)}
-	            anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-	          >
-	            <Alert
-	              severity="success"
-	              variant="filled"
-	              onClose={() => setRateSavedNotice(null)}
-	              data-testid="ff-staff-rate-saved"
-	              sx={{ width: '100%' }}
-	            >
-	              {rateSavedNotice}
-	            </Alert>
-	          </Snackbar>
-	        </Box>
-	      )}
+          <Snackbar
+            open={rateSavedNotice !== null}
+            autoHideDuration={2500}
+            onClose={() => setRateSavedNotice(null)}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+          >
+            <Alert
+              severity="success"
+              variant="filled"
+              onClose={() => setRateSavedNotice(null)}
+              data-testid="ff-staff-rate-saved"
+              sx={{ width: '100%' }}
+            >
+              {rateSavedNotice}
+            </Alert>
+          </Snackbar>
+        </Box>
+      )}
     </Box>
   )
 }

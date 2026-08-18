@@ -284,13 +284,17 @@ test('FF marketplace unload: tabs switch without losing document context', async
   )
   await expect(page.getByTestId('ff-supplies-doc-dialog')).not.toContainText(unloadDocumentNumber)
   await expect(page.getByTestId('ff-mp-tab-products')).toBeVisible()
+  // MPFBO-01: «Если план утверждён, вкладка "Подбор" должна становиться доступной».
+  // Раньше здесь стояло toHaveCount(0) на ff-mp-tab-picking — тест закреплял отсутствие
+  // шага подбора, потерянного 28.06 в коммите 304abf2. Требование говорит обратное.
+  await expect(page.getByTestId('ff-mp-tab-pick')).toBeVisible()
   await expect(page.getByTestId('ff-mp-tab-packaging')).toBeVisible()
-  await expect(page.getByTestId('ff-mp-tab-picking')).toHaveCount(0)
   await expect(page.getByTestId('ff-mp-tab-boxes')).toHaveCount(0)
   await expect(page.getByTestId('ff-mp-tab-final')).toHaveCount(0)
   await expect(page.getByTestId('ff-mp-boxes')).toHaveCount(0)
   await expectMpTabSelected(page, 'ff-mp-tab-products')
-  await expect(page.getByTestId('ff-mp-next-step')).toContainText('Упаковка')
+  // Следующий шаг после «Товары» — «Подбор», а не «Упаковка»: между ними появился этап.
+  await expect(page.getByTestId('ff-mp-next-step')).toContainText('Подбор')
   await expect(page.getByTestId('ff-mp-ship')).toHaveCount(0)
 
   await expect(page.getByTestId('ff-mp-shipment-summary')).toBeVisible()
@@ -303,7 +307,11 @@ test('FF marketplace unload: tabs switch without losing document context', async
   await expect(page.getByTestId('ff-mp-tab-packaging-panel')).toBeVisible()
   await expectMpTabSelected(page, 'ff-mp-tab-packaging')
   await expect(page.getByTestId('ff-mp-packaging-continue')).toHaveCount(0)
-  await expect(page.getByTestId('ff-mp-tab-packaging-panel')).toContainText('Готово 2 / Осталось 0')
+  // Блок «Прогресс» внутри панели упаковки убран как дубль (решение заказчика 2026-08-16) —
+  // те же «готово/осталось» показывает плашка отгрузки над вкладками, она видна на любой
+  // вкладке, включая «Упаковка».
+  await expect(page.getByTestId('ff-mp-shipment-summary-packed')).toHaveText('2/2')
+  await expect(page.getByTestId('ff-mp-shipment-summary-remaining')).toHaveText('0')
   await expect(page.getByTestId('ff-mp-boxes')).not.toBeVisible()
   await page.getByTestId('ff-mp-boxes-summary').click()
   await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
@@ -780,7 +788,10 @@ test('TC-NEW-OUT-FE-02: shipment table columns no early red', async ({ page }) =
   await expect(page.locator('[data-testid^="ff-mp-line-discrepancy-"]')).toHaveCount(0)
   await expect(page.getByTestId(`ff-mp-line-row-${mpLineId}`)).toBeVisible()
   await expect(page.getByTestId(`ff-mp-line-plan-${mpLineId}`)).toHaveText('2')
-  await expect(page.getByTestId(`ff-mp-line-picked-${mpLineId}`)).toHaveText('0')
+  // MPU-03 (18.08.2026): колонка «Распределено» убрана с вкладки «Товары» по решению
+  // заказчика — она дублировала данные вкладки «Подбор». Ячейка ff-mp-line-picked-*
+  // ушла вместе с колонкой; подобранное теперь видно в сводке сверху и на «Подборе».
+  await expect(page.getByTestId(`ff-mp-line-picked-${mpLineId}`)).toHaveCount(0)
   await expect(page.getByTestId(`ff-mp-line-remaining-${mpLineId}`)).toHaveText('2')
   await expect(page.getByTestId('ff-mp-print-actions')).toHaveCount(0)
   await page.getByTestId('ff-mp-tab-packaging').click()

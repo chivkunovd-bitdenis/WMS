@@ -985,6 +985,145 @@ async def test_complete_packaging_marking_not_done(async_client: AsyncClient) ->
 
 
 @pytest.mark.asyncio
+async def test_mark_prepacked_external_satisfies_marking_gate(async_client: AsyncClient) -> None:
+    """Пришло готовым: qty_packed_in_task и qty_marking_external растут вместе,
+    qty_marking_printed не трогается, но завершение задания не блокируется требованием
+    печати — код уже стоит на товаре физически."""
+    h = await _register_admin(async_client)
+    seller = await async_client.post(
+        "/sellers",
+        headers=h,
+        json={"name": "Prepacked Gate", "email": f"pg-{uuid.uuid4().hex[:8]}@example.com"},
+    )
+    assert seller.status_code == 201, seller.text
+    seller_id = seller.json()["id"]
+    wh = await async_client.post("/warehouses", headers=h, json={"name": "W", "code": "w-pg"})
+    wh_id = wh.json()["id"]
+    pr = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": "Prepacked Pkg",
+            "sku_code": f"pg-{uuid.uuid4().hex[:6]}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+            "seller_id": seller_id,
+        },
+    )
+    product_id = pr.json()["id"]
+    patch = await async_client.patch(
+        f"/products/{product_id}/packaging-instructions",
+        headers=h,
+        json={"requires_honest_sign": True, "packaging_instructions": "ЧЗ"},
+    )
+    assert patch.status_code == 200, patch.text
+    loc_id = await _inventory_at_location(
+        async_client, h, warehouse_id=wh_id, product_id=product_id, qty=2, location_code="PG-1"
+    )
+    create = await async_client.post(
+        "/operations/packaging-tasks",
+        headers=h,
+        json={
+            "warehouse_id": wh_id,
+            "lines": [{"product_id": product_id, "storage_location_id": loc_id, "quantity": 2}],
+        },
+    )
+    assert create.status_code == 201, create.text
+    task_id = create.json()["id"]
+    line_id = create.json()["lines"][0]["id"]
+
+    prepacked = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/lines/{line_id}/mark-prepacked",
+        headers=h,
+        json={"quantity": 2},
+    )
+    assert prepacked.status_code == 200, prepacked.text
+    prepacked_line = prepacked.json()["lines"][0]
+    assert prepacked_line["qty_packed_in_task"] == 2
+    assert prepacked_line["qty_marking_external"] == 2
+    assert prepacked_line["qty_marking_printed"] == 0
+
+    complete = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/complete",
+        headers=h,
+        json={"acknowledge_all_packed": False},
+    )
+    assert complete.status_code == 200, complete.text
+    assert complete.json()["status"] == STATUS_DONE
+
+
+@pytest.mark.asyncio
+async def test_pack_without_prepacked_leaves_marking_external_zero(
+    async_client: AsyncClient,
+) -> None:
+    """Контраст с mark-prepacked: обычный /pack не трогает qty_marking_external,
+    поэтому завершение задания по-прежнему требует печати ЧЗ."""
+    h = await _register_admin(async_client)
+    seller = await async_client.post(
+        "/sellers",
+        headers=h,
+        json={"name": "Pack Gate", "email": f"pkg2-{uuid.uuid4().hex[:8]}@example.com"},
+    )
+    assert seller.status_code == 201, seller.text
+    seller_id = seller.json()["id"]
+    wh = await async_client.post("/warehouses", headers=h, json={"name": "W", "code": "w-pk2"})
+    wh_id = wh.json()["id"]
+    pr = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": "Pack Gate Pkg",
+            "sku_code": f"pk2-{uuid.uuid4().hex[:6]}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+            "seller_id": seller_id,
+        },
+    )
+    product_id = pr.json()["id"]
+    patch = await async_client.patch(
+        f"/products/{product_id}/packaging-instructions",
+        headers=h,
+        json={"requires_honest_sign": True, "packaging_instructions": "ЧЗ"},
+    )
+    assert patch.status_code == 200, patch.text
+    loc_id = await _inventory_at_location(
+        async_client, h, warehouse_id=wh_id, product_id=product_id, qty=2, location_code="PK2-1"
+    )
+    create = await async_client.post(
+        "/operations/packaging-tasks",
+        headers=h,
+        json={
+            "warehouse_id": wh_id,
+            "lines": [{"product_id": product_id, "storage_location_id": loc_id, "quantity": 2}],
+        },
+    )
+    assert create.status_code == 201, create.text
+    task_id = create.json()["id"]
+    line_id = create.json()["lines"][0]["id"]
+
+    pack = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/lines/{line_id}/pack",
+        headers=h,
+        json={"quantity": 2},
+    )
+    assert pack.status_code == 200, pack.text
+    packed_line = pack.json()["packaging_task"]["lines"][0]
+    assert packed_line["qty_packed_in_task"] == 2
+    assert packed_line["qty_marking_external"] == 0
+    assert packed_line["qty_marking_printed"] == 0
+
+    blocked = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/complete",
+        headers=h,
+        json={"acknowledge_all_packed": True},
+    )
+    assert blocked.status_code == 422
+    assert blocked.json()["detail"] == "marking_not_done"
+
+
+@pytest.mark.asyncio
 async def test_box_create_allowed_before_packaging_done(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,

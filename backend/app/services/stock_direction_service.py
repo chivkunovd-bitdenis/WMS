@@ -172,11 +172,9 @@ async def create_stock_direction(
         name=clean_name,
         comment=clean_comment,
         quantity=int(quantity),
-        is_fbs=bool(is_fbs),
+        is_fbs=False,
     )
     session.add(direction)
-    if is_fbs and not product.fbs_stock_sync_enabled:
-        product.fbs_stock_sync_enabled = True
     schedule_seller_stock_publish(session, tenant_id, product.seller_id)
     await session.commit()
     await session.refresh(direction)
@@ -217,10 +215,7 @@ async def update_stock_direction(
         direction.name = _clean_name(name)
     if set_comment:
         direction.comment = _clean_comment(comment)
-    if is_fbs is not None:
-        direction.is_fbs = bool(is_fbs)
-        if is_fbs and not product.fbs_stock_sync_enabled:
-            product.fbs_stock_sync_enabled = True
+    direction.is_fbs = False
     direction.updated_at = datetime.now(UTC)
     schedule_seller_stock_publish(session, tenant_id, product.seller_id)
     await session.commit()
@@ -362,8 +357,8 @@ async def distributions_by_product(
         distributions[product_id] = StockDistribution(
             product_id=product_id,
             quantity_total=total,
-            quantity_fbs=directions.fbs,
-            quantity_reserved=directions.reserved,
+            quantity_fbs=0,
+            quantity_reserved=directions.total,
             quantity_free_fbo=max(0, total - directions.total),
         )
     return distributions

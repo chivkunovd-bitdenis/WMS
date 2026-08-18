@@ -428,5 +428,7 @@ test('MP packaging: marked product uses separate CZ/WB print when FF setting is 
   await expect(page.getByTestId('marking-print-tape')).toHaveCount(0)
   await expect(page.getByTestId('marking-print-preview')).toHaveCount(0)
   await expect(page.getByTestId('marking-print-sep-cz-total')).toContainText('К печати: 4 ЧЗ')
-  await expect(page.getByTestId('marking-print-sep-wb-total')).toContainText('К печати: 1 ШК ВБ')
+  // Умолчание поля «Количество этикеток» в раздельном режиме больше не
+  // жёстко 1 — теперь оно равно реальной плановой потребности (planQty).
+  await expect(page.getByTestId('marking-print-sep-wb-total')).toContainText('К печати: 2 ШК ВБ')
 })

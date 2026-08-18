@@ -32,6 +32,8 @@ type Props = {
   wbHasContentToken: boolean
   wbHasSuppliesToken: boolean
   wbHasMarketplaceToken: boolean
+  wbMarketplaceScopeOk: boolean | null
+  wbTokenUpdatedAt: string | null
   wbTokensBusy: boolean
   wbSyncBusy: boolean
   wbSuppliesSyncBusy: boolean
@@ -59,6 +61,8 @@ export function WildberriesScreen(props: Props) {
     wbHasContentToken,
     wbHasSuppliesToken,
     wbHasMarketplaceToken,
+    wbMarketplaceScopeOk,
+    wbTokenUpdatedAt,
     wbTokensBusy,
     wbSyncBusy,
     wbSuppliesSyncBusy,
@@ -104,11 +108,22 @@ export function WildberriesScreen(props: Props) {
                   </Select>
                 </label>
 
-                <p className="subtle" data-testid="wb-token-flags">
-                  Контент API: {wbHasContentToken ? 'токен есть' : 'нет токена'} · Поставки API:{' '}
-                  {wbHasSuppliesToken ? 'токен есть' : 'нет токена'} · Маркетплейс API:{' '}
-                  {wbHasMarketplaceToken ? 'отдельный токен' : 'берём общий'}
-                </p>
+                <div className="subtle" data-testid="wb-token-flags" data-task-id="FBS-07">
+                  <p data-testid="wb-token-status">
+                    {!wbHasContentToken
+                      ? 'Ключ WB не сохранён — без него не будут работать ни карточки, ни поставки, ни заказы FBS.'
+                      : wbMarketplaceScopeOk === true
+                        ? 'Ключ WB сохранён, права «Маркетплейс» подтверждены — заказы FBS будут работать.'
+                        : wbMarketplaceScopeOk === false
+                          ? 'Ключ WB сохранён, но у него нет прав «Маркетплейс» — заказы FBS работать не будут. Перевыпустите ключ в личном кабинете WB с категорией «Маркетплейс» и сохраните его заново.'
+                          : 'Ключ WB сохранён, но право «Маркетплейс» для него ещё не проверялось.'}
+                  </p>
+                  {wbTokenUpdatedAt ? (
+                    <p data-testid="wb-token-updated-at">
+                      Ключ обновлён {new Date(wbTokenUpdatedAt).toLocaleString('ru-RU')}
+                    </p>
+                  ) : null}
+                </div>
 
                 <form data-testid="wb-tokens-form" noValidate onSubmit={onSaveWbTokens}>
                   <label>

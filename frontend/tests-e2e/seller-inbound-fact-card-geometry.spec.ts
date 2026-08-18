@@ -13,14 +13,15 @@ type InboundDetail = {
   lines: { id: string; product_id: string }[];
 };
 
-const OLD_REPORT_COLUMN_HEADERS = [
+const UNIFIED_COLUMN_HEADERS = [
   'Фото',
   'Артикул',
   'ШК',
   'Артикул продавца',
-  'Артикул WB',
   'Наименование',
-  'Расхождение',
+  'Кол-во',
+  'Артикул WB',
+  'Действия',
 ] as const;
 
 async function createFfAddedProduct(
@@ -44,53 +45,35 @@ async function createFfAddedProduct(
   return String(((await res.json()) as { id: string }).id);
 }
 
-async function expectCompactTableGeometry(page: Page): Promise<void> {
+// BL-2: read-only statuses must render the exact same document form as the draft
+// (identity columns visible, no compact "micro-table"). Availability of actions is
+// the only thing allowed to change; the table shape must not.
+async function expectUnifiedTableGeometry(page: Page): Promise<void> {
   const geometry = await page.getByTestId('seller-inbound-lines-table').evaluate((table) => {
     const doc = document.documentElement;
     const body = document.body;
     const container = table.closest('.MuiTableContainer-root') as HTMLElement | null;
     const headCells = Array.from(table.querySelectorAll('thead th'));
     const rows = Array.from(table.querySelectorAll('tbody tr[data-testid="seller-inbound-line-row"]'));
-    const productIndex = headCells.findIndex((cell) => cell.textContent?.trim() === 'Товар');
-    const expectedIndex = headCells.findIndex((cell) => cell.textContent?.trim() === 'Заявлено');
-    const containerRect = container?.getBoundingClientRect();
-    const productWidths = rows.map((row) => row.children[productIndex]?.getBoundingClientRect().width ?? 0);
-    const rowHeights = rows.map((row) => row.getBoundingClientRect().height);
-    const headerBottom = Math.max(...headCells.map((cell) => cell.getBoundingClientRect().bottom));
-    const firstBodyTop = rows[0]?.getBoundingClientRect().top ?? 0;
-    const firstProductRight = rows[0]?.children[productIndex]?.getBoundingClientRect().right ?? 0;
-    const firstExpectedLeft = rows[0]?.children[expectedIndex]?.getBoundingClientRect().left ?? 0;
     return {
-      viewportWidth: window.innerWidth,
       documentScrollWidth: doc.scrollWidth,
       bodyScrollWidth: body.scrollWidth,
+      viewportWidth: window.innerWidth,
       containerClientWidth: container?.clientWidth ?? 0,
       containerScrollWidth: container?.scrollWidth ?? 0,
-      containerRight: containerRect?.right ?? 0,
-      lastHeaderRight: headCells[headCells.length - 1]?.getBoundingClientRect().right ?? 0,
       headerTexts: headCells.map((cell) => cell.textContent?.trim() ?? ''),
       headerCells: headCells.length,
       bodyCells: rows[0]?.children.length ?? 0,
-      minProductWidth: Math.min(...productWidths),
-      maxRowHeight: Math.max(...rowHeights),
-      headerBottom,
-      firstBodyTop,
-      firstProductRight,
-      firstExpectedLeft,
     };
   });
 
   expect(geometry.documentScrollWidth).toBeLessThanOrEqual(geometry.viewportWidth + 1);
   expect(geometry.bodyScrollWidth).toBeLessThanOrEqual(geometry.viewportWidth + 1);
-  expect(geometry.containerScrollWidth).toBeLessThanOrEqual(geometry.containerClientWidth + 1);
-  expect(geometry.lastHeaderRight).toBeLessThanOrEqual(geometry.containerRight + 1);
-  expect(geometry.headerTexts).toEqual(['Товар', 'Заявлено', 'Принято', 'Итог', '']);
+  expect(geometry.headerTexts.slice(0, UNIFIED_COLUMN_HEADERS.length)).toEqual([
+    ...UNIFIED_COLUMN_HEADERS,
+  ]);
+  expect(geometry.headerCells).toBe(8);
   expect(geometry.headerCells).toBe(geometry.bodyCells);
-  expect(geometry.headerCells).toBe(5);
-  expect(geometry.minProductWidth).toBeGreaterThanOrEqual(360);
-  expect(geometry.maxRowHeight).toBeLessThanOrEqual(120);
-  expect(geometry.headerBottom).toBeLessThanOrEqual(geometry.firstBodyTop + 1);
-  expect(geometry.firstProductRight).toBeLessThanOrEqual(geometry.firstExpectedLeft + 1);
 }
 
 async function expectSellerShellOnInbound(page: Page, requestId: string): Promise<void> {
@@ -108,50 +91,38 @@ async function expectDiscrepancyFactCardReadBack(
 ): Promise<void> {
   await expectSellerShellOnInbound(page, requestId);
   await expect(page.getByRole('heading', { name: /Карточка приёмки.*Поставка/ })).toBeVisible();
-  await expect(page.getByTestId('seller-inbound-fact-card')).toBeVisible();
-  await expect(page.getByTestId('seller-inbound-draft-form')).toHaveCount(0);
+
+  // Same document form as the draft — not a compact report table.
+  await expect(page.getByTestId('seller-inbound-draft-form')).toBeVisible();
+  for (const header of UNIFIED_COLUMN_HEADERS) {
+    // exact: иначе «Артикул» совпадает ещё и с «Артикул продавца» / «Артикул WB».
+    await expect(page.getByRole('columnheader', { name: header, exact: true })).toBeVisible();
+  }
+  await expectUnifiedTableGeometry(page);
+
+  // Actions unavailable in this status disappear rather than reshaping the form.
   await expect(page.getByTestId('seller-inbound-add-products')).toHaveCount(0);
   await expect(page.getByTestId('seller-inbound-submit-warehouse')).toHaveCount(0);
   await expect(page.getByTestId('seller-inbound-save-draft')).toHaveCount(0);
   await expect(page.getByTestId('seller-inbound-line-delete')).toHaveCount(0);
-
   await expect(page.getByTestId('seller-inbound-fact-summary')).toHaveCount(0);
   await expect(page.getByText('Итог приемки')).toHaveCount(0);
   await expect(page.getByText('Что не так')).toHaveCount(0);
-  for (const header of OLD_REPORT_COLUMN_HEADERS) {
-    await expect(page.getByRole('columnheader', { name: header })).toHaveCount(0);
-  }
-
-  await expectCompactTableGeometry(page);
 
   const visibleRows = page.getByTestId('seller-inbound-line-row');
   await expect(visibleRows).toHaveCount(2);
-  await expect(visibleRows.first()).toContainText(addedSku);
-  await expect(visibleRows.nth(1)).toContainText(seed.sku);
 
   const sellerShortageRow = page.getByTestId('seller-inbound-line-row').filter({ hasText: seed.sku });
-  await expect(sellerShortageRow.getByTestId('seller-inbound-line-expected')).toHaveText('3');
-  await expect(sellerShortageRow.getByTestId('seller-inbound-line-actual')).toHaveText('2');
-  await expect(sellerShortageRow.getByTestId('seller-inbound-line-discrepancy')).toHaveText('Недостача 1');
+  await expect(sellerShortageRow.getByTestId('seller-inbound-line-qty')).toHaveValue('3');
+  await expect(sellerShortageRow.getByTestId('seller-inbound-line-qty')).toBeDisabled();
+  await expect(sellerShortageRow.getByTestId('seller-inbound-line-fact')).toContainText('Принято: 2');
+  await expect(sellerShortageRow.getByTestId('seller-inbound-line-fact')).toContainText('Недостача 1');
 
   const sellerAddedRow = page.getByTestId('seller-inbound-line-row').filter({ hasText: addedSku });
   await expect(sellerAddedRow.getByTestId('seller-inbound-line-added-by-ff')).toContainText('Добавлено ФФ');
-  await expect(sellerAddedRow.getByTestId('seller-inbound-line-expected')).toHaveText('0');
-  await expect(sellerAddedRow.getByTestId('seller-inbound-line-actual')).toHaveText('1');
-  await expect(sellerAddedRow.getByTestId('seller-inbound-line-discrepancy')).toHaveText('Излишек 1');
-
-  await expect(page.getByTestId('seller-inbound-line-details')).toHaveCount(0);
-  await sellerAddedRow.getByTestId('seller-inbound-line-expand').click();
-  const details = page.getByTestId('seller-inbound-line-details');
-  await expect(details).toBeVisible();
-  await expect(details).toContainText('Артикул');
-  await expect(details).toContainText(addedSku);
-  await expect(details).toContainText('ШК');
-  await expect(details).toContainText(`${addedSku}-barcode`);
-  await expect(details).toContainText('Артикул продавца');
-  await expect(details).toContainText('Артикул WB');
-  await sellerAddedRow.getByTestId('seller-inbound-line-expand').click();
-  await expect(page.getByTestId('seller-inbound-line-details')).toHaveCount(0);
+  await expect(sellerAddedRow.getByTestId('seller-inbound-line-qty')).toHaveValue('0');
+  await expect(sellerAddedRow.getByTestId('seller-inbound-line-fact')).toContainText('Принято: 1');
+  await expect(sellerAddedRow.getByTestId('seller-inbound-line-fact')).toContainText('Излишек 1');
 }
 
 async function expectCleanFactCardReadBack(
@@ -160,32 +131,24 @@ async function expectCleanFactCardReadBack(
   requestId: string,
 ): Promise<void> {
   await expectSellerShellOnInbound(page, requestId);
-  await expect(page.getByTestId('seller-inbound-fact-card')).toBeVisible();
+  await expect(page.getByTestId('seller-inbound-draft-form')).toBeVisible();
   await expect(page.getByTestId('seller-inbound-fact-summary')).toHaveCount(0);
   await expect(page.getByText('Итог приемки')).toHaveCount(0);
   await expect(page.getByText('Что не так')).toHaveCount(0);
-  await expect(page.getByTestId('seller-inbound-summary-boxes')).toHaveCount(0);
   await expect(page.getByTestId('seller-inbound-line-added-by-ff')).toHaveCount(0);
+
+  await expectUnifiedTableGeometry(page);
 
   const cleanRow = page.getByTestId('seller-inbound-line-row').filter({ hasText: seed.sku });
   await expect(cleanRow).toBeVisible();
-  await expect(cleanRow.getByTestId('seller-inbound-line-expected')).toHaveText('2');
-  await expect(cleanRow.getByTestId('seller-inbound-line-actual')).toHaveText('2');
-  await expect(cleanRow.getByTestId('seller-inbound-line-discrepancy')).toHaveText('ОК');
-
-  const geometry = await page.getByTestId('seller-inbound-lines-table').evaluate((table) => {
-    const row = table.querySelector('tbody tr[data-testid="seller-inbound-line-row"]');
-    return {
-      headerTexts: Array.from(table.querySelectorAll('thead th')).map((cell) => cell.textContent?.trim() ?? ''),
-      rowBackground: row ? window.getComputedStyle(row).backgroundColor : '',
-    };
-  });
-  expect(geometry.headerTexts).toEqual(['Товар', 'Заявлено', 'Принято', 'Итог', '']);
-  expect(geometry.rowBackground).toBe('rgba(46, 125, 50, 0.08)');
+  await expect(cleanRow.getByTestId('seller-inbound-line-qty')).toHaveValue('2');
+  await expect(cleanRow.getByTestId('seller-inbound-line-fact')).toContainText('Принято: 2');
+  await expect(cleanRow.getByTestId('seller-inbound-line-fact')).toContainText('ОК');
 }
 
-// TC-NEW-IN-07 — seller fact-card at 1280px shows outcome/problem summary, 5 working columns, FF-added marker, local details, and reload read-back.
-test('seller inbound fact-card keeps a compact working discrepancy card at 1280px', async ({ page }) => {
+// TC-NEW-IN-07 — seller reads back the same document form after FF posted a discrepancy
+// (shortage + FF-added line), with actions disabled/hidden instead of a different layout.
+test('seller inbound document keeps the same form after a discrepancy at 1280px', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   const suffix = `f05-geometry-${Date.now()}`;
   const seed = await seedFfSellerInbound(page, suffix);
@@ -236,8 +199,9 @@ test('seller inbound fact-card keeps a compact working discrepancy card at 1280p
   await expect(sellerDocRow).toBeVisible();
 });
 
-// TC-NEW-IN-07 — seller fact-card clean state shows "Без расхождений", keeps normal rows undecorated, and survives reload read-back.
-test('seller inbound fact-card shows clean acceptance without problem noise', async ({ page }) => {
+// TC-NEW-IN-07 — clean acceptance (no discrepancy) still renders the same document form,
+// with normal rows undecorated, and survives reload read-back.
+test('seller inbound document shows clean acceptance in the same form', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   const suffix = `f05-clean-${Date.now()}`;
   const seed = await seedFfSellerInbound(page, suffix);

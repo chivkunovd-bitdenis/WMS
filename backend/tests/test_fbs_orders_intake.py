@@ -24,10 +24,12 @@ from app.models.fbs_order import (
     FbsOrder,
     FbsOrderReservation,
 )
+from app.models.fbs_binding_stock_pool import FbsBindingStockPool
+from app.models.fbs_stock_pool_debit import FbsStockPoolDebit
 from app.models.fbs_supply import FBS_SUPPLY_SOURCE_WB, FbsSupply
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
-from app.services import inventory_service, stock_direction_service
+from app.services import inventory_service
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.tokens import decode_access_token
 from app.services.wb_marketplace_orders_service import (
@@ -161,22 +163,6 @@ async def _seed_binding(
         )
     )
     await session.flush()
-
-
-async def _create_fbs_pool(
-    session: Any,
-    tenant_id: uuid.UUID,
-    product_id: uuid.UUID,
-    quantity: int,
-) -> None:
-    await stock_direction_service.create_stock_direction(
-        session,
-        tenant_id,
-        product_id,
-        name="FBS pool",
-        quantity=quantity,
-        is_fbs=True,
-    )
 
 
 def _patch_wb_order_fetches(
@@ -452,7 +438,6 @@ async def test_fbs_order_reserve_and_no_stock(
             quantity_delta=1,
             movement_type="inbound_intake",
         )
-        await _create_fbs_pool(session, prod.tenant_id, product_id, 1)
         await session.commit()
 
     rows = [
@@ -830,6 +815,124 @@ async def test_fbs_external_wb_supply_link_soft_fails_on_local_error(
         assert int(supply_count or 0) == 0
 
 
+@pytest.mark.asyncio
+async def test_fbs_external_wb_supply_link_surfaces_unmapped_warehouse_and_self_heals(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Поставка, собранная в кабинете WB, не подхватывается молча.
+
+    Раньше единственным следом отказа была logger.warning("... reason=no_local_warehouse")
+    внутри _get_or_create_wb_origin_supply — оператор видел заказ с пометкой «склад WB не
+    привязан» и не понимал, почему поставки для него нет. Эта проверка требует, чтобы
+    сводка sync_seller_orders называла причину и номер поставки WB явно, а также что после
+    того, как склад привяжут (тот же путь, что и в проде — PUT .../warehouse-bindings/...),
+    следующая обычная синхронизация подхватывает поставку сама, без ручных действий.
+    """
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    # Намеренно НЕ вызываем _create_binding: склад WB_WAREHOUSE_A ещё не сопоставлен
+    # складу WMS — именно эта ситуация и не даёт завести карточку поставки.
+
+    product = await async_client.post(
+        "/products",
+        headers=headers,
+        json={
+            "name": "Unmapped warehouse supply product",
+            "sku_code": f"UNMAPPED-SUP-{suffix}",
+            "seller_id": seller_id,
+            "wb_barcode": "FBS-UNMAPPED-SUP-001",
+        },
+    )
+    assert product.status_code in (200, 201), product.text
+    seller_uuid = uuid.UUID(seller_id)
+    warehouse_uuid = uuid.UUID(warehouse_id)
+
+    async with SessionLocal() as session:
+        prod = await session.get(Product, uuid.UUID(product.json()["id"]))
+        assert prod is not None
+        tenant_id = prod.tenant_id
+
+    _patch_wb_order_fetches(
+        monkeypatch,
+        new_rows=[
+            _wb_order_row(
+                order_id=800404,
+                barcode="FBS-UNMAPPED-SUP-001",
+                supply_id="WB-GI-UNMAPPED-001",
+                supplier_status="confirm",
+                wb_status="waiting",
+            )
+        ],
+        status_rows=[
+            {"id": 800404, "supplierStatus": "confirm", "wbStatus": "waiting"}
+        ],
+    )
+
+    async with SessionLocal() as session:
+        import httpx
+
+        async with httpx.AsyncClient() as http_client:
+            first = await sync_seller_orders(
+                session,
+                tenant_id,
+                seller_uuid,
+                http_client,
+                warehouse_id=warehouse_uuid,
+            )
+
+    assert first["supply_link_candidates"] == 1
+    assert first["supply_linked_orders"] == 0
+    assert first["supply_links_created"] == 0
+    assert first["supply_link_skipped_unmapped_warehouse"] == 1
+    assert first["supply_link_skipped_unmapped_warehouse_supply_ids"] == ["WB-GI-UNMAPPED-001"]
+
+    async with SessionLocal() as session:
+        order = await session.scalar(
+            select(FbsOrder).where(FbsOrder.wb_order_id == 800404)
+        )
+        assert order is not None
+        assert order.wb_supply_id == "WB-GI-UNMAPPED-001"
+        assert order.supply_id is None
+        supply_count = await session.scalar(select(func.count()).select_from(FbsSupply))
+        assert int(supply_count or 0) == 0
+
+    # Оператор (или другой оператор в отдельном экране) привязывает склад WB к складу WMS —
+    # ровно то действие, к которому подсказка на экране заказов и должна вести.
+    await _create_binding(async_client, headers, seller_id, WB_WAREHOUSE_A, warehouse_id)
+
+    async with SessionLocal() as session:
+        import httpx
+
+        async with httpx.AsyncClient() as http_client:
+            second = await sync_seller_orders(
+                session,
+                tenant_id,
+                seller_uuid,
+                http_client,
+                warehouse_id=warehouse_uuid,
+            )
+
+    assert second["supply_link_candidates"] == 1
+    assert second["supply_linked_orders"] == 1
+    assert second["supply_links_created"] == 1
+    assert second["supply_link_skipped_unmapped_warehouse"] == 0
+    assert second["supply_link_skipped_unmapped_warehouse_supply_ids"] == []
+
+    async with SessionLocal() as session:
+        order = await session.scalar(
+            select(FbsOrder).where(FbsOrder.wb_order_id == 800404)
+        )
+        assert order is not None
+        assert order.status == FBS_ORDER_STATUS_ASSEMBLING
+        assert order.supply_id is not None
+        supply = await session.get(FbsSupply, order.supply_id)
+        assert supply is not None
+        assert supply.wb_supply_id == "WB-GI-UNMAPPED-001"
+        assert supply.source == FBS_SUPPLY_SOURCE_WB
+        assert supply.warehouse_id == warehouse_uuid
+
+
 # TC-NEW-FBS-INTAKE-004
 @pytest.mark.asyncio
 async def test_fbs_order_status_sync_releases_reserve_on_cancel(
@@ -870,7 +973,6 @@ async def test_fbs_order_status_sync_releases_reserve_on_cancel(
             quantity_delta=2,
             movement_type="inbound_intake",
         )
-        await _create_fbs_pool(session, tenant_id, product_id, 2)
         order, _created = await upsert_order_from_wb_row(
             session,
             tenant_id,
@@ -949,7 +1051,10 @@ async def test_fbs_sync_job_fails_on_wb_client_error(
     assert start.status_code == 202
     body = await _wait_for_job(async_client, headers, start.json()["id"])
     assert body["status"] == "failed"
-    assert body["error_message"] == "wb_upstream_error_502"
+    # КРИТ-2 (HANDOFF-POLISH.md, пул 1, п.3): job.error_message теперь человеческий текст
+    # (exc.message), а не голый код "wb_upstream_error_502" — иначе оператор на экране
+    # видит шифр вместо причины ошибки.
+    assert body["error_message"] == "Wildberries отклонил операцию; проверьте детали ошибки в журнале."
 
 
 @pytest.mark.asyncio
@@ -1172,7 +1277,6 @@ async def test_fbs_cancelled_order_not_re_reserved_on_upsert(
             quantity_delta=1,
             movement_type="inbound_intake",
         )
-        await _create_fbs_pool(session, tenant_id, product_id, 1)
         order, _created = await upsert_order_from_wb_row(
             session,
             tenant_id,
@@ -1503,7 +1607,6 @@ async def test_fbs_binding_later_assigns_warehouse_and_reserves(
     async with SessionLocal() as session:
         prod = await session.get(Product, product_id)
         assert prod is not None
-        await _create_fbs_pool(session, prod.tenant_id, product_id, 1)
         await session.commit()
 
     start2 = await async_client.post(
@@ -1560,7 +1663,6 @@ async def test_fbs_order_status_sync_releases_reserve_on_defect(
             quantity_delta=1,
             movement_type="inbound_intake",
         )
-        await _create_fbs_pool(session, tenant_id, product_id, 1)
         order, _created = await upsert_order_from_wb_row(
             session,
             tenant_id,
@@ -1641,7 +1743,6 @@ async def test_fbs_order_reservation_conflict_keeps_warehouse(
             quantity_delta=1,
             movement_type="inbound_intake",
         )
-        await _create_fbs_pool(session, tenant_id, product_id, 1)
         await _seed_binding(
             session, tenant_id, seller_uuid, WB_WAREHOUSE_A, warehouse_a_uuid
         )
@@ -1732,7 +1833,6 @@ async def test_fbs_order_wb_warehouse_remap_conflict_on_resync(
             quantity_delta=1,
             movement_type="inbound_intake",
         )
-        await _create_fbs_pool(session, tenant_id, product_id, 1)
         await _seed_binding(
             session, tenant_id, seller_uuid, WB_WAREHOUSE_A, warehouse_a_uuid
         )
@@ -1775,3 +1875,123 @@ async def test_fbs_order_wb_warehouse_remap_conflict_on_resync(
         reservation = res.scalar_one_or_none()
         assert reservation is not None
         assert reservation.warehouse_id == warehouse_a_uuid
+
+
+# TC-NEW-FBS-POOL-DEBIT-001
+@pytest.mark.asyncio
+async def test_fbs_order_intake_debits_stock_pool_idempotently(
+    async_client: AsyncClient,
+) -> None:
+    """Заказ пришёл — пул fbs_binding_stock_pools уменьшился на количество заказа.
+
+    Тот же заказ прилетает от WB повторно на каждом автоопросе и по клику
+    кнопки "Синхронизировать" -- второго списания быть не должно.
+    Идемпотентность держит UNIQUE(order_id) в fbs_stock_pool_debits: строка
+    ставится один раз при первом появлении заказа и блокирует повтор и в
+    приложении (проверка перед списанием), и на уровне БД (гонки конкурентных
+    синков).
+    """
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, wms_warehouse_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    await _create_binding(
+        async_client, headers, seller_id, WB_WAREHOUSE_A, wms_warehouse_id
+    )
+
+    product = await async_client.post(
+        "/products",
+        headers=headers,
+        json={
+            "name": "Pool debit product",
+            "sku_code": f"POOL-DEBIT-{suffix}",
+            "seller_id": seller_id,
+            "wb_barcode": f"POOL-DEBIT-BAR-{suffix}",
+        },
+    )
+    assert product.status_code in (200, 201), product.text
+    product_id = uuid.UUID(product.json()["id"])
+
+    async with SessionLocal() as session:
+        row = await session.get(Product, product_id)
+        assert row is not None
+        tenant_id = row.tenant_id
+        row.fbs_stock_limit = 5
+        await session.commit()
+
+    binding_resp = await async_client.get(
+        f"/operations/fbs-sellers/{seller_id}/warehouse-bindings",
+        headers=headers,
+    )
+    assert binding_resp.status_code == 200, binding_resp.text
+    binding_id = uuid.UUID(
+        next(
+            b["id"]
+            for b in binding_resp.json()
+            if b["wb_warehouse_id"] == WB_WAREHOUSE_A
+        )
+    )
+
+    pool_resp = await async_client.put(
+        f"/operations/fbs-sellers/{seller_id}/warehouse-bindings/"
+        f"{WB_WAREHOUSE_A}/stock-pool/{product_id}",
+        headers=headers,
+        json={"quantity": 3},
+    )
+    assert pool_resp.status_code == 200, pool_resp.text
+
+    async def _pool_quantity() -> int:
+        async with SessionLocal() as session:
+            return (
+                await session.execute(
+                    select(FbsBindingStockPool.quantity).where(
+                        FbsBindingStockPool.binding_id == binding_id,
+                        FbsBindingStockPool.product_id == product_id,
+                    )
+                )
+            ).scalar_one()
+
+    async def _debit_rows_for_order(order_id: uuid.UUID) -> int:
+        async with SessionLocal() as session:
+            return (
+                await session.execute(
+                    select(func.count())
+                    .select_from(FbsStockPoolDebit)
+                    .where(FbsStockPoolDebit.order_id == order_id)
+                )
+            ).scalar_one()
+
+    assert await _pool_quantity() == 3
+
+    seller_uuid = uuid.UUID(seller_id)
+    wb_row = _wb_order_row(
+        order_id=800900,
+        barcode=f"POOL-DEBIT-BAR-{suffix}",
+        nm_id=900900,
+        chrt_id=800900,
+        warehouse_id=WB_WAREHOUSE_A,
+    )
+
+    async with SessionLocal() as session:
+        order, created = await upsert_order_from_wb_row(
+            session, tenant_id, seller_uuid, wb_row
+        )
+        await session.commit()
+        order_id = order.id
+    assert created is True
+
+    # Заказ пришёл -- пул уменьшился на его количество (один заказ = одна единица).
+    assert await _pool_quantity() == 2
+    assert await _debit_rows_for_order(order_id) == 1
+
+    # WB присылает тот же заказ повторно (автоопрос + ручная кнопка видят его
+    # снова и снова) -- пул не должен списаться второй раз.
+    async with SessionLocal() as session:
+        order2, created2 = await upsert_order_from_wb_row(
+            session, tenant_id, seller_uuid, wb_row
+        )
+        await session.commit()
+    assert created2 is False
+    assert order2.id == order_id
+    assert await _pool_quantity() == 2
+    assert await _debit_rows_for_order(order_id) == 1

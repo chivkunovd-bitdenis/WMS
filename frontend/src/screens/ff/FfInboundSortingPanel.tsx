@@ -19,6 +19,7 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import { alpha } from '@mui/material/styles'
@@ -119,6 +120,24 @@ function emptyLooseDraftRow(): CellDraftRow {
   }
 }
 
+// Единственная строка «россыпи», которую панель создаёт сама (при первом открытии
+// карточки товара), сразу получает количество = весь непринятый остаток — как у строк
+// коробов, где количество тоже не нужно вводить руками. Раньше строка была пустой, и
+// без скана (который заполняет её через distribution-scan) применить раскладку было
+// нельзя, даже если оператор просто выбрал ячейку мышкой: buildPayload() отбрасывает
+// строки без quantity, поэтому кнопка «Применить раскладку» держится задизейбленной,
+// пока хоть в одной строке нет и ячейки, и положительного количества (см. hasSelectableRows
+// ниже). Ручная раскладка без сканера — поддерживаемый сценарий, не только вспомогательный.
+// Строки, которые оператор добавляет вручную кнопкой «Добавить ячейку» (для разбивки
+// остатка по нескольким ячейкам), по-прежнему стартуют пустыми — там нет однозначного
+// количества по умолчанию.
+function defaultLooseDraftRow(loosePool: number): CellDraftRow {
+  return {
+    ...emptyLooseDraftRow(),
+    quantity: loosePool > 0 ? String(loosePool) : '',
+  }
+}
+
 function boxLineRemaining(bl: SortingBoxLine): number {
   return bl.remaining_qty ?? Math.max(0, bl.quantity - (bl.posted_qty ?? 0))
 }
@@ -146,7 +165,7 @@ function defaultRowsForProduct(
     })
   }
   if (loosePool > 0) {
-    rows.push(emptyLooseDraftRow())
+    rows.push(defaultLooseDraftRow(loosePool))
   }
   return rows
 }
@@ -167,18 +186,30 @@ function linesFromDistributionRows(rows: DistributionLineOut[]): CellDraftRow[] 
   }))
 }
 
+// Строки коробов не вводятся оператором вручную — их количество всегда равно текущему
+// остатку в коробе. Раньше здесь слепо доверяли сохранённой строке распределения: если
+// короб уже был полностью разложен в прошлом цикле (частичная раскладка теперь разрешена),
+// старая строка так и оставалась с прежним количеством, хотя реально раскладывать по
+// этому коробу уже нечего. Она подсвечивалась как «превышение» и намертво блокировала
+// кнопку «Применить раскладку», хотя это просто исторический след, а не ошибка ввода.
+// Поэтому строки коробов всегда пересобираем из текущего остатка, а не из сохранённого
+// черновика; выбранную ранее ячейку при этом сохраняем.
 function mergeSavedRowsWithDefaults(
   saved: DistributionLineOut[],
   productId: string,
   sortableBoxes: SortingBox[],
   loosePool: number,
 ): CellDraftRow[] {
-  const draft = saved.length > 0 ? linesFromDistributionRows(saved) : []
-  const boxIdsWithRow = new Set(draft.filter((r) => r.box_id != null).map((r) => r.box_id as string))
-  for (const box of sortableBoxes) {
-    if (boxIdsWithRow.has(box.id)) {
-      continue
+  const savedLooseRows = saved.filter((r) => distributionRowBoxId(r) == null)
+  const savedLocationByBoxId = new Map<string, string>()
+  for (const r of saved) {
+    const boxId = distributionRowBoxId(r)
+    if (boxId != null) {
+      savedLocationByBoxId.set(boxId, r.storage_location_id)
     }
+  }
+  const draft = linesFromDistributionRows(savedLooseRows)
+  for (const box of sortableBoxes) {
     const bl = box.lines.find((l) => l.product_id === productId)
     if (bl == null) {
       continue
@@ -190,13 +221,13 @@ function mergeSavedRowsWithDefaults(
     draft.push({
       key: nextDraftKey(),
       box_id: box.id,
-      storage_location_id: '',
+      storage_location_id: savedLocationByBoxId.get(box.id) ?? '',
       quantity: String(rem),
     })
   }
   const hasLooseRow = draft.some((r) => r.box_id == null)
   if (loosePool > 0 && !hasLooseRow) {
-    draft.push(emptyLooseDraftRow())
+    draft.push(defaultLooseDraftRow(loosePool))
   }
   if (draft.length === 0) {
     return defaultRowsForProduct(productId, sortableBoxes, loosePool)
@@ -221,6 +252,7 @@ function looseDraftQty(rows: CellDraftRow[]): number {
 function sumDraftQty(rows: CellDraftRow[]): number {
   let sum = 0
   for (const r of rows) {
+    if (!r.storage_location_id) continue
     const q = Math.floor(Number(r.quantity))
     if (Number.isFinite(q) && q > 0) {
       sum += q
@@ -247,7 +279,14 @@ function sortingErrorMessageRu(code: string): string {
     scan_not_found: 'Такой товар или ячейка не найдены в этой приёмке.',
     sorting_location_reserved: 'Служебную зону сортировки нельзя выбрать как ячейку хранения.',
   }
-  return messages[normalized] ?? normalized
+  const known = messages[normalized]
+  if (known) {
+    return known
+  }
+  // Сырой код ошибки сервера не должен попадать в интерфейс оператора: логируем для
+  // отладки, а на экране показываем понятный общий текст.
+  console.warn('[ff-sorting] unrecognized error code from server:', normalized)
+  return 'Не удалось выполнить действие. Попробуйте ещё раз или обновите страницу.'
 }
 
 export function FfInboundSortingPanel({
@@ -275,6 +314,7 @@ export function FfInboundSortingPanel({
   const [activeLocationId, setActiveLocationId] = useState<string | null>(null)
   const [activeLocationCode, setActiveLocationCode] = useState<string | null>(null)
   const [highlightedProductId, setHighlightedProductId] = useState<string | null>(null)
+  const [rowOverflowByProduct, setRowOverflowByProduct] = useState<Record<string, string | null>>({})
   const [, setDirty] = useState(false)
   const scanInputRef = useRef<HTMLInputElement | null>(null)
   const distributionLoadSeq = useRef(0)
@@ -312,11 +352,11 @@ export function FfInboundSortingPanel({
 
   const boxNumberById = useMemo(() => {
     const m = new Map<string, number>()
-    for (const box of sortableBoxes) {
+    for (const box of boxes) {
       m.set(box.id, box.box_number)
     }
     return m
-  }, [sortableBoxes])
+  }, [boxes])
 
   const acceptedByProductId = useMemo(() => {
     const m = new Map<string, number>()
@@ -411,6 +451,7 @@ export function FfInboundSortingPanel({
           ),
         })),
       )
+      setRowOverflowByProduct({})
     },
     [loosePoolByProductId, sortableBoxes, sortableProducts],
   )
@@ -517,14 +558,45 @@ export function FfInboundSortingPanel({
     return m
   }, [productStates])
 
-  const remainingByProductId = useMemo(() => {
+  // «Разложено» товара — это не просто сумма текущих строк-черновиков: строки могут
+  // повторно показывать то, что уже было применено в прошлый раз (частичная раскладка
+  // теперь разрешена), и тогда draftSum и posted совпадают или даже draftSum меньше (если
+  // строку удалили, а применённое из зоны сортировки никуда не делось). Поэтому берём
+  // максимум — «уже применено» не может уменьшиться от того, что в черновике сейчас пусто.
+  const effectiveDistributedByProductId = useMemo(() => {
     const m = new Map<string, number>()
     for (const p of productStates) {
       const draft = draftSumByProductId.get(p.product_id) ?? 0
-      m.set(p.product_id, Math.max(0, p.accepted - draft))
+      m.set(p.product_id, Math.max(p.posted, draft))
     }
     return m
   }, [draftSumByProductId, productStates])
+
+  // Осталось = принято минус фактически разложенное (effectiveDistributedByProductId).
+  // Специально НЕ схлопываем отрицательный результат в ноль: если расчёт всё же уйдёт в
+  // минус, это должно быть видно на экране, а не спрятано, — именно молчаливый
+  // Math.max(0, …) в чипе ниже когда-то ввёл оператора в заблуждение (показывал 0, когда
+  // на самом деле ещё оставалось раскладывать).
+  const remainingByProductId = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const p of productStates) {
+      const effective = effectiveDistributedByProductId.get(p.product_id) ?? 0
+      m.set(p.product_id, p.accepted - effective)
+    }
+    return m
+  }, [effectiveDistributedByProductId, productStates])
+
+  // Чип наверху и колонка «Осталось» в таблице должны говорить об одном и том же — оба
+  // считаются от effectiveDistributedByProductId, а не от «сырой» суммы черновика, иначе
+  // строка, повторно показывающая уже применённое, вычитается дважды и уводит чип в минус.
+  // Минус не прячем (см. комментарий выше).
+  const draftAwareRemainingTotal = useMemo(() => {
+    let total = 0
+    for (const qty of remainingByProductId.values()) {
+      total += qty
+    }
+    return total
+  }, [remainingByProductId])
 
   const rowMaxQty = (productId: string, row: CellDraftRow): number => {
     const accepted = acceptedByProductId.get(productId) ?? 0
@@ -575,10 +647,18 @@ export function FfInboundSortingPanel({
     return false
   }, [draftSumByProductId, productStates])
 
-  const firstIncompleteProduct = useMemo(
-    () => productStates.find((p) => (remainingByProductId.get(p.product_id) ?? 0) > 0) ?? null,
-    [productStates, remainingByProductId],
-  )
+  // «Применить раскладку» не должна быть доступна, пока нет ни одной строки с выбранной
+  // ячейкой и положительным количеством — иначе кнопка выглядит готовой к нажатию сразу
+  // после открытия карточки, до единого скана, а buildPayload() отправит пустой список.
+  const hasSelectableRows = useMemo(() => {
+    return productStates.some((p) =>
+      p.rows.some((row) => {
+        if (!row.storage_location_id) return false
+        const q = Math.floor(Number(row.quantity))
+        return Number.isFinite(q) && q > 0
+      }),
+    )
+  }, [productStates])
 
   const buildPayload = () => {
     const payload: {
@@ -723,12 +803,6 @@ export function FfInboundSortingPanel({
       setError('Превышено принятое количество — исправьте строки перед применением.')
       return
     }
-    if (firstIncompleteProduct != null) {
-      setError(
-        `По товару ${firstIncompleteProduct.product_name} осталось разложить ${remainingByProductId.get(firstIncompleteProduct.product_id) ?? 0} шт.`,
-      )
-      return
-    }
     setBusy(true)
     setError(null)
     try {
@@ -822,13 +896,6 @@ export function FfInboundSortingPanel({
                 },
               }}
             />
-            <Chip
-              size="small"
-              color={activeLocationId == null ? 'default' : 'info'}
-              label={activeLocationId == null ? 'Ячейка не выбрана' : `Ячейка ${activeLocationCode}`}
-              data-testid="ff-sorting-active-location"
-              sx={{ alignSelf: { xs: 'flex-start', md: 'center' } }}
-            />
             <Button
               type="submit"
               variant="outlined"
@@ -840,16 +907,20 @@ export function FfInboundSortingPanel({
               Скан
             </Button>
           </Stack>
-          {scanMessage ? (
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ display: 'block', mt: 0.75 }}
-              data-testid="ff-sorting-scan-message"
-            >
-              {scanMessage}
-            </Typography>
-          ) : null}
+          {/* SORT-01: одна подпись на оба состояния — до скана ячейки и после.
+              Раньше рядом висел ещё чип с тем же смыслом, он убран как дубль. */}
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: 'block', mt: 0.75 }}
+            data-testid="ff-sorting-scan-message"
+          >
+            {scanMessage
+              ? scanMessage
+              : activeLocationId == null
+                ? 'Ячейка не выбрана — отсканируйте ячейку.'
+                : `Активная ячейка: ${activeLocationCode}.`}
+          </Typography>
         </Box>
       ) : null}
 
@@ -858,21 +929,49 @@ export function FfInboundSortingPanel({
           Осталось разложить:
         </Typography>
         <Chip
-          label={`${sortingRemainingQty} шт`}
-          color={sortingRemainingQty > 0 ? 'warning' : 'success'}
+          label={
+            draftAwareRemainingTotal < 0
+              ? `Превышение на ${Math.abs(draftAwareRemainingTotal)} шт`
+              : `${draftAwareRemainingTotal} шт`
+          }
+          color={
+            draftAwareRemainingTotal > 0
+              ? 'warning'
+              : draftAwareRemainingTotal < 0
+                ? 'error'
+                : 'success'
+          }
           size="small"
           data-testid="ff-sorting-remaining-total"
         />
         {editable ? (
-          <Button
-            variant="contained"
-            size="small"
-            disabled={busy || hasValidationError || sortingRemainingQty <= 0 || !distributionReady}
-            onClick={() => void applyDistribution()}
-            data-testid="ff-sorting-apply"
+          <Tooltip
+            title={
+              hasValidationError
+                ? 'Есть строки, где указано больше, чем доступно для раскладки. Уменьшите количество, чтобы применить.'
+                : !hasSelectableRows
+                  ? 'Выберите ячейку и укажите количество хотя бы в одной строке, чтобы применить раскладку.'
+                  : ''
+            }
           >
-            Применить раскладку
-          </Button>
+            <span>
+              <Button
+                variant="contained"
+                size="small"
+                disabled={
+                  busy ||
+                  hasValidationError ||
+                  !hasSelectableRows ||
+                  sortingRemainingQty <= 0 ||
+                  !distributionReady
+                }
+                onClick={() => void applyDistribution()}
+                data-testid="ff-sorting-apply"
+              >
+                Применить раскладку
+              </Button>
+            </span>
+          </Tooltip>
         ) : null}
       </Stack>
 
@@ -885,14 +984,17 @@ export function FfInboundSortingPanel({
       <Stack spacing={2}>
         {productStates.map((product) => {
           const displayMeta = productDisplayMetaFromCatalog(product.product_id, product, catalogById)
-          const draftSum = draftSumByProductId.get(product.product_id) ?? 0
+          const effectiveDistributed = effectiveDistributedByProductId.get(product.product_id) ?? 0
           const remaining = remainingByProductId.get(product.product_id) ?? 0
+          const remainingOverflow = remaining < 0
           const loosePool = loosePoolByProductId.get(product.product_id) ?? 0
           const looseAllocated = looseDraftQty(product.rows)
           const looseRemaining = Math.max(0, loosePool - looseAllocated)
           const hasBoxRows = product.rows.some((r) => r.box_id != null)
-          const hasLooseRows = loosePool > 0
-          const showSourceColumn = hasBoxRows || hasLooseRows
+          // «Россыпь», повторённая в каждой строке, когда коробов вообще нет, — чистый шум:
+          // источник различать не от чего. Показываем колонку только если есть хотя бы одна
+          // строка короба (номера коробов различаются и информативны сами по себе).
+          const showSourceColumn = hasBoxRows
           const looseRowCount = product.rows.filter((r) => r.box_id == null).length
           const done = completed || remaining <= 0
 
@@ -937,9 +1039,13 @@ export function FfInboundSortingPanel({
                         {product.accepted}
                       </TableCell>
                       <TableCell align="right" data-testid="ff-sorting-product-distributed">
-                        {draftSum}
+                        {effectiveDistributed}
                       </TableCell>
-                      <TableCell align="right" data-testid="ff-sorting-product-remaining">
+                      <TableCell
+                        align="right"
+                        data-testid="ff-sorting-product-remaining"
+                        sx={remainingOverflow ? { color: 'error.main', fontWeight: 700 } : undefined}
+                      >
                         {remaining}
                       </TableCell>
                     </TableRow>
@@ -1016,9 +1122,28 @@ export function FfInboundSortingPanel({
                                 disabled={busy || !editable || !distributionReady || isBoxRow}
                                 error={exceeds}
                                 onChange={(e) => {
-                                  const v = e.target.value
+                                  const raw = e.target.value
+                                  const parsed = Math.floor(Number(raw))
+                                  // Верхняя граница проверяется в момент ввода, а не только
+                                  // при попытке применить: превышение сразу обрезаем до
+                                  // максимума и объясняем числами, сколько реально доступно.
+                                  if (raw !== '' && Number.isFinite(parsed) && parsed > maxQty) {
+                                    setRowOverflowByProduct((prev) => ({
+                                      ...prev,
+                                      [product.product_id]: `Осталось разложить ${maxQty} шт., вы указали ${parsed}. Количество уменьшено до ${maxQty}.`,
+                                    }))
+                                    updateProductRows(product.product_id, (rows) =>
+                                      rows.map((r) =>
+                                        r.key === row.key ? { ...r, quantity: String(maxQty) } : r,
+                                      ),
+                                    )
+                                    return
+                                  }
+                                  setRowOverflowByProduct((prev) =>
+                                    prev[product.product_id] ? { ...prev, [product.product_id]: null } : prev,
+                                  )
                                   updateProductRows(product.product_id, (rows) =>
-                                    rows.map((r) => (r.key === row.key ? { ...r, quantity: v } : r)),
+                                    rows.map((r) => (r.key === row.key ? { ...r, quantity: raw } : r)),
                                   )
                                 }}
                                 slotProps={{
@@ -1036,7 +1161,6 @@ export function FfInboundSortingPanel({
                               <TableCell align="right">
                                 {!isBoxRow && looseRowCount > 1 ? (
                                   <IconButton
-                                    size="small"
                                     disabled={busy}
                                     aria-label="Удалить строку"
                                     onClick={() =>
@@ -1045,6 +1169,7 @@ export function FfInboundSortingPanel({
                                       )
                                     }
                                     data-testid="ff-sorting-cell-remove"
+                                    sx={{ width: 40, height: 40, fontSize: 20 }}
                                   >
                                     ×
                                   </IconButton>
@@ -1059,6 +1184,17 @@ export function FfInboundSortingPanel({
                 </TableContainer>
               ) : null}
 
+              {rowOverflowByProduct[product.product_id] ? (
+                <Alert
+                  severity="warning"
+                  variant="outlined"
+                  sx={{ mb: 1, py: 0 }}
+                  data-testid="ff-sorting-cell-overflow"
+                >
+                  {rowOverflowByProduct[product.product_id]}
+                </Alert>
+              ) : null}
+
               {editable && looseRemaining > 0 ? (
                 <Button
                   size="small"
@@ -1070,7 +1206,7 @@ export function FfInboundSortingPanel({
                   }
                   data-testid="ff-sorting-add-cell"
                 >
-                  + ячейка
+                  Добавить ячейку
                 </Button>
               ) : null}
             </Paper>

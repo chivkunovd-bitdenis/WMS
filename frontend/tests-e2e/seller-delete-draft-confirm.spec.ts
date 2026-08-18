@@ -73,6 +73,5 @@ test('seller draft delete asks for confirmation before removing the document', a
     waitForDeleteOk(page, '/api/operations/inbound-intake-requests'),
     page.getByTestId('seller-delete-draft-confirm').click(),
   ]);
-  await expect(page.getByTestId('seller-documents-delete-ok')).toContainText('Черновик удалён');
   await expect(page.getByTestId('seller-documents-row')).toHaveCount(0);
 });

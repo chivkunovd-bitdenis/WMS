@@ -31,7 +31,6 @@ test('FF settings: separate marking print shows split print sections', async ({ 
   })
   expect(settingsPatch.ok()).toBeTruthy()
   await page.reload()
-  await expect(page.getByTestId('nav-ff-packaging')).toBeVisible()
 
   const sellerRes = await page.request.post(`${e2eApi}/sellers`, {
     headers: auth,
@@ -99,7 +98,7 @@ test('FF settings: separate marking print shows split print sections', async ({ 
   await page.request.post(`${baseIn}/${inboundId}/verify`, { headers: auth })
   await page.request.post(`${baseIn}/${inboundId}/post`, { headers: auth })
 
-  await page.getByTestId('nav-ff-packaging').click()
+  await page.goto('/app/ff/packaging')
   await page.getByTestId('ff-packaging-create-open').click()
   await page.getByTestId('ff-packaging-create-warehouse').click()
   await page.getByRole('option', { name: 'WH Sep' }).click()

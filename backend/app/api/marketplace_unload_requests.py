@@ -44,6 +44,7 @@ from app.models.seller import Seller
 from app.models.user import User
 from app.services import box_import_service as box_import_svc
 from app.services import marketplace_unload_box_service as box_svc
+from app.services import marketplace_unload_collect_service as collect_svc
 from app.services import marketplace_unload_pick_service as pick_svc
 from app.services import marketplace_unload_service as svc
 from app.services import packaging_task_service as pkg_svc
@@ -209,6 +210,7 @@ class MarketplaceUnloadPickOptionLocationOut(BaseModel):
     quantity: int
     reserved: int
     available: int
+    picked: int
 
 
 class MarketplaceUnloadPickOptionProductOut(BaseModel):
@@ -240,6 +242,12 @@ class MarketplaceUnloadPickAddBody(BaseModel):
     storage_location_id: uuid.UUID | None = None
     product_id: uuid.UUID
     quantity: int = Field(ge=1, le=1_000_000_000)
+
+
+class MarketplaceUnloadPickSetBody(BaseModel):
+    product_id: uuid.UUID
+    storage_location_id: uuid.UUID
+    quantity: int = Field(ge=0, le=1_000_000_000)
 
 
 class MarketplaceUnloadAttachBoxBody(BaseModel):
@@ -1122,6 +1130,7 @@ async def get_marketplace_unload_pick_options(
                     quantity=loc.quantity,
                     reserved=loc.reserved,
                     available=loc.available,
+                    picked=loc.picked,
                 )
                 for loc in o.locations
             ],
@@ -1191,6 +1200,40 @@ async def add_marketplace_unload_pick_qty(
     except MarketplaceUnloadPickError as exc:
         raise _map_pick_err(exc) from None
     return _pick_alloc_out(alloc)
+
+
+@router.post(
+    "/{request_id}/pick/set",
+    response_model=MarketplaceUnloadPickAllocationOut,
+    status_code=status.HTTP_200_OK,
+)
+async def set_marketplace_unload_pick_qty(
+    request_id: uuid.UUID,
+    body: MarketplaceUnloadPickSetBody,
+    user: Annotated[User, Depends(require_mp_shipments_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> MarketplaceUnloadPickAllocationOut:
+    _require_ff_execution(user)
+    try:
+        result = await collect_svc.set_pick_allocation(
+            session,
+            user.tenant_id,
+            request_id,
+            product_id=body.product_id,
+            storage_location_id=body.storage_location_id,
+            quantity=body.quantity,
+        )
+    except MarketplaceUnloadPickError as exc:
+        raise _map_pick_err(exc) from None
+    return MarketplaceUnloadPickAllocationOut(
+        id=str(result.id),
+        product_id=str(body.product_id),
+        sku_code=result.product.sku_code,
+        product_name=result.product.name,
+        storage_location_id=str(result.storage_location_id),
+        location_code=result.location_code,
+        quantity=result.quantity,
+    )
 
 
 @router.put(

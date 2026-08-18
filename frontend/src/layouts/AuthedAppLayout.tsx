@@ -200,7 +200,7 @@ export function AuthedAppLayout({
       >
         <Toolbar />
         <Box sx={{ p: 1, display: 'flex', flexDirection: 'column', height: 'calc(100% - 64px)' }}>
-          <List dense aria-label="Разделы ФФ" sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+          <List dense aria-label="Разделы ФФ">
             {can('reception') ? (
               <>
                 <ListItemButton component={NavLink} to={`${base}/reception`} data-testid="nav-ff-reception" data-task-id="NAV-01">
@@ -226,14 +226,14 @@ export function AuthedAppLayout({
                 <ListItemText primary="Отгрузки" />
               </ListItemButton>
             ) : null}
-            {canPackaging ? (
-              <ListItemButton component={NavLink} to={`${base}/packaging`} data-testid="nav-ff-packaging" data-task-id="NAV-01">
-                <ListItemText primary="Упаковка" />
-              </ListItemButton>
-            ) : null}
             {canCatalogCells ? (
               <ListItemButton component={NavLink} to="/app/catalog" data-testid="nav-catalog" data-task-id="NAV-01">
                 <ListItemText primary={isAdmin ? 'Ячейки' : 'Каталог и ячейки'} />
+              </ListItemButton>
+            ) : null}
+            {canCatalogCells ? (
+              <ListItemButton component={NavLink} to={`${base}/reports`} data-testid="nav-ff-reports" data-task-id="NAV-01">
+                <ListItemText primary="Отчёты" />
               </ListItemButton>
             ) : null}
             {isAdmin ? (
@@ -256,18 +256,25 @@ export function AuthedAppLayout({
                 <ListItemText primary="Честный знак" />
               </ListItemButton>
             ) : null}
+          </List>
+          {/* NAV-01: календарь, настройки и упаковка прижаты к низу, но список выше остаётся плотным */}
+          <List dense aria-label="Разделы ФФ, нижние" sx={{ mt: 'auto' }}>
             <ListItemButton
               component={NavLink}
               to={`${base}/dashboard`}
               data-testid="nav-dashboard"
               data-task-id="NAV-01"
-              sx={{ mt: 'auto' }}
             >
               <ListItemText primary="Календарь отгрузок" />
             </ListItemButton>
             {can('settings') || isAdmin ? (
               <ListItemButton component={NavLink} to={`${base}/settings`} data-testid="nav-ff-settings" data-task-id="NAV-01">
                 <ListItemText primary="Настройки" />
+              </ListItemButton>
+            ) : null}
+            {canPackaging ? (
+              <ListItemButton component={NavLink} to={`${base}/packaging`} data-testid="nav-ff-packaging" data-task-id="NAV-01">
+                <ListItemText primary="Упаковка" />
               </ListItemButton>
             ) : null}
           </List>

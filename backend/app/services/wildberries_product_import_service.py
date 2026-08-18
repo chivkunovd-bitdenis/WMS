@@ -8,10 +8,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.product import Product
+from app.services.catalog_service import DEFAULT_PRODUCT_DIM_MM
 from app.services.wb_card_enrichment import (
     WbSizeVariant,
+    country_of_origin_from_card,
     iter_size_variants_from_card,
     product_display_name,
+    shelf_life_from_card,
     sku_code_for_wb_variant,
 )
 
@@ -108,6 +111,26 @@ def _parse_title(card: dict[str, Any]) -> str | None:
     return None
 
 
+def _parse_dimensions_mm(item: dict) -> tuple[int | None, int | None, int | None]:
+    """Габариты из карточки WB. WB отдаёт сантиметры, храним миллиметры.
+
+    Возвращает (length_mm, width_mm, height_mm); None там, где WB не дал значения.
+    """
+    raw = item.get("dimensions")
+    if not isinstance(raw, dict):
+        return (None, None, None)
+
+    def one(key: str) -> int | None:
+        value = raw.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        if value <= 0:
+            return None
+        return int(round(value * 10))
+
+    return (one("length"), one("width"), one("height"))
+
+
 async def _find_product_for_variant(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -163,8 +186,6 @@ async def upsert_products_from_wb_cards(
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
     cards: list[object],
-    *,
-    default_dim_mm: int = 10,
 ) -> dict[str, int]:
     """
     Create/update Product rows for seller based on WB cards.
@@ -183,6 +204,9 @@ async def upsert_products_from_wb_cards(
         nm = _parse_nm_id(item)
         vendor = _parse_vendor_code(item)
         base_title = _parse_title(item) or (vendor or (f"WB {nm}" if nm else "WB товар"))
+        card_length_mm, card_width_mm, card_height_mm = _parse_dimensions_mm(item)
+        card_country = country_of_origin_from_card(item)
+        card_shelf_life = shelf_life_from_card(item)
         variants = iter_size_variants_from_card(item)
         if not variants:
             skipped += 1
@@ -212,9 +236,11 @@ async def upsert_products_from_wb_cards(
                     wb_chrt_id=variant.chrt_id,
                     wb_barcode=variant.barcode,
                     wb_size=variant.size_label,
-                    length_mm=default_dim_mm,
-                    width_mm=default_dim_mm,
-                    height_mm=default_dim_mm,
+                    length_mm=card_length_mm,
+                    width_mm=card_width_mm,
+                    height_mm=card_height_mm,
+                    wb_country_of_origin=card_country,
+                    wb_shelf_life=card_shelf_life,
                 )
                 session.add(p)
                 try:
@@ -244,6 +270,29 @@ async def upsert_products_from_wb_cards(
                 sku=sku,
                 variant=variant,
             )
+            # Fill empty dimension fields with values from WB card, and also correct
+            # the legacy DEFAULT_PRODUCT_DIM_MM stub (10x10x10) that an old, now
+            # removed sync default used to write in place of real data. Product has
+            # no field marking "entered by hand" vs "imported", so anything other
+            # than that exact stub triple is left untouched -- the safest reading of
+            # "never overwrite a measurement someone typed in".
+            dims_are_stub = (
+                p.length_mm == DEFAULT_PRODUCT_DIM_MM
+                and p.width_mm == DEFAULT_PRODUCT_DIM_MM
+                and p.height_mm == DEFAULT_PRODUCT_DIM_MM
+            )
+            if (p.length_mm is None or dims_are_stub) and card_length_mm is not None:
+                p.length_mm = card_length_mm
+            if (p.width_mm is None or dims_are_stub) and card_width_mm is not None:
+                p.width_mm = card_width_mm
+            if (p.height_mm is None or dims_are_stub) and card_height_mm is not None:
+                p.height_mm = card_height_mm
+            # Same rule for country of origin / shelf life: WB card fills the gap,
+            # never overwrites a value already present (e.g. entered by hand).
+            if p.wb_country_of_origin is None and card_country is not None:
+                p.wb_country_of_origin = card_country
+            if p.wb_shelf_life is None and card_shelf_life is not None:
+                p.wb_shelf_life = card_shelf_life
             try:
                 await session.commit()
             except IntegrityError:

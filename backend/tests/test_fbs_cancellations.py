@@ -157,14 +157,6 @@ async def _seed_reserved_order(
             quantity_delta=2,
             movement_type="inbound_intake",
         )
-        await stock_direction_service.create_stock_direction(
-            session,
-            tenant_id,
-            product.id,
-            name="FBS pool",
-            quantity=2,
-            is_fbs=True,
-        )
 
         row = _wb_order_row(
             order_id=wb_order_id,

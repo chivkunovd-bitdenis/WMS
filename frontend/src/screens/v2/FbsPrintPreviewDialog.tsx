@@ -16,6 +16,8 @@ import {
 } from '@mui/material'
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined'
 import { resolveFbsAssetUrl, type FbsPrintAsset, type FbsPrintBatch } from './fbsApi'
+import { loadLabelSizeId, resolveLabelSize, type LabelSize } from '../../utils/labelSize'
+import { LabelSizeSelect } from '../../components/LabelSizeSelect'
 
 type Props = {
   token: string
@@ -48,6 +50,7 @@ export function FbsPrintPreviewDialog({
   const [error, setError] = useState<string | null>(null)
   const [applyingId, setApplyingId] = useState<string | null>(null)
   const [copies, setCopies] = useState(1)
+  const [labelSize, setLabelSize] = useState<LabelSize>(() => resolveLabelSize(loadLabelSizeId()))
 
   const readyAssets = useMemo(
     () => batch?.assets.filter((asset) => asset.status === 'ready' && asset.preview_url) ?? [],
@@ -90,7 +93,10 @@ export function FbsPrintPreviewDialog({
   }, [open, readyAssets, token, authHeaders])
 
   useEffect(() => {
-    if (open) setCopies(1)
+    if (open) {
+      setCopies(1)
+      setLabelSize(resolveLabelSize(loadLabelSizeId()))
+    }
   }, [open, batch])
 
   const print = (items: Preview[]) => {
@@ -113,7 +119,9 @@ export function FbsPrintPreviewDialog({
         ),
       )
       .join('')
-    popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Печать WB</title><style>@page{size:58mm 40mm;margin:0}html,body{margin:0;padding:0}.label{width:58mm;height:40mm;display:flex;align-items:center;justify-content:center;break-after:page;page-break-after:always;overflow:hidden}.label:last-child{break-after:auto;page-break-after:auto}.label img{width:58mm;height:40mm;object-fit:contain;image-rendering:auto}</style></head><body>${pages}<script>Promise.all(Array.from(document.images).map(function(img){return img.complete?Promise.resolve():new Promise(function(resolve){img.onload=resolve;img.onerror=resolve})})).then(function(){window.focus();window.print()})</script></body></html>`)
+    const pageWidthMm = `${labelSize.widthMm}mm`
+    const pageHeightMm = `${labelSize.heightMm}mm`
+    popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Печать WB</title><style>@page{size:${pageWidthMm} ${pageHeightMm};margin:0}html,body{margin:0;padding:0}.label{width:${pageWidthMm};height:${pageHeightMm};display:flex;align-items:center;justify-content:center;break-after:page;page-break-after:always;overflow:hidden}.label:last-child{break-after:auto;page-break-after:auto}.label img{width:${pageWidthMm};height:${pageHeightMm};object-fit:contain;image-rendering:auto}</style></head><body>${pages}<script>Promise.all(Array.from(document.images).map(function(img){return img.complete?Promise.resolve():new Promise(function(resolve){img.onload=resolve;img.onerror=resolve})})).then(function(){window.focus();window.print()})</script></body></html>`)
     popup.document.close()
   }
 
@@ -139,17 +147,24 @@ export function FbsPrintPreviewDialog({
             {batch?.missing ? <Chip label={`Не получено ${batch.missing}`} color="warning" /> : null}
             {batch?.failed ? <Chip label={`Ошибок ${batch.failed}`} color="error" /> : null}
           </Stack>
-          <TextField
-            size="small"
-            type="number"
-            label="Копий каждого макета"
-            value={copies}
-            onChange={(event) => setCopies(Math.max(1, Math.min(99, Number(event.target.value) || 1)))}
-            slotProps={{ htmlInput: { min: 1, max: 99 } }}
-            sx={{ width: 220 }}
-            data-testid="fbs-print-preview-copies"
-            data-task-id="FBS-10"
-          />
+          <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap' }} useFlexGap data-task-id="FBS-10">
+            <TextField
+              size="small"
+              type="number"
+              label="Копий каждого макета"
+              value={copies}
+              onChange={(event) => setCopies(Math.max(1, Math.min(99, Number(event.target.value) || 1)))}
+              slotProps={{ htmlInput: { min: 1, max: 99 } }}
+              sx={{ width: 220 }}
+              data-testid="fbs-print-preview-copies"
+              data-task-id="FBS-10"
+            />
+            <LabelSizeSelect
+              value={labelSize.id}
+              onChange={setLabelSize}
+              testId="fbs-print-preview-label-size"
+            />
+          </Stack>
           {error ? <Alert severity="error">{error}</Alert> : null}
           {batch?.order_errors.map((item) => (
             <Alert key={item.order_id} severity="error">
@@ -169,7 +184,7 @@ export function FbsPrintPreviewDialog({
             {previews.map(({ asset, objectUrl }) => (
               <Paper key={asset.id} variant="outlined" sx={{ p: 2 }}>
                 <Typography variant="subtitle2">{assetLabel(asset)}</Typography>
-                <Box component="img" src={objectUrl} alt={assetLabel(asset)} sx={{ width: '100%', aspectRatio: '58 / 40', objectFit: 'contain', bgcolor: '#fff', my: 1.5 }} />
+                <Box component="img" src={objectUrl} alt={assetLabel(asset)} sx={{ width: '100%', aspectRatio: `${labelSize.widthMm} / ${labelSize.heightMm}`, objectFit: 'contain', bgcolor: '#fff', my: 1.5 }} />
                 <Stack direction="row" spacing={1}>
                   {previews.length > 1 ? <Button startIcon={<PrintOutlinedIcon />} onClick={() => print([{ asset, objectUrl }])} data-task-id="FBS-10">Печать только этого</Button> : null}
                   {asset.kind !== 'box_qr' ? (

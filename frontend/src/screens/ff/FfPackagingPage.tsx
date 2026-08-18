@@ -9,11 +9,15 @@ import {
 import { Link as RouterLink, useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   ArticleOutlined,
+  ExpandMoreOutlined,
   MoreVertOutlined,
   PrintOutlined,
   UndoOutlined,
 } from '@mui/icons-material'
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   Avatar,
   Badge,
@@ -47,6 +51,7 @@ import {
   Typography,
 } from '@mui/material'
 import { useWbProductCatalog } from '../../hooks/useWbProductCatalog'
+import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { apiUrl } from '../../api'
 import { fetchPendingMarking, pendingMarkingLineCount } from '../../utils/pendingMarkingApi'
 import { PageHeader } from '../../ui/PageHeader'
@@ -54,6 +59,7 @@ import { productDisplayMetaFromCatalog, resolveProductPrimaryBarcode } from '../
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { displayMetaToProductLabel } from '../../utils/productBarcodePrint'
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
+import { printShipmentPackagingSheet } from '../../utils/printShipmentPackagingSheet'
 import { formatHumanDocumentNumber } from './documentDisplay'
 
 export type PackagingTaskLine = {
@@ -74,6 +80,7 @@ export type PackagingTaskLine = {
   qty_packed_in_task: number
   qty_done: number
   qty_marking_printed: number
+  qty_marking_external: number
   qty_product_label_printed: number
   marking_available_count: number
   is_complete: boolean
@@ -133,6 +140,7 @@ type PackProgress = {
 
 type PrintedMarkingCode = {
   id: string
+  cis_code: string
   cis_masked: string
   status: string
 }
@@ -155,6 +163,9 @@ type TaskPanelProps = {
   printOnly?: boolean
   /** Embedded packing stage can keep physical packing free of print controls. */
   hidePrintActions?: boolean
+  /** Единое поле скана также принимает штрихкод готового короба (WHB-/INB-);
+      состоянием коробов владеет родитель, поэтому скан короба делегируется наверх. */
+  onBoxBarcodeScan?: (barcode: string) => void
   onClose?: () => void
   onUpdated: (task: PackagingTask) => void
 }
@@ -217,18 +228,42 @@ function comparePackagingEventsAsc(a: PackagingTaskEvent, b: PackagingTaskEvent)
   return a.event_sequence - b.event_sequence
 }
 
-/** Mirrors backend assert_packaging_line_marking_done (qty_done vs qty_marking_printed). */
+/** События без количества. manual_pack и undo_last собираются ниже — им нужно число. */
+const PACKAGING_EVENT_LABELS: Record<string, string> = {
+  scan_pack: '+1 скан',
+  product_label_print: 'Печать этикетки товара',
+  prepacked_external: 'Пришло готовым (без печати)',
+  cancel: 'Задание отменено',
+  complete: 'Задание выполнено',
+}
+
+function packagingEventLabel(action: string, quantity: number): string {
+  if (action === 'manual_pack') {
+    return `+${quantity} вручную`
+  }
+  if (action === 'undo_last') {
+    return `Отмена ${quantity} шт`
+  }
+  return PACKAGING_EVENT_LABELS[action] ?? action
+}
+
+/** Mirrors backend assert_packaging_line_marking_done: marked = printed + external. */
 function isLineMarkingIncomplete(ln: PackagingTaskLine): boolean {
   if (!ln.requires_honest_sign) {
     return false
   }
   const done = ln.qty_done
-  return done > 0 && ln.qty_marking_printed < done
+  const marked = ln.qty_marking_printed + (ln.qty_marking_external ?? 0)
+  return done > 0 && marked < done
 }
 
 /** Progress toward qty_need_pack — for ЧЗ column display and row highlight. */
 function isLineMarkingProgressIncomplete(ln: PackagingTaskLine): boolean {
-  return ln.requires_honest_sign && ln.qty_marking_printed < ln.qty_need_pack
+  if (!ln.requires_honest_sign) {
+    return false
+  }
+  const marked = ln.qty_marking_printed + (ln.qty_marking_external ?? 0)
+  return marked < ln.qty_need_pack
 }
 
 const MARKING_NOT_DONE_MESSAGE =
@@ -255,6 +290,7 @@ export function FfPackagingTaskPanel({
   renderLineActions,
   printOnly = false,
   hidePrintActions = false,
+  onBoxBarcodeScan,
   onClose,
   onUpdated,
 }: TaskPanelProps) {
@@ -270,6 +306,7 @@ export function FfPackagingTaskPanel({
   const [defectDialogError, setDefectDialogError] = useState<string | null>(null)
   const [lineMenuAnchor, setLineMenuAnchor] = useState<null | HTMLElement>(null)
   const [lineMenuLine, setLineMenuLine] = useState<PackagingTaskLine | null>(null)
+  const [instructionsLine, setInstructionsLine] = useState<PackagingTaskLine | null>(null)
   const [scannerValue, setScannerValue] = useState('')
   const [scannerFeedback, setScannerFeedback] = useState<string | null>(null)
   const [focusedLineId, setFocusedLineId] = useState<string | null>(null)
@@ -365,6 +402,33 @@ export function FfPackagingTaskPanel({
     )
   }
 
+  /** MPU-05 (18.08): единая кнопка печати листа отгрузки (накладная + ТЗ в одной форме
+      с колонками «Кол-во» (план) и «Факт» (пусто, под руку) — печатная форма уже
+      готова в printShipmentPackagingSheet, здесь только подключение и передача данных. */
+  const printPackagingSheet = () => {
+    printShipmentPackagingSheet({
+      documentNumber: formatHumanDocumentNumber(task) ?? task.document_number ?? task.id,
+      documentType: 'Отгрузка на маркетплейс',
+      sellerName: taskSellerLabel(task),
+      shipmentDate: task.created_at ? new Date(task.created_at).toLocaleString('ru-RU') : null,
+      warehouseName: task.warehouse_name ?? task.warehouse_code ?? 'Склад',
+      createdAt: task.created_at ?? null,
+      items: task.lines.map((ln) => {
+        const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
+        return {
+          product_name: displayMeta.product_name,
+          vendor_code: displayMeta.wb_vendor_code ?? '',
+          sku_code: displayMeta.sku_code,
+          barcode: resolveProductPrimaryBarcode(displayMeta) || null,
+          wb_nm_id: displayMeta.wb_nm_id,
+          photo_url: displayMeta.wb_primary_image_url,
+          instructions: ln.packaging_instructions,
+          quantity: ln.qty_need_pack,
+        }
+      }),
+    })
+  }
+
   const confirmPacked = async (lineId: string) => {
     setBusy(true)
     setError(null)
@@ -418,6 +482,14 @@ export function FfPackagingTaskPanel({
       return
     }
     if (isMpUnloadTask) {
+      // Единое поле различает короб (WHB-/INB-) и товар по формату строки.
+      if (barcode.startsWith('WHB-') || barcode.startsWith('INB-')) {
+        setScannerValue('')
+        setError(null)
+        onBoxBarcodeScan?.(barcode)
+        window.setTimeout(() => scannerRef.current?.focus(), 0)
+        return
+      }
       const matchingLine = task.lines.find((ln) => {
         const lineBarcode = lineBarcodeForScan(ln)
         return barcode === lineBarcode || barcode === ln.sku_code
@@ -427,11 +499,19 @@ export function FfPackagingTaskPanel({
         scannerRef.current?.focus()
         return
       }
+      const remaining = lineRemaining(matchingLine)
+      if (remaining < 1) {
+        setFocusedLineId(matchingLine.id)
+        setScannerValue('')
+        setError(null)
+        setScannerFeedback(`По этому товару уже упаковано всё: ${matchingLine.product_name}`)
+        window.setTimeout(() => scannerRef.current?.focus(), 0)
+        return
+      }
       setFocusedLineId(matchingLine.id)
       setScannerValue('')
       setError(null)
-      setScannerFeedback(`Строка найдена: ${matchingLine.product_name}`)
-      window.setTimeout(() => scannerRef.current?.focus(), 0)
+      await packQty(matchingLine.id, 1)
       return
     }
     const packedBefore = new Map(task.lines.map((ln) => [ln.id, ln.qty_packed_in_task]))
@@ -675,10 +755,7 @@ export function FfPackagingTaskPanel({
       {hideDocumentHeader ? null : (
         <Stack direction="row" spacing={2} sx={{ alignItems: 'flex-start', flexWrap: 'wrap' }}>
           <Stack spacing={0.25} sx={{ minWidth: 0 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-              Задание {displayDocumentNumber ?? '—'}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" data-testid="ff-packaging-task-status">
+            <Typography variant="body2" sx={{ fontWeight: 700 }} data-testid="ff-packaging-task-status">
               {statusLabel(task.status)}
             </Typography>
             {displayDocumentNumber ? (
@@ -717,36 +794,43 @@ export function FfPackagingTaskPanel({
           {pickResyncWarningText}
         </Alert>
       ) : null}
-      <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-packaging-work-context">
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: '1.2fr 1.4fr 0.8fr' },
-            gap: 1.5,
-            alignItems: 'center',
-          }}
-        >
-          <Box sx={{ minWidth: 0 }}>
-            <Typography variant="caption" color="text.secondary">Селлер</Typography>
-            <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: 'anywhere' }} data-testid="ff-packaging-task-seller">
-              {taskSellerLabel(task)}
-            </Typography>
+      {/* На форме отгрузки на МП (hideDocumentHeader) те же три цифры уже показаны в плашке
+          над вкладками (ff-mp-shipment-summary в FfSuppliesShipmentsPage.tsx) — здесь это
+          был чистый дубль без своей пользы («мне нахуя тут на форме?», разбор 2026-08-16).
+          В самостоятельном «Задания на упаковку» (FBS/обычные задания) такой плашки нет
+          нигде рядом, там блок остаётся. */}
+      {!hideDocumentHeader ? (
+        <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-packaging-work-context">
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', md: '1.2fr 1.4fr 0.8fr' },
+              gap: 1.5,
+              alignItems: 'center',
+            }}
+          >
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="caption" color="text.secondary">Селлер</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: 'anywhere' }} data-testid="ff-packaging-task-seller">
+                {taskSellerLabel(task)}
+              </Typography>
+            </Box>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="caption" color="text.secondary">Склад / ячейка</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: 'anywhere' }} data-testid="ff-packaging-task-place">
+                {taskPlaceLabel(task)}
+              </Typography>
+            </Box>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="caption" color="text.secondary">Прогресс</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 700 }} data-testid="ff-packaging-task-progress">
+                Готово {panelTotals.done} / Осталось {panelTotals.remaining}
+              </Typography>
+            </Box>
           </Box>
-          <Box sx={{ minWidth: 0 }}>
-            <Typography variant="caption" color="text.secondary">Склад / ячейка</Typography>
-            <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: 'anywhere' }} data-testid="ff-packaging-task-place">
-              {taskPlaceLabel(task)}
-            </Typography>
-          </Box>
-          <Box sx={{ minWidth: 0 }}>
-            <Typography variant="caption" color="text.secondary">Прогресс</Typography>
-            <Typography variant="body2" sx={{ fontWeight: 700 }} data-testid="ff-packaging-task-progress">
-              Готово {panelTotals.done} / Осталось {panelTotals.remaining}
-            </Typography>
-          </Box>
-        </Box>
-      </Paper>
-      {taskEditable && !printOnly ? (
+        </Paper>
+      ) : null}
+      {taskEditable && !printOnly && !isMpUnloadTask ? (
         <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-packaging-scanner-panel">
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', md: 'flex-start' } }}>
             <TextField
@@ -793,6 +877,16 @@ export function FfPackagingTaskPanel({
               </Button>
             )}
           </Stack>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: 'block', mt: 1 }}
+            data-testid="ff-packaging-scan-status"
+          >
+            {isMpUnloadTask
+              ? 'Сканер активен — пикните ШК товара или короба (WHB-…).'
+              : 'Сканер активен — пикните ШК товара.'}
+          </Typography>
           {scannerFeedback ? (
             <Alert severity="success" sx={{ mt: 1.5 }} data-testid="ff-packaging-scan-feedback">
               {scannerFeedback}
@@ -801,63 +895,129 @@ export function FfPackagingTaskPanel({
         </Paper>
       ) : null}
       {isMpUnloadTask ? (
+        <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
+          {/* MPU-05 (18.08): заказчик хочет одну кнопку печати вместо двух — печатает
+              готовую форму «Лист отгрузки» (накладная + ТЗ в одном листе, план в «Кол-во»,
+              «Факт» пустой под руку). Форма уже была готова в printShipmentPackagingSheet,
+              просто не была подключена ни к одному экрану. */}
+          <Button
+            variant="contained"
+            size="large"
+            startIcon={<PrintOutlined />}
+            onClick={printPackagingSheet}
+            data-testid="ff-packaging-print-sheet"
+          >
+            Печать накладной
+          </Button>
+        </Stack>
+      ) : null}
+      {isMpUnloadTask ? (
         <TableContainer component={Paper} variant="outlined" data-testid="ff-packaging-lines-table">
           <Table size="small" sx={{ tableLayout: 'fixed', width: '100%' }}>
             <TableHead>
               <TableRow>
-                <TableCell sx={{ width: '30%' }}>Товар / SKU</TableCell>
-                <TableCell sx={{ width: '18%' }}>ШК</TableCell>
-                <TableCell align="center" sx={{ width: 64 }}>ТЗ</TableCell>
-                <TableCell sx={{ width: '16%' }}>ЧЗ</TableCell>
-                <TableCell sx={{ width: '16%' }}>ШК печати</TableCell>
-                <TableCell align="right" sx={{ width: 120 }}>Упаковано</TableCell>
-                <TableCell align="right" sx={{ width: 96 }}>Печать</TableCell>
+                {/* MPU-04б (18.08): «ШК печати»/«Упаковано» ушли из таблицы в MPU-01/02, но
+                    оставшиеся колонки не занимали освободившееся место — table-layout: fixed
+                    отдаёт лишнее пространство только колонкам с px-шириной (ТЗ, Действия),
+                    а не с %, из-за чего ШК оставался узким и обрезался, а кнопка печати
+                    раздувалась на всю колонку. Ширины переведены в % и сбалансированы
+                    заново, чтобы штрихкод помещался целиком. */}
+                {/* MPU-10 (18.08): артикул продавца и артикул WB были слеплены в одной
+                    подписи под названием товара («SKU: ...»). Заказчик попросил развести их
+                    по отдельным колонкам вместе с размером; ширины остальных колонок
+                    пересчитаны заново, чтобы сумма снова давала 100% и ничего не обрезалось. */}
+                {/* Название товара — самая длинная строка в таблице, ей нужен запас:
+                    после добавления трёх колонок (артикулы и размер) оно начало
+                    обрезаться. Забрали 8 п.п. у «Действий», там одна кнопка. */}
+                <TableCell sx={{ width: '26%' }}>Товар</TableCell>
+                <TableCell sx={{ width: '10%' }}>Артикул продавца</TableCell>
+                <TableCell sx={{ width: '8%' }}>Артикул WB</TableCell>
+                <TableCell sx={{ width: '8%' }}>Размер</TableCell>
+                <TableCell sx={{ width: '14%' }}>ШК</TableCell>
+                <TableCell align="center" sx={{ width: '5%' }}>ТЗ</TableCell>
+                <TableCell sx={{ width: '11%' }}>ЧЗ</TableCell>
+                <TableCell align="right" sx={{ width: '18%' }}>Действия</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {task.lines.map((ln) => {
                 const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
                 const barcode = lineBarcodeForScan(ln)
-                const remaining = lineRemaining(ln)
                 const markingProgressIncomplete = isLineMarkingProgressIncomplete(ln)
                 const hasInstructions = Boolean(ln.packaging_instructions?.trim())
                 const barcodeReady = Boolean(barcode?.trim())
-                const productLabelNeed = Math.max(ln.qty_need_pack, ln.qty_done)
-                const productLabelPrinted = Math.min(
-                  ln.qty_product_label_printed ?? 0,
-                  productLabelNeed,
-                )
-                const barcodeStatusLabel = barcodeReady
-                  ? `напечатано ${productLabelPrinted}/${productLabelNeed}`
-                  : 'нет ШК'
                 return (
                   <TableRow
                     key={ln.id}
                     data-testid={markingProgressIncomplete ? 'ff-packaging-line-marking-incomplete' : 'ff-packaging-line'}
                     selected={focusedLineId === ln.id}
-                    sx={markingProgressIncomplete ? { bgcolor: 'warning.light' } : undefined}
                   >
-                    <TableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap data-testid="ff-packaging-compact-product-name">
-                        {displayMeta.product_name}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" noWrap>
-                        SKU: {displayMeta.sku_code}
+                    <TableCell sx={{ overflow: 'hidden' }}>
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
+                        <ProductPhotoThumb
+                          src={displayMeta.wb_primary_image_url}
+                          alt={displayMeta.product_name}
+                          testId={`ff-packaging-line-photo-${ln.id}`}
+                        />
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap data-testid="ff-packaging-compact-product-name">
+                            {displayMeta.product_name}
+                          </Typography>
+                        </Box>
+                      </Stack>
+                    </TableCell>
+                    <TableCell sx={{ overflow: 'hidden' }}>
+                      <Typography
+                        variant="body2"
+                        noWrap
+                        data-testid={`ff-packaging-line-vendor-code-${ln.id}`}
+                      >
+                        {displayMeta.wb_vendor_code || '—'}
                       </Typography>
                     </TableCell>
-                    <TableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      <Typography variant="body2" noWrap data-testid={`ff-packaging-line-barcode-${ln.id}`}>
+                    <TableCell sx={{ overflow: 'hidden' }}>
+                      <Typography
+                        variant="body2"
+                        noWrap
+                        data-testid={`ff-packaging-line-nm-id-${ln.id}`}
+                      >
+                        {displayMeta.wb_nm_id ?? '—'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={{ overflow: 'hidden' }}>
+                      <Typography
+                        variant="body2"
+                        noWrap
+                        data-testid={`ff-packaging-line-size-${ln.id}`}
+                      >
+                        {displayMeta.wb_size || ''}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      {/* Заказчик 18.08: обрезанный ШК нельзя ни прочитать, ни сверить, ни
+                          продиктовать — код должен быть виден целиком. Колонка расширена,
+                          обрезание убрано; на случай очень длинного кода — перенос по
+                          символам вместо ellipsis, а не обрубание текста. */}
+                      <Typography
+                        variant="body2"
+                        sx={{ wordBreak: 'break-word' }}
+                        data-testid={`ff-packaging-line-barcode-${ln.id}`}
+                      >
                         {barcode || '—'}
                       </Typography>
                     </TableCell>
                     <TableCell align="center">
+                      {/* Заказчик 18.08: иконка ТЗ должна показывать само задание на упаковку
+                          (текст packaging_instructions), а не открывать форму печати — раньше
+                          подпись обещала одно, а клик делал другое. Печать осталась на
+                          отдельной крупной кнопке принтера в колонке «Действия». */}
                       <Tooltip title={hasInstructions ? ln.packaging_instructions : 'ТЗ не задано'}>
                         <span>
                           <IconButton
                             size="small"
-                            disabled={!hasInstructions}
+                            onClick={() => setInstructionsLine(ln)}
                             data-testid={`ff-packaging-line-tz-${ln.id}`}
-                            aria-label={hasInstructions ? 'Показать ТЗ упаковки' : 'ТЗ упаковки не задано'}
+                            aria-label={hasInstructions ? 'Показать задание на упаковку' : 'Задание на упаковку не задано'}
                           >
                             <ArticleOutlined fontSize="small" color={hasInstructions ? 'primary' : 'disabled'} />
                           </IconButton>
@@ -877,35 +1037,26 @@ export function FfPackagingTaskPanel({
                         <Chip size="small" variant="outlined" label="не требуется" />
                       )}
                     </TableCell>
-                    <TableCell>
-                      <Chip
-                        size="small"
-                        color={barcodeReady && productLabelPrinted > 0 ? 'success' : 'warning'}
-                        variant="outlined"
-                        label={barcodeStatusLabel}
-                        data-testid={`ff-packaging-barcode-status-${ln.id}`}
-                      />
-                    </TableCell>
-                    <TableCell align="right" data-testid={`ff-packaging-line-progress-${ln.id}`}>
-                      {ln.qty_done}/{ln.qty_total}
-                      {remaining > 0 ? (
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                          осталось {remaining}
-                        </Typography>
-                      ) : null}
-                    </TableCell>
-                    <TableCell align="right">
-                      {!hidePrintActions ? (
-                        <IconButton
-                          size="small"
-                          aria-label={`Печать товара ${displayMeta.product_name}`}
-                          onClick={() => openLinePrint(ln)}
-                          data-testid={`ff-packaging-line-print-${ln.id}`}
-                          disabled={!barcodeReady && !ln.requires_honest_sign}
-                        >
-                          <PrintOutlined fontSize="small" />
-                        </IconButton>
-                      ) : null}
+                    <TableCell align="right" sx={{ py: 1 }}>
+                      {/* Заказчик 18.08: кнопка растягивалась fullWidth на всю колонку и
+                          выглядела баннером. Крупная (size large), но по размеру
+                          содержимого и прижата к правому краю колонки «Действия». */}
+                      <Stack spacing={0.5} sx={{ alignItems: 'flex-end' }}>
+                        {!hidePrintActions ? (
+                          <Button
+                            variant="contained"
+                            size="large"
+                            startIcon={<PrintOutlined />}
+                            aria-label={`Печать товара ${displayMeta.product_name}`}
+                            onClick={() => openLinePrint(ln)}
+                            data-testid={`ff-packaging-line-print-${ln.id}`}
+                            disabled={!barcodeReady && !ln.requires_honest_sign}
+                            sx={{ whiteSpace: 'nowrap' }}
+                          >
+                            ШК + ЧЗ
+                          </Button>
+                        ) : null}
+                      </Stack>
                       {lineHasOverflowActions(ln) ? (
                         <IconButton
                           size="small"
@@ -1087,50 +1238,36 @@ export function FfPackagingTaskPanel({
                 ))}
               </Alert>
             ) : null}
-            {isMpUnloadTask && (hasIncompletePacking || hasIncompleteMarking) ? (
-              <Typography variant="body2" color="text.secondary" data-testid="ff-packaging-complete-blocker">
-                Завершение станет доступно после печати обязательных ЧЗ/ШК и распределения товара по коробам.
-              </Typography>
-            ) : null}
-            <Button
-              variant="contained"
-              color="success"
-              disabled={
-                busy ||
-                hasIncompleteMarking ||
-                hasIncompletePacking
+            {/* Пункт 8 разбора 2026-08-16: отдельная карточка на всю ширину ради одной
+                серой кнопки — читать нечего, кроме причины блокировки. Текст правильный
+                (заказчик просил не убирать объяснение), но ему место подсказкой у самой
+                кнопки, а не отдельным блоком. Короба из причины убраны: завершение больше
+                не должно требовать распределения по коробам — решение заказчика
+                2026-08-16, реализовано на подборе (короб туда не попадает вообще). */}
+            <Tooltip
+              title={
+                isMpUnloadTask && (hasIncompletePacking || hasIncompleteMarking)
+                  ? 'Завершение станет доступно после печати обязательных ЧЗ/ШК и упаковки всего товара по плану.'
+                  : ''
               }
-              onClick={() => void completeTask()}
-              data-testid="ff-packaging-complete"
             >
-              Завершить упаковку
-            </Button>
-          </Stack>
-        </Paper>
-      ) : null}
-      {(task.events ?? []).length > 0 ? (
-        <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-packaging-history">
-          <Stack spacing={0.75}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-              История
-            </Typography>
-            {orderedEvents.slice().reverse().slice(0, 8).map((event) => (
-              <Typography key={event.id} variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
-                {event.action === 'scan_pack'
-                  ? '+1 скан'
-                  : event.action === 'manual_pack'
-                    ? `+${event.quantity} вручную`
-                    : event.action === 'undo_last'
-                      ? `Отмена ${event.quantity} шт`
-                      : event.action === 'complete'
-                        ? 'Задание выполнено'
-                        : event.action === 'cancel'
-                          ? 'Задание отменено'
-                          : event.action}{' '}
-                · {event.product_name ?? 'задание'} · {event.created_by_user_email ?? 'оператор'} ·{' '}
-                {new Date(event.created_at).toLocaleString('ru-RU')}
-              </Typography>
-            ))}
+              <span>
+                <Button
+                  variant="contained"
+                  color="success"
+                  disabled={
+                    busy ||
+                    hasIncompleteMarking ||
+                    hasIncompletePacking
+                  }
+                  onClick={() => void completeTask()}
+                  data-testid="ff-packaging-complete"
+                  sx={{ alignSelf: 'flex-start' }}
+                >
+                  Завершить упаковку
+                </Button>
+              </span>
+            </Tooltip>
           </Stack>
         </Paper>
       ) : null}
@@ -1170,6 +1307,34 @@ export function FfPackagingTaskPanel({
         </DialogActions>
       </Dialog>
       {markingPrintDialog}
+      <Dialog
+        open={Boolean(instructionsLine)}
+        onClose={() => setInstructionsLine(null)}
+        maxWidth="xs"
+        fullWidth
+        data-testid="ff-packaging-instructions-dialog"
+      >
+        <DialogTitle>Задание на упаковку</DialogTitle>
+        <DialogContent>
+          {instructionsLine ? (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              {instructionsLine.product_name} · SKU {instructionsLine.sku_code}
+            </Typography>
+          ) : null}
+          <Typography
+            variant="body2"
+            sx={{ whiteSpace: 'pre-wrap' }}
+            data-testid="ff-packaging-instructions-dialog-text"
+          >
+            {instructionsLine?.packaging_instructions?.trim() || 'ТЗ не задано'}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setInstructionsLine(null)} data-testid="ff-packaging-instructions-dialog-close">
+            Закрыть
+          </Button>
+        </DialogActions>
+      </Dialog>
       <Menu
         anchorEl={lineMenuAnchor}
         open={Boolean(lineMenuAnchor)}
@@ -1231,8 +1396,12 @@ export function FfPackagingTaskPanel({
                 data-testid="ff-packaging-defect-code-select"
               >
                 {defectCodes.map((code) => (
-                  <MenuItem key={code.id} value={code.id}>
-                    {code.cis_masked}
+                  <MenuItem
+                    key={code.id}
+                    value={code.id}
+                    sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+                  >
+                    {code.cis_code}
                   </MenuItem>
                 ))}
               </Select>
@@ -1264,6 +1433,28 @@ export function FfPackagingTaskPanel({
           </Button>
         </DialogActions>
       </Dialog>
+      {/* Пункт «История не на месте», разбор 2026-08-16: раньше блок стоял прямо в
+          теле формы между кнопкой завершения и диалогами — заказчик явно попросил
+          убрать его в самый низ под скрывашку, в одном стиле с блоком «Короба»
+          (соседним на этом же экране в FfSuppliesShipmentsPage.tsx). Свёрнут по
+          умолчанию, заголовок сразу говорит, сколько записей внутри. */}
+      {(task.events ?? []).length > 0 && !isMpUnloadTask ? (
+        <Accordion disableGutters variant="outlined" data-testid="ff-packaging-history-accordion">
+          <AccordionSummary expandIcon={<ExpandMoreOutlined />} data-testid="ff-packaging-history-summary">
+            <Typography variant="subtitle2">История ({orderedEvents.length})</Typography>
+          </AccordionSummary>
+          <AccordionDetails data-testid="ff-packaging-history">
+            <Stack spacing={0.75}>
+              {orderedEvents.slice().reverse().slice(0, 8).map((event) => (
+                <Typography key={event.id} variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
+                  {packagingEventLabel(event.action, event.quantity)} · {event.product_name ?? 'задание'} · {event.created_by_user_email ?? 'оператор'} ·{' '}
+                  {new Date(event.created_at).toLocaleString('ru-RU')}
+                </Typography>
+              ))}
+            </Stack>
+          </AccordionDetails>
+        </Accordion>
+      ) : null}
       {onClose ? (
         <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
           {manualTask ? (
@@ -1805,12 +1996,16 @@ export function FfPackagingPage({ token }: PageProps) {
             >
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ width: 92 }}>Номер</TableCell>
+                  {/* Дизайн-разбор 2026-08-16: «Номер» и «Прогресс» были уже, чем собственный
+                      заголовок и содержимое («№000001» рвался на «№0000»/«01»), хотя таблица
+                      не занимала всю доступную ширину — свободное место просто было отдано
+                      неровно. «Товар» — самая гибкая колонка, ей есть куда сжаться. */}
+                  <TableCell sx={{ width: 130 }}>Номер</TableCell>
                   <TableCell sx={{ width: 104 }}>Статус</TableCell>
                   <TableCell sx={{ width: 150 }}>Селлер</TableCell>
                   <TableCell sx={{ width: 180 }}>Склад / ячейка</TableCell>
                   <TableCell>Товар</TableCell>
-                  <TableCell align="right" sx={{ width: 84 }}>Прогресс</TableCell>
+                  <TableCell align="right" sx={{ width: 112 }}>Прогресс</TableCell>
                   <TableCell sx={{ width: 116 }}>Источник</TableCell>
                 </TableRow>
               </TableHead>

@@ -410,14 +410,6 @@ async def test_concurrent_reserve_only_one_succeeds(
             quantity_delta=1,
             movement_type="inbound_intake",
         )
-        await stock_direction_service.create_stock_direction(
-            session,
-            tenant_id,
-            product.id,
-            name="FBS pool",
-            quantity=1,
-            is_fbs=True,
-        )
         await seed_fbs_warehouse_binding(
             session,
             tenant_id=tenant_id,

@@ -1,6 +1,7 @@
 import { Avatar, Box } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
-import { useCallback, useState } from 'react'
+import PersonIcon from '@mui/icons-material/Person'
+import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 type Props = {
@@ -44,7 +45,42 @@ export function ProductPhotoThumb({
 }: Props) {
   const theme = useTheme()
   const [previewPos, setPreviewPos] = useState<PreviewPos | null>(null)
-  const imageSrc = src?.trim() || null
+  const rawSrc = src?.trim() || null
+  // Битая/протухшая ссылка на фото WB должна выглядеть так же, как отсутствие фото —
+  // единая заглушка (силуэт), а не буква названия товара в кружке.
+  //
+  // MUI Avatar сам пытается подгрузить src отдельным внутренним Image()-пробником
+  // (см. useLoaded в @mui/material/Avatar) и решает, что показать вместо картинки,
+  // независимо от онError на реально отрендеренном <img>: если alt задан и src ещё
+  // не сброшен в null, Avatar выбирает первую букву alt раньше, чем наш onError на
+  // DOM-элементе успевает сработать (тот <img> к этому моменту уже может быть
+  // размонтирован). Поэтому вместо onError на <img> используем свой собственный
+  // независимый пробник (тот же приём, что и внутри MUI) — он не привязан к тому,
+  // что и когда рендерит Avatar, и его результат надёжно приходит в наше состояние.
+  const [loadFailed, setLoadFailed] = useState(false)
+  useEffect(() => {
+    setLoadFailed(false)
+    if (!rawSrc) {
+      return undefined
+    }
+    let active = true
+    const probe = new Image()
+    probe.onload = () => {
+      if (active) {
+        setLoadFailed(false)
+      }
+    }
+    probe.onerror = () => {
+      if (active) {
+        setLoadFailed(true)
+      }
+    }
+    probe.src = rawSrc
+    return () => {
+      active = false
+    }
+  }, [rawSrc])
+  const imageSrc = loadFailed ? null : rawSrc
 
   const openPreview = useCallback(
     (el: HTMLElement) => {
@@ -87,7 +123,19 @@ export function ProductPhotoThumb({
           sx={{ width: size, height: size }}
           slotProps={{ img: { loading: 'lazy' } }}
           data-testid={testId}
-        />
+        >
+          {/*
+            Явный children — единственный надёжный (не зависящий от гонки состояний
+            внутри MUI Avatar, см. комментарий выше) способ гарантировать, что при
+            неудачной загрузке Avatar покажет именно эту заглушку-силуэт, а не первую
+            букву alt. Ветка "буква из alt" в MUI Avatar проверяется только когда
+            children не передан, так что передавая свою иконку мы её отключаем
+            полностью, независимо от того, кто быстрее — наш пробник или их. Размер
+            75% повторяет внутренний дефолт MUI (AvatarFallback), чтобы силуэт
+            выглядел так же, как в случае "фото вообще нет".
+          */}
+          <PersonIcon sx={{ width: '75%', height: '75%' }} />
+        </Avatar>
       </Box>
       {imageSrc && previewPos
         ? createPortal(

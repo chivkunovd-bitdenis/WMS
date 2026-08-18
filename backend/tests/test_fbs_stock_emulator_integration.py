@@ -29,6 +29,7 @@ from wb_emulator.settings import get_settings as get_emulator_settings
 
 from app.core.settings import settings
 from app.db.session import SessionLocal
+from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_order import (
     MAPPING_STATUS_MAPPED,
     RESERVE_STATUS_RESERVED,
@@ -36,7 +37,7 @@ from app.models.fbs_order import (
     FbsOrderReservation,
 )
 from app.models.fbs_stock_sync_item import (
-    STOCK_SYNC_STATUS_ERROR,
+    STOCK_SYNC_STATUS_CONFIRMED,
     FbsStockSyncItem,
 )
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
@@ -45,10 +46,6 @@ from app.models.marketplace_unload_reservation import MarketplaceUnloadReservati
 from app.models.product import Product
 from app.services import inventory_service, stock_direction_service
 from app.services.fbs_autopoll_service import SellerStockSyncResult, sync_seller_stocks
-from app.services.fbs_stock_sync_service import (
-    ERROR_UNSAFE_STOCK_UNKNOWN,
-    ERROR_UNSAFE_ZERO_BLOCKED,
-)
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import sync_seller_orders
 
@@ -278,7 +275,15 @@ async def test_wms_emulator_safe_sync_without_fbs_pool_keeps_wb_stock_20(
     async_client: AsyncClient,
     emulator_stack: httpx.AsyncClient,
 ) -> None:
-    """TC-NEW-F22-001: missing FBS pool blocks sync before WB PUT 0."""
+    """TC-NEW-F22-001: product with no fbs_binding_stock_pools row is skipped, WB stock untouched.
+
+    New pool model (2026-08-16): the amount published to a WB warehouse binding
+    comes only from fbs_binding_stock_pools, a number the admin sets by hand per
+    binding. A product with no row there simply hasn't been allocated to this
+    warehouse yet -- that is not an error, so it is excluded from publish
+    targets entirely and sync never sends anything for it, leaving whatever is
+    already in the WB cabinet untouched.
+    """
     emu_client = emulator_stack
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, fbs_wh_id = await _setup_seller_with_token(async_client, headers, suffix)
@@ -322,14 +327,14 @@ async def test_wms_emulator_safe_sync_without_fbs_pool_keeps_wb_stock_20(
             await session.execute(
                 select(FbsStockSyncItem).where(FbsStockSyncItem.chrt_id == CHRT_ID)
             )
-        ).scalar_one()
-        assert sync_item.status == STOCK_SYNC_STATUS_ERROR
-        assert sync_item.last_error_code == ERROR_UNSAFE_STOCK_UNKNOWN
-        assert sync_item.last_confirmed_amount is None
+        ).scalar_one_or_none()
+        # No pool row for this binding/product => it never becomes a publish
+        # target, so no FbsStockSyncItem is created for it at all.
+        assert sync_item is None
 
     assert stock_result.products_targeted == 0
     assert stock_result.products_confirmed == 0
-    assert stock_result.errors == 1
+    assert stock_result.errors == 0
     assert await _emulator_read_stock(emu_client, CHRT_ID) == 20
 
 
@@ -338,7 +343,20 @@ async def test_wms_emulator_fbs_stock_full_cycle(
     async_client: AsyncClient,
     emulator_stack: httpx.AsyncClient,
 ) -> None:
-    """Publish 1 → purchase → intake reserves 1 → publish 0; FBO on other WH ignored."""
+    """Publish 1 → purchase → intake reserves 1 AND debits the pool to 0; FBO on other WH ignored.
+
+    New pool model (2026-08-16): what WMS publishes to a WB warehouse binding
+    comes solely from fbs_binding_stock_pools -- a number the admin sets by
+    hand (PUT .../stock-pool/{product_id}). On top of that manual fill, the
+    customer's rule is "first fill is manual, everything after is spend
+    only": an incoming WB order now debits the pool by the order's quantity
+    the moment it is first seen (wb_marketplace_orders_service
+    ._debit_stock_pool_for_order), independent of and in addition to the
+    WMS-side physical reserve (StockDirection is_fbs). The zero-publish
+    protection still holds: WB only receives 0 when the pool row says 0
+    (is_explicit_zero) -- it makes no difference to the publish path whether
+    that zero was reached by an admin's manual edit or by order-driven spend.
+    """
     emu_client = emulator_stack
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, fbs_wh_id = await _setup_seller_with_token(async_client, headers, suffix)
@@ -382,6 +400,7 @@ async def test_wms_emulator_fbs_stock_full_cycle(
         row.wb_nm_id = WB_NM_ID
         row.wb_barcode = WB_BARCODE
         row.fbs_stock_sync_enabled = True
+        row.fbs_stock_limit = 1
         await session.commit()
 
         await get_or_create_sorting_location(session, tenant_id, uuid.UUID(fbs_wh_id))
@@ -392,14 +411,6 @@ async def test_wms_emulator_fbs_stock_full_cycle(
             storage_location_id=uuid.UUID(storage_loc_id),
             quantity_delta=1,
             movement_type="inbound_intake",
-        )
-        await stock_direction_service.create_stock_direction(
-            session,
-            tenant_id,
-            product_id,
-            name="FBS pool",
-            quantity=1,
-            is_fbs=True,
         )
 
         unload = MarketplaceUnloadRequest(
@@ -430,6 +441,15 @@ async def test_wms_emulator_fbs_stock_full_cycle(
         )
         await session.commit()
 
+    # Admin manually allocates 1 unit of this product's FBS pool to this WB
+    # warehouse binding -- the new source of truth for what gets published.
+    pool_resp = await async_client.put(
+        f"/operations/fbs-sellers/{seller_id}/warehouse-bindings/{WB_WAREHOUSE_ID}/stock-pool/{product_id}",
+        headers=headers,
+        json={"quantity": 1},
+    )
+    assert pool_resp.status_code == 200, pool_resp.text
+
     seller_uuid = uuid.UUID(seller_id)
 
     async with SessionLocal() as session:
@@ -452,6 +472,26 @@ async def test_wms_emulator_fbs_stock_full_cycle(
     async with SessionLocal() as session:
         intake = await sync_seller_orders(session, tenant_id, seller_uuid, emu_client)
     assert intake["orders_created"] >= 1
+    # Order arrival is a spend event against the admin-owned pool too: pool
+    # was 1, the order used 1 unit, so it must be 0 now.
+    assert intake["stock_pool_debited_units"] == 1
+    assert intake["stock_pool_debit_shortfall_units"] == 0
+    async with SessionLocal() as session:
+        pool_row = (
+            await session.execute(
+                select(FbsBindingStockPool)
+                .join(
+                    FbsWarehouseBinding,
+                    FbsBindingStockPool.binding_id == FbsWarehouseBinding.id,
+                )
+                .where(
+                    FbsWarehouseBinding.seller_id == seller_uuid,
+                    FbsWarehouseBinding.wb_warehouse_id == WB_WAREHOUSE_ID,
+                    FbsBindingStockPool.product_id == product_id,
+                )
+            )
+        ).scalar_one()
+        assert pool_row.quantity == 0
 
     async with SessionLocal() as session:
         order = (
@@ -475,6 +515,9 @@ async def test_wms_emulator_fbs_stock_full_cycle(
         )
         assert int(reserve_qty) == 1
 
+        # Order intake already debited fbs_binding_stock_pools to 0 above.
+        # Re-syncing must republish that 0 -- WB should reflect the sold-out
+        # state, not the stale 1 from before the order arrived.
         stock_result2 = await _sync_stocks_with_lease_retry(
             session,
             tenant_id,
@@ -488,13 +531,22 @@ async def test_wms_emulator_fbs_stock_full_cycle(
                 )
             )
         ).scalar_one()
-        assert sync_item.status == STOCK_SYNC_STATUS_ERROR
-        assert sync_item.last_error_code == ERROR_UNSAFE_ZERO_BLOCKED
-        assert sync_item.last_confirmed_amount == 1
+        assert sync_item.status == STOCK_SYNC_STATUS_CONFIRMED
+        assert sync_item.last_confirmed_amount == 0
 
-    assert stock_result2.products_confirmed == 0
-    assert stock_result2.errors == 1
+    assert stock_result2.products_confirmed == 1
+    assert stock_result2.errors == 0
     assert await _emulator_read_stock(emu_client, CHRT_ID) == 0
+
+    # Pool is already 0 from order-driven spend; an admin PUT of 0 here is a
+    # no-op confirming that an explicit zero re-publishes idempotently
+    # whether it was reached by hand or by order intake.
+    zero_resp = await async_client.put(
+        f"/operations/fbs-sellers/{seller_id}/warehouse-bindings/{WB_WAREHOUSE_ID}/stock-pool/{product_id}",
+        headers=headers,
+        json={"quantity": 0},
+    )
+    assert zero_resp.status_code == 200, zero_resp.text
 
     # Manual API path uses same httpx→emulator wiring (patched AsyncClient).
     api_sync = await async_client.post(
@@ -503,5 +555,6 @@ async def test_wms_emulator_fbs_stock_full_cycle(
         json={"wb_warehouse_id": WB_WAREHOUSE_ID},
     )
     assert api_sync.status_code == 200, api_sync.text
-    assert api_sync.json()["products_confirmed"] == 0
-    assert api_sync.json()["errors"] == 1
+    assert api_sync.json()["products_confirmed"] == 1
+    assert api_sync.json()["errors"] == 0
+    assert await _emulator_read_stock(emu_client, CHRT_ID) == 0

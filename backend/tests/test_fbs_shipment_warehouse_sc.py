@@ -840,9 +840,16 @@ async def test_retry_supply_qr_never_calls_wb_deliver(
     assert deliver_calls == 1
 
 
-# TC-NEW-FBS-SHIPWH-009 — retry-supply-qr is warehouse/SC-only
+# TC-NEW-FBS-SHIPWH-009 — retry-supply-qr also works for PVZ supplies.
+# WB's GET /api/v3/supplies/{id}/barcode issues a supply QR regardless of
+# delivery_type — verified against the live WB API on 2026-08-17 for both a
+# pvz supply (WB-GI-266096235) and a warehouse_sc supply (WB-GI-265889432),
+# both returning 200 with a PNG. The screen used to hide the supply-QR block
+# and tell operators WB "does not issue" a supply QR for PVZ pickup points;
+# that was false and cost a real warehouse half a shift of confusion, so the
+# backend must not gate this on delivery_type either.
 @pytest.mark.asyncio
-async def test_retry_supply_qr_rejects_pvz_delivery_type(
+async def test_retry_supply_qr_succeeds_for_pvz_delivery_type(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
@@ -850,23 +857,34 @@ async def test_retry_supply_qr_rejects_pvz_delivery_type(
     seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
         async_client, headers, suffix
     )
-    supply, _ = await _prepare_supply_with_orders(
+    supply, order_ids = await _prepare_supply_with_orders(
         async_client,
         headers,
         seller_id,
         warehouse_id,
         tenant_id,
         wb_order_ids=[953301],
-        supply_name="PVZ retry QR blocked",
+        supply_name="PVZ retry QR",
         delivery_type="pvz",
     )
 
-    resp = await async_client.post(
+    await _create_and_fill_physical_box(async_client, headers, supply["id"], order_ids)
+    deliver = await _deliver_with_preflight(async_client, headers, supply["id"])
+    assert deliver.status_code == 200, deliver.text
+
+    async with SessionLocal() as session:
+        supply_row = await session.get(FbsSupply, uuid.UUID(supply["id"]))
+        assert supply_row is not None
+        supply_row.barcode_file = None
+        supply_row.barcode_asset_id = None
+        await session.commit()
+
+    retry_qr = await async_client.post(
         f"/operations/fbs-supplies/{supply['id']}/retry-supply-qr",
         headers=headers,
     )
-    assert resp.status_code == 409
-    assert resp.json()["detail"]["code"] == "wrong_delivery_type"
+    assert retry_qr.status_code == 200, retry_qr.text
+    assert retry_qr.json()["supply"]["barcode_asset"]["status"] == "ready"
 
 
 # TC-NEW-FBS-SHIPWH-005 — PVZ deliver requires physical boxes before WB transfer

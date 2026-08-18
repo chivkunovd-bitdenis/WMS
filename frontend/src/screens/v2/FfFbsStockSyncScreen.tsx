@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type MouseEvent } from 'react'
 import {
   Alert,
   Box,
@@ -10,7 +10,9 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
+  IconButton,
   InputLabel,
+  Menu,
   MenuItem,
   Paper,
   Select,
@@ -22,23 +24,30 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import type { ChipProps } from '@mui/material'
+import MoreVertIcon from '@mui/icons-material/MoreVert'
 import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { FbsStockAllocationDialog } from './FbsStockAllocationDialog'
 import { FfFbsSectionNav } from './FfFbsSectionNav'
 import {
   disableFbsWarehouseBinding,
+  FbsApiError,
+  fetchFbsBindingStockPool,
   fetchFbsSellerOffices,
   fetchFbsSellerWarehouses,
   fetchFbsStockSyncStatus,
   fetchFbsWarehouseBindings,
+  setFbsBindingStockPoolQuantity,
   STOCK_SYNC_STATUS_LABEL,
   triggerFbsStockSync,
   upsertFbsWarehouseBinding,
   type FbsSellerOffice,
   type FbsSellerWarehouse,
+  type FbsStockPoolProduct,
   type FbsStockSyncStatus,
   type FbsStockSyncStatusItem,
   type FbsWarehouseBinding,
@@ -46,7 +55,7 @@ import {
 
 type SellerRow = { id: string; name: string }
 type WmsWarehouseRow = { id: string; name: string; code: string }
-type InventoryBalanceSummaryRow = { quantity_fbs: number }
+type InventoryBalanceSummaryRow = { quantity: number }
 
 type Props = {
   token: string
@@ -69,6 +78,7 @@ type SellerWarehouseView = {
   lastSyncStatus: string | null
   lastSyncAt: string | null
   lastErrorCode: string | null
+  allocatedPoolTotal: number
 }
 
 const STATUS_COLOR: Record<string, ChipProps['color']> = {
@@ -123,8 +133,42 @@ function stockErrorText(code: string | null): string | null {
     product_mapping_missing: 'Не найден товар для выгрузки',
     wb_token_read_only_401:
       'Ключ WB создан «только на чтение». Нужен ключ с правом публикации остатков.',
+    unsafe_zero_blocked:
+      'Остаток не опубликован: защита не даёт обнулить остаток в кабинете продавца. Проверьте наличие товара на складе и запустите синхронизацию заново.',
+    unsafe_stock_unknown:
+      'Остаток не опубликован: не удалось надёжно посчитать доступное количество для этого товара.',
   }
   return labels[code] ?? 'Синхронизация завершилась с ошибкой'
+}
+
+// Человеческое сообщение для сбоя загрузки складов/офисов селлера с Wildberries
+// (GET .../warehouses, .../offices). Бэкенд для многих кодов wb_* отдаёт общий
+// текст «Ошибка Wildberries.» (см. backend/app/api/fbs_errors.py:139-146,
+// fbs_error_message — код не найден в словаре FBS_ERROR_MESSAGES_RU, поэтому
+// используется заглушка для всех kодов с префиксом wb_). Код ошибки при этом
+// до фронта доезжает (структурированный envelope {code, message}), поэтому
+// различаем причины здесь, не трогая бэкенд.
+// У селлера один ключ WB на всё — второй ключ не запрашиваем никогда.
+function sellerWarehousesLoadErrorMessage(e: unknown): string {
+  if (e instanceof FbsApiError) {
+    if (e.code === 'missing_marketplace_token') {
+      return 'У селлера не подключён ключ Wildberries. Откройте карточку селлера и добавьте ключ WB.'
+    }
+    if (e.code === 'seller_not_found') {
+      return 'Селлер не найден.'
+    }
+    if (/_(401|403)$/.test(e.code)) {
+      return 'Wildberries не принял ключ селлера (нет прав на этот запрос). Перевыпустите ключ WB в личном кабинете продавца со всеми правами и сохраните его в карточке селлера.'
+    }
+    if (e.code === 'wb_transport_error') {
+      return 'Не удалось связаться с Wildberries — сервер не ответил. Проверьте соединение и нажмите «Обновить».'
+    }
+    if (e.code.startsWith('wb_')) {
+      return 'Wildberries вернул ошибку при загрузке списка складов. Нажмите «Обновить»; если повторится — перевыпустите ключ WB в личном кабинете продавца со всеми правами.'
+    }
+    return e.message
+  }
+  return e instanceof Error ? e.message : 'Не удалось загрузить склады WB'
 }
 
 function warehouseStatus(row: FbsSellerWarehouse | undefined): string {
@@ -134,16 +178,60 @@ function warehouseStatus(row: FbsSellerWarehouse | undefined): string {
   return 'активен в WB'
 }
 
-function bindingText(row: SellerWarehouseView): string {
-  if (!row.binding || !row.binding.is_active || row.isTechnicalBinding) {
-    return 'склад не сопоставлен'
-  }
-  return row.stockSyncEnabled ? 'публикация включена' : 'готов к публикации'
-}
+type RowStateInfo = { label: string; color: ChipProps['color']; detail?: string }
 
-function bindingColor(row: SellerWarehouseView): ChipProps['color'] {
-  if (!row.binding || !row.binding.is_active || row.isTechnicalBinding) return 'warning'
-  return row.stockSyncEnabled ? 'success' : 'default'
+// Короткая метка (2-3 слова) для узкой колонки строки; подробности — в detail,
+// который показывается во всплывающей подсказке по наведению, а не текстом в строке.
+function rowStateInfo(row: SellerWarehouseView): RowStateInfo {
+  if (!row.binding || !row.binding.is_active || row.isTechnicalBinding) {
+    return { label: 'склад не сопоставлен', color: 'warning' }
+  }
+  if (!row.stockSyncEnabled) {
+    return {
+      label: 'публикация выключена',
+      color: 'default',
+      detail: row.lastErrorCode
+        ? stockErrorText(row.lastErrorCode) ?? 'Синхронизация завершилась с ошибкой'
+        : undefined,
+    }
+  }
+  if (row.lastErrorCode) {
+    return {
+      label: 'ошибка публикации',
+      color: 'error',
+      detail: stockErrorText(row.lastErrorCode) ?? 'Синхронизация завершилась с ошибкой',
+    }
+  }
+  if (row.lastSyncStatus === 'confirmed') {
+    return { label: 'публикация включена', color: 'success', detail: 'Wildberries подтвердил остаток' }
+  }
+  if (row.lastSyncStatus === 'pending') {
+    return {
+      label: 'публикация включена',
+      color: 'warning',
+      detail: 'Ждём подтверждения от Wildberries',
+    }
+  }
+  if (row.lastSyncStatus === 'conflict') {
+    return {
+      label: 'публикация включена',
+      color: 'warning',
+      detail: 'Wildberries вернул расхождение по остатку',
+    }
+  }
+  if (row.lastSyncStatus === 'nothing_to_publish') {
+    return {
+      label: 'нечего публиковать',
+      color: 'warning',
+      detail:
+        'Ни по одному товару не задано распределение остатка на этот склад — нажмите «Остатки» и укажите количество',
+    }
+  }
+  return {
+    label: 'публикация включена',
+    color: 'default',
+    detail: 'Синхронизация ещё не запускалась',
+  }
 }
 
 function formatFbsStockTotal(value: number | null): string {
@@ -169,6 +257,17 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
   const [statusData, setStatusData] = useState<FbsStockSyncStatus | null>(null)
   const [statusWbId, setStatusWbId] = useState<number | null>(null)
   const [pendingDisable, setPendingDisable] = useState<SellerWarehouseView | null>(null)
+
+  const [poolOpen, setPoolOpen] = useState(false)
+  const [poolLoading, setPoolLoading] = useState(false)
+  const [poolRow, setPoolRow] = useState<SellerWarehouseView | null>(null)
+  const [poolItems, setPoolItems] = useState<FbsStockPoolProduct[]>([])
+  const [poolDrafts, setPoolDrafts] = useState<Record<string, string>>({})
+  const [poolSavingAll, setPoolSavingAll] = useState(false)
+  const [poolError, setPoolError] = useState<string | null>(null)
+  const [rowMenuAnchor, setRowMenuAnchor] = useState<{ wbId: number; el: HTMLElement } | null>(
+    null,
+  )
 
   const wmsById = useMemo(() => {
     const m = new Map<string, WmsWarehouseRow>()
@@ -235,6 +334,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
           lastSyncStatus: binding?.last_sync_status ?? null,
           lastSyncAt: binding?.last_sync_at ?? null,
           lastErrorCode: binding?.last_error_code ?? null,
+          allocatedPoolTotal: binding?.allocated_pool_total ?? 0,
         }
       })
   }, [
@@ -279,11 +379,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
       } catch (e) {
         setSellerWarehouses([])
         setSellerOffices([])
-        setError(
-          e instanceof Error
-            ? e.message
-            : 'Склады WB не загружены: подключите токен WB Marketplace или обновите список',
-        )
+        setError(sellerWarehousesLoadErrorMessage(e))
       }
     } catch (e) {
       setBindings([])
@@ -322,7 +418,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
           if (!res.ok) throw new Error(await readApiErrorMessage(res))
           const summary = (await res.json()) as InventoryBalanceSummaryRow[]
           const total = summary.reduce(
-            (sum, row) => sum + Math.max(0, Number(row.quantity_fbs) || 0),
+            (sum, row) => sum + Math.max(0, Number(row.quantity) || 0),
             0,
           )
           return [warehouseId, total] as const
@@ -482,8 +578,87 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
     [authHeaders, selectedSellerId, token],
   )
 
+  const openPool = useCallback(
+    async (row: SellerWarehouseView) => {
+      if (!row.binding || !selectedSellerId) return
+      setPoolRow(row)
+      setPoolOpen(true)
+      setPoolError(null)
+      setPoolItems([])
+      setPoolLoading(true)
+      try {
+        const items = await fetchFbsBindingStockPool(token, authHeaders, selectedSellerId, row.wbId)
+        setPoolItems(items)
+        setPoolDrafts(
+          Object.fromEntries(items.map((it) => [it.product_id, String(it.allocated_this_binding)])),
+        )
+      } catch (e) {
+        setPoolError(e instanceof Error ? e.message : 'Не удалось загрузить распределение пула')
+      } finally {
+        setPoolLoading(false)
+      }
+    },
+    [authHeaders, selectedSellerId, token],
+  )
+
+  const handleSaveAllPoolChanges = useCallback(async () => {
+    if (!poolRow || !selectedSellerId) return
+    const dirtyItems = poolItems.filter((item) => {
+      const draft = poolDrafts[item.product_id]
+      return draft !== undefined && draft !== String(item.allocated_this_binding)
+    })
+    if (dirtyItems.length === 0) return
+    for (const item of dirtyItems) {
+      const draft = poolDrafts[item.product_id] ?? ''
+      const quantity = Number(draft)
+      if (!Number.isFinite(quantity) || quantity < 0 || !Number.isInteger(quantity)) {
+        setPoolError(`«${item.name}»: количество должно быть целым числом не меньше нуля`)
+        return
+      }
+    }
+    setPoolError(null)
+    setPoolSavingAll(true)
+    try {
+      for (const item of dirtyItems) {
+        const quantity = Number(poolDrafts[item.product_id])
+        await setFbsBindingStockPoolQuantity(
+          token,
+          authHeaders,
+          selectedSellerId,
+          poolRow.wbId,
+          item.product_id,
+          quantity,
+        )
+      }
+      setFeedback('Изменения остатков по складу сохранены')
+      const items = await fetchFbsBindingStockPool(token, authHeaders, selectedSellerId, poolRow.wbId)
+      setPoolItems(items)
+      setPoolDrafts(
+        Object.fromEntries(items.map((it) => [it.product_id, String(it.allocated_this_binding)])),
+      )
+      await loadSellerWarehouseData()
+    } catch (e) {
+      setPoolError(e instanceof Error ? e.message : 'Не удалось сохранить распределение')
+    } finally {
+      setPoolSavingAll(false)
+    }
+  }, [authHeaders, loadSellerWarehouseData, poolDrafts, poolItems, poolRow, selectedSellerId, token])
+
+  const handlePoolDraftChange = useCallback((productId: string, value: string) => {
+    setPoolDrafts((prev) => ({ ...prev, [productId]: value }))
+  }, [])
+
   return (
-    <Box data-testid="fbs-stock-sync-screen">
+    <Box
+      data-testid="fbs-stock-sync-screen"
+      sx={{
+        minWidth: 0,
+        width: '100%',
+        maxWidth: 'calc(100vw - 308px)',
+        boxSizing: 'border-box',
+        overflowX: 'hidden',
+      }}
+    >
       <Typography variant="h5" gutterBottom>
         FBS
       </Typography>
@@ -567,13 +742,14 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
         component={Paper}
         variant="outlined"
         data-testid="fbs-stock-bindings-list"
-        sx={{ overflowX: 'hidden' }}
+        sx={{ overflowX: 'auto' }}
       >
         <Table
           size="small"
           sx={{
             tableLayout: 'fixed',
             width: '100%',
+            minWidth: 760,
             '& th, & td': {
               px: 1,
               py: 1.25,
@@ -583,12 +759,12 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
         >
           <TableHead>
             <TableRow>
-              <TableCell sx={{ width: '25%' }}>Склад WB</TableCell>
-              <TableCell sx={{ width: '28%' }}>Склад WMS</TableCell>
-              <TableCell align="right" sx={{ width: '8%' }}>FBS</TableCell>
-              <TableCell sx={{ width: '19%' }}>Публикация</TableCell>
-              <TableCell sx={{ width: '11%' }}>Подтверждение</TableCell>
-              <TableCell align="right" sx={{ width: '9%' }}>Действия</TableCell>
+              <TableCell sx={{ width: '18%' }}>Склад WB</TableCell>
+              <TableCell sx={{ width: '24%' }}>Склад WMS</TableCell>
+              <TableCell align="right" sx={{ width: '8%' }}>Остаток WMS</TableCell>
+              <TableCell sx={{ width: '25%' }}>Публикация</TableCell>
+              <TableCell sx={{ width: '7%' }}>Последняя синхронизация</TableCell>
+              <TableCell align="right" sx={{ width: '18%' }}>Действия</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -597,32 +773,45 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                 <TableCell colSpan={6}>
                   <Box sx={{ py: 3, textAlign: 'center' }} data-testid="fbs-stock-bindings-empty">
                     <Typography color="text.secondary">
-                      Склады WB не загружены: подключите токен WB Marketplace или обновите список.
+                      {error
+                        ? 'Список складов не загрузился — причина в сообщении выше.'
+                        : 'У этого селлера нет складов Wildberries. Подключите склад в личном кабинете WB и нажмите «Обновить».'}
                     </Typography>
                   </Box>
                 </TableCell>
               </TableRow>
             ) : (
-              rows.map((row) => (
+              rows.map((row) => {
+                const rowState = rowStateInfo(row)
+                return (
                 <TableRow key={row.wbId} data-testid="fbs-stock-binding-row">
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontWeight: 650 }}>
-                      {row.name}
-                    </Typography>
-                    <Stack spacing={0.25} sx={{ mt: 0.25 }}>
-                      <Typography variant="caption" color="text.secondary">
-                        WB ID {row.wbId}
+                  <TableCell sx={{ overflow: 'hidden' }}>
+                    <Tooltip title={row.name}>
+                      <Typography variant="body2" noWrap sx={{ fontWeight: 650 }}>
+                        {row.name}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
+                    </Tooltip>
+                    {row.city !== 'город не определён' ? (
+                      <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
                         {row.city}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {row.address || 'адрес не указан'}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {row.wbStatus}
-                      </Typography>
-                    </Stack>
+                    ) : null}
+                    {/* WB ID не нужен оператору визуально (он отличает склады по названию и
+                        городу), но остаётся в разметке — на него опирается фиксация склада
+                        в существующих сценариях. */}
+                    <Typography
+                      component="span"
+                      sx={{
+                        position: 'absolute',
+                        width: '1px',
+                        height: '1px',
+                        overflow: 'hidden',
+                        clip: 'rect(0 0 0 0)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      WB ID {row.wbId}
+                    </Typography>
                   </TableCell>
                   <TableCell>
                     <FormControl size="small" fullWidth>
@@ -634,6 +823,19 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                         onChange={(e) => void handleBind(row, e.target.value)}
                         disabled={savingWbId === row.wbId || physicalWarehouses.length === 0}
                         data-testid="fbs-stock-row-wms-select"
+                        renderValue={(value) => {
+                          const selectedWarehouse = wmsById.get(value as string)
+                          const label = selectedWarehouse
+                            ? `${selectedWarehouse.name} (${selectedWarehouse.code})`
+                            : 'склад не сопоставлен'
+                          return (
+                            <Tooltip title={label}>
+                              <Box component="span" sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {label}
+                              </Box>
+                            </Tooltip>
+                          )
+                        }}
                         sx={{
                           '& .MuiSelect-select': {
                             overflow: 'hidden',
@@ -659,23 +861,9 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                   <TableCell align="right" data-testid="fbs-stock-total">
                     {formatFbsStockTotal(row.fbsStockTotal)}
                   </TableCell>
-                  <TableCell>
-                    <Stack spacing={0.75}>
-                      <Chip
-                        size="small"
-                        variant="outlined"
-                        color={bindingColor(row)}
-                        label={bindingText(row)}
-                        data-testid="fbs-stock-binding-state"
-                        sx={{
-                          maxWidth: '100%',
-                          '& .MuiChip-label': {
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          },
-                        }}
-                      />
-                      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', minWidth: 0 }}>
+                  <TableCell sx={{ overflow: 'hidden' }}>
+                    <Stack spacing={0.5}>
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
                         <Switch
                           size="small"
                           checked={row.stockSyncEnabled}
@@ -683,50 +871,98 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                           disabled={!row.isMapped || savingWbId === row.wbId}
                           data-testid="fbs-stock-sync-toggle"
                         />
-                        <StockSyncStatusChip status={row.lastSyncStatus} />
+                        <Tooltip title={rowState.detail ?? ''} disableHoverListener={!rowState.detail}>
+                          <Typography
+                            variant="body2"
+                            noWrap
+                            sx={{ fontWeight: 600, minWidth: 0 }}
+                            color={
+                              rowState.color === 'error'
+                                ? 'error.main'
+                                : rowState.color === 'success'
+                                  ? 'success.main'
+                                  : rowState.color === 'warning'
+                                    ? 'warning.main'
+                                    : 'text.secondary'
+                            }
+                            data-testid="fbs-stock-binding-state"
+                          >
+                            {rowState.label}
+                          </Typography>
+                        </Tooltip>
                       </Stack>
-                      {row.lastErrorCode ? (
-                        <Typography variant="caption" color="error">
-                          {stockErrorText(row.lastErrorCode)}
+                      {row.allocatedPoolTotal > 0 ? (
+                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+                          Выделено: {row.allocatedPoolTotal} шт
                         </Typography>
                       ) : null}
                     </Stack>
                   </TableCell>
                   <TableCell>{formatDt(row.lastSyncAt)}</TableCell>
                   <TableCell align="right">
-                    <Stack spacing={0.25} sx={{ alignItems: 'flex-end' }}>
+                    <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end', alignItems: 'center' }}>
                       <Button
                         size="small"
-                        onClick={() => void handleSync(row)}
-                        disabled={busy || !row.isMapped || !row.stockSyncEnabled}
-                        data-testid="fbs-stock-sync-one"
-                        sx={{ minWidth: 0, px: 0.75 }}
-                      >
-                        Выгрузить
-                      </Button>
-                      <Button
-                        size="small"
-                        onClick={() => void openStatus(row)}
+                        variant="outlined"
+                        onClick={() => void openPool(row)}
                         disabled={!row.binding}
-                        data-testid="fbs-stock-status-btn"
-                        sx={{ minWidth: 0, px: 0.75 }}
+                        data-testid="fbs-stock-pool-btn"
+                        sx={{ minWidth: 0, px: 1 }}
                       >
-                        Статус
+                        Остатки
                       </Button>
-                      <Button
+                      <IconButton
                         size="small"
-                        color="error"
-                        onClick={() => setPendingDisable(row)}
-                        disabled={!row.binding?.is_active || savingWbId === row.wbId}
-                        data-testid="fbs-stock-disable-binding"
-                        sx={{ minWidth: 0, px: 0.75 }}
+                        aria-label="Ещё действия по складу"
+                        onClick={(e: MouseEvent<HTMLElement>) =>
+                          setRowMenuAnchor({ wbId: row.wbId, el: e.currentTarget })
+                        }
+                        data-testid="fbs-stock-row-menu-btn"
                       >
-                        Отключить
-                      </Button>
+                        <MoreVertIcon fontSize="small" />
+                      </IconButton>
+                      <Menu
+                        anchorEl={rowMenuAnchor?.wbId === row.wbId ? rowMenuAnchor.el : null}
+                        open={rowMenuAnchor?.wbId === row.wbId}
+                        onClose={() => setRowMenuAnchor(null)}
+                      >
+                        <MenuItem
+                          onClick={() => {
+                            setRowMenuAnchor(null)
+                            void handleSync(row)
+                          }}
+                          disabled={busy || !row.isMapped || !row.stockSyncEnabled}
+                          data-testid="fbs-stock-sync-one"
+                        >
+                          Выгрузить остатки сейчас
+                        </MenuItem>
+                        <MenuItem
+                          onClick={() => {
+                            setRowMenuAnchor(null)
+                            void openStatus(row)
+                          }}
+                          disabled={!row.binding}
+                          data-testid="fbs-stock-status-btn"
+                        >
+                          Статус синхронизации
+                        </MenuItem>
+                        <MenuItem
+                          onClick={() => {
+                            setRowMenuAnchor(null)
+                            setPendingDisable(row)
+                          }}
+                          disabled={!row.binding?.is_active || savingWbId === row.wbId}
+                          data-testid="fbs-stock-disable-binding"
+                          sx={{ color: 'error.main' }}
+                        >
+                          Отключить сопоставление
+                        </MenuItem>
+                      </Menu>
                     </Stack>
                   </TableCell>
                 </TableRow>
-              ))
+                )
+              })
             )}
           </TableBody>
         </Table>
@@ -826,6 +1062,21 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
           <Button onClick={() => setStatusOpen(false)}>Закрыть</Button>
         </DialogActions>
       </Dialog>
+
+      <FbsStockAllocationDialog
+        open={poolOpen}
+        loading={poolLoading}
+        saving={poolSavingAll}
+        error={poolError}
+        onErrorClose={() => setPoolError(null)}
+        warehouseName={poolRow?.name ?? ''}
+        wbId={poolRow?.wbId ?? null}
+        items={poolItems}
+        drafts={poolDrafts}
+        onDraftChange={handlePoolDraftChange}
+        onSave={() => void handleSaveAllPoolChanges()}
+        onClose={() => setPoolOpen(false)}
+      />
     </Box>
   )
 }

@@ -52,6 +52,8 @@ import {
   type WbProductCatalogRow,
 } from '../../types/wbProductCatalog'
 import { printBarcodeLabel } from '../../utils/printBarcodeLabel'
+import { BoxLabelPrintDialog } from '../../components/BoxLabelPrintDialog'
+import type { LabelSize } from '../../utils/labelSize'
 import { printInboundSupplyWaybill } from '../../utils/printShipmentWaybill'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { inboundOperationTypeReceptionLabel } from '../../utils/inboundOperationType'
@@ -62,6 +64,7 @@ import {
   buildInboundDiscrepancyLines,
   buildInboundReceivingTotals,
   effectiveActualQty,
+  formatBoxesCountLabel,
   inboundStatusRu,
   integerQtyError,
   isDoneStatus,
@@ -255,6 +258,55 @@ function InboundProductLineCell({ meta, productId, printTestId }: InboundProduct
   )
 }
 
+type InboundBoxContentLineProps = {
+  meta: ProductLineDisplayMeta
+  quantity: number
+}
+
+/** Компактная строка товара в содержимом короба (фото, название, артикул+ШК, кол-во). */
+function InboundBoxContentLine({ meta, quantity }: InboundBoxContentLineProps) {
+  const barcode = formatProductBarcodeDisplay(meta)
+
+  return (
+    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
+      <Box sx={{ flex: '0 0 32px', display: 'flex' }}>
+        <ProductPhotoThumb
+          src={meta.wb_primary_image_url}
+          alt={meta.product_name}
+          size={32}
+          testId="ff-inbound-box-line-photo"
+        />
+      </Box>
+      <Box sx={{ flex: '1 1 auto', minWidth: 0 }}>
+        <Typography
+          variant="body2"
+          sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          title={meta.product_name}
+          data-testid="ff-inbound-box-line-name"
+        >
+          {meta.product_name}
+        </Typography>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+          title={`${meta.sku_code} · ШК ${barcode}`}
+          data-testid="ff-inbound-box-line-sku"
+        >
+          {meta.sku_code} · ШК {barcode}
+        </Typography>
+      </Box>
+      <Typography
+        variant="body2"
+        sx={{ fontWeight: 700, flexShrink: 0, pl: 1 }}
+        data-testid="ff-inbound-box-line-qty"
+      >
+        {quantity}
+      </Typography>
+    </Stack>
+  )
+}
+
 type InboundDetail = {
   id: string
   document_number: string | null
@@ -420,7 +472,11 @@ export function FfInboundRequestView({
   const sellerCreatedDraft = detail?.status === 'draft' && detail.created_by_seller_id != null
   const isReturnOperation = detail?.operation_type === 'return'
   const operationTypeLabel = inboundOperationTypeReceptionLabel(detail?.operation_type)
-  const showInboundLinesTable = !sortingView || receptionClosed
+  // На экране сортировки товары уже показаны интерактивными карточками
+  // FfInboundSortingPanel; таблица «Состав приёмки» дублировала те же строки,
+  // поэтому в режиме сортировки она намеренно скрыта (решение подтверждено
+  // заказчиком 17.08.2026). На обычной приёмке таблица остаётся видна всегда.
+  const showInboundLinesTable = !sortingView
 
   // Глобальный скан: панель приёмки видна и диалог короба не открыт
   useBarcodeScanner({
@@ -842,13 +898,6 @@ export function FfInboundRequestView({
     return m
   }, [detail])
 
-  const hasLineDiscrepancy = useMemo(() => {
-    if (!detail) return false
-    const boxes = detail.boxes ?? []
-    return detail.lines.some(
-      (ln) => effectiveActualQty(ln, boxes, detail.status) !== ln.expected_qty,
-    )
-  }, [detail])
 
   const distributableProducts = useMemo(() => {
     if (!detail) return []
@@ -1413,7 +1462,15 @@ export function FfInboundRequestView({
     })
   }
 
-  const printInboundBoxLabel = async (box: InboundBox) => {
+  type InboundBoxPrintTarget =
+    | { kind: 'box'; box: InboundBox }
+    | { kind: 'box-all' }
+    | { kind: 'cargo'; place: InboundCargoPlace }
+    | { kind: 'cargo-all' }
+
+  const [boxPrintTarget, setBoxPrintTarget] = useState<InboundBoxPrintTarget | null>(null)
+
+  const printInboundBoxLabel = async (box: InboundBox, labelSize: LabelSize) => {
     setBusy(true)
     setError(null)
     try {
@@ -1422,6 +1479,7 @@ export function FfInboundRequestView({
         title: `Короб № ${box.box_number}`,
         barcode: box.internal_barcode,
         barcodeDataUrl: dataUrl,
+        labelSize,
       })
       const res = await fetch(
         apiUrl(
@@ -1441,14 +1499,14 @@ export function FfInboundRequestView({
     }
   }
 
-  const printAllInboundBoxLabels = async () => {
+  const printAllInboundBoxLabels = async (labelSize: LabelSize) => {
     if (!detail?.boxes?.length) return
     for (const box of detail.boxes) {
-      await printInboundBoxLabel(box)
+      await printInboundBoxLabel(box, labelSize)
     }
   }
 
-  const printInboundCargoPlaceLabel = async (place: InboundCargoPlace) => {
+  const printInboundCargoPlaceLabel = async (place: InboundCargoPlace, labelSize: LabelSize) => {
     setBusy(true)
     setError(null)
     try {
@@ -1457,6 +1515,7 @@ export function FfInboundRequestView({
         title: `Грузоместо № ${place.place_number}`,
         barcode: place.internal_barcode,
         barcodeDataUrl: dataUrl,
+        labelSize,
       })
       const res = await fetch(
         apiUrl(
@@ -1476,10 +1535,43 @@ export function FfInboundRequestView({
     }
   }
 
-  const printAllInboundCargoPlaceLabels = async () => {
+  const printAllInboundCargoPlaceLabels = async (labelSize: LabelSize) => {
     if (!detail?.cargo_places?.length) return
     for (const place of detail.cargo_places) {
-      await printInboundCargoPlaceLabel(place)
+      await printInboundCargoPlaceLabel(place, labelSize)
+    }
+  }
+
+  const requestPrintInboundBox = (box: InboundBox) => {
+    setBoxPrintTarget({ kind: 'box', box })
+  }
+
+  const requestPrintAllInboundBoxes = () => {
+    if (!detail?.boxes?.length) return
+    setBoxPrintTarget({ kind: 'box-all' })
+  }
+
+  const requestPrintInboundCargoPlace = (place: InboundCargoPlace) => {
+    setBoxPrintTarget({ kind: 'cargo', place })
+  }
+
+  const requestPrintAllInboundCargoPlaces = () => {
+    if (!detail?.cargo_places?.length) return
+    setBoxPrintTarget({ kind: 'cargo-all' })
+  }
+
+  const confirmInboundBoxPrint = async (labelSize: LabelSize) => {
+    const target = boxPrintTarget
+    setBoxPrintTarget(null)
+    if (!target) return
+    if (target.kind === 'box') {
+      await printInboundBoxLabel(target.box, labelSize)
+    } else if (target.kind === 'box-all') {
+      await printAllInboundBoxLabels(labelSize)
+    } else if (target.kind === 'cargo') {
+      await printInboundCargoPlaceLabel(target.place, labelSize)
+    } else {
+      await printAllInboundCargoPlaceLabels(labelSize)
     }
   }
 
@@ -1895,15 +1987,17 @@ export function FfInboundRequestView({
                 <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-boxes-summary">
                   Короба:{' '}
                   <strong data-testid="ff-inbound-planned-boxes">
-                    {receivingTotals.actualBoxes}
-                    {receivingTotals.plannedBoxes != null ? ` из ${receivingTotals.plannedBoxes}` : ''}
+                    {formatBoxesCountLabel(receivingTotals.actualBoxes, receivingTotals.plannedBoxes)}
                   </strong>
                 </Typography>
                 <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-volume-summary">
                   Литраж: <strong>{receivingTotals.totalVolumeLiters.toFixed(2)} л</strong>
                 </Typography>
                 <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-weight-summary">
-                  Вес: <strong>{receivingTotals.totalWeightKg.toFixed(2)} кг</strong>
+                  Вес:{' '}
+                  <strong>
+                    {receivingTotals.hasKnownWeight ? `${receivingTotals.totalWeightKg.toFixed(2)} кг` : 'не указан'}
+                  </strong>
                 </Typography>
               </Stack>
             </Stack>
@@ -2236,9 +2330,8 @@ export function FfInboundRequestView({
                             sx={{
                               flex: '1 1 auto',
                               minWidth: 0,
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
+                              whiteSpace: 'normal',
+                              wordBreak: 'break-word',
                             }}
                             title={formatLineDimensions(ln)}
                             data-testid="ff-inbound-line-dimensions"
@@ -2417,12 +2510,6 @@ export function FfInboundRequestView({
             </Alert>
           ) : null}
 
-          {isFulfillmentAdmin && !sortingView && receivingActive && hasLineDiscrepancy ? (
-            <Alert severity="warning" sx={{ mt: 2 }} data-testid="ff-inbound-discrepancy-hint">
-              Есть расхождения с планом — при завершении потребуется подтверждение.
-            </Alert>
-          ) : null}
-
           {isFulfillmentAdmin &&
           !sortingView &&
           (linkedDiscrepancyActs.length > 0 || discrepancyActsError) ? (
@@ -2588,7 +2675,7 @@ export function FfInboundRequestView({
                     <Button
                       variant="outlined"
                       disabled={busy || boxes.length === 0}
-                      onClick={() => void printAllInboundBoxLabels()}
+                      onClick={requestPrintAllInboundBoxes}
                       data-testid="ff-inbound-boxes-print-all"
                     >
                       Печать коробов
@@ -2596,7 +2683,7 @@ export function FfInboundRequestView({
                     <Button
                       variant="outlined"
                       disabled={busy || cargoPlaces.length === 0}
-                      onClick={() => void printAllInboundCargoPlaceLabels()}
+                      onClick={requestPrintAllInboundCargoPlaces}
                       data-testid="ff-inbound-cargo-places-print-all"
                     >
                       Печать грузомест
@@ -2659,7 +2746,7 @@ export function FfInboundRequestView({
                                 size="small"
                                 variant="outlined"
                                 disabled={busy}
-                                onClick={() => void printInboundBoxLabel(box)}
+                                onClick={() => requestPrintInboundBox(box)}
                                 data-testid={`ff-inbound-box-print-${box.id}`}
                               >
                                 Печать
@@ -2667,11 +2754,13 @@ export function FfInboundRequestView({
                             </Stack>
                           </Stack>
                           {visibleLines.length > 0 ? (
-                            <Stack spacing={0.25} sx={{ px: 1.25, py: 1, bgcolor: 'background.paper' }}>
+                            <Stack spacing={0.75} sx={{ px: 1.25, py: 1, bgcolor: 'background.paper' }}>
                               {visibleLines.map((ln) => (
-                                <Typography key={ln.id} variant="body2" color="text.secondary">
-                                  {ln.sku_code} · {ln.product_name}: {ln.quantity}
-                                </Typography>
+                                <InboundBoxContentLine
+                                  key={ln.id}
+                                  meta={productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)}
+                                  quantity={ln.quantity}
+                                />
                               ))}
                             </Stack>
                           ) : (
@@ -2714,7 +2803,7 @@ export function FfInboundRequestView({
                             size="small"
                             variant="outlined"
                             disabled={busy}
-                            onClick={() => void printInboundCargoPlaceLabel(place)}
+                            onClick={() => requestPrintInboundCargoPlace(place)}
                             data-testid={`ff-inbound-cargo-place-print-${place.id}`}
                           >
                             Печать
@@ -3202,7 +3291,7 @@ export function FfInboundRequestView({
           onClose={() => setBoxAddDialogBoxId(null)}
           requestId={requestId}
           boxId={boxAddDialogBoxId}
-          boxLabel={`Короб № ${boxAddDialogBox.box_number} · ${boxAddDialogBox.internal_barcode}`}
+          boxLabel={`Короб № ${boxAddDialogBox.box_number}`}
           readOnly={!receivingActive}
           token={token}
           requestLines={detail?.lines ?? []}
@@ -3436,8 +3525,7 @@ export function FfInboundRequestView({
               data-testid="ff-inbound-discrepancy-box-summary"
             >
               <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                Короба: {receivingTotals.actualBoxes}
-                {receivingTotals.plannedBoxes != null ? ` из ${receivingTotals.plannedBoxes}` : ''}
+                Короба: {formatBoxesCountLabel(receivingTotals.actualBoxes, receivingTotals.plannedBoxes)}
               </Typography>
               {receivingTotals.hasBoxDiscrepancy ? (
                 <Typography variant="body2" color="warning.dark">
@@ -3462,6 +3550,18 @@ export function FfInboundRequestView({
           </Button>
         </DialogActions>
       </Dialog>
+      <BoxLabelPrintDialog
+        open={boxPrintTarget !== null}
+        title={
+          boxPrintTarget?.kind === 'cargo' || boxPrintTarget?.kind === 'cargo-all'
+            ? 'Печать этикетки грузоместа'
+            : 'Печать этикетки короба'
+        }
+        busy={busy}
+        onClose={() => setBoxPrintTarget(null)}
+        onConfirm={(size) => void confirmInboundBoxPrint(size)}
+        testId="ff-inbound-box-print-dialog"
+      />
     </Box>
     </FfProductMarkingPrintProvider>
   )

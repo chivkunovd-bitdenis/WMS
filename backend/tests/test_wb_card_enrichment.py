@@ -5,8 +5,10 @@ from app.services.wb_card_enrichment import (
     collect_skus_from_card,
     color_from_card,
     composition_from_card,
+    country_of_origin_from_card,
     first_photo_url_from_card,
     primary_sku_display,
+    shelf_life_from_card,
     size_from_card_for_barcode,
     subject_name_from_card,
 )
@@ -57,6 +59,26 @@ def test_composition_from_card() -> None:
         ],
     }
     assert composition_from_card(card) == "хлопок 95%, эластан 5%"
+
+
+def test_country_of_origin_from_card_by_name() -> None:
+    card = {"characteristics": [{"name": "Страна производства", "value": ["Россия"]}]}
+    assert country_of_origin_from_card(card) == "Россия"
+
+
+def test_country_of_origin_from_card_missing() -> None:
+    assert country_of_origin_from_card({}) is None
+    assert country_of_origin_from_card({"characteristics": []}) is None
+
+
+def test_shelf_life_from_card_by_name() -> None:
+    card = {"characteristics": [{"name": "Срок годности", "value": ["12 месяцев"]}]}
+    assert shelf_life_from_card(card) == "12 месяцев"
+
+
+def test_shelf_life_from_card_missing() -> None:
+    assert shelf_life_from_card({}) is None
+    assert shelf_life_from_card({"characteristics": []}) is None
 
 
 def test_size_from_card_for_barcode() -> None:

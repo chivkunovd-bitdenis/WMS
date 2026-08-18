@@ -127,7 +127,10 @@ test('ff products: catalog separates product fields and hides stock columns', as
   await expect(alphaRow.locator('td').nth(2)).toContainText('ART-A')
   await expect(alphaRow.locator('td').nth(3)).toContainText(skuA)
   await expect(alphaRow.locator('td').nth(4)).toContainText(barcodeA)
-  await expect(alphaRow.locator('td').nth(6)).toContainText('46')
+  // Размер ищем по строке, а не по номеру колонки: порядок колонок каталога
+  // меняется (WB/nmId уехал в конец, чтобы липкая колонка действий не перекрывала
+  // соседнюю), и позиционная проверка ломается при каждой перестановке.
+  await expect(alphaRow).toContainText('46')
 
   // Photo cell exists even if WB photo is missing in mocks.
   await expect(page.getByTestId('ff-product-row').first().locator('td').nth(0)).toBeVisible()

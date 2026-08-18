@@ -76,53 +76,15 @@ function sortValue(row: InboundQueueRow, key: SortKey): string {
   return row.display_number ?? row.document_number ?? row.waybill_number ?? ''
 }
 
-function statusTone(row: InboundQueueRow): 'neutral' | 'new' | 'receiving' | 'sorting' | 'done' {
-  if (row.status === 'submitted') return 'new'
-  if (isReceivingStatus(row.status)) return 'receiving'
-  if (isSortingStatus(row.status)) return 'sorting'
-  if (isDoneStatus(row.status)) return 'done'
-  return 'neutral'
+// Решение заказчика 17.08.2026: подсветки строки нет вообще (ни заливки, ни полосы слева). Красным
+// помечается расхождение по количеству принятых штук (has_discrepancy) — только текст в колонке
+// «Состав». Расхождение по числу коробов не подсвечивается.
+function rowHasDiscrepancy(row: InboundQueueRow): boolean {
+  return row.has_discrepancy === true
 }
 
-function rowSx(row: InboundQueueRow) {
-  const hasStarted =
-    isReceivingStatus(row.status) || isSortingStatus(row.status) || isDoneStatus(row.status)
-  if (row.has_discrepancy === true || row.boxes_discrepancy === true) {
-    return {
-      cursor: 'pointer',
-      borderLeft: '5px solid',
-      borderLeftColor: 'error.main',
-      bgcolor: 'error.lighter',
-      '&:hover': { bgcolor: 'error.light' },
-    }
-  }
-  if (hasStarted && row.has_discrepancy === false) {
-    return {
-      cursor: 'pointer',
-      borderLeft: '5px solid',
-      borderLeftColor: 'success.main',
-      bgcolor: 'success.lighter',
-      '&:hover': { bgcolor: 'success.light' },
-    }
-  }
-  const tone = statusTone(row)
-  const palette =
-    tone === 'new'
-      ? 'info'
-      : tone === 'receiving'
-        ? 'warning'
-        : tone === 'sorting'
-          ? 'secondary'
-          : tone === 'done'
-            ? 'success'
-            : 'divider'
-  return {
-    cursor: 'pointer',
-    borderLeft: '5px solid',
-    borderLeftColor: palette === 'divider' ? 'divider' : `${palette}.main`,
-    bgcolor: palette === 'divider' ? 'background.paper' : `${palette}.lighter`,
-    '&:hover': { bgcolor: palette === 'divider' ? 'action.hover' : `${palette}.light` },
-  }
+function compositionSx(row: InboundQueueRow) {
+  return rowHasDiscrepancy(row) ? { color: 'error.main' } : undefined
 }
 
 function formatDate(value?: string | null): string {
@@ -448,7 +410,7 @@ export function FfInboundQueuePage({
                     hover
                     tabIndex={0}
                     sx={{
-                      ...rowSx(row),
+                      cursor: 'pointer',
                       '&:focus-visible': {
                         outline: (theme) => `2px solid ${theme.palette.primary.main}`,
                         outlineOffset: -2,
@@ -464,13 +426,7 @@ export function FfInboundQueuePage({
                     data-testid="ff-inbound-queue-row"
                     data-request-id={row.id}
                     data-row-status={row.status}
-                    data-row-discrepancy={
-                      row.has_discrepancy === true || row.boxes_discrepancy === true
-                        ? 'mismatch'
-                        : isReceivingStatus(row.status) || isSortingStatus(row.status) || isDoneStatus(row.status)
-                          ? 'matched'
-                          : 'none'
-                    }
+                    data-row-discrepancy={rowHasDiscrepancy(row) ? 'yes' : 'no'}
                   >
                     {workspace === 'reception' ? (
                       <>
@@ -492,7 +448,7 @@ export function FfInboundQueuePage({
                         <TableCell data-testid="ff-inbound-queue-date">
                           {formatDate(row.planned_delivery_date ?? row.created_at)}
                         </TableCell>
-                        <TableCell data-testid="ff-inbound-queue-composition">
+                        <TableCell data-testid="ff-inbound-queue-composition" sx={compositionSx(row)}>
                           {compositionLabel(summary)}
                         </TableCell>
                       </>

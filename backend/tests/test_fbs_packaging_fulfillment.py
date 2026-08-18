@@ -500,3 +500,238 @@ async def test_fbs_pack_same_sku_two_orders_third_rejected(
             ).scalars()
         )
         assert len(fulfillments) == 2
+
+
+# Regression — packaging must not care about the unpacked/packed split, only the
+# total balance at the packaging line's location. Reproduces the prod incident
+# (supply WB-GI-266096235): the balance at the task line's location was already
+# recorded as "packed" (e.g. by a manual DB fix or an earlier partial pack), yet
+# "Всё упаковано" still failed with "Недостаточно неупакованного остатка" even
+# though the product was physically right there. Before the fix this call
+# raised insufficient_unpacked; after the fix it must succeed end-to-end.
+@pytest.mark.asyncio
+async def test_fbs_pack_succeeds_when_line_balance_already_marked_packed(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix, tenant_id = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, source_location_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    product_id = await _create_product(async_client, headers, seller_id, sku=f"packed-{suffix}")
+
+    supply_resp = await async_client.post(
+        "/operations/fbs-supplies",
+        headers=headers,
+        json={
+            "seller_id": str(seller_id),
+            "warehouse_id": str(warehouse_id),
+            "name": "Already-packed balance supply",
+            "delivery_type": "warehouse_sc",
+        },
+    )
+    assert supply_resp.status_code == 201, supply_resp.text
+    supply_id = uuid.UUID(supply_resp.json()["id"])
+
+    async with SessionLocal() as session:
+        await seed_fbs_warehouse_binding(
+            session, tenant_id=tenant_id, seller_id=seller_id, wms_warehouse_id=warehouse_id
+        )
+        order, _ = await upsert_order_from_wb_row(
+            session,
+            tenant_id,
+            seller_id,
+            _wb_order_row(order_id=930030, article=f"PACKED-{suffix}"),
+        )
+        order.product_id = product_id
+        order.supply_id = supply_id
+        order.status = FBS_ORDER_STATUS_IN_SUPPLY
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=source_location_id,
+            quantity_delta=1,
+            movement_type="inbound_intake",
+        )
+        await session.commit()
+        order_id = order.id
+
+    status_resp = await async_client.put(
+        f"/operations/fbs-supplies/{supply_id}/status",
+        headers=headers,
+        json={"status": "assembling"},
+    )
+    assert status_resp.status_code == 200, status_resp.text
+    task_id = status_resp.json()["packaging_task_id"]
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        await _seed_pick_for_order(
+            session,
+            tenant_id=tenant_id,
+            supply_id=supply_id,
+            warehouse_id=warehouse_id,
+            order=order,
+            source_location_id=source_location_id,
+            scan_key=f"pick-{order_id}",
+        )
+        await session.commit()
+
+        # Flip the sorting-location balance so the unit is already recorded as
+        # "packed" rather than "unpacked" — total stays 1, only the split changes.
+        sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
+        balance = await session.scalar(
+            select(InventoryBalance).where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.product_id == product_id,
+                InventoryBalance.storage_location_id == sorting.id,
+            )
+        )
+        assert balance is not None
+        assert int(balance.quantity_unpacked) == 1
+        balance.quantity_unpacked = 0
+        balance.quantity_packed = 1
+        await session.commit()
+
+    task = await async_client.get(
+        f"/operations/packaging-tasks/{task_id}",
+        headers=headers,
+    )
+    assert task.status_code == 200, task.text
+    line = task.json()["lines"][0]
+
+    packed = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/lines/{line['id']}/pack",
+        headers=headers,
+        json={"quantity": 1, "idempotency_key": "pack-already-packed-balance"},
+    )
+    assert packed.status_code == 200, packed.text
+    body = packed.json()
+    assert body["fulfilled_order"]["id"] == str(order_id)
+    assert body["fulfilled_order"]["pack_status"] == PACK_STATUS_PACKED
+
+    complete = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/complete",
+        headers=headers,
+        json={"acknowledge_all_packed": False},
+    )
+    assert complete.status_code == 200, complete.text
+
+    supply = await async_client.get(
+        f"/operations/fbs-supplies/{supply_id}",
+        headers=headers,
+    )
+    assert supply.json()["status"] == FBS_SUPPLY_STATUS_PACKED
+
+
+# Regression counterpart — when the product genuinely isn't there at all (total
+# balance is zero), packing must still fail honestly, with a message that tells
+# the operator what is missing and where to look.
+@pytest.mark.asyncio
+async def test_fbs_pack_rejected_when_location_has_no_stock_at_all(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix, tenant_id = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, source_location_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    product_id = await _create_product(async_client, headers, seller_id, sku=f"empty-{suffix}")
+
+    supply_resp = await async_client.post(
+        "/operations/fbs-supplies",
+        headers=headers,
+        json={
+            "seller_id": str(seller_id),
+            "warehouse_id": str(warehouse_id),
+            "name": "No stock at all supply",
+            "delivery_type": "warehouse_sc",
+        },
+    )
+    assert supply_resp.status_code == 201, supply_resp.text
+    supply_id = uuid.UUID(supply_resp.json()["id"])
+
+    async with SessionLocal() as session:
+        await seed_fbs_warehouse_binding(
+            session, tenant_id=tenant_id, seller_id=seller_id, wms_warehouse_id=warehouse_id
+        )
+        order, _ = await upsert_order_from_wb_row(
+            session,
+            tenant_id,
+            seller_id,
+            _wb_order_row(order_id=930031, article=f"EMPTY-{suffix}"),
+        )
+        order.product_id = product_id
+        order.supply_id = supply_id
+        order.status = FBS_ORDER_STATUS_IN_SUPPLY
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=source_location_id,
+            quantity_delta=1,
+            movement_type="inbound_intake",
+        )
+        await session.commit()
+        order_id = order.id
+
+    status_resp = await async_client.put(
+        f"/operations/fbs-supplies/{supply_id}/status",
+        headers=headers,
+        json={"status": "assembling"},
+    )
+    assert status_resp.status_code == 200, status_resp.text
+    task_id = status_resp.json()["packaging_task_id"]
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        await _seed_pick_for_order(
+            session,
+            tenant_id=tenant_id,
+            supply_id=supply_id,
+            warehouse_id=warehouse_id,
+            order=order,
+            source_location_id=source_location_id,
+            scan_key=f"pick-{order_id}",
+        )
+        await session.commit()
+
+        # Drain the sorting-location balance entirely — the product is genuinely
+        # not there (e.g. written off or moved out by hand), total is zero.
+        sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
+        balance = await session.scalar(
+            select(InventoryBalance).where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.product_id == product_id,
+                InventoryBalance.storage_location_id == sorting.id,
+            )
+        )
+        assert balance is not None
+        balance.quantity_unpacked = 0
+        balance.quantity_packed = 0
+        balance.quantity = 0
+        await session.commit()
+
+    task = await async_client.get(
+        f"/operations/packaging-tasks/{task_id}",
+        headers=headers,
+    )
+    assert task.status_code == 200, task.text
+    line = task.json()["lines"][0]
+
+    blocked = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/lines/{line['id']}/pack",
+        headers=headers,
+        json={"quantity": 1, "idempotency_key": "pack-no-stock-at-all"},
+    )
+    assert blocked.status_code == 409, blocked.text
+    detail = blocked.json()["detail"]
+    assert isinstance(detail, dict)
+    assert detail["code"] == "insufficient_packaging_stock"
+    assert isinstance(detail.get("message"), str)
+    assert detail["message"]
+    # The message should be useful: point at the product and say how much is on hand.
+    assert "0" in detail["message"]

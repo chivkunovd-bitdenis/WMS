@@ -104,6 +104,7 @@ class MarkingInventoryRowOut(BaseModel):
 class MarkingInventoryOut(BaseModel):
     rows: list[MarkingInventoryRowOut]
     unlinked_available_count: int
+    defective_count: int
 
 
 class MarkingOverviewProductOut(BaseModel):
@@ -1114,6 +1115,7 @@ async def get_marking_inventory(
             for r in result.rows
         ],
         unlinked_available_count=result.unlinked_available_count,
+        defective_count=result.defective_count,
     )
 
 
@@ -1603,6 +1605,7 @@ class MarkingReprintRequestsOut(BaseModel):
 
 class PrintedMarkingCodeOut(BaseModel):
     id: str
+    cis_code: str
     cis_masked: str
     status: str
 
@@ -1640,7 +1643,12 @@ async def list_printed_codes_for_line(
         raise _http_from_mc_error(exc) from exc
     return PrintedMarkingCodesOut(
         codes=[
-            PrintedMarkingCodeOut(id=str(row.id), cis_masked=row.cis_masked, status=row.status)
+            PrintedMarkingCodeOut(
+                id=str(row.id),
+                cis_code=row.cis_code,
+                cis_masked=row.cis_masked,
+                status=row.status,
+            )
             for row in rows
         ]
     )

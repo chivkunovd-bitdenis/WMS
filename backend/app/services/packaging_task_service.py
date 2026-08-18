@@ -21,6 +21,7 @@ from app.models.packaging_task import (
     PACKAGING_EVENT_CANCEL,
     PACKAGING_EVENT_COMPLETE,
     PACKAGING_EVENT_MANUAL_PACK,
+    PACKAGING_EVENT_PREPACKED_EXTERNAL,
     PACKAGING_EVENT_PRODUCT_LABEL_PRINT,
     PACKAGING_EVENT_SCAN_PACK,
     PACKAGING_EVENT_UNDO_LAST,
@@ -77,8 +78,9 @@ REVERSIBLE_PACK_EVENTS = (PACKAGING_EVENT_SCAN_PACK, PACKAGING_EVENT_MANUAL_PACK
 
 
 class PackagingTaskServiceError(Exception):
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, message: str | None = None) -> None:
         self.code = code
+        self.message = message
         super().__init__(code)
 
 
@@ -515,8 +517,7 @@ async def sync_lines_from_unload_plan(
             if ln.qty_packed_in_task == 0 and ln.qty_confirmed_packed == 0:
                 await session.delete(ln)
 
-    if pick_changed_with_progress:
-        task.pick_resync_warning = True
+    task.pick_resync_warning = pick_changed_with_progress
     if task.status == STATUS_DONE:
         plan_qty_after = {ul.product_id: int(ul.quantity) for ul in unload_lines}
         if plan_qty_after != plan_qty_before:
@@ -623,8 +624,7 @@ async def sync_lines_from_pick_allocations(
             if ln.qty_packed_in_task == 0 and ln.qty_confirmed_packed == 0:
                 await session.delete(ln)
 
-    if pick_changed_with_progress:
-        task.pick_resync_warning = True
+    task.pick_resync_warning = pick_changed_with_progress
     _touch_task(task)
     await session.commit()
     loaded = await get_task(session, tenant_id, task.id)
@@ -780,6 +780,66 @@ async def confirm_line_packed_from_shelf(
     return loaded
 
 
+async def mark_line_prepacked_external(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    task_id: uuid.UUID,
+    line_id: uuid.UUID,
+    qty: int,
+    *,
+    acting_user_id: uuid.UUID | None = None,
+) -> PackagingTask:
+    """«Пришло готовым»: товар уже упакован и промаркирован поставщиком/селлером до
+    поступления на упаковку. Прибавляет к qty_packed_in_task, а при
+    requires_honest_sign — честно к qty_marking_external (НЕ к qty_marking_printed,
+    иначе исказится учёт расхода кодов ЧЗ). Именно qty_marking_external уже учитывает
+    assert_packaging_line_marking_done при проверке готовности задания."""
+    if qty < 1:
+        raise PackagingTaskServiceError("invalid_qty")
+    task = await get_task(session, tenant_id, task_id)
+    if task is None:
+        raise PackagingTaskServiceError("not_found")
+    if task.status == STATUS_DONE:
+        raise PackagingTaskServiceError("bad_status")
+    line = next((ln for ln in task.lines if ln.id == line_id), None)
+    if line is None:
+        raise PackagingTaskServiceError("line_not_found")
+
+    from app.services.fbs_packaging_integration_service import get_supply_for_packaging_task
+
+    fbs_supply = await get_supply_for_packaging_task(session, tenant_id, task_id)
+    if fbs_supply is not None:
+        raise PackagingTaskServiceError("bad_status")
+
+    need = qty_need_pack(line)
+    remaining = need - int(line.qty_packed_in_task)
+    if remaining <= 0:
+        raise PackagingTaskServiceError("line_already_packed")
+    if qty > remaining:
+        raise PackagingTaskServiceError("invalid_qty")
+
+    line.qty_packed_in_task = int(line.qty_packed_in_task) + qty
+    if line.product.requires_honest_sign:
+        line.qty_marking_external = int(line.qty_marking_external) + qty
+    _touch_task(task)
+    await _add_task_event(
+        session,
+        task,
+        action=PACKAGING_EVENT_PREPACKED_EXTERNAL,
+        quantity=qty,
+        line=line,
+        acting_user_id=acting_user_id,
+    )
+    if acting_user_id is not None:
+        await billing_svc.finalize_task_billing(
+            session, task, completed_by_user_id=acting_user_id
+        )
+    await session.commit()
+    loaded = await get_task(session, tenant_id, task_id)
+    assert loaded is not None
+    return loaded
+
+
 async def record_pack_progress(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -832,7 +892,7 @@ async def record_pack_progress(
                 idempotency_key=idempotency_key,
             )
         except FbsPackagingIntegrationError as exc:
-            raise PackagingTaskServiceError(exc.code) from exc
+            raise PackagingTaskServiceError(exc.code, message=exc.message) from exc
         _touch_task(task)
         packed_delta = int(line.qty_packed_in_task) - before_packed
         if packed_delta > 0:

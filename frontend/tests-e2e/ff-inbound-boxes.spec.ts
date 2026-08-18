@@ -153,11 +153,16 @@ test.describe('US-B-02 inbound box barcodes and print actions', () => {
     expect(new Set(barcodes).size).toBe(3);
 
     const row0 = rows.nth(0);
+    await row0.getByTestId(/^ff-inbound-box-print-/).click();
+    await expect(page.getByTestId('ff-inbound-box-print-dialog')).toBeVisible();
     await Promise.all([
       waitForInboundBoxLabelPrintedOk(page),
-      row0.getByTestId(/^ff-inbound-box-print-/).click(),
+      page.getByTestId('ff-inbound-box-print-dialog-confirm').click(),
     ]);
+    await expect(page.getByTestId('ff-inbound-box-print-dialog')).toBeHidden();
 
+    await page.getByTestId('ff-inbound-boxes-print-all').click();
+    await expect(page.getByTestId('ff-inbound-box-print-dialog')).toBeVisible();
     const markPrinted = page.waitForResponse(
       (r) =>
         r.request().method() === 'POST' &&
@@ -166,7 +171,7 @@ test.describe('US-B-02 inbound box barcodes and print actions', () => {
         r.status() < 300,
       { times: 3 },
     );
-    await Promise.all([markPrinted, page.getByTestId('ff-inbound-boxes-print-all').click()]);
+    await Promise.all([markPrinted, page.getByTestId('ff-inbound-box-print-dialog-confirm').click()]);
   });
 });
 

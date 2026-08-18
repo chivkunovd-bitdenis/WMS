@@ -901,14 +901,6 @@ async def test_fbs_promote_write_off_shelf_confirm_sold_does_not_resurrect_avail
             quantity_delta=5,
             movement_type="inbound_intake",
         )
-        await stock_direction_service.create_stock_direction(
-            session,
-            tenant_id,
-            product_id,
-            name="FBS pool",
-            quantity=5,
-            is_fbs=True,
-        )
         await session.commit()
         order_id = order.id
 

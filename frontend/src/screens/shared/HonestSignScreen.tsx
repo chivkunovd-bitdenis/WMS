@@ -92,6 +92,7 @@ type PoolListRow = {
 type MarkingInventoryResponse = {
   rows: ProductInventoryRow[]
   unlinked_available_count: number
+  defective_count: number
 }
 
 type StockFilter = 'all' | 'low' | 'empty'
@@ -194,6 +195,7 @@ export function HonestSignScreen({
   const inventoryLoadAbortRef = useRef<AbortController | null>(null)
   const [products, setProducts] = useState<ProductInventoryRow[]>([])
   const [unlinkedAvailable, setUnlinkedAvailable] = useState(0)
+  const [defectiveCount, setDefectiveCount] = useState(0)
   const [unlinkedPools, setUnlinkedPools] = useState<PoolListRow[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -251,6 +253,7 @@ export function HonestSignScreen({
       const poolRows = (await poolsRes.json()) as PoolListRow[]
       setProducts(body.rows)
       setUnlinkedAvailable(body.unlinked_available_count)
+      setDefectiveCount(body.defective_count)
       setUnlinkedPools(
         poolRows.filter(
           (pool) => (pool.linked_products_count ?? pool.products.length) === 0 && pool.available > 0,
@@ -272,6 +275,7 @@ export function HonestSignScreen({
     if (sellerIdRequiredForImport && !effectiveSellerId) {
       setProducts([])
       setUnlinkedAvailable(0)
+      setDefectiveCount(0)
       setUnlinkedPools([])
       return
     }
@@ -313,7 +317,7 @@ export function HonestSignScreen({
       },
       {
         label: 'Брак',
-        value: '→',
+        value: defectiveCount,
         testId: 'kpi-defective',
         interactive: true,
         onClick: () => {
@@ -332,7 +336,7 @@ export function HonestSignScreen({
         },
       },
     ]
-  }, [kpis, navigate, routeBase, scrollToProductsTable, stockFilter])
+  }, [kpis, navigate, routeBase, scrollToProductsTable, stockFilter, defectiveCount])
 
   const filteredProducts = useMemo(() => {
     return products.filter((row) => {

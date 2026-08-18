@@ -643,13 +643,13 @@ export function HonestSignProductPage({
             {codes.length} КМ
           </Typography>
         ) : null}
-        <TableContainer component={Paper} variant="outlined">
-          <Table size="small" sx={{ tableLayout: 'fixed' }}>
+        <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto', maxHeight: 420 }}>
+          <Table size="small" stickyHeader sx={{ tableLayout: 'fixed' }}>
             <TableHead>
               <TableRow>
                 <TableCell>КМ/CIS</TableCell>
-                <TableCell>Статус</TableCell>
-                <TableCell>Дата</TableCell>
+                <TableCell sx={{ width: 140 }}>Статус</TableCell>
+                <TableCell sx={{ width: 190 }}>Дата</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -670,7 +670,7 @@ export function HonestSignProductPage({
               ) : (
                 filteredCodes.map((c) => (
                   <TableRow key={c.id} data-testid={`${testIdPrefix}-code-row-${c.id}`}>
-                    <TableCell sx={{ wordBreak: 'break-all' }}>{c.cis_code}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{c.cis_code}</TableCell>
                     <TableCell>
                       <Chip size="small" label={codeStatusLabel(c.status)} />
                     </TableCell>

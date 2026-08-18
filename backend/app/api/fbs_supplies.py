@@ -1344,7 +1344,7 @@ async def clear_fbs_packing_box(
 @router.post(
     "/{supply_id}/boxes/{box_id}/retry-qr",
     response_model=FbsWorkspaceOut,
-    summary="Retry a PVZ box QR without creating a cargo place",
+    summary="Retry a box cargo-place QR without creating a new cargo place",
 )
 async def retry_fbs_packing_box_qr(
     supply_id: uuid.UUID,
@@ -1637,7 +1637,7 @@ async def create_fbs_cargo_places(
 @router.delete(
     "/{supply_id}/cargo-places",
     response_model=FbsCargoPlaceListOut,
-    summary="Delete selected PVZ cargo places",
+    summary="Delete selected cargo places",
     description=(
         "Removes selected WB cargo places while the supply is still being assembled. "
         "Calls WB DELETE /api/v3/supplies/{supplyId}/trbx, then drops local FbsTrbx rows "
@@ -1918,11 +1918,11 @@ async def sync_fbs_supply_tracking(
 @router.post(
     "/{supply_id}/retry-supply-qr",
     response_model=FbsWorkspaceOut,
-    summary="Retry warehouse/SC supply QR after confirmed deliver",
+    summary="Retry supply QR after confirmed deliver",
     description=(
         "Fetches the missing supply QR print asset only. Never re-invokes WB deliver. "
-        "Allowed for warehouse_sc supplies in in_delivery or done; PVZ returns 409 "
-        "wrong_delivery_type."
+        "Allowed for any delivery_type (warehouse_sc or pvz) once the supply is in "
+        "in_delivery or done — WB issues a supply QR for both."
     ),
 )
 async def retry_fbs_supply_qr(
@@ -1955,7 +1955,7 @@ async def retry_fbs_supply_qr(
     summary="Deprecated compatibility: supply QR binary",
     description=(
         "Compatibility layer only. Prefer print-assets kind=supply_qr after deliver "
-        "(warehouse/sc). Does not return barcode_file paths to the client."
+        "(any delivery_type). Does not return barcode_file paths to the client."
     ),
 )
 async def get_fbs_supply_barcode(

@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.inbound_intake import InboundIntakeRequest
 from app.models.inventory_balance import InventoryBalance
 from app.models.outbound_shipment import OutboundShipmentRequest
@@ -512,7 +513,13 @@ async def create_seller(session: AsyncSession, tenant_id: uuid.UUID, *, name: st
     return s
 
 
-DEFAULT_PRODUCT_DIM_MM = 10  # used by WB sync path only
+# Legacy placeholder a since-removed WB sync default used to write into
+# length_mm/width_mm/height_mm when the real dimensions were unknown. Nothing
+# writes this value anymore — the sync path leaves dimensions empty instead of
+# guessing. Products that still carry this exact 10x10x10 triple have no real
+# WB dimensions on file, so the WB import path (wildberries_product_import_service)
+# treats that triple as "no data" and is allowed to overwrite it, same as None.
+DEFAULT_PRODUCT_DIM_MM = 10
 
 
 def _normalize_dimensions(
@@ -716,9 +723,29 @@ async def update_product_fbs_stock_sync(
     if p is None:
         raise CatalogError("product_not_found")
     if enabled_given:
+        # Явно переданный флаг продолжаем уважать — его шлют старые вызовы и тесты.
         p.fbs_stock_sync_enabled = bool(fbs_stock_sync_enabled)
+    elif limit_given:
+        # Отдельного тумблера больше нет: участие в FBS выводится из наличия
+        # остатка. Задали число — включились; очистили — флаг всё равно
+        # остаётся True (см. ниже), чтобы товар не выпал из выгрузки и WB
+        # получил честный ноль, а не застрял на последнем опубликованном остатке.
+        p.fbs_stock_sync_enabled = True
     if limit_given:
         p.fbs_stock_limit = limit_value if isinstance(limit_value, int) else None
+        if limit_value is None and not enabled_given:
+            # Лимит очистили руками (не через explicit-флаг) — обнуляем
+            # распределение по складам, а не удаляем строки: их наличие с
+            # quantity=0 — это осознанный ноль, он проходит через zero-guard.
+            zero_pool_stmt = (
+                update(FbsBindingStockPool)
+                .where(
+                    FbsBindingStockPool.tenant_id == tenant_id,
+                    FbsBindingStockPool.product_id == p.id,
+                )
+                .values(quantity=0)
+            )
+            await session.execute(zero_pool_stmt)
     # Именно в момент переключения новая цифра должна уехать в кабинет WB:
     # включили — кабинет видит остаток фулфилмента, выключили — получает ноль.
     # Ждать ближайшего движения товара или фоновой сверки здесь нельзя.

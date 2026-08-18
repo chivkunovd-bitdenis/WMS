@@ -386,9 +386,13 @@ async def test_mp_availability_uses_free_fbo_after_directions_and_active_reserve
     )
     assert summary.status_code == 200, summary.text
     summary_row = next(row for row in summary.json() if row["product_id"] == str(product_id))
+    # The FBS flag on directions is gone (FBS-02): every direction is stored
+    # as a plain reserve now, regardless of the is_fbs argument passed above.
+    # So quantity_fbs is always 0, and both directions (200 + 300) land in
+    # quantity_reserved_directions.
     assert summary_row["quantity"] == 1000
-    assert summary_row["quantity_fbs"] == 200
-    assert summary_row["quantity_reserved_directions"] == 300
+    assert summary_row["quantity_fbs"] == 0
+    assert summary_row["quantity_reserved_directions"] == 500
     assert summary_row["quantity_free_fbo"] == 500
     assert summary_row["available"] == 400
 

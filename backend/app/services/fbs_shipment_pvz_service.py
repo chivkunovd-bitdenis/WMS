@@ -1,5 +1,20 @@
 # ruff: noqa: RUF001
-"""FBS PVZ shipment — cargo places (count-only trbx), QR print assets."""
+"""FBS cargo places (count-only trbx) and their QR print assets.
+
+Cargo place creation was historically restricted to `pvz` deliveries because
+that was the only route the team had confirmed against the live WB API. That
+restriction was our own caution, not a WB rule: verified live on 2026-08-17
+against WB-GI-265711836 (a warehouse/SC handoff, owner's own key) — WB
+accepted `POST .../trbx` (201, real `WB-MP-...` id), issued a real QR sticker
+via `POST .../trbx/stickers` (200, PNG), and accepted the delete (204). Our
+outgoing request in `create_marketplace_supply_trbx`
+(app/services/wildberries_client.py) never carries a delivery-type flag
+either, so WB has no way to tell a `pvz` cargo place from a `warehouse_sc`
+one. WB's own seller docs additionally say cargo places are *optional* (not
+forbidden) for warehouse/SC handoffs. So cargo places and their QR stickers
+are now available for any `delivery_type` — do not reintroduce a
+`pvz`-only gate here.
+"""
 
 from __future__ import annotations
 
@@ -19,7 +34,6 @@ from app.models.fbs_print_asset import (
     FbsPrintAsset,
 )
 from app.models.fbs_supply import (
-    FBS_DELIVERY_TYPE_PVZ,
     FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_DONE,
     FBS_SUPPLY_STATUS_DRAFT,
@@ -152,11 +166,6 @@ async def _get_supply(
         stmt = stmt.options(selectinload(FbsSupply.orders))
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
-
-
-def _require_pvz_supply(supply: FbsSupply) -> None:
-    if supply.delivery_type != FBS_DELIVERY_TYPE_PVZ:
-        raise FbsShipmentPvzError("wrong_delivery_type")
 
 
 def _require_cargo_places_mutable_supply(supply: FbsSupply) -> None:
@@ -366,7 +375,6 @@ async def preflight_cargo_places(
     supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
     if supply is None:
         raise FbsShipmentPvzError("supply_not_found")
-    _require_pvz_supply(supply)
 
     count = len(boxes)
     _validate_count_limit(count, len(supply.orders))
@@ -492,7 +500,6 @@ async def list_cargo_places(
     supply = await _get_supply(session, tenant_id, supply_id, with_trbxes=True)
     if supply is None:
         raise FbsShipmentPvzError("supply_not_found")
-    _require_pvz_supply(supply)
 
     token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
     try:
@@ -536,7 +543,6 @@ async def create_cargo_places(
     )
     if supply is None:
         raise FbsShipmentPvzError("supply_not_found")
-    _require_pvz_supply(supply)
 
     effective_boxes = _normalize_boxes(count, boxes)
     if len(effective_boxes) != count:
@@ -876,7 +882,6 @@ async def delete_cargo_places(
     )
     if supply is None:
         raise FbsShipmentPvzError("supply_not_found")
-    _require_pvz_supply(supply)
     _require_cargo_places_mutable_supply(supply)
 
     req_hash = request_hash_for_cargo_places_delete(
@@ -1036,7 +1041,6 @@ async def fetch_trbx_stickers(
     supply = await _get_supply(session, tenant_id, supply_id, with_trbxes=True)
     if supply is None:
         raise FbsShipmentPvzError("supply_not_found")
-    _require_pvz_supply(supply)
     await _ensure_cargo_qrs(session, tenant_id, supply, http_client)
     await session.flush()
     return [_trbx_meta(trbx) for trbx in supply.trbxes]

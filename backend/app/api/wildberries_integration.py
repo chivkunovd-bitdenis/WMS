@@ -63,6 +63,7 @@ class WildberriesSellerTokensOut(BaseModel):
     has_content_token: bool
     has_supplies_token: bool
     has_marketplace_token: bool
+    marketplace_scope_ok: bool | None
     updated_at: datetime | None
 
 
@@ -70,6 +71,7 @@ class WildberriesSelfTokensOut(BaseModel):
     has_content_token: bool
     has_supplies_token: bool
     has_marketplace_token: bool
+    marketplace_scope_ok: bool | None
     updated_at: datetime | None
 
 
@@ -351,12 +353,13 @@ async def get_seller_wildberries_tokens(
     st = await get_public_token_status(session, user.tenant_id, seller_id)
     if st is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="seller_not_found")
-    has_c, has_s, has_m, upd = st
+    has_c, has_s, has_m, upd, scope_ok = st
     return WildberriesSellerTokensOut(
         seller_id=str(seller_id),
         has_content_token=has_c,
         has_supplies_token=has_s,
         has_marketplace_token=has_m,
+        marketplace_scope_ok=scope_ok,
         updated_at=upd,
     )
 
@@ -373,11 +376,12 @@ async def get_self_wildberries_tokens(
     st = await get_public_token_status(session, user.tenant_id, effective_seller_id)
     if st is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="seller_not_found")
-    has_c, has_s, has_m, upd = st
+    has_c, has_s, has_m, upd, scope_ok = st
     return WildberriesSelfTokensOut(
         has_content_token=has_c,
         has_supplies_token=has_s,
         has_marketplace_token=has_m,
+        marketplace_scope_ok=scope_ok,
         updated_at=upd,
     )
 
@@ -419,7 +423,7 @@ async def patch_seller_wildberries_tokens(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="seller_not_found")
     st = await get_public_token_status(session, user.tenant_id, seller_id)
     assert st is not None
-    has_c, has_s, has_m, upd = st
+    has_c, has_s, has_m, upd, scope_ok = st
     if (
         supplies is not SKIP
         and isinstance(supplies, str)
@@ -434,6 +438,7 @@ async def patch_seller_wildberries_tokens(
         has_content_token=has_c,
         has_supplies_token=has_s,
         has_marketplace_token=has_m,
+        marketplace_scope_ok=scope_ok,
         updated_at=upd,
     )
 
@@ -543,8 +548,9 @@ async def save_and_validate_self_content_token(
             tenant_id,
             seller_id,
             content_api_token=token,
-            supplies_api_token=token if marketplace_validation_ok else None,
-            marketplace_api_token=token if marketplace_validation_ok else None,
+            supplies_api_token=token if marketplace_validation_ok else SKIP,
+            marketplace_api_token=token if marketplace_validation_ok else SKIP,
+            marketplace_scope_ok=marketplace_validation_ok,
         )
         if validation_error is None:
             saved = await upsert_imported_cards(

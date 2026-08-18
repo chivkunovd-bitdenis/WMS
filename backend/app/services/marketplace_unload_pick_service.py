@@ -6,7 +6,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Literal
 
-from sqlalchemy import select
+from sqlalchemy import case, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -42,6 +42,7 @@ class PickOptionLocation:
     quantity: int
     reserved: int
     available: int
+    picked: int
 
 
 @dataclass(frozen=True)
@@ -72,6 +73,19 @@ async def _picked_qty_by_product(
     from app.services import marketplace_unload_collect_service as collect_svc
 
     return await collect_svc.picked_qty_by_product(session, request_id)
+
+
+async def _picked_qty_by_product_location(
+    session: AsyncSession, request_id: uuid.UUID
+) -> dict[tuple[uuid.UUID, uuid.UUID], int]:
+    """Снято по каждой паре товар+ячейка этого документа (PICK-01)."""
+    stmt = select(
+        MarketplaceUnloadPickAllocation.product_id,
+        MarketplaceUnloadPickAllocation.storage_location_id,
+        MarketplaceUnloadPickAllocation.quantity,
+    ).where(MarketplaceUnloadPickAllocation.request_id == request_id)
+    res = await session.execute(stmt)
+    return {(pid, loc_id): int(qty) for pid, loc_id, qty in res.all()}
 
 
 async def _barcode_index_for_seller(
@@ -115,13 +129,24 @@ async def find_location_by_barcode(
     raw = barcode.strip()
     if not raw:
         return None
-    stmt = select(StorageLocation).where(
-        StorageLocation.tenant_id == tenant_id,
-        StorageLocation.warehouse_id == warehouse_id,
-        StorageLocation.barcode == raw,
+    # Ячейку можно и отсканировать, и набрать кодом руками. Ограничения БД допускают,
+    # что одна строка окажется штрихкодом одной ячейки и кодом другой на том же складе
+    # (uq_storage_locations_wh_code — код уникален по складу, а
+    # uq_storage_locations_tenant_barcode — штрихкод по организации). Раньше такой ввод
+    # возвращал две строки и ронял подбор через scalar_one_or_none(). Побеждает штрихкод:
+    # сканер важнее клавиатуры (SORT-01).
+    stmt = (
+        select(StorageLocation)
+        .where(
+            StorageLocation.tenant_id == tenant_id,
+            StorageLocation.warehouse_id == warehouse_id,
+            or_(StorageLocation.barcode == raw, StorageLocation.code == raw),
+        )
+        .order_by(case((StorageLocation.barcode == raw, 0), else_=1))
+        .limit(1)
     )
     res = await session.execute(stmt)
-    return res.scalar_one_or_none()
+    return res.scalars().first()
 
 
 async def get_pick_options(
@@ -135,6 +160,7 @@ async def get_pick_options(
         return []
 
     picked = await _picked_qty_by_product(session, req.id)
+    picked_by_loc = await _picked_qty_by_product_location(session, req.id)
     bal_rows = await inventory_service.list_location_balances_for_products_in_warehouse(
         session,
         tenant_id,
@@ -142,7 +168,9 @@ async def get_pick_options(
         product_ids,
     )
     loc_by_product: dict[uuid.UUID, list[PickOptionLocation]] = {pid: [] for pid in product_ids}
+    seen_pairs: set[tuple[uuid.UUID, uuid.UUID]] = set()
     for pid, loc_id, code, on_hand, rsv in bal_rows:
+        seen_pairs.add((pid, loc_id))
         loc_by_product.setdefault(pid, []).append(
             PickOptionLocation(
                 storage_location_id=loc_id,
@@ -150,8 +178,38 @@ async def get_pick_options(
                 quantity=on_hand,
                 reserved=rsv,
                 available=max(0, on_hand - rsv),
+                picked=picked_by_loc.get((pid, loc_id), 0),
             )
         )
+
+    # Ячейки, по которым уже есть подбор, но остаток в них стал нулевым, не попадают
+    # в bal_rows (там фильтр quantity > 0) — без них оператор не смог бы вернуть
+    # снятое обратно в ячейку (PICK-01).
+    for (pid, loc_id), qty in picked_by_loc.items():
+        if (pid, loc_id) in seen_pairs or pid not in loc_by_product:
+            continue
+        loc = await session.get(StorageLocation, loc_id)
+        if loc is None:
+            continue
+        available = await inventory_service.available_at_location(
+            session, tenant_id, pid, loc_id
+        )
+        reserved = await inventory_service.total_reserved_at_location(
+            session, tenant_id, pid, loc_id
+        )
+        loc_by_product[pid].append(
+            PickOptionLocation(
+                storage_location_id=loc_id,
+                location_code=loc.code,
+                quantity=available + reserved,
+                reserved=reserved,
+                available=max(0, available),
+                picked=qty,
+            )
+        )
+
+    for pid, locs in loc_by_product.items():
+        locs.sort(key=lambda loc: loc.location_code)
 
     out: list[PickOptionProduct] = []
     for ln in req.lines:
@@ -201,22 +259,16 @@ async def add_pick_qty(
 ) -> MarketplaceUnloadPickAllocation:
     from app.services import marketplace_unload_collect_service as collect_svc
 
-    try:
-        result = await collect_svc.collect_into_box(
-            session,
-            tenant_id,
-            request_id,
-            storage_location_id=storage_location_id,
-            product_id=product_id,
-            quantity=quantity,
-        )
-    except MarketplaceUnloadPickError:
-        raise
-    from app.services import packaging_task_service as pkg_svc
-
-    task = await pkg_svc.get_task_for_unload(session, tenant_id, request_id)
-    if task is not None:
-        await pkg_svc.sync_lines_from_pick_allocations(session, tenant_id, task)
+    result = await collect_svc.record_pick_allocation(
+        session,
+        tenant_id,
+        request_id,
+        storage_location_id=storage_location_id,
+        product_id=product_id,
+        quantity=quantity,
+    )
+    # record_pick_allocation уже синхронизирует задание на упаковку сама —
+    # отдельного вызова здесь не нужно.
     return result.allocation
 
 
@@ -247,10 +299,6 @@ async def pick_scan(
 
     from app.services import marketplace_unload_collect_service as collect_svc
 
-    open_box = await collect_svc.get_open_box(session, request_id)
-    if open_box is None:
-        raise MarketplaceUnloadPickError("open_box_required")
-
     if req.seller_id is None:
         raise MarketplaceUnloadPickError("seller_required")
     idx = await _barcode_index_for_seller(session, tenant_id, req.seller_id)
@@ -258,16 +306,17 @@ async def pick_scan(
     if product_id is None:
         raise MarketplaceUnloadPickError("barcode_unknown")
 
-    result = await collect_svc.collect_into_box(
+    # Подбор не трогает короба (решение заказчика 2026-08-16) — только storage →
+    # pick allocation. Короб появляется отдельно и явно на упаковке.
+    result = await collect_svc.record_pick_allocation(
         session,
         tenant_id,
         request_id,
-        box_id=open_box.id,
         storage_location_id=storage_location_id,
         product_id=product_id,
         quantity=1,
     )
-    p = result.box_line.product
+    p = result.product
     return PickScanResult(
         kind="product",
         storage_location_id=storage_location_id,
@@ -292,10 +341,6 @@ async def save_pick_allocations(
 
     from app.services import marketplace_unload_collect_service as collect_svc
 
-    open_box = await collect_svc.get_open_box(session, request_id)
-    if open_box is None:
-        raise MarketplaceUnloadPickError("open_box_required")
-
     merged: dict[tuple[uuid.UUID, uuid.UUID | None], int] = {}
     for row in rows:
         if row.quantity < 1:
@@ -305,21 +350,17 @@ async def save_pick_allocations(
         key = (row.product_id, row.storage_location_id)
         merged[key] = merged.get(key, 0) + row.quantity
 
+    # Подбор не трогает короба (решение заказчика 2026-08-16) — только storage →
+    # pick allocation для каждой пары товар/ячейка.
     for (product_id, loc_id), qty in merged.items():
-        await collect_svc.collect_into_box(
+        await collect_svc.record_pick_allocation(
             session,
             tenant_id,
             request_id,
-            box_id=open_box.id,
             storage_location_id=loc_id,
             product_id=product_id,
             quantity=qty,
         )
-    from app.services import packaging_task_service as pkg_svc
-
-    task = await pkg_svc.get_task_for_unload(session, tenant_id, request_id)
-    if task is not None:
-        await pkg_svc.sync_lines_from_pick_allocations(session, tenant_id, task)
     return await list_pick_allocations(session, tenant_id, request_id)
 
 

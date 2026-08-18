@@ -20,17 +20,15 @@ import {
   Typography,
 } from '@mui/material'
 import { apiUrl } from '../../api'
-import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
+import { FfProductLineCells, FfProductTableHeadCells } from '../../components/FfProductLineCells'
 import {
   productDisplayMetaFromCatalog,
-  resolveProductPrimaryBarcode,
   type WbProductCatalogRow,
 } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import {
   boxFillDialogContentSx,
   boxFillDialogPaperSx,
-  boxFillProductCellSx,
   boxFillQtyCellSx,
   boxFillTableScrollSx,
 } from './boxFillDialogLayout'
@@ -287,8 +285,7 @@ export function FfInboundBoxAddDialog({
             <Table size="small" stickyHeader data-testid="ff-inbound-box-add-table">
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ width: 56, px: 1 }}>Фото</TableCell>
-                  <TableCell sx={{ minWidth: 180 }}>Товар</TableCell>
+                  <FfProductTableHeadCells showPrint={false} />
                   <TableCell align="right" sx={{ width: 80, whiteSpace: 'nowrap', px: 1 }}>
                     Заявлено
                   </TableCell>
@@ -300,55 +297,28 @@ export function FfInboundBoxAddDialog({
               <TableBody>
                 {requestLines.map((ln) => {
                   const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
-                  const barcode = resolveProductPrimaryBarcode(displayMeta)
                   return (
                     <TableRow
                       key={ln.id}
                       data-testid={`ff-inbound-box-add-line-row-${ln.product_id}`}
                     >
-                      <TableCell sx={{ px: 1, verticalAlign: 'top' }}>
-                        <ProductPhotoThumb
-                          src={displayMeta.wb_primary_image_url}
-                          alt={displayMeta.product_name}
-                          testId={`ff-inbound-box-add-product-${ln.product_id}-photo`}
-                        />
-                      </TableCell>
-                      <TableCell sx={boxFillProductCellSx}>
-                        <Typography
-                          variant="body2"
-                          sx={{ fontWeight: 700 }}
-                          data-testid={`ff-inbound-box-add-product-${ln.product_id}-sku`}
-                          title={displayMeta.sku_code}
-                        >
-                          {displayMeta.sku_code}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          data-testid={`ff-inbound-box-add-product-${ln.product_id}-name`}
-                          title={displayMeta.product_name}
-                        >
-                          {displayMeta.product_name}
-                        </Typography>
-                        {displayMeta.wb_size ? (
-                          <Typography
-                            variant="caption"
-                            color="text.secondary"
-                            data-testid={`ff-inbound-box-add-size-${ln.product_id}`}
-                            title={`Размер: ${displayMeta.wb_size}`}
-                          >
-                            Размер: {displayMeta.wb_size}
-                          </Typography>
-                        ) : null}
-                        {barcode ? (
-                          <Typography
-                            variant="caption"
-                            color="text.secondary"
-                            title={`ШК: ${barcode}`}
-                          >
-                            ШК: {barcode}
-                          </Typography>
-                        ) : null}
-                      </TableCell>
+                      <FfProductLineCells
+                        meta={displayMeta}
+                        showPrint={false}
+                        lineTestIdPrefix={`ff-inbound-box-add-product-${ln.product_id}`}
+                        nameExtra={
+                          displayMeta.wb_size ? (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              data-testid={`ff-inbound-box-add-size-${ln.product_id}`}
+                              title={`Размер: ${displayMeta.wb_size}`}
+                            >
+                              Размер: {displayMeta.wb_size}
+                            </Typography>
+                          ) : null
+                        }
+                      />
                       <TableCell align="right" sx={{ px: 1, verticalAlign: 'top' }}>
                         {ln.expected_qty}
                       </TableCell>
@@ -401,8 +371,13 @@ export function FfInboundBoxAddDialog({
         </Stack>
       </DialogContent>
       <DialogActions sx={{ flexShrink: 0 }}>
-        <Button onClick={() => void handleDismiss()} disabled={busy} data-testid="ff-inbound-box-add-dismiss">
-          Скрыть окно
+        <Button
+          variant="contained"
+          onClick={() => void handleDismiss()}
+          disabled={busy}
+          data-testid="ff-inbound-box-add-dismiss"
+        >
+          Готово
         </Button>
       </DialogActions>
     </Dialog>

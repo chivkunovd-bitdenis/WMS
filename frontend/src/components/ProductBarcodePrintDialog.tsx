@@ -14,18 +14,14 @@ import {
 } from '@mui/material'
 import {
   DEFAULT_PRODUCT_LABEL_PRINT_OPTIONS,
-  PRODUCT_LABEL_REVIEW_FOOTER,
-  productLabelDetailLines,
-  resolveProductLabelArticle,
-  normalizeProductLabelName,
   type ProductLabelPrintOptions,
 } from '../utils/productLabelText'
 import { printProductThermalLabels } from '../utils/printProductThermalLabel'
 import { resolvePackUnits, resolveWbBarcodeLabelCount } from '../utils/productBarcodePrint'
 import { resolveProductPrimaryBarcode, type ProductLineDisplayMeta } from '../types/wbProductCatalog'
-import { renderBarcodeDataUrl } from '../utils/renderBarcodeDataUrl'
 import { resolveLabelSize, loadLabelSizeId, type LabelSize } from '../utils/labelSize'
 import { LabelSizeSelect } from './LabelSizeSelect'
+import { MarkingLabelPreview } from './MarkingLabelPreview'
 
 type Props = {
   open: boolean
@@ -54,9 +50,6 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
   }, [open, meta?.sku_code, meta?.wb_composition])
 
   const barcode = meta ? resolveProductPrimaryBarcode(meta) : ''
-  const article = meta ? resolveProductLabelArticle(meta) : ''
-  const name = meta ? normalizeProductLabelName(meta.product_name) : ''
-  const sellerName = meta?.seller_name?.trim() ?? ''
   const packUnits = useMemo(
     () =>
       meta
@@ -72,21 +65,23 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
     Number.isFinite(qtyMultiplier) && qtyMultiplier >= 1
       ? resolveWbBarcodeLabelCount(Math.floor(qtyMultiplier), packUnits)
       : 0
-  const detailLines = useMemo(
-    () => (meta ? productLabelDetailLines(meta, printOptions) : []),
-    [meta, printOptions],
-  )
 
-  const previewBarcodeUrl = useMemo(() => {
-    if (!barcode) {
-      return ''
+  const previewProductLabel = useMemo(() => {
+    if (!meta || !barcode) {
+      return null
     }
-    try {
-      return renderBarcodeDataUrl(barcode, { variant: 'thermal58' })
-    } catch {
-      return ''
+    return {
+      product_name: meta.product_name,
+      sku_code: meta.sku_code,
+      wb_vendor_code: meta.wb_vendor_code,
+      wb_size: meta.wb_size,
+      wb_color: meta.wb_color,
+      wb_brand: meta.wb_brand,
+      wb_composition: meta.wb_composition,
+      seller_name: meta.seller_name,
+      barcode,
     }
-  }, [barcode])
+  }, [meta, barcode])
 
   const handlePrint = () => {
     if (!meta || !barcode) {
@@ -147,121 +142,16 @@ export function ProductBarcodePrintDialog({ open, meta, onClose }: Props) {
           />
         </Box>
 
-        <Box
-          data-testid="ff-product-label-preview"
-          sx={{
-            width: 232,
-            height: Math.round((232 * labelSize.heightMm) / labelSize.widthMm),
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 1,
-            bgcolor: '#fff',
-            color: '#111',
-            p: '6px 7px',
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            fontFamily: 'Arial, Helvetica, sans-serif',
-            mx: 'auto',
-            mb: 2,
-          }}
-        >
-          <Box sx={{ flex: '0 0 auto', mb: '3px' }}>
-            {previewBarcodeUrl ? (
-              <Box
-                component="img"
-                src={previewBarcodeUrl}
-                alt="barcode"
-                sx={{ width: '100%', maxHeight: 40, objectFit: 'contain', display: 'block' }}
-              />
-            ) : null}
-            <Typography
-              variant="caption"
-              sx={{
-                display: 'block',
-                textAlign: 'center',
-                letterSpacing: '0.04em',
-                fontSize: 9,
-                lineHeight: 1.1,
-                fontFamily: 'Arial, Helvetica, sans-serif',
-              }}
-            >
-              {barcode || '—'}
-            </Typography>
-          </Box>
-
-          <Box
-            sx={{
-              flex: 1,
-              minHeight: 0,
-              fontSize: 9,
-              lineHeight: 1.35,
-              overflow: 'hidden',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '2px',
-              mt: '2px',
-            }}
-          >
-            {sellerName ? (
-              <Box
-                sx={{
-                  flex: '0 0 auto',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  lineHeight: 1.35,
-                  minHeight: '12px',
-                }}
-                title={sellerName}
-              >
-                {sellerName}
-              </Box>
-            ) : null}
-            <Box
-              sx={{
-                flex: '0 0 auto',
-                fontSize: 9.5,
-                lineHeight: 1.35,
-                maxHeight: '26px',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                wordBreak: 'break-word',
-              }}
-              title={name || meta?.product_name}
-            >
-              {name || '—'}
-            </Box>
-            <Box sx={{ flex: '0 0 auto', lineHeight: 1.35 }}>Артикул: {article || '—'}</Box>
-            {detailLines.map((line) => (
-              <Box
-                key={line}
-                sx={{
-                  flex: '0 0 auto',
-                  lineHeight: 1.35,
-                  ...(line.startsWith('Состав:')
-                    ? {
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                      }
-                    : {
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                      }),
-                }}
-              >
-                {line}
-              </Box>
-            ))}
-          </Box>
-
-          <Typography
-            variant="caption"
-            sx={{ flex: '0 0 auto', fontSize: 8.5, lineHeight: 1.2, mt: '2px' }}
-          >
-            {PRODUCT_LABEL_REVIEW_FOOTER}
-          </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+          <MarkingLabelPreview
+            variant="product"
+            productLabel={previewProductLabel}
+            size={labelSize}
+            unitsToShow={Math.max(1, totalLabels || 1)}
+            totalUnits={Math.max(1, totalLabels || 1)}
+            printOptions={printOptions}
+            testId="ff-product-label-preview"
+          />
         </Box>
 
         <FormGroup row sx={{ justifyContent: 'center', gap: 1, mb: 2 }} data-testid="ff-product-label-fields">

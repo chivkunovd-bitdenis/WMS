@@ -20,6 +20,8 @@ import { SellerLayout } from './SellerLayout'
 
 type InboundSummaryRow = {
   id: string
+  document_number?: string | null
+  display_number?: string | null
   waybill_number?: string | null
   warehouse_id: string
   warehouse_name?: string | null
@@ -29,6 +31,7 @@ type InboundSummaryRow = {
   goods_qty_total?: number
   planned_delivery_date: string | null
   planned_box_count?: number | null
+  created_at?: string
 }
 
 type WarehouseRow = { id: string; name: string; code: string }
@@ -70,6 +73,8 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
   const [mpUnloadSummaries, setMpUnloadSummaries] = useState<
     {
       id: string
+      document_number?: string | null
+      display_number?: string | null
       status: string
       line_count: number
       goods_qty_total?: number

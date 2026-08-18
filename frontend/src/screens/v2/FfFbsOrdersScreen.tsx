@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -13,6 +13,7 @@ import {
   DialogTitle,
   FormControl,
   InputLabel,
+  Link,
   InputAdornment,
   MenuItem,
   Paper,
@@ -41,6 +42,7 @@ import { FbsSupplyCreateDialog } from './FbsSupplyCreateDialog'
 import { FfFbsSectionNav } from './FfFbsSectionNav'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import { ordersWord } from './fbsUx'
+import { plural } from '../../utils/plural'
 import {
   fetchFbsSellerWarehouses,
   fetchFbsSupplyWorklist,
@@ -64,12 +66,41 @@ type Props = {
   isAdmin?: boolean
 }
 
+// Порядок вкладок — единственный источник истины для UI; заказчик 16.08 попросил
+// подвинуть «Просрочены» после «В доставке» (раньше стояла сразу за «Новыми»).
 const TABS = [
   { key: 'new', label: 'Новые' },
   { key: 'active', label: 'В работе' },
   { key: 'delivery', label: 'В доставке' },
+  { key: 'expired', label: 'Просрочены' },
   { key: 'done', label: 'Завершённые' },
+  { key: 'cancelled', label: 'Отменённые' },
 ] as const
+
+type FbsStatusGroup = (typeof TABS)[number]['key']
+
+// HANDOFF-POLISH.md пул 1 п.4 (решение П3): «В работе», «В доставке» и «Завершённые» —
+// это работа с уже собранным документом (поставкой) целиком, не с отдельными заказами.
+// Бэкенд уже отдаёт поставки для всех трёх (fbs_supply_service.list_supply_worklist),
+// раньше фронт звал это только для 'active'.
+function isFbsSupplyGroup(group: FbsStatusGroup): group is 'active' | 'delivery' | 'done' {
+  return group === 'active' || group === 'delivery' || group === 'done'
+}
+
+const SUPPLY_EMPTY_STATE: Record<'active' | 'delivery' | 'done', { title: string; hint: string }> = {
+  active: {
+    title: 'Поставок в работе нет',
+    hint: 'Создайте поставку на вкладке «Новые» или обновите список.',
+  },
+  delivery: {
+    title: 'Поставок в доставке нет',
+    hint: 'Поставки появятся здесь после передачи в доставку.',
+  },
+  done: {
+    title: 'Завершённых поставок нет',
+    hint: 'Поставки появятся здесь после приёмки Wildberries.',
+  },
+}
 
 const EXTERNAL_WB_SUPPLY_HINT =
   'Поставку создали в кабинете Wildberries, а в WMS она не привязана. Открыть её здесь нельзя.'
@@ -83,22 +114,57 @@ function MissingText({ children }: { children: string }) {
   )
 }
 
-function MetadataState({ order }: { order: FbsWorklistOrder }) {
+// BL-4 (16.08, FBS-02): блокер "склад WB не привязан" — не просто упрёк, а понятная
+// подсказка с действием. Привязка делается на соседней вкладке «Остатки WB» того же
+// раздела FBS, поэтому клик по подписи ведёт туда через тот же react-router, которым
+// пользуется FfFbsSectionNav.
+function BlockerLine({
+  blocker,
+  onGoToStockSync,
+}: {
+  blocker: { code: string; message: string }
+  onGoToStockSync: () => void
+}) {
+  if (blocker.code === 'warehouse_unmapped') {
+    return (
+      <Link
+        component="button"
+        type="button"
+        color="error"
+        underline="hover"
+        sx={{ fontWeight: 650, fontSize: '0.75rem', textAlign: 'left' }}
+        onClick={(event) => {
+          event.stopPropagation()
+          onGoToStockSync()
+        }}
+        data-testid="fbs-warehouse-unmapped-link"
+        data-task-id="FBS-02"
+      >
+        Склад WB не привязан — привязать на «Остатках WB»
+      </Link>
+    )
+  }
+  return <MissingText>{blocker.message}</MissingText>
+}
+
+// GLOBAL-02: единственное состояние строки, которое реально мешает оператору
+// отгрузить заказ, — незакрытая маркировка Честным знаком. «Не хватает: N» с прошлого
+// стейджа заказчик прочитал как нехватку товара на складе — на деле это нехватка кодов
+// маркировки (order.metadata), поэтому подпись теперь называет вещь напрямую и красный
+// цвет держится только за тем, что действительно блокирует работу.
+type MetadataProblem = { label: string; color: 'error' }
+
+function metadataProblem(order: FbsWorklistOrder): MetadataProblem | null {
   if (order.metadata.required.length === 0) {
     return null
   }
   const rejected = order.metadata.states.some((state) =>
     ['rejected', 'replacement_required'].includes(state.status),
   )
+  if (rejected) return { label: 'Отклонено WB', color: 'error' }
   const missing = order.metadata.states.filter((state) => state.status === 'missing').length
-  return (
-    <Chip
-      size="small"
-      variant="outlined"
-      color={rejected ? 'error' : missing ? 'warning' : 'success'}
-      label={rejected ? 'Отклонено WB' : missing ? `Не хватает: ${missing}` : 'Готово'}
-    />
-  )
+  if (missing > 0) return { label: `Не хватает честных знаков: ${missing}`, color: 'error' }
+  return null
 }
 
 function warehouseOptionLabel(
@@ -146,7 +212,9 @@ function formatNullableDateTime(value: string | null): string {
 
 function supplyStatusLabel(status: string): string {
   const labels: Record<string, string> = {
-    draft: 'Состав',
+    // «Состав» — это название первой вкладки внутри карточки поставки, а не статус
+    // документа. В списке поставок черновик должен называться черновиком.
+    draft: 'Черновик',
     assembling: 'В работе',
     packed: 'Готова к сдаче',
     in_delivery: 'В доставке',
@@ -172,6 +240,15 @@ function elapsedSince(value: string, serverNow: string | null): string {
   if (days > 0) return `${days} д ${hours} ч`
   if (hours > 0) return `${hours} ч ${mins} мин`
   return `${mins} мин`
+}
+
+// Задача 9 пула (HANDOFF-POLISH.md): отметка свежести данных — сколько прошло с последней
+// успешной загрузки списка.
+function formatFreshness(lastLoadedAt: string | null): string | null {
+  if (!lastLoadedAt) return null
+  const minutes = Math.max(0, Math.floor((Date.now() - new Date(lastLoadedAt).getTime()) / 60000))
+  if (minutes < 1) return 'Обновлено только что'
+  return `Обновлено ${minutes} ${plural(minutes, ['минуту', 'минуты', 'минут'])} назад`
 }
 
 function excelCell(value: string | number | null | undefined): string {
@@ -221,6 +298,7 @@ function downloadOrdersExcel(rows: FbsWorklistOrder[]): void {
 
 export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false }: Props) {
   const location = useLocation()
+  const navigate = useNavigate()
   const [statusGroup, setStatusGroup] = useState<(typeof TABS)[number]['key']>('new')
   const [sellerId, setSellerId] = useState('__all__')
   const [wbWarehouseId, setWbWarehouseId] = useState('__all__')
@@ -232,6 +310,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [warehouseOptions, setWarehouseOptions] = useState<FbsWorklistWarehouseOption[]>([])
   const [sellerWarehouseNames, setSellerWarehouseNames] = useState<Record<string, string>>({})
   const [serverNow, setServerNow] = useState<string | null>(null)
+  const [lastLoadedAt, setLastLoadedAt] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [selectedCache, setSelectedCache] = useState<Map<string, FbsWorklistOrder>>(new Map())
   const [selectedOpen, setSelectedOpen] = useState(false)
@@ -240,6 +319,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [notice, setNotice] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [syncNote, setSyncNote] = useState<string | null>(null)
+  const [syncError, setSyncError] = useState<string | null>(null)
+  const [syncWarning, setSyncWarning] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [addExistingOpen, setAddExistingOpen] = useState(false)
   const [addExistingSupplyId, setAddExistingSupplyId] = useState('')
@@ -249,15 +330,30 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [workspaceSeed, setWorkspaceSeed] = useState<FbsWorkspace | null>(null)
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({})
   const openedSupplyFromQuery = useRef<string | null>(null)
+  const loadingRef = useRef(false)
+  // Плавающая панель выбора (fbs-selection-bar) прибита к низу вьюпорта и накрывает
+  // собой последние строки таблицы — оператор кликал по чекбоксу второго заказа и
+  // попадал в панель (см. tests-e2e/ff-fbs-orders.spec.ts:277). Меряем реальную высоту
+  // панели и резервируем под неё место в TableContainer, а не поднимаем z-index/двигаем
+  // панель — так нижние строки остаются кликабельными при любой высоте панели.
+  const selectionBarRef = useRef<HTMLDivElement | null>(null)
+  const [selectionBarHeight, setSelectionBarHeight] = useState(0)
 
   const load = useCallback(async () => {
+    // Задача 9 пула (HANDOFF-POLISH.md): поллинг не должен наслаиваться сам на себя —
+    // если предыдущий запрос ещё летит, новый тик пропускаем.
+    if (loadingRef.current) return
+    loadingRef.current = true
     setBusy(true)
     setError(null)
     try {
-      if (statusGroup === 'active') {
+      if (isFbsSupplyGroup(statusGroup)) {
+        // Задача 4 пула (HANDOFF-POLISH.md, решение П3): «В работе», «В доставке» и
+        // «Завершённые» показывают поставки, не отдельные заказы; ordersPage тут нужен
+        // только чтобы найти заказы WB без локальной карточки поставки в WMS.
         const params = {
           seller_id: sellerId === '__all__' ? null : sellerId,
-          status_group: 'active',
+          status_group: statusGroup,
           limit: 500,
         }
         const [suppliesPage, ordersPage] = await Promise.all([
@@ -269,6 +365,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         setOrders([])
         setWarehouseOptions([])
         setServerNow(suppliesPage.server_now)
+        setLastLoadedAt(new Date().toISOString())
         return
       }
       const page = await fetchFbsWorklist(token, authHeaders, {
@@ -294,15 +391,36 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         setWbWarehouseId('__all__')
       }
       setServerNow(page.server_now)
+      setLastLoadedAt(new Date().toISOString())
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Не удалось загрузить заказы FBS.')
     } finally {
       setBusy(false)
+      loadingRef.current = false
     }
   }, [token, authHeaders, sellerId, statusGroup, wbWarehouseId])
 
   useEffect(() => {
     void load()
+  }, [load])
+
+  // Задача 9 пула (HANDOFF-POLISH.md): список раньше не обновлялся сам никогда. Поллинг
+  // активной вкладки каждые 30 секунд; останавливается, когда вкладка браузера скрыта —
+  // обновлять то, что оператор не видит, незачем. loadingRef внутри load() не даёт
+  // соседним тикам наслоиться друг на друга.
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      if (document.hidden) return
+      void load()
+    }, 30000)
+    const onVisibilityChange = () => {
+      if (!document.hidden) void load()
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      window.clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
   }, [load])
 
   useEffect(() => {
@@ -334,15 +452,20 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
 
   const syncWithWb = useCallback(async () => {
     if (syncTargets.length === 0) {
-      setError('Нет ни одного селлера, по которому можно запросить заказы.')
+      setSyncError('Нет ни одного селлера, по которому можно запросить заказы.')
       return
     }
     setSyncing(true)
     setError(null)
     setSyncNote(null)
+    setSyncError(null)
+    setSyncWarning(null)
     let received = 0
     let created = 0
     let statusesUpdated = 0
+    let skippedUnmappedWarehouse = 0
+    let skippedMismatchOrders = 0
+    const skippedSupplyIds: string[] = []
     const failures: string[] = []
     for (const targetSellerId of syncTargets) {
       const sellerName = sellers.find((seller) => seller.id === targetSellerId)?.name ?? 'селлер'
@@ -350,6 +473,9 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         const outcome = await runFbsOrdersSync(token, authHeaders, targetSellerId)
         received += outcome.ordersReceived
         created += outcome.ordersCreated
+        skippedUnmappedWarehouse += outcome.supplyLinkSkippedUnmappedWarehouse
+        skippedMismatchOrders += outcome.supplyLinkSkippedWarehouseMismatchOrders
+        skippedSupplyIds.push(...outcome.supplyLinkSkippedUnmappedWarehouseSupplyIds)
       } catch (cause) {
         failures.push(`${sellerName}: ${cause instanceof Error ? cause.message : 'ошибка синхронизации'}`)
         continue
@@ -361,13 +487,35 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       }
     }
     setSyncing(false)
+    // КРИТ-2 (HANDOFF-POLISH.md, пул 1 п.3): раньше ошибка WB уходила только в лог,
+    // экран не менялся ни на пиксель. Теперь у ошибки sync своя плашка — такая же
+    // заметная, как зелёная плашка успеха ниже.
     if (failures.length > 0) {
-      setError(failures.join(' · '))
+      setSyncError(failures.join(' · '))
     }
     if (failures.length < syncTargets.length) {
       setSyncNote(
         `WB отдал заказов: ${received}, из них новых: ${created}. Обновлено статусов: ${statusesUpdated}.`,
       )
+      // Предупреждение о пропущенных поставках из-за непривязанных складов.
+      if (skippedUnmappedWarehouse > 0) {
+        const displayedSupplyIds = skippedSupplyIds.slice(0, 5)
+        const displayedIds = displayedSupplyIds.join(', ')
+        const remaining = skippedSupplyIds.length - displayedSupplyIds.length
+        const supplyWord = plural(skippedUnmappedWarehouse, ['поставка', 'поставки', 'поставок'])
+        let supplyWarning = `Из кабинета WB не подхватилось ${skippedUnmappedWarehouse} ${supplyWord} — у их складов нет привязки к WMS. Номера: ${displayedIds}`
+        if (remaining > 0) {
+          supplyWarning += `, и ещё ${remaining}.`
+        } else {
+          supplyWarning += '.'
+        }
+        supplyWarning += ' Привязка делается на вкладке «Остатки WB».'
+        if (skippedMismatchOrders > 0) {
+          const orderWord = plural(skippedMismatchOrders, ['заказ', 'заказа', 'заказов'])
+          supplyWarning += ` Кроме того, ${skippedMismatchOrders} ${orderWord} не привязались к своим поставкам из-за несовпадения склада.`
+        }
+        setSyncWarning(supplyWarning)
+      }
     }
     await load()
   }, [syncTargets, sellers, token, authHeaders, load])
@@ -510,6 +658,28 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const hasNewSelection = statusGroup === 'new' && selected.size > 0
 
   useEffect(() => {
+    // Панель появляется/пропадает и меняет высоту (строка блокера длиннее, чем
+    // подсказка по умолчанию) — ResizeObserver ловит оба случая без завязки на
+    // конкретные брейкпоинты. Когда выбор снят, панель размонтируется и отступ
+    // под таблицей сразу убираем.
+    if (!hasNewSelection) {
+      setSelectionBarHeight(0)
+      return
+    }
+    const node = selectionBarRef.current
+    if (!node) return
+    const measure = () => setSelectionBarHeight(node.getBoundingClientRect().height)
+    measure()
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', measure)
+      return () => window.removeEventListener('resize', measure)
+    }
+    const observer = new ResizeObserver(measure)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [hasNewSelection, selectionBlockers.length])
+
+  useEffect(() => {
     const supplyId = new URLSearchParams(location.search).get('supply_id')
     if (!supplyId || openedSupplyFromQuery.current === supplyId) return
     openedSupplyFromQuery.current = supplyId
@@ -518,7 +688,17 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   }, [location.search])
 
   return (
-    <Box data-testid="fbs-orders-screen" sx={{ pb: hasNewSelection ? 24 : 3 }}>
+    <Box
+      data-testid="fbs-orders-screen"
+      sx={{
+        pb: hasNewSelection ? 24 : 3,
+        minWidth: 0,
+        width: '100%',
+        maxWidth: 'calc(100vw - 308px)',
+        boxSizing: 'border-box',
+        overflowX: 'hidden',
+      }}
+    >
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         sx={{ justifyContent: 'space-between', gap: 2, mb: 1.5 }}
@@ -529,7 +709,17 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
             <Typography variant="h5">Заказы FBS</Typography>
           </Stack>
         </Box>
-        <Stack direction="row" spacing={1.25} sx={{ alignItems: 'flex-start' }}>
+        <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
+          {formatFreshness(lastLoadedAt) ? (
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              data-testid="fbs-orders-freshness"
+              data-task-id="REC-11"
+            >
+              {formatFreshness(lastLoadedAt)}
+            </Typography>
+          ) : null}
           <Button
             variant="text"
             size="small"
@@ -570,7 +760,14 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
           sx={{ px: 1.5, borderBottom: 1, borderColor: 'divider' }}
         >
           {TABS.map((tab) => (
-            <Tab key={tab.key} value={tab.key} label={tab.label} />
+            <Tab
+              key={tab.key}
+              value={tab.key}
+              label={tab.label}
+              data-task-id={
+                tab.key === 'cancelled' ? 'FBS-06' : tab.key === 'expired' ? 'FBS-03' : undefined
+              }
+            />
           ))}
         </Tabs>
 
@@ -677,6 +874,30 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         </Alert>
       ) : null}
 
+      {syncError ? (
+        <Alert
+          severity="error"
+          sx={{ mt: 2 }}
+          onClose={() => setSyncError(null)}
+          data-testid="fbs-orders-sync-error"
+          data-task-id="FBS-07"
+        >
+          {syncError}
+        </Alert>
+      ) : null}
+
+      {syncWarning ? (
+        <Alert
+          severity="warning"
+          sx={{ mt: 2 }}
+          onClose={() => setSyncWarning(null)}
+          data-testid="fbs-orders-sync-warning"
+          data-task-id="FBS-07"
+        >
+          {syncWarning}
+        </Alert>
+      ) : null}
+
       {notice ? (
         <Alert
           severity={notice.startsWith('Выгружено') ? 'success' : 'info'}
@@ -688,24 +909,24 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         </Alert>
       ) : null}
 
-      {statusGroup === 'active' && externalActiveOrders.length > 0 ? (
+      {isFbsSupplyGroup(statusGroup) && externalActiveOrders.length > 0 ? (
         <Alert severity="info" sx={{ mt: 2 }} data-testid="fbs-06-external-supply-explanation">
-          {externalActiveOrders.length} {ordersWord(externalActiveOrders.length)} уже находятся в WB-поставках, но локальной карточки поставки в WMS нет. Они скрыты из «Новых» и не открываются как поставка здесь.
+          {externalActiveOrders.length} {ordersWord(externalActiveOrders.length)} уже видны в WB, но локальной карточки поставки в WMS нет. Они не открываются как поставка здесь.
         </Alert>
       ) : null}
 
-      {statusGroup === 'active' ? (
+      {isFbsSupplyGroup(statusGroup) ? (
         <TableContainer component={Paper} variant="outlined" sx={{ mt: 2, maxHeight: 'calc(100vh - 330px)' }}>
           <Table stickyHeader size="small" data-testid="fbs-18-supplies-table">
             <TableHead>
               <TableRow>
-                <TableCell sx={{ minWidth: 240 }}>Номер / название поставки</TableCell>
-                <TableCell sx={{ minWidth: 160 }}>Селлер</TableCell>
-                <TableCell sx={{ minWidth: 220 }}>Склад</TableCell>
-                <TableCell sx={{ minWidth: 130 }}>Заказы / единицы</TableCell>
-                <TableCell sx={{ minWidth: 90 }}>Короба</TableCell>
-                <TableCell sx={{ minWidth: 140 }}>Статус</TableCell>
-                <TableCell sx={{ minWidth: 150 }}>Дата отгрузки</TableCell>
+                <TableCell sx={{ minWidth: 210 }}>Номер / название поставки</TableCell>
+                <TableCell sx={{ minWidth: 130 }}>Селлер</TableCell>
+                <TableCell sx={{ minWidth: 190 }}>Склад</TableCell>
+                <TableCell sx={{ minWidth: 95 }}>Заказы / единицы</TableCell>
+                <TableCell sx={{ minWidth: 64 }}>Короба</TableCell>
+                <TableCell sx={{ minWidth: 115 }}>Статус</TableCell>
+                <TableCell sx={{ minWidth: 135 }}>Дата отгрузки</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -748,16 +969,16 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                   <TableCell>{formatNullableDateTime(supply.planned_shipment_date)}</TableCell>
                 </TableRow>
               ))}
-              {!busy && activeSupplies.length === 0 ? (
+              {!busy && activeSupplies.length === 0 && isFbsSupplyGroup(statusGroup) ? (
                 <TableRow>
                   <TableCell colSpan={7}>
                     <Box sx={{ py: 8, textAlign: 'center' }}>
                       <Inventory2OutlinedIcon sx={{ fontSize: 42, color: 'text.disabled' }} />
                       <Typography variant="subtitle1" sx={{ mt: 1 }}>
-                        Поставок в работе нет
+                        {SUPPLY_EMPTY_STATE[statusGroup].title}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Создайте поставку на вкладке «Новые» или обновите список.
+                        {SUPPLY_EMPTY_STATE[statusGroup].hint}
                       </Typography>
                     </Box>
                   </TableCell>
@@ -773,7 +994,20 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
           ) : null}
         </TableContainer>
       ) : (
-      <TableContainer component={Paper} variant="outlined" sx={{ mt: 2, maxHeight: 'calc(100vh - 330px)' }}>
+      <TableContainer
+        component={Paper}
+        variant="outlined"
+        sx={{
+          mt: 2,
+          // Резервируем под fbs-selection-bar её реальную высоту + отступ панели от
+          // низа вьюпорта (18px) + небольшой воздух, чтобы нижняя строка таблицы
+          // никогда не пряталась под панелью, а не «подрезалась» вплотную к ней.
+          maxHeight: hasNewSelection
+            ? `calc(100vh - 330px - ${selectionBarHeight + 30}px)`
+            : 'calc(100vh - 330px)',
+          transition: 'max-height 0.15s ease',
+        }}
+      >
         <Table stickyHeader size="small" data-testid="fbs-worklist-table">
           <TableHead>
             <TableRow>
@@ -788,18 +1022,18 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               </TableCell>
               {statusGroup === 'new' ? (
                 <>
-                  <TableCell sx={{ minWidth: 300 }}>Товар</TableCell>
-                  <TableCell sx={{ minWidth: 180 }}>Заказ и сканирование</TableCell>
-                  <TableCell sx={{ minWidth: 170 }}>Селлер</TableCell>
-                  <TableCell sx={{ minWidth: 220 }}>Склад селлера / WB</TableCell>
-                  <TableCell sx={{ minWidth: 130 }}>Создан WB</TableCell>
+                  <TableCell sx={{ minWidth: 210 }}>Товар</TableCell>
+                  <TableCell sx={{ minWidth: 210 }}>Заказ и сканирование</TableCell>
+                  <TableCell sx={{ minWidth: 135 }}>Селлер</TableCell>
+                  <TableCell sx={{ minWidth: 180 }}>Склад селлера / WB</TableCell>
+                  <TableCell sx={{ minWidth: 140 }}>Создан WB / в сборке</TableCell>
                 </>
               ) : (
                 <>
                   <TableCell sx={{ minWidth: 270 }}>Товар</TableCell>
                   <TableCell sx={{ minWidth: 125 }}>Селлер</TableCell>
                   <TableCell sx={{ minWidth: 150 }}>Склад селлера / WB</TableCell>
-                  <TableCell sx={{ minWidth: 150 }}>Создан WB</TableCell>
+                  <TableCell sx={{ minWidth: 150 }}>Создан WB / в сборке</TableCell>
                   <TableCell sx={{ minWidth: 130 }}>Статус</TableCell>
                 </>
               )}
@@ -810,6 +1044,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               const blocked = order.selection_blockers.length > 0
               const localSupplyMissing = statusGroup !== 'new' && !order.supply_id
               const highlighted = statusGroup === 'new' && searchTerm && matchingIds.has(order.id)
+              const metaFlag = metadataProblem(order)
               const row = (
                 <TableRow
                   key={order.id}
@@ -862,14 +1097,18 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                           />
                           <Box sx={{ minWidth: 0 }}>
                             <Tooltip title={order.product.id ? order.product.name : 'Товар не сопоставлен'}>
-                              <Typography variant="subtitle2" noWrap sx={{ lineHeight: 1.25, maxWidth: 320 }}>
+                              <Typography variant="subtitle2" noWrap sx={{ lineHeight: 1.25, maxWidth: 150 }}>
                                 {order.product.id ? order.product.name : 'Товар не сопоставлен'}
                               </Typography>
                             </Tooltip>
                             {blocked ? (
                               <Stack sx={{ mt: 0.75 }} spacing={0.25}>
                                 {order.selection_blockers.map((blocker) => (
-                                  <MissingText key={blocker.code}>{blocker.message}</MissingText>
+                                  <BlockerLine
+                                    key={blocker.code}
+                                    blocker={blocker}
+                                    onGoToStockSync={() => navigate('/app/ff/fbs/stock-sync')}
+                                  />
                                 ))}
                               </Stack>
                             ) : null}
@@ -880,24 +1119,24 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                         <Typography variant="body2" sx={{ fontWeight: 700 }}>
                           WB №{order.wb_order_id}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 190 }}>
+                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
                           ШК: {order.product.barcode ?? '—'}
                         </Typography>
                         {order.product.sku ? (
                           <Tooltip title={order.product.sku}>
-                            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 190 }}>
+                            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
                               SKU {order.product.sku}
                             </Typography>
                           </Tooltip>
                         ) : order.product.seller_article ? (
-                          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 190 }}>
+                          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
                             Артикул: {order.product.seller_article}
                           </Typography>
                         ) : null}
                       </TableCell>
                       <TableCell>
                         <Tooltip title={order.seller.name ?? '—'}>
-                          <Typography variant="body2" noWrap sx={{ maxWidth: 190 }}>{order.seller.name ?? '—'}</Typography>
+                          <Typography variant="body2" noWrap sx={{ maxWidth: 100 }}>{order.seller.name ?? '—'}</Typography>
                         </Tooltip>
                         {order.buyer_type === 'legal' ? (
                           <Typography variant="caption" color="text.secondary">
@@ -907,11 +1146,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                       </TableCell>
                       <TableCell>
                         <Tooltip title={order.wb_warehouse.name || `WB ${order.wb_warehouse.id}`}>
-                          <Typography variant="body2" noWrap sx={{ fontWeight: 650, maxWidth: 240 }}>
+                          <Typography variant="body2" noWrap sx={{ fontWeight: 650, maxWidth: 145 }}>
                             {order.wb_warehouse.name || `WB ${order.wb_warehouse.id}`}
                           </Typography>
                         </Tooltip>
-                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 240 }}>
+                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 145 }}>
                           WMS: {order.wms_warehouse.name}
                         </Typography>
                       </TableCell>
@@ -967,21 +1206,37 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <FbsStatusChip status={order.status} />
-                        <Stack sx={{ mt: 0.75, alignItems: 'flex-start' }} spacing={0.75}>
-                          {localSupplyMissing ? (
-                            <Tooltip title={EXTERNAL_WB_SUPPLY_HINT}>
-                              <Chip
-                                size="small"
-                                variant="outlined"
-                                color="warning"
-                                label="Поставка создана в WB"
-                                data-testid={`fbs-order-${order.id}-external-supply`}
-                              />
-                            </Tooltip>
-                          ) : null}
-                          <MetadataState order={order} />
-                        </Stack>
+                        {/* GLOBAL-02: одно главное состояние на строку. На «Просрочены»
+                            статус всегда «Новый» (см. STATUS_GROUP_MAP на бэкенде) — сам
+                            факт просрочки уже виден по вкладке, повторять его чипом не
+                            нужно, поэтому базовый статус-чип там не рисуем вовсе. Если
+                            маркировка отклонена/не хватает — это и есть главное состояние,
+                            оно важнее декоративного статуса. Всё остальное — обычным
+                            текстом ниже, без цвета. */}
+                        {statusGroup === 'expired' && metaFlag ? (
+                          <Chip
+                            size="small"
+                            color={metaFlag.color}
+                            label={metaFlag.label}
+                            data-testid={`fbs-order-${order.id}-marking-issue`}
+                          />
+                        ) : statusGroup !== 'expired' ? (
+                          // «Отменённые»: заказ уже закрыт, состояние маркировки для решения
+                          // не нужно — главное здесь то, чем закончился заказ (Отменён/Дефект).
+                          <FbsStatusChip status={order.status} />
+                        ) : null}
+                        {localSupplyMissing ? (
+                          <Tooltip title={EXTERNAL_WB_SUPPLY_HINT}>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ display: 'block', mt: 0.75 }}
+                              data-testid={`fbs-order-${order.id}-external-supply`}
+                            >
+                              Поставка создана в WB, недоступна в WMS
+                            </Typography>
+                          </Tooltip>
+                        ) : null}
                       </TableCell>
                     </>
                   )}
@@ -1023,10 +1278,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
 
       {statusGroup === 'new' && selected.size ? (
         <Paper
+          ref={selectionBarRef}
           elevation={8}
           sx={{
             position: 'fixed',
-            left: { xs: 12, md: 280 },
+            left: { xs: 12, md: 308 },
             right: 20,
             bottom: 18,
             zIndex: 1200,
@@ -1038,13 +1294,33 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
           data-testid="fbs-selection-bar"
         >
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ alignItems: { md: 'center' } }}>
-            <Box sx={{ flex: 1 }}>
-              <Typography variant="subtitle2">Выбрано заказов: {selected.size}</Typography>
-              <Typography variant="caption" color={selectionBlockers.length ? 'error.main' : 'text.secondary'}>
-                {selectionBlockers.length
-                  ? selectionBlockers[0].blocker.message
-                  : 'Следующий шаг — серверная проверка селлера, складов и состава.'}
+            {/* minWidth:0 + noWrap — рядом четыре кнопки почти впритык по ширине panelю
+                (952px на 1280px экране), без этого текстовый блок ужимается флексом до
+                ширины одного слова и подпись переносится в 6-8 строк — панель раздувается
+                до 280px+ и перекрывает уже не только соседнюю строку, а половину таблицы.
+                Полный текст остаётся доступен по hover через Tooltip. */}
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography variant="subtitle2" noWrap>
+                Выбрано заказов: {selected.size}
               </Typography>
+              <Tooltip
+                title={
+                  selectionBlockers.length
+                    ? selectionBlockers[0].blocker.message
+                    : 'Следующий шаг — серверная проверка селлера, складов и состава.'
+                }
+              >
+                <Typography
+                  variant="caption"
+                  color={selectionBlockers.length ? 'error.main' : 'text.secondary'}
+                  noWrap
+                  sx={{ display: 'block' }}
+                >
+                  {selectionBlockers.length
+                    ? selectionBlockers[0].blocker.message
+                    : 'Следующий шаг — серверная проверка селлера, складов и состава.'}
+                </Typography>
+              </Tooltip>
             </Box>
             <Button onClick={() => setSelectedOpen(true)} data-testid="fbs-selected-open">
               Показать выбранные
@@ -1091,7 +1367,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                       {order.selection_blockers.length ? (
                         <Stack sx={{ mt: 0.5 }} spacing={0.25}>
                           {order.selection_blockers.map((blocker) => (
-                            <MissingText key={blocker.code}>{blocker.message}</MissingText>
+                            <BlockerLine
+                              key={blocker.code}
+                              blocker={blocker}
+                              onGoToStockSync={() => navigate('/app/ff/fbs/stock-sync')}
+                            />
                           ))}
                         </Stack>
                       ) : null}

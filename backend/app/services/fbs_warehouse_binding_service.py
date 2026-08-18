@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_order import FbsOrder, FbsOrderReservation
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+from app.models.product import Product
 from app.models.seller import Seller
 from app.models.warehouse import Warehouse
 from app.services.catalog_service import get_warehouse
@@ -18,8 +20,10 @@ AUTO_FBS_WAREHOUSE_CODE_PREFIX = "fbs-wb"
 
 
 class FbsWarehouseBindingError(Exception):
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, context: dict | None = None, message: str | None = None) -> None:
         self.code = code
+        self.context = context
+        self.message = message
         super().__init__(code)
 
 
@@ -76,28 +80,6 @@ async def _has_active_fbs_reservations(
     )
     res = await session.execute(stmt)
     return res.scalar_one_or_none() is not None
-
-
-async def _assert_wms_not_bound_to_other_wb(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    seller_id: uuid.UUID,
-    wms_warehouse_id: uuid.UUID,
-    *,
-    exclude_wb_warehouse_id: int | None,
-) -> None:
-    stmt = select(FbsWarehouseBinding).where(
-        FbsWarehouseBinding.tenant_id == tenant_id,
-        FbsWarehouseBinding.seller_id == seller_id,
-        FbsWarehouseBinding.wms_warehouse_id == wms_warehouse_id,
-    )
-    if exclude_wb_warehouse_id is not None:
-        stmt = stmt.where(
-            FbsWarehouseBinding.wb_warehouse_id != exclude_wb_warehouse_id
-        )
-    res = await session.execute(stmt)
-    if res.scalar_one_or_none() is not None:
-        raise FbsWarehouseBindingError("wms_warehouse_already_bound")
 
 
 async def list_bindings(
@@ -161,13 +143,6 @@ async def upsert_binding(
                 session, tenant_id, seller_id, old_wms
             ):
                 raise FbsWarehouseBindingError("active_fbs_reservations")
-            await _assert_wms_not_bound_to_other_wb(
-                session,
-                tenant_id,
-                seller_id,
-                wms_warehouse_id,
-                exclude_wb_warehouse_id=wb_warehouse_id,
-            )
             existing.wms_warehouse_id = wms_warehouse_id
         existing.stock_sync_enabled = stock_sync_enabled
         existing.is_active = True
@@ -175,13 +150,6 @@ async def upsert_binding(
         await session.refresh(existing)
         return existing
 
-    await _assert_wms_not_bound_to_other_wb(
-        session,
-        tenant_id,
-        seller_id,
-        wms_warehouse_id,
-        exclude_wb_warehouse_id=None,
-    )
     row = FbsWarehouseBinding(
         tenant_id=tenant_id,
         seller_id=seller_id,
@@ -194,8 +162,14 @@ async def upsert_binding(
     try:
         await session.commit()
     except IntegrityError as exc:
+        # One WMS warehouse binding many WB warehouses is now allowed (pool 1,
+        # item 5 of docs/agent-orders/HANDOFF-POLISH.md) — the DB no longer has
+        # a uniqueness constraint on (seller_id, wms_warehouse_id). The only
+        # constraint that can still fire on this insert is
+        # uq_fbs_warehouse_bindings_seller_wb_warehouse, from a concurrent
+        # duplicate PUT racing on the same brand-new wb_warehouse_id.
         await session.rollback()
-        raise FbsWarehouseBindingError("wms_warehouse_already_bound") from exc
+        raise FbsWarehouseBindingError("wb_warehouse_already_bound") from exc
     await session.refresh(row)
     return row
 
@@ -221,3 +195,129 @@ async def disable_binding(
     await session.commit()
     await session.refresh(row)
     return row
+
+
+async def set_binding_stock_pool_quantity(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    binding_id: uuid.UUID,
+    product_id: uuid.UUID,
+    quantity: int,
+    *,
+    updated_by: uuid.UUID | None = None,
+) -> FbsBindingStockPool:
+    """Set manual FBS stock pool quantity allocated to a specific WB warehouse.
+
+    The operator manually decides how to distribute the product's FBS pool across
+    WB warehouses. This function validates that the total quantity allocated across
+    all bindings of this product for this seller does not exceed product.fbs_stock_limit
+    (where None is treated as 0).
+    """
+    if await _seller_in_tenant(session, tenant_id, seller_id) is None:
+        raise FbsWarehouseBindingError("seller_not_found")
+    if quantity < 0:
+        raise FbsWarehouseBindingError("invalid_quantity")
+
+    binding = await session.get(FbsWarehouseBinding, binding_id)
+    if binding is None or binding.tenant_id != tenant_id or binding.seller_id != seller_id:
+        raise FbsWarehouseBindingError("binding_not_found")
+
+    product = await session.get(Product, product_id)
+    if product is None or product.tenant_id != tenant_id or product.seller_id != seller_id:
+        raise FbsWarehouseBindingError("product_not_found")
+
+    limit = int(product.fbs_stock_limit) if product.fbs_stock_limit is not None else 0
+
+    # Sum of quantities allocated to other bindings of this product for this seller
+    # (excluding the current binding_id).
+    stmt = (
+        select(func.coalesce(func.sum(FbsBindingStockPool.quantity), 0))
+        .select_from(FbsBindingStockPool)
+        .join(FbsWarehouseBinding, FbsBindingStockPool.binding_id == FbsWarehouseBinding.id)
+        .where(
+            FbsBindingStockPool.product_id == product_id,
+            FbsWarehouseBinding.seller_id == seller_id,
+            FbsWarehouseBinding.tenant_id == tenant_id,
+            FbsBindingStockPool.binding_id != binding_id,
+        )
+    )
+    res = await session.execute(stmt)
+    allocated_elsewhere = int(res.scalar_one())
+
+    if allocated_elsewhere + quantity > limit:
+        available = max(limit - allocated_elsewhere, 0)
+        raise FbsWarehouseBindingError(
+            "pool_quota_exceeded",
+            context={
+                "limit": limit,
+                "allocated_elsewhere": allocated_elsewhere,
+                "requested": quantity,
+            },
+            message=(
+                f"Пул {limit}, на другие склады уже разложено {allocated_elsewhere}, "
+                f"свободно {available}. Запрошено {quantity} — уменьшите количество."
+            ),
+        )
+
+    # Get or create the stock pool entry for this binding and product.
+    stmt_existing = select(FbsBindingStockPool).where(
+        FbsBindingStockPool.binding_id == binding_id,
+        FbsBindingStockPool.product_id == product_id,
+    )
+    existing = (await session.execute(stmt_existing)).scalar_one_or_none()
+    if existing is not None:
+        existing.quantity = quantity
+        existing.updated_by = updated_by
+    else:
+        existing = FbsBindingStockPool(
+            tenant_id=tenant_id,
+            binding_id=binding_id,
+            product_id=product_id,
+            quantity=quantity,
+            updated_by=updated_by,
+        )
+        session.add(existing)
+    await session.commit()
+    await session.refresh(existing)
+    return existing
+
+
+async def get_binding_stock_pool_summary(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    product_id: uuid.UUID,
+) -> dict:
+    """Get FBS stock pool summary: limit, total allocated, available, and per-binding breakdown.
+
+    Returns a dictionary with:
+    - limit: the product's fbs_stock_limit (0 if None)
+    - allocated_total: total quantity allocated across all bindings
+    - available: remaining capacity (limit - allocated_total, never negative)
+    - by_binding: dict of {binding_id -> quantity} for all bindings of this product
+    """
+    product = await session.get(Product, product_id)
+    if product is None or product.tenant_id != tenant_id or product.seller_id != seller_id:
+        raise FbsWarehouseBindingError("product_not_found")
+    limit = int(product.fbs_stock_limit) if product.fbs_stock_limit is not None else 0
+
+    stmt = (
+        select(FbsBindingStockPool.binding_id, FbsBindingStockPool.quantity)
+        .select_from(FbsBindingStockPool)
+        .join(FbsWarehouseBinding, FbsBindingStockPool.binding_id == FbsWarehouseBinding.id)
+        .where(
+            FbsBindingStockPool.product_id == product_id,
+            FbsWarehouseBinding.seller_id == seller_id,
+            FbsWarehouseBinding.tenant_id == tenant_id,
+        )
+    )
+    res = await session.execute(stmt)
+    rows = res.all()
+    allocated_total = sum(int(row.quantity) for row in rows)
+    return {
+        "limit": limit,
+        "allocated_total": allocated_total,
+        "available": max(limit - allocated_total, 0),
+        "by_binding": {row.binding_id: int(row.quantity) for row in rows},
+    }

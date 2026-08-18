@@ -206,7 +206,12 @@ async def test_tc20_pvz_deliver_timeout_pending_confirmation(
             assert order.status == FBS_ORDER_STATUS_IN_DELIVERY
 
 
-# TC-21 — warehouse/sc: no trbx required; supply QR after success; PVZ route differs
+# TC-21 — warehouse/sc: no trbx required; PVZ requires physical boxes first;
+# both routes get a supply QR after a confirmed deliver. WB's supply-barcode
+# endpoint (GET /api/v3/supplies/{id}/barcode) was verified live on 2026-08-17
+# to return 200 with a PNG for a pvz supply (WB-GI-266096235) exactly like a
+# warehouse_sc one (WB-GI-265889432), so the backend no longer gates the
+# supply QR on delivery_type — only "must be delivered" still applies.
 @pytest.mark.asyncio
 async def test_tc21_warehouse_sc_qr_after_deliver_route_diff(
     async_client: AsyncClient,
@@ -247,7 +252,7 @@ async def test_tc21_warehouse_sc_qr_after_deliver_route_diff(
     assert barcode.headers["content-type"].startswith("image/png")
     assert len(barcode.content) > 0
 
-    pvz_supply, _ = await _prepare_pvz_supply(
+    pvz_supply, pvz_order_ids = await _prepare_pvz_supply(
         async_client,
         headers,
         seller_id,
@@ -256,15 +261,32 @@ async def test_tc21_warehouse_sc_qr_after_deliver_route_diff(
         wb_order_ids=[982002],
         supply_name="TC-21 PVZ route",
     )
+
+    # Route difference #1: PVZ cannot be delivered without physical boxes first
+    # (warehouse/sc has no such requirement, see wh_preflight above).
     pvz_barcode = await async_client.get(
         f"/operations/fbs-supplies/{pvz_supply['id']}/barcode",
         headers=headers,
     )
     assert pvz_barcode.status_code == 409
-    assert pvz_barcode.json()["detail"]["code"] == "wrong_delivery_type"
+    assert pvz_barcode.json()["detail"]["code"] == "supply_bad_status"
     pvz_preflight = await _delivery_preflight(async_client, headers, pvz_supply["id"])
     assert pvz_preflight["can_deliver"] is False
     assert any(
         check["code"] == "physical_boxes_required" and not check["ok"]
         for check in pvz_preflight["checks"]
     )
+
+    # Once PVZ is actually delivered, its supply QR works exactly like warehouse/sc's.
+    await _create_and_fill_physical_box(async_client, headers, pvz_supply["id"], pvz_order_ids)
+    pvz_deliver = await _deliver_with_preflight(async_client, headers, pvz_supply["id"])
+    assert pvz_deliver.status_code == 200, pvz_deliver.text
+    assert pvz_deliver.json()["supply"]["status"] == FBS_SUPPLY_STATUS_IN_DELIVERY
+
+    pvz_barcode_after_deliver = await async_client.get(
+        f"/operations/fbs-supplies/{pvz_supply['id']}/barcode",
+        headers=headers,
+    )
+    assert pvz_barcode_after_deliver.status_code == 200, pvz_barcode_after_deliver.text
+    assert pvz_barcode_after_deliver.headers["content-type"].startswith("image/png")
+    assert len(pvz_barcode_after_deliver.content) > 0

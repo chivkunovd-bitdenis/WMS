@@ -36,6 +36,7 @@ import {
 import { FfHonestSignPage } from './screens/ff/FfHonestSignPage'
 import { HonestSignImportPage } from './screens/shared/HonestSignImportPage'
 import { FfHonestSignLedgerPage } from './screens/ff/FfHonestSignLedgerPage'
+import { FfReportsPage } from './screens/ff/FfReportsPage'
 import { FfHonestSignReprintsPage } from './screens/ff/FfHonestSignReprintsPage'
 import { NotificationsPage } from './screens/shared/NotificationsPage'
 import { HonestSignPoolPage } from './screens/shared/HonestSignPoolPage'
@@ -340,6 +341,8 @@ export default function App() {
   const [wbHasContentToken, setWbHasContentToken] = useState(false)
   const [wbHasSuppliesToken, setWbHasSuppliesToken] = useState(false)
   const [wbHasMarketplaceToken, setWbHasMarketplaceToken] = useState(false)
+  const [wbMarketplaceScopeOk, setWbMarketplaceScopeOk] = useState<boolean | null>(null)
+  const [wbTokenUpdatedAt, setWbTokenUpdatedAt] = useState<string | null>(null)
   const [wbTokensBusy, setWbTokensBusy] = useState(false)
   const [wbSyncBusy, setWbSyncBusy] = useState(false)
   const [wbJobStatus, setWbJobStatus] = useState<string | null>(null)
@@ -872,6 +875,8 @@ export default function App() {
     if (!token || me?.role !== 'fulfillment_admin' || !wbSellerId) {
       setWbHasContentToken(false)
       setWbHasSuppliesToken(false)
+      setWbMarketplaceScopeOk(null)
+      setWbTokenUpdatedAt(null)
       return
     }
     let cancelled = false
@@ -888,6 +893,8 @@ export default function App() {
           has_content_token: boolean
           has_supplies_token: boolean
           has_marketplace_token?: boolean
+          marketplace_scope_ok?: boolean | null
+          updated_at?: string | null
         }
         if (cancelled) {
           return
@@ -895,11 +902,14 @@ export default function App() {
         setWbHasContentToken(Boolean(j.has_content_token))
         setWbHasSuppliesToken(Boolean(j.has_supplies_token))
         setWbHasMarketplaceToken(Boolean(j.has_marketplace_token))
+        setWbMarketplaceScopeOk(j.marketplace_scope_ok ?? null)
+        setWbTokenUpdatedAt(j.updated_at ?? null)
       } catch {
         if (!cancelled) {
           setWbHasContentToken(false)
           setWbHasSuppliesToken(false)
           setWbHasMarketplaceToken(false)
+          setWbMarketplaceScopeOk(null)
         }
       }
     })()
@@ -2272,10 +2282,14 @@ export default function App() {
         has_content_token: boolean
         has_supplies_token: boolean
         has_marketplace_token?: boolean
+        marketplace_scope_ok?: boolean | null
+        updated_at?: string | null
       }
       setWbHasContentToken(Boolean(j.has_content_token))
       setWbHasSuppliesToken(Boolean(j.has_supplies_token))
       setWbHasMarketplaceToken(Boolean(j.has_marketplace_token))
+      setWbMarketplaceScopeOk(j.marketplace_scope_ok ?? null)
+      setWbTokenUpdatedAt(j.updated_at ?? null)
       form.reset()
     } catch (err) {
       setOpsError(
@@ -2311,8 +2325,14 @@ export default function App() {
         setOpsError(await readApiErrorMessage(res))
         return
       }
-      const j = (await res.json()) as { has_marketplace_token?: boolean }
+      const j = (await res.json()) as {
+        has_marketplace_token?: boolean
+        marketplace_scope_ok?: boolean | null
+        updated_at?: string | null
+      }
       setWbHasMarketplaceToken(Boolean(j.has_marketplace_token))
+      setWbMarketplaceScopeOk(j.marketplace_scope_ok ?? null)
+      setWbTokenUpdatedAt(j.updated_at ?? null)
     } catch (err) {
       setOpsError(
         err instanceof Error ? err.message : 'Не удалось стереть маркетплейс-токен WB.',
@@ -3048,6 +3068,19 @@ export default function App() {
             }
           />
           <Route
+            path="ff/reports"
+            element={
+              token && (isFulfillmentAdmin || canCellsOps) ? (
+                <FfReportsPage
+                  token={token}
+                  sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
+                />
+              ) : (
+                ffAccessDenied
+              )
+            }
+          />
+          <Route
             path="ff/honest-sign/reprints"
             element={
               token && canShiftLeadOps ? (
@@ -3341,6 +3374,8 @@ export default function App() {
                   wbHasContentToken={wbHasContentToken}
                   wbHasSuppliesToken={wbHasSuppliesToken}
                   wbHasMarketplaceToken={wbHasMarketplaceToken}
+                  wbMarketplaceScopeOk={wbMarketplaceScopeOk}
+                  wbTokenUpdatedAt={wbTokenUpdatedAt}
                   wbTokensBusy={wbTokensBusy}
                   wbSyncBusy={wbSyncBusy}
                   wbSuppliesSyncBusy={wbSuppliesSyncBusy}

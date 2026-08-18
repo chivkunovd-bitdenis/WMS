@@ -259,11 +259,7 @@ async def test_fbs_worklist_delivery_and_done_groups(async_client: AsyncClient) 
     assert sorted_delivery.status_code == 200, sorted_delivery.text
     assert [item["id"] for item in sorted_delivery.json()["items"]] == [str(order_id)]
 
-    for terminal_status in (
-        FBS_ORDER_STATUS_DONE,
-        FBS_ORDER_STATUS_CANCELLED,
-        FBS_ORDER_STATUS_DEFECT,
-    ):
+    for terminal_status in (FBS_ORDER_STATUS_DONE,):
         async with SessionLocal() as session:
             order = await session.get(FbsOrder, order_id)
             assert order is not None
@@ -277,6 +273,23 @@ async def test_fbs_worklist_delivery_and_done_groups(async_client: AsyncClient) 
         )
         assert done.status_code == 200, done.text
         assert [item["id"] for item in done.json()["items"]] == [str(order_id)]
+
+    # Отменённые и брак больше не попадают в "done" — своя группа "cancelled"
+    # (решение пользователя 16.08 + FBS-06).
+    for terminal_status in (FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DEFECT):
+        async with SessionLocal() as session:
+            order = await session.get(FbsOrder, order_id)
+            assert order is not None
+            order.status = terminal_status
+            await session.commit()
+
+        cancelled = await async_client.get(
+            "/operations/fbs-orders/worklist",
+            headers=headers,
+            params={"seller_id": str(seller_id), "status_group": "cancelled"},
+        )
+        assert cancelled.status_code == 200, cancelled.text
+        assert [item["id"] for item in cancelled.json()["items"]] == [str(order_id)]
 
     async with SessionLocal() as session:
         order = await session.get(FbsOrder, order_id)
@@ -296,6 +309,47 @@ async def test_fbs_worklist_delivery_and_done_groups(async_client: AsyncClient) 
         blocker["code"] == "order_external_processing"
         for blocker in active.json()["items"][0]["selection_blockers"]
     )
+
+
+@pytest.mark.asyncio
+async def test_fbs_worklist_new_and_expired_groups_split_by_deadline(async_client: AsyncClient) -> None:
+    """BL-3/FBS-03: заказ с истёкшим сроком сборки уходит из "new" в "expired",
+    статус в БД (FBS_ORDER_STATUS_NEW) не меняется."""
+    headers, seller_id, _, _, _, order_ids = await _setup_ff_admin_with_stock(
+        async_client, order_count=2
+    )
+    fresh_id, expired_id = order_ids[0], order_ids[1]
+
+    async with SessionLocal() as session:
+        expired_order = await session.get(FbsOrder, expired_id)
+        assert expired_order is not None
+        expired_order.deadline_at = datetime.now(tz=UTC) - timedelta(hours=1)
+        await session.commit()
+
+    new_resp = await async_client.get(
+        "/operations/fbs-orders/worklist",
+        headers=headers,
+        params={"seller_id": str(seller_id), "status_group": "new"},
+    )
+    assert new_resp.status_code == 200, new_resp.text
+    assert {item["id"] for item in new_resp.json()["items"]} == {str(fresh_id)}
+
+    expired_resp = await async_client.get(
+        "/operations/fbs-orders/worklist",
+        headers=headers,
+        params={"seller_id": str(seller_id), "status_group": "expired"},
+    )
+    assert expired_resp.status_code == 200, expired_resp.text
+    expired_items = expired_resp.json()["items"]
+    assert {item["id"] for item in expired_items} == {str(expired_id)}
+    assert any(
+        blocker["code"] == "deadline_passed" for blocker in expired_items[0]["selection_blockers"]
+    )
+
+    async with SessionLocal() as session:
+        expired_order_check = await session.get(FbsOrder, expired_id)
+        assert expired_order_check is not None
+        assert expired_order_check.status == FBS_ORDER_STATUS_NEW
 
 
 @pytest.mark.asyncio
@@ -455,7 +509,13 @@ async def test_fbs_worklist_query_count_bounded(async_client: AsyncClient) -> No
     finally:
         event.remove(sync_engine, "before_cursor_execute", _count_query)
 
-    assert query_count <= 21, f"expected <=21 queries, got {query_count}"
+    # Budget raised 21 -> 22: fbs_available_qty_by_product now derives
+    # availability from the actual on-hand balance (storage + sorting) plus
+    # reserve directions, instead of reading it off a single FBS-flagged
+    # direction pool (FBS-02/FBS-03). That on-hand lookup is one extra batch
+    # query for the whole worklist, not a per-order query, so the bound stays
+    # flat regardless of order count.
+    assert query_count <= 22, f"expected <=22 queries, got {query_count}"
 
     api_resp = await async_client.get(
         "/operations/fbs-orders/worklist",

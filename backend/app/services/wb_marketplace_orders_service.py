@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -9,9 +10,10 @@ from typing import Any, cast
 
 import httpx
 from sqlalchemy import Select, and_, or_, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_ASSEMBLING,
     FBS_ORDER_STATUS_CANCELLED,
@@ -31,6 +33,7 @@ from app.models.fbs_order import (
     FbsOrder,
     FbsOrderReservation,
 )
+from app.models.fbs_stock_pool_debit import FbsStockPoolDebit
 from app.models.fbs_supply import (
     FBS_DELIVERY_TYPE_WAREHOUSE_SC,
     FBS_SUPPLY_SOURCE_WB,
@@ -93,6 +96,10 @@ SYNC_STATUS_BATCH_SIZE = 500
 MAX_SYNC_STATUS_BATCHES = 20
 
 logger = logging.getLogger(__name__)
+
+# Повтор списания пула при занятой базе: рядом может писать фоновая публикация остатка.
+_POOL_DEBIT_ATTEMPTS = 3
+_POOL_DEBIT_RETRY_DELAY_SEC = 0.05
 
 
 class WbMarketplaceOrdersError(Exception):
@@ -520,6 +527,119 @@ async def _release_reservation(session: AsyncSession, order: FbsOrder) -> None:
     schedule_seller_stock_publish(session, order.tenant_id, order.seller_id)
 
 
+async def _resolve_active_binding_id_for_pool(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    wb_warehouse_id: int,
+) -> uuid.UUID | None:
+    stmt = select(FbsWarehouseBinding.id).where(
+        FbsWarehouseBinding.tenant_id == tenant_id,
+        FbsWarehouseBinding.seller_id == seller_id,
+        FbsWarehouseBinding.wb_warehouse_id == wb_warehouse_id,
+        FbsWarehouseBinding.is_active.is_(True),
+    )
+    res = await session.execute(stmt)
+    return res.scalar_one_or_none()
+
+
+async def _debit_stock_pool_for_order(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    order: FbsOrder,
+) -> dict[str, int]:
+    """Спиши fbs_binding_stock_pools при приходе заказа — «только расход».
+
+    Модель заказчика: первое внесение остатка вручную (админ), дальше пул
+    только уменьшается по факту заказов, никогда не пополняется автоматически.
+    Идемпотентность держится на UNIQUE(order_id) в fbs_stock_pool_debits:
+    WB присылает один и тот же заказ повторно на каждом автоопросе и на
+    каждый клик кнопки синка, но строка появляется не больше одного раза на
+    order_id, поэтому второй и все следующие проходы по этому заказу — no-op.
+    Нет строки пула для пары (склад WB, товар) — значит админ ничего сюда не
+    выделял, списывать нечего и придумывать остаток за него нельзя.
+    """
+    empty = {"debited": 0, "shortfall": 0}
+    if order.product_id is None or order.wb_warehouse_id is None:
+        return empty
+
+    already = await session.execute(
+        select(FbsStockPoolDebit.id).where(FbsStockPoolDebit.order_id == order.id)
+    )
+    if already.scalar_one_or_none() is not None:
+        return empty
+
+    binding_id = await _resolve_active_binding_id_for_pool(
+        session, tenant_id, seller_id, order.wb_warehouse_id
+    )
+    if binding_id is None:
+        return empty
+
+    result = dict(empty)
+    # Рядом может работать фоновая публикация остатка со своей сессией. На Postgres
+    # это расходится само, на файловом SQLite (тесты, локальный стенд) вторая сессия
+    # держит запись и мы получаем «database is locked». Списание — не тот повод,
+    # чтобы валить всю синхронизацию заказов, поэтому короткий повтор.
+    for attempt in range(_POOL_DEBIT_ATTEMPTS):
+        try:
+            return await _debit_stock_pool_once(
+                session, tenant_id, order, binding_id, empty
+            )
+        except IntegrityError:
+            # Параллельный синк (ручная кнопка + автоопрос) успел списать первым;
+            # UNIQUE(order_id) в fbs_stock_pool_debits гарантирует это на уровне БД.
+            # Своя попытка откатывается до savepoint, заказ уже учтён.
+            return empty
+        except OperationalError:
+            if attempt + 1 >= _POOL_DEBIT_ATTEMPTS:
+                logger.warning(
+                    "stock pool debit skipped: seller=%s order=%s reason=db_locked",
+                    seller_id,
+                    order.id,
+                )
+                return empty
+            await asyncio.sleep(_POOL_DEBIT_RETRY_DELAY_SEC)
+    return empty
+
+
+async def _debit_stock_pool_once(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    order: FbsOrder,
+    binding_id: uuid.UUID,
+    empty: dict[str, int],
+) -> dict[str, int]:
+    async with session.begin_nested():
+        # Без FOR UPDATE намеренно. Идемпотентность списания держит уникальность
+        # order_id в fbs_stock_pool_debits, а гонку двух синхронизаций ловит
+        # перехват IntegrityError у вызывающего — блокировка строки тут ничего
+        # не добавляет, зато на SQLite приводит к «database is locked».
+        pool_stmt = select(FbsBindingStockPool).where(
+            FbsBindingStockPool.binding_id == binding_id,
+            FbsBindingStockPool.product_id == order.product_id,
+        )
+        pool_row = (await session.execute(pool_stmt)).scalar_one_or_none()
+        if pool_row is None:
+            return empty
+
+        requested = 1  # один заказ WB marketplace = одна физическая единица
+        debited = min(requested, pool_row.quantity)
+        shortfall = requested - debited
+        pool_row.quantity -= debited
+        session.add(
+            FbsStockPoolDebit(
+                tenant_id=tenant_id,
+                pool_id=pool_row.id,
+                order_id=order.id,
+                quantity_debited=debited,
+                quantity_shortfall=shortfall,
+            )
+        )
+        await session.flush()
+        return {"debited": debited, "shortfall": shortfall}
+
+
 async def _move_new_order_to_external_processing(
     session: AsyncSession,
     order: FbsOrder,
@@ -536,6 +656,8 @@ async def _apply_wb_row_to_existing(
     seller_id: uuid.UUID,
     existing: FbsOrder,
     row: dict[str, Any],
+    *,
+    pool_debit_totals: dict[str, int] | None = None,
 ) -> None:
     wb_barcode = _first_barcode(row)
     wb_nm_id = row.get("nmId")
@@ -600,6 +722,10 @@ async def _apply_wb_row_to_existing(
             await _try_reserve_order(session, existing)
     except IntegrityError:
         pass
+    debit_result = await _debit_stock_pool_for_order(session, tenant_id, seller_id, existing)
+    if pool_debit_totals is not None:
+        pool_debit_totals["debited"] += debit_result["debited"]
+        pool_debit_totals["shortfall"] += debit_result["shortfall"]
 
 
 async def upsert_order_from_wb_row(
@@ -607,8 +733,18 @@ async def upsert_order_from_wb_row(
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
     row: dict[str, Any],
+    *,
+    pool_debit_totals: dict[str, int] | None = None,
 ) -> tuple[FbsOrder, bool]:
-    """Returns (order, created)."""
+    """Returns (order, created).
+
+    ``pool_debit_totals``, when given, accumulates {"debited": int,
+    "shortfall": int} across calls: units actually subtracted from
+    fbs_binding_stock_pools for this row's order, and units that could not
+    be subtracted because the pool was already lower than the order needed
+    (a WB-cabinet desync, not an error to raise on). Callers that don't
+    care can omit it; the 2-tuple return is unchanged so no call site breaks.
+    """
     wb_order_id_raw = row.get("id")
     if wb_order_id_raw is None:
         raise WbMarketplaceOrdersError("missing_wb_order_id")
@@ -623,7 +759,14 @@ async def upsert_order_from_wb_row(
 
     existing = await _get_order_by_wb_id(session, seller_id, wb_order_id)
     if existing is not None:
-        await _apply_wb_row_to_existing(session, tenant_id, seller_id, existing, row)
+        await _apply_wb_row_to_existing(
+            session,
+            tenant_id,
+            seller_id,
+            existing,
+            row,
+            pool_debit_totals=pool_debit_totals,
+        )
         return existing, False
 
     product = await _map_product(
@@ -687,8 +830,19 @@ async def upsert_order_from_wb_row(
         raced = await _get_order_by_wb_id(session, seller_id, wb_order_id)
         if raced is None:
             raise WbMarketplaceOrdersError("duplicate_order_race") from None
-        await _apply_wb_row_to_existing(session, tenant_id, seller_id, raced, row)
+        await _apply_wb_row_to_existing(
+            session,
+            tenant_id,
+            seller_id,
+            raced,
+            row,
+            pool_debit_totals=pool_debit_totals,
+        )
         return raced, False
+    debit_result = await _debit_stock_pool_for_order(session, tenant_id, seller_id, order)
+    if pool_debit_totals is not None:
+        pool_debit_totals["debited"] += debit_result["debited"]
+        pool_debit_totals["shortfall"] += debit_result["shortfall"]
     return order, True
 
 
@@ -1051,6 +1205,25 @@ async def _get_or_create_wb_origin_supply(
     return supply
 
 
+# Ключи сводки синхронизации, которые доезжают до `sync_seller_orders` и дальше — до
+# фонового задания `/operations/fbs-orders/sync`. Один источник умолчаний, чтобы во всех
+# ранних `return` не разъезжались набор ключей: раньше «пропуск из-за непривязанного
+# склада» был виден только в логе (logger.warning), оператор видел заказы с пометкой
+# «склад WB не привязан» и не понимал, почему поставка из кабинета WB не появилась.
+def _empty_supply_link_result(**overrides: Any) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "supply_link_candidates": 0,
+        "supply_linked_orders": 0,
+        "supply_links_created": 0,
+        "supply_link_supplies_scanned": 0,
+        "supply_link_skipped_unmapped_warehouse": 0,
+        "supply_link_skipped_unmapped_warehouse_supply_ids": [],
+        "supply_link_skipped_warehouse_mismatch_orders": 0,
+    }
+    result.update(overrides)
+    return result
+
+
 async def link_confirmed_orders_to_wb_supplies(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -1061,32 +1234,19 @@ async def link_confirmed_orders_to_wb_supplies(
     _ = http_client, api_token
     candidates = await _load_unlinked_confirmed_orders(session, tenant_id, seller_id)
     if not candidates:
-        return {
-            "supply_link_candidates": 0,
-            "supply_linked_orders": 0,
-            "supply_links_created": 0,
-            "supply_link_supplies_scanned": 0,
-        }
+        return _empty_supply_link_result()
 
     async with wb_seller_lock(session, seller_id) as acquired:
         if not acquired:
             logger.info("wb supply link skipped: seller=%s reason=lock_busy", seller_id)
-            return {
-                "supply_link_candidates": len(candidates),
-                "supply_linked_orders": 0,
-                "supply_links_created": 0,
-                "supply_link_supplies_scanned": 0,
-                "supply_link_skipped": "seller_lock_busy",
-            }
+            return _empty_supply_link_result(
+                supply_link_candidates=len(candidates),
+                supply_link_skipped="seller_lock_busy",
+            )
 
         candidates = await _load_unlinked_confirmed_orders(session, tenant_id, seller_id)
         if not candidates:
-            return {
-                "supply_link_candidates": 0,
-                "supply_linked_orders": 0,
-                "supply_links_created": 0,
-                "supply_link_supplies_scanned": 0,
-            }
+            return _empty_supply_link_result()
 
         candidates_by_supply_id: dict[str, list[FbsOrder]] = {}
         for order in candidates:
@@ -1097,16 +1257,13 @@ async def link_confirmed_orders_to_wb_supplies(
                 candidates_by_supply_id.setdefault(wb_supply_id, []).append(order)
 
         if not candidates_by_supply_id:
-            return {
-                "supply_link_candidates": len(candidates),
-                "supply_linked_orders": 0,
-                "supply_links_created": 0,
-                "supply_link_supplies_scanned": 0,
-            }
+            return _empty_supply_link_result(supply_link_candidates=len(candidates))
 
         linked_orders = 0
         supplies_created = 0
         supplies_scanned = len(candidates_by_supply_id)
+        skipped_unmapped_warehouse_supply_ids: list[str] = []
+        skipped_warehouse_mismatch_orders = 0
 
         for wb_supply_id, matching_orders in candidates_by_supply_id.items():
             existed_before = (
@@ -1124,6 +1281,11 @@ async def link_confirmed_orders_to_wb_supplies(
                 matching_orders,
             )
             if supply is None:
+                # _get_or_create_wb_origin_supply вернул None только по одной причине:
+                # ни у одного заказа поставки не нашлось привязки WB-склад → WMS-склад
+                # (см. _resolve_supply_warehouse_for_orders). Раньше это было видно только
+                # в логе; теперь сводка несёт номер поставки WB дальше, в интерфейс.
+                skipped_unmapped_warehouse_supply_ids.append(wb_supply_id)
                 continue
             if not existed_before:
                 supplies_created += 1
@@ -1143,6 +1305,7 @@ async def link_confirmed_orders_to_wb_supplies(
                         wb_supply_id,
                         order.wb_order_id,
                     )
+                    skipped_warehouse_mismatch_orders += 1
                     continue
                 order.supply_id = supply.id
                 if order.status in {
@@ -1153,12 +1316,15 @@ async def link_confirmed_orders_to_wb_supplies(
                 linked_orders += 1
 
         await session.commit()
-        result: dict[str, Any] = {
-            "supply_link_candidates": len(candidates),
-            "supply_linked_orders": linked_orders,
-            "supply_links_created": supplies_created,
-            "supply_link_supplies_scanned": supplies_scanned,
-        }
+        result = _empty_supply_link_result(
+            supply_link_candidates=len(candidates),
+            supply_linked_orders=linked_orders,
+            supply_links_created=supplies_created,
+            supply_link_supplies_scanned=supplies_scanned,
+            supply_link_skipped_unmapped_warehouse=len(skipped_unmapped_warehouse_supply_ids),
+            supply_link_skipped_unmapped_warehouse_supply_ids=skipped_unmapped_warehouse_supply_ids,
+            supply_link_skipped_warehouse_mismatch_orders=skipped_warehouse_mismatch_orders,
+        )
         return result
 
 
@@ -1211,9 +1377,12 @@ async def sync_seller_orders(
     orders_page_error: str | None = None
     status_sync_error: str | None = None
     supply_link_result: dict[str, Any] = {}
+    pool_debit_totals: dict[str, int] = {"debited": 0, "shortfall": 0}
 
     for row in new_rows:
-        _order, was_created = await upsert_order_from_wb_row(session, tenant_id, seller_id, row)
+        _order, was_created = await upsert_order_from_wb_row(
+            session, tenant_id, seller_id, row, pool_debit_totals=pool_debit_totals
+        )
         upserted += 1
         orders_received += 1
         if was_created:
@@ -1250,7 +1419,9 @@ async def sync_seller_orders(
         if not page_rows:
             break
         for row in page_rows:
-            _order, was_created = await upsert_order_from_wb_row(session, tenant_id, seller_id, row)
+            _order, was_created = await upsert_order_from_wb_row(
+                session, tenant_id, seller_id, row, pool_debit_totals=pool_debit_totals
+            )
             upserted += 1
             orders_received += 1
             if was_created:
@@ -1284,13 +1455,9 @@ async def sync_seller_orders(
                     seller_id,
                     type(exc).__name__,
                 )
-                supply_link_result = {
-                    "supply_link_candidates": 0,
-                    "supply_linked_orders": 0,
-                    "supply_links_created": 0,
-                    "supply_link_supplies_scanned": 0,
-                    "supply_link_error": "local_exception",
-                }
+                supply_link_result = _empty_supply_link_result(
+                    supply_link_error="local_exception",
+                )
 
     result: dict[str, Any] = {
         "seller_id": str(seller_id),
@@ -1298,6 +1465,8 @@ async def sync_seller_orders(
         "orders_upserted": upserted,
         "orders_created": created,
         "statuses_updated": statuses_updated,
+        "stock_pool_debited_units": pool_debit_totals["debited"],
+        "stock_pool_debit_shortfall_units": pool_debit_totals["shortfall"],
     }
     result.update(supply_link_result)
     if orders_page_error is not None:

@@ -260,7 +260,11 @@ async def run_wildberries_marketplace_orders_sync_job(job_id: uuid.UUID) -> None
             logger.warning("wildberries marketplace orders sync failed: %s", exc.code)
             job.status = JOB_STATUS_FAILED
             job.result_json = None
-            job.error_message = exc.code
+            # КРИТ-2 (docs/agent-orders/HANDOFF-POLISH.md, пул 1, п.3): раньше здесь
+            # сохранялся голый код (например "wb_upstream_error_401"), и оператор видел
+            # на экране шифр вместо причины. exc.message — уже человеческий текст
+            # (см. wb_operator_message в wildberries_errors.py).
+            job.error_message = exc.message
         except Exception as exc:
             logger.exception("wildberries marketplace orders sync failed: %s", exc)
             job.status = JOB_STATUS_FAILED

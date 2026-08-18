@@ -1214,6 +1214,7 @@ export type FbsWarehouseBinding = {
   last_sync_status: string | null
   last_sync_at: string | null
   last_error_code: string | null
+  allocated_pool_total: number
 }
 
 export type FbsStockSyncResult = {
@@ -1302,6 +1303,59 @@ export async function disableFbsWarehouseBinding(
   return jsonOrThrow<FbsWarehouseBinding>(res)
 }
 
+export type FbsStockPoolProduct = {
+  product_id: string
+  sku_code: string
+  name: string
+  wb_chrt_id: number | null
+  pool_limit: number
+  allocated_this_binding: number
+  allocated_elsewhere: number
+  available_for_this_binding: number
+}
+
+export type FbsStockPoolSetResult = {
+  product_id: string
+  quantity: number
+  pool_limit: number
+  allocated_total: number
+  available: number
+}
+
+export async function fetchFbsBindingStockPool(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  sellerId: string,
+  wbWarehouseId: number,
+): Promise<FbsStockPoolProduct[]> {
+  const res = await fetch(
+    apiUrl(`${sellerBase(sellerId)}/warehouse-bindings/${wbWarehouseId}/stock-pool`),
+    { headers: { ...ah(token) } },
+  )
+  return jsonOrThrow<FbsStockPoolProduct[]>(res)
+}
+
+export async function setFbsBindingStockPoolQuantity(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  sellerId: string,
+  wbWarehouseId: number,
+  productId: string,
+  quantity: number,
+): Promise<FbsStockPoolSetResult> {
+  const res = await fetch(
+    apiUrl(
+      `${sellerBase(sellerId)}/warehouse-bindings/${wbWarehouseId}/stock-pool/${productId}`,
+    ),
+    {
+      method: 'PUT',
+      headers: { ...ah(token), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quantity }),
+    },
+  )
+  return jsonOrThrow<FbsStockPoolSetResult>(res)
+}
+
 export async function triggerFbsStockSync(
   token: string,
   ah: (t: string) => Record<string, string>,
@@ -1353,6 +1407,9 @@ export type FbsOrdersSyncOutcome = {
   ordersReceived: number
   ordersCreated: number
   ordersUpserted: number
+  supplyLinkSkippedUnmappedWarehouse: number
+  supplyLinkSkippedUnmappedWarehouseSupplyIds: string[]
+  supplyLinkSkippedWarehouseMismatchOrders: number
 }
 
 export async function startFbsOrdersSync(
@@ -1386,6 +1443,12 @@ const JOB_FAILED_STATUSES = new Set(['failed'])
 function readCount(result: Record<string, unknown> | null, key: string): number {
   const value = result?.[key]
   return typeof value === 'number' ? value : 0
+}
+
+function readStringArray(result: Record<string, unknown> | null, key: string): string[] {
+  const value = result?.[key]
+  if (!Array.isArray(value)) return []
+  return value.every((item) => typeof item === 'string') ? value : []
 }
 
 /** Ждёт завершения фоновой задачи, опрашивая её раз в секунду. */
@@ -1425,6 +1488,9 @@ export async function runFbsOrdersSync(
     ordersReceived: readCount(job.result_json, 'orders_received'),
     ordersCreated: readCount(job.result_json, 'orders_created'),
     ordersUpserted: readCount(job.result_json, 'orders_upserted'),
+    supplyLinkSkippedUnmappedWarehouse: readCount(job.result_json, 'supply_link_skipped_unmapped_warehouse'),
+    supplyLinkSkippedUnmappedWarehouseSupplyIds: readStringArray(job.result_json, 'supply_link_skipped_unmapped_warehouse_supply_ids'),
+    supplyLinkSkippedWarehouseMismatchOrders: readCount(job.result_json, 'supply_link_skipped_warehouse_mismatch_orders'),
   }
 }
 

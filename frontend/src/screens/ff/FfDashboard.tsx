@@ -13,6 +13,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { plural } from '../../utils/plural'
 
 export type FfInboundSummary = {
   id: string
@@ -312,7 +313,10 @@ export function FfDashboard({
                   p: 1,
                   borderRight: `1px solid ${theme.palette.divider}`,
                   borderBottom: `1px solid ${theme.palette.divider}`,
-                  bgcolor: outsideMonth ? alpha(theme.palette.action.hover, 0.35) : 'background.paper',
+                  // alpha() ЗАМЕНЯЕТ прозрачность, а не умножает: action.hover — это уже
+                  // rgba(0,0,0,0.04), и alpha(..., 0.35) давал rgba(0,0,0,0.35) — сплошную
+                  // серую плашку вместо лёгкого оттенка дней соседнего месяца.
+                  bgcolor: outsideMonth ? alpha(theme.palette.text.primary, 0.04) : 'background.paper',
                 })}
                 data-testid={`cal-01-day-${key}`}
                 data-task-id="CAL-01"
@@ -356,7 +360,7 @@ export function FfDashboard({
                         {row.direction}
                       </Typography>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.2 }} data-task-id="CAL-01">
-                        {row.boxesCount} коробов · {row.shipmentType}
+                        {row.boxesCount} {plural(row.boxesCount, ['короб', 'короба', 'коробов'])} · {row.shipmentType}
                       </Typography>
                     </Box>
                   ))}

@@ -36,6 +36,8 @@ backend/tests/wms_pytest_data_*/
 backend/var/wms-data/
 backend/dev.db
 backend/dev-local.db
+# База локального стенда для осмотра экранов, рецепт в docs/agent-orders/HANDOFF-POLISH.md
+backend/manual.db
 backend/live*.db
 backend/*live*.db
 backend/alembic_autogen.db
