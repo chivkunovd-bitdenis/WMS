@@ -220,12 +220,21 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const [sepCzQty, setSepCzQty] = useState(2)
   const [sepWbQty, setSepWbQty] = useState(1)
   const [sepCzDone, setSepCzDone] = useState(false)
-  const [sepWbDone, setSepWbDone] = useState(false)
 
   const requiresHonestSign = ctx?.requiresHonestSign ?? true
   const fbsTapeMode = Boolean(ctx?.fbsTape)
   const fbsTapeOrders = ctx?.fbsTape?.orders ?? []
   const fbsHonestSignOrders = fbsTapeOrders.filter((order) => order.requiresHonestSign)
+  /**
+   * PRN-01: «Печать всего» на поставке FBS (openBulkOrderMarkingPrint) всегда
+   * включает fbsTape.includeOrderQr — на ленту реально уходит QR заказа WB вместе
+   * с ЧЗ/ШК (см. printFbsTape ниже). Раньше предпросмотр этот QR не показывал
+   * вообще, а заголовок диалога назывался «Печать ШК ВБ», хотя печаталось всё —
+   * заказчик жаловался, что кнопка обещает «всё», а окно показывает один элемент.
+   * Флаг ниже включает QR в предпросмотр (MarkingLabelPreview) и правит заголовок
+   * под фактический состав ленты; сама печать (что уходит на принтер) не меняется.
+   */
+  const includesOrderQr = fbsTapeMode && Boolean(ctx?.fbsTape?.includeOrderQr)
   const isCatalogSource = ctx?.source === 'catalog'
   /**
    * Перепечатка существует только чтобы не жечь коды ЧЗ повторно (FBS-11) — у товара
@@ -347,7 +356,6 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     setSepCzQty(2)
     setSepWbQty(wbDefaultQty)
     setSepCzDone(false)
-    setSepWbDone(false)
     setCzLabelSize(resolveLabelSize(loadLabelSizeId('cz')))
     setCzPrintOrientation(loadLabelPrintOrientation())
     setWbLabelSize(resolveLabelSize(loadLabelSizeId('label')))
@@ -476,8 +484,19 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       ? `К печати: ${totalWbLabels}`
       : `К упаковке: ${qtyNeed}`
   const shortage = requiresHonestSign && !effectiveReprint && available < qtyNeed ? qtyNeed - available : 0
+  /**
+   * PRN-02: перепечатка ленты FBS не строится по выбору конкретных КМ
+   * (`selectedReprintCodeIds` там всегда пуст — построчный список кодов на выбор
+   * не используется в fbsTapeMode, см. условие `!fbsTapeMode` ниже у самого списка),
+   * поэтому для предпросмотра берём то же количество, что уже показывает счётчик
+   * в шапке диалога (qtyNeed уже учитывает fbsTapeMode). Раньше здесь безусловно
+   * стоял selectedReprintCodeIds.length, из-за чего в перепечатке FBS предпросмотр
+   * ленты получал canPrintCount=0 и превью не строилось вовсе.
+   */
   const canPrintCount = effectiveReprint
-    ? selectedReprintCodeIds.length
+    ? fbsTapeMode
+      ? qtyNeed
+      : selectedReprintCodeIds.length
     : requiresHonestSign
       ? allowPartial
         ? Math.min(available, qtyNeed)
@@ -532,11 +551,10 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   }
 
   const markSectionDone = (markDone: 'cz' | 'wb' | null) => {
+    // ШК — не расходуемый ресурс (в отличие от кодов ЧЗ), поэтому печать ШК
+    // никогда не блокируется повторным нажатием; отмечаем «сделано» только для ЧЗ.
     if (markDone === 'cz') {
       setSepCzDone(true)
-    }
-    if (markDone === 'wb') {
-      setSepWbDone(true)
     }
   }
 
@@ -936,9 +954,13 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
 
   const dialogTitle = effectiveReprint
     ? 'Повторная печать'
-    : requiresHonestSign
-      ? 'Печать ЧЗ'
-      : 'Печать ШК ВБ'
+    : includesOrderQr
+      ? requiresHonestSign
+        ? 'Печать ЧЗ, ШК и QR заказа'
+        : 'Печать ШК и QR заказа'
+      : requiresHonestSign
+        ? 'Печать ЧЗ'
+        : 'Печать ШК ВБ'
 
   return (
     <>
@@ -1123,6 +1145,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                     size={nonCzPrintSize}
                     unitsToShow={Math.max(1, totalWbLabels)}
                     totalUnits={Math.max(1, totalWbLabels)}
+                    showOrderQr={includesOrderQr}
                     testId="marking-print-wb-only-preview"
                   />
                 </Box>
@@ -1256,7 +1279,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                       onChange={(e) =>
                         setSepWbQty(Math.max(1, Math.min(999, Number(e.target.value) || 1)))
                       }
-                      disabled={busy || sepWbDone}
+                      disabled={busy}
                       slotProps={{ htmlInput: { min: 1, max: 999 } }}
                       data-testid="marking-print-sep-wb-qty"
                       sx={{ width: 180 }}
@@ -1267,7 +1290,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                           <Checkbox
                             checked={printDoubleWbBarcode}
                             onChange={(e) => setPrintDoubleWbBarcode(e.target.checked)}
-                            disabled={busy || sepWbDone}
+                            disabled={busy}
                             data-testid="marking-print-sep-wb-double"
                           />
                         }
@@ -1282,18 +1305,21 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                     <LabelSizeSelect
                       value={wbLabelSize.id}
                       onChange={setWbLabelSize}
-                      disabled={busy || sepWbDone}
+                      disabled={busy}
                       scope="label"
                       label="Размер ШК ВБ"
                       testId="marking-print-wb-label-size"
                     />
                     <Button
                       variant="contained"
-                      disabled={busy || sepWbDone || sepWbTotal < 1}
+                      disabled={busy || sepWbTotal < 1}
                       onClick={() => void handleSeparateWbPrint()}
                       data-testid="marking-print-sep-wb-print"
                     >
-                      {sepWbDone ? 'ШК напечатаны ✓' : 'Печать ШК ВБ'}
+                      {/* Печать ШК — не расходуемый ресурс (в отличие от кодов ЧЗ), поэтому
+                          кнопка не блокируется после первой печати: повторная печать должна
+                          работать сколько угодно раз. */}
+                      Печать ШК ВБ
                     </Button>
                   </Stack>
                   {sepWbTotal > 0 ? (
@@ -1321,7 +1347,18 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               </>
             ) : null}
 
-            {!effectiveReprint && requiresHonestSign && !separateMode && !separateModeResolving ? (
+            {/*
+              PRN-02: в перепечатке ленты FBS (`fbsTapeMode && effectiveReprint`) построчный
+              список кодов на выбор ниже не рендерится (он завязан на `!fbsTapeMode` — для
+              ленты нет самой концепции «выбрать конкретный код»), поэтому единственная ветка
+              предпросмотра, которая вообще что-то показывает — эта, обычно предназначенная
+              только для первой печати. Раньше её тоже закрывало условие `!effectiveReprint`,
+              и в итоге окно перепечатки ленты FBS оставалось пустым — ни ленты, ни QR заказа,
+              ни ЧЗ/ШК, только счётчик количества в шапке. Показываем эту же ветку и в
+              перепечатке ленты FBS: то же самое, что видит оператор при первой печати —
+              что уходит на принтер (printFbsTape ниже), эта правка не меняет.
+            */}
+            {(!effectiveReprint || fbsTapeMode) && requiresHonestSign && !separateMode && !separateModeResolving ? (
               <>
                 {isCatalogSource ? (
                   <TextField
@@ -1443,6 +1480,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                     unitsToShow={previewUnitCount}
                     totalUnits={canPrintCount}
                     productLabel={ctx?.productLabel ?? null}
+                    showOrderQr={includesOrderQr}
                     testId="marking-print-tape-preview"
                   />
                 </Box>

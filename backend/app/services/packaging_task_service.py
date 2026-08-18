@@ -78,8 +78,9 @@ REVERSIBLE_PACK_EVENTS = (PACKAGING_EVENT_SCAN_PACK, PACKAGING_EVENT_MANUAL_PACK
 
 
 class PackagingTaskServiceError(Exception):
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, message: str | None = None) -> None:
         self.code = code
+        self.message = message
         super().__init__(code)
 
 
@@ -891,7 +892,7 @@ async def record_pack_progress(
                 idempotency_key=idempotency_key,
             )
         except FbsPackagingIntegrationError as exc:
-            raise PackagingTaskServiceError(exc.code) from exc
+            raise PackagingTaskServiceError(exc.code, message=exc.message) from exc
         _touch_task(task)
         packed_delta = int(line.qty_packed_in_task) - before_packed
         if packed_delta > 0:

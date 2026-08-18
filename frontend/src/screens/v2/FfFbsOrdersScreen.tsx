@@ -212,7 +212,9 @@ function formatNullableDateTime(value: string | null): string {
 
 function supplyStatusLabel(status: string): string {
   const labels: Record<string, string> = {
-    draft: 'Состав',
+    // «Состав» — это название первой вкладки внутри карточки поставки, а не статус
+    // документа. В списке поставок черновик должен называться черновиком.
+    draft: 'Черновик',
     assembling: 'В работе',
     packed: 'Готова к сдаче',
     in_delivery: 'В доставке',

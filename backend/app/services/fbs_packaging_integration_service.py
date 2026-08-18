@@ -38,7 +38,10 @@ from app.models.fbs_supply import (
     FbsSupply,
 )
 from app.models.fbs_trbx import FbsTrbx
+from app.models.inventory_balance import InventoryBalance
 from app.models.packaging_task import STATUS_DRAFT, PackagingTask, PackagingTaskLine
+from app.models.product import Product
+from app.models.storage_location import StorageLocation
 from app.models.warehouse_box import WarehouseBox
 from app.services import inventory_service as inv_svc
 from app.services import sorting_location_service as sorting_loc_svc
@@ -59,8 +62,9 @@ _VALID_SUPPLY_STATUS_TRANSITIONS: dict[str, frozenset[str]] = {
 
 
 class FbsPackagingIntegrationError(Exception):
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, message: str | None = None) -> None:
         self.code = code
+        self.message = message
         super().__init__(code)
 
 
@@ -437,6 +441,38 @@ async def _resolve_order_for_pack_unit(
     return eligible[0]
 
 
+async def _insufficient_stock_message(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    line: PackagingTaskLine,
+) -> str:
+    """Собрать понятный текст: чего не хватает и где оператор смотрел."""
+    product = await session.get(Product, line.product_id)
+    loc = await session.get(StorageLocation, line.storage_location_id)
+    product_label = (
+        f"«{product.name}» (арт. {product.sku_code})" if product is not None else "товара"
+    )
+    if loc is not None and sorting_loc_svc.is_sorting_location(loc):
+        location_label = f"ячейке сортировки склада (код {loc.barcode})"
+    elif loc is not None:
+        location_label = f"ячейке «{loc.code}»"
+    else:
+        location_label = "указанной ячейке"
+    on_hand = await session.scalar(
+        select(InventoryBalance.quantity).where(
+            InventoryBalance.tenant_id == tenant_id,
+            InventoryBalance.product_id == line.product_id,
+            InventoryBalance.storage_location_id == line.storage_location_id,
+        )
+    )
+    on_hand_int = int(on_hand or 0)
+    return (
+        f"Недостаточно {product_label} в {location_label}: по остатку числится "
+        f"{on_hand_int} шт., а нужна как минимум 1. Проверьте фактическое наличие "
+        "товара на складе — возможно, он лежит в другой ячейке или ещё не подобран."
+    )
+
+
 async def record_fbs_pack_progress(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -493,10 +529,18 @@ async def record_fbs_pack_progress(
                 product_id=line.product_id,
                 storage_location_id=line.storage_location_id,
                 quantity=1,
+                # Упаковке всё равно, числится товар «упакованным» или «неупакованным» —
+                # важен только общий остаток в ячейке. Деление между статусами остаётся
+                # учётной операцией и переносит столько, сколько реально есть в
+                # «не упаковано»; оно больше не блокирует упаковку.
+                require_unpacked=False,
             )
         except ValueError as exc:
-            if str(exc) == "insufficient_unpacked":
-                raise FbsPackagingIntegrationError("insufficient_unpacked") from exc
+            if str(exc) == "insufficient_stock":
+                raise FbsPackagingIntegrationError(
+                    "insufficient_packaging_stock",
+                    message=await _insufficient_stock_message(session, tenant_id, line),
+                ) from exc
             raise
 
         now = datetime.now(UTC)

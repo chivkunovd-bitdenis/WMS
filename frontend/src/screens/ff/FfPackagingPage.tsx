@@ -51,6 +51,7 @@ import {
   Typography,
 } from '@mui/material'
 import { useWbProductCatalog } from '../../hooks/useWbProductCatalog'
+import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { apiUrl } from '../../api'
 import { fetchPendingMarking, pendingMarkingLineCount } from '../../utils/pendingMarkingApi'
 import { PageHeader } from '../../ui/PageHeader'
@@ -304,6 +305,7 @@ export function FfPackagingTaskPanel({
   const [defectDialogError, setDefectDialogError] = useState<string | null>(null)
   const [lineMenuAnchor, setLineMenuAnchor] = useState<null | HTMLElement>(null)
   const [lineMenuLine, setLineMenuLine] = useState<PackagingTaskLine | null>(null)
+  const [instructionsLine, setInstructionsLine] = useState<PackagingTaskLine | null>(null)
   const [scannerValue, setScannerValue] = useState('')
   const [scannerFeedback, setScannerFeedback] = useState<string | null>(null)
   const [focusedLineId, setFocusedLineId] = useState<string | null>(null)
@@ -406,28 +408,6 @@ export function FfPackagingTaskPanel({
       const res = await fetch(
         apiUrl(`/operations/packaging-tasks/${task.id}/lines/${lineId}/confirm-packed`),
         { method: 'POST', headers: authHeaders, body: JSON.stringify({}) },
-      )
-      if (!res.ok) {
-        setError(await readPackagingApiErrorMessage(res))
-        return
-      }
-      onUpdated((await res.json()) as PackagingTask)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const markPrepackedExternal = async (lineId: string, qty: number) => {
-    setBusy(true)
-    setError(null)
-    try {
-      const res = await fetch(
-        apiUrl(`/operations/packaging-tasks/${task.id}/lines/${lineId}/mark-prepacked`),
-        {
-          method: 'POST',
-          headers: authHeaders,
-          body: JSON.stringify({ quantity: qty }),
-        },
       )
       if (!res.ok) {
         setError(await readPackagingApiErrorMessage(res))
@@ -822,7 +802,7 @@ export function FfPackagingTaskPanel({
           </Box>
         </Paper>
       ) : null}
-      {taskEditable && !printOnly ? (
+      {taskEditable && !printOnly && !isMpUnloadTask ? (
         <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-packaging-scanner-panel">
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ alignItems: { xs: 'stretch', md: 'flex-start' } }}>
             <TextField
@@ -891,68 +871,74 @@ export function FfPackagingTaskPanel({
           <Table size="small" sx={{ tableLayout: 'fixed', width: '100%' }}>
             <TableHead>
               <TableRow>
-                {/* Дизайн-разбор 2026-08-16: 96px на «Печать» физически не вмещали иконку
-                    печати и две кнопки («Упаковано», «Пришло готовым») — подписи резались
-                    и переносились, оператор в перчатках рисковал промахнуться мимо смысла.
-                    Кнопки теперь стоят в столбик (см. ячейку ниже), но и так им нужна
-                    настоящая ширина, а не остаток; сузили менее критичные колонки. */}
-                <TableCell sx={{ width: '26%' }}>Товар / SKU</TableCell>
-                <TableCell sx={{ width: '15%' }}>ШК</TableCell>
-                <TableCell align="center" sx={{ width: 56 }}>ТЗ</TableCell>
-                <TableCell sx={{ width: '13%' }}>ЧЗ</TableCell>
-                <TableCell sx={{ width: '13%' }}>ШК печати</TableCell>
-                <TableCell align="right" sx={{ width: 96 }}>Упаковано</TableCell>
-                <TableCell align="right" sx={{ width: 176 }}>Действия</TableCell>
+                {/* MPU-04б (18.08): «ШК печати»/«Упаковано» ушли из таблицы в MPU-01/02, но
+                    оставшиеся колонки не занимали освободившееся место — table-layout: fixed
+                    отдаёт лишнее пространство только колонкам с px-шириной (ТЗ, Действия),
+                    а не с %, из-за чего ШК оставался узким и обрезался, а кнопка печати
+                    раздувалась на всю колонку. Ширины переведены в % и сбалансированы
+                    заново, чтобы штрихкод помещался целиком. */}
+                <TableCell sx={{ width: '22%' }}>Товар / SKU</TableCell>
+                <TableCell sx={{ width: '22%' }}>ШК</TableCell>
+                <TableCell align="center" sx={{ width: '6%' }}>ТЗ</TableCell>
+                <TableCell sx={{ width: '12%' }}>ЧЗ</TableCell>
+                <TableCell align="right" sx={{ width: '38%' }}>Действия</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {task.lines.map((ln) => {
                 const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
                 const barcode = lineBarcodeForScan(ln)
-                const remaining = lineRemaining(ln)
                 const markingProgressIncomplete = isLineMarkingProgressIncomplete(ln)
                 const hasInstructions = Boolean(ln.packaging_instructions?.trim())
                 const barcodeReady = Boolean(barcode?.trim())
-                const productLabelNeed = Math.max(ln.qty_need_pack, ln.qty_done)
-                const productLabelPrinted = Math.min(
-                  ln.qty_product_label_printed ?? 0,
-                  productLabelNeed,
-                )
-                const barcodeStatusLabel = barcodeReady
-                  ? `напечатано ${productLabelPrinted}/${productLabelNeed}`
-                  : 'нет ШК'
                 return (
                   <TableRow
                     key={ln.id}
                     data-testid={markingProgressIncomplete ? 'ff-packaging-line-marking-incomplete' : 'ff-packaging-line'}
                     selected={focusedLineId === ln.id}
-                    sx={markingProgressIncomplete ? { bgcolor: 'warning.light' } : undefined}
                   >
-                    <TableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap data-testid="ff-packaging-compact-product-name">
-                        {displayMeta.product_name}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" noWrap>
-                        SKU: {displayMeta.sku_code}
-                      </Typography>
+                    <TableCell sx={{ overflow: 'hidden' }}>
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
+                        <ProductPhotoThumb
+                          src={displayMeta.wb_primary_image_url}
+                          alt={displayMeta.product_name}
+                          testId={`ff-packaging-line-photo-${ln.id}`}
+                        />
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap data-testid="ff-packaging-compact-product-name">
+                            {displayMeta.product_name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+                            SKU: {displayMeta.sku_code}
+                          </Typography>
+                        </Box>
+                      </Stack>
                     </TableCell>
-                    <TableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      <Typography variant="body2" noWrap data-testid={`ff-packaging-line-barcode-${ln.id}`}>
+                    <TableCell>
+                      {/* Заказчик 18.08: обрезанный ШК нельзя ни прочитать, ни сверить, ни
+                          продиктовать — код должен быть виден целиком. Колонка расширена,
+                          обрезание убрано; на случай очень длинного кода — перенос по
+                          символам вместо ellipsis, а не обрубание текста. */}
+                      <Typography
+                        variant="body2"
+                        sx={{ wordBreak: 'break-word' }}
+                        data-testid={`ff-packaging-line-barcode-${ln.id}`}
+                      >
                         {barcode || '—'}
                       </Typography>
                     </TableCell>
                     <TableCell align="center">
-                      {/* Иконка ТЗ раньше только показывала подсказку по наведению и никак не
-                          реагировала на клик — заказчик указал, что она должна открывать форму
-                          печати, как и иконка принтера в этой же строке (тот же openLinePrint). */}
+                      {/* Заказчик 18.08: иконка ТЗ должна показывать само задание на упаковку
+                          (текст packaging_instructions), а не открывать форму печати — раньше
+                          подпись обещала одно, а клик делал другое. Печать осталась на
+                          отдельной крупной кнопке принтера в колонке «Действия». */}
                       <Tooltip title={hasInstructions ? ln.packaging_instructions : 'ТЗ не задано'}>
                         <span>
                           <IconButton
                             size="small"
-                            disabled={!barcodeReady && !ln.requires_honest_sign}
-                            onClick={() => openLinePrint(ln)}
+                            onClick={() => setInstructionsLine(ln)}
                             data-testid={`ff-packaging-line-tz-${ln.id}`}
-                            aria-label={hasInstructions ? 'ТЗ упаковки — открыть печать' : 'ТЗ упаковки не задано — открыть печать'}
+                            aria-label={hasInstructions ? 'Показать задание на упаковку' : 'Задание на упаковку не задано'}
                           >
                             <ArticleOutlined fontSize="small" color={hasInstructions ? 'primary' : 'disabled'} />
                           </IconButton>
@@ -965,86 +951,31 @@ export function FfPackagingTaskPanel({
                           size="small"
                           color={markingProgressIncomplete ? 'warning' : 'success'}
                           variant={markingProgressIncomplete ? 'outlined' : 'filled'}
-                          label={`${ln.qty_marking_printed + (ln.qty_marking_external ?? 0)}/${ln.qty_need_pack}`}
+                          label={`${ln.qty_marking_printed}/${ln.qty_need_pack}`}
                           data-testid={`ff-packaging-marking-progress-${ln.id}`}
                         />
                       ) : (
                         <Chip size="small" variant="outlined" label="не требуется" />
                       )}
                     </TableCell>
-                    <TableCell>
-                      <Chip
-                        size="small"
-                        // GLOBAL-02: оранжевый значит «мешает работать». Печать товарного ШК
-                        // завершение упаковки не блокирует, поэтому «напечатано 0/2» — это
-                        // нейтральный факт, а не тревога. Тревога только когда ШК вообще нет.
-                        color={
-                          !barcodeReady ? 'warning' : productLabelPrinted > 0 ? 'success' : 'default'
-                        }
-                        variant="outlined"
-                        label={barcodeStatusLabel}
-                        data-testid={`ff-packaging-barcode-status-${ln.id}`}
-                      />
-                    </TableCell>
-                    <TableCell align="right" data-testid={`ff-packaging-line-progress-${ln.id}`}>
-                      {ln.qty_done}/{ln.qty_total}
-                      {remaining > 0 ? (
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                          осталось {remaining}
-                        </Typography>
-                      ) : null}
-                    </TableCell>
                     <TableCell align="right" sx={{ py: 1 }}>
-                      {/* Три разных по смыслу контрола в столбик, каждый на всю ширину
-                          колонки — с подписью целиком, без переноса посреди слова. */}
-                      <Stack spacing={0.5} sx={{ alignItems: 'stretch' }}>
+                      {/* Заказчик 18.08: кнопка растягивалась fullWidth на всю колонку и
+                          выглядела баннером. Крупная (size large), но по размеру
+                          содержимого и прижата к правому краю колонки «Действия». */}
+                      <Stack spacing={0.5} sx={{ alignItems: 'flex-end' }}>
                         {!hidePrintActions ? (
-                          <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                            <IconButton
-                              size="small"
-                              aria-label={`Печать товара ${displayMeta.product_name}`}
-                              onClick={() => openLinePrint(ln)}
-                              data-testid={`ff-packaging-line-print-${ln.id}`}
-                              disabled={!barcodeReady && !ln.requires_honest_sign}
-                            >
-                              <PrintOutlined fontSize="small" />
-                            </IconButton>
-                          </Box>
-                        ) : null}
-                        {taskEditable && remaining > 0 ? (
-                          <Tooltip title="Обычная упаковка: печать кода маркировки нужна отдельным шагом.">
-                            <span>
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                fullWidth
-                                disabled={busy}
-                                onClick={() => void packQty(ln.id, remaining)}
-                                data-testid={`ff-packaging-line-mark-packed-${ln.id}`}
-                                data-task-id="MPFBO-03"
-                                sx={{ whiteSpace: 'nowrap' }}
-                              >
-                                Упаковано
-                              </Button>
-                            </span>
-                          </Tooltip>
-                        ) : null}
-                        {taskEditable && remaining > 0 ? (
-                          <Tooltip title="Товар пришёл уже упакованным и промаркированным — печать не нужна.">
-                            <span>
-                              <Button
-                                size="small"
-                                fullWidth
-                                disabled={busy}
-                                onClick={() => void markPrepackedExternal(ln.id, remaining)}
-                                data-testid={`ff-packaging-line-prepacked-${ln.id}`}
-                                data-task-id="MPFBO-03"
-                                sx={{ whiteSpace: 'nowrap' }}
-                              >
-                                Пришло готовым
-                              </Button>
-                            </span>
-                          </Tooltip>
+                          <Button
+                            variant="contained"
+                            size="large"
+                            startIcon={<PrintOutlined />}
+                            aria-label={`Печать товара ${displayMeta.product_name}`}
+                            onClick={() => openLinePrint(ln)}
+                            data-testid={`ff-packaging-line-print-${ln.id}`}
+                            disabled={!barcodeReady && !ln.requires_honest_sign}
+                            sx={{ whiteSpace: 'nowrap' }}
+                          >
+                            Печать ЧЗ
+                          </Button>
                         ) : null}
                       </Stack>
                       {lineHasOverflowActions(ln) ? (
@@ -1297,6 +1228,34 @@ export function FfPackagingTaskPanel({
         </DialogActions>
       </Dialog>
       {markingPrintDialog}
+      <Dialog
+        open={Boolean(instructionsLine)}
+        onClose={() => setInstructionsLine(null)}
+        maxWidth="xs"
+        fullWidth
+        data-testid="ff-packaging-instructions-dialog"
+      >
+        <DialogTitle>Задание на упаковку</DialogTitle>
+        <DialogContent>
+          {instructionsLine ? (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              {instructionsLine.product_name} · SKU {instructionsLine.sku_code}
+            </Typography>
+          ) : null}
+          <Typography
+            variant="body2"
+            sx={{ whiteSpace: 'pre-wrap' }}
+            data-testid="ff-packaging-instructions-dialog-text"
+          >
+            {instructionsLine?.packaging_instructions?.trim() || 'ТЗ не задано'}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setInstructionsLine(null)} data-testid="ff-packaging-instructions-dialog-close">
+            Закрыть
+          </Button>
+        </DialogActions>
+      </Dialog>
       <Menu
         anchorEl={lineMenuAnchor}
         open={Boolean(lineMenuAnchor)}

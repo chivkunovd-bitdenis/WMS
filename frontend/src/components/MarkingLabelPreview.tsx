@@ -3,9 +3,11 @@ import { Box, Typography } from '@mui/material'
 import {
   buildMarkingTapeDocument,
   buildMarkingTapeSections,
+  buildWbOrderQrLabelHtml,
   type MarkingTapeUnitInput,
 } from '../utils/printMarkingCodeLabel'
 import {
+  buildProductLabelSectionHtml,
   buildProductThermalLabelDocument,
   type ProductThermalLabelData,
 } from '../utils/printProductThermalLabel'
@@ -51,6 +53,24 @@ function previewCis(index: number): string {
   return `\x1d01${gtin}21PREVIEW${index + 1}`
 }
 
+/**
+ * PRN-01: QR заказа WB (как и КМ ЧЗ выше) реально появляется только после
+ * нажатия «Печать» — до этого его негде взять. Для превью строим QR по той
+ * же технологии, что и настоящий (bwip-js, bcid 'qrcode' — см. renderBoxQrDataUrl
+ * в FfFbsSupplyWorkspace.tsx), но по заглушке: макет честный, содержимое — нет.
+ */
+async function renderOrderQrPreviewDataUrl(): Promise<string> {
+  const bwipjs = await import('bwip-js')
+  const canvas = document.createElement('canvas')
+  bwipjs.toCanvas(canvas, {
+    bcid: 'qrcode',
+    text: 'PREVIEW-WB-ORDER-QR',
+    scale: 5,
+    includetext: false,
+  })
+  return canvas.toDataURL('image/png')
+}
+
 type TapeVariantProps = {
   variant?: 'tape'
   layout: PrintLayout
@@ -60,6 +80,8 @@ type TapeVariantProps = {
   unitsToShow: number
   /** Настоящее суммарное количество к печати, если оно больше unitsToShow. */
   totalUnits?: number
+  /** «Печать всего» на поставке FBS: перед лентой в реальности печатается QR заказа. */
+  showOrderQr?: boolean
   testId?: string
 }
 
@@ -71,6 +93,8 @@ type ProductVariantProps = {
   totalUnits?: number
   /** Какие опциональные поля показывать (например, состав) — как при реальной печати. */
   printOptions?: ProductLabelPrintOptions
+  /** «Печать всего» на поставке FBS: перед этикеткой в реальности печатается QR заказа. */
+  showOrderQr?: boolean
   testId?: string
 }
 
@@ -116,6 +140,7 @@ export function MarkingLabelPreview(props: Props) {
 
   const shown = Math.min(Math.max(1, Math.floor(unitsToShow) || 1), MAX_PREVIEW_UNITS)
   const total = Math.max(shown, Math.floor(totalUnits ?? shown) || shown)
+  const showOrderQr = props.showOrderQr ?? false
   const blocksPerUnit =
     props.variant === 'product'
       ? 1
@@ -123,7 +148,8 @@ export function MarkingLabelPreview(props: Props) {
           1,
           props.layout.units.reduce((sum, unit) => sum + Math.max(1, unit.copies), 0),
         )
-  const sectionsCount = shown * blocksPerUnit
+  // QR заказа печатается один раз (не на единицу) — см. printFbsTape в MarkingPrintDialog.tsx.
+  const sectionsCount = shown * blocksPerUnit + (showOrderQr ? 1 : 0)
   const layoutKey = props.variant === 'product' ? 'product' : JSON.stringify(props.layout)
   const productLabel = props.productLabel ?? null
   const productPrintOptions = props.variant === 'product' ? props.printOptions : undefined
@@ -133,6 +159,11 @@ export function MarkingLabelPreview(props: Props) {
     setError(null)
     void (async () => {
       try {
+        // QR заказа WB — тем же порядком, что и в реальной ленте (см. printFbsTape):
+        // сначала QR заказа, потом сами этикетки (ЧЗ+ШК либо только ШК).
+        const qrSections: string[] = showOrderQr
+          ? [buildWbOrderQrLabelHtml(await renderOrderQrPreviewDataUrl())]
+          : []
         let nextHtml: string | null
         if (props.variant === 'product') {
           const barcode = productLabel?.barcode?.trim()
@@ -140,13 +171,24 @@ export function MarkingLabelPreview(props: Props) {
             nextHtml = null
           } else {
             const barcodeDataUrl = renderBarcodeDataUrl(barcode, { variant: 'thermal58' })
-            nextHtml = buildProductThermalLabelDocument(
-              productLabel,
-              shown,
-              barcodeDataUrl,
-              productPrintOptions,
-              size,
-            )
+            if (showOrderQr) {
+              // «Печать всего» на поставке FBS: ленту с QR собирает та же функция,
+              // что и настоящую печать (printTapeSections → buildMarkingTapeDocument) —
+              // buildProductThermalLabelDocument для одиночных ШК её не поддерживает
+              // (нет стилей под .label--wb-qr).
+              const productSections = Array.from({ length: shown }, () =>
+                buildProductLabelSectionHtml(productLabel, barcodeDataUrl, productPrintOptions, size),
+              )
+              nextHtml = buildMarkingTapeDocument([...qrSections, ...productSections], size)
+            } else {
+              nextHtml = buildProductThermalLabelDocument(
+                productLabel,
+                shown,
+                barcodeDataUrl,
+                productPrintOptions,
+                size,
+              )
+            }
           }
         } else {
           const units: MarkingTapeUnitInput[] = Array.from({ length: shown }, (_, i) => ({
@@ -154,7 +196,7 @@ export function MarkingLabelPreview(props: Props) {
             productLabel,
           }))
           const sections = await buildMarkingTapeSections(units, props.layout, productLabel)
-          nextHtml = buildMarkingTapeDocument(sections, size)
+          nextHtml = buildMarkingTapeDocument([...qrSections, ...sections], size)
         }
         if (requestRef.current === myRequest) {
           setHtml(nextHtml)
@@ -177,6 +219,7 @@ export function MarkingLabelPreview(props: Props) {
     productLabel?.product_name,
     productPrintOptions?.includeComposition,
     productPrintOptions?.includeSize,
+    showOrderQr,
   ])
 
   const previewWidthPx = Math.min(

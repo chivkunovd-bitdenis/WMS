@@ -1151,6 +1151,18 @@ export function FfSuppliesShipmentsPage({
     [mpVisibleBoxes],
   )
 
+  // MPU-04б (18.08): заказчик увидел свёрнутый блок «Короба» и не понял, что там вообще
+  // есть содержимое. Счётчик в заголовке — сколько коробов и сколько единиц в них —
+  // виден без раскрытия аккордеона.
+  const mpBoxesSummary = useMemo(() => {
+    const boxCount = mpVisibleBoxes.length
+    const unitCount = mpVisibleBoxes.reduce(
+      (sum, box) => sum + box.lines.reduce((lineSum, ln) => lineSum + ln.quantity, 0),
+      0,
+    )
+    return { boxCount, unitCount }
+  }, [mpVisibleBoxes])
+
   const mpBoxPanelSx = (hasLines: boolean) => ({
     borderRadius: 1,
     overflow: 'hidden',
@@ -1807,7 +1819,16 @@ export function FfSuppliesShipmentsPage({
       return null
     }
     const planned = unloadDetail.lines.reduce((sum, ln) => sum + ln.quantity, 0)
-    const distributed = unloadDetail.lines.reduce((sum, ln) => sum + (ln.picked_qty ?? 0), 0)
+    // MPU-03: ln.picked_qty приходит с бэкенда посчитанным по содержимому коробов
+    // (backend/app/api/marketplace_unload_requests.py, _picked_by_product), а подбор
+    // с 2026-08-16 короба не трогает вообще — поэтому это поле всегда 0 и счётчик
+    // «Подобрано» не сходился с реальным подбором. Настоящий источник — аллокации
+    // подбора (unloadDetail.pick_allocations), как и написано в комментарии ниже
+    // про «Раньше подпись была...».
+    const distributed = unloadDetail.pick_allocations.reduce(
+      (sum, alloc) => sum + alloc.quantity,
+      0,
+    )
     return {
       planned,
       distributed,
@@ -2606,10 +2627,7 @@ export function FfSuppliesShipmentsPage({
                         <FfProductTableHeadCells showPrint={false} />
                         <TableCell align="right">План</TableCell>
                         {mpExecutionPhase ? (
-                          <>
-                            <TableCell align="right">Распределено</TableCell>
-                            <TableCell align="right">Осталось</TableCell>
-                          </>
+                          <TableCell align="right">Осталось</TableCell>
                         ) : null}
                         {canDeleteMpUnloadLine ? <TableCell align="right" width={56} /> : null}
                       </TableRow>
@@ -2618,7 +2636,7 @@ export function FfSuppliesShipmentsPage({
                       {(() => {
                         const lines = unloadDetail.lines
                         const productCols = 6
-                        const mpCols = mpExecutionPhase ? 2 : 0
+                        const mpCols = mpExecutionPhase ? 1 : 0
                         const emptySpan = productCols + 1 + mpCols + (canDeleteMpUnloadLine ? 1 : 0)
                         if (lines.length === 0) {
                           return (
@@ -2663,20 +2681,12 @@ export function FfSuppliesShipmentsPage({
                                 {ln.quantity}
                               </TableCell>
                               {mpExecutionPhase ? (
-                                <>
-                                  <TableCell
-                                    align="right"
-                                    data-testid={`ff-mp-line-picked-${ln.id}`}
-                                  >
-                                    {picked}
-                                  </TableCell>
-                                  <TableCell
-                                    align="right"
-                                    data-testid={`ff-mp-line-remaining-${ln.id}`}
-                                  >
-                                    {remaining}
-                                  </TableCell>
-                                </>
+                                <TableCell
+                                  align="right"
+                                  data-testid={`ff-mp-line-remaining-${ln.id}`}
+                                >
+                                  {remaining}
+                                </TableCell>
                               ) : null}
                               {canDeleteMpUnloadLine ? (
                                 <TableCell align="right">
@@ -2702,41 +2712,6 @@ export function FfSuppliesShipmentsPage({
                       })()}
                     </TableBody>
                   </Table>
-                  {mpExecutionPhase && unloadDetail.pick_allocations.length > 0 ? (
-                    <Table
-                      size="small"
-                      data-testid="ff-mp-picking-allocations"
-                      sx={{ tableLayout: 'fixed', width: '100%' }}
-                    >
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={{ width: '24%' }}>Ячейка</TableCell>
-                          <TableCell sx={{ width: '28%' }}>Артикул</TableCell>
-                          <TableCell>Товар</TableCell>
-                          <TableCell align="right" sx={{ width: 120 }}>
-                            Подобрать
-                          </TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {unloadDetail.pick_allocations.map((allocation) => (
-                          <TableRow
-                            key={allocation.id}
-                            data-testid={`ff-mp-picking-allocation-${allocation.id}`}
-                          >
-                            <TableCell>{allocation.location_code}</TableCell>
-                            <TableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {allocation.sku_code}
-                            </TableCell>
-                            <TableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {allocation.product_name}
-                            </TableCell>
-                            <TableCell align="right">{allocation.quantity}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  ) : null}
                 </Stack>
               ) : null}
               {mpUnloadTab === 'pick' && unloadDetail && token && authHeaders ? (
@@ -2797,8 +2772,23 @@ export function FfSuppliesShipmentsPage({
                   >
                     <AccordionSummary expandIcon={<ExpandMoreOutlined />} data-testid="ff-mp-boxes-summary">
                       {/* Пункт 12 итерации 2026-08-14: числа «распределено/план» уже есть в шапке
-                          (ff-mp-shipment-summary) — здесь не дублируем, только заголовок раздела. */}
-                      <Typography variant="subtitle2">Короба</Typography>
+                          (ff-mp-shipment-summary) — здесь не дублируем, только заголовок раздела.
+                          MPU-04б (18.08): заказчик не видел, что блок вообще раскрывается и что
+                          внутри есть содержимое — счётчики коробов и единиц в них по образцу
+                          «Короба и грузоместа» на приёмке (FfInboundRequestView). */}
+                      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                        <Typography variant="subtitle2">Короба</Typography>
+                        <Chip
+                          size="small"
+                          label={`Коробов: ${mpBoxesSummary.boxCount}`}
+                          data-testid="ff-mp-boxes-count-chip"
+                        />
+                        <Chip
+                          size="small"
+                          label={`Единиц: ${mpBoxesSummary.unitCount}`}
+                          data-testid="ff-mp-boxes-units-chip"
+                        />
+                      </Stack>
                     </AccordionSummary>
                     <AccordionDetails>
                       <Stack spacing={1.25} data-testid="ff-mp-boxes">

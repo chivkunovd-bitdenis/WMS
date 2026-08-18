@@ -310,9 +310,13 @@ def _http_from_pkg_error(exc: pkg_svc.PackagingTaskServiceError) -> HTTPExceptio
         "line_already_packed",
         "undo_not_available",
         "undo_not_supported",
+        "insufficient_packaging_stock",
     }:
         status_code = status.HTTP_409_CONFLICT
-    return HTTPException(status_code=status_code, detail=code)
+    detail: object = code
+    if exc.message:
+        detail = {"code": code, "message": exc.message}
+    return HTTPException(status_code=status_code, detail=detail)
 
 
 def _fulfilled_order_out(order: object) -> FulfilledOrderOut:

@@ -633,8 +633,21 @@ async def apply_packaging_convert(
     product_id: uuid.UUID,
     storage_location_id: uuid.UUID,
     quantity: int,
+    require_unpacked: bool = True,
 ) -> None:
-    """Перевод qty из не упаковано в упаковано в том же месте."""
+    """Перевод qty из не упаковано в упаковано в том же месте.
+
+    По умолчанию (``require_unpacked=True``) операция требует, чтобы именно
+    неупакованной части хватало на всю запрошенную quantity — так ведёт себя
+    обычная (не FBS) упаковка, где деление важно для планирования остатка.
+
+    ``require_unpacked=False`` снимает это требование: гейт — ОБЩИЙ остаток
+    в ячейке (unpacked + packed), а не его неупакованная часть. Перенос
+    по-прежнему идёт из «не упаковано» в «упаковано», но только на то
+    количество, которое там реально есть (может быть 0) — остаток deficit
+    просто уже числится упакованным на этом месте, и это не повод падать.
+    Уйти в минус по общему остатку по-прежнему нельзя.
+    """
     if quantity < 1:
         msg = "quantity must be positive"
         raise ValueError(msg)
@@ -648,25 +661,44 @@ async def apply_packaging_convert(
         raise ValueError(msg)
     unpacked = InventoryBalance.quantity_unpacked
     packed = InventoryBalance.quantity_packed
+    if require_unpacked:
+        stmt = (
+            update(InventoryBalance)
+            .where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.product_id == product_id,
+                InventoryBalance.storage_location_id == storage_location_id,
+                unpacked >= quantity,
+            )
+            .values(
+                quantity_unpacked=unpacked - quantity,
+                quantity_packed=packed + quantity,
+                quantity=unpacked + packed,
+                updated_at=datetime.now(UTC),
+            )
+        )
+    else:
+        moved_from_unpacked = case((unpacked >= quantity, quantity), else_=unpacked)
+        stmt = (
+            update(InventoryBalance)
+            .where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.product_id == product_id,
+                InventoryBalance.storage_location_id == storage_location_id,
+                unpacked + packed >= quantity,
+            )
+            .values(
+                quantity_unpacked=unpacked - moved_from_unpacked,
+                quantity_packed=packed + moved_from_unpacked,
+                quantity=unpacked + packed,
+                updated_at=datetime.now(UTC),
+            )
+        )
     updated_balance_id = await session.scalar(
-        update(InventoryBalance)
-        .where(
-            InventoryBalance.tenant_id == tenant_id,
-            InventoryBalance.product_id == product_id,
-            InventoryBalance.storage_location_id == storage_location_id,
-            unpacked >= quantity,
-        )
-        .values(
-            quantity_unpacked=unpacked - quantity,
-            quantity_packed=packed + quantity,
-            quantity=unpacked + packed,
-            updated_at=datetime.now(UTC),
-        )
-        .returning(InventoryBalance.id)
-        .execution_options(synchronize_session=False)
+        stmt.returning(InventoryBalance.id).execution_options(synchronize_session=False)
     )
     if updated_balance_id is None:
-        msg = "insufficient_unpacked"
+        msg = "insufficient_unpacked" if require_unpacked else "insufficient_stock"
         raise ValueError(msg)
 
 

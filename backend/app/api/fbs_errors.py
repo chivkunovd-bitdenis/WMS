@@ -44,6 +44,7 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     "product_not_in_supply": "Товар не входит в состав поставки или уже подобран.",
     "order_already_picked": "Заказ уже подобран.",
     "insufficient_unpacked": "Недостаточно неупакованного остатка.",
+    "insufficient_packaging_stock": "Недостаточно остатка товара в ячейке упаковки.",
     "pick_undo_not_allowed": "Отмена подбора после упаковки запрещена.",
     "order_not_picked": "Заказ ещё не подобран.",
     "trbx_not_found": "Грузоместо не найдено.",

@@ -36,6 +36,7 @@ import {
 import { FfHonestSignPage } from './screens/ff/FfHonestSignPage'
 import { HonestSignImportPage } from './screens/shared/HonestSignImportPage'
 import { FfHonestSignLedgerPage } from './screens/ff/FfHonestSignLedgerPage'
+import { FfReportsPage } from './screens/ff/FfReportsPage'
 import { FfHonestSignReprintsPage } from './screens/ff/FfHonestSignReprintsPage'
 import { NotificationsPage } from './screens/shared/NotificationsPage'
 import { HonestSignPoolPage } from './screens/shared/HonestSignPoolPage'
@@ -3058,6 +3059,19 @@ export default function App() {
             element={
               token && isFulfillmentAdmin ? (
                 <FfHonestSignLedgerPage
+                  token={token}
+                  sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
+                />
+              ) : (
+                ffAccessDenied
+              )
+            }
+          />
+          <Route
+            path="ff/reports"
+            element={
+              token && (isFulfillmentAdmin || canCellsOps) ? (
+                <FfReportsPage
                   token={token}
                   sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
                 />
