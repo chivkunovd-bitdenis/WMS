@@ -39,6 +39,7 @@ import {
   Typography,
   Snackbar,
 } from '@mui/material'
+import { alpha } from '@mui/material/styles'
 import { FfProductLineCells, FfProductTableHeadCells } from '../../components/FfProductLineCells'
 import { WbProductPickerDialog, type WbProductPickerCatalogRow } from '../../components/WbProductPickerDialog'
 import { FfMpUnloadPickPanel } from './FfMpUnloadPickPanel'
@@ -1186,15 +1187,6 @@ export function FfSuppliesShipmentsPage({
     bgcolor: 'background.paper',
   }
 
-  const mpBoxTableHeadCellSx = {
-    fontWeight: 600,
-    color: 'text.secondary',
-    bgcolor: 'transparent',
-    borderBottom: 1,
-    borderColor: 'divider',
-    py: 0.75,
-  }
-
   const mpBoxActionsSx = {
     display: 'flex',
     alignItems: 'center',
@@ -1312,80 +1304,49 @@ export function FfSuppliesShipmentsPage({
             sx={{ ...mpBoxBodySx, ...mpBoxTableWrapSx, mt: 0 }}
             data-testid={tableTestId ?? `ff-mp-box-lines-${box.id}`}
           >
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: canUseMpBoxDestructiveControls
-                  ? '28% 1fr 104px 40px'
-                  : '28% 1fr 104px',
-                gap: 1,
-                borderBottom: 1,
-                borderColor: 'divider',
-              }}
-            >
-              <Typography variant="caption" sx={{ ...mpBoxTableHeadCellSx, borderBottom: 0 }}>
-                Артикул
-              </Typography>
-              <Typography variant="caption" sx={{ ...mpBoxTableHeadCellSx, borderBottom: 0 }}>
-                Товар
-              </Typography>
-              <Typography
-                variant="caption"
-                sx={{ ...mpBoxTableHeadCellSx, borderBottom: 0, textAlign: 'right' }}
-              >
-                В коробе
-              </Typography>
-              {canUseMpBoxDestructiveControls ? <Box /> : null}
-            </Box>
-            {box.lines.map((ln) => (
-              <Box
-                key={ln.id}
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: canUseMpBoxDestructiveControls
-                    ? '28% 1fr 104px 40px'
-                    : '28% 1fr 104px',
-                  gap: 1,
-                  alignItems: 'center',
-                  py: 0.5,
-                  borderBottom: 1,
-                  borderColor: 'divider',
-                  '&:last-of-type': { borderBottom: 0 },
-                }}
-              >
-                <Typography
-                  variant="body2"
-                  sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                >
-                  {ln.sku_code}
-                </Typography>
-                <Typography
-                  variant="body2"
-                  title={ln.product_name}
-                  sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                >
-                  {ln.product_name}
-                </Typography>
-                <Typography variant="body2" sx={{ textAlign: 'right' }}>
-                  {ln.quantity}
-                </Typography>
-                {canUseMpBoxDestructiveControls ? (
-                  <Box sx={{ textAlign: 'right' }}>
-                    <Tooltip title="Убрать из короба">
-                      <IconButton
-                        size="small"
-                        aria-label="Убрать из короба"
-                        data-testid={`ff-mp-box-line-remove-${ln.id}`}
-                        disabled={modalBusy}
-                        onClick={() => void removeBoxLine(box.id, ln.id)}
-                      >
-                        <DeleteOutlineOutlined fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
-                ) : null}
-              </Box>
-            ))}
+            {/* MPU-07 (18.08): раньше строка товара в коробе была обезличенной —
+                артикул/название/число. Заказчик просил ту же строку товара, что и
+                везде в системе (фото, ШК, артикул продавца, артикул WB, размер) —
+                переиспользуем FfProductLineCells/FfProductTableHeadCells, как на
+                вкладке «Товары» этого же экрана (ff-supplies-doc-lines) и в
+                диалоге наполнения короба. */}
+            <Table size="small" sx={{ tableLayout: 'fixed', width: '100%' }}>
+              <TableHead>
+                <TableRow>
+                  <FfProductTableHeadCells showPrint={false} />
+                  <TableCell align="right" sx={{ width: 104 }}>
+                    В коробе
+                  </TableCell>
+                  {canUseMpBoxDestructiveControls ? <TableCell sx={{ width: 40 }} /> : null}
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {box.lines.map((ln) => {
+                  const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
+                  return (
+                    <TableRow key={ln.id}>
+                      <FfProductLineCells meta={displayMeta} showPrint={false} />
+                      <TableCell align="right">{ln.quantity}</TableCell>
+                      {canUseMpBoxDestructiveControls ? (
+                        <TableCell align="right">
+                          <Tooltip title="Убрать из короба">
+                            <IconButton
+                              size="small"
+                              aria-label="Убрать из короба"
+                              data-testid={`ff-mp-box-line-remove-${ln.id}`}
+                              disabled={modalBusy}
+                              onClick={() => void removeBoxLine(box.id, ln.id)}
+                            >
+                              <DeleteOutlineOutlined fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      ) : null}
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
           </Box>
         ) : null}
       </Paper>
@@ -2770,14 +2731,25 @@ export function FfSuppliesShipmentsPage({
                     sx={{ mt: 2 }}
                     data-testid="ff-mp-boxes-accordion"
                   >
-                    <AccordionSummary expandIcon={<ExpandMoreOutlined />} data-testid="ff-mp-boxes-summary">
+                    <AccordionSummary
+                      expandIcon={<ExpandMoreOutlined />}
+                      data-testid="ff-mp-boxes-summary"
+                      sx={{
+                        bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08),
+                      }}
+                    >
                       {/* Пункт 12 итерации 2026-08-14: числа «распределено/план» уже есть в шапке
                           (ff-mp-shipment-summary) — здесь не дублируем, только заголовок раздела.
                           MPU-04б (18.08): заказчик не видел, что блок вообще раскрывается и что
                           внутри есть содержимое — счётчики коробов и единиц в них по образцу
-                          «Короба и грузоместа» на приёмке (FfInboundRequestView). */}
+                          «Короба и грузоместа» на приёмке (FfInboundRequestView).
+                          MPU-08 (18.08): заголовок сливался с фоном, заказчик просил несколько
+                          раз сделать его заметным — лёгкая подложка фирменным цветом темы
+                          (primary, 8% непрозрачности) и жирный заголовок, не полная заливка. */}
                       <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                        <Typography variant="subtitle2">Короба</Typography>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                          Короба
+                        </Typography>
                         <Chip
                           size="small"
                           label={`Коробов: ${mpBoxesSummary.boxCount}`}

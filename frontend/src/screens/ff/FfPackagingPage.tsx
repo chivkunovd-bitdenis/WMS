@@ -922,11 +922,18 @@ export function FfPackagingTaskPanel({
                     а не с %, из-за чего ШК оставался узким и обрезался, а кнопка печати
                     раздувалась на всю колонку. Ширины переведены в % и сбалансированы
                     заново, чтобы штрихкод помещался целиком. */}
-                <TableCell sx={{ width: '22%' }}>Товар / SKU</TableCell>
-                <TableCell sx={{ width: '22%' }}>ШК</TableCell>
-                <TableCell align="center" sx={{ width: '6%' }}>ТЗ</TableCell>
-                <TableCell sx={{ width: '12%' }}>ЧЗ</TableCell>
-                <TableCell align="right" sx={{ width: '38%' }}>Действия</TableCell>
+                {/* MPU-10 (18.08): артикул продавца и артикул WB были слеплены в одной
+                    подписи под названием товара («SKU: ...»). Заказчик попросил развести их
+                    по отдельным колонкам вместе с размером; ширины остальных колонок
+                    пересчитаны заново, чтобы сумма снова давала 100% и ничего не обрезалось. */}
+                <TableCell sx={{ width: '18%' }}>Товар</TableCell>
+                <TableCell sx={{ width: '10%' }}>Артикул продавца</TableCell>
+                <TableCell sx={{ width: '8%' }}>Артикул WB</TableCell>
+                <TableCell sx={{ width: '8%' }}>Размер</TableCell>
+                <TableCell sx={{ width: '14%' }}>ШК</TableCell>
+                <TableCell align="center" sx={{ width: '5%' }}>ТЗ</TableCell>
+                <TableCell sx={{ width: '11%' }}>ЧЗ</TableCell>
+                <TableCell align="right" sx={{ width: '26%' }}>Действия</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -953,11 +960,35 @@ export function FfPackagingTaskPanel({
                           <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap data-testid="ff-packaging-compact-product-name">
                             {displayMeta.product_name}
                           </Typography>
-                          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
-                            SKU: {displayMeta.sku_code}
-                          </Typography>
                         </Box>
                       </Stack>
+                    </TableCell>
+                    <TableCell sx={{ overflow: 'hidden' }}>
+                      <Typography
+                        variant="body2"
+                        noWrap
+                        data-testid={`ff-packaging-line-vendor-code-${ln.id}`}
+                      >
+                        {displayMeta.wb_vendor_code || '—'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={{ overflow: 'hidden' }}>
+                      <Typography
+                        variant="body2"
+                        noWrap
+                        data-testid={`ff-packaging-line-nm-id-${ln.id}`}
+                      >
+                        {displayMeta.wb_nm_id ?? '—'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={{ overflow: 'hidden' }}>
+                      <Typography
+                        variant="body2"
+                        noWrap
+                        data-testid={`ff-packaging-line-size-${ln.id}`}
+                      >
+                        {displayMeta.wb_size || ''}
+                      </Typography>
                     </TableCell>
                     <TableCell>
                       {/* Заказчик 18.08: обрезанный ШК нельзя ни прочитать, ни сверить, ни
@@ -1019,7 +1050,7 @@ export function FfPackagingTaskPanel({
                             disabled={!barcodeReady && !ln.requires_honest_sign}
                             sx={{ whiteSpace: 'nowrap' }}
                           >
-                            Печать ЧЗ
+                            ШК + ЧЗ
                           </Button>
                         ) : null}
                       </Stack>
@@ -1404,7 +1435,7 @@ export function FfPackagingTaskPanel({
           убрать его в самый низ под скрывашку, в одном стиле с блоком «Короба»
           (соседним на этом же экране в FfSuppliesShipmentsPage.tsx). Свёрнут по
           умолчанию, заголовок сразу говорит, сколько записей внутри. */}
-      {(task.events ?? []).length > 0 ? (
+      {(task.events ?? []).length > 0 && !isMpUnloadTask ? (
         <Accordion disableGutters variant="outlined" data-testid="ff-packaging-history-accordion">
           <AccordionSummary expandIcon={<ExpandMoreOutlined />} data-testid="ff-packaging-history-summary">
             <Typography variant="subtitle2">История ({orderedEvents.length})</Typography>

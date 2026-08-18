@@ -788,7 +788,10 @@ test('TC-NEW-OUT-FE-02: shipment table columns no early red', async ({ page }) =
   await expect(page.locator('[data-testid^="ff-mp-line-discrepancy-"]')).toHaveCount(0)
   await expect(page.getByTestId(`ff-mp-line-row-${mpLineId}`)).toBeVisible()
   await expect(page.getByTestId(`ff-mp-line-plan-${mpLineId}`)).toHaveText('2')
-  await expect(page.getByTestId(`ff-mp-line-picked-${mpLineId}`)).toHaveText('0')
+  // MPU-03 (18.08.2026): колонка «Распределено» убрана с вкладки «Товары» по решению
+  // заказчика — она дублировала данные вкладки «Подбор». Ячейка ff-mp-line-picked-*
+  // ушла вместе с колонкой; подобранное теперь видно в сводке сверху и на «Подборе».
+  await expect(page.getByTestId(`ff-mp-line-picked-${mpLineId}`)).toHaveCount(0)
   await expect(page.getByTestId(`ff-mp-line-remaining-${mpLineId}`)).toHaveText('2')
   await expect(page.getByTestId('ff-mp-print-actions')).toHaveCount(0)
   await page.getByTestId('ff-mp-tab-packaging').click()

@@ -471,6 +471,18 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         ? fbsHonestSignOrders.length || fbsTapeOrders.length
         : (ctx?.qtyNeedPack ?? 0)
   const totalWbLabels = resolveManualWbLabelCount(wbBarcodeQty, printDoubleWbBarcode)
+  /**
+   * PRN-04: printFbsTape (ниже) печатает циклом по заказам — на каждый заказ
+   * сначала QR, потом его этикетки. Раньше предпросмотр строил один общий QR +
+   * один список «единиц» независимо от заказов, поэтому при нескольких заказах в
+   * «Печать всего» показывал не то, что реально уходит на ленту. fbsPreviewOrders —
+   * тот же ctx.fbsTape.orders, что видит printFbsTape; fbsPreviewLabelCopies —
+   * то же правило числа копий ШК-only этикетки на заказ без ЧЗ (fallbackLabelCopies
+   * в printFbsTape). Сама печать этим не затронута.
+   */
+  const fbsPreviewOrders = includesOrderQr ? fbsTapeOrders : undefined
+  const fbsPreviewLabelCopies =
+    fbsHonestSignOrders.length > 0 ? Math.max(1, labelCopiesFromLayout(layout)) : Math.max(1, totalWbLabels)
   const available = ctx?.markingAvailable ?? 0
   const quantitySummaryText = requiresHonestSign
     ? effectiveReprint
@@ -1146,6 +1158,8 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                     unitsToShow={Math.max(1, totalWbLabels)}
                     totalUnits={Math.max(1, totalWbLabels)}
                     showOrderQr={includesOrderQr}
+                    fbsOrders={fbsPreviewOrders}
+                    fbsNonHonestLabelCopies={fbsPreviewLabelCopies}
                     testId="marking-print-wb-only-preview"
                   />
                 </Box>
@@ -1481,6 +1495,8 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                     totalUnits={canPrintCount}
                     productLabel={ctx?.productLabel ?? null}
                     showOrderQr={includesOrderQr}
+                    fbsOrders={fbsPreviewOrders}
+                    fbsNonHonestLabelCopies={fbsPreviewLabelCopies}
                     testId="marking-print-tape-preview"
                   />
                 </Box>

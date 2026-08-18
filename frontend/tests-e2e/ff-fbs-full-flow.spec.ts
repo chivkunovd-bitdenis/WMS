@@ -265,34 +265,39 @@ test("TC-NEW-FBS-KIZ-013: operator binds and cancels external KIZ in the WB emul
   }
   await expect(page.getByText(/Напечатано 0 из 2/)).toBeVisible();
 
-  await page.getByTestId("fbs-kiz-open").click();
-  const dialog = page.getByTestId("fbs-kiz-dialog");
-  const input = page.getByTestId("fbs-kiz-input");
-  await expect(dialog).toBeVisible();
+  // Сканирование Честного знака перенесено из модалки на вкладку по решению
+  // заказчика 18.08.2026, отдельного шага «Провести» больше нет: скан стикера
+  // заказа подсвечивает строку и активирует её, скан кода сразу привязывает
+  // его к заказу и уходит в WB.
+  const kizScanBar = page.getByTestId("fbs-kiz-scan-bar");
+  const kizScanInput = page.getByTestId("fbs-kiz-scan-input");
+  await expect(kizScanBar).toBeVisible();
   const kizValues = [
     "010460043993125321E2EKIZ000001",
     "010460043993125321E2EKIZ000002",
   ];
   for (const [index, order] of orders.entries()) {
     const sticker = `WB${String(order.wb_order_id).padStart(10, "0")}`;
-    await input.fill(sticker);
-    await input.press("Enter");
-    await expect(dialog.getByText(`№ ${order.wb_order_id}`)).toBeVisible();
-    await input.fill(kizValues[index]);
-    await input.press("Enter");
-    await expect(page.getByTestId("fbs-kiz-pair")).toHaveCount(index + 1);
+    await kizScanInput.fill(sticker);
+    await kizScanInput.press("Enter");
+    await expect(page.getByTestId("fbs-kiz-row-active")).toContainText(
+      `заказ ${order.wb_order_id}`,
+    );
+    await expect(page.getByTestId("fbs-kiz-scan-active")).toContainText(
+      `№ ${order.wb_order_id}`,
+    );
+    await kizScanInput.fill(kizValues[index]);
+    await Promise.all([
+      page.waitForResponse(
+        (item) =>
+          item.url().includes("/operations/fbs-orders/kiz/commit") &&
+          item.status() === 200,
+      ),
+      kizScanInput.press("Enter"),
+    ]);
+    await expect(page.getByTestId("fbs-kiz-scan-active")).toHaveCount(0);
+    await expect(page.getByTestId("fbs-kiz-row-active")).toHaveCount(0);
   }
-
-  await Promise.all([
-    page.waitForResponse(
-      (item) =>
-        item.url().includes("/operations/fbs-orders/kiz/commit") &&
-        item.status() === 200,
-    ),
-    page.getByTestId("fbs-kiz-commit").click(),
-  ]);
-  await expect(dialog.getByText("✓")).toHaveCount(2);
-  await dialog.getByRole("button", { name: "Закрыть" }).click();
 
   await expect(page.getByText(/Напечатано 2 из 2/)).toBeVisible();
   await expect(page.getByText(/· КИЗ/)).toHaveCount(2);

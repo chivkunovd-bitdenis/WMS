@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, type MouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import {
   Alert,
   Box,
   Button,
   Checkbox,
   CircularProgress,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -12,7 +13,9 @@ import {
   Divider,
   FormControlLabel,
   IconButton,
+  InputAdornment,
   LinearProgress,
+  Link,
   Menu,
   MenuItem,
   Paper,
@@ -33,6 +36,7 @@ import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined'
 import MoreVertOutlinedIcon from '@mui/icons-material/MoreVertOutlined'
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined'
+import QrCodeScannerOutlined from '@mui/icons-material/QrCodeScannerOutlined'
 import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { DeadlinePill } from '../../components/fbs/FbsChips'
@@ -40,7 +44,6 @@ import { type PackagingTask, type PackagingTaskLine } from '../ff/FfPackagingPag
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import type { ProductThermalLabelData } from '../../utils/printProductThermalLabel'
-import { FbsKizScanDialog } from './FbsKizScanDialog'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
 import { buildFbsPickingListPrintHtml, ordersWord } from './fbsUx'
 import {
@@ -49,6 +52,7 @@ import {
   addFbsOrdersToSupply,
   assignFbsPackingBoxOrders,
   clearFbsPackingBox,
+  commitFbsKiz,
   createFbsPackingBoxes,
   createFbsIdempotencyKey,
   deleteFbsOrderKiz,
@@ -58,6 +62,7 @@ import {
   fetchFbsPrintBatch,
   fetchFbsWorklist,
   fetchFbsWorkspace,
+  lookupFbsOrderBySticker,
   printFbsOrderTape,
   removeFbsPackingBoxOrder,
   retryFbsPackingBoxQr,
@@ -68,6 +73,8 @@ import {
   startFbsSupplyWork,
   undoFbsPick,
   updateFbsSupplyPlannedShipmentDate,
+  validateFbsKiz,
+  type FbsKizLookup,
   type FbsOrderPrintTapeRequest,
   type FbsPickLocation,
   type FbsPrintAsset,
@@ -145,6 +152,71 @@ function hasOperatorKiz(order: FbsWorkspace['orders'][number]) {
   )
 }
 
+// KIZ-01: инлайновый скан «стикер заказа → Честный знак» прямо в списке упаковки,
+// без модалки. Логика ошибок/подсказок скана переиспользована из FbsKizScanDialog.tsx
+// (тот диалог не меняется и как запасной путь больше не используется).
+type KizScannerDebug = {
+  length: number
+  first8: string
+  last8: string
+}
+
+type KizScanError = {
+  text: string
+  debug: KizScannerDebug | null
+}
+
+const KIZ_HINT_TEXT: Record<string, string> = {
+  keyboard_layout: 'исправлена раскладка',
+  gs_substitute: 'восстановлен разделитель',
+  aim_prefix: 'убран префикс сканера',
+}
+
+function kizErrorTextByCode(code: string, message: string, context: unknown): string {
+  if (code === 'sticker_not_found') return 'Стикер не найден в этой поставке'
+  if (code === 'order_frozen') return 'Заказ уже передан в доставку — КИЗ не изменить'
+  if (code === 'duplicate_kiz') {
+    const details = context as { wb_order_id?: number; created_at?: string } | null
+    const order = details?.wb_order_id ? ` в заказ № ${details.wb_order_id}` : ''
+    const when = details?.created_at
+      ? ` от ${new Date(details.created_at).toLocaleDateString('ru-RU')}`
+      : ''
+    return `Этот КИЗ уже внесён${order}${when}`
+  }
+  if (code === 'needs_confirmation') {
+    const details = context as { current_kiz?: string } | null
+    const current = details?.current_kiz ? ` ${details.current_kiz}` : ''
+    return `На этот заказ уже есть ЧЗ${current}. Внести другой КИЗ?`
+  }
+  if (code === 'not_a_kiz') return 'Это не похоже на Честный знак'
+  if (code === 'meta_validation_fail') return `WB не принял: ${message}`
+  if (code.startsWith('wb_')) return 'WB недоступен, попробуйте ещё раз'
+  return message
+}
+
+function kizErrorText(cause: unknown): string {
+  if (cause instanceof FbsApiError) {
+    return kizErrorTextByCode(cause.code, cause.message, cause.context)
+  }
+  return cause instanceof Error ? cause.message : 'Не удалось выполнить операцию'
+}
+
+function kizScannerDebug(cause: unknown): KizScannerDebug | null {
+  if (!(cause instanceof FbsApiError) || cause.code !== 'not_a_kiz') return null
+  if (!cause.context || typeof cause.context !== 'object') return null
+  const debug = (cause.context as { debug?: unknown }).debug
+  if (!debug || typeof debug !== 'object') return null
+  const row = debug as { length?: unknown; first8?: unknown; last8?: unknown }
+  if (
+    typeof row.length !== 'number' ||
+    typeof row.first8 !== 'string' ||
+    typeof row.last8 !== 'string'
+  ) {
+    return null
+  }
+  return { length: row.length, first8: row.first8, last8: row.last8 }
+}
+
 function productLabelFromOrder(order: FbsWorkspace['orders'][number]): ProductThermalLabelData {
   return {
     product_name: order.product.name,
@@ -214,8 +286,15 @@ export function FfFbsSupplyWorkspace({
   const [retryAction, setRetryAction] = useState<(() => void) | null>(null)
   const [tzLine, setTzLine] = useState<PackagingTaskLine | null>(null)
   const [reprintMenu, setReprintMenu] = useState<{ orderId: string; anchorEl: HTMLElement } | null>(null)
-  const [kizOpen, setKizOpen] = useState(false)
   const [kizUndoOrderId, setKizUndoOrderId] = useState<string | null>(null)
+  const [kizScanActive, setKizScanActive] = useState<FbsKizLookup | null>(null)
+  const [kizScanValue, setKizScanValue] = useState('')
+  const [kizScanBusy, setKizScanBusy] = useState(false)
+  const [kizScanError, setKizScanError] = useState<KizScanError | null>(null)
+  const [kizScanHints, setKizScanHints] = useState<string[]>([])
+  const [kizScanDebugOpen, setKizScanDebugOpen] = useState(false)
+  const [kizConfirmTarget, setKizConfirmTarget] = useState<FbsKizLookup | null>(null)
+  const kizScanInputRef = useRef<HTMLInputElement | null>(null)
   const [addOrdersOpen, setAddOrdersOpen] = useState(false)
   const [addableOrders, setAddableOrders] = useState<FbsWorklistOrder[]>([])
   const [addableSelected, setAddableSelected] = useState<Set<string>>(() => new Set())
@@ -264,6 +343,13 @@ export function FfFbsSupplyWorkspace({
     setAddOrdersOpen(false)
     setAddableOrders([])
     setAddableSelected(new Set())
+    setKizScanActive(null)
+    setKizScanValue('')
+    setKizScanBusy(false)
+    setKizScanError(null)
+    setKizScanHints([])
+    setKizScanDebugOpen(false)
+    setKizConfirmTarget(null)
     if (!initialWorkspace) void load()
   }, [open, supplyId, initialWorkspace, load])
 
@@ -414,6 +500,101 @@ export function FfFbsSupplyWorkspace({
     )
     if (next) setProductBarcode('')
   }
+
+  // KIZ-01: сканер стреляет в активное поле; пока запрос идёт, поле disabled и фокус
+  // теряется — без возврата фокуса следующий скан уходит в никуда. Тот же приём,
+  // что и в FbsKizScanDialog.tsx (см. его refocus()).
+  const refocusKizInput = useCallback(() => {
+    let attempts = 0
+    const focus = () => {
+      const input = kizScanInputRef.current
+      input?.focus()
+      attempts += 1
+      if (input != null && document.activeElement !== input && attempts < 8) {
+        window.setTimeout(focus, 50)
+      }
+    }
+    window.setTimeout(focus, 0)
+  }, [])
+
+  const scanKizSticker = useCallback(
+    async (raw: string) => {
+      if (!workspace) return
+      setKizScanBusy(true)
+      setKizScanError(null)
+      setKizScanHints([])
+      setKizScanDebugOpen(false)
+      try {
+        const found = await lookupFbsOrderBySticker(token, authHeaders, workspace.supply.id, raw)
+        if (!found.can_bind) {
+          setKizScanError({ text: found.block_reason ?? 'На этот заказ КИЗ внести нельзя', debug: null })
+          setKizScanValue('')
+          return
+        }
+        if (found.needs_confirmation) setKizConfirmTarget(found)
+        else setKizScanActive(found)
+        setKizScanValue('')
+      } catch (cause) {
+        setKizScanError({ text: kizErrorText(cause), debug: kizScannerDebug(cause) })
+        setKizScanValue('')
+      } finally {
+        setKizScanBusy(false)
+        refocusKizInput()
+      }
+    },
+    [workspace, token, authHeaders, refocusKizInput],
+  )
+
+  const scanKizCode = useCallback(
+    async (raw: string) => {
+      if (!kizScanActive) return
+      setKizScanBusy(true)
+      setKizScanError(null)
+      setKizScanHints([])
+      setKizScanDebugOpen(false)
+      try {
+        const validated = await validateFbsKiz(token, authHeaders, kizScanActive.order_id, raw)
+        setKizScanHints(validated.hints)
+        const results = await commitFbsKiz(
+          token,
+          authHeaders,
+          [{ order_id: kizScanActive.order_id, value: raw, confirmed: kizScanActive.needs_confirmation }],
+          createFbsIdempotencyKey(),
+        )
+        const outcome = results.find((item) => item.order_id === kizScanActive.order_id)
+        if (outcome && outcome.status !== 'ok') {
+          setKizScanError({
+            text: kizErrorTextByCode(outcome.code ?? '', outcome.message ?? 'Не сохранено', null),
+            debug: null,
+          })
+          setKizScanValue('')
+          return
+        }
+        setKizScanActive(null)
+        setKizScanValue('')
+        await load(true)
+      } catch (cause) {
+        setKizScanError({ text: kizErrorText(cause), debug: kizScannerDebug(cause) })
+        setKizScanValue('')
+      } finally {
+        setKizScanBusy(false)
+        refocusKizInput()
+      }
+    },
+    [kizScanActive, token, authHeaders, refocusKizInput, load],
+  )
+
+  const onKizScanEnter = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key !== 'Enter' || kizScanBusy) return
+      event.preventDefault()
+      const raw = kizScanValue.trim()
+      if (!raw) return
+      if (kizScanActive) void scanKizCode(raw)
+      else void scanKizSticker(raw)
+    },
+    [kizScanBusy, kizScanValue, kizScanActive, scanKizCode, scanKizSticker],
+  )
 
   const pickFromCell = async (locationId: string, productId: string, orderIds: string[]) => {
     if (!workspace || orderIds.length === 0) return
@@ -1467,15 +1648,6 @@ export function FfFbsSupplyWorkspace({
                         </Typography>
                       </Box>
                       <Stack direction="row" spacing={1}>
-                        {anyOrderNeedsHonestSign ? (
-                          <Tooltip title="Только если Честный знак уже наклеен селлером">
-                            <span>
-                              <Button disabled={!packagingEditable || busy} onClick={() => setKizOpen(true)} data-testid="fbs-kiz-open">
-                                Внести КИЗ
-                              </Button>
-                            </span>
-                          </Tooltip>
-                        ) : null}
                         <Button
                           disabled={!packagingEditable || busy || packingOrders.length === 0}
                           onClick={() => openBulkOrderMarkingPrint(
@@ -1499,11 +1671,109 @@ export function FfFbsSupplyWorkspace({
                       </Typography>
                     </Box>
                   ) : null}
+                  {anyOrderNeedsHonestSign ? (
+                    // KIZ-01: скан живёт прямо на вкладке — стикер заказа подсвечивает
+                    // строку активной, следующий скан (Честный знак) привязывает код к
+                    // ней и сразу уходит в WB. Окно «Внести КИЗ» для этого больше не нужно.
+                    <Box
+                      sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }}
+                      data-testid="fbs-kiz-scan-bar"
+                    >
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                        Внесение КИЗ со стикера — только если Честный знак уже наклеен селлером
+                      </Typography>
+                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { sm: 'center' } }}>
+                        <TextField
+                          inputRef={kizScanInputRef}
+                          autoFocus={packagingEditable}
+                          size="small"
+                          fullWidth
+                          autoComplete="off"
+                          value={kizScanValue}
+                          disabled={!packagingEditable || kizScanBusy}
+                          placeholder={kizScanActive ? 'Сканируйте Честный знак' : 'Сканируйте QR стикера заказа'}
+                          onChange={(event) => setKizScanValue(event.target.value)}
+                          onKeyDown={onKizScanEnter}
+                          data-testid="fbs-kiz-scan-input"
+                          slotProps={{
+                            input: {
+                              startAdornment: (
+                                <InputAdornment position="start">
+                                  <QrCodeScannerOutlined fontSize="small" color="action" />
+                                </InputAdornment>
+                              ),
+                            },
+                          }}
+                          sx={{ '& input': { fontFamily: 'monospace' } }}
+                        />
+                        {kizScanActive ? (
+                          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0 }} data-testid="fbs-kiz-scan-active">
+                            <ProductPhotoThumb src={kizScanActive.product.image_url} alt={kizScanActive.product.name} size={32} previewSize={220} />
+                            <Box sx={{ minWidth: 0 }}>
+                              <Typography variant="body2" noWrap sx={{ fontWeight: 700 }}>
+                                {kizScanActive.product.name}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                № {kizScanActive.wb_order_id}
+                              </Typography>
+                            </Box>
+                          </Stack>
+                        ) : null}
+                      </Stack>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: 'block', mt: 0.75 }}
+                        data-testid="fbs-kiz-scan-message"
+                      >
+                        {kizScanActive
+                          ? `Заказ № ${kizScanActive.wb_order_id} активен — сканируйте Честный знак, код привяжется и уйдёт в WB.`
+                          : 'Сканируйте QR стикера заказа — его строка станет активной, затем сканируйте Честный знак.'}
+                      </Typography>
+                      {kizScanHints.length > 0 ? (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                          {kizScanHints.map((hint) => KIZ_HINT_TEXT[hint] ?? hint).join(' · ')}
+                        </Typography>
+                      ) : null}
+                      {kizScanError ? (
+                        <Typography
+                          variant="body2"
+                          component="div"
+                          sx={{ color: 'error.main', mt: 0.5 }}
+                          data-testid="fbs-kiz-scan-error"
+                        >
+                          {kizScanError.text}
+                          {kizScanError.debug ? (
+                            <>
+                              <Link
+                                component="button"
+                                type="button"
+                                variant="body2"
+                                color="inherit"
+                                underline="hover"
+                                onClick={() => setKizScanDebugOpen((current) => !current)}
+                                sx={{ ml: 1 }}
+                              >
+                                Что приехало со сканера
+                              </Link>
+                              <Collapse in={kizScanDebugOpen}>
+                                <Typography variant="caption" component="div" color="text.secondary">
+                                  Длина: {kizScanError.debug.length} · начало: {kizScanError.debug.first8 || '—'} · конец:{' '}
+                                  {kizScanError.debug.last8 || '—'}
+                                </Typography>
+                              </Collapse>
+                            </>
+                          ) : null}
+                        </Typography>
+                      ) : null}
+                    </Box>
+                  ) : null}
                   <Stack divider={<Divider flexItem />}>
                     {packingOrders.map((order) => {
                       const line = order.product.id ? packLineByProduct.get(order.product.id) : undefined
                       const printed = orderPrintDone(order)
                       const mutedColor = printed ? 'text.secondary' : 'text.primary'
+                      const kizRowActive = kizScanActive?.order_id === order.id
                       const ids = [
                         order.product.seller_article,
                         order.product.barcode,
@@ -1518,8 +1788,11 @@ export function FfFbsSupplyWorkspace({
                             alignItems: 'center',
                             px: 2,
                             py: 1.25,
-                            bgcolor: printed ? 'action.hover' : 'background.paper',
+                            bgcolor: kizRowActive ? 'info.light' : (printed ? 'action.hover' : 'background.paper'),
+                            borderLeft: '4px solid',
+                            borderLeftColor: kizRowActive ? 'info.main' : 'transparent',
                           }}
+                          data-testid={kizRowActive ? 'fbs-kiz-row-active' : undefined}
                         >
                           <ProductPhotoThumb src={order.product.image_url} alt={order.product.name} size={40} previewSize={280} />
                           <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -1842,16 +2115,30 @@ export function FfFbsSupplyWorkspace({
         </DialogActions>
       </Dialog>
       {markingPrintDialog}
-      {workspace ? (
-        <FbsKizScanDialog
-          token={token}
-          authHeaders={authHeaders}
-          supplyId={workspace.supply.id}
-          open={kizOpen}
-          onClose={() => setKizOpen(false)}
-          onCommitted={() => void load(true)}
-        />
-      ) : null}
+      {/* KIZ-01: единственный оставшийся модальный шаг скана КИЗ — редкое подтверждение
+          замены уже внесённого кода. Основной цикл «стикер → ЧЗ» идёт инлайново на вкладке. */}
+      <Dialog open={Boolean(kizConfirmTarget)} onClose={() => { setKizConfirmTarget(null); refocusKizInput() }} maxWidth="xs" fullWidth>
+        <DialogTitle>Заказ уже с ЧЗ</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            На заказ № {kizConfirmTarget?.wb_order_id} уже есть ЧЗ {kizConfirmTarget?.current_kiz?.masked}. Внести другой КИЗ?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setKizConfirmTarget(null); refocusKizInput() }}>Отмена</Button>
+          <Button
+            variant="contained"
+            data-testid="fbs-kiz-confirm-replace"
+            onClick={() => {
+              setKizScanActive(kizConfirmTarget)
+              setKizConfirmTarget(null)
+              refocusKizInput()
+            }}
+          >
+            Внести
+          </Button>
+        </DialogActions>
+      </Dialog>
       <Dialog open={Boolean(kizUndoOrderId)} onClose={() => setKizUndoOrderId(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Отменить КИЗ?</DialogTitle>
         <DialogContent>
