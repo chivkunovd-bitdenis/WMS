@@ -33,6 +33,7 @@ type PickOptionLocation = {
   quantity: number
   reserved: number
   available: number
+  picked: number
 }
 
 type PickOptionProduct = {
@@ -219,25 +220,21 @@ export function FfMpUnloadPickPanel({
     }
   }
 
-  const addProduct = useCallback(
-    async (productId: string, locationId: string | null, quantity: number) => {
+  const saveProductLocation = useCallback(
+    async (productId: string, locationId: string, quantity: number) => {
       setBusy(true)
       setError(null)
       setScanMessage(null)
 
       try {
-        const body: {
-          product_id: string
-          quantity: number
-          storage_location_id?: string | null
-        } = {
+        const body = {
           product_id: productId,
-          quantity,
           storage_location_id: locationId,
+          quantity,
         }
 
         const res = await fetch(
-          apiUrl(`/operations/marketplace-unload-requests/${requestId}/pick/add`),
+          apiUrl(`/operations/marketplace-unload-requests/${requestId}/pick/set`),
           {
             method: 'POST',
             headers: jsonHeaderMap,
@@ -250,11 +247,11 @@ export function FfMpUnloadPickPanel({
           return
         }
 
-        setScanMessage(`Добавлено: ${quantity} шт.`)
+        setScanMessage(`Сохранено: ${quantity} шт.`)
         onChanged?.()
         await loadPickOptions({ silent: true })
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Не удалось добавить товар.')
+        setError(e instanceof Error ? e.message : 'Не удалось сохранить количество.')
       } finally {
         setBusy(false)
       }
@@ -463,7 +460,7 @@ export function FfMpUnloadPickPanel({
                                 align="right"
                                 sx={{ width: 110, fontSize: 12, fontWeight: 400, color: 'text.secondary', border: 'none' }}
                               >
-                                Шт
+                                Снято
                               </TableCell>
                               <TableCell align="right" sx={{ width: 120, border: 'none' }} />
                             </TableRow>
@@ -471,10 +468,12 @@ export function FfMpUnloadPickPanel({
                           <TableBody>
                             {product.locations.map((location) => {
                               const qtyKey = `${product.product_id}-${location.storage_location_id}`
-                              const qtyStr = manualQtyByProductLocation[qtyKey] ?? '1'
+                              const qtyMax = location.picked + location.available
+                              const qtyStr =
+                                manualQtyByProductLocation[qtyKey] ?? String(location.picked)
                               const qtyNum = Number(qtyStr)
                               const qtyValid =
-                                Number.isInteger(qtyNum) && qtyNum >= 1 && qtyNum <= location.available
+                                Number.isInteger(qtyNum) && qtyNum >= 0 && qtyNum <= qtyMax
 
                               return (
                                 <TableRow key={qtyKey} data-testid="ff-mp-pick-cell-row">
@@ -499,8 +498,8 @@ export function FfMpUnloadPickPanel({
                                       }
                                       slotProps={{
                                         htmlInput: {
-                                          min: 1,
-                                          max: location.available,
+                                          min: 0,
+                                          max: qtyMax,
                                           'data-testid': `ff-mp-pick-qty-${product.product_id}-${location.storage_location_id}`,
                                         },
                                       }}
@@ -512,9 +511,9 @@ export function FfMpUnloadPickPanel({
                                     <Button
                                       size="small"
                                       variant="outlined"
-                                      disabled={isDisabled || !qtyValid || location.available < 1}
+                                      disabled={isDisabled || !qtyValid}
                                       onClick={() =>
-                                        void addProduct(
+                                        void saveProductLocation(
                                           product.product_id,
                                           location.storage_location_id,
                                           qtyNum,
@@ -522,7 +521,7 @@ export function FfMpUnloadPickPanel({
                                       }
                                       data-testid={`ff-mp-pick-add-${product.product_id}-${location.storage_location_id}`}
                                     >
-                                      Добавить
+                                      Сохранить
                                     </Button>
                                   </TableCell>
                                 </TableRow>

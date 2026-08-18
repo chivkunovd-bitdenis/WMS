@@ -42,6 +42,19 @@ class PickAllocationResult:
     picked_qty: int
 
 
+@dataclass(frozen=True)
+class SetPickAllocationResult:
+    """Ответ set_pick_allocation. Не привязан к ORM-объекту аллокации, потому что
+    при обнулении строка удаляется — обращаться к ней после commit небезопасно."""
+
+    id: uuid.UUID
+    product: Product
+    storage_location_id: uuid.UUID
+    location_code: str
+    quantity: int
+    picked_qty: int
+
+
 async def picked_qty_by_product(
     session: AsyncSession, request_id: uuid.UUID
 ) -> dict[uuid.UUID, int]:
@@ -506,6 +519,138 @@ async def record_pick_allocation(
     return PickAllocationResult(
         allocation=alloc_loaded,
         product=prod,
+        picked_qty=picked_after.get(product_id, 0),
+    )
+
+
+async def set_pick_allocation(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    *,
+    product_id: uuid.UUID,
+    storage_location_id: uuid.UUID,
+    quantity: int,
+) -> SetPickAllocationResult:
+    """Задать итоговое количество подбора по паре товар+ячейка (не прибавку, а
+    итог) — PICK-01. Разница > 0 идёт через record_pick_allocation как есть,
+    разница < 0 — тем же способом, каким remove_from_box возвращает товар в
+    ячейку (reverse_marketplace_unload_pick + restore_reservation_for_remove),
+    но по конкретной строке подбора, а не через _rollback_pick_allocations,
+    которая разносит количество по всем ячейкам товара подряд.
+    """
+    if quantity < 0:
+        raise MarketplaceUnloadPickError("invalid_quantity")
+
+    req = await _request_for_collect(session, tenant_id, request_id)
+    if not await _product_in_shipment(session, req.id, product_id):
+        raise MarketplaceUnloadPickError("product_not_in_shipment")
+
+    prod = await session.get(Product, product_id)
+    if prod is None or prod.tenant_id != tenant_id:
+        raise MarketplaceUnloadPickError("product_not_found")
+    if req.seller_id is not None and prod.seller_id != req.seller_id:
+        raise MarketplaceUnloadPickError("product_seller_mismatch")
+
+    loc = await _validate_storage_location(
+        session, tenant_id, req.warehouse_id, storage_location_id
+    )
+
+    lock_stmt = (
+        select(MarketplaceUnloadRequest.id)
+        .where(
+            MarketplaceUnloadRequest.id == request_id,
+            MarketplaceUnloadRequest.tenant_id == tenant_id,
+        )
+        .with_for_update()
+    )
+    await session.execute(lock_stmt)
+
+    alloc_stmt = (
+        select(MarketplaceUnloadPickAllocation)
+        .where(
+            MarketplaceUnloadPickAllocation.request_id == request_id,
+            MarketplaceUnloadPickAllocation.product_id == product_id,
+            MarketplaceUnloadPickAllocation.storage_location_id == storage_location_id,
+        )
+        .with_for_update()
+    )
+    alloc_res = await session.execute(alloc_stmt)
+    alloc = alloc_res.scalar_one_or_none()
+    current_qty = int(alloc.quantity) if alloc is not None else 0
+    diff = quantity - current_qty
+
+    if diff > 0:
+        result = await record_pick_allocation(
+            session,
+            tenant_id,
+            request_id,
+            storage_location_id=storage_location_id,
+            product_id=product_id,
+            quantity=diff,
+        )
+        return SetPickAllocationResult(
+            id=result.allocation.id,
+            product=result.product,
+            storage_location_id=result.allocation.storage_location_id,
+            location_code=result.allocation.storage_location.code,
+            quantity=int(result.allocation.quantity),
+            picked_qty=result.picked_qty,
+        )
+
+    if diff == 0:
+        picked_now = await picked_qty_by_product(session, request_id)
+        return SetPickAllocationResult(
+            id=alloc.id if alloc is not None else uuid.uuid4(),
+            product=prod,
+            storage_location_id=storage_location_id,
+            location_code=loc.code,
+            quantity=current_qty,
+            picked_qty=picked_now.get(product_id, 0),
+        )
+
+    # diff < 0: current_qty > quantity >= 0, значит строка подбора существует.
+    assert alloc is not None
+    alloc_id = alloc.id
+    remove_qty = -diff
+    new_qty = current_qty - remove_qty
+    if new_qty < 1:
+        await session.delete(alloc)
+    else:
+        alloc.quantity = new_qty
+
+    await inventory_service.reverse_marketplace_unload_pick(
+        session,
+        tenant_id=tenant_id,
+        product_id=product_id,
+        storage_location_id=storage_location_id,
+        quantity=remove_qty,
+        marketplace_unload_request_id=request_id,
+    )
+    await mu_svc.restore_reservation_for_remove(
+        session,
+        request_id,
+        product_id,
+        remove_qty,
+        tenant_id=tenant_id,
+        warehouse_id=req.warehouse_id,
+    )
+
+    await session.commit()
+
+    from app.services import packaging_task_service as pkg_svc
+
+    pkg_task = await pkg_svc.get_task_for_unload(session, tenant_id, request_id)
+    if pkg_task is not None:
+        await pkg_svc.sync_lines_from_pick_allocations(session, tenant_id, pkg_task)
+
+    picked_after = await picked_qty_by_product(session, request_id)
+    return SetPickAllocationResult(
+        id=alloc_id,
+        product=prod,
+        storage_location_id=storage_location_id,
+        location_code=loc.code,
+        quantity=max(0, new_qty),
         picked_qty=picked_after.get(product_id, 0),
     )
 

@@ -1261,6 +1261,190 @@ async def test_marketplace_unload_ship_deducts_stock_by_pick_and_scan(
 
 
 @pytest.mark.asyncio
+async def test_marketplace_unload_pick_set_allocation_increase_decrease_zero(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """PICK-01: pick/set задаёт итог по ячейке (не прибавку) и умеет вернуть
+    товар обратно, вплоть до нуля — ровно тем способом, каким remove_from_box
+    уже возвращает товар при удалении строки короба."""
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "PickSet Co",
+            "slug": f"pickset-{suffix}",
+            "admin_email": f"pickset-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    token = str(reg.json()["access_token"])
+    h = {"Authorization": f"Bearer {token}"}
+    wh = await async_client.post(
+        "/warehouses", headers=h, json={"name": "W", "code": f"w-{suffix}"}
+    )
+    wid = wh.json()["id"]
+    sid, wb_wid = await _seller_wb_mp_warehouse(async_client, h, monkeypatch)
+    pr = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": "P",
+            "sku_code": f"S-{suffix}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+            "seller_id": sid,
+        },
+    )
+    pid = pr.json()["id"]
+    await _link_product_wb_barcode(
+        async_client, h, seller_id=sid, product_id=pid, monkeypatch=monkeypatch
+    )
+    loc_id = await _post_inventory(
+        async_client,
+        h,
+        warehouse_id=wid,
+        product_id=pid,
+        qty=5,
+        location_code="MU-SET",
+    )
+
+    mu = await async_client.post(
+        "/operations/marketplace-unload-requests",
+        headers=h,
+        json={"warehouse_id": wid, "seller_id": sid, "wb_mp_warehouse_id": wb_wid},
+    )
+    mid = mu.json()["id"]
+    await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/lines",
+        headers=h,
+        json={"product_id": pid, "quantity": 5},
+    )
+    await _patch_mp_planned_date(async_client, h, mid)
+    await _patch_packaging_instructions(async_client, h, pid)
+    sub = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/submit", headers=h
+    )
+    assert sub.status_code == 200, sub.text
+
+    # Увеличение: подобрать все 5 из ячейки. Остаток в ячейке обнуляется —
+    # проверяем «важно» из PICK-01: такая ячейка не должна пропасть из выдачи.
+    set5 = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/pick/set",
+        headers=h,
+        json={"product_id": pid, "storage_location_id": loc_id, "quantity": 5},
+    )
+    assert set5.status_code == 200, set5.text
+    assert set5.json()["quantity"] == 5
+
+    bal_at_loc = await async_client.get(
+        "/operations/inventory-balances",
+        headers=h,
+        params={"storage_location_id": loc_id},
+    )
+    row = next(x for x in bal_at_loc.json() if x["product_id"] == pid)
+    assert row["quantity"] == 0
+
+    options = await async_client.get(
+        f"/operations/marketplace-unload-requests/{mid}/pick-options", headers=h
+    )
+    assert options.status_code == 200, options.text
+    product_row = next(o for o in options.json() if o["product_id"] == pid)
+    assert product_row["picked_qty"] == 5
+    loc_row = next(
+        loc for loc in product_row["locations"] if loc["storage_location_id"] == loc_id
+    )
+    assert loc_row["picked"] == 5
+    assert loc_row["quantity"] == 0
+    assert loc_row["available"] == 0
+
+    # Уменьшение: вернуть 2 в ячейку, оставив снятыми 3.
+    set3 = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/pick/set",
+        headers=h,
+        json={"product_id": pid, "storage_location_id": loc_id, "quantity": 3},
+    )
+    assert set3.status_code == 200, set3.text
+    assert set3.json()["quantity"] == 3
+
+    bal_after_partial = await async_client.get(
+        "/operations/inventory-balances",
+        headers=h,
+        params={"storage_location_id": loc_id},
+    )
+    row_partial = next(x for x in bal_after_partial.json() if x["product_id"] == pid)
+    assert row_partial["quantity"] == 2
+
+    options_partial = await async_client.get(
+        f"/operations/marketplace-unload-requests/{mid}/pick-options", headers=h
+    )
+    product_row_partial = next(
+        o for o in options_partial.json() if o["product_id"] == pid
+    )
+    assert product_row_partial["picked_qty"] == 3
+    loc_row_partial = next(
+        loc
+        for loc in product_row_partial["locations"]
+        if loc["storage_location_id"] == loc_id
+    )
+    assert loc_row_partial["picked"] == 3
+    assert loc_row_partial["quantity"] == 2
+    assert loc_row_partial["available"] == 2
+
+    # Обнуление: вернуть остаток целиком, подбор с ячейки обнуляется, а остаток в
+    # ячейке возвращается к исходным 5 (не выдумывается новое движение по складу).
+    set0 = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/pick/set",
+        headers=h,
+        json={"product_id": pid, "storage_location_id": loc_id, "quantity": 0},
+    )
+    assert set0.status_code == 200, set0.text
+    assert set0.json()["quantity"] == 0
+
+    bal_after_zero = await async_client.get(
+        "/operations/inventory-balances",
+        headers=h,
+        params={"storage_location_id": loc_id},
+    )
+    row_zero = next(x for x in bal_after_zero.json() if x["product_id"] == pid)
+    assert row_zero["quantity"] == 5
+
+    options_zero = await async_client.get(
+        f"/operations/marketplace-unload-requests/{mid}/pick-options", headers=h
+    )
+    product_row_zero = next(o for o in options_zero.json() if o["product_id"] == pid)
+    assert product_row_zero["picked_qty"] == 0
+    loc_row_zero = next(
+        loc for loc in product_row_zero["locations"] if loc["storage_location_id"] == loc_id
+    )
+    assert loc_row_zero["picked"] == 0
+    assert loc_row_zero["quantity"] == 5
+    assert loc_row_zero["available"] == 5
+
+    # Не прибавка, а итог: повторная установка того же числа не даёт двойного счёта.
+    set_again_a = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/pick/set",
+        headers=h,
+        json={"product_id": pid, "storage_location_id": loc_id, "quantity": 3},
+    )
+    assert set_again_a.status_code == 200, set_again_a.text
+    set_again_b = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/pick/set",
+        headers=h,
+        json={"product_id": pid, "storage_location_id": loc_id, "quantity": 3},
+    )
+    assert set_again_b.status_code == 200, set_again_b.text
+    assert set_again_b.json()["quantity"] == 3
+    options_repeat = await async_client.get(
+        f"/operations/marketplace-unload-requests/{mid}/pick-options", headers=h
+    )
+    product_row_repeat = next(
+        o for o in options_repeat.json() if o["product_id"] == pid
+    )
+    assert product_row_repeat["picked_qty"] == 3
+
+
+@pytest.mark.asyncio
 async def test_marketplace_unload_ship_no_double_inventory_movement(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
