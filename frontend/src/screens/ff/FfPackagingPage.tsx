@@ -926,14 +926,17 @@ export function FfPackagingTaskPanel({
                     подписи под названием товара («SKU: ...»). Заказчик попросил развести их
                     по отдельным колонкам вместе с размером; ширины остальных колонок
                     пересчитаны заново, чтобы сумма снова давала 100% и ничего не обрезалось. */}
-                <TableCell sx={{ width: '18%' }}>Товар</TableCell>
+                {/* Название товара — самая длинная строка в таблице, ей нужен запас:
+                    после добавления трёх колонок (артикулы и размер) оно начало
+                    обрезаться. Забрали 8 п.п. у «Действий», там одна кнопка. */}
+                <TableCell sx={{ width: '26%' }}>Товар</TableCell>
                 <TableCell sx={{ width: '10%' }}>Артикул продавца</TableCell>
                 <TableCell sx={{ width: '8%' }}>Артикул WB</TableCell>
                 <TableCell sx={{ width: '8%' }}>Размер</TableCell>
                 <TableCell sx={{ width: '14%' }}>ШК</TableCell>
                 <TableCell align="center" sx={{ width: '5%' }}>ТЗ</TableCell>
                 <TableCell sx={{ width: '11%' }}>ЧЗ</TableCell>
-                <TableCell align="right" sx={{ width: '26%' }}>Действия</TableCell>
+                <TableCell align="right" sx={{ width: '18%' }}>Действия</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>

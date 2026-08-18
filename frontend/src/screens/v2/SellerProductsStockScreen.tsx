@@ -932,7 +932,8 @@ export function SellerProductsStockScreen({
             <col style={{ width: '16%' }} />
             <col style={{ width: '12%' }} />
             <col style={{ width: '13%' }} />
-            <col style={{ width: '12%' }} />
+            <col style={{ width: '7%' }} />
+            <col style={{ width: '5%' }} />
           </colgroup>
           <TableHead>
             <TableRow>
@@ -952,7 +953,8 @@ export function SellerProductsStockScreen({
               <TableCell align="right">Остаток</TableCell>
               <TableCell>FBS-пул</TableCell>
               <TableCell>Публикация WB</TableCell>
-              <TableCell>ТЗ / ЧЗ</TableCell>
+              <TableCell>ТЗ</TableCell>
+              <TableCell>ЧЗ</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -1117,46 +1119,40 @@ export function SellerProductsStockScreen({
                   })()}
                 </TableCell>
                 <TableCell sx={{ minWidth: 0 }}>
-                  <Stack spacing={0.25} sx={{ alignItems: 'flex-start', minWidth: 0 }}>
-                    <Typography
-                      variant="caption"
-                      color={p.has_packaging_instructions ? 'text.primary' : 'text.secondary'}
-                      data-testid={`seller-packaging-status-${p.id}`}
-                      noWrap
-                    >
-                      {p.has_packaging_instructions ? 'ТЗ есть' : 'Без ТЗ'}
-                    </Typography>
-                    {p.requires_honest_sign ? (
-                      <Chip
-                        size="small"
-                        label="ЧЗ"
-                        color="info"
-                        variant="outlined"
-                        data-testid={`seller-honest-sign-status-${p.id}`}
-                      />
-                    ) : (
-                      <Typography variant="caption" color="text.secondary" noWrap>
-                        ЧЗ нет
-                      </Typography>
-                    )}
-                    <Button
+                  <Button
+                    size="small"
+                    variant={p.has_packaging_instructions ? 'contained' : 'outlined'}
+                    color={p.has_packaging_instructions ? 'primary' : 'inherit'}
+                    onClick={() => openPackagingEdit(p)}
+                    data-testid={`seller-packaging-edit-${p.id}`}
+                    aria-label={p.has_packaging_instructions ? 'Редактировать ТЗ' : 'Добавить ТЗ'}
+                    title={p.has_packaging_instructions ? 'Редактировать ТЗ' : 'Добавить ТЗ'}
+                    sx={{
+                      minWidth: 64,
+                      ...(p.has_packaging_instructions
+                        ? {}
+                        : { color: 'text.secondary', borderColor: 'divider' }),
+                    }}
+                  >
+                    ТЗ
+                  </Button>
+                </TableCell>
+                <TableCell sx={{ minWidth: 0 }}>
+                  {p.requires_honest_sign ? (
+                    <Chip
                       size="small"
+                      label="ЧЗ"
+                      color="info"
                       variant="outlined"
-                      onClick={() => openPackagingEdit(p)}
-                      data-testid={`seller-packaging-edit-${p.id}`}
-                      aria-label="Редактировать ТЗ"
-                      title="Редактировать ТЗ"
-                      sx={{ width: 36, minWidth: 36, px: 0 }}
-                    >
-                      ТЗ
-                    </Button>
-                  </Stack>
+                      data-testid={`seller-honest-sign-status-${p.id}`}
+                    />
+                  ) : null}
                 </TableCell>
               </TableRow>
             ))}
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7}>
+                <TableCell colSpan={8}>
                   <Typography variant="body2" color="text.secondary">
                     Пока нет товаров.
                   </Typography>

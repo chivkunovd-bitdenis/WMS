@@ -863,7 +863,17 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     setError(null)
     try {
       if (ctx.fbsTape) {
-        await printFbsTape({ layout, size: czTapePrintSize, closeAfter: true })
+        // PRN-05 (18.08.2026): для пачки, где ни одному заказу не нужен Честный знак,
+        // размер надо брать тот, который оператор реально видит и меняет в поле
+        // «Размер ШК ВБ» (nonCzPrintSize). czTapePrintSize читает другое хранилище,
+        // которое в этой ветке не показывается, — оператор выбирал 60×80, а
+        // печаталось 58×40. Соседняя ветка одиночной печати без ЧЗ (ниже) уже
+        // использует nonCzPrintSize, приводим ленту к тому же правилу.
+        await printFbsTape({
+          layout,
+          size: requiresHonestSign ? czTapePrintSize : nonCzPrintSize,
+          closeAfter: true,
+        })
       } else if (!requiresHonestSign) {
         if (wbBarcodeQty >= 1) {
           await printLabelOnlyTape(totalWbLabels, nonCzPrintSize, true)
