@@ -412,19 +412,6 @@ async def test_wms_emulator_fbs_stock_full_cycle(
             quantity_delta=1,
             movement_type="inbound_intake",
         )
-        # StockDirection (is_fbs=True) is a separate mechanism from
-        # fbs_binding_stock_pools: it still gates whether an incoming WB order
-        # can be reserved against physical WMS inventory
-        # (fbs_stock_availability_service.fbs_available_qty_for_product).
-        # The new pool table only controls what gets published to WB.
-        await stock_direction_service.create_stock_direction(
-            session,
-            tenant_id,
-            product_id,
-            name="FBS pool",
-            quantity=1,
-            is_fbs=True,
-        )
 
         unload = MarketplaceUnloadRequest(
             tenant_id=tenant_id,

@@ -29,7 +29,7 @@ from app.models.fbs_stock_pool_debit import FbsStockPoolDebit
 from app.models.fbs_supply import FBS_SUPPLY_SOURCE_WB, FbsSupply
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
-from app.services import inventory_service, stock_direction_service
+from app.services import inventory_service
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.tokens import decode_access_token
 from app.services.wb_marketplace_orders_service import (
@@ -163,22 +163,6 @@ async def _seed_binding(
         )
     )
     await session.flush()
-
-
-async def _create_fbs_pool(
-    session: Any,
-    tenant_id: uuid.UUID,
-    product_id: uuid.UUID,
-    quantity: int,
-) -> None:
-    await stock_direction_service.create_stock_direction(
-        session,
-        tenant_id,
-        product_id,
-        name="FBS pool",
-        quantity=quantity,
-        is_fbs=True,
-    )
 
 
 def _patch_wb_order_fetches(
@@ -454,7 +438,6 @@ async def test_fbs_order_reserve_and_no_stock(
             quantity_delta=1,
             movement_type="inbound_intake",
         )
-        await _create_fbs_pool(session, prod.tenant_id, product_id, 1)
         await session.commit()
 
     rows = [
@@ -990,7 +973,6 @@ async def test_fbs_order_status_sync_releases_reserve_on_cancel(
             quantity_delta=2,
             movement_type="inbound_intake",
         )
-        await _create_fbs_pool(session, tenant_id, product_id, 2)
         order, _created = await upsert_order_from_wb_row(
             session,
             tenant_id,
@@ -1295,7 +1277,6 @@ async def test_fbs_cancelled_order_not_re_reserved_on_upsert(
             quantity_delta=1,
             movement_type="inbound_intake",
         )
-        await _create_fbs_pool(session, tenant_id, product_id, 1)
         order, _created = await upsert_order_from_wb_row(
             session,
             tenant_id,
@@ -1626,7 +1607,6 @@ async def test_fbs_binding_later_assigns_warehouse_and_reserves(
     async with SessionLocal() as session:
         prod = await session.get(Product, product_id)
         assert prod is not None
-        await _create_fbs_pool(session, prod.tenant_id, product_id, 1)
         await session.commit()
 
     start2 = await async_client.post(
@@ -1683,7 +1663,6 @@ async def test_fbs_order_status_sync_releases_reserve_on_defect(
             quantity_delta=1,
             movement_type="inbound_intake",
         )
-        await _create_fbs_pool(session, tenant_id, product_id, 1)
         order, _created = await upsert_order_from_wb_row(
             session,
             tenant_id,
@@ -1764,7 +1743,6 @@ async def test_fbs_order_reservation_conflict_keeps_warehouse(
             quantity_delta=1,
             movement_type="inbound_intake",
         )
-        await _create_fbs_pool(session, tenant_id, product_id, 1)
         await _seed_binding(
             session, tenant_id, seller_uuid, WB_WAREHOUSE_A, warehouse_a_uuid
         )
@@ -1855,7 +1833,6 @@ async def test_fbs_order_wb_warehouse_remap_conflict_on_resync(
             quantity_delta=1,
             movement_type="inbound_intake",
         )
-        await _create_fbs_pool(session, tenant_id, product_id, 1)
         await _seed_binding(
             session, tenant_id, seller_uuid, WB_WAREHOUSE_A, warehouse_a_uuid
         )

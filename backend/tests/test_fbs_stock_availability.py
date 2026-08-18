@@ -78,10 +78,12 @@ async def _setup_tenant_product(
 
 # TC-NEW-FBS-STOCK-006
 @pytest.mark.asyncio
-async def test_fbs_availability_without_fbs_direction_is_zero(
+async def test_fbs_availability_without_direction_uses_physical_stock(
     async_client: AsyncClient,
 ) -> None:
-    """No explicit FBS pool means WB publish/reserve sees 0, not physical stock."""
+    """No stock direction (reserve) means WB publish/reserve sees physical stock
+    minus outbound and FBS reservations — directions are no longer a gate, only
+    an extra reserve on top of the physical balance."""
     _headers, seller_id, warehouse_id, product_id, storage_loc_id = (
         await _setup_tenant_product(async_client)
     )
@@ -172,9 +174,12 @@ async def test_fbs_availability_without_fbs_direction_is_zero(
             session, tenant_id, warehouse_id, product_id
         )
 
-    assert batch[product_id] == 0
-    assert single == 0
-    assert via_reserve == 0
+    # on_hand 5 (storage) + 2 (sorting) = 7, minus outbound reserve 1,
+    # minus 2 FBS order reservations (1 each) = 4. No direction was created,
+    # so there is nothing to subtract for reserves.
+    assert batch[product_id] == 4
+    assert single == 4
+    assert via_reserve == 4
 
 
 # TC-NEW-FBS-STOCK-005
@@ -211,9 +216,9 @@ async def test_fbo_reserve_does_not_reduce_fbs_publish(async_client: AsyncClient
             session,
             tenant_id,
             product_id,
-            name="FBS pool",
-            quantity=15,
-            is_fbs=True,
+            name="Reserve",
+            quantity=6,
+            is_fbs=False,
         )
 
         before_mp = await fbs_available_qty_for_product(
@@ -252,8 +257,10 @@ async def test_fbo_reserve_does_not_reduce_fbs_publish(async_client: AsyncClient
             session, tenant_id, warehouse_id, product_id
         )
 
-    assert before_mp == 15
-    assert after_mp == 15
+    # on_hand 10 (storage) + 5 (sorting) = 15, minus a 6-unit reserve
+    # direction = 9. The marketplace-unload reservation must not touch it.
+    assert before_mp == 9
+    assert after_mp == 9
 
 
 # TC-NEW-FBS-STOCK-007
@@ -459,14 +466,9 @@ async def test_sold_release_does_not_resurrect_available_after_fbs_write_off(
             quantity_delta=5,
             movement_type="inbound_intake",
         )
-        await stock_direction_service.create_stock_direction(
-            session,
-            tenant_id,
-            product_id,
-            name="FBS pool",
-            quantity=5,
-            is_fbs=True,
-        )
+        # No stock direction here: under the new model availability comes
+        # straight from physical stock, so a direction is not needed to
+        # exercise the write-off/release invariant below.
 
         order = FbsOrder(
             tenant_id=tenant_id,

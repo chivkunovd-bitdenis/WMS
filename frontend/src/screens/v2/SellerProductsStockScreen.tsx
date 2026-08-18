@@ -5,13 +5,19 @@ import {
   Button,
   Checkbox,
   Chip,
+  Divider,
+  Drawer,
+  FormControl,
   FormControlLabel,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
   Stack,
   Table,
   TableBody,
@@ -34,6 +40,7 @@ type WbCatalogRow = {
   name: string
   wb_vendor_code: string | null
   wb_nm_id: number | null
+  wb_subject_name: string | null
   wb_primary_image_url: string | null
   wb_barcodes: string[]
   wb_primary_barcode: string | null
@@ -41,6 +48,51 @@ type WbCatalogRow = {
   packaging_instructions: string | null
   requires_honest_sign: boolean
   has_packaging_instructions: boolean
+}
+
+// Остаток на ФФ по товару — из /operations/inventory-balances/summary. Тот же
+// запрос и формат, что и в каталоге фулфилмента (см. CAT-20).
+type StockSummaryRow = {
+  product_id: string
+  sku_code: string
+  product_name: string
+  quantity: number
+  quantity_in_sorting: number
+  quantity_in_storage: number
+  reserved: number
+  available: number
+  quantity_fbs: number
+  quantity_reserved_directions: number
+  quantity_free_fbo: number
+}
+
+// Направления остатка (резервы) — только чтение. Механику резервирования
+// правит фулфилмент в своём каталоге, здесь товар только смотрит список.
+type StockDirectionRow = {
+  id: string
+  product_id: string
+  name: string
+  comment: string | null
+  quantity: number
+  is_fbs: boolean
+}
+
+function matchesCatalogSearch(
+  row: {
+    name: string
+    wb_vendor_code: string | null
+    sku_code: string
+    wb_primary_barcode: string | null
+    wb_barcodes: string[]
+  },
+  query: string,
+): boolean {
+  const needle = query.trim().toLowerCase()
+  if (!needle) return true
+  const haystack = [row.name, row.wb_vendor_code ?? '', row.sku_code, row.wb_primary_barcode ?? '', ...row.wb_barcodes]
+    .join(' ')
+    .toLowerCase()
+  return haystack.includes(needle)
 }
 
 type Props = {
@@ -56,6 +108,7 @@ export function SellerProductsStockScreen({
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [catalog, setCatalog] = useState<WbCatalogRow[]>([])
+  const [stock, setStock] = useState<StockSummaryRow[]>([])
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(10)
   const [editProduct, setEditProduct] = useState<WbCatalogRow | null>(null)
@@ -64,6 +117,15 @@ export function SellerProductsStockScreen({
   const [editBusy, setEditBusy] = useState(false)
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set())
   const [bulkHonestSignBusy, setBulkHonestSignBusy] = useState(false)
+
+  // ── Фильтры над таблицей (перенесены из каталога фулфилмента, CAT-20) ─────
+  const [filterSearch, setFilterSearch] = useState('')
+  const [filterCategory, setFilterCategory] = useState('')
+
+  // ── Резервы: список направлений остатка, только чтение (CAT-20) ──────────
+  const [reservesProductId, setReservesProductId] = useState<string | null>(null)
+  const [reserveDirections, setReserveDirections] = useState<Record<string, StockDirectionRow[]>>({})
+  const [reserveBusy, setReserveBusy] = useState<Set<string>>(new Set())
 
   const refreshAll = useCallback(async () => {
     setError(null)
@@ -86,10 +148,66 @@ export function SellerProductsStockScreen({
     void refreshAll()
   }, [refreshAll])
 
+  const loadStock = useCallback(async () => {
+    try {
+      const res = await fetch(apiUrl('/operations/inventory-balances/summary'), {
+        headers: { ...authHeaders(token) },
+      })
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      setStock((await res.json()) as StockSummaryRow[])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось загрузить остатки.')
+    }
+  }, [authHeaders, token])
+
+  useEffect(() => {
+    void loadStock()
+  }, [loadStock])
+
+  const rows = useMemo(() => {
+    const byProduct = new Map(stock.map((s) => [s.product_id, s]))
+    return catalog.map((p) => {
+      const bal = byProduct.get(p.id)
+      return {
+        ...p,
+        stock_on_hand: bal?.quantity ?? 0,
+        stock_in_storage: bal?.quantity_in_storage ?? 0,
+        stock_reserved_directions: bal?.quantity_reserved_directions ?? 0,
+        stock_free_fbo: bal?.quantity_free_fbo ?? bal?.quantity ?? 0,
+      }
+    })
+  }, [catalog, stock])
+
+  const categoryOptions = useMemo(() => {
+    const set = new Set<string>()
+    for (const row of rows) {
+      const value = row.wb_subject_name?.trim()
+      if (value) set.add(value)
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ru'))
+  }, [rows])
+
+  const filteredRows = useMemo(
+    () =>
+      rows.filter(
+        (row) =>
+          matchesCatalogSearch(row, filterSearch) &&
+          (!filterCategory || row.wb_subject_name === filterCategory),
+      ),
+    [rows, filterSearch, filterCategory],
+  )
+
+  useEffect(() => {
+    setPage(0)
+  }, [filterSearch, filterCategory])
+
   const pagedRows = useMemo(() => {
     const start = page * rowsPerPage
-    return catalog.slice(start, start + rowsPerPage)
-  }, [catalog, page, rowsPerPage])
+    return filteredRows.slice(start, start + rowsPerPage)
+  }, [filteredRows, page, rowsPerPage])
 
   const selectedRows = useMemo(
     () => catalog.filter((row) => selectedProductIds.has(row.id)),
@@ -240,6 +358,57 @@ export function SellerProductsStockScreen({
     }
   }
 
+  const markReserveBusy = useCallback((productId: string, pending: boolean) => {
+    setReserveBusy((current) => {
+      const next = new Set(current)
+      if (pending) next.add(productId)
+      else next.delete(productId)
+      return next
+    })
+  }, [])
+
+  const loadReserveDirections = useCallback(
+    async (productId: string) => {
+      markReserveBusy(productId, true)
+      setError(null)
+      try {
+        const res = await fetch(apiUrl(`/products/${productId}/stock-directions`), {
+          headers: { ...authHeaders(token) },
+        })
+        if (!res.ok) {
+          setError(await readApiErrorMessage(res))
+          return
+        }
+        const body = (await res.json()) as StockDirectionRow[]
+        setReserveDirections((current) => ({ ...current, [productId]: body }))
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Не удалось загрузить резервы.')
+      } finally {
+        markReserveBusy(productId, false)
+      }
+    },
+    [authHeaders, markReserveBusy, token],
+  )
+
+  const openReserves = useCallback(
+    async (productId: string) => {
+      setReservesProductId(productId)
+      if (reserveDirections[productId] == null) {
+        await loadReserveDirections(productId)
+      }
+    },
+    [loadReserveDirections, reserveDirections],
+  )
+
+  const closeReserves = useCallback(() => {
+    setReservesProductId(null)
+  }, [])
+
+  const reservesProduct = useMemo(
+    () => rows.find((row) => row.id === reservesProductId) ?? null,
+    [reservesProductId, rows],
+  )
+
   return (
     <Box
       sx={{
@@ -254,8 +423,8 @@ export function SellerProductsStockScreen({
         Товары
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Каталог товаров, синхронизированных из WB. Остаток по складам и публикация в FBS
-        настраиваются на экране каталога фулфилмента.
+        Каталог товаров, синхронизированных из WB. Остаток и резервы здесь только для
+        просмотра — их настраивает фулфилмент на своём экране каталога.
       </Typography>
 
       {error ? (
@@ -298,6 +467,43 @@ export function SellerProductsStockScreen({
         </Stack>
       </Paper>
 
+      <Paper variant="outlined" sx={{ p: 2, mb: 2 }} data-testid="seller-catalog-filters">
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={2}
+          sx={{ alignItems: { sm: 'center' }, flexWrap: 'wrap', rowGap: 2 }}
+        >
+          <TextField
+            size="small"
+            placeholder="Поиск по названию, артикулу, SKU или ШК"
+            value={filterSearch}
+            onChange={(e) => setFilterSearch(e.target.value)}
+            slotProps={{ htmlInput: { 'data-testid': 'seller-catalog-search' } }}
+            sx={{ minWidth: 260 }}
+          />
+          <FormControl size="small" sx={{ minWidth: 200 }}>
+            <InputLabel id="seller-catalog-category-filter-label">Категория</InputLabel>
+            <Select
+              labelId="seller-catalog-category-filter-label"
+              label="Категория"
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              data-testid="seller-catalog-category-filter"
+            >
+              <MenuItem value="">Все категории</MenuItem>
+              {categoryOptions.map((c) => (
+                <MenuItem key={c} value={c}>
+                  {c}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Typography variant="body2" color="text.secondary" data-testid="seller-catalog-filter-count">
+            Найдено: {filteredRows.length} из {rows.length}
+          </Typography>
+        </Stack>
+      </Paper>
+
       <TableContainer
         component={Paper}
         variant="outlined"
@@ -333,14 +539,16 @@ export function SellerProductsStockScreen({
         >
           <colgroup>
             <col style={{ width: '4%' }} />
-            <col style={{ width: '8%' }} />
-            <col style={{ width: '24%' }} />
-            <col style={{ width: '14%' }} />
+            <col style={{ width: '7%' }} />
+            <col style={{ width: '15%' }} />
             <col style={{ width: '10%' }} />
-            <col style={{ width: '14%' }} />
+            <col style={{ width: '9%' }} />
+            <col style={{ width: '11%' }} />
+            <col style={{ width: '6%' }} />
+            <col style={{ width: '13%' }} />
             <col style={{ width: '8%' }} />
-            <col style={{ width: '9%' }} />
-            <col style={{ width: '9%' }} />
+            <col style={{ width: '7%' }} />
+            <col style={{ width: '10%' }} />
           </colgroup>
           <TableHead>
             <TableRow>
@@ -358,11 +566,13 @@ export function SellerProductsStockScreen({
               <TableCell>Фото</TableCell>
               <TableCell>Название</TableCell>
               <TableCell>Артикул продавца</TableCell>
-              <TableCell>Артикул WB</TableCell>
+              <TableCell>SKU</TableCell>
               <TableCell>ШК</TableCell>
               <TableCell>Размер</TableCell>
+              <TableCell align="right">Остаток</TableCell>
               <TableCell>ТЗ</TableCell>
               <TableCell>ЧЗ</TableCell>
+              <TableCell>Резервы</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -390,9 +600,6 @@ export function SellerProductsStockScreen({
                   <Typography variant="body2" sx={{ fontWeight: 600 }} title={p.name} noWrap>
                     {p.name}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" noWrap>
-                    SKU {p.sku_code}
-                  </Typography>
                 </TableCell>
                 <TableCell>
                   <Typography variant="body2" title={p.wb_vendor_code ?? '—'} noWrap>
@@ -400,8 +607,8 @@ export function SellerProductsStockScreen({
                   </Typography>
                 </TableCell>
                 <TableCell>
-                  <Typography variant="body2" title={String(p.wb_nm_id ?? '—')} noWrap>
-                    {p.wb_nm_id ?? '—'}
+                  <Typography variant="body2" sx={{ fontWeight: 600 }} title={p.sku_code} noWrap>
+                    {p.sku_code}
                   </Typography>
                 </TableCell>
                 <TableCell>
@@ -417,6 +624,36 @@ export function SellerProductsStockScreen({
                   <Typography variant="body2" title={p.wb_size ?? '—'} noWrap>
                     {p.wb_size ?? '—'}
                   </Typography>
+                </TableCell>
+                <TableCell align="right">
+                  <Stack spacing={0.15} sx={{ minWidth: 0, alignItems: 'flex-end' }}>
+                    <Typography
+                      variant="caption"
+                      data-testid={`seller-catalog-stock-in-storage-${p.id}`}
+                      title={`В ячейках ${p.stock_in_storage}`}
+                      noWrap
+                    >
+                      В ячейках {p.stock_in_storage}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      data-testid={`seller-catalog-stock-on-hand-${p.id}`}
+                      title={`На ФФ ${p.stock_on_hand}`}
+                      noWrap
+                    >
+                      На ФФ {p.stock_on_hand}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      data-testid={`seller-catalog-stock-free-fbo-${p.id}`}
+                      title={`Свободный FBO ${p.stock_free_fbo}`}
+                      noWrap
+                    >
+                      Свободный FBO {p.stock_free_fbo}
+                    </Typography>
+                  </Stack>
                 </TableCell>
                 <TableCell sx={{ minWidth: 0 }}>
                   <Button
@@ -448,13 +685,31 @@ export function SellerProductsStockScreen({
                     />
                   ) : null}
                 </TableCell>
+                <TableCell sx={{ minWidth: 0 }}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => void openReserves(p.id)}
+                    data-testid={`seller-catalog-reserves-${p.id}`}
+                  >
+                    Резервы
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
             {catalog.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9}>
+                <TableCell colSpan={11}>
                   <Typography variant="body2" color="text.secondary">
                     Пока нет товаров.
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            ) : filteredRows.length === 0 && !busy ? (
+              <TableRow>
+                <TableCell colSpan={11}>
+                  <Typography variant="body2" color="text.secondary">
+                    Ничего не найдено.
                   </Typography>
                 </TableCell>
               </TableRow>
@@ -463,7 +718,7 @@ export function SellerProductsStockScreen({
         </Table>
         <TablePagination
           component="div"
-          count={catalog.length}
+          count={filteredRows.length}
           page={page}
           onPageChange={(_, next) => setPage(next)}
           rowsPerPage={rowsPerPage}
@@ -536,6 +791,111 @@ export function SellerProductsStockScreen({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Drawer
+        anchor="right"
+        open={reservesProduct != null}
+        onClose={closeReserves}
+        slotProps={{
+          paper: { sx: { width: { xs: '100%', sm: 460 }, maxWidth: '100%' } },
+        }}
+        data-testid={reservesProduct ? `seller-reserves-panel-${reservesProduct.id}` : undefined}
+      >
+        {reservesProduct ? (
+          <Box sx={{ p: 2.5 }}>
+            <Stack spacing={2}>
+              <Box>
+                <Typography variant="h6">Резервы</Typography>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {reservesProduct.sku_code} · {reservesProduct.name}
+                </Typography>
+              </Box>
+              <Stack direction="row" spacing={2}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Резервы
+                  </Typography>
+                  <Typography variant="h6">{reservesProduct.stock_reserved_directions} шт</Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Свободный FBO
+                  </Typography>
+                  <Typography variant="h6">{reservesProduct.stock_free_fbo} шт</Typography>
+                </Box>
+              </Stack>
+              <Divider />
+              <Stack spacing={1}>
+                {reserveBusy.has(reservesProduct.id) ? (
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                    <CircularProgress size={18} />
+                    <Typography variant="body2" color="text.secondary">
+                      Загружаем…
+                    </Typography>
+                  </Stack>
+                ) : null}
+                {!reserveBusy.has(reservesProduct.id) &&
+                (reserveDirections[reservesProduct.id]?.length ?? 0) === 0 ? (
+                  <Typography variant="body2" color="text.secondary">
+                    Направлений пока нет.
+                  </Typography>
+                ) : null}
+                {(reserveDirections[reservesProduct.id] ?? []).map((direction) => (
+                  <Paper
+                    key={direction.id}
+                    variant="outlined"
+                    sx={{ p: 1.25 }}
+                    data-testid={`seller-reserve-direction-row-${direction.id}`}
+                  >
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: 600,
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {direction.name}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {direction.is_fbs ? 'FBS-пул' : 'Резерв/набор'} · {direction.quantity} шт
+                    </Typography>
+                    {direction.comment ? (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {direction.comment}
+                      </Typography>
+                    ) : null}
+                  </Paper>
+                ))}
+              </Stack>
+              <Divider />
+              <Button onClick={closeReserves} data-testid="seller-reserves-close">
+                Закрыть
+              </Button>
+            </Stack>
+          </Box>
+        ) : null}
+      </Drawer>
     </Box>
   )
 }

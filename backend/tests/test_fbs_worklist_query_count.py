@@ -509,7 +509,13 @@ async def test_fbs_worklist_query_count_bounded(async_client: AsyncClient) -> No
     finally:
         event.remove(sync_engine, "before_cursor_execute", _count_query)
 
-    assert query_count <= 21, f"expected <=21 queries, got {query_count}"
+    # Budget raised 21 -> 22: fbs_available_qty_by_product now derives
+    # availability from the actual on-hand balance (storage + sorting) plus
+    # reserve directions, instead of reading it off a single FBS-flagged
+    # direction pool (FBS-02/FBS-03). That on-hand lookup is one extra batch
+    # query for the whole worklist, not a per-order query, so the bound stays
+    # flat regardless of order count.
+    assert query_count <= 22, f"expected <=22 queries, got {query_count}"
 
     api_resp = await async_client.get(
         "/operations/fbs-orders/worklist",

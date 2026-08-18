@@ -129,13 +129,28 @@ async def fbs_available_qty_by_product(
     *,
     exclude_fbs_order_ids: frozenset[uuid.UUID] | None = None,
 ) -> dict[uuid.UUID, int]:
-    """FBS pool minus active FBS reserves.
+    """Фактический остаток минус то, что уже занято.
 
-    No stock direction means no product quantity is intentionally assigned to FBS,
-    so WB publication and FBS order reservation must see zero.
+    Направления хранения — это резервы («двести штук под комплекты»), а не отдельный
+    FBS-пул: галки «FBS» у них больше нет. Поэтому доступное под FBS считается от
+    реального остатка на складе, из которого вычитается всё занятое — отгрузки на
+    маркетплейс, именованные резервы и уже созданные брони под FBS-заказы.
+
+    Раньше здесь стояло `directions.fbs - reserved`, то есть при отсутствии
+    направления с галкой FBS доступным считался ноль. После снятия галки такое
+    правило означало бы, что ни один заказ из WB никогда не сможет забронировать
+    товар, — все они уходили бы в «нет остатка».
     """
     if not product_ids:
         return {}
+    from app.services.marketplace_unload_service import _outbound_reserved_by_product
+
+    on_hand_map = await _storage_and_sorting_on_hand_by_product(
+        session, tenant_id, warehouse_id, product_ids
+    )
+    outbound_map = await _outbound_reserved_by_product(
+        session, tenant_id, warehouse_id, product_ids
+    )
     fbs_map = await fbs_reserved_by_product(
         session,
         tenant_id,
@@ -148,12 +163,16 @@ async def fbs_available_qty_by_product(
     )
     result: dict[uuid.UUID, int] = {}
     for pid in product_ids:
+        storage, sorting = on_hand_map.get(pid, (0, 0))
         directions = direction_map.get(pid)
-        fbs = int(fbs_map.get(pid, 0))
-        if directions is not None and directions.has_any:
-            result[pid] = clamp_nonneg(directions.fbs - fbs)
-            continue
-        result[pid] = 0
+        reserved_by_directions = int(directions.total) if directions is not None else 0
+        result[pid] = clamp_nonneg(
+            storage
+            + sorting
+            - int(outbound_map.get(pid, 0))
+            - reserved_by_directions
+            - int(fbs_map.get(pid, 0))
+        )
     return result
 
 

@@ -6,6 +6,7 @@ import {
   Box,
   Button,
   Checkbox,
+  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -129,31 +130,6 @@ function directionQuantityFromDraft(raw: string): number | null {
   return Number.isInteger(qty) && qty >= 0 ? qty : null
 }
 
-function fbsPublicationState(row: {
-  stock_fbs: number
-  fbs_stock_sync_enabled?: boolean
-  fbs_sync_status?: string | null
-  fbs_published_amount?: number | null
-}) {
-  if (row.stock_fbs <= 0) {
-    return { label: 'Нет FBS', color: 'text.secondary', canToggle: false }
-  }
-  if (row.fbs_sync_status === 'error' || row.fbs_sync_status === 'conflict') {
-    return { label: 'Ошибка WB', color: 'error.main', canToggle: true }
-  }
-  if (row.fbs_stock_sync_enabled && row.fbs_sync_status === 'confirmed') {
-    return {
-      label: `WB: ${row.fbs_published_amount ?? row.stock_fbs} шт`,
-      color: 'success.main',
-      canToggle: true,
-    }
-  }
-  if (row.fbs_stock_sync_enabled) {
-    return { label: 'Проверяем WB', color: 'warning.main', canToggle: true }
-  }
-  return { label: 'Пауза', color: 'text.secondary', canToggle: true }
-}
-
 function matchesCatalogSearch(
   row: {
     name: string
@@ -214,9 +190,7 @@ export function FfProductsCatalogScreen({
   // Ширины колонок ужаты так, чтобы таблица целиком помещалась в контейнер —
   // тогда липкой колонке действий физически некуда сдвигаться, и она
   // не перекрывает соседей вовсе (тот же приём, что и в SellerInboundDraftScreen).
-  // WB/nmId — служебный номенклатурный номер, который не ищут глазами, — сдвинут в
-  // конец списка колонок, к липкой границе, а не «Название» или артикулы.
-  const tableMinWidth = 1344
+  const tableMinWidth = 1284
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [catalog, setCatalog] = useState<FfCatalogRow[]>([])
@@ -441,7 +415,7 @@ export function FfProductsCatalogScreen({
     }
   }
 
-  // ── Остаток / FBS-пул / Публикация WB — перенесено из SellerProductsStockScreen
+  // ── Остаток / резервы — перенесено из SellerProductsStockScreen
   // (было там до задачи CAT-11, теперь живёт здесь — в каталоге фулфилмента).
 
   const rows = useMemo(() => {
@@ -477,11 +451,6 @@ export function FfProductsCatalogScreen({
           (!filterCategory || row.wb_subject_name === filterCategory),
       ),
     [rows, filterSearch, filterSellerId, filterCategory],
-  )
-
-  const fbsPublishingCount = useMemo(
-    () => rows.filter((row) => row.stock_fbs > 0 && row.fbs_stock_sync_enabled).length,
-    [rows],
   )
 
   const markDirectionBusy = useCallback((productId: string, pending: boolean) => {
@@ -683,8 +652,7 @@ export function FfProductsCatalogScreen({
           Каталог
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Карточки товаров селлеров: название, артикулы, ШК, размер, ТЗ упаковки, остаток на ФФ и
-          публикация FBS в WB.
+          Карточки товаров селлеров: название, артикулы, ШК, размер, ТЗ упаковки и остаток на ФФ.
         </Typography>
 
         {error ? (
@@ -787,17 +755,6 @@ export function FfProductsCatalogScreen({
           </Stack>
         </Paper>
 
-        <Paper variant="outlined" sx={{ p: 2, mb: 2 }} data-testid="ff-fbs-sync-panel">
-          <Stack spacing={0.25}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-              Публикация FBS в WB
-            </Typography>
-            <Typography variant="caption" color="text.secondary" data-testid="ff-fbs-enabled-count">
-              Публикуется: {fbsPublishingCount} из {rows.length}
-            </Typography>
-          </Stack>
-        </Paper>
-
         <TableContainer
           component={Paper}
           variant="outlined"
@@ -826,33 +783,31 @@ export function FfProductsCatalogScreen({
           >
             <colgroup>
               <col style={{ width: 56 }} />
-              <col style={{ width: 140 }} />
-              <col style={{ width: 119 }} />
-              <col style={{ width: 118 }} />
-              <col style={{ width: 112 }} />
-              <col style={{ width: 64 }} />
-              <col style={{ width: 75 }} />
-              <col style={{ width: 96 }} />
-              <col style={{ width: 78 }} />
-              <col style={{ width: 120 }} />
+              <col style={{ width: 200 }} />
               <col style={{ width: 130 }} />
-              <col style={{ width: 140 }} />
+              <col style={{ width: 118 }} />
+              <col style={{ width: 130 }} />
+              <col style={{ width: 64 }} />
+              <col style={{ width: 110 }} />
+              <col style={{ width: 130 }} />
+              <col style={{ width: 70 }} />
+              <col style={{ width: 70 }} />
+              <col style={{ width: 110 }} />
               <col style={{ width: 96 }} />
             </colgroup>
             <TableHead>
               <TableRow>
                 <TableCell>Фото</TableCell>
                 <TableCell>Название</TableCell>
-                <TableCell>Артикул селлера</TableCell>
+                <TableCell>Артикул продавца</TableCell>
                 <TableCell>SKU</TableCell>
                 <TableCell>ШК</TableCell>
                 <TableCell>Размер</TableCell>
                 <TableCell>Селлер</TableCell>
-                <TableCell>ТЗ</TableCell>
-                <TableCell>WB/nmId</TableCell>
                 <TableCell align="right">Остаток</TableCell>
-                <TableCell>FBS-пул</TableCell>
-                <TableCell>Публикация WB</TableCell>
+                <TableCell>ТЗ</TableCell>
+                <TableCell>ЧЗ</TableCell>
+                <TableCell>Резервы</TableCell>
                 <TableCell
                   align="center"
                   sx={{
@@ -871,7 +826,6 @@ export function FfProductsCatalogScreen({
                 const displayMeta = catalogRowToDisplayMeta(p)
                 const barcode = resolveProductPrimaryBarcode(displayMeta)
                 const markingCount = p.marking_available_count ?? 0
-                const publication = fbsPublicationState(p)
                 return (
                   <TableRow key={p.id} hover data-testid="ff-product-row">
                     <TableCell>
@@ -933,33 +887,6 @@ export function FfProductsCatalogScreen({
                         {p.seller_name ?? '—'}
                       </Typography>
                     </TableCell>
-                    <TableCell>
-                      <Stack spacing={0.5} sx={{ minWidth: 0, alignItems: 'flex-start' }}>
-                        <Typography
-                          variant="body2"
-                          color={p.has_packaging_instructions ? 'text.primary' : 'text.secondary'}
-                          data-testid={`ff-packaging-status-${p.id}`}
-                          noWrap
-                        >
-                          {p.has_packaging_instructions ? 'Заполнено' : 'Нет ТЗ'}
-                        </Typography>
-                        {canManageCatalog ? (
-                          <Button
-                            size="small"
-                            onClick={() => openPackagingEdit(p)}
-                            data-testid={`ff-packaging-edit-${p.id}`}
-                            sx={{ maxWidth: '100%', minWidth: 0, px: 0 }}
-                          >
-                            ТЗ
-                          </Button>
-                        ) : null}
-                      </Stack>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" noWrap>
-                        {p.wb_nm_id ?? '—'}
-                      </Typography>
-                    </TableCell>
                     <TableCell align="right">
                       <Stack spacing={0.15} sx={{ minWidth: 0, alignItems: 'flex-end' }}>
                         <Typography
@@ -990,42 +917,46 @@ export function FfProductsCatalogScreen({
                         </Typography>
                       </Stack>
                     </TableCell>
-                    <TableCell data-testid={`ff-catalog-stock-distribution-${p.id}`} sx={{ minWidth: 0 }}>
-                      <Stack spacing={0.25} sx={{ minWidth: 0 }}>
-                        <Typography variant="body2" noWrap>
-                          FBS {p.stock_fbs} шт
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" noWrap>
-                          резервы {p.stock_reserved_directions} шт
-                        </Typography>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          aria-label="Настроить FBS-пул"
-                          title="Настроить FBS-пул"
-                          sx={{ alignSelf: 'flex-start', width: 44, minWidth: 44, px: 0 }}
-                          onClick={() => void openDirections(p.id)}
-                          data-testid={`ff-catalog-stock-directions-toggle-${p.id}`}
-                        >
-                          Пул
-                        </Button>
-                      </Stack>
-                    </TableCell>
-                    <TableCell data-testid={`ff-catalog-fbs-cell-${p.id}`} sx={{ minWidth: 0 }}>
-                      <Typography
-                        variant="caption"
-                        color={publication.color}
-                        data-testid={`ff-catalog-fbs-status-${p.id}`}
+                    <TableCell sx={{ minWidth: 0 }}>
+                      <Button
+                        size="small"
+                        variant={p.has_packaging_instructions ? 'contained' : 'outlined'}
+                        color={p.has_packaging_instructions ? 'primary' : 'inherit'}
+                        onClick={() => openPackagingEdit(p)}
+                        disabled={!canManageCatalog}
+                        data-testid={`ff-packaging-edit-${p.id}`}
+                        aria-label={p.has_packaging_instructions ? 'Редактировать ТЗ' : 'Добавить ТЗ'}
+                        title={p.has_packaging_instructions ? 'Редактировать ТЗ' : 'Добавить ТЗ'}
                         sx={{
-                          display: '-webkit-box',
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: 'vertical',
-                          overflow: 'hidden',
-                          maxWidth: '100%',
+                          minWidth: 64,
+                          ...(p.has_packaging_instructions
+                            ? {}
+                            : { color: 'text.secondary', borderColor: 'divider' }),
                         }}
                       >
-                        {publication.label}
-                      </Typography>
+                        ТЗ
+                      </Button>
+                    </TableCell>
+                    <TableCell sx={{ minWidth: 0 }}>
+                      {p.requires_honest_sign ? (
+                        <Chip
+                          size="small"
+                          label="ЧЗ"
+                          color="info"
+                          variant="outlined"
+                          data-testid={`ff-honest-sign-status-${p.id}`}
+                        />
+                      ) : null}
+                    </TableCell>
+                    <TableCell data-testid={`ff-catalog-reserves-cell-${p.id}`} sx={{ minWidth: 0 }}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => void openDirections(p.id)}
+                        data-testid={`ff-catalog-reserves-${p.id}`}
+                      >
+                        Резервы
+                      </Button>
                     </TableCell>
                     <TableCell
                       align="center"
@@ -1100,7 +1031,7 @@ export function FfProductsCatalogScreen({
               })}
               {filteredRows.length === 0 && !busy ? (
                 <TableRow>
-                  <TableCell colSpan={13}>
+                  <TableCell colSpan={12}>
                     {rows.length === 0 ? (
                       canManageCatalog ? (
                         <Typography variant="body2" color="text.secondary" data-testid="ff-products-empty">
@@ -1288,12 +1219,6 @@ export function FfProductsCatalogScreen({
                 <Stack direction="row" spacing={2}>
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      FBS
-                    </Typography>
-                    <Typography variant="h6">{directionProduct.stock_fbs} шт</Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
                       Резервы
                     </Typography>
                     <Typography variant="h6">
@@ -1307,11 +1232,6 @@ export function FfProductsCatalogScreen({
                     <Typography variant="h6">{directionProduct.stock_free_fbo} шт</Typography>
                   </Box>
                 </Stack>
-                {directionProduct.stock_fbs === 0 ? (
-                  <Alert severity="info" variant="outlined">
-                    FBS-пул не выделен. Сначала добавьте направление с галкой FBS.
-                  </Alert>
-                ) : null}
                 <Divider />
                 <Stack spacing={1}>
                   {directions[directionProduct.id]?.length === 0 &&
@@ -1425,19 +1345,6 @@ export function FfProductsCatalogScreen({
                         'data-testid': `ff-stock-direction-comment-${directionProduct.id}`,
                       },
                     }}
-                  />
-                  <FormControlLabel
-                    sx={{ m: 0 }}
-                    control={
-                      <Checkbox
-                        checked={drawerDraft.is_fbs}
-                        onChange={(e) =>
-                          patchDirectionDraft(directionProduct.id, { is_fbs: e.target.checked })
-                        }
-                        data-testid={`ff-stock-direction-fbs-${directionProduct.id}`}
-                      />
-                    }
-                    label="FBS-пул для публикации в WB"
                   />
                   <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <Button

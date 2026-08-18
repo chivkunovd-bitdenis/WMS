@@ -214,8 +214,10 @@ async def test_seller_stock_directions_summary_and_scope(
     assert summary.status_code == 200, summary.text
     row = next(item for item in summary.json() if item["product_id"] == str(product_id))
     assert row["quantity"] == 10
-    assert row["quantity_fbs"] == 3
-    assert row["quantity_reserved_directions"] == 2
+    # Галки «FBS» у направлений больше нет: оба направления — обычный резерв,
+    # поэтому FBS-часть всегда ноль, а в резерв уходит вся сумма направлений.
+    assert row["quantity_fbs"] == 0
+    assert row["quantity_reserved_directions"] == 5
     assert row["quantity_free_fbo"] == 5
     assert row["available"] == 5
 
@@ -229,7 +231,7 @@ async def test_seller_stock_directions_summary_and_scope(
 
 
 @pytest.mark.asyncio
-async def test_directions_drive_fbs_pool_and_mp_free_fbo(
+async def test_directions_reserve_from_stock_and_mp_free_fbo(
     async_client: AsyncClient,
 ) -> None:
     admin_headers, seller_id, _sku, warehouse_id, _location_id, product_id = (
@@ -337,8 +339,8 @@ async def test_monthly_stock_snapshot_captures_distribution(
     assert row["product_name"] == "Direction Product"
     assert row["sku_code"] == _sku
     assert row["quantity_total"] == 10
-    assert row["quantity_fbs"] == 3
-    assert row["quantity_reserved"] == 2
+    assert row["quantity_fbs"] == 0
+    assert row["quantity_reserved"] == 5
     assert row["quantity_free_fbo"] == 5
 
     changed_fbs = await async_client.patch(
@@ -369,8 +371,8 @@ async def test_monthly_stock_snapshot_captures_distribution(
     rerun_row = next(item for item in rerun.json() if item["product_id"] == str(product_id))
     assert rerun_row["id"] == row["id"]
     assert rerun_row["quantity_total"] == 10
-    assert rerun_row["quantity_fbs"] == 3
-    assert rerun_row["quantity_reserved"] == 2
+    assert rerun_row["quantity_fbs"] == 0
+    assert rerun_row["quantity_reserved"] == 5
     assert rerun_row["quantity_free_fbo"] == 5
 
     new_product = await async_client.post(
