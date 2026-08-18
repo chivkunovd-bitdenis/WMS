@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.product import Product
+from app.services.catalog_service import DEFAULT_PRODUCT_DIM_MM
 from app.services.wb_card_enrichment import (
     WbSizeVariant,
     country_of_origin_from_card,
@@ -269,12 +270,22 @@ async def upsert_products_from_wb_cards(
                 sku=sku,
                 variant=variant,
             )
-            # Fill empty dimension fields with values from WB card, but don't overwrite measured values
-            if p.length_mm is None and card_length_mm is not None:
+            # Fill empty dimension fields with values from WB card, and also correct
+            # the legacy DEFAULT_PRODUCT_DIM_MM stub (10x10x10) that an old, now
+            # removed sync default used to write in place of real data. Product has
+            # no field marking "entered by hand" vs "imported", so anything other
+            # than that exact stub triple is left untouched -- the safest reading of
+            # "never overwrite a measurement someone typed in".
+            dims_are_stub = (
+                p.length_mm == DEFAULT_PRODUCT_DIM_MM
+                and p.width_mm == DEFAULT_PRODUCT_DIM_MM
+                and p.height_mm == DEFAULT_PRODUCT_DIM_MM
+            )
+            if (p.length_mm is None or dims_are_stub) and card_length_mm is not None:
                 p.length_mm = card_length_mm
-            if p.width_mm is None and card_width_mm is not None:
+            if (p.width_mm is None or dims_are_stub) and card_width_mm is not None:
                 p.width_mm = card_width_mm
-            if p.height_mm is None and card_height_mm is not None:
+            if (p.height_mm is None or dims_are_stub) and card_height_mm is not None:
                 p.height_mm = card_height_mm
             # Same rule for country of origin / shelf life: WB card fills the gap,
             # never overwrites a value already present (e.g. entered by hand).

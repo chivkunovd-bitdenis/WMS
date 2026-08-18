@@ -59,6 +59,7 @@ import { productDisplayMetaFromCatalog, resolveProductPrimaryBarcode } from '../
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { displayMetaToProductLabel } from '../../utils/productBarcodePrint'
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
+import { printShipmentPackagingSheet } from '../../utils/printShipmentPackagingSheet'
 import { formatHumanDocumentNumber } from './documentDisplay'
 
 export type PackagingTaskLine = {
@@ -399,6 +400,33 @@ export function FfPackagingTaskPanel({
       },
       { reprint: opts?.reprint },
     )
+  }
+
+  /** MPU-05 (18.08): единая кнопка печати листа отгрузки (накладная + ТЗ в одной форме
+      с колонками «Кол-во» (план) и «Факт» (пусто, под руку) — печатная форма уже
+      готова в printShipmentPackagingSheet, здесь только подключение и передача данных. */
+  const printPackagingSheet = () => {
+    printShipmentPackagingSheet({
+      documentNumber: formatHumanDocumentNumber(task) ?? task.document_number ?? task.id,
+      documentType: 'Отгрузка на маркетплейс',
+      sellerName: taskSellerLabel(task),
+      shipmentDate: task.created_at ? new Date(task.created_at).toLocaleString('ru-RU') : null,
+      warehouseName: task.warehouse_name ?? task.warehouse_code ?? 'Склад',
+      createdAt: task.created_at ?? null,
+      items: task.lines.map((ln) => {
+        const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
+        return {
+          product_name: displayMeta.product_name,
+          vendor_code: displayMeta.wb_vendor_code ?? '',
+          sku_code: displayMeta.sku_code,
+          barcode: resolveProductPrimaryBarcode(displayMeta) || null,
+          wb_nm_id: displayMeta.wb_nm_id,
+          photo_url: displayMeta.wb_primary_image_url,
+          instructions: ln.packaging_instructions,
+          quantity: ln.qty_need_pack,
+        }
+      }),
+    })
   }
 
   const confirmPacked = async (lineId: string) => {
@@ -865,6 +893,23 @@ export function FfPackagingTaskPanel({
             </Alert>
           ) : null}
         </Paper>
+      ) : null}
+      {isMpUnloadTask ? (
+        <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
+          {/* MPU-05 (18.08): заказчик хочет одну кнопку печати вместо двух — печатает
+              готовую форму «Лист отгрузки» (накладная + ТЗ в одном листе, план в «Кол-во»,
+              «Факт» пустой под руку). Форма уже была готова в printShipmentPackagingSheet,
+              просто не была подключена ни к одному экрану. */}
+          <Button
+            variant="contained"
+            size="large"
+            startIcon={<PrintOutlined />}
+            onClick={printPackagingSheet}
+            data-testid="ff-packaging-print-sheet"
+          >
+            Печать накладной
+          </Button>
+        </Stack>
       ) : null}
       {isMpUnloadTask ? (
         <TableContainer component={Paper} variant="outlined" data-testid="ff-packaging-lines-table">

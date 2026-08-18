@@ -163,7 +163,9 @@ test('FF marketplace unload: packaging table keeps TZ print controls without FBS
   await expect(page.getByTestId('ff-packaging-lines-table')).toBeVisible();
   await expect(page.getByTestId('ff-packaging-compact-product-name')).toContainText('Носки хлопок');
   await expect(page.locator('[data-testid^="ff-packaging-line-tz-"]').first()).toBeVisible();
-  await expect(page.locator('[data-testid^="ff-packaging-barcode-status-"]').first()).toBeVisible();
+  // MPU-01 (18.08.2026): колонка «ШК печати» с этой пометкой убрана с экрана упаковки
+  // в отгрузке по решению заказчика — на строке остаётся один счётчик, по ЧЗ.
+  await expect(page.locator('[data-testid^="ff-packaging-barcode-status-"]')).toHaveCount(0);
   const linePrint = page.locator('[data-testid^="ff-packaging-line-print-"]').first();
   await expect(linePrint).toBeVisible();
   await expect(linePrint).toBeEnabled();

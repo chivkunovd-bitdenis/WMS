@@ -512,7 +512,13 @@ async def create_seller(session: AsyncSession, tenant_id: uuid.UUID, *, name: st
     return s
 
 
-DEFAULT_PRODUCT_DIM_MM = 10  # used by WB sync path only
+# Legacy placeholder a since-removed WB sync default used to write into
+# length_mm/width_mm/height_mm when the real dimensions were unknown. Nothing
+# writes this value anymore — the sync path leaves dimensions empty instead of
+# guessing. Products that still carry this exact 10x10x10 triple have no real
+# WB dimensions on file, so the WB import path (wildberries_product_import_service)
+# treats that triple as "no data" and is allowed to overwrite it, same as None.
+DEFAULT_PRODUCT_DIM_MM = 10
 
 
 def _normalize_dimensions(
