@@ -5,7 +5,7 @@ from typing import Annotated, Any
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_fbs_operator_access
@@ -19,16 +19,6 @@ router = APIRouter(
     prefix="/operations/fbs-orders",
     tags=["operations"],
 )
-
-
-class FbsMarkingValueBody(BaseModel):
-    value: str = Field(min_length=1, max_length=512)
-
-
-class FbsMetadataScanBody(BaseModel):
-    kind: str = Field(min_length=1, max_length=16)
-    raw_value: str = Field(min_length=1, max_length=512)
-    idempotency_key: str = Field(min_length=1, max_length=128)
 
 
 class FbsOrderMarkingOut(BaseModel):
@@ -114,30 +104,6 @@ async def get_fbs_order_metadata(
     return _metadata_out(payload)
 
 
-@router.post("/{order_id}/metadata/scan", response_model=FbsOrderMetadataOut)
-async def scan_fbs_order_metadata(
-    order_id: uuid.UUID,
-    body: FbsMetadataScanBody,
-    user: Annotated[User, Depends(require_fbs_operator_access)],
-    session: Annotated[AsyncSession, Depends(get_db)],
-) -> FbsOrderMetadataOut:
-    async with httpx.AsyncClient() as http_client:
-        try:
-            payload = await marking_svc.scan_order_metadata(
-                session,
-                user.tenant_id,
-                order_id,
-                body.kind,
-                body.raw_value,
-                http_client,
-                idempotency_key=body.idempotency_key,
-            )
-        except marking_svc.FbsMarkingError as exc:
-            _raise_from_service(exc)
-    await session.commit()
-    return _metadata_out(payload)
-
-
 @router.get("/{order_id}/markings", response_model=list[FbsOrderMarkingOut])
 async def get_fbs_order_markings(
     order_id: uuid.UUID,
@@ -149,31 +115,6 @@ async def get_fbs_order_markings(
     except marking_svc.FbsMarkingError as exc:
         _raise_from_service(exc)
     return [_marking_out(row) for row in rows]
-
-
-@router.put("/{order_id}/markings/{kind}", response_model=FbsOrderMarkingOut)
-async def put_fbs_order_marking(
-    order_id: uuid.UUID,
-    kind: str,
-    body: FbsMarkingValueBody,
-    user: Annotated[User, Depends(require_fbs_operator_access)],
-    session: Annotated[AsyncSession, Depends(get_db)],
-) -> FbsOrderMarkingOut:
-    async with httpx.AsyncClient() as http_client:
-        try:
-            row = await marking_svc.upsert_order_marking(
-                session,
-                user.tenant_id,
-                order_id,
-                kind,
-                body.value,
-                http_client,
-            )
-        except marking_svc.FbsMarkingError as exc:
-            _raise_from_service(exc)
-    await session.commit()
-    await session.refresh(row)
-    return _marking_out(row)
 
 
 @router.post("/{order_id}/markings/sync", response_model=list[FbsOrderMarkingOut])

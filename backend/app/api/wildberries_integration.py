@@ -13,11 +13,17 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_effective_seller_id, require_fulfillment_admin
+from app.api.deps import (
+    assert_seller_permission,
+    get_current_user,
+    get_effective_seller_id,
+    require_fulfillment_admin,
+)
 from app.core.roles import FULFILLMENT_SELLER
 from app.core.settings import settings
 from app.db.session import get_db
 from app.models.user import User
+from app.services.seller_staff_permissions_service import PERM_SETTINGS
 from app.services.wildberries_client import (
     WildberriesClientError,
     fetch_cards_list,
@@ -361,6 +367,7 @@ async def get_self_wildberries_tokens(
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> WildberriesSelfTokensOut:
+    await assert_seller_permission(session, user, PERM_SETTINGS)
     if user.role != FULFILLMENT_SELLER or effective_seller_id is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     st = await get_public_token_status(session, user.tenant_id, effective_seller_id)
@@ -447,6 +454,7 @@ async def save_and_validate_self_content_token(
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> WildberriesSelfTokenSaveOut | JSONResponse:
     """Seller saves WB API key; validate content and marketplace scopes."""
+    await assert_seller_permission(session, user, PERM_SETTINGS)
     if user.role != FULFILLMENT_SELLER or effective_seller_id is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     tenant_id = user.tenant_id
@@ -601,6 +609,7 @@ async def sync_products_now(
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> WildberriesSelfSyncOut:
     """Seller-click sync: fetch all WB cards, persist snapshots, and upsert Product rows."""
+    await assert_seller_permission(session, user, PERM_SETTINGS)
     if user.role != FULFILLMENT_SELLER or effective_seller_id is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     pair = await get_decrypted_tokens_for_seller(session, user.tenant_id, effective_seller_id)

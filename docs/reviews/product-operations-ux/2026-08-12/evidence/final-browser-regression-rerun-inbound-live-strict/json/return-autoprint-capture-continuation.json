@@ -1,0 +1,6 @@
+{
+  "payload": "QA Return Product\nwb-return-final-inbound-1786666957465",
+  "hasReturnBarcode": true,
+  "hasProductName": true,
+  "note": "Return autoprint capture stores product name plus WB barcode for the thermal label path."
+}

@@ -17,6 +17,7 @@ MOVEMENT_TYPE_OUTBOUND_SHIPMENT = "outbound_shipment"
 MOVEMENT_TYPE_FBS_SHIPMENT = "fbs_shipment"
 MOVEMENT_TYPE_MARKETPLACE_UNLOAD = "marketplace_unload"
 MOVEMENT_TYPE_PRODUCT_TZ_IMPORT = "product_tz_import"
+MOVEMENT_TYPE_DISCREPANCY_ACT = "discrepancy_act"
 
 if TYPE_CHECKING:
     from app.models.inbound_intake import InboundIntakeLine

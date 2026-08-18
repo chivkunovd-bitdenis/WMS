@@ -1,0 +1,271 @@
+{
+  "continued_at": "2026-08-15T08:15:29.847Z",
+  "seed": {
+    "run": "1786780739",
+    "email": "live-kiz-pass-1786779741815687000@example.com",
+    "password": "password123",
+    "supplyId": "76b2baa2-6aa8-4f9d-9669-04e47ff9b4b0",
+    "supplyName": "Live KIZ full browser supply 1786780739",
+    "orders": [
+      {
+        "id": "d2b312bb-6127-43aa-915d-4f65ee64d323",
+        "wb_order_id": 930000000,
+        "sticker": "930000000 930000001",
+        "kiz": "010460043993125321E2EKIZFULL000001"
+      },
+      {
+        "id": "f3befb25-3ec5-41a7-8234-2df4a226e125",
+        "wb_order_id": 930000001,
+        "sticker": "930000001 930000002",
+        "kiz": "010460043993125321E2EKIZFULL000002"
+      }
+    ]
+  },
+  "browser": "external Google Chrome 151 visible window via CDP on port 19354",
+  "steps": [
+    {
+      "name": "14-active-row-after-source-fix",
+      "at": "2026-08-15T08:15:36.749Z",
+      "url": "http://127.0.0.1:51861/app/ff/fbs",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/fbs-kiz-live-chrome-approved-1786780739-full/14-active-row-after-source-fix.png"
+    },
+    {
+      "name": "15-after-source-fix-two-of-two",
+      "at": "2026-08-15T08:15:38.281Z",
+      "url": "http://127.0.0.1:51861/app/ff/fbs",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/fbs-kiz-live-chrome-approved-1786780739-full/15-after-source-fix-two-of-two.png"
+    },
+    {
+      "name": "16-undo-kiz-confirm-dialog",
+      "at": "2026-08-15T08:15:40.359Z",
+      "url": "http://127.0.0.1:51861/app/ff/fbs",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/fbs-kiz-live-chrome-approved-1786780739-full/16-undo-kiz-confirm-dialog.png"
+    }
+  ],
+  "console": [
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "at": "2026-08-15T08:15:41.166Z",
+      "url": "http://127.0.0.1:51861/app/ff/fbs"
+    }
+  ],
+  "after_fix_workspace": {
+    "supply": {
+      "id": "76b2baa2-6aa8-4f9d-9669-04e47ff9b4b0",
+      "wb_supply_id": "WB-GI-KIZ-FULL-1786780739",
+      "name": "Live KIZ full browser supply 1786780739",
+      "status": "assembling",
+      "delivery_type": "warehouse_sc",
+      "seller": {
+        "id": "79394efd-1a96-4d8a-80af-5d27a0a3dfb5",
+        "name": "Live KIZ Pass Seller"
+      },
+      "wb_warehouse": {
+        "id": 501001,
+        "name": null
+      },
+      "wms_warehouse": {
+        "id": "46f22dbe-1d19-456b-9c35-aaa5f4d134d9",
+        "name": "Live KIZ Pass WH"
+      },
+      "planned_destination": {
+        "office_id": 501001,
+        "name": "Live destination SC",
+        "zone": ""
+      },
+      "nearest_deadline_at": "2026-08-16T03:59:41+00:00",
+      "packaging_task_id": "496e2dbd-e20b-4fa7-9702-7472a5a72188",
+      "barcode_asset": null
+    },
+    "stage": "packing",
+    "progress": {
+      "picked": 2,
+      "packed": 0,
+      "metadata_ready": 2,
+      "stickers_ready": 2,
+      "total": 2
+    },
+    "blockers": [],
+    "orders": [
+      {
+        "id": "d2b312bb-6127-43aa-915d-4f65ee64d323",
+        "wb_order_id": 930000000,
+        "status": "assembling",
+        "wb_status": "confirm",
+        "supplier_status": "confirm",
+        "seller": {
+          "id": "79394efd-1a96-4d8a-80af-5d27a0a3dfb5",
+          "name": "Live KIZ Pass Seller"
+        },
+        "wb_warehouse": {
+          "id": 501001,
+          "name": "Склад WB неизвестен"
+        },
+        "wms_warehouse": {
+          "id": "46f22dbe-1d19-456b-9c35-aaa5f4d134d9",
+          "name": "Live KIZ Pass WH"
+        },
+        "product": {
+          "id": "ef0d3461-41e7-4af7-9835-0f823a11bc64",
+          "name": "Live KIZ full browser product 1 with very long SKU and seller article 1786780739",
+          "image_url": null,
+          "seller_article": "LIVE-KIZ-FULL-SKU-1-1786780739-LONG-REAL-DATA",
+          "wb_article": 730000,
+          "barcode": "LIVE-KIZ-FULL-BAR-1-1786780739",
+          "size": "UNI",
+          "packaging_instructions": null,
+          "has_packaging_instructions": false
+        },
+        "inventory": {
+          "available_unpacked": 0,
+          "locations": []
+        },
+        "buyer_type": "individual",
+        "cargo_type": "box",
+        "can_pvz": false,
+        "metadata": {
+          "required": [
+            "sgtin"
+          ],
+          "optional": [],
+          "states": [
+            {
+              "kind": "sgtin",
+              "status": "accepted",
+              "reason": null,
+              "source": "operator"
+            }
+          ],
+          "delivery_allowed": true,
+          "last_checked_at": "2026-08-15T08:03:59.772555"
+        },
+        "sticker": {
+          "code": "930000000 930000001",
+          "status": "applied",
+          "asset_url": "/operations/fbs-print-assets/904866ec-654e-4593-b99f-7285c278bb82/content",
+          "applied_at": "2026-08-15T08:02:23.055750"
+        },
+        "pick": {
+          "status": "picked",
+          "location_code": null,
+          "picked_at": "2026-08-15T07:59:41+00:00"
+        },
+        "pack": {
+          "status": "pending",
+          "packed_at": null
+        },
+        "created_at_wb": "2026-08-15T07:59:41+00:00",
+        "deadline_at": "2026-08-16T03:59:41+00:00",
+        "supply_id": "76b2baa2-6aa8-4f9d-9669-04e47ff9b4b0",
+        "selection_blockers": [
+          {
+            "code": "order_external_processing",
+            "message": "Заказ уже ушёл в кабинете WB."
+          },
+          {
+            "code": "already_in_supply",
+            "message": "Заказ уже в поставке."
+          }
+        ]
+      },
+      {
+        "id": "f3befb25-3ec5-41a7-8234-2df4a226e125",
+        "wb_order_id": 930000001,
+        "status": "assembling",
+        "wb_status": "confirm",
+        "supplier_status": "confirm",
+        "seller": {
+          "id": "79394efd-1a96-4d8a-80af-5d27a0a3dfb5",
+          "name": "Live KIZ Pass Seller"
+        },
+        "wb_warehouse": {
+          "id": 501001,
+          "name": "Склад WB неизвестен"
+        },
+        "wms_warehouse": {
+          "id": "46f22dbe-1d19-456b-9c35-aaa5f4d134d9",
+          "name": "Live KIZ Pass WH"
+        },
+        "product": {
+          "id": "a74c55bb-1741-4835-8896-d1f157618f9d",
+          "name": "Live KIZ full browser product 2 with very long SKU and seller article 1786780739",
+          "image_url": null,
+          "seller_article": "LIVE-KIZ-FULL-SKU-2-1786780739-LONG-REAL-DATA",
+          "wb_article": 730001,
+          "barcode": "LIVE-KIZ-FULL-BAR-2-1786780739",
+          "size": "UNI",
+          "packaging_instructions": null,
+          "has_packaging_instructions": false
+        },
+        "inventory": {
+          "available_unpacked": 0,
+          "locations": []
+        },
+        "buyer_type": "individual",
+        "cargo_type": "box",
+        "can_pvz": false,
+        "metadata": {
+          "required": [
+            "sgtin"
+          ],
+          "optional": [],
+          "states": [
+            {
+              "kind": "sgtin",
+              "status": "accepted",
+              "reason": null,
+              "source": "operator"
+            }
+          ],
+          "delivery_allowed": true,
+          "last_checked_at": "2026-08-15T08:03:59.842031"
+        },
+        "sticker": {
+          "code": "930000001 930000002",
+          "status": "applied",
+          "asset_url": "/operations/fbs-print-assets/6c844dbe-ab2c-4b01-aaaf-a6ccf180a8df/content",
+          "applied_at": "2026-08-15T08:02:26.304708"
+        },
+        "pick": {
+          "status": "picked",
+          "location_code": null,
+          "picked_at": "2026-08-15T07:59:41+00:00"
+        },
+        "pack": {
+          "status": "pending",
+          "packed_at": null
+        },
+        "created_at_wb": "2026-08-15T07:59:41+00:00",
+        "deadline_at": "2026-08-16T03:59:41+00:00",
+        "supply_id": "76b2baa2-6aa8-4f9d-9669-04e47ff9b4b0",
+        "selection_blockers": [
+          {
+            "code": "order_external_processing",
+            "message": "Заказ уже ушёл в кабинете WB."
+          },
+          {
+            "code": "already_in_supply",
+            "message": "Заказ уже в поставке."
+          }
+        ]
+      }
+    ],
+    "cargo_places": [],
+    "boxes": [],
+    "marking_pool": {
+      "required": 0,
+      "available": 0,
+      "shortage": 0,
+      "orders_without_code": []
+    },
+    "delivery_preflight": null,
+    "last_wb_sync_at": null,
+    "tracking_summary": null,
+    "partial_rejection": null,
+    "wb_sync_stale": false,
+    "server_now": "2026-08-15T08:15:38.359363+00:00"
+  },
+  "error": "page.waitForResponse: Timeout 30000ms exceeded while waiting for event \"response\"\n    at /Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/[eval1]:95:10",
+  "finished_at": "2026-08-15T08:16:10.440Z"
+}

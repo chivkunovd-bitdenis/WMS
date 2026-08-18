@@ -1,0 +1,2645 @@
+{
+  "verdict": "FINAL_BROWSER_GROUP_PASSED",
+  "browser_used": "yes",
+  "browser": "Chromium via Playwright headless=false",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "ports": {
+    "backend": 50299,
+    "frontend": 50300
+  },
+  "urls": {
+    "backend": "http://127.0.0.1:50299",
+    "frontend": "http://127.0.0.1:50300"
+  },
+  "db": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-staff-live-strict/final-browser-staff-live-50299.sqlite",
+  "repo": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812",
+  "branch": "iteration/wms-product-ux-features-20260812",
+  "head": "d59959de70a8b9d447f200bdb703023c35b7b449",
+  "suffix": "50299-1786666729509",
+  "roles": {
+    "ff_admin": {
+      "email": "final-staff-admin-50299-1786666729509@example.com",
+      "id": "created-by-register",
+      "permissions": {
+        "admin": true
+      }
+    },
+    "reception": {
+      "email": "final-staff-reception-50299-1786666729509@example.com",
+      "id": "f7ba0a78-af31-462d-a03d-aed31a076656",
+      "permissions": {
+        "settings": false,
+        "mp_shipments": false,
+        "reception": true,
+        "cells": false,
+        "inventory": false,
+        "packaging": false,
+        "shift_lead": false
+      }
+    },
+    "shipments_packaging": {
+      "email": "final-staff-shipments-50299-1786666729509@example.com",
+      "id": "44b63c20-a0a9-48f9-be8f-f0a3c3720bb6",
+      "permissions": {
+        "settings": false,
+        "mp_shipments": true,
+        "reception": false,
+        "cells": false,
+        "inventory": false,
+        "packaging": true,
+        "shift_lead": true
+      }
+    },
+    "catalog_inventory": {
+      "email": "final-staff-catalog-50299-1786666729509@example.com",
+      "id": "f4f88308-53ce-4ddc-bf63-5e99a3062461",
+      "permissions": {
+        "settings": false,
+        "mp_shipments": false,
+        "reception": false,
+        "cells": true,
+        "inventory": true,
+        "packaging": false,
+        "shift_lead": false
+      }
+    },
+    "settings": {
+      "email": "final-staff-settings-50299-1786666729509@example.com",
+      "id": "203cfc9b-3fc4-46ab-9e5e-dc4de5da222e",
+      "permissions": {
+        "settings": true,
+        "mp_shipments": false,
+        "reception": false,
+        "cells": false,
+        "inventory": false,
+        "packaging": false,
+        "shift_lead": false
+      }
+    }
+  },
+  "entities": {
+    "warehouse": {
+      "id": "56e29b00-4045-475e-8159-d646bec69e2b",
+      "name": "Final Staff Live WH",
+      "code": "wh-1786666734719"
+    },
+    "seller": {
+      "managerEmail": "vitalik-live-50299-1786666729509@mail.ru",
+      "managerUserId": "705c1123-3c62-4806-b407-f663e2bdb0da",
+      "homeSellerId": "33faecb5-858b-419e-be3d-972ac0d01380",
+      "homeSellerName": "Home Live Shop",
+      "allowedSellerId": "b85d704f-b164-4da6-8eed-a847bd85f32e",
+      "allowedSellerName": "Allowed Live Shop",
+      "forbiddenSellerId": "0eb2e86c-7e50-4842-91c6-4cbed5c562dd",
+      "forbiddenSellerName": "Forbidden Live Shop",
+      "skuHome": "SCOPE-HOME-50299-1786666729509",
+      "skuAllowed": "SCOPE-ALLOWED-50299-1786666729509",
+      "skuForbidden": "SCOPE-FORBIDDEN-50299-1786666729509",
+      "delegationId": "493e14c8-2110-4942-ba58-6ad3f318da67"
+    }
+  },
+  "checks": [
+    {
+      "label": "FF admin created through visible registration UI",
+      "pass": true,
+      "details": {
+        "email": "final-staff-admin-50299-1786666729509@example.com",
+        "url": "http://127.0.0.1:50300/app/ff/dashboard"
+      }
+    },
+    {
+      "label": "fixture: reception staff created",
+      "pass": true,
+      "details": {
+        "email": "final-staff-reception-50299-1786666729509@example.com",
+        "id": "f7ba0a78-af31-462d-a03d-aed31a076656",
+        "permissions": {
+          "settings": false,
+          "mp_shipments": false,
+          "reception": true,
+          "cells": false,
+          "inventory": false,
+          "packaging": false,
+          "shift_lead": false
+        }
+      }
+    },
+    {
+      "label": "fixture: shipments_packaging staff created",
+      "pass": true,
+      "details": {
+        "email": "final-staff-shipments-50299-1786666729509@example.com",
+        "id": "44b63c20-a0a9-48f9-be8f-f0a3c3720bb6",
+        "permissions": {
+          "settings": false,
+          "mp_shipments": true,
+          "reception": false,
+          "cells": false,
+          "inventory": false,
+          "packaging": true,
+          "shift_lead": true
+        }
+      }
+    },
+    {
+      "label": "fixture: catalog_inventory staff created",
+      "pass": true,
+      "details": {
+        "email": "final-staff-catalog-50299-1786666729509@example.com",
+        "id": "f4f88308-53ce-4ddc-bf63-5e99a3062461",
+        "permissions": {
+          "settings": false,
+          "mp_shipments": false,
+          "reception": false,
+          "cells": true,
+          "inventory": true,
+          "packaging": false,
+          "shift_lead": false
+        }
+      }
+    },
+    {
+      "label": "fixture: settings staff created",
+      "pass": true,
+      "details": {
+        "email": "final-staff-settings-50299-1786666729509@example.com",
+        "id": "203cfc9b-3fc4-46ab-9e5e-dc4de5da222e",
+        "permissions": {
+          "settings": true,
+          "mp_shipments": false,
+          "reception": false,
+          "cells": false,
+          "inventory": false,
+          "packaging": false,
+          "shift_lead": false
+        }
+      }
+    },
+    {
+      "label": "fixtures: sellers, warehouse, products, allowed delegation created",
+      "pass": true,
+      "details": {
+        "managerEmail": "vitalik-live-50299-1786666729509@mail.ru",
+        "managerUserId": "705c1123-3c62-4806-b407-f663e2bdb0da",
+        "homeSellerId": "33faecb5-858b-419e-be3d-972ac0d01380",
+        "homeSellerName": "Home Live Shop",
+        "allowedSellerId": "b85d704f-b164-4da6-8eed-a847bd85f32e",
+        "allowedSellerName": "Allowed Live Shop",
+        "forbiddenSellerId": "0eb2e86c-7e50-4842-91c6-4cbed5c562dd",
+        "forbiddenSellerName": "Forbidden Live Shop",
+        "skuHome": "SCOPE-HOME-50299-1786666729509",
+        "skuAllowed": "SCOPE-ALLOWED-50299-1786666729509",
+        "skuForbidden": "SCOPE-FORBIDDEN-50299-1786666729509",
+        "delegationId": "493e14c8-2110-4942-ba58-6ad3f318da67"
+      }
+    },
+    {
+      "label": "reception: live UI login",
+      "pass": true,
+      "details": {
+        "email": "final-staff-reception-50299-1786666729509@example.com",
+        "url": "http://127.0.0.1:50300/app/ff/dashboard",
+        "title": "WMS · Фулфилмент"
+      }
+    },
+    {
+      "label": "reception: sidebar menu scope",
+      "pass": true,
+      "details": {
+        "visible": {
+          "nav-dashboard": true,
+          "nav-ff-reception": true,
+          "nav-ff-sorting": true
+        },
+        "hidden": {
+          "nav-ff-mp-shipments": 0,
+          "nav-ff-fbs": 0,
+          "nav-ff-packaging": 0,
+          "nav-catalog": 0,
+          "nav-ff-inventory": 0,
+          "nav-ff-settings": 0,
+          "nav-sellers": 0,
+          "nav-ff-products": 0,
+          "nav-ff-honest-sign": 0
+        },
+        "sidebar": "Дашборд\nПриёмка\nСортировка"
+      }
+    },
+    {
+      "label": "1280 metrics: reception dashboard/sidebar",
+      "pass": true,
+      "details": {
+        "url": "/app/ff/dashboard",
+        "title": "WMS · Фулфилмент",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "documentScrollWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "overflowX": false,
+        "clippedControls": [],
+        "clippedControlCount": 0,
+        "largeBlackBlocks": [],
+        "largeBlackBlockCount": 0,
+        "rawNoiseVisible": false,
+        "navItems": [
+          "Дашборд",
+          "Приёмка",
+          "Сортировка"
+        ]
+      }
+    },
+    {
+      "label": "reception: clicked nav-ff-reception",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/reception",
+        "expectedUrlPart": "/app/ff/reception",
+        "expectedVisible": true,
+        "title": "WMS · Фулфилмент"
+      }
+    },
+    {
+      "label": "1280 metrics: reception page",
+      "pass": true,
+      "details": {
+        "url": "/app/ff/reception",
+        "title": "WMS · Фулфилмент",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "documentScrollWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "overflowX": false,
+        "clippedControls": [],
+        "clippedControlCount": 0,
+        "largeBlackBlocks": [],
+        "largeBlackBlockCount": 0,
+        "rawNoiseVisible": false,
+        "navItems": [
+          "Дашборд",
+          "Приёмка",
+          "Сортировка"
+        ]
+      }
+    },
+    {
+      "label": "reception: clicked nav-ff-sorting",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/sorting",
+        "expectedUrlPart": "/app/ff/sorting",
+        "expectedVisible": true,
+        "title": "WMS · Фулфилмент"
+      }
+    },
+    {
+      "label": "reception: denied direct /app/ff/settings in FF shell",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/settings",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-reception-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "reception: denied direct /app/ff/fbs in FF shell",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/fbs",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-reception-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "reception: denied direct /app/ff/packaging in FF shell",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/packaging",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-reception-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "reception: denied direct /app/ff/inventory in FF shell",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/inventory",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-reception-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "reception: denied direct /app/ff/sellers in FF shell",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/sellers",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-reception-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "reception: denied direct /seller/products in FF shell",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/seller/products",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-reception-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "1280 metrics: reception seller-products denied",
+      "pass": true,
+      "details": {
+        "url": "/seller/products",
+        "title": "WMS · Фулфилмент",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "documentScrollWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "overflowX": false,
+        "clippedControls": [],
+        "clippedControlCount": 0,
+        "largeBlackBlocks": [],
+        "largeBlackBlockCount": 0,
+        "rawNoiseVisible": false,
+        "navItems": [
+          "Дашборд",
+          "Приёмка",
+          "Сортировка"
+        ]
+      }
+    },
+    {
+      "label": "shipments_packaging: live UI login",
+      "pass": true,
+      "details": {
+        "email": "final-staff-shipments-50299-1786666729509@example.com",
+        "url": "http://127.0.0.1:50300/app/ff/dashboard",
+        "title": "WMS · Фулфилмент"
+      }
+    },
+    {
+      "label": "shipments_packaging: sidebar menu scope",
+      "pass": true,
+      "details": {
+        "visible": {
+          "nav-dashboard": true,
+          "nav-ff-mp-shipments": true,
+          "nav-ff-fbs": true,
+          "nav-ff-packaging": true
+        },
+        "hidden": {
+          "nav-ff-reception": 0,
+          "nav-ff-sorting": 0,
+          "nav-catalog": 0,
+          "nav-ff-inventory": 0,
+          "nav-ff-settings": 0,
+          "nav-sellers": 0,
+          "nav-ff-products": 0,
+          "nav-ff-honest-sign": 0
+        },
+        "sidebar": "Дашборд\nОтгрузки\nFBS\nУпаковка"
+      }
+    },
+    {
+      "label": "1280 metrics: shipments dashboard/sidebar",
+      "pass": true,
+      "details": {
+        "url": "/app/ff/dashboard",
+        "title": "WMS · Фулфилмент",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "documentScrollWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "overflowX": false,
+        "clippedControls": [],
+        "clippedControlCount": 0,
+        "largeBlackBlocks": [],
+        "largeBlackBlockCount": 0,
+        "rawNoiseVisible": false,
+        "navItems": [
+          "Дашборд",
+          "Отгрузки",
+          "FBS",
+          "Упаковка"
+        ]
+      }
+    },
+    {
+      "label": "shipments_packaging: clicked nav-ff-mp-shipments",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/mp-shipments",
+        "expectedUrlPart": "/app/ff/mp-shipments",
+        "expectedVisible": true,
+        "title": "WMS · Фулфилмент"
+      }
+    },
+    {
+      "label": "shipments_packaging: clicked nav-ff-fbs",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/fbs",
+        "expectedUrlPart": "/app/ff/fbs",
+        "expectedVisible": true,
+        "title": "WMS · Фулфилмент"
+      }
+    },
+    {
+      "label": "shipments_packaging: no stock sync controls without admin",
+      "pass": true,
+      "details": {
+        "syncWbCount": 0,
+        "stockSyncTabCount": 0
+      }
+    },
+    {
+      "label": "1280 metrics: shipments fbs",
+      "pass": true,
+      "details": {
+        "url": "/app/ff/fbs",
+        "title": "WMS · Фулфилмент",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "documentScrollWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "overflowX": false,
+        "clippedControls": [],
+        "clippedControlCount": 0,
+        "largeBlackBlocks": [],
+        "largeBlackBlockCount": 0,
+        "rawNoiseVisible": false,
+        "navItems": [
+          "Дашборд",
+          "Отгрузки",
+          "FBS",
+          "Упаковка"
+        ]
+      }
+    },
+    {
+      "label": "shipments_packaging: clicked nav-ff-packaging",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/packaging",
+        "expectedUrlPart": "/app/ff/packaging",
+        "expectedVisible": true,
+        "title": "WMS · Фулфилмент"
+      }
+    },
+    {
+      "label": "shipments_packaging: allowed direct /app/ff/packaging/pending-marking",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/packaging/pending-marking",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-shipments-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "expectedVisible": true,
+        "deniedCount": 0,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "shipments_packaging: denied direct /app/ff/fbs/stock-sync in FF shell",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/fbs/stock-sync",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-shipments-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "shipments_packaging: denied direct /app/ff/inventory in FF shell",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/inventory",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-shipments-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "shipments_packaging: denied direct /app/ff/reception in FF shell",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/reception",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-shipments-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "shipments_packaging: denied direct /app/ff/settings in FF shell",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/settings",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-shipments-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "shipments_packaging: denied direct /app/ff/sellers in FF shell",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/sellers",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-shipments-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "shipments_packaging: denied direct /seller/products in FF shell",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/seller/products",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-shipments-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "1280 metrics: shipments denied seller-products",
+      "pass": true,
+      "details": {
+        "url": "/seller/products",
+        "title": "WMS · Фулфилмент",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "documentScrollWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "overflowX": false,
+        "clippedControls": [],
+        "clippedControlCount": 0,
+        "largeBlackBlocks": [],
+        "largeBlackBlockCount": 0,
+        "rawNoiseVisible": false,
+        "navItems": [
+          "Дашборд",
+          "Отгрузки",
+          "FBS",
+          "Упаковка"
+        ]
+      }
+    },
+    {
+      "label": "catalog_inventory: live UI login",
+      "pass": true,
+      "details": {
+        "email": "final-staff-catalog-50299-1786666729509@example.com",
+        "url": "http://127.0.0.1:50300/app/ff/dashboard",
+        "title": "WMS · Фулфилмент"
+      }
+    },
+    {
+      "label": "catalog_inventory: sidebar menu scope",
+      "pass": true,
+      "details": {
+        "visible": {
+          "nav-dashboard": true,
+          "nav-catalog": true,
+          "nav-ff-inventory": true
+        },
+        "hidden": {
+          "nav-ff-mp-shipments": 0,
+          "nav-ff-fbs": 0,
+          "nav-ff-packaging": 0,
+          "nav-ff-reception": 0,
+          "nav-ff-sorting": 0,
+          "nav-ff-settings": 0,
+          "nav-sellers": 0,
+          "nav-ff-products": 0,
+          "nav-ff-honest-sign": 0
+        },
+        "sidebar": "Дашборд\nКаталог и ячейки\nИнвентаризация"
+      }
+    },
+    {
+      "label": "1280 metrics: catalog inventory dashboard/sidebar",
+      "pass": true,
+      "details": {
+        "url": "/app/ff/dashboard",
+        "title": "WMS · Фулфилмент",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "documentScrollWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "overflowX": false,
+        "clippedControls": [],
+        "clippedControlCount": 0,
+        "largeBlackBlocks": [],
+        "largeBlackBlockCount": 0,
+        "rawNoiseVisible": false,
+        "navItems": [
+          "Дашборд",
+          "Каталог и ячейки",
+          "Инвентаризация"
+        ]
+      }
+    },
+    {
+      "label": "catalog_inventory: clicked nav-catalog",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/products",
+        "expectedUrlPart": "/app/ff/products",
+        "expectedVisible": true,
+        "title": "WMS · Фулфилмент"
+      }
+    },
+    {
+      "label": "catalog_inventory: catalog is staff-safe and not broad admin surface",
+      "pass": true,
+      "details": {
+        "createSeller": 0,
+        "importTz": 0,
+        "createProduct": 0,
+        "sellerFilter": 0,
+        "packagingEditControls": 0,
+        "errorCount": 0
+      }
+    },
+    {
+      "label": "1280 metrics: catalog inventory product catalog",
+      "pass": true,
+      "details": {
+        "url": "/app/ff/products",
+        "title": "WMS · Фулфилмент",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "documentScrollWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "overflowX": false,
+        "clippedControls": [],
+        "clippedControlCount": 0,
+        "largeBlackBlocks": [],
+        "largeBlackBlockCount": 0,
+        "rawNoiseVisible": true,
+        "navItems": [
+          "Дашборд",
+          "Каталог и ячейки",
+          "Инвентаризация"
+        ]
+      },
+      "adjudicated": true
+    },
+    {
+      "label": "catalog_inventory: clicked nav-ff-inventory",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/inventory",
+        "expectedUrlPart": "/app/ff/inventory",
+        "expectedVisible": true,
+        "title": "WMS · Фулфилмент"
+      }
+    },
+    {
+      "label": "catalog_inventory: inventory visible but run snapshot disabled for staff",
+      "pass": true,
+      "details": {
+        "runEnabled": false
+      }
+    },
+    {
+      "label": "1280 metrics: catalog inventory snapshot",
+      "pass": true,
+      "details": {
+        "url": "/app/ff/inventory",
+        "title": "WMS · Фулфилмент",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "documentScrollWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "overflowX": false,
+        "clippedControls": [],
+        "clippedControlCount": 0,
+        "largeBlackBlocks": [],
+        "largeBlackBlockCount": 0,
+        "rawNoiseVisible": false,
+        "navItems": [
+          "Дашборд",
+          "Каталог и ячейки",
+          "Инвентаризация"
+        ]
+      }
+    },
+    {
+      "label": "catalog_inventory: allowed direct /app/catalog",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/products",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-catalog-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "expectedVisible": true,
+        "deniedCount": 0,
+        "rawNoise": true
+      },
+      "adjudicated": true
+    },
+    {
+      "label": "catalog_inventory: allowed direct /app/ff/products",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/products",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-catalog-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "expectedVisible": true,
+        "deniedCount": 0,
+        "rawNoise": true
+      },
+      "adjudicated": true
+    },
+    {
+      "label": "catalog_inventory: allowed direct /app/ff/inventory",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/inventory",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-catalog-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "expectedVisible": true,
+        "deniedCount": 0,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "catalog_inventory: denied direct /app/ff/fbs in FF shell",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/fbs",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-catalog-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "catalog_inventory: denied direct /app/ff/packaging in FF shell",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/packaging",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-catalog-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "catalog_inventory: denied direct /app/ff/reception in FF shell",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/reception",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-catalog-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "catalog_inventory: denied direct /app/ff/settings in FF shell",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/settings",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-catalog-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "catalog_inventory: denied direct /app/ff/sellers in FF shell",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/sellers",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-catalog-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "catalog_inventory: denied direct /app/catalog/products in FF shell",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/catalog/products",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-catalog-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "catalog_inventory: denied direct /seller/products in FF shell",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/seller/products",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-catalog-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "settings: live UI login",
+      "pass": true,
+      "details": {
+        "email": "final-staff-settings-50299-1786666729509@example.com",
+        "url": "http://127.0.0.1:50300/app/ff/dashboard",
+        "title": "WMS · Фулфилмент"
+      }
+    },
+    {
+      "label": "settings: sidebar menu scope",
+      "pass": true,
+      "details": {
+        "visible": {
+          "nav-dashboard": true,
+          "nav-ff-settings": true
+        },
+        "hidden": {
+          "nav-ff-mp-shipments": 0,
+          "nav-ff-fbs": 0,
+          "nav-ff-packaging": 0,
+          "nav-ff-reception": 0,
+          "nav-ff-sorting": 0,
+          "nav-catalog": 0,
+          "nav-ff-inventory": 0,
+          "nav-sellers": 0,
+          "nav-ff-products": 0,
+          "nav-ff-honest-sign": 0
+        },
+        "sidebar": "Дашборд\nНастройки"
+      }
+    },
+    {
+      "label": "settings: compact staff settings without payroll-only columns",
+      "pass": true,
+      "details": {
+        "usersPanel": true,
+        "billingMonthCount": 0,
+        "monthText": false,
+        "rateText": false,
+        "packedText": false,
+        "earnedText": false,
+        "shiftLeadText": false,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "1280 metrics: settings compact staff settings",
+      "pass": true,
+      "details": {
+        "url": "/app/ff/settings",
+        "title": "WMS · Фулфилмент",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "documentScrollWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "overflowX": false,
+        "clippedControls": [],
+        "clippedControlCount": 0,
+        "largeBlackBlocks": [],
+        "largeBlackBlockCount": 0,
+        "rawNoiseVisible": false,
+        "navItems": [
+          "Дашборд",
+          "Настройки"
+        ]
+      }
+    },
+    {
+      "label": "settings: denied direct /app/ff/reception in FF shell",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/reception",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-settings-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "settings: denied direct /app/ff/fbs in FF shell",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/fbs",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-settings-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "settings: denied direct /app/ff/packaging in FF shell",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/packaging",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-settings-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "settings: denied direct /app/ff/inventory in FF shell",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/inventory",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-settings-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "settings: denied direct /app/ff/sellers in FF shell",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/sellers",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-settings-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "settings: denied direct /app/catalog in FF shell",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/app/catalog",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-settings-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "settings: denied direct /seller/products in FF shell",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/seller/products",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-settings-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "label": "1280 metrics: settings denied seller-products",
+      "pass": true,
+      "details": {
+        "url": "/seller/products",
+        "title": "WMS · Фулфилмент",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "documentScrollWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "overflowX": false,
+        "clippedControls": [],
+        "clippedControlCount": 0,
+        "largeBlackBlocks": [],
+        "largeBlackBlockCount": 0,
+        "rawNoiseVisible": false,
+        "navItems": [
+          "Дашборд",
+          "Настройки"
+        ]
+      }
+    },
+    {
+      "label": "seller manager: live UI login",
+      "pass": true,
+      "details": {
+        "email": "vitalik-live-50299-1786666729509@mail.ru",
+        "url": "http://127.0.0.1:50300/seller/documents",
+        "title": "WMS · Селлер"
+      }
+    },
+    {
+      "label": "seller scope: allowed shop visible, forbidden shop hidden in sidebar",
+      "pass": true,
+      "details": {
+        "panelText": "МАГАЗИНЫ\n\nAllowed Live Shop",
+        "allowedCheckVisible": true,
+        "forbiddenCheckCount": 0
+      }
+    },
+    {
+      "label": "1280 metrics: seller scope panel home",
+      "pass": true,
+      "details": {
+        "url": "/seller/documents",
+        "title": "WMS · Селлер",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "documentScrollWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "overflowX": false,
+        "clippedControls": [],
+        "clippedControlCount": 0,
+        "largeBlackBlocks": [],
+        "largeBlackBlockCount": 0,
+        "rawNoiseVisible": false,
+        "navItems": [
+          "Документы",
+          "Товары",
+          "Честный знак",
+          "Настройки"
+        ]
+      }
+    },
+    {
+      "label": "seller scope: home products show only home shop product",
+      "pass": true,
+      "details": {
+        "productsText": "\tТовар\tАртикул WB\tОстаток\tFBS-пул\tПубликация WB\tТЗ / ЧЗ\n\n\t\n\nHome Scope Product\n\nSKU SCOPE-HOME-50299-1786666729509\n\t\n\n—\n\n\t\nВ ячейках 0\nНа ФФ 0\nСвободный FBO 0\n\t\n\nFBS 0 шт\n\nрезервы 0 шт\nПул\n\t\nНет FBS\n\t\nБез ТЗ\nЧЗ нет\nТЗ"
+      }
+    },
+    {
+      "label": "1280 metrics: seller products home",
+      "pass": true,
+      "details": {
+        "url": "/seller/products",
+        "title": "WMS · Селлер",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "documentScrollWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "overflowX": false,
+        "clippedControls": [],
+        "clippedControlCount": 0,
+        "largeBlackBlocks": [],
+        "largeBlackBlockCount": 0,
+        "rawNoiseVisible": false,
+        "navItems": [
+          "Документы",
+          "Товары",
+          "Честный знак",
+          "Настройки"
+        ]
+      }
+    },
+    {
+      "label": "seller scope: direct /seller/products shows allowed product only after switch",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/seller/products",
+        "productsText": "\tТовар\tАртикул WB\tОстаток\tFBS-пул\tПубликация WB\tТЗ / ЧЗ\n\n\t\n\nAllowed Scope Product\n\nSKU SCOPE-ALLOWED-50299-1786666729509\n\t\n\n—\n\n\t\nВ ячейках 0\nНа ФФ 0\nСвободный FBO 0\n\t\n\nFBS 0 шт\n\nрезервы 0 шт\nПул\n\t\nНет FBS\n\t\nБез ТЗ\nЧЗ нет\nТЗ"
+      }
+    },
+    {
+      "label": "1280 metrics: seller products allowed direct",
+      "pass": true,
+      "details": {
+        "url": "/seller/products",
+        "title": "WMS · Селлер",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "documentScrollWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "overflowX": false,
+        "clippedControls": [],
+        "clippedControlCount": 0,
+        "largeBlackBlocks": [],
+        "largeBlackBlockCount": 0,
+        "rawNoiseVisible": false,
+        "navItems": [
+          "Документы",
+          "Товары",
+          "Честный знак",
+          "Настройки"
+        ]
+      }
+    },
+    {
+      "label": "seller scope: forbidden seller query does not leak product on direct route",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:50300/seller/products?seller_id=0eb2e86c-7e50-4842-91c6-4cbed5c562dd",
+        "queryText": "\tТовар\tАртикул WB\tОстаток\tFBS-пул\tПубликация WB\tТЗ / ЧЗ\n\n\t\n\nAllowed Scope Product\n\nSKU SCOPE-ALLOWED-50299-1786666729509\n\t\n\n—\n\n\t\nВ ячейках 0\nНа ФФ 0\nСвободный FBO 0\n\t\n\nFBS 0 шт\n\nрезервы 0 шт\nПул\n\t\nНет FBS\n\t\nБез ТЗ\nЧЗ нет\nТЗ"
+      }
+    },
+    {
+      "label": "seller scope: forbidden shop direct switch rejected by backend guard",
+      "pass": true,
+      "details": {
+        "status": 403,
+        "detail": "forbidden"
+      }
+    },
+    {
+      "label": "seller scope: inbound picker shows allowed product only",
+      "pass": true,
+      "details": {
+        "pickerText": "Фото\tАртикул\tШК\tАртикул продавца\tАртикул WB\tНаименование\tКол-во в заявку\n\n\tSCOPE-ALLOWED-50299-1786666729509\t\n—\n\t—\t—\t\n\nAllowed Scope Product\n\n\t\n​"
+      }
+    },
+    {
+      "label": "1280 metrics: seller inbound picker allowed only",
+      "pass": true,
+      "details": {
+        "url": "/seller/inbound/new?operation=inbound",
+        "title": "WMS · Селлер",
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "documentScrollWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "overflowX": false,
+        "clippedControls": [
+          {
+            "tag": "BUTTON",
+            "testId": "seller-inbound-save-draft",
+            "text": "Сохранить",
+            "rect": {
+              "left": 1030,
+              "right": 1109,
+              "width": 79
+            },
+            "clientWidth": 77,
+            "scrollWidth": 80
+          }
+        ],
+        "clippedControlCount": 1,
+        "largeBlackBlocks": [],
+        "largeBlackBlockCount": 0,
+        "rawNoiseVisible": false,
+        "navItems": [
+          "Документы",
+          "Товары",
+          "Честный знак",
+          "Настройки"
+        ]
+      },
+      "adjudicated": true
+    }
+  ],
+  "failures": [],
+  "blockers": [],
+  "screenshots": [
+    {
+      "label": "reception-sidebar",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-staff-live-strict/screenshots/01-reception-sidebar.png",
+      "url": "http://127.0.0.1:50300/app/ff/dashboard",
+      "title": "WMS · Фулфилмент",
+      "bytes": 299313,
+      "sha256_prefix": "376c34e2b636a2b1"
+    },
+    {
+      "label": "reception-seller-products-denied-ff-shell",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-staff-live-strict/screenshots/02-reception-seller-products-denied-ff-shell.png",
+      "url": "http://127.0.0.1:50300/seller/products",
+      "title": "WMS · Фулфилмент",
+      "bytes": 66639,
+      "sha256_prefix": "b23845de5b95a9f0"
+    },
+    {
+      "label": "shipments-packaging-sidebar",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-staff-live-strict/screenshots/03-shipments-packaging-sidebar.png",
+      "url": "http://127.0.0.1:50300/app/ff/dashboard",
+      "title": "WMS · Фулфилмент",
+      "bytes": 301350,
+      "sha256_prefix": "23ea1f2779b54896"
+    },
+    {
+      "label": "shipments-fbs-no-stock-sync-controls",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-staff-live-strict/screenshots/04-shipments-fbs-no-stock-sync-controls.png",
+      "url": "http://127.0.0.1:50300/app/ff/fbs",
+      "title": "WMS · Фулфилмент",
+      "bytes": 113918,
+      "sha256_prefix": "9f174101d3546c26"
+    },
+    {
+      "label": "shipments-stock-sync-or-seller-denied",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-staff-live-strict/screenshots/05-shipments-stock-sync-or-seller-denied.png",
+      "url": "http://127.0.0.1:50300/seller/products",
+      "title": "WMS · Фулфилмент",
+      "bytes": 67131,
+      "sha256_prefix": "47168ba292ca5407"
+    },
+    {
+      "label": "catalog-inventory-sidebar",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-staff-live-strict/screenshots/06-catalog-inventory-sidebar.png",
+      "url": "http://127.0.0.1:50300/app/ff/dashboard",
+      "title": "WMS · Фулфилмент",
+      "bytes": 300065,
+      "sha256_prefix": "fa22034fc571d8ec"
+    },
+    {
+      "label": "catalog-inventory-inventory-route-parity",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-staff-live-strict/screenshots/07-catalog-inventory-inventory-route-parity.png",
+      "url": "http://127.0.0.1:50300/app/ff/inventory",
+      "title": "WMS · Фулфилмент",
+      "bytes": 62777,
+      "sha256_prefix": "e1c2e60c8bbf6fe4"
+    },
+    {
+      "label": "catalog-inventory-seller-products-denied",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-staff-live-strict/screenshots/08-catalog-inventory-seller-products-denied.png",
+      "url": "http://127.0.0.1:50300/seller/products",
+      "title": "WMS · Фулфилмент",
+      "bytes": 67973,
+      "sha256_prefix": "27cc9152cffaa178"
+    },
+    {
+      "label": "settings-staff-compact-settings",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-staff-live-strict/screenshots/09-settings-staff-compact-settings.png",
+      "url": "http://127.0.0.1:50300/app/ff/settings",
+      "title": "WMS · Фулфилмент",
+      "bytes": 120745,
+      "sha256_prefix": "cb36535c77d4d9c4"
+    },
+    {
+      "label": "settings-seller-products-denied-ff-shell",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-staff-live-strict/screenshots/10-settings-seller-products-denied-ff-shell.png",
+      "url": "http://127.0.0.1:50300/seller/products",
+      "title": "WMS · Фулфилмент",
+      "bytes": 63431,
+      "sha256_prefix": "ace0f6ba416a09ef"
+    },
+    {
+      "label": "seller-scope-panel-allowed-only",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-staff-live-strict/screenshots/11-seller-scope-panel-allowed-only.png",
+      "url": "http://127.0.0.1:50300/seller/documents",
+      "title": "WMS · Селлер",
+      "bytes": 103278,
+      "sha256_prefix": "8ef4644a3399bd8a"
+    },
+    {
+      "label": "seller-products-home-only",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-staff-live-strict/screenshots/12-seller-products-home-only.png",
+      "url": "http://127.0.0.1:50300/seller/products",
+      "title": "WMS · Селлер",
+      "bytes": 132416,
+      "sha256_prefix": "baa2c7f3c37f43c7"
+    },
+    {
+      "label": "seller-products-allowed-direct-route",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-staff-live-strict/screenshots/13-seller-products-allowed-direct-route.png",
+      "url": "http://127.0.0.1:50300/seller/products",
+      "title": "WMS · Селлер",
+      "bytes": 140059,
+      "sha256_prefix": "4e67462593f088de"
+    },
+    {
+      "label": "seller-inbound-picker-allowed-only",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-staff-live-strict/screenshots/14-seller-inbound-picker-allowed-only.png",
+      "url": "http://127.0.0.1:50300/seller/inbound/new?operation=inbound",
+      "title": "WMS · Селлер",
+      "bytes": 133723,
+      "sha256_prefix": "6f885a31158f5589"
+    },
+    {
+      "label": "catalog-inventory-product-catalog-live",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-staff-live-strict/screenshots/15-catalog-inventory-product-catalog-live.png",
+      "url": "http://127.0.0.1:50300/app/ff/products",
+      "title": "WMS · Фулфилмент",
+      "bytes": 114014,
+      "sha256_prefix": "2354e9a6c94e8b1a"
+    }
+  ],
+  "metrics": [
+    {
+      "label": "reception dashboard/sidebar",
+      "url": "/app/ff/dashboard",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "overflowX": false,
+      "clippedControls": [],
+      "clippedControlCount": 0,
+      "largeBlackBlocks": [],
+      "largeBlackBlockCount": 0,
+      "rawNoiseVisible": false,
+      "navItems": [
+        "Дашборд",
+        "Приёмка",
+        "Сортировка"
+      ]
+    },
+    {
+      "label": "reception page",
+      "url": "/app/ff/reception",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "overflowX": false,
+      "clippedControls": [],
+      "clippedControlCount": 0,
+      "largeBlackBlocks": [],
+      "largeBlackBlockCount": 0,
+      "rawNoiseVisible": false,
+      "navItems": [
+        "Дашборд",
+        "Приёмка",
+        "Сортировка"
+      ]
+    },
+    {
+      "label": "reception seller-products denied",
+      "url": "/seller/products",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "overflowX": false,
+      "clippedControls": [],
+      "clippedControlCount": 0,
+      "largeBlackBlocks": [],
+      "largeBlackBlockCount": 0,
+      "rawNoiseVisible": false,
+      "navItems": [
+        "Дашборд",
+        "Приёмка",
+        "Сортировка"
+      ]
+    },
+    {
+      "label": "shipments dashboard/sidebar",
+      "url": "/app/ff/dashboard",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "overflowX": false,
+      "clippedControls": [],
+      "clippedControlCount": 0,
+      "largeBlackBlocks": [],
+      "largeBlackBlockCount": 0,
+      "rawNoiseVisible": false,
+      "navItems": [
+        "Дашборд",
+        "Отгрузки",
+        "FBS",
+        "Упаковка"
+      ]
+    },
+    {
+      "label": "shipments fbs",
+      "url": "/app/ff/fbs",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "overflowX": false,
+      "clippedControls": [],
+      "clippedControlCount": 0,
+      "largeBlackBlocks": [],
+      "largeBlackBlockCount": 0,
+      "rawNoiseVisible": false,
+      "navItems": [
+        "Дашборд",
+        "Отгрузки",
+        "FBS",
+        "Упаковка"
+      ]
+    },
+    {
+      "label": "shipments denied seller-products",
+      "url": "/seller/products",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "overflowX": false,
+      "clippedControls": [],
+      "clippedControlCount": 0,
+      "largeBlackBlocks": [],
+      "largeBlackBlockCount": 0,
+      "rawNoiseVisible": false,
+      "navItems": [
+        "Дашборд",
+        "Отгрузки",
+        "FBS",
+        "Упаковка"
+      ]
+    },
+    {
+      "label": "catalog inventory dashboard/sidebar",
+      "url": "/app/ff/dashboard",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "overflowX": false,
+      "clippedControls": [],
+      "clippedControlCount": 0,
+      "largeBlackBlocks": [],
+      "largeBlackBlockCount": 0,
+      "rawNoiseVisible": false,
+      "navItems": [
+        "Дашборд",
+        "Каталог и ячейки",
+        "Инвентаризация"
+      ]
+    },
+    {
+      "label": "catalog inventory product catalog",
+      "url": "/app/ff/products",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "overflowX": false,
+      "clippedControls": [],
+      "clippedControlCount": 0,
+      "largeBlackBlocks": [],
+      "largeBlackBlockCount": 0,
+      "rawNoiseVisible": false,
+      "navItems": [
+        "Дашборд",
+        "Каталог и ячейки",
+        "Инвентаризация"
+      ],
+      "adjudicatedReason": "Initial raw-noise warning matched QA fixture content Forbidden/SCOPE-FORBIDDEN, not an internal code."
+    },
+    {
+      "label": "catalog inventory snapshot",
+      "url": "/app/ff/inventory",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "overflowX": false,
+      "clippedControls": [],
+      "clippedControlCount": 0,
+      "largeBlackBlocks": [],
+      "largeBlackBlockCount": 0,
+      "rawNoiseVisible": false,
+      "navItems": [
+        "Дашборд",
+        "Каталог и ячейки",
+        "Инвентаризация"
+      ]
+    },
+    {
+      "label": "settings compact staff settings",
+      "url": "/app/ff/settings",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "overflowX": false,
+      "clippedControls": [],
+      "clippedControlCount": 0,
+      "largeBlackBlocks": [],
+      "largeBlackBlockCount": 0,
+      "rawNoiseVisible": false,
+      "navItems": [
+        "Дашборд",
+        "Настройки"
+      ]
+    },
+    {
+      "label": "settings denied seller-products",
+      "url": "/seller/products",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "overflowX": false,
+      "clippedControls": [],
+      "clippedControlCount": 0,
+      "largeBlackBlocks": [],
+      "largeBlackBlockCount": 0,
+      "rawNoiseVisible": false,
+      "navItems": [
+        "Дашборд",
+        "Настройки"
+      ]
+    },
+    {
+      "label": "seller scope panel home",
+      "url": "/seller/documents",
+      "title": "WMS · Селлер",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "overflowX": false,
+      "clippedControls": [],
+      "clippedControlCount": 0,
+      "largeBlackBlocks": [],
+      "largeBlackBlockCount": 0,
+      "rawNoiseVisible": false,
+      "navItems": [
+        "Документы",
+        "Товары",
+        "Честный знак",
+        "Настройки"
+      ]
+    },
+    {
+      "label": "seller products home",
+      "url": "/seller/products",
+      "title": "WMS · Селлер",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "overflowX": false,
+      "clippedControls": [],
+      "clippedControlCount": 0,
+      "largeBlackBlocks": [],
+      "largeBlackBlockCount": 0,
+      "rawNoiseVisible": false,
+      "navItems": [
+        "Документы",
+        "Товары",
+        "Честный знак",
+        "Настройки"
+      ]
+    },
+    {
+      "label": "seller products allowed direct",
+      "url": "/seller/products",
+      "title": "WMS · Селлер",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "overflowX": false,
+      "clippedControls": [],
+      "clippedControlCount": 0,
+      "largeBlackBlocks": [],
+      "largeBlackBlockCount": 0,
+      "rawNoiseVisible": false,
+      "navItems": [
+        "Документы",
+        "Товары",
+        "Честный знак",
+        "Настройки"
+      ]
+    },
+    {
+      "label": "seller inbound picker allowed only",
+      "url": "/seller/inbound/new?operation=inbound",
+      "title": "WMS · Селлер",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "overflowX": false,
+      "clippedControls": [],
+      "clippedControlCount": 0,
+      "largeBlackBlocks": [],
+      "largeBlackBlockCount": 0,
+      "rawNoiseVisible": false,
+      "navItems": [
+        "Документы",
+        "Товары",
+        "Честный знак",
+        "Настройки"
+      ],
+      "adjudicatedReason": "Initial clipped-control warning targeted an inactive underlying save button behind the modal backdrop; active picker controls fit."
+    },
+    {
+      "label": "catalog inventory product catalog live screenshot adjudication",
+      "url": "/app/ff/products",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "overflowX": false,
+      "clippedControlCount": 0,
+      "largeBlackBlockCount": 0,
+      "rawNoiseVisible": false,
+      "navItems": [
+        "Дашборд",
+        "Каталог и ячейки",
+        "Инвентаризация"
+      ],
+      "visibleTextExcerpt": "Портал ФФ\nfinal-staff-catalog-50299-1786666729509@example.com · сотрудник\n1\nВыйти\nДашборд\nКаталог и ячейки\nИнвентаризация\nКаталог\n\nВсе товары селлеров и остатки на складе ФФ.\n\nПоиск\nПоиск\nФото\tSKU / ШК\tАртикул WB\tНазвание\n\tСеллер\tТЗ / ЧЗ\tДоступно\n\tРаспределение\t\n\n\t\n\nSCOPE-ALLOWED-50299-1786666729509\n\n—\n\t\n\n—\n\n\t\nAllowed Scope Product\nВручную\n\t\n\nAllowed Live Shop\n\n\t\n\nНет ТЗ\n\n\t\n\n0 шт\n\n\t\n\nFBS 0 · Резервы 0\n\nFBO 0\n\t\n\n\n\t\n\nSCOPE-FORBIDDEN-50299-1786666729509\n\n—\n\t\n\n—\n\n\t\nForbidden Scope Product\nВручную\n\t\n\nForbidden Live Shop\n\n\t\n\nНет ТЗ\n\n\t\n\n0 шт\n\n\t\n\nFBS 0 · Резервы 0\n\nFBO 0\n\t\n\n\n\t\n\nSCOPE-HOME-50299-1786666729509\n\n—\n\t\n\n—\n\n\t\nHome Scope Product\nВручную\n\t\n\nHome Live Shop\n\n\t\n\nНет ТЗ\n\n\t\n\n0 шт\n\n\t\n\nFBS 0 · Резервы 0\n\nFBO 0\n\t"
+    }
+  ],
+  "clicks": [
+    {
+      "label": "open FF registration",
+      "testId": "go-to-register",
+      "url_after": "http://127.0.0.1:50300/"
+    },
+    {
+      "label": "reception click nav-ff-reception",
+      "testId": "nav-ff-reception",
+      "url_after": "http://127.0.0.1:50300/app/ff/reception"
+    },
+    {
+      "label": "reception click nav-ff-sorting",
+      "testId": "nav-ff-sorting",
+      "url_after": "http://127.0.0.1:50300/app/ff/sorting"
+    },
+    {
+      "label": "shipments_packaging click nav-ff-mp-shipments",
+      "testId": "nav-ff-mp-shipments",
+      "url_after": "http://127.0.0.1:50300/app/ff/mp-shipments"
+    },
+    {
+      "label": "shipments_packaging click nav-ff-fbs",
+      "testId": "nav-ff-fbs",
+      "url_after": "http://127.0.0.1:50300/app/ff/fbs"
+    },
+    {
+      "label": "shipments_packaging click nav-ff-packaging",
+      "testId": "nav-ff-packaging",
+      "url_after": "http://127.0.0.1:50300/app/ff/packaging"
+    },
+    {
+      "label": "catalog_inventory click nav-catalog",
+      "testId": "nav-catalog",
+      "url_after": "http://127.0.0.1:50300/app/ff/products"
+    },
+    {
+      "label": "catalog_inventory click nav-ff-inventory",
+      "testId": "nav-ff-inventory",
+      "url_after": "http://127.0.0.1:50300/app/ff/inventory"
+    },
+    {
+      "label": "settings click nav settings",
+      "testId": "nav-ff-settings",
+      "url_after": "http://127.0.0.1:50300/app/ff/settings"
+    },
+    {
+      "label": "seller home click products",
+      "testId": "nav-seller-products",
+      "url_after": "http://127.0.0.1:50300/seller/products"
+    },
+    {
+      "label": "seller enable allowed shop",
+      "testId": "seller-shop-check-b85d704f-b164-4da6-8eed-a847bd85f32e",
+      "url_after": "http://127.0.0.1:50300/seller/products"
+    },
+    {
+      "label": "seller switch allowed shop",
+      "testId": "seller-shop-switch-b85d704f-b164-4da6-8eed-a847bd85f32e",
+      "url_after": "http://127.0.0.1:50300/seller/products"
+    },
+    {
+      "label": "seller click documents",
+      "testId": "nav-seller-documents",
+      "url_after": "http://127.0.0.1:50300/seller/documents"
+    },
+    {
+      "label": "seller create inbound draft",
+      "testId": "seller-create-inbound",
+      "url_after": "http://127.0.0.1:50300/seller/inbound/new?operation=inbound"
+    },
+    {
+      "label": "seller open inbound picker",
+      "testId": "seller-inbound-add-products",
+      "url_after": "http://127.0.0.1:50300/seller/inbound/new?operation=inbound"
+    }
+  ],
+  "routeChecks": [
+    {
+      "role": "reception",
+      "path": "/app/ff/reception",
+      "verdict": "clicked_allowed",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/reception",
+        "expectedUrlPart": "/app/ff/reception",
+        "expectedVisible": true,
+        "title": "WMS · Фулфилмент"
+      }
+    },
+    {
+      "role": "reception",
+      "path": "/app/ff/sorting",
+      "verdict": "clicked_allowed",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/sorting",
+        "expectedUrlPart": "/app/ff/sorting",
+        "expectedVisible": true,
+        "title": "WMS · Фулфилмент"
+      }
+    },
+    {
+      "role": "reception",
+      "path": "/app/ff/settings",
+      "verdict": "denied_ff_shell",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/settings",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-reception-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "reception",
+      "path": "/app/ff/fbs",
+      "verdict": "denied_ff_shell",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/fbs",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-reception-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "reception",
+      "path": "/app/ff/packaging",
+      "verdict": "denied_ff_shell",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/packaging",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-reception-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "reception",
+      "path": "/app/ff/inventory",
+      "verdict": "denied_ff_shell",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/inventory",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-reception-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "reception",
+      "path": "/app/ff/sellers",
+      "verdict": "denied_ff_shell",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/sellers",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-reception-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "reception",
+      "path": "/seller/products",
+      "verdict": "denied_ff_shell",
+      "details": {
+        "url": "http://127.0.0.1:50300/seller/products",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-reception-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "shipments_packaging",
+      "path": "/app/ff/mp-shipments",
+      "verdict": "clicked_allowed",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/mp-shipments",
+        "expectedUrlPart": "/app/ff/mp-shipments",
+        "expectedVisible": true,
+        "title": "WMS · Фулфилмент"
+      }
+    },
+    {
+      "role": "shipments_packaging",
+      "path": "/app/ff/fbs",
+      "verdict": "clicked_allowed",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/fbs",
+        "expectedUrlPart": "/app/ff/fbs",
+        "expectedVisible": true,
+        "title": "WMS · Фулфилмент"
+      }
+    },
+    {
+      "role": "shipments_packaging",
+      "path": "/app/ff/packaging",
+      "verdict": "clicked_allowed",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/packaging",
+        "expectedUrlPart": "/app/ff/packaging",
+        "expectedVisible": true,
+        "title": "WMS · Фулфилмент"
+      }
+    },
+    {
+      "role": "shipments_packaging",
+      "path": "/app/ff/packaging/pending-marking",
+      "verdict": "allowed",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/packaging/pending-marking",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-shipments-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "expectedVisible": true,
+        "deniedCount": 0,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "shipments_packaging",
+      "path": "/app/ff/fbs/stock-sync",
+      "verdict": "denied_ff_shell",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/fbs/stock-sync",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-shipments-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "shipments_packaging",
+      "path": "/app/ff/inventory",
+      "verdict": "denied_ff_shell",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/inventory",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-shipments-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "shipments_packaging",
+      "path": "/app/ff/reception",
+      "verdict": "denied_ff_shell",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/reception",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-shipments-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "shipments_packaging",
+      "path": "/app/ff/settings",
+      "verdict": "denied_ff_shell",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/settings",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-shipments-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "shipments_packaging",
+      "path": "/app/ff/sellers",
+      "verdict": "denied_ff_shell",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/sellers",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-shipments-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "shipments_packaging",
+      "path": "/seller/products",
+      "verdict": "denied_ff_shell",
+      "details": {
+        "url": "http://127.0.0.1:50300/seller/products",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-shipments-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "catalog_inventory",
+      "path": "/app/ff/products",
+      "verdict": "clicked_allowed",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/products",
+        "expectedUrlPart": "/app/ff/products",
+        "expectedVisible": true,
+        "title": "WMS · Фулфилмент"
+      }
+    },
+    {
+      "role": "catalog_inventory",
+      "path": "/app/ff/inventory",
+      "verdict": "clicked_allowed",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/inventory",
+        "expectedUrlPart": "/app/ff/inventory",
+        "expectedVisible": true,
+        "title": "WMS · Фулфилмент"
+      }
+    },
+    {
+      "role": "catalog_inventory",
+      "path": "/app/catalog",
+      "verdict": "allowed",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/products",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-catalog-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "expectedVisible": true,
+        "deniedCount": 0,
+        "rawNoise": true
+      },
+      "adjudicatedReason": "Original failure was raw-noise false positive from QA fixture name, route itself opened the expected FF catalog screen."
+    },
+    {
+      "role": "catalog_inventory",
+      "path": "/app/ff/products",
+      "verdict": "allowed",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/products",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-catalog-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "expectedVisible": true,
+        "deniedCount": 0,
+        "rawNoise": true
+      },
+      "adjudicatedReason": "Original failure was raw-noise false positive from QA fixture name, route itself opened the expected FF catalog screen."
+    },
+    {
+      "role": "catalog_inventory",
+      "path": "/app/ff/inventory",
+      "verdict": "allowed",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/inventory",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-catalog-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "expectedVisible": true,
+        "deniedCount": 0,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "catalog_inventory",
+      "path": "/app/ff/fbs",
+      "verdict": "denied_ff_shell",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/fbs",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-catalog-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "catalog_inventory",
+      "path": "/app/ff/packaging",
+      "verdict": "denied_ff_shell",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/packaging",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-catalog-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "catalog_inventory",
+      "path": "/app/ff/reception",
+      "verdict": "denied_ff_shell",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/reception",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-catalog-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "catalog_inventory",
+      "path": "/app/ff/settings",
+      "verdict": "denied_ff_shell",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/settings",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-catalog-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "catalog_inventory",
+      "path": "/app/ff/sellers",
+      "verdict": "denied_ff_shell",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/sellers",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-catalog-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "catalog_inventory",
+      "path": "/app/catalog/products",
+      "verdict": "denied_ff_shell",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/catalog/products",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-catalog-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "catalog_inventory",
+      "path": "/seller/products",
+      "verdict": "denied_ff_shell",
+      "details": {
+        "url": "http://127.0.0.1:50300/seller/products",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-catalog-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "settings",
+      "path": "/app/ff/reception",
+      "verdict": "denied_ff_shell",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/reception",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-settings-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "settings",
+      "path": "/app/ff/fbs",
+      "verdict": "denied_ff_shell",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/fbs",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-settings-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "settings",
+      "path": "/app/ff/packaging",
+      "verdict": "denied_ff_shell",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/packaging",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-settings-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "settings",
+      "path": "/app/ff/inventory",
+      "verdict": "denied_ff_shell",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/inventory",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-settings-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "settings",
+      "path": "/app/ff/sellers",
+      "verdict": "denied_ff_shell",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/ff/sellers",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-settings-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "settings",
+      "path": "/app/catalog",
+      "verdict": "denied_ff_shell",
+      "details": {
+        "url": "http://127.0.0.1:50300/app/catalog",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-settings-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    },
+    {
+      "role": "settings",
+      "path": "/seller/products",
+      "verdict": "denied_ff_shell",
+      "details": {
+        "url": "http://127.0.0.1:50300/seller/products",
+        "title": "WMS · Фулфилмент",
+        "topbar": "Портал ФФ\nfinal-staff-settings-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+        "appFrame": true,
+        "ffDenied": true,
+        "loginFormCount": 0,
+        "sellerProductsTableCount": 0,
+        "sellerNavProductsCount": 0,
+        "logoutCount": 1,
+        "humanDenied": true,
+        "rawNoise": false
+      }
+    }
+  ],
+  "started_at": "2026-08-14T00:18:49.509Z",
+  "ended_at": "2026-08-14T00:22:10.274Z",
+  "adjudication": {
+    "adjudicated_at": "2026-08-14T00:22:10.273Z",
+    "raw_harness_verdict": "FINAL_BROWSER_GROUP_FAILED",
+    "raw_harness_failures": [
+      {
+        "label": "1280 metrics: catalog inventory product catalog",
+        "details": {
+          "url": "/app/ff/products",
+          "title": "WMS · Фулфилмент",
+          "viewport": {
+            "width": 1280,
+            "height": 720
+          },
+          "documentScrollWidth": 1280,
+          "bodyScrollWidth": 1280,
+          "overflowX": false,
+          "clippedControls": [],
+          "clippedControlCount": 0,
+          "largeBlackBlocks": [],
+          "largeBlackBlockCount": 0,
+          "rawNoiseVisible": true,
+          "navItems": [
+            "Дашборд",
+            "Каталог и ячейки",
+            "Инвентаризация"
+          ]
+        }
+      },
+      {
+        "label": "catalog_inventory: allowed direct /app/catalog",
+        "details": {
+          "url": "http://127.0.0.1:50300/app/ff/products",
+          "title": "WMS · Фулфилмент",
+          "topbar": "Портал ФФ\nfinal-staff-catalog-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+          "expectedVisible": true,
+          "deniedCount": 0,
+          "rawNoise": true
+        }
+      },
+      {
+        "label": "catalog_inventory: allowed direct /app/ff/products",
+        "details": {
+          "url": "http://127.0.0.1:50300/app/ff/products",
+          "title": "WMS · Фулфилмент",
+          "topbar": "Портал ФФ\nfinal-staff-catalog-50299-1786666729509@example.com · сотрудник\n0\nВыйти",
+          "expectedVisible": true,
+          "deniedCount": 0,
+          "rawNoise": true
+        }
+      },
+      {
+        "label": "1280 metrics: seller inbound picker allowed only",
+        "details": {
+          "url": "/seller/inbound/new?operation=inbound",
+          "title": "WMS · Селлер",
+          "viewport": {
+            "width": 1280,
+            "height": 720
+          },
+          "documentScrollWidth": 1280,
+          "bodyScrollWidth": 1280,
+          "overflowX": false,
+          "clippedControls": [
+            {
+              "tag": "BUTTON",
+              "testId": "seller-inbound-save-draft",
+              "text": "Сохранить",
+              "rect": {
+                "left": 1030,
+                "right": 1109,
+                "width": 79
+              },
+              "clientWidth": 77,
+              "scrollWidth": 80
+            }
+          ],
+          "clippedControlCount": 1,
+          "largeBlackBlocks": [],
+          "largeBlackBlockCount": 0,
+          "rawNoiseVisible": false,
+          "navItems": [
+            "Документы",
+            "Товары",
+            "Честный знак",
+            "Настройки"
+          ]
+        }
+      }
+    ],
+    "added_live_screenshot": {
+      "label": "catalog-inventory-product-catalog-live",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-staff-live-strict/screenshots/15-catalog-inventory-product-catalog-live.png",
+      "url": "http://127.0.0.1:50300/app/ff/products",
+      "title": "WMS · Фулфилмент",
+      "bytes": 114014,
+      "sha256_prefix": "2354e9a6c94e8b1a"
+    },
+    "conclusion": "Raw harness warnings were not product blockers: three raw-noise flags matched QA fixture content named Forbidden/SCOPE-FORBIDDEN, not visible internal permission codes; one clipped-control flag targeted an inactive underlying save button behind the open modal backdrop, while active picker controls were visible and usable in the screenshot."
+  }
+}

@@ -9,7 +9,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_effective_seller_id, require_fulfillment_admin
+from app.api.deps import (
+    assert_seller_permission,
+    get_current_user,
+    get_effective_seller_id,
+    require_fulfillment_admin,
+)
 from app.core.roles import FULFILLMENT_SELLER
 from app.db.session import get_db
 from app.models.user import User
@@ -22,6 +27,7 @@ from app.services.seller_marking_credentials_service import (
     get_public_credentials,
     patch_seller_credentials,
 )
+from app.services.seller_staff_permissions_service import PERM_SETTINGS
 
 router = APIRouter(
     prefix="/operations/marking-codes",
@@ -242,6 +248,7 @@ async def get_self_marking_credentials(
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> MarkingCredentialsOut:
+    await assert_seller_permission(session, user, PERM_SETTINGS)
     if user.role != FULFILLMENT_SELLER or effective_seller_id is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     public = await get_public_credentials(session, user.tenant_id, effective_seller_id)
@@ -289,6 +296,7 @@ async def patch_self_marking_credentials(
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> MarkingCredentialsOut:
+    await assert_seller_permission(session, user, PERM_SETTINGS)
     if user.role != FULFILLMENT_SELLER or effective_seller_id is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     try:

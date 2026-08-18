@@ -17,6 +17,7 @@ import {
   loginSellerPortal,
   openFfInboundDoc,
   beginInboundReceivingWithBoxes,
+  expandInboundPackages,
   seedFfSellerInbound,
   expectSellerPortalReady,
   sellerPath,
@@ -38,7 +39,7 @@ test.describe('US-B-01 seller inbound draft — fields and actions', () => {
       waitForPostOk(page, INBOUND_API, (u) => !u.includes('/lines') && !u.includes('/submit')),
       page.getByTestId('seller-create-inbound').click(),
     ]);
-    await page.waitForURL(`**${sellerPath('/inbound/new')}`);
+    await page.waitForURL(`**${sellerPath('/inbound/new')}**`);
     await expect(page.getByTestId('seller-inbound-draft-form')).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId('seller-inbound-status-chip')).toContainText('Черновик');
 
@@ -47,21 +48,9 @@ test.describe('US-B-01 seller inbound draft — fields and actions', () => {
 
     const plannedBoxes = page.getByTestId('seller-inbound-planned-boxes');
     await plannedBoxes.fill('0');
-    await plannedBoxes.blur();
-    await expect(page.getByTestId('seller-inbound-draft-error')).toContainText('коробов');
-
-    await plannedBoxes.fill('6');
-    await Promise.all([
-      waitForPatchOk(page, INBOUND_API, (u) => !u.includes('/lines')),
-      plannedBoxes.blur(),
-    ]);
-    await expect(plannedBoxes).toHaveValue('6');
 
     const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-    await Promise.all([
-      waitForPatchOk(page, INBOUND_API, (u) => !u.includes('/lines')),
-      setWmsDateField(page, 'seller-inbound-planned-date', tomorrow),
-    ]);
+    await setWmsDateField(page, 'seller-inbound-planned-date', tomorrow);
 
     await page.getByTestId('seller-inbound-add-products').click();
     await expect(page.getByTestId('seller-inbound-picker')).toBeVisible();
@@ -79,6 +68,16 @@ test.describe('US-B-01 seller inbound draft — fields and actions', () => {
     ]);
     await expect(page.getByTestId('seller-inbound-line-row')).toHaveCount(1);
     await expect(submitBtn).toBeEnabled();
+    await submitBtn.click();
+    await expect(page.getByTestId('seller-inbound-draft-error')).toContainText('Укажите количество грузомест');
+
+    await plannedBoxes.fill('6');
+    await Promise.all([
+      waitForPatchOk(page, INBOUND_API, (u) => !u.includes('/lines')),
+      page.getByTestId('seller-inbound-save-draft').click(),
+    ]);
+    await expect(page.getByTestId('seller-inbound-draft-ok')).toContainText('Заявка сохранена');
+    await expect(plannedBoxes).toHaveValue('6');
 
     const lineQty = page.getByTestId('seller-inbound-line-qty').first();
     await lineQty.fill('9');
@@ -87,7 +86,7 @@ test.describe('US-B-01 seller inbound draft — fields and actions', () => {
       lineQty.blur(),
     ]);
 
-    await page.getByTestId('seller-inbound-save-draft').click();
+    await page.getByTestId('seller-inbound-close').click();
     await expect(page.getByTestId('seller-documents-table')).toBeVisible();
 
     await page.getByTestId('seller-documents-row').first().click();
@@ -113,7 +112,7 @@ test.describe('US-B-01 FF receiving creates on-demand boxes', () => {
 
     await expect(page.getByTestId('ff-inbound-planned-boxes')).toContainText('4');
     await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('Приёмка');
-    await expect(page.getByTestId('ff-inbound-boxes-panel')).toBeVisible();
+    await expandInboundPackages(page);
     await expect(page.getByTestId('ff-inbound-box-row')).toHaveCount(4);
 
     await page.getByTestId('ff-inbound-close').click();
@@ -121,7 +120,7 @@ test.describe('US-B-01 FF receiving creates on-demand boxes', () => {
 
     await page.getByTestId('nav-ff-reception').click();
     await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
-    await expect(page.getByTestId('ff-inbound-boxes-panel')).toBeVisible();
+    await expandInboundPackages(page);
     await expect(page.getByTestId('ff-inbound-box-row')).toHaveCount(4);
   });
 });
@@ -141,7 +140,7 @@ test.describe('US-B-02 inbound box barcodes and print actions', () => {
     await beginInboundReceivingWithBoxes(page.request, h, rid, { boxCount: 3, closeEach: true });
     await openFfInboundDoc(page, seed);
 
-    await expect(page.getByTestId('ff-inbound-boxes-panel')).toBeVisible();
+    await expandInboundPackages(page);
 
     const rows = page.getByTestId('ff-inbound-box-row');
     await expect(rows).toHaveCount(3);
@@ -217,11 +216,10 @@ test.describe('US-B-01 seller first-time login path', () => {
 
     await page.getByTestId('nav-seller-documents').click();
     await page.getByTestId('seller-create-inbound').click();
-    await page.waitForURL(`**${sellerPath('/inbound/new')}`);
+    await page.waitForURL(`**${sellerPath('/inbound/new')}**`);
     await waitForPostOk(page, INBOUND_API, (u) => !u.includes('/lines') && !u.includes('/submit'));
 
     await page.getByTestId('seller-inbound-planned-boxes').fill('2');
-    await page.getByTestId('seller-inbound-planned-boxes').blur();
     await page.getByTestId('seller-inbound-add-products').click();
     await page.getByTestId('seller-inbound-picker-search').fill(seed.sku);
     await page.getByTestId('seller-inbound-picker-qty').first().fill('1');

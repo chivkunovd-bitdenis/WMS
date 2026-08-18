@@ -1,0 +1,40 @@
+{
+  "browser": "Chrome/151.0.7922.138",
+  "url": "http://127.0.0.1:5185",
+  "width": 1400,
+  "role": "FF admin / warehouse sorting operator",
+  "control": "raw Chrome DevTools Protocol attached to visible external Google Chrome window; not Playwright, not headless",
+  "actions": [
+    "fixture via API: FF warehouse, cell, product, inbound sorting qty=2"
+  ],
+  "states": {
+    "empty": "Нет приёмок в сортировке — всё разложено по ячейкам.",
+    "outer_width": 1400,
+    "initial_focus": "ff-sorting-scan-input",
+    "focus_after_cell_scan": "ff-sorting-scan-input",
+    "error": "Такой товар или ячейка не найдены в этой приёмке.",
+    "value_after_error": "",
+    "focus_after_error_scan": "ff-sorting-scan-input",
+    "focus_after_product_scans": [
+      "ff-sorting-scan-input",
+      "ff-sorting-scan-input"
+    ],
+    "success_scan_message": "Скан принят: Очень длинное название товара для live sorting QA без переноса строки на 1280 → LIVE-A-01; разложено 2, осталось 0.",
+    "distributed": "2",
+    "remaining": "0"
+  },
+  "findings": {
+    "stop": [],
+    "brake": [],
+    "tail": []
+  },
+  "artifacts": [
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-sorting-cells-20260814/docs/reviews/wave1-sorting-cells/live-browser-qa-20260815/01-empty-sorting-1280.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-sorting-cells-20260814/docs/reviews/wave1-sorting-cells/live-browser-qa-20260815/02-sorting-queue-with-row-1280.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-sorting-cells-20260814/docs/reviews/wave1-sorting-cells/live-browser-qa-20260815/03-sorting-panel-autofocus-1280.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-sorting-cells-20260814/docs/reviews/wave1-sorting-cells/live-browser-qa-20260815/04-cell-scan-active-location-1280.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-sorting-cells-20260814/docs/reviews/wave1-sorting-cells/live-browser-qa-20260815/05-unknown-scan-error-focus-1280.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-sorting-cells-20260814/docs/reviews/wave1-sorting-cells/live-browser-qa-20260815/06-product-scans-plus-two-1280.png"
+  ],
+  "error": "Error: Timeout waiting for panel after reload; last=false\n    at waitFor ([stdin]:8:252)\n    at async main ([stdin]:17:46)"
+}

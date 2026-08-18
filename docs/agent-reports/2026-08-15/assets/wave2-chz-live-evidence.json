@@ -1,0 +1,281 @@
+{
+  "recorded_at_msk": "2026-08-15 16:45",
+  "acceptance_status": "PRODUCT_BROWSER_APPROVED",
+  "browser": {
+    "type": "external_visible_google_chrome",
+    "control": "Chrome DevTools Protocol mouse/key events against a visible OS Chrome window; Playwright/headless not used for acceptance",
+    "cdp_port": 9245,
+    "version": "Chrome/151.0.7922.138",
+    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
+    "visible_targets": [
+      {
+        "id": "8A34C4852EFD21B5E0FE9626CADF7845",
+        "url": "http://127.0.0.1:18951/app/ff/honest-sign/pool/95391149-f822-45a0-925a-e658bdea8e67?tab=codes",
+        "title": "WMS · Фулфилмент"
+      },
+      {
+        "id": "573A52D8B1CCFE8A4FF78F1E9ABC82A9",
+        "url": "about:blank",
+        "title": "Печать"
+      },
+      {
+        "id": "CA8B09F43DE0FE444E1BFED45AB72E91",
+        "url": "about:blank",
+        "title": "Печать"
+      }
+    ]
+  },
+  "services": {
+    "backend": "http://127.0.0.1:18950",
+    "frontend": "http://127.0.0.1:18951"
+  },
+  "seed": {
+    "email": "chz-live-1786811199512@example.com",
+    "product_id": "9a5852eb-1cd6-46b2-b0a6-cab9307fdf8c",
+    "pool_id": "95391149-f822-45a0-925a-e658bdea8e67",
+    "packaging_task_id": "8e5ff606-a9c6-49f5-af9a-5b5ced2fcaab",
+    "seller_id": "806f455f-2f9a-4ccd-84cb-7191060bcbd5",
+    "warehouse_id": "826e2d66-d5d5-4c65-add2-e4a3d8762143",
+    "sku": "CHZ-LIVE-1786811199512",
+    "gtin": "04601234567890"
+  },
+  "product_codes": {
+    "status_counts": {
+      "printed": 2,
+      "defective": 1,
+      "available": 9
+    },
+    "rows": [
+      {
+        "id": "29c7241a-991d-41fa-9eef-1faf57fca76d",
+        "cis_code": "010460123456789021199512LIVE0001",
+        "status": "printed",
+        "has_label_artifact": false
+      },
+      {
+        "id": "9ddb66c5-d76f-4183-8282-766e16f74613",
+        "cis_code": "010460123456789021199512LIVE0002",
+        "status": "defective",
+        "has_label_artifact": false
+      },
+      {
+        "id": "2da90872-1416-428d-ba78-59facc74f5fc",
+        "cis_code": "010460123456789021199512LIVE0003",
+        "status": "printed",
+        "has_label_artifact": false
+      },
+      {
+        "id": "11b645f3-4556-42b4-adfe-1aeaf4d18986",
+        "cis_code": "010460123456789021199512LIVE0004",
+        "status": "available",
+        "has_label_artifact": false
+      },
+      {
+        "id": "97cbe09b-bd08-4172-b1f2-2d8d0e476f4a",
+        "cis_code": "010460123456789021199512LIVE0005",
+        "status": "available",
+        "has_label_artifact": false
+      },
+      {
+        "id": "64b42c18-aaef-4f58-a45e-2cdfc3e2f35d",
+        "cis_code": "010460123456789021199512LIVE0006",
+        "status": "available",
+        "has_label_artifact": false
+      },
+      {
+        "id": "2d62c89c-f431-400b-831d-a354b1a53297",
+        "cis_code": "010460123456789021199512LIVE0007",
+        "status": "available",
+        "has_label_artifact": false
+      },
+      {
+        "id": "3e54b082-f805-4c5a-af92-c480133f1db6",
+        "cis_code": "010460123456789021199512LIVE0008",
+        "status": "available",
+        "has_label_artifact": false
+      },
+      {
+        "id": "ed7a0187-ae14-490e-91a3-4c0db8a565fb",
+        "cis_code": "010460123456789021199512LIVE0009",
+        "status": "available",
+        "has_label_artifact": false
+      },
+      {
+        "id": "40f9f19f-ad35-4df7-b177-46aa63e47fb2",
+        "cis_code": "010460123456789021199512LIVE0010",
+        "status": "available",
+        "has_label_artifact": false
+      },
+      {
+        "id": "906bf500-77da-44b8-8f5d-54b1771806c8",
+        "cis_code": "010460123456789021199512LIVE0011",
+        "status": "available",
+        "has_label_artifact": false
+      },
+      {
+        "id": "27155142-a4e3-4c61-b323-75afd2af445e",
+        "cis_code": "010460123456789021199512LIVE0012",
+        "status": "available",
+        "has_label_artifact": false
+      }
+    ]
+  },
+  "ledger": {
+    "defective_total": 1,
+    "defective_rows": [
+      {
+        "id": "c8088137-ebea-465a-b728-c61f74541f7a",
+        "created_at": "2026-08-15T16:39:43",
+        "event_type": "defective",
+        "cis_code": "010460123456789021199512LIVE0002",
+        "cis_masked": "…9512LIVE0002",
+        "pool_title": "Live ChZ Pool",
+        "gtin": "04601234567890",
+        "product_name": "Live ChZ Product",
+        "product_sku": "CHZ-LIVE-1786811199512",
+        "seller_name": "Live ChZ Seller",
+        "document_number": "УПАК-26-08-15-1",
+        "actor_email": "chz-live-1786811199512@example.com",
+        "source_process": "packing_fbs_print",
+        "source_process_label": "Упаковка/FBS-печать",
+        "aggregated_count": null
+      }
+    ],
+    "recent_rows": [
+      {
+        "id": "c8088137-ebea-465a-b728-c61f74541f7a",
+        "created_at": "2026-08-15T16:39:43",
+        "event_type": "defective",
+        "cis_code": "010460123456789021199512LIVE0002",
+        "cis_masked": "…9512LIVE0002",
+        "pool_title": "Live ChZ Pool",
+        "gtin": "04601234567890",
+        "product_name": "Live ChZ Product",
+        "product_sku": "CHZ-LIVE-1786811199512",
+        "seller_name": "Live ChZ Seller",
+        "document_number": "УПАК-26-08-15-1",
+        "actor_email": "chz-live-1786811199512@example.com",
+        "source_process": "packing_fbs_print",
+        "source_process_label": "Упаковка/FBS-печать",
+        "aggregated_count": null
+      },
+      {
+        "id": "88bd6458-dc9c-4db4-ab4a-2eda19b738b7",
+        "created_at": "2026-08-15T16:35:23",
+        "event_type": "printed",
+        "cis_code": "010460123456789021199512LIVE0002",
+        "cis_masked": "…9512LIVE0002",
+        "pool_title": "Live ChZ Pool",
+        "gtin": "04601234567890",
+        "product_name": "Live ChZ Product",
+        "product_sku": "CHZ-LIVE-1786811199512",
+        "seller_name": "Live ChZ Seller",
+        "document_number": "УПАК-26-08-15-1",
+        "actor_email": "chz-live-1786811199512@example.com",
+        "source_process": "packing_fbs_print",
+        "source_process_label": "Упаковка/FBS-печать",
+        "aggregated_count": null
+      },
+      {
+        "id": "f8571c65-fe5d-4e89-a937-d2090a7b1d71",
+        "created_at": "2026-08-15T16:35:23",
+        "event_type": "printed",
+        "cis_code": "010460123456789021199512LIVE0003",
+        "cis_masked": "…9512LIVE0003",
+        "pool_title": "Live ChZ Pool",
+        "gtin": "04601234567890",
+        "product_name": "Live ChZ Product",
+        "product_sku": "CHZ-LIVE-1786811199512",
+        "seller_name": "Live ChZ Seller",
+        "document_number": "УПАК-26-08-15-1",
+        "actor_email": "chz-live-1786811199512@example.com",
+        "source_process": "packing_fbs_print",
+        "source_process_label": "Упаковка/FBS-печать",
+        "aggregated_count": null
+      },
+      {
+        "id": "e87f29e9-02d2-4bca-b113-01d29fa907cf",
+        "created_at": "2026-08-15T16:28:08",
+        "event_type": "printed",
+        "cis_code": "010460123456789021199512LIVE0001",
+        "cis_masked": "…9512LIVE0001",
+        "pool_title": "Live ChZ Pool",
+        "gtin": "04601234567890",
+        "product_name": "Live ChZ Product",
+        "product_sku": "CHZ-LIVE-1786811199512",
+        "seller_name": "Live ChZ Seller",
+        "document_number": null,
+        "actor_email": "chz-live-1786811199512@example.com",
+        "source_process": "catalog",
+        "source_process_label": "Каталог",
+        "aggregated_count": null
+      },
+      {
+        "id": "7044504f-9111-4d36-a4ce-4dc0a9294a91",
+        "created_at": "2026-08-15T16:26:40",
+        "event_type": "imported",
+        "cis_code": null,
+        "cis_masked": null,
+        "pool_title": "Live ChZ Pool",
+        "gtin": "04601234567890",
+        "product_name": "Live ChZ Product",
+        "product_sku": "CHZ-LIVE-1786811199512",
+        "seller_name": "Live ChZ Seller",
+        "document_number": "ЗАГРКМ-26-08-15-1",
+        "actor_email": "chz-live-1786811199512@example.com",
+        "source_process": "catalog",
+        "source_process_label": "Каталог",
+        "aggregated_count": 12
+      }
+    ]
+  },
+  "reprint_requests": [
+    {
+      "id": "79b396f4-8487-412b-a70a-39d9de8df399",
+      "code_id": "9ddb66c5-d76f-4183-8282-766e16f74613",
+      "status": "pending",
+      "reason": "Порвана этикетка при live acceptance",
+      "created_at": "2026-08-15T16:39:43",
+      "requested_by_email": "chz-live-1786811199512@example.com",
+      "product_name": "Live ChZ Product",
+      "product_sku": "CHZ-LIVE-1786811199512",
+      "cis_masked": "…9512LIVE0002",
+      "document_number": "УПАК-26-08-15-1",
+      "packaging_task_id": "8e5ff606-a9c6-49f5-af9a-5b5ced2fcaab",
+      "pool_id": "95391149-f822-45a0-925a-e658bdea8e67"
+    }
+  ],
+  "assertions": {
+    "cz_01_product_print_spent_one_code": true,
+    "cz_01_ledger_has_full_cis_actor_source": true,
+    "cz_02_product_card_codes_and_ledger_seen": true,
+    "cz_03_product_card_full_ledger_button_absent": true,
+    "cz_04_defect_sets_code_defective": true,
+    "cz_04_defect_ledger_has_full_cis_actor_source_document": true,
+    "cz_04_reprint_request_pending_with_reason": true
+  },
+  "screenshots": [
+    "wave2-chz-live-00-os-visible-chrome.png",
+    "wave2-chz-live-01-page-open.png",
+    "wave2-chz-live-02-seller-selected-product-row.png",
+    "wave2-chz-live-03-print-dialog.png",
+    "wave2-chz-live-04-after-print-row-updated.png",
+    "wave2-chz-live-05-product-card-codes-and-ledger.png",
+    "wave2-chz-live-06-product-card-printed-filter.png",
+    "wave2-chz-live-07-defective-ledger-filter.png",
+    "wave2-chz-live-08-pool-card-after-print.png",
+    "wave2-chz-live-09-packaging-page.png",
+    "wave2-chz-live-10-packaging-create-dialog.png",
+    "wave2-chz-live-11-packaging-create-row.png",
+    "wave2-chz-live-12-packaging-task-created.png",
+    "wave2-chz-live-13-packaging-print-dialog.png",
+    "wave2-chz-live-14-defect-menu.png",
+    "wave2-chz-live-15-defect-dialog.png",
+    "wave2-chz-live-16-defect-confirm-ready.png",
+    "wave2-chz-live-17-defect-confirmed.png",
+    "wave2-chz-live-18-reprints-row.png",
+    "wave2-chz-live-19-defective-ledger-after-defect.png",
+    "wave2-chz-live-debug-current.png",
+    "wave2-chz-live-debug-pool-current.png"
+  ]
+}

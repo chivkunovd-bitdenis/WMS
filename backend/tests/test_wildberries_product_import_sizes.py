@@ -90,10 +90,12 @@ async def test_self_sync_creates_product_per_size(
     assert by_size["S"]["wb_primary_barcode"] == "1110000000001"
     assert by_size["M"]["wb_barcodes"] == ["1110000000002"]
     assert by_size["L"]["sku_code"] == "LEG-STRIP/L"
+    assert {r["name"] for r in rows} == {"Лосины"}
 
     plist = await async_client.get("/products", headers=ah)
     seller_products = [p for p in plist.json() if p.get("seller_id") == sid]
     assert len(seller_products) == 3
+    assert {p["name"] for p in seller_products} == {"Лосины"}
 
 
 @pytest.mark.asyncio

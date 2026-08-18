@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Uuid, func
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -22,6 +22,9 @@ FBS_SUPPLY_STATUS_ASSEMBLING = "assembling"
 FBS_SUPPLY_STATUS_PACKED = "packed"
 FBS_SUPPLY_STATUS_IN_DELIVERY = "in_delivery"
 FBS_SUPPLY_STATUS_DONE = "done"
+
+FBS_SUPPLY_SOURCE_WMS = "wms"
+FBS_SUPPLY_SOURCE_WB = "wb"
 
 FBS_DELIVERY_TYPE_WAREHOUSE_SC = "warehouse_sc"
 FBS_DELIVERY_TYPE_PVZ = "pvz"
@@ -68,6 +71,7 @@ class FbsSupply(Base):
     planned_destination_office_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     planned_destination_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     planned_destination_zone: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    planned_shipment_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     last_wb_sync_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

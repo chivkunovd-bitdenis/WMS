@@ -82,6 +82,7 @@ async def test_pending_marking_lists_unprinted_lines(async_client: AsyncClient) 
     assert body["total"] == 1
     assert body["rows"][0]["packaging_task_line_id"] == line_id
     assert body["rows"][0]["qty_remaining"] == 1
+    assert body["rows"][0]["seller_name"] == "Pending Seller"
 
     printed = await async_client.post(
         f"/operations/marking-codes/packaging-lines/{line_id}/print",

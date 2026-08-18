@@ -1,0 +1,150 @@
+{
+  "verdict": "BROWSER_PRODUCT_QA_PASSED",
+  "ports": {
+    "apiPort": 52828,
+    "webPort": 52829,
+    "wbPort": 52830
+  },
+  "dbPath": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/f10-browser-product-qa-final/data/f10-browser-product-qa.sqlite3",
+  "startedAt": "2026-08-13T16:26:40.047Z",
+  "positive": {
+    "seed": {
+      "tenant_id": "9abd6ba3-f722-47f3-b84c-fef04828d3cd",
+      "seller_id": "4079fc9b-66e9-4303-92fe-58042c1bff14",
+      "product_id": "32675cbb-a6b1-4e7f-b834-fde0d392a8fb",
+      "warehouse_id": "794306d6-7b68-45ce-b836-0e04c199b2e9",
+      "location_id": "3b0607c4-1ab0-457a-8545-9ab621539022",
+      "binding_ids": [
+        "0c9d2dc4-4472-4bd7-b319-ef5ad76956c8"
+      ],
+      "order_id": "38ddf5cb-f649-41ac-94be-880393f1154d",
+      "chrt_id": 1210,
+      "wb_warehouse_id": 501001,
+      "physical_stock": 1000,
+      "fbs_pool": 200,
+      "reserve_pool": 300,
+      "active_fbs_reservation": 7
+    },
+    "syncResult": {
+      "bindings_processed": 1,
+      "products_targeted": 1,
+      "products_confirmed": 1,
+      "products_zeroed": 0,
+      "conflicts": 0,
+      "errors": 0,
+      "binding_errors": 0
+    },
+    "wbPutCalls": [
+      {
+        "warehouseId": 501001,
+        "stocks": [
+          {
+            "chrtId": 1210,
+            "amount": 193
+          }
+        ]
+      }
+    ],
+    "wbPostCalls": [
+      {
+        "warehouseId": 501001,
+        "chrtIds": [
+          1210
+        ]
+      }
+    ],
+    "wbReadbackAmount": 193,
+    "sellerBeforeGeometry": {
+      "viewportWidth": 1280,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "tableScrollWidth": 990,
+      "tableContainerClientWidth": 990,
+      "tableContainerScrollWidth": 990,
+      "rowHeight": 91.515625,
+      "fbsCellText": "Проверяем WB",
+      "tableText": "ТоварWB / ШКОстатокFBS-пулПубликация WBТЗ / ЧЗДействияF10 Positive ProductSKU SKU-F10-POS-1786638400038-8d27a1 · F10-POS-1786638400038-8d27a1901210F10-POS-BAR-1786638400038-8d27a110001000500FBS 200 штрезервы 300 штFBSПроверяем WBБез ТЗЧЗ нетТЗ",
+      "fbsLimitControls": 0,
+      "blackStripElements": 0
+    },
+    "sellerAfterGeometry": {
+      "viewportWidth": 1280,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "tableScrollWidth": 990,
+      "tableContainerClientWidth": 990,
+      "tableContainerScrollWidth": 990,
+      "rowHeight": 91.515625,
+      "fbsCellText": "WB: 193 шт",
+      "tableText": "ТоварWB / ШКОстатокFBS-пулПубликация WBТЗ / ЧЗДействияF10 Positive ProductSKU SKU-F10-POS-1786638400038-8d27a1 · F10-POS-1786638400038-8d27a1901210F10-POS-BAR-1786638400038-8d27a110001000500FBS 200 штрезервы 300 штFBSWB: 193 штБез ТЗЧЗ нетТЗ",
+      "fbsLimitControls": 0,
+      "blackStripElements": 0
+    },
+    "sku": "SKU-F10-POS-1786638400038-8d27a1"
+  },
+  "ambiguous": {
+    "seed": {
+      "tenant_id": "9abd6ba3-f722-47f3-b84c-fef04828d3cd",
+      "seller_id": "fb7e845b-2f7b-46b6-ae9d-8b282fdc5048",
+      "product_id": "3e398394-ee31-46fc-a1a5-ae63c6388bf0",
+      "warehouse_id": "2e98bfa3-25a6-4994-a175-1a21f065d20f",
+      "location_id": "a8b5c5f3-054a-4ca0-a8e1-db98349376bf",
+      "binding_ids": [
+        "adf0d7ba-b12d-4a56-91c5-0179ae7030eb",
+        "a458e08d-8b28-4e2d-8f94-7be43f784a0d"
+      ],
+      "order_id": null,
+      "chrt_id": 1211,
+      "wb_warehouse_id": 501101,
+      "physical_stock": 1000,
+      "fbs_pool": 200,
+      "reserve_pool": 300,
+      "active_fbs_reservation": 0
+    },
+    "syncResult": {
+      "bindings_processed": 2,
+      "products_targeted": 0,
+      "products_confirmed": 0,
+      "products_zeroed": 0,
+      "conflicts": 0,
+      "errors": 2,
+      "binding_errors": 2
+    },
+    "wbPutCallsAdded": 0,
+    "wbPostCallsAdded": 0,
+    "wbReadbackAmounts": {
+      "501101:1211": 20,
+      "501102:1211": 20
+    },
+    "sellerGeometry": {
+      "viewportWidth": 1280,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "tableScrollWidth": 990,
+      "tableContainerClientWidth": 990,
+      "tableContainerScrollWidth": 990,
+      "rowHeight": 91.515625,
+      "fbsCellText": "Ошибка WB",
+      "tableText": "ТоварWB / ШКОстатокFBS-пулПубликация WBТЗ / ЧЗДействияF10 Ambiguous ProductSKU SKU-F10-AMB-1786638400038-8d27a1 · F10-AMB-1786638400038-8d27a1901211F10-AMB-BAR-1786638400038-8d27a110001000500FBS 200 штрезервы 300 штFBSОшибка WBБез ТЗЧЗ нетТЗ",
+      "fbsLimitControls": 0,
+      "blackStripElements": 0
+    },
+    "sku": "SKU-F10-AMB-1786638400038-8d27a1"
+  },
+  "visual": {
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "forbiddenMainUiPattern": "/Лимит|pending_confirmation|warehouse_mapping_missing|unsafe_stock_unknown|unsafe_zero_blocked|ambiguous_warehouse_scope|wb_upstream_error|readback_mismatch|duplicate_chrt_id|conflict/",
+    "screenshots": [
+      "screenshots/positive-seller-before-sync.png",
+      "screenshots/positive-ff-manual-sync.png",
+      "screenshots/positive-seller-after-readback.png",
+      "screenshots/ambiguous-ff-fail-closed-sync.png",
+      "screenshots/ambiguous-seller-safe-error.png"
+    ]
+  },
+  "errors": [],
+  "finishedAt": "2026-08-13T16:26:59.488Z"
+}

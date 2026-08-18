@@ -111,7 +111,7 @@ async def test_seller_mp_unload_plan_reserves_and_ff_confirms(
         json={"lines": [{"product_id": pid, "quantity": 21}]},
     )
     assert bad.status_code == 422
-    assert bad.json()["detail"] == "insufficient_available"
+    assert bad.json()["detail"]["code"] == "insufficient_available"
 
     ok_lines = await async_client.put(
         f"/operations/marketplace-unload-requests/{mid}/lines",

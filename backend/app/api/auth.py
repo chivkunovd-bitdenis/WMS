@@ -32,6 +32,7 @@ from app.services.seller_shop_service import (
     update_enabled_shops,
     user_can_manage_seller_shops,
 )
+from app.services.seller_staff_permissions_service import get_seller_permissions
 from app.services.staff_permissions_service import get_staff_permissions
 from app.services.tokens import create_access_token
 
@@ -66,6 +67,14 @@ class StaffPermissionsOut(BaseModel):
     shift_lead: bool
 
 
+class SellerPermissionsOut(BaseModel):
+    documents: bool
+    products: bool
+    honest_sign: bool
+    settings: bool
+    staff: bool
+
+
 class SellerShopOut(BaseModel):
     id: str
     name: str
@@ -89,8 +98,10 @@ class UserMeResponse(BaseModel):
     switchable_shops: list[SellerShopOut] = Field(default_factory=list)
     delegatable_shops: list[SellerShopOut] = Field(default_factory=list)
     permissions: StaffPermissionsOut | None = None
+    seller_permissions: SellerPermissionsOut | None = None
     address_storage_enabled: bool = True
     separate_marking_print_enabled: bool = False
+    fbs_shipment_cutoff_time: str | None = None
 
 
 class SwitchSellerBody(BaseModel):
@@ -320,6 +331,19 @@ async def me(
         packaging=perms_dict["packaging"],
         shift_lead=perms_dict["shift_lead"],
     )
+    seller_perms_snapshot = await get_seller_permissions(session, user)
+    seller_perms_dict = seller_perms_snapshot.as_dict()
+    seller_permissions = (
+        SellerPermissionsOut(
+            documents=seller_perms_dict["documents"],
+            products=seller_perms_dict["products"],
+            honest_sign=seller_perms_dict["honest_sign"],
+            settings=seller_perms_dict["settings"],
+            staff=seller_perms_dict["staff"],
+        )
+        if user.role == FULFILLMENT_SELLER
+        else None
+    )
     return UserMeResponse(
         id=str(user.id),
         email=user.email,
@@ -336,8 +360,14 @@ async def me(
         switchable_shops=switchable_out,
         delegatable_shops=delegatable_out,
         permissions=permissions,
+        seller_permissions=seller_permissions,
         address_storage_enabled=tenant.address_storage_enabled,
         separate_marking_print_enabled=tenant.separate_marking_print_enabled,
+        fbs_shipment_cutoff_time=(
+            tenant.fbs_shipment_cutoff_time.strftime("%H:%M")
+            if tenant.fbs_shipment_cutoff_time is not None
+            else None
+        ),
     )
 
 

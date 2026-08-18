@@ -21,6 +21,10 @@ function order(id: string, over: JsonObject = {}): JsonObject {
       seller_article: `ART-${id}`,
       wb_article: 1000 + Number(id.replace(/\D/g, '') || '1'),
       barcode: `200000${id}`,
+      sku: `SKU-${id}`,
+      chrt_id: 7000 + Number(id.replace(/\D/g, '') || '1'),
+      category: 'Бомберы',
+      color: null,
       size: null,
     },
     inventory: {
@@ -68,6 +72,7 @@ function workspace({
       wb_warehouse: { id: 501001, name: 'WB Подольск' },
       wms_warehouse: { id: 'w-1', name: 'Основной склад' },
       planned_destination: null,
+      planned_shipment_date: null,
       nearest_deadline_at: new Date(Date.now() + 100 * 3600 * 1000).toISOString(),
       packaging_task_id: null,
       barcode_asset: null,
@@ -83,6 +88,8 @@ function workspace({
     blockers: [],
     orders,
     cargo_places: [],
+    boxes: [],
+    marking_pool: { required: 0, available: 0, shortage: 0, orders_without_code: [] },
     delivery_preflight: null,
     last_wb_sync_at: null,
     server_now: new Date().toISOString(),
@@ -154,16 +161,13 @@ test('fbs workspace: preflight and deliver', async ({ page }) => {
 
   await page.getByTestId('nav-ff-fbs').click()
   await expect(page.getByTestId('fbs-order-1')).toBeVisible()
-  await page.getByTestId('fbs-order-1').getByRole('button', { name: 'Продолжить работу' }).click()
+  await page.getByTestId('fbs-order-1').click()
   await expect(page.getByTestId('fbs-workspace')).toBeVisible()
-  await page.getByRole('tab', { name: 'Передача и статусы' }).click()
-  await page.getByRole('button', { name: 'Проверить готовность' }).click()
-  await expect(page.getByText('Поставка готова')).toBeVisible()
-  await page.getByRole('button', { name: 'Подтвердить передачу WB' }).click()
-  await page.getByRole('dialog', { name: 'Подтвердить передачу в WB?' }).getByRole('button', { name: 'Передать в WB' }).click()
+  await expect(page.getByTestId('fbs-boxes')).toBeVisible()
+  await page.getByRole('button', { name: 'Передать в WB' }).click()
 
-  await expect(page.getByText('WB подтвердил передачу поставки в доставку.')).toBeVisible()
-  expect(deliverBody?.confirmed_preflight_version).toBe('preflight-v1')
+  await expect(page.getByText('Поставка передана, QR получить не удалось')).toBeVisible()
+  expect(deliverBody?.confirmed_preflight_version).toBeUndefined()
   expect(deliverBody?.idempotency_key).toEqual(expect.any(String))
 })
 
@@ -173,6 +177,7 @@ test('fbs orders: create supply from selected orders', async ({ page }) => {
   const selectedOrders = [order('1'), order('2')]
   await mockWorklist(page, selectedOrders)
   let createBody: JsonObject | null = null
+  let plannedDateBody: JsonObject | null = null
 
   await page.route('**/operations/fbs-supplies/preflight', (route) =>
     json(route, {
@@ -196,6 +201,13 @@ test('fbs orders: create supply from selected orders', async ({ page }) => {
     createBody = route.request().postDataJSON() as JsonObject
     await json(route, workspace({ orders: selectedOrders.map((item) => ({ ...item, supply_id: 'sup-1' })) }), 201)
   })
+  await page.route('**/operations/fbs-supplies/sup-1/planned-shipment-date', async (route) => {
+    plannedDateBody = route.request().postDataJSON() as JsonObject
+    const body = plannedDateBody as { planned_shipment_date?: string | null }
+    const next = workspace({ orders: selectedOrders.map((item) => ({ ...item, supply_id: 'sup-1' })) })
+    ;(next.supply as JsonObject).planned_shipment_date = body.planned_shipment_date ?? null
+    await json(route, next)
+  })
 
   await page.getByTestId('nav-ff-fbs').click()
   await page.getByTestId('fbs-order-1').getByRole('checkbox').click()
@@ -207,8 +219,55 @@ test('fbs orders: create supply from selected orders', async ({ page }) => {
   await page.getByTestId('fbs-create-submit').click()
 
   await expect(page.getByTestId('fbs-workspace')).toBeVisible()
+  await expect(page.getByTestId('cal-02-fbs-shipment-date')).toBeVisible()
+  await page.getByTestId('cal-02-fbs-shipment-date').fill('2026-08-17')
+  await page.getByTestId('cal-02-fbs-shipment-date-save').click()
+  await expect(page.getByText('Дата отгрузки сохранена.')).toBeVisible()
   expect(createBody?.order_ids).toEqual(['1', '2'])
   expect(createBody?.idempotency_key).toEqual(expect.any(String))
+  expect(plannedDateBody).toEqual({ planned_shipment_date: '2026-08-17' })
+})
+
+// TC-NEW-FBS-PARTIAL-READBACK — WB partial confirmation remains visible after workspace read-back.
+test('fbs workspace: partial rejection is visible outside composition stage', async ({ page }) => {
+  await registerFf(page, 'partial-readback')
+  const acceptedOrder = order('1', {
+    status: 'sorted',
+    wb_status: 'waiting',
+    supply_id: 'sup-1',
+    pick: { status: 'picked', location_code: 'A-01', picked_at: new Date().toISOString() },
+    pack: { status: 'packed', packed_at: new Date().toISOString() },
+  })
+  const rejectedOrder = order('2', {
+    status: 'defect',
+    wb_status: 'defect',
+    supply_id: 'sup-1',
+    pick: { status: 'picked', location_code: 'A-01', picked_at: new Date().toISOString() },
+    pack: { status: 'packed', packed_at: new Date().toISOString() },
+  })
+  await mockWorklist(page, [acceptedOrder])
+  await page.route('**/operations/fbs-supplies/sup-1/workspace', (route) =>
+    json(route, {
+      ...workspace({
+        stage: 'tracking',
+        status: 'in_delivery',
+        orders: [acceptedOrder, rejectedOrder],
+      }),
+      partial_rejection: {
+        accepted_orders: [{ wb_order_id: 1, reason: null }],
+        rejected_orders: [{ wb_order_id: 2, reason: 'Брак при приёмке маркетплейсом.' }],
+      },
+    }),
+  )
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await page.getByRole('tab', { name: 'В доставке' }).click()
+  await page.getByTestId('fbs-order-1').click()
+
+  await expect(page.getByTestId('fbs-workspace')).toBeVisible()
+  await expect(page.getByTestId('fbs-partial-rejection')).toContainText('WB подтвердил только часть заказов')
+  await expect(page.getByTestId('fbs-partial-rejection')).toContainText('№1')
+  await expect(page.getByTestId('fbs-partial-rejection')).toContainText('№2')
 })
 
 // TC-S17-007 — location then product scan updates server-owned picking progress.
@@ -241,7 +300,7 @@ test('fbs workspace: scan location then product', async ({ page }) => {
   )
 
   await page.getByTestId('nav-ff-fbs').click()
-  await page.getByTestId('fbs-order-1').getByRole('button', { name: 'Продолжить работу' }).click()
+  await page.getByTestId('fbs-order-1').click()
   await expect(page.getByTestId('fbs-workspace')).toBeVisible()
   await page.getByLabel('Штрихкод ячейки').fill('CELL-A-01')
   await page.getByRole('button', { name: 'Подтвердить ячейку' }).click()
@@ -250,5 +309,107 @@ test('fbs workspace: scan location then product', async ({ page }) => {
   await page.getByRole('button', { name: 'Подобрать товар' }).click()
 
   await expect(page.getByText('Товар подобран. Прогресс синхронизирован для всех операторов.')).toBeVisible()
-  await expect(page.getByText('Товары в подборе: 1/1')).toBeVisible()
+})
+
+// TC-NEW-FBS-12 — boxes can be created in "without distribution" mode.
+test('fbs workspace: boxes without distribution sends durable mode', async ({ page }) => {
+  await registerFf(page, 'boxes-no-distribution')
+  const packedOrder = order('1', {
+    status: 'packed',
+    supply_id: 'sup-1',
+    pick: { status: 'picked', location_code: 'A-01', picked_at: new Date().toISOString() },
+    pack: { status: 'packed', packed_at: new Date().toISOString() },
+  })
+  await mockWorklist(page, [packedOrder])
+  let currentWorkspace = workspace({ stage: 'handoff_prep', status: 'packed', orders: [packedOrder] })
+  let createBody: JsonObject | null = null
+
+  await page.route('**/operations/fbs-supplies/sup-1/workspace', (route) => json(route, currentWorkspace))
+  await page.route('**/operations/fbs-supplies/sup-1/boxes', async (route) => {
+    createBody = route.request().postDataJSON() as JsonObject
+    currentWorkspace = {
+      ...currentWorkspace,
+      stage: 'delivery',
+      boxes: [{
+        id: 'box-1',
+        box_number: 1,
+        barcode: 'FBS-MOCK-001',
+        assigned_order_ids: [],
+        trbx_id: null,
+        wb_trbx_id: null,
+        qr_asset: null,
+        without_distribution: true,
+      }],
+    }
+    await json(route, currentWorkspace, 201)
+  })
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await page.getByTestId('fbs-order-1').click()
+  await expect(page.getByTestId('fbs-boxes')).toBeVisible()
+  await page.getByTestId('fbs-boxes-without-distribution').check()
+  await page.getByLabel('Коробов').fill('2')
+  await page.getByRole('button', { name: 'Добавить короба' }).click()
+
+  expect(createBody?.without_distribution).toBe(true)
+  expect(createBody?.count).toBe(2)
+  await expect(page.getByText('Без распределения · коробов 1')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Добавить товары' })).toBeDisabled()
+  await page.getByRole('button', { name: 'QR' }).click()
+  const preview = page.getByRole('dialog', { name: 'Проверка перед печатью' })
+  await expect(preview).toContainText('Печать QR короба WMS')
+  await expect(preview.getByTestId('fbs-print-preview-copies')).toBeVisible()
+})
+
+// TC-NEW-FBS-10/FBS-09 — one print preview shows the asset and copy count before printing.
+test('fbs workspace: supply QR preview has copies control', async ({ page }) => {
+  await registerFf(page, 'qr-preview')
+  const packedOrder = order('1', {
+    status: 'packed',
+    supply_id: 'sup-1',
+    pick: { status: 'picked', location_code: 'A-01', picked_at: new Date().toISOString() },
+    pack: { status: 'packed', packed_at: new Date().toISOString() },
+  })
+  await mockWorklist(page, [packedOrder])
+  const currentWorkspace = {
+    ...workspace({ stage: 'tracking', status: 'in_delivery', orders: [packedOrder] }),
+    supply: {
+      ...(workspace({ stage: 'tracking', status: 'in_delivery', orders: [packedOrder] }).supply as JsonObject),
+      barcode_asset: {
+        id: 'asset-supply-qr',
+        kind: 'supply_qr',
+        status: 'ready',
+        content_type: 'image/png',
+        width_mm: 58,
+        height_mm: 40,
+        preview_url: '/operations/fbs-print-assets/asset-supply-qr/content',
+        download_url: '/operations/fbs-print-assets/asset-supply-qr/content',
+        checksum: 'sha256:mock',
+        applied_at: null,
+        error: null,
+      },
+    },
+  }
+  await page.route('**/operations/fbs-supplies/sup-1/workspace', (route) => json(route, currentWorkspace))
+  await page.route('**/operations/fbs-print-assets/asset-supply-qr/content', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'image/png',
+      body: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/l9sZ3wAAAABJRU5ErkJggg==',
+        'base64',
+      ),
+    })
+  })
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await page.getByRole('tab', { name: 'В доставке' }).click()
+  await page.getByTestId('fbs-order-1').click()
+  await page.getByRole('button', { name: 'Печать QR поставки' }).click()
+
+  const dialog = page.getByRole('dialog', { name: 'Проверка перед печатью' })
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByTestId('fbs-print-preview-copies')).toBeVisible()
+  await dialog.getByLabel('Копий каждого макета').fill('3')
+  await expect(dialog.getByLabel('Копий каждого макета')).toHaveValue('3')
 })

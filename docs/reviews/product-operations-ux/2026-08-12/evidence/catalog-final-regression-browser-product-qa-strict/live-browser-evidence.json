@@ -1,0 +1,1100 @@
+{
+  "verdict": "BROWSER_PRODUCT_QA_PASSED",
+  "browser_used": true,
+  "browser": "Chromium via Playwright headless=false",
+  "ports": {
+    "backend": 18458,
+    "frontend": 15458
+  },
+  "db": "/tmp/wms-catalog-final-browser-qa-20260814-18458.sqlite",
+  "route": "http://127.0.0.1:15458/seller/products",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "seed": {
+    "suffix": "final-1786665779346",
+    "adminEmail": "qa-catalog-admin-final-1786665779346@example.com",
+    "sellerEmail": "qa-catalog-seller-final-1786665779346@example.com",
+    "sellerId": "b201ecf4-f352-43cc-80ef-d26e0d978d8e",
+    "productId": "724b4820-5a34-468b-98fe-bd2709dca43c",
+    "sku": "SKU-FINAL-final-1786665779346",
+    "barcode": "E2E-MOCK-BARCODE",
+    "inboundId": "4d9ee8a6-10c2-4394-9292-1e472ad56356",
+    "fbsDirectionId": "1800ff1d-9a70-4875-887e-baaae86e6d98"
+  },
+  "screenshots": [
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/catalog-final-regression-browser-product-qa-strict/01-seller-products-initial-1280.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/catalog-final-regression-browser-product-qa-strict/02-selected-bulk-confirm-1280.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/catalog-final-regression-browser-product-qa-strict/03-fbs-pool-drawer-empty-1280.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/catalog-final-regression-browser-product-qa-strict/04-fbs-direction-created-1280.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/catalog-final-regression-browser-product-qa-strict/05-packaging-dialog-from-tz-chz-1280.png"
+  ],
+  "checks": [
+    {
+      "name": "route_opened_1280x720",
+      "pass": true,
+      "details": {
+        "url": "http://127.0.0.1:15458/seller/products",
+        "viewport": [
+          1280,
+          720
+        ]
+      }
+    },
+    {
+      "name": "wb_article_header_visible_wb_shk_absent",
+      "pass": true,
+      "details": {
+        "headers": [
+          "",
+          "Товар",
+          "Артикул WB",
+          "Остаток",
+          "FBS-пул",
+          "Публикация WB",
+          "ТЗ / ЧЗ"
+        ]
+      }
+    },
+    {
+      "name": "stock_cell_labeled_not_naked",
+      "pass": true,
+      "details": {
+        "stockTexts": {
+          "inStorage": "В ячейках 12",
+          "onHand": "На ФФ 12",
+          "freeFbo": "Свободный FBO 12",
+          "distribution": "FBS 0 штрезервы 0 штПул",
+          "status": "Нет FBS",
+          "packaging": "ТЗ есть"
+        },
+        "nakedStockPattern": false
+      }
+    },
+    {
+      "name": "no_actions_header_packaging_in_tz_chz",
+      "pass": true,
+      "details": {
+        "headers": [
+          "",
+          "Товар",
+          "Артикул WB",
+          "Остаток",
+          "FBS-пул",
+          "Публикация WB",
+          "ТЗ / ЧЗ"
+        ],
+        "packagingButtonBounds": {
+          "x": 1144.1796875,
+          "y": 473.390625,
+          "width": 36,
+          "height": 24,
+          "text": "ТЗ"
+        }
+      }
+    },
+    {
+      "name": "initial_f22_no_fbs_status_toggle_disabled",
+      "pass": true,
+      "details": {
+        "status": "Нет FBS",
+        "fbsToggleDisabled": true
+      }
+    },
+    {
+      "name": "bulk_confirmation_selected_only",
+      "pass": true,
+      "details": {
+        "confirmText": "Включить публикацию FBS для 1 товаров?Будут изменены только выбранные товары.SKU-FINAL-final-1786665779346 · Catalog Final Regression Product With Long Enough NameОтменаПодтвердить",
+        "selectedListText": "SKU-FINAL-final-1786665779346 · Catalog Final Regression Product With Long Enough Name",
+        "bulkPatchBody": {
+          "product_ids": [
+            "724b4820-5a34-468b-98fe-bd2709dca43c"
+          ],
+          "fbs_stock_sync_enabled": true
+        }
+      }
+    },
+    {
+      "name": "f22_missing_pool_does_not_publish_zero",
+      "pass": true,
+      "details": {
+        "status": "Нет FBS",
+        "fbsToggleDisabled": true,
+        "rowText": "Catalog Final Regression Product With Long Enough NameSKU SKU-FINAL-final-1786665779346 · E2E-MOCK · L424242ШК E2E-MOCK-BARCODEВ ячейках 12На ФФ 12Свободный FBO 12FBS 0 штрезервы 0 штПулНет FBSТЗ естьЧЗ нетТЗ"
+      }
+    },
+    {
+      "name": "fbs_pool_main_row_and_drawer_split_clear",
+      "pass": true,
+      "details": {
+        "rowStockTexts": {
+          "inStorage": "В ячейках 12",
+          "onHand": "На ФФ 12",
+          "freeFbo": "Свободный FBO 7",
+          "distribution": "FBS 5 штрезервы 0 штПул",
+          "status": "Проверяем WB",
+          "packaging": "ТЗ есть"
+        },
+        "drawerText": "Распределение остаткаSKU-FINAL-final-1786665779346 · Catalog Final Regression Product With Long Enough NameFBS5 штРезервы0 штСвободный FBO7 штFBS WBFBS-пул · 5 штРедактироватьУдалитьНовое направлениеНазваниеНазваниеКоличествоКоличествоКомментарийКомментарийFBS-пул для публикации в WBДобавитьЗакрыть"
+      }
+    },
+    {
+      "name": "short_statuses_no_raw_noise",
+      "pass": true,
+      "details": {
+        "initialStatus": "Нет FBS",
+        "afterFbsStatus": "Проверяем WB",
+        "hasRawCodes": false,
+        "hasLimit": false
+      }
+    },
+    {
+      "name": "packaging_action_reachable_from_tz_chz_without_actions_column",
+      "pass": true,
+      "details": {
+        "packagingDialogText": "ТЗ на упаковкуSKU-FINAL-final-1786665779346 · Catalog Final Regression Product With Long Enough NameНужен Честный знак при упаковкеИнструкция для фулфилментаQA: пакет + стикер WB, проверить маркировку перед отгрузкойИнструкция для фулфилментаОтменаПечатьСохранить",
+        "headers": [
+          "",
+          "Товар",
+          "Артикул WB",
+          "Остаток",
+          "FBS-пул",
+          "Публикация WB",
+          "ТЗ / ЧЗ"
+        ],
+        "packagingButtonBounds": {
+          "x": 1144.1796875,
+          "y": 539.90625,
+          "width": 36,
+          "height": 24,
+          "text": "ТЗ"
+        }
+      }
+    },
+    {
+      "name": "layout_no_overflow_no_clipped_actions_row_height_lte72",
+      "pass": true,
+      "details": {
+        "rowHeight": 68.6328125,
+        "noPageOverflow": true,
+        "noTableOverflow": true,
+        "noClippedActions": true,
+        "widths": {
+          "documentScrollWidth": 1280,
+          "bodyScrollWidth": 1280,
+          "containerScrollWidth": 990,
+          "containerClientWidth": 990,
+          "tableScrollWidth": 990
+        }
+      }
+    }
+  ],
+  "failedChecks": [],
+  "metrics": {
+    "initial": {
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyClientWidth": 1280,
+      "tableScrollWidth": 990,
+      "tableClientWidth": 990,
+      "containerScrollWidth": 990,
+      "containerClientWidth": 990,
+      "headers": [
+        "",
+        "Товар",
+        "Артикул WB",
+        "Остаток",
+        "FBS-пул",
+        "Публикация WB",
+        "ТЗ / ЧЗ"
+      ],
+      "headerBounds": [
+        {
+          "text": "",
+          "x": 265,
+          "y": 390.9609375,
+          "width": 39.59375,
+          "height": 43.09375,
+          "scrollWidth": 51,
+          "clientWidth": 40
+        },
+        {
+          "text": "Товар",
+          "x": 304.59375,
+          "y": 390.9609375,
+          "width": 277.1953125,
+          "height": 43.09375,
+          "scrollWidth": 277,
+          "clientWidth": 277
+        },
+        {
+          "text": "Артикул WB",
+          "x": 581.7890625,
+          "y": 390.9609375,
+          "width": 148.5,
+          "height": 43.09375,
+          "scrollWidth": 149,
+          "clientWidth": 149
+        },
+        {
+          "text": "Остаток",
+          "x": 730.2890625,
+          "y": 390.9609375,
+          "width": 158.3984375,
+          "height": 43.09375,
+          "scrollWidth": 158,
+          "clientWidth": 158
+        },
+        {
+          "text": "FBS-пул",
+          "x": 888.6875,
+          "y": 390.9609375,
+          "width": 118.796875,
+          "height": 43.09375,
+          "scrollWidth": 119,
+          "clientWidth": 119
+        },
+        {
+          "text": "Публикация WB",
+          "x": 1007.484375,
+          "y": 390.9609375,
+          "width": 128.6953125,
+          "height": 43.09375,
+          "scrollWidth": 129,
+          "clientWidth": 129
+        },
+        {
+          "text": "ТЗ / ЧЗ",
+          "x": 1136.1796875,
+          "y": 390.9609375,
+          "width": 118.8203125,
+          "height": 43.09375,
+          "scrollWidth": 119,
+          "clientWidth": 119
+        }
+      ],
+      "rowHeight": 68.6328125,
+      "rowText": "Catalog Final Regression Product With Long Enough NameSKU SKU-FINAL-final-1786665779346 · E2E-MOCK · L424242ШК E2E-MOCK-BARCODEВ ячейках 12На ФФ 12Свободный FBO 12FBS 0 штрезервы 0 штПулНет FBSТЗ естьЧЗ нетТЗ",
+      "rowCells": [
+        "",
+        "Catalog Final Regression Product With Long Enough NameSKU SKU-FINAL-final-1786665779346 · E2E-MOCK · L",
+        "424242ШК E2E-MOCK-BARCODE",
+        "В ячейках 12На ФФ 12Свободный FBO 12",
+        "FBS 0 штрезервы 0 штПул",
+        "Нет FBS",
+        "ТЗ естьЧЗ нетТЗ"
+      ],
+      "stockTexts": {
+        "inStorage": "В ячейках 12",
+        "onHand": "На ФФ 12",
+        "freeFbo": "Свободный FBO 12",
+        "distribution": "FBS 0 штрезервы 0 штПул",
+        "status": "Нет FBS",
+        "packaging": "ТЗ есть"
+      },
+      "fbsToggleDisabled": true,
+      "actionBounds": [
+        {
+          "text": "Пул",
+          "aria": "Настроить FBS-пул",
+          "title": "Настроить FBS-пул",
+          "x": 896.6875,
+          "y": 474.6875,
+          "width": 44,
+          "height": 24,
+          "scrollWidth": 42,
+          "clientWidth": 42
+        },
+        {
+          "text": "ТЗ",
+          "aria": "Редактировать ТЗ",
+          "title": "Редактировать ТЗ",
+          "x": 1144.1796875,
+          "y": 473.390625,
+          "width": 36,
+          "height": 24,
+          "scrollWidth": 34,
+          "clientWidth": 34
+        }
+      ],
+      "packagingButtonBounds": {
+        "x": 1144.1796875,
+        "y": 473.390625,
+        "width": 36,
+        "height": 24,
+        "text": "ТЗ"
+      },
+      "poolButtonBounds": {
+        "x": 896.6875,
+        "y": 474.6875,
+        "width": 44,
+        "height": 24,
+        "text": "Пул",
+        "title": "Настроить FBS-пул",
+        "aria": "Настроить FBS-пул"
+      },
+      "hasWbShk": false,
+      "hasWbArticle": true,
+      "hasActionsHeader": false,
+      "hasRawCodes": false,
+      "hasLimit": false,
+      "nakedStockPattern": false
+    },
+    "afterBulk": {
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyClientWidth": 1280,
+      "tableScrollWidth": 990,
+      "tableClientWidth": 990,
+      "containerScrollWidth": 990,
+      "containerClientWidth": 990,
+      "headers": [
+        "",
+        "Товар",
+        "Артикул WB",
+        "Остаток",
+        "FBS-пул",
+        "Публикация WB",
+        "ТЗ / ЧЗ"
+      ],
+      "headerBounds": [
+        {
+          "text": "",
+          "x": 265,
+          "y": 457.4765625,
+          "width": 39.59375,
+          "height": 43.09375,
+          "scrollWidth": 51,
+          "clientWidth": 40
+        },
+        {
+          "text": "Товар",
+          "x": 304.59375,
+          "y": 457.4765625,
+          "width": 277.1953125,
+          "height": 43.09375,
+          "scrollWidth": 277,
+          "clientWidth": 277
+        },
+        {
+          "text": "Артикул WB",
+          "x": 581.7890625,
+          "y": 457.4765625,
+          "width": 148.5,
+          "height": 43.09375,
+          "scrollWidth": 149,
+          "clientWidth": 149
+        },
+        {
+          "text": "Остаток",
+          "x": 730.2890625,
+          "y": 457.4765625,
+          "width": 158.3984375,
+          "height": 43.09375,
+          "scrollWidth": 158,
+          "clientWidth": 158
+        },
+        {
+          "text": "FBS-пул",
+          "x": 888.6875,
+          "y": 457.4765625,
+          "width": 118.796875,
+          "height": 43.09375,
+          "scrollWidth": 119,
+          "clientWidth": 119
+        },
+        {
+          "text": "Публикация WB",
+          "x": 1007.484375,
+          "y": 457.4765625,
+          "width": 128.6953125,
+          "height": 43.09375,
+          "scrollWidth": 129,
+          "clientWidth": 129
+        },
+        {
+          "text": "ТЗ / ЧЗ",
+          "x": 1136.1796875,
+          "y": 457.4765625,
+          "width": 118.8203125,
+          "height": 43.09375,
+          "scrollWidth": 119,
+          "clientWidth": 119
+        }
+      ],
+      "rowHeight": 68.6328125,
+      "rowText": "Catalog Final Regression Product With Long Enough NameSKU SKU-FINAL-final-1786665779346 · E2E-MOCK · L424242ШК E2E-MOCK-BARCODEВ ячейках 12На ФФ 12Свободный FBO 12FBS 0 штрезервы 0 штПулНет FBSТЗ естьЧЗ нетТЗ",
+      "rowCells": [
+        "",
+        "Catalog Final Regression Product With Long Enough NameSKU SKU-FINAL-final-1786665779346 · E2E-MOCK · L",
+        "424242ШК E2E-MOCK-BARCODE",
+        "В ячейках 12На ФФ 12Свободный FBO 12",
+        "FBS 0 штрезервы 0 штПул",
+        "Нет FBS",
+        "ТЗ естьЧЗ нетТЗ"
+      ],
+      "stockTexts": {
+        "inStorage": "В ячейках 12",
+        "onHand": "На ФФ 12",
+        "freeFbo": "Свободный FBO 12",
+        "distribution": "FBS 0 штрезервы 0 штПул",
+        "status": "Нет FBS",
+        "packaging": "ТЗ есть"
+      },
+      "fbsToggleDisabled": true,
+      "actionBounds": [
+        {
+          "text": "Пул",
+          "aria": "Настроить FBS-пул",
+          "title": "Настроить FBS-пул",
+          "x": 896.6875,
+          "y": 541.203125,
+          "width": 44,
+          "height": 24,
+          "scrollWidth": 42,
+          "clientWidth": 42
+        },
+        {
+          "text": "ТЗ",
+          "aria": "Редактировать ТЗ",
+          "title": "Редактировать ТЗ",
+          "x": 1144.1796875,
+          "y": 539.90625,
+          "width": 36,
+          "height": 24,
+          "scrollWidth": 34,
+          "clientWidth": 34
+        },
+        {
+          "text": "Подтвердить",
+          "aria": null,
+          "title": null,
+          "x": 797.3125,
+          "y": 400.4765625,
+          "width": 134.6875,
+          "height": 39.5625,
+          "scrollWidth": 135,
+          "clientWidth": 135
+        }
+      ],
+      "packagingButtonBounds": {
+        "x": 1144.1796875,
+        "y": 539.90625,
+        "width": 36,
+        "height": 24,
+        "text": "ТЗ"
+      },
+      "poolButtonBounds": {
+        "x": 896.6875,
+        "y": 541.203125,
+        "width": 44,
+        "height": 24,
+        "text": "Пул",
+        "title": "Настроить FBS-пул",
+        "aria": "Настроить FBS-пул"
+      },
+      "hasWbShk": false,
+      "hasWbArticle": true,
+      "hasActionsHeader": false,
+      "hasRawCodes": false,
+      "hasLimit": false,
+      "nakedStockPattern": false
+    },
+    "afterFbs": {
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyClientWidth": 1280,
+      "tableScrollWidth": 990,
+      "tableClientWidth": 990,
+      "containerScrollWidth": 990,
+      "containerClientWidth": 990,
+      "headers": [
+        "",
+        "Товар",
+        "Артикул WB",
+        "Остаток",
+        "FBS-пул",
+        "Публикация WB",
+        "ТЗ / ЧЗ"
+      ],
+      "headerBounds": [
+        {
+          "text": "",
+          "x": 265,
+          "y": 457.4765625,
+          "width": 39.59375,
+          "height": 43.09375,
+          "scrollWidth": 51,
+          "clientWidth": 40
+        },
+        {
+          "text": "Товар",
+          "x": 304.59375,
+          "y": 457.4765625,
+          "width": 277.1953125,
+          "height": 43.09375,
+          "scrollWidth": 277,
+          "clientWidth": 277
+        },
+        {
+          "text": "Артикул WB",
+          "x": 581.7890625,
+          "y": 457.4765625,
+          "width": 148.5,
+          "height": 43.09375,
+          "scrollWidth": 149,
+          "clientWidth": 149
+        },
+        {
+          "text": "Остаток",
+          "x": 730.2890625,
+          "y": 457.4765625,
+          "width": 158.3984375,
+          "height": 43.09375,
+          "scrollWidth": 158,
+          "clientWidth": 158
+        },
+        {
+          "text": "FBS-пул",
+          "x": 888.6875,
+          "y": 457.4765625,
+          "width": 118.796875,
+          "height": 43.09375,
+          "scrollWidth": 119,
+          "clientWidth": 119
+        },
+        {
+          "text": "Публикация WB",
+          "x": 1007.484375,
+          "y": 457.4765625,
+          "width": 128.6953125,
+          "height": 43.09375,
+          "scrollWidth": 129,
+          "clientWidth": 129
+        },
+        {
+          "text": "ТЗ / ЧЗ",
+          "x": 1136.1796875,
+          "y": 457.4765625,
+          "width": 118.8203125,
+          "height": 43.09375,
+          "scrollWidth": 119,
+          "clientWidth": 119
+        }
+      ],
+      "rowHeight": 68.6328125,
+      "rowText": "Catalog Final Regression Product With Long Enough NameSKU SKU-FINAL-final-1786665779346 · E2E-MOCK · L424242ШК E2E-MOCK-BARCODEВ ячейках 12На ФФ 12Свободный FBO 7FBS 5 штрезервы 0 штПулПроверяем WBТЗ естьЧЗ нетТЗ",
+      "rowCells": [
+        "",
+        "Catalog Final Regression Product With Long Enough NameSKU SKU-FINAL-final-1786665779346 · E2E-MOCK · L",
+        "424242ШК E2E-MOCK-BARCODE",
+        "В ячейках 12На ФФ 12Свободный FBO 7",
+        "FBS 5 штрезервы 0 штПул",
+        "Проверяем WB",
+        "ТЗ естьЧЗ нетТЗ"
+      ],
+      "stockTexts": {
+        "inStorage": "В ячейках 12",
+        "onHand": "На ФФ 12",
+        "freeFbo": "Свободный FBO 7",
+        "distribution": "FBS 5 штрезервы 0 штПул",
+        "status": "Проверяем WB",
+        "packaging": "ТЗ есть"
+      },
+      "fbsToggleDisabled": false,
+      "actionBounds": [
+        {
+          "text": "Пул",
+          "aria": "Настроить FBS-пул",
+          "title": "Настроить FBS-пул",
+          "x": 896.6875,
+          "y": 541.203125,
+          "width": 44,
+          "height": 24,
+          "scrollWidth": 42,
+          "clientWidth": 42
+        },
+        {
+          "text": "ТЗ",
+          "aria": "Редактировать ТЗ",
+          "title": "Редактировать ТЗ",
+          "x": 1144.1796875,
+          "y": 539.90625,
+          "width": 36,
+          "height": 24,
+          "scrollWidth": 34,
+          "clientWidth": 34
+        }
+      ],
+      "packagingButtonBounds": {
+        "x": 1144.1796875,
+        "y": 539.90625,
+        "width": 36,
+        "height": 24,
+        "text": "ТЗ"
+      },
+      "poolButtonBounds": {
+        "x": 896.6875,
+        "y": 541.203125,
+        "width": 44,
+        "height": 24,
+        "text": "Пул",
+        "title": "Настроить FBS-пул",
+        "aria": "Настроить FBS-пул"
+      },
+      "hasWbShk": false,
+      "hasWbArticle": true,
+      "hasActionsHeader": false,
+      "hasRawCodes": false,
+      "hasLimit": false,
+      "nakedStockPattern": false
+    },
+    "afterPackaging": {
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyClientWidth": 1280,
+      "tableScrollWidth": 990,
+      "tableClientWidth": 990,
+      "containerScrollWidth": 990,
+      "containerClientWidth": 990,
+      "headers": [
+        "",
+        "Товар",
+        "Артикул WB",
+        "Остаток",
+        "FBS-пул",
+        "Публикация WB",
+        "ТЗ / ЧЗ"
+      ],
+      "headerBounds": [
+        {
+          "text": "",
+          "x": 265,
+          "y": 457.4765625,
+          "width": 39.59375,
+          "height": 43.09375,
+          "scrollWidth": 51,
+          "clientWidth": 40
+        },
+        {
+          "text": "Товар",
+          "x": 304.59375,
+          "y": 457.4765625,
+          "width": 277.1953125,
+          "height": 43.09375,
+          "scrollWidth": 277,
+          "clientWidth": 277
+        },
+        {
+          "text": "Артикул WB",
+          "x": 581.7890625,
+          "y": 457.4765625,
+          "width": 148.5,
+          "height": 43.09375,
+          "scrollWidth": 149,
+          "clientWidth": 149
+        },
+        {
+          "text": "Остаток",
+          "x": 730.2890625,
+          "y": 457.4765625,
+          "width": 158.3984375,
+          "height": 43.09375,
+          "scrollWidth": 158,
+          "clientWidth": 158
+        },
+        {
+          "text": "FBS-пул",
+          "x": 888.6875,
+          "y": 457.4765625,
+          "width": 118.796875,
+          "height": 43.09375,
+          "scrollWidth": 119,
+          "clientWidth": 119
+        },
+        {
+          "text": "Публикация WB",
+          "x": 1007.484375,
+          "y": 457.4765625,
+          "width": 128.6953125,
+          "height": 43.09375,
+          "scrollWidth": 129,
+          "clientWidth": 129
+        },
+        {
+          "text": "ТЗ / ЧЗ",
+          "x": 1136.1796875,
+          "y": 457.4765625,
+          "width": 118.8203125,
+          "height": 43.09375,
+          "scrollWidth": 119,
+          "clientWidth": 119
+        }
+      ],
+      "rowHeight": 68.6328125,
+      "rowText": "Catalog Final Regression Product With Long Enough NameSKU SKU-FINAL-final-1786665779346 · E2E-MOCK · L424242ШК E2E-MOCK-BARCODEВ ячейках 12На ФФ 12Свободный FBO 7FBS 5 штрезервы 0 штПулПроверяем WBТЗ естьЧЗ нетТЗ",
+      "rowCells": [
+        "",
+        "Catalog Final Regression Product With Long Enough NameSKU SKU-FINAL-final-1786665779346 · E2E-MOCK · L",
+        "424242ШК E2E-MOCK-BARCODE",
+        "В ячейках 12На ФФ 12Свободный FBO 7",
+        "FBS 5 штрезервы 0 штПул",
+        "Проверяем WB",
+        "ТЗ естьЧЗ нетТЗ"
+      ],
+      "stockTexts": {
+        "inStorage": "В ячейках 12",
+        "onHand": "На ФФ 12",
+        "freeFbo": "Свободный FBO 7",
+        "distribution": "FBS 5 штрезервы 0 штПул",
+        "status": "Проверяем WB",
+        "packaging": "ТЗ есть"
+      },
+      "fbsToggleDisabled": false,
+      "actionBounds": [
+        {
+          "text": "Пул",
+          "aria": "Настроить FBS-пул",
+          "title": "Настроить FBS-пул",
+          "x": 896.6875,
+          "y": 541.203125,
+          "width": 44,
+          "height": 24,
+          "scrollWidth": 42,
+          "clientWidth": 42
+        },
+        {
+          "text": "ТЗ",
+          "aria": "Редактировать ТЗ",
+          "title": "Редактировать ТЗ",
+          "x": 1144.1796875,
+          "y": 539.90625,
+          "width": 36,
+          "height": 24,
+          "scrollWidth": 34,
+          "clientWidth": 34
+        }
+      ],
+      "packagingButtonBounds": {
+        "x": 1144.1796875,
+        "y": 539.90625,
+        "width": 36,
+        "height": 24,
+        "text": "ТЗ"
+      },
+      "poolButtonBounds": {
+        "x": 896.6875,
+        "y": 541.203125,
+        "width": 44,
+        "height": 24,
+        "text": "Пул",
+        "title": "Настроить FBS-пул",
+        "aria": "Настроить FBS-пул"
+      },
+      "hasWbShk": false,
+      "hasWbArticle": true,
+      "hasActionsHeader": false,
+      "hasRawCodes": false,
+      "hasLimit": false,
+      "nakedStockPattern": false
+    },
+    "final": {
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyClientWidth": 1280,
+      "tableScrollWidth": 990,
+      "tableClientWidth": 990,
+      "containerScrollWidth": 990,
+      "containerClientWidth": 990,
+      "headers": [
+        "",
+        "Товар",
+        "Артикул WB",
+        "Остаток",
+        "FBS-пул",
+        "Публикация WB",
+        "ТЗ / ЧЗ"
+      ],
+      "headerBounds": [
+        {
+          "text": "",
+          "x": 265,
+          "y": 457.4765625,
+          "width": 39.59375,
+          "height": 43.09375,
+          "scrollWidth": 51,
+          "clientWidth": 40
+        },
+        {
+          "text": "Товар",
+          "x": 304.59375,
+          "y": 457.4765625,
+          "width": 277.1953125,
+          "height": 43.09375,
+          "scrollWidth": 277,
+          "clientWidth": 277
+        },
+        {
+          "text": "Артикул WB",
+          "x": 581.7890625,
+          "y": 457.4765625,
+          "width": 148.5,
+          "height": 43.09375,
+          "scrollWidth": 149,
+          "clientWidth": 149
+        },
+        {
+          "text": "Остаток",
+          "x": 730.2890625,
+          "y": 457.4765625,
+          "width": 158.3984375,
+          "height": 43.09375,
+          "scrollWidth": 158,
+          "clientWidth": 158
+        },
+        {
+          "text": "FBS-пул",
+          "x": 888.6875,
+          "y": 457.4765625,
+          "width": 118.796875,
+          "height": 43.09375,
+          "scrollWidth": 119,
+          "clientWidth": 119
+        },
+        {
+          "text": "Публикация WB",
+          "x": 1007.484375,
+          "y": 457.4765625,
+          "width": 128.6953125,
+          "height": 43.09375,
+          "scrollWidth": 129,
+          "clientWidth": 129
+        },
+        {
+          "text": "ТЗ / ЧЗ",
+          "x": 1136.1796875,
+          "y": 457.4765625,
+          "width": 118.8203125,
+          "height": 43.09375,
+          "scrollWidth": 119,
+          "clientWidth": 119
+        }
+      ],
+      "rowHeight": 68.6328125,
+      "rowText": "Catalog Final Regression Product With Long Enough NameSKU SKU-FINAL-final-1786665779346 · E2E-MOCK · L424242ШК E2E-MOCK-BARCODEВ ячейках 12На ФФ 12Свободный FBO 7FBS 5 штрезервы 0 штПулПроверяем WBТЗ естьЧЗ нетТЗ",
+      "rowCells": [
+        "",
+        "Catalog Final Regression Product With Long Enough NameSKU SKU-FINAL-final-1786665779346 · E2E-MOCK · L",
+        "424242ШК E2E-MOCK-BARCODE",
+        "В ячейках 12На ФФ 12Свободный FBO 7",
+        "FBS 5 штрезервы 0 штПул",
+        "Проверяем WB",
+        "ТЗ естьЧЗ нетТЗ"
+      ],
+      "stockTexts": {
+        "inStorage": "В ячейках 12",
+        "onHand": "На ФФ 12",
+        "freeFbo": "Свободный FBO 7",
+        "distribution": "FBS 5 штрезервы 0 штПул",
+        "status": "Проверяем WB",
+        "packaging": "ТЗ есть"
+      },
+      "fbsToggleDisabled": false,
+      "actionBounds": [
+        {
+          "text": "Пул",
+          "aria": "Настроить FBS-пул",
+          "title": "Настроить FBS-пул",
+          "x": 896.6875,
+          "y": 541.203125,
+          "width": 44,
+          "height": 24,
+          "scrollWidth": 42,
+          "clientWidth": 42
+        },
+        {
+          "text": "ТЗ",
+          "aria": "Редактировать ТЗ",
+          "title": "Редактировать ТЗ",
+          "x": 1144.1796875,
+          "y": 539.90625,
+          "width": 36,
+          "height": 24,
+          "scrollWidth": 34,
+          "clientWidth": 34
+        }
+      ],
+      "packagingButtonBounds": {
+        "x": 1144.1796875,
+        "y": 539.90625,
+        "width": 36,
+        "height": 24,
+        "text": "ТЗ"
+      },
+      "poolButtonBounds": {
+        "x": 896.6875,
+        "y": 541.203125,
+        "width": 44,
+        "height": 24,
+        "text": "Пул",
+        "title": "Настроить FBS-пул",
+        "aria": "Настроить FBS-пул"
+      },
+      "hasWbShk": false,
+      "hasWbArticle": true,
+      "hasActionsHeader": false,
+      "hasRawCodes": false,
+      "hasLimit": false,
+      "nakedStockPattern": false
+    }
+  },
+  "network": {
+    "bulkPatchBody": {
+      "product_ids": [
+        "724b4820-5a34-468b-98fe-bd2709dca43c"
+      ],
+      "fbs_stock_sync_enabled": true
+    },
+    "sampledRequests": [
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:15458/api/products/wb-catalog",
+        "postData": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:15458/api/operations/inventory-balances/summary",
+        "postData": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:15458/api/products/wb-catalog",
+        "postData": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:15458/api/operations/inventory-balances/summary",
+        "postData": null
+      },
+      {
+        "method": "PATCH",
+        "url": "http://127.0.0.1:15458/api/products/fbs-stock-sync/bulk",
+        "postData": "{\"product_ids\":[\"724b4820-5a34-468b-98fe-bd2709dca43c\"],\"fbs_stock_sync_enabled\":true}"
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:15458/api/products/wb-catalog",
+        "postData": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:15458/api/operations/inventory-balances/summary",
+        "postData": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:15458/api/products/724b4820-5a34-468b-98fe-bd2709dca43c/stock-directions",
+        "postData": null
+      },
+      {
+        "method": "POST",
+        "url": "http://127.0.0.1:15458/api/products/724b4820-5a34-468b-98fe-bd2709dca43c/stock-directions",
+        "postData": "{\"name\":\"FBS WB\",\"comment\":null,\"quantity\":5,\"is_fbs\":true}"
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:15458/api/products/724b4820-5a34-468b-98fe-bd2709dca43c/stock-directions",
+        "postData": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:15458/api/products/wb-catalog",
+        "postData": null
+      },
+      {
+        "method": "GET",
+        "url": "http://127.0.0.1:15458/api/operations/inventory-balances/summary",
+        "postData": null
+      }
+    ],
+    "sampledResponses": [
+      {
+        "status": 200,
+        "url": "http://127.0.0.1:15458/api/products/wb-catalog",
+        "method": "GET"
+      },
+      {
+        "status": 200,
+        "url": "http://127.0.0.1:15458/api/products/wb-catalog",
+        "method": "GET"
+      },
+      {
+        "status": 200,
+        "url": "http://127.0.0.1:15458/api/operations/inventory-balances/summary",
+        "method": "GET"
+      },
+      {
+        "status": 200,
+        "url": "http://127.0.0.1:15458/api/operations/inventory-balances/summary",
+        "method": "GET"
+      },
+      {
+        "status": 200,
+        "url": "http://127.0.0.1:15458/api/products/fbs-stock-sync/bulk",
+        "method": "PATCH"
+      },
+      {
+        "status": 200,
+        "url": "http://127.0.0.1:15458/api/products/wb-catalog",
+        "method": "GET"
+      },
+      {
+        "status": 200,
+        "url": "http://127.0.0.1:15458/api/operations/inventory-balances/summary",
+        "method": "GET"
+      },
+      {
+        "status": 200,
+        "url": "http://127.0.0.1:15458/api/products/724b4820-5a34-468b-98fe-bd2709dca43c/stock-directions",
+        "method": "GET"
+      },
+      {
+        "status": 201,
+        "url": "http://127.0.0.1:15458/api/products/724b4820-5a34-468b-98fe-bd2709dca43c/stock-directions",
+        "method": "POST"
+      },
+      {
+        "status": 200,
+        "url": "http://127.0.0.1:15458/api/products/724b4820-5a34-468b-98fe-bd2709dca43c/stock-directions",
+        "method": "GET"
+      },
+      {
+        "status": 200,
+        "url": "http://127.0.0.1:15458/api/products/wb-catalog",
+        "method": "GET"
+      },
+      {
+        "status": 200,
+        "url": "http://127.0.0.1:15458/api/operations/inventory-balances/summary",
+        "method": "GET"
+      }
+    ]
+  }
+}

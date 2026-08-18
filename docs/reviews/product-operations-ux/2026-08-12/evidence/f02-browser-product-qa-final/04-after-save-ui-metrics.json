@@ -1,0 +1,13 @@
+{
+  "name": "WMS · Фулфилмент",
+  "viewportWidth": 1280,
+  "viewportHeight": 800,
+  "documentScrollWidth": 1280,
+  "bodyScrollWidth": 1280,
+  "documentClientWidth": 1280,
+  "bodyClientWidth": 1280,
+  "horizontalOverflowPx": 0,
+  "rootBackground": "rgb(255, 255, 255)",
+  "bodyBackground": "rgb(232, 236, 244)",
+  "blackViewportBackground": false
+}

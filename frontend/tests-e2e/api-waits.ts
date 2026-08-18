@@ -80,6 +80,14 @@ export function waitForPutOk(
   return page.waitForResponse((r) => isMethodOk('PUT', r, pathIncludes, urlFilter));
 }
 
+export function waitForDeleteOk(
+  page: Page,
+  pathIncludes: string,
+  urlFilter?: (url: string) => boolean,
+): Promise<Response> {
+  return page.waitForResponse((r) => isMethodOk('DELETE', r, pathIncludes, urlFilter));
+}
+
 /** Inbound line partial receive: POST .../lines/{id}/receive */
 export function waitForInboundBoxLabelPrintedOk(page: Page): Promise<Response> {
   return page.waitForResponse((r) =>

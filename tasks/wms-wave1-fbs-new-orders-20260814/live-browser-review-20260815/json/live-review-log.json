@@ -1,0 +1,109 @@
+{
+  "started_at": "2026-08-15T07:54:01.135Z",
+  "browser": "Chrome/151.0.7922.138",
+  "url": "http://127.0.0.1:5186/",
+  "actions": [
+    {
+      "action": "screenshot",
+      "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-fbs-new-orders-20260814/tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/01-login-visible-chrome.png",
+      "at": "2026-08-15T07:54:06.873Z"
+    },
+    {
+      "action": "fill",
+      "label": "login-form:Email",
+      "value": "fbs-live-review-02981000@example.com",
+      "at": "2026-08-15T07:54:06.886Z"
+    },
+    {
+      "action": "fill",
+      "label": "login-form:Пароль",
+      "value": "password123",
+      "at": "2026-08-15T07:54:07.048Z"
+    },
+    {
+      "action": "click",
+      "label": "button:Войти",
+      "box": {
+        "x": 640,
+        "y": 361.203125,
+        "w": 504,
+        "h": 45.53125,
+        "text": "Войти"
+      },
+      "at": "2026-08-15T07:54:07.332Z"
+    },
+    {
+      "action": "screenshot",
+      "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-fbs-new-orders-20260814/tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/02-dashboard-after-login.png",
+      "at": "2026-08-15T07:54:11.147Z"
+    },
+    {
+      "action": "click",
+      "label": "nav FBS",
+      "box": {
+        "x": 129.5,
+        "y": 176.2890625,
+        "w": 243,
+        "h": 38.515625,
+        "text": "FBS"
+      },
+      "at": "2026-08-15T07:54:11.260Z"
+    },
+    {
+      "action": "screenshot",
+      "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-fbs-new-orders-20260814/tasks/wms-wave1-fbs-new-orders-20260814/live-browser-review-20260815/screenshots/03-fbs-new-orders-long-data-1280.png",
+      "at": "2026-08-15T07:54:14.211Z"
+    },
+    {
+      "action": "fill",
+      "label": "fbs-worklist-search",
+      "value": "бомбер",
+      "at": "2026-08-15T07:54:14.225Z"
+    },
+    {
+      "action": "click",
+      "label": "button:Найти",
+      "box": {
+        "x": 1022,
+        "y": 337.484375,
+        "w": 130,
+        "h": 42.875,
+        "text": "Найти"
+      },
+      "at": "2026-08-15T07:54:14.415Z"
+    }
+  ],
+  "observations": [
+    {
+      "label": "new_orders_initial_state",
+      "value": {
+        "innerWidth": 1280,
+        "innerHeight": 783,
+        "rows": [
+          {
+            "id": "fbs-order-18d961ce-87eb-45d1-83a4-d140c7a15e84",
+            "text": "\t\nК\nКроссовки беговые демисезонные темно-синие\nКроссовки · темно-синий · 43\n\t\n\nWB №880003\n\nАртикул: SHOES-LIVE-02981000 · WB/nmId 9901003\nШК: 460LIVE02981000003\nSKU SHOES-NAVY-02981000 · chrtId 770003\n\t\n\nИП Очень Длинный Селлер Северо-Западный Склад 2026\n\n\t\n\nWB Казань Зеленодольск\n\nWMS: Резервный WMS склад Казань\t\n\n14.08.26, 20:05\n\nВ сборке: 14 ч 49 мин"
+          },
+          {
+            "id": "fbs-order-881cba56-07b0-4f26-b043-a7977792f282",
+            "text": "\t\nФ\nФутболка базовая белая хлопок премиум\nФутболки · белый · M\n\t\n\nWB №880002\n\nАртикул: TSHIRT-LIVE-02981000 · WB/nmId 9901002\nШК: 460LIVE02981000002\nSKU TSHIRT-WHITE-02981000 · chrtId 770002\n\t\n\nИП Очень Длинный Селлер Северо-Западный Склад 2026\n\n\t\n\nWB Москва Коледино - склад селлера северный длинный\n\nWMS: Основной WMS склад с длинным названием Москва-Север\t\n\n15.08.26, 02:47\n\nВ сборке: 8 ч 7 мин"
+          },
+          {
+            "id": "fbs-order-a641f2ea-28cb-46df-9ae8-f5b370d2c2b1",
+            "text": "\t\nБ\nБомбер мужской утепленный графитовый с очень длинным названием модели Limited Edition 2026\nБомберы · графитовый · XL Tall\n\t\n\nWB №880001\n\nАртикул: BOMBER-LIVE-02981000 · WB/nmId 9901001\nШК: 460LIVE02981000001\nSKU BOMBER-LONG-SKU-02981000-GRAPHITE-LIMITED-EDITION-2026 · chrtId 770001\n\t\n\nИП Очень Длинный Селлер Северо-Западный Склад 2026\n\n\t\n\nWB Москва Коледино - склад селлера северный длинный\n\nWMS: Основной WMS склад с длинным названием Москва-Север\t\n\n15.08.26, 05:34\n\nВ сборке: 5 ч 20 мин"
+          }
+        ],
+        "header": "\tТовар\tЗаказ и идентификаторы\tСеллер\tСклад селлера / WB\tСоздан WB\n\n\t\nК\nКроссовки беговые демисезонные темно-синие\nКроссовки · темно-синий · 43\n\t\n\nWB №880003\n\nАртикул: SHOES-LIVE-02981000 · WB/nmId 9901003\nШК: 460LIVE02981000003\nSKU SHOES-NAVY-02981000 · chrtId 770003\n\t\n\nИП Очень Длинный Селлер Северо-Западный Склад 2026\n\n\t\n\nWB Казань Зеленодольск\n\nWMS: Резервный WMS склад Казань\t\n\n14.08.26, 20:05\n\nВ сборке: 14 ч 49 мин\n\n\t\nФ\nФутболка базовая белая хлопок премиум\nФутболки · белый · M\n\t\n\nWB №880002\n\nАртикул: TSHIRT-LIVE-02981000 · WB/nmId 9901002\nШК: 460LIVE02981000002\nSKU TSHIRT-WHITE-02981000 · chrtId 770002\n\t\n\nИП Очень Длинный Селлер Северо-Западный Склад 2026\n\n\t\n\nWB Москва Коледино - склад селлера северный длинный\n\nWMS: Основной WMS склад с длинным названием Москва-Север\t\n\n15.08.26, 02:47\n\nВ сборке: 8 ч 7 мин\n\n\t\nБ\nБомбер мужской утепленный графитовый с очень длинным названием модели Limited Edition 2026\nБомберы · графитовый · XL Tall\n\t\n\nWB №880001\n\nАртикул: BOMBER-LIVE-02981000 · WB/nmId 9901001\nШК: 460LIVE02981000001\nSKU BOMBER-LONG-SKU-02981000-GRAPHITE-LIMITED-EDITION-2026 · chrtId 770001\n\t\n\nИП Очень Длинный Селлер Северо-Западный Склад 2026\n\n\t\n\nWB Москва Коледино - склад селлера северный длинный\n\nWMS: Основной WMS склад с длинным названием Москва-Север\t\n\n15.08.26, 05:34\n\nВ сборке: 5 ч 20 мин",
+        "selectionBar": null
+      },
+      "at": "2026-08-15T07:54:14.215Z"
+    }
+  ],
+  "failures": [
+    {
+      "bucket": "blocked",
+      "reason": "Error: Timeout waiting for search result alert\n    at waitFor ([stdin]:17:267)\n    at async main ([stdin]:34:97)"
+    }
+  ],
+  "completed_at": "2026-08-15T07:54:24.799Z"
+}

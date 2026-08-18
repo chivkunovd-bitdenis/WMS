@@ -27,6 +27,7 @@ from app.services.marketplace_unload_pick_service import (
     MarketplaceUnloadPickError,
     find_location_by_barcode,
 )
+from app.services.marketplace_unload_status import DELETE_EDITABLE_STATUSES
 from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
 
 ALLOWED_BOX_PRESETS = frozenset({"60_40_40", "30_20_30"})
@@ -536,6 +537,11 @@ async def remove_box_line(
     box = await session.get(MarketplaceUnloadBox, box_id)
     if box is None:
         raise MarketplaceUnloadBoxError("box_not_found")
+    req = await mu_svc.get_request(session, tenant_id, box.request_id)
+    if req is None:
+        raise MarketplaceUnloadBoxError("not_found")
+    if req.status not in DELETE_EDITABLE_STATUSES:
+        raise MarketplaceUnloadBoxError("not_draft")
     try:
         return await collect_svc.remove_from_box(
             session,

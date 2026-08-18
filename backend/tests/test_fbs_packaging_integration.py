@@ -12,11 +12,14 @@ from sqlalchemy import func, select
 from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.fbs_order import (
+    CHECK_STATUS_NEW,
     FBS_ORDER_STATUS_IN_DELIVERY,
     FBS_ORDER_STATUS_IN_SUPPLY,
     FBS_ORDER_STATUS_NEW,
+    META_STATUS_PENDING,
     PICK_STATUS_PICKED,
     FbsOrder,
+    FbsOrderMarking,
     FbsOrderReservation,
 )
 from app.models.fbs_order_pick import FbsOrderPick
@@ -30,7 +33,7 @@ from app.models.fbs_trbx import FbsTrbx
 from app.models.inventory_movement import MOVEMENT_TYPE_FBS_SHIPMENT, InventoryMovement
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.warehouse_box import WarehouseBox
-from app.services import inventory_service
+from app.services import inventory_service, stock_direction_service
 from app.services.fbs_packaging_integration_service import create_packaging_task_for_supply
 from app.services.fbs_stock_availability_service import fbs_available_qty_for_product
 from app.services.sorting_location_service import get_or_create_sorting_location
@@ -784,12 +787,18 @@ async def test_fbs_supply_promoted_after_marking_when_honest_sign_required(
     )
     assert supply_mid.json()["status"] == FBS_SUPPLY_STATUS_ASSEMBLING
 
-    mark = await async_client.put(
-        f"/operations/fbs-orders/{order_id}/markings/sgtin",
-        headers=headers,
-        json={"value": "01CIS-PACKINT-TEST"},
-    )
-    assert mark.status_code == 200, mark.text
+    async with SessionLocal() as session:
+        session.add(
+            FbsOrderMarking(
+                order_id=order_id,
+                tenant_id=tenant_id,
+                kind="sgtin",
+                value="01CIS-PACKINT-TEST",
+                check_status=CHECK_STATUS_NEW,
+                meta_status=META_STATUS_PENDING,
+            )
+        )
+        await session.commit()
 
     from app.services.wildberries_fbs_client import MarketplaceOrderMetaRow
 
@@ -891,6 +900,14 @@ async def test_fbs_promote_write_off_shelf_confirm_sold_does_not_resurrect_avail
             storage_location_id=sorting.id,
             quantity_delta=5,
             movement_type="inbound_intake",
+        )
+        await stock_direction_service.create_stock_direction(
+            session,
+            tenant_id,
+            product_id,
+            name="FBS pool",
+            quantity=5,
+            is_fbs=True,
         )
         await session.commit()
         order_id = order.id

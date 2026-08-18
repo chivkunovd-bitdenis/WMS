@@ -8,6 +8,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -26,6 +27,7 @@ if TYPE_CHECKING:
     from app.models.inventory_movement import InventoryMovement
     from app.models.outbound_shipment import OutboundShipmentLine
     from app.models.seller import Seller
+    from app.models.stock_direction import StockDirection
     from app.models.tenant import Tenant
 
 
@@ -56,6 +58,8 @@ class Product(Base):
     length_mm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     width_mm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     height_mm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    weight_g: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    volume_liters: Mapped[float | None] = mapped_column(Float, nullable=True)
     packaging_instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
     requires_honest_sign: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
@@ -85,4 +89,9 @@ class Product(Base):
     outbound_shipment_lines: Mapped[list[OutboundShipmentLine]] = relationship(
         "OutboundShipmentLine",
         back_populates="product",
+    )
+    stock_directions: Mapped[list[StockDirection]] = relationship(
+        "StockDirection",
+        back_populates="product",
+        cascade="all, delete-orphan",
     )

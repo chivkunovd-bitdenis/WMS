@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import {
   Alert,
   Box,
@@ -17,12 +16,17 @@ import {
   TableHead,
   TableRow,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material'
 import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
-import { FF_PERMISSION_BLOCKS, type FfPermissions } from '../../utils/ffPermissions'
+import {
+  FF_STAFF_ACCESS_BLOCKS,
+  applyFfStaffAccessChange,
+  ffPermissionsToStaffAccess,
+  type FfPermissions,
+  type FfStaffAccessKey,
+} from '../../utils/ffPermissions'
 import { setSeparateMarkingPrintEnabled } from '../../utils/separateMarkingPrint'
 
 type StaffPackagingBilling = {
@@ -37,17 +41,30 @@ type StaffAccountRow = {
   role: string
   must_set_password: boolean
   permissions: FfPermissions
-  packaging_rate_rub: string
-  packaging_billing: StaffPackagingBilling
+  packaging_rate_rub?: string
+  packaging_billing?: StaffPackagingBilling
 }
 
 type Props = {
   token: string
   authHeaders: (t: string) => Record<string, string>
   isFulfillmentAdmin: boolean
+  canManageStaff: boolean
   addressStorageEnabled?: boolean
   onAddressStorageChange?: (enabled: boolean) => void
   separateMarkingPrintEnabled?: boolean
+  fbsShipmentCutoffTime?: string | null
+}
+
+function humanStaffError(message: string): string {
+  if (message.includes('email_taken')) return 'Этот сотрудник уже добавлен'
+  if (message.includes('forbidden') || message.includes('Нет доступа')) {
+    return 'Нет доступа к сотрудникам'
+  }
+  if (message.includes('not_staff_user') || message.includes('user_not_found')) {
+    return 'Сотрудник не найден'
+  }
+  return message || 'Не удалось сохранить. Попробуйте еще раз'
 }
 
 function currentBillingMonth(): string {
@@ -69,9 +86,11 @@ export function FfSettingsScreen({
   token,
   authHeaders,
   isFulfillmentAdmin,
+  canManageStaff,
   addressStorageEnabled = true,
   onAddressStorageChange,
   separateMarkingPrintEnabled = false,
+  fbsShipmentCutoffTime = null,
 }: Props) {
   const [rows, setRows] = useState<StaffAccountRow[]>([])
   const [billingMonth, setBillingMonth] = useState(currentBillingMonth)
@@ -85,6 +104,9 @@ export function FfSettingsScreen({
   } | null>(null)
   const [separatePrint, setSeparatePrint] = useState(separateMarkingPrintEnabled)
   const [separatePrintBusy, setSeparatePrintBusy] = useState(false)
+  const [fbsCutoff, setFbsCutoff] = useState(fbsShipmentCutoffTime ?? '')
+  const [fbsCutoffSaved, setFbsCutoffSaved] = useState(fbsShipmentCutoffTime ?? '')
+  const [fbsCutoffBusy, setFbsCutoffBusy] = useState(false)
   const [permBusyId, setPermBusyId] = useState<string | null>(null)
   const [rateBusyId, setRateBusyId] = useState<string | null>(null)
   const [rateDrafts, setRateDrafts] = useState<Record<string, string>>({})
@@ -95,26 +117,30 @@ export function FfSettingsScreen({
   const [highlightRowId, setHighlightRowId] = useState<string | null>(null)
 
   const loadRows = useCallback(async () => {
-    if (!token || !isFulfillmentAdmin) {
+    if (!token || !canManageStaff) {
       return
     }
-    const params = new URLSearchParams({ billing_month: billingMonth })
-    const res = await fetch(apiUrl(`/auth/staff-accounts?${params.toString()}`), {
+    const staffUrl = isFulfillmentAdmin
+      ? `/auth/staff-accounts?${new URLSearchParams({ billing_month: billingMonth }).toString()}`
+      : '/auth/staff-accounts'
+    const res = await fetch(apiUrl(staffUrl), {
       headers: authHeaders(token),
     })
     if (!res.ok) {
-      throw new Error(await readApiErrorMessage(res))
+      throw new Error(humanStaffError(await readApiErrorMessage(res)))
     }
     const data = (await res.json()) as StaffAccountRow[]
     setRows(data)
     setRateDrafts(
-      Object.fromEntries(data.map((row) => [row.id, row.packaging_rate_rub])),
+      isFulfillmentAdmin
+        ? Object.fromEntries(data.map((row) => [row.id, row.packaging_rate_rub ?? '0.00']))
+        : {},
     )
-  }, [authHeaders, billingMonth, isFulfillmentAdmin, token])
+  }, [authHeaders, billingMonth, canManageStaff, isFulfillmentAdmin, token])
 
   useEffect(() => {
     void loadRows().catch((err: unknown) => {
-      setError(err instanceof Error ? err.message : 'Не удалось загрузить пользователей.')
+      setError(err instanceof Error ? err.message : 'Не удалось загрузить сотрудников.')
     })
   }, [loadRows])
 
@@ -127,6 +153,11 @@ export function FfSettingsScreen({
   }, [separateMarkingPrintEnabled])
 
   useEffect(() => {
+    setFbsCutoff(fbsShipmentCutoffTime ?? '')
+    setFbsCutoffSaved(fbsShipmentCutoffTime ?? '')
+  }, [fbsShipmentCutoffTime])
+
+  useEffect(() => {
     if (!highlightRowId) {
       return
     }
@@ -137,7 +168,7 @@ export function FfSettingsScreen({
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const form = e.currentTarget
-    if (!token || !isFulfillmentAdmin) {
+    if (!token || !canManageStaff) {
       return
     }
     setError(null)
@@ -156,16 +187,14 @@ export function FfSettingsScreen({
         body: JSON.stringify({ email }),
       })
       if (!res.ok) {
-        setError(await readApiErrorMessage(res))
+        setError(humanStaffError(await readApiErrorMessage(res)))
         return
       }
       const created = (await res.json()) as StaffAccountRow
       form.reset()
       await loadRows()
       setHighlightRowId(created.id)
-      setSuccess(
-        `Сотрудник ${email} добавлен. Передайте ему email и адрес портала. Первый вход — с пустым паролем, система попросит задать новый.`,
-      )
+      setSuccess('Сотрудник добавлен')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось добавить сотрудника.')
     } finally {
@@ -175,16 +204,15 @@ export function FfSettingsScreen({
 
   async function onTogglePermission(
     row: StaffAccountRow,
-    key: keyof FfPermissions,
+    key: FfStaffAccessKey,
     checked: boolean,
   ) {
-    if (!token || !isFulfillmentAdmin) {
+    if (!token || !canManageStaff) {
       return
     }
     setError(null)
     setPermBusyId(row.id)
-    const block = FF_PERMISSION_BLOCKS.find((b) => b.key === key)
-    const next: FfPermissions = { ...row.permissions, [key]: checked }
+    const next = applyFfStaffAccessChange(row.permissions, key, checked)
     try {
       const res = await fetch(apiUrl(`/auth/staff-accounts/${row.id}/permissions`), {
         method: 'PATCH',
@@ -192,14 +220,12 @@ export function FfSettingsScreen({
         body: JSON.stringify(next),
       })
       if (!res.ok) {
-        setError(await readApiErrorMessage(res))
+        setError(humanStaffError(await readApiErrorMessage(res)))
         return
       }
       const updated = (await res.json()) as StaffAccountRow
       setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
-      setPermSavedNotice(
-        `${row.email}: «${block?.label ?? key}» ${checked ? 'включено' : 'выключено'}`,
-      )
+      setPermSavedNotice('Права сохранены')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось сохранить права.')
     } finally {
@@ -234,13 +260,13 @@ export function FfSettingsScreen({
         },
       )
       if (!res.ok) {
-        setError(await readApiErrorMessage(res))
+        setError(humanStaffError(await readApiErrorMessage(res)))
         return
       }
       const updated = (await res.json()) as StaffAccountRow
       setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
-      setRateDrafts((prev) => ({ ...prev, [row.id]: updated.packaging_rate_rub }))
-      setRateSavedNotice(`${row.email}: ставка ${formatRubDisplay(updated.packaging_rate_rub)} ₽`)
+      setRateDrafts((prev) => ({ ...prev, [row.id]: updated.packaging_rate_rub ?? '0.00' }))
+      setRateSavedNotice(`${row.email}: ставка ${formatRubDisplay(updated.packaging_rate_rub ?? '0')} ₽`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось сохранить ставку.')
     } finally {
@@ -322,13 +348,41 @@ export function FfSettingsScreen({
     }
   }
 
+  async function onFbsCutoffSave(nextValue = fbsCutoff) {
+    if (!token || !isFulfillmentAdmin) {
+      return
+    }
+    const normalized = nextValue.trim()
+    setFbsCutoffBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(apiUrl('/tenant/settings'), {
+        method: 'PATCH',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fbs_shipment_cutoff_time: normalized || null }),
+      })
+      if (!res.ok) {
+        setError(await readApiErrorMessage(res))
+        return
+      }
+      const data = (await res.json()) as { fbs_shipment_cutoff_time: string | null }
+      setFbsCutoff(data.fbs_shipment_cutoff_time ?? '')
+      setFbsCutoffSaved(data.fbs_shipment_cutoff_time ?? '')
+      setSuccess(data.fbs_shipment_cutoff_time ? 'Время отсечки FBS сохранено' : 'Время отсечки FBS очищено')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось сохранить время отсечки FBS.')
+    } finally {
+      setFbsCutoffBusy(false)
+    }
+  }
+
   return (
     <Box data-testid="ff-settings-screen">
       <Typography variant="h5" gutterBottom>
         Настройки
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Сотрудники фулфилмента, доступ к разделам и расчёт зарплаты за упаковку.
+        Сотрудники фулфилмента и доступ к рабочим разделам.
       </Typography>
 
       {isFulfillmentAdmin ? (
@@ -386,12 +440,56 @@ export function FfSettingsScreen({
               {separatePrintBusy ? <CircularProgress size={20} /> : null}
             </Stack>
           </Box>
+
+          <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'divider' }} data-testid="cal-03-fbs-cutoff-section" data-task-id="CAL-03">
+            <Typography variant="subtitle2" gutterBottom data-task-id="CAL-03">
+              Время отсечки FBS
+            </Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }} data-task-id="CAL-03">
+              <TextField
+                type="time"
+                size="small"
+                label="Время отсечки FBS"
+                value={fbsCutoff}
+                onChange={(event) => setFbsCutoff(event.target.value)}
+                disabled={fbsCutoffBusy}
+                slotProps={{
+                  inputLabel: { shrink: true },
+                  htmlInput: { 'data-testid': 'cal-03-fbs-cutoff-time' },
+                }}
+                sx={{ width: { xs: '100%', sm: 180 } }}
+                data-task-id="CAL-03"
+              />
+              <Button
+                variant="outlined"
+                onClick={() => void onFbsCutoffSave()}
+                disabled={fbsCutoffBusy || fbsCutoff === fbsCutoffSaved}
+                data-testid="cal-03-fbs-cutoff-save"
+                data-task-id="CAL-03"
+              >
+                Сохранить
+              </Button>
+              <Button
+                variant="text"
+                onClick={() => {
+                  setFbsCutoff('')
+                  void onFbsCutoffSave('')
+                }}
+                disabled={fbsCutoffBusy || !fbsCutoff}
+                data-testid="cal-03-fbs-cutoff-clear"
+                data-task-id="CAL-03"
+              >
+                Очистить
+              </Button>
+              {fbsCutoffBusy ? <CircularProgress size={20} /> : null}
+            </Stack>
+          </Box>
         </Paper>
       ) : null}
 
-      {!isFulfillmentAdmin ? (
+      {!canManageStaff ? (
         <Alert severity="info" data-testid="ff-settings-users-admin-only">
-          Управление пользователями доступно только администратору фулфилмента.
+          Нет доступа к сотрудникам.
         </Alert>
       ) : (
         <Box data-testid="ff-settings-users-panel">
@@ -407,36 +505,35 @@ export function FfSettingsScreen({
           ) : null}
 
           <Stack spacing={2}>
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={2}
-              sx={{ alignItems: { xs: 'stretch', sm: 'center' } }}
-            >
-              <TextField
-                label="Месяц расчёта"
-                type="month"
-                size="small"
-                value={billingMonth}
-                onChange={(e) => setBillingMonth(e.target.value)}
-                slotProps={{
-                  htmlInput: { 'data-testid': 'ff-staff-billing-month' },
-                }}
-                helperText="Период по московскому времени"
-                sx={{ width: { xs: '100%', sm: 220 } }}
-              />
-            </Stack>
+            {isFulfillmentAdmin ? (
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                spacing={2}
+                sx={{ alignItems: { xs: 'stretch', sm: 'center' } }}
+              >
+                <TextField
+                  label="Месяц расчёта"
+                  type="month"
+                  size="small"
+                  value={billingMonth}
+                  onChange={(e) => setBillingMonth(e.target.value)}
+                  slotProps={{
+                    htmlInput: { 'data-testid': 'ff-staff-billing-month' },
+                  }}
+                  helperText="Период по московскому времени"
+                  sx={{ width: { xs: '100%', sm: 220 } }}
+                />
+              </Stack>
+            ) : null}
 
             {rows.length === 0 ? (
               <Paper
                 variant="outlined"
-                sx={{ py: 4, px: 2, textAlign: 'center' }}
+                sx={{ py: 2.5, px: 2, textAlign: 'center' }}
                 data-testid="ff-staff-empty"
               >
-                <Typography variant="subtitle1" gutterBottom>
-                  Пока нет сотрудников
-                </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Добавьте первого пользователя в форме ниже — укажите email для входа в портал.
+                  Сотрудников пока нет.
                 </Typography>
               </Paper>
             ) : (
@@ -448,120 +545,125 @@ export function FfSettingsScreen({
               >
                 <Table size="small" data-testid="ff-staff-table">
                   <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ minWidth: 200 }}>Email</TableCell>
-                      {FF_PERMISSION_BLOCKS.map((block) => (
-                        <TableCell key={block.key} align="center" sx={{ minWidth: 88 }}>
-                          <Tooltip title={block.hint} arrow placement="top">
-                            <Stack
-                              direction="row"
-                              spacing={0.25}
-                              sx={{ alignItems: 'center', justifyContent: 'center' }}
-                            >
-                              <Typography variant="caption" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
-                                {block.label}
-                              </Typography>
-                              <InfoOutlinedIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
-                            </Stack>
-                          </Tooltip>
-                        </TableCell>
-                      ))}
-                      <TableCell align="right" sx={{ minWidth: 120 }}>
-                        Ставка за ед., ₽
-                      </TableCell>
-                      <TableCell align="right" sx={{ minWidth: 110 }}>
-                        Упаковано, шт
-                      </TableCell>
-                      <TableCell align="right" sx={{ minWidth: 110 }}>
-                        Начислено, ₽
-                      </TableCell>
-                    </TableRow>
-                  </TableHead>
+	                    <TableRow>
+	                      <TableCell sx={{ minWidth: 220 }}>Email</TableCell>
+	                      {FF_STAFF_ACCESS_BLOCKS.map((block) => (
+	                        <TableCell key={block.key} align="center" sx={{ minWidth: 116 }}>
+                          <Typography variant="caption" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
+                            {block.label}
+                          </Typography>
+	                        </TableCell>
+	                      ))}
+	                      {isFulfillmentAdmin ? (
+	                        <>
+	                          <TableCell align="right" sx={{ minWidth: 120 }}>
+	                            Ставка за ед., ₽
+	                          </TableCell>
+	                          <TableCell align="right" sx={{ minWidth: 110 }}>
+	                            Упаковано, шт
+	                          </TableCell>
+	                          <TableCell align="right" sx={{ minWidth: 110 }}>
+	                            Начислено, ₽
+	                          </TableCell>
+	                        </>
+	                      ) : null}
+	                    </TableRow>
+	                  </TableHead>
                   <TableBody>
-                    {rows.map((row) => (
-                      <TableRow
-                        key={row.id}
-                        hover
-                        data-testid="ff-staff-row"
-                        data-staff-id={row.id}
-                        sx={
-                          highlightRowId === row.id
-                            ? { bgcolor: 'action.selected' }
-                            : undefined
-                        }
-                      >
-                        <TableCell>
-                          <Typography variant="body2">{row.email}</Typography>
-                          {row.must_set_password ? (
-                            <Typography variant="caption" color="warning.main">
-                              ожидает первый вход
+                    {rows.map((row) => {
+                      const access = ffPermissionsToStaffAccess(row.permissions)
+                      return (
+                        <TableRow
+                          key={row.id}
+                          hover
+                          data-testid="ff-staff-row"
+                          data-staff-id={row.id}
+                          sx={
+                            highlightRowId === row.id
+                              ? { bgcolor: 'action.selected' }
+                              : undefined
+                          }
+                        >
+                          <TableCell sx={{ maxWidth: 320 }}>
+                            <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                              {row.email}
                             </Typography>
-                          ) : null}
-                        </TableCell>
-                        {FF_PERMISSION_BLOCKS.map((block) => (
-                          <TableCell key={block.key} align="center" padding="checkbox">
-                            <Checkbox
-                              size="small"
-                              checked={row.permissions[block.key]}
-                              disabled={permBusyId === row.id}
-                              slotProps={{
-                                root: {
-                                  'data-testid': `ff-staff-perm-${row.id}-${block.key}`,
-                                } as React.HTMLAttributes<HTMLSpanElement>,
-                                input: {
-                                  'aria-label': `${block.label} для ${row.email}`,
-                                } as React.InputHTMLAttributes<HTMLInputElement>,
-                              }}
-                              onChange={(e) =>
-                                void onTogglePermission(row, block.key, e.target.checked)
-                              }
-                            />
+                            <Typography
+                              variant="caption"
+                              color={row.must_set_password ? 'warning.main' : 'text.secondary'}
+                            >
+                              {row.must_set_password ? 'ожидает первый вход' : 'сотрудник'}
+                            </Typography>
                           </TableCell>
-                        ))}
-                        <TableCell align="right">
-                          <TextField
-                            size="small"
-                            type="number"
-                            inputMode="decimal"
-                            value={rateDrafts[row.id] ?? row.packaging_rate_rub}
-                            disabled={rateBusyId === row.id}
-                            onChange={(e) =>
-                              setRateDrafts((prev) => ({
-                                ...prev,
-                                [row.id]: e.target.value,
-                              }))
-                            }
-                            onBlur={() => {
-                              const draft = rateDrafts[row.id]
-                              if (draft !== undefined && draft !== row.packaging_rate_rub) {
-                                void savePackagingRate(row)
-                              }
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault()
-                                void savePackagingRate(row)
-                              }
-                            }}
-                            slotProps={{
-                              htmlInput: {
-                                'data-testid': `ff-staff-rate-${row.id}`,
-                                min: 0,
-                                step: 0.01,
-                                style: { textAlign: 'right' },
-                              },
-                            }}
-                            sx={{ width: 108 }}
-                          />
-                        </TableCell>
-                        <TableCell align="right" data-testid={`ff-staff-units-${row.id}`}>
-                          {row.packaging_billing.units_packed}
-                        </TableCell>
-                        <TableCell align="right" data-testid={`ff-staff-earned-${row.id}`}>
-                          {formatRubDisplay(row.packaging_billing.earned_rub)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+	                          {FF_STAFF_ACCESS_BLOCKS.map((block) => (
+	                            <TableCell key={block.key} align="center" padding="checkbox">
+                              <Checkbox
+                                size="small"
+                                checked={access[block.key]}
+                                disabled={permBusyId === row.id}
+                                slotProps={{
+                                  root: {
+                                    'data-testid': `ff-staff-access-${row.id}-${block.key}`,
+                                  } as React.HTMLAttributes<HTMLSpanElement>,
+                                  input: {
+                                    'aria-label': `${block.label} для ${row.email}`,
+                                  } as React.InputHTMLAttributes<HTMLInputElement>,
+                                }}
+                                onChange={(e) =>
+                                  void onTogglePermission(row, block.key, e.target.checked)
+                                }
+                              />
+	                            </TableCell>
+	                          ))}
+	                          {isFulfillmentAdmin ? (
+	                            <>
+	                              <TableCell align="right">
+	                                <TextField
+	                                  size="small"
+	                                  type="number"
+	                                  inputMode="decimal"
+	                                  value={rateDrafts[row.id] ?? row.packaging_rate_rub ?? '0.00'}
+	                                  disabled={rateBusyId === row.id}
+	                                  onChange={(e) =>
+	                                    setRateDrafts((prev) => ({
+	                                      ...prev,
+	                                      [row.id]: e.target.value,
+	                                    }))
+	                                  }
+	                                  onBlur={() => {
+	                                    const draft = rateDrafts[row.id]
+	                                    if (draft !== undefined && draft !== row.packaging_rate_rub) {
+	                                      void savePackagingRate(row)
+	                                    }
+	                                  }}
+	                                  onKeyDown={(e) => {
+	                                    if (e.key === 'Enter') {
+	                                      e.preventDefault()
+	                                      void savePackagingRate(row)
+	                                    }
+	                                  }}
+	                                  slotProps={{
+	                                    htmlInput: {
+	                                      'data-testid': `ff-staff-rate-${row.id}`,
+	                                      min: 0,
+	                                      step: 0.01,
+	                                      style: { textAlign: 'right' },
+	                                    },
+	                                  }}
+	                                  sx={{ width: 108 }}
+	                                />
+	                              </TableCell>
+	                              <TableCell align="right" data-testid={`ff-staff-units-${row.id}`}>
+	                                {row.packaging_billing?.units_packed ?? 0}
+	                              </TableCell>
+	                              <TableCell align="right" data-testid={`ff-staff-earned-${row.id}`}>
+	                                {formatRubDisplay(row.packaging_billing?.earned_rub ?? '0')}
+	                              </TableCell>
+	                            </>
+	                          ) : null}
+	                        </TableRow>
+	                      )
+	                    })}
                   </TableBody>
                 </Table>
               </TableContainer>
@@ -591,7 +693,7 @@ export function FfSettingsScreen({
                   fullWidth
                   size="small"
                   autoComplete="off"
-                  helperText="Пароль не задаётся: при первом входе сотрудник создаст его сам"
+                  helperText="Пароль задаётся при первом входе"
                   slotProps={{ htmlInput: { 'data-testid': 'ff-staff-email' } }}
                   sx={{ flex: 1 }}
                 />
@@ -624,26 +726,26 @@ export function FfSettingsScreen({
             >
               {permSavedNotice}
             </Alert>
-          </Snackbar>
+	          </Snackbar>
 
-          <Snackbar
-            open={rateSavedNotice !== null}
-            autoHideDuration={2500}
-            onClose={() => setRateSavedNotice(null)}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-          >
-            <Alert
-              severity="success"
-              variant="filled"
-              onClose={() => setRateSavedNotice(null)}
-              data-testid="ff-staff-rate-saved"
-              sx={{ width: '100%' }}
-            >
-              {rateSavedNotice}
-            </Alert>
-          </Snackbar>
-        </Box>
-      )}
+	          <Snackbar
+	            open={rateSavedNotice !== null}
+	            autoHideDuration={2500}
+	            onClose={() => setRateSavedNotice(null)}
+	            anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+	          >
+	            <Alert
+	              severity="success"
+	              variant="filled"
+	              onClose={() => setRateSavedNotice(null)}
+	              data-testid="ff-staff-rate-saved"
+	              sx={{ width: '100%' }}
+	            >
+	              {rateSavedNotice}
+	            </Alert>
+	          </Snackbar>
+	        </Box>
+	      )}
     </Box>
   )
 }

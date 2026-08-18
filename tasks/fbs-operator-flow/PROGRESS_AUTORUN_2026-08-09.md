@@ -233,7 +233,7 @@ git worktree на `d80a294`, чтобы не чинить чужое вслеп�
 
 **Доступы, которые я уже проверил (чтобы не искать заново):**
 
-- Стенд жив, вход работает: `staging-admin@example.com` / `StagingWms2026!`,
+- Стенд жив, вход работает: `<WMS_STAGING_ADMIN_EMAIL>` / `<WMS_STAGING_ADMIN_PASSWORD>`,
   бэкенд `https://wms-production-780c.up.railway.app`, фронт `https://web-production-9e7c1.up.railway.app`.
 - Селлер Denmarcs — `53692f4a-bae9-4141-b373-7fc093675ba7`. На стенде также лежат сеяные
   `FBS Demo North` и `FBS Demo South` — под уборку в самом конце.

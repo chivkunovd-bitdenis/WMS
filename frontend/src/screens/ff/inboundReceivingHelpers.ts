@@ -1,3 +1,5 @@
+import { inboundOperationTypeReceptionLabel } from '../../utils/inboundOperationType'
+
 export type InboundBoxLineRef = {
   product_id: string
   quantity: number
@@ -8,9 +10,53 @@ export type InboundBoxRef = {
 }
 
 export type InboundLineRef = {
+  sku_code?: string
+  product_name?: string
+  expected_qty?: number
   product_id: string
   actual_qty: number | null
   effective_actual_qty?: number | null
+  volume_liters?: number | null
+  weight_g?: number | null
+}
+
+export type InboundSummaryRef = {
+  display_number?: string | null
+  public_number?: string | null
+  human_number?: string | null
+  document_number?: string | null
+  waybill_number?: string | null
+  line_count?: number
+  planned_box_count?: number | null
+  actual_box_count?: number | null
+  boxes_discrepancy?: boolean
+  has_discrepancy?: boolean
+  goods_qty_total?: number | null
+  expected_qty_total?: number | null
+  units_total?: number | null
+  operation_type?: string | null
+}
+
+export type InboundReceivingTotals = {
+  expectedQty: number
+  acceptedQty: number
+  plannedBoxes: number | null
+  actualBoxes: number
+  totalVolumeLiters: number
+  totalWeightKg: number
+  lineDiscrepancyCount: number
+  hasBoxDiscrepancy: boolean
+  hasAnyDiscrepancy: boolean
+}
+
+export type InboundDiscrepancyLine = {
+  productId: string
+  skuCode: string
+  productName: string
+  expectedQty: number
+  acceptedQty: number
+  shortage: number
+  surplus: number
 }
 
 export function isReceivingStatus(status: string): boolean {
@@ -32,6 +78,18 @@ export function inboundStatusRu(status: string): string {
   if (isSortingStatus(status)) return 'В сортировке'
   if (isDoneStatus(status)) return 'Оприходовано'
   return status
+}
+
+export function integerQtyError(raw: string): string | null {
+  const value = raw.trim()
+  if (value === '') return 'Укажите целое количество.'
+  if (!/^\d+$/.test(value)) return 'Только целое количество без дробей.'
+  return null
+}
+
+export function parseIntegerQty(raw: string): number | null {
+  if (integerQtyError(raw) != null) return null
+  return Number(raw.trim())
 }
 
 export function boxTotalForProduct(boxes: InboundBoxRef[], productId: string): number {
@@ -76,7 +134,28 @@ export function looseQtyFromDisplayedTotal(
 
 export function scanErrorMessageRu(code: string): string {
   if (code === 'product_not_on_request' || code === 'barcode_unknown') {
-    return 'Товар не найден в этой поставке.'
+    return 'Товар не найден в документе. Нажмите «Добавить товар» и выберите его из каталога селлера.'
+  }
+  if (code === 'product_not_in_seller_catalog') {
+    return 'Товар не найден в каталоге селлера. Добавление нового товара будет отдельной задачей.'
+  }
+  if (code === 'product_seller_mismatch' || code === 'mixed_seller_lines') {
+    return 'Товар относится к другому селлеру. В одной приёмке нельзя смешивать селлеров.'
+  }
+  if (code === 'not_verifying') {
+    return 'Приёмка сейчас не открыта для проверки.'
+  }
+  if (code === 'product_not_found') {
+    return 'Товар не найден.'
+  }
+  if (code === 'invalid_qty') {
+    return 'Количество должно быть больше нуля.'
+  }
+  if (code === 'nothing_to_receive') {
+    return 'Нет товаров для приёмки.'
+  }
+  if (code === 'actual_below_posted') {
+    return 'Нельзя уменьшить принятое количество ниже уже размещённого.'
   }
   if (code === 'barcode_empty') {
     return 'Введите штрихкод.'
@@ -87,5 +166,90 @@ export function scanErrorMessageRu(code: string): string {
   if (code === 'box_not_empty') {
     return 'Нельзя удалить короб с товарами.'
   }
-  return code
+  return 'Не удалось выполнить действие. Проверьте заявку и попробуйте ещё раз.'
+}
+
+export function inboundQueueDocumentLabel(row: InboundSummaryRef): string {
+  const operationLabel = inboundOperationTypeReceptionLabel(row.operation_type)
+  const preferred = row.display_number ?? row.public_number ?? row.human_number
+  if (preferred?.trim()) return `${operationLabel} № ${preferred.trim().replace(/^№\s*/, '')}`
+  if (row.document_number?.trim()) return `${operationLabel} № ${row.document_number.trim()}`
+  return `${operationLabel} № —`
+}
+
+export function inboundQueueUnitsLabel(row: InboundSummaryRef): string {
+  const exact = row.goods_qty_total ?? row.expected_qty_total ?? row.units_total
+  if (typeof exact === 'number' && Number.isFinite(exact)) {
+    return `${exact} ед.`
+  }
+  const lines = row.line_count ?? 0
+  if (lines <= 0) return '0 ед.'
+  return `от ${lines} ед.`
+}
+
+export function inboundQueueBoxesLabel(row: InboundSummaryRef): string {
+  const actual = row.actual_box_count ?? 0
+  if (row.planned_box_count == null) return `${actual} коробов`
+  return `${actual} из ${row.planned_box_count} коробов`
+}
+
+export function buildInboundReceivingTotals(
+  lines: InboundLineRef[],
+  boxes: InboundBoxRef[],
+  status?: string,
+  plannedBoxCount?: number | null,
+): InboundReceivingTotals {
+  let expectedQty = 0
+  let acceptedQty = 0
+  let totalVolumeLiters = 0
+  let totalWeightKg = 0
+  let lineDiscrepancyCount = 0
+  for (const line of lines) {
+    const expected = line.expected_qty ?? 0
+    const accepted = effectiveActualQty(line, boxes, status)
+    expectedQty += expected
+    acceptedQty += accepted
+    if (line.volume_liters != null && Number.isFinite(line.volume_liters)) {
+      totalVolumeLiters += accepted * line.volume_liters
+    }
+    if (line.weight_g != null && Number.isFinite(line.weight_g)) {
+      totalWeightKg += (accepted * line.weight_g) / 1000
+    }
+    if (accepted !== expected) lineDiscrepancyCount += 1
+  }
+  const actualBoxes = boxes.length
+  const hasBoxDiscrepancy = plannedBoxCount != null && actualBoxes !== plannedBoxCount
+  return {
+    expectedQty,
+    acceptedQty,
+    plannedBoxes: plannedBoxCount ?? null,
+    actualBoxes,
+    totalVolumeLiters,
+    totalWeightKg,
+    lineDiscrepancyCount,
+    hasBoxDiscrepancy,
+    hasAnyDiscrepancy: lineDiscrepancyCount > 0 || hasBoxDiscrepancy,
+  }
+}
+
+export function buildInboundDiscrepancyLines(
+  lines: InboundLineRef[],
+  boxes: InboundBoxRef[],
+  status?: string,
+): InboundDiscrepancyLine[] {
+  return lines
+    .map((line) => {
+      const expectedQty = line.expected_qty ?? 0
+      const acceptedQty = effectiveActualQty(line, boxes, status)
+      return {
+        productId: line.product_id,
+        skuCode: line.sku_code ?? 'SKU',
+        productName: line.product_name ?? '',
+        expectedQty,
+        acceptedQty,
+        shortage: Math.max(0, expectedQty - acceptedQty),
+        surplus: Math.max(0, acceptedQty - expectedQty),
+      }
+    })
+    .filter((line) => line.shortage > 0 || line.surplus > 0)
 }

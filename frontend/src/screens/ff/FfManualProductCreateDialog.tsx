@@ -3,13 +3,11 @@ import type { FormEvent } from 'react'
 import {
   Alert,
   Button,
-  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   FormControl,
-  FormControlLabel,
   InputLabel,
   MenuItem,
   Select,
@@ -20,6 +18,7 @@ import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 
 type SellerRow = { id: string; name: string }
+type CreatedProduct = { id: string }
 
 type Props = {
   open: boolean
@@ -28,7 +27,16 @@ type Props = {
   sellers: SellerRow[]
   defaultSellerId?: string | null
   onClose: () => void
-  onCreated: () => void | Promise<void>
+  onCreated: (product: CreatedProduct) => void | Promise<void>
+}
+
+function humanManualProductError(raw: string): string {
+  if (raw === 'sku_taken') return 'Такой артикул (SKU) уже есть.'
+  if (raw === 'barcode_taken') return 'Такой штрихкод уже занят.'
+  if (raw === 'seller_not_found') return 'Селлер не найден.'
+  if (raw === 'invalid_dimensions') return 'Укажите все три габарита или оставьте пустыми.'
+  if (/^[a-z0-9_:-]+$/i.test(raw.trim())) return 'Не удалось создать товар.'
+  return raw || 'Не удалось создать товар.'
 }
 
 export function FfManualProductCreateDialog({
@@ -52,18 +60,19 @@ export function FfManualProductCreateDialog({
   const [lengthMm, setLengthMm] = useState('')
   const [widthMm, setWidthMm] = useState('')
   const [heightMm, setHeightMm] = useState('')
-  const [requiresHonestSign, setRequiresHonestSign] = useState(false)
+  const [createdProduct, setCreatedProduct] = useState<CreatedProduct | null>(null)
 
   useEffect(() => {
-    if (open) {
+    if (open && createdProduct == null) {
       setSellerId(defaultSellerId ?? '')
       setError(null)
     }
-  }, [open, defaultSellerId])
+  }, [open, defaultSellerId, createdProduct])
 
   function reset() {
     setError(null)
     setBusy(false)
+    setCreatedProduct(null)
     setSellerId(defaultSellerId ?? '')
     setName('')
     setSku('')
@@ -74,7 +83,6 @@ export function FfManualProductCreateDialog({
     setLengthMm('')
     setWidthMm('')
     setHeightMm('')
-    setRequiresHonestSign(false)
   }
 
   function handleClose() {
@@ -86,60 +94,49 @@ export function FfManualProductCreateDialog({
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
-    const trimmedName = name.trim()
-    const trimmedSku = sku.trim()
-    if (!trimmedName || !trimmedSku) {
-      setError('Укажите название и артикул (SKU).')
-      return
-    }
-    if (!sellerId) {
-      setError('Выберите селлера.')
-      return
-    }
     setBusy(true)
     try {
-      const body: Record<string, unknown> = {
-        name: trimmedName,
-        sku_code: trimmedSku,
-        seller_id: sellerId,
-        requires_honest_sign: requiresHonestSign,
-      }
-      if (size.trim()) body.wb_size = size.trim()
-      if (barcode.trim()) body.wb_barcode = barcode.trim()
-      if (vendor.trim()) body.wb_vendor_code = vendor.trim()
-      if (tz.trim()) body.packaging_instructions = tz.trim()
-      if (lengthMm.trim()) body.length_mm = Number(lengthMm)
-      if (widthMm.trim()) body.width_mm = Number(widthMm)
-      if (heightMm.trim()) body.height_mm = Number(heightMm)
+      let created = createdProduct
+      if (created == null) {
+        const trimmedName = name.trim()
+        const trimmedSku = sku.trim()
+        if (!trimmedName || !trimmedSku) {
+          setError('Укажите название и артикул (SKU).')
+          return
+        }
+        if (!sellerId) {
+          setError('Выберите селлера.')
+          return
+        }
 
-      const res = await fetch(apiUrl('/products'), {
-        method: 'POST',
-        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      if (!res.ok) {
-        const raw = await readApiErrorMessage(res)
-        if (raw === 'sku_taken') {
-          setError('Такой артикул (SKU) уже есть.')
+        const body: Record<string, unknown> = {
+          name: trimmedName,
+          sku_code: trimmedSku,
+          seller_id: sellerId,
+        }
+        if (size.trim()) body.wb_size = size.trim()
+        if (barcode.trim()) body.wb_barcode = barcode.trim()
+        if (vendor.trim()) body.wb_vendor_code = vendor.trim()
+        if (tz.trim()) body.packaging_instructions = tz.trim()
+        if (lengthMm.trim()) body.length_mm = Math.floor(Number(lengthMm))
+        if (widthMm.trim()) body.width_mm = Math.floor(Number(widthMm))
+        if (heightMm.trim()) body.height_mm = Math.floor(Number(heightMm))
+
+        const res = await fetch(apiUrl('/products'), {
+          method: 'POST',
+          headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        if (!res.ok) {
+          const raw = await readApiErrorMessage(res)
+          setError(humanManualProductError(raw))
           return
         }
-        if (raw === 'barcode_taken') {
-          setError('Такой штрихкод уже занят.')
-          return
-        }
-        if (raw === 'seller_not_found') {
-          setError('Селлер не найден.')
-          return
-        }
-        if (raw === 'invalid_dimensions') {
-          setError('Укажите все три габарита или оставьте пустыми.')
-          return
-        }
-        setError(raw)
-        return
+        created = (await res.json()) as CreatedProduct
+        setCreatedProduct(created)
       }
+      await onCreated(created)
       reset()
-      await onCreated()
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось создать товар.')
@@ -216,6 +213,35 @@ export function FfManualProductCreateDialog({
                 slotProps={{ htmlInput: { 'data-testid': 'ff-manual-product-barcode' } }}
               />
             </Stack>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                size="small"
+                type="number"
+                label="Длина, мм"
+                value={lengthMm}
+                onChange={(e) => setLengthMm(e.target.value)}
+                fullWidth
+                slotProps={{ htmlInput: { min: 1, 'data-testid': 'ff-manual-product-length' } }}
+              />
+              <TextField
+                size="small"
+                type="number"
+                label="Ширина, мм"
+                value={widthMm}
+                onChange={(e) => setWidthMm(e.target.value)}
+                fullWidth
+                slotProps={{ htmlInput: { min: 1, 'data-testid': 'ff-manual-product-width' } }}
+              />
+              <TextField
+                size="small"
+                type="number"
+                label="Высота, мм"
+                value={heightMm}
+                onChange={(e) => setHeightMm(e.target.value)}
+                fullWidth
+                slotProps={{ htmlInput: { min: 1, 'data-testid': 'ff-manual-product-height' } }}
+              />
+            </Stack>
             <TextField
               size="small"
               label="ТЗ упаковки"
@@ -225,45 +251,6 @@ export function FfManualProductCreateDialog({
               onChange={(e) => setTz(e.target.value)}
               slotProps={{ htmlInput: { 'data-testid': 'ff-manual-product-tz' } }}
             />
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-              <TextField
-                size="small"
-                label="Длина, мм (необяз.)"
-                type="number"
-                value={lengthMm}
-                onChange={(e) => setLengthMm(e.target.value)}
-                fullWidth
-                slotProps={{ htmlInput: { 'data-testid': 'ff-manual-product-length', min: 1 } }}
-              />
-              <TextField
-                size="small"
-                label="Ширина, мм (необяз.)"
-                type="number"
-                value={widthMm}
-                onChange={(e) => setWidthMm(e.target.value)}
-                fullWidth
-                slotProps={{ htmlInput: { 'data-testid': 'ff-manual-product-width', min: 1 } }}
-              />
-              <TextField
-                size="small"
-                label="Высота, мм (необяз.)"
-                type="number"
-                value={heightMm}
-                onChange={(e) => setHeightMm(e.target.value)}
-                fullWidth
-                slotProps={{ htmlInput: { 'data-testid': 'ff-manual-product-height', min: 1 } }}
-              />
-            </Stack>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={requiresHonestSign}
-                  onChange={(e) => setRequiresHonestSign(e.target.checked)}
-                  data-testid="ff-manual-product-cz"
-                />
-              }
-              label="Нужен Честный знак"
-            />
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -271,7 +258,7 @@ export function FfManualProductCreateDialog({
             Отмена
           </Button>
           <Button type="submit" variant="contained" disabled={busy} data-testid="ff-manual-product-submit">
-            Создать
+            {createdProduct == null ? 'Создать' : 'Добавить в приёмку'}
           </Button>
         </DialogActions>
       </form>

@@ -6,6 +6,7 @@ import time
 
 import pytest
 from httpx import AsyncClient
+from inbound_box_intake_helpers import set_planned_boxes
 
 
 async def _admin_headers(async_client: AsyncClient, suffix: str) -> dict[str, str]:
@@ -37,12 +38,21 @@ async def _submitted_request(
     assert wh.status_code == 200, wh.text
     wid = wh.json()["id"]
 
+    seller = await async_client.post(
+        "/sellers",
+        headers=ah,
+        json={"name": f"Seller {suffix}"},
+    )
+    assert seller.status_code in (200, 201), seller.text
+    seller_id = seller.json()["id"]
+
     pr = await async_client.post(
         "/products",
         headers=ah,
         json={
             "name": "P",
             "sku_code": f"sku-{suffix}",
+            "seller_id": seller_id,
             "length_mm": 100,
             "width_mm": 100,
             "height_mm": 100,
@@ -53,7 +63,11 @@ async def _submitted_request(
     sku = pr.json()["sku_code"]
 
     base = "/operations/inbound-intake-requests"
-    cr = await async_client.post(base, headers=ah, json={"warehouse_id": wid})
+    cr = await async_client.post(
+        base,
+        headers=ah,
+        json={"warehouse_id": wid, "seller_id": seller_id},
+    )
     assert cr.status_code == 201, cr.text
     rid = cr.json()["id"]
 
@@ -64,6 +78,7 @@ async def _submitted_request(
     )
     assert ln.status_code == 201, ln.text
 
+    await set_planned_boxes(async_client, base, rid, ah)
     sub = await async_client.post(f"{base}/{rid}/submit", headers=ah)
     assert sub.status_code == 200, sub.text
     assert sub.json()["status"] == "submitted"

@@ -92,6 +92,14 @@ async def get_staff_permissions(
     return _from_row(row)
 
 
+async def can_manage_ff_staff(session: AsyncSession, user: User) -> bool:
+    if user.role == FULFILLMENT_ADMIN:
+        return True
+    if user.role != FULFILLMENT_STAFF:
+        return False
+    return (await get_staff_permissions(session, user)).settings
+
+
 async def list_staff_users(
     session: AsyncSession,
     *,
@@ -117,8 +125,10 @@ async def update_staff_permissions(
     staff_user_id: uuid.UUID,
     permissions: StaffPermissionsSnapshot,
 ) -> tuple[User, StaffPermissionsSnapshot]:
-    if acting_user.role != FULFILLMENT_ADMIN:
+    if not await can_manage_ff_staff(session, acting_user):
         raise PermissionError("forbidden")
+    if acting_user.id == staff_user_id:
+        raise PermissionError("self_update_forbidden")
     user = await session.get(
         User,
         staff_user_id,

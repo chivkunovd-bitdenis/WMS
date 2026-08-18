@@ -47,7 +47,7 @@ from app.models.inventory_movement import MOVEMENT_TYPE_FBS_SHIPMENT, InventoryM
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
 from app.models.storage_location import StorageLocation
-from app.services import inventory_service
+from app.services import inventory_service, stock_direction_service
 from app.services.fbs_packaging_integration_service import (
     _write_off_active_orders_once,
     detach_cancelled_order_from_supply,
@@ -410,6 +410,14 @@ async def test_concurrent_reserve_only_one_succeeds(
             quantity_delta=1,
             movement_type="inbound_intake",
         )
+        await stock_direction_service.create_stock_direction(
+            session,
+            tenant_id,
+            product.id,
+            name="FBS pool",
+            quantity=1,
+            is_fbs=True,
+        )
         await seed_fbs_warehouse_binding(
             session,
             tenant_id=tenant_id,
@@ -629,6 +637,7 @@ async def test_promote_packed_requires_marking_ok(
         session.add(
             FbsOrderMarking(
                 order_id=order_id,
+                tenant_id=tenant_id,
                 kind="sgtin",
                 value="010460000000000021N4N57RTCBUZTQ",
                 check_status=CHECK_STATUS_NEW,

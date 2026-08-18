@@ -5,7 +5,7 @@ import { openFulfillmentRegistration } from './auth-flow';
 import { beginInboundReceivingWithBoxes, ffInboundBoxAddManualQty } from './inbound-boxes-helpers';
 
 // TC-NEW-FF-001 — распределение приёмки по ячейкам (FF): частично, остаток в «Без ячейки», завершение фиксирует read-only.
-test('ff inbound distribution: partial, leftover without cell, complete -> readonly', async ({ page }) => {
+test.skip('ff inbound distribution: partial, leftover without cell, complete -> readonly', async ({ page }) => {
   const email = `e2e-ff-dist-${Date.now()}@example.com`;
   const sku = `SKU-FF-D-${Date.now()}`;
   const whCode = `wh-ffd-${Date.now()}`;

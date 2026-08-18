@@ -1,0 +1,1979 @@
+{
+  "attempt": 2,
+  "verdict": "FINAL_BROWSER_GROUP_PASSED",
+  "browser_used": true,
+  "browser_surface": "real Chromium via Playwright, headless=false",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "ports": {
+    "backend": 18221,
+    "frontend": 5221
+  },
+  "dbFile": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-after-fix-live-strict/qa-18221.sqlite",
+  "repo": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812",
+  "evidenceDir": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-after-fix-live-strict",
+  "routes": [
+    "/",
+    "/",
+    "/",
+    "/app/ff/dashboard",
+    "/app/ff/dashboard",
+    "/app/ff/dashboard",
+    "/app/ff/dashboard",
+    "/app/ff/reception",
+    "/",
+    "/",
+    "/",
+    "/app/ff/dashboard",
+    "/app/ff/dashboard",
+    "/app/ff/dashboard",
+    "/app/ff/dashboard",
+    "/app/ff/reception",
+    "/seller/",
+    "/seller/",
+    "/seller/",
+    "/seller/documents",
+    "/seller/documents",
+    "/seller/documents",
+    "/seller/inbound/64f1a8db-55f0-4659-8ba4-e97846c1b385"
+  ],
+  "clicks": [
+    "Open registration form",
+    "Register FF admin ff-admin-after-fix-rerun-1786668071455@example.com",
+    "Fresh load FF shell after seed",
+    "FF sidebar: Приёмка",
+    "Open ordinary inbound from FF queue",
+    "Ordinary: edit dimensions to 210x110x60",
+    "Ordinary: scan SKU sku-ordinary-after-fix-rerun-1786668071455",
+    "Ordinary: manual fact correction to 3",
+    "Ordinary: click Завершить приёмку",
+    "Ordinary: confirm discrepancy",
+    "Ordinary: print waybill and capture HTML",
+    "Close ordinary inbound dialog",
+    "Continuation: fresh FF login",
+    "Continuation: FF sidebar Приёмка",
+    "Continuation: open return inbound",
+    "Continuation: enable return autoprint",
+    "Continuation: scan return WB barcode wb-return-after-fix-rerun-1786668071455",
+    "Continuation: seller sidebar Документы",
+    "Continuation: seller open ordinary fact-card"
+  ],
+  "screenshots": [
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-after-fix-live-strict/screenshots/20-login-before-registration-rerun.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-after-fix-live-strict/screenshots/21-ff-registered-shell-rerun.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-after-fix-live-strict/screenshots/22-ff-reception-queue-rerun.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-after-fix-live-strict/screenshots/23-ordinary-open-rerun.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-after-fix-live-strict/screenshots/24-ordinary-dimensions-saved-rerun.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-after-fix-live-strict/screenshots/25-ordinary-after-scan-rerun.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-after-fix-live-strict/screenshots/26-ordinary-manual-discrepancy-rerun.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-after-fix-live-strict/screenshots/27-ordinary-discrepancy-dialog-rerun.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-after-fix-live-strict/screenshots/28-ordinary-completed-after-confirm-rerun.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-after-fix-live-strict/screenshots/33-return-queue-continuation.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-after-fix-live-strict/screenshots/34-return-open-continuation.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-after-fix-live-strict/screenshots/35-return-after-autoprint-continuation.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-after-fix-live-strict/screenshots/36-seller-documents-continuation.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-inbound-after-fix-live-strict/screenshots/37-seller-fact-card-continuation.png"
+  ],
+  "metrics": {
+    "20-login-before-registration-rerun": {
+      "href": "http://127.0.0.1:5221/",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "scrollX": 0,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "appRootScrollWidth": 1280,
+      "appRootClientWidth": 1280,
+      "pageOverflow": false,
+      "bodyText": "WMS · Портал фулфилмента\n\nРегистрация организации — для первого администратора. Аккаунты селлеров создаёт админ фулфилмента.\n\nВход\nEmail *\nEmail *\nПароль\nПароль\n\nТолько сотрудники фулфилмента. Селлеры входят на /seller/ (кнопка ниже).\n\nВойти\nВход для селлера (портал /seller/)Регистрация организации (первый админ)",
+      "visibleButtons": [
+        {
+          "text": "Войти",
+          "disabled": false,
+          "visible": true,
+          "left": 388,
+          "right": 892,
+          "top": 387,
+          "bottom": 433,
+          "width": 504,
+          "height": 46
+        },
+        {
+          "text": "Регистрация организации (первый админ)",
+          "disabled": false,
+          "visible": true,
+          "left": 388,
+          "right": 892,
+          "top": 497,
+          "bottom": 536,
+          "width": 504,
+          "height": 40
+        }
+      ]
+    },
+    "21-ff-registered-shell-rerun": {
+      "href": "http://127.0.0.1:5221/app/ff/dashboard",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "scrollX": 0,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "appRootScrollWidth": 1280,
+      "appRootClientWidth": 1280,
+      "pageOverflow": false,
+      "bodyText": "Портал ФФ\nff-admin-after-fix-rerun-1786668071455@example.com · администратор\n0\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nДашборд ФФ\n\nQA FF after-fix-rerun-1786668071455\n\nПриёмка от селлеров и отгрузки фулфилмента на маркетплейс — план по датам.\n\nПриёмка (от селлеров)\n\nЗаявки после выхода из черновика. Если плановая дата приёмки не задана — показываем дату создания.\n\nДата привоза\tСтрок\tСеллер\n\n\nНет заявок в плане\n\nЗапланированные отгрузки на склад МП\n\nСтатус «submitted» (запланировано к отгрузке), плановая дата отвоза.\n\nДата отвоза\tСклад\tМаркетплейс\tТоваров (шт.)\n\n\nНет отгрузок в плане\n\nНеделя\n\n2026-08-10 — 2026-08-16\n\nПн\n10.08\nВт\n11.08\nСр\n12.08\nЧт\n13.08\nПт\n14.08\nСб\n15.08\nВс\n16.08\nПриёмка (план привоза селлером)\nОтгрузка на склад МП (запланировано)\nНовых селлеров добавляйте в разделе «Селлеры»: название и email. Пароль селлер задаёт при первом входе (поле пароля оставить пустым).Открыть «Селлеры»",
+      "visibleButtons": [
+        {
+          "text": "0",
+          "disabled": false,
+          "visible": true,
+          "left": 1130,
+          "right": 1173,
+          "top": 11,
+          "bottom": 54,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Выйти",
+          "disabled": false,
+          "visible": true,
+          "left": 1189,
+          "right": 1256,
+          "top": 15,
+          "bottom": 49,
+          "width": 67,
+          "height": 34
+        }
+      ]
+    },
+    "22-ff-reception-queue-rerun": {
+      "href": "http://127.0.0.1:5221/app/ff/reception",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "scrollX": 0,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "appRootScrollWidth": 1280,
+      "appRootClientWidth": 1280,
+      "pageOverflow": false,
+      "bodyText": "Портал ФФ\nff-admin-after-fix-rerun-1786668071455@example.com · администратор\n2\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nПриёмка\n\nПриёмки до завершения поштучного пересчёта. После «Завершить пересчёт» заявка уходит в сортировку, остаток появляется у ФФ.\n\n№ документа\tСеллер\tСостав\tКороба\tСтатус\nПоставка № 000001\tQA Seller after-fix-rerun-1786668071455\t1 поз. · от 1 ед.\t0 из 1\t\nПередано\n\nВозврат № 000002\tQA Seller after-fix-rerun-1786668071455\t1 поз. · от 1 ед.\t0 из 1\t\nПередано",
+      "visibleButtons": [
+        {
+          "text": "2",
+          "disabled": false,
+          "visible": true,
+          "left": 1130,
+          "right": 1173,
+          "top": 11,
+          "bottom": 54,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Выйти",
+          "disabled": false,
+          "visible": true,
+          "left": 1189,
+          "right": 1256,
+          "top": 15,
+          "bottom": 49,
+          "width": 67,
+          "height": 34
+        }
+      ]
+    },
+    "23-ordinary-open-rerun": {
+      "href": "http://127.0.0.1:5221/app/ff/reception",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "scrollX": 0,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "appRootScrollWidth": 1280,
+      "appRootClientWidth": 1280,
+      "pageOverflow": false,
+      "bodyText": "Портал ФФ\nff-admin-after-fix-rerun-1786668071455@example.com · администратор\n2\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nПриёмка\n\nПриёмки до завершения поштучного пересчёта. После «Завершить пересчёт» заявка уходит в сортировку, остаток появляется у ФФ.\n\n№ документа\tСеллер\tСостав\tКороба\tСтатус\nПоставка № 000001\tQA Seller after-fix-rerun-1786668071455\t1 поз. · от 1 ед.\t0 из 1\t\nПередано\n\nВозврат № 000002\tQA Seller after-fix-rerun-1786668071455\t1 поз. · от 1 ед.\t0 из 1\t\nПередано\nДокумент\nПриёмка\n№000001\n\nТип: Поставка\n\nСеллер: QA Seller after-fix-rerun-1786668071455\n\nПринято: 0 из 5\n\nКороба: 0 из 1\n\nРасхождения: 1 + короба\n\nДата приёмки (план) *\nDD.\nMM.\nYYYY\nДата приёмки (план) *\nПередано на склад\nЗавершить приёмку\nПечать накладной\nЗакрыть\nТовар\tГабариты\tПлан\tПринято\n\n\nQA Ordinary Product\n\nSKU sku-ordinary-after-fix-rerun-1786668071455\nШК wb-ordinary-after-fix-rerun-1786668071455\n\t\n100×90×50 мм · 0.45 л\n\t\n\n5\n\n\t\n\n0\n\nНедостача 5\nСкан приёмки\n\nСкан штрихкода товара добавляет +1 к принятому количеству. Скан в короб — только в карточке короба.\n\nШтрихкод товара\nШтрихкод товара\nСкан\nДобавить факт\nЗагрузить по накладной\nСоздать короб\nЗавершить приёмку\nЕсть расхождения с планом — при завершении потребуется подтверждение.",
+      "visibleButtons": [
+        {
+          "text": "2",
+          "disabled": false,
+          "visible": true,
+          "left": 1130,
+          "right": 1173,
+          "top": 11,
+          "bottom": 54,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Выйти",
+          "disabled": false,
+          "visible": true,
+          "left": 1189,
+          "right": 1256,
+          "top": 15,
+          "bottom": 49,
+          "width": 67,
+          "height": 34
+        },
+        {
+          "text": "Закрыть",
+          "disabled": false,
+          "visible": true,
+          "left": 12,
+          "right": 55,
+          "top": 11,
+          "bottom": 54,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Choose date",
+          "disabled": true,
+          "visible": true,
+          "left": 237,
+          "right": 280,
+          "top": 169,
+          "bottom": 212,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Завершить приёмку",
+          "disabled": false,
+          "visible": true,
+          "left": 743,
+          "right": 933,
+          "top": 228,
+          "bottom": 268,
+          "width": 190,
+          "height": 40
+        },
+        {
+          "text": "Печать накладной",
+          "disabled": false,
+          "visible": true,
+          "left": 941,
+          "right": 1141,
+          "top": 228,
+          "bottom": 268,
+          "width": 200,
+          "height": 40
+        },
+        {
+          "text": "Закрыть",
+          "disabled": false,
+          "visible": true,
+          "left": 1149,
+          "right": 1247,
+          "top": 228,
+          "bottom": 268,
+          "width": 98,
+          "height": 40
+        },
+        {
+          "text": "Печать ШК товара",
+          "disabled": false,
+          "visible": true,
+          "left": 701,
+          "right": 733,
+          "top": 349,
+          "bottom": 382,
+          "width": 33,
+          "height": 33
+        },
+        {
+          "text": "Габариты",
+          "disabled": false,
+          "visible": true,
+          "left": 885,
+          "right": 925,
+          "top": 345,
+          "bottom": 385,
+          "width": 40,
+          "height": 40
+        },
+        {
+          "text": "Править количество",
+          "disabled": false,
+          "visible": true,
+          "left": 1199,
+          "right": 1239,
+          "top": 345,
+          "bottom": 385,
+          "width": 40,
+          "height": 40
+        },
+        {
+          "text": "Скан",
+          "disabled": true,
+          "visible": true,
+          "left": 379,
+          "right": 450,
+          "top": 499,
+          "bottom": 542,
+          "width": 71,
+          "height": 43
+        },
+        {
+          "text": "Добавить факт",
+          "disabled": false,
+          "visible": true,
+          "left": 458,
+          "right": 606,
+          "top": 499,
+          "bottom": 542,
+          "width": 148,
+          "height": 43
+        },
+        {
+          "text": "Создать товар",
+          "disabled": false,
+          "visible": true,
+          "left": 614,
+          "right": 647,
+          "top": 499,
+          "bottom": 532,
+          "width": 33,
+          "height": 33
+        },
+        {
+          "text": "Загрузить по накладной",
+          "disabled": false,
+          "visible": true,
+          "left": 655,
+          "right": 877,
+          "top": 499,
+          "bottom": 542,
+          "width": 222,
+          "height": 43
+        },
+        {
+          "text": "Создать короб",
+          "disabled": false,
+          "visible": true,
+          "left": 885,
+          "right": 1032,
+          "top": 499,
+          "bottom": 542,
+          "width": 147,
+          "height": 43
+        },
+        {
+          "text": "Завершить приёмку",
+          "disabled": false,
+          "visible": true,
+          "left": 1040,
+          "right": 1230,
+          "top": 499,
+          "bottom": 542,
+          "width": 190,
+          "height": 43
+        }
+      ]
+    },
+    "24-ordinary-dimensions-saved-rerun": {
+      "href": "http://127.0.0.1:5221/app/ff/reception",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "scrollX": 0,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "appRootScrollWidth": 1280,
+      "appRootClientWidth": 1280,
+      "pageOverflow": false,
+      "bodyText": "Портал ФФ\nff-admin-after-fix-rerun-1786668071455@example.com · администратор\n2\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nПриёмка\n\nПриёмки до завершения поштучного пересчёта. После «Завершить пересчёт» заявка уходит в сортировку, остаток появляется у ФФ.\n\n№ документа\tСеллер\tСостав\tКороба\tСтатус\nПоставка № 000001\tQA Seller after-fix-rerun-1786668071455\t1 поз. · от 1 ед.\t0 из 1\t\nПередано\n\nВозврат № 000002\tQA Seller after-fix-rerun-1786668071455\t1 поз. · от 1 ед.\t0 из 1\t\nПередано\nДокумент\nПриёмка\n№000001\n\nТип: Поставка\n\nСеллер: QA Seller after-fix-rerun-1786668071455\n\nПринято: 0 из 5\n\nКороба: 0 из 1\n\nРасхождения: 1 + короба\n\nДата приёмки (план) *\nDD.\nMM.\nYYYY\nДата приёмки (план) *\nПередано на склад\nЗавершить приёмку\nПечать накладной\nЗакрыть\nТовар\tГабариты\tПлан\tПринято\n\n\nQA Ordinary Product\n\nSKU sku-ordinary-after-fix-rerun-1786668071455\nШК wb-ordinary-after-fix-rerun-1786668071455\n\t\n210×110×60 мм · 1.39 л\n\t\n\n5\n\n\t\n\n0\n\nНедостача 5\nСкан приёмки\n\nСкан штрихкода товара добавляет +1 к принятому количеству. Скан в короб — только в карточке короба.\n\nШтрихкод товара\nШтрихкод товара\nСкан\nДобавить факт\nЗагрузить по накладной\nСоздать короб\nЗавершить приёмку\nЕсть расхождения с планом — при завершении потребуется подтверждение.",
+      "visibleButtons": [
+        {
+          "text": "2",
+          "disabled": false,
+          "visible": true,
+          "left": 1130,
+          "right": 1173,
+          "top": 11,
+          "bottom": 54,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Выйти",
+          "disabled": false,
+          "visible": true,
+          "left": 1189,
+          "right": 1256,
+          "top": 15,
+          "bottom": 49,
+          "width": 67,
+          "height": 34
+        },
+        {
+          "text": "Закрыть",
+          "disabled": false,
+          "visible": true,
+          "left": 12,
+          "right": 55,
+          "top": 11,
+          "bottom": 54,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Choose date",
+          "disabled": true,
+          "visible": true,
+          "left": 237,
+          "right": 280,
+          "top": 169,
+          "bottom": 212,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Завершить приёмку",
+          "disabled": false,
+          "visible": true,
+          "left": 743,
+          "right": 933,
+          "top": 228,
+          "bottom": 268,
+          "width": 190,
+          "height": 40
+        },
+        {
+          "text": "Печать накладной",
+          "disabled": false,
+          "visible": true,
+          "left": 941,
+          "right": 1141,
+          "top": 228,
+          "bottom": 268,
+          "width": 200,
+          "height": 40
+        },
+        {
+          "text": "Закрыть",
+          "disabled": false,
+          "visible": true,
+          "left": 1149,
+          "right": 1247,
+          "top": 228,
+          "bottom": 268,
+          "width": 98,
+          "height": 40
+        },
+        {
+          "text": "Печать ШК товара",
+          "disabled": false,
+          "visible": true,
+          "left": 701,
+          "right": 733,
+          "top": 349,
+          "bottom": 382,
+          "width": 33,
+          "height": 33
+        },
+        {
+          "text": "Габариты",
+          "disabled": false,
+          "visible": true,
+          "left": 885,
+          "right": 925,
+          "top": 345,
+          "bottom": 385,
+          "width": 40,
+          "height": 40
+        },
+        {
+          "text": "Править количество",
+          "disabled": false,
+          "visible": true,
+          "left": 1199,
+          "right": 1239,
+          "top": 345,
+          "bottom": 385,
+          "width": 40,
+          "height": 40
+        },
+        {
+          "text": "Скан",
+          "disabled": true,
+          "visible": true,
+          "left": 379,
+          "right": 450,
+          "top": 499,
+          "bottom": 542,
+          "width": 71,
+          "height": 43
+        },
+        {
+          "text": "Добавить факт",
+          "disabled": false,
+          "visible": true,
+          "left": 458,
+          "right": 606,
+          "top": 499,
+          "bottom": 542,
+          "width": 148,
+          "height": 43
+        },
+        {
+          "text": "Создать товар",
+          "disabled": false,
+          "visible": true,
+          "left": 614,
+          "right": 647,
+          "top": 499,
+          "bottom": 532,
+          "width": 33,
+          "height": 33
+        },
+        {
+          "text": "Загрузить по накладной",
+          "disabled": false,
+          "visible": true,
+          "left": 655,
+          "right": 877,
+          "top": 499,
+          "bottom": 542,
+          "width": 222,
+          "height": 43
+        },
+        {
+          "text": "Создать короб",
+          "disabled": false,
+          "visible": true,
+          "left": 885,
+          "right": 1032,
+          "top": 499,
+          "bottom": 542,
+          "width": 147,
+          "height": 43
+        },
+        {
+          "text": "Завершить приёмку",
+          "disabled": false,
+          "visible": true,
+          "left": 1040,
+          "right": 1230,
+          "top": 499,
+          "bottom": 542,
+          "width": 190,
+          "height": 43
+        }
+      ]
+    },
+    "25-ordinary-after-scan-rerun": {
+      "href": "http://127.0.0.1:5221/app/ff/reception",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "scrollX": 0,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "appRootScrollWidth": 1280,
+      "appRootClientWidth": 1280,
+      "pageOverflow": false,
+      "bodyText": "Портал ФФ\nff-admin-after-fix-rerun-1786668071455@example.com · администратор\n2\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nПриёмка\n\nПриёмки до завершения поштучного пересчёта. После «Завершить пересчёт» заявка уходит в сортировку, остаток появляется у ФФ.\n\n№ документа\tСеллер\tСостав\tКороба\tСтатус\nПоставка № 000001\tQA Seller after-fix-rerun-1786668071455\t1 поз. · от 1 ед.\t0 из 1\t\nПередано\n\nВозврат № 000002\tQA Seller after-fix-rerun-1786668071455\t1 поз. · от 1 ед.\t0 из 1\t\nПередано\nДокумент\nПриёмка\n№000001\n\nТип: Поставка\n\nСеллер: QA Seller after-fix-rerun-1786668071455\n\nПринято: 1 из 5\n\nКороба: 0 из 1\n\nРасхождения: 1 + короба\n\nДата приёмки (план) *\nDD.\nMM.\nYYYY\nДата приёмки (план) *\nПриёмка\nЗавершить приёмку\nПечать накладной\nЗакрыть\nТовар\tГабариты\tПлан\tПринято\n\n\nQA Ordinary Product\n\nSKU sku-ordinary-after-fix-rerun-1786668071455\nШК wb-ordinary-after-fix-rerun-1786668071455\n\t\n210×110×60 мм · 1.39 л\n\t\n\n5\n\n\t\n\n1\n\nНедостача 4\nСкан приёмки\n\nСкан штрихкода товара добавляет +1 к принятому количеству. Скан в короб — только в карточке короба.\n\nШтрихкод товара\nШтрихкод товара\nСкан\nДобавить факт\nЗагрузить по накладной\nСоздать короб\nЗавершить приёмку\nЕсть расхождения с планом — при завершении потребуется подтверждение.",
+      "visibleButtons": [
+        {
+          "text": "2",
+          "disabled": false,
+          "visible": true,
+          "left": 1130,
+          "right": 1173,
+          "top": 11,
+          "bottom": 54,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Выйти",
+          "disabled": false,
+          "visible": true,
+          "left": 1189,
+          "right": 1256,
+          "top": 15,
+          "bottom": 49,
+          "width": 67,
+          "height": 34
+        },
+        {
+          "text": "Закрыть",
+          "disabled": false,
+          "visible": true,
+          "left": 12,
+          "right": 55,
+          "top": 11,
+          "bottom": 54,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Choose date",
+          "disabled": true,
+          "visible": true,
+          "left": 237,
+          "right": 280,
+          "top": 169,
+          "bottom": 212,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Завершить приёмку",
+          "disabled": false,
+          "visible": true,
+          "left": 743,
+          "right": 933,
+          "top": 228,
+          "bottom": 268,
+          "width": 190,
+          "height": 40
+        },
+        {
+          "text": "Печать накладной",
+          "disabled": false,
+          "visible": true,
+          "left": 941,
+          "right": 1141,
+          "top": 228,
+          "bottom": 268,
+          "width": 200,
+          "height": 40
+        },
+        {
+          "text": "Закрыть",
+          "disabled": false,
+          "visible": true,
+          "left": 1149,
+          "right": 1247,
+          "top": 228,
+          "bottom": 268,
+          "width": 98,
+          "height": 40
+        },
+        {
+          "text": "Печать ШК товара",
+          "disabled": false,
+          "visible": true,
+          "left": 701,
+          "right": 733,
+          "top": 349,
+          "bottom": 382,
+          "width": 33,
+          "height": 33
+        },
+        {
+          "text": "Габариты",
+          "disabled": false,
+          "visible": true,
+          "left": 885,
+          "right": 925,
+          "top": 345,
+          "bottom": 385,
+          "width": 40,
+          "height": 40
+        },
+        {
+          "text": "Править количество",
+          "disabled": false,
+          "visible": true,
+          "left": 1199,
+          "right": 1239,
+          "top": 345,
+          "bottom": 385,
+          "width": 40,
+          "height": 40
+        },
+        {
+          "text": "Скан",
+          "disabled": true,
+          "visible": true,
+          "left": 379,
+          "right": 450,
+          "top": 499,
+          "bottom": 542,
+          "width": 71,
+          "height": 43
+        },
+        {
+          "text": "Добавить факт",
+          "disabled": false,
+          "visible": true,
+          "left": 458,
+          "right": 606,
+          "top": 499,
+          "bottom": 542,
+          "width": 148,
+          "height": 43
+        },
+        {
+          "text": "Создать товар",
+          "disabled": false,
+          "visible": true,
+          "left": 614,
+          "right": 647,
+          "top": 499,
+          "bottom": 532,
+          "width": 33,
+          "height": 33
+        },
+        {
+          "text": "Загрузить по накладной",
+          "disabled": false,
+          "visible": true,
+          "left": 655,
+          "right": 877,
+          "top": 499,
+          "bottom": 542,
+          "width": 222,
+          "height": 43
+        },
+        {
+          "text": "Создать короб",
+          "disabled": false,
+          "visible": true,
+          "left": 885,
+          "right": 1032,
+          "top": 499,
+          "bottom": 542,
+          "width": 147,
+          "height": 43
+        },
+        {
+          "text": "Завершить приёмку",
+          "disabled": false,
+          "visible": true,
+          "left": 1040,
+          "right": 1230,
+          "top": 499,
+          "bottom": 542,
+          "width": 190,
+          "height": 43
+        }
+      ]
+    },
+    "26-ordinary-manual-discrepancy-rerun": {
+      "href": "http://127.0.0.1:5221/app/ff/reception",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "scrollX": 0,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "appRootScrollWidth": 1280,
+      "appRootClientWidth": 1280,
+      "pageOverflow": false,
+      "bodyText": "Портал ФФ\nff-admin-after-fix-rerun-1786668071455@example.com · администратор\n2\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nПриёмка\n\nПриёмки до завершения поштучного пересчёта. После «Завершить пересчёт» заявка уходит в сортировку, остаток появляется у ФФ.\n\n№ документа\tСеллер\tСостав\tКороба\tСтатус\nПоставка № 000001\tQA Seller after-fix-rerun-1786668071455\t1 поз. · от 1 ед.\t0 из 1\t\nПередано\n\nВозврат № 000002\tQA Seller after-fix-rerun-1786668071455\t1 поз. · от 1 ед.\t0 из 1\t\nПередано\nДокумент\nПриёмка\n№000001\n\nТип: Поставка\n\nСеллер: QA Seller after-fix-rerun-1786668071455\n\nПринято: 3 из 5\n\nКороба: 0 из 1\n\nРасхождения: 1 + короба\n\nДата приёмки (план) *\nDD.\nMM.\nYYYY\nДата приёмки (план) *\nПриёмка\nЗавершить приёмку\nПечать накладной\nЗакрыть\nТовар\tГабариты\tПлан\tПринято\n\n\nQA Ordinary Product\n\nSKU sku-ordinary-after-fix-rerun-1786668071455\nШК wb-ordinary-after-fix-rerun-1786668071455\n\t\n210×110×60 мм · 1.39 л\n\t\n\n5\n\n\t\n\n3\n\nНедостача 2\nСкан приёмки\n\nСкан штрихкода товара добавляет +1 к принятому количеству. Скан в короб — только в карточке короба.\n\nШтрихкод товара\nШтрихкод товара\nСкан\nДобавить факт\nЗагрузить по накладной\nСоздать короб\nЗавершить приёмку\nЕсть расхождения с планом — при завершении потребуется подтверждение.",
+      "visibleButtons": [
+        {
+          "text": "2",
+          "disabled": false,
+          "visible": true,
+          "left": 1130,
+          "right": 1173,
+          "top": 11,
+          "bottom": 54,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Выйти",
+          "disabled": false,
+          "visible": true,
+          "left": 1189,
+          "right": 1256,
+          "top": 15,
+          "bottom": 49,
+          "width": 67,
+          "height": 34
+        },
+        {
+          "text": "Закрыть",
+          "disabled": false,
+          "visible": true,
+          "left": 12,
+          "right": 55,
+          "top": 11,
+          "bottom": 54,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Choose date",
+          "disabled": true,
+          "visible": true,
+          "left": 237,
+          "right": 280,
+          "top": 169,
+          "bottom": 212,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Завершить приёмку",
+          "disabled": false,
+          "visible": true,
+          "left": 743,
+          "right": 933,
+          "top": 228,
+          "bottom": 268,
+          "width": 190,
+          "height": 40
+        },
+        {
+          "text": "Печать накладной",
+          "disabled": false,
+          "visible": true,
+          "left": 941,
+          "right": 1141,
+          "top": 228,
+          "bottom": 268,
+          "width": 200,
+          "height": 40
+        },
+        {
+          "text": "Закрыть",
+          "disabled": false,
+          "visible": true,
+          "left": 1149,
+          "right": 1247,
+          "top": 228,
+          "bottom": 268,
+          "width": 98,
+          "height": 40
+        },
+        {
+          "text": "Печать ШК товара",
+          "disabled": false,
+          "visible": true,
+          "left": 701,
+          "right": 733,
+          "top": 349,
+          "bottom": 382,
+          "width": 33,
+          "height": 33
+        },
+        {
+          "text": "Габариты",
+          "disabled": false,
+          "visible": true,
+          "left": 885,
+          "right": 925,
+          "top": 345,
+          "bottom": 385,
+          "width": 40,
+          "height": 40
+        },
+        {
+          "text": "Править количество",
+          "disabled": false,
+          "visible": true,
+          "left": 1199,
+          "right": 1239,
+          "top": 345,
+          "bottom": 385,
+          "width": 40,
+          "height": 40
+        },
+        {
+          "text": "Скан",
+          "disabled": true,
+          "visible": true,
+          "left": 379,
+          "right": 450,
+          "top": 499,
+          "bottom": 542,
+          "width": 71,
+          "height": 43
+        },
+        {
+          "text": "Добавить факт",
+          "disabled": false,
+          "visible": true,
+          "left": 458,
+          "right": 606,
+          "top": 499,
+          "bottom": 542,
+          "width": 148,
+          "height": 43
+        },
+        {
+          "text": "Создать товар",
+          "disabled": false,
+          "visible": true,
+          "left": 614,
+          "right": 647,
+          "top": 499,
+          "bottom": 532,
+          "width": 33,
+          "height": 33
+        },
+        {
+          "text": "Загрузить по накладной",
+          "disabled": false,
+          "visible": true,
+          "left": 655,
+          "right": 877,
+          "top": 499,
+          "bottom": 542,
+          "width": 222,
+          "height": 43
+        },
+        {
+          "text": "Создать короб",
+          "disabled": false,
+          "visible": true,
+          "left": 885,
+          "right": 1032,
+          "top": 499,
+          "bottom": 542,
+          "width": 147,
+          "height": 43
+        },
+        {
+          "text": "Завершить приёмку",
+          "disabled": false,
+          "visible": true,
+          "left": 1040,
+          "right": 1230,
+          "top": 499,
+          "bottom": 542,
+          "width": 190,
+          "height": 43
+        }
+      ]
+    },
+    "27-ordinary-discrepancy-dialog-rerun": {
+      "href": "http://127.0.0.1:5221/app/ff/reception",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "scrollX": 0,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "appRootScrollWidth": 1280,
+      "appRootClientWidth": 1280,
+      "pageOverflow": false,
+      "bodyText": "Портал ФФ\nff-admin-after-fix-rerun-1786668071455@example.com · администратор\n2\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nПриёмка\n\nПриёмки до завершения поштучного пересчёта. После «Завершить пересчёт» заявка уходит в сортировку, остаток появляется у ФФ.\n\n№ документа\tСеллер\tСостав\tКороба\tСтатус\nПоставка № 000001\tQA Seller after-fix-rerun-1786668071455\t1 поз. · от 1 ед.\t0 из 1\t\nПередано\n\nВозврат № 000002\tQA Seller after-fix-rerun-1786668071455\t1 поз. · от 1 ед.\t0 из 1\t\nПередано\nДокумент\nПриёмка\n№000001\n\nТип: Поставка\n\nСеллер: QA Seller after-fix-rerun-1786668071455\n\nПринято: 3 из 5\n\nКороба: 0 из 1\n\nРасхождения: 1 + короба\n\nДата приёмки (план) *\nDD.\nMM.\nYYYY\nДата приёмки (план) *\nПриёмка\nЗавершить приёмку\nПечать накладной\nЗакрыть\nТовар\tГабариты\tПлан\tПринято\n\n\nQA Ordinary Product\n\nSKU sku-ordinary-after-fix-rerun-1786668071455\nШК wb-ordinary-after-fix-rerun-1786668071455\n\t\n210×110×60 мм · 1.39 л\n\t\n\n5\n\n\t\n\n3\n\nНедостача 2\nСкан приёмки\n\nСкан штрихкода товара добавляет +1 к принятому количеству. Скан в короб — только в карточке короба.\n\nШтрихкод товара\nШтрихкод товара\nСкан\nДобавить факт\nЗагрузить по накладной\nСоздать короб\nЗавершить приёмку\nЕсть расхождения с планом — при завершении потребуется подтверждение.\nЕсть расхождения, провести приёмку?\nSKU\tОжидалось\tПринято\tОтклонение\n\n\nsku-ordinary-after-fix-rerun-1786668071455\n\nQA Ordinary Product\t5\t3\tНедостача 2\n\nКороба: 0 из 1\n\nКоличество коробов отличается от плана.\n\nОтмена\nЗавершить приёмку",
+      "visibleButtons": [
+        {
+          "text": "2",
+          "disabled": false,
+          "visible": true,
+          "left": 1130,
+          "right": 1173,
+          "top": 11,
+          "bottom": 54,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Выйти",
+          "disabled": false,
+          "visible": true,
+          "left": 1189,
+          "right": 1256,
+          "top": 15,
+          "bottom": 49,
+          "width": 67,
+          "height": 34
+        },
+        {
+          "text": "Закрыть",
+          "disabled": false,
+          "visible": true,
+          "left": 12,
+          "right": 55,
+          "top": 11,
+          "bottom": 54,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Choose date",
+          "disabled": true,
+          "visible": true,
+          "left": 237,
+          "right": 280,
+          "top": 169,
+          "bottom": 212,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Завершить приёмку",
+          "disabled": false,
+          "visible": true,
+          "left": 743,
+          "right": 933,
+          "top": 228,
+          "bottom": 268,
+          "width": 190,
+          "height": 40
+        },
+        {
+          "text": "Печать накладной",
+          "disabled": false,
+          "visible": true,
+          "left": 941,
+          "right": 1141,
+          "top": 228,
+          "bottom": 268,
+          "width": 200,
+          "height": 40
+        },
+        {
+          "text": "Закрыть",
+          "disabled": false,
+          "visible": true,
+          "left": 1149,
+          "right": 1247,
+          "top": 228,
+          "bottom": 268,
+          "width": 98,
+          "height": 40
+        },
+        {
+          "text": "Печать ШК товара",
+          "disabled": false,
+          "visible": true,
+          "left": 701,
+          "right": 733,
+          "top": 349,
+          "bottom": 382,
+          "width": 33,
+          "height": 33
+        },
+        {
+          "text": "Габариты",
+          "disabled": false,
+          "visible": true,
+          "left": 885,
+          "right": 925,
+          "top": 345,
+          "bottom": 385,
+          "width": 40,
+          "height": 40
+        },
+        {
+          "text": "Править количество",
+          "disabled": false,
+          "visible": true,
+          "left": 1199,
+          "right": 1239,
+          "top": 345,
+          "bottom": 385,
+          "width": 40,
+          "height": 40
+        },
+        {
+          "text": "Скан",
+          "disabled": true,
+          "visible": true,
+          "left": 379,
+          "right": 450,
+          "top": 499,
+          "bottom": 542,
+          "width": 71,
+          "height": 43
+        },
+        {
+          "text": "Добавить факт",
+          "disabled": false,
+          "visible": true,
+          "left": 458,
+          "right": 606,
+          "top": 499,
+          "bottom": 542,
+          "width": 148,
+          "height": 43
+        },
+        {
+          "text": "Создать товар",
+          "disabled": false,
+          "visible": true,
+          "left": 614,
+          "right": 647,
+          "top": 499,
+          "bottom": 532,
+          "width": 33,
+          "height": 33
+        },
+        {
+          "text": "Загрузить по накладной",
+          "disabled": false,
+          "visible": true,
+          "left": 655,
+          "right": 877,
+          "top": 499,
+          "bottom": 542,
+          "width": 222,
+          "height": 43
+        },
+        {
+          "text": "Создать короб",
+          "disabled": false,
+          "visible": true,
+          "left": 885,
+          "right": 1032,
+          "top": 499,
+          "bottom": 542,
+          "width": 147,
+          "height": 43
+        },
+        {
+          "text": "Завершить приёмку",
+          "disabled": false,
+          "visible": true,
+          "left": 1040,
+          "right": 1230,
+          "top": 499,
+          "bottom": 542,
+          "width": 190,
+          "height": 43
+        },
+        {
+          "text": "Отмена",
+          "disabled": false,
+          "visible": true,
+          "left": 658,
+          "right": 734,
+          "top": 501,
+          "bottom": 541,
+          "width": 76,
+          "height": 40
+        },
+        {
+          "text": "Завершить приёмку",
+          "disabled": false,
+          "visible": true,
+          "left": 742,
+          "right": 932,
+          "top": 501,
+          "bottom": 541,
+          "width": 190,
+          "height": 40
+        }
+      ]
+    },
+    "28-ordinary-completed-after-confirm-rerun": {
+      "href": "http://127.0.0.1:5221/app/ff/reception",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "scrollX": 0,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "appRootScrollWidth": 1280,
+      "appRootClientWidth": 1280,
+      "pageOverflow": false,
+      "bodyText": "Портал ФФ\nff-admin-after-fix-rerun-1786668071455@example.com · администратор\n2\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nПриёмка\n\nПриёмки до завершения поштучного пересчёта. После «Завершить пересчёт» заявка уходит в сортировку, остаток появляется у ФФ.\n\n№ документа\tСеллер\tСостав\tКороба\tСтатус\nПоставка № 000001\tQA Seller after-fix-rerun-1786668071455\t1 поз. · от 1 ед.\t0 из 1\t\nПередано\n\nВозврат № 000002\tQA Seller after-fix-rerun-1786668071455\t1 поз. · от 1 ед.\t0 из 1\t\nПередано\nДокумент\nПриёмка\n№000001\n\nТип: Поставка\n\nСеллер: QA Seller after-fix-rerun-1786668071455\n\nПринято: 3 из 5\n\nКороба: 0 из 1\n\nРасхождения: 1 + короба\n\nДата приёмки (план) *\nDD.\nMM.\nYYYY\nДата приёмки (план) *\nВ сортировке\nРедактировать\nПечать накладной\nЗакрыть\nТовар\tГабариты\tПлан\tПринято\n\n\nQA Ordinary Product\n\nSKU sku-ordinary-after-fix-rerun-1786668071455\nШК wb-ordinary-after-fix-rerun-1786668071455\n\t\n210×110×60 мм · 1.39 л\n\t\n\n5\n\n\t\n\n3\n\nНедостача 2\nПриёмка завершена. Остаток принят на склад ФФ (зона «Сортировка»). Разложение по ячейкам — в разделе Сортировка.",
+      "visibleButtons": [
+        {
+          "text": "2",
+          "disabled": false,
+          "visible": true,
+          "left": 1130,
+          "right": 1173,
+          "top": 11,
+          "bottom": 54,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Выйти",
+          "disabled": false,
+          "visible": true,
+          "left": 1189,
+          "right": 1256,
+          "top": 15,
+          "bottom": 49,
+          "width": 67,
+          "height": 34
+        },
+        {
+          "text": "Закрыть",
+          "disabled": false,
+          "visible": true,
+          "left": 12,
+          "right": 55,
+          "top": 11,
+          "bottom": 54,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Choose date",
+          "disabled": true,
+          "visible": true,
+          "left": 237,
+          "right": 280,
+          "top": 169,
+          "bottom": 212,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Редактировать",
+          "disabled": false,
+          "visible": true,
+          "left": 759,
+          "right": 933,
+          "top": 228,
+          "bottom": 268,
+          "width": 174,
+          "height": 40
+        },
+        {
+          "text": "Печать накладной",
+          "disabled": false,
+          "visible": true,
+          "left": 941,
+          "right": 1141,
+          "top": 228,
+          "bottom": 268,
+          "width": 200,
+          "height": 40
+        },
+        {
+          "text": "Закрыть",
+          "disabled": false,
+          "visible": true,
+          "left": 1149,
+          "right": 1247,
+          "top": 228,
+          "bottom": 268,
+          "width": 98,
+          "height": 40
+        },
+        {
+          "text": "Печать ШК товара",
+          "disabled": false,
+          "visible": true,
+          "left": 701,
+          "right": 733,
+          "top": 349,
+          "bottom": 382,
+          "width": 33,
+          "height": 33
+        },
+        {
+          "text": "Габариты",
+          "disabled": false,
+          "visible": true,
+          "left": 885,
+          "right": 925,
+          "top": 345,
+          "bottom": 385,
+          "width": 40,
+          "height": 40
+        }
+      ]
+    },
+    "33-return-queue-continuation": {
+      "href": "http://127.0.0.1:5221/app/ff/reception",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "scrollX": 0,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "appRootScrollWidth": 1280,
+      "appRootClientWidth": 1280,
+      "pageOverflow": false,
+      "bodyText": "Портал ФФ\nff-admin-after-fix-rerun-1786668071455@example.com · администратор\n2\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nПриёмка\n\nПриёмки до завершения поштучного пересчёта. После «Завершить пересчёт» заявка уходит в сортировку, остаток появляется у ФФ.\n\n№ документа\tСеллер\tСостав\tКороба\tСтатус\nВозврат № 000002\tQA Seller after-fix-rerun-1786668071455\t1 поз. · от 1 ед.\t0 из 1\t\nПередано",
+      "visibleButtons": [
+        {
+          "text": "2",
+          "disabled": false,
+          "visible": true,
+          "left": 1130,
+          "right": 1173,
+          "top": 11,
+          "bottom": 54,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Выйти",
+          "disabled": false,
+          "visible": true,
+          "left": 1189,
+          "right": 1256,
+          "top": 15,
+          "bottom": 49,
+          "width": 67,
+          "height": 34
+        }
+      ]
+    },
+    "34-return-open-continuation": {
+      "href": "http://127.0.0.1:5221/app/ff/reception",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "scrollX": 0,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "appRootScrollWidth": 1280,
+      "appRootClientWidth": 1280,
+      "pageOverflow": false,
+      "bodyText": "Портал ФФ\nff-admin-after-fix-rerun-1786668071455@example.com · администратор\n2\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nПриёмка\n\nПриёмки до завершения поштучного пересчёта. После «Завершить пересчёт» заявка уходит в сортировку, остаток появляется у ФФ.\n\n№ документа\tСеллер\tСостав\tКороба\tСтатус\nВозврат № 000002\tQA Seller after-fix-rerun-1786668071455\t1 поз. · от 1 ед.\t0 из 1\t\nПередано\nДокумент\nПриёмка\n№000002\n\nТип: Возврат\n\nСеллер: QA Seller after-fix-rerun-1786668071455\n\nПринято: 0 из 1\n\nКороба: 0 из 1\n\nРасхождения: 1 + короба\n\nДата приёмки (план) *\nDD.\nMM.\nYYYY\nДата приёмки (план) *\nПередано на склад\nЗавершить приёмку\nПечать накладной\nЗакрыть\nТовар\tГабариты\tПлан\tПринято\n\n\nQA Return Product\n\nSKU sku-return-after-fix-rerun-1786668071455\nШК wb-return-after-fix-rerun-1786668071455\n\t\n120×80×40 мм · 0.38 л\n\t\n\n1\n\n\t\n\n0\n\nНедостача 1\nСкан приёмки\n\nСкан штрихкода товара добавляет +1 к принятому количеству. Скан в короб — только в карточке короба.\n\nШтрихкод товара\nШтрихкод товара\nСкан\nДобавить факт\nПечатать ШК при скане\nЗагрузить по накладной\nСоздать короб\nЗавершить приёмку\nЕсть расхождения с планом — при завершении потребуется подтверждение.",
+      "visibleButtons": [
+        {
+          "text": "2",
+          "disabled": false,
+          "visible": true,
+          "left": 1130,
+          "right": 1173,
+          "top": 11,
+          "bottom": 54,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Выйти",
+          "disabled": false,
+          "visible": true,
+          "left": 1189,
+          "right": 1256,
+          "top": 15,
+          "bottom": 49,
+          "width": 67,
+          "height": 34
+        },
+        {
+          "text": "Закрыть",
+          "disabled": false,
+          "visible": true,
+          "left": 12,
+          "right": 55,
+          "top": 11,
+          "bottom": 54,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Choose date",
+          "disabled": true,
+          "visible": true,
+          "left": 237,
+          "right": 280,
+          "top": 169,
+          "bottom": 212,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Завершить приёмку",
+          "disabled": false,
+          "visible": true,
+          "left": 743,
+          "right": 933,
+          "top": 228,
+          "bottom": 268,
+          "width": 190,
+          "height": 40
+        },
+        {
+          "text": "Печать накладной",
+          "disabled": false,
+          "visible": true,
+          "left": 941,
+          "right": 1141,
+          "top": 228,
+          "bottom": 268,
+          "width": 200,
+          "height": 40
+        },
+        {
+          "text": "Закрыть",
+          "disabled": false,
+          "visible": true,
+          "left": 1149,
+          "right": 1247,
+          "top": 228,
+          "bottom": 268,
+          "width": 98,
+          "height": 40
+        },
+        {
+          "text": "Печать ШК товара",
+          "disabled": false,
+          "visible": true,
+          "left": 701,
+          "right": 733,
+          "top": 349,
+          "bottom": 382,
+          "width": 33,
+          "height": 33
+        },
+        {
+          "text": "Габариты",
+          "disabled": false,
+          "visible": true,
+          "left": 885,
+          "right": 925,
+          "top": 345,
+          "bottom": 385,
+          "width": 40,
+          "height": 40
+        },
+        {
+          "text": "Править количество",
+          "disabled": false,
+          "visible": true,
+          "left": 1199,
+          "right": 1239,
+          "top": 345,
+          "bottom": 385,
+          "width": 40,
+          "height": 40
+        },
+        {
+          "text": "Скан",
+          "disabled": true,
+          "visible": true,
+          "left": 278,
+          "right": 342,
+          "top": 499,
+          "bottom": 566,
+          "width": 64,
+          "height": 67
+        },
+        {
+          "text": "Добавить факт",
+          "disabled": false,
+          "visible": true,
+          "left": 350,
+          "right": 478,
+          "top": 499,
+          "bottom": 566,
+          "width": 128,
+          "height": 67
+        },
+        {
+          "text": "Создать товар",
+          "disabled": false,
+          "visible": true,
+          "left": 486,
+          "right": 519,
+          "top": 499,
+          "bottom": 532,
+          "width": 33,
+          "height": 33
+        },
+        {
+          "text": "Загрузить по накладной",
+          "disabled": false,
+          "visible": true,
+          "left": 735,
+          "right": 924,
+          "top": 499,
+          "bottom": 566,
+          "width": 189,
+          "height": 67
+        },
+        {
+          "text": "Создать короб",
+          "disabled": false,
+          "visible": true,
+          "left": 932,
+          "right": 1060,
+          "top": 499,
+          "bottom": 566,
+          "width": 127,
+          "height": 67
+        },
+        {
+          "text": "Завершить приёмку",
+          "disabled": false,
+          "visible": true,
+          "left": 1068,
+          "right": 1230,
+          "top": 499,
+          "bottom": 566,
+          "width": 162,
+          "height": 67
+        }
+      ]
+    },
+    "35-return-after-autoprint-continuation": {
+      "href": "http://127.0.0.1:5221/app/ff/reception",
+      "title": "WMS · Фулфилмент",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "scrollX": 0,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "appRootScrollWidth": 1280,
+      "appRootClientWidth": 1280,
+      "pageOverflow": false,
+      "bodyText": "Портал ФФ\nff-admin-after-fix-rerun-1786668071455@example.com · администратор\n2\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nПриёмка\n\nПриёмки до завершения поштучного пересчёта. После «Завершить пересчёт» заявка уходит в сортировку, остаток появляется у ФФ.\n\n№ документа\tСеллер\tСостав\tКороба\tСтатус\nВозврат № 000002\tQA Seller after-fix-rerun-1786668071455\t1 поз. · от 1 ед.\t0 из 1\t\nПередано\nДокумент\nПриёмка\n№000002\n\nТип: Возврат\n\nСеллер: QA Seller after-fix-rerun-1786668071455\n\nПринято: 1 из 1\n\nКороба: 0 из 1\n\nРасхождения: 0 + короба\n\nДата приёмки (план) *\nDD.\nMM.\nYYYY\nДата приёмки (план) *\nПриёмка\nЗавершить приёмку\nПечать накладной\nЗакрыть\nТовар\tГабариты\tПлан\tПринято\n\n\nQA Return Product\n\nSKU sku-return-after-fix-rerun-1786668071455\nШК wb-return-after-fix-rerun-1786668071455\n\t\n120×80×40 мм · 0.38 л\n\t\n\n1\n\n\t\n\n1\n\nСкан приёмки\n\nСкан штрихкода товара добавляет +1 к принятому количеству. Скан в короб — только в карточке короба.\n\nШтрихкод товара\nШтрихкод товара\nСкан\nДобавить факт\nПечатать ШК при скане\nЗагрузить по накладной\nСоздать короб\nЗавершить приёмку",
+      "visibleButtons": [
+        {
+          "text": "2",
+          "disabled": false,
+          "visible": true,
+          "left": 1130,
+          "right": 1173,
+          "top": 11,
+          "bottom": 54,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Выйти",
+          "disabled": false,
+          "visible": true,
+          "left": 1189,
+          "right": 1256,
+          "top": 15,
+          "bottom": 49,
+          "width": 67,
+          "height": 34
+        },
+        {
+          "text": "Закрыть",
+          "disabled": false,
+          "visible": true,
+          "left": 12,
+          "right": 55,
+          "top": 11,
+          "bottom": 54,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Choose date",
+          "disabled": true,
+          "visible": true,
+          "left": 237,
+          "right": 280,
+          "top": 169,
+          "bottom": 212,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Завершить приёмку",
+          "disabled": false,
+          "visible": true,
+          "left": 743,
+          "right": 933,
+          "top": 228,
+          "bottom": 268,
+          "width": 190,
+          "height": 40
+        },
+        {
+          "text": "Печать накладной",
+          "disabled": false,
+          "visible": true,
+          "left": 941,
+          "right": 1141,
+          "top": 228,
+          "bottom": 268,
+          "width": 200,
+          "height": 40
+        },
+        {
+          "text": "Закрыть",
+          "disabled": false,
+          "visible": true,
+          "left": 1149,
+          "right": 1247,
+          "top": 228,
+          "bottom": 268,
+          "width": 98,
+          "height": 40
+        },
+        {
+          "text": "Печать ШК товара",
+          "disabled": false,
+          "visible": true,
+          "left": 701,
+          "right": 733,
+          "top": 349,
+          "bottom": 382,
+          "width": 33,
+          "height": 33
+        },
+        {
+          "text": "Габариты",
+          "disabled": false,
+          "visible": true,
+          "left": 885,
+          "right": 925,
+          "top": 345,
+          "bottom": 385,
+          "width": 40,
+          "height": 40
+        },
+        {
+          "text": "Править количество",
+          "disabled": false,
+          "visible": true,
+          "left": 1199,
+          "right": 1239,
+          "top": 345,
+          "bottom": 385,
+          "width": 40,
+          "height": 40
+        },
+        {
+          "text": "Скан",
+          "disabled": true,
+          "visible": true,
+          "left": 278,
+          "right": 342,
+          "top": 499,
+          "bottom": 566,
+          "width": 64,
+          "height": 67
+        },
+        {
+          "text": "Добавить факт",
+          "disabled": false,
+          "visible": true,
+          "left": 350,
+          "right": 478,
+          "top": 499,
+          "bottom": 566,
+          "width": 128,
+          "height": 67
+        },
+        {
+          "text": "Создать товар",
+          "disabled": false,
+          "visible": true,
+          "left": 486,
+          "right": 519,
+          "top": 499,
+          "bottom": 532,
+          "width": 33,
+          "height": 33
+        },
+        {
+          "text": "Загрузить по накладной",
+          "disabled": false,
+          "visible": true,
+          "left": 735,
+          "right": 924,
+          "top": 499,
+          "bottom": 566,
+          "width": 189,
+          "height": 67
+        },
+        {
+          "text": "Создать короб",
+          "disabled": false,
+          "visible": true,
+          "left": 932,
+          "right": 1060,
+          "top": 499,
+          "bottom": 566,
+          "width": 127,
+          "height": 67
+        },
+        {
+          "text": "Завершить приёмку",
+          "disabled": false,
+          "visible": true,
+          "left": 1068,
+          "right": 1230,
+          "top": 499,
+          "bottom": 566,
+          "width": 162,
+          "height": 67
+        }
+      ]
+    },
+    "36-seller-documents-continuation": {
+      "href": "http://127.0.0.1:5221/seller/documents",
+      "title": "WMS · Селлер",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "scrollX": 0,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "appRootScrollWidth": 1280,
+      "appRootClientWidth": 1280,
+      "pageOverflow": false,
+      "bodyText": "Портал селлера\nseller-after-fix-rerun-1786668071455@example.com · fulfillment_seller\n0\nВыйти\nДокументы\nТовары\nЧестный знак\nНастройки\nДокументы\n\nПоставки на ФФ и отгрузки на маркетплейс\n\nСоздать акт расхождений\nПоставка\nВозврат\nСоздать заявку на поставку\nСоздать отгрузку на МП\nТип документа\nВсе\nТип документа\nСортировка\nДата (новые сверху)\nСортировка\nТип\tДата\tСтатус\tСтрок\tДействия\nПоставка\t—\tВ сортировке\t1\t\n\n—\n\n\nВозврат\t—\tПринимается на складе\t1\t\n\n—",
+      "visibleButtons": [
+        {
+          "text": "0",
+          "disabled": false,
+          "visible": true,
+          "left": 1130,
+          "right": 1173,
+          "top": 11,
+          "bottom": 54,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Выйти",
+          "disabled": false,
+          "visible": true,
+          "left": 1189,
+          "right": 1256,
+          "top": 15,
+          "bottom": 49,
+          "width": 67,
+          "height": 34
+        },
+        {
+          "text": "Создать акт расхождений",
+          "disabled": false,
+          "visible": true,
+          "left": 281,
+          "right": 517,
+          "top": 190,
+          "bottom": 230,
+          "width": 236,
+          "height": 40
+        },
+        {
+          "text": "Поставка",
+          "disabled": false,
+          "visible": true,
+          "left": 529,
+          "right": 613,
+          "top": 189,
+          "bottom": 231,
+          "width": 85,
+          "height": 42
+        },
+        {
+          "text": "Возврат",
+          "disabled": false,
+          "visible": true,
+          "left": 612,
+          "right": 688,
+          "top": 189,
+          "bottom": 231,
+          "width": 76,
+          "height": 42
+        },
+        {
+          "text": "Создать заявку на поставку",
+          "disabled": false,
+          "visible": true,
+          "left": 700,
+          "right": 950,
+          "top": 190,
+          "bottom": 230,
+          "width": 250,
+          "height": 40
+        },
+        {
+          "text": "Создать отгрузку на МП",
+          "disabled": false,
+          "visible": true,
+          "left": 962,
+          "right": 1184,
+          "top": 190,
+          "bottom": 230,
+          "width": 221,
+          "height": 40
+        }
+      ]
+    },
+    "37-seller-fact-card-continuation": {
+      "href": "http://127.0.0.1:5221/seller/inbound/64f1a8db-55f0-4659-8ba4-e97846c1b385",
+      "title": "WMS · Селлер",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "scrollX": 0,
+      "documentScrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "appRootScrollWidth": 1280,
+      "appRootClientWidth": 1280,
+      "pageOverflow": false,
+      "bodyText": "Портал селлера\nseller-after-fix-rerun-1786668071455@example.com · fulfillment_seller\n0\nВыйти\nДокументы\nТовары\nЧестный знак\nНастройки\nКарточка приёмки · Поставка\n\nПоставка\n\n·\n\nВ сортировке\n\n·\n\nQA WH after-fix-rerun-1786668071455 (wh-after-fix-rerun-1786668071455)\n\nИтог приемки\n\nЗаявлено 5 · принято 3\n\nЕсть расхождения\n\nЧто не так\n\nНедостача 2\n\n·\n\nКороба: план 1 · факт 0\n\nТовар\tЗаявлено\tПринято\tИтог\t\n\n\nQA Ordinary Product\n\nАртикул sku-ordinary-after-fix-rerun-1786668071455\n\t5\t3\tНедостача 2\t",
+      "visibleButtons": [
+        {
+          "text": "0",
+          "disabled": false,
+          "visible": true,
+          "left": 1130,
+          "right": 1173,
+          "top": 11,
+          "bottom": 54,
+          "width": 43,
+          "height": 43
+        },
+        {
+          "text": "Выйти",
+          "disabled": false,
+          "visible": true,
+          "left": 1189,
+          "right": 1256,
+          "top": 15,
+          "bottom": 49,
+          "width": 67,
+          "height": 34
+        },
+        {
+          "text": "Показать сверку строки",
+          "disabled": false,
+          "visible": true,
+          "left": 1207,
+          "right": 1239,
+          "top": 351,
+          "bottom": 383,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    }
+  },
+  "fixture": {
+    "suffix": "after-fix-rerun-1786668071455",
+    "adminEmail": "ff-admin-after-fix-rerun-1786668071455@example.com",
+    "sellerEmail": "seller-after-fix-rerun-1786668071455@example.com",
+    "sellerName": "QA Seller after-fix-rerun-1786668071455",
+    "warehouseId": "47eecdd3-6e90-444b-ac5c-df2f5e730220",
+    "warehouseName": "QA WH after-fix-rerun-1786668071455",
+    "locationId": "8368666d-33be-4079-8bc2-3f6ee073c9cd",
+    "locationCode": "A-01",
+    "ordinarySku": "sku-ordinary-after-fix-rerun-1786668071455",
+    "ordinaryBarcode": "wb-ordinary-after-fix-rerun-1786668071455",
+    "ordinaryProductId": "df26fa39-f837-46f6-b996-51001a27221a",
+    "ordinaryRequestId": "64f1a8db-55f0-4659-8ba4-e97846c1b385",
+    "returnSku": "sku-return-after-fix-rerun-1786668071455",
+    "returnBarcode": "wb-return-after-fix-rerun-1786668071455",
+    "returnProductId": "b2e8c44d-5834-48e1-941b-c171ee16e3b4",
+    "returnRequestId": "f50120ea-91ee-4984-b719-a52812172d2a"
+  },
+  "checks": {
+    "modalClosure": {
+      "afterConfirmAt": "2026-08-14T00:41:20.719Z",
+      "modalCountImmediately": 0,
+      "staleQuestionCount": 0,
+      "statusText": "В сортировке",
+      "receivedSummary": "Принято: 3 из 5",
+      "lineAfter": "QA Ordinary ProductSKU sku-ordinary-after-fix-rerun-1786668071455ШК wb-ordinary-after-fix-rerun-1786668071455210×110×60 мм · 1.39 л53Недостача 2",
+      "staleButtonTextPresent": false
+    },
+    "productJudgement": {
+      "noStaleControlsAfterSuccessfulOperation": true,
+      "visibleControlsHelpWork": true,
+      "pageOverflowNames": [],
+      "blackStripObserved": false,
+      "ordinaryPrintOk": true,
+      "returnAutoprintOk": true,
+      "sellerFactCardOk": true
+    }
+  },
+  "print": {
+    "ordinary_waybill": {
+      "containsHtml": true,
+      "length": 1664,
+      "hasShortage": true,
+      "hasSku": true,
+      "hasSeller": true,
+      "hasExpected": true,
+      "hasFact": true,
+      "rawNoise": {
+        "hasRequestId": false,
+        "hasWarehouseId": false,
+        "hasStatusWord": false,
+        "hasFbsNoise": false
+      },
+      "sample": "<!doctype html>\n<html>\n  <head>\n    <meta charset=\"utf-8\" />\n    <title>Поставка №000001</title>\n    <style>\n      @page { margin: 12mm; }\n      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 12px; color: #111; }\n      h1 { font-size: 18px; margin: 0 0 8px; }\n      h2 { font-size: 14px; margin: 16px 0 8px; }\n      .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; margin-bottom: 16px; }\n      .meta dt { font-weight: 600; margin: 0; }\n      .meta dd { margin: 0 0 6px; }\n      table { width: 100%; border-collapse: collapse; }\n      th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }\n      th { background: #f5f5f5; }\n      .foot { margin-top: 24px; font-size: 11px; color: #555; }\n    </style>\n  </head>\n  <body>\n    <h1>Накладная — поставка на склад ФФ · №000001</h1>\n    <dl class=\"meta\">\n      <dt>Документ</dt><dd>Поставка №000001</dd>\n      <dt>Селлер</dt><dd>QA Seller after-fix-rerun-1786668071455</dd>\n      <dt>Дата</dt><dd>—</dd>\n      <dt>Склад ФФ</dt><dd>QA WH after-fix-rerun-1786668071455 (wh-after-fix-rerun-1786668071455)</dd>\n      <dt>Короба (план / факт)</dt><dd>1 / 0</dd>\n    </dl>\n    <h2>Состав</h2>\n    <table>\n      <thead>\n        <tr><th>SKU/товар</th><th align=\"right\">Заявлено</th><th align=\"right\">Факт</th><th>Расхождение</th></tr>\n      </thead>\n      <tbody><tr>\n          <td><strong>sku-ordinary-after-fix-rerun-1786668071455</strong><br><span>QA Ordinary Product</span></td>\n          <td align=\"right\">5</td>\n          <td align=\"right\">3</td>\n          <td>Недостача 2</td>\n        </tr></tbody>\n    </table>\n    \n    \n  </body>\n</html>"
+    }
+  },
+  "returnFlow": {
+    "operationType": "Тип: Возврат",
+    "autoprintVisible": true,
+    "ordinaryAutoprintHidden": true,
+    "scannedBarcode": "wb-return-after-fix-rerun-1786668071455",
+    "printHasBarcode": true,
+    "printHasProductName": true,
+    "printLeaksSkuInsteadOfWb": false,
+    "receivedSummary": "Принято: 1 из 1",
+    "lineActual": "1",
+    "printSample": "QA Return Product\nwb-return-after-fix-rerun-1786668071455"
+  },
+  "sellerFactCard": {
+    "href": "http://127.0.0.1:5221/seller/inbound/64f1a8db-55f0-4659-8ba4-e97846c1b385",
+    "summaryUnits": "Заявлено 5 · принято 3",
+    "summaryDiscrepancy": "Есть расхождения",
+    "problemSummary": "Что не такНедостача 2·Короба: план 1 · факт 0",
+    "sellerLine": "QA Ordinary ProductАртикул sku-ordinary-after-fix-rerun-178666807145553Недостача 2",
+    "readOnlyControls": {
+      "draftForm": 0,
+      "addProducts": 0,
+      "submitWarehouse": 0,
+      "saveDraft": 0,
+      "lineDelete": 0
+    },
+    "rawNoise": {
+      "hasRequestId": false,
+      "hasWarehouseId": false,
+      "hasStatusWord": false,
+      "hasFbsNoise": false
+    }
+  },
+  "blockers": [],
+  "errors": [
+    {
+      "stage": "return live browser path",
+      "message": "locator.waitFor: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByTestId('ff-doc-dialog') to be hidden\u001b[22m\n",
+      "stack": "locator.waitFor: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByTestId('ff-doc-dialog') to be hidden\u001b[22m\n\n    at /Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/frontend/[eval1]:291:43"
+    },
+    {
+      "stage": "error screenshot",
+      "message": "page.screenshot: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - taking page screenshot\u001b[22m\n"
+    }
+  ],
+  "startedAt": "2026-08-14T00:41:11.455Z",
+  "finishedAt": "2026-08-14T00:41:46.331Z",
+  "continuation": {
+    "startedAt": "2026-08-14T00:43:29.475Z",
+    "browser_used": true,
+    "errors": [],
+    "blockers": [],
+    "finishedAt": "2026-08-14T00:43:35.776Z"
+  }
+}

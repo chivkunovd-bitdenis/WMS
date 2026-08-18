@@ -1,9 +1,25 @@
 from __future__ import annotations
 
 import time
+import uuid
 
 import pytest
 from httpx import AsyncClient
+
+from app.db.session import SessionLocal
+from app.models.seller_shop_delegation import SellerShopDelegation
+
+
+async def _allow_seller_shop(user_id: str, seller_id: str, *, enabled: bool = False) -> None:
+    async with SessionLocal() as session:
+        session.add(
+            SellerShopDelegation(
+                user_id=uuid.UUID(user_id),
+                target_seller_id=uuid.UUID(seller_id),
+                enabled=enabled,
+            )
+        )
+        await session.commit()
 
 
 @pytest.mark.asyncio
@@ -41,6 +57,7 @@ async def test_seller_shop_switch_acts_as_delegated_seller(
         },
     )
     assert home.status_code == 201
+    home_user_id = home.json()["user_id"]
     home_seller_id = home.json()["seller_id"]
 
     other = await async_client.post(
@@ -65,6 +82,8 @@ async def test_seller_shop_switch_acts_as_delegated_seller(
         },
     )
     assert test_seller.status_code == 201
+
+    await _allow_seller_shop(home_user_id, other_seller_id, enabled=False)
 
     login = await async_client.post(
         "/auth/login",

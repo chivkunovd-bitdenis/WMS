@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import AddIcon from '@mui/icons-material/Add'
+import QrCodeScannerOutlined from '@mui/icons-material/QrCodeScannerOutlined'
 import {
   Alert,
   Box,
@@ -66,6 +67,14 @@ type DistributionLineOut = {
   quantity: number
 }
 
+type DistributionScanOut = {
+  kind: 'location' | 'product'
+  active_storage_location_id: string | null
+  active_storage_location_code: string | null
+  product_id: string | null
+  lines: DistributionLineOut[]
+}
+
 type CellDraftRow = {
   key: string
   box_id: string | null
@@ -91,6 +100,7 @@ type Props = {
   sortingRemainingQty: number
   completed?: boolean
   onReload: () => Promise<void>
+  onDirtyChange?: (dirty: boolean) => void
 }
 
 let draftRowSeq = 0
@@ -219,6 +229,27 @@ function sumDraftQty(rows: CellDraftRow[]): number {
   return sum
 }
 
+function sortingErrorMessageRu(code: string): string {
+  const normalized = code.trim()
+  const messages: Record<string, string> = {
+    active_location_required: 'Сначала отсканируйте ячейку, потом товар.',
+    barcode_empty: 'Отсканируйте ячейку или товар.',
+    distribution_completed: 'Раскладка уже применена, документ больше не редактируется.',
+    distribution_incomplete: 'Разложите всё принятое количество перед применением.',
+    insufficient_sorting_stock: 'В зоне сортировки не хватает остатка для этой раскладки. Обновите документ и проверьте количество.',
+    invalid_qty: 'Количество должно быть целым числом больше нуля.',
+    location_not_found: 'Ячейка не найдена на складе этой приёмки.',
+    not_distributable: 'Документ ещё не находится в сортировке.',
+    product_not_accepted: 'Этот товар не принят по документу.',
+    product_not_on_request: 'Этот товар не относится к этой приёмке.',
+    qty_exceeds_accepted: 'По этому товару указано больше, чем принято. Уменьшите количество.',
+    qty_exceeds_box_remaining: 'По коробу указано больше товара, чем осталось разложить.',
+    scan_not_found: 'Такой товар или ячейка не найдены в этой приёмке.',
+    sorting_location_reserved: 'Служебную зону сортировки нельзя выбрать как ячейку хранения.',
+  }
+  return messages[normalized] ?? normalized
+}
+
 export function FfInboundSortingPanel({
   token,
   requestId,
@@ -228,6 +259,7 @@ export function FfInboundSortingPanel({
   sortingRemainingQty,
   completed = false,
   onReload,
+  onDirtyChange,
 }: Props) {
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
   const { catalogById } = useWbProductCatalog(token)
@@ -237,7 +269,33 @@ export function FfInboundSortingPanel({
   const [distributionLoadError, setDistributionLoadError] = useState<string | null>(null)
   const [productStates, setProductStates] = useState<ProductSortState[]>([])
   const [distributionLoaded, setDistributionLoaded] = useState(false)
+  const [scanValue, setScanValue] = useState('')
+  const [scanBusy, setScanBusy] = useState(false)
+  const [scanMessage, setScanMessage] = useState<string | null>(null)
+  const [activeLocationId, setActiveLocationId] = useState<string | null>(null)
+  const [activeLocationCode, setActiveLocationCode] = useState<string | null>(null)
+  const [highlightedProductId, setHighlightedProductId] = useState<string | null>(null)
+  const [, setDirty] = useState(false)
+  const scanInputRef = useRef<HTMLInputElement | null>(null)
   const distributionLoadSeq = useRef(0)
+  const distributionEditSeq = useRef(0)
+  const dirtyRef = useRef(false)
+  const activeLocationStorageKey = useMemo(
+    () => `wms.ff.sorting.activeLocation.${requestId}`,
+    [requestId],
+  )
+
+  const markDirty = useCallback(
+    (nextDirty: boolean) => {
+      if (nextDirty) {
+        distributionEditSeq.current += 1
+      }
+      dirtyRef.current = nextDirty
+      setDirty(nextDirty)
+      onDirtyChange?.(nextDirty)
+    },
+    [onDirtyChange],
+  )
 
   const sortableBoxes = useMemo(
     () =>
@@ -334,49 +392,103 @@ export function FfInboundSortingPanel({
     setLocations((await res.json()) as LocationRow[])
   }, [authHeaders, warehouseId])
 
+  const hydrateDistributionRows = useCallback(
+    (rows: DistributionLineOut[]) => {
+      const byProduct = new Map<string, DistributionLineOut[]>()
+      for (const r of rows) {
+        const list = byProduct.get(r.product_id) ?? []
+        list.push(r)
+        byProduct.set(r.product_id, list)
+      }
+      setProductStates(
+        sortableProducts.map((p) => ({
+          ...p,
+          rows: mergeSavedRowsWithDefaults(
+            byProduct.get(p.product_id) ?? [],
+            p.product_id,
+            sortableBoxes,
+            loosePoolByProductId.get(p.product_id) ?? 0,
+          ),
+        })),
+      )
+    },
+    [loosePoolByProductId, sortableBoxes, sortableProducts],
+  )
+
   const loadDistribution = useCallback(async () => {
     const seq = ++distributionLoadSeq.current
+    const editSeq = distributionEditSeq.current
     const res = await fetch(
       apiUrl(`/operations/inbound-intake-requests/${requestId}/distribution-lines`),
       { headers: authHeaders },
     )
-    if (seq !== distributionLoadSeq.current) {
+    if (
+      seq !== distributionLoadSeq.current ||
+      editSeq !== distributionEditSeq.current ||
+      dirtyRef.current
+    ) {
       return
     }
     if (!res.ok) {
-      setDistributionLoadError(await readApiErrorMessage(res))
+      setDistributionLoadError(sortingErrorMessageRu(await readApiErrorMessage(res)))
       setDistributionLoaded(false)
       return
     }
     setDistributionLoadError(null)
     const rows = (await res.json()) as DistributionLineOut[]
-    const byProduct = new Map<string, DistributionLineOut[]>()
-    for (const r of rows) {
-      const list = byProduct.get(r.product_id) ?? []
-      list.push(r)
-      byProduct.set(r.product_id, list)
-    }
-    setProductStates(
-      sortableProducts.map((p) => ({
-        ...p,
-        rows: mergeSavedRowsWithDefaults(
-          byProduct.get(p.product_id) ?? [],
-          p.product_id,
-          sortableBoxes,
-          loosePoolByProductId.get(p.product_id) ?? 0,
-        ),
-      })),
-    )
+    hydrateDistributionRows(rows)
+    markDirty(false)
     setDistributionLoaded(true)
-  }, [authHeaders, loosePoolByProductId, requestId, sortableProducts, sortableBoxes])
+  }, [authHeaders, hydrateDistributionRows, markDirty, requestId])
 
   useEffect(() => {
     void loadLocations()
   }, [loadLocations])
 
   useEffect(() => {
+    if (locations.length === 0 || activeLocationId != null) {
+      return
+    }
+    const raw = window.sessionStorage.getItem(activeLocationStorageKey)
+    if (!raw) {
+      return
+    }
+    try {
+      const saved = JSON.parse(raw) as { id?: unknown; code?: unknown }
+      const id = typeof saved.id === 'string' ? saved.id : ''
+      const loc = locations.find((x) => x.id === id)
+      if (loc == null) {
+        window.sessionStorage.removeItem(activeLocationStorageKey)
+        return
+      }
+      setActiveLocationId(loc.id)
+      setActiveLocationCode(
+        typeof saved.code === 'string' && saved.code.trim() ? saved.code : loc.code,
+      )
+    } catch {
+      window.sessionStorage.removeItem(activeLocationStorageKey)
+    }
+  }, [activeLocationId, activeLocationStorageKey, locations])
+
+  useEffect(() => {
+    if (activeLocationId == null || activeLocationCode == null) {
+      window.sessionStorage.removeItem(activeLocationStorageKey)
+      return
+    }
+    window.sessionStorage.setItem(
+      activeLocationStorageKey,
+      JSON.stringify({ id: activeLocationId, code: activeLocationCode }),
+    )
+  }, [activeLocationCode, activeLocationId, activeLocationStorageKey])
+
+  useEffect(() => {
+    if (dirtyRef.current) {
+      return
+    }
     setDistributionLoaded(false)
     setDistributionLoadError(null)
+    setScanMessage(null)
+    setHighlightedProductId(null)
   }, [lines, boxes, requestId])
 
   const retryDistributionLoad = () => {
@@ -391,6 +503,7 @@ export function FfInboundSortingPanel({
   }, [distributionLoaded, loadDistribution])
 
   const updateProductRows = (productId: string, updater: (rows: CellDraftRow[]) => CellDraftRow[]) => {
+    markDirty(true)
     setProductStates((prev) =>
       prev.map((p) => (p.product_id === productId ? { ...p, rows: updater(p.rows) } : p)),
     )
@@ -462,6 +575,11 @@ export function FfInboundSortingPanel({
     return false
   }, [draftSumByProductId, productStates])
 
+  const firstIncompleteProduct = useMemo(
+    () => productStates.find((p) => (remainingByProductId.get(p.product_id) ?? 0) > 0) ?? null,
+    [productStates, remainingByProductId],
+  )
+
   const buildPayload = () => {
     const payload: {
       box_id: string | null
@@ -487,6 +605,7 @@ export function FfInboundSortingPanel({
 
   const persistDistribution = async (): Promise<boolean> => {
     setError(null)
+    distributionEditSeq.current += 1
     try {
       const res = await fetch(
         apiUrl(`/operations/inbound-intake-requests/${requestId}/distribution-lines`),
@@ -497,38 +616,12 @@ export function FfInboundSortingPanel({
         },
       )
       if (!res.ok) {
-        const text = await res.text()
-        let detail: unknown = null
-        try {
-          detail = (JSON.parse(text) as { detail?: unknown }).detail
-        } catch {
-          /* use readApiErrorMessage fallback */
-        }
-        if (detail === 'qty_exceeds_accepted') {
-          setError('Превышено принятое количество по товару.')
-        } else {
-          setError(await readApiErrorMessage(new Response(text, { status: res.status })))
-        }
+        setError(sortingErrorMessageRu(await readApiErrorMessage(res)))
         return false
       }
       const rows = (await res.json()) as DistributionLineOut[]
-      const byProduct = new Map<string, DistributionLineOut[]>()
-      for (const r of rows) {
-        const list = byProduct.get(r.product_id) ?? []
-        list.push(r)
-        byProduct.set(r.product_id, list)
-      }
-      setProductStates((prev) =>
-        prev.map((p) => ({
-          ...p,
-          rows: mergeSavedRowsWithDefaults(
-            byProduct.get(p.product_id) ?? [],
-            p.product_id,
-            sortableBoxes,
-            loosePoolByProductId.get(p.product_id) ?? 0,
-          ),
-        })),
-      )
+      hydrateDistributionRows(rows)
+      markDirty(false)
       return true
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось сохранить раскладку.')
@@ -536,19 +629,89 @@ export function FfInboundSortingPanel({
     }
   }
 
-  const saveDistribution = async () => {
-    if (!distributionReady) {
+  const editable = !completed
+  const distributionReady = distributionLoaded
+
+  const focusScanner = useCallback(() => {
+    let attempts = 0
+    const focus = () => {
+      const input = scanInputRef.current
+      input?.focus()
+      attempts += 1
+      if (input != null && document.activeElement !== input && attempts < 8) {
+        window.setTimeout(focus, 50)
+      }
+    }
+    window.setTimeout(focus, 0)
+  }, [])
+
+  useEffect(() => {
+    if (!editable || !distributionReady || locations.length === 0 || busy || scanBusy) {
       return
     }
-    if (hasValidationError) {
-      setError('Превышено принятое количество — уменьшите количество в строках.')
+    focusScanner()
+  }, [busy, distributionReady, editable, focusScanner, locations.length, scanBusy])
+
+  const scanDistribution = async (event?: FormEvent<HTMLFormElement>) => {
+    event?.preventDefault()
+    if (!distributionReady || !editable || scanBusy) {
+      focusScanner()
       return
     }
-    setBusy(true)
+    const barcode = scanValue.trim()
+    if (!barcode) {
+      setScanMessage('Отсканируйте ячейку или товар.')
+      focusScanner()
+      return
+    }
+    setScanBusy(true)
+    setError(null)
+    setScanMessage(null)
+    distributionEditSeq.current += 1
     try {
-      await persistDistribution()
+      const res = await fetch(
+        apiUrl(`/operations/inbound-intake-requests/${requestId}/distribution-scan`),
+        {
+          method: 'POST',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            barcode,
+            active_storage_location_id: activeLocationId,
+          }),
+        },
+      )
+      if (!res.ok) {
+        setError(sortingErrorMessageRu(await readApiErrorMessage(res)))
+        setScanValue('')
+        return
+      }
+      const result = (await res.json()) as DistributionScanOut
+      if (result.active_storage_location_id != null) {
+        setActiveLocationId(result.active_storage_location_id)
+        setActiveLocationCode(result.active_storage_location_code)
+      }
+      if (result.kind === 'location') {
+        setScanMessage(`Активная ячейка: ${result.active_storage_location_code ?? 'без кода'}.`)
+      } else {
+        hydrateDistributionRows(result.lines)
+        markDirty(false)
+        setHighlightedProductId(result.product_id)
+        const product = productStates.find((p) => p.product_id === result.product_id)
+        const allocated = result.lines
+          .filter((r) => r.product_id === result.product_id)
+          .reduce((sum, r) => sum + Number(r.quantity || 0), 0)
+        const accepted = product?.accepted ?? 0
+        const remaining = Math.max(0, accepted - allocated)
+        setScanMessage(
+          `Скан принят: ${product?.product_name ?? 'товар'} → ${result.active_storage_location_code ?? activeLocationCode ?? 'ячейка'}; разложено ${allocated}, осталось ${remaining}.`,
+        )
+      }
+      setScanValue('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось обработать скан.')
     } finally {
-      setBusy(false)
+      setScanBusy(false)
+      focusScanner()
     }
   }
 
@@ -558,6 +721,12 @@ export function FfInboundSortingPanel({
     }
     if (hasValidationError) {
       setError('Превышено принятое количество — исправьте строки перед применением.')
+      return
+    }
+    if (firstIncompleteProduct != null) {
+      setError(
+        `По товару ${firstIncompleteProduct.product_name} осталось разложить ${remainingByProductId.get(firstIncompleteProduct.product_id) ?? 0} шт.`,
+      )
       return
     }
     setBusy(true)
@@ -570,7 +739,7 @@ export function FfInboundSortingPanel({
         { method: 'POST', headers: authHeaders },
       )
       if (!res.ok) {
-        setError(await readApiErrorMessage(res))
+        setError(sortingErrorMessageRu(await readApiErrorMessage(res)))
         return
       }
       await onReload()
@@ -598,9 +767,6 @@ export function FfInboundSortingPanel({
     )
   }
 
-  const editable = !completed
-  const distributionReady = distributionLoaded
-
   return (
     <FfProductMarkingPrintProvider token={token}>
       <Box data-testid="ff-sorting-panel" sx={{ width: '100%', minWidth: 0 }}>
@@ -625,6 +791,68 @@ export function FfInboundSortingPanel({
         </Alert>
       ) : null}
 
+      {editable ? (
+        <Box
+          component="form"
+          onSubmit={(event) => void scanDistribution(event)}
+          sx={{
+            mb: 2,
+            p: 1.5,
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1,
+            bgcolor: (theme) => alpha(theme.palette.info.main, 0.04),
+          }}
+          data-testid="ff-sorting-scanner"
+        >
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.25} sx={{ alignItems: { md: 'center' } }}>
+            <TextField
+              inputRef={scanInputRef}
+              value={scanValue}
+              onChange={(event) => setScanValue(event.target.value)}
+              size="small"
+              autoFocus={editable && distributionReady && locations.length > 0}
+              fullWidth
+              autoComplete="off"
+              placeholder={activeLocationId == null ? 'Скан ячейки' : 'Скан товара'}
+              disabled={scanBusy || busy || !distributionReady || locations.length === 0}
+              slotProps={{
+                htmlInput: {
+                  'data-testid': 'ff-sorting-scan-input',
+                },
+              }}
+            />
+            <Chip
+              size="small"
+              color={activeLocationId == null ? 'default' : 'info'}
+              label={activeLocationId == null ? 'Ячейка не выбрана' : `Ячейка ${activeLocationCode}`}
+              data-testid="ff-sorting-active-location"
+              sx={{ alignSelf: { xs: 'flex-start', md: 'center' } }}
+            />
+            <Button
+              type="submit"
+              variant="outlined"
+              startIcon={<QrCodeScannerOutlined />}
+              disabled={scanBusy || busy || !distributionReady || locations.length === 0}
+              data-testid="ff-sorting-scan-submit"
+              sx={{ whiteSpace: 'nowrap' }}
+            >
+              Скан
+            </Button>
+          </Stack>
+          {scanMessage ? (
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: 'block', mt: 0.75 }}
+              data-testid="ff-sorting-scan-message"
+            >
+              {scanMessage}
+            </Typography>
+          ) : null}
+        </Box>
+      ) : null}
+
       <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
         <Typography variant="body2" color="text.secondary">
           Осталось разложить:
@@ -636,32 +864,21 @@ export function FfInboundSortingPanel({
           data-testid="ff-sorting-remaining-total"
         />
         {editable ? (
-          <>
-            <Button
-              variant="outlined"
-              size="small"
-              disabled={busy || hasValidationError || !distributionReady}
-              onClick={() => void saveDistribution()}
-              data-testid="ff-sorting-save"
-            >
-              Сохранить
-            </Button>
-            <Button
-              variant="contained"
-              size="small"
-              disabled={busy || hasValidationError || sortingRemainingQty <= 0 || !distributionReady}
-              onClick={() => void applyDistribution()}
-              data-testid="ff-sorting-apply"
-            >
-              Применить раскладку
-            </Button>
-          </>
+          <Button
+            variant="contained"
+            size="small"
+            disabled={busy || hasValidationError || sortingRemainingQty <= 0 || !distributionReady}
+            onClick={() => void applyDistribution()}
+            data-testid="ff-sorting-apply"
+          >
+            Применить раскладку
+          </Button>
         ) : null}
       </Stack>
 
       {locations.length === 0 ? (
         <Alert severity="warning" sx={{ mb: 2 }} data-testid="ff-sorting-no-locations">
-          На складе нет ячеек хранения — создайте их в разделе «Ячейки».
+          Адресное хранение включено, но на складе нет обычных ячеек. Создайте ячейку в каталоге складов.
         </Alert>
       ) : null}
 
@@ -686,6 +903,11 @@ export function FfInboundSortingPanel({
               sx={{
                 p: 2,
                 minWidth: 0,
+                borderColor: product.product_id === highlightedProductId ? 'info.main' : undefined,
+                boxShadow:
+                  product.product_id === highlightedProductId
+                    ? (theme) => `0 0 0 1px ${theme.palette.info.main}`
+                    : undefined,
                 ...(done
                   ? { opacity: 0.85, bgcolor: (theme) => alpha(theme.palette.success.main, 0.06) }
                   : null),

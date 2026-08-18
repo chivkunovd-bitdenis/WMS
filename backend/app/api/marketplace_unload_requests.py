@@ -4,7 +4,17 @@ import uuid
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+    status,
+)
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -174,6 +184,7 @@ class MarketplaceUnloadRequestSummaryOut(BaseModel):
     warehouse_name: str
     status: str
     line_count: int = Field(default=0, ge=0)
+    goods_qty_total: int = Field(default=0, ge=0)
     seller_id: str | None = None
     seller_name: str | None = None
     wb_mp_warehouse_id: int | None = None
@@ -372,6 +383,7 @@ def _summary_out(
         warehouse_name=warehouse_name,
         status=r.status,
         line_count=len(r.lines),
+        goods_qty_total=sum(int(ln.quantity) for ln in r.lines),
         seller_id=str(r.seller_id) if r.seller_id is not None else None,
         seller_name=seller_name,
         wb_mp_warehouse_id=int(r.wb_mp_warehouse_id) if r.wb_mp_warehouse_id is not None else None,
@@ -500,6 +512,8 @@ async def _detail_with_packaging(
 def _map_mu_err(exc: MarketplaceUnloadError) -> HTTPException:
     if exc.code == "not_found":
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+    if exc.code == "not_draft":
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail="not_draft")
     if exc.code == "not_editable":
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail="not_editable")
     if exc.code == "bad_status":
@@ -540,7 +554,12 @@ def _map_mu_err(exc: MarketplaceUnloadError) -> HTTPException:
     if exc.code == "insufficient_available":
         return HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="insufficient_available",
+            detail=exc.detail or "insufficient_available",
+        )
+    if exc.code == "insufficient_free_fbo":
+        return HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=exc.detail or "insufficient_free_fbo",
         )
     if exc.code == "no_lines":
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail="no_lines")
@@ -590,6 +609,8 @@ def _map_pick_err(exc: MarketplaceUnloadPickError) -> HTTPException:
 def _map_box_err(exc: MarketplaceUnloadBoxError) -> HTTPException:
     if exc.code == "not_found":
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+    if exc.code == "not_draft":
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail="not_draft")
     if exc.code in (
         "not_editable",
         "open_box_exists",
@@ -740,6 +761,35 @@ async def get_marketplace_unload(
         sync_packaging=True,
         seller_plan_only=_seller_plan_only(user),
     )
+
+
+@router.delete("/{request_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_marketplace_unload_draft(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_mp_shipments_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_bearer)
+    ],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> Response:
+    await _get_visible_request(
+        session,
+        user,
+        request_id,
+        credentials,
+        effective_seller_id=effective_seller_id,
+    )
+    try:
+        await svc.delete_draft_request(session, user.tenant_id, request_id)
+    except MarketplaceUnloadError as exc:
+        if exc.code == "not_draft":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="not_draft",
+            ) from None
+        raise _map_mu_err(exc) from None
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(
@@ -1215,14 +1265,12 @@ async def delete_marketplace_unload_line(
     ],
 ) -> None:
     await _get_visible_request(session, user, request_id, credentials)
-    allow_ff_confirmed = user.role == FULFILLMENT_ADMIN
     try:
         await svc.delete_line(
             session,
             user.tenant_id,
             request_id,
             line_id,
-            allow_ff_confirmed=allow_ff_confirmed,
         )
     except MarketplaceUnloadError as exc:
         raise _map_mu_err(exc) from None

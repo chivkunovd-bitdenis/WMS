@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import './App.css'
 import { apiUrl } from './api'
-import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { ProfileLoadingScreen } from './screens/ProfileLoadingScreen'
 import { PublicAuthScreen } from './screens/PublicAuthScreen'
 import { AuthedAppLayout } from './layouts/AuthedAppLayout'
@@ -53,6 +53,7 @@ import {
   resolveFfPermissions,
 } from './utils/ffPermissions'
 import { setSeparateMarkingPrintEnabled } from './utils/separateMarkingPrint'
+import type { InboundOperationType } from './utils/inboundOperationType'
 
 type WarehouseRow = { id: string; name: string; code: string }
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
@@ -78,10 +79,21 @@ type InboundSummaryRow = {
   id: string
   warehouse_id: string
   status: string
+  operation_type?: string | null
+  document_number?: string | null
+  display_number?: string | null
+  waybill_number?: string | null
   line_count: number
+  goods_qty_total?: number | null
+  planned_box_count?: number | null
+  actual_box_count?: number | null
+  boxes_discrepancy?: boolean
+  has_discrepancy?: boolean
   planned_delivery_date: string | null
   seller_id?: string | null
   seller_name?: string | null
+  product_names?: string[]
+  created_by_seller_id?: string | null
   created_at?: string
   sorting_remaining_qty?: number
 }
@@ -123,6 +135,9 @@ type InboundDetailRow = {
   actual_box_count?: number | null
   boxes_discrepancy?: boolean
   has_discrepancy?: boolean
+  seller_id?: string | null
+  seller_name?: string | null
+  created_by_seller_id?: string | null
   boxes?: InboundBoxRow[]
   lines: InboundLineRow[]
 }
@@ -145,6 +160,26 @@ type GlobalMovementRow = {
   quantity_delta: number
   movement_type: string
   created_at: string
+}
+
+function FfAccessDeniedPage() {
+  return (
+    <FfPlaceholderPage
+      title="Нет доступа"
+      hint="Нет доступа к этому разделу."
+      testId="ff-access-denied"
+    />
+  )
+}
+
+function SellerPortalDocumentRedirect() {
+  const location = useLocation()
+
+  useEffect(() => {
+    window.location.replace(`${location.pathname}${location.search}${location.hash}`)
+  }, [location.hash, location.pathname, location.search])
+
+  return <ProfileLoadingScreen loading onLogout={() => window.location.replace('/')} />
 }
 
 type OutboundSummaryRow = {
@@ -246,6 +281,8 @@ export default function App() {
   const [inboundSummaries, setInboundSummaries] = useState<InboundSummaryRow[]>(
     [],
   )
+  const [inboundListLoading, setInboundListLoading] = useState(false)
+  const [inboundListError, setInboundListError] = useState<string | null>(null)
   const [selectedInboundId, setSelectedInboundId] = useState<string | null>(
     null,
   )
@@ -277,6 +314,7 @@ export default function App() {
     null,
   )
   const [ffDocModal, setFfDocModal] = useState<null | 'inbound' | 'outbound'>(null)
+  const [ffDocDirty, setFfDocDirty] = useState(false)
   const [ffInboundWorkspace, setFfInboundWorkspace] =
     useState<InboundRequestWorkspace>('full')
   const [marketplaceUnloadSummaries, setMarketplaceUnloadSummaries] = useState<
@@ -382,7 +420,7 @@ export default function App() {
   const refreshLocations = useCallback(
     async (t: string, warehouseId: string) => {
       const res = await fetch(
-        apiUrl(`/warehouses/${warehouseId}/locations`),
+        apiUrl(`/warehouses/${warehouseId}/locations?exclude_sorting_zone=true`),
         { headers: authHeaders(t) },
       )
       if (!res.ok) {
@@ -441,13 +479,23 @@ export default function App() {
 
   const refreshInboundList = useCallback(
     async (t: string) => {
-      const res = await fetch(apiUrl('/operations/inbound-intake-requests'), {
-        headers: authHeaders(t),
-      })
-      if (!res.ok) {
-        throw new Error(await readApiErrorMessage(res))
+      setInboundListLoading(true)
+      setInboundListError(null)
+      try {
+        const res = await fetch(apiUrl('/operations/inbound-intake-requests'), {
+          headers: authHeaders(t),
+        })
+        if (!res.ok) {
+          throw new Error(await readApiErrorMessage(res))
+        }
+        setInboundSummaries((await res.json()) as InboundSummaryRow[])
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Не удалось загрузить приёмки.'
+        setInboundListError(message)
+        throw e
+      } finally {
+        setInboundListLoading(false)
       }
-      setInboundSummaries((await res.json()) as InboundSummaryRow[])
     },
     [authHeaders],
   )
@@ -604,13 +652,36 @@ export default function App() {
     setOpsError(null)
     void (async () => {
       try {
-        await refreshWarehouses(token)
-        if (me.role !== 'fulfillment_admin' && !canAccessFfBlock(me.role, me.permissions, 'cells')) {
+        const canLoadReception = canAccessFfBlock(me.role, me.permissions, 'reception')
+        const canLoadMpShipments = canAccessFfBlock(me.role, me.permissions, 'mp_shipments')
+        const canLoadPackaging = canAccessFfBlock(me.role, me.permissions, 'packaging')
+        const canLoadCells =
+          canAccessFfBlock(me.role, me.permissions, 'cells') ||
+          canAccessFfBlock(me.role, me.permissions, 'inventory')
+        const canLoadWarehouseCatalog =
+          me.role === 'fulfillment_admin' ||
+          canLoadReception ||
+          canLoadMpShipments ||
+          canLoadPackaging ||
+          canLoadCells
+        const canLoadProductCatalog = canLoadWarehouseCatalog
+        if (canLoadWarehouseCatalog) {
+          await refreshWarehouses(token)
+        } else {
+          setWarehouses([])
+          setSelectedWarehouseId(null)
+        }
+        if (me.role !== 'fulfillment_admin' && !canLoadCells) {
           setLocations([])
           setSelectedWarehouseId(null)
         }
-        await refreshProducts(token)
-        await refreshSellers(token)
+        if (canLoadProductCatalog) {
+          await refreshProducts(token)
+          await refreshSellers(token)
+        } else {
+          setProducts([])
+          setSellers([])
+        }
       } catch (e) {
         setCatalogError(
           e instanceof Error ? e.message : 'Не удалось загрузить каталог.',
@@ -619,11 +690,27 @@ export default function App() {
     })()
     void (async () => {
       try {
-        await refreshInboundList(token)
-        await refreshOutboundList(token)
-        await refreshMarketplaceUnloadList(token)
-        await refreshDiscrepancyActList(token)
-        await refreshGlobalMovements(token)
+        const canLoadReception = canAccessFfBlock(me.role, me.permissions, 'reception')
+        const canLoadMpShipments = canAccessFfBlock(me.role, me.permissions, 'mp_shipments')
+        if (me.role === 'fulfillment_admin' || canLoadReception) {
+          await refreshInboundList(token)
+        } else {
+          setInboundSummaries([])
+        }
+        if (me.role === 'fulfillment_admin') {
+          await refreshOutboundList(token)
+          await refreshDiscrepancyActList(token)
+          await refreshGlobalMovements(token)
+        } else {
+          setOutboundSummaries([])
+          setDiscrepancyActSummaries([])
+          setGlobalMovements([])
+        }
+        if (me.role === 'fulfillment_admin' || canLoadMpShipments) {
+          await refreshMarketplaceUnloadList(token)
+        } else {
+          setMarketplaceUnloadSummaries([])
+        }
       } catch (e) {
         setOpsError(
           e instanceof Error ? e.message : 'Не удалось загрузить заявки.',
@@ -975,6 +1062,190 @@ export default function App() {
     }
   }
 
+  async function onRenameWarehouse(warehouseId: string, name: string): Promise<boolean> {
+    if (!token) {
+      return false
+    }
+    const trimmed = name.trim()
+    if (!trimmed) {
+      setCatalogError('Укажите название склада.')
+      return false
+    }
+    setCatalogError(null)
+    setCatalogBusy(true)
+    try {
+      const res = await fetch(apiUrl(`/warehouses/${warehouseId}`), {
+        method: 'PATCH',
+        headers: {
+          ...authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: trimmed }),
+      })
+      if (!res.ok) {
+        setCatalogError(await readApiErrorMessage(res))
+        return false
+      }
+      await refreshWarehouses(token)
+      return true
+    } catch (e) {
+      setCatalogError(e instanceof Error ? e.message : 'Сеть: не удалось переименовать склад.')
+      return false
+    } finally {
+      setCatalogBusy(false)
+    }
+  }
+
+  async function onDeleteWarehouse(warehouseId: string): Promise<boolean> {
+    if (!token) {
+      return false
+    }
+    setCatalogError(null)
+    setCatalogBusy(true)
+    try {
+      const res = await fetch(apiUrl(`/warehouses/${warehouseId}`), {
+        method: 'DELETE',
+        headers: authHeaders(token),
+      })
+      if (!res.ok) {
+        const msg = await readApiErrorMessage(res)
+        setCatalogError(
+          msg === 'warehouse_has_documents'
+            ? 'Нельзя удалить склад: к нему привязаны документы.'
+            : msg === 'warehouse_has_stock'
+              ? 'Нельзя удалить склад: на нём есть остатки.'
+              : msg === 'warehouse_has_locations'
+                ? 'Нельзя удалить склад: сначала удалите обычные ячейки.'
+                : msg,
+        )
+        return false
+      }
+      await refreshWarehouses(token)
+      return true
+    } catch (e) {
+      setCatalogError(e instanceof Error ? e.message : 'Сеть: не удалось удалить склад.')
+      return false
+    } finally {
+      setCatalogBusy(false)
+    }
+  }
+
+  async function onRenameLocation(
+    warehouseId: string,
+    locationId: string,
+    code: string,
+  ): Promise<boolean> {
+    if (!token) {
+      return false
+    }
+    const trimmed = code.trim()
+    if (!trimmed) {
+      setCatalogError('Укажите код ячейки.')
+      return false
+    }
+    setCatalogError(null)
+    setCatalogBusy(true)
+    try {
+      const res = await fetch(apiUrl(`/warehouses/${warehouseId}/locations/${locationId}`), {
+        method: 'PATCH',
+        headers: {
+          ...authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ code: trimmed }),
+      })
+      if (!res.ok) {
+        const msg = await readApiErrorMessage(res)
+        setCatalogError(
+          msg === 'location_code_taken'
+            ? 'Такой код ячейки уже есть на этом складе.'
+            : msg === 'system_location_locked'
+              ? 'Служебную зону сортировки нельзя переименовать.'
+              : msg,
+        )
+        return false
+      }
+      await refreshLocations(token, warehouseId)
+      return true
+    } catch (e) {
+      setCatalogError(e instanceof Error ? e.message : 'Сеть: не удалось переименовать ячейку.')
+      return false
+    } finally {
+      setCatalogBusy(false)
+    }
+  }
+
+  async function onDeleteLocation(
+    warehouseId: string,
+    locationId: string,
+    moveStockTo?: 'sorting' | 'unallocated',
+  ): Promise<boolean> {
+    if (!token) {
+      return false
+    }
+    setCatalogError(null)
+    setCatalogBusy(true)
+    try {
+      const params = moveStockTo ? `?move_stock_to=${moveStockTo}` : ''
+      const res = await fetch(apiUrl(`/warehouses/${warehouseId}/locations/${locationId}${params}`), {
+        method: 'DELETE',
+        headers: authHeaders(token),
+      })
+      if (!res.ok) {
+        const msg = await readApiErrorMessage(res)
+        setCatalogError(
+          msg === 'location_has_stock'
+            ? 'В ячейке есть товар. Выберите перенос в сортировку или без ячейки.'
+            : msg === 'system_location_locked'
+              ? 'Служебную зону сортировки нельзя удалить.'
+              : msg,
+        )
+        return false
+      }
+      await refreshLocations(token, warehouseId)
+      return true
+    } catch (e) {
+      setCatalogError(e instanceof Error ? e.message : 'Сеть: не удалось удалить ячейку.')
+      return false
+    } finally {
+      setCatalogBusy(false)
+    }
+  }
+
+  async function onLoadLocationBalances(locationId: string): Promise<
+    {
+      product_id: string
+      sku_code: string
+      product_name: string
+      quantity: number
+      reserved: number
+      available: number
+    }[]
+  > {
+    if (!token) {
+      return []
+    }
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/inventory-balances?storage_location_id=${locationId}`),
+        { headers: authHeaders(token) },
+      )
+      if (!res.ok) {
+        return []
+      }
+      return (await res.json()) as {
+        product_id: string
+        sku_code: string
+        product_name: string
+        quantity: number
+        reserved: number
+        available: number
+      }[]
+    } catch {
+      return []
+    }
+  }
+
   async function onListWarehouseRacks(warehouseId: string): Promise<string[]> {
     if (!token) {
       return []
@@ -1081,6 +1352,8 @@ export default function App() {
         fd.get('inbound_planned_delivery_date') ?? '',
       ).trim()
       const planned_delivery_date = planned_delivery_date_raw || null
+      const operation_type =
+        String(fd.get('inbound_operation_type') ?? 'inbound').trim() || 'inbound'
       const warehouseId =
         whFromForm ||
         selectedWarehouseId ||
@@ -1099,7 +1372,7 @@ export default function App() {
           ...authHeaders(token),
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ warehouse_id: warehouseId, planned_delivery_date }),
+        body: JSON.stringify({ warehouse_id: warehouseId, planned_delivery_date, operation_type }),
       })
       if (!res.ok) {
         setOpsError(await readApiErrorMessage(res))
@@ -2331,13 +2604,20 @@ export default function App() {
     refreshMarketplaceUnloadList,
   ])
 
-  const onCreateFfInboundDraft = useCallback(async (): Promise<{ id: string } | null> => {
+  const onCreateFfInboundDraft = useCallback(async (
+    operationType: InboundOperationType,
+    sellerId: string,
+  ): Promise<{ id: string } | null> => {
     if (!token) {
       return null
     }
     const wid = selectedWarehouseId ?? warehouses[0]?.id ?? null
     if (!wid) {
       setOpsError('Склад ФФ не найден.')
+      return null
+    }
+    if (!sellerId) {
+      setOpsError('Выберите селлера для документа.')
       return null
     }
     setFfSuppliesNotice(null)
@@ -2350,7 +2630,11 @@ export default function App() {
           ...authHeaders(token),
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ warehouse_id: wid }),
+        body: JSON.stringify({
+          warehouse_id: wid,
+          operation_type: operationType,
+          seller_id: sellerId,
+        }),
       })
       if (!res.ok) {
         setOpsError(await readApiErrorMessage(res))
@@ -2360,7 +2644,13 @@ export default function App() {
       await refreshInboundList(token)
       return created
     } catch (e) {
-      setOpsError(e instanceof Error ? e.message : 'Не удалось создать приёмку.')
+      setOpsError(
+        e instanceof Error
+          ? e.message
+          : operationType === 'return'
+            ? 'Не удалось создать возврат.'
+            : 'Не удалось создать приёмку.',
+      )
       return null
     } finally {
       setOpsBusy(false)
@@ -2389,9 +2679,7 @@ export default function App() {
       }
       const created = (await res.json()) as { id: string }
       await refreshDiscrepancyActList(token)
-      setFfSuppliesNotice(
-        'Акт расхождения создан (черновик). Связь с приёмкой и строки — на следующем этапе.',
-      )
+      setFfSuppliesNotice('Акт расхождения создан (черновик). Добавьте строки и передайте на FF.')
       return created
     } catch (e) {
       setOpsError(
@@ -2402,6 +2690,20 @@ export default function App() {
       setOpsBusy(false)
     }
   }, [token, authHeaders, refreshDiscrepancyActList])
+
+  const closeFfDocument = useCallback(() => {
+    if (ffDocDirty && !window.confirm('Закрыть без сохранения?')) {
+      return
+    }
+    setFfDocDirty(false)
+    setFfDocModal(null)
+    setSelectedInboundId(null)
+    setSelectedOutboundId(null)
+    setFfInboundWorkspace('full')
+    if (token) {
+      void refreshInboundList(token)
+    }
+  }, [ffDocDirty, refreshInboundList, token])
 
   const rootElement = (() => {
     if (!token) {
@@ -2428,19 +2730,27 @@ export default function App() {
     const isFulfillmentAdmin = me.role === 'fulfillment_admin'
     const isFulfillmentSeller = me.role === 'fulfillment_seller'
     const ffPermissions = resolveFfPermissions(me.role, me.permissions)
-    const canFbsOps = isFulfillmentAdmin || canAccessFfBlock(me.role, me.permissions, 'packaging')
+    const canMpShipmentOps =
+      isFulfillmentAdmin || canAccessFfBlock(me.role, me.permissions, 'mp_shipments')
+    const canPackagingOps =
+      isFulfillmentAdmin || canAccessFfBlock(me.role, me.permissions, 'packaging')
+    const canShiftLeadOps = canAccessFfBlock(me.role, me.permissions, 'shift_lead')
     const canReceptionOps = canAccessFfBlock(me.role, me.permissions, 'reception')
-    const canCellsOps = canAccessFfBlock(me.role, me.permissions, 'cells')
+    const canCellsOps =
+      canAccessFfBlock(me.role, me.permissions, 'cells') ||
+      canAccessFfBlock(me.role, me.permissions, 'inventory')
+    const canSettingsOps = isFulfillmentAdmin || canAccessFfBlock(me.role, me.permissions, 'settings')
     const portal: 'seller' | 'ff' = 'ff'
     const base = '/app/ff'
+    const ffAccessDenied = <FfAccessDeniedPage />
 
     // seller stock should always be available on products tab
     // (refreshed lazily by screens via this helper)
 
     const v2 = (
-        <AuthedAppLayout
+      <AuthedAppLayout
         onLogout={onLogout}
-          title="Портал ФФ"
+        title="Портал ФФ"
         userLabel={me.email}
         userRoleLabel={ffRoleLabel(me.role)}
         meRole={me.role}
@@ -2449,6 +2759,7 @@ export default function App() {
       >
         <>
         <Routes>
+          <Route index element={<Navigate to={`${base}/dashboard`} replace />} />
           <Route
             path="dashboard"
             element={<Navigate to={`${base}/dashboard`} replace />}
@@ -2459,6 +2770,8 @@ export default function App() {
             element={
               <FfDashboard
                 me={me}
+                token={token}
+                authHeaders={authHeaders}
                 isFulfillmentAdmin={isFulfillmentAdmin}
                 inboundSummaries={inboundSummaries}
                 outboundSummaries={outboundSummaries}
@@ -2482,8 +2795,17 @@ export default function App() {
                   setFfDocModal('inbound')
                 }}
                 onOpenOutbound={(id) => {
+                  setPendingMpUnloadId(null)
+                  setSelectedInboundId(null)
+                  setSelectedOutboundId(id)
+                  setFfDocModal('outbound')
+                }}
+                onOpenMarketplaceUnload={(id) => {
                   setPendingMpUnloadId(id)
                   navigate(`${base}/ff/mp-shipments`)
+                }}
+                onOpenFbsSupply={(id) => {
+                  navigate(`${base}/fbs?supply_id=${id}`)
                 }}
               />
             }
@@ -2497,105 +2819,125 @@ export default function App() {
           <Route
             path="ff/mp-shipments"
             element={
-              <FfSuppliesShipmentsPage
-                pageVariant="mp-shipments"
-                busy={opsBusy}
-                error={opsError}
-                infoNotice={ffSuppliesNotice}
-                onDismissInfoNotice={() => setFfSuppliesNotice(null)}
-                token={token}
-                addressStorageEnabled={me?.address_storage_enabled !== false}
-                sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
-                productPicklist={products.map((p) => ({
-                  id: p.id,
-                  sku_code: p.sku_code,
-                  name: p.name,
-                }))}
-                onRefreshFfSupplyExtras={async () => {
-                  if (!token) {
-                    return
-                  }
-                  await refreshMarketplaceUnloadList(token)
-                  await refreshDiscrepancyActList(token)
-                }}
-                inboundSummaries={inboundSummaries}
-                outboundSummaries={outboundSummaries}
-                marketplaceUnloadSummaries={marketplaceUnloadSummaries}
-                discrepancyActSummaries={discrepancyActSummaries}
-                initialMarketplaceUnloadId={pendingMpUnloadId}
-                onInitialMarketplaceUnloadOpened={() => setPendingMpUnloadId(null)}
-                onOpenInbound={(id) => {
-                  setSelectedOutboundId(null)
-                  setSelectedInboundId(id)
-                  setFfInboundWorkspace('full')
-                  setFfDocModal('inbound')
-                }}
-                onOpenOutbound={(id) => {
-                  setSelectedInboundId(null)
-                  setSelectedOutboundId(id)
-                  setFfDocModal('outbound')
-                }}
-                onCreateMpShipment={onCreateFfMpShipment}
-                onCreateDiverge={onCreateFfDiscrepancyAct}
-              />
+              token && canMpShipmentOps ? (
+                <FfSuppliesShipmentsPage
+                  pageVariant="mp-shipments"
+                  busy={opsBusy}
+                  error={opsError}
+                  infoNotice={ffSuppliesNotice}
+                  onDismissInfoNotice={() => setFfSuppliesNotice(null)}
+                  token={token}
+                  addressStorageEnabled={me?.address_storage_enabled !== false}
+                  sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
+                  productPicklist={products.map((p) => ({
+                    id: p.id,
+                    sku_code: p.sku_code,
+                    name: p.name,
+                  }))}
+                  onRefreshFfSupplyExtras={async () => {
+                    if (!token) {
+                      return
+                    }
+                    await refreshMarketplaceUnloadList(token)
+                    await refreshDiscrepancyActList(token)
+                  }}
+                  inboundSummaries={inboundSummaries}
+                  outboundSummaries={outboundSummaries}
+                  marketplaceUnloadSummaries={marketplaceUnloadSummaries}
+                  discrepancyActSummaries={discrepancyActSummaries}
+                  initialMarketplaceUnloadId={pendingMpUnloadId}
+                  onInitialMarketplaceUnloadOpened={() => setPendingMpUnloadId(null)}
+                  onOpenInbound={(id) => {
+                    setSelectedOutboundId(null)
+                    setSelectedInboundId(id)
+                    setFfInboundWorkspace('full')
+                    setFfDocModal('inbound')
+                  }}
+                  onOpenOutbound={(id) => {
+                    setSelectedInboundId(null)
+                    setSelectedOutboundId(id)
+                    setFfDocModal('outbound')
+                  }}
+                  onCreateMpShipment={onCreateFfMpShipment}
+                  onCreateDiverge={onCreateFfDiscrepancyAct}
+                />
+              ) : (
+                ffAccessDenied
+              )
             }
           />
 
           <Route
             path="ff/reception"
             element={
-              <FfInboundQueuePage
-                workspace="reception"
-                rows={inboundSummaries}
-                creatingDraft={opsBusy}
-                onCreateDraft={async () => {
-                  const created = await onCreateFfInboundDraft()
-                  if (!created?.id) {
-                    return
-                  }
-                  setSelectedOutboundId(null)
-                  setSelectedInboundId(created.id)
-                  setFfInboundWorkspace('reception')
-                  setFfDocModal('inbound')
-                }}
-                onOpen={(id) => {
-                  setSelectedOutboundId(null)
-                  setSelectedInboundId(id)
-                  setFfInboundWorkspace('reception')
-                  setFfDocModal('inbound')
-                }}
-              />
+              token && canReceptionOps ? (
+                <FfInboundQueuePage
+                  workspace="reception"
+                  rows={inboundSummaries}
+                  creatingDraft={opsBusy}
+                  sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
+                  loading={inboundListLoading}
+                  error={inboundListError}
+                  onRetry={async () => {
+                    if (token) {
+                      await refreshInboundList(token)
+                    }
+                  }}
+                  onCreateDraft={async (operationType, sellerId) => {
+                    const created = await onCreateFfInboundDraft(operationType, sellerId)
+                    if (!created?.id) {
+                      return
+                    }
+                    setSelectedOutboundId(null)
+                    setSelectedInboundId(created.id)
+                    setFfInboundWorkspace('reception')
+                    setFfDocModal('inbound')
+                  }}
+                  onOpen={(id) => {
+                    setSelectedOutboundId(null)
+                    setSelectedInboundId(id)
+                    setFfInboundWorkspace('reception')
+                    setFfDocModal('inbound')
+                  }}
+                />
+              ) : (
+                ffAccessDenied
+              )
             }
           />
 
           <Route
             path="ff/sorting"
             element={
-              <FfInboundQueuePage
-                workspace="sorting"
-                rows={inboundSummaries}
-                onOpen={(id) => {
-                  setSelectedOutboundId(null)
-                  setSelectedInboundId(id)
-                  setFfInboundWorkspace('sorting')
-                  setFfDocModal('inbound')
-                }}
-              />
+              token && canReceptionOps ? (
+                <FfInboundQueuePage
+                  workspace="sorting"
+                  rows={inboundSummaries}
+                  onOpen={(id) => {
+                    setSelectedOutboundId(null)
+                    setSelectedInboundId(id)
+                    setFfInboundWorkspace('sorting')
+                    setFfDocModal('inbound')
+                  }}
+                />
+              ) : (
+                ffAccessDenied
+              )
             }
           />
 
           <Route
             path="ff/products"
             element={
-              token ? (
+              token && canCellsOps ? (
                 <FfProductsCatalogScreen
                   token={token}
                   authHeaders={authHeaders}
                   sellers={sellers}
-                  onSellersChanged={() => refreshSellers(token)}
+                  canManageCatalog={isFulfillmentAdmin}
                 />
               ) : (
-                <FfPlaceholderPage title="Каталог" hint="Нет токена." testId="ff-products-placeholder" />
+                ffAccessDenied
               )
             }
           />
@@ -2603,7 +2945,7 @@ export default function App() {
           <Route
             path="ff/fbs"
             element={
-              token && canFbsOps ? (
+              token && canPackagingOps ? (
                 <FfFbsOrdersScreen
                   token={token}
                   authHeaders={authHeaders}
@@ -2611,11 +2953,7 @@ export default function App() {
                   isAdmin={isFulfillmentAdmin}
                 />
               ) : (
-                <FfPlaceholderPage
-                  title="FBS"
-                  hint={token ? 'Нет доступа к сборке FBS. Обратитесь к администратору.' : 'Нет токена.'}
-                  testId="ff-fbs-placeholder"
-                />
+                ffAccessDenied
               )
             }
           />
@@ -2626,11 +2964,7 @@ export default function App() {
               token && isFulfillmentAdmin ? (
                 <FfFbsStockSyncScreen token={token} authHeaders={authHeaders} sellers={sellers} />
               ) : (
-                <FfPlaceholderPage
-                  title="FBS — остатки"
-                  hint={token ? 'Настройка остатков доступна только администратору.' : 'Нет токена.'}
-                  testId="ff-fbs-stock-placeholder"
-                />
+                ffAccessDenied
               )
             }
           />
@@ -2638,28 +2972,30 @@ export default function App() {
           <Route
             path="ff/packaging"
             element={
-              token && (isFulfillmentAdmin || canAccessFfBlock(me.role, me.permissions, 'packaging')) ? (
+              token && canPackagingOps ? (
                 <FfPackagingPage token={token} />
               ) : (
-                <FfPlaceholderPage
-                  title="Упаковка"
-                  hint={
-                    token
-                      ? 'Нет доступа к разделу «Упаковка». Обратитесь к администратору.'
-                      : 'Нет токена.'
-                  }
-                  testId="ff-packaging-placeholder"
-                />
+                ffAccessDenied
+              )
+            }
+          />
+          <Route
+            path="ff/packaging/:taskId"
+            element={
+              token && canPackagingOps ? (
+                <FfPackagingPage token={token} />
+              ) : (
+                ffAccessDenied
               )
             }
           />
           <Route
             path="ff/packaging/pending-marking"
             element={
-              token && (isFulfillmentAdmin || canAccessFfBlock(me.role, me.permissions, 'packaging')) ? (
+              token && canPackagingOps ? (
                 <FfPendingMarkingPage token={token} />
               ) : (
-                <Navigate to={`${base}/dashboard`} replace />
+                ffAccessDenied
               )
             }
           />
@@ -2667,17 +3003,13 @@ export default function App() {
           <Route
             path="ff/honest-sign"
             element={
-              token ? (
+              token && isFulfillmentAdmin ? (
                 <FfHonestSignPage
                   token={token}
                   sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
                 />
               ) : (
-                <FfPlaceholderPage
-                  title="Честный знак"
-                  hint="Нет токена."
-                  testId="ff-honest-sign-placeholder"
-                />
+                ffAccessDenied
               )
             }
           />
@@ -2685,69 +3017,53 @@ export default function App() {
           <Route
             path="ff/honest-sign/pool/:poolId"
             element={
-              token ? (
+              token && isFulfillmentAdmin ? (
                 <HonestSignPoolPage token={token} testIdPrefix="ff-honest-sign-pool" />
               ) : (
-                <FfPlaceholderPage
-                  title="Пул КМ"
-                  hint="Нет токена."
-                  testId="ff-honest-sign-pool-placeholder"
-                />
+                ffAccessDenied
               )
             }
           />
           <Route
             path="ff/honest-sign/product/:productId"
             element={
-              token ? (
+              token && isFulfillmentAdmin ? (
                 <HonestSignProductPage token={token} testIdPrefix="ff-honest-sign-product" />
               ) : (
-                <FfPlaceholderPage
-                  title="Карточка товара"
-                  hint="Нет токена."
-                  testId="ff-honest-sign-product-placeholder"
-                />
+                ffAccessDenied
               )
             }
           />
           <Route
             path="ff/honest-sign/ledger"
             element={
-              token ? (
+              token && isFulfillmentAdmin ? (
                 <FfHonestSignLedgerPage
                   token={token}
                   sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
                 />
               ) : (
-                <FfPlaceholderPage
-                  title="Лента расхода"
-                  hint="Нет токена."
-                  testId="ff-honest-sign-ledger-placeholder"
-                />
+                ffAccessDenied
               )
             }
           />
           <Route
             path="ff/honest-sign/reprints"
             element={
-              token && canAccessFfBlock(me.role, me.permissions, 'shift_lead') ? (
+              token && canShiftLeadOps ? (
                 <FfHonestSignReprintsPage token={token} />
               ) : (
-                <Navigate to={`${base}/dashboard`} replace />
+                ffAccessDenied
               )
             }
           />
           <Route
             path="ff/honest-sign/import"
             element={
-              token ? (
+              token && isFulfillmentAdmin ? (
                 <HonestSignImportPage />
               ) : (
-                <FfPlaceholderPage
-                  title="Загрузка КМ"
-                  hint="Нет токена."
-                  testId="ff-honest-sign-import-placeholder"
-                />
+                ffAccessDenied
               )
             }
           />
@@ -2769,70 +3085,262 @@ export default function App() {
 
           <Route
             path="ff/inventory"
-            element={
-              canAccessFfBlock(me.role, me.permissions, 'inventory') ? (
-                <FfPlaceholderPage
-                  title="Инвентаризация"
-                  hint="Раздел в разработке."
-                  testId="ff-inventory-placeholder"
-                />
-              ) : (
-                <Navigate to={`${base}/dashboard`} replace />
-              )
-            }
+            element={token && canCellsOps ? <Navigate to={`${base}/products`} replace /> : ffAccessDenied}
           />
 
           <Route
             path="ff/settings"
             element={
-              token && (isFulfillmentAdmin || canAccessFfBlock(me.role, me.permissions, 'settings')) ? (
+              token && canSettingsOps ? (
                 <FfSettingsScreen
                   token={token}
                   authHeaders={authHeaders}
                   isFulfillmentAdmin={isFulfillmentAdmin}
+                  canManageStaff={canSettingsOps}
                   addressStorageEnabled={me.address_storage_enabled !== false}
                   onAddressStorageChange={() => {
                     void reloadMe()
                   }}
                   separateMarkingPrintEnabled={me.separate_marking_print_enabled === true}
+                  fbsShipmentCutoffTime={me.fbs_shipment_cutoff_time ?? null}
                 />
               ) : (
-                <Navigate to={`${base}/dashboard`} replace />
+                ffAccessDenied
               )
             }
           />
 
-          <Route path="ff/inbound" element={<Navigate to="/app/ops/inbound" replace />} />
-          <Route path="ff/outbound" element={<Navigate to="/app/ops/outbound" replace />} />
-          <Route path="ff/warehouses" element={<Navigate to="/app/catalog" replace />} />
+          <Route
+            path="ff/inbound"
+            element={token && canReceptionOps ? <Navigate to={`${base}/reception`} replace /> : ffAccessDenied}
+          />
+          <Route
+            path="ff/outbound"
+            element={token && isFulfillmentAdmin ? <Navigate to="/app/ops/outbound" replace /> : ffAccessDenied}
+          />
+          <Route
+            path="ff/warehouses"
+            element={token && canCellsOps ? <Navigate to="/app/catalog" replace /> : ffAccessDenied}
+          />
           <Route
             path="ff/integrations/wb"
-            element={<Navigate to="/app/integrations/wb" replace />}
+            element={token && isFulfillmentAdmin ? <Navigate to="/app/integrations/wb" replace /> : ffAccessDenied}
           />
 
           <Route
             path="catalog"
             element={
-              <Screen title="Ячейки" subtitle="Склады и ячейки">
-                <CatalogSection
-                  isFulfillmentAdmin={isFulfillmentAdmin || canCellsOps}
+              token && canCellsOps && isFulfillmentAdmin ? (
+                <Screen title="Ячейки" subtitle="Склады и ячейки">
+                  <CatalogSection
+                    isFulfillmentAdmin={isFulfillmentAdmin || canCellsOps}
+                    catalogBusy={catalogBusy}
+                    catalogError={catalogError}
+                    sellers={sellers}
+                    warehouses={warehouses}
+                    locations={locations}
+                    selectedWarehouseId={selectedWarehouseId}
+                    setSelectedWarehouseId={setSelectedWarehouseId}
+                    products={products}
+                    onCreateWarehouse={(e) => void onCreateWarehouse(e)}
+                    onCreateLocation={onCreateLocation}
+                    onRenameWarehouse={onRenameWarehouse}
+                    onDeleteWarehouse={onDeleteWarehouse}
+                    onRenameLocation={onRenameLocation}
+                    onDeleteLocation={onDeleteLocation}
+                    onLoadLocationBalances={onLoadLocationBalances}
+                    onListWarehouseRacks={onListWarehouseRacks}
+                    onSuggestLocation={onSuggestLocation}
+                    onCreateProduct={(e) => void onCreateProduct(e)}
+                    wbSellerId={wbSellerId}
+                    setWbSellerId={setWbSellerId}
+                    wbHasContentToken={wbHasContentToken}
+                    wbHasSuppliesToken={wbHasSuppliesToken}
+                    wbTokensBusy={wbTokensBusy}
+                    wbSyncBusy={wbSyncBusy}
+                    wbSuppliesSyncBusy={wbSuppliesSyncBusy}
+                    wbLinkBusy={wbLinkBusy}
+                    wbJobStatus={wbJobStatus}
+                    wbJobResult={wbJobResult}
+                    wbSuppliesJobStatus={wbSuppliesJobStatus}
+                    wbSuppliesJobResult={wbSuppliesJobResult}
+                    wbImportedCards={wbImportedCards}
+                    wbImportedSupplies={wbImportedSupplies}
+                    onSaveWbTokens={(e) => void onSaveWbTokens(e)}
+                    onStartWbCardsSyncJob={() => void onStartWbCardsSyncJob()}
+                    onStartWbSuppliesSyncJob={() => void onStartWbSuppliesSyncJob()}
+                    onLinkProductToWb={(e) => void onLinkProductToWb(e)}
+                  />
+                </Screen>
+              ) : token && canCellsOps ? (
+                <Navigate to={`${base}/products`} replace />
+              ) : (
+                ffAccessDenied
+              )
+            }
+          />
+
+          <Route
+            path="ff/sellers"
+            element={
+              token && isFulfillmentAdmin ? (
+                <SellersScreen
+                  token={token}
+                  authHeaders={authHeaders}
+                  isFulfillmentAdmin={isFulfillmentAdmin}
+                  sellers={sellers}
+                  onRefresh={() => void refreshSellers(token)}
+                />
+              ) : (
+                ffAccessDenied
+              )
+            }
+          />
+
+          <Route
+            path="catalog/products"
+            element={
+              token && isFulfillmentAdmin ? (
+                <ProductsScreen
+                  isFulfillmentAdmin={isFulfillmentAdmin}
                   catalogBusy={catalogBusy}
                   catalogError={catalogError}
                   sellers={sellers}
-                  warehouses={warehouses}
-                  locations={locations}
-                  selectedWarehouseId={selectedWarehouseId}
-                  setSelectedWarehouseId={setSelectedWarehouseId}
                   products={products}
-                  onCreateWarehouse={(e) => void onCreateWarehouse(e)}
-                  onCreateLocation={onCreateLocation}
-                  onListWarehouseRacks={onListWarehouseRacks}
-                  onSuggestLocation={onSuggestLocation}
                   onCreateProduct={(e) => void onCreateProduct(e)}
+                />
+              ) : (
+                ffAccessDenied
+              )
+            }
+          />
+
+          <Route
+            path="ops"
+            element={token && canReceptionOps ? <Navigate to={`${base}/reception`} replace /> : ffAccessDenied}
+          />
+
+          <Route
+            path="ops/inbound"
+            element={
+              token && canReceptionOps ? (
+                <InboundScreen
+                  opsError={opsError}
+                  opsBusy={opsBusy}
+                  isFulfillmentAdmin={isFulfillmentAdmin}
+                  isFulfillmentSeller={isFulfillmentSeller}
+                  canEditInboundDraft={canReceptionOps}
+                  warehouses={warehouses}
+                  selectedWarehouseId={selectedWarehouseId}
+                  products={products}
+                  inboundSummaries={inboundSummaries}
+                  selectedInboundId={selectedInboundId}
+                  setSelectedInboundId={setSelectedInboundId}
+                  inboundDetail={inboundDetail}
+                  inboundRequestLocations={inboundRequestLocations}
+                  inboundMovements={inboundMovements}
+                  postedInventoryRows={postedInventoryRows}
+                  onCreateInboundRequest={(e) => void onCreateInboundRequest(e)}
+                  onAddInboundLine={(e) => void onAddInboundLine(e)}
+                  onSubmitInboundRequest={() => void onSubmitInboundRequest()}
+                  onPrimaryAcceptInboundRequest={() => void onPrimaryAcceptInboundRequest()}
+                  onOpenInboundBoxByBarcode={(code) => void onOpenInboundBoxByBarcode(code)}
+                  onScanInboundProductBarcode={(code) => void onScanInboundProductBarcode(code)}
+                  onCloseInboundBoxIntake={() => void onCloseInboundBoxIntake()}
+                  onSetInboundLineActualQty={(e) => void onSetInboundLineActualQty(e)}
+                  onCompleteInboundVerification={() => void onCompleteInboundVerification()}
+                  onSaveInboundLineStorage={(e) => void onSaveInboundLineStorage(e)}
+                  onReceiveInboundLine={(e) => void onReceiveInboundLine(e)}
+                  onPostInboundRequest={() => void onPostInboundRequest()}
+                />
+              ) : (
+                ffAccessDenied
+              )
+            }
+          />
+
+          <Route
+            path="ops/outbound"
+            element={
+              token && isFulfillmentAdmin ? (
+                <OutboundScreen
+                  opsError={opsError}
+                  opsBusy={opsBusy}
+                  isFulfillmentAdmin={isFulfillmentAdmin}
+                  isFulfillmentSeller={isFulfillmentSeller}
+                  canEditOutboundDraft={isFulfillmentAdmin}
+                  warehouses={warehouses}
+                  selectedWarehouseId={selectedWarehouseId}
+                  products={products}
+                  outboundSummaries={outboundSummaries}
+                  selectedOutboundId={selectedOutboundId}
+                  setSelectedOutboundId={setSelectedOutboundId}
+                  outboundDetail={outboundDetail}
+                  outboundRequestLocations={outboundRequestLocations}
+                  outboundMovements={outboundMovements}
+                  onCreateOutboundRequest={(e) => void onCreateOutboundRequest(e)}
+                  onAddOutboundLine={(e) => void onAddOutboundLine(e)}
+                  onDeleteOutboundLine={(lineId) => void onDeleteOutboundLine(lineId)}
+                  onSubmitOutboundRequest={() => void onSubmitOutboundRequest()}
+                  onSaveOutboundLineStorage={(e) => void onSaveOutboundLineStorage(e)}
+                  onShipOutboundLine={(e) => void onShipOutboundLine(e)}
+                  onPostOutboundRequest={() => void onPostOutboundRequest()}
+                />
+              ) : (
+                ffAccessDenied
+              )
+            }
+          />
+
+          <Route
+            path="ops/movements"
+            element={
+              token && isFulfillmentAdmin ? (
+                <MovementsScreen
+                  globalMovements={globalMovements}
+                  onRefreshGlobalMovementsClick={() => void onRefreshGlobalMovementsClick()}
+                  isFulfillmentAdmin={isFulfillmentAdmin}
+                  opsBusy={opsBusy}
+                  backgroundJobStatus={backgroundJobStatus}
+                  backgroundJobResult={backgroundJobResult}
+                  onStartMovementsDigestJob={() => void onStartMovementsDigestJob()}
+                />
+              ) : (
+                ffAccessDenied
+              )
+            }
+          />
+
+          <Route
+            path="ops/transfers"
+            element={
+              token && isFulfillmentAdmin ? (
+                <TransfersScreen
+                  opsError={opsError}
+                  opsBusy={opsBusy}
+                  isFulfillmentAdmin={isFulfillmentAdmin}
+                  locations={locations}
+                  products={products}
+                  onStockTransfer={(e) => void onStockTransfer(e)}
+                />
+              ) : (
+                ffAccessDenied
+              )
+            }
+          />
+
+          <Route
+            path="integrations/wb"
+            element={
+              token && isFulfillmentAdmin ? (
+                <WildberriesScreen
+                  sellers={sellers}
+                  products={products}
                   wbSellerId={wbSellerId}
                   setWbSellerId={setWbSellerId}
                   wbHasContentToken={wbHasContentToken}
                   wbHasSuppliesToken={wbHasSuppliesToken}
+                  wbHasMarketplaceToken={wbHasMarketplaceToken}
                   wbTokensBusy={wbTokensBusy}
                   wbSyncBusy={wbSyncBusy}
                   wbSuppliesSyncBusy={wbSuppliesSyncBusy}
@@ -2844,187 +3352,23 @@ export default function App() {
                   wbImportedCards={wbImportedCards}
                   wbImportedSupplies={wbImportedSupplies}
                   onSaveWbTokens={(e) => void onSaveWbTokens(e)}
+                  onClearWbMarketplaceToken={() => void onClearWbMarketplaceToken()}
                   onStartWbCardsSyncJob={() => void onStartWbCardsSyncJob()}
                   onStartWbSuppliesSyncJob={() => void onStartWbSuppliesSyncJob()}
                   onLinkProductToWb={(e) => void onLinkProductToWb(e)}
                 />
-              </Screen>
-            }
-          />
-
-          <Route
-            path="ff/sellers"
-            element={
-              token ? (
-                <SellersScreen
-                  token={token}
-                  authHeaders={authHeaders}
-                  isFulfillmentAdmin={isFulfillmentAdmin}
-                  sellers={sellers}
-                  onRefresh={() => void refreshSellers(token)}
-                />
               ) : (
-                <FfPlaceholderPage
-                  title="Селлеры"
-                  hint="Нет токена."
-                  testId="ff-sellers-placeholder"
-                />
+                ffAccessDenied
               )
             }
           />
 
-          <Route
-            path="catalog/products"
-            element={
-              <ProductsScreen
-                isFulfillmentAdmin={isFulfillmentAdmin}
-                catalogBusy={catalogBusy}
-                catalogError={catalogError}
-                sellers={sellers}
-                products={products}
-                onCreateProduct={(e) => void onCreateProduct(e)}
-              />
-            }
-          />
-
-          <Route
-            path="ops"
-            element={<Navigate to="/app/ops/inbound" replace />}
-          />
-
-          <Route
-            path="ops/inbound"
-            element={
-              <InboundScreen
-                opsError={opsError}
-                opsBusy={opsBusy}
-                isFulfillmentAdmin={isFulfillmentAdmin}
-                isFulfillmentSeller={isFulfillmentSeller}
-                canEditInboundDraft={canReceptionOps}
-                warehouses={warehouses}
-                selectedWarehouseId={selectedWarehouseId}
-                products={products}
-                inboundSummaries={inboundSummaries}
-                selectedInboundId={selectedInboundId}
-                setSelectedInboundId={setSelectedInboundId}
-                inboundDetail={inboundDetail}
-                inboundRequestLocations={inboundRequestLocations}
-                inboundMovements={inboundMovements}
-                postedInventoryRows={postedInventoryRows}
-                onCreateInboundRequest={(e) => void onCreateInboundRequest(e)}
-                onAddInboundLine={(e) => void onAddInboundLine(e)}
-                onSubmitInboundRequest={() => void onSubmitInboundRequest()}
-                onPrimaryAcceptInboundRequest={() => void onPrimaryAcceptInboundRequest()}
-                onOpenInboundBoxByBarcode={(code) => void onOpenInboundBoxByBarcode(code)}
-                onScanInboundProductBarcode={(code) => void onScanInboundProductBarcode(code)}
-                onCloseInboundBoxIntake={() => void onCloseInboundBoxIntake()}
-                onSetInboundLineActualQty={(e) => void onSetInboundLineActualQty(e)}
-                onCompleteInboundVerification={() => void onCompleteInboundVerification()}
-                onSaveInboundLineStorage={(e) => void onSaveInboundLineStorage(e)}
-                onReceiveInboundLine={(e) => void onReceiveInboundLine(e)}
-                onPostInboundRequest={() => void onPostInboundRequest()}
-              />
-            }
-          />
-
-          <Route
-            path="ops/outbound"
-            element={
-              <OutboundScreen
-                opsError={opsError}
-                opsBusy={opsBusy}
-                isFulfillmentAdmin={isFulfillmentAdmin}
-                isFulfillmentSeller={isFulfillmentSeller}
-                canEditOutboundDraft={isFulfillmentAdmin}
-                warehouses={warehouses}
-                selectedWarehouseId={selectedWarehouseId}
-                products={products}
-                outboundSummaries={outboundSummaries}
-                selectedOutboundId={selectedOutboundId}
-                setSelectedOutboundId={setSelectedOutboundId}
-                outboundDetail={outboundDetail}
-                outboundRequestLocations={outboundRequestLocations}
-                outboundMovements={outboundMovements}
-                onCreateOutboundRequest={(e) => void onCreateOutboundRequest(e)}
-                onAddOutboundLine={(e) => void onAddOutboundLine(e)}
-                onDeleteOutboundLine={(lineId) => void onDeleteOutboundLine(lineId)}
-                onSubmitOutboundRequest={() => void onSubmitOutboundRequest()}
-                onSaveOutboundLineStorage={(e) => void onSaveOutboundLineStorage(e)}
-                onShipOutboundLine={(e) => void onShipOutboundLine(e)}
-                onPostOutboundRequest={() => void onPostOutboundRequest()}
-              />
-            }
-          />
-
-          <Route
-            path="ops/movements"
-            element={
-              <MovementsScreen
-                globalMovements={globalMovements}
-                onRefreshGlobalMovementsClick={() => void onRefreshGlobalMovementsClick()}
-                isFulfillmentAdmin={isFulfillmentAdmin}
-                opsBusy={opsBusy}
-                backgroundJobStatus={backgroundJobStatus}
-                backgroundJobResult={backgroundJobResult}
-                onStartMovementsDigestJob={() => void onStartMovementsDigestJob()}
-              />
-            }
-          />
-
-          <Route
-            path="ops/transfers"
-            element={
-              <TransfersScreen
-                opsError={opsError}
-                opsBusy={opsBusy}
-                isFulfillmentAdmin={isFulfillmentAdmin}
-                locations={locations}
-                products={products}
-                onStockTransfer={(e) => void onStockTransfer(e)}
-              />
-            }
-          />
-
-          <Route
-            path="integrations/wb"
-            element={
-              <WildberriesScreen
-                sellers={sellers}
-                products={products}
-                wbSellerId={wbSellerId}
-                setWbSellerId={setWbSellerId}
-                wbHasContentToken={wbHasContentToken}
-                wbHasSuppliesToken={wbHasSuppliesToken}
-                wbHasMarketplaceToken={wbHasMarketplaceToken}
-                wbTokensBusy={wbTokensBusy}
-                wbSyncBusy={wbSyncBusy}
-                wbSuppliesSyncBusy={wbSuppliesSyncBusy}
-                wbLinkBusy={wbLinkBusy}
-                wbJobStatus={wbJobStatus}
-                wbJobResult={wbJobResult}
-                wbSuppliesJobStatus={wbSuppliesJobStatus}
-                wbSuppliesJobResult={wbSuppliesJobResult}
-                wbImportedCards={wbImportedCards}
-                wbImportedSupplies={wbImportedSupplies}
-                onSaveWbTokens={(e) => void onSaveWbTokens(e)}
-                onClearWbMarketplaceToken={() => void onClearWbMarketplaceToken()}
-                onStartWbCardsSyncJob={() => void onStartWbCardsSyncJob()}
-                onStartWbSuppliesSyncJob={() => void onStartWbSuppliesSyncJob()}
-                onLinkProductToWb={(e) => void onLinkProductToWb(e)}
-              />
-            }
-          />
-
-          <Route path="*" element={<Navigate to={`${base}/dashboard`} replace />} />
+          <Route path="*" element={ffAccessDenied} />
         </Routes>
 
         <Dialog
           open={ffDocModal !== null}
-          onClose={() => {
-            setFfDocModal(null)
-            setSelectedInboundId(null)
-            setSelectedOutboundId(null)
-          }}
+          onClose={closeFfDocument}
           fullScreen
           data-testid="ff-doc-dialog"
         >
@@ -3034,11 +3378,7 @@ export default function App() {
                 edge="start"
                 color="inherit"
                 aria-label="Закрыть"
-                onClick={() => {
-                  setFfDocModal(null)
-                  setSelectedInboundId(null)
-                  setSelectedOutboundId(null)
-                }}
+                onClick={closeFfDocument}
                 data-testid="ff-doc-dialog-close"
               >
                 <CloseIcon />
@@ -3056,14 +3396,10 @@ export default function App() {
                   requestId={selectedInboundId}
                   isFulfillmentAdmin={canReceptionOps}
                   workspace={ffInboundWorkspace}
+                  sellers={sellers}
                   addressStorageEnabled={me?.address_storage_enabled !== false}
-                  onClose={() => {
-                    setFfDocModal(null)
-                    setSelectedInboundId(null)
-                    setSelectedOutboundId(null)
-                    setFfInboundWorkspace('full')
-                    void refreshInboundList(token)
-                  }}
+                  onDirtyChange={setFfDocDirty}
+                  onClose={closeFfDocument}
                 />
               ) : (
                 <MuiTypography variant="body2" color="text.secondary">
@@ -3105,13 +3441,15 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Navigate to={`${base}/dashboard`} replace />} />
         <Route path="/app/*" element={v2} />
-        <Route path="*" element={<Navigate to={`${base}/dashboard`} replace />} />
+        <Route path="*" element={v2} />
       </Routes>
     )
   })()
 
   return (
     <Routes>
+      <Route path="/seller" element={<SellerPortalDocumentRedirect />} />
+      <Route path="/seller/*" element={<SellerPortalDocumentRedirect />} />
       <Route path="*" element={rootElement} />
     </Routes>
   )

@@ -160,7 +160,7 @@ async def create_staff_user(
     email: str,
     password: str | None,
 ) -> User:
-    if acting_user.role != FULFILLMENT_ADMIN:
+    if acting_user.role not in (FULFILLMENT_ADMIN, FULFILLMENT_STAFF):
         raise AuthError("forbidden")
     if password and password.strip():
         password_hash = hash_password(password)
@@ -177,10 +177,10 @@ async def create_staff_user(
         role=FULFILLMENT_STAFF,
     )
     session.add(user)
-    await session.flush()
-    perms = FfStaffPermissions(user_id=user.id)
-    session.add(perms)
     try:
+        await session.flush()
+        perms = FfStaffPermissions(user_id=user.id)
+        session.add(perms)
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()

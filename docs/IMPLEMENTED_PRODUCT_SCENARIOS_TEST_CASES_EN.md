@@ -212,6 +212,38 @@ This document expands **[IMPLEMENTED_PRODUCT_SCENARIOS_EN.md](./IMPLEMENTED_PROD
 - **Steps:** **submit** request.
 - **Expected:** request moves to **submitted** state suitable for warehouse processing.
 
+### TC-NEW-F18-001 Seller creates return from documents
+
+- **Actor:** fulfillment seller.
+- **Given:** seller is logged in with document permission; FF warehouse and seller product exist.
+- **When:** seller opens **Documents**, switches the inbound creation control from **Supply** to **Return**, and creates the request.
+- **Then:** the same inbound draft screen opens with visible **Return** type; the request remains in the inbound intake flow and can be filled/submitted like supply.
+- **Negative / restrictions:** no separate return tab/route/queue is created; technical values such as `return` or `operation_type` are not shown to the seller; operation type cannot be edited after draft creation.
+
+### TC-NEW-F18-002 Ordinary supply remains default
+
+- **Actor:** fulfillment seller.
+- **Given:** seller is on **Documents** and does not change the operation selector.
+- **When:** seller creates an inbound request.
+- **Then:** a normal **Supply** draft opens without an extra click and current seller inbound happy path is preserved.
+- **Negative / restrictions:** default supply must not become return accidentally for old or missing operation-type payloads.
+
+### TC-NEW-F18-003 Seller and FF lists show inbound operation type
+
+- **Actor:** fulfillment seller and fulfillment admin.
+- **Given:** one supply and one return inbound request exist for the seller.
+- **When:** seller opens **Documents** and admin opens FF reception/sorting queue.
+- **Then:** rows visibly distinguish **Supply** and **Return**; seller type filter can show all, supply-only, and return-only inbound documents.
+- **Negative / restrictions:** FF uses the existing queue and document-number cell; no extra return-only queue or noisy column is required.
+
+### TC-NEW-F18-004 Return print heading
+
+- **Actor:** fulfillment admin.
+- **Given:** a return inbound request with at least one line is open in FF reception.
+- **When:** admin prints the inbound waybill.
+- **Then:** the primary print heading contains **Return** and the document number; the line table still shows expected/fact/discrepancy.
+- **Negative / restrictions:** metadata-only return label is insufficient; ordinary supply print remains readable as supply.
+
 ### TC-S06-005 Assign or change storage cell on line (when status allows)
 
 - **Actor:** typically admin for warehouse execution (seller may be read-only on some actions).
@@ -600,7 +632,7 @@ Distinct from **operational outbound** (S08) and **seller supply/inbound** (S06)
 - **Actor:** fulfillment admin.
 - **Given:** seller **submitted** MP unload with lines and WB warehouse.
 - **When:** opens document, sets planned shipment date, **Confirm** (footer).
-- **Then:** status **confirmed**; **linked packaging task** created; boxes/collect UI on **Products** tab enabled; **Shipped** disabled until packaging done and boxes filled.
+- **Then:** status **confirmed**; **linked packaging task** created; **Packaging** tab enabled; boxes/collect UI lives under the **Boxes** accordion inside **Packaging**; **Shipped** disabled until packaging done and boxes filled.
 - **Negative:** seller role cannot call confirm.
 
 ### TC-NEW-MP-11 Boxes only after confirmed; ship after packaging
@@ -609,7 +641,7 @@ Distinct from **operational outbound** (S08) and **seller supply/inbound** (S06)
 - **Given:** MP unload **draft** or **submitted** with lines.
 - **When:** attempts create box / collect.
 - **Then:** rejected (`not_editable` / `bad_status`).
-- **When:** after **confirm**, creates open batch boxes, fills via modal **before** packaging complete.
+- **When:** after **confirm**, opens **Packaging → Boxes**, creates open batch boxes, fills via modal **before** packaging complete.
 - **Then:** box add succeeds (no packaging gate); **Shipped** still disabled.
 - **When:** completes packaging task, full distribution in boxes, clicks **Shipped**.
 - **Then:** status **shipped**; stock reduced.
@@ -619,7 +651,7 @@ Distinct from **operational outbound** (S08) and **seller supply/inbound** (S06)
 
 - **Actor:** seller + FF admin (e2e).
 - **Given:** seller **Plan**; FF **Confirm** with date.
-- **When:** FF batch-creates 2+ boxes, fills plan via box modal **without** completing packaging; then completes packaging; then **Shipped** from footer.
+- **When:** FF opens **Packaging → Boxes**, batch-creates 2+ boxes, fills plan via box modal **without** completing packaging; then completes packaging; then **Shipped** from footer.
 - **Then:** status **shipped**; `ff-mp-collect-summary-remaining` = 0.
 - **Negative:** **Shipped** enabled before packaging complete → must fail (MP-033).
 
@@ -948,6 +980,14 @@ Full-cycle FBS: worklist → compatible selection → atomic WB supply → serve
 - **When:** product A is picked from **both** cells (partial quantity from each) and product B from its own cell; the shipment/packaging tab is opened.
 - **Then:** the packaging task has exactly **2** lines (one per product); product A's line `qty_total` equals the sum of quantities picked from both cells; no cell/location is exposed on the MP packaging line.
 - **Negative:** before this fix, picking one product from N cells produced N packaging lines for that single product — regression covered by `test_marketplace_unload_packaging_one_row_per_product_across_cells`.
+
+### TC-NEW-PKG-09 FF bulk marks catalog products as Honest Sign required
+
+- **Actor:** fulfillment admin.
+- **Given:** FF product catalog contains several visible product rows.
+- **When:** clicks **Select all** in the catalog table and applies **Honest Sign required** to selected rows.
+- **Then:** selected products persist `requires_honest_sign=true`; each updated row shows a visible **CHZ** marker.
+- **Negative:** bulk apply action is disabled while no product rows are selected.
 
 ---
 

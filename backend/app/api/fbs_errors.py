@@ -64,6 +64,8 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     "kind_already_assigned": "Идентификатор уже назначен.",
     "marking_code_already_assigned": "Код маркировки уже назначен другому заказу.",
     "meta_validation_fail": "Wildberries отклонил метаданные.",
+    "sticker_not_found": "Стикер не найден в этой поставке.",
+    "order_frozen": "Заказ уже передан в доставку — КИЗ не изменить.",
     "invalid_order_ids": "Недопустимый список заказов для печати.",
     "asset_not_ready": "Печатный актив ещё не готов.",
     "asset_error": "Ошибка получения печатного актива.",

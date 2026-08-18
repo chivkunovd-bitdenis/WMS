@@ -1,0 +1,138 @@
+{
+  "browser": "external Google Chrome 151, visible OS window, CDP-attached for interaction because macOS Accessibility UI automation is disabled",
+  "appUrl": "http://127.0.0.1:51831/app/ff/fbs/stock-sync",
+  "apiUrl": "http://127.0.0.1:18131",
+  "viewport": "1280x900",
+  "sellerId": "1cce70c5-8e34-4d23-b5df-294734cf5d48",
+  "warehouseId": "f6ae16fc-dc78-454f-aa43-1d23aa49beee",
+  "steps": [
+    {
+      "name": "opened external Chrome page",
+      "ok": true,
+      "url": "http://127.0.0.1:51831/",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-seller-warehouses-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/seller-warehouses-live-chrome/04-login.png",
+      "at": "2026-08-15T06:15:14.638Z"
+    },
+    {
+      "name": "registered FF admin through UI",
+      "ok": true,
+      "adminEmail": "live-fbs-stock-1786774516565@example.com",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-seller-warehouses-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/seller-warehouses-live-chrome/05-dashboard-after-register.png",
+      "at": "2026-08-15T06:15:19.435Z"
+    },
+    {
+      "name": "created seller through UI",
+      "ok": true,
+      "sellerName": "Live Seller WH 1786774516565",
+      "sellerId": "1cce70c5-8e34-4d23-b5df-294734cf5d48",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-seller-warehouses-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/seller-warehouses-live-chrome/06-seller-created.png",
+      "at": "2026-08-15T06:15:24.768Z"
+    },
+    {
+      "name": "INFRA-01 read-back: no auto technical FBS warehouse after seller creation",
+      "ok": true,
+      "warehousesBefore": [],
+      "at": "2026-08-15T06:15:24.829Z"
+    },
+    {
+      "name": "empty/error state visible: no WMS warehouse and no WB token",
+      "ok": true,
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-seller-warehouses-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/seller-warehouses-live-chrome/07-empty-error-no-wms-no-token.png",
+      "at": "2026-08-15T06:15:29.571Z"
+    },
+    {
+      "name": "fixture setup: physical WMS warehouse and mocked WB Marketplace token",
+      "ok": true,
+      "warehouse": {
+        "id": "f6ae16fc-dc78-454f-aa43-1d23aa49beee",
+        "name": "Физический склад FBS 1786774516565",
+        "code": "phys-fbs-1786774516565"
+      },
+      "at": "2026-08-15T06:15:29.655Z"
+    },
+    {
+      "name": "WB warehouse list with city and unmapped state visible",
+      "ok": true,
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-seller-warehouses-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/seller-warehouses-live-chrome/08-wb-warehouse-unmapped.png",
+      "at": "2026-08-15T06:15:35.131Z"
+    },
+    {
+      "name": "mapped WB warehouse to physical WMS warehouse, sync remains off by default",
+      "ok": true,
+      "bindingsAfterMap": [
+        {
+          "id": "e5871616-b63e-4456-abed-64f87526bd72",
+          "wb_warehouse_id": 501001,
+          "wms_warehouse_id": "f6ae16fc-dc78-454f-aa43-1d23aa49beee",
+          "is_active": true,
+          "stock_sync_enabled": false,
+          "last_sync_status": null,
+          "last_sync_at": null,
+          "last_error_code": null
+        }
+      ],
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-seller-warehouses-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/seller-warehouses-live-chrome/09-mapped-sync-off.png",
+      "at": "2026-08-15T06:15:36.673Z"
+    },
+    {
+      "name": "publication toggle enabled and read back from API",
+      "ok": true,
+      "bindingsAfterToggle": [
+        {
+          "id": "e5871616-b63e-4456-abed-64f87526bd72",
+          "wb_warehouse_id": 501001,
+          "wms_warehouse_id": "f6ae16fc-dc78-454f-aa43-1d23aa49beee",
+          "is_active": true,
+          "stock_sync_enabled": true,
+          "last_sync_status": null,
+          "last_sync_at": null,
+          "last_error_code": null
+        }
+      ],
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-seller-warehouses-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/seller-warehouses-live-chrome/10-publication-enabled.png",
+      "at": "2026-08-15T06:15:38.684Z"
+    },
+    {
+      "name": "reload/read-back keeps publication enabled",
+      "ok": true,
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-seller-warehouses-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/seller-warehouses-live-chrome/11-reload-readback-enabled.png",
+      "at": "2026-08-15T06:15:43.299Z"
+    },
+    {
+      "name": "manual sync action completed without publishing from unmapped/technical warehouse",
+      "ok": true,
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-seller-warehouses-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/seller-warehouses-live-chrome/12-sync-feedback.png",
+      "at": "2026-08-15T06:15:44.719Z"
+    },
+    {
+      "name": "status panel empty state visible and human-readable",
+      "ok": true,
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-seller-warehouses-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/seller-warehouses-live-chrome/13-status-empty.png",
+      "at": "2026-08-15T06:15:45.425Z"
+    },
+    {
+      "name": "disable confirmation warns about blocked new orders",
+      "ok": true,
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-seller-warehouses-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/seller-warehouses-live-chrome/14-disable-confirmation.png",
+      "at": "2026-08-15T06:15:46.616Z"
+    },
+    {
+      "name": "binding disabled and read back as inactive",
+      "ok": true,
+      "bindingsAfterDisable": [
+        {
+          "id": "e5871616-b63e-4456-abed-64f87526bd72",
+          "wb_warehouse_id": 501001,
+          "wms_warehouse_id": "f6ae16fc-dc78-454f-aa43-1d23aa49beee",
+          "is_active": false,
+          "stock_sync_enabled": true,
+          "last_sync_status": "confirmed",
+          "last_sync_at": "2026-08-15T06:15:43.724323",
+          "last_error_code": null
+        }
+      ],
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-seller-warehouses-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/seller-warehouses-live-chrome/15-disabled-readback.png",
+      "at": "2026-08-15T06:15:47.957Z"
+    }
+  ]
+}

@@ -1,9 +1,11 @@
 import { test, expect } from '@playwright/test';
 
-import { waitForGetOk, waitForPatchOk } from './api-waits';
+import { waitForPatchOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
 
-// TC-NEW-002 — админ задаёт ставку за упаковку и видит колонки расчёта ЗП.
+// TC-NEW-002 — F14/R02: admin payroll stays available while staff settings hide it.
+// Given: FF admin opens staff settings; When: staff users are listed or created;
+// Then: expected admin UI/API keep packaging rate and billing columns.
 test('admin sets staff packaging rate and sees billing columns', async ({ page }) => {
   const adminEmail = `e2e-bill-admin-${Date.now()}@example.com`;
   const staffEmail = `e2e-bill-staff-${Date.now()}@example.com`;
@@ -31,6 +33,9 @@ test('admin sets staff packaging rate and sees billing columns', async ({ page }
 
   const staffRow = page.getByTestId('ff-staff-row').filter({ hasText: staffEmail });
   await expect(staffRow).toBeVisible();
+  await expect(page.getByText('Ставка за ед.')).toBeVisible();
+  await expect(page.getByText('Упаковано')).toBeVisible();
+  await expect(page.getByText('Начислено')).toBeVisible();
   const staffId = await staffRow.getAttribute('data-staff-id');
   expect(staffId).toBeTruthy();
 
@@ -43,4 +48,15 @@ test('admin sets staff packaging rate and sees billing columns', async ({ page }
   await expect(page.getByTestId('ff-staff-rate-saved')).toBeVisible();
   await expect(page.getByTestId(`ff-staff-units-${staffId}`)).toHaveText('0');
   await expect(page.getByTestId(`ff-staff-earned-${staffId}`)).toHaveText('0');
+
+  const token = await page.evaluate(() => localStorage.getItem('wms_token_ff'));
+  expect(token).toBeTruthy();
+  const staffList = await page.request.get('/api/auth/staff-accounts', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  expect(staffList.status()).toBe(200);
+  const rows = (await staffList.json()) as Record<string, unknown>[];
+  const row = rows.find((item) => item.id === staffId);
+  expect(row?.packaging_rate_rub).toBe('12.50');
+  expect(row?.packaging_billing).toMatchObject({ units_packed: 0, earned_rub: '0.00' });
 });

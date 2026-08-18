@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import io
 import json
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -11,9 +13,13 @@ from test_packaging_tasks import _register_admin
 
 from app.db.session import SessionLocal
 from app.models.marking_code import (
+    EVENT_APPLIED,
+    STATUS_APPLIED,
     STATUS_PRINTED,
     MarkingCode,
+    MarkingCodeEvent,
 )
+from app.services.tokens import decode_access_token
 
 
 async def _seed_pool_with_codes(
@@ -156,6 +162,51 @@ async def test_ledger_filters(async_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_ledger_excludes_external_fbs_registry_events(async_client: AsyncClient) -> None:
+    # TC-NEW-FBS-KIZ-012: external FBS KIZ events are not pool consumption events.
+    headers, seller_id, _pool_id, product_id, _ = await _seed_pool_with_codes(async_client)
+    token = headers["Authorization"].removeprefix("Bearer ")
+    tenant_id = uuid.UUID(str(decode_access_token(token)["tenant_id"]))
+
+    async with SessionLocal() as session:
+        code = MarkingCode(
+            tenant_id=tenant_id,
+            seller_id=uuid.UUID(seller_id),
+            product_id=uuid.UUID(product_id),
+            cis_code=f"010000000000777721{'E' * 20}0001",
+            source="external_fbs",
+            status=STATUS_APPLIED,
+        )
+        session.add(code)
+        await session.flush()
+        session.add(
+            MarkingCodeEvent(
+                tenant_id=tenant_id,
+                seller_id=uuid.UUID(seller_id),
+                code_id=code.id,
+                event_type=EVENT_APPLIED,
+            )
+        )
+        await session.commit()
+
+    ledger = await async_client.get(
+        "/operations/marking-codes/ledger",
+        headers=headers,
+        params={"seller_id": seller_id, "event_type": EVENT_APPLIED},
+    )
+    assert ledger.status_code == 200, ledger.text
+    assert ledger.json() == {"rows": [], "total": 0}
+
+    export = await async_client.get(
+        "/operations/marking-codes/ledger/export",
+        headers=headers,
+        params={"seller_id": seller_id, "event_type": EVENT_APPLIED},
+    )
+    assert export.status_code == 200, export.text
+    assert len(export.content.decode("utf-8-sig").strip().splitlines()) == 1
+
+
+@pytest.mark.asyncio
 async def test_ledger_date_range_filter(async_client: AsyncClient) -> None:
     h, seller_id, _, _, _ = await _seed_pool_with_codes(async_client)
     now = datetime.now(UTC)
@@ -224,7 +275,7 @@ async def test_ledger_cis_mask_filter(async_client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_ledger_export_csv(async_client: AsyncClient) -> None:
-    h, seller_id, _, _, _ = await _seed_pool_with_codes(async_client)
+    h, seller_id, _, _, codes = await _seed_pool_with_codes(async_client)
     params = {"seller_id": seller_id, "event_type": "imported"}
 
     ledger = await async_client.get(
@@ -246,10 +297,27 @@ async def test_ledger_export_csv(async_client: AsyncClient) -> None:
     assert "attachment" in export.headers["content-disposition"]
     text = export.content.decode("utf-8-sig")
     lines = [line for line in text.strip().splitlines() if line]
-    assert lines[0].startswith("created_at,event_type,cis_masked")
+    rows = list(csv.DictReader(io.StringIO(text)))
+    assert lines[0].split(",") == [
+        "created_at",
+        "event_type",
+        "cis_code",
+        "cis_masked",
+        "pool_title",
+        "gtin",
+        "product_name",
+        "product_sku",
+        "seller_name",
+        "document_number",
+        "actor_email",
+        "source_process",
+    ]
     # CSV export keeps one row per raw event (not collapsed).
-    assert len(lines) - 1 == 4
-    assert all("imported" in line for line in lines[1:])
+    assert len(rows) == 4
+    assert {row["cis_code"] for row in rows} == set(codes)
+    assert all(row["event_type"] == "imported" for row in rows)
+    assert all(row["actor_email"] for row in rows)
+    assert all("Read pool" == row["pool_title"] for row in rows)
 
 
 @pytest.mark.asyncio

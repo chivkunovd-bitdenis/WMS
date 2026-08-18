@@ -62,6 +62,13 @@ async def _setup_request(
             product_id=product_id,
             expected_qty=expected_qty,
         )
+        await svc.patch_request_draft(
+            session,
+            tenant_id,
+            request_id,
+            planned_box_count=1,
+            planned_box_count_set=True,
+        )
         await svc.submit_request(session, tenant_id, request_id)
     return request_id, product_id
 

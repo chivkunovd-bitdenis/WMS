@@ -1,0 +1,26 @@
+
+> frontend@0.0.0 dev
+> vite --host 127.0.0.1 --port 52484
+
+
+  VITE v8.0.8  ready in 416 ms
+
+  ➜  Local:   http://127.0.0.1:52484/
+
+> frontend@0.0.0 dev
+> vite --host 127.0.0.1 --port 52577
+
+
+  VITE v8.0.8  ready in 129 ms
+
+  ➜  Local:   http://127.0.0.1:52577/
+
+> frontend@0.0.0 dev
+> vite --host 127.0.0.1 --port 52829
+
+
+  VITE v8.0.8  ready in 289 ms
+
+  ➜  Local:   http://127.0.0.1:52829/
+
+[exit code=143 signal=null]

@@ -1,0 +1,27 @@
+{
+  "suffix": "f19-pw-1786634397925",
+  "adminEmail": "ff-f19-pw-1786634397925@example.com",
+  "sellerEmail": "seller-f19-pw-1786634397925@example.com",
+  "sellerId": "41955727-a0b1-4ea4-afb2-eb8a5ec6a93e",
+  "warehouseId": "c546dc62-b88e-4899-9795-a50fc9478b6b",
+  "ordinaryRequestId": "960ac400-8dc0-44e2-ad67-9d2e1917f244",
+  "returnRequestId": "5fe92546-58e6-43bf-aa4a-d5584a81519f",
+  "ordinarySku": "sku-ordinary-f19-pw-1786634397925",
+  "ordinaryWb": "wb-ordinary-f19-pw-1786634397925",
+  "plannedSku": "sku-planned-f19-pw-1786634397925",
+  "plannedWb": "wb-planned-f19-pw-1786634397925",
+  "factSku": "sku-fact-f19-pw-1786634397925",
+  "factWb": "wb-fact-f19-pw-1786634397925",
+  "pickerSku": "sku-picker-f19-pw-1786634397925",
+  "pickerWb": "wb-picker-f19-pw-1786634397925",
+  "manualSku": "sku-created-f19-pw-1786634397925",
+  "manualWb": "wb-created-f19-pw-1786634397925",
+  "missingSku": "sku-no-wb-f19-pw-1786634397925",
+  "productIds": {
+    "ordinary": "f0ccddf1-32ab-40ef-8420-a1ca4a1b1a57",
+    "planned": "5883f67d-3c84-4d5e-bdb2-ebd02333376b",
+    "fact": "627b420d-b275-46d3-85f1-05bec3168f4a",
+    "picker": "2672edbf-2c55-4637-958f-d31b1a589552",
+    "missing": "acfa33ee-b088-4899-9ef2-ad9884fd3b01"
+  }
+}

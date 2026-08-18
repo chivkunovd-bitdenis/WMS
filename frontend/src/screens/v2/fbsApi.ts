@@ -87,6 +87,7 @@ export type FbsSupply = {
   barcode_file: string | null // base64 PNG QR поставки
   document_number: string | null
   display_number: string | null
+  planned_shipment_date: string | null
   created_at_wb: string | null
   delivered_at: string | null
   created_at: string
@@ -162,6 +163,7 @@ export type FbsOrderMetadata = {
       | 'rejected'
       | 'replacement_required'
     reason: string | null
+    source?: 'pool' | 'operator'
   }>
   delivery_allowed: boolean
   last_checked_at: string | null
@@ -176,6 +178,21 @@ export type FbsWorklistWarehouseOption = {
 export type FbsSellerWarehouse = {
   id: number | null
   name: string | null
+  address: string | null
+  officeId: number | null
+  cargoType: number | null
+  deliveryType: number | null
+  isDeleting: boolean | null
+  isProcessing: boolean | null
+}
+
+export type FbsSellerOffice = {
+  id: number | null
+  officeId: number | null
+  name: string | null
+  city: string | null
+  address: string | null
+  selected: boolean | null
 }
 
 export type FbsWorklistOrder = {
@@ -194,6 +211,10 @@ export type FbsWorklistOrder = {
     seller_article: string | null
     wb_article: number | null
     barcode: string | null
+    sku: string | null
+    chrt_id: number | null
+    category: string | null
+    color: string | null
     size: string | null
     packaging_instructions?: string | null
     has_packaging_instructions?: boolean
@@ -261,6 +282,31 @@ export type FbsSupplyCreateFromOrdersRequest = {
   idempotency_key: string
 }
 
+export type FbsSupplyAddOrdersRequest = {
+  order_ids: string[]
+  idempotency_key: string
+}
+
+export type FbsSupplyWorklistItem = {
+  id: string
+  wb_supply_id: string
+  name: string
+  status: string
+  seller: { id: string; name: string }
+  wb_warehouse: { id: number; name: string | null }
+  wms_warehouse: { id: string; name: string }
+  orders_count: number
+  units_count: number
+  boxes_count: number
+  planned_shipment_date: string | null
+  can_add_orders: boolean
+}
+
+export type FbsSupplyWorklistPage = {
+  items: FbsSupplyWorklistItem[]
+  server_now: string
+}
+
 export type FbsPickLocation = {
   id: string
   code: string
@@ -277,7 +323,7 @@ export type FbsPickLocation = {
 
 export type FbsPrintAsset = {
   id: string
-  kind: 'order_sticker' | 'cargo_place_qr' | 'supply_qr'
+  kind: 'order_sticker' | 'cargo_place_qr' | 'supply_qr' | 'box_qr'
   status: 'requesting' | 'ready' | 'error'
   content_type: string | null
   width_mm: number | null
@@ -351,6 +397,7 @@ export type FbsPackingBox = {
   trbx_id: string | null
   wb_trbx_id: string | null
   qr_asset: FbsPrintAsset | null
+  without_distribution: boolean
 }
 
 export type FbsCargoPlaceDraft = {
@@ -412,6 +459,7 @@ export type FbsWorkspace = {
     wb_warehouse: { id: number; name: string | null }
     wms_warehouse: { id: string; name: string }
     planned_destination: { office_id: number; name: string; zone: string } | null
+    planned_shipment_date: string | null
     nearest_deadline_at: string
     packaging_task_id: string | null
     barcode_asset: FbsPrintAsset | null
@@ -441,6 +489,7 @@ export type FbsWorkspace = {
   server_now: string
   tracking_summary?: FbsTrackingSummary | null
   partial_rejection?: FbsPartialRejection | null
+  picking_auto_passed_reason?: string | null
   wb_sync_stale?: boolean
 }
 
@@ -455,7 +504,7 @@ export function createFbsIdempotencyKey(): string {
 }
 
 export function resolveFbsAssetUrl(path: string): string {
-  return /^https?:\/\//i.test(path) ? path : apiUrl(path)
+  return /^(https?:|data:)/i.test(path) ? path : apiUrl(path)
 }
 
 export async function fetchFbsWorklist(
@@ -511,6 +560,36 @@ export async function createFbsSupplyFromOrders(
   )
 }
 
+export async function fetchFbsSupplyWorklist(
+  token: string,
+  ah: AuthHeaders,
+  params: { seller_id?: string | null; status_group?: string | null; limit?: number } = {},
+): Promise<FbsSupplyWorklistPage> {
+  const qs = new URLSearchParams({ limit: String(params.limit ?? 100) })
+  if (params.seller_id) qs.set('seller_id', params.seller_id)
+  if (params.status_group) qs.set('status_group', params.status_group)
+  return jsonOrThrow<FbsSupplyWorklistPage>(
+    await fetch(apiUrl(`/operations/fbs-supplies/worklist?${qs.toString()}`), {
+      headers: { ...ah(token) },
+    }),
+  )
+}
+
+export async function addFbsOrdersToSupply(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  body: FbsSupplyAddOrdersRequest,
+): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/orders/batch`), {
+      method: 'POST',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify(body),
+    }),
+  )
+}
+
 export async function fetchFbsWorkspace(
   token: string,
   ah: AuthHeaders,
@@ -519,6 +598,21 @@ export async function fetchFbsWorkspace(
   return jsonOrThrow<FbsWorkspace>(
     await fetch(apiUrl(`/operations/fbs-supplies/${id}/workspace`), {
       headers: { ...ah(token) },
+    }),
+  )
+}
+
+export async function updateFbsSupplyPlannedShipmentDate(
+  token: string,
+  ah: AuthHeaders,
+  id: string,
+  planned_shipment_date: string | null,
+): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${id}/planned-shipment-date`), {
+      method: 'PATCH',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify({ planned_shipment_date }),
     }),
   )
 }
@@ -634,7 +728,7 @@ export async function createFbsPackingBoxes(
   token: string,
   ah: AuthHeaders,
   supplyId: string,
-  body: { count: number; idempotency_key: string },
+  body: { count: number; idempotency_key: string; without_distribution?: boolean },
 ): Promise<FbsWorkspace> {
   return jsonOrThrow<FbsWorkspace>(
     await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/boxes`), {
@@ -719,21 +813,6 @@ export async function fetchFbsOrderMetadata(
   return jsonOrThrow<FbsOrderMetadata>(
     await fetch(apiUrl(`/operations/fbs-orders/${orderId}/metadata`), {
       headers: { ...ah(token) },
-    }),
-  )
-}
-
-export async function scanFbsOrderMetadata(
-  token: string,
-  ah: AuthHeaders,
-  orderId: string,
-  body: { kind: string; raw_value: string; idempotency_key: string },
-): Promise<FbsOrderMetadata> {
-  return jsonOrThrow<FbsOrderMetadata>(
-    await fetch(apiUrl(`/operations/fbs-orders/${orderId}/metadata/scan`), {
-      method: 'POST',
-      headers: jsonHeaders(token, ah),
-      body: JSON.stringify(body),
     }),
   )
 }
@@ -1010,48 +1089,93 @@ export async function fetchFbsTrbxStickers(
 // Маркировка в WB привязана к ЗАКАЗУ, а не к артикулу — ручки backend/app/api/fbs_marking.py
 // под /operations/fbs-orders/{order_id}/markings...
 
-export type FbsMarkingKind = 'sgtin' | 'uin' | 'imei' | 'gtin'
+// ── Внесение чужих КИЗ по стикеру ────────────────────────────────────────────
+// backend/app/api/fbs_kiz.py — спека tasks/fbs-kiz-manual-binding/TASK.md §5.
+// Сопоставление идёт ТОЛЬКО по стикеру: QR даёт заказ, КИЗ вешается на этот заказ.
 
-export const MARKING_KIND_LABEL: Record<FbsMarkingKind, string> = {
-  sgtin: 'КИЗ (SGTIN)',
-  uin: 'УИН',
-  imei: 'IMEI',
-  gtin: 'GTIN',
-}
-
-export type FbsOrderMarking = {
-  id: string
+export type FbsKizLookup = {
   order_id: string
-  kind: string
-  value: string
-  check_status: string // new | checking | ok | error | no_check
-  marking_code_id: string | null
+  wb_order_id: number
+  product: {
+    name: string
+    image_url: string | null
+    barcode: string | null
+    seller_article: string | null
+  }
+  current_kiz: { masked: string; meta_status: string; from_pool: boolean } | null
+  needs_confirmation: boolean
+  can_bind: boolean
+  block_reason: string | null
 }
 
-export async function getFbsOrderMarkings(
+export type FbsKizPair = { order_id: string; value: string; confirmed: boolean }
+
+export type FbsKizValidateResult = {
+  ok: boolean
+  hints: string[]
+}
+
+export type FbsKizCommitResult = {
+  order_id: string
+  status: 'ok' | 'error'
+  code: string | null
+  message: string | null
+}
+
+export async function lookupFbsOrderBySticker(
   token: string,
   ah: (t: string) => Record<string, string>,
-  orderId: string,
-): Promise<FbsOrderMarking[]> {
-  const res = await fetch(apiUrl(`/operations/fbs-orders/${orderId}/markings`), {
+  supplyId: string,
+  sticker: string,
+): Promise<FbsKizLookup> {
+  const query = new URLSearchParams({ supply_id: supplyId, sticker })
+  const res = await fetch(apiUrl(`/operations/fbs-orders/kiz/lookup?${query.toString()}`), {
     headers: { ...ah(token) },
   })
-  return jsonOrThrow<FbsOrderMarking[]>(res)
+  return jsonOrThrow<FbsKizLookup>(res)
 }
 
-export async function putFbsOrderMarking(
+export async function validateFbsKiz(
   token: string,
   ah: (t: string) => Record<string, string>,
   orderId: string,
-  kind: FbsMarkingKind,
   value: string,
-): Promise<FbsOrderMarking> {
-  const res = await fetch(apiUrl(`/operations/fbs-orders/${orderId}/markings/${kind}`), {
-    method: 'PUT',
+): Promise<FbsKizValidateResult> {
+  const res = await fetch(apiUrl('/operations/fbs-orders/kiz/validate'), {
+    method: 'POST',
     headers: { ...ah(token), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ value }),
+    body: JSON.stringify({ order_id: orderId, value }),
   })
-  return jsonOrThrow<FbsOrderMarking>(res)
+  return jsonOrThrow<FbsKizValidateResult>(res)
+}
+
+export async function commitFbsKiz(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  pairs: FbsKizPair[],
+  idempotencyKey: string,
+): Promise<FbsKizCommitResult[]> {
+  const res = await fetch(apiUrl('/operations/fbs-orders/kiz/commit'), {
+    method: 'POST',
+    headers: { ...ah(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pairs, idempotency_key: idempotencyKey }),
+  })
+  return jsonOrThrow<FbsKizCommitResult[]>(res)
+}
+
+export async function deleteFbsOrderKiz(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  orderId: string,
+): Promise<void> {
+  const res = await fetch(apiUrl(`/operations/fbs-orders/${orderId}/kiz`), {
+    method: 'DELETE',
+    headers: { ...ah(token) },
+  })
+  // Успех приходит пустым 204 — разбирать в нём JSON нечего, иначе отмена,
+  // которая на самом деле прошла, показывается оператору ошибкой.
+  if (res.ok) return
+  await jsonOrThrow<{ ok: boolean }>(res)
 }
 
 // ── Привязки складов WB ↔ WMS + синхронизация остатков ───────────────────────
@@ -1064,6 +1188,18 @@ export async function fetchFbsSellerWarehouses(
 ): Promise<FbsSellerWarehouse[]> {
   return jsonOrThrow<FbsSellerWarehouse[]>(
     await fetch(apiUrl(`/operations/fbs-sellers/${sellerId}/warehouses`), {
+      headers: { ...ah(token) },
+    }),
+  )
+}
+
+export async function fetchFbsSellerOffices(
+  token: string,
+  ah: AuthHeaders,
+  sellerId: string,
+): Promise<FbsSellerOffice[]> {
+  return jsonOrThrow<FbsSellerOffice[]>(
+    await fetch(apiUrl(`/operations/fbs-sellers/${sellerId}/offices`), {
       headers: { ...ah(token) },
     }),
   )

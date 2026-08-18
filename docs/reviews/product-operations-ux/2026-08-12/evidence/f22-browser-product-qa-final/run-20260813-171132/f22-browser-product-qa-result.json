@@ -1,0 +1,62 @@
+{
+  "status": "BROWSER_PRODUCT_QA_FAILED",
+  "checks": [
+    {
+      "name": "seller UI blocks missing FBS pool from sending zero",
+      "passed": true,
+      "statusBefore": "Нет FBS",
+      "toggleEnabled": false,
+      "stockBefore": 20,
+      "stockAfterDisabledAttempt": 20,
+      "matchingRequests": []
+    },
+    {
+      "name": "seller products header has no Limit column",
+      "passed": true,
+      "headerText": "\tТовар\tWB / ШК\tОстаток\tFBS-пул\tПубликация WB\tТЗ / ЧЗ\tДействия\n"
+    },
+    {
+      "name": "seller products screen has no raw technical errors",
+      "passed": true,
+      "matchedTextSample": "Портал селлера\nf22-seller-1786630297409@example.com · fulfillment_seller\n0\nВыйти\nДокументы\nТовары\nЧестный знак\nНастройки\nТовары\n\nКаталог WB и остаток на фулфилменте. Остаток — всего на ФФ минус резерв; отгрузку на МП можно планировать только по колонке «В ячейках» (после раскладки ФФ).\n\nСинхронизировать по API\nПубликация FBS в WB\nПубликуется: 0 из 1\n\tТовар\tWB / ШК\tОстаток\tFBS-пул\tПубликация WB\tТЗ / ЧЗ\tДействия\n\n\t\n\nF22 Safe Sync Product\n\nSKU F22-SAFE-1786630297409\n\t\n\n22022022\n\nF22-WB-BARCODE\n\t\n\n0\n\n0\n0\n\t\n\nFBS 0 шт\n\nрезервы 0 шт\nFBS\n\t\nНет FBS\n\t\nБез ТЗ\nЧЗ нет\n\t\nТЗ\n\nНа странице\n\n10\n\n1–1 of 1"
+    },
+    {
+      "name": "1280px layout has no horizontal page overflow or black strip",
+      "passed": true,
+      "innerWidth": 1280,
+      "scrollWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "blackStrip": false
+    },
+    {
+      "name": "backend scheduled enable with missing pool keeps WB at 20",
+      "passed": true,
+      "emulatorAmount": 20,
+      "syncItem": {
+        "chrt_id": 111001,
+        "product_id": "46d68f50-8860-4cd2-9ff7-522c7d3ec9cb",
+        "target": null,
+        "confirmed": null,
+        "status": "error",
+        "error": "unsafe_stock_unknown",
+        "timestamp": "2026-08-13T14:11:41"
+      },
+      "syncResult": {
+        "bindings_processed": 0,
+        "products_targeted": 0,
+        "products_confirmed": 0,
+        "products_zeroed": 0,
+        "conflicts": 0,
+        "errors": 0,
+        "binding_errors": 0
+      }
+    }
+  ],
+  "commands": {
+    "runner": "docs/reviews/product-operations-ux/2026-08-12/evidence/f22-browser-product-qa-final/run_f22_browser_product_qa_final.sh"
+  },
+  "error": {
+    "message": "expect(locator).toBeVisible() failed\n\nLocator: getByTestId('seller-products-table')\nExpected: visible\nTimeout: 20000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"to.be.visible\" with timeout 20000ms\n  - waiting for getByTestId('seller-products-table')\n",
+    "stack": "Error: expect(locator).toBeVisible() failed\n\nLocator: getByTestId('seller-products-table')\nExpected: visible\nTimeout: 20000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"to.be.visible\" with timeout 20000ms\n  - waiting for getByTestId('seller-products-table')\n\n    at Proxy.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/frontend/node_modules/playwright/lib/matchers/expect.js:213:24)\n    at main (file:///Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/f22-browser-product-qa-final/f22_browser_product_qa_final.mjs:329:59)\n    at async file:///Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/f22-browser-product-qa-final/f22_browser_product_qa_final.mjs:372:3"
+  }
+}

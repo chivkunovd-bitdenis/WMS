@@ -8,6 +8,9 @@ import pytest
 from httpx import AsyncClient
 from inbound_box_intake_helpers import fulfill_inbound_via_box_scans, post_primary_accept
 
+from app.db.session import SessionLocal
+from app.models.product import Product
+
 
 async def _create_seller_headers(
     async_client: AsyncClient,
@@ -35,6 +38,30 @@ async def _create_seller_headers(
     )
     assert login.status_code == 200, login.text
     return {"Authorization": f"Bearer {login.json()['access_token']}"}, sid
+
+
+async def _mark_product_wb_linked(product_id: str, *, nm_id: int) -> None:
+    async with SessionLocal() as session:
+        product = await session.get(Product, uuid.UUID(product_id))
+        assert product is not None
+        product.wb_nm_id = nm_id
+        product.wb_chrt_id = nm_id + 10_000
+        await session.commit()
+
+
+async def _set_planned_boxes(
+    async_client: AsyncClient,
+    base: str,
+    request_id: str,
+    headers: dict[str, str],
+    count: int = 1,
+) -> None:
+    res = await async_client.patch(
+        f"{base}/{request_id}",
+        headers=headers,
+        json={"planned_box_count": count},
+    )
+    assert res.status_code == 200, res.text
 
 
 @pytest.mark.asyncio
@@ -118,6 +145,7 @@ async def test_inbound_intake_flow_post_all(async_client: AsyncClient) -> None:
     assert ln.json()["storage_location_id"] == lid
     line_id = ln.json()["id"]
 
+    await _set_planned_boxes(async_client, base, rid, sh)
     sub = await async_client.post(f"{base}/{rid}/submit", headers=sh)
     assert sub.status_code == 200, sub.text
     assert sub.json()["status"] == "submitted"
@@ -181,6 +209,197 @@ async def test_inbound_intake_flow_post_all(async_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_ff_created_request_begins_receiving_and_reads_cargo_places(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "FF Direct Co",
+            "slug": f"ff-direct-{suffix}",
+            "admin_email": f"ff-direct-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    seller = await async_client.post(
+        "/sellers",
+        headers=ah,
+        json={"name": "FF Direct Seller"},
+    )
+    assert seller.status_code in (200, 201), seller.text
+    sid = seller.json()["id"]
+    wh = await async_client.post(
+        "/warehouses",
+        headers=ah,
+        json={"name": "FF Direct WH", "code": f"ff-direct-wh-{suffix}"},
+    )
+    assert wh.status_code == 200, wh.text
+    product = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "Габаритный товар",
+            "sku_code": f"FF-DIM-{suffix}",
+            "seller_id": sid,
+            "length_mm": 100,
+            "width_mm": 200,
+            "height_mm": 300,
+            "weight_g": 1250,
+        },
+    )
+    assert product.status_code == 200, product.text
+
+    base = "/operations/inbound-intake-requests"
+    cr = await async_client.post(
+        base,
+        headers=ah,
+        json={"warehouse_id": wh.json()["id"]},
+    )
+    assert cr.status_code == 201, cr.text
+    rid = cr.json()["id"]
+    assert cr.json()["status"] == "draft"
+
+    line = await async_client.post(
+        f"{base}/{rid}/lines",
+        headers=ah,
+        json={"product_id": product.json()["id"], "expected_qty": 4},
+    )
+    assert line.status_code == 201, line.text
+
+    begin = await async_client.post(f"{base}/{rid}/begin-receiving", headers=ah)
+    assert begin.status_code == 200, begin.text
+    data = begin.json()
+    assert data["status"] == "receiving"
+    assert data["seller_id"] == sid
+    assert data["lines"][0]["weight_g"] == 1250
+    assert data["lines"][0]["volume_liters"] == pytest.approx(6.0)
+
+    cargo = await async_client.post(
+        f"{base}/{rid}/cargo-places",
+        headers=ah,
+        json={"quantity": 2},
+    )
+    assert cargo.status_code == 201, cargo.text
+    places = cargo.json()
+    assert [p["place_number"] for p in places] == [1, 2]
+    assert all(p["internal_barcode"].startswith("ICG-") for p in places)
+
+    printed = await async_client.post(
+        f"{base}/{rid}/cargo-places/{places[0]['id']}/mark-label-printed",
+        headers=ah,
+    )
+    assert printed.status_code == 200, printed.text
+    assert printed.json()["label_printed_at"] is not None
+
+    reloaded = await async_client.get(f"{base}/{rid}", headers=ah)
+    assert reloaded.status_code == 200, reloaded.text
+    loaded_places = reloaded.json()["cargo_places"]
+    assert [p["place_number"] for p in loaded_places] == [1, 2]
+    assert loaded_places[0]["label_printed_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_rec03_seller_created_requires_submit_but_ff_created_receives_directly(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "REC03 Co",
+            "slug": f"rec03-{suffix}",
+            "admin_email": f"rec03-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    sh, sid = await _create_seller_headers(
+        async_client,
+        admin_headers=ah,
+        seller_name="REC03 Seller",
+        seller_email=f"rec03-seller-{suffix}@example.com",
+    )
+    wh = await async_client.post(
+        "/warehouses",
+        headers=ah,
+        json={"name": "REC03 WH", "code": f"rec03-wh-{suffix}"},
+    )
+    assert wh.status_code == 200, wh.text
+    wid = wh.json()["id"]
+    product = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "REC03 Product",
+            "sku_code": f"REC03-{suffix}",
+            "seller_id": sid,
+            "length_mm": 100,
+            "width_mm": 100,
+            "height_mm": 100,
+        },
+    )
+    assert product.status_code == 200, product.text
+    pid = product.json()["id"]
+    sku = product.json()["sku_code"]
+    base = "/operations/inbound-intake-requests"
+
+    seller_doc = await async_client.post(base, headers=sh, json={"warehouse_id": wid})
+    assert seller_doc.status_code == 201, seller_doc.text
+    seller_doc_id = seller_doc.json()["id"]
+    seller_line = await async_client.post(
+        f"{base}/{seller_doc_id}/lines",
+        headers=sh,
+        json={"product_id": pid, "expected_qty": 2},
+    )
+    assert seller_line.status_code == 201, seller_line.text
+
+    blocked = await async_client.post(f"{base}/{seller_doc_id}/begin-receiving", headers=ah)
+    assert blocked.status_code == 409
+    assert blocked.json()["detail"] == "not_submitted"
+    still_draft = await async_client.get(f"{base}/{seller_doc_id}", headers=ah)
+    assert still_draft.json()["status"] == "draft"
+
+    await _set_planned_boxes(async_client, base, seller_doc_id, sh)
+    submitted = await async_client.post(f"{base}/{seller_doc_id}/submit", headers=sh)
+    assert submitted.status_code == 200, submitted.text
+    assert submitted.json()["status"] == "submitted"
+    seller_begin = await async_client.post(f"{base}/{seller_doc_id}/begin-receiving", headers=ah)
+    assert seller_begin.status_code == 200, seller_begin.text
+    assert seller_begin.json()["status"] == "receiving"
+
+    ff_doc = await async_client.post(base, headers=ah, json={"warehouse_id": wid})
+    assert ff_doc.status_code == 201, ff_doc.text
+    ff_doc_id = ff_doc.json()["id"]
+    ff_line = await async_client.post(
+        f"{base}/{ff_doc_id}/lines",
+        headers=ah,
+        json={"product_id": pid, "expected_qty": 3},
+    )
+    assert ff_line.status_code == 201, ff_line.text
+    ff_begin = await async_client.post(f"{base}/{ff_doc_id}/begin-receiving", headers=ah)
+    assert ff_begin.status_code == 200, ff_begin.text
+    assert ff_begin.json()["status"] == "receiving"
+
+    await fulfill_inbound_via_box_scans(async_client, ah, ff_doc_id, sku, 3)
+    verified = await async_client.post(f"{base}/{ff_doc_id}/complete-receiving", headers=ah)
+    assert verified.status_code == 200, verified.text
+    assert verified.json()["status"] == "sorting"
+    balances = await async_client.get(
+        "/operations/inventory-balances/summary",
+        headers=ah,
+        params={"warehouse_id": wid},
+    )
+    assert balances.status_code == 200, balances.text
+    row = next(item for item in balances.json() if item["product_id"] == pid)
+    assert row["quantity"] == 3
+    assert row["quantity_in_sorting"] == 3
+
+
+@pytest.mark.asyncio
 async def test_inbound_partial_receive_then_complete(async_client: AsyncClient) -> None:
     suffix = str(int(time.time() * 1000))
     reg = await async_client.post(
@@ -238,6 +457,7 @@ async def test_inbound_partial_receive_then_complete(async_client: AsyncClient) 
         json={"product_id": pid, "expected_qty": 10, "storage_location_id": lid},
     )
     line_id = ln.json()["id"]
+    await _set_planned_boxes(async_client, base, rid, sh)
     await async_client.post(f"{base}/{rid}/submit", headers=sh)
     await post_primary_accept(async_client, base, rid, ah)
     await fulfill_inbound_via_box_scans(async_client, ah, rid, sku, 10)
@@ -322,6 +542,7 @@ async def test_inbound_patch_storage_after_line_create(async_client: AsyncClient
     assert patched.status_code == 200, patched.text
     assert patched.json()["storage_location_id"] == lid
 
+    await _set_planned_boxes(async_client, base, rid, h)
     await async_client.post(f"{base}/{rid}/submit", headers=h)
     await post_primary_accept(async_client, base, rid, h)
     await fulfill_inbound_via_box_scans(async_client, h, rid, sku, 2)
@@ -376,6 +597,7 @@ async def test_inbound_post_missing_storage_on_line(async_client: AsyncClient) -
         headers=h,
         json={"product_id": pid, "expected_qty": 1},
     )
+    await _set_planned_boxes(async_client, base, rid, h)
     await async_client.post(f"{base}/{rid}/submit", headers=h)
     await post_primary_accept(async_client, base, rid, h)
     await fulfill_inbound_via_box_scans(async_client, h, rid, sku, 1)
@@ -432,6 +654,76 @@ async def test_inbound_duplicate_line_while_draft(async_client: AsyncClient) -> 
     )
     assert r2.status_code == 409
     assert r2.json()["detail"] == "duplicate_line"
+
+
+@pytest.mark.asyncio
+async def test_ff_created_inbound_summary_keeps_seller_and_product_terms(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "FF Selected Seller",
+            "slug": f"ff-selected-seller-{suffix}",
+            "admin_email": f"ff-selected-seller-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    h = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+
+    wh = await async_client.post(
+        "/warehouses",
+        headers=h,
+        json={"name": "W", "code": f"ffsel-{suffix}"},
+    )
+    assert wh.status_code == 200, wh.text
+    wid = wh.json()["id"]
+    seller = await async_client.post(
+        "/sellers",
+        headers=h,
+        json={"name": f"Seller Selected {suffix}"},
+    )
+    assert seller.status_code in (200, 201), seller.text
+    sid = seller.json()["id"]
+    product = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": f"Searchable Product {suffix}",
+            "sku_code": f"SEARCH-SKU-{suffix}",
+            "seller_id": sid,
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+        },
+    )
+    assert product.status_code == 200, product.text
+
+    base = "/operations/inbound-intake-requests"
+    created = await async_client.post(
+        base,
+        headers=h,
+        json={"warehouse_id": wid, "seller_id": sid},
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["seller_id"] == sid
+    rid = created.json()["id"]
+    line = await async_client.post(
+        f"{base}/{rid}/lines",
+        headers=h,
+        json={"product_id": product.json()["id"], "expected_qty": 3},
+    )
+    assert line.status_code == 201, line.text
+
+    listed = await async_client.get(base, headers=h)
+    assert listed.status_code == 200, listed.text
+    row = next(r for r in listed.json() if r["id"] == rid)
+    assert row["seller_id"] == sid
+    assert row["seller_name"] == f"Seller Selected {suffix}"
+    assert f"Searchable Product {suffix}" in row["product_names"]
+    assert f"SEARCH-SKU-{suffix}" in row["product_names"]
 
 
 @pytest.mark.asyncio
@@ -652,3 +944,504 @@ async def test_inbound_draft_patch_qty_delete_patch_planned(async_client: AsyncC
     got = await async_client.get(f"{base}/{rid}", headers=sh)
     assert got.status_code == 200, got.text
     assert got.json()["lines"] == []
+
+
+@pytest.mark.asyncio
+async def test_inbound_receiving_scan_accepts_planned_local_product_without_wb_ids(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Receiving Local Planned Co",
+            "slug": f"recv-local-plan-{suffix}",
+            "admin_email": f"recv-local-plan-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    sh, sid = await _create_seller_headers(
+        async_client,
+        admin_headers=ah,
+        seller_name="Receiving Local Planned Seller",
+        seller_email=f"recv-local-plan-seller-{suffix}@example.com",
+    )
+    wh = await async_client.post(
+        "/warehouses",
+        headers=ah,
+        json={"name": "Receiving Local Planned WH", "code": f"recv-local-plan-wh-{suffix}"},
+    )
+    assert wh.status_code == 200, wh.text
+    sku = f"RLP-PLAN-{suffix}"
+    planned = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "Локальный заявленный товар",
+            "sku_code": sku,
+            "seller_id": sid,
+        },
+    )
+    assert planned.status_code == 200, planned.text
+    async with SessionLocal() as session:
+        stored = await session.get(Product, uuid.UUID(planned.json()["id"]))
+        assert stored is not None
+        assert stored.wb_nm_id is None
+        assert stored.wb_chrt_id is None
+
+    base = "/operations/inbound-intake-requests"
+    cr = await async_client.post(base, headers=sh, json={"warehouse_id": wh.json()["id"]})
+    assert cr.status_code == 201, cr.text
+    rid = cr.json()["id"]
+    add = await async_client.post(
+        f"{base}/{rid}/lines",
+        headers=sh,
+        json={"product_id": planned.json()["id"], "expected_qty": 3},
+    )
+    assert add.status_code == 201, add.text
+    await _set_planned_boxes(async_client, base, rid, sh)
+    sub = await async_client.post(f"{base}/{rid}/submit", headers=sh)
+    assert sub.status_code == 200, sub.text
+
+    first_scan = await async_client.post(
+        f"{base}/{rid}/receiving/scan",
+        headers=ah,
+        json={"barcode": sku},
+    )
+    assert first_scan.status_code == 200, first_scan.text
+    assert first_scan.json()["actual_qty"] == 1
+
+    second_scan = await async_client.post(
+        f"{base}/{rid}/receiving/scan",
+        headers=ah,
+        json={"barcode": sku},
+    )
+    assert second_scan.status_code == 200, second_scan.text
+    scanned = second_scan.json()
+    assert scanned["product_id"] == planned.json()["id"]
+    assert scanned["expected_qty"] == 3
+    assert scanned["actual_qty"] == 2
+    assert scanned["effective_actual_qty"] == 2
+    assert scanned["added_by_fulfillment"] is False
+
+
+@pytest.mark.asyncio
+async def test_inbound_scan_rejects_catalog_product_not_on_request_until_added(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Regular Mix Co",
+            "slug": f"reg-mix-{suffix}",
+            "admin_email": f"reg-mix-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    sh, sid = await _create_seller_headers(
+        async_client,
+        admin_headers=ah,
+        seller_name="Regular Seller",
+        seller_email=f"reg-mix-seller-{suffix}@example.com",
+    )
+    wh = await async_client.post(
+        "/warehouses",
+        headers=ah,
+        json={"name": "Regular WH", "code": f"reg-wh-{suffix}"},
+    )
+    assert wh.status_code == 200, wh.text
+    wid = wh.json()["id"]
+
+    planned = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "Заявленный товар",
+            "sku_code": f"REG-PLAN-{suffix}",
+            "seller_id": sid,
+        },
+    )
+    assert planned.status_code == 200, planned.text
+    arrived_barcode = f"REG-FACT-{suffix}"
+    arrived = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "Приехавший товар",
+            "sku_code": f"REG-ARR-{suffix}",
+            "wb_barcode": arrived_barcode,
+            "seller_id": sid,
+        },
+    )
+    assert arrived.status_code == 200, arrived.text
+
+    base = "/operations/inbound-intake-requests"
+    cr = await async_client.post(base, headers=sh, json={"warehouse_id": wid})
+    assert cr.status_code == 201, cr.text
+    rid = cr.json()["id"]
+    add = await async_client.post(
+        f"{base}/{rid}/lines",
+        headers=sh,
+        json={"product_id": planned.json()["id"], "expected_qty": 2},
+    )
+    assert add.status_code == 201, add.text
+    await _set_planned_boxes(async_client, base, rid, sh)
+    sub = await async_client.post(f"{base}/{rid}/submit", headers=sh)
+    assert sub.status_code == 200, sub.text
+
+    scan = await async_client.post(
+        f"{base}/{rid}/receiving/scan",
+        headers=ah,
+        json={"barcode": arrived_barcode},
+    )
+    assert scan.status_code == 422, scan.text
+    assert scan.json()["detail"] == "product_not_on_request"
+
+    fact = await async_client.post(
+        f"{base}/{rid}/receiving/lines",
+        headers=ah,
+        json={"product_id": arrived.json()["id"], "actual_qty": 1},
+    )
+    assert fact.status_code == 201, fact.text
+    data = fact.json()
+    assert data["product_id"] == arrived.json()["id"]
+    assert data["expected_qty"] == 0
+    assert data["actual_qty"] == 1
+    assert data["effective_actual_qty"] == 1
+    assert data["added_by_fulfillment"] is True
+
+
+@pytest.mark.asyncio
+async def test_inbound_receiving_accepts_seller_catalog_product_as_discrepancy(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Return Mix Co",
+            "slug": f"ret-mix-{suffix}",
+            "admin_email": f"ret-mix-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    sh, sid = await _create_seller_headers(
+        async_client,
+        admin_headers=ah,
+        seller_name="Return Seller",
+        seller_email=f"ret-mix-seller-{suffix}@example.com",
+    )
+    wh = await async_client.post(
+        "/warehouses",
+        headers=ah,
+        json={"name": "Return WH", "code": f"ret-wh-{suffix}"},
+    )
+    assert wh.status_code == 200, wh.text
+    wid = wh.json()["id"]
+    planned = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "Заявленный цвет",
+            "sku_code": f"RET-PLAN-{suffix}",
+            "seller_id": sid,
+        },
+    )
+    assert planned.status_code == 200, planned.text
+    arrived_barcode = f"RET-FACT-{suffix}"
+    arrived = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "Приехавший цвет",
+            "sku_code": f"RET-ARR-{suffix}",
+            "wb_barcode": arrived_barcode,
+            "seller_id": sid,
+        },
+    )
+    assert arrived.status_code == 200, arrived.text
+
+    base = "/operations/inbound-intake-requests"
+    cr = await async_client.post(
+        base,
+        headers=sh,
+        json={"warehouse_id": wid, "operation_type": "return"},
+    )
+    assert cr.status_code == 201, cr.text
+    assert cr.json()["operation_type"] == "return"
+    rid = cr.json()["id"]
+    add = await async_client.post(
+        f"{base}/{rid}/lines",
+        headers=sh,
+        json={"product_id": planned.json()["id"], "expected_qty": 1},
+    )
+    assert add.status_code == 201, add.text
+    await _set_planned_boxes(async_client, base, rid, sh)
+    sub = await async_client.post(f"{base}/{rid}/submit", headers=sh)
+    assert sub.status_code == 200, sub.text
+
+    scan = await async_client.post(
+        f"{base}/{rid}/receiving/scan",
+        headers=ah,
+        json={"barcode": arrived_barcode},
+    )
+    assert scan.status_code == 422, scan.text
+    assert scan.json()["detail"] == "product_not_on_request"
+
+    fact = await async_client.post(
+        f"{base}/{rid}/receiving/lines",
+        headers=ah,
+        json={"product_id": arrived.json()["id"], "actual_qty": 1},
+    )
+    assert fact.status_code == 201, fact.text
+    assert fact.json()["product_id"] == arrived.json()["id"]
+    assert fact.json()["expected_qty"] == 0
+    assert fact.json()["actual_qty"] == 1
+    assert fact.json()["effective_actual_qty"] == 1
+    assert fact.json()["added_by_fulfillment"] is True
+
+    done = await async_client.post(f"{base}/{rid}/complete-receiving", headers=ah)
+    assert done.status_code == 200, done.text
+    data = done.json()
+    assert data["has_discrepancy"] is True
+    fact_line = next(ln for ln in data["lines"] if ln["product_id"] == arrived.json()["id"])
+    assert fact_line["expected_qty"] == 0
+    assert fact_line["actual_qty"] == 1
+
+
+@pytest.mark.asyncio
+async def test_inbound_receiving_lines_accepts_same_seller_catalog_product(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Receiving Linked Co",
+            "slug": f"recv-linked-{suffix}",
+            "admin_email": f"recv-linked-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    sh, sid = await _create_seller_headers(
+        async_client,
+        admin_headers=ah,
+        seller_name="Receiving Linked Seller",
+        seller_email=f"recv-linked-seller-{suffix}@example.com",
+    )
+    wh = await async_client.post(
+        "/warehouses",
+        headers=ah,
+        json={"name": "Receiving Linked WH", "code": f"recv-linked-wh-{suffix}"},
+    )
+    assert wh.status_code == 200, wh.text
+    planned = await async_client.post(
+        "/products",
+        headers=ah,
+        json={"name": "Заявленный WB", "sku_code": f"RL-PLAN-{suffix}", "seller_id": sid},
+    )
+    assert planned.status_code == 200, planned.text
+    arrived = await async_client.post(
+        "/products",
+        headers=ah,
+        json={"name": "Фактический WB", "sku_code": f"RL-FACT-{suffix}", "seller_id": sid},
+    )
+    assert arrived.status_code == 200, arrived.text
+
+    base = "/operations/inbound-intake-requests"
+    cr = await async_client.post(base, headers=sh, json={"warehouse_id": wh.json()["id"]})
+    assert cr.status_code == 201, cr.text
+    rid = cr.json()["id"]
+    add = await async_client.post(
+        f"{base}/{rid}/lines",
+        headers=sh,
+        json={"product_id": planned.json()["id"], "expected_qty": 1},
+    )
+    assert add.status_code == 201, add.text
+    await _set_planned_boxes(async_client, base, rid, sh)
+    sub = await async_client.post(f"{base}/{rid}/submit", headers=sh)
+    assert sub.status_code == 200, sub.text
+
+    fact = await async_client.post(
+        f"{base}/{rid}/receiving/lines",
+        headers=ah,
+        json={"product_id": arrived.json()["id"], "actual_qty": 2},
+    )
+    assert fact.status_code == 201, fact.text
+    data = fact.json()
+    assert data["product_id"] == arrived.json()["id"]
+    assert data["expected_qty"] == 0
+    assert data["actual_qty"] == 2
+    assert data["added_by_fulfillment"] is True
+
+
+@pytest.mark.asyncio
+async def test_inbound_receiving_lines_accepts_local_same_seller_catalog_product(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Receiving Boundary Co",
+            "slug": f"recv-boundary-{suffix}",
+            "admin_email": f"recv-boundary-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    sh, sid = await _create_seller_headers(
+        async_client,
+        admin_headers=ah,
+        seller_name="Receiving Boundary Seller",
+        seller_email=f"recv-boundary-seller-{suffix}@example.com",
+    )
+    wh = await async_client.post(
+        "/warehouses",
+        headers=ah,
+        json={"name": "Receiving Boundary WH", "code": f"recv-boundary-wh-{suffix}"},
+    )
+    assert wh.status_code == 200, wh.text
+    planned = await async_client.post(
+        "/products",
+        headers=ah,
+        json={"name": "Заявленный", "sku_code": f"RB-PLAN-{suffix}", "seller_id": sid},
+    )
+    assert planned.status_code == 200, planned.text
+    arrived = await async_client.post(
+        "/products",
+        headers=ah,
+        json={"name": "Фактический товар", "sku_code": f"RB-FACT-{suffix}", "seller_id": sid},
+    )
+    assert arrived.status_code == 200, arrived.text
+    manual = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "Ручной факт",
+            "sku_code": f"RB-MANUAL-{suffix}",
+            "seller_id": sid,
+        },
+    )
+    assert manual.status_code == 200, manual.text
+
+    base = "/operations/inbound-intake-requests"
+    cr = await async_client.post(base, headers=sh, json={"warehouse_id": wh.json()["id"]})
+    assert cr.status_code == 201, cr.text
+    rid = cr.json()["id"]
+    add = await async_client.post(
+        f"{base}/{rid}/lines",
+        headers=sh,
+        json={"product_id": planned.json()["id"], "expected_qty": 1},
+    )
+    assert add.status_code == 201, add.text
+    await _set_planned_boxes(async_client, base, rid, sh)
+    sub = await async_client.post(f"{base}/{rid}/submit", headers=sh)
+    assert sub.status_code == 200, sub.text
+
+    accepted = await async_client.post(
+        f"{base}/{rid}/receiving/lines",
+        headers=ah,
+        json={"product_id": arrived.json()["id"], "actual_qty": 1},
+    )
+    assert accepted.status_code == 201, accepted.text
+    assert accepted.json()["product_id"] == arrived.json()["id"]
+    assert accepted.json()["expected_qty"] == 0
+    assert accepted.json()["actual_qty"] == 1
+    assert accepted.json()["added_by_fulfillment"] is True
+
+    emergency = await async_client.post(
+        f"{base}/{rid}/receiving/lines",
+        headers=ah,
+        json={
+            "product_id": manual.json()["id"],
+            "actual_qty": 1,
+            "source": "manual_created",
+        },
+    )
+    assert emergency.status_code == 422, emergency.text
+
+
+@pytest.mark.asyncio
+async def test_inbound_receiving_lines_rejects_foreign_seller_product(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Receiving Foreign Co",
+            "slug": f"recv-foreign-{suffix}",
+            "admin_email": f"recv-foreign-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    sh, sid = await _create_seller_headers(
+        async_client,
+        admin_headers=ah,
+        seller_name="Receiving Owner Seller",
+        seller_email=f"recv-owner-seller-{suffix}@example.com",
+    )
+    _foreign_headers, foreign_sid = await _create_seller_headers(
+        async_client,
+        admin_headers=ah,
+        seller_name="Receiving Foreign Seller",
+        seller_email=f"recv-foreign-seller-{suffix}@example.com",
+    )
+    wh = await async_client.post(
+        "/warehouses",
+        headers=ah,
+        json={"name": "Receiving Foreign WH", "code": f"recv-foreign-wh-{suffix}"},
+    )
+    assert wh.status_code == 200, wh.text
+    planned = await async_client.post(
+        "/products",
+        headers=ah,
+        json={"name": "Заявленный", "sku_code": f"RF-PLAN-{suffix}", "seller_id": sid},
+    )
+    assert planned.status_code == 200, planned.text
+    foreign = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "Чужой WB",
+            "sku_code": f"RF-FOREIGN-{suffix}",
+            "seller_id": foreign_sid,
+        },
+    )
+    assert foreign.status_code == 200, foreign.text
+    await _mark_product_wb_linked(foreign.json()["id"], nm_id=8_200_001)
+
+    base = "/operations/inbound-intake-requests"
+    cr = await async_client.post(base, headers=sh, json={"warehouse_id": wh.json()["id"]})
+    assert cr.status_code == 201, cr.text
+    rid = cr.json()["id"]
+    add = await async_client.post(
+        f"{base}/{rid}/lines",
+        headers=sh,
+        json={"product_id": planned.json()["id"], "expected_qty": 1},
+    )
+    assert add.status_code == 201, add.text
+    await _set_planned_boxes(async_client, base, rid, sh)
+    sub = await async_client.post(f"{base}/{rid}/submit", headers=sh)
+    assert sub.status_code == 200, sub.text
+
+    rejected = await async_client.post(
+        f"{base}/{rid}/receiving/lines",
+        headers=ah,
+        json={"product_id": foreign.json()["id"], "actual_qty": 1},
+    )
+    assert rejected.status_code == 422, rejected.text
+    assert rejected.json()["detail"] == "product_seller_mismatch"

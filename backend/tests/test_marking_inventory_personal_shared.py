@@ -289,6 +289,32 @@ async def test_inventory_two_personal_pools_sum(async_client: AsyncClient) -> No
 
 
 @pytest.mark.asyncio
+async def test_inventory_counts_available_codes_in_unlinked_pool(
+    async_client: AsyncClient,
+) -> None:
+    tenant_id, seller_id = await _seed_tenant_seller(async_client)
+
+    async with SessionLocal() as session:
+        await _pool_with_codes(
+            session,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            gtin="04600000000006",
+            title="Unlinked pool",
+            available=2,
+            printed=1,
+            product_ids=[],
+        )
+        await session.commit()
+
+    async with SessionLocal() as session:
+        result = await mc_svc.list_inventory(session, tenant_id, seller_id=seller_id)
+
+    assert result.rows == []
+    assert result.unlinked_available_count == 2
+
+
+@pytest.mark.asyncio
 async def test_inventory_empty_seller(async_client: AsyncClient) -> None:
     tenant_id, seller_id = await _seed_tenant_seller(async_client)
 

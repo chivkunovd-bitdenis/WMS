@@ -80,6 +80,13 @@ def _dispatch(tenant_id: uuid.UUID, seller_id: uuid.UUID) -> None:
 _BACKGROUND_TASKS: set[asyncio.Task[None]] = set()
 
 
+async def drain_background_stock_publish_tasks() -> None:
+    """Wait for in-process publish jobs before test schema teardown."""
+    while _BACKGROUND_TASKS:
+        tasks = tuple(_BACKGROUND_TASKS)
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
 def schedule_seller_stock_publish(
     session: AsyncSession,
     tenant_id: uuid.UUID,

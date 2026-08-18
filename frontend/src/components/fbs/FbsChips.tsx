@@ -197,7 +197,7 @@ export function FbsMarkingStatusChip({ required, states }: { required: string[];
   )
 }
 
-// Статус проверки идентификатора (КИЗ/УИН/IMEI/GTIN) заказа — FbsOrderMarking.check_status.
+// Статус проверки идентификатора (КИЗ/УИН/IMEI/GTIN) заказа — поле check_status в API.
 const CHECK_STATUS_META: Record<string, { label: string; color: ChipProps['color'] }> = {
   new: { label: 'Новый', color: 'default' },
   checking: { label: 'Проверяется', color: 'warning' },

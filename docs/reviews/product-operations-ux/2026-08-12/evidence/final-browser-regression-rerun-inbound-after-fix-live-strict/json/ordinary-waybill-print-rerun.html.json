@@ -1,0 +1,16 @@
+{
+  "containsHtml": true,
+  "length": 1664,
+  "hasShortage": true,
+  "hasSku": true,
+  "hasSeller": true,
+  "hasExpected": true,
+  "hasFact": true,
+  "rawNoise": {
+    "hasRequestId": false,
+    "hasWarehouseId": false,
+    "hasStatusWord": false,
+    "hasFbsNoise": false
+  },
+  "sample": "<!doctype html>\n<html>\n  <head>\n    <meta charset=\"utf-8\" />\n    <title>Поставка №000001</title>\n    <style>\n      @page { margin: 12mm; }\n      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 12px; color: #111; }\n      h1 { font-size: 18px; margin: 0 0 8px; }\n      h2 { font-size: 14px; margin: 16px 0 8px; }\n      .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; margin-bottom: 16px; }\n      .meta dt { font-weight: 600; margin: 0; }\n      .meta dd { margin: 0 0 6px; }\n      table { width: 100%; border-collapse: collapse; }\n      th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }\n      th { background: #f5f5f5; }\n      .foot { margin-top: 24px; font-size: 11px; color: #555; }\n    </style>\n  </head>\n  <body>\n    <h1>Накладная — поставка на склад ФФ · №000001</h1>\n    <dl class=\"meta\">\n      <dt>Документ</dt><dd>Поставка №000001</dd>\n      <dt>Селлер</dt><dd>QA Seller after-fix-rerun-1786668071455</dd>\n      <dt>Дата</dt><dd>—</dd>\n      <dt>Склад ФФ</dt><dd>QA WH after-fix-rerun-1786668071455 (wh-after-fix-rerun-1786668071455)</dd>\n      <dt>Короба (план / факт)</dt><dd>1 / 0</dd>\n    </dl>\n    <h2>Состав</h2>\n    <table>\n      <thead>\n        <tr><th>SKU/товар</th><th align=\"right\">Заявлено</th><th align=\"right\">Факт</th><th>Расхождение</th></tr>\n      </thead>\n      <tbody><tr>\n          <td><strong>sku-ordinary-after-fix-rerun-1786668071455</strong><br><span>QA Ordinary Product</span></td>\n          <td align=\"right\">5</td>\n          <td align=\"right\">3</td>\n          <td>Недостача 2</td>\n        </tr></tbody>\n    </table>\n    \n    \n  </body>\n</html>"
+}

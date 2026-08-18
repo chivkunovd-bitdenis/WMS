@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 
 import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
+import { expandInboundPackages } from './inbound-boxes-helpers';
 
 // TC-NEW-FF-INBOUND-001 — ФФ создаёт черновик приёмки из очереди приёмки и сразу открывает документ.
 test('ff reception can create inbound draft and open it', async ({ page }) => {
@@ -26,10 +27,23 @@ test('ff reception can create inbound draft and open it', async ({ page }) => {
     data: { name: 'Склад ФФ', code: whCode },
   });
   expect(wh.ok()).toBeTruthy();
+  const seller = await page.request.post('/api/sellers', {
+    headers: h,
+    data: { name: 'REC-12 Seller' },
+  });
+  expect(seller.ok()).toBeTruthy();
+  const sellerId = String(((await seller.json()) as { id: string }).id);
 
   await page.goto('/app/ff/reception');
   await expect(page.getByTestId('ff-reception-page')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Приёмка на FF' })).toBeVisible();
   await expect(page.getByTestId('ff-inbound-create')).toBeEnabled();
+  await expect(page.getByTestId('ff-inbound-new-count')).toContainText('Новые приёмки: 0');
+
+  await page.getByTestId('ff-inbound-create').click();
+  await expect(page.getByTestId('ff-inbound-create-dialog')).toBeVisible();
+  await page.getByTestId('ff-inbound-create-seller').click();
+  await page.getByRole('option', { name: 'REC-12 Seller' }).click();
 
   const [createRes] = await Promise.all([
     waitForPostOk(
@@ -37,11 +51,14 @@ test('ff reception can create inbound draft and open it', async ({ page }) => {
       '/api/operations/inbound-intake-requests',
       (u) => !u.includes('/lines') && !u.includes('/submit'),
     ),
-    page.getByTestId('ff-inbound-create').click(),
+    page.getByTestId('ff-inbound-create-confirm').click(),
   ]);
   expect(createRes.ok()).toBeTruthy();
-  const created = (await createRes.json()) as { id: string; status: string };
+  const createBody = JSON.parse(createRes.request().postData() ?? '{}') as { seller_id?: string };
+  expect(createBody.seller_id).toBe(sellerId);
+  const created = (await createRes.json()) as { id: string; status: string; seller_id: string };
   expect(created.status).toBe('draft');
+  expect(created.seller_id).toBe(sellerId);
 
   await expect(page.getByTestId('ff-doc-dialog')).toBeVisible();
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
@@ -53,6 +70,164 @@ test('ff reception can create inbound draft and open it', async ({ page }) => {
     'data-request-id',
     created.id,
   );
+});
+
+// TC-NEW-REC-LIST-001 — REC-10/REC-13/REC-14: список приёмок фильтруется, ищет по товару и красит строки по расхождению/статусу.
+test('ff reception list has filters search sorting and row state colors', async ({ page }) => {
+  const suffix = String(Date.now());
+  const email = `e2e-rec-list-${suffix}@example.com`;
+
+  await page.goto('/');
+  await openFulfillmentRegistration(page);
+  await page.getByTestId('register-form').getByLabel('Организация').fill('E2E Reception List');
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email);
+  await page.getByTestId('register-form').getByLabel('Пароль').fill('password123');
+  const [regRes] = await Promise.all([
+    waitForPostOk(page, '/api/auth/register'),
+    waitForGetOk(page, '/api/auth/me'),
+    page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
+  ]);
+  const token = ((await regRes.json()) as { access_token: string }).access_token;
+  const h = { Authorization: `Bearer ${token}` };
+
+  const wh = await page.request.post('/api/warehouses', {
+    headers: h,
+    data: { name: 'Склад списка', code: `rec-list-${suffix}` },
+  });
+  expect(wh.ok()).toBeTruthy();
+  const warehouseId = String(((await wh.json()) as { id: string }).id);
+
+  async function createSellerProduct(name: string, sku: string) {
+    const seller = await page.request.post('/api/sellers', {
+      headers: h,
+      data: { name },
+    });
+    expect(seller.ok()).toBeTruthy();
+    const sellerId = String(((await seller.json()) as { id: string }).id);
+    const product = await page.request.post('/api/products', {
+      headers: h,
+      data: {
+        name: `${name} product`,
+        sku_code: sku,
+        seller_id: sellerId,
+        length_mm: 10,
+        width_mm: 10,
+        height_mm: 10,
+      },
+    });
+    expect(product.ok()).toBeTruthy();
+    return { sellerId, productId: String(((await product.json()) as { id: string }).id) };
+  }
+
+  async function createRequest(opts: {
+    sellerId: string;
+    productId: string;
+    plannedDate: string;
+    expectedQty: number;
+    actualQty?: number;
+  }) {
+    const base = '/api/operations/inbound-intake-requests';
+    const created = await page.request.post(base, {
+      headers: h,
+      data: {
+        warehouse_id: warehouseId,
+        seller_id: opts.sellerId,
+        planned_delivery_date: opts.plannedDate,
+      },
+    });
+    expect(created.ok()).toBeTruthy();
+    const requestId = String(((await created.json()) as { id: string }).id);
+    const line = await page.request.post(`${base}/${requestId}/lines`, {
+      headers: h,
+      data: { product_id: opts.productId, expected_qty: opts.expectedQty },
+    });
+    expect(line.ok()).toBeTruthy();
+    const lineId = String(((await line.json()) as { id: string }).id);
+    await page.request.patch(`${base}/${requestId}`, {
+      headers: h,
+      data: { planned_box_count: 1 },
+    });
+    await page.request.post(`${base}/${requestId}/submit`, { headers: h });
+    if (opts.actualQty != null) {
+      await page.request.post(`${base}/${requestId}/begin-receiving`, { headers: h });
+      await page.request.patch(`${base}/${requestId}/lines/${lineId}/actual`, {
+        headers: h,
+        data: { actual_qty: opts.actualQty },
+      });
+      await page.request.post(`${base}/${requestId}/verify`, { headers: h });
+    }
+    return requestId;
+  }
+
+  const red = await createSellerProduct(`REC Red Seller ${suffix}`, `REC-RED-${suffix}`);
+  const green = await createSellerProduct(`REC Green Seller ${suffix}`, `REC-GREEN-${suffix}`);
+  const fresh = await createSellerProduct(`REC Fresh Seller ${suffix}`, `REC-FRESH-${suffix}`);
+  const redId = await createRequest({
+    sellerId: red.sellerId,
+    productId: red.productId,
+    plannedDate: '2026-08-20',
+    expectedQty: 5,
+    actualQty: 4,
+  });
+  const greenId = await createRequest({
+    sellerId: green.sellerId,
+    productId: green.productId,
+    plannedDate: '2026-08-18',
+    expectedQty: 3,
+    actualQty: 3,
+  });
+  const freshId = await createRequest({
+    sellerId: fresh.sellerId,
+    productId: fresh.productId,
+    plannedDate: '2026-08-19',
+    expectedQty: 7,
+  });
+
+  await page.goto('/app/ff/reception');
+  await expect(page.getByRole('heading', { name: 'Приёмка на FF' })).toBeVisible();
+  await expect(page.getByTestId('nav-ff-reception')).toContainText('Приёмка на FF');
+  await expect(page.getByTestId('ff-inbound-new-count')).toContainText('Новые приёмки: 1');
+  await expect(page.getByTestId('ff-inbound-queue-table')).toContainText('Селлер');
+  await expect(page.getByTestId('ff-inbound-queue-table')).toContainText('Номер документа');
+  await expect(page.getByTestId('ff-inbound-queue-table')).toContainText('Дата');
+  await expect(page.getByTestId('ff-inbound-queue-table')).toContainText('Состав');
+  await expect(page.getByTestId('ff-inbound-queue-table')).toContainText('Статус');
+
+  const redRow = page.locator(`[data-testid="ff-inbound-queue-row"][data-request-id="${redId}"]`);
+  const greenRow = page.locator(`[data-testid="ff-inbound-queue-row"][data-request-id="${greenId}"]`);
+  const freshRow = page.locator(`[data-testid="ff-inbound-queue-row"][data-request-id="${freshId}"]`);
+  await expect(redRow).toHaveAttribute('data-row-discrepancy', 'mismatch');
+  await expect(greenRow).toHaveAttribute('data-row-discrepancy', 'matched');
+  await expect(freshRow).toHaveAttribute('data-row-status', 'submitted');
+  await expect(freshRow.getByTestId('ff-inbound-queue-composition')).toContainText('0 из 1 коробов');
+  await expect(freshRow.getByTestId('ff-inbound-queue-composition')).toContainText('7 ед.');
+
+  await page.getByTestId('ff-inbound-search').fill(`REC-RED-${suffix}`);
+  await expect(page.getByTestId('ff-inbound-queue-row')).toHaveCount(1);
+  await expect(redRow).toBeVisible();
+  await page.getByTestId('ff-inbound-search').fill('');
+
+  await page.getByTestId('ff-inbound-seller-filter').click();
+  await page.getByRole('option', { name: `REC Green Seller ${suffix}` }).click();
+  await expect(page.getByTestId('ff-inbound-queue-row')).toHaveCount(1);
+  await expect(greenRow).toBeVisible();
+  await page.getByTestId('ff-inbound-seller-filter').click();
+  await page.getByRole('option', { name: 'Все селлеры' }).click();
+
+  await page.getByTestId('ff-inbound-status-filter').click();
+  await page.getByRole('option', { name: 'Передано на склад' }).click();
+  await expect(page.getByTestId('ff-inbound-queue-row')).toHaveCount(1);
+  await expect(freshRow).toBeVisible();
+  await page.getByTestId('ff-inbound-status-filter').click();
+  await page.getByRole('option', { name: 'Все статусы' }).click();
+
+  await page.getByTestId('ff-inbound-sort-date').click();
+  await expect(page.getByTestId('ff-inbound-queue-row').first()).toHaveAttribute(
+    'data-request-id',
+    greenId,
+  );
+  await page.getByTestId('ff-inbound-sort-number').click();
+  await expect(page.getByTestId('ff-inbound-queue-row').first()).toBeVisible();
 });
 
 // TC-S06-007 — остаток после verify (зона сортировки); раскладка → доступно в ячейках.
@@ -99,13 +274,23 @@ test('ff verify posts to sorting zone; sorting queue and product columns', async
     headers: { ...h, 'Content-Type': 'application/json' },
     data: { product_id: pid, expected_qty: 4 },
   });
+  await page.request.patch(`${base}/${rid}`, {
+    headers: { ...h, 'Content-Type': 'application/json' },
+    data: { planned_box_count: 1 },
+  });
   await page.request.post(`${base}/${rid}/submit`, { headers: h });
 
   await page.goto('/app/ff/reception');
   await expect(page.getByTestId('ff-reception-page')).toBeVisible();
   await page.getByTestId('ff-inbound-queue-row').first().click();
   await expect(page.getByTestId('ff-doc-dialog')).toBeVisible();
+  await Promise.all([
+    waitForPostOk(page, base, (u) => u.includes('/begin-receiving')),
+    page.getByTestId('ff-inbound-submit-warehouse').click(),
+  ]);
+  await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('Приёмка');
 
+  await expandInboundPackages(page);
   await page.getByTestId('ff-inbound-add-to-box').click();
   await page.getByTestId('ff-inbound-box-row').first().getByRole('button', { name: 'Наполнить' }).click();
   await expect(page.getByTestId('ff-inbound-box-add-dialog')).toBeVisible();
@@ -175,9 +360,19 @@ test('ff verify posts to sorting zone; sorting queue and product columns', async
   expect(doneRow?.available).toBe(4);
 
   await page.goto('/app/ff/products');
+  await expect(page.getByTestId('ff-products-list')).toBeVisible();
   const prodRow = page.getByTestId('ff-product-row').filter({ hasText: sku });
-  await expect(prodRow.getByTestId('ff-product-qty-sorting')).toHaveText('0');
-  await expect(prodRow).toContainText('4');
+  await expect(prodRow).toBeVisible();
+  const catalogHead = page.getByTestId('ff-products-table').locator('thead');
+  await expect(catalogHead).toContainText('Название');
+  await expect(catalogHead).toContainText('Артикул селлера');
+  await expect(catalogHead).toContainText('SKU');
+  await expect(catalogHead).toContainText('ШК');
+  await expect(catalogHead).toContainText('Размер');
+  await expect(catalogHead).not.toContainText('Доступно');
+  await expect(catalogHead).not.toContainText('Распределение');
+  await expect(prodRow).toContainText(sku);
+  await expect(page.getByTestId('ff-products-table')).not.toContainText('Сортировка');
 
   // TC-NEW-PRINT-03 — печать из каталога: единый диалог MarkingPrintDialog.
   await prodRow.getByRole('button', { name: 'Печать ШК товара' }).click();

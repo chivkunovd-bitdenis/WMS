@@ -19,10 +19,11 @@ async function registerFf(page: import('@playwright/test').Page, tag: string) {
   await expect(page.getByTestId('dashboard')).toBeVisible()
 }
 
-// TC-NEW-FBS-STOCK-UI-001 — привязка WB↔WMS, ручная синхронизация и статус (реальный backend).
-// Given: оператор ФФ, селлер и склад WMS; When: создаёт привязку, запускает sync, открывает статус;
-// Then: привязка в списке, feedback по sync виден, панель статуса открывается без mock API.
-test('fbs stock sync: bind, manual sync, status panel', async ({ page }) => {
+// TC-NEW-FBS-STOCK-UI-001 — привязка реального WB-склада из строки к WMS-складу.
+// Given: оператор ФФ, селлер с WB-токеном и физический WMS-склад;
+// When: открывает склады селлера, выбирает WMS-склад в строке WB-склада и включает публикацию;
+// Then: ручного ввода WB ID нет, связь видна в строке, sync/status работают по выбранному складу.
+test('fbs seller warehouses: row binding, manual sync, status panel', async ({ page }) => {
   await registerFf(page, 'ui')
 
   const token = (await page.evaluate(() => localStorage.getItem('wms_token_ff'))) ?? ''
@@ -31,6 +32,14 @@ test('fbs stock sync: bind, manual sync, status panel', async ({ page }) => {
   const seller = (await (
     await page.request.post('/api/sellers', { headers: h, data: { name: 'Селлер Stock' } })
   ).json()) as { id: string }
+  const tokenPatch = await page.request.patch(
+    `/api/integrations/wildberries/sellers/${seller.id}/tokens`,
+    {
+      headers: h,
+      data: { marketplace_api_token: 'wb-marketplace-token' },
+    },
+  )
+  expect(tokenPatch.ok()).toBeTruthy()
 
   const whCode = `wh-stock-${Date.now()}`
   const wh = (await (
@@ -47,19 +56,26 @@ test('fbs stock sync: bind, manual sync, status panel', async ({ page }) => {
   await page.getByTestId('fbs-stock-seller-filter').click()
   await page.getByRole('option', { name: 'Селлер Stock' }).click()
 
-  await page.getByTestId('fbs-stock-add-binding').click()
-  await page.getByTestId('fbs-stock-add-wb-id').fill('501001')
-  await page.getByTestId('fbs-stock-add-wms-select').click()
-  await page.getByRole('option', { name: new RegExp(wh.name) }).click()
+  const row = page.getByTestId('fbs-stock-binding-row').first()
+  await expect(row).toContainText('E2E Seller Warehouse')
+  await expect(row).toContainText('Moscow')
+  await expect(row).toContainText('WB ID 501001')
+  await expect(page.getByTestId('fbs-stock-add-binding')).toHaveCount(0)
 
+  await row.getByTestId('fbs-stock-row-wms-select').click()
   await Promise.all([
     waitForPutOk(page, '/warehouse-bindings/501001'),
     waitForGetOk(page, '/warehouse-bindings'),
-    page.getByTestId('fbs-stock-add-save').click(),
+    page.getByRole('option', { name: new RegExp(wh.name) }).click(),
   ])
 
-  await expect(page.getByTestId('fbs-stock-binding-row')).toHaveCount(1)
-  await expect(page.getByTestId('fbs-stock-binding-row')).toContainText('501001')
+  await expect(row).toContainText('готов к публикации')
+  await Promise.all([
+    waitForPutOk(page, '/warehouse-bindings/501001'),
+    waitForGetOk(page, '/warehouse-bindings'),
+    row.getByTestId('fbs-stock-sync-toggle').click(),
+  ])
+  await expect(row).toContainText('публикация включена')
 
   await Promise.all([
     page.waitForResponse(
@@ -81,7 +97,7 @@ test('fbs stock sync: bind, manual sync, status panel', async ({ page }) => {
 
   // Disable binding — real DELETE
   await page.getByRole('button', { name: 'Закрыть' }).click()
-  await page.getByTestId('fbs-stock-disable-binding').click()
+  await row.getByTestId('fbs-stock-disable-binding').click()
   await Promise.all([
     page.waitForResponse(
       (r) =>
@@ -90,9 +106,9 @@ test('fbs stock sync: bind, manual sync, status panel', async ({ page }) => {
         r.status() === 200,
     ),
     waitForGetOk(page, '/warehouse-bindings'),
-    page.getByRole('dialog', { name: 'Отключить связь складов?' }).getByRole('button', { name: 'Отключить' }).click(),
+    page.getByRole('dialog', { name: 'Отключить сопоставление складов?' }).getByRole('button', { name: 'Отключить' }).click(),
   ])
-  await expect(page.getByTestId('fbs-stock-bindings-empty')).toBeVisible()
+  await expect(row).toContainText('склад не сопоставлен')
 
   // Seller id used for binding API path
   expect(seller.id).toBeTruthy()

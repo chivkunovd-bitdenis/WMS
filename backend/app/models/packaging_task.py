@@ -4,7 +4,16 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint, Uuid, func
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+    Uuid,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -17,12 +26,20 @@ if TYPE_CHECKING:
     from app.models.product import Product
     from app.models.storage_location import StorageLocation
     from app.models.tenant import Tenant
+    from app.models.user import User
     from app.models.warehouse import Warehouse
 
 STATUS_DRAFT = "draft"
 STATUS_IN_PROGRESS = "in_progress"
 STATUS_DONE = "done"
 STATUS_CANCELLED = "cancelled"
+
+PACKAGING_EVENT_SCAN_PACK = "scan_pack"
+PACKAGING_EVENT_MANUAL_PACK = "manual_pack"
+PACKAGING_EVENT_PRODUCT_LABEL_PRINT = "product_label_print"
+PACKAGING_EVENT_UNDO_LAST = "undo_last"
+PACKAGING_EVENT_CANCEL = "cancel"
+PACKAGING_EVENT_COMPLETE = "complete"
 
 
 class PackagingTask(Base):
@@ -98,6 +115,12 @@ class PackagingTask(Base):
         back_populates="task",
         cascade="all, delete-orphan",
     )
+    events: Mapped[list[PackagingTaskEvent]] = relationship(
+        "PackagingTaskEvent",
+        back_populates="task",
+        cascade="all, delete-orphan",
+        order_by="PackagingTaskEvent.event_sequence",
+    )
     fbs_fulfillments: Mapped[list[FbsPackagingFulfillment]] = relationship(
         "FbsPackagingFulfillment",
         back_populates="packaging_task",
@@ -136,6 +159,9 @@ class PackagingTaskLine(Base):
     qty_confirmed_packed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     qty_packed_in_task: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     qty_marking_printed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    qty_marking_external: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     marketplace_unload_line_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("marketplace_unload_lines.id", ondelete="SET NULL"),
@@ -156,4 +182,75 @@ class PackagingTaskLine(Base):
         "FbsPackagingFulfillment",
         back_populates="packaging_task_line",
         cascade="all, delete-orphan",
+    )
+
+
+class PackagingTaskEvent(Base):
+    __tablename__ = "packaging_task_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "task_id",
+            "event_sequence",
+            name="uq_packaging_task_events_task_sequence",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), index=True
+    )
+    task_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("packaging_tasks.id", ondelete="CASCADE"),
+        index=True,
+    )
+    event_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    line_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("packaging_task_lines.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    product_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("products.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    storage_location_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("storage_locations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    action: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    note: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    reversed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reversed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+    tenant: Mapped[Tenant] = relationship("Tenant")
+    task: Mapped[PackagingTask] = relationship("PackagingTask", back_populates="events")
+    line: Mapped[PackagingTaskLine | None] = relationship("PackagingTaskLine")
+    product: Mapped[Product | None] = relationship("Product")
+    storage_location: Mapped[StorageLocation | None] = relationship("StorageLocation")
+    created_by_user: Mapped[User | None] = relationship(
+        "User", foreign_keys=[created_by_user_id]
+    )
+    reversed_by_user: Mapped[User | None] = relationship(
+        "User", foreign_keys=[reversed_by_user_id]
     )

@@ -17,6 +17,7 @@ import {
   Typography,
 } from '@mui/material'
 import {
+  FbsApiError,
   createFbsIdempotencyKey,
   createFbsSupplyFromOrders,
   preflightFbsSupply,
@@ -60,6 +61,7 @@ export function FbsSupplyCreateDialog({
   const [preflightBusy, setPreflightBusy] = useState(false)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pending, setPending] = useState<string | null>(null)
   const [idempotencyKey, setIdempotencyKey] = useState(createFbsIdempotencyKey)
 
   const orderKey = useMemo(() => orderIds.join(','), [orderIds])
@@ -68,6 +70,7 @@ export function FbsSupplyCreateDialog({
     if (!open) return
     setIdempotencyKey(createFbsIdempotencyKey())
     setError(null)
+    setPending(null)
   }, [open, orderKey])
 
   useEffect(() => {
@@ -78,6 +81,7 @@ export function FbsSupplyCreateDialog({
     let active = true
     setPreflightBusy(true)
     setError(null)
+    setPending(null)
     void preflightFbsSupply(token, authHeaders, {
       order_ids: orderIds,
       planned_delivery_type: deliveryType,
@@ -102,6 +106,7 @@ export function FbsSupplyCreateDialog({
     if (!preflight?.compatible || creating) return
     setCreating(true)
     setError(null)
+    setPending(null)
     try {
       const workspace = await createFbsSupplyFromOrders(token, authHeaders, {
         // Имя генерирует WMS: оператору оно не требуется для сборки.
@@ -113,7 +118,19 @@ export function FbsSupplyCreateDialog({
       })
       onCreated(workspace)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Не удалось создать поставку.')
+      if (
+        cause instanceof FbsApiError &&
+        cause.retryable &&
+        ['wb_timeout', 'wb_pending_confirmation'].includes(cause.code)
+      ) {
+        const context = cause.context && typeof cause.context === 'object'
+          ? cause.context as { wb_supply_id?: unknown }
+          : null
+        const wbSupply = typeof context?.wb_supply_id === 'string' ? ` WB: ${context.wb_supply_id}.` : ''
+        setPending(`${cause.message}${wbSupply} Повторите проверку, чтобы прочитать фактический состав WB.`)
+      } else {
+        setError(cause instanceof Error ? cause.message : 'Не удалось создать поставку.')
+      }
     } finally {
       setCreating(false)
     }
@@ -131,6 +148,19 @@ export function FbsSupplyCreateDialog({
       <DialogContent dividers>
         <Stack spacing={2.5}>
           {error ? <Alert severity="error">{error}</Alert> : null}
+          {pending ? (
+            <Alert
+              severity="warning"
+              action={
+                <Button color="inherit" size="small" onClick={() => void create()} disabled={creating}>
+                  Повторить проверку
+                </Button>
+              }
+              data-testid="fbs-supply-pending-confirmation"
+            >
+              {pending}
+            </Alert>
+          ) : null}
 
           <Box>
             <Typography variant="subtitle2" gutterBottom>
@@ -185,12 +215,14 @@ export function FbsSupplyCreateDialog({
                 }}
               >
                 <SummaryItem label="Селлер" value={summary.seller.name} />
+                <SummaryItem
+                  label="Склад WB"
+                  value={summary.wb_warehouse.name ? String(summary.wb_warehouse.name) : `WB ${summary.wb_warehouse.id}`}
+                />
                 <SummaryItem label="Склад WMS" value={summary.wms_warehouse.name} />
                 <SummaryItem label="Заказов" value={String(summary.orders_count)} />
-                <SummaryItem
-                  label="Отгрузить до"
-                  value={new Date(summary.nearest_deadline_at).toLocaleString('ru-RU')}
-                />
+                <SummaryItem label="Грузовой тип" value={summary.cargo_type} />
+                <SummaryItem label="Контроль сборки" value="без подтверждённого WB SLA" />
                 {summary.buyer_type === 'legal' ? <SummaryItem label="Покупатель" value="Юридическое лицо" /> : null}
                 {summary.required_marking_count > 0 ? <SummaryItem label="Нужна маркировка" value={String(summary.required_marking_count)} /> : null}
                 {deliveryType === 'pvz' && summary.pvz_blocked_count > 0 ? <SummaryItem label="Нельзя сдать через ПВЗ" value={String(summary.pvz_blocked_count)} /> : null}

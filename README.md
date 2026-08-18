@@ -231,8 +231,12 @@ Caddy хранит сертификаты Let's Encrypt в Docker volume `wms_ca
 
 ## CI gates (Definition of Done)
 
+CI is necessary, but it is not WMS product acceptance. Every WMS task must pass
+the mandatory `docs/WMS_FEATURE_GATE_PROTOCOL_RU.md` cycle: BA feature cards,
+Product review before development, Code Review, and real-browser Product review
+after development.
+
 - `ruff check .`
 - `mypy .`
 - `pytest`
 - Playwright e2e (user scenarios)
-

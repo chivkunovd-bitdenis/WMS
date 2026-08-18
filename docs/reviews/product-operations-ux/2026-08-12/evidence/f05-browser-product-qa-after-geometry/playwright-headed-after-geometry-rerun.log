@@ -1,0 +1,26 @@
+[1A[2K[2m[WebServer] [22mINFO:     Started server process [87278]
+
+[1A[2K[2m[WebServer] [22mINFO:     Waiting for application startup.
+
+[1A[2K[2m[WebServer] [22mWMS_AUTO_CREATE_SCHEMA=1: tables created (dev/e2e only).
+
+[1A[2K[2m[WebServer] [22mINFO:     Application startup complete.
+
+[1A[2K[2m[WebServer] [22mINFO:     Uvicorn running on http://127.0.0.1:18206 (Press CTRL+C to quit)
+
+[1A[2K[2m[WebServer] [22m(node:87305) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[2m[WebServer] [22m(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+Running 1 test using 1 worker
+
+[1A[2K(node:87306) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1A[2K(node:87306) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1A[2K[1/1] [chromium] › ../docs/reviews/product-operations-ux/2026-08-12/evidence/f05-browser-product-qa-after-geometry/f05-browser-product-qa-after-geometry.spec.ts:241:5 › F05 after geometry — FF conducts receiving and seller sees full factual card at 1280x900
+[1A[2K  1 passed (49.0s)

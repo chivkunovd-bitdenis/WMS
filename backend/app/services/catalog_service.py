@@ -1,17 +1,22 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.inbound_intake import InboundIntakeRequest
+from app.models.inventory_balance import InventoryBalance
+from app.models.outbound_shipment import OutboundShipmentRequest
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
 from app.models.warehouse_storage_rack import WarehouseStorageRack
+from app.services import inventory_service as inv_svc
 from app.services import sorting_location_service as sorting_loc_svc
 from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
 
@@ -68,7 +73,12 @@ async def get_storage_location_in_warehouse(
     location_id: uuid.UUID,
 ) -> StorageLocation | None:
     loc = await session.get(StorageLocation, location_id)
-    if loc is None or loc.tenant_id != tenant_id or loc.warehouse_id != warehouse_id:
+    if (
+        loc is None
+        or loc.tenant_id != tenant_id
+        or loc.warehouse_id != warehouse_id
+        or loc.deleted_at is not None
+    ):
         return None
     return loc
 
@@ -88,6 +98,7 @@ async def list_locations(
         .where(
             StorageLocation.warehouse_id == warehouse_id,
             StorageLocation.tenant_id == tenant_id,
+            StorageLocation.deleted_at.is_(None),
         )
         .order_by(StorageLocation.code)
     )
@@ -251,6 +262,172 @@ async def create_location_from_rack(
     raise CatalogError("barcode_collision")
 
 
+async def rename_warehouse(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    *,
+    name: str,
+) -> Warehouse:
+    wh = await get_warehouse(session, tenant_id, warehouse_id)
+    if wh is None:
+        raise CatalogError("warehouse_not_found")
+    trimmed = name.strip()
+    if not trimmed:
+        raise CatalogError("invalid_warehouse_name")
+    wh.name = trimmed
+    await session.commit()
+    await session.refresh(wh)
+    return wh
+
+
+async def delete_warehouse(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+) -> None:
+    wh = await get_warehouse(session, tenant_id, warehouse_id)
+    if wh is None:
+        raise CatalogError("warehouse_not_found")
+
+    docs_count = int(
+        await session.scalar(
+            select(func.count(InboundIntakeRequest.id)).where(
+                InboundIntakeRequest.tenant_id == tenant_id,
+                InboundIntakeRequest.warehouse_id == warehouse_id,
+            )
+        )
+        or 0
+    )
+    docs_count += int(
+        await session.scalar(
+            select(func.count(OutboundShipmentRequest.id)).where(
+                OutboundShipmentRequest.tenant_id == tenant_id,
+                OutboundShipmentRequest.warehouse_id == warehouse_id,
+            )
+        )
+        or 0
+    )
+    if docs_count > 0:
+        raise CatalogError("warehouse_has_documents")
+
+    stock_count = int(
+        await session.scalar(
+            select(func.coalesce(func.sum(InventoryBalance.quantity), 0))
+            .join(StorageLocation, StorageLocation.id == InventoryBalance.storage_location_id)
+            .where(
+                InventoryBalance.tenant_id == tenant_id,
+                StorageLocation.tenant_id == tenant_id,
+                StorageLocation.warehouse_id == warehouse_id,
+                InventoryBalance.quantity > 0,
+            )
+        )
+        or 0
+    )
+    if stock_count > 0:
+        raise CatalogError("warehouse_has_stock")
+
+    active_regular_locations = int(
+        await session.scalar(
+            select(func.count(StorageLocation.id)).where(
+                StorageLocation.tenant_id == tenant_id,
+                StorageLocation.warehouse_id == warehouse_id,
+                StorageLocation.deleted_at.is_(None),
+                StorageLocation.code != sorting_loc_svc.SORTING_LOCATION_CODE,
+            )
+        )
+        or 0
+    )
+    if active_regular_locations > 0:
+        raise CatalogError("warehouse_has_locations")
+
+    await session.delete(wh)
+    await session.commit()
+
+
+async def rename_location(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    location_id: uuid.UUID,
+    *,
+    code: str,
+) -> StorageLocation:
+    loc = await get_storage_location_in_warehouse(
+        session, tenant_id, warehouse_id, location_id
+    )
+    if loc is None:
+        raise CatalogError("location_not_found")
+    if sorting_loc_svc.is_sorting_location(loc):
+        raise CatalogError("system_location_locked")
+    trimmed = code.strip()
+    if not trimmed:
+        raise CatalogError("invalid_location_code")
+    loc.code = trimmed
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        msg = str(exc.orig).lower() if exc.orig is not None else str(exc).lower()
+        if "uq_storage_locations_wh_code" in msg or "storage_locations_wh_code" in msg:
+            raise CatalogError("location_code_taken") from exc
+        raise
+    await session.refresh(loc)
+    return loc
+
+
+async def delete_location(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    location_id: uuid.UUID,
+    *,
+    move_stock_to: str | None = None,
+) -> None:
+    loc = await get_storage_location_in_warehouse(
+        session, tenant_id, warehouse_id, location_id
+    )
+    if loc is None:
+        raise CatalogError("location_not_found")
+    if sorting_loc_svc.is_sorting_location(loc):
+        raise CatalogError("system_location_locked")
+
+    balances = list(
+        (
+            await session.execute(
+                select(InventoryBalance).where(
+                    InventoryBalance.tenant_id == tenant_id,
+                    InventoryBalance.storage_location_id == location_id,
+                    InventoryBalance.quantity > 0,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if balances:
+        if move_stock_to not in ("sorting", "unallocated"):
+            raise CatalogError("location_has_stock")
+        sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
+            session, tenant_id, warehouse_id
+        )
+        for bal in balances:
+            qty = int(bal.quantity)
+            if qty < 1:
+                continue
+            await inv_svc.transfer_on_hand_between_locations(
+                session,
+                tenant_id,
+                from_storage_location_id=location_id,
+                to_storage_location_id=sorting_loc.id,
+                product_id=bal.product_id,
+                quantity=qty,
+            )
+
+    loc.deleted_at = datetime.now(UTC)
+    await session.commit()
+
+
 async def create_location(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -355,6 +532,14 @@ def _normalize_dimensions(
     return length_mm, width_mm, height_mm
 
 
+def _normalize_weight_g(weight_g: int | None) -> int | None:
+    if weight_g is None:
+        return None
+    if weight_g <= 0:
+        raise CatalogError("invalid_weight")
+    return weight_g
+
+
 async def create_product(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -364,6 +549,7 @@ async def create_product(
     length_mm: int | None = None,
     width_mm: int | None = None,
     height_mm: int | None = None,
+    weight_g: int | None = None,
     seller_id: uuid.UUID | None = None,
     wb_barcode: str | None = None,
     wb_size: str | None = None,
@@ -373,6 +559,7 @@ async def create_product(
     commit: bool = True,
 ) -> Product:
     dim_l, dim_w, dim_h = _normalize_dimensions(length_mm, width_mm, height_mm)
+    normalized_weight_g = _normalize_weight_g(weight_g)
     if seller_id is not None:
         sel = await session.get(Seller, seller_id)
         if sel is None or sel.tenant_id != tenant_id:
@@ -389,6 +576,8 @@ async def create_product(
         length_mm=dim_l,
         width_mm=dim_w,
         height_mm=dim_h,
+        weight_g=normalized_weight_g,
+        volume_liters=volume_liters_from_mm(dim_l, dim_w, dim_h),
         wb_barcode=barcode,
         wb_size=size,
         wb_vendor_code=vendor,
@@ -448,6 +637,63 @@ async def update_packaging_instructions(
     else:
         await session.flush()
     return p
+
+
+async def update_product_dimensions(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    *,
+    length_mm: int | None,
+    width_mm: int | None,
+    height_mm: int | None,
+    weight_g: int | None = None,
+    weight_g_set: bool = False,
+    commit: bool = True,
+) -> Product:
+    dim_l, dim_w, dim_h = _normalize_dimensions(length_mm, width_mm, height_mm)
+    normalized_weight_g = _normalize_weight_g(weight_g) if weight_g_set else None
+    p = await get_product(session, tenant_id, product_id)
+    if p is None:
+        raise CatalogError("product_not_found")
+    p.length_mm = dim_l
+    p.width_mm = dim_w
+    p.height_mm = dim_h
+    if weight_g_set:
+        p.weight_g = normalized_weight_g
+    p.volume_liters = volume_liters_from_mm(dim_l, dim_w, dim_h)
+    if commit:
+        await session.commit()
+        await session.refresh(p, attribute_names=["seller"])
+    else:
+        await session.flush()
+    return p
+
+
+async def bulk_update_products_requires_honest_sign(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    product_ids: list[uuid.UUID],
+    requires_honest_sign: bool,
+    seller_id: uuid.UUID | None = None,
+) -> int:
+    if not product_ids:
+        return 0
+    stmt = (
+        update(Product)
+        .where(
+            Product.tenant_id == tenant_id,
+            Product.id.in_(product_ids),
+        )
+        .values(requires_honest_sign=requires_honest_sign)
+    )
+    if seller_id is not None:
+        stmt = stmt.where(Product.seller_id == seller_id)
+    result = await session.execute(stmt)
+    updated_count = int(getattr(result, "rowcount", 0) or 0)
+    await session.commit()
+    return updated_count
 
 
 async def update_product_fbs_stock_sync(

@@ -1,0 +1,997 @@
+{
+  "verdict": "FINAL_BROWSER_GROUP_FAILED",
+  "browser_used": "yes",
+  "browser": "Chromium via Playwright headless=false --kiosk-printing",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "ports": {
+    "api": 18214,
+    "web": 55214
+  },
+  "routes": [
+    "/",
+    "/app/ff/packaging",
+    "/app/ff/packaging",
+    "/seller/",
+    "/",
+    "/app/ff/mp-shipments?open_mp=31589782-14d4-415d-bae6-36e4b3567c8e"
+  ],
+  "clicks": [
+    "go-to-register",
+    "Создать аккаунт",
+    "packaging create open",
+    "packaging select warehouse",
+    "packaging select location",
+    "select seller A packaging row",
+    "select seller B packaging row",
+    "unselect seller B packaging row",
+    "packaging create submit",
+    "packaging scan submit valid",
+    "packaging scan submit invalid",
+    "packaging manual +2",
+    "packaging undo open",
+    "packaging undo confirm",
+    "packaging final scan 1",
+    "packaging final scan 2",
+    "packaging final scan 3",
+    "packaging overscan",
+    "packaging complete",
+    "pending create open",
+    "select no-KM packaging row",
+    "open pending marking",
+    "logout",
+    "seller Войти",
+    "seller nav documents",
+    "seller create MP unload",
+    "seller select WB warehouse",
+    "seller add MP products",
+    "seller apply MP product",
+    "seller plan MP unload",
+    "FF login Войти",
+    "FF confirm MP request",
+    "FF MP boxes tab",
+    "MP create one box",
+    "MP add products to box 6bd85265-8bec-4196-9b6a-3e90fe82142f",
+    "MP box add scan submit",
+    "MP box add manual product",
+    "FF MP packaging tab",
+    "MP packaging manual pack",
+    "MP packaging complete",
+    "FF MP final tab",
+    "FF click MP print shipment sheet"
+  ],
+  "inputs": [
+    "FF registration org/email/password",
+    "packaging qty decimal 1.5",
+    "packaging qty A 4",
+    "scan valid packaging barcode",
+    "scan invalid packaging barcode",
+    "manual packaging +2",
+    "seller login final-seller-owner-1786667012059@example.com",
+    "seller planned date 2026-06-15 via API fixture",
+    "seller MP picker sku qty 4",
+    "MP batch box count 1",
+    "MP box add scan location LOC-4A1B173DD60B",
+    "MP box add qty 4",
+    "MP packaging manual qty 4"
+  ],
+  "screenshots": [
+    {
+      "name": "ff-admin-registered",
+      "file": "01-ff-admin-registered-1280x720.png",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-packaging-delete-live-strict/01-ff-admin-registered-1280x720.png",
+      "metric": {
+        "url": "http://127.0.0.1:55214/app/ff/dashboard",
+        "innerWidth": 1280,
+        "innerHeight": 720,
+        "documentScrollWidth": 1280,
+        "documentClientWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "bodyClientWidth": 1280,
+        "bodyRectWidth": 1280,
+        "horizontalOverflow": false,
+        "rawCodesVisible": []
+      }
+    },
+    {
+      "name": "packaging-route-empty-or-queue",
+      "file": "02-packaging-route-empty-or-queue-1280x720.png",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-packaging-delete-live-strict/02-packaging-route-empty-or-queue-1280x720.png",
+      "metric": {
+        "url": "http://127.0.0.1:55214/app/ff/packaging",
+        "innerWidth": 1280,
+        "innerHeight": 720,
+        "documentScrollWidth": 1280,
+        "documentClientWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "bodyClientWidth": 1280,
+        "bodyRectWidth": 1280,
+        "horizontalOverflow": false,
+        "rawCodesVisible": []
+      }
+    },
+    {
+      "name": "packaging-create-dialog-open",
+      "file": "03-packaging-create-dialog-open-1280x720.png",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-packaging-delete-live-strict/03-packaging-create-dialog-open-1280x720.png",
+      "metric": {
+        "url": "http://127.0.0.1:55214/app/ff/packaging",
+        "innerWidth": 1280,
+        "innerHeight": 720,
+        "documentScrollWidth": 1280,
+        "documentClientWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "bodyClientWidth": 1280,
+        "bodyRectWidth": 1280,
+        "horizontalOverflow": false,
+        "rawCodesVisible": []
+      }
+    },
+    {
+      "name": "packaging-create-location-two-sellers",
+      "file": "04-packaging-create-location-two-sellers-1280x720.png",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-packaging-delete-live-strict/04-packaging-create-location-two-sellers-1280x720.png",
+      "metric": {
+        "url": "http://127.0.0.1:55214/app/ff/packaging",
+        "innerWidth": 1280,
+        "innerHeight": 720,
+        "documentScrollWidth": 1280,
+        "documentClientWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "bodyClientWidth": 1280,
+        "bodyRectWidth": 1280,
+        "horizontalOverflow": false,
+        "rawCodesVisible": []
+      }
+    },
+    {
+      "name": "packaging-create-mixed-seller-block",
+      "file": "05-packaging-create-mixed-seller-block-1280x720.png",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-packaging-delete-live-strict/05-packaging-create-mixed-seller-block-1280x720.png",
+      "metric": {
+        "url": "http://127.0.0.1:55214/app/ff/packaging",
+        "innerWidth": 1280,
+        "innerHeight": 720,
+        "documentScrollWidth": 1280,
+        "documentClientWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "bodyClientWidth": 1280,
+        "bodyRectWidth": 1280,
+        "horizontalOverflow": false,
+        "rawCodesVisible": []
+      }
+    },
+    {
+      "name": "packaging-task-created-from-location",
+      "file": "06-packaging-task-created-from-location-1280x720.png",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-packaging-delete-live-strict/06-packaging-task-created-from-location-1280x720.png",
+      "metric": {
+        "url": "http://127.0.0.1:55214/app/ff/packaging/eb6490ea-1fff-4ba0-8eda-8681d33efc29",
+        "innerWidth": 1280,
+        "innerHeight": 720,
+        "documentScrollWidth": 1280,
+        "documentClientWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "bodyClientWidth": 1280,
+        "bodyRectWidth": 1280,
+        "horizontalOverflow": false,
+        "rawCodesVisible": []
+      }
+    },
+    {
+      "name": "packaging-valid-scan-success",
+      "file": "07-packaging-valid-scan-success-1280x720.png",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-packaging-delete-live-strict/07-packaging-valid-scan-success-1280x720.png",
+      "metric": {
+        "url": "http://127.0.0.1:55214/app/ff/packaging/eb6490ea-1fff-4ba0-8eda-8681d33efc29",
+        "innerWidth": 1280,
+        "innerHeight": 720,
+        "documentScrollWidth": 1280,
+        "documentClientWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "bodyClientWidth": 1280,
+        "bodyRectWidth": 1280,
+        "horizontalOverflow": false,
+        "rawCodesVisible": []
+      }
+    },
+    {
+      "name": "packaging-invalid-barcode-human-error",
+      "file": "08-packaging-invalid-barcode-human-error-1280x720.png",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-packaging-delete-live-strict/08-packaging-invalid-barcode-human-error-1280x720.png",
+      "metric": {
+        "url": "http://127.0.0.1:55214/app/ff/packaging/eb6490ea-1fff-4ba0-8eda-8681d33efc29",
+        "innerWidth": 1280,
+        "innerHeight": 720,
+        "documentScrollWidth": 1280,
+        "documentClientWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "bodyClientWidth": 1280,
+        "bodyRectWidth": 1280,
+        "horizontalOverflow": false,
+        "rawCodesVisible": []
+      }
+    },
+    {
+      "name": "packaging-manual-undo-confirm",
+      "file": "09-packaging-manual-undo-confirm-1280x720.png",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-packaging-delete-live-strict/09-packaging-manual-undo-confirm-1280x720.png",
+      "metric": {
+        "url": "http://127.0.0.1:55214/app/ff/packaging/eb6490ea-1fff-4ba0-8eda-8681d33efc29",
+        "innerWidth": 1280,
+        "innerHeight": 720,
+        "documentScrollWidth": 1280,
+        "documentClientWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "bodyClientWidth": 1280,
+        "bodyRectWidth": 1280,
+        "horizontalOverflow": false,
+        "rawCodesVisible": []
+      }
+    },
+    {
+      "name": "packaging-undo-readback",
+      "file": "10-packaging-undo-readback-1280x720.png",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-packaging-delete-live-strict/10-packaging-undo-readback-1280x720.png",
+      "metric": {
+        "url": "http://127.0.0.1:55214/app/ff/packaging/eb6490ea-1fff-4ba0-8eda-8681d33efc29",
+        "innerWidth": 1280,
+        "innerHeight": 720,
+        "documentScrollWidth": 1280,
+        "documentClientWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "bodyClientWidth": 1280,
+        "bodyRectWidth": 1280,
+        "horizontalOverflow": false,
+        "rawCodesVisible": []
+      }
+    },
+    {
+      "name": "packaging-overpack-human-error",
+      "file": "11-packaging-overpack-human-error-1280x720.png",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-packaging-delete-live-strict/11-packaging-overpack-human-error-1280x720.png",
+      "metric": {
+        "url": "http://127.0.0.1:55214/app/ff/packaging/eb6490ea-1fff-4ba0-8eda-8681d33efc29",
+        "innerWidth": 1280,
+        "innerHeight": 720,
+        "documentScrollWidth": 1280,
+        "documentClientWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "bodyClientWidth": 1280,
+        "bodyRectWidth": 1280,
+        "horizontalOverflow": false,
+        "rawCodesVisible": []
+      }
+    },
+    {
+      "name": "packaging-completed-history",
+      "file": "12-packaging-completed-history-1280x720.png",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-packaging-delete-live-strict/12-packaging-completed-history-1280x720.png",
+      "metric": {
+        "url": "http://127.0.0.1:55214/app/ff/packaging/eb6490ea-1fff-4ba0-8eda-8681d33efc29",
+        "innerWidth": 1280,
+        "innerHeight": 720,
+        "documentScrollWidth": 1280,
+        "documentClientWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "bodyClientWidth": 1280,
+        "bodyRectWidth": 1280,
+        "horizontalOverflow": false,
+        "rawCodesVisible": []
+      }
+    },
+    {
+      "name": "packaging-completed-reload-readback",
+      "file": "13-packaging-completed-reload-readback-1280x720.png",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-packaging-delete-live-strict/13-packaging-completed-reload-readback-1280x720.png",
+      "metric": {
+        "url": "http://127.0.0.1:55214/app/ff/packaging/eb6490ea-1fff-4ba0-8eda-8681d33efc29",
+        "innerWidth": 1280,
+        "innerHeight": 720,
+        "documentScrollWidth": 1280,
+        "documentClientWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "bodyClientWidth": 1280,
+        "bodyRectWidth": 1280,
+        "horizontalOverflow": false,
+        "rawCodesVisible": []
+      }
+    },
+    {
+      "name": "pending-marking-no-km-human-labels",
+      "file": "14-pending-marking-no-km-human-labels-1280x720.png",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-packaging-delete-live-strict/14-pending-marking-no-km-human-labels-1280x720.png",
+      "metric": {
+        "url": "http://127.0.0.1:55214/app/ff/packaging/pending-marking",
+        "innerWidth": 1280,
+        "innerHeight": 720,
+        "documentScrollWidth": 1280,
+        "documentClientWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "bodyClientWidth": 1280,
+        "bodyRectWidth": 1280,
+        "horizontalOverflow": false,
+        "rawCodesVisible": []
+      }
+    },
+    {
+      "name": "seller-mp-planned",
+      "file": "15-seller-mp-planned-1280x720.png",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-packaging-delete-live-strict/15-seller-mp-planned-1280x720.png",
+      "metric": {
+        "url": "http://127.0.0.1:55214/seller/documents",
+        "innerWidth": 1280,
+        "innerHeight": 720,
+        "documentScrollWidth": 1280,
+        "documentClientWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "bodyClientWidth": 1280,
+        "bodyRectWidth": 1280,
+        "horizontalOverflow": false,
+        "rawCodesVisible": []
+      }
+    },
+    {
+      "name": "ff-mp-submitted-no-delete",
+      "file": "16-ff-mp-submitted-no-delete-1280x720.png",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-packaging-delete-live-strict/16-ff-mp-submitted-no-delete-1280x720.png",
+      "metric": {
+        "url": "http://127.0.0.1:55214/app/ff/mp-shipments",
+        "innerWidth": 1280,
+        "innerHeight": 720,
+        "documentScrollWidth": 1280,
+        "documentClientWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "bodyClientWidth": 1280,
+        "bodyRectWidth": 1280,
+        "horizontalOverflow": false,
+        "rawCodesVisible": []
+      }
+    },
+    {
+      "name": "ff-mp-confirmed-box-filled-no-remove-visible",
+      "file": "17-ff-mp-confirmed-box-filled-no-remove-visible-1280x720.png",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-packaging-delete-live-strict/17-ff-mp-confirmed-box-filled-no-remove-visible-1280x720.png",
+      "metric": {
+        "url": "http://127.0.0.1:55214/app/ff/mp-shipments",
+        "innerWidth": 1280,
+        "innerHeight": 720,
+        "documentScrollWidth": 1280,
+        "documentClientWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "bodyClientWidth": 1280,
+        "bodyRectWidth": 1280,
+        "horizontalOverflow": false,
+        "rawCodesVisible": []
+      }
+    },
+    {
+      "name": "ff-mp-packaging-complete",
+      "file": "18-ff-mp-packaging-complete-1280x720.png",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-packaging-delete-live-strict/18-ff-mp-packaging-complete-1280x720.png",
+      "metric": {
+        "url": "http://127.0.0.1:55214/app/ff/mp-shipments",
+        "innerWidth": 1280,
+        "innerHeight": 720,
+        "documentScrollWidth": 1280,
+        "documentClientWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "bodyClientWidth": 1280,
+        "bodyRectWidth": 1280,
+        "horizontalOverflow": false,
+        "rawCodesVisible": []
+      }
+    },
+    {
+      "name": "ff-mp-final-print-button",
+      "file": "19-ff-mp-final-print-button-1280x720.png",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-packaging-delete-live-strict/19-ff-mp-final-print-button-1280x720.png",
+      "metric": {
+        "url": "http://127.0.0.1:55214/app/ff/mp-shipments",
+        "innerWidth": 1280,
+        "innerHeight": 720,
+        "documentScrollWidth": 1280,
+        "documentClientWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "bodyClientWidth": 1280,
+        "bodyRectWidth": 1280,
+        "horizontalOverflow": false,
+        "rawCodesVisible": []
+      }
+    },
+    {
+      "name": "fatal-product-qa",
+      "file": "20-fatal-product-qa-1280x720.png",
+      "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/docs/reviews/product-operations-ux/2026-08-12/evidence/final-browser-regression-rerun-packaging-delete-live-strict/20-fatal-product-qa-1280x720.png",
+      "metric": {
+        "url": "http://127.0.0.1:55214/app/ff/mp-shipments",
+        "innerWidth": 1280,
+        "innerHeight": 720,
+        "documentScrollWidth": 1280,
+        "documentClientWidth": 1280,
+        "bodyScrollWidth": 1280,
+        "bodyClientWidth": 1280,
+        "bodyRectWidth": 1280,
+        "horizontalOverflow": false,
+        "rawCodesVisible": []
+      }
+    }
+  ],
+  "metrics": [
+    {
+      "label": "ff-admin-registered",
+      "url": "http://127.0.0.1:55214/app/ff/dashboard",
+      "innerWidth": 1280,
+      "innerHeight": 720,
+      "documentScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "bodyClientWidth": 1280,
+      "bodyRectWidth": 1280,
+      "horizontalOverflow": false,
+      "rawCodesVisible": []
+    },
+    {
+      "label": "packaging-route-empty-or-queue",
+      "url": "http://127.0.0.1:55214/app/ff/packaging",
+      "innerWidth": 1280,
+      "innerHeight": 720,
+      "documentScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "bodyClientWidth": 1280,
+      "bodyRectWidth": 1280,
+      "horizontalOverflow": false,
+      "rawCodesVisible": []
+    },
+    {
+      "label": "packaging-route",
+      "url": "http://127.0.0.1:55214/app/ff/packaging",
+      "innerWidth": 1280,
+      "innerHeight": 720,
+      "documentScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "bodyClientWidth": 1280,
+      "bodyRectWidth": 1280,
+      "horizontalOverflow": false,
+      "rawCodesVisible": []
+    },
+    {
+      "label": "packaging-create-dialog-open",
+      "url": "http://127.0.0.1:55214/app/ff/packaging",
+      "innerWidth": 1280,
+      "innerHeight": 720,
+      "documentScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "bodyClientWidth": 1280,
+      "bodyRectWidth": 1280,
+      "horizontalOverflow": false,
+      "rawCodesVisible": []
+    },
+    {
+      "label": "packaging-create-location-two-sellers",
+      "url": "http://127.0.0.1:55214/app/ff/packaging",
+      "innerWidth": 1280,
+      "innerHeight": 720,
+      "documentScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "bodyClientWidth": 1280,
+      "bodyRectWidth": 1280,
+      "horizontalOverflow": false,
+      "rawCodesVisible": []
+    },
+    {
+      "label": "packaging-create-mixed-seller-block",
+      "url": "http://127.0.0.1:55214/app/ff/packaging",
+      "innerWidth": 1280,
+      "innerHeight": 720,
+      "documentScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "bodyClientWidth": 1280,
+      "bodyRectWidth": 1280,
+      "horizontalOverflow": false,
+      "rawCodesVisible": []
+    },
+    {
+      "label": "packaging-task-created-from-location",
+      "url": "http://127.0.0.1:55214/app/ff/packaging/eb6490ea-1fff-4ba0-8eda-8681d33efc29",
+      "innerWidth": 1280,
+      "innerHeight": 720,
+      "documentScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "bodyClientWidth": 1280,
+      "bodyRectWidth": 1280,
+      "horizontalOverflow": false,
+      "rawCodesVisible": []
+    },
+    {
+      "label": "packaging-valid-scan-success",
+      "url": "http://127.0.0.1:55214/app/ff/packaging/eb6490ea-1fff-4ba0-8eda-8681d33efc29",
+      "innerWidth": 1280,
+      "innerHeight": 720,
+      "documentScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "bodyClientWidth": 1280,
+      "bodyRectWidth": 1280,
+      "horizontalOverflow": false,
+      "rawCodesVisible": []
+    },
+    {
+      "label": "packaging-invalid-barcode-human-error",
+      "url": "http://127.0.0.1:55214/app/ff/packaging/eb6490ea-1fff-4ba0-8eda-8681d33efc29",
+      "innerWidth": 1280,
+      "innerHeight": 720,
+      "documentScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "bodyClientWidth": 1280,
+      "bodyRectWidth": 1280,
+      "horizontalOverflow": false,
+      "rawCodesVisible": []
+    },
+    {
+      "label": "packaging-manual-undo-confirm",
+      "url": "http://127.0.0.1:55214/app/ff/packaging/eb6490ea-1fff-4ba0-8eda-8681d33efc29",
+      "innerWidth": 1280,
+      "innerHeight": 720,
+      "documentScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "bodyClientWidth": 1280,
+      "bodyRectWidth": 1280,
+      "horizontalOverflow": false,
+      "rawCodesVisible": []
+    },
+    {
+      "label": "packaging-undo-readback",
+      "url": "http://127.0.0.1:55214/app/ff/packaging/eb6490ea-1fff-4ba0-8eda-8681d33efc29",
+      "innerWidth": 1280,
+      "innerHeight": 720,
+      "documentScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "bodyClientWidth": 1280,
+      "bodyRectWidth": 1280,
+      "horizontalOverflow": false,
+      "rawCodesVisible": []
+    },
+    {
+      "label": "packaging-overpack-human-error",
+      "url": "http://127.0.0.1:55214/app/ff/packaging/eb6490ea-1fff-4ba0-8eda-8681d33efc29",
+      "innerWidth": 1280,
+      "innerHeight": 720,
+      "documentScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "bodyClientWidth": 1280,
+      "bodyRectWidth": 1280,
+      "horizontalOverflow": false,
+      "rawCodesVisible": []
+    },
+    {
+      "label": "packaging-completed-history",
+      "url": "http://127.0.0.1:55214/app/ff/packaging/eb6490ea-1fff-4ba0-8eda-8681d33efc29",
+      "innerWidth": 1280,
+      "innerHeight": 720,
+      "documentScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "bodyClientWidth": 1280,
+      "bodyRectWidth": 1280,
+      "horizontalOverflow": false,
+      "rawCodesVisible": []
+    },
+    {
+      "label": "packaging-completed-reload-readback",
+      "url": "http://127.0.0.1:55214/app/ff/packaging/eb6490ea-1fff-4ba0-8eda-8681d33efc29",
+      "innerWidth": 1280,
+      "innerHeight": 720,
+      "documentScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "bodyClientWidth": 1280,
+      "bodyRectWidth": 1280,
+      "horizontalOverflow": false,
+      "rawCodesVisible": []
+    },
+    {
+      "label": "packaging-completed-reload",
+      "url": "http://127.0.0.1:55214/app/ff/packaging/eb6490ea-1fff-4ba0-8eda-8681d33efc29",
+      "innerWidth": 1280,
+      "innerHeight": 720,
+      "documentScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "bodyClientWidth": 1280,
+      "bodyRectWidth": 1280,
+      "horizontalOverflow": false,
+      "rawCodesVisible": []
+    },
+    {
+      "label": "pending-marking-no-km-human-labels",
+      "url": "http://127.0.0.1:55214/app/ff/packaging/pending-marking",
+      "innerWidth": 1280,
+      "innerHeight": 720,
+      "documentScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "bodyClientWidth": 1280,
+      "bodyRectWidth": 1280,
+      "horizontalOverflow": false,
+      "rawCodesVisible": []
+    },
+    {
+      "label": "pending-marking",
+      "url": "http://127.0.0.1:55214/app/ff/packaging/pending-marking",
+      "innerWidth": 1280,
+      "innerHeight": 720,
+      "documentScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "bodyClientWidth": 1280,
+      "bodyRectWidth": 1280,
+      "horizontalOverflow": false,
+      "rawCodesVisible": []
+    },
+    {
+      "label": "seller-mp-planned",
+      "url": "http://127.0.0.1:55214/seller/documents",
+      "innerWidth": 1280,
+      "innerHeight": 720,
+      "documentScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "bodyClientWidth": 1280,
+      "bodyRectWidth": 1280,
+      "horizontalOverflow": false,
+      "rawCodesVisible": []
+    },
+    {
+      "label": "ff-mp-submitted-no-delete",
+      "url": "http://127.0.0.1:55214/app/ff/mp-shipments",
+      "innerWidth": 1280,
+      "innerHeight": 720,
+      "documentScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "bodyClientWidth": 1280,
+      "bodyRectWidth": 1280,
+      "horizontalOverflow": false,
+      "rawCodesVisible": []
+    },
+    {
+      "label": "ff-mp-confirmed-box-filled-no-remove-visible",
+      "url": "http://127.0.0.1:55214/app/ff/mp-shipments",
+      "innerWidth": 1280,
+      "innerHeight": 720,
+      "documentScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "bodyClientWidth": 1280,
+      "bodyRectWidth": 1280,
+      "horizontalOverflow": false,
+      "rawCodesVisible": []
+    },
+    {
+      "label": "ff-mp-packaging-complete",
+      "url": "http://127.0.0.1:55214/app/ff/mp-shipments",
+      "innerWidth": 1280,
+      "innerHeight": 720,
+      "documentScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "bodyClientWidth": 1280,
+      "bodyRectWidth": 1280,
+      "horizontalOverflow": false,
+      "rawCodesVisible": []
+    },
+    {
+      "label": "ff-mp-final-print-button",
+      "url": "http://127.0.0.1:55214/app/ff/mp-shipments",
+      "innerWidth": 1280,
+      "innerHeight": 720,
+      "documentScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "bodyClientWidth": 1280,
+      "bodyRectWidth": 1280,
+      "horizontalOverflow": false,
+      "rawCodesVisible": []
+    },
+    {
+      "label": "ff-mp-final-print",
+      "url": "http://127.0.0.1:55214/app/ff/mp-shipments",
+      "innerWidth": 1280,
+      "innerHeight": 720,
+      "documentScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "bodyClientWidth": 1280,
+      "bodyRectWidth": 1280,
+      "horizontalOverflow": false,
+      "rawCodesVisible": []
+    },
+    {
+      "label": "ff-mp-final-print",
+      "url": "http://127.0.0.1:55214/app/ff/mp-shipments",
+      "innerWidth": 1280,
+      "innerHeight": 720,
+      "documentScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "bodyClientWidth": 1280,
+      "bodyRectWidth": 1280,
+      "horizontalOverflow": false,
+      "rawCodesVisible": []
+    },
+    {
+      "label": "fatal-product-qa",
+      "url": "http://127.0.0.1:55214/app/ff/mp-shipments",
+      "innerWidth": 1280,
+      "innerHeight": 720,
+      "documentScrollWidth": 1280,
+      "documentClientWidth": 1280,
+      "bodyScrollWidth": 1280,
+      "bodyClientWidth": 1280,
+      "bodyRectWidth": 1280,
+      "horizontalOverflow": false,
+      "rawCodesVisible": []
+    }
+  ],
+  "checks": [
+    {
+      "name": "1280 no horizontal overflow: packaging-route",
+      "ok": true,
+      "detail": "{\"url\":\"http://127.0.0.1:55214/app/ff/packaging\",\"innerWidth\":1280,\"innerHeight\":720,\"documentScrollWidth\":1280,\"documentClientWidth\":1280,\"bodyScrollWidth\":1280,\"bodyClientWidth\":1280,\"bodyRectWidth\":1280,\"horizontalOverflow\":false,\"rawCodesVisible\":[]}"
+    },
+    {
+      "name": "Packaging create dialog shows seller identity",
+      "ok": true,
+      "detail": "Создать задание на упаковку\nСклад\nFinal QA WH 1786667012059\nСклад\nМесто (ячейка)\nPACK-12059\nМесто (ячейка)\nВыбрано 0 строк / 0 шт. / 0 селлеров\n\tТовар / селлер / ТЗ\tНеупаковано\tВ задание\n\n\t\n\nFinal MP Product 1786667012059\n\nSKU: FINAL-MP-1786667012059 · ШК: E2E-MOCK-BARCODE · WB: 424242\nСеллер: Final Seller A 1786667012059\nТЗ: Final QA: пакет + стикер WB\n\t8\t\n​\n\n​\n\n\n\n\t\n\nFinal No KM 1786667012059\n\nSKU: FINAL-NOKM-1786667012059 · ШК: FINAL-NOKM-1786667012059\nСеллер: Final Seller A 1786667012059\nТЗ: "
+    },
+    {
+      "name": "Decimal packaging qty blocked with human helper",
+      "ok": true,
+      "detail": "Введите целое число"
+    },
+    {
+      "name": "Mixed-seller packaging task is blocked with human text",
+      "ok": true,
+      "detail": "Нельзя создать одно задание для разных селлеров. Выберите товары одного селлера."
+    },
+    {
+      "name": "Create button disabled for mixed sellers",
+      "ok": true,
+      "detail": "disabled"
+    },
+    {
+      "name": "Packaging task shows seller and location",
+      "ok": true,
+      "detail": "Задание №000001\n\nЧерновик\n\n№000001\nСеллер\n\nFinal Seller A 1786667012059\n\nСклад / ячейка\n\nFinal QA WH 1786667012059 / PACK-12059\n\nПрогресс\n\nГотово 0 / Осталось 4\n\nСканируйте ШК товара\nСканируйте ШК товара\n+1\nОтменить последнее\n\nFinal Pack A 1786667012059\n\nSKU: FINAL-PACK-A-1786667012059 · ШК: FINAL-PACK-A-1786667012059\nСеллер: Final Seller A 1786667012059 · Ячейка: PACK-12059\n\nГотово 0 / Осталось 4 / Всего 4\n\nТЗ: не задано\nЧЗ не требуется\n+N\n+N\n\n​\n\n+N\nЗавершить упаковку\nОтменить задание\nЗакрыть"
+    },
+    {
+      "name": "Invalid barcode is human-readable",
+      "ok": true,
+      "detail": "ШК не найден в этом задании. Проверьте товар и выбранное задание."
+    },
+    {
+      "name": "Undo confirmation explains quantity",
+      "ok": true,
+      "detail": "Из задания будет снято 2 шт · Final Pack A 1786667012059. Количество вернётся в «Осталось». Подтвердите только если оператор добавил количество ошибочно."
+    },
+    {
+      "name": "Overpack uses human text, not line_already_packed",
+      "ok": true,
+      "detail": "По этому товару всё уже упаковано."
+    },
+    {
+      "name": "Packaging task completed",
+      "ok": true,
+      "detail": "Выполнено"
+    },
+    {
+      "name": "Packaging history includes scan/manual/undo/complete",
+      "ok": false,
+      "detail": "История\n\nЗадание выполнено · задание · final-packaging-admin-1786667012059@example.com · 14.08.2026, 00:23:42\n\n+1 скан · Final Pack A 1786667012059 · final-packaging-admin-1786667012059@example.com · 14.08.2026, 00:23:41\n\n+1 скан · Final Pack A 1786667012059 · final-packaging-admin-1786667012059@example.com · 14.08.2026, 00:23:41\n\n+1 скан · Final Pack A 1786667012059 · final-packaging-admin-1786667012059@example.com · 14.08.2026, 00:23:41\n\nОтмена 2 шт · Final Pack A 1786667012059 · final-packaging-admin-1786667012059@example.com · 14.08.2026, 00:23:41\n\n+2 вручную · Final Pack A 1786667012059 · final-packaging-admin-1786667012059@example.com · 14.08.2026, 00:23:41\n\n+1 скан · Final Pack A 1786667012059 · final-packaging-admin-1786667012059@example.com · 14.08.2026, 00:23:40"
+    },
+    {
+      "name": "Packaging completed read-back survives reload",
+      "ok": true,
+      "detail": "Задание №000001\n\nВыполнено\n\n№000001\nСеллер\n\nFinal Seller A 1786667012059\n\nСклад / ячейка\n\nFinal QA WH 1786667012059 / PACK-12059\n\nПрогресс\n\nГотово 4 / Осталось 0\n\nFinal Pack A 1786667012059\n\nSKU: FINAL-PACK-A-1786667012059 · ШК: FINAL-PACK-A-1786667012059\nСеллер: Final Seller A 1786667012059 · Ячейка: PACK-12059\n\nГотово 4 / Осталось 0 / Всего 4\n\nТЗ: не задано\nЧЗ не требуется\nИстория\n\nЗадание выполнено · задание · final-packaging-admin-1786667012059@example.com · 14.08.2026, 00:23:42\n\n+1 скан · Final Pack A 1786667012059 · final-packaging-admin-1786667012059@example.com · 14.08.2026, 00:23:41\n\n+1 скан · Final Pack A 1786667012059 · final-packaging-admin-1786667012059@example.com · 14.08.2026, 00:23:41\n\n+1 скан · Final Pack A 1786667012059 · final-packaging-admin-1786667012059@example.com · 14.08.2026, 00:23:41\n\nОтмена 2 шт · Final Pack A 1786667012059 · final-packaging-admin-1786667012059@example.com · 14.08.2026, 00:23:41\n\n+2 вручную · Final Pack A 1786667012059 · final-packaging-admin"
+    },
+    {
+      "name": "No raw technical codes visible: packaging-completed-reload",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "Pending marking shows no-KM human handoff",
+      "ok": true,
+      "detail": "Портал ФФ\nfinal-packaging-admin-1786667012059@example.com · администратор\n2\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nОсталось промаркировать\n\nСтроки заданий на упаковку, где КМ ещё не напечатаны полностью.\n\n← К упаковке\n1 строк\nПечать выбранных (0)\n\tДокумент\tТовар\tЯчейка\tОсталось\tДоступно в пуле\tДействия\n\n\tУПАК-26-08-14-2\tFinal No KM 1786667012059\nFINAL-NOKM-1786667012059\n\tPACK-12059\t\n0/1\n1\n\t\n\nНет КМ\n\nСеллер: Final Seller A 1786667012059\nЗапросите КМ у селлера\nОткрыть задание\n\tПечать"
+    },
+    {
+      "name": "Pending marking avoids raw sorting/code labels",
+      "ok": true,
+      "detail": "Портал ФФ\nfinal-packaging-admin-1786667012059@example.com · администратор\n2\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nОсталось промаркировать\n\nСтроки заданий на упаковку, где КМ ещё не напечатаны полностью.\n\n← К упаковке\n1 строк\nПечать выбранных (0)\n\tДокумент\tТовар\tЯчейка\tОсталось\tДоступно в пуле\tДействия\n\n\tУПАК-26-08-14-2\tFinal No KM 1786667012059\nFINAL-NOKM-1786667012059\n\tPACK-12059\t\n0/1\n1\n\t\n\nНет КМ\n\nСеллер: Final Seller A 1786667012059\nЗапросите КМ у селлера\nОткрыть задание\n\tПечать"
+    },
+    {
+      "name": "1280 no horizontal overflow: pending-marking",
+      "ok": true,
+      "detail": "{\"url\":\"http://127.0.0.1:55214/app/ff/packaging/pending-marking\",\"innerWidth\":1280,\"innerHeight\":720,\"documentScrollWidth\":1280,\"documentClientWidth\":1280,\"bodyScrollWidth\":1280,\"bodyClientWidth\":1280,\"bodyRectWidth\":1280,\"horizontalOverflow\":false,\"rawCodesVisible\":[]}"
+    },
+    {
+      "name": "FF submitted MP has no line delete controls",
+      "ok": true,
+      "detail": "submitted hidden"
+    },
+    {
+      "name": "FF non-draft box-line remove control is hidden",
+      "ok": true,
+      "detail": "count=0"
+    },
+    {
+      "name": "Direct non-draft box-line remove is blocked and read-back preserved",
+      "ok": true,
+      "detail": "status=409; detail={\"detail\":\"not_draft\"}; stillHasLine=true"
+    },
+    {
+      "name": "MP/FBO print HTML captured from UI click",
+      "ok": true,
+      "detail": "length=4320"
+    },
+    {
+      "name": "MP/FBO print has seller/date/type/quantity/fact/product",
+      "ok": true,
+      "detail": "{\"length\":4320,\"hasSeller\":true,\"hasDate\":true,\"hasType\":true,\"hasQuantity\":true,\"hasFactColumn\":true,\"hasProduct\":true,\"noFbsQr\":true,\"noRawUuid\":true}"
+    },
+    {
+      "name": "MP/FBO print has no FBS order QR/raw UUID",
+      "ok": true,
+      "detail": "{\"length\":4320,\"hasSeller\":true,\"hasDate\":true,\"hasType\":true,\"hasQuantity\":true,\"hasFactColumn\":true,\"hasProduct\":true,\"noFbsQr\":true,\"noRawUuid\":true}"
+    },
+    {
+      "name": "1280 no horizontal overflow: ff-mp-final-print",
+      "ok": true,
+      "detail": "{\"url\":\"http://127.0.0.1:55214/app/ff/mp-shipments\",\"innerWidth\":1280,\"innerHeight\":720,\"documentScrollWidth\":1280,\"documentClientWidth\":1280,\"bodyScrollWidth\":1280,\"bodyClientWidth\":1280,\"bodyRectWidth\":1280,\"horizontalOverflow\":false,\"rawCodesVisible\":[]}"
+    },
+    {
+      "name": "No raw technical codes visible: ff-mp-final-print",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "blockers": [],
+  "failures": [
+    "Packaging history includes scan/manual/undo/complete: История\n\nЗадание выполнено · задание · final-packaging-admin-1786667012059@example.com · 14.08.2026, 00:23:42\n\n+1 скан · Final Pack A 1786667012059 · final-packaging-admin-1786667012059@example.com · 14.08.2026, 00:23:41\n\n+1 скан · Final Pack A 1786667012059 · final-packaging-admin-1786667012059@example.com · 14.08.2026, 00:23:41\n\n+1 скан · Final Pack A 1786667012059 · final-packaging-admin-1786667012059@example.com · 14.08.2026, 00:23:41\n\nОтмена 2 шт · Final Pack A 1786667012059 · final-packaging-admin-1786667012059@example.com · 14.08.2026, 00:23:41\n\n+2 вручную · Final Pack A 1786667012059 · final-packaging-admin-1786667012059@example.com · 14.08.2026, 00:23:41\n\n+1 скан · Final Pack A 1786667012059 · final-packaging-admin-1786667012059@example.com · 14.08.2026, 00:23:40",
+    "product-qa: locator.click: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByTestId('logout')\u001b[22m\n\u001b[2m    - locator resolved to <button tabindex=\"0\" type=\"button\" data-testid=\"logout\" class=\"MuiButtonBase-root MuiButton-root MuiButton-outlined MuiButton-sizeSmall MuiButton-colorPrimary MuiButton-disableElevation MuiButton-root MuiButton-outlined MuiButton-sizeSmall MuiButton-colorPrimary MuiButton-disableElevation css-e1u2wq-MuiButtonBase-root-MuiButton-root\">Выйти</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <h2 id=\"_r_a_\" class=\"MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-1i6487j-MuiTypography-root-MuiDialogTitle-root\">Отгрузка на маркетплейс</h2> from <div role=\"presentation\" class=\"MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root\">…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <h2 id=\"_r_a_\" class=\"MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-1i6487j-MuiTypography-root-MuiDialogTitle-root\">Отгрузка на маркетплейс</h2> from <div role=\"presentation\" class=\"MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root\">…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    38 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <h2 id=\"_r_a_\" class=\"MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-1i6487j-MuiTypography-root-MuiDialogTitle-root\">Отгрузка на маркетплейс</h2> from <div role=\"presentation\" class=\"MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root\">…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n\nlocator.click: Timeout 20000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByTestId('logout')\u001b[22m\n\u001b[2m    - locator resolved to <button tabindex=\"0\" type=\"button\" data-testid=\"logout\" class=\"MuiButtonBase-root MuiButton-root MuiButton-outlined MuiButton-sizeSmall MuiButton-colorPrimary MuiButton-disableElevation MuiButton-root MuiButton-outlined MuiButton-sizeSmall MuiButton-colorPrimary MuiButton-disableElevation css-e1u2wq-MuiButtonBase-root-MuiButton-root\">Выйти</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <h2 id=\"_r_a_\" class=\"MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-1i6487j-MuiTypography-root-MuiDialogTitle-root\">Отгрузка на маркетплейс</h2> from <div role=\"presentation\" class=\"MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root\">…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m      - element is visible, enabled and stable\u001b[22m\n\u001b[2m      - scrolling into view if needed\u001b[22m\n\u001b[2m      - done scrolling\u001b[22m\n\u001b[2m      - <h2 id=\"_r_a_\" class=\"MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-1i6487j-MuiTypography-root-MuiDialogTitle-root\">Отгрузка на маркетплейс</h2> from <div role=\"presentation\" class=\"MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root\">…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m    - retrying click action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    38 × waiting for element to be visible, enabled and stable\u001b[22m\n\u001b[2m       - element is visible, enabled and stable\u001b[22m\n\u001b[2m       - scrolling into view if needed\u001b[22m\n\u001b[2m       - done scrolling\u001b[22m\n\u001b[2m       - <h2 id=\"_r_a_\" class=\"MuiTypography-root MuiTypography-h6 MuiDialogTitle-root css-1i6487j-MuiTypography-root-MuiDialogTitle-root\">Отгрузка на маркетплейс</h2> from <div role=\"presentation\" class=\"MuiDialog-root MuiModal-root css-1424xw8-MuiModal-root-MuiDialog-root\">…</div> subtree intercepts pointer events\u001b[22m\n\u001b[2m     - retrying click action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n\n    at logoutIfVisible (/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/frontend/[eval1]:45:143)\n    at async runSellerDeleteScenario (/Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/frontend/[eval1]:146:3)\n    at async file:///Users/deniscivkunov/Projects/WMS/.worktrees/product-operations-ux-20260812/frontend/[eval1]:156:210"
+  ],
+  "console_errors": [
+    "Failed to load resource: the server responded with a status of 409 (Conflict)",
+    "Failed to load resource: the server responded with a status of 409 (Conflict)"
+  ],
+  "data": {
+    "suffix": "1786667012059",
+    "health": {
+      "status": "ok"
+    },
+    "adminEmail": "final-packaging-admin-1786667012059@example.com",
+    "password": "password123",
+    "sellerAId": "22f1e8ab-9c2e-4104-8deb-287542aaed85",
+    "sellerAName": "Final Seller A 1786667012059",
+    "sellerBId": "fdc2ccec-56db-4fcf-8ca3-1ec01dd2c202",
+    "sellerBName": "Final Seller B 1786667012059",
+    "warehouseId": "111daa84-2701-48e9-a978-d71f2bee8eb4",
+    "warehouseName": "Final QA WH 1786667012059",
+    "locationId": "dcb69010-59fd-4054-9e35-ad466dd5a99b",
+    "locationCode": "PACK-12059",
+    "locationBarcode": "LOC-4A1B173DD60B",
+    "packA": {
+      "id": "bf0b4015-419b-44cb-bd1a-ec69208c0728",
+      "name": "Final Pack A 1786667012059",
+      "sku_code": "FINAL-PACK-A-1786667012059",
+      "length_mm": 10,
+      "width_mm": 10,
+      "height_mm": 10,
+      "seller_id": "22f1e8ab-9c2e-4104-8deb-287542aaed85",
+      "seller_name": "Final Seller A 1786667012059",
+      "wb_nm_id": null,
+      "wb_vendor_code": null,
+      "wb_barcode": null,
+      "wb_size": null,
+      "packaging_instructions": null,
+      "requires_honest_sign": false,
+      "is_manual": true,
+      "volume_liters": 0.001
+    },
+    "packB": {
+      "id": "e5cdaeb0-b933-434a-815e-021ce6d8e371",
+      "name": "Final Pack B 1786667012059",
+      "sku_code": "FINAL-PACK-B-1786667012059",
+      "length_mm": 10,
+      "width_mm": 10,
+      "height_mm": 10,
+      "seller_id": "fdc2ccec-56db-4fcf-8ca3-1ec01dd2c202",
+      "seller_name": "Final Seller B 1786667012059",
+      "wb_nm_id": null,
+      "wb_vendor_code": null,
+      "wb_barcode": null,
+      "wb_size": null,
+      "packaging_instructions": null,
+      "requires_honest_sign": false,
+      "is_manual": true,
+      "volume_liters": 0.001
+    },
+    "noKm": {
+      "id": "3c9d715a-f366-483f-8e4d-f19d56fdcc27",
+      "name": "Final No KM 1786667012059",
+      "sku_code": "FINAL-NOKM-1786667012059",
+      "length_mm": 10,
+      "width_mm": 10,
+      "height_mm": 10,
+      "seller_id": "22f1e8ab-9c2e-4104-8deb-287542aaed85",
+      "seller_name": "Final Seller A 1786667012059",
+      "wb_nm_id": null,
+      "wb_vendor_code": null,
+      "wb_barcode": null,
+      "wb_size": null,
+      "packaging_instructions": null,
+      "requires_honest_sign": false,
+      "is_manual": true,
+      "volume_liters": 0.001
+    },
+    "mpProduct": {
+      "id": "9127f291-24b3-4d0f-8640-c57a7ae73b5e",
+      "name": "Final MP Product 1786667012059",
+      "sku_code": "FINAL-MP-1786667012059",
+      "length_mm": 10,
+      "width_mm": 10,
+      "height_mm": 10,
+      "seller_id": "22f1e8ab-9c2e-4104-8deb-287542aaed85",
+      "seller_name": "Final Seller A 1786667012059",
+      "wb_nm_id": null,
+      "wb_vendor_code": null,
+      "wb_barcode": null,
+      "wb_size": null,
+      "packaging_instructions": null,
+      "requires_honest_sign": false,
+      "is_manual": true,
+      "volume_liters": 0.001
+    },
+    "sellerEmail": "final-seller-owner-1786667012059@example.com",
+    "sellerDraftInboundId": "2c12b6f0-9074-43d9-b909-93f050ba4372",
+    "sellerSubmittedInboundId": "f0a8064f-6f54-4f41-8664-43b1caa2995d",
+    "packagingTaskId": "eb6490ea-1fff-4ba0-8eda-8681d33efc29",
+    "pendingTaskId": "2b5acd49-9cbc-4f08-9db5-d9a6c8f74666",
+    "mpRequestId": "31589782-14d4-415d-bae6-36e4b3567c8e",
+    "mpBoxId": "6bd85265-8bec-4196-9b6a-3e90fe82142f",
+    "mpBoxLineId": "acfb563f-0e16-490b-b16d-e7fbda44b46a",
+    "mpDirectRemove": {
+      "status": 409,
+      "ok": false,
+      "text": "{\"detail\":\"not_draft\"}",
+      "json": {
+        "detail": "not_draft"
+      }
+    }
+  },
+  "print": {
+    "length": 4320,
+    "hasSeller": true,
+    "hasDate": true,
+    "hasType": true,
+    "hasQuantity": true,
+    "hasFactColumn": true,
+    "hasProduct": true,
+    "noFbsQr": true,
+    "noRawUuid": true
+  },
+  "finished_at": "2026-08-14T00:24:15.942Z"
+}

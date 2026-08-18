@@ -35,13 +35,20 @@ from app.models.fbs_order import (
     FbsOrder,
     FbsOrderReservation,
 )
-from app.models.fbs_stock_sync_item import STOCK_SYNC_STATUS_CONFIRMED, FbsStockSyncItem
+from app.models.fbs_stock_sync_item import (
+    STOCK_SYNC_STATUS_ERROR,
+    FbsStockSyncItem,
+)
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.marketplace_unload import MarketplaceUnloadLine, MarketplaceUnloadRequest
 from app.models.marketplace_unload_reservation import MarketplaceUnloadReservation
 from app.models.product import Product
-from app.services import inventory_service
+from app.services import inventory_service, stock_direction_service
 from app.services.fbs_autopoll_service import SellerStockSyncResult, sync_seller_stocks
+from app.services.fbs_stock_sync_service import (
+    ERROR_UNSAFE_STOCK_UNKNOWN,
+    ERROR_UNSAFE_ZERO_BLOCKED,
+)
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import sync_seller_orders
 
@@ -214,6 +221,21 @@ async def _emulator_read_stock(
     return 0
 
 
+async def _emulator_put_stock(
+    emu_client: httpx.AsyncClient,
+    chrt_id: int,
+    amount: int,
+    *,
+    warehouse_id: int = WB_WAREHOUSE_ID,
+) -> None:
+    response = await emu_client.put(
+        f"/api/v3/stocks/{warehouse_id}",
+        headers={"Authorization": EMU_TOKEN},
+        json={"stocks": [{"chrtId": chrt_id, "amount": amount}]},
+    )
+    assert response.status_code == 204, response.text
+
+
 async def _admin_purchase(
     emu_client: httpx.AsyncClient,
     count: int,
@@ -251,6 +273,66 @@ def test_prod_compose_runs_migrations_once_before_workers() -> None:
 
 
 # TC-NEW-FBS-STOCK-017
+@pytest.mark.asyncio
+async def test_wms_emulator_safe_sync_without_fbs_pool_keeps_wb_stock_20(
+    async_client: AsyncClient,
+    emulator_stack: httpx.AsyncClient,
+) -> None:
+    """TC-NEW-F22-001: missing FBS pool blocks sync before WB PUT 0."""
+    emu_client = emulator_stack
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, fbs_wh_id = await _setup_seller_with_token(async_client, headers, suffix)
+    await _create_binding(async_client, headers, seller_id, WB_WAREHOUSE_ID, fbs_wh_id)
+
+    product = await async_client.post(
+        "/products",
+        headers=headers,
+        json={
+            "name": "Emu safe-sync no pool",
+            "sku_code": f"EMU-NOPOOL-{suffix}",
+            "seller_id": seller_id,
+            "wb_barcode": WB_BARCODE,
+        },
+    )
+    assert product.status_code in (200, 201), product.text
+    product_id = uuid.UUID(product.json()["id"])
+
+    async with SessionLocal() as session:
+        row = await session.get(Product, product_id)
+        assert row is not None
+        tenant_id = row.tenant_id
+        row.wb_chrt_id = CHRT_ID
+        row.wb_nm_id = WB_NM_ID
+        row.wb_barcode = WB_BARCODE
+        row.fbs_stock_sync_enabled = True
+        await session.commit()
+
+    await _emulator_put_stock(emu_client, CHRT_ID, 20)
+    assert await _emulator_read_stock(emu_client, CHRT_ID) == 20
+
+    seller_uuid = uuid.UUID(seller_id)
+    async with SessionLocal() as session:
+        stock_result = await _sync_stocks_with_lease_retry(
+            session,
+            tenant_id,
+            seller_uuid,
+            emu_client,
+        )
+        sync_item = (
+            await session.execute(
+                select(FbsStockSyncItem).where(FbsStockSyncItem.chrt_id == CHRT_ID)
+            )
+        ).scalar_one()
+        assert sync_item.status == STOCK_SYNC_STATUS_ERROR
+        assert sync_item.last_error_code == ERROR_UNSAFE_STOCK_UNKNOWN
+        assert sync_item.last_confirmed_amount is None
+
+    assert stock_result.products_targeted == 0
+    assert stock_result.products_confirmed == 0
+    assert stock_result.errors == 1
+    assert await _emulator_read_stock(emu_client, CHRT_ID) == 20
+
+
 @pytest.mark.asyncio
 async def test_wms_emulator_fbs_stock_full_cycle(
     async_client: AsyncClient,
@@ -310,6 +392,14 @@ async def test_wms_emulator_fbs_stock_full_cycle(
             storage_location_id=uuid.UUID(storage_loc_id),
             quantity_delta=1,
             movement_type="inbound_intake",
+        )
+        await stock_direction_service.create_stock_direction(
+            session,
+            tenant_id,
+            product_id,
+            name="FBS pool",
+            quantity=1,
+            is_fbs=True,
         )
 
         unload = MarketplaceUnloadRequest(
@@ -395,13 +485,15 @@ async def test_wms_emulator_fbs_stock_full_cycle(
             await session.execute(
                 select(FbsStockSyncItem).where(
                     FbsStockSyncItem.chrt_id == CHRT_ID,
-                    FbsStockSyncItem.status == STOCK_SYNC_STATUS_CONFIRMED,
                 )
             )
         ).scalar_one()
-        assert sync_item.last_confirmed_amount == 0
+        assert sync_item.status == STOCK_SYNC_STATUS_ERROR
+        assert sync_item.last_error_code == ERROR_UNSAFE_ZERO_BLOCKED
+        assert sync_item.last_confirmed_amount == 1
 
-    assert stock_result2.products_confirmed >= 1
+    assert stock_result2.products_confirmed == 0
+    assert stock_result2.errors == 1
     assert await _emulator_read_stock(emu_client, CHRT_ID) == 0
 
     # Manual API path uses same httpx→emulator wiring (patched AsyncClient).
@@ -411,4 +503,5 @@ async def test_wms_emulator_fbs_stock_full_cycle(
         json={"wb_warehouse_id": WB_WAREHOUSE_ID},
     )
     assert api_sync.status_code == 200, api_sync.text
-    assert api_sync.json()["products_confirmed"] >= 1
+    assert api_sync.json()["products_confirmed"] == 0
+    assert api_sync.json()["errors"] == 1

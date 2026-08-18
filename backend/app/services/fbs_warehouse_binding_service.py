@@ -11,13 +11,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.fbs_order import FbsOrder, FbsOrderReservation
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.seller import Seller
+from app.models.warehouse import Warehouse
 from app.services.catalog_service import get_warehouse
+
+AUTO_FBS_WAREHOUSE_CODE_PREFIX = "fbs-wb"
 
 
 class FbsWarehouseBindingError(Exception):
     def __init__(self, code: str) -> None:
         self.code = code
         super().__init__(code)
+
+
+def is_auto_fbs_wms_warehouse(warehouse: Warehouse) -> bool:
+    return warehouse.code.startswith(f"{AUTO_FBS_WAREHOUSE_CODE_PREFIX}-") or (
+        warehouse.name.startswith("FBS WB ")
+    )
 
 
 async def _seller_in_tenant(

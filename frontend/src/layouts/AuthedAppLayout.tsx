@@ -138,6 +138,9 @@ export function AuthedAppLayout({
   const ffDrawerWidth = 260
   const isAdmin = isFulfillmentAdminRole(meRole)
   const can = (block: keyof FfPermissions) => canAccessFfBlock(meRole, ffPermissions, block)
+  const canMpShipments = isAdmin || can('mp_shipments')
+  const canPackaging = isAdmin || can('packaging')
+  const canCatalogCells = isAdmin || can('cells') || can('inventory')
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }} data-testid="app-frame">
       <CssBaseline />
@@ -196,62 +199,51 @@ export function AuthedAppLayout({
         data-testid="app-sidebar"
       >
         <Toolbar />
-        <Box sx={{ p: 1 }}>
-          <List dense aria-label="Разделы ФФ">
-            <ListItemButton component={NavLink} to={`${base}/dashboard`} data-testid="nav-dashboard">
-              <ListItemText primary="Дашборд" />
-            </ListItemButton>
-            {can('mp_shipments') ? (
-              <ListItemButton
-                component={NavLink}
-                to={`${base}/mp-shipments`}
-                data-testid="nav-ff-mp-shipments"
-              >
-                <ListItemText primary="Отгрузки на МП" />
-              </ListItemButton>
-            ) : null}
-            {can('packaging') ? (
-              <ListItemButton component={NavLink} to={`${base}/fbs`} data-testid="nav-ff-fbs">
-                <ListItemText primary="FBS" />
-              </ListItemButton>
-            ) : null}
+        <Box sx={{ p: 1, display: 'flex', flexDirection: 'column', height: 'calc(100% - 64px)' }}>
+          <List dense aria-label="Разделы ФФ" sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
             {can('reception') ? (
               <>
-                <ListItemButton component={NavLink} to={`${base}/reception`} data-testid="nav-ff-reception">
-                  <ListItemText primary="Приёмка" />
+                <ListItemButton component={NavLink} to={`${base}/reception`} data-testid="nav-ff-reception" data-task-id="NAV-01">
+                  <ListItemText primary="Приёмка на FF" />
                 </ListItemButton>
-                <ListItemButton component={NavLink} to={`${base}/sorting`} data-testid="nav-ff-sorting">
+                <ListItemButton component={NavLink} to={`${base}/sorting`} data-testid="nav-ff-sorting" data-task-id="NAV-01">
                   <ListItemText primary="Сортировка" />
                 </ListItemButton>
               </>
             ) : null}
-            {can('packaging') ? (
-              <ListItemButton component={NavLink} to={`${base}/packaging`} data-testid="nav-ff-packaging">
+            {canPackaging ? (
+              <ListItemButton component={NavLink} to={`${base}/fbs`} data-testid="nav-ff-fbs" data-task-id="NAV-01">
+                <ListItemText primary="FBS" />
+              </ListItemButton>
+            ) : null}
+            {canMpShipments ? (
+              <ListItemButton
+                component={NavLink}
+                to={`${base}/mp-shipments`}
+                data-testid="nav-ff-mp-shipments"
+                data-task-id="NAV-01"
+              >
+                <ListItemText primary="Отгрузки" />
+              </ListItemButton>
+            ) : null}
+            {canPackaging ? (
+              <ListItemButton component={NavLink} to={`${base}/packaging`} data-testid="nav-ff-packaging" data-task-id="NAV-01">
                 <ListItemText primary="Упаковка" />
               </ListItemButton>
             ) : null}
-            {can('cells') ? (
-              <ListItemButton component={NavLink} to="/app/catalog" data-testid="nav-catalog">
-                <ListItemText primary="Ячейки" />
+            {canCatalogCells ? (
+              <ListItemButton component={NavLink} to="/app/catalog" data-testid="nav-catalog" data-task-id="NAV-01">
+                <ListItemText primary={isAdmin ? 'Ячейки' : 'Каталог и ячейки'} />
               </ListItemButton>
             ) : null}
             {isAdmin ? (
-              <ListItemButton component={NavLink} to={`${base}/sellers`} data-testid="nav-sellers">
+              <ListItemButton component={NavLink} to={`${base}/sellers`} data-testid="nav-sellers" data-task-id="NAV-01">
                 <ListItemText primary="Селлеры" />
               </ListItemButton>
             ) : null}
             {isAdmin ? (
-              <ListItemButton component={NavLink} to={`${base}/products`} data-testid="nav-ff-products">
+              <ListItemButton component={NavLink} to={`${base}/products`} data-testid="nav-ff-products" data-task-id="NAV-01">
                 <ListItemText primary="Каталог" />
-              </ListItemButton>
-            ) : null}
-            {can('inventory') ? (
-              <ListItemButton
-                component={NavLink}
-                to={`${base}/inventory`}
-                data-testid="nav-ff-inventory"
-              >
-                <ListItemText primary="Инвентаризация" />
               </ListItemButton>
             ) : null}
             {isAdmin ? (
@@ -259,12 +251,22 @@ export function AuthedAppLayout({
                 component={NavLink}
                 to={`${base}/honest-sign`}
                 data-testid="nav-ff-honest-sign"
+                data-task-id="NAV-01"
               >
                 <ListItemText primary="Честный знак" />
               </ListItemButton>
             ) : null}
+            <ListItemButton
+              component={NavLink}
+              to={`${base}/dashboard`}
+              data-testid="nav-dashboard"
+              data-task-id="NAV-01"
+              sx={{ mt: 'auto' }}
+            >
+              <ListItemText primary="Календарь отгрузок" />
+            </ListItemButton>
             {can('settings') || isAdmin ? (
-              <ListItemButton component={NavLink} to={`${base}/settings`} data-testid="nav-ff-settings">
+              <ListItemButton component={NavLink} to={`${base}/settings`} data-testid="nav-ff-settings" data-task-id="NAV-01">
                 <ListItemText primary="Настройки" />
               </ListItemButton>
             ) : null}

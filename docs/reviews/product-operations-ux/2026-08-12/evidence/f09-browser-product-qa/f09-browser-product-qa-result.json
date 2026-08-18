@@ -1,0 +1,1128 @@
+{
+  "startedAt": "2026-08-13T15:38:55.889Z",
+  "steps": [
+    {
+      "name": "Seed: register FF admin",
+      "detail": {},
+      "at": "2026-08-13T15:38:55.889Z"
+    },
+    {
+      "name": "Seed: create posted inbound stock 1000",
+      "detail": {},
+      "at": "2026-08-13T15:38:58.698Z"
+    },
+    {
+      "name": "Seed: directions and active MP/FBO reserve",
+      "detail": {},
+      "at": "2026-08-13T15:38:59.810Z"
+    },
+    {
+      "name": "Browser: open seller UI",
+      "detail": {},
+      "at": "2026-08-13T15:39:00.743Z"
+    },
+    {
+      "name": "Browser: open seller UI after visibility unsupported retry",
+      "detail": {
+        "note": "Skipped visibility.set(true); browser interaction and screenshots still use Browser tab."
+      },
+      "at": "2026-08-13T15:40:19.972Z"
+    },
+    {
+      "name": "Browser: create seller MP/FBO unload draft",
+      "detail": {},
+      "at": "2026-08-13T15:40:23.666Z"
+    },
+    {
+      "name": "Seed: create seller draft with WB warehouse/date for F09 browser continuation",
+      "detail": {},
+      "at": "2026-08-13T15:42:28.668Z"
+    },
+    {
+      "name": "Browser: open prepared seller MP/FBO draft",
+      "detail": {},
+      "at": "2026-08-13T15:42:29.112Z"
+    },
+    {
+      "name": "Browser: continue from logged-in seller documents",
+      "detail": {},
+      "at": "2026-08-13T15:44:13.846Z"
+    },
+    {
+      "name": "Browser: open prepared seller MP/FBO draft",
+      "detail": {},
+      "at": "2026-08-13T15:44:13.911Z"
+    },
+    {
+      "name": "Browser: open product picker and verify visible availability",
+      "detail": {},
+      "at": "2026-08-13T15:44:14.259Z"
+    },
+    {
+      "name": "Browser: try quantity 401 and expect human error",
+      "detail": {},
+      "at": "2026-08-13T15:44:15.762Z"
+    },
+    {
+      "name": "Browser: try quantity 400 and plan",
+      "detail": {},
+      "at": "2026-08-13T15:44:16.940Z"
+    },
+    {
+      "name": "Browser: 1280px geometry checks",
+      "detail": {},
+      "at": "2026-08-13T15:44:18.348Z"
+    },
+    {
+      "name": "Browser: verify planned state after network-confirmed plan",
+      "detail": {},
+      "at": "2026-08-13T15:45:15.218Z"
+    }
+  ],
+  "checks": [
+    {
+      "name": "Seed physical stock is 1000",
+      "pass": true,
+      "detail": {
+        "product_id": "d260872f-3ce7-46ca-8783-5657f970cc59",
+        "sku_code": "F09-FBO-1786635535889",
+        "product_name": "F09 Free FBO Product with normal warehouse name",
+        "quantity": 1000,
+        "quantity_unpacked": 1000,
+        "quantity_packed": 0,
+        "quantity_in_sorting": 0,
+        "quantity_in_storage": 1000,
+        "reserved": 100,
+        "available": 400,
+        "quantity_fbs": 200,
+        "quantity_reserved_directions": 300,
+        "quantity_free_fbo": 500
+      },
+      "at": "2026-08-13T15:39:00.743Z"
+    },
+    {
+      "name": "Seed FBS directions are 200",
+      "pass": true,
+      "detail": {
+        "product_id": "d260872f-3ce7-46ca-8783-5657f970cc59",
+        "sku_code": "F09-FBO-1786635535889",
+        "product_name": "F09 Free FBO Product with normal warehouse name",
+        "quantity": 1000,
+        "quantity_unpacked": 1000,
+        "quantity_packed": 0,
+        "quantity_in_sorting": 0,
+        "quantity_in_storage": 1000,
+        "reserved": 100,
+        "available": 400,
+        "quantity_fbs": 200,
+        "quantity_reserved_directions": 300,
+        "quantity_free_fbo": 500
+      },
+      "at": "2026-08-13T15:39:00.743Z"
+    },
+    {
+      "name": "Seed non-FBS directions/reserves are 300",
+      "pass": true,
+      "detail": {
+        "product_id": "d260872f-3ce7-46ca-8783-5657f970cc59",
+        "sku_code": "F09-FBO-1786635535889",
+        "product_name": "F09 Free FBO Product with normal warehouse name",
+        "quantity": 1000,
+        "quantity_unpacked": 1000,
+        "quantity_packed": 0,
+        "quantity_in_sorting": 0,
+        "quantity_in_storage": 1000,
+        "reserved": 100,
+        "available": 400,
+        "quantity_fbs": 200,
+        "quantity_reserved_directions": 300,
+        "quantity_free_fbo": 500
+      },
+      "at": "2026-08-13T15:39:00.743Z"
+    },
+    {
+      "name": "Seed free FBO is 500 before active MP reserve",
+      "pass": true,
+      "detail": {
+        "product_id": "d260872f-3ce7-46ca-8783-5657f970cc59",
+        "sku_code": "F09-FBO-1786635535889",
+        "product_name": "F09 Free FBO Product with normal warehouse name",
+        "quantity": 1000,
+        "quantity_unpacked": 1000,
+        "quantity_packed": 0,
+        "quantity_in_sorting": 0,
+        "quantity_in_storage": 1000,
+        "reserved": 100,
+        "available": 400,
+        "quantity_fbs": 200,
+        "quantity_reserved_directions": 300,
+        "quantity_free_fbo": 500
+      },
+      "at": "2026-08-13T15:39:00.743Z"
+    },
+    {
+      "name": "Seed available for new FBO is 400 after active MP reserve",
+      "pass": true,
+      "detail": {
+        "summaryRow": {
+          "product_id": "d260872f-3ce7-46ca-8783-5657f970cc59",
+          "sku_code": "F09-FBO-1786635535889",
+          "product_name": "F09 Free FBO Product with normal warehouse name",
+          "quantity": 1000,
+          "quantity_unpacked": 1000,
+          "quantity_packed": 0,
+          "quantity_in_sorting": 0,
+          "quantity_in_storage": 1000,
+          "reserved": 100,
+          "available": 400,
+          "quantity_fbs": 200,
+          "quantity_reserved_directions": 300,
+          "quantity_free_fbo": 500
+        },
+        "availableRow": {
+          "product_id": "d260872f-3ce7-46ca-8783-5657f970cc59",
+          "sku_code": "F09-FBO-1786635535889",
+          "product_name": "F09 Free FBO Product with normal warehouse name",
+          "available": 400
+        }
+      },
+      "at": "2026-08-13T15:39:00.743Z"
+    },
+    {
+      "name": "Prepared draft opens in real seller MP/FBO modal",
+      "pass": true,
+      "detail": {
+        "openedDraftText": "Отгрузка на маркетплейс\n\nСклад ФФ: F09 WH · Черновик · отгрузка 2026-08-20\n\nСклад WB (маркетплейс)\nE2E WB склад (900001)\nСклад WB (маркетплейс)\nДата отгрузки на МП *\n20.\n08.\n2026\nДата отгрузки на МП *\nДобавить товары\nФото\tАртикул\tШК\tАртикул продавца\tАртикул WB\tНаименование\tДоступно FBO\tК отгрузке\t\n\n\nДобавьте товары кнопкой «Добавить товары».\n\nЗапланировать\nЗакрыть"
+      },
+      "at": "2026-08-13T15:44:14.224Z"
+    },
+    {
+      "name": "Picker header shows compact Доступно FBO",
+      "pass": true,
+      "detail": {
+        "pickerHeadText": "Фото\tАртикул\tШК\tАртикул продавца\tАртикул WB\tНаименование\tДоступно FBO\tК отгрузке\n"
+      },
+      "at": "2026-08-13T15:44:15.694Z"
+    },
+    {
+      "name": "Picker row shows available FBO 400",
+      "pass": true,
+      "detail": {
+        "pickerText": "\tF09-FBO-1786635535889\t\nE2E-MOCK-BARCODE\nРазмер: L\nСостав: хлопок 95%, эластан 5%\n\tE2E-MOCK\t424242\t\n\nF09 Free FBO Product with normal warehouse name\n\n\t400\t\n​"
+      },
+      "at": "2026-08-13T15:44:15.694Z"
+    },
+    {
+      "name": "Picker has no forbidden Limit/raw/id/noise",
+      "pass": true,
+      "detail": {
+        "pickerHeadText": "Фото\tАртикул\tШК\tАртикул продавца\tАртикул WB\tНаименование\tДоступно FBO\tК отгрузке\n",
+        "pickerText": "\tF09-FBO-1786635535889\t\nE2E-MOCK-BARCODE\nРазмер: L\nСостав: хлопок 95%, эластан 5%\n\tE2E-MOCK\t424242\t\n\nF09 Free FBO Product with normal warehouse name\n\n\t400\t\n​"
+      },
+      "at": "2026-08-13T15:44:15.694Z"
+    },
+    {
+      "name": "401 is blocked with human free FBO error",
+      "pass": true,
+      "detail": {
+        "errorText": "Недостаточно свободного FBO остатка. Уменьшите количество или освободите резерв/FBS-пул.",
+        "errorVisible": true,
+        "errorCount": 1
+      },
+      "at": "2026-08-13T15:44:16.876Z"
+    },
+    {
+      "name": "401 error main text has no technical code",
+      "pass": true,
+      "detail": {
+        "errorText": "Недостаточно свободного FBO остатка. Уменьшите количество или освободите резерв/FBS-пул.",
+        "errorVisible": true,
+        "errorCount": 1
+      },
+      "at": "2026-08-13T15:44:16.876Z"
+    },
+    {
+      "name": "401 error is visible to user while picker is open",
+      "pass": true,
+      "detail": {
+        "errorText": "Недостаточно свободного FBO остатка. Уменьшите количество или освободите резерв/FBS-пул.",
+        "errorVisible": true,
+        "errorCount": 1
+      },
+      "at": "2026-08-13T15:44:16.876Z"
+    },
+    {
+      "name": "400 adds line to MP/FBO draft",
+      "pass": true,
+      "detail": {
+        "linesText": "Фото\tАртикул\tШК\tАртикул продавца\tАртикул WB\tНаименование\tДоступно FBO\tК отгрузке\t\n\n\tF09-FBO-1786635535889\t\nE2E-MOCK-BARCODE\nРазмер: L\nСостав: хлопок 95%, эластан 5%\n\tE2E-MOCK\t424242\t\n\nF09 Free FBO Product with normal warehouse name\n\n\t400\t\n​\n\tУдалить"
+      },
+      "at": "2026-08-13T15:44:17.716Z"
+    },
+    {
+      "name": "Draft line table shows compact Доступно FBO column",
+      "pass": true,
+      "detail": {
+        "linesText": "Фото\tАртикул\tШК\tАртикул продавца\tАртикул WB\tНаименование\tДоступно FBO\tК отгрузке\t\n\n\tF09-FBO-1786635535889\t\nE2E-MOCK-BARCODE\nРазмер: L\nСостав: хлопок 95%, эластан 5%\n\tE2E-MOCK\t424242\t\n\nF09 Free FBO Product with normal warehouse name\n\n\t400\t\n​\n\tУдалить"
+      },
+      "at": "2026-08-13T15:44:17.716Z"
+    },
+    {
+      "name": "Plan button is enabled after valid 400 line",
+      "pass": true,
+      "detail": {},
+      "at": "2026-08-13T15:44:17.736Z"
+    },
+    {
+      "name": "400 or less can be planned and process remains understandable",
+      "pass": true,
+      "detail": {
+        "dialogText": "Отгрузка на маркетплейс\n\nСклад ФФ: F09 WH · Черновик · отгрузка 2026-08-20\n\nСклад WB (маркетплейс)\nE2E WB склад (900001)\nСклад WB (маркетплейс)\nДата отгрузки на МП *\n20.\n08.\n2026\nДата отгрузки на МП *\nДобавить товары\nФото\tАртикул\tШК\tАртикул продавца\tАртикул WB\tНаименование\tДоступно FBO\tК отгрузке\t\n\n\tF09-FBO-1786635535889\t\nE2E-MOCK-BARCODE\nРазмер: L\nСостав: хлопок 95%, эластан 5%\n\tE2E-MOCK\t424242\t\n\nF09 Free FBO Product with normal warehouse name\n\n\t400\t\n​\n\tУдалить\nЗапланировать\nЗакрыть",
+        "supersededBy": "400 or less can be planned and process remains understandable after dialog refresh"
+      },
+      "at": "2026-08-13T15:44:18.267Z"
+    },
+    {
+      "name": "Final dialog has no forbidden UI noise",
+      "pass": true,
+      "detail": {
+        "dialogText": "Отгрузка на маркетплейс\n\nСклад ФФ: F09 WH · Черновик · отгрузка 2026-08-20\n\nСклад WB (маркетплейс)\nE2E WB склад (900001)\nСклад WB (маркетплейс)\nДата отгрузки на МП *\n20.\n08.\n2026\nДата отгрузки на МП *\nДобавить товары\nФото\tАртикул\tШК\tАртикул продавца\tАртикул WB\tНаименование\tДоступно FBO\tК отгрузке\t\n\n\tF09-FBO-1786635535889\t\nE2E-MOCK-BARCODE\nРазмер: L\nСостав: хлопок 95%, эластан 5%\n\tE2E-MOCK\t424242\t\n\nF09 Free FBO Product with normal warehouse name\n\n\t400\t\n​\n\tУдалить\nЗапланировать\nЗакрыть"
+      },
+      "at": "2026-08-13T15:44:18.267Z"
+    },
+    {
+      "name": "1280px body/document do not overflow horizontally",
+      "pass": true,
+      "detail": {
+        "blackBars": 0,
+        "bodyScrollWidth": 1280,
+        "buttons": [
+          {
+            "height": 43,
+            "left": 1130,
+            "right": 1173,
+            "text": "0",
+            "width": 43
+          },
+          {
+            "height": 34,
+            "left": 1189,
+            "right": 1256,
+            "text": "Выйти",
+            "width": 67
+          },
+          {
+            "height": 40,
+            "left": 281,
+            "right": 517,
+            "text": "Создать акт расхождений",
+            "width": 236
+          },
+          {
+            "height": 42,
+            "left": 529,
+            "right": 613,
+            "text": "Поставка",
+            "width": 85
+          },
+          {
+            "height": 42,
+            "left": 612,
+            "right": 688,
+            "text": "Возврат",
+            "width": 76
+          },
+          {
+            "height": 40,
+            "left": 700,
+            "right": 950,
+            "text": "Создать заявку на поставку",
+            "width": 250
+          },
+          {
+            "height": 40,
+            "left": 962,
+            "right": 1184,
+            "text": "Создать отгрузку на МП",
+            "width": 221
+          },
+          {
+            "height": 34,
+            "left": 1159,
+            "right": 1239,
+            "text": "Удалить",
+            "width": 80
+          },
+          {
+            "height": 34,
+            "left": 1159,
+            "right": 1239,
+            "text": "Удалить",
+            "width": 80
+          },
+          {
+            "height": 43,
+            "left": 518,
+            "right": 561,
+            "text": "",
+            "width": 43
+          },
+          {
+            "height": 40,
+            "left": 1088,
+            "right": 1256,
+            "text": "Добавить товары",
+            "width": 168
+          },
+          {
+            "height": 34,
+            "left": 1174,
+            "right": 1244,
+            "text": "Удалить",
+            "width": 70
+          },
+          {
+            "height": 40,
+            "left": 1030,
+            "right": 1182,
+            "text": "Запланировать",
+            "width": 151
+          },
+          {
+            "height": 40,
+            "left": 1190,
+            "right": 1272,
+            "text": "Закрыть",
+            "width": 82
+          }
+        ],
+        "dialogText": "Отгрузка на маркетплейсСклад ФФ: F09 WH · Черновик · отгрузка 2026-08-20Склад WB (маркетплейс)E2E WB склад (900001)Склад WB (маркетплейс)Дата отгрузки на МП *20.08.2026Дата отгрузки на МП *Добавить товарыФотоАртикулШКАртикул продавцаАртикул WBНаименованиеДоступно FBOК отгрузкеF09-FBO-1786635535889E2E-MOCK-BARCODEРазмер: LСостав: хлопок 95%, эластан 5%E2E-MOCK424242F09 Free FBO Product with normal warehouse name400​УдалитьЗапланироватьЗакрыть",
+        "documentScrollWidth": 1280,
+        "tableClientWidth": 1232,
+        "tableScrollWidth": 1232,
+        "viewportHeight": 720,
+        "viewportWidth": 1280
+      },
+      "at": "2026-08-13T15:44:18.400Z"
+    },
+    {
+      "name": "1280px has no visible black bars detected",
+      "pass": true,
+      "detail": {
+        "blackBars": 0,
+        "bodyScrollWidth": 1280,
+        "buttons": [
+          {
+            "height": 43,
+            "left": 1130,
+            "right": 1173,
+            "text": "0",
+            "width": 43
+          },
+          {
+            "height": 34,
+            "left": 1189,
+            "right": 1256,
+            "text": "Выйти",
+            "width": 67
+          },
+          {
+            "height": 40,
+            "left": 281,
+            "right": 517,
+            "text": "Создать акт расхождений",
+            "width": 236
+          },
+          {
+            "height": 42,
+            "left": 529,
+            "right": 613,
+            "text": "Поставка",
+            "width": 85
+          },
+          {
+            "height": 42,
+            "left": 612,
+            "right": 688,
+            "text": "Возврат",
+            "width": 76
+          },
+          {
+            "height": 40,
+            "left": 700,
+            "right": 950,
+            "text": "Создать заявку на поставку",
+            "width": 250
+          },
+          {
+            "height": 40,
+            "left": 962,
+            "right": 1184,
+            "text": "Создать отгрузку на МП",
+            "width": 221
+          },
+          {
+            "height": 34,
+            "left": 1159,
+            "right": 1239,
+            "text": "Удалить",
+            "width": 80
+          },
+          {
+            "height": 34,
+            "left": 1159,
+            "right": 1239,
+            "text": "Удалить",
+            "width": 80
+          },
+          {
+            "height": 43,
+            "left": 518,
+            "right": 561,
+            "text": "",
+            "width": 43
+          },
+          {
+            "height": 40,
+            "left": 1088,
+            "right": 1256,
+            "text": "Добавить товары",
+            "width": 168
+          },
+          {
+            "height": 34,
+            "left": 1174,
+            "right": 1244,
+            "text": "Удалить",
+            "width": 70
+          },
+          {
+            "height": 40,
+            "left": 1030,
+            "right": 1182,
+            "text": "Запланировать",
+            "width": 151
+          },
+          {
+            "height": 40,
+            "left": 1190,
+            "right": 1272,
+            "text": "Закрыть",
+            "width": 82
+          }
+        ],
+        "dialogText": "Отгрузка на маркетплейсСклад ФФ: F09 WH · Черновик · отгрузка 2026-08-20Склад WB (маркетплейс)E2E WB склад (900001)Склад WB (маркетплейс)Дата отгрузки на МП *20.08.2026Дата отгрузки на МП *Добавить товарыФотоАртикулШКАртикул продавцаАртикул WBНаименованиеДоступно FBOК отгрузкеF09-FBO-1786635535889E2E-MOCK-BARCODEРазмер: LСостав: хлопок 95%, эластан 5%E2E-MOCK424242F09 Free FBO Product with normal warehouse name400​УдалитьЗапланироватьЗакрыть",
+        "documentScrollWidth": 1280,
+        "tableClientWidth": 1232,
+        "tableScrollWidth": 1232,
+        "viewportHeight": 720,
+        "viewportWidth": 1280
+      },
+      "at": "2026-08-13T15:44:18.400Z"
+    },
+    {
+      "name": "1280px controls stay within viewport",
+      "pass": true,
+      "detail": [
+        {
+          "height": 43,
+          "left": 1130,
+          "right": 1173,
+          "text": "0",
+          "width": 43
+        },
+        {
+          "height": 34,
+          "left": 1189,
+          "right": 1256,
+          "text": "Выйти",
+          "width": 67
+        },
+        {
+          "height": 40,
+          "left": 281,
+          "right": 517,
+          "text": "Создать акт расхождений",
+          "width": 236
+        },
+        {
+          "height": 42,
+          "left": 529,
+          "right": 613,
+          "text": "Поставка",
+          "width": 85
+        },
+        {
+          "height": 42,
+          "left": 612,
+          "right": 688,
+          "text": "Возврат",
+          "width": 76
+        },
+        {
+          "height": 40,
+          "left": 700,
+          "right": 950,
+          "text": "Создать заявку на поставку",
+          "width": 250
+        },
+        {
+          "height": 40,
+          "left": 962,
+          "right": 1184,
+          "text": "Создать отгрузку на МП",
+          "width": 221
+        },
+        {
+          "height": 34,
+          "left": 1159,
+          "right": 1239,
+          "text": "Удалить",
+          "width": 80
+        },
+        {
+          "height": 34,
+          "left": 1159,
+          "right": 1239,
+          "text": "Удалить",
+          "width": 80
+        },
+        {
+          "height": 43,
+          "left": 518,
+          "right": 561,
+          "text": "",
+          "width": 43
+        },
+        {
+          "height": 40,
+          "left": 1088,
+          "right": 1256,
+          "text": "Добавить товары",
+          "width": 168
+        },
+        {
+          "height": 34,
+          "left": 1174,
+          "right": 1244,
+          "text": "Удалить",
+          "width": 70
+        },
+        {
+          "height": 40,
+          "left": 1030,
+          "right": 1182,
+          "text": "Запланировать",
+          "width": 151
+        },
+        {
+          "height": 40,
+          "left": 1190,
+          "right": 1272,
+          "text": "Закрыть",
+          "width": 82
+        }
+      ],
+      "at": "2026-08-13T15:44:18.400Z"
+    },
+    {
+      "name": "400 or less can be planned and process remains understandable after dialog refresh",
+      "pass": true,
+      "detail": {
+        "dialogText": "Отгрузка на маркетплейс\n\nСклад ФФ: F09 WH · Запланировано · отгрузка 2026-08-20\n\nДальше заявку обрабатывает фулфилмент.\nАртикул\tТовар\tКол-во\nF09-FBO-1786635535889\tF09 Free FBO Product with normal warehouse name\t400\nВернуть в черновик\nЗакрыть"
+      },
+      "at": "2026-08-13T15:45:15.263Z"
+    },
+    {
+      "name": "Planned dialog has no forbidden UI noise",
+      "pass": true,
+      "detail": {
+        "dialogText": "Отгрузка на маркетплейс\n\nСклад ФФ: F09 WH · Запланировано · отгрузка 2026-08-20\n\nДальше заявку обрабатывает фулфилмент.\nАртикул\tТовар\tКол-во\nF09-FBO-1786635535889\tF09 Free FBO Product with normal warehouse name\t400\nВернуть в черновик\nЗакрыть"
+      },
+      "at": "2026-08-13T15:45:15.264Z"
+    },
+    {
+      "name": "Final 1280px body/document do not overflow horizontally",
+      "pass": true,
+      "detail": {
+        "blackBars": 0,
+        "bodyScrollWidth": 1280,
+        "buttons": [
+          {
+            "height": 43,
+            "left": 1130,
+            "right": 1173,
+            "text": "0",
+            "width": 43
+          },
+          {
+            "height": 34,
+            "left": 1189,
+            "right": 1256,
+            "text": "Выйти",
+            "width": 67
+          },
+          {
+            "height": 40,
+            "left": 281,
+            "right": 517,
+            "text": "Создать акт расхождений",
+            "width": 236
+          },
+          {
+            "height": 42,
+            "left": 529,
+            "right": 613,
+            "text": "Поставка",
+            "width": 85
+          },
+          {
+            "height": 42,
+            "left": 612,
+            "right": 688,
+            "text": "Возврат",
+            "width": 76
+          },
+          {
+            "height": 40,
+            "left": 700,
+            "right": 950,
+            "text": "Создать заявку на поставку",
+            "width": 250
+          },
+          {
+            "height": 40,
+            "left": 962,
+            "right": 1184,
+            "text": "Создать отгрузку на МП",
+            "width": 221
+          },
+          {
+            "height": 34,
+            "left": 1159,
+            "right": 1239,
+            "text": "Удалить",
+            "width": 80
+          },
+          {
+            "height": 40,
+            "left": 994,
+            "right": 1182,
+            "text": "Вернуть в черновик",
+            "width": 188
+          },
+          {
+            "height": 40,
+            "left": 1190,
+            "right": 1272,
+            "text": "Закрыть",
+            "width": 82
+          }
+        ],
+        "dialogText": "Отгрузка на маркетплейсСклад ФФ: F09 WH · Запланировано · отгрузка 2026-08-20Дальше заявку обрабатывает фулфилмент.АртикулТоварКол-воF09-FBO-1786635535889F09 Free FBO Product with normal warehouse name400Вернуть в черновикЗакрыть",
+        "documentScrollWidth": 1280,
+        "tableClientWidth": 1232,
+        "tableScrollWidth": 1232,
+        "viewportHeight": 720,
+        "viewportWidth": 1280
+      },
+      "at": "2026-08-13T15:45:15.336Z"
+    },
+    {
+      "name": "Final 1280px has no visible black bars detected",
+      "pass": true,
+      "detail": {
+        "blackBars": 0,
+        "bodyScrollWidth": 1280,
+        "buttons": [
+          {
+            "height": 43,
+            "left": 1130,
+            "right": 1173,
+            "text": "0",
+            "width": 43
+          },
+          {
+            "height": 34,
+            "left": 1189,
+            "right": 1256,
+            "text": "Выйти",
+            "width": 67
+          },
+          {
+            "height": 40,
+            "left": 281,
+            "right": 517,
+            "text": "Создать акт расхождений",
+            "width": 236
+          },
+          {
+            "height": 42,
+            "left": 529,
+            "right": 613,
+            "text": "Поставка",
+            "width": 85
+          },
+          {
+            "height": 42,
+            "left": 612,
+            "right": 688,
+            "text": "Возврат",
+            "width": 76
+          },
+          {
+            "height": 40,
+            "left": 700,
+            "right": 950,
+            "text": "Создать заявку на поставку",
+            "width": 250
+          },
+          {
+            "height": 40,
+            "left": 962,
+            "right": 1184,
+            "text": "Создать отгрузку на МП",
+            "width": 221
+          },
+          {
+            "height": 34,
+            "left": 1159,
+            "right": 1239,
+            "text": "Удалить",
+            "width": 80
+          },
+          {
+            "height": 40,
+            "left": 994,
+            "right": 1182,
+            "text": "Вернуть в черновик",
+            "width": 188
+          },
+          {
+            "height": 40,
+            "left": 1190,
+            "right": 1272,
+            "text": "Закрыть",
+            "width": 82
+          }
+        ],
+        "dialogText": "Отгрузка на маркетплейсСклад ФФ: F09 WH · Запланировано · отгрузка 2026-08-20Дальше заявку обрабатывает фулфилмент.АртикулТоварКол-воF09-FBO-1786635535889F09 Free FBO Product with normal warehouse name400Вернуть в черновикЗакрыть",
+        "documentScrollWidth": 1280,
+        "tableClientWidth": 1232,
+        "tableScrollWidth": 1232,
+        "viewportHeight": 720,
+        "viewportWidth": 1280
+      },
+      "at": "2026-08-13T15:45:15.336Z"
+    },
+    {
+      "name": "Final 1280px controls stay within viewport",
+      "pass": true,
+      "detail": [
+        {
+          "height": 43,
+          "left": 1130,
+          "right": 1173,
+          "text": "0",
+          "width": 43
+        },
+        {
+          "height": 34,
+          "left": 1189,
+          "right": 1256,
+          "text": "Выйти",
+          "width": 67
+        },
+        {
+          "height": 40,
+          "left": 281,
+          "right": 517,
+          "text": "Создать акт расхождений",
+          "width": 236
+        },
+        {
+          "height": 42,
+          "left": 529,
+          "right": 613,
+          "text": "Поставка",
+          "width": 85
+        },
+        {
+          "height": 42,
+          "left": 612,
+          "right": 688,
+          "text": "Возврат",
+          "width": 76
+        },
+        {
+          "height": 40,
+          "left": 700,
+          "right": 950,
+          "text": "Создать заявку на поставку",
+          "width": 250
+        },
+        {
+          "height": 40,
+          "left": 962,
+          "right": 1184,
+          "text": "Создать отгрузку на МП",
+          "width": 221
+        },
+        {
+          "height": 34,
+          "left": 1159,
+          "right": 1239,
+          "text": "Удалить",
+          "width": 80
+        },
+        {
+          "height": 40,
+          "left": 994,
+          "right": 1182,
+          "text": "Вернуть в черновик",
+          "width": 188
+        },
+        {
+          "height": 40,
+          "left": 1190,
+          "right": 1272,
+          "text": "Закрыть",
+          "width": 82
+        }
+      ],
+      "at": "2026-08-13T15:45:15.336Z"
+    }
+  ],
+  "errors": [],
+  "seed": {
+    "adminEmail": "f09-admin-1786635535889@example.com",
+    "sellerEmail": "f09-seller-1786635535889@example.com",
+    "sku": "F09-FBO-1786635535889",
+    "warehouseId": "e064cc3d-c23a-4939-8d88-088442ec593e",
+    "sellerId": "3c3e0c99-46f7-43f2-bb2b-2897333b7db9",
+    "productId": "d260872f-3ce7-46ca-8783-5657f970cc59",
+    "locationId": "0017a191-6a88-4726-bd1b-0dd22d096d88",
+    "inboundId": "2fcd06b4-e68a-404f-858c-c960584f3cf8",
+    "reserveReqId": "1c158f98-ed91-4e47-9fa3-3d873ee78f45",
+    "wbWarehouseId": 900001,
+    "summaryRow": {
+      "product_id": "d260872f-3ce7-46ca-8783-5657f970cc59",
+      "sku_code": "F09-FBO-1786635535889",
+      "product_name": "F09 Free FBO Product with normal warehouse name",
+      "quantity": 1000,
+      "quantity_unpacked": 1000,
+      "quantity_packed": 0,
+      "quantity_in_sorting": 0,
+      "quantity_in_storage": 1000,
+      "reserved": 100,
+      "available": 400,
+      "quantity_fbs": 200,
+      "quantity_reserved_directions": 300,
+      "quantity_free_fbo": 500
+    },
+    "availableRow": {
+      "product_id": "d260872f-3ce7-46ca-8783-5657f970cc59",
+      "sku_code": "F09-FBO-1786635535889",
+      "product_name": "F09 Free FBO Product with normal warehouse name",
+      "available": 400
+    },
+    "preparedDraftId": "9925cea2-f0a2-487d-a0a9-180c04be4710"
+  },
+  "verdict": "BROWSER_PRODUCT_QA_PASSED",
+  "finishedAt": "2026-08-13T15:45:15.336Z",
+  "geometry": {
+    "blackBars": 0,
+    "bodyScrollWidth": 1280,
+    "buttons": [
+      {
+        "height": 43,
+        "left": 1130,
+        "right": 1173,
+        "text": "0",
+        "width": 43
+      },
+      {
+        "height": 34,
+        "left": 1189,
+        "right": 1256,
+        "text": "Выйти",
+        "width": 67
+      },
+      {
+        "height": 40,
+        "left": 281,
+        "right": 517,
+        "text": "Создать акт расхождений",
+        "width": 236
+      },
+      {
+        "height": 42,
+        "left": 529,
+        "right": 613,
+        "text": "Поставка",
+        "width": 85
+      },
+      {
+        "height": 42,
+        "left": 612,
+        "right": 688,
+        "text": "Возврат",
+        "width": 76
+      },
+      {
+        "height": 40,
+        "left": 700,
+        "right": 950,
+        "text": "Создать заявку на поставку",
+        "width": 250
+      },
+      {
+        "height": 40,
+        "left": 962,
+        "right": 1184,
+        "text": "Создать отгрузку на МП",
+        "width": 221
+      },
+      {
+        "height": 34,
+        "left": 1159,
+        "right": 1239,
+        "text": "Удалить",
+        "width": 80
+      },
+      {
+        "height": 34,
+        "left": 1159,
+        "right": 1239,
+        "text": "Удалить",
+        "width": 80
+      },
+      {
+        "height": 43,
+        "left": 518,
+        "right": 561,
+        "text": "",
+        "width": 43
+      },
+      {
+        "height": 40,
+        "left": 1088,
+        "right": 1256,
+        "text": "Добавить товары",
+        "width": 168
+      },
+      {
+        "height": 34,
+        "left": 1174,
+        "right": 1244,
+        "text": "Удалить",
+        "width": 70
+      },
+      {
+        "height": 40,
+        "left": 1030,
+        "right": 1182,
+        "text": "Запланировать",
+        "width": 151
+      },
+      {
+        "height": 40,
+        "left": 1190,
+        "right": 1272,
+        "text": "Закрыть",
+        "width": 82
+      }
+    ],
+    "dialogText": "Отгрузка на маркетплейсСклад ФФ: F09 WH · Черновик · отгрузка 2026-08-20Склад WB (маркетплейс)E2E WB склад (900001)Склад WB (маркетплейс)Дата отгрузки на МП *20.08.2026Дата отгрузки на МП *Добавить товарыФотоАртикулШКАртикул продавцаАртикул WBНаименованиеДоступно FBOК отгрузкеF09-FBO-1786635535889E2E-MOCK-BARCODEРазмер: LСостав: хлопок 95%, эластан 5%E2E-MOCK424242F09 Free FBO Product with normal warehouse name400​УдалитьЗапланироватьЗакрыть",
+    "documentScrollWidth": 1280,
+    "tableClientWidth": 1232,
+    "tableScrollWidth": 1232,
+    "viewportHeight": 720,
+    "viewportWidth": 1280
+  },
+  "geometryFinal": {
+    "blackBars": 0,
+    "bodyScrollWidth": 1280,
+    "buttons": [
+      {
+        "height": 43,
+        "left": 1130,
+        "right": 1173,
+        "text": "0",
+        "width": 43
+      },
+      {
+        "height": 34,
+        "left": 1189,
+        "right": 1256,
+        "text": "Выйти",
+        "width": 67
+      },
+      {
+        "height": 40,
+        "left": 281,
+        "right": 517,
+        "text": "Создать акт расхождений",
+        "width": 236
+      },
+      {
+        "height": 42,
+        "left": 529,
+        "right": 613,
+        "text": "Поставка",
+        "width": 85
+      },
+      {
+        "height": 42,
+        "left": 612,
+        "right": 688,
+        "text": "Возврат",
+        "width": 76
+      },
+      {
+        "height": 40,
+        "left": 700,
+        "right": 950,
+        "text": "Создать заявку на поставку",
+        "width": 250
+      },
+      {
+        "height": 40,
+        "left": 962,
+        "right": 1184,
+        "text": "Создать отгрузку на МП",
+        "width": 221
+      },
+      {
+        "height": 34,
+        "left": 1159,
+        "right": 1239,
+        "text": "Удалить",
+        "width": 80
+      },
+      {
+        "height": 40,
+        "left": 994,
+        "right": 1182,
+        "text": "Вернуть в черновик",
+        "width": 188
+      },
+      {
+        "height": 40,
+        "left": 1190,
+        "right": 1272,
+        "text": "Закрыть",
+        "width": 82
+      }
+    ],
+    "dialogText": "Отгрузка на маркетплейсСклад ФФ: F09 WH · Запланировано · отгрузка 2026-08-20Дальше заявку обрабатывает фулфилмент.АртикулТоварКол-воF09-FBO-1786635535889F09 Free FBO Product with normal warehouse name400Вернуть в черновикЗакрыть",
+    "documentScrollWidth": 1280,
+    "tableClientWidth": 1232,
+    "tableScrollWidth": 1232,
+    "viewportHeight": 720,
+    "viewportWidth": 1280
+  },
+  "harnessNotes": [
+    "Initial plan assertion read background table text and sampled the dialog before React detail refresh; backend returned POST /plan 200 and this final check waited on the dialog itself."
+  ]
+}

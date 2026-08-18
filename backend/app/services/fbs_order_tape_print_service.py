@@ -18,6 +18,7 @@ from app.models.fbs_order import (
     META_STATUS_PENDING,
     FbsOrder,
     FbsOrderMarking,
+    current_order_marking,
 )
 from app.models.fbs_supply import FbsSupply
 from app.models.marking_code import EVENT_REPRINTED, STATUS_PRINTED, MarkingCode
@@ -203,12 +204,14 @@ async def print_fbs_order_tape(
         code_value = printed.codes[0] if printed.codes else None
         if code_value:
             try:
-                await marking_svc.upsert_order_marking(
+                marking = _existing_sgtin_marking(order)
+                if marking is None:
+                    raise marking_svc.FbsMarkingError("order_marking_not_found")
+                await marking_svc.attach_order_meta_to_wb_and_sync(
                     session,
                     tenant_id,
-                    order.id,
-                    MARKING_KIND_SGTIN,
-                    code_value,
+                    order,
+                    marking,
                     http_client,
                 )
             except marking_svc.FbsMarkingError as exc:
@@ -359,6 +362,8 @@ async def _print_or_reprint_order_code(
     actor_user_id: uuid.UUID,
 ) -> mc_svc.PrintMarkingCodesResult:
     existing = _existing_sgtin_marking(order)
+    if existing is not None and existing.source == "operator":
+        raise mc_svc.MarkingCodeServiceError("operator_kiz_print_forbidden")
     if existing and existing.marking_code is not None:
         code = existing.marking_code
         if reprint:
@@ -370,6 +375,7 @@ async def _print_or_reprint_order_code(
                 document_number=line.task.document_number if line.task else None,
                 packaging_task=line,
                 copies=mc_svc.cz_copies_from_layout(layout),
+                source_process=mc_svc.MARKING_SOURCE_PACKING_FBS_PRINT,
             )
         return mc_svc.PrintMarkingCodesResult(
             packaging_task_line_id=line.id,
@@ -410,10 +416,7 @@ async def _print_or_reprint_order_code(
 
 
 def _existing_sgtin_marking(order: FbsOrder) -> FbsOrderMarking | None:
-    for marking in order.markings:
-        if marking.kind == MARKING_KIND_SGTIN:
-            return marking
-    return None
+    return current_order_marking(list(order.markings), MARKING_KIND_SGTIN)
 
 
 def _order_requires_sgtin(order: FbsOrder) -> bool:
@@ -467,8 +470,10 @@ async def _assign_printed_code_to_order(
             if existing is None:
                 existing = FbsOrderMarking(
                     order_id=order.id,
+                    tenant_id=order.tenant_id,
                     kind=MARKING_KIND_SGTIN,
                     value=code.cis_code,
+                    source="pool",
                     check_status=CHECK_STATUS_NEW,
                     meta_status=META_STATUS_PENDING,
                     marking_code_id=code.id,

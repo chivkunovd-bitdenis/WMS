@@ -18,11 +18,16 @@ export type PackagingSheetItem = {
 
 export type ShipmentPackagingSheetData = {
   documentNumber: string
+  documentType: string
   sellerName: string | null
+  shipmentDate: string | null
+  warehouseName: string
+  marketplaceWarehouseName?: string | null
+  createdAt?: string | null
   items: PackagingSheetItem[]
 }
 
-function itemCard(item: PackagingSheetItem, index: number): string {
+function itemRow(item: PackagingSheetItem, index: number): string {
   const photo = item.photo_url?.trim()
   const photoBlock = photo
     ? `<img class="pk-photo" src="${escapeLabelHtml(photo)}" alt="фото" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
@@ -30,90 +35,104 @@ function itemCard(item: PackagingSheetItem, index: number): string {
     : `<div class="pk-photo pk-photo-empty">фото</div>`
 
   const article = item.vendor_code.trim() || item.sku_code.trim()
-  const metaParts = [
-    article ? `Артикул продавца: ${article}` : '',
+  const productMeta = [
+    article ? `Арт.: ${article}` : '',
+    item.sku_code.trim() ? `SKU: ${item.sku_code.trim()}` : '',
     item.wb_nm_id != null ? `Артикул WB: ${item.wb_nm_id}` : '',
   ]
     .filter(Boolean)
-    .map((part) => `<span class="pk-meta-part">${escapeLabelHtml(part)}</span>`)
-    .join('')
-  const barcodeLine = item.barcode?.trim()
-    ? `<p class="pk-barcode">ШК: ${escapeLabelHtml(item.barcode.trim())}</p>`
-    : ''
+    .map((part) => `<span>${escapeLabelHtml(part)}</span>`)
+    .join(' · ')
   const instructions = item.instructions?.trim()
   const instructionsBlock = instructions
-    ? `<div class="pk-tz-text">${escapeLabelHtml(instructions)}</div>`
-    : `<div class="pk-tz-text pk-tz-empty">ТЗ не заполнено</div>`
+    ? `<div class="pk-instructions-text">${escapeLabelHtml(instructions)}</div>`
+    : `<div class="pk-instructions-text pk-empty-text">Инструкция не заполнена</div>`
+  const barcode = item.barcode?.trim() || '—'
 
-  return `<section class="pk-card" data-testid="tz-sheet-card" data-tz-index="${index}">
-  <div class="pk-left">
-    ${photoBlock}
-  </div>
-  <div class="pk-main">
-    <div class="pk-product">
-      <p class="pk-name">${escapeLabelHtml(item.product_name)}</p>
-      ${metaParts ? `<p class="pk-meta">${metaParts}</p>` : ''}
-      ${barcodeLine}
-    </div>
-    <div class="pk-tz">
-      <p class="pk-tz-title">ТЗ на упаковку</p>
-      ${instructionsBlock}
-    </div>
-  </div>
-  <div class="pk-qty-col" data-testid="tz-sheet-qty">
-    <span class="pk-qty-label">Кол-во</span>
-    <span class="pk-qty-value">${item.quantity}</span>
-  </div>
-</section>`
+  return `<tr data-testid="tz-sheet-card" data-row-index="${index}">
+  <td class="pk-photo-cell">${photoBlock}</td>
+  <td class="pk-product-cell">
+    <p class="pk-name">${escapeLabelHtml(item.product_name)}</p>
+    ${productMeta ? `<p class="pk-meta">${productMeta}</p>` : ''}
+  </td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">${escapeLabelHtml(barcode)}</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">${item.quantity}</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions">${instructionsBlock}</td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr>`
 }
 
-/** HTML сводной печатной формы «ТЗ на упаковку» для всей отгрузки (A4). */
+/** HTML компактного листа отгрузки с упаковочными инструкциями (A4). */
 export function buildShipmentPackagingSheetHtml(data: ShipmentPackagingSheetData): string {
-  const cards = data.items.map((item, i) => itemCard(item, i)).join('')
+  const rows = data.items.map((item, i) => itemRow(item, i)).join('')
   const body =
     data.items.length > 0
-      ? cards
+      ? rows
       : '<p class="pk-empty" data-testid="tz-sheet-empty">Нет товаров для печати.</p>'
+  const marketplaceWarehouse = data.marketplaceWarehouseName?.trim()
+  const createdAt = data.createdAt?.trim()
   return `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>ТЗ на упаковку — ${escapeLabelHtml(data.documentNumber)}</title>
+    <title>Лист отгрузки — ${escapeLabelHtml(data.documentNumber)}</title>
     <style>
       /* Ориентацию выбирает оператор в диалоге печати — не форсируем landscape в @page
          (иначе при Portrait в диалоге карточки уезжают за область печати). */
-      @page { size: A4; margin: 4mm 10mm 6mm; }
+      @page { size: A4; margin: 7mm 8mm 8mm; }
       * { box-sizing: border-box; }
       body {
         font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-        font-size: 12px;
+        font-size: 10.5px;
         color: #111;
         margin: 0;
         width: 100%;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }
-      h1 { font-size: 14px; margin: 0 0 1px; }
-      .pk-head { margin: 0 0 6px; font-size: 11px; color: #444; }
-      /* Одинаковые прямоугольные строки на всю ширину, высотой с фото товара. */
-      .pk-card {
-        display: flex;
-        gap: 8px;
-        border: 1px solid #bbb;
-        border-radius: 4px;
-        padding: 6px;
+      h1 { font-size: 15px; margin: 0 0 5px; }
+      .pk-head {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 3px 12px;
         margin: 0 0 8px;
+        padding: 6px 8px;
+        border: 1px solid #cfcfcf;
+        background: #f6f6f6;
+      }
+      .pk-head dt { margin: 0; color: #555; font-size: 9px; text-transform: uppercase; }
+      .pk-head dd { margin: 0; font-weight: 700; word-break: break-word; }
+      table {
         width: 100%;
-        max-width: 100%;
-        align-items: flex-start;
+        border-collapse: collapse;
+        table-layout: fixed;
+      }
+      th,
+      td {
+        border: 1px solid #cfcfcf;
+        padding: 4px 5px;
+        vertical-align: top;
+      }
+      th {
+        background: #ececec;
+        font-size: 9px;
+        text-align: left;
+        text-transform: uppercase;
+        color: #444;
+      }
+      tr {
         page-break-inside: avoid;
         break-inside: avoid-page;
       }
-      .pk-left { flex: 0 0 40mm; }
-      .pk-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+      .pk-photo-cell { width: 24mm; }
+      .pk-product-cell { width: 35%; }
+      .pk-barcode-cell { width: 24mm; word-break: break-word; font-weight: 700; }
+      .pk-qty-cell { width: 14mm; text-align: right; font-weight: 700; font-size: 13px; }
+      .pk-instructions-cell { width: auto; }
+      .pk-fact-cell { width: 18mm; min-height: 24mm; }
       .pk-photo {
-        width: 40mm;
-        height: 40mm;
+        width: 21mm;
+        height: 21mm;
         object-fit: contain;
         border: 1px solid #eee;
         display: block;
@@ -127,62 +146,44 @@ export function buildShipmentPackagingSheetHtml(data: ShipmentPackagingSheetData
         font-size: 11px;
         background: #f5f5f5;
       }
-      /* Серая плашка — данные товара; ниже — задание на упаковку. */
-      .pk-product {
-        background: #e8e8e8;
-        border: 1px solid #ccc;
-        border-radius: 3px;
-        padding: 4px 8px;
-      }
-      .pk-name { font-weight: 700; margin: 0; word-break: break-word; }
-      .pk-meta { margin: 2px 0 0; word-break: break-word; }
-      .pk-meta-part { margin-right: 12px; }
-      .pk-barcode { margin: 2px 0 0; font-weight: 700; word-break: break-word; }
-      .pk-tz { margin-top: 5px; }
-      .pk-tz-title {
-        margin: 0 0 2px;
-        font-size: 10px;
-        font-weight: 600;
-        color: #555;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-      }
-      .pk-tz-text {
+      .pk-name { font-weight: 700; margin: 0 0 2px; word-break: break-word; }
+      .pk-meta { margin: 0; color: #555; word-break: break-word; }
+      .pk-instructions-text {
         white-space: pre-wrap;
         word-break: break-word;
-        line-height: 1.4;
+        line-height: 1.35;
       }
-      .pk-tz-empty { color: #999; font-style: italic; }
-      .pk-qty-col {
-        flex: 0 0 16mm;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: flex-start;
-        border-left: 1px solid #ddd;
-        padding-left: 6px;
-        margin-left: 4px;
-      }
-      .pk-qty-label {
-        font-size: 9px;
-        font-weight: 600;
-        color: #555;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-      }
-      .pk-qty-value {
-        margin-top: 4px;
-        font-size: 16px;
-        font-weight: 700;
-        line-height: 1.2;
-      }
+      .pk-empty-text { color: #999; font-style: italic; }
       .pk-empty { color: #555; }
     </style>
   </head>
   <body>
-    <h1>ТЗ на упаковку — Отгрузка ${escapeLabelHtml(data.documentNumber)}</h1>
-    <p class="pk-head">Селлер: ${escapeLabelHtml(data.sellerName ?? '—')} · Товаров: ${data.items.length}</p>
-    ${body}
+    <h1>Лист отгрузки</h1>
+    <dl class="pk-head">
+      <div><dt>Селлер</dt><dd>${escapeLabelHtml(data.sellerName ?? '—')}</dd></div>
+      <div><dt>Дата</dt><dd>${escapeLabelHtml(data.shipmentDate ?? createdAt ?? '—')}</dd></div>
+      <div><dt>Тип</dt><dd>${escapeLabelHtml(data.documentType)}</dd></div>
+      <div><dt>Номер</dt><dd>${escapeLabelHtml(data.documentNumber)}</dd></div>
+      <div><dt>Склад ФФ</dt><dd>${escapeLabelHtml(data.warehouseName)}</dd></div>
+      <div><dt>Склад МП</dt><dd>${escapeLabelHtml(marketplaceWarehouse || '—')}</dd></div>
+    </dl>
+    ${
+      data.items.length > 0
+        ? `<table data-testid="shipment-sheet-table">
+      <thead>
+        <tr>
+          <th>Фото</th>
+          <th>Товар</th>
+          <th>ШК</th>
+          <th>Кол-во</th>
+          <th>Инструкции</th>
+          <th>Факт</th>
+        </tr>
+      </thead>
+      <tbody>${body}</tbody>
+    </table>`
+        : body
+    }
   </body>
 </html>`
 }
@@ -194,7 +195,7 @@ declare global {
   }
 }
 
-/** Печать сводной формы ТЗ на упаковку (A4, браузер). Ждёт загрузки фото (с таймаутом). */
+/** Печать компактного листа отгрузки (A4, браузер). Ждёт загрузки фото (с таймаутом). */
 export function printShipmentPackagingSheet(data: ShipmentPackagingSheetData): void {
   const html = buildShipmentPackagingSheetHtml(data)
   if (typeof window !== 'undefined' && window.__WMS_CAPTURE_PRINT_HTML__) {

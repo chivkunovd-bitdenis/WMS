@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
+    assert_seller_permission,
     get_current_user,
     get_effective_seller_id,
     require_packaging_access,
@@ -26,10 +27,19 @@ from app.services import marking_code_service as mc_svc
 from app.services import print_template_service as pt_svc
 from app.services.catalog_service import get_product
 from app.services.marking_label_artifact_service import pdf_bytes_to_png
+from app.services.seller_staff_permissions_service import PERM_HONEST_SIGN
+
+
+async def require_seller_honest_sign_if_seller(
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    await assert_seller_permission(session, user, PERM_HONEST_SIGN)
 
 router = APIRouter(
     prefix="/operations/marking-codes",
     tags=["operations"],
+    dependencies=[Depends(require_seller_honest_sign_if_seller)],
 )
 
 _MAX_UPLOAD_BYTES = 25 * 1024 * 1024
@@ -189,6 +199,7 @@ class PendingMarkingLineOut(BaseModel):
     document_number: str | None
     warehouse_id: str
     seller_id: str | None
+    seller_name: str | None = None
     product_id: str
     sku_code: str
     product_name: str
@@ -306,6 +317,7 @@ class LedgerEventOut(BaseModel):
     id: str
     created_at: str
     event_type: str
+    cis_code: str | None = None
     cis_masked: str | None = None
     pool_title: str | None
     gtin: str | None
@@ -314,6 +326,8 @@ class LedgerEventOut(BaseModel):
     seller_name: str | None
     document_number: str | None
     actor_email: str | None
+    source_process: str | None = None
+    source_process_label: str | None = None
     aggregated_count: int | None = None
 
 
@@ -944,6 +958,7 @@ async def list_marking_ledger(
                 id=str(r.id),
                 created_at=r.created_at.isoformat(),
                 event_type=r.event_type,
+                cis_code=r.cis_code,
                 cis_masked=r.cis_masked,
                 pool_title=r.pool_title,
                 gtin=r.gtin,
@@ -952,6 +967,8 @@ async def list_marking_ledger(
                 seller_name=r.seller_name,
                 document_number=r.document_number,
                 actor_email=r.actor_email,
+                source_process=r.source_process,
+                source_process_label=r.source_process_label,
                 aggregated_count=r.aggregated_count,
             )
             for r in page.rows
@@ -1464,6 +1481,7 @@ async def list_pending_marking(
                 document_number=row.document_number,
                 warehouse_id=str(row.warehouse_id),
                 seller_id=str(row.seller_id) if row.seller_id else None,
+                seller_name=row.seller_name,
                 product_id=str(row.product_id),
                 sku_code=row.sku_code,
                 product_name=row.product_name,
@@ -1602,6 +1620,7 @@ class MarkingDefectOut(BaseModel):
     request_id: str
     code_id: str
     status: str
+    code_status: str
 
 
 @router.get(
@@ -1649,6 +1668,7 @@ async def report_marking_code_defect(
         request_id=str(req.id),
         code_id=str(req.code_id),
         status=req.status,
+        code_status="defective",
     )
 
 

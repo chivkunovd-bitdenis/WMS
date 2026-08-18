@@ -1,0 +1,49 @@
+{
+  "base": "https://web-production-9e7c1.up.railway.app",
+  "checkedAt": "2026-08-14T05:45:04.254Z",
+  "scenario": "stage before fix: FF token only, open seller deep route /seller/products",
+  "finalUrl": "https://web-production-9e7c1.up.railway.app/seller/products",
+  "title": "WMS · Фулфилмент",
+  "bodyText": "Нет доступа\n\nНет доступа к этому разделу.",
+  "counts": {
+    "loginForm": 0,
+    "appFrame": 0,
+    "ffAccessDenied": 1,
+    "sellerProductsTable": 0,
+    "sellerProductsNav": 0,
+    "appTopbar": 0
+  },
+  "storage": {
+    "ff": null,
+    "seller": null,
+    "legacy": null
+  },
+  "events": [
+    {
+      "type": "navigation",
+      "url": "https://web-production-9e7c1.up.railway.app/",
+      "ts": "2026-08-14T05:44:59.335Z"
+    },
+    {
+      "type": "navigation",
+      "url": "https://web-production-9e7c1.up.railway.app/",
+      "ts": "2026-08-14T05:45:00.193Z"
+    },
+    {
+      "type": "navigation",
+      "url": "https://web-production-9e7c1.up.railway.app/seller/products",
+      "ts": "2026-08-14T05:45:00.514Z"
+    },
+    {
+      "type": "navigation",
+      "url": "https://web-production-9e7c1.up.railway.app/seller/products",
+      "ts": "2026-08-14T05:45:00.822Z"
+    },
+    {
+      "type": "console",
+      "level": "error",
+      "text": "Failed to load resource: the server responded with a status of 401 ()",
+      "ts": "2026-08-14T05:45:01.128Z"
+    }
+  ]
+}

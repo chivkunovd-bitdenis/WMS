@@ -103,7 +103,7 @@ test('MP packaging: print icon opens qty-only dialog for non-marked product', as
   const baseIn = `${e2eApi}/operations/inbound-intake-requests`
   const inbound = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const inboundId = String(((await inbound.json()) as { id: string }).id)
   await page.request.post(`${baseIn}/${inboundId}/lines`, {
@@ -362,7 +362,7 @@ test('MP packaging: marked product uses separate CZ/WB print when FF setting is 
   const baseIn = `${e2eApi}/operations/inbound-intake-requests`
   const inbound = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const inboundId = String(((await inbound.json()) as { id: string }).id)
   await page.request.post(`${baseIn}/${inboundId}/lines`, {

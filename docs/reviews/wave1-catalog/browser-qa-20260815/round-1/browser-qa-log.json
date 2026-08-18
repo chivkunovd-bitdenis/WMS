@@ -1,0 +1,247 @@
+{
+  "round": 1,
+  "browser": "Chrome/151.0.7922.138",
+  "started_at": "2026-08-15T08:12:13.441Z",
+  "app_base": "http://127.0.0.1:51941",
+  "api_base": "http://127.0.0.1:18141",
+  "checks": [
+    {
+      "name": "Live auth token present in visible Chrome",
+      "status": "pass",
+      "details": {
+        "tokenLength": 292
+      },
+      "at": "2026-08-15T08:12:14.141Z"
+    },
+    {
+      "name": "CAT empty state after fix",
+      "status": "pass",
+      "details": {
+        "hasEmpty": true,
+        "rowCount": 0,
+        "text": "Короб ВМС\nlive-catalog-r1-1786781394699@example.com · администратор\n0\nВыйти\nДашборд\nОтгрузки\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nЧестный знак\nНастройки\nКаталог\n\nКарточки товаров селлеров: название, артикулы, ШК, размер и ТЗ упаковки.\n\nСоздать селлера\nЗагрузить Excel\nСоздать товар\nПоиск\nПоиск\nСеллер\nВсе\nСеллер\nФото\tНазвание\n\tАртикул селлера\tSKU\tШК\tWB/nmId\tРазмер\tСеллер\tТЗ\t\n\n\nВ каталоге пока нет товаров. Скачайте шаблон, загрузите Excel или создайте один товар вручную."
+      },
+      "at": "2026-08-15T08:12:18.711Z"
+    },
+    {
+      "name": "CAT inventory nav hidden",
+      "status": "pass",
+      "details": {
+        "invNav": 0
+      },
+      "at": "2026-08-15T08:12:19.439Z"
+    },
+    {
+      "name": "CAT inventory route redirects",
+      "status": "pass",
+      "details": {
+        "pathname": "/app/ff/products"
+      },
+      "at": "2026-08-15T08:12:23.170Z"
+    },
+    {
+      "name": "CAT seller create empty error",
+      "status": "pass",
+      "details": {
+        "error": "Укажите название селлера."
+      },
+      "at": "2026-08-15T08:12:24.532Z"
+    },
+    {
+      "name": "CAT seller create success",
+      "status": "pass",
+      "details": {
+        "sellerName": "Live Catalog Seller R1 1786781533441",
+        "sellerId": "f81c0c4e-1a86-427d-ab15-d983b731941a"
+      },
+      "at": "2026-08-15T08:12:26.590Z"
+    },
+    {
+      "name": "CAT manual product API readback",
+      "status": "pass",
+      "details": {
+        "productId": "a34518fd-4c03-4942-8bb4-f3f5bdd176d0",
+        "sku": "SKU-LIVE-CATALOG-R1-LONG-ARTICUL-1786781533441-SIZE-54-EMERALD-WINTER-EXTRA-LONG"
+      },
+      "at": "2026-08-15T08:12:33.490Z"
+    },
+    {
+      "name": "CAT long real name single-line clean cell",
+      "status": "pass",
+      "details": {
+        "nameText": "Пальто утепленное женское демисезонное длинное с капюшоном и поясом цвет глубокий изумруд коллекция Северный ветер 2026 очень длинное реальное название после фикса\nВручную",
+        "rowHeight": 77.109375,
+        "nameHeight": 22.515625,
+        "lineHeight": "22.5225px",
+        "whiteSpace": "nowrap",
+        "overflow": "hidden",
+        "textOverflow": "ellipsis",
+        "nameScrollWidth": 1395,
+        "nameClientWidth": 93,
+        "bodyScrollWidth": 1280,
+        "innerWidth": 1280,
+        "containsVendorInNameCell": false,
+        "containsSizeInNameCell": false,
+        "containsSkuInNameCell": false,
+        "containsBarcodeInNameCell": false
+      },
+      "at": "2026-08-15T08:12:33.495Z"
+    },
+    {
+      "name": "CAT marking icon grey with zero and no text chip",
+      "status": "pass",
+      "details": {
+        "exists": true,
+        "aria": "Коды маркировки SKU-LIVE-CATALOG-R1-LONG-ARTICUL-1786781533441-SIZE-54-EMERALD-WINTER-EXTRA-LONG: 0",
+        "iconClass": "MuiSvgIcon-root MuiSvgIcon-colorDisabled MuiSvgIcon-fontSizeSmall css-up4zqc-MuiSvgIcon-root",
+        "hasTextChz": false
+      },
+      "at": "2026-08-15T08:12:34.182Z"
+    },
+    {
+      "name": "CAT marking icon yellow count 2 after reload",
+      "status": "pass",
+      "details": {
+        "aria": "Коды маркировки SKU-LIVE-CATALOG-R1-LONG-ARTICUL-1786781533441-SIZE-54-EMERALD-WINTER-EXTRA-LONG: 2",
+        "text": "2",
+        "iconClass": "MuiSvgIcon-root MuiSvgIcon-colorWarning MuiSvgIcon-fontSizeSmall css-jd7atb-MuiSvgIcon-root"
+      },
+      "at": "2026-08-15T08:12:40.032Z"
+    },
+    {
+      "name": "CAT marking icon opens product CHZ page",
+      "status": "pass",
+      "details": {
+        "pathname": "/app/ff/honest-sign/product/a34518fd-4c03-4942-8bb4-f3f5bdd176d0",
+        "newConsoleErrors": 4
+      },
+      "at": "2026-08-15T08:12:42.028Z"
+    },
+    {
+      "name": "CAT Excel template downloaded in visible Chrome",
+      "status": "pass",
+      "details": {
+        "templateFile": "wms-product-catalog-template.xlsx",
+        "downloadsDir": "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wave1-catalog/browser-qa-20260815/round-1/downloads"
+      },
+      "at": "2026-08-15T08:12:48.654Z"
+    },
+    {
+      "name": "CAT Excel preview success zero quantity",
+      "status": "pass",
+      "details": {
+        "summary": "Лист «Каталог товары 2026»: создать 2, обновить 0, пропустить 0, ошибок 0",
+        "text": "Строка\tНазвание\tАртикул селлера\tSKU\tШК\tWB/nmId\tРазмер\tКол-во\tДействие\tТЗ\tПричина\n2\tТермокружка дорожная с силиконовой крышкой цвет графит реальное длинное название для Excel проверки\tLIVE-EXCEL-R1-ART\tLIVE-EXCEL-R1-SKU-ONE-LONG-46\t2039100000001\t987654321\t46-48\t0\tсоздать\tПузырчатая пленка, короб 20x10x10, стикер не перекрывать\t—\n3\tНабор органайзеров для склада прозрачный размер L комплект из 6 штук\tLIVE-EXCEL-R1-ORG\tLIVE-EXCEL-R1-SKU-TWO-XL\t2039100000002\t987654322\tXL\t0\tсоздать\tПакет, маркировку не сгибать\t—",
+        "applyDisabled": false
+      },
+      "at": "2026-08-15T08:12:50.829Z"
+    },
+    {
+      "name": "CAT Excel apply success zero quantity",
+      "status": "pass",
+      "details": {
+        "notice": "Создано: 2, обновлено: 0, пропущено: 0",
+        "hasOne": true,
+        "hasTwo": true,
+        "rowCount": 3
+      },
+      "at": "2026-08-15T08:14:23.008Z"
+    },
+    {
+      "name": "CAT reload readback after Excel import",
+      "status": "pass",
+      "details": {
+        "rowCount": 3,
+        "hasOne": true,
+        "hasTwo": true
+      },
+      "at": "2026-08-15T08:14:27.522Z"
+    },
+    {
+      "name": "CAT seller available for bad Excel continuation",
+      "status": "pass",
+      "details": {
+        "sellerName": "Live Catalog Seller R1 1786781533441",
+        "sellerId": "f81c0c4e-1a86-427d-ab15-d983b731941a"
+      },
+      "at": "2026-08-15T08:14:28.362Z"
+    },
+    {
+      "name": "CAT Excel bad file error and apply disabled",
+      "status": "pass",
+      "details": {
+        "summary": "Лист «Ошибочное количество»: создать 0, обновить 0, пропустить 0, ошибок 1",
+        "text": "Строка\tНазвание\tАртикул селлера\tSKU\tШК\tWB/nmId\tРазмер\tКол-во\tДействие\tТЗ\tПричина\n2\tОшибка импорта отрицательное количество\tLIVE-EXCEL-R1-BAD\t—\t2039100000999\t987654399\t46\t—\tошибка\tTZ\tКоличество не может быть отрицательным.",
+        "applyDisabled": true
+      },
+      "at": "2026-08-15T08:14:30.140Z"
+    }
+  ],
+  "screenshots": [
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wave1-catalog/browser-qa-20260815/round-1/01-empty-catalog-after-fix.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wave1-catalog/browser-qa-20260815/round-1/02-inventory-route-redirects-to-catalog.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wave1-catalog/browser-qa-20260815/round-1/03-seller-create-empty-error-after-fix.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wave1-catalog/browser-qa-20260815/round-1/04-seller-created-after-fix.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wave1-catalog/browser-qa-20260815/round-1/05-long-product-single-line-after-fix.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wave1-catalog/browser-qa-20260815/round-1/06-marking-icon-grey-zero-after-fix.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wave1-catalog/browser-qa-20260815/round-1/07-marking-icon-yellow-count-2-after-reload.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wave1-catalog/browser-qa-20260815/round-1/08-marking-icon-opens-chz-page-tail.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wave1-catalog/browser-qa-20260815/round-1/09-excel-template-downloaded-after-fix.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wave1-catalog/browser-qa-20260815/round-1/10-excel-preview-zero-quantity-good.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wave1-catalog/browser-qa-20260815/round-1/11-excel-apply-success-zero-quantity.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wave1-catalog/browser-qa-20260815/round-1/12-reload-readback-excel-products.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wave1-catalog-20260814/docs/reviews/wave1-catalog/browser-qa-20260815/round-1/13-excel-bad-file-error-apply-disabled.png"
+  ],
+  "console_errors": [
+    {
+      "type": "error",
+      "text": "In HTML, %s cannot be a child of <%s>.%s\nThis will cause a hydration error.%s <td> a  \n\n  ...\n    <MuiTableContainer-root ref={null} as={{...}} className=\"MuiTableCo...\" ownerState={{...}} variant=\"outlined\">\n      <Insertion>\n      <Paper className=\"MuiTableCo...\" variant=\"outlined\">\n        <MuiPaper-root as=\"div\" ownerState={{...}} className=\"MuiPaper-r...\" ref={null} style={{}}>\n          <Insertion>\n          <div className=\"MuiPaper-r...\" style={{}}>\n            <Table size=\"small\" sx={{...}}>\n              <MuiTable-root as=\"table\" role={null} ref={null} className=\"MuiTable-root\" ownerState={{size:\"small\", ...}} ...>\n                <Insertion>\n                <table role={null} className=\"MuiTable-r...\">\n                  <TableHead>\n                  <TableBody>\n                    <MuiTableBody-root className=\"MuiTableBo...\" as=\"tbody\" ref={null} role={null} ...>\n                      <Insertion>\n                      <tbody className=\"MuiTableBo...\" role={null}>\n                        <TableRow hover={true} component={{...}} to=\"/app/ff/ho...\" sx={{...}} ...>\n                          <MuiTableRow-root as={{...}} ref={null} className=\"MuiTableRo...\" role=\"row\" ...>\n                            <Insertion>\n                            <LinkWithRef className=\"MuiTableRo...\" role=\"row\" to=\"/app/ff/ho...\" ...>\n>                             <a\n>                               className=\"MuiTableRow-root MuiTableRow-hover css-2qon4t-MuiTableRow-root\"\n>                               role=\"row\"\n>                               data-testid=\"ff-honest-sign-product-personal-pool-2e452896-5e39-4a3d-8d85-7d1f7adc3a2a\"\n>                               href=\"/app/ff/honest-sign/pool/2e452896-5e39-4a3d-8d85-7d1f7adc3a2a\"\n>                               onClick={function handleClick}\n>                               ref={function}\n>                               target={undefined}\n>                               data-discover=\"true\"\n>                             >\n                                <TableCell>\n                                  <MuiTableCell-root as=\"td\" ref={null} className=\"MuiTableCe...\" aria-sort={null} ...>\n                                    <Insertion>\n>                                   <td\n>                                     className=\"MuiTableCell-root MuiTableCell-body MuiTableCell-sizeSmall css-125bja...\"\n>                                     aria-sort={null}\n>                                     scope={undefined}\n>                                   >\n                                ...\n",
+      "at": "2026-08-15T08:12:41.174Z"
+    },
+    {
+      "type": "error",
+      "text": "<%s> cannot contain a nested %s.\nSee this log for the ancestor stack trace. a <td>",
+      "at": "2026-08-15T08:12:41.174Z"
+    },
+    {
+      "type": "error",
+      "text": "In HTML, %s cannot be a child of <%s>.%s\nThis will cause a hydration error.%s <a> tbody  \n\n  ...\n    <Box data-testid=\"ff-honest-...\">\n      <Styled(div) as=\"div\" ref={null} className=\"MuiBox-root\" theme={{...}} data-testid=\"ff-honest-...\">\n        <Insertion>\n        <div className=\"MuiBox-roo...\" data-testid=\"ff-honest-...\">\n          <Typography>\n          <TableContainer component={{...}} variant=\"outlined\">\n            <MuiTableContainer-root ref={null} as={{...}} className=\"MuiTableCo...\" ownerState={{...}} variant=\"outlined\">\n              <Insertion>\n              <Paper className=\"MuiTableCo...\" variant=\"outlined\">\n                <MuiPaper-root as=\"div\" ownerState={{...}} className=\"MuiPaper-r...\" ref={null} style={{}}>\n                  <Insertion>\n                  <div className=\"MuiPaper-r...\" style={{}}>\n                    <Table size=\"small\" sx={{...}}>\n                      <MuiTable-root as=\"table\" role={null} ref={null} className=\"MuiTable-root\" ...>\n                        <Insertion>\n                        <table role={null} className=\"MuiTable-r...\">\n                          <TableHead>\n                          <TableBody>\n                            <MuiTableBody-root className=\"MuiTableBo...\" as=\"tbody\" ref={null} role={null} ...>\n                              <Insertion>\n>                             <tbody className=\"MuiTableBody-root css-gmh7jj-MuiTableBody-root\" role={null}>\n                                <TableRow hover={true} component={{...}} to=\"/app/ff/ho...\" sx={{...}} ...>\n                                  <MuiTableRow-root as={{...}} ref={null} className=\"MuiTableRo...\" role=\"row\" ...>\n                                    <Insertion>\n                                    <LinkWithRef className=\"MuiTableRo...\" role=\"row\" to=\"/app/ff/ho...\" ...>\n>                                     <a\n>                                       className=\"MuiTableRow-root MuiTableRow-hover css-2qon4t-MuiTableRow-root\"\n>                                       role=\"row\"\n>                                       data-testid=\"ff-honest-sign-product-personal-pool-2e452896-5e39-4a3d-8d85-7d1f...\"\n>                                       href=\"/app/ff/honest-sign/pool/2e452896-5e39-4a3d-8d85-7d1f7adc3a2a\"\n>                                       onClick={function handleClick}\n>                                       ref={function}\n>                                       target={undefined}\n>                                       data-discover=\"true\"\n>                                     >\n",
+      "at": "2026-08-15T08:12:41.179Z"
+    },
+    {
+      "type": "error",
+      "text": "<%s> cannot contain a nested %s.\nSee this log for the ancestor stack trace. tbody <a>",
+      "at": "2026-08-15T08:12:41.179Z"
+    }
+  ],
+  "tails": [
+    {
+      "bucket": "Хвост",
+      "scope": "non-catalog",
+      "summary": "ЧЗ product page emits invalid table/link DOM warning after catalog icon navigation",
+      "examples": [
+        {
+          "type": "error",
+          "text": "In HTML, %s cannot be a child of <%s>.%s\nThis will cause a hydration error.%s <td> a  \n\n  ...\n    <MuiTableContainer-root ref={null} as={{...}} className=\"MuiTableCo...\" ownerState={{...}} variant=\"outlined\">\n      <Insertion>\n      <Paper className=\"MuiTableCo...\" variant=\"outlined\">\n        <MuiPaper-root as=\"div\" ownerState={{...}} className=\"MuiPaper-r...\" ref={null} style={{}}>\n          <Insertion>\n          <div className=\"MuiPaper-r...\" style={{}}>\n            <Table size=\"small\" sx={{...}}>\n              <MuiTable-root as=\"table\" role={null} ref={null} className=\"MuiTable-root\" ownerState={{size:\"small\", ...}} ...>\n                <Insertion>\n                <table role={null} className=\"MuiTable-r...\">\n                  <TableHead>\n                  <TableBody>\n                    <MuiTableBody-root className=\"MuiTableBo...\" as=\"tbody\" ref={null} role={null} ...>\n                      <Insertion>\n                      <tbody className=\"MuiTableBo...\" role={null}>\n                        <TableRow hover={true} component={{...}} to=\"/app/ff/ho...\" sx={{...}} ...>\n                          <MuiTableRow-root as={{...}} ref={null} className=\"MuiTableRo...\" role=\"row\" ...>\n                            <Insertion>\n                            <LinkWithRef className=\"MuiTableRo...\" role=\"row\" to=\"/app/ff/ho...\" ...>\n>                             <a\n>                               className=\"MuiTableRow-root MuiTableRow-hover css-2qon4t-MuiTableRow-root\"\n>                               role=\"row\"\n>                               data-testid=\"ff-honest-sign-product-personal-pool-2e452896-5e39-4a3d-8d85-7d1f7adc3a2a\"\n>                               href=\"/app/ff/honest-sign/pool/2e452896-5e39-4a3d-8d85-7d1f7adc3a2a\"\n>                               onClick={function handleClick}\n>                               ref={function}\n>                               target={undefined}\n>                               data-discover=\"true\"\n>                             >\n                                <TableCell>\n                                  <MuiTableCell-root as=\"td\" ref={null} className=\"MuiTableCe...\" aria-sort={null} ...>\n                                    <Insertion>\n>                                   <td\n>                                     className=\"MuiTableCell-root MuiTableCell-body MuiTableCell-sizeSmall css-125bja...\"\n>                                     aria-sort={null}\n>                                     scope={undefined}\n>                                   >\n                                ...\n",
+          "at": "2026-08-15T08:12:41.174Z"
+        },
+        {
+          "type": "error",
+          "text": "<%s> cannot contain a nested %s.\nSee this log for the ancestor stack trace. a <td>",
+          "at": "2026-08-15T08:12:41.174Z"
+        },
+        {
+          "type": "error",
+          "text": "In HTML, %s cannot be a child of <%s>.%s\nThis will cause a hydration error.%s <a> tbody  \n\n  ...\n    <Box data-testid=\"ff-honest-...\">\n      <Styled(div) as=\"div\" ref={null} className=\"MuiBox-root\" theme={{...}} data-testid=\"ff-honest-...\">\n        <Insertion>\n        <div className=\"MuiBox-roo...\" data-testid=\"ff-honest-...\">\n          <Typography>\n          <TableContainer component={{...}} variant=\"outlined\">\n            <MuiTableContainer-root ref={null} as={{...}} className=\"MuiTableCo...\" ownerState={{...}} variant=\"outlined\">\n              <Insertion>\n              <Paper className=\"MuiTableCo...\" variant=\"outlined\">\n                <MuiPaper-root as=\"div\" ownerState={{...}} className=\"MuiPaper-r...\" ref={null} style={{}}>\n                  <Insertion>\n                  <div className=\"MuiPaper-r...\" style={{}}>\n                    <Table size=\"small\" sx={{...}}>\n                      <MuiTable-root as=\"table\" role={null} ref={null} className=\"MuiTable-root\" ...>\n                        <Insertion>\n                        <table role={null} className=\"MuiTable-r...\">\n                          <TableHead>\n                          <TableBody>\n                            <MuiTableBody-root className=\"MuiTableBo...\" as=\"tbody\" ref={null} role={null} ...>\n                              <Insertion>\n>                             <tbody className=\"MuiTableBody-root css-gmh7jj-MuiTableBody-root\" role={null}>\n                                <TableRow hover={true} component={{...}} to=\"/app/ff/ho...\" sx={{...}} ...>\n                                  <MuiTableRow-root as={{...}} ref={null} className=\"MuiTableRo...\" role=\"row\" ...>\n                                    <Insertion>\n                                    <LinkWithRef className=\"MuiTableRo...\" role=\"row\" to=\"/app/ff/ho...\" ...>\n>                                     <a\n>                                       className=\"MuiTableRow-root MuiTableRow-hover css-2qon4t-MuiTableRow-root\"\n>                                       role=\"row\"\n>                                       data-testid=\"ff-honest-sign-product-personal-pool-2e452896-5e39-4a3d-8d85-7d1f...\"\n>                                       href=\"/app/ff/honest-sign/pool/2e452896-5e39-4a3d-8d85-7d1f7adc3a2a\"\n>                                       onClick={function handleClick}\n>                                       ref={function}\n>                                       target={undefined}\n>                                       data-discover=\"true\"\n>                                     >\n",
+          "at": "2026-08-15T08:12:41.179Z"
+        }
+      ]
+    }
+  ],
+  "window": {
+    "width": 1280,
+    "height": 900
+  },
+  "status": "SCREEN_APPROVED_WITH_NONCATALOG_TAIL",
+  "finished_at": "2026-08-15T08:14:30.693Z"
+}

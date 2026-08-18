@@ -66,7 +66,7 @@ test('seller A outbound list excludes seller B shipments only (#11)', async ({ p
 
   await page.getByTestId('nav-seller-documents').click();
   await page.getByTestId('seller-create-inbound').click();
-  await page.waitForURL('**/seller/inbound/new');
+  await page.waitForURL('**/seller/inbound/new**');
   await waitForPostOk(page, baseIn, (u) => !u.includes('/lines') && !u.includes('/submit'));
   await expect(page.getByTestId('seller-inbound-draft-form')).toBeVisible();
   await page.getByTestId('seller-inbound-add-products').click();
@@ -77,6 +77,7 @@ test('seller A outbound list excludes seller B shipments only (#11)', async ({ p
     waitForPostOk(page, baseIn, (u) => u.includes('/lines')),
     page.getByTestId('seller-inbound-picker-apply').click(),
   ]);
+  await page.getByTestId('seller-inbound-planned-boxes').fill('2');
   await Promise.all([
     waitForPostOk(page, baseIn, (u) => u.includes('/submit')),
     page.getByTestId('seller-inbound-submit-warehouse').click(),
@@ -89,7 +90,7 @@ test('seller A outbound list excludes seller B shipments only (#11)', async ({ p
 
   await page.getByTestId('nav-seller-documents').click();
   await page.getByTestId('seller-create-inbound').click();
-  await page.waitForURL('**/seller/inbound/new');
+  await page.waitForURL('**/seller/inbound/new**');
   await waitForPostOk(page, baseIn, (u) => !u.includes('/lines') && !u.includes('/submit'));
   await expect(page.getByTestId('seller-inbound-draft-form')).toBeVisible();
   await page.getByTestId('seller-inbound-add-products').click();
@@ -100,6 +101,7 @@ test('seller A outbound list excludes seller B shipments only (#11)', async ({ p
     waitForPostOk(page, baseIn, (u) => u.includes('/lines')),
     page.getByTestId('seller-inbound-picker-apply').click(),
   ]);
+  await page.getByTestId('seller-inbound-planned-boxes').fill('2');
   await Promise.all([
     waitForPostOk(page, baseIn, (u) => u.includes('/submit')),
     page.getByTestId('seller-inbound-submit-warehouse').click(),

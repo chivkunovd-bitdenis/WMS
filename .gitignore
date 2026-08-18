@@ -25,12 +25,19 @@ frontend/playwright-report/
 
 # Local e2e sqlite
 e2e.db
+backend/e2e-*.db
+backend/live-*.db
 backend/wms_pytest.sqlite
 backend/tests/wms_pytest.sqlite
+backend/tests/wms_pytest_*.sqlite
+backend/tests/wms_pytest_*.sqlite-*
 backend/tests/wms_pytest_data/
+backend/tests/wms_pytest_data_*/
 backend/var/wms-data/
 backend/dev.db
 backend/dev-local.db
+backend/live*.db
+backend/*live*.db
 backend/alembic_autogen.db
 
 # IDE

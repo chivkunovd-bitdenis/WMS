@@ -40,6 +40,7 @@ export function PublicAuthScreen({
   const [mode, setMode] = useState<AuthMode>('login')
   const isFf = variant === 'fulfillment'
   const portal = isFf ? 'fulfillment' : 'seller'
+  const heading = isFf ? 'Короб ВМС' : 'WMS · Портал селлера'
 
   if (pendingPasswordSetupEmail) {
     return (
@@ -62,7 +63,7 @@ export function PublicAuthScreen({
                 component="h1"
                 sx={{ fontWeight: 900, letterSpacing: 0 }}
               >
-                Короб ВМС
+                {heading}
               </Typography>
             </Box>
             {error ? (
@@ -163,7 +164,7 @@ export function PublicAuthScreen({
               component="h1"
               sx={{ fontWeight: 900, letterSpacing: 0 }}
             >
-              Короб ВМС
+              {heading}
             </Typography>
           </Box>
           {error ? (

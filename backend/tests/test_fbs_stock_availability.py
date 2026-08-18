@@ -16,7 +16,7 @@ from app.models.marketplace_unload import MarketplaceUnloadLine, MarketplaceUnlo
 from app.models.marketplace_unload_reservation import MarketplaceUnloadReservation
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
 from app.models.product import Product
-from app.services import inventory_service
+from app.services import inventory_service, stock_direction_service
 from app.services.fbs_stock_availability_service import (
     clamp_nonneg,
     fbs_available_qty_by_product,
@@ -78,8 +78,10 @@ async def _setup_tenant_product(
 
 # TC-NEW-FBS-STOCK-006
 @pytest.mark.asyncio
-async def test_fbs_availability_formula_batch(async_client: AsyncClient) -> None:
-    """storage 5 + sorting 2 - outbound 1 - FBS 2 = 4."""
+async def test_fbs_availability_without_fbs_direction_is_zero(
+    async_client: AsyncClient,
+) -> None:
+    """No explicit FBS pool means WB publish/reserve sees 0, not physical stock."""
     _headers, seller_id, warehouse_id, product_id, storage_loc_id = (
         await _setup_tenant_product(async_client)
     )
@@ -170,9 +172,9 @@ async def test_fbs_availability_formula_batch(async_client: AsyncClient) -> None
             session, tenant_id, warehouse_id, product_id
         )
 
-    assert batch[product_id] == 4
-    assert single == 4
-    assert via_reserve == 4
+    assert batch[product_id] == 0
+    assert single == 0
+    assert via_reserve == 0
 
 
 # TC-NEW-FBS-STOCK-005
@@ -204,6 +206,14 @@ async def test_fbo_reserve_does_not_reduce_fbs_publish(async_client: AsyncClient
             storage_location_id=sorting.id,
             quantity_delta=5,
             movement_type="inbound_intake",
+        )
+        await stock_direction_service.create_stock_direction(
+            session,
+            tenant_id,
+            product_id,
+            name="FBS pool",
+            quantity=15,
+            is_fbs=True,
         )
 
         before_mp = await fbs_available_qty_for_product(
@@ -448,6 +458,14 @@ async def test_sold_release_does_not_resurrect_available_after_fbs_write_off(
             storage_location_id=storage_loc_id,
             quantity_delta=5,
             movement_type="inbound_intake",
+        )
+        await stock_direction_service.create_stock_direction(
+            session,
+            tenant_id,
+            product_id,
+            name="FBS pool",
+            quantity=5,
+            is_fbs=True,
         )
 
         order = FbsOrder(

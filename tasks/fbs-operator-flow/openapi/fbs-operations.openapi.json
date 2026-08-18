@@ -407,64 +407,6 @@
         }
       }
     },
-    "/operations/fbs-orders/{order_id}/metadata/scan": {
-      "post": {
-        "tags": [
-          "operations"
-        ],
-        "summary": "Scan Fbs Order Metadata",
-        "operationId": "scan_fbs_order_metadata_operations_fbs_orders__order_id__metadata_scan_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "order_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Order Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FbsMetadataScanBody"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FbsOrderMetadataOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/operations/fbs-orders/{order_id}/markings": {
       "get": {
         "tags": [
@@ -500,73 +442,6 @@
                     "$ref": "#/components/schemas/FbsOrderMarkingOut"
                   },
                   "title": "Response Get Fbs Order Markings Operations Fbs Orders  Order Id  Markings Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/operations/fbs-orders/{order_id}/markings/{kind}": {
-      "put": {
-        "tags": [
-          "operations"
-        ],
-        "summary": "Put Fbs Order Marking",
-        "operationId": "put_fbs_order_marking_operations_fbs_orders__order_id__markings__kind__put",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "order_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Order Id"
-            }
-          },
-          {
-            "name": "kind",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Kind"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FbsMarkingValueBody"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FbsOrderMarkingOut"
                 }
               }
             }
@@ -622,6 +497,202 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-orders/kiz/lookup": {
+      "get": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Lookup Fbs Order By Sticker",
+        "operationId": "lookup_fbs_order_by_sticker_operations_fbs_orders_kiz_lookup_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          },
+          {
+            "name": "sticker",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512,
+              "title": "Sticker"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsKizLookupOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-orders/kiz/validate": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Validate Fbs Order Kiz",
+        "operationId": "validate_fbs_order_kiz_operations_fbs_orders_kiz_validate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsKizValidateBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsKizValidateOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/operations/fbs-orders/kiz/commit": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Commit Fbs Order Kiz",
+        "operationId": "commit_fbs_order_kiz_operations_fbs_orders_kiz_commit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsKizCommitBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FbsKizCommitRowOut"
+                  },
+                  "type": "array",
+                  "title": "Response Commit Fbs Order Kiz Operations Fbs Orders Kiz Commit Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/operations/fbs-orders/{order_id}/kiz": {
+      "delete": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Delete Fbs Order Kiz",
+        "operationId": "delete_fbs_order_kiz_operations_fbs_orders__order_id__kiz_delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "order_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Order Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -1142,6 +1213,82 @@
         ]
       }
     },
+    "/operations/fbs-supplies/calendar": {
+      "get": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Get Fbs Shipment Calendar",
+        "operationId": "get_fbs_shipment_calendar_operations_fbs_supplies_calendar_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start Date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End Date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FbsShipmentCalendarRowOut"
+                  },
+                  "title": "Response Get Fbs Shipment Calendar Operations Fbs Supplies Calendar Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/operations/fbs-supplies/{supply_id}/start-work": {
       "post": {
         "tags": [
@@ -1166,6 +1313,141 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsWorkspaceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/worklist": {
+      "get": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Get Fbs Supplies Worklist",
+        "operationId": "get_fbs_supplies_worklist_operations_fbs_supplies_worklist_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "seller_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Seller Id"
+            }
+          },
+          {
+            "name": "status_group",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "active",
+              "title": "Status Group"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsSupplyWorklistOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/{supply_id}/orders/batch": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Add Orders To Fbs Supply",
+        "operationId": "add_orders_to_fbs_supply_operations_fbs_supplies__supply_id__orders_batch_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsSupplyAddOrdersBody"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1561,6 +1843,64 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsWorkspaceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-supplies/{supply_id}/planned-shipment-date": {
+      "patch": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Patch Fbs Supply Planned Shipment Date",
+        "operationId": "patch_fbs_supply_planned_shipment_date_operations_fbs_supplies__supply_id__planned_shipment_date_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsSupplyPlannedShipmentDateBody"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -3943,7 +4283,7 @@
           "quantity": {
             "type": "integer",
             "maximum": 1000000000.0,
-            "minimum": 1.0,
+            "minimum": -1000000000.0,
             "title": "Quantity"
           },
           "inbound_intake_line_id": {
@@ -4483,34 +4823,16 @@
         ],
         "title": "FbsDeliveryPreflightOut"
       },
-      "FbsMarkingValueBody": {
+      "FbsKizCommitBody": {
         "properties": {
-          "value": {
-            "type": "string",
-            "maxLength": 512,
-            "minLength": 1,
-            "title": "Value"
-          }
-        },
-        "type": "object",
-        "required": [
-          "value"
-        ],
-        "title": "FbsMarkingValueBody"
-      },
-      "FbsMetadataScanBody": {
-        "properties": {
-          "kind": {
-            "type": "string",
-            "maxLength": 16,
-            "minLength": 1,
-            "title": "Kind"
-          },
-          "raw_value": {
-            "type": "string",
-            "maxLength": 512,
-            "minLength": 1,
-            "title": "Raw Value"
+          "pairs": {
+            "items": {
+              "$ref": "#/components/schemas/FbsKizCommitPairIn"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Pairs"
           },
           "idempotency_key": {
             "type": "string",
@@ -4521,11 +4843,231 @@
         },
         "type": "object",
         "required": [
-          "kind",
-          "raw_value",
+          "pairs",
           "idempotency_key"
         ],
-        "title": "FbsMetadataScanBody"
+        "title": "FbsKizCommitBody"
+      },
+      "FbsKizCommitPairIn": {
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Order Id"
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 512,
+            "title": "Value"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "title": "Confirmed",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "order_id",
+          "value"
+        ],
+        "title": "FbsKizCommitPairIn"
+      },
+      "FbsKizCommitRowOut": {
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "title": "Order Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "order_id",
+          "status",
+          "code",
+          "message"
+        ],
+        "title": "FbsKizCommitRowOut"
+      },
+      "FbsKizCurrentOut": {
+        "properties": {
+          "masked": {
+            "type": "string",
+            "title": "Masked"
+          },
+          "meta_status": {
+            "type": "string",
+            "title": "Meta Status"
+          },
+          "from_pool": {
+            "type": "boolean",
+            "title": "From Pool"
+          }
+        },
+        "type": "object",
+        "required": [
+          "masked",
+          "meta_status",
+          "from_pool"
+        ],
+        "title": "FbsKizCurrentOut"
+      },
+      "FbsKizLookupOut": {
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "title": "Order Id"
+          },
+          "wb_order_id": {
+            "type": "integer",
+            "title": "Wb Order Id"
+          },
+          "product": {
+            "$ref": "#/components/schemas/FbsKizProductOut"
+          },
+          "current_kiz": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FbsKizCurrentOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "needs_confirmation": {
+            "type": "boolean",
+            "title": "Needs Confirmation"
+          },
+          "can_bind": {
+            "type": "boolean",
+            "title": "Can Bind"
+          },
+          "block_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Block Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "order_id",
+          "wb_order_id",
+          "product",
+          "current_kiz",
+          "needs_confirmation",
+          "can_bind",
+          "block_reason"
+        ],
+        "title": "FbsKizLookupOut"
+      },
+      "FbsKizProductOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Barcode"
+          },
+          "seller_article": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Article"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "image_url",
+          "barcode",
+          "seller_article"
+        ],
+        "title": "FbsKizProductOut"
+      },
+      "FbsKizValidateBody": {
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Order Id"
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 512,
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "order_id",
+          "value"
+        ],
+        "title": "FbsKizValidateBody"
+      },
+      "FbsKizValidateOut": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "hints": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Hints"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok",
+          "hints"
+        ],
+        "title": "FbsKizValidateOut"
       },
       "FbsOrderMarkingOut": {
         "properties": {
@@ -5169,6 +5711,11 @@
             "maxLength": 128,
             "minLength": 1,
             "title": "Idempotency Key"
+          },
+          "without_distribution": {
+            "type": "boolean",
+            "title": "Without Distribution",
+            "default": false
           }
         },
         "type": "object",
@@ -5245,6 +5792,11 @@
                 "type": "null"
               }
             ]
+          },
+          "without_distribution": {
+            "type": "boolean",
+            "title": "Without Distribution",
+            "default": false
           }
         },
         "type": "object",
@@ -5944,6 +6496,44 @@
         "type": "object",
         "title": "FbsSellerWarehouseOut"
       },
+      "FbsShipmentCalendarRowOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "direction": {
+            "type": "string",
+            "title": "Direction"
+          },
+          "boxes_count": {
+            "type": "integer",
+            "title": "Boxes Count"
+          },
+          "shipment_type": {
+            "type": "string",
+            "title": "Shipment Type"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "date",
+          "direction",
+          "boxes_count",
+          "shipment_type",
+          "title"
+        ],
+        "title": "FbsShipmentCalendarRowOut"
+      },
       "FbsStickerMetaOut": {
         "properties": {
           "order_id": {
@@ -6224,6 +6814,32 @@
         ],
         "title": "FbsSupplyAddOrderBody"
       },
+      "FbsSupplyAddOrdersBody": {
+        "properties": {
+          "order_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Order Ids"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Idempotency Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "order_ids",
+          "idempotency_key"
+        ],
+        "title": "FbsSupplyAddOrdersBody"
+      },
       "FbsSupplyCreateBody": {
         "properties": {
           "seller_id": {
@@ -6497,6 +7113,17 @@
             ],
             "title": "Display Number"
           },
+          "planned_shipment_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Shipment Date"
+          },
           "packaging_task_id": {
             "anyOf": [
               {
@@ -6567,6 +7194,7 @@
           "barcode_file",
           "document_number",
           "display_number",
+          "planned_shipment_date",
           "packaging_task_id",
           "created_at_wb",
           "delivered_at",
@@ -6601,6 +7229,24 @@
           "zone"
         ],
         "title": "FbsSupplyPlannedDestinationBody"
+      },
+      "FbsSupplyPlannedShipmentDateBody": {
+        "properties": {
+          "planned_shipment_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Shipment Date"
+          }
+        },
+        "type": "object",
+        "title": "FbsSupplyPlannedShipmentDateBody"
       },
       "FbsSupplyPreflightBody": {
         "properties": {
@@ -6785,6 +7431,121 @@
         },
         "type": "object",
         "title": "FbsSupplyStickersBody"
+      },
+      "FbsSupplyWorklistItemOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "wb_supply_id": {
+            "type": "string",
+            "title": "Wb Supply Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "seller": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Seller"
+          },
+          "wb_warehouse": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Wb Warehouse"
+          },
+          "wms_warehouse": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Wms Warehouse"
+          },
+          "orders_count": {
+            "type": "integer",
+            "title": "Orders Count"
+          },
+          "units_count": {
+            "type": "integer",
+            "title": "Units Count"
+          },
+          "boxes_count": {
+            "type": "integer",
+            "title": "Boxes Count"
+          },
+          "planned_shipment_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Shipment Date"
+          },
+          "can_add_orders": {
+            "type": "boolean",
+            "title": "Can Add Orders"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "wb_supply_id",
+          "name",
+          "status",
+          "seller",
+          "wb_warehouse",
+          "wms_warehouse",
+          "orders_count",
+          "units_count",
+          "boxes_count",
+          "planned_shipment_date",
+          "can_add_orders"
+        ],
+        "title": "FbsSupplyWorklistItemOut"
+      },
+      "FbsSupplyWorklistOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FbsSupplyWorklistItemOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "server_now": {
+            "type": "string",
+            "title": "Server Now"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "server_now"
+        ],
+        "title": "FbsSupplyWorklistOut"
       },
       "FbsTrbxBindBoxBody": {
         "properties": {
@@ -7250,6 +8011,17 @@
               }
             ],
             "title": "Reason"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
           }
         },
         "type": "object",
@@ -7551,6 +8323,50 @@
               }
             ],
             "title": "Barcode"
+          },
+          "sku": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sku"
+          },
+          "chrt_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chrt Id"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
           },
           "size": {
             "anyOf": [
@@ -7986,6 +8802,17 @@
             ],
             "title": "Partial Rejection"
           },
+          "picking_auto_passed_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Picking Auto Passed Reason"
+          },
           "wb_sync_stale": {
             "type": "boolean",
             "title": "Wb Sync Stale",
@@ -8194,6 +9021,50 @@
             ],
             "title": "Barcode"
           },
+          "sku": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sku"
+          },
+          "chrt_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chrt Id"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
           "size": {
             "anyOf": [
               {
@@ -8342,6 +9213,17 @@
             ],
             "title": "Planned Destination"
           },
+          "planned_shipment_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Shipment Date"
+          },
           "nearest_deadline_at": {
             "type": "string",
             "title": "Nearest Deadline At"
@@ -8379,6 +9261,7 @@
           "wb_warehouse",
           "wms_warehouse",
           "planned_destination",
+          "planned_shipment_date",
           "nearest_deadline_at",
           "packaging_task_id",
           "barcode_asset"
@@ -8586,6 +9469,11 @@
             "title": "Has Packaging Instructions",
             "default": false
           },
+          "marking_available_count": {
+            "type": "integer",
+            "title": "Marking Available Count",
+            "default": 0
+          },
           "is_manual": {
             "type": "boolean",
             "title": "Is Manual",
@@ -8771,6 +9659,58 @@
         ],
         "title": "InboundBoxScanBody"
       },
+      "InboundCargoPlaceCreate": {
+        "properties": {
+          "quantity": {
+            "type": "integer",
+            "maximum": 1000.0,
+            "minimum": 1.0,
+            "title": "Quantity",
+            "default": 1
+          }
+        },
+        "type": "object",
+        "title": "InboundCargoPlaceCreate"
+      },
+      "InboundCargoPlaceOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "place_number": {
+            "type": "integer",
+            "title": "Place Number"
+          },
+          "internal_barcode": {
+            "type": "string",
+            "title": "Internal Barcode"
+          },
+          "label_printed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label Printed At"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "place_number",
+          "internal_barcode",
+          "created_at"
+        ],
+        "title": "InboundCargoPlaceOut"
+      },
       "InboundDistributionLineIn": {
         "properties": {
           "product_id": {
@@ -8880,6 +9820,90 @@
           "created_at"
         ],
         "title": "InboundDistributionLineOut"
+      },
+      "InboundDistributionScanBody": {
+        "properties": {
+          "barcode": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Barcode"
+          },
+          "active_storage_location_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Storage Location Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "barcode"
+        ],
+        "title": "InboundDistributionScanBody"
+      },
+      "InboundDistributionScanOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "location",
+              "product"
+            ],
+            "title": "Kind"
+          },
+          "active_storage_location_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Storage Location Id"
+          },
+          "active_storage_location_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Storage Location Code"
+          },
+          "product_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Id"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/InboundDistributionLineOut"
+            },
+            "type": "array",
+            "title": "Lines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "InboundDistributionScanOut"
       },
       "InboundIntakeBoxLineOut": {
         "properties": {
@@ -9078,6 +10102,82 @@
             "type": "string",
             "title": "Product Name"
           },
+          "wb_barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wb Barcode"
+          },
+          "requires_honest_sign": {
+            "type": "boolean",
+            "title": "Requires Honest Sign",
+            "default": false
+          },
+          "length_mm": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Length Mm"
+          },
+          "width_mm": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width Mm"
+          },
+          "height_mm": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height Mm"
+          },
+          "weight_g": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weight G"
+          },
+          "volume_liters": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Volume Liters"
+          },
+          "added_by_fulfillment": {
+            "type": "boolean",
+            "title": "Added By Fulfillment",
+            "default": false
+          },
           "expected_qty": {
             "type": "integer",
             "title": "Expected Qty"
@@ -9181,6 +10281,18 @@
             "format": "uuid",
             "title": "Warehouse Id"
           },
+          "seller_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Id"
+          },
           "planned_delivery_date": {
             "anyOf": [
               {
@@ -9192,6 +10304,24 @@
               }
             ],
             "title": "Planned Delivery Date"
+          },
+          "waybill_number": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waybill Number"
+          },
+          "operation_type": {
+            "type": "string",
+            "maxLength": 32,
+            "title": "Operation Type",
+            "default": "inbound"
           }
         },
         "type": "object",
@@ -9228,13 +10358,40 @@
             ],
             "title": "Display Number"
           },
+          "waybill_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waybill Number"
+          },
           "warehouse_id": {
             "type": "string",
             "title": "Warehouse Id"
           },
+          "warehouse_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Name"
+          },
           "status": {
             "type": "string",
             "title": "Status"
+          },
+          "operation_type": {
+            "type": "string",
+            "title": "Operation Type",
+            "default": "inbound"
           },
           "planned_delivery_date": {
             "anyOf": [
@@ -9301,6 +10458,17 @@
             ],
             "title": "Seller Name"
           },
+          "created_by_seller_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Seller Id"
+          },
           "created_at": {
             "anyOf": [
               {
@@ -9334,6 +10502,13 @@
             },
             "type": "array",
             "title": "Boxes"
+          },
+          "cargo_places": {
+            "items": {
+              "$ref": "#/components/schemas/InboundCargoPlaceOut"
+            },
+            "type": "array",
+            "title": "Cargo Places"
           },
           "lines": {
             "items": {
@@ -9378,6 +10553,18 @@
               }
             ],
             "title": "Planned Box Count"
+          },
+          "waybill_number": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waybill Number"
           }
         },
         "type": "object",
@@ -9411,17 +10598,49 @@
             ],
             "title": "Display Number"
           },
+          "waybill_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waybill Number"
+          },
           "warehouse_id": {
             "type": "string",
             "title": "Warehouse Id"
+          },
+          "warehouse_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Name"
           },
           "status": {
             "type": "string",
             "title": "Status"
           },
+          "operation_type": {
+            "type": "string",
+            "title": "Operation Type",
+            "default": "inbound"
+          },
           "line_count": {
             "type": "integer",
             "title": "Line Count"
+          },
+          "goods_qty_total": {
+            "type": "integer",
+            "title": "Goods Qty Total",
+            "default": 0
           },
           "planned_delivery_date": {
             "anyOf": [
@@ -9488,6 +10707,24 @@
             ],
             "title": "Seller Name"
           },
+          "product_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Product Names"
+          },
+          "created_by_seller_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Seller Id"
+          },
           "created_at": {
             "type": "string",
             "title": "Created At"
@@ -9507,6 +10744,33 @@
           "created_at"
         ],
         "title": "InboundIntakeRequestSummaryOut"
+      },
+      "InboundReceivingLineBody": {
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Product Id"
+          },
+          "actual_qty": {
+            "type": "integer",
+            "maximum": 1000000000.0,
+            "minimum": 1.0,
+            "title": "Actual Qty",
+            "default": 1
+          },
+          "source": {
+            "type": "string",
+            "const": "seller_catalog",
+            "title": "Source",
+            "default": "seller_catalog"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id"
+        ],
+        "title": "InboundReceivingLineBody"
       },
       "InboundReceivingScanBody": {
         "properties": {
@@ -9537,6 +10801,44 @@
             "type": "string",
             "title": "Product Name"
           },
+          "seller_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Id"
+          },
+          "seller_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Name"
+          },
+          "packaging_instructions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Packaging Instructions"
+          },
+          "requires_honest_sign": {
+            "type": "boolean",
+            "title": "Requires Honest Sign",
+            "default": false
+          },
           "quantity": {
             "type": "integer",
             "title": "Quantity"
@@ -9564,6 +10866,21 @@
           "available": {
             "type": "integer",
             "title": "Available"
+          },
+          "quantity_fbs": {
+            "type": "integer",
+            "title": "Quantity Fbs",
+            "default": 0
+          },
+          "quantity_reserved_directions": {
+            "type": "integer",
+            "title": "Quantity Reserved Directions",
+            "default": 0
+          },
+          "quantity_free_fbo": {
+            "type": "integer",
+            "title": "Quantity Free Fbo",
+            "default": 0
           }
         },
         "type": "object",
@@ -9733,6 +11050,17 @@
             "type": "string",
             "title": "Event Type"
           },
+          "cis_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cis Code"
+          },
           "cis_masked": {
             "anyOf": [
               {
@@ -9820,6 +11148,28 @@
               }
             ],
             "title": "Actor Email"
+          },
+          "source_process": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Process"
+          },
+          "source_process_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Process Label"
           },
           "aggregated_count": {
             "anyOf": [
@@ -10088,6 +11438,21 @@
           "barcode"
         ],
         "title": "LocationOut"
+      },
+      "LocationPatch": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "title": "LocationPatch"
       },
       "LocationSuggestOut": {
         "properties": {
@@ -11075,6 +12440,12 @@
             "title": "Line Count",
             "default": 0
           },
+          "goods_qty_total": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Goods Qty Total",
+            "default": 0
+          },
           "seller_id": {
             "anyOf": [
               {
@@ -11370,13 +12741,18 @@
           "status": {
             "type": "string",
             "title": "Status"
+          },
+          "code_status": {
+            "type": "string",
+            "title": "Code Status"
           }
         },
         "type": "object",
         "required": [
           "request_id",
           "code_id",
-          "status"
+          "status",
+          "code_status"
         ],
         "title": "MarkingDefectOut"
       },
@@ -12219,6 +13595,138 @@
         ],
         "title": "PackagingTaskCreate"
       },
+      "PackagingTaskEventOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "event_sequence": {
+            "type": "integer",
+            "title": "Event Sequence"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "line_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line Id"
+          },
+          "product_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Id"
+          },
+          "product_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Name"
+          },
+          "storage_location_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Location Id"
+          },
+          "storage_location_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Location Code"
+          },
+          "quantity": {
+            "type": "integer",
+            "title": "Quantity"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "created_by_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By User Id"
+          },
+          "created_by_user_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By User Email"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "reversed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reversed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "event_sequence",
+          "action",
+          "quantity",
+          "created_at"
+        ],
+        "title": "PackagingTaskEventOut"
+      },
       "PackagingTaskLineIn": {
         "properties": {
           "product_id": {
@@ -12261,6 +13769,28 @@
           "product_id": {
             "type": "string",
             "title": "Product Id"
+          },
+          "seller_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Id"
+          },
+          "seller_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Name"
           },
           "sku_code": {
             "type": "string",
@@ -12321,6 +13851,10 @@
             "type": "integer",
             "title": "Qty Marking Printed"
           },
+          "qty_product_label_printed": {
+            "type": "integer",
+            "title": "Qty Product Label Printed"
+          },
           "marking_available_count": {
             "type": "integer",
             "title": "Marking Available Count",
@@ -12348,6 +13882,7 @@
           "qty_packed_in_task",
           "qty_done",
           "qty_marking_printed",
+          "qty_product_label_printed",
           "is_complete"
         ],
         "title": "PackagingTaskLineOut"
@@ -12384,6 +13919,50 @@
             "type": "string",
             "title": "Warehouse Id"
           },
+          "warehouse_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Name"
+          },
+          "warehouse_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Code"
+          },
+          "seller_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Id"
+          },
+          "seller_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Name"
+          },
           "status": {
             "type": "string",
             "title": "Status"
@@ -12419,12 +13998,63 @@
             "title": "Pick Resync Warning",
             "default": false
           },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "completed_by_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed By User Id"
+          },
           "lines": {
             "items": {
               "$ref": "#/components/schemas/PackagingTaskLineOut"
             },
             "type": "array",
             "title": "Lines"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/PackagingTaskEventOut"
+            },
+            "type": "array",
+            "title": "Events"
           }
         },
         "type": "object",
@@ -12474,6 +14104,17 @@
               }
             ],
             "title": "Seller Id"
+          },
+          "seller_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Name"
           },
           "product_id": {
             "type": "string",
@@ -13585,6 +15226,19 @@
             ],
             "title": "Height Mm"
           },
+          "weight_g": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1000000000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weight G"
+          },
           "seller_id": {
             "anyOf": [
               {
@@ -13657,6 +15311,64 @@
           "sku_code"
         ],
         "title": "ProductCreate"
+      },
+      "ProductDimensionsPatch": {
+        "properties": {
+          "length_mm": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10000000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Length Mm"
+          },
+          "width_mm": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10000000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width Mm"
+          },
+          "height_mm": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10000000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height Mm"
+          },
+          "weight_g": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1000000000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weight G"
+          }
+        },
+        "type": "object",
+        "title": "ProductDimensionsPatch"
       },
       "ProductFbsStockSyncBulkOut": {
         "properties": {
@@ -13741,6 +15453,59 @@
         "additionalProperties": false,
         "type": "object",
         "title": "ProductFbsStockSyncPatch"
+      },
+      "ProductHonestSignBulkOut": {
+        "properties": {
+          "updated_count": {
+            "type": "integer",
+            "title": "Updated Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "updated_count"
+        ],
+        "title": "ProductHonestSignBulkOut"
+      },
+      "ProductHonestSignBulkPatch": {
+        "properties": {
+          "product_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 10000,
+            "minItems": 1,
+            "title": "Product Ids"
+          },
+          "requires_honest_sign": {
+            "type": "boolean",
+            "title": "Requires Honest Sign",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "product_ids"
+        ],
+        "title": "ProductHonestSignBulkPatch"
+      },
+      "ProductLabelPrintedIn": {
+        "properties": {
+          "quantity": {
+            "type": "integer",
+            "maximum": 1000000000.0,
+            "minimum": 1.0,
+            "title": "Quantity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "quantity"
+        ],
+        "title": "ProductLabelPrintedIn"
       },
       "ProductLocationHintOut": {
         "properties": {
@@ -13883,6 +15648,17 @@
             ],
             "title": "Height Mm"
           },
+          "weight_g": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weight G"
+          },
           "seller_id": {
             "anyOf": [
               {
@@ -13979,8 +15755,7 @@
                 "type": "null"
               }
             ],
-            "title": "Volume Liters",
-            "readOnly": true
+            "title": "Volume Liters"
           }
         },
         "type": "object",
@@ -13989,8 +15764,7 @@
           "name",
           "sku_code",
           "seller_id",
-          "seller_name",
-          "volume_liters"
+          "seller_name"
         ],
         "title": "ProductOut"
       },
@@ -14172,6 +15946,17 @@
           "row": {
             "type": "integer",
             "title": "Row"
+          },
+          "wb_nm_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wb Nm Id"
           },
           "vendor_article": {
             "anyOf": [
@@ -14401,6 +16186,21 @@
         ],
         "title": "ReprintResolutionOut"
       },
+      "ScanPackIn": {
+        "properties": {
+          "barcode": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Barcode"
+          }
+        },
+        "type": "object",
+        "required": [
+          "barcode"
+        ],
+        "title": "ScanPackIn"
+      },
       "ScanPrintMarkingIn": {
         "properties": {
           "packaging_task_id": {
@@ -14542,6 +16342,70 @@
         ],
         "title": "SellerOut"
       },
+      "SellerPermissionsBody": {
+        "properties": {
+          "documents": {
+            "type": "boolean",
+            "title": "Documents",
+            "default": true
+          },
+          "products": {
+            "type": "boolean",
+            "title": "Products",
+            "default": true
+          },
+          "honest_sign": {
+            "type": "boolean",
+            "title": "Honest Sign",
+            "default": true
+          },
+          "settings": {
+            "type": "boolean",
+            "title": "Settings",
+            "default": false
+          },
+          "staff": {
+            "type": "boolean",
+            "title": "Staff",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "SellerPermissionsBody"
+      },
+      "SellerPermissionsOut": {
+        "properties": {
+          "documents": {
+            "type": "boolean",
+            "title": "Documents"
+          },
+          "products": {
+            "type": "boolean",
+            "title": "Products"
+          },
+          "honest_sign": {
+            "type": "boolean",
+            "title": "Honest Sign"
+          },
+          "settings": {
+            "type": "boolean",
+            "title": "Settings"
+          },
+          "staff": {
+            "type": "boolean",
+            "title": "Staff"
+          }
+        },
+        "type": "object",
+        "required": [
+          "documents",
+          "products",
+          "honest_sign",
+          "settings",
+          "staff"
+        ],
+        "title": "SellerPermissionsOut"
+      },
       "SellerShopOut": {
         "properties": {
           "id": {
@@ -14583,6 +16447,77 @@
         },
         "type": "object",
         "title": "SellerShopsUpdateBody"
+      },
+      "SellerStaffAccountCreate": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/SellerPermissionsBody"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "SellerStaffAccountCreate"
+      },
+      "SellerStaffAccountOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "seller_id": {
+            "type": "string",
+            "title": "Seller Id"
+          },
+          "must_set_password": {
+            "type": "boolean",
+            "title": "Must Set Password"
+          },
+          "is_owner": {
+            "type": "boolean",
+            "title": "Is Owner"
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/SellerPermissionsOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "role",
+          "seller_id",
+          "must_set_password",
+          "is_owner",
+          "permissions"
+        ],
+        "title": "SellerStaffAccountOut"
       },
       "SellerWbCatalogAdminOut": {
         "properties": {
@@ -15076,11 +17011,25 @@
             "$ref": "#/components/schemas/StaffPermissionsOut"
           },
           "packaging_rate_rub": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Packaging Rate Rub"
           },
           "packaging_billing": {
-            "$ref": "#/components/schemas/StaffPackagingBillingOut"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StaffPackagingBillingOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -15089,9 +17038,7 @@
           "email",
           "role",
           "must_set_password",
-          "permissions",
-          "packaging_rate_rub",
-          "packaging_billing"
+          "permissions"
         ],
         "title": "StaffAccountOut"
       },
@@ -15224,6 +17171,233 @@
         ],
         "title": "StaffPermissionsOut"
       },
+      "StockDirectionCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Quantity"
+          },
+          "is_fbs": {
+            "type": "boolean",
+            "title": "Is Fbs",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "quantity"
+        ],
+        "title": "StockDirectionCreate"
+      },
+      "StockDirectionOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "product_id": {
+            "type": "string",
+            "title": "Product Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "quantity": {
+            "type": "integer",
+            "title": "Quantity"
+          },
+          "is_fbs": {
+            "type": "boolean",
+            "title": "Is Fbs"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "product_id",
+          "name",
+          "comment",
+          "quantity",
+          "is_fbs",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "StockDirectionOut"
+      },
+      "StockDirectionPatch": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "is_fbs": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Fbs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "StockDirectionPatch"
+      },
+      "StockMonthlySnapshotOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "product_id": {
+            "type": "string",
+            "title": "Product Id"
+          },
+          "product_name": {
+            "type": "string",
+            "title": "Product Name"
+          },
+          "sku_code": {
+            "type": "string",
+            "title": "Sku Code"
+          },
+          "barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Barcode"
+          },
+          "snapshot_month": {
+            "type": "string",
+            "format": "date",
+            "title": "Snapshot Month"
+          },
+          "quantity_total": {
+            "type": "integer",
+            "title": "Quantity Total"
+          },
+          "quantity_fbs": {
+            "type": "integer",
+            "title": "Quantity Fbs"
+          },
+          "quantity_reserved": {
+            "type": "integer",
+            "title": "Quantity Reserved"
+          },
+          "quantity_free_fbo": {
+            "type": "integer",
+            "title": "Quantity Free Fbo"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "product_id",
+          "product_name",
+          "sku_code",
+          "snapshot_month",
+          "quantity_total",
+          "quantity_fbs",
+          "quantity_reserved",
+          "quantity_free_fbo"
+        ],
+        "title": "StockMonthlySnapshotOut"
+      },
+      "StockMonthlySnapshotRunIn": {
+        "properties": {
+          "month": {
+            "type": "string",
+            "format": "date",
+            "title": "Month"
+          }
+        },
+        "type": "object",
+        "required": [
+          "month"
+        ],
+        "title": "StockMonthlySnapshotRunIn"
+      },
       "StockTransferCreate": {
         "properties": {
           "from_storage_location_id": {
@@ -15295,6 +17469,17 @@
           "separate_marking_print_enabled": {
             "type": "boolean",
             "title": "Separate Marking Print Enabled"
+          },
+          "fbs_shipment_cutoff_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fbs Shipment Cutoff Time"
           }
         },
         "type": "object",
@@ -15327,6 +17512,18 @@
               }
             ],
             "title": "Separate Marking Print Enabled"
+          },
+          "fbs_shipment_cutoff_time": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fbs Shipment Cutoff Time"
           }
         },
         "type": "object",
@@ -15507,6 +17704,16 @@
               }
             ]
           },
+          "seller_permissions": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SellerPermissionsOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "address_storage_enabled": {
             "type": "boolean",
             "title": "Address Storage Enabled",
@@ -15516,6 +17723,17 @@
             "type": "boolean",
             "title": "Separate Marking Print Enabled",
             "default": false
+          },
+          "fbs_shipment_cutoff_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fbs Shipment Cutoff Time"
           }
         },
         "type": "object",
@@ -15664,6 +17882,21 @@
           "code"
         ],
         "title": "WarehouseOut"
+      },
+      "WarehousePatch": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "WarehousePatch"
       },
       "WbMpWarehouseOut": {
         "properties": {

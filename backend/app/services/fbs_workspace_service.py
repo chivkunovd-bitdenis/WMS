@@ -16,12 +16,16 @@ from app.models.fbs_order import (
     MARKING_KIND_SGTIN,
     META_STATUS_ACCEPTED,
     META_STATUS_ALLOWED_WITHOUT_CHECK,
+    META_STATUS_ASSIGNED,
+    META_STATUS_PENDING,
+    META_STATUS_SENDING,
     PACK_STATUS_PACKED,
     PICK_STATUS_PICKED,
     STICKER_STATUS_APPLIED,
     STICKER_STATUS_PRINT_OPENED,
     STICKER_STATUS_READY,
     FbsOrder,
+    FbsOrderMarking,
 )
 from app.models.fbs_print_asset import (
     PRINT_ASSET_KIND_CARGO_PLACE_QR,
@@ -39,7 +43,10 @@ from app.models.fbs_supply import (
     FbsSupply,
 )
 from app.models.fbs_trbx import FbsTrbx
+from app.models.inventory_balance import InventoryBalance
+from app.models.storage_location import StorageLocation
 from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
+from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.fbs_packing_box_service import get_boxes_for_workspace
 from app.services.fbs_tracking_service import (
     build_partial_rejection_summary,
@@ -48,7 +55,10 @@ from app.services.fbs_tracking_service import (
 )
 from app.services.fbs_worklist_service import build_worklist_items, print_asset_content_url
 from app.services.marking_code_service import count_available_for_products_batch
-from app.services.sorting_location_service import get_or_create_sorting_location
+from app.services.sorting_location_service import (
+    SORTING_LOCATION_CODE,
+    get_or_create_sorting_location,
+)
 
 
 class FbsWorkspaceError(Exception):
@@ -64,6 +74,17 @@ class WorkspaceProgress:
     metadata_ready: int
     stickers_ready: int
     total: int
+
+
+_WORKING_MARKING_STATUSES = frozenset(
+    {
+        META_STATUS_ASSIGNED,
+        META_STATUS_SENDING,
+        META_STATUS_PENDING,
+        META_STATUS_ACCEPTED,
+        META_STATUS_ALLOWED_WITHOUT_CHECK,
+    }
+)
 
 
 async def get_supply_workspace(
@@ -82,14 +103,21 @@ async def get_supply_workspace(
     await _inject_order_pick_fallback(session, tenant_id, supply, worklist_items)
     cargo_places = await _build_cargo_places(session, tenant_id, supply)
     boxes = await _build_boxes(session, tenant_id, supply_id)
+    boxes_without_distribution = _boxes_without_distribution(boxes)
     marking_pool = await _build_marking_pool(session, tenant_id, orders)
     progress = _compute_progress(orders)
-    unassigned_packed_order_ids = _unassigned_packed_order_ids(orders, boxes)
+    picking_auto_passed_reason = await _picking_auto_passed_reason(
+        session, tenant_id, supply, orders
+    )
+    unassigned_packed_order_ids = (
+        set() if boxes_without_distribution else _unassigned_packed_order_ids(orders, boxes)
+    )
     stage = _compute_stage(
         supply,
         orders,
         progress,
         has_physical_boxes=bool(boxes),
+        without_distribution=boxes_without_distribution,
         unassigned_packed_order_ids=unassigned_packed_order_ids,
     )
     blockers = _compute_workspace_blockers(
@@ -98,6 +126,7 @@ async def get_supply_workspace(
         stage,
         progress,
         has_physical_boxes=bool(boxes),
+        without_distribution=boxes_without_distribution,
         unassigned_packed_order_ids=unassigned_packed_order_ids,
     )
     wb_name = await _wb_warehouse_name(session, tenant_id, orders)
@@ -130,6 +159,11 @@ async def get_supply_workspace(
                 "name": supply.warehouse.name if supply.warehouse else "Склад не найден",
             },
             "planned_destination": _planned_destination(supply),
+            "planned_shipment_date": (
+                supply.planned_shipment_date.isoformat()
+                if supply.planned_shipment_date is not None
+                else None
+            ),
             "nearest_deadline_at": nearest_deadline.isoformat(),
             "packaging_task_id": (
                 str(supply.packaging_task_id) if supply.packaging_task_id else None
@@ -155,9 +189,48 @@ async def get_supply_workspace(
         ),
         "tracking_summary": tracking_summary,
         "partial_rejection": partial_rejection,
+        "picking_auto_passed_reason": picking_auto_passed_reason,
         "wb_sync_stale": wb_sync_stale,
         "server_now": server_now.isoformat(),
     }
+
+
+async def _picking_auto_passed_reason(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply: FbsSupply,
+    orders: list[FbsOrder],
+) -> str | None:
+    if not orders:
+        return None
+    address_enabled = await tenant_settings_svc.is_address_storage_enabled(session, tenant_id)
+    if not address_enabled:
+        return (
+            "Адресное хранение выключено: подбор отмечен пройденным, "
+            "можно переходить к упаковке."
+        )
+    product_ids = {order.product_id for order in orders if order.product_id is not None}
+    if not product_ids:
+        return None
+    regular_location = await session.scalar(
+        select(StorageLocation.id)
+        .join(InventoryBalance, InventoryBalance.storage_location_id == StorageLocation.id)
+        .where(
+            StorageLocation.tenant_id == tenant_id,
+            StorageLocation.warehouse_id == supply.warehouse_id,
+            StorageLocation.code != SORTING_LOCATION_CODE,
+            InventoryBalance.tenant_id == tenant_id,
+            InventoryBalance.product_id.in_(product_ids),
+            InventoryBalance.quantity_unpacked > 0,
+        )
+        .limit(1)
+    )
+    if regular_location is None:
+        return (
+            "Товар не распределён по адресным ячейкам: подбор отмечен пройденным, "
+            "можно переходить к упаковке."
+        )
+    return None
 
 
 async def _inject_order_pick_fallback(
@@ -285,6 +358,7 @@ def _compute_stage(
     progress: WorkspaceProgress,
     *,
     has_physical_boxes: bool = True,
+    without_distribution: bool = False,
     unassigned_packed_order_ids: set[uuid.UUID] | frozenset[uuid.UUID] = frozenset(),
 ) -> str:
     if supply.status in {FBS_SUPPLY_STATUS_DONE, FBS_SUPPLY_STATUS_IN_DELIVERY}:
@@ -301,7 +375,7 @@ def _compute_stage(
         return "packing"
     if progress.stickers_ready < progress.total:
         return "order_stickers"
-    if not has_physical_boxes or unassigned_packed_order_ids:
+    if not has_physical_boxes or (unassigned_packed_order_ids and not without_distribution):
         return "handoff_prep"
     if supply.delivery_type == FBS_DELIVERY_TYPE_PVZ and not supply.trbxes:
         return "handoff_prep"
@@ -319,6 +393,7 @@ def _compute_workspace_blockers(
     progress: WorkspaceProgress,
     *,
     has_physical_boxes: bool = True,
+    without_distribution: bool = False,
     unassigned_packed_order_ids: set[uuid.UUID] | frozenset[uuid.UUID] = frozenset(),
 ) -> list[dict[str, Any]]:
     blockers: list[dict[str, Any]] = []
@@ -387,6 +462,8 @@ def _compute_workspace_blockers(
             }
         )
     for order in orders:
+        if without_distribution:
+            break
         if order.id in unassigned_packed_order_ids:
             blockers.append(
                 {
@@ -423,6 +500,10 @@ def _unassigned_packed_order_ids(
         for order in orders
         if order.pack_status == PACK_STATUS_PACKED and order.id not in assigned
     }
+
+
+def _boxes_without_distribution(boxes: list[dict[str, object]]) -> bool:
+    return bool(boxes) and any(bool(box.get("without_distribution")) for box in boxes)
 
 
 async def _build_cargo_places(
@@ -481,10 +562,25 @@ async def _build_marking_pool(
     tenant_id: uuid.UUID,
     orders: list[FbsOrder],
 ) -> dict[str, Any]:
-    """Честный знак deficit for the whole supply, reusing the pool count logic
+    """Honest Sign deficit for the whole supply, reusing the pool count logic
     from marking_code_service (no ad-hoc query on MarkingCode here).
     """
-    needing_orders = [order for order in orders if _order_needs_marking_code(order)]
+    order_ids = [order.id for order in orders]
+    marked_order_ids: set[uuid.UUID] = set()
+    if order_ids:
+        marked_stmt = select(FbsOrderMarking.order_id).where(
+            FbsOrderMarking.tenant_id == tenant_id,
+            FbsOrderMarking.order_id.in_(order_ids),
+            FbsOrderMarking.kind == MARKING_KIND_SGTIN,
+            FbsOrderMarking.meta_status.in_(_WORKING_MARKING_STATUSES),
+        )
+        marked_order_ids = set((await session.execute(marked_stmt)).scalars().all())
+
+    needing_orders = [
+        order
+        for order in orders
+        if _order_needs_marking_code(order) and order.id not in marked_order_ids
+    ]
     if not needing_orders:
         return {"required": 0, "available": 0, "shortage": 0, "orders_without_code": []}
 

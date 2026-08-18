@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
-import { apiUrl } from '../../api'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { Alert, Box, Typography } from '@mui/material'
+import { apiUrl, getStoredToken } from '../../api'
 import { useAuth } from '../../hooks/useAuth'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import {
+  firstAllowedSellerPath,
+  resolveSellerPermissions,
+} from '../../utils/sellerPermissions'
 import { ProfileLoadingScreen } from '../../screens/ProfileLoadingScreen'
 import { PublicAuthScreen } from '../../screens/PublicAuthScreen'
 import { SellerDocumentsScreen } from '../../screens/v2/SellerDocumentsScreen'
@@ -15,14 +20,25 @@ import { SellerLayout } from './SellerLayout'
 
 type InboundSummaryRow = {
   id: string
+  waybill_number?: string | null
+  warehouse_id: string
+  warehouse_name?: string | null
   status: string
+  operation_type?: string | null
   line_count: number
+  goods_qty_total?: number
   planned_delivery_date: string | null
+  planned_box_count?: number | null
 }
 
 type WarehouseRow = { id: string; name: string; code: string }
 
-export function SellerApp() {
+type SellerAppProps = {
+  navigationBasePath?: string
+}
+
+export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
+  const location = useLocation()
   const {
     token,
     me,
@@ -52,13 +68,34 @@ export function SellerApp() {
     [],
   )
   const [mpUnloadSummaries, setMpUnloadSummaries] = useState<
-    { id: string; status: string; line_count: number; created_at?: string }[]
+    {
+      id: string
+      status: string
+      line_count: number
+      goods_qty_total?: number
+      warehouse_id?: string
+      warehouse_name?: string | null
+      planned_shipment_date?: string | null
+      created_at?: string
+    }[]
   >([])
 
   const authHeaders = useCallback(
     (t: string) => ({ Authorization: `Bearer ${t}` }),
     [],
   )
+  const sellerPath = useCallback(
+    (path: string) => `${navigationBasePath}${path}`,
+    [navigationBasePath],
+  )
+
+  useEffect(() => {
+    const previousTitle = document.title
+    document.title = 'WMS · Селлер'
+    return () => {
+      document.title = previousTitle
+    }
+  }, [])
 
   const refreshWarehouses = useCallback(
     async (t: string) => {
@@ -217,6 +254,17 @@ export function SellerApp() {
 
   const rootElement = (() => {
     if (!token) {
+      const hasFulfillmentToken = Boolean(getStoredToken('fulfillment'))
+      if (hasFulfillmentToken && location.pathname !== '/') {
+        return (
+          <Box sx={{ p: 3 }} data-testid="ff-access-denied" data-task-id="R02-F14">
+            <Typography variant="h5" gutterBottom data-task-id="R02-F14">
+              Нет доступа
+            </Typography>
+            <Typography data-task-id="R02-F14">Нет доступа к этому разделу.</Typography>
+          </Box>
+        )
+      }
       return (
         <PublicAuthScreen
           variant="seller"
@@ -237,6 +285,12 @@ export function SellerApp() {
       return null
     }
     const catalogScopeKey = me.active_seller_id ?? me.seller_id ?? 'none'
+    const sellerPermissions = resolveSellerPermissions(me.seller_permissions)
+    const accessDenied = (
+      <Alert severity="warning" data-testid="seller-access-denied">
+        Нет доступа к этому разделу. Обратитесь к администратору селлера.
+      </Alert>
+    )
     return (
       <SellerLayout
         onLogout={() => logout()}
@@ -244,8 +298,8 @@ export function SellerApp() {
         userLabel={me.email}
         userRoleLabel={
           me.active_seller_name && me.active_seller_name !== me.home_seller_name
-            ? `${me.role} · ${me.active_seller_name}`
-            : me.role
+            ? `Селлер · ${me.active_seller_name}`
+            : 'Селлер'
         }
         canManageSellerShops={Boolean(me.can_manage_seller_shops)}
         homeSellerId={me.home_seller_id ?? me.seller_id ?? null}
@@ -253,6 +307,8 @@ export function SellerApp() {
         delegatableShops={me.delegatable_shops ?? []}
         switchableShops={me.switchable_shops ?? []}
         shopsBusy={shopsBusy}
+        permissions={sellerPermissions}
+        navigationBasePath={navigationBasePath}
         {...(me.can_manage_seller_shops ||
         (me.switchable_shops?.length ?? 0) > 1
           ? {
@@ -263,138 +319,166 @@ export function SellerApp() {
           : {})}
       >
         <Routes>
-          <Route path="/" element={<Navigate to="/documents" replace />} />
+          <Route
+            path="/"
+            element={<Navigate to={sellerPath(firstAllowedSellerPath(sellerPermissions))} replace />}
+          />
           <Route
             path="/documents"
             element={
-              <SellerDocumentsScreen
-                key={catalogScopeKey}
-                busy={opsBusy}
-                catalogScopeKey={catalogScopeKey}
-                error={opsError}
-                token={token}
-                authHeaders={authHeaders}
-                warehouseId={selectedWarehouseId ?? warehouses[0]?.id ?? null}
-                inboundSummaries={inboundSummaries}
-                mpUnloadSummaries={mpUnloadSummaries}
-                onCreateCorrection={() =>
-                  setOpsError(
-                    'Акт расхождений: будет реализован отдельным документом на следующем этапе.',
-                  )
-                }
-                onCreateMpUnload={async () => {
-                  if (!token) {
-                    return null
-                  }
-                  const wid = selectedWarehouseId ?? warehouses[0]?.id
-                  if (!wid) {
-                    setOpsError('Склад ФФ не найден.')
-                    return null
-                  }
-                  setOpsBusy(true)
-                  setOpsError(null)
-                  try {
-                    const res = await fetch(
-                      apiUrl('/operations/marketplace-unload-requests/seller'),
-                      {
-                        method: 'POST',
-                        headers: {
-                          ...authHeaders(token),
-                          'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ warehouse_id: wid }),
-                      },
+              sellerPermissions.documents ? (
+                <SellerDocumentsScreen
+                  key={catalogScopeKey}
+                  busy={opsBusy}
+                  catalogScopeKey={catalogScopeKey}
+                  error={opsError}
+                  token={token}
+                  authHeaders={authHeaders}
+                  warehouseId={selectedWarehouseId ?? warehouses[0]?.id ?? null}
+                  inboundSummaries={inboundSummaries}
+                  mpUnloadSummaries={mpUnloadSummaries}
+                  onRefreshInboundList={async () => {
+                    if (token) {
+                      await refreshInboundList(token)
+                    }
+                  }}
+                  onCreateCorrection={() =>
+                    setOpsError(
+                      'Акт расхождений: будет реализован отдельным документом на следующем этапе.',
                     )
-                    if (!res.ok) {
-                      setOpsError(await readApiErrorMessage(res))
+                  }
+                  onCreateMpUnload={async () => {
+                    if (!token) {
                       return null
                     }
-                    const created = (await res.json()) as { id: string }
-                    await refreshMpUnloadList(token)
-                    return created.id
-                  } catch (e) {
-                    setOpsError(
-                      e instanceof Error ? e.message : 'Не удалось создать отгрузку на МП.',
-                    )
-                    return null
-                  } finally {
-                    setOpsBusy(false)
-                  }
-                }}
-                onRefreshMpUnloadList={async () => {
-                  if (token) {
-                    await refreshMpUnloadList(token)
-                  }
-                }}
-              />
+                    const wid = selectedWarehouseId ?? warehouses[0]?.id
+                    if (!wid) {
+                      setOpsError('Склад ФФ не найден.')
+                      return null
+                    }
+                    setOpsBusy(true)
+                    setOpsError(null)
+                    try {
+                      const res = await fetch(
+                        apiUrl('/operations/marketplace-unload-requests/seller'),
+                        {
+                          method: 'POST',
+                          headers: {
+                            ...authHeaders(token),
+                            'Content-Type': 'application/json',
+                          },
+                          body: JSON.stringify({ warehouse_id: wid }),
+                        },
+                      )
+                      if (!res.ok) {
+                        setOpsError(await readApiErrorMessage(res))
+                        return null
+                      }
+                      const created = (await res.json()) as { id: string }
+                      await refreshMpUnloadList(token)
+                      return created.id
+                    } catch (e) {
+                      setOpsError(
+                        e instanceof Error ? e.message : 'Не удалось создать отгрузку на МП.',
+                      )
+                      return null
+                    } finally {
+                      setOpsBusy(false)
+                    }
+                  }}
+                  onRefreshMpUnloadList={async () => {
+                    if (token) {
+                      await refreshMpUnloadList(token)
+                    }
+                  }}
+                />
+              ) : (
+                accessDenied
+              )
             }
           />
           <Route
             path="/inbound/new"
             element={
-              token ? (
+              token && sellerPermissions.documents ? (
                 <SellerInboundDraftScreen
                   key={catalogScopeKey}
                   token={token}
                   authHeaders={authHeaders}
                   warehouseId={selectedWarehouseId ?? (warehouses[0]?.id ?? null)}
+                  warehouses={warehouses}
                   onRefreshInboundList={() =>
                     token ? refreshInboundList(token) : undefined
                   }
                 />
-              ) : null
+              ) : (
+                accessDenied
+              )
             }
           />
           <Route
             path="/inbound/:requestId"
             element={
-              token ? (
+              token && sellerPermissions.documents ? (
                 <SellerInboundDraftScreen
                   key={catalogScopeKey}
                   token={token}
                   authHeaders={authHeaders}
                   warehouseId={selectedWarehouseId ?? (warehouses[0]?.id ?? null)}
+                  warehouses={warehouses}
                   onRefreshInboundList={() =>
                     token ? refreshInboundList(token) : undefined
                   }
                 />
-              ) : null
+              ) : (
+                accessDenied
+              )
             }
           />
           <Route
             path="/products"
             element={
-              token ? (
+              token && sellerPermissions.products ? (
                 <SellerProductsStockScreen
                   key={catalogScopeKey}
                   token={token}
                   authHeaders={authHeaders}
                 />
-              ) : null
+              ) : (
+                accessDenied
+              )
             }
           />
           <Route
             path="/honest-sign"
             element={
-              token ? (
+              token && sellerPermissions.honest_sign ? (
                 <SellerHonestSignScreen
                   key={catalogScopeKey}
                   token={token}
                   sellerId={me.active_seller_id ?? me.seller_id ?? ''}
                 />
-              ) : null
+              ) : (
+                accessDenied
+              )
             }
           />
           <Route
             path="/settings"
             element={
-              token ? (
+              token && (sellerPermissions.settings || sellerPermissions.staff) ? (
                 <SellerSettingsScreen
                   key={catalogScopeKey}
                   token={token}
                   authHeaders={authHeaders}
+                  permissions={sellerPermissions}
+                  onStaffChanged={async () => {
+                    await reloadMe()
+                  }}
                 />
-              ) : null
+              ) : (
+                accessDenied
+              )
             }
           />
           <Route
@@ -405,7 +489,10 @@ export function SellerApp() {
               ) : null
             }
           />
-          <Route path="*" element={<Navigate to="/documents" replace />} />
+          <Route
+            path="*"
+            element={<Navigate to={sellerPath(firstAllowedSellerPath(sellerPermissions))} replace />}
+          />
         </Routes>
       </SellerLayout>
     )
@@ -417,4 +504,3 @@ export function SellerApp() {
     </Routes>
   )
 }
-

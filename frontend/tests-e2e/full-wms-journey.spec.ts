@@ -7,6 +7,7 @@ import {
   waitForPostOk,
 } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
+import { setInboundPlannedBoxes } from './inbound-boxes-helpers';
 
 /**
  * Полный путь пользователя с нуля: регистрация → справочники → приёмка.
@@ -53,7 +54,7 @@ test.describe('Full WMS user journey', () => {
     expect(pr.ok()).toBeTruthy();
 
     await page.goto('/app/ops/inbound');
-    await Promise.all([
+    const [createRes] = await Promise.all([
       waitForPostOk(
         page,
         '/api/operations/inbound-intake-requests',
@@ -61,6 +62,8 @@ test.describe('Full WMS user journey', () => {
       ),
       page.getByTestId('inbound-create-submit').click(),
     ]);
+    const requestId = String(((await createRes.json()) as { id: string }).id);
+    await setInboundPlannedBoxes(page.request, h, requestId, 1);
     await expect(page.getByTestId('inbound-detail-status')).toContainText('draft');
 
     await page
@@ -116,7 +119,7 @@ test.describe('Full WMS user journey', () => {
       .getByTestId('inbound-movements-list')
       .getByTestId('inbound-movement-row');
     await expect(
-      movementsAfterPost.filter({ hasText: '+5 · stock_transfer_in' }),
+      movementsAfterPost.filter({ hasText: '+5 · Перемещение: принято' }),
     ).toHaveCount(1);
 
     const invRow = page
@@ -163,7 +166,7 @@ test.describe('Full WMS user journey', () => {
     expect(pr.ok()).toBeTruthy();
 
     await page.goto('/app/ops/inbound');
-    await Promise.all([
+    const [createRes] = await Promise.all([
       waitForPostOk(
         page,
         '/api/operations/inbound-intake-requests',
@@ -171,6 +174,8 @@ test.describe('Full WMS user journey', () => {
       ),
       page.getByTestId('inbound-create-submit').click(),
     ]);
+    const requestId = String(((await createRes.json()) as { id: string }).id);
+    await setInboundPlannedBoxes(page.request, h, requestId, 1);
 
     await page
       .getByTestId('inbound-line-product')

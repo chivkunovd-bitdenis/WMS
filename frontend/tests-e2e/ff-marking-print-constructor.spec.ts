@@ -97,6 +97,10 @@ test('FF packaging: marking print constructor shortage and pairs preview', async
   await page.getByTestId('ff-packaging-create-open').click()
   await page.getByTestId('ff-packaging-create-warehouse').click()
   await page.getByRole('option', { name: 'WH Short' }).click()
+  await page.getByTestId('ff-packaging-create-location').click()
+  await page.getByRole('option', { name: 'Сортировка' }).click()
+  await expect(page.getByTestId('ff-packaging-create-row')).toBeVisible()
+  await page.locator('[data-testid^="ff-packaging-create-row-select-"]').first().click()
   await page.getByTestId(`ff-packaging-create-qty-${productId}`).fill('3')
   await Promise.all([
     page.waitForResponse(
@@ -153,5 +157,5 @@ test('FF packaging: marking print constructor shortage and pairs preview', async
   expect(printHtml).not.toContain('class="tail"')
 
   await expect(page.getByText('напечатано 2 / нужно 3')).toBeVisible()
-  await expect(page.getByText(/дост\.\s+\d+\s+в пуле/)).toBeVisible()
+  await expect(page.getByText(/в пуле\s+\d+/)).toBeVisible()
 })

@@ -1,0 +1,216 @@
+{
+  "base": "https://web-production-9e7c1.up.railway.app",
+  "deploymentId": "138bef26-9e25-4665-84f0-b26116d623c0",
+  "commit": "c0f00262b10528d8198d24c64da14e36ef98d8ce",
+  "checkedAt": "2026-08-14T05:53:04.327Z",
+  "verdict": "PASS",
+  "assets": {
+    "root": [
+      "assets/ff-CX6e3HhU.js"
+    ],
+    "seller": [
+      "assets/seller-ObuAi1h7.js"
+    ]
+  },
+  "checks": [
+    {
+      "name": "01-root-ff-login",
+      "url": "https://web-production-9e7c1.up.railway.app/",
+      "title": "WMS · Фулфилмент",
+      "bodyText": "WMS · Портал фулфилмента\n\nРегистрация организации — для первого администратора. Аккаунты селлеров создаёт админ фулфилмента.\n\nВход\nEmail *\nEmail *\nПароль\nПароль\n\nТолько сотрудники фулфилмента. Селлеры входят на /seller/ (кнопка ниже).\n\nВойти\nВход для селлера (портал /seller/)Регистрация организации (первый админ)",
+      "counts": {
+        "loginForm": 1,
+        "appFrame": 0,
+        "appTopbar": 0,
+        "ffAccessDenied": 0,
+        "sellerProductsTable": 0,
+        "navSellerProducts": 0,
+        "goToSellerPortal": 1
+      },
+      "storage": {
+        "ff": null,
+        "seller": null,
+        "legacy": null
+      }
+    },
+    {
+      "name": "02-click-seller-link",
+      "url": "https://web-production-9e7c1.up.railway.app/seller/",
+      "title": "WMS · Селлер",
+      "bodyText": "WMS · Портал селлера\n\nВход для селлера. Регистрация недоступна — доступ выдаёт администратор вашего фулфилмента.\n\nВход\nEmail *\nEmail *\nПароль\nПароль\n\nПервый вход: оставьте пароль пустым и нажмите «Войти», затем задайте пароль.\n\nВойти",
+      "counts": {
+        "loginForm": 1,
+        "appFrame": 0,
+        "appTopbar": 0,
+        "ffAccessDenied": 0,
+        "sellerProductsTable": 0,
+        "navSellerProducts": 0,
+        "goToSellerPortal": 0
+      },
+      "storage": {
+        "ff": null,
+        "seller": null,
+        "legacy": null
+      }
+    },
+    {
+      "name": "03-seller-products-with-ff-token-direct",
+      "url": "https://web-production-9e7c1.up.railway.app/seller/products",
+      "title": "WMS · Селлер",
+      "bodyText": "WMS · Портал селлера\n\nВход для селлера. Регистрация недоступна — доступ выдаёт администратор вашего фулфилмента.\n\nВход\nEmail *\nEmail *\nПароль\nПароль\n\nПервый вход: оставьте пароль пустым и нажмите «Войти», затем задайте пароль.\n\nВойти",
+      "counts": {
+        "loginForm": 1,
+        "appFrame": 0,
+        "appTopbar": 0,
+        "ffAccessDenied": 0,
+        "sellerProductsTable": 0,
+        "navSellerProducts": 0,
+        "goToSellerPortal": 0
+      },
+      "storage": {
+        "ff": "dummy-ff-token-after-c0f0026-direct",
+        "seller": null,
+        "legacy": null
+      }
+    },
+    {
+      "name": "04-seller-products-with-ff-token-client-route",
+      "url": "https://web-production-9e7c1.up.railway.app/seller/products",
+      "title": "WMS · Селлер",
+      "bodyText": "WMS · Портал селлера\n\nВход для селлера. Регистрация недоступна — доступ выдаёт администратор вашего фулфилмента.\n\nВход\nEmail *\nEmail *\nПароль\nПароль\n\nПервый вход: оставьте пароль пустым и нажмите «Войти», затем задайте пароль.\n\nВойти",
+      "counts": {
+        "loginForm": 1,
+        "appFrame": 0,
+        "appTopbar": 0,
+        "ffAccessDenied": 0,
+        "sellerProductsTable": 0,
+        "navSellerProducts": 0,
+        "goToSellerPortal": 0
+      },
+      "storage": {
+        "ff": "dummy-ff-token-after-c0f0026-client-route",
+        "seller": null,
+        "legacy": null
+      }
+    },
+    {
+      "name": "05-ff-reception-with-seller-token",
+      "url": "https://web-production-9e7c1.up.railway.app/app/ff/reception",
+      "title": "WMS · Фулфилмент",
+      "bodyText": "WMS · Портал фулфилмента\n\nРегистрация организации — для первого администратора. Аккаунты селлеров создаёт админ фулфилмента.\n\nВход\nEmail *\nEmail *\nПароль\nПароль\n\nТолько сотрудники фулфилмента. Селлеры входят на /seller/ (кнопка ниже).\n\nВойти\nВход для селлера (портал /seller/)Регистрация организации (первый админ)",
+      "counts": {
+        "loginForm": 1,
+        "appFrame": 0,
+        "appTopbar": 0,
+        "ffAccessDenied": 0,
+        "sellerProductsTable": 0,
+        "navSellerProducts": 0,
+        "goToSellerPortal": 1
+      },
+      "storage": {
+        "ff": null,
+        "seller": "dummy-seller-token-after-c0f0026",
+        "legacy": null
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "navigation",
+      "url": "https://web-production-9e7c1.up.railway.app/",
+      "ts": "2026-08-14T05:52:46.470Z"
+    },
+    {
+      "type": "navigation",
+      "url": "https://web-production-9e7c1.up.railway.app/",
+      "ts": "2026-08-14T05:52:47.217Z"
+    },
+    {
+      "type": "navigation",
+      "url": "https://web-production-9e7c1.up.railway.app/seller/",
+      "ts": "2026-08-14T05:52:48.610Z"
+    },
+    {
+      "type": "navigation",
+      "url": "https://web-production-9e7c1.up.railway.app/seller/",
+      "ts": "2026-08-14T05:52:48.934Z"
+    },
+    {
+      "type": "navigation",
+      "url": "https://web-production-9e7c1.up.railway.app/",
+      "ts": "2026-08-14T05:52:50.022Z"
+    },
+    {
+      "type": "navigation",
+      "url": "https://web-production-9e7c1.up.railway.app/",
+      "ts": "2026-08-14T05:52:50.341Z"
+    },
+    {
+      "type": "navigation",
+      "url": "https://web-production-9e7c1.up.railway.app/seller/products",
+      "ts": "2026-08-14T05:52:51.708Z"
+    },
+    {
+      "type": "navigation",
+      "url": "https://web-production-9e7c1.up.railway.app/seller/products",
+      "ts": "2026-08-14T05:52:52.032Z"
+    },
+    {
+      "type": "navigation",
+      "url": "https://web-production-9e7c1.up.railway.app/",
+      "ts": "2026-08-14T05:52:55.081Z"
+    },
+    {
+      "type": "navigation",
+      "url": "https://web-production-9e7c1.up.railway.app/",
+      "ts": "2026-08-14T05:52:55.391Z"
+    },
+    {
+      "type": "console",
+      "level": "error",
+      "text": "Failed to load resource: the server responded with a status of 401 ()",
+      "ts": "2026-08-14T05:52:55.576Z"
+    },
+    {
+      "type": "navigation",
+      "url": "https://web-production-9e7c1.up.railway.app/seller/products",
+      "ts": "2026-08-14T05:52:56.572Z"
+    },
+    {
+      "type": "navigation",
+      "url": "https://web-production-9e7c1.up.railway.app/seller/products",
+      "ts": "2026-08-14T05:52:56.856Z"
+    },
+    {
+      "type": "navigation",
+      "url": "https://web-production-9e7c1.up.railway.app/seller/products",
+      "ts": "2026-08-14T05:52:57.246Z"
+    },
+    {
+      "type": "navigation",
+      "url": "https://web-production-9e7c1.up.railway.app/",
+      "ts": "2026-08-14T05:52:58.753Z"
+    },
+    {
+      "type": "navigation",
+      "url": "https://web-production-9e7c1.up.railway.app/",
+      "ts": "2026-08-14T05:52:59.119Z"
+    },
+    {
+      "type": "console",
+      "level": "error",
+      "text": "Failed to load resource: the server responded with a status of 401 ()",
+      "ts": "2026-08-14T05:52:59.294Z"
+    },
+    {
+      "type": "navigation",
+      "url": "https://web-production-9e7c1.up.railway.app/app/ff/reception",
+      "ts": "2026-08-14T05:53:00.539Z"
+    },
+    {
+      "type": "navigation",
+      "url": "https://web-production-9e7c1.up.railway.app/app/ff/reception",
+      "ts": "2026-08-14T05:53:00.838Z"
+    }
+  ]
+}

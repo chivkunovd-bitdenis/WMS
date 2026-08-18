@@ -327,7 +327,9 @@ export function SellerMarketplaceUnloadDialog({
         }
         const available = stockByProductId.get(productId)?.available ?? 0
         if (qty > available) {
-          setModalError(`Недостаточно остатка: доступно ${available}.`)
+          setModalError(
+            'Недостаточно свободного FBO остатка. Уменьшите количество или освободите резерв/FBS-пул.',
+          )
           setModalBusy(false)
           return
         }
@@ -568,7 +570,7 @@ export function SellerMarketplaceUnloadDialog({
               <TableCell sx={{ width: 120, pr: 2 }}>Артикул WB</TableCell>
               <TableCell sx={{ pl: 2 }}>Наименование</TableCell>
               <TableCell align="right" sx={{ width: 110 }}>
-                Доступно
+                Доступно FBO
               </TableCell>
               <TableCell align="right" sx={{ width: 120 }}>
                 К отгрузке
@@ -634,7 +636,9 @@ export function SellerMarketplaceUnloadDialog({
                           return
                         }
                         if (v > available) {
-                          setModalError(`Недостаточно остатка: доступно ${available}.`)
+                          setModalError(
+                            'Недостаточно свободного FBO остатка. Уменьшите количество или освободите резерв/FBS-пул.',
+                          )
                           return
                         }
                         if (v !== ln.quantity) {
@@ -804,9 +808,10 @@ export function SellerMarketplaceUnloadDialog({
         testIdPrefix="seller-mp-picker"
         qtyColumnLabel="К отгрузке"
         showAvailableColumn
+        availableColumnLabel="Доступно FBO"
         getAvailable={pickerGetAvailable}
         filterRow={pickerFilterRow}
-        emptyMessage="Нет товаров с остатком на складе ФФ."
+        emptyMessage="Нет свободного FBO остатка для отгрузки."
         onClose={() => setPickerOpen(false)}
         onApply={applyPicker}
       />

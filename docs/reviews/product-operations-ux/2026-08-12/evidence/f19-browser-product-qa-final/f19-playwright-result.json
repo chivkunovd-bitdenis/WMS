@@ -1,0 +1,620 @@
+{
+  "verdict": "BROWSER_PRODUCT_QA_PASSED",
+  "startedAt": "2026-08-13T15:19:57.924Z",
+  "finishedAt": "2026-08-13T15:20:06.569Z",
+  "ids": {
+    "suffix": "f19-pw-1786634397925",
+    "adminEmail": "ff-f19-pw-1786634397925@example.com",
+    "sellerEmail": "seller-f19-pw-1786634397925@example.com",
+    "sellerId": "41955727-a0b1-4ea4-afb2-eb8a5ec6a93e",
+    "warehouseId": "c546dc62-b88e-4899-9795-a50fc9478b6b",
+    "ordinaryRequestId": "960ac400-8dc0-44e2-ad67-9d2e1917f244",
+    "returnRequestId": "5fe92546-58e6-43bf-aa4a-d5584a81519f",
+    "ordinarySku": "sku-ordinary-f19-pw-1786634397925",
+    "ordinaryWb": "wb-ordinary-f19-pw-1786634397925",
+    "plannedSku": "sku-planned-f19-pw-1786634397925",
+    "plannedWb": "wb-planned-f19-pw-1786634397925",
+    "factSku": "sku-fact-f19-pw-1786634397925",
+    "factWb": "wb-fact-f19-pw-1786634397925",
+    "pickerSku": "sku-picker-f19-pw-1786634397925",
+    "pickerWb": "wb-picker-f19-pw-1786634397925",
+    "manualSku": "sku-created-f19-pw-1786634397925",
+    "manualWb": "wb-created-f19-pw-1786634397925",
+    "missingSku": "sku-no-wb-f19-pw-1786634397925",
+    "productIds": {
+      "ordinary": "f0ccddf1-32ab-40ef-8420-a1ca4a1b1a57",
+      "planned": "5883f67d-3c84-4d5e-bdb2-ebd02333376b",
+      "fact": "627b420d-b275-46d3-85f1-05bec3168f4a",
+      "picker": "2672edbf-2c55-4637-958f-d31b1a589552",
+      "missing": "acfa33ee-b088-4899-9ef2-ad9884fd3b01"
+    }
+  },
+  "evidence": [
+    {
+      "kind": "visible",
+      "label": "login form"
+    },
+    {
+      "kind": "fill",
+      "label": "FF admin email",
+      "value": "ff-f19-pw-1786634397925@example.com"
+    },
+    {
+      "kind": "fill",
+      "label": "FF admin password",
+      "value": "password123"
+    },
+    {
+      "kind": "click",
+      "label": "FF admin login button"
+    },
+    {
+      "kind": "visible",
+      "label": "FF reception nav"
+    },
+    {
+      "kind": "screenshot",
+      "file": "pw-01-login-reception-ready.png"
+    },
+    {
+      "kind": "click",
+      "label": "nav reception for ordinary inbound"
+    },
+    {
+      "kind": "visible",
+      "label": "reception page for ordinary inbound"
+    },
+    {
+      "kind": "visible",
+      "label": "queue row ordinary inbound"
+    },
+    {
+      "kind": "click",
+      "label": "open ordinary inbound"
+    },
+    {
+      "kind": "visible",
+      "label": "ordinary inbound doc root"
+    },
+    {
+      "kind": "assert",
+      "label": "ordinary inbound hides return autoprint",
+      "ordinaryOperation": "Тип: Поставка",
+      "ordinarySwitchCount": 0,
+      "panelText": "Скан приёмки\n\nСкан штрихкода товара добавляет +1 к принятому количеству. Скан в короб — только в карточке короба.\n\nШтрихкод товара\nШтрихкод товара\nСкан\nДобавить факт\nЗагрузить по накладной\nСоздать короб\nЗавершить приёмку\nЕсть расхождения с планом — при завершении потребуется подтверждение."
+    },
+    {
+      "kind": "screenshot",
+      "file": "pw-02-ordinary-inbound-no-autoprint-switch.png"
+    },
+    {
+      "kind": "click",
+      "label": "close FF doc dialog"
+    },
+    {
+      "kind": "hidden",
+      "label": "doc dialog closed"
+    },
+    {
+      "kind": "click",
+      "label": "nav reception for return inbound"
+    },
+    {
+      "kind": "visible",
+      "label": "reception page for return inbound"
+    },
+    {
+      "kind": "visible",
+      "label": "queue row return inbound"
+    },
+    {
+      "kind": "click",
+      "label": "open return inbound"
+    },
+    {
+      "kind": "visible",
+      "label": "return inbound doc root"
+    },
+    {
+      "kind": "visible",
+      "label": "return autoprint switch"
+    },
+    {
+      "kind": "assert",
+      "label": "return inbound switch visible and checked",
+      "returnOperation": "Тип: Возврат",
+      "switchChecked": true
+    },
+    {
+      "kind": "screenshot",
+      "file": "pw-03-return-inbound-autoprint-enabled.png"
+    },
+    {
+      "kind": "click",
+      "label": "open manual picker"
+    },
+    {
+      "kind": "visible",
+      "label": "manual picker"
+    },
+    {
+      "kind": "fill",
+      "label": "picker search sku",
+      "value": "sku-picker-f19-pw-1786634397925"
+    },
+    {
+      "kind": "fill",
+      "label": "picker qty",
+      "value": "1"
+    },
+    {
+      "kind": "click",
+      "label": "apply picker"
+    },
+    {
+      "kind": "hidden",
+      "label": "picker closed"
+    },
+    {
+      "kind": "visible",
+      "label": "line row for sku-picker-f19-pw-1786634397925"
+    },
+    {
+      "kind": "assert",
+      "label": "manual picker does not auto-print",
+      "pickerActual": "1",
+      "lastPrint": "__NO_PRINT__"
+    },
+    {
+      "kind": "click",
+      "label": "open manual create"
+    },
+    {
+      "kind": "visible",
+      "label": "manual product dialog"
+    },
+    {
+      "kind": "fill",
+      "label": "manual product name",
+      "value": "F19 Manual Created Product"
+    },
+    {
+      "kind": "fill",
+      "label": "manual product sku",
+      "value": "sku-created-f19-pw-1786634397925"
+    },
+    {
+      "kind": "fill",
+      "label": "manual product barcode",
+      "value": "wb-created-f19-pw-1786634397925"
+    },
+    {
+      "kind": "fill",
+      "label": "manual length",
+      "value": "100"
+    },
+    {
+      "kind": "fill",
+      "label": "manual width",
+      "value": "80"
+    },
+    {
+      "kind": "fill",
+      "label": "manual height",
+      "value": "40"
+    },
+    {
+      "kind": "click",
+      "label": "manual product submit"
+    },
+    {
+      "kind": "hidden",
+      "label": "manual product dialog closed"
+    },
+    {
+      "kind": "visible",
+      "label": "line row for sku-created-f19-pw-1786634397925"
+    },
+    {
+      "kind": "assert",
+      "label": "manual create does not auto-print",
+      "manualActual": "1",
+      "lastPrint": "__NO_PRINT__"
+    },
+    {
+      "kind": "screenshot",
+      "file": "pw-04-return-manual-actions-no-print.png"
+    },
+    {
+      "kind": "fill",
+      "label": "scan good WB barcode",
+      "value": "wb-fact-f19-pw-1786634397925"
+    },
+    {
+      "kind": "click",
+      "label": "submit good scan"
+    },
+    {
+      "kind": "visible",
+      "label": "line row for sku-fact-f19-pw-1786634397925"
+    },
+    {
+      "kind": "assert",
+      "label": "successful scan increments +1 and captures WB print payload",
+      "factActual": "1",
+      "printPayload": "F19 Fact Product\nwb-fact-f19-pw-1786634397925",
+      "printContainsWb": true,
+      "printContainsSku": false,
+      "printDialogCount": 0
+    },
+    {
+      "kind": "screenshot",
+      "file": "pw-05-return-successful-scan-print-payload.png"
+    },
+    {
+      "kind": "fill",
+      "label": "scan missing WB by SKU",
+      "value": "sku-no-wb-f19-pw-1786634397925"
+    },
+    {
+      "kind": "click",
+      "label": "submit missing WB scan"
+    },
+    {
+      "kind": "visible",
+      "label": "missing WB snackbar"
+    },
+    {
+      "kind": "visible",
+      "label": "line row for sku-no-wb-f19-pw-1786634397925"
+    },
+    {
+      "kind": "assert",
+      "label": "missing WB fails closed without SKU fallback",
+      "missingError": "У товара нет ШК WB для печати.",
+      "missingActual": "1",
+      "missingPrintPayload": "__NO_PRINT__",
+      "missingDialogCount": 0
+    },
+    {
+      "kind": "screenshot",
+      "file": "pw-06-return-missing-wb-fails-closed.png"
+    },
+    {
+      "kind": "assert",
+      "label": "1280px visual geometry compact",
+      "geometry": {
+        "viewportWidth": 1280,
+        "viewportHeight": 900,
+        "bodyScrollWidth": 1280,
+        "documentScrollWidth": 1280,
+        "panel": {
+          "width": 1214,
+          "height": 230.875,
+          "left": 33,
+          "right": 1247,
+          "top": 686.453125,
+          "bottom": 917.328125
+        },
+        "root": {
+          "width": 1248,
+          "height": 870.328125,
+          "left": 16,
+          "right": 1264,
+          "top": 80,
+          "bottom": 950.328125
+        },
+        "table": {
+          "width": 1214,
+          "height": 386.609375,
+          "left": 33,
+          "right": 1247,
+          "top": 283.84375,
+          "bottom": 670.453125
+        },
+        "visibleTextSample": "Портал ФФ\nff-f19-pw-1786634397925@example.com · администратор\n2\nВыйти\nДашборд\nОтгрузки на МП\nFBS\nПриёмка\nСортировка\nУпаковка\nЯчейки\nСеллеры\nКаталог\nИнвентаризация\nЧестный знак\nНастройки\nПриёмка\n\nПриёмки до завершения поштучного пересчёта. После «Завершить пересчёт» заявка уходит в сортировку, остаток появляется у ФФ.\n\n№ документа\tСеллер\tСостав\tКороба\tСтатус\nПоставка № 000001\tF19 Seller f19-pw-1786634397925\t1 поз. · от 1 ед.\t0 коробов\t\nПередано\n\nВозврат № 000002\tF19 Seller f19-pw-1786634397925\t1 поз. · от 1 ед.\t0 коробов\t\nПередано\nДокумент\nПриёмка\n№000002\n\nТип: Возврат\n\nСеллер: F19 Seller f19-pw-1786634397925\n\nПринято: 4 из 1\n\nКороба: 0\n\nРасхождения: 5\n\nДата приёмки (план) *\nDD.\nMM.\nYYYY\nДата приёмки (план) *\nПриёмка\nЗавершить приёмку\nПечать накладной\nЗакрыть\nТовар\tГабариты\tПлан\tПринято\n\n\nF19 Planned Return Product\n\nSKU sku-planned-f19-pw-1786634397925\nШК wb-planned-f19-pw-1786634397925\n\t\n120×80×40 мм · 0.38 л\n\t\n\n1\n\n\t\n\n0\n\nНедостача 1\n\n\n\nF19 Picker Product\n\nSKU sku-picker-f19-pw-1786634397925\nШК wb-picker-f19-pw-1786634397925\n\t\n120×80×40 мм · 0.38 л\n\t\n\n0\n\nДобавлено ФФ\n\t\n\n1\n\nИзлишек 1\n\n\n\nF19 Manual Created Product\n\nSKU sku-created-f19-pw-1786634397925\nШК wb-created-f19-pw-1786634397925\n\t\n100×80×40 мм · 0.32 л\n\t\n\n0\n\nДобавлено ФФ\n\t\n\n1\n\nИзлишек 1\n\n\n\nF19 Fact Product\n\nSKU sku-fact-f19-pw-1786634397925\nШК wb-fact-f19-pw-1786634397925\n\t\n120×80×40 мм · 0.38 л\n\t\n\n0\n\nДобавлено ФФ\n\t\n\n1\n\nИзлишек 1\n\n\n\nF19 Missing WB Product\n\nSKU sku-no-wb-f19-pw-1786634397925\nШК —\n\t\n120×80×40 мм · 0.38 л\n\t\n\n0\n\nДобавлено ФФ\n\t\n\n1\n\nИзлишек 1\nСкан приёмки\n\nСкан штрихкода товара добавляет +1 к принятому количеству. Скан в короб — только в карточке короба.\n\nШтрихкод товара\nШтрихкод товара\nСкан\nДобавить факт\nПечатать ШК при скане\nЗагрузить по накладной\nСоздать короб\nЗавершить приёмку\nЕсть расхождения с планом — при завершении потребуется подтверждение.\nУ товара нет ШК WB для печати.",
+        "labels": [
+          "Передано",
+          "Передано",
+          "Передано",
+          "Передано",
+          "Дата приёмки (план) *",
+          "Приёмка",
+          "Приёмка",
+          "Штрихкод товара",
+          "Печатать ШК при скане"
+        ],
+        "buttonMetrics": [
+          {
+            "text": "2",
+            "width": 43,
+            "height": 43,
+            "left": 1130.03125,
+            "right": 1173.03125,
+            "top": 10.5,
+            "bottom": 53.5
+          },
+          {
+            "text": "Выйти",
+            "width": 66.96875,
+            "height": 33.59375,
+            "left": 1189.03125,
+            "right": 1256,
+            "top": 15.203125,
+            "bottom": 48.796875
+          },
+          {
+            "text": "Закрыть",
+            "width": 43,
+            "height": 43,
+            "left": 12,
+            "right": 55,
+            "top": 10.5,
+            "bottom": 53.5
+          },
+          {
+            "text": "Choose date",
+            "width": 43,
+            "height": 43,
+            "left": 237,
+            "right": 280,
+            "top": 169.34375,
+            "bottom": 212.34375
+          },
+          {
+            "text": "Завершить приёмку",
+            "width": 189.96875,
+            "height": 39.5625,
+            "left": 743.078125,
+            "right": 933.046875,
+            "top": 228.28125,
+            "bottom": 267.84375
+          },
+          {
+            "text": "Печать накладной",
+            "width": 199.546875,
+            "height": 39.5625,
+            "left": 941.046875,
+            "right": 1140.59375,
+            "top": 228.28125,
+            "bottom": 267.84375
+          },
+          {
+            "text": "Закрыть",
+            "width": 98.40625,
+            "height": 39.5625,
+            "left": 1148.59375,
+            "right": 1247,
+            "top": 228.28125,
+            "bottom": 267.84375
+          },
+          {
+            "text": "Печать ШК товара",
+            "width": 32.5,
+            "height": 32.5,
+            "left": 700.75,
+            "right": 733.25,
+            "top": 349.046875,
+            "bottom": 381.546875
+          },
+          {
+            "text": "Габариты",
+            "width": 40,
+            "height": 40,
+            "left": 885,
+            "right": 925,
+            "top": 345.296875,
+            "bottom": 385.296875
+          },
+          {
+            "text": "Править количество",
+            "width": 40,
+            "height": 40,
+            "left": 1199,
+            "right": 1239,
+            "top": 345.296875,
+            "bottom": 385.296875
+          },
+          {
+            "text": "Печать ШК товара",
+            "width": 32.5,
+            "height": 32.5,
+            "left": 700.75,
+            "right": 733.25,
+            "top": 415.96875,
+            "bottom": 448.46875
+          },
+          {
+            "text": "Габариты",
+            "width": 40,
+            "height": 40,
+            "left": 885,
+            "right": 925,
+            "top": 412.21875,
+            "bottom": 452.21875
+          },
+          {
+            "text": "Править количество",
+            "width": 40,
+            "height": 40,
+            "left": 1199,
+            "right": 1239,
+            "top": 412.21875,
+            "bottom": 452.21875
+          },
+          {
+            "text": "Печать ШК товара",
+            "width": 32.5,
+            "height": 32.5,
+            "left": 700.75,
+            "right": 733.25,
+            "top": 483.890625,
+            "bottom": 516.390625
+          },
+          {
+            "text": "Габариты",
+            "width": 40,
+            "height": 40,
+            "left": 885,
+            "right": 925,
+            "top": 480.140625,
+            "bottom": 520.140625
+          },
+          {
+            "text": "Править количество",
+            "width": 40,
+            "height": 40,
+            "left": 1199,
+            "right": 1239,
+            "top": 480.140625,
+            "bottom": 520.140625
+          },
+          {
+            "text": "Печать ШК товара",
+            "width": 32.5,
+            "height": 32.5,
+            "left": 700.75,
+            "right": 733.25,
+            "top": 551.8125,
+            "bottom": 584.3125
+          },
+          {
+            "text": "Габариты",
+            "width": 40,
+            "height": 40,
+            "left": 885,
+            "right": 925,
+            "top": 548.0625,
+            "bottom": 588.0625
+          },
+          {
+            "text": "Править количество",
+            "width": 40,
+            "height": 40,
+            "left": 1199,
+            "right": 1239,
+            "top": 548.0625,
+            "bottom": 588.0625
+          },
+          {
+            "text": "Печать ШК товара",
+            "width": 32.5,
+            "height": 32.5,
+            "left": 700.75,
+            "right": 733.25,
+            "top": 619.734375,
+            "bottom": 652.234375
+          },
+          {
+            "text": "Габариты",
+            "width": 40,
+            "height": 40,
+            "left": 885,
+            "right": 925,
+            "top": 615.984375,
+            "bottom": 655.984375
+          },
+          {
+            "text": "Править количество",
+            "width": 40,
+            "height": 40,
+            "left": 1199,
+            "right": 1239,
+            "top": 615.984375,
+            "bottom": 655.984375
+          },
+          {
+            "text": "Скан",
+            "width": 64,
+            "height": 67.125,
+            "left": 278,
+            "right": 342,
+            "top": 770.6875,
+            "bottom": 837.8125
+          },
+          {
+            "text": "Добавить факт",
+            "width": 128.140625,
+            "height": 67.125,
+            "left": 350,
+            "right": 478.140625,
+            "top": 770.6875,
+            "bottom": 837.8125
+          },
+          {
+            "text": "Создать товар",
+            "width": 32.5,
+            "height": 32.5,
+            "left": 486.140625,
+            "right": 518.640625,
+            "top": 770.6875,
+            "bottom": 803.1875
+          },
+          {
+            "text": "Загрузить по накладной",
+            "width": 188.859375,
+            "height": 67.125,
+            "left": 735.453125,
+            "right": 924.3125,
+            "top": 770.6875,
+            "bottom": 837.8125
+          },
+          {
+            "text": "Создать короб",
+            "width": 127.234375,
+            "height": 67.125,
+            "left": 932.3125,
+            "right": 1059.546875,
+            "top": 770.6875,
+            "bottom": 837.8125
+          },
+          {
+            "text": "Завершить приёмку",
+            "width": 162.453125,
+            "height": 67.125,
+            "left": 1067.546875,
+            "right": 1230,
+            "top": 770.6875,
+            "bottom": 837.8125
+          },
+          {
+            "text": "Close",
+            "width": 32.5,
+            "height": 32.5,
+            "left": 779.6171875,
+            "right": 812.1171875,
+            "top": 835.484375,
+            "bottom": 867.984375
+          }
+        ],
+        "technicalTextFound": false,
+        "duplicateButtonLabels": [
+          [
+            "Закрыть",
+            2
+          ],
+          [
+            "Завершить приёмку",
+            2
+          ],
+          [
+            "Печать ШК товара",
+            5
+          ],
+          [
+            "Габариты",
+            5
+          ],
+          [
+            "Править количество",
+            5
+          ]
+        ]
+      }
+    },
+    {
+      "kind": "screenshot",
+      "file": "pw-07-return-1280-visual-final.png"
+    }
+  ]
+}

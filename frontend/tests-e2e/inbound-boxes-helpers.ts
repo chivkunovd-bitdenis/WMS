@@ -157,15 +157,16 @@ export async function createSellerInboundDraftViaUi(
     waitForPostOk(page, INBOUND_API, (u) => !u.includes('/lines') && !u.includes('/submit')),
     page.getByTestId('seller-create-inbound').click(),
   ]);
-  await page.waitForURL(`**${sellerPath('/inbound/new')}`);
+  await page.waitForURL(`**${sellerPath('/inbound/new')}**`);
   await expect(page.getByTestId('seller-inbound-draft-form')).toBeVisible({ timeout: 20_000 });
 
   const planned = page.getByTestId('seller-inbound-planned-boxes');
   await planned.fill(opts.plannedBoxes);
   await Promise.all([
     waitForPatchOk(page, INBOUND_API, (u) => !u.includes('/lines')),
-    planned.blur(),
+    page.getByTestId('seller-inbound-save-draft').click(),
   ]);
+  await expect(page.getByTestId('seller-inbound-draft-ok')).toContainText('Заявка сохранена');
 
   await page.getByTestId('seller-inbound-add-products').click();
   await expect(page.getByTestId('seller-inbound-picker')).toBeVisible();
@@ -245,6 +246,21 @@ export type InboundRequestJson = {
   planned_box_count?: number | null;
 };
 
+export async function setInboundPlannedBoxes(
+  req: APIRequestContext,
+  headers: { Authorization: string },
+  rid: string,
+  plannedBoxes = 1,
+): Promise<void> {
+  const res = await req.patch(`${INBOUND_API}/${rid}`, {
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    data: { planned_box_count: plannedBoxes },
+  });
+  if (!res.ok()) {
+    throw new Error(`set planned boxes: ${res.status()} ${await res.text()}`);
+  }
+}
+
 /** Begin receiving on a submitted inbound (replaces legacy primary-accept). */
 export async function beginInboundReceiving(
   req: APIRequestContext,
@@ -252,24 +268,43 @@ export async function beginInboundReceiving(
   rid: string,
 ): Promise<void> {
   const base = `${INBOUND_API}/${rid}`;
-  const got = await req.get(base, { headers: adminHeaders });
+  let got = await req.get(base, { headers: adminHeaders });
   if (!got.ok()) {
     throw new Error(`inbound get: ${got.status()} ${await got.text()}`);
   }
-  const body = (await got.json()) as InboundRequestJson;
+  let body = (await got.json()) as InboundRequestJson;
+  if (body.status === 'draft') {
+    if (body.lines.length > 0 && (body.planned_box_count == null || body.planned_box_count < 1)) {
+      await setInboundPlannedBoxes(req, adminHeaders, rid, 1);
+      got = await req.get(base, { headers: adminHeaders });
+      if (!got.ok()) {
+        throw new Error(`inbound get after planned boxes: ${got.status()} ${await got.text()}`);
+      }
+      body = (await got.json()) as InboundRequestJson;
+    }
+    const submit = await req.post(`${base}/submit`, { headers: adminHeaders });
+    if (submit.ok()) {
+      got = await req.get(base, { headers: adminHeaders });
+      if (!got.ok()) {
+        throw new Error(`inbound get after submit: ${got.status()} ${await got.text()}`);
+      }
+      body = (await got.json()) as InboundRequestJson;
+    } else {
+      const beginDraft = await req.post(`${base}/begin-receiving`, { headers: adminHeaders });
+      if (!beginDraft.ok()) {
+        throw new Error(
+          `submit draft: ${submit.status()} ${await submit.text()}; begin receiving: ${beginDraft.status()} ${await beginDraft.text()}`,
+        );
+      }
+      return;
+    }
+  }
   if (body.status !== 'submitted') {
     return;
   }
-  const lineId = body.lines[0]?.id;
-  if (!lineId) {
-    throw new Error('inbound has no lines');
-  }
-  const patch = await req.patch(`${base}/lines/${lineId}/actual`, {
-    headers: { ...adminHeaders, 'Content-Type': 'application/json' },
-    data: { actual_qty: 0 },
-  });
-  if (!patch.ok()) {
-    throw new Error(`begin receiving: ${patch.status()} ${await patch.text()}`);
+  const begin = await req.post(`${base}/begin-receiving`, { headers: adminHeaders });
+  if (!begin.ok()) {
+    throw new Error(`begin receiving: ${begin.status()} ${await begin.text()}`);
   }
 }
 
@@ -464,6 +499,7 @@ export async function apiCreateSubmittedInbound(
 
 /** FF modal: create box, open fill, direct qty field, hide modal. */
 export async function ffInboundBoxAddManualQty(page: Page, quantity: number): Promise<void> {
+  await expandInboundPackages(page);
   const boxRows = page.getByTestId('ff-inbound-box-row');
   const boxCountBefore = await boxRows.count();
   await Promise.all([
@@ -484,6 +520,25 @@ export async function ffInboundBoxAddManualQty(page: Page, quantity: number): Pr
     page.getByTestId('ff-inbound-box-add-dismiss').click(),
   ]);
   await expect(page.getByTestId('ff-inbound-box-add-dialog')).toBeHidden();
+}
+
+export async function expandInboundPackages(page: Page): Promise<void> {
+  const panel = page.getByTestId('ff-inbound-boxes-panel');
+  if (!(await panel.isVisible().catch(() => false))) {
+    await page.getByTestId('ff-inbound-packages-toggle').click();
+  }
+  await expect(panel).toBeVisible();
+}
+
+export async function scanInboundReceiving(page: Page, barcode: string): Promise<void> {
+  await Promise.all([
+    waitForPostOk(page, INBOUND_API, (u) => u.includes('/receiving/scan')),
+    (async () => {
+      await page.getByTestId('ff-inbound-doc-root').click({ position: { x: 8, y: 8 } });
+      await page.keyboard.type(barcode);
+      await page.keyboard.press('Enter');
+    })(),
+  ]);
 }
 
 /** Set quantity for the first line in the active open box (blur saves via PUT). */

@@ -12,6 +12,7 @@ from sqlalchemy import select
 from app.api.auth import router as auth_router
 from app.api.background_jobs import router as background_jobs_router
 from app.api.discrepancy_acts import router as discrepancy_acts_router
+from app.api.fbs_kiz import router as fbs_kiz_router
 from app.api.fbs_marking import router as fbs_marking_router
 from app.api.fbs_orders import router as fbs_orders_router
 from app.api.fbs_print_assets import router as fbs_print_assets_router
@@ -28,6 +29,7 @@ from app.api.notifications import router as notifications_router
 from app.api.outbound_shipment import router as outbound_shipment_router
 from app.api.packaging_tasks import router as packaging_tasks_router
 from app.api.products import router as products_router
+from app.api.seller_staff_accounts import router as seller_staff_accounts_router
 from app.api.sellers import router as sellers_router
 from app.api.staff_accounts import router as staff_accounts_router
 from app.api.stock_transfer import router as stock_transfer_router
@@ -98,6 +100,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(staff_accounts_router)
+    app.include_router(seller_staff_accounts_router)
     app.include_router(tenant_settings_router)
     app.include_router(sellers_router)
     app.include_router(warehouses_router)
@@ -117,6 +120,7 @@ def create_app() -> FastAPI:
     app.include_router(background_jobs_router)
     app.include_router(fbs_orders_router)
     app.include_router(fbs_marking_router)
+    app.include_router(fbs_kiz_router)
     app.include_router(fbs_sellers_router)
     app.include_router(fbs_supplies_router)
     app.include_router(fbs_print_assets_router)

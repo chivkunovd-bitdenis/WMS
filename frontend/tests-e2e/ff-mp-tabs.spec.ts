@@ -3,6 +3,7 @@ import type { APIRequestContext, Page } from '@playwright/test'
 
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
+import { beginInboundReceiving } from './inbound-boxes-helpers'
 
 const MP_SELLER_NAME_TABS = 'Tabs Seller'
 const MP_SELLER_NAME_DRAFT_PKG = 'Draft Pkg Seller'
@@ -63,12 +64,6 @@ async function expectMpTabSelected(page: Page, tabTestId: string): Promise<void>
   await expect(page.getByTestId(tabTestId)).toHaveAttribute('aria-selected', 'true')
 }
 
-function formatDisplayDocumentNumber(documentNumber: string): string {
-  const counter = documentNumber.match(/(\d+)\s*$/)?.[1]
-  expect(counter).toBeTruthy()
-  return `№${counter!.padStart(6, '0')}`
-}
-
 async function postInboundLineToSorting(
   req: APIRequestContext,
   auth: { Authorization: string },
@@ -77,6 +72,7 @@ async function postInboundLineToSorting(
   lineId: string,
   qty: number,
 ): Promise<void> {
+  await beginInboundReceiving(req, auth, inboundId)
   const patchActual = await req.patch(`${baseIn}/${inboundId}/lines/${lineId}/actual`, {
     headers: { ...auth, 'Content-Type': 'application/json' },
     data: JSON.stringify({ actual_qty: qty }),
@@ -94,6 +90,7 @@ async function postInboundLineToStorage(
   lineId: string,
   qty: number,
 ): Promise<void> {
+  await beginInboundReceiving(req, auth, inboundId)
   const patchActual = await req.patch(`${baseIn}/${inboundId}/lines/${lineId}/actual`, {
     headers: { ...auth, 'Content-Type': 'application/json' },
     data: JSON.stringify({ actual_qty: qty }),
@@ -194,7 +191,7 @@ test('FF marketplace unload: tabs switch without losing document context', async
   const baseIn = `${e2eApi}/operations/inbound-intake-requests`
   const inbound = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const inboundId = String(((await inbound.json()) as { id: string }).id)
   const locLineRes = await page.request.post(`${baseIn}/${inboundId}/lines`, {
@@ -212,7 +209,7 @@ test('FF marketplace unload: tabs switch without losing document context', async
 
   const inboundSort = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const sortInboundId = String(((await inboundSort.json()) as { id: string }).id)
   const sortLineRes = await page.request.post(`${baseIn}/${sortInboundId}/lines`, {
@@ -245,26 +242,29 @@ test('FF marketplace unload: tabs switch without losing document context', async
     data: JSON.stringify({ planned_shipment_date: '2026-06-01' }),
   })
 
-  const pkgRes = await page.request.get(
-    `${e2eApi}/operations/packaging-tasks/by-unload/${mid}`,
-    { headers: auth },
+  const boxRes = await page.request.post(
+    `${e2eApi}/operations/marketplace-unload-requests/${mid}/boxes/batch`,
+    {
+      headers: auth,
+      data: JSON.stringify({ count: 1, box_preset: '60_40_40' }),
+    },
   )
+  expect(boxRes.ok(), await boxRes.text()).toBeTruthy()
+  const boxId = String(((await boxRes.json()) as { id: string }[])[0].id)
+  const boxLineRes = await page.request.post(
+    `${e2eApi}/operations/marketplace-unload-requests/${mid}/boxes/${boxId}/manual-line`,
+    {
+      headers: auth,
+      data: JSON.stringify({ product_id: productId, storage_location_id: locId, quantity: 2 }),
+    },
+  )
+  expect(boxLineRes.ok(), await boxLineRes.text()).toBeTruthy()
+
+  const pkgRes = await page.request.get(`${e2eApi}/operations/packaging-tasks/by-unload/${mid}`, {
+    headers: auth,
+  })
   expect(pkgRes.ok()).toBeTruthy()
-  const pkgBody = (await pkgRes.json()) as {
-    id: string
-    lines: { id: string; qty_need_pack: number }[]
-  }
-  const pkgLine = pkgBody.lines[0]
-  expect(pkgLine?.id).toBeTruthy()
-  if (pkgLine && pkgLine.qty_need_pack > 0) {
-    await page.request.post(
-      `${e2eApi}/operations/packaging-tasks/${pkgBody.id}/lines/${pkgLine.id}/pack`,
-      {
-        headers: auth,
-        data: JSON.stringify({ quantity: pkgLine.qty_need_pack }),
-      },
-    )
-  }
+  const pkgBody = (await pkgRes.json()) as { id: string }
   const pkgComplete = await page.request.post(
     `${e2eApi}/operations/packaging-tasks/${pkgBody.id}/complete`,
     { headers: auth, data: JSON.stringify({ acknowledge_all_packed: false }) },
@@ -284,34 +284,33 @@ test('FF marketplace unload: tabs switch without losing document context', async
   )
   await expect(page.getByTestId('ff-supplies-doc-dialog')).not.toContainText(unloadDocumentNumber)
   await expect(page.getByTestId('ff-mp-tab-products')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-tab-packaging')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-tab-picking')).toHaveCount(0)
   await expect(page.getByTestId('ff-mp-tab-boxes')).toHaveCount(0)
   await expect(page.getByTestId('ff-mp-tab-final')).toHaveCount(0)
-  await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-boxes')).toHaveCount(0)
   await expectMpTabSelected(page, 'ff-mp-tab-products')
-  await expect(page.getByTestId('ff-mp-ship')).toBeDisabled()
+  await expect(page.getByTestId('ff-mp-next-step')).toContainText('Упаковка')
+  await expect(page.getByTestId('ff-mp-ship')).toHaveCount(0)
 
   await expect(page.getByTestId('ff-mp-shipment-summary')).toBeVisible()
   await expect(page.getByTestId('ff-mp-shipment-summary-planned')).toHaveText('2')
-  await expect(page.getByTestId('ff-mp-shipment-summary-distributed')).toHaveText('0')
-  await expect(page.getByTestId('ff-mp-shipment-summary-remaining')).toHaveText('2')
-  await expect(page.getByTestId('ff-mp-shipment-summary-remaining')).toHaveCSS(
-    'color',
-    'rgb(237, 108, 2)',
-  )
+  await expect(page.getByTestId('ff-mp-shipment-summary-distributed')).toHaveText('2')
+  await expect(page.getByTestId('ff-mp-shipment-summary-remaining')).toHaveText('0')
   await expect(page.getByTestId('ff-mp-shipment-summary-packed')).toHaveText('2/2')
 
   await page.getByTestId('ff-mp-tab-packaging').click()
   await expect(page.getByTestId('ff-mp-tab-packaging-panel')).toBeVisible()
   await expectMpTabSelected(page, 'ff-mp-tab-packaging')
   await expect(page.getByTestId('ff-mp-packaging-continue')).toHaveCount(0)
-  await expect(page.getByTestId('ff-packaging-task-status')).toHaveCount(0)
-  await expect(page.getByTestId('ff-mp-boxes')).toHaveCount(0)
-
+  await expect(page.getByTestId('ff-mp-tab-packaging-panel')).toContainText('Готово 2 / Осталось 0')
+  await expect(page.getByTestId('ff-mp-boxes')).not.toBeVisible()
+  await page.getByTestId('ff-mp-boxes-summary').click()
+  await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-ship')).toBeEnabled()
   await page.getByTestId('ff-mp-tab-products').click()
   await expect(page.getByTestId('ff-supplies-doc-lines')).toBeVisible()
-  await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
   await expectMpTabSelected(page, 'ff-mp-tab-products')
-  await expect(page.getByTestId('ff-mp-ship')).toBeDisabled()
   await expect(page.getByTestId('ff-mp-unload-document-number')).toHaveText(
     `Отгрузка ${unloadDisplayNumber}`,
   )
@@ -403,7 +402,7 @@ test('FF marketplace unload: no packaging progress banner on draft', async ({ pa
   const baseIn = `${e2eApi}/operations/inbound-intake-requests`
   const inbound = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const inboundId = String(((await inbound.json()) as { id: string }).id)
   const locLineRes = await page.request.post(`${baseIn}/${inboundId}/lines`, {
@@ -421,7 +420,7 @@ test('FF marketplace unload: no packaging progress banner on draft', async ({ pa
 
   const inboundSort = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const sortInboundId = String(((await inboundSort.json()) as { id: string }).id)
   const sortLineRes = await page.request.post(`${baseIn}/${sortInboundId}/lines`, {
@@ -559,7 +558,7 @@ test('FF marketplace unload: main scan rejects product barcode', async ({ page }
   const baseIn = `${e2eApi}/operations/inbound-intake-requests`
   const inbound = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const inboundId = String(((await inbound.json()) as { id: string }).id)
   const locLineRes = await page.request.post(`${baseIn}/${inboundId}/lines`, {
@@ -577,7 +576,7 @@ test('FF marketplace unload: main scan rejects product barcode', async ({ page }
 
   const inboundSort = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const sortInboundId = String(((await inboundSort.json()) as { id: string }).id)
   const sortLineRes = await page.request.post(`${baseIn}/${sortInboundId}/lines`, {
@@ -620,6 +619,8 @@ test('FF marketplace unload: main scan rejects product barcode', async ({ page }
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible()
   await expectMpTabSelected(page, 'ff-mp-tab-products')
 
+  await page.getByTestId('ff-mp-tab-packaging').click()
+  await page.getByTestId('ff-mp-boxes-summary').click()
   await Promise.all([
     waitForPostOk(page, `/api/operations/marketplace-unload-requests/${mid}/boxes/batch`),
     page.getByTestId('ff-mp-box-batch-create').click(),
@@ -718,7 +719,7 @@ test('TC-NEW-OUT-FE-02: shipment table columns no early red', async ({ page }) =
   const baseIn = `${e2eApi}/operations/inbound-intake-requests`
   const inbound = await page.request.post(baseIn, {
     headers: auth,
-    data: JSON.stringify({ warehouse_id: whId }),
+    data: JSON.stringify({ warehouse_id: whId, planned_box_count: 1 }),
   })
   const inboundId = String(((await inbound.json()) as { id: string }).id)
   const lineRes = await page.request.post(`${baseIn}/${inboundId}/lines`, {
@@ -781,7 +782,11 @@ test('TC-NEW-OUT-FE-02: shipment table columns no early red', async ({ page }) =
   await expect(page.getByTestId(`ff-mp-line-plan-${mpLineId}`)).toHaveText('2')
   await expect(page.getByTestId(`ff-mp-line-picked-${mpLineId}`)).toHaveText('0')
   await expect(page.getByTestId(`ff-mp-line-remaining-${mpLineId}`)).toHaveText('2')
-  await expect(page.getByTestId('ff-mp-print-actions')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-print-actions')).toHaveCount(0)
+  await page.getByTestId('ff-mp-tab-packaging').click()
+  await page.getByTestId('ff-mp-boxes-summary').click()
   await expect(page.getByTestId('ff-mp-boxes')).toBeVisible()
+  await expect(page.getByTestId('ff-mp-tab-final')).toHaveCount(0)
+  await expect(page.getByTestId('ff-mp-print-actions')).toHaveCount(0)
   await expect(page.getByTestId('ff-mp-ship')).toBeDisabled()
 })

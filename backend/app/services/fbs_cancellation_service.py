@@ -90,6 +90,14 @@ async def reverse_fbs_shipment_if_needed(
         quantity_delta=int(ledger.quantity),
         movement_type=MOVEMENT_TYPE_FBS_SHIPMENT,
     )
+    from app.services import stock_direction_service
+
+    await stock_direction_service.restore_fbs_pool(
+        session,
+        order.tenant_id,
+        ledger.product_id,
+        int(ledger.quantity),
+    )
     ledger.reversed_at = datetime.now(UTC)
     await session.flush()
     ledger.reversal_movement_id = reversal_movement.id

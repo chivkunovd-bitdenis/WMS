@@ -7,7 +7,12 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_effective_seller_id, require_fulfillment_admin
+from app.api.deps import (
+    assert_seller_permission,
+    get_current_user,
+    get_effective_seller_id,
+    require_fulfillment_admin,
+)
 from app.core.roles import FULFILLMENT_SELLER
 from app.core.settings import settings
 from app.db.session import get_db
@@ -21,6 +26,7 @@ from app.services.background_job_service import (
     JOB_TYPE_WILDBERRIES_MARKETPLACE_ORDERS_SYNC,
     JOB_TYPE_WILDBERRIES_SUPPLIES_SYNC,
 )
+from app.services.seller_staff_permissions_service import PERM_SETTINGS
 
 router = APIRouter(
     prefix="/operations/background-jobs",
@@ -185,6 +191,7 @@ async def start_wildberries_cards_sync_self(
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> BackgroundJobStartOut:
+    await assert_seller_permission(session, user, PERM_SETTINGS)
     if user.role != FULFILLMENT_SELLER or effective_seller_id is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

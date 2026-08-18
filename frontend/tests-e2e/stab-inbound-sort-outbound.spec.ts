@@ -4,7 +4,10 @@ import { waitForGetOk, waitForPostOk } from './api-waits';
 import {
   INBOUND_API,
   apiCreateSubmittedInbound,
+  beginInboundReceiving,
+  expandInboundPackages,
   loginFfAdmin,
+  scanInboundReceiving,
   seedFfSellerInbound,
 } from './inbound-boxes-helpers';
 
@@ -22,8 +25,8 @@ test('stab inbound sort outbound — receive, see sorting, ship from buffer with
 
   const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000';
   const seed = await seedFfSellerInbound(page, `stab-e2e-${Date.now()}`);
-  await apiCreateSubmittedInbound(page.request, seed, {
-    plannedBoxes: 0,
+  const inboundId = await apiCreateSubmittedInbound(page.request, seed, {
+    plannedBoxes: 1,
     expectedQty: EXPECTED_QTY,
   });
 
@@ -31,6 +34,7 @@ test('stab inbound sort outbound — receive, see sorting, ship from buffer with
     Authorization: `Bearer ${seed.token}`,
     'Content-Type': 'application/json',
   };
+  await beginInboundReceiving(page.request, auth, inboundId);
 
   await page.request.patch(
     `${e2eApi}/integrations/wildberries/sellers/${seed.sellerId}/tokens`,
@@ -74,7 +78,7 @@ test('stab inbound sort outbound — receive, see sorting, ship from buffer with
   await page.getByTestId('nav-ff-reception').click();
   await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
-  await expect(page.getByTestId('ff-inbound-receiving-scan-panel')).toBeVisible();
+  await expandInboundPackages(page);
 
   for (let i = 0; i < 2; i++) {
     await Promise.all([
@@ -99,20 +103,21 @@ test('stab inbound sort outbound — receive, see sorting, ship from buffer with
   await expect(page.getByTestId('ff-inbound-box-row').nth(1)).toContainText(seed.sku);
 
   for (let i = 0; i < LOOSE_QTY; i++) {
-    await page.getByTestId('ff-inbound-receiving-scan-input').fill(seed.sku);
-    await Promise.all([
-      waitForPostOk(page, INBOUND_API, (u) => u.includes('/receiving/scan')),
-      page.getByTestId('ff-inbound-receiving-scan-submit').click(),
-    ]);
+    await scanInboundReceiving(page, seed.sku);
+    await expect(page.getByTestId('ff-inbound-line-actual-display').first()).toHaveText(
+      String(BOX2_QTY + i + 1),
+    );
   }
   await expect(page.getByTestId('ff-inbound-line-actual-display').first()).toHaveText(
     String(EXPECTED_QTY),
   );
   await expect(page.getByTestId('ff-inbound-verify-complete')).toBeEnabled();
 
+  await page.getByTestId('ff-inbound-verify-complete').click();
+  await expect(page.getByTestId('ff-inbound-discrepancy-dialog')).toBeVisible();
   await Promise.all([
     waitForPostOk(page, INBOUND_API, (u) => u.includes('/complete-receiving')),
-    page.getByTestId('ff-inbound-verify-complete').click(),
+    page.getByTestId('ff-inbound-discrepancy-confirm').click(),
   ]);
   await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('В сортировке');
 
@@ -160,6 +165,9 @@ test('stab inbound sort outbound — receive, see sorting, ship from buffer with
     page.locator('[data-doc-kind="marketplace_unload"]').first().click(),
   ]);
   await expect(page.getByTestId('ff-supplies-doc-dialog')).toBeVisible();
+  await page.getByTestId('ff-mp-tab-packaging').click();
+  await page.getByTestId('ff-mp-boxes-summary').click();
+  await expect(page.getByTestId('ff-mp-box-batch-create')).toBeVisible();
 
   await Promise.all([
     waitForPostOk(page, `/api/operations/marketplace-unload-requests/${mid}/boxes/batch`),

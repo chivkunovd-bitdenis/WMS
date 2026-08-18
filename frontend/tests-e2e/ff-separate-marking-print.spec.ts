@@ -103,7 +103,10 @@ test('FF settings: separate marking print shows split print sections', async ({ 
   await page.getByTestId('ff-packaging-create-open').click()
   await page.getByTestId('ff-packaging-create-warehouse').click()
   await page.getByRole('option', { name: 'WH Sep' }).click()
+  await page.getByTestId('ff-packaging-create-location').click()
+  await page.getByRole('option', { name: 'Сортировка' }).click()
   await expect(page.getByTestId('ff-packaging-create-row')).toBeVisible()
+  await page.locator('[data-testid^="ff-packaging-create-row-select-"]').first().click()
   await Promise.all([
     page.waitForResponse(
       (r) =>
@@ -165,4 +168,3 @@ test('FF settings: separate marking print shows split print sections', async ({ 
   await expect(page.getByTestId('marking-print-reprint-notice')).toBeVisible()
   await expect(page.getByTestId('marking-reprint-pick-list')).toBeVisible()
 })
-

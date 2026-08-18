@@ -1,0 +1,85 @@
+{
+  "browser": {
+    "Browser": "Chrome/151.0.7922.138",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36"
+  },
+  "mode": "visible external Google Chrome via CDP mouse/key events; not Playwright; not headless",
+  "backend": "http://127.0.0.1:18940",
+  "frontend": "http://127.0.0.1:18941",
+  "db_path": "/private/tmp/wms_final_fbs_live_1786808276.sqlite",
+  "supply_id": "796204ed-2b5e-4d89-819b-03718a329c52",
+  "orders": [
+    998324,
+    998325
+  ],
+  "product_barcode": "FBS-LIVE-BAR-1786808324",
+  "location_code": "FBS-A-08324",
+  "screenshots": [
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/agent-reports/2026-08-15/assets/wave2-final-fbs-00-os-visible-chrome.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/agent-reports/2026-08-15/assets/wave2-final-fbs-01-login.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/agent-reports/2026-08-15/assets/wave2-final-fbs-02-new-orders.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/agent-reports/2026-08-15/assets/wave2-final-fbs-03-selected-orders.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/agent-reports/2026-08-15/assets/wave2-final-fbs-04-create-preflight.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/agent-reports/2026-08-15/assets/wave2-final-fbs-05-composition.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/agent-reports/2026-08-15/assets/wave2-final-fbs-06-picking-started.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/agent-reports/2026-08-15/assets/wave2-final-fbs-07-location-confirmed.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/agent-reports/2026-08-15/assets/wave2-final-fbs-08-packing-after-picks.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/agent-reports/2026-08-15/assets/wave2-final-fbs-09-order-998324-sticker-preview.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/agent-reports/2026-08-15/assets/wave2-final-fbs-09b-order-998325-sticker-preview.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/agent-reports/2026-08-15/assets/wave2-final-fbs-10c-active-supply-row.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/agent-reports/2026-08-15/assets/wave2-final-fbs-10d-stickers-applied-after-fix.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/agent-reports/2026-08-15/assets/wave2-final-fbs-11-packed-and-boxes-stage.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/agent-reports/2026-08-15/assets/wave2-final-fbs-12-box-created.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/agent-reports/2026-08-15/assets/wave2-final-fbs-13-box-quantity.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/agent-reports/2026-08-15/assets/wave2-final-fbs-14-box-filled.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/agent-reports/2026-08-15/assets/wave2-final-fbs-15-delivered.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/agent-reports/2026-08-15/assets/wave2-final-fbs-16-supply-qr-preview.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/agent-reports/2026-08-15/assets/wave2-final-fbs-17-final-ui.png"
+  ],
+  "final": {
+    "supply_status": "in_delivery",
+    "stage": "tracking",
+    "progress": {
+      "picked": 2,
+      "packed": 2,
+      "metadata_ready": 2,
+      "stickers_ready": 2,
+      "total": 2
+    },
+    "orders": [
+      {
+        "wb_order_id": 998324,
+        "status": "in_delivery",
+        "pick": "picked",
+        "pack": "packed",
+        "sticker_applied": true
+      },
+      {
+        "wb_order_id": 998325,
+        "status": "in_delivery",
+        "pick": "picked",
+        "pack": "packed",
+        "sticker_applied": true
+      }
+    ],
+    "boxes": [
+      {
+        "number": 1,
+        "assigned_order_ids": [
+          "e0ec2252-2912-4e3d-8fb2-ce3beaac9780",
+          "36b6f0f9-53e0-4410-b4c6-8ac83dd0b7a3"
+        ],
+        "without_distribution": false
+      }
+    ],
+    "supply_qr": {
+      "kind": "supply_qr",
+      "status": "ready",
+      "applied": true,
+      "preview_url": true
+    },
+    "delivery_worklist_ids": [
+      "796204ed-2b5e-4d89-819b-03718a329c52"
+    ]
+  }
+}

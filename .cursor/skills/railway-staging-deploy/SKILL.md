@@ -13,6 +13,9 @@ description: >-
 1. **Prod не трогать:** не менять `deploy.yml`, `docker-compose.prod.yml`, `scripts/deploy/prod-update.sh`, prod env на VPS.
 2. Staging = только ветка **`staging`** + Railway (см. `docs/analysis/RAILWAY_STAGING_RU.md`).
 3. Перед выкаткой — **закоммитить** все изменения задачи.
+4. Staging не заменяет WMS product gate: перед обычной выкаткой должны быть BA
+   feature cards, Product before dev и Code Review; после выкатки нужен
+   Product Browser Review в реальном браузере, если задача меняет продукт.
 
 ## Когда пользователь просит «лей на railway»
 
@@ -42,6 +45,7 @@ WMS_STAGING_URL=https://….up.railway.app ./scripts/railway-staging-smoke.sh
 - Не запускать prod deploy / SSH / `prod-update.sh`.
 - Не требовать локальный `docker compose` или `npm run dev` для просмотра правок — пользователь смотрит staging URL.
 - Не ждать полный Playwright e2e перед staging — на push в `staging` e2e в CI не гоняется.
+- Не называть staging готовым продуктово без `PRODUCT_BROWSER_APPROVED`.
 
 ## Полный CI перед prod
 

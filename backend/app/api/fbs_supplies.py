@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date
 from typing import Annotated
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
+from sqlalchemy import distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_fbs_operator_access
@@ -13,8 +15,10 @@ from app.api.fbs_errors import envelope_from_exc, raise_fbs_http
 from app.api.fbs_orders import FbsWorklistOrderOut, FbsWorklistProductOut
 from app.db.session import get_db
 from app.models.fbs_order import FbsOrder
+from app.models.fbs_packing_box import FbsPackingBox
 from app.models.fbs_supply import FbsSupply
 from app.models.user import User
+from app.models.warehouse import Warehouse
 from app.services import fbs_order_tape_print_service as order_tape_svc
 from app.services import fbs_packaging_integration_service as pack_int_svc
 from app.services import fbs_packing_box_service as packing_box_svc
@@ -49,6 +53,11 @@ class FbsSupplyFromOrdersBody(BaseModel):
     order_ids: list[uuid.UUID] = Field(min_length=1)
     planned_delivery_type: str
     planned_destination: FbsSupplyPlannedDestinationBody | None = None
+    idempotency_key: str = Field(min_length=1, max_length=128)
+
+
+class FbsSupplyAddOrdersBody(BaseModel):
+    order_ids: list[uuid.UUID] = Field(min_length=1, max_length=100)
     idempotency_key: str = Field(min_length=1, max_length=128)
 
 
@@ -117,12 +126,33 @@ class FbsSupplyOut(BaseModel):
     barcode_file: str | None
     document_number: str | None
     display_number: str | None
+    planned_shipment_date: str | None
     packaging_task_id: str | None
     created_at_wb: str | None
     delivered_at: str | None
     created_at: str
     updated_at: str
     orders: list[FbsSupplyOrderOut] | None = None
+
+
+class FbsSupplyWorklistItemOut(BaseModel):
+    id: str
+    wb_supply_id: str
+    name: str
+    status: str
+    seller: dict[str, str]
+    wb_warehouse: dict[str, str | int | None]
+    wms_warehouse: dict[str, str]
+    orders_count: int
+    units_count: int
+    boxes_count: int
+    planned_shipment_date: str | None
+    can_add_orders: bool
+
+
+class FbsSupplyWorklistOut(BaseModel):
+    items: list[FbsSupplyWorklistItemOut]
+    server_now: str
 
 
 class FbsPickingListItemOut(BaseModel):
@@ -249,6 +279,19 @@ class FbsSupplyStatusBody(BaseModel):
     status: str
 
 
+class FbsSupplyPlannedShipmentDateBody(BaseModel):
+    planned_shipment_date: date | None = None
+
+
+class FbsShipmentCalendarRowOut(BaseModel):
+    id: str
+    date: str
+    direction: str
+    boxes_count: int
+    shipment_type: str
+    title: str
+
+
 class FbsTrbxBindBoxBody(BaseModel):
     trbx_id: uuid.UUID
     packaging_box_id: uuid.UUID
@@ -282,6 +325,7 @@ class FbsWorkspaceSupplyOut(BaseModel):
     wb_warehouse: dict[str, str | int | None]
     wms_warehouse: dict[str, str]
     planned_destination: dict[str, str | int] | None
+    planned_shipment_date: str | None
     nearest_deadline_at: str
     packaging_task_id: str | None
     barcode_asset: FbsWorkspacePrintAssetOut | None
@@ -360,6 +404,7 @@ class FbsCargoPlaceListOut(BaseModel):
 class FbsPackingBoxCreateBody(BaseModel):
     count: int = Field(ge=1, le=100)
     idempotency_key: str = Field(min_length=1, max_length=128)
+    without_distribution: bool = False
 
 
 class FbsPackingBoxAssignOrdersBody(BaseModel):
@@ -378,6 +423,7 @@ class FbsPackingBoxOut(BaseModel):
     trbx_id: str | None
     wb_trbx_id: str | None
     qr_asset: FbsWorkspacePrintAssetOut | None
+    without_distribution: bool = False
 
 
 class FbsDeliveryCheckOut(BaseModel):
@@ -428,6 +474,7 @@ class FbsWorkspaceOut(BaseModel):
     last_wb_sync_at: str | None
     tracking_summary: dict[str, object] | None = None
     partial_rejection: dict[str, object] | None = None
+    picking_auto_passed_reason: str | None = None
     wb_sync_stale: bool = False
     server_now: str
 
@@ -506,6 +553,11 @@ def _supply_out(supply: FbsSupply, *, include_orders: bool) -> FbsSupplyOut:
         barcode_file=supply.barcode_file,
         document_number=supply.document_number,
         display_number=supply.display_number,
+        planned_shipment_date=(
+            supply.planned_shipment_date.isoformat()
+            if supply.planned_shipment_date is not None
+            else None
+        ),
         packaging_task_id=(
             str(supply.packaging_task_id) if supply.packaging_task_id is not None else None
         ),
@@ -647,6 +699,7 @@ def _raise_from_packing_box_service(exc: packing_box_svc.FbsPackingBoxError) -> 
         "order_not_in_supply",
         "empty_order_set",
         "missing_idempotency_key",
+        "box_without_distribution",
     }:
         raise_fbs_http(status.HTTP_400_BAD_REQUEST, exc.code)
     if exc.code in {"supply_not_editable", "box_cargo_place_unresolved"}:
@@ -729,6 +782,7 @@ def _raise_from_service(exc: supply_svc.FbsSupplyError) -> None:
             "empty_order_set",
             "missing_idempotency_key",
             "supply_empty",
+            "invalid_status_group",
         }
     ):
         raise HTTPException(status_code=exc.http_status, detail=detail)
@@ -865,6 +919,62 @@ async def create_fbs_supply_from_orders(
     return FbsWorkspaceOut.model_validate(workspace)
 
 
+@router.get("/calendar", response_model=list[FbsShipmentCalendarRowOut])
+async def get_fbs_shipment_calendar(
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    start_date: Annotated[date | None, Query()] = None,
+    end_date: Annotated[date | None, Query()] = None,
+) -> list[FbsShipmentCalendarRowOut]:
+    conditions = [
+        FbsSupply.tenant_id == user.tenant_id,
+        FbsSupply.planned_shipment_date.is_not(None),
+    ]
+    if start_date is not None:
+        conditions.append(FbsSupply.planned_shipment_date >= start_date)
+    if end_date is not None:
+        conditions.append(FbsSupply.planned_shipment_date <= end_date)
+    stmt = (
+        select(
+            FbsSupply.id,
+            FbsSupply.name,
+            FbsSupply.planned_shipment_date,
+            FbsSupply.planned_destination_name,
+            Warehouse.name.label("warehouse_name"),
+            func.count(distinct(FbsOrder.id)).label("orders_count"),
+            func.count(distinct(FbsPackingBox.id)).label("boxes_count"),
+        )
+        .join(Warehouse, Warehouse.id == FbsSupply.warehouse_id)
+        .outerjoin(FbsOrder, FbsOrder.supply_id == FbsSupply.id)
+        .outerjoin(FbsPackingBox, FbsPackingBox.supply_id == FbsSupply.id)
+        .where(*conditions)
+        .group_by(
+            FbsSupply.id,
+            FbsSupply.name,
+            FbsSupply.planned_shipment_date,
+            FbsSupply.planned_destination_name,
+            Warehouse.name,
+        )
+        .order_by(FbsSupply.planned_shipment_date.asc(), FbsSupply.name.asc())
+    )
+    rows = (await session.execute(stmt)).all()
+    result: list[FbsShipmentCalendarRowOut] = []
+    for row in rows:
+        boxes_count = int(row.boxes_count or 0) or int(row.orders_count or 0)
+        direction = row.planned_destination_name or row.warehouse_name or "Направление не указано"
+        result.append(
+            FbsShipmentCalendarRowOut(
+                id=str(row.id),
+                date=row.planned_shipment_date.isoformat(),
+                direction=direction,
+                boxes_count=boxes_count,
+                shipment_type="FBS",
+                title=row.name,
+            )
+        )
+    return result
+
+
 @router.post("/{supply_id}/start-work", response_model=FbsWorkspaceOut)
 async def start_fbs_supply_work(
     supply_id: uuid.UUID,
@@ -877,6 +987,52 @@ async def start_fbs_supply_work(
                 session,
                 user.tenant_id,
                 supply_id,
+                actor_user_id=user.id,
+                http_client=http_client,
+            )
+        except supply_svc.FbsSupplyError as exc:
+            _raise_from_service(exc)
+    await session.commit()
+    return FbsWorkspaceOut.model_validate(workspace)
+
+
+@router.get("/worklist", response_model=FbsSupplyWorklistOut)
+async def get_fbs_supplies_worklist(
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    seller_id: Annotated[uuid.UUID | None, Query()] = None,
+    status_group: Annotated[str, Query()] = "active",
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+) -> FbsSupplyWorklistOut:
+    try:
+        payload = await supply_svc.list_supply_worklist(
+            session,
+            user.tenant_id,
+            seller_id=seller_id,
+            status_group=status_group,
+            limit=limit,
+        )
+    except supply_svc.FbsSupplyError as exc:
+        _raise_from_service(exc)
+    return FbsSupplyWorklistOut.model_validate(payload)
+
+
+@router.post("/{supply_id}/orders/batch", response_model=FbsWorkspaceOut)
+async def add_orders_to_fbs_supply(
+    supply_id: uuid.UUID,
+    body: FbsSupplyAddOrdersBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    async with httpx.AsyncClient() as http_client:
+        try:
+            workspace = await supply_svc.add_orders_to_existing_supply(
+                session,
+                user.tenant_id,
+                supply_id,
+                body.order_ids,
+                idempotency_key=body.idempotency_key,
+                actor_user_id=user.id,
                 http_client=http_client,
             )
         except supply_svc.FbsSupplyError as exc:
@@ -1035,6 +1191,32 @@ async def get_fbs_supply_workspace(
     return FbsWorkspaceOut.model_validate(workspace)
 
 
+@router.patch("/{supply_id}/planned-shipment-date", response_model=FbsWorkspaceOut)
+async def patch_fbs_supply_planned_shipment_date(
+    supply_id: uuid.UUID,
+    body: FbsSupplyPlannedShipmentDateBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    try:
+        await supply_svc.update_planned_shipment_date(
+            session,
+            user.tenant_id,
+            supply_id,
+            planned_shipment_date=body.planned_shipment_date,
+        )
+        workspace = await get_supply_workspace(session, user.tenant_id, supply_id)
+    except supply_svc.FbsSupplyError as exc:
+        if exc.code == "supply_not_found":
+            raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
+        raise_fbs_http(status.HTTP_400_BAD_REQUEST, exc.code)
+    except FbsWorkspaceError as exc:
+        if exc.code == "supply_not_found":
+            raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
+        raise_fbs_http(status.HTTP_500_INTERNAL_SERVER_ERROR, exc.code)
+    return FbsWorkspaceOut.model_validate(workspace)
+
+
 @router.post(
     "/{supply_id}/boxes",
     response_model=FbsWorkspaceOut,
@@ -1057,6 +1239,7 @@ async def create_fbs_packing_boxes(
                 body.idempotency_key,
                 http_client,
                 actor_user_id=user.id,
+                without_distribution=body.without_distribution,
             )
         except packing_box_svc.FbsPackingBoxError as exc:
             _raise_from_packing_box_service(exc)

@@ -14,6 +14,7 @@ from app.models.marking_code import (
     EVENT_PRINTED,
     EVENT_REPLACED,
     STATUS_APPLIED,
+    STATUS_DEFECTIVE,
     STATUS_PRINTED,
     STATUS_REPLACED,
     MarkingCode,
@@ -127,7 +128,21 @@ async def test_defect_creates_pending_reprint_request(async_client: AsyncClient)
     assert created.status_code == 200, created.text
     body = created.json()
     assert body["status"] == "pending"
+    assert body["code_status"] == STATUS_DEFECTIVE
     assert body["code_id"] == code_id
+
+    async with SessionLocal() as session:
+        code = await session.get(MarkingCode, uuid.UUID(code_id))
+        assert code is not None
+        assert code.status == STATUS_DEFECTIVE
+        events = (
+            await session.execute(
+                select(MarkingCodeEvent).where(MarkingCodeEvent.code_id == code.id)
+            )
+        ).scalars().all()
+        defective = [event for event in events if event.event_type == EVENT_DEFECTIVE]
+        assert len(defective) == 1
+        assert defective[0].reason == "Порвана этикетка"
 
     queue = await async_client.get(
         "/operations/marking-codes/reprint-requests",
@@ -225,7 +240,7 @@ async def test_replace_reprint_request_clears_queue(async_client: AsyncClient) -
                 select(MarkingCodeEvent.event_type).where(MarkingCodeEvent.code_id == old.id)
             )
         ).scalars().all()
-        assert EVENT_DEFECTIVE in old_events
+        assert old_events.count(EVENT_DEFECTIVE) == 1
         assert EVENT_REPLACED in old_events
         new_events = (
             await session.execute(
@@ -266,4 +281,3 @@ async def test_approve_reprint_rejects_non_printed_code(async_client: AsyncClien
     )
     assert approved.status_code == 422
     assert approved.json()["detail"] == "code_not_printed"
-

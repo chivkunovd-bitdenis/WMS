@@ -61,12 +61,12 @@ def _map_office(row: dict[str, Any]) -> FbsSellerOfficeOut:
 
 def _raise_from_service(exc: wh_svc.FbsSellerWarehouseError) -> None:
     if exc.code == "seller_not_found":
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.code)
+        raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
     if exc.code == "missing_marketplace_token":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.code)
+        raise_fbs_http(status.HTTP_403_FORBIDDEN, exc.code)
     if exc.code.startswith("wb_"):
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.code)
-    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=exc.code)
+        raise_fbs_http(status.HTTP_502_BAD_GATEWAY, exc.code, retryable=True)
+    raise_fbs_http(status.HTTP_500_INTERNAL_SERVER_ERROR, exc.code)
 
 
 class FbsWarehouseBindingOut(BaseModel):

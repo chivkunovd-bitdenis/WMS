@@ -1,0 +1,12 @@
+{
+  "operationType": "Тип: Возврат",
+  "autoprintVisible": true,
+  "ordinaryAutoprintHidden": true,
+  "scannedBarcode": "wb-return-after-fix-rerun-1786668071455",
+  "printHasBarcode": true,
+  "printHasProductName": true,
+  "printLeaksSkuInsteadOfWb": false,
+  "receivedSummary": "Принято: 1 из 1",
+  "lineActual": "1",
+  "printSample": "QA Return Product\nwb-return-after-fix-rerun-1786668071455"
+}

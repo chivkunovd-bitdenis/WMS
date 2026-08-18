@@ -155,6 +155,35 @@ async def test_box_creation_key_is_idempotent_and_rejects_different_count(
     assert conflict.json()["detail"]["code"] == "idempotency_key_reused"
 
 
+@pytest.mark.asyncio
+async def test_without_distribution_boxes_do_not_accept_order_assignment(
+    async_client: AsyncClient,
+) -> None:
+    headers, supply_id, order_ids = await _packed_supply(async_client)
+
+    created = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes",
+        headers=headers,
+        json={
+            "count": 1,
+            "idempotency_key": "boxes-without-distribution-1",
+            "without_distribution": True,
+        },
+    )
+    assert created.status_code == 201, created.text
+    box = created.json()["boxes"][0]
+    assert box["without_distribution"] is True
+    assert box["assigned_order_ids"] == []
+
+    assigned = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes/{box['id']}/orders",
+        headers=headers,
+        json={"order_ids": [str(order_ids[0])]},
+    )
+    assert assigned.status_code == 400, assigned.text
+    assert assigned.json()["detail"]["code"] == "box_without_distribution"
+
+
 def test_workspace_handoff_requires_boxes_and_every_packed_order_assignment() -> None:
     order_id = uuid.uuid4()
     supply = SimpleNamespace(
@@ -190,3 +219,40 @@ def test_workspace_handoff_requires_boxes_and_every_packed_order_assignment() ->
         ("physical_boxes_required", "handoff_prep"),
         ("packed_order_unassigned", "handoff_prep"),
     }
+
+
+def test_workspace_without_distribution_skips_assignment_gate() -> None:
+    order_id = uuid.uuid4()
+    supply = SimpleNamespace(
+        status=FBS_SUPPLY_STATUS_PACKED,
+        delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+        trbxes=[],
+    )
+    order = SimpleNamespace(
+        id=order_id,
+        wb_order_id=772,
+        pick_status="picked",
+        metadata_delivery_allowed=True,
+        required_meta_json=[],
+    )
+    progress = WorkspaceProgress(picked=1, packed=1, metadata_ready=1, stickers_ready=1, total=1)
+
+    stage = _compute_stage(
+        supply,
+        [order],
+        progress,
+        has_physical_boxes=True,
+        without_distribution=True,
+        unassigned_packed_order_ids={order_id},
+    )
+    assert stage == "delivery"
+    blockers = _compute_workspace_blockers(
+        supply,
+        [order],
+        stage,
+        progress,
+        has_physical_boxes=True,
+        without_distribution=True,
+        unassigned_packed_order_ids={order_id},
+    )
+    assert all(item["code"] != "packed_order_unassigned" for item in blockers)

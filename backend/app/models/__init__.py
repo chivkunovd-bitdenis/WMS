@@ -44,16 +44,18 @@ from app.models.marking_code import (
 )
 from app.models.notification import Notification
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
-from app.models.packaging_task import PackagingTask, PackagingTaskLine
+from app.models.packaging_task import PackagingTask, PackagingTaskEvent, PackagingTaskLine
 from app.models.print_template import PrintTemplate
 from app.models.product import Product
 from app.models.product_tz_import import ProductTzImport
 from app.models.seller import Seller
 from app.models.seller_marking_credentials import SellerMarkingCredentials
 from app.models.seller_shop_delegation import SellerShopDelegation
+from app.models.seller_staff_permissions import SellerStaffPermissions
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.models.seller_wildberries_imported_supply import SellerWildberriesImportedSupply
+from app.models.stock_direction import StockDirection, StockMonthlySnapshot
 from app.models.storage_location import StorageLocation
 from app.models.tenant import Tenant
 from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
@@ -109,6 +111,7 @@ __all__ = [
     "OutboundShipmentLine",
     "OutboundShipmentRequest",
     "PackagingTask",
+    "PackagingTaskEvent",
     "PackagingTaskLine",
     "PrintTemplate",
     "Product",
@@ -116,9 +119,12 @@ __all__ = [
     "Seller",
     "SellerMarkingCredentials",
     "SellerShopDelegation",
+    "SellerStaffPermissions",
     "SellerWildberriesCredentials",
     "SellerWildberriesImportedCard",
     "SellerWildberriesImportedSupply",
+    "StockDirection",
+    "StockMonthlySnapshot",
     "StorageLocation",
     "Tenant",
     "TenantWbMpWarehouse",

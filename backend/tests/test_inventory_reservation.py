@@ -4,7 +4,11 @@ import time
 
 import pytest
 from httpx import AsyncClient
-from inbound_box_intake_helpers import fulfill_inbound_via_box_scans, post_primary_accept
+from inbound_box_intake_helpers import (
+    fulfill_inbound_via_box_scans,
+    post_primary_accept,
+    set_planned_boxes,
+)
 
 
 @pytest.mark.asyncio
@@ -61,10 +65,11 @@ async def test_second_outbound_line_blocks_when_reserved_exceeds_on_hand(
             "storage_location_id": lid,
         },
     )
-    await async_client.post(
-        f"/operations/inbound-intake-requests/{rid}/submit", headers=h
-    )
-    await post_primary_accept(async_client, "/operations/inbound-intake-requests", rid, h)
+    base_in = "/operations/inbound-intake-requests"
+    await set_planned_boxes(async_client, base_in, rid, h)
+    submit = await async_client.post(f"{base_in}/{rid}/submit", headers=h)
+    assert submit.status_code == 200, submit.text
+    await post_primary_accept(async_client, base_in, rid, h)
     inb = await async_client.get(
         f"/operations/inbound-intake-requests/{rid}", headers=h
     )
@@ -159,10 +164,11 @@ async def test_stock_transfer_blocked_by_outbound_reservation(
             "storage_location_id": aid,
         },
     )
-    await async_client.post(
-        f"/operations/inbound-intake-requests/{rid}/submit", headers=h
-    )
-    await post_primary_accept(async_client, "/operations/inbound-intake-requests", rid, h)
+    base_in = "/operations/inbound-intake-requests"
+    await set_planned_boxes(async_client, base_in, rid, h)
+    submit = await async_client.post(f"{base_in}/{rid}/submit", headers=h)
+    assert submit.status_code == 200, submit.text
+    await post_primary_accept(async_client, base_in, rid, h)
     inb = await async_client.get(
         f"/operations/inbound-intake-requests/{rid}", headers=h
     )
@@ -254,10 +260,11 @@ async def test_inventory_balances_include_reserved_and_available(
             "storage_location_id": lid,
         },
     )
-    await async_client.post(
-        f"/operations/inbound-intake-requests/{rid}/submit", headers=h
-    )
-    await post_primary_accept(async_client, "/operations/inbound-intake-requests", rid, h)
+    base_in = "/operations/inbound-intake-requests"
+    await set_planned_boxes(async_client, base_in, rid, h)
+    submit = await async_client.post(f"{base_in}/{rid}/submit", headers=h)
+    assert submit.status_code == 200, submit.text
+    await post_primary_accept(async_client, base_in, rid, h)
     await fulfill_inbound_via_box_scans(async_client, h, rid, sku, 10)
     await async_client.post(
         f"/operations/inbound-intake-requests/{rid}/verify", headers=h

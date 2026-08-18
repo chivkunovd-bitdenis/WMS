@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Any
 
@@ -18,6 +19,9 @@ from app.services.wildberries_credentials_service import (
     get_decrypted_marketplace_token,
     get_decrypted_tokens_for_seller,
 )
+from app.services.wildberries_errors import log_wb_client_error
+
+logger = logging.getLogger(__name__)
 
 
 class FbsSellerWarehouseError(Exception):
@@ -84,6 +88,14 @@ async def list_seller_warehouses(
     try:
         rows = await fetch_marketplace_seller_warehouses(http_client, api_token=token)
     except WildberriesClientError as exc:
+        log_wb_client_error(
+            logger,
+            "fbs seller warehouses fetch failed",
+            exc,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            endpoint=exc.endpoint or "GET /api/v3/warehouses",
+        )
         raise FbsSellerWarehouseError(_wb_error_code(exc)) from exc
     return [_pick_fields(row, _WAREHOUSE_KEYS) for row in rows if isinstance(row, dict)]
 
@@ -98,5 +110,13 @@ async def list_seller_offices(
     try:
         rows = await fetch_marketplace_seller_offices(http_client, api_token=token)
     except WildberriesClientError as exc:
+        log_wb_client_error(
+            logger,
+            "fbs seller offices fetch failed",
+            exc,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            endpoint=exc.endpoint or "GET /api/v3/offices",
+        )
         raise FbsSellerWarehouseError(_wb_error_code(exc)) from exc
     return [_pick_fields(row, _OFFICE_KEYS) for row in rows if isinstance(row, dict)]

@@ -94,10 +94,9 @@ def sku_code_for_wb_variant(
 
 
 def product_display_name(base_title: str, variant: WbSizeVariant, *, multi_variant: bool) -> str:
+    del variant, multi_variant
     title = base_title.strip() or "WB товар"
-    if not multi_variant or not variant.size_label:
-        return title[:255]
-    return f"{title} {variant.size_label}"[:255]
+    return title[:255]
 
 
 def collect_skus_from_card(card: dict[str, Any]) -> list[str]:

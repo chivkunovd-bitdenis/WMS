@@ -1,0 +1,69 @@
+{
+  "started_at": "2026-08-15T07:43:07.308Z",
+  "seed": {
+    "email": "live-kiz-pass-1786779741815687000@example.com",
+    "password": "password123",
+    "supplyId": "925d3673-f355-4ecc-ae9d-eb1e90ff26c7",
+    "orders": [
+      {
+        "id": "3d19a544-f44f-4c24-af33-e415c5b3e773",
+        "wb_order_id": 920000000,
+        "sticker": "WB0920000000",
+        "kiz": "010460043993125321E2EKIZ100001"
+      },
+      {
+        "id": "4d6e59c6-2d93-4042-8e2f-2db8c5ca9a53",
+        "wb_order_id": 920000001,
+        "sticker": "WB0920000001",
+        "kiz": "010460043993125321E2EKIZ100002"
+      }
+    ]
+  },
+  "browser": "external Google Chrome 151 visible window via CDP",
+  "steps": [
+    {
+      "name": "login",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/fbs-kiz-live-chrome-approved/01-login.png",
+      "at": "2026-08-15T07:43:10.119Z",
+      "url": "http://127.0.0.1:51861/"
+    },
+    {
+      "name": "dashboard",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/fbs-kiz-live-chrome-approved/02-dashboard.png",
+      "at": "2026-08-15T07:43:10.914Z",
+      "url": "http://127.0.0.1:51861/app/ff/dashboard"
+    },
+    {
+      "name": "fbs-active-list",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/fbs-kiz-live-chrome-approved/03-fbs-active-list.png",
+      "at": "2026-08-15T07:43:11.238Z",
+      "url": "http://127.0.0.1:51861/app/ff/fbs"
+    },
+    {
+      "name": "workspace-before-kiz",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/fbs-kiz-live-chrome-approved/04-workspace-before-kiz.png",
+      "at": "2026-08-15T07:43:11.602Z",
+      "url": "http://127.0.0.1:51861/app/ff/fbs"
+    },
+    {
+      "name": "kiz-dialog-open",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/fbs-kiz-live-chrome-approved/05-kiz-dialog-open.png",
+      "at": "2026-08-15T07:43:11.748Z",
+      "url": "http://127.0.0.1:51861/app/ff/fbs"
+    },
+    {
+      "name": "two-kiz-pairs",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/fbs-kiz-live-chrome-approved/06-two-kiz-pairs.png",
+      "at": "2026-08-15T07:43:12.335Z",
+      "url": "http://127.0.0.1:51861/app/ff/fbs"
+    },
+    {
+      "name": "kiz-committed-dialog",
+      "screenshot": "/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/docs/reviews/wms-wave1/2026-08-15/evidence/fbs-kiz-live-chrome-approved/07-kiz-committed-dialog.png",
+      "at": "2026-08-15T07:43:12.553Z",
+      "url": "http://127.0.0.1:51861/app/ff/fbs"
+    }
+  ],
+  "error": "Error: expect(locator).toBeVisible() failed\n\nLocator: getByText(/Напечатано 2 из 2/)\nExpected: visible\nTimeout: 15000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"to.be.visible\" with timeout 15000ms\n  - waiting for getByText(/Напечатано 2 из 2/)\n\n    at Proxy.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/integration-wave0-20260814/frontend/node_modules/playwright/lib/matchers/expect.js:213:24)\n    at main ([stdin]:75:53)",
+  "finished_at": "2026-08-15T07:43:28.001Z"
+}

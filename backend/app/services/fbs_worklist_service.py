@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import String, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.elements import ColumnElement
@@ -29,6 +29,7 @@ from app.models.fbs_order import (
     MAPPING_STATUS_MISSING,
     FbsOrder,
     FbsOrderMarking,
+    current_order_marking,
 )
 from app.models.fbs_order_pick import FbsOrderPick
 from app.models.fbs_print_asset import (
@@ -48,8 +49,10 @@ from app.models.warehouse import Warehouse
 from app.services.fbs_stock_availability_service import fbs_available_qty_by_product
 from app.services.inventory_service import OUTBOUND_RESERVE_STATUSES
 from app.services.wb_card_enrichment import (
+    color_from_card,
     first_photo_url_from_card,
     size_from_card_for_barcode,
+    subject_name_from_card,
 )
 
 STATUS_GROUP_MAP: dict[str, frozenset[str]] = {
@@ -189,12 +192,37 @@ async def _fetch_orders_page(
         stmt = stmt.where(FbsOrder.wb_warehouse_id == wb_warehouse_id)
     if search and search.strip():
         term = search.strip()
+        stmt = stmt.outerjoin(Product, Product.id == FbsOrder.product_id).outerjoin(
+            SellerWildberriesImportedCard,
+            and_(
+                SellerWildberriesImportedCard.tenant_id == FbsOrder.tenant_id,
+                SellerWildberriesImportedCard.seller_id == FbsOrder.seller_id,
+                SellerWildberriesImportedCard.nm_id == FbsOrder.wb_nm_id,
+            ),
+        )
         clauses: list[ColumnElement[bool]] = [
             FbsOrder.wb_barcode.ilike(f"%{term}%"),
             FbsOrder.wb_article.ilike(f"%{term}%"),
+            Product.name.ilike(f"%{term}%"),
+            Product.sku_code.ilike(f"%{term}%"),
+            Product.wb_vendor_code.ilike(f"%{term}%"),
+            Product.wb_barcode.ilike(f"%{term}%"),
+            Product.wb_size.ilike(f"%{term}%"),
+            SellerWildberriesImportedCard.title.ilike(f"%{term}%"),
+            SellerWildberriesImportedCard.vendor_code.ilike(f"%{term}%"),
+            SellerWildberriesImportedCard.raw_json.cast(String).ilike(f"%{term}%"),
         ]
         if term.isdigit():
-            clauses.append(FbsOrder.wb_order_id == int(term))
+            term_num = int(term)
+            clauses.extend(
+                [
+                    FbsOrder.wb_order_id == term_num,
+                    FbsOrder.wb_nm_id == term_num,
+                    FbsOrder.wb_chrt_id == term_num,
+                    Product.wb_nm_id == term_num,
+                    Product.wb_chrt_id == term_num,
+                ]
+            )
         stmt = stmt.where(or_(*clauses))
     if cursor:
         cursor_deadline, cursor_id = _decode_cursor(cursor)
@@ -630,6 +658,8 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
     card_raw = card.raw_json if card and isinstance(card.raw_json, dict) else None
     barcode = order.wb_barcode or (product.wb_barcode if product else None)
     image_url = first_photo_url_from_card(card_raw) if card_raw else None
+    category = subject_name_from_card(card_raw) if card_raw else None
+    color = color_from_card(card_raw) if card_raw else None
     size = None
     if product and product.wb_size:
         size = product.wb_size
@@ -676,9 +706,23 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
             "id": str(order.product_id) if order.product_id else None,
             "name": product.name if product else MISSING_PRODUCT,
             "image_url": image_url,
-            "seller_article": product.sku_code if product else order.wb_article,
+            "seller_article": (
+                product.wb_vendor_code
+                if product and product.wb_vendor_code
+                else order.wb_article
+            ),
             "wb_article": int(order.wb_nm_id) if order.wb_nm_id is not None else None,
             "barcode": barcode,
+            "sku": product.sku_code if product else None,
+            "chrt_id": (
+                int(order.wb_chrt_id)
+                if order.wb_chrt_id is not None
+                else int(product.wb_chrt_id)
+                if product and product.wb_chrt_id is not None
+                else None
+            ),
+            "category": category,
+            "color": color,
             "size": size,
             "packaging_instructions": product.packaging_instructions if product else None,
             "has_packaging_instructions": bool(
@@ -734,20 +778,27 @@ def _build_metadata(
 ) -> dict[str, Any]:
     required = list(order.required_meta_json or [])
     optional = list(order.optional_meta_json or [])
-    by_kind = {m.kind: m for m in markings}
     states: list[dict[str, Any]] = []
     for kind in required + optional:
-        mark = by_kind.get(kind)
+        mark = current_order_marking(markings, kind, include_rejected=True)
         if mark is not None:
             states.append(
                 {
                     "kind": kind,
                     "status": mark.meta_status,
                     "reason": mark.reason,
+                    "source": mark.source,
                 }
             )
         else:
-            states.append({"kind": kind, "status": "missing", "reason": None})
+            states.append(
+                {
+                    "kind": kind,
+                    "status": "missing",
+                    "reason": None,
+                    "source": None,
+                }
+            )
     delivery_allowed = (
         bool(order.metadata_delivery_allowed)
         if order.metadata_delivery_allowed is not None

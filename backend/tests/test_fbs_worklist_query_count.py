@@ -104,11 +104,19 @@ async def _setup_ff_admin_with_stock(
                 seller_id=seller_id,
                 nm_id=900_100,
                 vendor_code=f"ART-{suffix[-6:]}",
-                title="Футболка",
+                title="футболка",
                 raw_json={
                     "nmID": 900_100,
+                    "subjectName": "Бомберы",
                     "photos": [{"big": "https://images.example/wb.jpg"}],
-                    "sizes": [{"skus": [f"BAR-{suffix[-8:]}"], "techSize": "L"}],
+                    "characteristics": [{"name": "Цвет", "value": "синий"}],
+                    "sizes": [
+                        {
+                            "chrtID": 777001,
+                            "skus": [f"BAR-{suffix[-8:]}"],
+                            "techSize": "L",
+                        }
+                    ],
                 },
             )
         )
@@ -130,6 +138,7 @@ async def _setup_ff_admin_with_stock(
                 product_id=product_id,
                 wb_order_id=800_000 + idx,
                 wb_nm_id=900_100,
+                wb_chrt_id=777_001,
                 wb_barcode=f"BAR-{suffix[-8:]}",
                 wb_article=f"ART-{suffix[-6:]}",
                 cargo_type="mgt",
@@ -178,6 +187,10 @@ async def test_fbs_worklist_happy_path(async_client: AsyncClient) -> None:
     assert item["wb_warehouse"]["name"] == "WB Москва"
     assert item["wms_warehouse"]["name"] == "WH"
     assert item["product"]["image_url"] == "https://images.example/wb.jpg"
+    assert item["product"]["sku"].startswith("FBS-")
+    assert item["product"]["chrt_id"] == 777001
+    assert item["product"]["category"] == "Бомберы"
+    assert item["product"]["color"] == "синий"
     assert item["product"]["size"] == "L"
     assert item["inventory"]["available_unpacked"] >= 0
     assert len(item["inventory"]["locations"]) >= 1
@@ -186,6 +199,28 @@ async def test_fbs_worklist_happy_path(async_client: AsyncClient) -> None:
     options_by_id = {option["id"]: option for option in body["warehouse_options"]}
     assert str(DEFAULT_WB_WAREHOUSE_ID) in options_by_id
     assert options_by_id[str(DEFAULT_WB_WAREHOUSE_ID)]["name"] == "WB Москва"
+
+
+@pytest.mark.asyncio
+async def test_fbs_worklist_searches_operator_identifiers(async_client: AsyncClient) -> None:
+    """TC-NEW-FBS-SEARCH-001: backend search covers title, category, SKU, chrtId and WB ids."""
+    headers, seller_id, _warehouse_id, _product_id, _location_id, order_ids = (
+        await _setup_ff_admin_with_stock(async_client, order_count=1)
+    )
+    terms = ["футбол", "ART", "BAR", "777001", "900100"]
+    for term in terms:
+        resp = await async_client.get(
+            "/operations/fbs-orders/worklist",
+            headers=headers,
+            params={
+                "seller_id": str(seller_id),
+                "status_group": "new",
+                "search": term,
+                "limit": 10,
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        assert [item["id"] for item in resp.json()["items"]] == [str(order_ids[0])], term
 
 
 @pytest.mark.asyncio

@@ -1,4 +1,4 @@
-"""FBS order marking — WB metadata requirements, scan path, pool KIZ, sync."""
+"""FBS order marking — WB metadata requirements, pool KIZ, and status sync."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ from typing import Any
 
 import httpx
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fbs_order import (
@@ -19,8 +18,6 @@ from app.models.fbs_order import (
     CHECK_STATUS_OK,
     FBS_MARKING_CHECK_STATUSES,
     FBS_MARKING_KINDS,
-    FBS_ORDER_MARKING_FROZEN_STATUSES,
-    FBS_ORDER_MARKING_WRITE_STATUSES,
     MARKING_KIND_SGTIN,
     META_STATUS_ACCEPTED,
     META_STATUS_ALLOWED_WITHOUT_CHECK,
@@ -33,6 +30,7 @@ from app.models.fbs_order import (
     META_STATUS_UNKNOWN,
     FbsOrder,
     FbsOrderMarking,
+    current_order_marking,
 )
 from app.models.marking_code import STATUS_AVAILABLE, STATUS_RESERVED, MarkingCode
 from app.services.marking_code_service import normalize_cis
@@ -75,11 +73,6 @@ class FbsMarkingError(Exception):
 def _wb_error_code(exc: WildberriesClientError) -> str:
     suffix = f"_{exc.status_code}" if exc.status_code else ""
     return f"wb_{exc.code}{suffix}"
-
-
-def preserve_scan_raw_value(raw: str) -> str:
-    """Strip outer whitespace only; preserve ASCII GS (\\u001d) separators."""
-    return raw.strip()
 
 
 def parse_meta_kinds_from_wb_row(row: dict[str, Any]) -> tuple[list[str], list[str]]:
@@ -277,7 +270,10 @@ def _meta_details_from_wb(details: tuple[MarketplaceMetaDetail, ...]) -> dict[st
 
 def _meta_details_from_markings(markings: list[FbsOrderMarking]) -> dict[str, Any]:
     out: dict[str, Any] = {}
-    for mark in markings:
+    for kind in {marking.kind for marking in markings}:
+        mark = current_order_marking(markings, kind, include_rejected=True)
+        if mark is None:
+            continue
         out[mark.kind] = {
             "status": mark.meta_status,
             "value": mark.value,
@@ -293,9 +289,8 @@ def compute_delivery_allowed(
     required = list(order.required_meta_json or [])
     if not required:
         return True
-    by_kind = {m.kind: m for m in markings}
     for kind in required:
-        mark = by_kind.get(kind)
+        mark = current_order_marking(markings, kind)
         if mark is None:
             return False
         if mark.meta_status in {META_STATUS_REJECTED, META_STATUS_REPLACEMENT_REQUIRED}:
@@ -311,20 +306,27 @@ def build_order_metadata(
 ) -> dict[str, Any]:
     required = list(order.required_meta_json or [])
     optional = list(order.optional_meta_json or [])
-    by_kind = {m.kind: m for m in markings}
     states: list[dict[str, Any]] = []
     for kind in required + [k for k in optional if k not in required]:
-        mark = by_kind.get(kind)
+        mark = current_order_marking(markings, kind, include_rejected=True)
         if mark is not None:
             states.append(
                 {
                     "kind": kind,
                     "status": mark.meta_status,
                     "reason": mark.reason,
+                    "source": mark.source,
                 }
             )
         else:
-            states.append({"kind": kind, "status": META_STATUS_MISSING, "reason": None})
+            states.append(
+                {
+                    "kind": kind,
+                    "status": META_STATUS_MISSING,
+                    "reason": None,
+                    "source": None,
+                }
+            )
     delivery_allowed = (
         bool(order.metadata_delivery_allowed)
         if order.metadata_delivery_allowed is not None
@@ -348,9 +350,8 @@ def order_marking_blocks_progress(order: FbsOrder) -> bool:
     required = list(order.required_meta_json or [])
     if not required:
         return False
-    by_kind = {m.kind: m for m in order.markings}
     for kind in required:
-        mark = by_kind.get(kind)
+        mark = current_order_marking(list(order.markings), kind)
         if mark is None:
             return True
         if mark.meta_status in {
@@ -364,7 +365,7 @@ def order_marking_blocks_progress(order: FbsOrder) -> bool:
     return False
 
 
-async def _require_marketplace_token(
+async def require_marketplace_token(
     session: AsyncSession, tenant_id: uuid.UUID, seller_id: uuid.UUID
 ) -> str:
     if await _seller_in_tenant(session, tenant_id, seller_id) is None:
@@ -392,29 +393,6 @@ async def _get_order(
     return result.scalar_one_or_none()
 
 
-async def _lookup_marking_code(
-    session: AsyncSession,
-    *,
-    tenant_id: uuid.UUID,
-    seller_id: uuid.UUID,
-    cis_code: str,
-    for_update: bool = False,
-) -> MarkingCode | None:
-    lookup_values = [cis_code]
-    normalized = normalize_cis(cis_code)
-    if normalized and normalized not in lookup_values:
-        lookup_values.append(normalized)
-    stmt = select(MarkingCode).where(
-        MarkingCode.tenant_id == tenant_id,
-        MarkingCode.seller_id == seller_id,
-        MarkingCode.cis_code.in_(lookup_values),
-    )
-    if for_update:
-        stmt = stmt.with_for_update()
-    result = await session.execute(stmt)
-    return result.scalar_one_or_none()
-
-
 async def _lookup_marking_code_in_tenant(
     session: AsyncSession,
     *,
@@ -431,29 +409,6 @@ async def _lookup_marking_code_in_tenant(
     )
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
-
-
-async def _ensure_kiz_not_duplicate(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    order_id: uuid.UUID,
-    kind: str,
-    value: str,
-) -> None:
-    stmt = (
-        select(FbsOrderMarking.id)
-        .join(FbsOrder, FbsOrder.id == FbsOrderMarking.order_id)
-        .where(
-            FbsOrder.tenant_id == tenant_id,
-            FbsOrderMarking.order_id != order_id,
-            FbsOrderMarking.kind == kind,
-            FbsOrderMarking.value == value,
-        )
-        .limit(1)
-    )
-    existing = await session.scalar(stmt)
-    if existing is not None:
-        raise FbsMarkingError("duplicate_kiz")
 
 
 async def _claim_pool_code_if_present(
@@ -540,7 +495,12 @@ async def _sync_order_meta_from_wb(
         if wb_status is not None:
             marking.check_status = wb_status
         meta_detail = details_by_kind.get(marking.kind)
-        if meta_detail is not None:
+        current = current_order_marking(markings, marking.kind, include_rejected=True)
+        detail_matches = meta_detail is not None and (
+            meta_detail.value == marking.value
+            or (meta_detail.value is None and current is marking)
+        )
+        if meta_detail is not None and detail_matches:
             _apply_meta_detail_to_marking(marking, meta_detail, check_status=wb_status)
         elif wb_status is not None:
             marking.meta_status = derive_meta_status(
@@ -552,6 +512,62 @@ async def _sync_order_meta_from_wb(
     order.metadata_delivery_allowed = compute_delivery_allowed(order, markings)
     order.metadata_last_checked_at = datetime.now(tz=UTC)
     await session.flush()
+    return markings
+
+
+def _meta_validation_reasons(exc: WildberriesBusinessError) -> list[dict[str, Any]]:
+    return [
+        {
+            "order_id": item.order_id,
+            "kind": item.key,
+            "value": item.value,
+            "decision": item.decision,
+            "reason": item.reason,
+        }
+        for item in exc.meta_validation
+    ]
+
+
+async def attach_order_meta_to_wb_and_sync(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    order: FbsOrder,
+    marking: FbsOrderMarking,
+    http_client: httpx.AsyncClient,
+    *,
+    api_token: str | None = None,
+) -> list[FbsOrderMarking]:
+    marking.meta_status = META_STATUS_SENDING
+    await session.flush()
+
+    token = api_token or await require_marketplace_token(
+        session, tenant_id, order.seller_id
+    )
+    try:
+        await put_marketplace_order_meta(
+            http_client,
+            api_token=token,
+            order_id=int(order.wb_order_id),
+            kind=marking.kind,
+            value=marking.value,
+        )
+    except WildberriesBusinessError as exc:
+        marking.meta_status = META_STATUS_REJECTED
+        reasons = _meta_validation_reasons(exc)
+        if exc.meta_validation:
+            marking.reason = exc.meta_validation[0].reason
+        marking.meta_details_json = {"meta_validation": reasons}
+        await session.flush()
+        raise FbsMarkingError(
+            "meta_validation_fail",
+            context={"reasons": reasons},
+        ) from exc
+    except WildberriesClientError as exc:
+        marking.meta_status = META_STATUS_ASSIGNED
+        raise FbsMarkingError(_wb_error_code(exc)) from exc
+
+    markings = await _sync_order_meta_from_wb(session, order, http_client, token)
+    await _notify_supply_marking_update(session, tenant_id, order.id)
     return markings
 
 
@@ -585,222 +601,10 @@ async def get_order_metadata(
         raise FbsMarkingError("order_not_found")
     markings = await list_order_markings(session, tenant_id, order_id)
     if sync_wb and markings:
-        token = await _require_marketplace_token(session, tenant_id, order.seller_id)
+        token = await require_marketplace_token(session, tenant_id, order.seller_id)
         markings = await _sync_order_meta_from_wb(session, order, http_client, token)
         await _notify_supply_marking_update(session, tenant_id, order_id)
     return build_order_metadata(order, markings)
-
-
-async def scan_order_metadata(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    order_id: uuid.UUID,
-    kind: str,
-    raw_value: str,
-    http_client: httpx.AsyncClient,
-    *,
-    idempotency_key: str | None = None,
-) -> dict[str, Any]:
-    del idempotency_key  # reserved for operation journal; duplicate value is idempotent
-    kind_norm = kind.strip().lower()
-    if kind_norm not in FBS_MARKING_KINDS:
-        raise FbsMarkingError("invalid_kind")
-    preserved = preserve_scan_raw_value(raw_value)
-    if not preserved:
-        raise FbsMarkingError("empty_value")
-
-    order = await _get_order(session, tenant_id, order_id, for_update=True)
-    if order is None:
-        raise FbsMarkingError("order_not_found")
-    if order.status in FBS_ORDER_MARKING_FROZEN_STATUSES:
-        raise FbsMarkingError("order_marking_frozen")
-    if order.status not in FBS_ORDER_MARKING_WRITE_STATUSES:
-        raise FbsMarkingError("order_marking_frozen")
-
-    allowed_kinds = set(order.required_meta_json or []) | set(order.optional_meta_json or [])
-    if allowed_kinds and kind_norm not in allowed_kinds:
-        raise FbsMarkingError("kind_not_required")
-
-    await _ensure_kiz_not_duplicate(session, tenant_id, order_id, kind_norm, preserved)
-
-    existing_kind_stmt = select(FbsOrderMarking).where(
-        FbsOrderMarking.order_id == order_id,
-        FbsOrderMarking.kind == kind_norm,
-        FbsOrderMarking.value != preserved,
-    )
-    if (await session.execute(existing_kind_stmt)).scalar_one_or_none() is not None:
-        raise FbsMarkingError("kind_already_assigned")
-
-    pool_code: MarkingCode | None = None
-    if kind_norm == MARKING_KIND_SGTIN:
-        pool_code = await _claim_pool_code_if_present(
-            session,
-            tenant_id=tenant_id,
-            order=order,
-            cis_raw=preserved,
-        )
-
-    stmt = select(FbsOrderMarking).where(
-        FbsOrderMarking.order_id == order_id,
-        FbsOrderMarking.kind == kind_norm,
-        FbsOrderMarking.value == preserved,
-    )
-    result = await session.execute(stmt)
-    row = result.scalar_one_or_none()
-    try:
-        async with session.begin_nested():
-            if row is None:
-                row = FbsOrderMarking(
-                    order_id=order_id,
-                    kind=kind_norm,
-                    value=preserved,
-                    check_status=CHECK_STATUS_NEW,
-                    meta_status=META_STATUS_ASSIGNED,
-                )
-                session.add(row)
-            else:
-                row.meta_status = META_STATUS_ASSIGNED
-
-            if pool_code is not None:
-                await _ensure_marking_code_unassigned(session, pool_code.id, order_id)
-                row.marking_code_id = pool_code.id
-            elif kind_norm == MARKING_KIND_SGTIN:
-                code = await _lookup_marking_code(
-                    session,
-                    tenant_id=tenant_id,
-                    seller_id=order.seller_id,
-                    cis_code=preserved,
-                )
-                if code is not None:
-                    await _ensure_marking_code_unassigned(session, code.id, order_id)
-                    row.marking_code_id = code.id
-                else:
-                    row.marking_code_id = None
-
-            row.meta_status = META_STATUS_SENDING
-            await session.flush()
-    except IntegrityError as exc:
-        raise FbsMarkingError("marking_code_already_assigned") from exc
-
-    token = await _require_marketplace_token(session, tenant_id, order.seller_id)
-    try:
-        await put_marketplace_order_meta(
-            http_client,
-            api_token=token,
-            order_id=int(order.wb_order_id),
-            kind=kind_norm,
-            value=preserved,
-        )
-    except WildberriesBusinessError as exc:
-        row.meta_status = META_STATUS_REJECTED
-        reasons = [
-            {
-                "order_id": item.order_id,
-                "kind": item.key,
-                "value": item.value,
-                "decision": item.decision,
-                "reason": item.reason,
-            }
-            for item in exc.meta_validation
-        ]
-        if exc.meta_validation:
-            row.reason = exc.meta_validation[0].reason
-        row.meta_details_json = {"meta_validation": reasons}
-        await session.flush()
-        raise FbsMarkingError(
-            "meta_validation_fail",
-            context={"reasons": reasons},
-        ) from exc
-    except WildberriesClientError as exc:
-        row.meta_status = META_STATUS_ASSIGNED
-        raise FbsMarkingError(_wb_error_code(exc)) from exc
-
-    markings = await _sync_order_meta_from_wb(session, order, http_client, token)
-    await _notify_supply_marking_update(session, tenant_id, order_id)
-    return build_order_metadata(order, markings)
-
-
-async def upsert_order_marking(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    order_id: uuid.UUID,
-    kind: str,
-    value: str,
-    http_client: httpx.AsyncClient,
-) -> FbsOrderMarking:
-    kind_norm = kind.strip().lower()
-    if kind_norm not in FBS_MARKING_KINDS:
-        raise FbsMarkingError("invalid_kind")
-    value_norm = preserve_scan_raw_value(value)
-    if not value_norm:
-        raise FbsMarkingError("empty_value")
-
-    order = await _get_order(session, tenant_id, order_id)
-    if order is None:
-        raise FbsMarkingError("order_not_found")
-    if order.status in FBS_ORDER_MARKING_FROZEN_STATUSES:
-        raise FbsMarkingError("order_marking_frozen")
-    if order.status not in FBS_ORDER_MARKING_WRITE_STATUSES:
-        raise FbsMarkingError("order_marking_frozen")
-
-    code: MarkingCode | None = None
-    if kind_norm == MARKING_KIND_SGTIN:
-        code = await _lookup_marking_code(
-            session,
-            tenant_id=tenant_id,
-            seller_id=order.seller_id,
-            cis_code=value_norm,
-            for_update=True,
-        )
-        if code is not None:
-            await _ensure_marking_code_unassigned(session, code.id, order_id)
-
-    token = await _require_marketplace_token(session, tenant_id, order.seller_id)
-    try:
-        await put_marketplace_order_meta(
-            http_client,
-            api_token=token,
-            order_id=int(order.wb_order_id),
-            kind=kind_norm,
-            value=value_norm,
-        )
-    except WildberriesClientError as exc:
-        raise FbsMarkingError(_wb_error_code(exc)) from exc
-
-    stmt = select(FbsOrderMarking).where(
-        FbsOrderMarking.order_id == order_id,
-        FbsOrderMarking.kind == kind_norm,
-        FbsOrderMarking.value == value_norm,
-    )
-    result = await session.execute(stmt)
-    row = result.scalar_one_or_none()
-    try:
-        async with session.begin_nested():
-            if row is None:
-                row = FbsOrderMarking(
-                    order_id=order_id,
-                    kind=kind_norm,
-                    value=value_norm,
-                    check_status=CHECK_STATUS_NEW,
-                    meta_status=META_STATUS_PENDING,
-                )
-                session.add(row)
-            else:
-                row.check_status = CHECK_STATUS_NEW
-                row.meta_status = META_STATUS_PENDING
-
-            if kind_norm == MARKING_KIND_SGTIN:
-                if code is not None:
-                    await _ensure_marking_code_unassigned(session, code.id, order_id)
-                    row.marking_code_id = code.id
-                else:
-                    row.marking_code_id = None
-
-            await session.flush()
-    except IntegrityError as exc:
-        raise FbsMarkingError("marking_code_already_assigned") from exc
-    await _notify_supply_marking_update(session, tenant_id, order_id)
-    return row
 
 
 async def sync_order_marking_statuses(
@@ -817,7 +621,7 @@ async def sync_order_marking_statuses(
     if not markings:
         return markings
 
-    token = await _require_marketplace_token(session, tenant_id, order.seller_id)
+    token = await require_marketplace_token(session, tenant_id, order.seller_id)
     try:
         markings = await _sync_order_meta_from_wb(session, order, http_client, token)
     except WildberriesClientError as exc:
@@ -840,16 +644,3 @@ async def _notify_supply_marking_update(
     )
 
     await sync_fbs_supply_after_order_marking_update(session, tenant_id, order_id)
-
-
-async def _ensure_marking_code_unassigned(
-    session: AsyncSession, code_id: uuid.UUID, order_id: uuid.UUID
-) -> None:
-    existing = await session.scalar(
-        select(FbsOrderMarking.id).where(
-            FbsOrderMarking.marking_code_id == code_id,
-            FbsOrderMarking.order_id != order_id,
-        )
-    )
-    if existing is not None:
-        raise FbsMarkingError("marking_code_already_assigned")
