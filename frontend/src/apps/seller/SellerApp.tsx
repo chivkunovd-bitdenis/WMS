@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import { Alert, Box, Typography } from '@mui/material'
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { Alert, Box, Button, Typography } from '@mui/material'
 import { apiUrl, getStoredToken } from '../../api'
 import { useAuth } from '../../hooks/useAuth'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
@@ -42,6 +42,7 @@ type SellerAppProps = {
 
 export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
   const location = useLocation()
+  const navigate = useNavigate()
   const {
     token,
     me,
@@ -266,7 +267,17 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
             <Typography variant="h5" gutterBottom data-task-id="R02-F14">
               Нет доступа
             </Typography>
-            <Typography data-task-id="R02-F14">Нет доступа к этому разделу.</Typography>
+            <Typography data-task-id="R02-F14">
+              В этом браузере нет сессии селлера, но открыта сессия фулфилмента.
+              Чтобы войти в кабинет селлера, нажмите кнопку ниже.
+            </Typography>
+            <Button
+              variant="contained"
+              sx={{ mt: 2 }}
+              onClick={() => navigate(sellerPath('/'))}
+            >
+              Войти как селлер
+            </Button>
           </Box>
         )
       }
