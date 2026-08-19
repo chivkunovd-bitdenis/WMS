@@ -116,8 +116,6 @@ type Props = {
   testIdPrefix?: string
   /** FF: /app/ff · seller: /seller */
   routeBase?: string
-  /** Seller portal: highlight low-stock product cards above the table */
-  showSellerDashboard?: boolean
 }
 
 function productMatchesSearch(row: ProductInventoryRow, query: string): boolean {
@@ -133,19 +131,6 @@ function productMatchesSearch(row: ProductInventoryRow, query: string): boolean 
 
 function isLowPersonalStock(row: ProductInventoryRow): boolean {
   return row.personal_available > 0 && row.personal_available <= 10
-}
-
-function isProblematicProduct(row: ProductInventoryRow): boolean {
-  return row.personal_available === 0 || isLowPersonalStock(row)
-}
-
-function hasMarkingActivity(row: ProductInventoryRow): boolean {
-  return (
-    row.personal_available > 0 ||
-    row.printed_count > 0 ||
-    row.shared_baskets.length > 0 ||
-    row.requires_honest_sign
-  )
 }
 
 function SharedBasketChips({
@@ -188,7 +173,6 @@ export function HonestSignScreen({
   onSelectedSellerIdChange,
   testIdPrefix = 'honest-sign',
   routeBase = '/app/ff',
-  showSellerDashboard = false,
 }: Props) {
   const navigate = useNavigate()
   const productsTableRef = useRef<HTMLDivElement>(null)
@@ -205,6 +189,7 @@ export function HonestSignScreen({
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   const effectiveSellerId = sellerId ?? selectedSellerId
+  const isSellerPortal = Boolean(sellerId)
   const importDisabled = sellerIdRequiredForImport && !effectiveSellerId
   const { catalogById } = useWbProductCatalog(
     token,
@@ -353,22 +338,6 @@ export function HonestSignScreen({
     })
   }, [products, search, stockFilter])
 
-  const problematicProducts = useMemo(
-    () =>
-      filteredProducts.filter(
-        (row) => isProblematicProduct(row) && hasMarkingActivity(row),
-      ),
-    [filteredProducts],
-  )
-
-  const tableProducts = useMemo(() => {
-    if (!showSellerDashboard) {
-      return filteredProducts
-    }
-    const problematicIds = new Set(problematicProducts.map((row) => row.product_id))
-    return filteredProducts.filter((row) => !problematicIds.has(row.product_id))
-  }, [filteredProducts, problematicProducts, showSellerDashboard])
-
   const openImport = () => {
     if (sellerIdRequiredForImport && !effectiveSellerId) {
       return
@@ -458,66 +427,6 @@ export function HonestSignScreen({
           </Paper>
         ))}
       </Stack>
-
-      {showSellerDashboard && problematicProducts.length > 0 ? (
-        <Stack spacing={1} data-testid={`${testIdPrefix}-seller-dashboard`}>
-          <Typography variant="subtitle2" color="text.secondary">
-            Требуют внимания
-          </Typography>
-          {problematicProducts.map((row) => {
-            const low = isLowPersonalStock(row)
-            return (
-              <Paper
-                key={row.product_id}
-                variant="outlined"
-                sx={{
-                  p: 2,
-                  bgcolor: low ? 'error.50' : row.personal_available === 0 ? 'warning.50' : 'background.paper',
-                }}
-                data-testid={`${testIdPrefix}-product-card-${row.product_id}`}
-              >
-                <Stack
-                  direction={{ xs: 'column', sm: 'row' }}
-                  spacing={1}
-                  sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}
-                >
-                  <Box>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                      {row.product_name}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {row.sku_code}
-                    </Typography>
-                  </Box>
-                  <Button
-                    size="small"
-                    variant="contained"
-                    startIcon={<UploadFileOutlined />}
-                    onClick={() => openImport()}
-                    data-testid={`${testIdPrefix}-product-card-upload-${row.product_id}`}
-                  >
-                    Догрузить
-                  </Button>
-                </Stack>
-                <Stack direction="row" spacing={2} sx={{ mt: 1, flexWrap: 'wrap' }}>
-                  <Typography variant="body2">Личный остаток: {row.personal_available}</Typography>
-                  <Typography variant="body2">Напечатано: {row.printed_count}</Typography>
-                  {row.shared_baskets.length > 0 ? (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <Typography variant="body2">Корзины:</Typography>
-                      <SharedBasketChips
-                        baskets={row.shared_baskets}
-                        testIdPrefix={testIdPrefix}
-                        productId={row.product_id}
-                      />
-                    </Box>
-                  ) : null}
-                </Stack>
-              </Paper>
-            )
-          })}
-        </Stack>
-      ) : null}
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
         <Tooltip
@@ -614,7 +523,7 @@ export function HonestSignScreen({
                   </TableCell>
                 </TableRow>
               ))
-            ) : tableProducts.length === 0 ? (
+            ) : filteredProducts.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5}>
                   <Stack spacing={1} sx={{ py: 2, alignItems: 'flex-start' }}>
@@ -623,8 +532,6 @@ export function HonestSignScreen({
                         ? 'Пока нет кодов маркировки — загрузите КМ из файла.'
                         : unlinkedAvailable > 0
                           ? 'Товарных строк пока нет, но есть КМ без привязки. Откройте пул без привязки ниже и выберите товары.'
-                        : showSellerDashboard && problematicProducts.length > 0
-                          ? 'Товары, требующие внимания, показаны в блоке выше. По фильтру в таблице ничего нет.'
                           : 'Ничего не найдено по фильтру.'}
                     </Typography>
                     {!hasAnyMarkingData ? (
@@ -642,7 +549,7 @@ export function HonestSignScreen({
                 </TableCell>
               </TableRow>
             ) : (
-              tableProducts.map((row) => {
+              filteredProducts.map((row) => {
                 const low = isLowPersonalStock(row)
                 const displayMeta = productDisplayMetaFromCatalog(
                   row.product_id,
@@ -710,31 +617,33 @@ export function HonestSignScreen({
                     <TableCell align="right">{row.printed_count}</TableCell>
                     <TableCell align="right" onClick={(e) => e.stopPropagation()}>
                       <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'flex-end' }}>
-                        <ProductBarcodePrintButton
-                          meta={displayMeta}
-                          testId={`${testIdPrefix}-product-print-${row.product_id}`}
-                          onMarkingPrint={() =>
-                            openPrint({
-                              token,
-                              source: 'catalog',
-                              productId: row.product_id,
-                              documentNumber: null,
-                              qtyNeedPack: 1,
-                              markingAvailable: computeMarkingAvailableFromInventory(
-                                row.personal_available,
-                                row.shared_baskets,
-                              ),
-                              qtyMarkingPrinted: row.printed_count,
-                              requiresHonestSign: true,
-                              skuCode: displayMeta.sku_code,
-                              productName: displayMeta.product_name,
-                              productLabel: displayMetaToProductLabel(displayMeta),
-                              onPrinted: () => {
-                                void loadInventory()
-                              },
-                            })
-                          }
-                        />
+                        {!isSellerPortal ? (
+                          <ProductBarcodePrintButton
+                            meta={displayMeta}
+                            testId={`${testIdPrefix}-product-print-${row.product_id}`}
+                            onMarkingPrint={() =>
+                              openPrint({
+                                token,
+                                source: 'catalog',
+                                productId: row.product_id,
+                                documentNumber: null,
+                                qtyNeedPack: 1,
+                                markingAvailable: computeMarkingAvailableFromInventory(
+                                  row.personal_available,
+                                  row.shared_baskets,
+                                ),
+                                qtyMarkingPrinted: row.printed_count,
+                                requiresHonestSign: true,
+                                skuCode: displayMeta.sku_code,
+                                productName: displayMeta.product_name,
+                                productLabel: displayMetaToProductLabel(displayMeta),
+                                onPrinted: () => {
+                                  void loadInventory()
+                                },
+                              })
+                            }
+                          />
+                        ) : null}
                         <ChevronRightOutlined fontSize="small" color="action" sx={{ mt: 0.75 }} />
                       </Stack>
                     </TableCell>
@@ -811,7 +720,7 @@ export function HonestSignScreen({
         message={toastMessage ?? ''}
         data-testid={`${testIdPrefix}-import-toast`}
       />
-      {markingPrintDialog}
+      {!isSellerPortal ? markingPrintDialog : null}
     </Stack>
   )
 }

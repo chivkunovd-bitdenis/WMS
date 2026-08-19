@@ -12,7 +12,6 @@ export function SellerHonestSignScreen({ token, sellerId }: Props) {
       sellerId={sellerId}
       testIdPrefix="seller-honest-sign"
       routeBase="/seller"
-      showSellerDashboard
     />
   )
 }

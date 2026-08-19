@@ -3,8 +3,11 @@ import { expect, test } from '@playwright/test'
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import { loginAsSeller, openFulfillmentRegistration } from './auth-flow'
 
-// TC-NEW-CROSS-004 — product-first: «Догрузить» с карточки товара открывает импорт; файл с GTIN пула подхватывается.
-test('seller product card upload opens import and accepts pool GTIN file', async ({ page }) => {
+// TC-NEW-CROSS-004 (актуализировано 19.08.2026 — карточек «Требуют внимания»
+// больше нет): товар находится строкой в общей таблице, «Загрузить КМ»
+// открывает импорт; файл с GTIN уже привязанного пула подхватывается и
+// предлагает привязать корректный товар/пул.
+test('seller finds product row and pool GTIN import context is preserved', async ({ page }) => {
   test.setTimeout(90_000)
   const adminEmail = `e2e-cross04-adm-${Date.now()}@example.com`
   const sellerEmail = `e2e-cross04-sl-${Date.now()}@example.com`
@@ -99,12 +102,13 @@ test('seller product card upload opens import and accepts pool GTIN file', async
 
   await page.getByTestId('nav-seller-honest-sign').click()
   await expect(page.getByTestId('seller-honest-sign-page')).toBeVisible()
-  await expect(page.getByTestId('seller-honest-sign-seller-dashboard')).toBeVisible()
+  await expect(page.getByTestId('seller-honest-sign-seller-dashboard')).toHaveCount(0)
 
-  const card = page.getByTestId(`seller-honest-sign-product-card-${productId}`)
-  await expect(card).toContainText(sku)
+  const row = page.getByTestId(`seller-honest-sign-product-row-${productId}`)
+  await expect(row).toBeVisible()
+  await expect(row).toContainText(sku)
 
-  await card.getByTestId(`seller-honest-sign-product-card-upload-${productId}`).click()
+  await page.getByTestId('seller-honest-sign-open-import').click()
   await expect(page.getByTestId('seller-honest-sign-import-dialog')).toBeVisible()
 
   const cis = `01${gtin14}21${'C'.repeat(20)}0001`
