@@ -38,6 +38,7 @@ from app.models.fbs_supply import (
     FBS_DELIVERY_TYPE_WAREHOUSE_SC,
     FBS_SUPPLY_SOURCE_WB,
     FBS_SUPPLY_STATUS_ASSEMBLING,
+    FBS_SUPPLY_STATUS_DONE,
     FbsSupply,
 )
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
@@ -64,10 +65,15 @@ from app.services.wildberries_errors import (
     wb_error_ref,
     wb_operator_message,
 )
-from app.services.wildberries_fbs_client import split_marketplace_order_id_batches
+from app.services.wildberries_fbs_client import (
+    fetch_marketplace_supplies_page,
+    fetch_marketplace_supply_details,
+    split_marketplace_order_id_batches,
+)
 
 FBS_DEADLINE_HOURS = 120
 MAX_ORDERS_PAGES = 10
+MAX_SUPPLIES_PAGES = 10
 
 RESERVE_STATUS_WAREHOUSE_REMAP_CONFLICT = "warehouse_remap_conflict"
 
@@ -576,7 +582,6 @@ async def _debit_stock_pool_for_order(
     if binding_id is None:
         return empty
 
-    result = dict(empty)
     # Рядом может работать фоновая публикация остатка со своей сессией. На Postgres
     # это расходится само, на файловом SQLite (тесты, локальный стенд) вторая сессия
     # держит запись и мы получаем «database is locked». Списание — не тот повод,
@@ -1168,6 +1173,9 @@ async def _get_or_create_wb_origin_supply(
     wb_supply_id: str,
     row: dict[str, Any],
     matching_orders: list[FbsOrder],
+    http_client: httpx.AsyncClient | None = None,
+    api_token: str | None = None,
+    supplies_dict: dict[str, tuple[str | None, bool]] | None = None,
 ) -> FbsSupply | None:
     existing = await _get_existing_supply_by_wb_id(
         session, tenant_id, seller_id, wb_supply_id
@@ -1187,14 +1195,47 @@ async def _get_or_create_wb_origin_supply(
         return None
 
     first_order = matching_orders[0]
+
+    # Get supply details from pre-fetched dictionary or fall back to individual request
+    supply_name = _wb_supply_name_from_row(row, wb_supply_id)
+    supply_status = FBS_SUPPLY_STATUS_ASSEMBLING
+
+    if supplies_dict is not None and wb_supply_id in supplies_dict:
+        # Use data from pre-fetched supplies list
+        wb_name, wb_done = supplies_dict[wb_supply_id]
+        if wb_name:
+            supply_name = wb_name
+        if wb_done:
+            supply_status = FBS_SUPPLY_STATUS_DONE
+    elif http_client is not None and api_token is not None:
+        # Fall back to individual fetch if not in supplies_dict
+        try:
+            details = await fetch_marketplace_supply_details(
+                http_client,
+                api_token=api_token,
+                supply_id=wb_supply_id,
+            )
+            if details.name:
+                supply_name = details.name
+            if details.done:
+                supply_status = FBS_SUPPLY_STATUS_DONE
+        except Exception as exc:
+            logger.warning(
+                "wb supply details fetch failed: seller=%s wb_supply_id=%s error=%s",
+                seller_id,
+                wb_supply_id,
+                type(exc).__name__,
+                exc_info=True,
+            )
+
     supply = FbsSupply(
         tenant_id=tenant_id,
         seller_id=seller_id,
         warehouse_id=warehouse_id,
         wb_supply_id=wb_supply_id,
-        name=_wb_supply_name_from_row(row, wb_supply_id),
+        name=supply_name,
         source=FBS_SUPPLY_SOURCE_WB,
-        status=FBS_SUPPLY_STATUS_ASSEMBLING,
+        status=supply_status,
         delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
         cargo_type=first_order.cargo_type,
         wb_office_id=first_order.wb_office_id,
@@ -1231,7 +1272,59 @@ async def link_confirmed_orders_to_wb_supplies(
     http_client: httpx.AsyncClient,
     api_token: str,
 ) -> dict[str, Any]:
-    _ = http_client, api_token
+    # Fetch all supplies from WB once, cache in a dictionary
+    supplies_dict: dict[str, tuple[str | None, bool]] = {}
+    try:
+        next_cursor: int | None = None
+        for _page in range(MAX_SUPPLIES_PAGES):
+            try:
+                page = await fetch_marketplace_supplies_page(
+                    http_client,
+                    api_token=api_token,
+                    next_cursor=next_cursor,
+                )
+                supplies_dict.update(page.supplies)
+                if page.next_cursor is None:
+                    break
+                next_cursor = page.next_cursor
+            except WildberriesClientError as exc:
+                logger.warning(
+                    "wb supplies list fetch failed: seller=%s error=%s page=%d",
+                    seller_id,
+                    exc.code,
+                    _page,
+                    exc_info=True,
+                )
+                break
+    except Exception as exc:
+        logger.warning(
+            "wb supplies list fetch failed with exception: seller=%s error=%s",
+            seller_id,
+            type(exc).__name__,
+            exc_info=True,
+        )
+
+    # Periodic sync: update non-terminal supplies that are done in WB
+    # using supplies_dict
+    stmt_unfinished = select(FbsSupply).where(
+        FbsSupply.tenant_id == tenant_id,
+        FbsSupply.seller_id == seller_id,
+        FbsSupply.source == FBS_SUPPLY_SOURCE_WB,
+        FbsSupply.status != FBS_SUPPLY_STATUS_DONE,
+    )
+    res_unfinished = await session.execute(stmt_unfinished)
+    unfinished_supplies = list(res_unfinished.scalars().all())
+
+    for local_supply in unfinished_supplies:
+        if local_supply.wb_supply_id in supplies_dict:
+            wb_name, wb_done = supplies_dict[local_supply.wb_supply_id]
+            if wb_done:
+                local_supply.status = FBS_SUPPLY_STATUS_DONE
+                if wb_name:
+                    local_supply.name = wb_name
+
+    await session.commit()
+
     candidates = await _load_unlinked_confirmed_orders(session, tenant_id, seller_id)
     if not candidates:
         return _empty_supply_link_result()
@@ -1279,6 +1372,9 @@ async def link_confirmed_orders_to_wb_supplies(
                 wb_supply_id,
                 {"supplyId": wb_supply_id},
                 matching_orders,
+                http_client=http_client,
+                api_token=api_token,
+                supplies_dict=supplies_dict,
             )
             if supply is None:
                 # _get_or_create_wb_origin_supply вернул None только по одной причине:

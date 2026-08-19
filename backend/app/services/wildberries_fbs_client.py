@@ -54,6 +54,12 @@ class MarketplaceSupplyDetails:
 
 
 @dataclass(frozen=True, slots=True)
+class MarketplaceSuppliesPage:
+    supplies: dict[str, tuple[str | None, bool]]  # {id: (name, done)}
+    next_cursor: int | None
+
+
+@dataclass(frozen=True, slots=True)
 class MarketplaceOrderMetaRow:
     order_id: int
     meta_details: tuple[MarketplaceMetaDetail, ...] = ()
@@ -356,6 +362,35 @@ def _parse_supply_details(data: Any) -> MarketplaceSupplyDetails:
     )
 
 
+def _parse_supplies_page(data: Any) -> MarketplaceSuppliesPage:
+    if not isinstance(data, dict):
+        raise WildberriesClientError("invalid_response")
+    supplies_raw = data.get("supplies")
+    if not isinstance(supplies_raw, list):
+        raise WildberriesClientError("invalid_response")
+
+    supplies: dict[str, tuple[str | None, bool]] = {}
+    for item in supplies_raw:
+        if not isinstance(item, dict):
+            continue
+        supply_id_raw = item.get("id")
+        if supply_id_raw is None:
+            continue
+        supply_id = str(supply_id_raw)
+        name_raw = item.get("name")
+        name = name_raw if isinstance(name_raw, str) else None
+        done_raw = item.get("done")
+        done = bool(done_raw) if isinstance(done_raw, bool) else False
+        supplies[supply_id] = (name, done)
+
+    next_cursor_raw = data.get("next")
+    next_cursor: int | None = None
+    if isinstance(next_cursor_raw, int):
+        next_cursor = next_cursor_raw
+
+    return MarketplaceSuppliesPage(supplies=supplies, next_cursor=next_cursor)
+
+
 def _parse_order_ids_response(data: Any) -> list[int]:
     if not isinstance(data, dict):
         raise WildberriesClientError("invalid_response")
@@ -521,6 +556,37 @@ async def fetch_marketplace_supply_details(
     except ValueError as exc:
         raise WildberriesClientError("invalid_response") from exc
     return _parse_supply_details(data)
+
+
+async def fetch_marketplace_supplies_page(
+    client: httpx.AsyncClient,
+    *,
+    api_token: str,
+    next_cursor: int | None = None,
+    marketplace_api_base: str | None = None,
+) -> MarketplaceSuppliesPage:
+    """GET /api/v3/supplies?limit=1000&next=N — paginated list of supplies."""
+    url = _marketplace_api_url(
+        MARKETPLACE_SUPPLIES_PATH,
+        marketplace_api_base=marketplace_api_base,
+    )
+    params: dict[str, str | int] = {"limit": 1000}
+    if next_cursor is not None:
+        params["next"] = next_cursor
+    response = await marketplace_request(
+        client,
+        "GET",
+        url,
+        api_token=api_token,
+        params=params,
+    )
+    if response.status_code >= 400:
+        raise map_upstream_error(response)
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise WildberriesClientError("invalid_response") from exc
+    return _parse_supplies_page(data)
 
 
 async def fetch_marketplace_supply_order_ids(
