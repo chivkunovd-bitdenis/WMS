@@ -572,7 +572,7 @@ async def fetch_marketplace_supplies_page(
     )
     # WB требует ОБА параметра. Без `next` ручка отвечает
     # 400 {"code":"IncorrectParameter"} — проверено живым запросом на боевом токене
-    # 19.08.2026. Первая страница запрашивается с next=0.
+    # 19.08.2026. Первая страница запрашивается с next=0.  # noqa: RUF003
     params: dict[str, str | int] = {"limit": 1000, "next": next_cursor or 0}
     response = await marketplace_request(
         client,

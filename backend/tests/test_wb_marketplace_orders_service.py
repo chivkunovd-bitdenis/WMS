@@ -588,3 +588,40 @@ async def test_supplies_page_always_sends_next_param() -> None:
 
     assert seen[0] == {"limit": "1000", "next": "0"}, "первая страница обязана слать next=0"
     assert seen[1] == {"limit": "1000", "next": "777"}, "курсор обязан уходить в запрос"
+
+
+@pytest.mark.asyncio
+async def test_supplies_pagination_stops_on_empty_page() -> None:
+    """WB отдаёт курсор даже когда данные кончились — выходим по пустой странице.
+
+    Раньше признаком конца был только пустой курсор, поэтому цикл честно крутил
+    все MAX_SUPPLIES_PAGES страниц на каждого селлера: 10 запросов вместо одного,
+    и общий лимитер WB отвечал 429.
+    """
+    from app.services.wildberries_fbs_client import fetch_marketplace_supplies_page
+
+    calls: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        if len(calls) == 1:
+            return httpx.Response(200, json={
+                "supplies": [{"id": "WB-GI-1", "name": "Первая", "done": True}],
+                "next": 999,          # курсор есть, хотя данные кончились
+            })
+        return httpx.Response(200, json={"supplies": [], "next": 1000})
+
+    merged: dict[str, tuple[str | None, bool]] = {}
+    cursor: int | None = None
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        for _ in range(10):
+            page = await fetch_marketplace_supplies_page(
+                client, api_token="t", next_cursor=cursor
+            )
+            merged.update(page.supplies)
+            if not page.supplies or page.next_cursor is None:
+                break
+            cursor = page.next_cursor
+
+    assert merged == {"WB-GI-1": ("Первая", True)}
+    assert len(calls) == 2, f"должно быть 2 запроса, а не {len(calls)} — иначе лимитер WB"

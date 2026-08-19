@@ -1284,7 +1284,11 @@ async def link_confirmed_orders_to_wb_supplies(
                     next_cursor=next_cursor,
                 )
                 supplies_dict.update(page.supplies)
-                if page.next_cursor is None:
+                # WB отдаёт курсор всегда, даже когда данные кончились: по одному
+                # только курсору цикл крутил все MAX_SUPPLIES_PAGES страниц на каждого
+                # селлера. На бою это 10 запросов × 20 селлеров за проход и 429  # noqa: RUF003
+                # от общего лимитера. Признак конца — пустая страница.
+                if not page.supplies or page.next_cursor is None:
                     break
                 next_cursor = page.next_cursor
             except WildberriesClientError as exc:
