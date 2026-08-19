@@ -1528,7 +1528,12 @@ export function FfFbsSupplyWorkspace({
                   </TableBody>
                 </Table>
               </Paper>
-              {workspace.supply.status === 'draft' && stageIsCurrent ? (
+              {/* Кнопка нужна, пока у поставки нет задания упаковки, — а не пока она
+                  в статусе draft. Поставки, зазеркаленные из кабинета WB, рождаются
+                  сразу в assembling, минуя draft: раньше кнопка им не показывалась
+                  вовсе, задание не создавалось, и вкладка упаковки на них навсегда
+                  оставалась заглушкой «Сначала начните работу с поставкой». */}
+              {!workspace.supply.packaging_task_id ? (
                 <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
                   <Button variant="contained" size="large" onClick={() => void run(() => startFbsSupplyWork(token, authHeaders, workspace.supply.id), 'Задание создано. Можно переходить к следующему этапу.')}>
                     Начать работу с поставкой
