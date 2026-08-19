@@ -42,6 +42,15 @@ class Tenant(Base):
         server_default="false",
         default=False,
     )
+    # Управляет тем, обязателен ли этап упаковки перед раскладкой заказа по коробам.
+    # По умолчанию True — сохраняет текущее поведение для всех тенантов; выключается
+    # только явным решением владельца.
+    fbs_packing_required: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default="true",
+        default=True,
+    )
     fbs_shipment_cutoff_time: Mapped[time | None] = mapped_column(
         Time(timezone=False),
         nullable=True,
