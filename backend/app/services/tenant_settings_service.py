@@ -31,6 +31,16 @@ async def is_address_storage_enabled(
     return tenant.address_storage_enabled
 
 
+async def is_fbs_packing_required(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+) -> bool:
+    """True по умолчанию — этап упаковки обязателен, пока владелец явно не
+    выключил настройку конкретному тенанту."""
+    tenant = await get_tenant(session, tenant_id)
+    return tenant.fbs_packing_required
+
+
 async def get_tenant_settings(
     session: AsyncSession,
     tenant_id: uuid.UUID,

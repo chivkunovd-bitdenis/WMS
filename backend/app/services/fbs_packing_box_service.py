@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import httpx
 from sqlalchemy import delete, func, select
@@ -23,6 +24,7 @@ from app.models.fbs_supply import (
 from app.models.fbs_trbx import FbsTrbx
 from app.models.warehouse_box import WarehouseBox
 from app.services import fbs_shipment_pvz_service as pvz_svc
+from app.services import tenant_settings_service as tenant_settings_svc
 
 
 class FbsPackingBoxError(Exception):
@@ -145,6 +147,30 @@ async def create_boxes(
     return await _load_boxes(session, tenant_id, supply_id)
 
 
+async def _auto_pass_packing_if_needed(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    orders: list[FbsOrder],
+) -> None:
+    """Упаковка не обязательна для тенанта — считаем заказ упакованным
+    автоматически, чтобы не блокировать раскладку по коробам требованием
+    сначала пройти шаг упаковки. По образцу автопропуска подбора
+    (`_auto_pass_picking_if_needed` в `fbs_supply_service.py`): когда шаг
+    отключён настройкой, он не должен становиться стеной для оператора,
+    но проверка остаётся — просто перестаёт требовать ручной отметки.
+    """
+    packing_required = await tenant_settings_svc.is_fbs_packing_required(session, tenant_id)
+    if packing_required:
+        return
+    now = datetime.now(tz=UTC)
+    for order in orders:
+        if order.pack_status == PACK_STATUS_PACKED:
+            continue
+        order.pack_status = PACK_STATUS_PACKED
+        order.packed_at = now
+    await session.flush()
+
+
 async def assign_orders(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -170,6 +196,7 @@ async def assign_orders(
     orders = {order.id: order for order in result.scalars().all()}
     if len(orders) != len(unique_ids):
         raise FbsPackingBoxError("order_not_in_supply")
+    await _auto_pass_packing_if_needed(session, tenant_id, list(orders.values()))
     if any(order.pack_status != PACK_STATUS_PACKED for order in orders.values()):
         raise FbsPackingBoxError("order_not_packed")
     assigned = await session.execute(

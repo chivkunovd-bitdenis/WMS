@@ -15,8 +15,9 @@ from sqlalchemy import select
 
 from app.core.settings import settings
 from app.db.session import SessionLocal
-from app.models.fbs_order import PACK_STATUS_PACKED, FbsOrder
+from app.models.fbs_order import PACK_STATUS_PACKED, PACK_STATUS_PENDING, FbsOrder
 from app.models.fbs_supply import FBS_DELIVERY_TYPE_WAREHOUSE_SC, FBS_SUPPLY_STATUS_PACKED
+from app.models.tenant import Tenant
 from app.services.fbs_workspace_service import (
     WorkspaceProgress,
     _compute_stage,
@@ -207,6 +208,89 @@ async def test_without_distribution_boxes_do_not_accept_order_assignment(
     )
     assert assigned.status_code == 400, assigned.text
     assert assigned.json()["detail"]["code"] == "box_without_distribution"
+
+
+@pytest.mark.asyncio
+async def test_assign_orders_auto_passes_packing_when_tenant_disables_requirement(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """Тенант выключил fbs_packing_required — заказ, упаковку которого никто
+    не отмечал, всё равно попадает в короб. Значение pack_status при этом
+    по-настоящему становится "packed", проверка не просто обходится стороной."""
+    headers, supply_id, order_ids = await _packed_supply(async_client)
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_ids[0])
+        assert order is not None
+        order.pack_status = PACK_STATUS_PENDING
+        order.packed_at = None
+        tenant = await session.get(Tenant, order.tenant_id)
+        assert tenant is not None
+        tenant.fbs_packing_required = False
+        await session.commit()
+
+    created = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes",
+        headers=headers,
+        json={"count": 1, "idempotency_key": "boxes-auto-pack-1"},
+    )
+    assert created.status_code == 201, created.text
+    box_id = created.json()["boxes"][0]["id"]
+
+    assigned = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes/{box_id}/orders",
+        headers=headers,
+        json={"order_ids": [str(order_ids[0])]},
+    )
+    assert assigned.status_code == 200, assigned.text
+    assert assigned.json()["boxes"][0]["assigned_order_ids"] == [str(order_ids[0])]
+
+    async with SessionLocal() as session:
+        refreshed = await session.get(FbsOrder, order_ids[0])
+        assert refreshed is not None
+        assert refreshed.pack_status == PACK_STATUS_PACKED
+        assert refreshed.packed_at is not None
+
+
+@pytest.mark.asyncio
+async def test_assign_orders_still_requires_packing_when_tenant_requires_it(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """fbs_packing_required=True (в т.ч. значение по умолчанию) — поведение
+    не меняется: заказ без отметки упаковки в короб не попадает."""
+    headers, supply_id, order_ids = await _packed_supply(async_client)
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_ids[0])
+        assert order is not None
+        order.pack_status = PACK_STATUS_PENDING
+        order.packed_at = None
+        tenant = await session.get(Tenant, order.tenant_id)
+        assert tenant is not None
+        # Явно фиксируем True, поскольку полагаться только на значение по умолчанию рискованно.
+        tenant.fbs_packing_required = True
+        await session.commit()
+
+    created = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes",
+        headers=headers,
+        json={"count": 1, "idempotency_key": "boxes-still-required-1"},
+    )
+    assert created.status_code == 201, created.text
+    box_id = created.json()["boxes"][0]["id"]
+
+    assigned = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes/{box_id}/orders",
+        headers=headers,
+        json={"order_ids": [str(order_ids[0])]},
+    )
+    assert assigned.status_code == 400, assigned.text
+    assert assigned.json()["detail"]["code"] == "order_not_packed"
+
+    async with SessionLocal() as session:
+        refreshed = await session.get(FbsOrder, order_ids[0])
+        assert refreshed is not None
+        assert refreshed.pack_status == PACK_STATUS_PENDING
 
 
 def test_workspace_handoff_requires_boxes_and_every_packed_order_assignment() -> None:
