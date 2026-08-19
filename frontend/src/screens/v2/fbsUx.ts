@@ -20,6 +20,7 @@ export function metadataKindLabel(kind: string) {
 
 export type FbsPickingListPrintRow = {
   name: string
+  size: string | null
   imageUrl: string | null
   identifiers: string[]
   locations: string[]
@@ -79,6 +80,7 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
           <strong>${escapePrintHtml(row.name)}</strong>
           <div class="muted">${row.identifiers.length ? row.identifiers.map(escapePrintHtml).join(' · ') : 'Идентификаторы не указаны'}</div>
         </td>
+        <td class="size">${row.size ? escapePrintHtml(row.size) : '—'}</td>
         <td>${row.locations.length ? row.locations.map(escapePrintHtml).join('<br />') : 'Ячейка не назначена'}</td>
         <td>${row.wbOrders.map((id) => `№${escapePrintHtml(id)}`).join('<br />')}</td>
         <td class="sticker">${stickerCodes}</td>
@@ -110,6 +112,8 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
       .number { width: 28px; text-align: center; }
       .image { width: 54px; text-align: center; }
       .image img { display: block; width: 42px; height: 42px; margin: auto; object-fit: contain; }
+      .size { width: 78px; text-align: center; white-space: nowrap; }
+      td.size { font-size: 20px; font-weight: 700; }
       .quantity { width: 62px; text-align: center; font-weight: 700; }
       .sticker { width: 96px; font-size: 14px; white-space: nowrap; }
       .muted { margin-top: 3px; color: #687083; font-size: 10px; }
@@ -126,8 +130,8 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
       <div><span>Сдать до</span><strong>${escapePrintHtml(input.deadlineLabel)}</strong></div>
     </div>
     <table>
-      <thead><tr><th class="number">№</th><th class="image">Фото</th><th>Товар и идентификаторы</th><th>Ячейка</th><th>Заказы WB</th><th class="sticker">Стикер</th><th class="quantity">Взять</th><th class="quantity">Подобрано</th><th>Маркировка</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="9">В поставке нет товаров для подбора.</td></tr>'}</tbody>
+      <thead><tr><th class="number">№</th><th class="image">Фото</th><th>Товар и идентификаторы</th><th class="size">Размер</th><th>Ячейка</th><th>Заказы WB</th><th class="sticker">Стикер</th><th class="quantity">Взять</th><th class="quantity">Подобрано</th><th>Маркировка</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="10">В поставке нет товаров для подбора.</td></tr>'}</tbody>
     </table>
     <div class="footer">Сформировано WMS: ${escapePrintHtml(input.printedAtLabel)} · Актуальное серверное состояние на момент печати.</div>
     <script>

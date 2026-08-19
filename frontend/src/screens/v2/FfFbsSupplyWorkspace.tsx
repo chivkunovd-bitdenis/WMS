@@ -985,6 +985,7 @@ export function FfFbsSupplyWorkspace({
     const grouped = new Map<string, {
       key: string
       name: string
+      size: string | null
       imageUrl: string | null
       identifiers: string[]
       locations: string[]
@@ -1000,6 +1001,7 @@ export function FfFbsSupplyWorkspace({
       const current = grouped.get(key) ?? {
         key,
         name: order.product.name,
+        size: order.product.size,
         imageUrl: order.product.image_url,
         identifiers: [order.product.seller_article, order.product.wb_article ? `WB ${order.product.wb_article}` : null, order.product.barcode].filter((value): value is string => Boolean(value)),
         locations: [],

@@ -22,6 +22,7 @@ describe('FBS picking list print document', () => {
       printedAtLabel: '05.08.2026, 19:00',
       rows: [{
         name: '<script>alert(1)</script>',
+        size: '38',
         imageUrl: 'javascript:alert(1)',
         identifiers: ['ART-1', '2000000000011'],
         locations: ['A-01: 2'],
@@ -41,5 +42,35 @@ describe('FBS picking list print document', () => {
     expect(html).toContain('A-01: 2')
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
     expect(html).not.toContain('javascript:alert(1)')
+  })
+
+  it('печатает размер отдельной колонкой, а без размера ставит прочерк', () => {
+    const base = {
+      supplyName: 'FBS 19.08',
+      wbSupplyId: 'WB-GI-2',
+      sellerName: 'Loviana',
+      wmsWarehouseName: 'основной',
+      routeLabel: 'Склад / СЦ',
+      deadlineLabel: '24.08.2026, 12:00',
+      printedAtLabel: '19.08.2026, 16:20',
+    }
+    const row = {
+      name: 'Лоферы замшевые',
+      imageUrl: null,
+      identifiers: ['J308-6'],
+      locations: [],
+      required: 1,
+      picked: 0,
+      wbOrders: [5524537174],
+      stickerCodes: [null],
+      marking: 'Не требуется',
+    }
+
+    const withSize = buildFbsPickingListPrintHtml({ ...base, rows: [{ ...row, size: '38' }] })
+    expect(withSize).toContain('<th class="size">Размер</th>')
+    expect(withSize).toContain('<td class="size">38</td>')
+
+    const noSize = buildFbsPickingListPrintHtml({ ...base, rows: [{ ...row, size: null }] })
+    expect(noSize).toContain('<td class="size">—</td>')
   })
 })
