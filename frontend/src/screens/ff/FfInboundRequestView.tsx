@@ -54,7 +54,7 @@ import {
 import { printBarcodeLabel } from '../../utils/printBarcodeLabel'
 import { BoxLabelPrintDialog } from '../../components/BoxLabelPrintDialog'
 import type { LabelSize } from '../../utils/labelSize'
-import { printInboundSupplyWaybill } from '../../utils/printShipmentWaybill'
+import { printInboundReceivingSheet } from '../../utils/printInboundReceivingSheet'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { inboundOperationTypeReceptionLabel } from '../../utils/inboundOperationType'
 import { FfInboundBoxAddDialog } from './FfInboundBoxAddDialog'
@@ -462,7 +462,7 @@ export function FfInboundRequestView({
     return () => onDirtyChange?.(false)
   }, [onDirtyChange, sortingView])
   const plannedDateFieldEnabled = false
-  const waybillPrintEnabled = false
+  const waybillPrintEnabled = true
   const boxImportEnabled = false
   const documentDistributionEnabled = false
   const receptionClosed =
@@ -2158,25 +2158,23 @@ export function FfInboundRequestView({
                   data-testid="ff-inbound-print-waybill"
                   onClick={() => {
                     const wh = requestWarehouse
-                    const boxes = detail.boxes ?? []
-                    printInboundSupplyWaybill({
-                      documentId: detail.id,
+                    printInboundReceivingSheet({
                       documentNumber: displayDocumentNumber,
-                      waybillNumber: detail.waybill_number ?? null,
-                      documentTypeLabel: operationTypeLabel,
-                      statusLabel: inboundStatusRu(detail.status),
-                      warehouseName: wh ? `${wh.name} (${wh.code})` : '—',
                       sellerName: detail.seller_name ?? null,
+                      warehouseName: wh ? `${wh.name} (${wh.code})` : '—',
                       plannedDate: detail.planned_delivery_date,
-                      createdAt: detail.created_at ?? null,
-                      plannedBoxCount: detail.planned_box_count,
-                      actualBoxCount: detail.actual_box_count ?? boxes.length,
-                      lines: detail.lines.map((ln) => ({
-                        sku_code: ln.sku_code,
-                        product_name: ln.product_name,
-                        quantity: ln.expected_qty,
-                        received_qty: effectiveActualQty(ln, boxes, detail.status),
-                      })),
+                      items: detail.lines.map((ln) => {
+                        const meta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
+                        return {
+                          product_name: meta.product_name,
+                          vendor_code: meta.wb_vendor_code ?? '',
+                          sku_code: meta.sku_code,
+                          barcode: formatProductBarcodeDisplay(meta),
+                          wb_nm_id: meta.wb_nm_id,
+                          photo_url: meta.wb_primary_image_url,
+                          expected_qty: ln.expected_qty,
+                        }
+                      }),
                     })
                   }}
                 >
