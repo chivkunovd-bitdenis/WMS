@@ -494,7 +494,10 @@ async def test_supplies_pagination_merged_into_dict(
                     next_param = int(next_param_raw)
                 page_requests.append(next_param)
 
-                if next_param is None:
+                # WB требует `next` всегда; первая страница — next=0.
+                # Раньше тест ждал отсутствия параметра и тем закреплял ошибку,
+                # из-за которой боевой WB отвечал 400 IncorrectParameter.
+                if next_param in (None, 0):
                     # First page
                     return httpx.Response(
                         200,
@@ -562,3 +565,26 @@ async def test_supplies_pagination_merged_into_dict(
         assert result["supply_linked_orders"] == 2
         # Verify pagination happened (two page requests)
         assert len(page_requests) == 2
+
+
+@pytest.mark.asyncio
+async def test_supplies_page_always_sends_next_param() -> None:
+    """WB отвечает 400 IncorrectParameter, если в запросе нет `next`.
+
+    Проверяем сам ЗАПРОС, а не разбор ответа: прошлая версия слала только `limit`,
+    все тесты на разборе были зелёными, а на бою список не приходил ни разу.
+    """
+    from app.services.wildberries_fbs_client import fetch_marketplace_supplies_page
+
+    seen: list[dict[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(dict(request.url.params))
+        return httpx.Response(200, json={"supplies": [], "next": None})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        await fetch_marketplace_supplies_page(client, api_token="t")
+        await fetch_marketplace_supplies_page(client, api_token="t", next_cursor=777)
+
+    assert seen[0] == {"limit": "1000", "next": "0"}, "первая страница обязана слать next=0"
+    assert seen[1] == {"limit": "1000", "next": "777"}, "курсор обязан уходить в запрос"
