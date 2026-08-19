@@ -39,6 +39,12 @@ type Marks = Record<string, Mark>
 type PickFilter = 'all' | 'not_collected' | 'not_packed'
 
 // Отметки Собрал/Упаковал в v1 живут локально (localStorage) — серверного персиста пока нет.
+/** Ключ отметки — артикул вместе с размером: у одного артикула строк столько,
+ *  сколько размеров, и отметка «Собрал» должна принадлежать своей строке. */
+export function markKey(item: Pick<FbsPickingItem, 'article' | 'size'>): string {
+  return item.size ? `${item.article}::${item.size}` : item.article
+}
+
 function loadMarks(supplyId: string): Marks {
   try {
     return JSON.parse(localStorage.getItem(`fbs-picklist-${supplyId}`) ?? '{}') as Marks
@@ -86,11 +92,11 @@ export function FfFbsPickList({ token, authHeaders, supplyId, open, onClose }: P
   }, [open, supplyId, load])
 
   const setMark = useCallback(
-    (article: string, patch: Partial<Mark>) => {
+    (key: string, patch: Partial<Mark>) => {
       if (!supplyId) return
       setMarks((prev) => {
-        const cur = prev[article] ?? { collected: false, packed: false }
-        const next = { ...prev, [article]: { ...cur, ...patch } }
+        const cur = prev[key] ?? { collected: false, packed: false }
+        const next = { ...prev, [key]: { ...cur, ...patch } }
         saveMarks(supplyId, next)
         return next
       })
@@ -99,24 +105,25 @@ export function FfFbsPickList({ token, authHeaders, supplyId, open, onClose }: P
   )
 
   const collectedCount = useMemo(
-    () => items.filter((i) => marks[i.article]?.collected).length,
+    () => items.filter((i) => marks[markKey(i)]?.collected).length,
     [items, marks],
   )
   const packedCount = useMemo(
-    () => items.filter((i) => marks[i.article]?.packed).length,
+    () => items.filter((i) => marks[markKey(i)]?.packed).length,
     [items, marks],
   )
 
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase()
     return items.filter((i) => {
-      const m = marks[i.article] ?? { collected: false, packed: false }
+      const m = marks[markKey(i)] ?? { collected: false, packed: false }
       if (filter === 'not_collected' && m.collected) return false
       if (filter === 'not_packed' && m.packed) return false
       if (needle) {
         return (
           i.article.toLowerCase().includes(needle) ||
-          i.product_name.toLowerCase().includes(needle)
+          i.product_name.toLowerCase().includes(needle) ||
+          (i.size?.toLowerCase().includes(needle) ?? false)
         )
       }
       return true
@@ -193,6 +200,9 @@ export function FfFbsPickList({ token, authHeaders, supplyId, open, onClose }: P
             <TableHead>
               <TableRow>
                 <TableCell>Товар</TableCell>
+                <TableCell width={92} align="center">
+                  Размер
+                </TableCell>
                 <TableCell width={90} align="right">
                   Кол-во
                 </TableCell>
@@ -206,28 +216,33 @@ export function FfFbsPickList({ token, authHeaders, supplyId, open, onClose }: P
             </TableHead>
             <TableBody>
               {visible.map((i) => {
-                const m = marks[i.article] ?? { collected: false, packed: false }
+                const key = markKey(i)
+                const m = marks[key] ?? { collected: false, packed: false }
                 return (
-                  <TableRow key={i.article} data-testid="fbs-pick-row" data-article={i.article}>
+                  <TableRow key={key} data-testid="fbs-pick-row" data-article={i.article} data-size={i.size ?? ''}>
                     <TableCell>
                       <Typography variant="body2">{i.product_name}</Typography>
                       <Typography variant="caption" color="text.secondary">
                         {i.article}
-                        {i.size ? ` · ${i.size}` : ''}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="center">
+                      <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }} data-testid="fbs-pick-size">
+                        {i.size || '—'}
                       </Typography>
                     </TableCell>
                     <TableCell align="right">{i.quantity}</TableCell>
                     <TableCell align="center">
                       <Checkbox
                         checked={m.collected}
-                        onChange={(e) => setMark(i.article, { collected: e.target.checked })}
+                        onChange={(e) => setMark(key, { collected: e.target.checked })}
                         data-testid="fbs-pick-collected"
                       />
                     </TableCell>
                     <TableCell align="center">
                       <Checkbox
                         checked={m.packed}
-                        onChange={(e) => setMark(i.article, { packed: e.target.checked })}
+                        onChange={(e) => setMark(key, { packed: e.target.checked })}
                         data-testid="fbs-pick-packed"
                       />
                     </TableCell>
@@ -236,7 +251,7 @@ export function FfFbsPickList({ token, authHeaders, supplyId, open, onClose }: P
               })}
               {!busy && visible.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4}>
+                  <TableCell colSpan={5}>
                     <Box sx={{ py: 3, textAlign: 'center' }} data-testid="fbs-pick-empty">
                       <Typography variant="body2" color="text.secondary">
                         Нет позиций по фильтру.
