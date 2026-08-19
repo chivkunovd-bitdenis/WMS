@@ -1139,7 +1139,12 @@ export function FfFbsSupplyWorkspace({
   const printedOrdersCount = packingOrders.filter(orderPrintDone).length
   const unprintedPackingOrders = packingOrders.filter((order) => !orderPrintDone(order))
   const markingShortOrderIds = new Set(workspace?.marking_pool?.orders_without_code ?? [])
-  const anyOrderNeedsHonestSign = packingOrders.some(requiresOrderHonestSign)
+  // Строка скана КИЗ доступна на любой поставке и любом товаре, без оглядки на
+  // признак маркировки в карточке и на requiredMeta от WB. Если Честный знак
+  // физически наклеен на товаре — значит товар маркированный, и спрашивать об
+  // этом систему незачем: раньше признак не доезжал (он читается из строки
+  // задания упаковки), строка скана не появлялась и КИЗ не уходили в WB вовсе.
+  const anyOrderNeedsHonestSign = packingOrders.length > 0
 
   const stageBlockers = useMemo(() => {
     if (stage === 'packing') {
