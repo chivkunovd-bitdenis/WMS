@@ -51,6 +51,8 @@ type Props = {
   sellers?: { id: string; name: string }[]
   selectedSellerId?: string | null
   onSelectedSellerIdChange?: (id: string | null) => void
+  /** Портал селлера, если задан. У фулфилмента не задан. */
+  sellerId?: string | null
 }
 
 const EVENT_TYPES = ['', 'imported', 'printed', 'applied', 'shipped', 'voided', 'defective']
@@ -70,7 +72,10 @@ export function HonestSignLedgerPage({
   sellers = [],
   selectedSellerId = null,
   onSelectedSellerIdChange,
+  sellerId = null,
 }: Props) {
+  const isSellerPortal = Boolean(sellerId)
+  const columnCount = isSellerPortal ? 8 : 9
   const [searchParams] = useSearchParams()
   const poolIdFromUrl = searchParams.get('pool_id')
   const eventTypeFromUrl = searchParams.get('event_type') ?? ''
@@ -354,26 +359,27 @@ export function HonestSignLedgerPage({
         <Table size="small" data-testid={`${testIdPrefix}-table`}>
           <TableHead>
             <TableRow>
+              <TableCell>Товар</TableCell>
+              <TableCell>Название документа</TableCell>
+              <TableCell>Номер документа</TableCell>
+              {!isSellerPortal ? <TableCell>Сотрудник</TableCell> : null}
               <TableCell>Время</TableCell>
+              <TableCell>КМ/CIS</TableCell>
               <TableCell>Событие</TableCell>
-              <TableCell>КМ</TableCell>
-              <TableCell>Пул / товар</TableCell>
+              <TableCell>Пул</TableCell>
               <TableCell>Селлер</TableCell>
-              <TableCell>Документ</TableCell>
-              <TableCell>Источник</TableCell>
-              <TableCell>Пользователь</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {busy ? (
               <TableRow>
-                <TableCell colSpan={8}>
+                <TableCell colSpan={columnCount}>
                   <Skeleton height={32} />
                 </TableCell>
               </TableRow>
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8}>
+                <TableCell colSpan={columnCount}>
                   <Typography variant="body2" color="text.secondary">
                     События не найдены.
                   </Typography>
@@ -382,21 +388,26 @@ export function HonestSignLedgerPage({
             ) : (
               rows.map((row) => (
                 <TableRow key={row.id} data-testid={`${testIdPrefix}-row-${row.id}`}>
-                  <TableCell>{new Date(row.created_at).toLocaleString('ru-RU')}</TableCell>
                   <TableCell>
-                    <Chip size="small" label={ledgerEventLabel(row.event_type)} />
+                    <Typography variant="body2">{row.product_name ?? '—'}</Typography>
+                    {row.product_sku ? (
+                      <Typography variant="caption" color="text.secondary">
+                        {row.product_sku}
+                      </Typography>
+                    ) : null}
                   </TableCell>
+                  <TableCell>{row.source_process_label ?? '—'}</TableCell>
+                  <TableCell>{row.document_number ?? '—'}</TableCell>
+                  {!isSellerPortal ? <TableCell>{row.actor_email ?? '—'}</TableCell> : null}
+                  <TableCell>{new Date(row.created_at).toLocaleString('ru-RU')}</TableCell>
                   <TableCell sx={{ wordBreak: 'break-all' }}>
                     {row.cis_code ?? row.cis_masked ?? '—'}
                   </TableCell>
                   <TableCell>
-                    {row.pool_title ?? '—'}
-                    {row.product_sku ? ` / ${row.product_sku}` : ''}
+                    <Chip size="small" label={ledgerEventLabel(row.event_type)} />
                   </TableCell>
+                  <TableCell>{row.pool_title ?? '—'}</TableCell>
                   <TableCell>{row.seller_name ?? '—'}</TableCell>
-                  <TableCell>{row.document_number ?? '—'}</TableCell>
-                  <TableCell>{row.source_process_label ?? '—'}</TableCell>
-                  <TableCell>{row.actor_email ?? '—'}</TableCell>
                 </TableRow>
               ))
             )}

@@ -88,13 +88,17 @@ type Props = {
   token: string
   testIdPrefix?: string
   routeBase?: string
+  /** Портал селлера, если задан. У фулфилмента не задан. */
+  sellerId?: string | null
 }
 
 export function HonestSignProductPage({
   token,
   testIdPrefix = 'honest-sign-product',
   routeBase = '/app/ff',
+  sellerId = null,
 }: Props) {
+  const isSellerPortal = Boolean(sellerId)
   const { productId } = useParams<{ productId: string }>()
   const navigate = useNavigate()
 
@@ -443,7 +447,7 @@ export function HonestSignProductPage({
                     label="Личный пул"
                     value={thresholdPool?.pool_id ?? ''}
                     onChange={(e) => setThresholdPoolId(e.target.value)}
-                    disabled={thresholdLoading || thresholdSaving}
+                    disabled={thresholdLoading || thresholdSaving || isSellerPortal}
                     sx={{ minWidth: { sm: 220 } }}
                     data-testid={`${testIdPrefix}-threshold-pool`}
                   >
@@ -460,7 +464,7 @@ export function HonestSignProductPage({
                   type="number"
                   value={lowThreshold}
                   onChange={(e) => setLowThreshold(e.target.value)}
-                  disabled={thresholdLoading || thresholdSaving}
+                  disabled={thresholdLoading || thresholdSaving || isSellerPortal}
                   slotProps={{ htmlInput: { min: 0 } }}
                   data-testid={`${testIdPrefix}-threshold-low`}
                 />
@@ -470,20 +474,22 @@ export function HonestSignProductPage({
                   type="number"
                   value={forecastDaysThreshold}
                   onChange={(e) => setForecastDaysThreshold(e.target.value)}
-                  disabled={thresholdLoading || thresholdSaving}
+                  disabled={thresholdLoading || thresholdSaving || isSellerPortal}
                   slotProps={{ htmlInput: { min: 0 } }}
                   sx={{ minWidth: { sm: 280 } }}
                   data-testid={`${testIdPrefix}-threshold-forecast-days`}
                 />
-                <Button
-                  variant="contained"
-                  size="small"
-                  disabled={thresholdLoading || thresholdSaving}
-                  onClick={() => void saveThreshold()}
-                  data-testid={`${testIdPrefix}-threshold-save`}
-                >
-                  Сохранить
-                </Button>
+                {!isSellerPortal ? (
+                  <Button
+                    variant="contained"
+                    size="small"
+                    disabled={thresholdLoading || thresholdSaving}
+                    onClick={() => void saveThreshold()}
+                    data-testid={`${testIdPrefix}-threshold-save`}
+                  >
+                    Сохранить
+                  </Button>
+                ) : null}
               </Stack>
             </Paper>
           ) : null}
@@ -707,7 +713,7 @@ export function HonestSignProductPage({
                 <TableCell>Время</TableCell>
                 <TableCell>Событие</TableCell>
                 <TableCell>КМ/CIS</TableCell>
-                <TableCell>Сотрудник</TableCell>
+                {!isSellerPortal ? <TableCell>Сотрудник</TableCell> : null}
                 <TableCell>Источник</TableCell>
                 <TableCell>Документ</TableCell>
               </TableRow>
@@ -715,13 +721,13 @@ export function HonestSignProductPage({
             <TableBody>
               {ledgerBusy && ledger.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6}>
+                  <TableCell colSpan={isSellerPortal ? 5 : 6}>
                     <Skeleton height={32} />
                   </TableCell>
                 </TableRow>
               ) : ledger.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6}>
+                  <TableCell colSpan={isSellerPortal ? 5 : 6}>
                     <Typography variant="body2" color="text.secondary">
                       Событий пока нет.
                     </Typography>
@@ -751,7 +757,7 @@ export function HonestSignProductPage({
                       <TableCell sx={{ wordBreak: 'break-all' }}>
                         {isAggregatedImport ? '—' : row.cis_code ?? row.cis_masked ?? '—'}
                       </TableCell>
-                      <TableCell>{row.actor_email ?? '—'}</TableCell>
+                      {!isSellerPortal ? <TableCell>{row.actor_email ?? '—'}</TableCell> : null}
                       <TableCell>{row.source_process_label ?? '—'}</TableCell>
                       <TableCell>{row.document_number ?? '—'}</TableCell>
                     </TableRow>

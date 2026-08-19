@@ -16,6 +16,7 @@ import { SellerProductsStockScreen } from '../../screens/v2/SellerProductsStockS
 import { SellerHonestSignScreen } from '../../screens/v2/SellerHonestSignScreen'
 import { SellerSettingsScreen } from '../../screens/v2/SellerSettingsScreen'
 import { NotificationsPage } from '../../screens/shared/NotificationsPage'
+import { HonestSignProductPage } from '../../screens/shared/HonestSignProductPage'
 import { SellerLayout } from './SellerLayout'
 
 type InboundSummaryRow = {
@@ -472,7 +473,24 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                 <SellerHonestSignScreen
                   key={catalogScopeKey}
                   token={token}
+                  navigationBasePath={navigationBasePath}
                   sellerId={me.active_seller_id ?? me.seller_id ?? ''}
+                />
+              ) : (
+                accessDenied
+              )
+            }
+          />
+          <Route
+            path="/honest-sign/product/:productId"
+            element={
+              token && sellerPermissions.honest_sign ? (
+                <HonestSignProductPage
+                  key={catalogScopeKey}
+                  token={token}
+                  sellerId={me.active_seller_id ?? me.seller_id ?? ''}
+                  testIdPrefix="seller-honest-sign-product"
+                  routeBase="/seller"
                 />
               ) : (
                 accessDenied
