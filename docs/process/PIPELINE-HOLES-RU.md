@@ -81,6 +81,21 @@ runner, всё ещё могут обратиться в живой WB/Ozon, п�
 нужен audit всех штатных test entrypoint'ов или сетевой sandbox уровнем ниже
 процесса.
 
+## P0. Crash/restart lane: MT04, MT22 и MT40 проверяются автономно
+
+Добавлены `pipeline/replay.py` и `scripts/ci/check_pipeline_replay_metatests.py`.
+Они без запуска controller или LMS/WMS читают временные копии того же
+`state.json`/`journal.jsonl`: MT04 восстанавливает следующий stage после
+последнего receipt и терпит оборванную последнюю строку журнала, MT22
+восстанавливает все task-state wave, MT40 не повторяет внешний effect по
+durable `effect_key`, если crash произошёл до обновления task state.
+
+Это автономный contract probe, а не полноценный wave-driver: controller пока
+не пишет отдельный effect ledger и не предоставляет recovery-команду. MT40
+проверяет протокол, где `EXTERNAL_EFFECT_COMMITTED` должен быть durable до
+state update; crash до этой записи или отсутствие provider-side idempotency
+остаются дырой controller/integration слоя.
+
 ## P1. Старые процессные документы ещё живые
 
 Входные документы теперь получили указатель на
