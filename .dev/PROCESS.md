@@ -3,7 +3,7 @@
 > Pipeline v2 supersedes this staged process after activation. Целевой канон:
 > [`docs/process/PIPELINE-RU.md`](../docs/process/PIPELINE-RU.md), машинный статус:
 > [`pipeline/pipeline.yml`](../pipeline/pipeline.yml). Пока статус
-> `TARGET_PIPELINE_NOT_ENFORCED`, этот файл остаётся legacy-регламентом и не
+> не `ACTIVE`, этот файл остаётся legacy-регламентом и не
 > считается доказательством активации нового controller.
 
 > Этот файл — единый регламент для **любого** агента (Claude Code, Cursor, Codex) и человека.

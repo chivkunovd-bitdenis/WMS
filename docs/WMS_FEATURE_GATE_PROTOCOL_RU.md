@@ -3,7 +3,7 @@
 > Legacy gate until Pipeline v2 activation. Целевой единый процесс:
 > [`docs/process/PIPELINE-RU.md`](process/PIPELINE-RU.md), машинный статус:
 > [`pipeline/pipeline.yml`](../pipeline/pipeline.yml). Пока статус
-> `TARGET_PIPELINE_NOT_ENFORCED`, этот gate остаётся обязательным, но не является
+> не `ACTIVE`, этот gate остаётся обязательным, но не является
 > новым controller из Pipeline v2.
 
 Этот документ обязателен для любой WMS-задачи: поток требований, баг, UI/rework,

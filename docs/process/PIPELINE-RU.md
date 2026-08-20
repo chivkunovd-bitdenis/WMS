@@ -1538,7 +1538,7 @@ print/scanner, mobile consumer, new module, emergency debt closure и соста
 Редактирование документа и реализация технических этапов не означают автоматическую активацию.
 
 ```text
-PIPELINE_IMPLEMENTATION_APPROVED: <дата или нет>
+PIPELINE_IMPLEMENTATION_APPROVED: 2026-08-20
 PIPELINE_ACTIVATION_APPROVED: <дата или нет>
 ```
 

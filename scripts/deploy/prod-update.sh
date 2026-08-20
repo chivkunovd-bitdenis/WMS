@@ -8,13 +8,28 @@ cd "$REPO_DIR"
 # Deploy SSH user may differ from repo owner (git 2.35+ safe.directory).
 git config --global --add safe.directory "$REPO_DIR"
 
-echo "==> git pull"
-git fetch origin
-git checkout main
-if ! git pull --ff-only origin main; then
-  echo "WARN: pull blocked by local changes; resetting to origin/main"
-  git reset --hard origin/main
+if [[ -z "${WMS_RELEASE_SHA:-}" ]]; then
+  echo "ERROR: WMS_RELEASE_SHA is required; production deploy must name the approved exact SHA." >&2
+  exit 64
 fi
+if [[ ! "$WMS_RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "ERROR: WMS_RELEASE_SHA must be a lowercase 40-char Git SHA." >&2
+  exit 64
+fi
+
+CURRENT_SHA="$(git rev-parse HEAD)"
+if [[ "$CURRENT_SHA" != "$WMS_RELEASE_SHA" ]]; then
+  echo "ERROR: deploy checkout mismatch: HEAD=$CURRENT_SHA, WMS_RELEASE_SHA=$WMS_RELEASE_SHA" >&2
+  exit 65
+fi
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "ERROR: production worktree is dirty; exact-SHA deploy refuses to continue." >&2
+  git status --short
+  exit 66
+fi
+
+export WMS_GIT_SHA="$WMS_RELEASE_SHA"
+export WMS_ARTIFACT_DIGEST="${WMS_ARTIFACT_DIGEST:-server-build:${WMS_RELEASE_SHA}}"
 
 COMPOSE=(docker compose -f docker-compose.prod.yml)
 if [[ -f docker-compose.wms-host-8088.yml ]]; then

@@ -3,7 +3,7 @@
 > Legacy Product role until Pipeline v2 activation. Целевой единый процесс:
 > [`docs/process/PIPELINE-RU.md`](process/PIPELINE-RU.md), машинный статус:
 > [`pipeline/pipeline.yml`](../pipeline/pipeline.yml). Пока статус
-> `TARGET_PIPELINE_NOT_ENFORCED`, эта роль остаётся действующей частью старого
+> не `ACTIVE`, эта роль остаётся действующей частью старого
 > Product gate и не заменяет S25/controller receipt из Pipeline v2.
 
 Product Agent — это не QA и не "проверить, что кнопка нажалась". Это

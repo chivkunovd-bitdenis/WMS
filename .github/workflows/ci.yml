@@ -15,6 +15,8 @@ jobs:
           python-version: "3.11"
       - name: Validate WMS pipeline v2 contract
         run: python3 scripts/ci/check_pipeline_contract.py
+      - name: Run WMS pipeline v2 metatests
+        run: python3 scripts/ci/check_pipeline_metatests.py
 
   tc-coverage-report:
     runs-on: ubuntu-latest

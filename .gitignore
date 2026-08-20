@@ -54,6 +54,9 @@ mobile/
 # Состояние наряда — локальное, у каждой ветки своё (scripts/naryad_state.py)
 tasks/_current/
 
+# Runtime state Pipeline v2 controller; Git получает только task snapshots.
+.pipeline-state/
+
 # Вывод генераторов печати и черновики агентов — не код
 output/
 scratchpad/

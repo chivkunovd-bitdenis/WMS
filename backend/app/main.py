@@ -32,6 +32,7 @@ from app.api.sellers import router as sellers_router
 from app.api.staff_accounts import router as staff_accounts_router
 from app.api.stock_transfer import router as stock_transfer_router
 from app.api.tenant_settings import router as tenant_settings_router
+from app.api.version import router as version_router
 from app.api.warehouses import router as warehouses_router
 from app.api.wb_mp_warehouses import router as wb_mp_warehouses_router
 from app.api.wildberries_integration import router as wildberries_integration_router
@@ -96,6 +97,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(health_router)
+    app.include_router(version_router)
     app.include_router(auth_router)
     app.include_router(staff_accounts_router)
     app.include_router(tenant_settings_router)

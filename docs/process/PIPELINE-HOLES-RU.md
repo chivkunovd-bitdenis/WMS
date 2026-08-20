@@ -2,51 +2,57 @@
 
 Дата: 2026-08-20.
 
-Статус: `TARGET_PIPELINE_NOT_ENFORCED`.
+Статус: `IMPLEMENTATION_IN_PROGRESS`.
 
 Этот файл фиксирует разрыв между целевой спецификацией
 [`docs/process/PIPELINE-RU.md`](PIPELINE-RU.md) и тем, что сейчас реально
 включено в репозитории. Это не список "мелких TODO"; каждый пункт ниже мешает
 честно поставить `PIPELINE_ACTIVATION_APPROVED`.
 
-## P0. Deploy всё ещё не exact-SHA promotion
+## P0. Deploy exact-SHA guard включён, но build-once promotion ещё не готов
 
 Факт из текущих файлов:
 
-- `.github/workflows/deploy.yml` по push в `main` заходит на сервер, делает
-  `git fetch origin`, `git checkout main`, `git reset --hard origin/main` и
-  запускает `./scripts/deploy/prod-update.sh`;
-- `scripts/deploy/prod-update.sh` повторно делает `git fetch`, `git checkout
-  main`, `git pull --ff-only origin main` или `git reset --hard origin/main`,
-  затем заново собирает `migrations`, `api`, `celery_worker`, `celery_beat` и
-  `web` через `docker compose build`.
+- `.github/workflows/deploy.yml` больше не деплоит push в `main`; production
+  deploy запускается вручную с обязательным `release_sha`;
+- workflow чекаутит detached exact SHA, передаёт `WMS_RELEASE_SHA` в
+  `scripts/deploy/prod-update.sh` и smoke-проверяет `/api/version`;
+- `scripts/deploy/prod-update.sh` больше не делает `checkout main`/`pull main`
+  и падает, если `HEAD != WMS_RELEASE_SHA` или worktree dirty;
+- контейнеры всё ещё собираются на сервере через `docker compose build`.
 
-Почему это дырка: Pipeline v2 требует build-once immutable artifacts, promotion
-ровно разрешённого SHA и runtime verification по `git_sha + artifact_digest`.
-Текущий deploy доказывает только, что сервер собрал текущее `origin/main`;
-он не доказывает, что выкатился тот SHA, который прошёл acceptance.
+Почему это всё ещё дырка: exact Git SHA уже защищён, но Pipeline v2 требует
+build-once immutable artifacts и promotion готовых digests. Серверная сборка
+ровно того же SHA лучше прежнего `main`, но ещё не доказывает неизменность
+artifact digest между acceptance и production.
 
 ## P0. Controller и единый validation engine не реализованы
 
-Добавленный `scripts/ci/check_pipeline_contract.py` проверяет только машинный
-контракт: стадии, traits, hash канонического Markdown, entrypoint pointers и
-наличие 40 метатестов. Он не является `wave-driver`: не выдаёт worktree, не
-подписывает receipts, не ведёт event journal, не делает compare-and-swap state и
-не управляет lease/fencing token.
+Добавлен `pipeline/controller.py` и вход `scripts/pipeline/run.py` с командами
+`open`, `classify`, `advance`, `validate`, `status`, `close`. Контроллер пишет
+runtime state в `.pipeline-state/`, публикует snapshot в `tasks/<task-id>/` и
+создаёт structured receipt при `advance`.
+
+Что ещё не закрыто: это минимальный local controller, а не полный `wave-driver`.
+Он ещё не выдаёт настоящие isolated worktrees/ports/DB/Redis/Celery/emulator, не
+подписывает receipts секретным ключом, не реализует полноценный fencing token,
+crash replay и resource scheduler.
 
 Почему это дырка: без controller рабочий агент всё ещё может "сказать", что
 стадия пройдена, а не получить проверяемый controller-issued receipt.
 
-## P0. Метатесты пока объявлены, но не доказывают поведение
+## P0. Метатесты частично автоматизированы
 
 В `pipeline/pipeline.yml` заведены `MT01`...`MT40`, чтобы CI не потерял ни один
-сценарий части XII. Их статус сейчас `declared_pending_controller`, а не
-`automated_green`.
+сценарий части XII. `scripts/ci/check_pipeline_metatests.py` сейчас доказывает
+первый executable slice: Product-before-workspace order, запрет `DONE` до
+`ACTIVE`, entrypoint inventory, trait machine dimensions и exact-SHA deploy
+guard.
 
 Почему это дырка: наличие списка защищает от забывания требований, но не
 доказывает, что Dev без Product approval реально не получает workspace, что
 истёкший lock отклоняется, или что crash между external side effect и state
-update идемпотентно восстанавливается.
+update идемпотентно восстанавливается. Большая часть MT02...MT40 ещё pending.
 
 ## P0. Fail-closed test egress не включён для всего тестового контура
 
@@ -83,6 +89,12 @@ producer/consumer, который обязательно пишет и пров�
   lifecycle statuses, blockers, protected paths, entrypoints и required
   metatests.
 - Появился CI guard `scripts/ci/check_pipeline_contract.py`.
+- Появился executable local controller `pipeline/controller.py` и вход
+  `scripts/pipeline/run.py`.
+- Появился `scripts/ci/check_pipeline_metatests.py`.
+- Production deploy больше не стартует автоматически от push в `main` и требует
+  exact `release_sha`.
+- Backend отдаёт `/version`, а deploy smoke сверяет runtime SHA.
 - `.github/workflows/ci.yml` запускает этот guard.
 - Основные process entrypoints прямо указывают на новый канон и текущий
   неактивированный статус.
@@ -91,7 +103,7 @@ producer/consumer, который обязательно пишет и пров�
 
 ## Следующий технический slice
 
-Самый полезный следующий slice: E-1 deploy safety fuse. Нужно заменить текущий
-deploy на build-once artifact manifest, promotion exact digests, `/version`
-проверку backend/worker/frontend и rollback/stop plan. Это снижает самый опасный
-разрыв: "приняли один SHA, выкатили другой".
+Самый полезный следующий slice: build-once artifact manifest и promotion exact
+digests. Нужно убрать серверный `docker compose build`, собирать backend,
+worker, migrations и frontend один раз в CI, сохранять manifest и продвигать
+именно эти digests на production.

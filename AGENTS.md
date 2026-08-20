@@ -4,7 +4,7 @@
 
 Целевой единый процесс описан в [`docs/process/PIPELINE-RU.md`](docs/process/PIPELINE-RU.md), а
 машинный статус и hash источника — в [`pipeline/pipeline.yml`](pipeline/pipeline.yml). Пока там
-указано `TARGET_PIPELINE_NOT_ENFORCED`, старые Product gate-правила ниже остаются действующими;
+не указано `ACTIVE`, старые Product gate-правила ниже остаются действующими;
 нельзя называть Pipeline v2 активированным до owner approval и зелёных метатестов из части XII.
 
 ## ⛔️ ЕДИНСТВЕННЫЙ ПРАВИЛЬНЫЙ ПУТЬ ПРОЕКТА — ЧИТАТЬ ПЕРВЫМ

@@ -1,15 +1,15 @@
 {
   "$schema": "./pipeline.schema.json",
   "pipeline_version": "2.0",
-  "status": "TARGET_PIPELINE_NOT_ENFORCED",
+  "status": "IMPLEMENTATION_IN_PROGRESS",
   "canonical_source": "docs/process/PIPELINE-RU.md",
-  "canonical_source_sha256": "6067a2833ee1c00c772bad035a3dc425113ac076886f13d3be3cc3fbcc90ba11",
+  "canonical_source_sha256": "eda6c64c555120a47e4438c1a018b8dc9ae213b498dec2ec41530f047972e36d",
   "format_note": "This file intentionally uses the JSON subset of YAML so CI can validate it with Python stdlib only.",
   "activation": {
-    "implementation_approved": false,
+    "implementation_approved": true,
     "activation_approved": false,
     "activation_requires_owner_line": "PIPELINE_ACTIVATION_APPROVED: <date>",
-    "current_truth": "The v2 process is declared and guarded, but controller, deploy promotion and runtime receipts are not fully implemented."
+    "current_truth": "The v2 process implementation is in progress: local controller, contract guard, partial metatests and exact-SHA deploy guard exist; full activation is still blocked."
   },
   "refs": {
     "canonical_base_ref": "origin/etalon",
@@ -384,7 +384,7 @@
     {"path": "docs/process/TASK-PIPELINE-ARCHITECT-RU.md", "mode_before_activation": "legacy_design_doc_marked_superseded_pending_activation", "mode_after_activation": "archived_or_pointer"}
   ],
   "activation_blockers": [
-    "controller_wave_driver_not_implemented",
+    "controller_wave_driver_not_full_resumable",
     "shared_validation_engine_not_used_by_close_ci_deploy",
     "build_once_artifact_promotion_not_implemented",
     "runtime_artifact_digest_verification_not_implemented",
@@ -394,7 +394,7 @@
     "old_process_entrypoints_not_archived_after_activation"
   ],
   "required_metatests": [
-    {"id": "MT01", "source": "42.1", "title": "Dev without PRODUCT_APPROVED_FOR_DEV cannot receive workspace", "status": "declared_pending_controller"},
+    {"id": "MT01", "source": "42.1", "title": "Dev without PRODUCT_APPROVED_FOR_DEV cannot receive workspace", "status": "automated_green"},
     {"id": "MT02", "source": "42.2", "title": "Out-of-scope file change is blocked by local guard and CI", "status": "declared_pending_controller"},
     {"id": "MT03", "source": "42.3", "title": "Ordinary task cannot modify pipeline.yml", "status": "declared_pending_controller"},
     {"id": "MT04", "source": "42.4", "title": "Stage crash resumes from last receipt", "status": "declared_pending_controller"},
@@ -424,14 +424,14 @@
     {"id": "MT28", "source": "42.28", "title": "Large internal module gets new_module research/process/GAP/falsification", "status": "declared_pending_controller"},
     {"id": "MT29", "source": "42.29", "title": "Required case without runnable binding blocks functional stage", "status": "declared_pending_controller"},
     {"id": "MT30", "source": "42.30", "title": "UI code without Design Implementation receipt cannot reach Product Browser or release", "status": "declared_pending_controller"},
-    {"id": "MT31", "source": "42.31", "title": "MONITORING_NO_TRAFFIC does not become DONE", "status": "declared_pending_controller"},
+    {"id": "MT31", "source": "42.31", "title": "MONITORING_NO_TRAFFIC does not become DONE", "status": "automated_green"},
     {"id": "MT32", "source": "42.32", "title": "Same Git SHA with different artifact digest blocks promotion/deploy", "status": "declared_pending_controller"},
-    {"id": "MT33", "source": "42.33", "title": "Activation PR missing any process entrypoint is blocked", "status": "declared_pending_controller"},
+    {"id": "MT33", "source": "42.33", "title": "Activation PR missing any process entrypoint is blocked", "status": "automated_green"},
     {"id": "MT34", "source": "42.34", "title": "Emergency profile without signed scope or immutable debt is blocked", "status": "declared_pending_controller"},
     {"id": "MT35", "source": "42.35", "title": "Mutating cases are commutative or declared ordered journeys", "status": "declared_pending_controller"},
     {"id": "MT36", "source": "42.36", "title": "Every failure verdict routes to owning stage, repair, waiting or rollback", "status": "declared_pending_controller"},
     {"id": "MT37", "source": "42.37", "title": "Receipt input change transitively invalidates dependency DAG children", "status": "declared_pending_controller"},
-    {"id": "MT38", "source": "42.38", "title": "Every trait declares stages, receipts, case dimensions and acceptance surface", "status": "declared_pending_controller"},
+    {"id": "MT38", "source": "42.38", "title": "Every trait declares stages, receipts, case dimensions and acceptance surface", "status": "automated_green"},
     {"id": "MT39", "source": "42.39", "title": "Migration release requires compatibility, restore rehearsal and honest rollback policy", "status": "declared_pending_controller"},
     {"id": "MT40", "source": "42.40", "title": "Crash between external side effect and state update cannot repeat effect", "status": "declared_pending_controller"}
   ]
