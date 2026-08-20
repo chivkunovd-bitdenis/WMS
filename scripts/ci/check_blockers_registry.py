@@ -11,6 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 BLOCKS_PATH = ROOT / "docs" / "product" / "blocks.json"
+BACKLOG_QUEUE_PATH = ROOT / "docs" / "product" / "backlog-queue.json"
 REGISTRY_PATH = ROOT / "docs" / "process" / "BLOCKERS-REGISTRY-RU.md"
 HEADING_RE = re.compile(r"^### (BLK-[A-Z]+-\d{3}) — (.+)$", re.MULTILINE)
 VALID_STATUSES = {"open", "narrowed", "closed"}
@@ -38,6 +39,12 @@ def main() -> int:
     errors: list[str] = []
     blocks = json.loads(BLOCKS_PATH.read_text(encoding="utf-8"))
     entries = blocks.get("entries", [])
+    backlog = json.loads(BACKLOG_QUEUE_PATH.read_text(encoding="utf-8"))
+    backlog_ids = {
+        item.get("id")
+        for item in backlog.get("items", [])
+        if isinstance(item, dict) and isinstance(item.get("id"), str)
+    }
     markdown = REGISTRY_PATH.read_text(encoding="utf-8")
     markdown_ids = [match.group(1) for match in HEADING_RE.finditer(markdown)]
 
@@ -56,6 +63,13 @@ def main() -> int:
         require(isinstance(entry.get("title"), str) and len(entry["title"]) >= 8, f"{blocker_id}: title too short", errors)
         require(isinstance(entry.get("owner_role"), str) and entry["owner_role"], f"{blocker_id}: owner_role required", errors)
         require(isinstance(entry.get("affected_task_ids"), list), f"{blocker_id}: affected_task_ids must be an array", errors)
+        for task_id in entry.get("affected_task_ids", []):
+            if isinstance(task_id, str) and task_id.startswith("BLG-"):
+                require(task_id in backlog_ids, f"{blocker_id}: unknown backlog id {task_id}", errors)
+            elif isinstance(task_id, str) and task_id.startswith("BUG-WMS-"):
+                require(True, f"{blocker_id}: existing controller task id {task_id}", errors)
+            else:
+                require(False, f"{blocker_id}: affected task id must be BLG-* or BUG-WMS-*: {task_id}", errors)
         require(isinstance(entry.get("evidence"), list) and entry["evidence"], f"{blocker_id}: evidence must be non-empty", errors)
         require(isinstance(entry.get("supersedes"), list), f"{blocker_id}: supersedes must be an array", errors)
         require(re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(entry.get("last_verified_at"))), f"{blocker_id}: last_verified_at must be YYYY-MM-DD", errors)

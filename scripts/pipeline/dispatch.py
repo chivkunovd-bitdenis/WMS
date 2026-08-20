@@ -138,7 +138,7 @@ python3 scripts/pipeline/run.py validate --task-id {task_id}
 Only after completing the owned stage:
 
 ```bash
-python3 scripts/pipeline/run.py advance --task-id {task_id} --stage {packet["stage"]} --verdict <ALLOWED_VERDICT> --role {packet["role"]} --agent <agent-id>
+python3 scripts/pipeline/run.py advance --task-id {task_id} --stage {packet["stage"]} --verdict <ALLOWED_VERDICT> --role {packet["role"]} --agent <agent-id> --executor {executor} --model {model_recommendation["model"]} --tier {model_recommendation["tier"]} --input-tokens <INPUT_TOKENS> --output-tokens <OUTPUT_TOKENS> --estimated-usd <USD>
 python3 scripts/pipeline/run.py packet --task-id {task_id}
 python3 scripts/pipeline/dispatch.py --task-id {task_id} --executor {executor}
 ```

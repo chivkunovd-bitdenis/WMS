@@ -79,6 +79,11 @@ def cleanup_task(task_id: str) -> None:
     shutil.rmtree(ROOT / "docs" / "evidence" / task_id, ignore_errors=True)
 
 
+def cleanup_wave(wave_id: str) -> None:
+    (ROOT / ".pipeline-state" / "waves" / f"{wave_id}.json").unlink(missing_ok=True)
+    (ROOT / "tasks" / "_waves" / f"{wave_id}.json").unlink(missing_ok=True)
+
+
 def advance_until(
     task_id: str,
     target_stage: str,
@@ -291,6 +296,9 @@ def main() -> int:
     require("command_packet" in controller, "controller must produce agent handoff packets", errors)
     require("command_hold" in controller, "controller must support owner hold before execution", errors)
     require("command_resume" in controller, "controller must support explicit resume after owner hold", errors)
+    require("command_start_wave" in controller, "controller must support owner-approved backlog wave start", errors)
+    require("command_resolve_blocker" in controller, "controller must support blocker closure evidence", errors)
+    require("budget_enforced" in controller, "controller must enforce usage receipts for wave tasks", errors)
     require('state.get("status") == "WAITING"' in controller, "controller must block advance while task is WAITING", errors)
     require("BLOCKER_TYPES" in controller, "controller must bind hold choices to pipeline blocker types", errors)
     for blocker_type in contract["blocker_types"]:
@@ -958,6 +966,76 @@ def main() -> int:
             require({"S03", "S04", "S15"}.issubset(set(profile["required_stages"])), "reclassification must expand required stages", errors)
     shutil.rmtree(ROOT / ".pipeline-state" / "tasks" / "TASK-METATEST-RECLASS", ignore_errors=True)
     shutil.rmtree(ROOT / "tasks" / "TASK-METATEST-RECLASS", ignore_errors=True)
+
+    # MT41-MT43: owner-approved backlog wave creates budget-enforced tasks,
+    # missing usage holds the task, and open blockers stop the owning stage.
+    wave_prefix = f"TASK-METATEST-WAVE-{os.getpid()}-"
+    budget_wave = f"metatest-budget-{os.getpid()}"
+    budget_task = f"{wave_prefix}BLG-I04"
+    blocker_wave = f"metatest-blocker-{os.getpid()}"
+    blocker_task = f"{wave_prefix}BLG-D19"
+    try:
+        budget_start = pipeline_command(
+            "start-wave",
+            "--backlog-ids", "BLG-I04",
+            "--owner-approved-by", "metatest-owner",
+            "--wave-id", budget_wave,
+            "--task-prefix", wave_prefix,
+        )
+        require(budget_start.returncode == 0, f"MT41 start-wave failed: {budget_start.stderr}", errors)
+        if budget_start.returncode == 0:
+            budget_state = json.loads(pipeline_command("status", "--task-id", budget_task).stdout)
+            require(budget_state.get("budget_enforced") is True, "MT41: start-wave task must enforce budget usage receipts", errors)
+            no_usage = pipeline_command(
+                "advance", "--task-id", budget_task, "--stage", "S01", "--verdict", "TASK_INTAKE_READY",
+                "--role", "pipeline-dispatcher", "--agent", "metatest",
+            )
+            require(no_usage.returncode != 0, "MT42: budget-enforced advance without usage must fail", errors)
+            held = json.loads(pipeline_command("status", "--task-id", budget_task).stdout)
+            require(held["status"] == "WAITING" and held.get("blocker", {}).get("reason_code") == "BUDGET_HARD_STOP", "MT42: missing usage must hold task with BUDGET_HARD_STOP", errors)
+            resumed_budget = pipeline_command("resume", "--task-id", budget_task, "--by", "metatest-owner")
+            require(resumed_budget.returncode == 0, f"MT42 resume budget task failed: {resumed_budget.stderr}", errors)
+            with_usage = pipeline_command(
+                "advance", "--task-id", budget_task, "--stage", "S01", "--verdict", "TASK_INTAKE_READY",
+                "--role", "pipeline-dispatcher", "--agent", "metatest", "--executor", "codex",
+                "--input-tokens", "100", "--output-tokens", "50", "--estimated-usd", "0.01",
+            )
+            require(with_usage.returncode == 0, f"MT42 advance with usage failed: {with_usage.stderr}", errors)
+
+        blocker_start = pipeline_command(
+            "start-wave",
+            "--backlog-ids", "BLG-D19",
+            "--owner-approved-by", "metatest-owner",
+            "--wave-id", blocker_wave,
+            "--task-prefix", wave_prefix,
+        )
+        require(blocker_start.returncode == 0, f"MT43 blocker start-wave failed: {blocker_start.stderr}", errors)
+        if blocker_start.returncode == 0:
+            blocker_state = json.loads(pipeline_command("status", "--task-id", blocker_task).stdout)
+            require(any(blocker.get("id") == "BLK-RESEARCH-001" for blocker in blocker_state.get("blocked_by", [])), "MT43: BLG-D19 must bind BLK-RESEARCH-001", errors)
+            for stage, verdict, role in [
+                ("S01", "TASK_INTAKE_READY", "pipeline-dispatcher"),
+                ("S02", "IMPACT_CLASSIFIED", "pipeline-dispatcher"),
+            ]:
+                advanced = pipeline_command(
+                    "advance", "--task-id", blocker_task, "--stage", stage, "--verdict", verdict,
+                    "--role", role, "--agent", "metatest", "--executor", "codex",
+                    "--input-tokens", "100", "--output-tokens", "50", "--estimated-usd", "0.01",
+                )
+                require(advanced.returncode == 0, f"MT43 setup {stage} failed: {advanced.stderr}", errors)
+            blocked = pipeline_command(
+                "advance", "--task-id", blocker_task, "--stage", "S03", "--verdict", "RESEARCH_READY",
+                "--role", "pipeline-ba", "--agent", "metatest", "--executor", "codex",
+                "--input-tokens", "100", "--output-tokens", "50", "--estimated-usd", "0.01",
+            )
+            require(blocked.returncode != 0, "MT43: open blocker must stop its resume stage", errors)
+            held_by_blocker = json.loads(pipeline_command("status", "--task-id", blocker_task).stdout)
+            require(held_by_blocker["status"] == "WAITING" and held_by_blocker.get("blocker", {}).get("reason_code") == "OPEN_BLOCKER", "MT43: open blocker must hold task", errors)
+    finally:
+        cleanup_task(budget_task)
+        cleanup_task(blocker_task)
+        cleanup_wave(budget_wave)
+        cleanup_wave(blocker_wave)
 
     if errors:
         for error in errors:

@@ -32,6 +32,10 @@ snapshot состояния и packet для S01, но нет receipts, verdicts
   `python3 scripts/pipeline/run.py report`.
 - Есть генератор dispatch-prompt для Codex, Claude и Cursor:
   `python3 scripts/pipeline/dispatch.py --task-id <id> --executor codex|claude|cursor`.
+- Есть минимальный запуск owner-approved wave из backlog:
+  `python3 scripts/pipeline/run.py start-wave --backlog-ids BLG-I04,BLG-I12 --owner-approved-by <owner>`.
+  Он создаёт controller tasks из `docs/product/backlog-queue.json`, привязывает
+  `BLG-*`, `wave_id`, budget enforcement и открытые `BLK-*`.
 - Есть executable dry-run wave-driver:
   `python3 scripts/pipeline/wave_driver.py --format json`. Он читает только
   `WAITING` snapshots и показывает isolated worktree/ports/DB/Redis/Celery/
@@ -43,6 +47,10 @@ snapshot состояния и packet для S01, но нет receipts, verdicts
 - Есть machine-readable budget policy: `pipeline/budget-policy.yml` и schema задают лимиты
   на wave/task/card/stage tier, warning threshold, fail-closed hard stop, usage receipt,
   recovery packet и owner override marker. CI проверяет policy отдельным check и pipeline metatest.
+- Для задач, созданных через `start-wave`, `advance` требует usage receipt
+  (`input_tokens`, `output_tokens`, `estimated_usd`, executor/model/tier) и
+  переводит задачу в `WAITING/BUDGET_HARD_STOP`, если receipt отсутствует или
+  превышен stage/task/wave budget.
 - Все `MT01`...`MT40` из части XII сейчас `automated_green`. Метатесты проверяют
   сам процесс: например, что разработка не получает workspace раньше продуктового
   одобрения, старый fencing token отклоняется, красный GOLD case блокирует
@@ -70,6 +78,9 @@ snapshot состояния и packet для S01, но нет receipts, verdicts
   артефактом.
 - Машинная база блокировок лежит в `docs/product/blocks.json`; CI сверяет её
   один-к-одному с Markdown-реестром через `scripts/ci/check_blockers_registry.py`.
+- Controller привязывает открытые `BLK-*` к backlog task и останавливает stage,
+  на котором блокер должен быть снят; закрытие задачи с открытым blocker ID
+  запрещено до `resolve-blocker` с evidence-файлом.
 - Единая machine-readable backlog queue лежит в `docs/product/backlog-queue.json`.
   В неё входят свежие K1/K2: тормоза системы и пробная задача аналитической
   отчётности для селлера/фулфилмента.
@@ -92,16 +103,15 @@ snapshot состояния и packet для S01, но нет receipts, verdicts
 - Старые процессные документы остаются действующими до явной активации Pipeline
   v2. Это безопасно для перехода, но не даёт объявить новый процесс единственным
   каноном без отдельного activation PR/line.
-- BLK-COST-001 сужен: статический budget contract, warning/hard stop policy, owner override
-  marker и recovery packet закрыты. Остаётся runtime accounting: provider usage receipts,
-  durable aggregation по wave/card/stage и фактическая блокировка dispatch по измеренному
-  расходу; policy явно не заявляет runtime enforcement.
+- BLK-COST-001 сужен сильнее: controller runtime enforcement для `start-wave`
+  задач есть, но расход пока self-reported агентом, а не подтверждён provider
+  billing API.
 - BLK-BACKLOG-001 сужен: backlog сведён в единую versioned очередь со stable IDs,
   зависимостями и readiness. Остаётся owner-approved wave: владелец должен выбрать
-  конкретные `WMS-BL-*`, лимиты и порядок запуска.
-- BLK-PROCESS-001 сужен: machine-readable `blocks.json` и CI guard есть. Остаётся
-  runtime binding, чтобы controller не закрывал карточку при открытом связанном
-  `BLK-*` без closure evidence.
+  конкретные `BLG-*`, лимиты и порядок запуска.
+- BLK-PROCESS-001 сужен сильнее: runtime binding в controller есть для задач,
+  созданных из backlog wave. Остаётся расширить это на старые вручную заведённые
+  tasks и на глобальные process blockers.
 - Старый UI-долг не погашен автоматически: экраны не переписаны на `ui-kit`.
   Новое правило защищает будущие правки, а переезд существующих экранов должен идти
   по задачам, когда эти экраны всё равно попадают в работу.

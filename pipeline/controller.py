@@ -13,12 +13,16 @@ import copy
 import fcntl
 import hashlib
 import json
+import re
 import subprocess
 import sys
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+from pipeline.budget_policy import load_budget_policy
+from pipeline.model_policy import recommendation_for_packet
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,6 +37,10 @@ LOCK_STORE_PATH = ROOT / ".pipeline-state" / "locks.json"
 LOCK_AUDIT_PATH = ROOT / ".pipeline-state" / "locks.journal.jsonl"
 CONTROLLER_LOCK_PATH = ROOT / ".pipeline-state" / "controller.lock"
 EXTERNAL_EFFECT_STORE_PATH = ROOT / ".pipeline-state" / "external-effects.json"
+BACKLOG_QUEUE_PATH = ROOT / "docs" / "product" / "backlog-queue.json"
+BLOCKS_REGISTRY_PATH = ROOT / "docs" / "product" / "blocks.json"
+WAVE_STORE_ROOT = ROOT / ".pipeline-state" / "waves"
+WAVE_SNAPSHOT_ROOT = ROOT / "tasks" / "_waves"
 
 TOTAL_ORDER = [
     "S01",
@@ -136,6 +144,32 @@ FAILURE_ROUTES = {
     "MUTATING_CASE_UNSAFE": {"status": "WAITING", "resume_stage": "S15", "blocker_type": "FIXTURE"},
     "EMERGENCY_SCOPE_MISSING": {"status": "WAITING", "resume_stage": "S01", "blocker_type": "OWNER_INPUT"},
     "PRODUCTION_TRACE_FAILED": {"status": "REWORK", "resume_stage": "S27", "blocker_type": "RELEASE"},
+}
+
+TYPE_TRAITS = {
+    "background_worker": ["background_worker"],
+    "bug": ["bug"],
+    "concurrency": ["database_change", "background_worker"],
+    "data": ["database_change", "tenant_sensitive"],
+    "data_integrity": ["database_change", "tenant_sensitive"],
+    "external_contract": ["external_contract"],
+    "mobile_contract": ["mobile_contract"],
+    "new_domain": ["new_domain", "external_contract"],
+    "new_module": ["new_module"],
+    "performance": ["database_change", "background_worker"],
+    "pipeline_change": ["pipeline_change"],
+    "print": ["print"],
+    "product_intake": ["process_change"],
+    "release_change": ["release_change"],
+    "test_infrastructure": ["pipeline_change"],
+    "ui_change": ["ui_change"],
+}
+
+PRIORITY_RISK = {
+    "critical": "critical",
+    "high": "high",
+    "medium": "medium",
+    "low": "low",
 }
 
 
@@ -397,6 +431,264 @@ def parse_traits(raw: str) -> list[str]:
     return [part.strip() for part in raw.split(",") if part.strip()]
 
 
+def unique_ordered(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
+
+
+def load_backlog_queue() -> dict[str, Any]:
+    payload = load_json(BACKLOG_QUEUE_PATH)
+    items = payload.get("items")
+    if not isinstance(items, list):
+        raise PipelineError("backlog queue must contain items array")
+    return payload
+
+
+def backlog_items_by_id() -> dict[str, dict[str, Any]]:
+    items = load_backlog_queue()["items"]
+    result: dict[str, dict[str, Any]] = {}
+    for item in items:
+        if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+            raise PipelineError("backlog queue contains invalid item")
+        result[item["id"]] = item
+    return result
+
+
+def load_blocks_registry() -> dict[str, Any]:
+    payload = load_json(BLOCKS_REGISTRY_PATH)
+    entries = payload.get("entries")
+    if not isinstance(entries, list):
+        raise PipelineError("blocks registry must contain entries array")
+    return payload
+
+
+def active_blockers_for_backlog(backlog_id: str) -> list[dict[str, Any]]:
+    blockers: list[dict[str, Any]] = []
+    for entry in load_blocks_registry()["entries"]:
+        if not isinstance(entry, dict) or entry.get("status") == "closed":
+            continue
+        if entry.get("type") in {"backlog", "process_guard"}:
+            continue
+        affected = entry.get("affected_task_ids")
+        if isinstance(affected, list) and backlog_id in affected:
+            blockers.append(
+                {
+                    "id": entry["id"],
+                    "title": entry["title"],
+                    "status": entry["status"],
+                    "type": entry["type"],
+                    "owner_role": entry["owner_role"],
+                    "resume_stage": entry["resume_stage"],
+                    "minimum_closure_artifact": entry["minimum_closure_artifact"],
+                }
+            )
+    return blockers
+
+
+def unresolved_blockers(state: dict[str, Any]) -> list[dict[str, Any]]:
+    resolved = {
+        record.get("blocker_id")
+        for record in state.get("blocker_resolutions", [])
+        if isinstance(record, dict) and isinstance(record.get("blocker_id"), str)
+    }
+    return [
+        blocker
+        for blocker in state.get("blocked_by", [])
+        if isinstance(blocker, dict) and blocker.get("id") not in resolved
+    ]
+
+
+def blocker_applies_at_stage(blocker: dict[str, Any], stage_id: str) -> bool:
+    resume_stage = blocker.get("resume_stage")
+    if not isinstance(resume_stage, str) or resume_stage not in TOTAL_ORDER:
+        return False
+    return TOTAL_ORDER.index(stage_id) >= TOTAL_ORDER.index(resume_stage)
+
+
+def put_task_on_hold_for_blocker(state: dict[str, Any], blocker: dict[str, Any], stage_id: str) -> None:
+    state["status"] = "WAITING"
+    state["current_stage"] = stage_id
+    state["blocker"] = {
+        "type": "OWNER_INPUT",
+        "reason_code": "OPEN_BLOCKER",
+        "details": f"{blocker['id']}: {blocker['title']}",
+        "owner": blocker.get("owner_role", "owner"),
+        "created_at": now_iso(),
+        "resume_stage": stage_id,
+    }
+    state["resume_condition"] = {
+        "stage": stage_id,
+        "condition": f"resolve {blocker['id']} with closure evidence",
+    }
+    save_state(state, {"type": "TASK_HELD_BY_OPEN_BLOCKER", "blocker_id": blocker["id"], "stage": stage_id})
+
+
+def enforce_stage_blockers(state: dict[str, Any], stage_id: str) -> None:
+    for blocker in unresolved_blockers(state):
+        if blocker_applies_at_stage(blocker, stage_id):
+            put_task_on_hold_for_blocker(state, blocker, stage_id)
+            raise PipelineError(f"{stage_id} is blocked by {blocker['id']}: {blocker['title']}")
+
+
+def ensure_no_unresolved_blockers_for_close(state: dict[str, Any], status: str) -> None:
+    if status == "CANCELLED":
+        return
+    blockers = unresolved_blockers(state)
+    if blockers:
+        ids = ", ".join(blocker["id"] for blocker in blockers)
+        raise PipelineError(f"{status} is blocked by unresolved blockers: {ids}")
+
+
+def item_traits(item: dict[str, Any]) -> list[str]:
+    traits = list(TYPE_TRAITS.get(item.get("type"), []))
+    title = str(item.get("title", "")).lower()
+    source = str(item.get("source_section", "")).lower()
+    if "wb" in title or "wb" in source or "ozon" in title or "ozon" in source:
+        traits.append("external_contract")
+    if "селлер" in title or "tenant" in title:
+        traits.append("tenant_sensitive")
+    return unique_ordered(traits or ["process_change"])
+
+
+def item_risk(item: dict[str, Any]) -> str:
+    return PRIORITY_RISK.get(str(item.get("priority", "medium")), "medium")
+
+
+def usage_from_args(args: argparse.Namespace, state: dict[str, Any], stage_id: str, role: str) -> dict[str, Any] | None:
+    if not state.get("budget_enforced"):
+        return None
+    missing = [
+        name for name in ("input_tokens", "output_tokens", "estimated_usd")
+        if getattr(args, name, None) is None
+    ]
+    if missing:
+        return None
+    executor = args.executor or "codex"
+    packet = {
+        "task_id": state["task_id"],
+        "stage": stage_id,
+        "role": role,
+        "status": state["status"],
+        "traits": state.get("traits", []),
+        "risk_level": state.get("risk_level", "low"),
+    }
+    model_recommendation = recommendation_for_packet(packet, executor)
+    tier = args.tier or model_recommendation["tier"]
+    model = args.model or model_recommendation["model"]
+    return {
+        "task_id": state["task_id"],
+        "stage": stage_id,
+        "role": role,
+        "executor": executor,
+        "model": model,
+        "tier": tier,
+        "input_tokens": args.input_tokens,
+        "output_tokens": args.output_tokens,
+        "estimated_usd": args.estimated_usd,
+        "agent_id": args.agent,
+        "recorded_at": now_iso(),
+    }
+
+
+def task_budget_usage(state: dict[str, Any]) -> dict[str, float | int]:
+    usage = state.get("budget_usage")
+    if not isinstance(usage, dict):
+        return {"input_tokens": 0, "output_tokens": 0, "estimated_usd": 0.0}
+    return {
+        "input_tokens": int(usage.get("input_tokens", 0)),
+        "output_tokens": int(usage.get("output_tokens", 0)),
+        "estimated_usd": float(usage.get("estimated_usd", 0.0)),
+    }
+
+
+def wave_budget_usage(wave_id: str, current_task_id: str) -> dict[str, float | int]:
+    total = {"input_tokens": 0, "output_tokens": 0, "estimated_usd": 0.0}
+    for other in iter_states():
+        if other.get("task_id") == current_task_id or other.get("wave_id") != wave_id:
+            continue
+        usage = task_budget_usage(other)
+        total["input_tokens"] += int(usage["input_tokens"])
+        total["output_tokens"] += int(usage["output_tokens"])
+        total["estimated_usd"] += float(usage["estimated_usd"])
+    return total
+
+
+def put_task_on_budget_hold(state: dict[str, Any], details: str) -> None:
+    stage_id = state["current_stage"]
+    state["status"] = "WAITING"
+    state["blocker"] = {
+        "type": "OWNER_INPUT",
+        "reason_code": "BUDGET_HARD_STOP",
+        "details": details,
+        "owner": "owner",
+        "created_at": now_iso(),
+        "resume_stage": stage_id,
+    }
+    state["resume_condition"] = {
+        "stage": stage_id,
+        "condition": "record owner budget override or lower scope before continuing",
+    }
+    save_state(state, {"type": "TASK_HELD_BY_BUDGET", "details": details, "stage": stage_id})
+
+
+def enforce_budget(state: dict[str, Any], usage: dict[str, Any] | None) -> None:
+    if not state.get("budget_enforced"):
+        return
+    if usage is None:
+        put_task_on_budget_hold(state, "missing usage receipt")
+        raise PipelineError("missing usage receipt")
+    policy = load_budget_policy()
+    required = set(policy["usage_receipt"]["required_fields"])
+    missing = sorted(required - usage.keys())
+    if missing:
+        put_task_on_budget_hold(state, f"usage receipt missing fields: {', '.join(missing)}")
+        raise PipelineError(f"usage receipt missing fields: {', '.join(missing)}")
+    tier = usage["tier"]
+    tier_limit = policy["limits"]["stage_tier"].get(tier)
+    if not tier_limit:
+        raise PipelineError(f"unknown budget tier: {tier}")
+    stage_tokens = int(usage["input_tokens"]) + int(usage["output_tokens"])
+    if float(usage["estimated_usd"]) > float(tier_limit["max_usd"]) or stage_tokens > int(tier_limit["max_tokens"]):
+        put_task_on_budget_hold(state, f"stage budget exceeded for tier {tier}")
+        raise PipelineError(f"stage budget exceeded for tier {tier}")
+
+    current = task_budget_usage(state)
+    next_task_usd = float(current["estimated_usd"]) + float(usage["estimated_usd"])
+    next_task_tokens = int(current["input_tokens"]) + int(current["output_tokens"]) + stage_tokens
+    task_limit = policy["limits"]["task"]
+    if next_task_usd > float(task_limit["max_usd"]) or next_task_tokens > int(task_limit["max_tokens"]):
+        put_task_on_budget_hold(state, "task budget exceeded")
+        raise PipelineError("task budget exceeded")
+
+    wave_id = state.get("wave_id")
+    if isinstance(wave_id, str) and wave_id:
+        wave_current = wave_budget_usage(wave_id, state["task_id"])
+        next_wave_usd = float(wave_current["estimated_usd"]) + next_task_usd
+        next_wave_tokens = int(wave_current["input_tokens"]) + int(wave_current["output_tokens"]) + next_task_tokens
+        wave_limit = policy["limits"]["wave"]
+        if next_wave_usd > float(wave_limit["max_usd"]) or next_wave_tokens > int(wave_limit["max_tokens"]):
+            put_task_on_budget_hold(state, "wave budget exceeded")
+            raise PipelineError("wave budget exceeded")
+
+
+def record_budget_usage(state: dict[str, Any], usage: dict[str, Any] | None) -> None:
+    if usage is None:
+        return
+    current = task_budget_usage(state)
+    state["budget_usage"] = {
+        "input_tokens": int(current["input_tokens"]) + int(usage["input_tokens"]),
+        "output_tokens": int(current["output_tokens"]) + int(usage["output_tokens"]),
+        "estimated_usd": round(float(current["estimated_usd"]) + float(usage["estimated_usd"]), 6),
+    }
+    state.setdefault("budget_usage_receipts", []).append(usage)
+
+
 def invalidate_verdicts(state: dict[str, Any], reason: str, resume_stage: str | None = None) -> None:
     invalidated = sorted(state.get("verdicts", {}).keys(), key=TOTAL_ORDER.index)
     if not invalidated:
@@ -510,7 +802,14 @@ def first_missing_stage(state: dict[str, Any]) -> str:
     return state["required_stages"][-1]
 
 
-def receipt_for(state: dict[str, Any], stage_id: str, verdict: str, role: str, agent: str) -> dict[str, Any]:
+def receipt_for(
+    state: dict[str, Any],
+    stage_id: str,
+    verdict: str,
+    role: str,
+    agent: str,
+    usage_receipt: dict[str, Any] | None,
+) -> dict[str, Any]:
     payload = {
         "task_id": state["task_id"],
         "run_id": f"{state['task_id']}:{stage_id}:{len(state.get('verdicts', {})) + 1}",
@@ -528,6 +827,8 @@ def receipt_for(state: dict[str, Any], stage_id: str, verdict: str, role: str, a
         "blocker": None,
         "resume_stage": None,
     }
+    if usage_receipt is not None:
+        payload["usage_receipt"] = usage_receipt
     payload["signature"] = stable_hash(payload)
     return payload
 
@@ -620,14 +921,17 @@ def command_advance(args: argparse.Namespace) -> int:
     if args.verdict not in stages[stage_id]["pass_verdicts"]:
         raise PipelineError(f"{args.verdict} is not an allowed pass verdict for {stage_id}")
     enforce_independent_acceptance(state, stage_id, args.agent)
+    enforce_stage_blockers(state, stage_id)
     if stage_id == "S22" and "S19" in state["required_stages"] and not state.get("case_bindings_complete"):
         raise PipelineError("S22 functional testing requires S19 runnable case bindings")
     if stage_id == "S23":
         red_cases = red_gold_cases(state)
         if red_cases:
             raise PipelineError(f"S23 integration is blocked by red GOLD cases: {', '.join(red_cases)}")
+    usage_receipt = usage_from_args(args, state, stage_id, args.role)
+    enforce_budget(state, usage_receipt)
 
-    receipt = receipt_for(state, stage_id, args.verdict, args.role, args.agent)
+    receipt = receipt_for(state, stage_id, args.verdict, args.role, args.agent, usage_receipt)
     evidence_dir = ROOT / "docs" / "evidence" / args.task_id
     receipt_path = evidence_dir / f"{stage_id}-{args.verdict}.receipt.json"
     write_json(receipt_path, receipt)
@@ -640,6 +944,7 @@ def command_advance(args: argparse.Namespace) -> int:
         "agent_identity": args.agent,
     }
     state["last_valid_receipt"] = stable_hash(receipt)
+    record_budget_usage(state, usage_receipt)
     if stage_id == "S19" and args.verdict == "CASES_EXECUTABLE":
         state["case_bindings_complete"] = True
     if stage_id == "B01" and args.verdict == "NOT_REPRODUCED":
@@ -816,6 +1121,15 @@ def validate_receipts(contract: dict[str, Any], state: dict[str, Any]) -> list[s
             errors.append(f"{state['task_id']}: verdict record mismatch for {stage_id}")
         if receipt.get("parent_receipt_hash") != previous_hash:
             errors.append(f"{state['task_id']}: receipt chain mismatch at {stage_id}")
+        if state.get("budget_enforced"):
+            usage = receipt.get("usage_receipt")
+            required_usage_fields = set(load_budget_policy()["usage_receipt"]["required_fields"])
+            if not isinstance(usage, dict):
+                errors.append(f"{state['task_id']}: budget-enforced receipt {stage_id} is missing usage_receipt")
+            else:
+                missing_usage = sorted(required_usage_fields - usage.keys())
+                if missing_usage:
+                    errors.append(f"{state['task_id']}: usage_receipt {stage_id} missing {', '.join(missing_usage)}")
         previous_hash = expected_receipt_hash
     if state.get("last_valid_receipt") != previous_hash:
         errors.append(f"{state['task_id']}: last_valid_receipt does not match receipt chain")
@@ -990,12 +1304,19 @@ def next_stage_packet(state: dict[str, Any]) -> dict[str, Any]:
         "worktree": state["worktree"],
         "branch": state["branch"],
         "base_sha": state["base_sha"],
+        "wave_id": state.get("wave_id"),
+        "backlog_item_id": state.get("backlog_item_id"),
+        "budget_enforced": state.get("budget_enforced", False),
+        "budget_usage": state.get("budget_usage"),
+        "blocked_by": unresolved_blockers(state),
         "blocker": state.get("blocker"),
         "resume_condition": state.get("resume_condition"),
         "rules": [
             "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
             "Do not accept your own work.",
             "If status is WAITING, do not advance; report the blocker and wait for resume.",
+            "If budget_enforced is true, advance requires usage receipt fields.",
+            "If blocked_by is non-empty, do not pass the blocker resume stage without resolve-blocker evidence.",
             "Use python3 scripts/pipeline/run.py advance only for the stage you own.",
             "Do not set DONE while pipeline status is not ACTIVE.",
         ],
@@ -1026,6 +1347,7 @@ def command_close(args: argparse.Namespace) -> int:
         allowed.add("DONE")
     if args.status not in allowed:
         raise PipelineError(f"{args.status} is not allowed while pipeline status is {contract.get('status')}")
+    ensure_no_unresolved_blockers_for_close(state, args.status)
     if args.status in {"READY_FOR_RELEASE", "DONE"}:
         missing: list[str] = []
         if len(state.get("verdicts", {})) != len(state.get("required_stages", [])):
@@ -1044,6 +1366,38 @@ def command_close(args: argparse.Namespace) -> int:
         raise PipelineError("; ".join(errors))
     save_state(state, {"type": "TASK_CLOSED", "status": args.status})
     print(json.dumps({"task_id": args.task_id, "status": args.status}, ensure_ascii=False))
+    return 0
+
+
+def command_resolve_blocker(args: argparse.Namespace) -> int:
+    contract = load_contract()
+    state = load_state(args.task_id)
+    blocker_ids = {blocker.get("id") for blocker in state.get("blocked_by", []) if isinstance(blocker, dict)}
+    if args.blocker_id not in blocker_ids:
+        raise PipelineError(f"{args.blocker_id} is not attached to task {args.task_id}")
+    evidence_path = path_within_root(args.evidence)
+    if evidence_path is None:
+        raise PipelineError("blocker evidence path escapes repo root")
+    if not evidence_path.exists():
+        raise PipelineError(f"blocker evidence does not exist: {args.evidence}")
+    state.setdefault("blocker_resolutions", []).append(
+        {
+            "blocker_id": args.blocker_id,
+            "evidence": args.evidence,
+            "by": args.by,
+            "resolved_at": now_iso(),
+        }
+    )
+    if state.get("status") == "WAITING" and (state.get("blocker") or {}).get("reason_code") == "OPEN_BLOCKER":
+        state["blocker"] = None
+        state["resume_condition"] = None
+        state["current_stage"] = first_missing_stage(state)
+        state["status"] = "RUNNING" if state.get("verdicts") else "QUEUED"
+    errors = validate_state(contract, state)
+    if errors:
+        raise PipelineError("; ".join(errors))
+    save_state(state, {"type": "BLOCKER_RESOLVED", "blocker_id": args.blocker_id, "evidence": args.evidence, "by": args.by})
+    print(json.dumps({"task_id": args.task_id, "blocker_id": args.blocker_id, "status": state["status"]}, ensure_ascii=False))
     return 0
 
 
@@ -1152,6 +1506,160 @@ def command_worker_claim(args: argparse.Namespace) -> int:
     return 0
 
 
+def parse_backlog_ids(raw: str) -> list[str]:
+    ids = [part.strip() for part in raw.split(",") if part.strip()]
+    if not ids:
+        raise PipelineError("start-wave requires at least one backlog id")
+    if len(ids) != len(set(ids)):
+        raise PipelineError("start-wave backlog ids contain duplicates")
+    return ids
+
+
+def wave_id_for(backlog_ids: list[str]) -> str:
+    raw = json.dumps(backlog_ids, ensure_ascii=False, separators=(",", ":")).encode()
+    return "wave-" + hashlib.sha256(raw).hexdigest()[:12]
+
+
+def backlog_task_id(backlog_id: str, prefix: str) -> str:
+    clean = re.sub(r"[^A-Za-z0-9_-]+", "-", backlog_id).strip("-")
+    if not clean:
+        raise PipelineError(f"cannot derive task id from backlog id {backlog_id}")
+    return f"{prefix}{clean}" if prefix else clean
+
+
+def validate_wave_selection(items: dict[str, dict[str, Any]], backlog_ids: list[str], allow_missing_dependencies: bool) -> list[dict[str, Any]]:
+    unknown = [backlog_id for backlog_id in backlog_ids if backlog_id not in items]
+    if unknown:
+        raise PipelineError(f"unknown backlog ids: {', '.join(unknown)}")
+    selected = {backlog_id for backlog_id in backlog_ids}
+    selected_items = [items[backlog_id] for backlog_id in backlog_ids]
+    if not allow_missing_dependencies:
+        missing_dependencies = sorted(
+            {
+                dependency
+                for item in selected_items
+                for dependency in item.get("dependencies", [])
+                if dependency not in selected
+            }
+        )
+        if missing_dependencies:
+            raise PipelineError(f"wave is missing dependencies: {', '.join(missing_dependencies)}")
+    return selected_items
+
+
+def state_from_backlog_item(
+    contract: dict[str, Any],
+    item: dict[str, Any],
+    task_id: str,
+    wave_id: str,
+    owner: str,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    traits = item_traits(item)
+    risk_level = item_risk(item)
+    required = required_stages(contract, traits, risk_level)
+    lease_until = datetime.now(UTC) + timedelta(minutes=args.lease_minutes)
+    resources = sorted({f"backlog:{item['id'].lower()}", "file:docs/product/backlog-queue.json"})
+    if args.resources:
+        resources = sorted(set(resources + parse_resources(args.resources)))
+    return {
+        "task_id": task_id,
+        "backlog_item_id": item["id"],
+        "backlog_title": item["title"],
+        "source_hash": source_hash(json.dumps(item, ensure_ascii=False, sort_keys=True)),
+        "source_excerpt": item["title"][:240],
+        "pipeline_version": contract["pipeline_version"],
+        "pipeline_hash": contract_hash(),
+        "traits": traits,
+        "risk_level": risk_level,
+        "required_stages": required,
+        "current_stage": "S01",
+        "status": "QUEUED",
+        "base_sha": args.base_sha or current_sha(),
+        "branch": args.branch or current_branch(),
+        "worktree": str(ROOT),
+        "environment_id": args.environment_id,
+        "database": args.database,
+        "redis_namespace": args.redis_namespace,
+        "celery_queue": args.celery_queue or f"{wave_id}-{item['id']}".lower(),
+        "emulator_namespace": args.emulator_namespace,
+        "resources": resources,
+        "owner_agent": owner,
+        "attempt": 1,
+        "lease_until": lease_until.replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "heartbeat_at": now_iso(),
+        "last_valid_receipt": None,
+        "blocker": None,
+        "resume_condition": None,
+        "verdicts": {},
+        "commits": [],
+        "wave_id": wave_id,
+        "budget_enforced": True,
+        "budget_usage": {"input_tokens": 0, "output_tokens": 0, "estimated_usd": 0.0},
+        "budget_usage_receipts": [],
+        "blocked_by": active_blockers_for_backlog(item["id"]),
+        "blocker_resolutions": [],
+    }
+
+
+def command_start_wave(args: argparse.Namespace) -> int:
+    if not args.owner_approved_by:
+        raise PipelineError("start-wave requires --owner-approved-by")
+    contract = load_contract()
+    backlog_ids = parse_backlog_ids(args.backlog_ids)
+    items = backlog_items_by_id()
+    selected_items = validate_wave_selection(items, backlog_ids, args.allow_missing_dependencies)
+    wave_id = args.wave_id or wave_id_for(backlog_ids)
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", wave_id):
+        raise PipelineError("wave-id may contain only letters, digits, underscore and hyphen")
+
+    planned: list[dict[str, Any]] = []
+    states: list[dict[str, Any]] = []
+    for item in selected_items:
+        task_id = backlog_task_id(item["id"], args.task_prefix)
+        state_path, _, _ = task_paths(task_id)
+        if state_path.exists() and not args.skip_existing:
+            raise PipelineError(f"task already exists: {task_id}")
+        state = state_from_backlog_item(contract, item, task_id, wave_id, args.owner_approved_by, args)
+        states.append(state)
+        planned.append(
+            {
+                "task_id": task_id,
+                "backlog_item_id": item["id"],
+                "title": item["title"],
+                "readiness": item["readiness"],
+                "traits": state["traits"],
+                "risk_level": state["risk_level"],
+                "required_stages": state["required_stages"],
+                "blocked_by": [blocker["id"] for blocker in state.get("blocked_by", [])],
+            }
+        )
+
+    manifest = {
+        "wave_id": wave_id,
+        "created_at": now_iso(),
+        "owner_approved_by": args.owner_approved_by,
+        "base_sha": args.base_sha or current_sha(),
+        "backlog_ids": backlog_ids,
+        "budget_policy": "pipeline/budget-policy.yml",
+        "tasks": planned,
+    }
+    if args.dry_run:
+        print(json.dumps({"dry_run": True, **manifest}, ensure_ascii=False, indent=2))
+        return 0
+
+    with controller_store_lock():
+        for state in states:
+            state_path, _, _ = task_paths(state["task_id"])
+            if state_path.exists() and args.skip_existing:
+                continue
+            save_state(state, {"type": "TASK_OPENED_FROM_BACKLOG_WAVE", "wave_id": wave_id, "backlog_item_id": state["backlog_item_id"]})
+        write_json(WAVE_STORE_ROOT / f"{wave_id}.json", manifest)
+        write_json(WAVE_SNAPSHOT_ROOT / f"{wave_id}.json", {**manifest, "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."})
+    print(json.dumps(manifest, ensure_ascii=False, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="scripts/pipeline")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -1187,6 +1695,12 @@ def build_parser() -> argparse.ArgumentParser:
     advance_p.add_argument("--verdict", required=True)
     advance_p.add_argument("--role", required=True)
     advance_p.add_argument("--agent", required=True)
+    advance_p.add_argument("--executor", choices=["codex", "claude", "cursor"], default="codex")
+    advance_p.add_argument("--model")
+    advance_p.add_argument("--tier", choices=["cheap", "moderate", "expensive"])
+    advance_p.add_argument("--input-tokens", type=int)
+    advance_p.add_argument("--output-tokens", type=int)
+    advance_p.add_argument("--estimated-usd", type=float)
     advance_p.set_defaults(func=command_advance)
 
     validate_p = sub.add_parser("validate")
@@ -1228,6 +1742,32 @@ def build_parser() -> argparse.ArgumentParser:
     close_p.add_argument("--task-id", required=True)
     close_p.add_argument("--status", required=True)
     close_p.set_defaults(func=command_close)
+
+    resolve_blocker_p = sub.add_parser("resolve-blocker")
+    resolve_blocker_p.add_argument("--task-id", required=True)
+    resolve_blocker_p.add_argument("--blocker-id", required=True)
+    resolve_blocker_p.add_argument("--evidence", required=True)
+    resolve_blocker_p.add_argument("--by", required=True)
+    resolve_blocker_p.set_defaults(func=command_resolve_blocker)
+
+    start_wave_p = sub.add_parser("start-wave")
+    start_wave_p.add_argument("--backlog-ids", required=True, help="comma-separated backlog IDs from docs/product/backlog-queue.json")
+    start_wave_p.add_argument("--owner-approved-by", required=True)
+    start_wave_p.add_argument("--wave-id")
+    start_wave_p.add_argument("--task-prefix", default="")
+    start_wave_p.add_argument("--base-sha")
+    start_wave_p.add_argument("--branch")
+    start_wave_p.add_argument("--environment-id", default="local")
+    start_wave_p.add_argument("--database", default="local")
+    start_wave_p.add_argument("--redis-namespace", default="local")
+    start_wave_p.add_argument("--celery-queue")
+    start_wave_p.add_argument("--emulator-namespace", default="local")
+    start_wave_p.add_argument("--resources", default="", help="comma-separated extra canonical resource ids")
+    start_wave_p.add_argument("--lease-minutes", type=int, default=60)
+    start_wave_p.add_argument("--allow-missing-dependencies", action="store_true")
+    start_wave_p.add_argument("--skip-existing", action="store_true")
+    start_wave_p.add_argument("--dry-run", action="store_true")
+    start_wave_p.set_defaults(func=command_start_wave)
 
     def add_lock_arguments(lock_parser: argparse.ArgumentParser, *, include_lease: bool) -> None:
         lock_parser.add_argument("--task-id", required=True)
