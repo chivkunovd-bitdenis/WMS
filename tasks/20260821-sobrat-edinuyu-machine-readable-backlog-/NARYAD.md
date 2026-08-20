@@ -18,9 +18,15 @@
 
 - `docs/process/BACKLOG-QUEUE-RU.md`
 - `docs/process/BLOCKERS-REGISTRY-RU.md`
+- `docs/process/PIPELINE-READY-REPORT-RU.md`
+- `docs/product/blocks.json`
 - `docs/product/backlog-queue.json`
+- `pipeline/pipeline.yml`
+- `.github/workflows/ci.yml`
 - `scripts/ci/check_backlog_queue.py`
-- `tasks/20260821-backlog-queue/NARYAD.md`
+- `scripts/ci/check_blockers_registry.py`
+- `scripts/ci/check_pipeline_metatests.py`
+- `tasks/20260821-sobrat-edinuyu-machine-readable-backlog-/NARYAD.md`
 
 ## Статус
 

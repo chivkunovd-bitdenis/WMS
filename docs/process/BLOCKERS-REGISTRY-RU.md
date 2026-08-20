@@ -20,10 +20,11 @@
 блокер можно снять именно для указанной зоны. Само намерение, устный ответ,
 зелёный тест на соседний слой или наличие незакоммиченного кода блокер не снимают.
 
-Для машинной версии реестра каждая запись должна получить поля `status`,
-`affected_task_ids`, `evidence`, `last_verified_at`, `resume_stage` и `supersedes`.
-Пока `docs/product/blocks.json` не введён, эти поля фиксируются текстом в записи
-или считаются `status: open`, `affected_task_ids: TBD`, `supersedes: none`.
+Машинная версия реестра лежит в `docs/product/blocks.json`. CI сверяет её с
+этим Markdown через `scripts/ci/check_blockers_registry.py`: набор `BLK-*`
+должен совпадать один-к-одному, а каждая запись обязана иметь `status`,
+`affected_task_ids`, `evidence`, `last_verified_at`, `resume_stage` и
+`supersedes`.
 
 ## Блокеры автономного запуска pipeline
 
@@ -131,7 +132,7 @@
 - **Resume stage:** S16 → S18.
 - **Минимальный артефакт закрытия:** утверждённая card hash, S08/S12/S15 package и controller receipt `PRODUCT_APPROVED_FOR_DEV` на конкретный task/card.
 
-### BLK-BACKLOG-001 — Нет единой versioned backlog-очереди и dependency map
+### BLK-BACKLOG-001 — Versioned backlog-очередь есть, owner-approved wave ещё нет
 
 - **Тип:** backlog / product / planning.
 - **Статус:** сужен; очередь создана, но owner-approved wave ещё не выдана.
@@ -235,14 +236,16 @@
 - **Кто закрывает:** Research и Product; Architect согласует интеграционную границу; Browser QA/Reviewer.
 - **Минимальный артефакт закрытия:** printer dossier с форматом 58×40, полями, способом печати (браузер/ESC/POS), повторной печатью, ошибками и подтверждением на разрешённом устройстве.
 
-### BLK-PROCESS-001 — Нет машинного `blocks.json` и rules guard
+### BLK-PROCESS-001 — Машинный `blocks.json` есть, runtime rules binding ещё не полный
 
 - **Тип:** process / machine registry.
-- **Где обнаружен:** `docs/process/PIPELINE-DESIGN-RU.md`, раздел 9: блокировки описаны текстом, машинная часть `docs/product/blocks.json` и `rules_guard.py` ещё не введены.
-- **Почему блокирует бизнес:** пока блокировки живут только в Markdown, агент может не связать правило с owner, resume stage, ущербом и негативным кейсом. Это не останавливает ручную работу, но не даёт автономному pipeline надёжно решать, что блокер снят.
+- **Статус:** сужен; `docs/product/blocks.json` и CI guard введены, runtime binding ещё не останавливает закрытие карточек по всем blocker IDs.
+- **Где обнаружен:** `docs/product/blocks.json` и `scripts/ci/check_blockers_registry.py` зеркалят текущий реестр, но controller пока не требует снять конкретный blocker ID перед каждым `close`.
+- **Почему блокирует бизнес:** агент уже получает машинный список блокеров, owner и resume stage, но автономный pipeline ещё должен научиться не закрывать карточку, если связанный `BLK-*` открыт или не имеет closure evidence.
 - **Кто закрывает:** pipeline Architect и Guard.
 - **Resume stage:** S08/S15/S22 в зависимости от правила.
-- **Минимальный артефакт закрытия:** `docs/product/blocks.json` со schema, `rules_guard.py`-храповик, metatest на правило без ссылки на блок и миграция текущего реестра в машинный формат.
+- **Закрытая часть:** machine registry и CI-храповик, который сверяет его с Markdown-реестром.
+- **Оставшийся минимальный артефакт:** controller/rules binding: `close`, `resume` и `advance` учитывают открытые blocker IDs, closure evidence и негативный metatest на попытку закрыть карточку при открытом блокере.
 
 ### BLK-RELEASE-001 — Cache-control/D12 не включён в browser/release proof
 

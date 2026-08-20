@@ -177,6 +177,8 @@ def main() -> int:
     require("check_pipeline_scope_guard.py" in ci_workflow, "CI must run pipeline scope guard", errors)
     require("check_pipeline_model_policy.py" in ci_workflow, "CI must run pipeline model policy check", errors)
     require("check_pipeline_budget_policy.py" in ci_workflow, "CI must run pipeline budget policy check", errors)
+    require("check_backlog_queue.py" in ci_workflow, "CI must run backlog queue check", errors)
+    require("check_blockers_registry.py" in ci_workflow, "CI must run blocker registry check", errors)
     require("check_pipeline_policy_metatests.py" in ci_workflow, "CI must run pipeline policy metatests", errors)
     require("check_pipeline_replay_metatests.py" in ci_workflow, "CI must run pipeline replay metatests", errors)
     require("scripts/ui/ui_guard.py" in ci_workflow, "CI must run UI canon ratchet for product changes", errors)
@@ -189,6 +191,30 @@ def main() -> int:
         stderr=subprocess.PIPE,
     )
     require(model_policy_check.returncode == 0, f"pipeline model policy check failed: {model_policy_check.stderr}", errors)
+    budget_policy_check = subprocess.run(
+        [sys.executable, "scripts/ci/check_pipeline_budget_policy.py"],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    require(budget_policy_check.returncode == 0, f"pipeline budget policy check failed: {budget_policy_check.stderr}", errors)
+    backlog_queue_check = subprocess.run(
+        [sys.executable, "scripts/ci/check_backlog_queue.py"],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    require(backlog_queue_check.returncode == 0, f"backlog queue check failed: {backlog_queue_check.stderr}", errors)
+    blockers_registry_check = subprocess.run(
+        [sys.executable, "scripts/ci/check_blockers_registry.py"],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    require(blockers_registry_check.returncode == 0, f"blockers registry check failed: {blockers_registry_check.stderr}", errors)
     ui_kit_usage_guard = ROOT / "scripts" / "ui" / "ui_kit_usage_guard.py"
     require(ui_kit_usage_guard.exists(), "W12 ui-kit usage guard must exist", errors)
     if ui_kit_usage_guard.exists():

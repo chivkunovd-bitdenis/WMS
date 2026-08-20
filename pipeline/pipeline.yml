@@ -16,13 +16,17 @@
     "integration_ref": "refs/heads/integration/wms-pipeline-unified-v2",
     "release_ref": "manual-owner-approved-exact-sha-only",
     "budget_policy": "pipeline/budget-policy.yml",
-    "budget_policy_schema": "pipeline/budget-policy.schema.json"
+    "budget_policy_schema": "pipeline/budget-policy.schema.json",
+    "backlog_queue": "docs/product/backlog-queue.json",
+    "blockers_registry": "docs/product/blocks.json"
   },
   "control_plane_protected_paths": [
     "pipeline/**",
     ".github/workflows/**",
     "scripts/ci/check_pipeline_contract.py",
     "scripts/ci/check_pipeline_budget_policy.py",
+    "scripts/ci/check_backlog_queue.py",
+    "scripts/ci/check_blockers_registry.py",
     "scripts/ci/check_pipeline_scope_guard.py",
     "scripts/deploy/**",
     "tasks/*/state.json"

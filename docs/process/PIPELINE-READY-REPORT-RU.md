@@ -68,6 +68,11 @@ snapshot состояния и packet для S01, но нет receipts, verdicts
 - Реестр блокировок вынесен в `docs/process/BLOCKERS-REGISTRY-RU.md`: там отдельно
   описаны pipeline-блокеры и backlog-блокеры с владельцем закрытия и минимальным
   артефактом.
+- Машинная база блокировок лежит в `docs/product/blocks.json`; CI сверяет её
+  один-к-одному с Markdown-реестром через `scripts/ci/check_blockers_registry.py`.
+- Единая machine-readable backlog queue лежит в `docs/product/backlog-queue.json`.
+  В неё входят свежие K1/K2: тормоза системы и пробная задача аналитической
+  отчётности для селлера/фулфилмента.
 - Для всех трёх агентов можно одинаково: снять `WAITING` с одной одобренной
   карточки, выдать dispatch, пройти нужные стадии, получить controller receipt и
   остановиться на Product/owner gate, если он требуется.
@@ -91,8 +96,12 @@ snapshot состояния и packet для S01, но нет receipts, verdicts
   marker и recovery packet закрыты. Остаётся runtime accounting: provider usage receipts,
   durable aggregation по wave/card/stage и фактическая блокировка dispatch по измеренному
   расходу; policy явно не заявляет runtime enforcement.
-- Backlog пока не сведён в единую versioned очередь со stable IDs, зависимостями,
-  readiness и owner-approved wave.
+- BLK-BACKLOG-001 сужен: backlog сведён в единую versioned очередь со stable IDs,
+  зависимостями и readiness. Остаётся owner-approved wave: владелец должен выбрать
+  конкретные `WMS-BL-*`, лимиты и порядок запуска.
+- BLK-PROCESS-001 сужен: machine-readable `blocks.json` и CI guard есть. Остаётся
+  runtime binding, чтобы controller не закрывал карточку при открытом связанном
+  `BLK-*` без closure evidence.
 - Старый UI-долг не погашен автоматически: экраны не переписаны на `ui-kit`.
   Новое правило защищает будущие правки, а переезд существующих экранов должен идти
   по задачам, когда эти экраны всё равно попадают в работу.
@@ -105,6 +114,8 @@ snapshot состояния и packet для S01, но нет receipts, verdicts
 python3 scripts/ci/check_pipeline_contract.py
 python3 scripts/ci/check_pipeline_model_policy.py
 python3 scripts/ci/check_pipeline_budget_policy.py
+python3 scripts/ci/check_backlog_queue.py
+python3 scripts/ci/check_blockers_registry.py
 python3 scripts/ui/ui_guard.py
 python3 scripts/ui/ui_kit_usage_guard.py
 ```
@@ -114,6 +125,7 @@ python3 scripts/ui/ui_kit_usage_guard.py
 ```bash
 python3 scripts/ci/check_pipeline_metatests.py
 python3 scripts/ci/check_pipeline_policy_metatests.py
+python3 scripts/ci/check_pipeline_wave_driver_smoke.py
 python3 scripts/ci/check_pipeline_replay_metatests.py
 ```
 
