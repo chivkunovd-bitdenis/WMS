@@ -79,6 +79,11 @@ const TABS = [
 
 type FbsStatusGroup = (typeof TABS)[number]['key']
 
+// Аварийный лимит: обычная MUI-таблица с 500 строками блокирует слабые
+// рабочие ноутбуки при массовом выборе. После создания/пополнения поставки
+// выбранная сотня уходит из «Новых», и экран показывает следующую.
+const NEW_ORDERS_PAGE_LIMIT = 100
+
 // HANDOFF-POLISH.md пул 1 п.4 (решение П3): «В работе», «В доставке» и «Завершённые» —
 // это работа с уже собранным документом (поставкой) целиком, не с отдельными заказами.
 // Бэкенд уже отдаёт поставки для всех трёх (fbs_supply_service.list_supply_worklist),
@@ -372,7 +377,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         seller_id: sellerId === '__all__' ? null : sellerId,
         status_group: statusGroup,
         wb_warehouse_id: statusGroup === 'new' && wbWarehouseId !== '__all__' ? wbWarehouseId : null,
-        limit: 500,
+        limit: statusGroup === 'new' ? NEW_ORDERS_PAGE_LIMIT : 500,
       })
       setOrders(page.items)
       setActiveSupplies([])

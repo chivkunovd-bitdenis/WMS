@@ -136,7 +136,9 @@ test('fbs orders: list, tabs and empty state', async ({ page }) => {
 
   await page.route('**/operations/fbs-orders/worklist**', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback()
-    const statusGroup = new URL(route.request().url()).searchParams.get('status_group')
+    const params = new URL(route.request().url()).searchParams
+    const statusGroup = params.get('status_group')
+    if (statusGroup === 'new') expect(params.get('limit')).toBe('100')
     const body = statusGroup === 'new'
       ? worklist([order('1'), order('2')])
       : statusGroup === 'cancelled'
@@ -171,6 +173,31 @@ test('fbs orders: list, tabs and empty state', async ({ page }) => {
 
   await page.getByRole('tab', { name: 'Отменённые' }).click()
   await expect(page.getByTestId('fbs-order-5')).toBeVisible()
+})
+
+// HOTFIX 20.08.2026: рабочий ноутбук должен суметь выбрать всю аварийно
+// ограниченную страницу, чтобы оператор собрал заказы сотнями без зависания.
+test('fbs orders: 100 new orders remain selectable as one batch', async ({ page }) => {
+  await registerFf(page, 'hundred-orders')
+  const hundredOrders = Array.from({ length: 100 }, (_, index) => order(String(index + 1)))
+
+  await page.route('**/operations/fbs-orders/worklist**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    const params = new URL(route.request().url()).searchParams
+    expect(params.get('status_group')).toBe('new')
+    expect(params.get('limit')).toBe('100')
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(worklist(hundredOrders)),
+    })
+  })
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await expect(page.getByTestId('fbs-order-100')).toBeAttached()
+  await page.getByTestId('fbs-worklist-table').getByRole('checkbox').first().click()
+  await expect(page.getByTestId('fbs-selection-bar')).toContainText('Выбрано заказов: 100')
+  await expect(page.getByRole('button', { name: 'Сформировать поставку' })).toBeEnabled()
 })
 
 // TC-FBS-FE-002 — seller_id передаётся в canonical worklist и меняет строки ответа.
