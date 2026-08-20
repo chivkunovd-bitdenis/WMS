@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WMS Pipeline Stage Receipt",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "task_id",
+    "run_id",
+    "stage_id",
+    "pipeline_hash",
+    "role_binding_id",
+    "agent_identity",
+    "input_hashes",
+    "output_hashes",
+    "parent_receipt_hash",
+    "baseline_sha",
+    "started_at",
+    "finished_at",
+    "verdict"
+  ],
+  "properties": {
+    "task_id": {"type": "string"},
+    "run_id": {"type": "string"},
+    "stage_id": {"type": "string"},
+    "pipeline_hash": {"type": "string"},
+    "role_binding_id": {"type": "string"},
+    "agent_identity": {"type": "string"},
+    "input_hashes": {"type": "object"},
+    "output_hashes": {"type": "object"},
+    "parent_receipt_hash": {"type": ["string", "null"]},
+    "baseline_sha": {"type": "string"},
+    "started_at": {"type": "string"},
+    "finished_at": {"type": "string"},
+    "verdict": {"type": "string"},
+    "blocker": {"type": ["object", "null"]},
+    "resume_stage": {"type": ["string", "null"]},
+    "signature": {"type": "string"}
+  }
+}

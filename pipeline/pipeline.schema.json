@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WMS Pipeline Contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "pipeline_version",
+    "status",
+    "canonical_source",
+    "canonical_source_sha256",
+    "activation",
+    "refs",
+    "control_plane_protected_paths",
+    "lifecycle_statuses",
+    "blocker_types",
+    "stages",
+    "traits",
+    "role_incompatibilities",
+    "entrypoints",
+    "activation_blockers",
+    "required_metatests"
+  ],
+  "properties": {
+    "$schema": {"type": "string"},
+    "pipeline_version": {"const": "2.0"},
+    "status": {
+      "enum": ["TARGET_PIPELINE_NOT_ENFORCED", "IMPLEMENTATION_IN_PROGRESS", "ACTIVE"]
+    },
+    "canonical_source": {"const": "docs/process/PIPELINE-RU.md"},
+    "canonical_source_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "format_note": {"type": "string"},
+    "activation": {"type": "object"},
+    "refs": {"type": "object"},
+    "control_plane_protected_paths": {
+      "type": "array",
+      "items": {"type": "string"},
+      "minItems": 1
+    },
+    "lifecycle_statuses": {
+      "type": "array",
+      "items": {"type": "string"},
+      "minItems": 13,
+      "uniqueItems": true
+    },
+    "blocker_types": {
+      "type": "array",
+      "items": {"type": "string"},
+      "minItems": 9,
+      "uniqueItems": true
+    },
+    "stages": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/stage"},
+      "minItems": 32
+    },
+    "traits": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/trait"}
+    },
+    "role_incompatibilities": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": {"type": "string"},
+        "minItems": 2,
+        "maxItems": 2
+      }
+    },
+    "entrypoints": {
+      "type": "array",
+      "items": {"type": "object"},
+      "minItems": 1
+    },
+    "activation_blockers": {
+      "type": "array",
+      "items": {"type": "string"},
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "required_metatests": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/metatest"},
+      "minItems": 40
+    }
+  },
+  "$defs": {
+    "stage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "enabled_when", "pass_verdicts", "next_on_pass"],
+      "properties": {
+        "id": {"type": "string"},
+        "name": {"type": "string"},
+        "enabled_when": {"type": "string"},
+        "pass_verdicts": {
+          "type": "array",
+          "items": {"type": "string"},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "next_on_pass": {"type": "string"}
+      }
+    },
+    "trait": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required_stages",
+        "required_receipts",
+        "case_dimensions",
+        "acceptance_surfaces"
+      ],
+      "properties": {
+        "required_stages": {
+          "type": "array",
+          "items": {"type": "string"},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "required_receipts": {
+          "type": "array",
+          "items": {"type": "string"},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "case_dimensions": {
+          "type": "array",
+          "items": {"type": "string"},
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "acceptance_surfaces": {
+          "type": "array",
+          "items": {"type": "string"},
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "metatest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "source", "title", "status"],
+      "properties": {
+        "id": {"pattern": "^MT[0-9]{2}$"},
+        "source": {"type": "string"},
+        "title": {"type": "string"},
+        "status": {
+          "enum": ["declared_pending_controller", "automated_green"]
+        }
+      }
+    }
+  }
+}

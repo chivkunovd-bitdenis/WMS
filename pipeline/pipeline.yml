@@ -1,0 +1,438 @@
+{
+  "$schema": "./pipeline.schema.json",
+  "pipeline_version": "2.0",
+  "status": "TARGET_PIPELINE_NOT_ENFORCED",
+  "canonical_source": "docs/process/PIPELINE-RU.md",
+  "canonical_source_sha256": "6067a2833ee1c00c772bad035a3dc425113ac076886f13d3be3cc3fbcc90ba11",
+  "format_note": "This file intentionally uses the JSON subset of YAML so CI can validate it with Python stdlib only.",
+  "activation": {
+    "implementation_approved": false,
+    "activation_approved": false,
+    "activation_requires_owner_line": "PIPELINE_ACTIVATION_APPROVED: <date>",
+    "current_truth": "The v2 process is declared and guarded, but controller, deploy promotion and runtime receipts are not fully implemented."
+  },
+  "refs": {
+    "canonical_base_ref": "origin/etalon",
+    "integration_ref": "refs/heads/integration/wms-pipeline-unified-v2",
+    "release_ref": "manual-owner-approved-exact-sha-only"
+  },
+  "control_plane_protected_paths": [
+    "pipeline/**",
+    ".github/workflows/**",
+    "scripts/ci/check_pipeline_contract.py",
+    "scripts/deploy/**",
+    "tasks/*/state.json"
+  ],
+  "lifecycle_statuses": [
+    "QUEUED",
+    "RUNNING",
+    "WAITING",
+    "REWORK",
+    "PARKED",
+    "IMPLEMENTATION_DONE",
+    "READY_FOR_RELEASE",
+    "DEPLOYING",
+    "MONITORING",
+    "STABILIZED_WITH_DEBT",
+    "INVESTIGATION_DONE",
+    "CANCELLED",
+    "DONE"
+  ],
+  "blocker_types": [
+    "OWNER_INPUT",
+    "ENV",
+    "FIXTURE",
+    "EXTERNAL",
+    "ORACLE_CONFLICT",
+    "BASELINE",
+    "ACCESS",
+    "SECURITY",
+    "RELEASE"
+  ],
+  "stages": [
+    {
+      "id": "S01",
+      "name": "INTAKE",
+      "enabled_when": "always",
+      "pass_verdicts": ["TASK_INTAKE_READY"],
+      "next_on_pass": "S02"
+    },
+    {
+      "id": "S02",
+      "name": "IMPACT_CLASSIFICATION",
+      "enabled_when": "always",
+      "pass_verdicts": ["IMPACT_CLASSIFIED"],
+      "next_on_pass": "next_enabled_stage"
+    },
+    {
+      "id": "B01",
+      "name": "BUG_REPRODUCTION",
+      "enabled_when": "bug",
+      "pass_verdicts": ["REPRODUCED", "NOT_REPRODUCED", "INTERMITTENT"],
+      "next_on_pass": "B02_or_observation_loop"
+    },
+    {
+      "id": "B02",
+      "name": "EXPECTED_BEHAVIOR_CONTRACT",
+      "enabled_when": "bug",
+      "pass_verdicts": ["DEFECT_CONFIRMED", "EXPECTED_BEHAVIOR", "DUPLICATE"],
+      "next_on_pass": "B03_or_B04_or_reclassification_or_waiting"
+    },
+    {
+      "id": "B03",
+      "name": "ROOT_CAUSE_AND_ESCAPE_ANALYSIS",
+      "enabled_when": "confirmed_bug",
+      "pass_verdicts": ["ROOT_CAUSE_ESCAPE_READY"],
+      "next_on_pass": "next_enabled_stage"
+    },
+    {
+      "id": "B04",
+      "name": "INVESTIGATION_CLOSURE_NO_CHANGE",
+      "enabled_when": "no_defect_or_duplicate",
+      "pass_verdicts": ["INVESTIGATION_DONE"],
+      "next_on_pass": "terminal"
+    },
+    {
+      "id": "S03",
+      "name": "DOMAIN_RESEARCH",
+      "enabled_when": "external_contract_or_new_domain_or_new_module",
+      "pass_verdicts": ["RESEARCH_READY"],
+      "next_on_pass": "next_enabled_stage"
+    },
+    {
+      "id": "S04",
+      "name": "RESEARCH_CRITIC",
+      "enabled_when": "external_contract_or_new_domain_or_new_module",
+      "pass_verdicts": ["RESEARCH_PASSED"],
+      "next_on_pass": "next_enabled_stage"
+    },
+    {
+      "id": "S05",
+      "name": "PROCESS_MAP",
+      "enabled_when": "new_domain_or_new_module_or_process_change",
+      "pass_verdicts": ["PROCESS_MAP_READY"],
+      "next_on_pass": "next_enabled_stage"
+    },
+    {
+      "id": "S06",
+      "name": "GAP_ANALYSIS",
+      "enabled_when": "new_domain_or_new_module_or_process_change",
+      "pass_verdicts": ["GAP_READY"],
+      "next_on_pass": "next_enabled_stage"
+    },
+    {
+      "id": "S07",
+      "name": "PRODUCT_DOMAIN_APPROVAL",
+      "enabled_when": "new_domain_or_new_module_or_process_change",
+      "pass_verdicts": ["PRODUCT_DOMAIN_APPROVED"],
+      "next_on_pass": "next_enabled_stage"
+    },
+    {
+      "id": "S08",
+      "name": "BEHAVIOR_CONTRACT_AND_BLOCK_AUDIT",
+      "enabled_when": "runtime_change_or_explicit_na_audit",
+      "pass_verdicts": ["BEHAVIOR_CONTRACT_READY", "NO_RUNTIME_BEHAVIOR"],
+      "next_on_pass": "next_enabled_stage"
+    },
+    {
+      "id": "S09",
+      "name": "UX_CONTRACT_AND_MOCKUPS",
+      "enabled_when": "ui_change",
+      "pass_verdicts": ["UX_CONTRACT_READY"],
+      "next_on_pass": "next_enabled_stage"
+    },
+    {
+      "id": "S10",
+      "name": "DESIGN_REVIEW",
+      "enabled_when": "ui_change",
+      "pass_verdicts": ["DESIGN_APPROVED"],
+      "next_on_pass": "next_enabled_stage"
+    },
+    {
+      "id": "S11",
+      "name": "PRODUCT_CONTRACT_APPROVAL",
+      "enabled_when": "always",
+      "pass_verdicts": ["PRODUCT_CONTRACT_APPROVED"],
+      "next_on_pass": "next_enabled_stage"
+    },
+    {
+      "id": "S12",
+      "name": "TASK_CUT",
+      "enabled_when": "always",
+      "pass_verdicts": ["TASK_CUT_READY"],
+      "next_on_pass": "next_enabled_stage"
+    },
+    {
+      "id": "S13",
+      "name": "ARCHITECT_PLAN",
+      "enabled_when": "new_domain_or_new_module_or_multiple_cards_or_database_worker_or_high_risk",
+      "pass_verdicts": ["ARCH_PLAN_READY"],
+      "next_on_pass": "next_enabled_stage"
+    },
+    {
+      "id": "S14",
+      "name": "ARCHITECT_FALSIFICATION",
+      "enabled_when": "new_domain_or_new_module_or_conflicts_or_high_risk",
+      "pass_verdicts": ["ARCH_REVIEW_PASSED"],
+      "next_on_pass": "next_enabled_stage"
+    },
+    {
+      "id": "S15",
+      "name": "CASE_FACTORY",
+      "enabled_when": "always",
+      "pass_verdicts": ["CASES_READY", "CASE_AUDIT_PASSED"],
+      "next_on_pass": "next_enabled_stage"
+    },
+    {
+      "id": "S16",
+      "name": "CARD_PRODUCT_APPROVAL_BEFORE_DEV",
+      "enabled_when": "always",
+      "pass_verdicts": ["PRODUCT_APPROVED_FOR_DEV"],
+      "next_on_pass": "next_enabled_stage"
+    },
+    {
+      "id": "S17",
+      "name": "WORKSPACE_ALLOCATION",
+      "enabled_when": "always",
+      "pass_verdicts": ["WORKSPACE_READY"],
+      "next_on_pass": "next_enabled_stage"
+    },
+    {
+      "id": "S18",
+      "name": "DEVELOPMENT",
+      "enabled_when": "always",
+      "pass_verdicts": ["DEV_DONE"],
+      "next_on_pass": "next_enabled_stage"
+    },
+    {
+      "id": "S19",
+      "name": "TEST_AUTOMATION_BINDING",
+      "enabled_when": "always",
+      "pass_verdicts": ["CASES_EXECUTABLE"],
+      "next_on_pass": "next_enabled_stage"
+    },
+    {
+      "id": "S20",
+      "name": "CODE_REVIEW",
+      "enabled_when": "always",
+      "pass_verdicts": ["CODE_REVIEW_PASSED"],
+      "next_on_pass": "next_enabled_stage"
+    },
+    {
+      "id": "S21",
+      "name": "DOCUMENTATION_AND_REGISTRY_UPDATE",
+      "enabled_when": "always",
+      "pass_verdicts": ["DOCS_REGISTRY_PASSED", "DOCS_REGISTRY_NA_VERIFIED"],
+      "next_on_pass": "next_enabled_stage"
+    },
+    {
+      "id": "S22",
+      "name": "FUNCTIONAL_TESTING",
+      "enabled_when": "always",
+      "pass_verdicts": ["FUNCTIONAL_TESTS_PASSED"],
+      "next_on_pass": "next_enabled_stage"
+    },
+    {
+      "id": "S23",
+      "name": "INTEGRATION_AND_FULL_REGRESSION",
+      "enabled_when": "always",
+      "pass_verdicts": ["INTEGRATION_PASSED"],
+      "next_on_pass": "next_enabled_stage"
+    },
+    {
+      "id": "S24",
+      "name": "DESIGN_IMPLEMENTATION_REVIEW",
+      "enabled_when": "ui_change",
+      "pass_verdicts": ["DESIGN_IMPLEMENTATION_APPROVED"],
+      "next_on_pass": "next_enabled_stage"
+    },
+    {
+      "id": "S25",
+      "name": "FINAL_ACCEPTANCE",
+      "enabled_when": "browser_for_operator_flow_or_declared_internal_acceptance_surface",
+      "pass_verdicts": ["FINAL_ACCEPTANCE_APPROVED"],
+      "next_on_pass": "next_enabled_stage"
+    },
+    {
+      "id": "S26",
+      "name": "RELEASE_AUTHORIZATION",
+      "enabled_when": "always",
+      "pass_verdicts": ["RELEASE_AUTHORIZED", "READY_FOR_RELEASE", "RELEASE_BLOCKED"],
+      "next_on_pass": "S27_or_waiting_or_typed_rework"
+    },
+    {
+      "id": "S27",
+      "name": "DEPLOY_EXACT_SHA",
+      "enabled_when": "release_authorized",
+      "pass_verdicts": ["DEPLOYED_EXACT_ARTIFACT"],
+      "next_on_pass": "S28"
+    },
+    {
+      "id": "S28",
+      "name": "PRODUCTION_MONITORING",
+      "enabled_when": "after_deploy",
+      "pass_verdicts": ["PRODUCTION_TRACE_PASSED", "MONITORING_NO_TRAFFIC", "PRODUCTION_TRACE_FAILED"],
+      "next_on_pass": "done_or_monitoring_or_rollback_rework"
+    }
+  ],
+  "traits": {
+    "bug": {
+      "required_stages": ["B01", "B02", "B03", "S15"],
+      "required_receipts": ["reproduction", "oracle_triage", "root_cause_escape", "regression_case_or_b04_closure"],
+      "case_dimensions": ["happy", "regression", "read_back", "reload"],
+      "acceptance_surfaces": ["product_browser_or_declared_internal_acceptance"]
+    },
+    "ui_change": {
+      "required_stages": ["S09", "S10", "S24", "S25"],
+      "required_receipts": ["ux_contract", "design_review", "visual_implementation", "product_browser"],
+      "case_dimensions": ["loading", "empty", "error", "forbidden", "partial", "long_data", "viewport"],
+      "acceptance_surfaces": ["product_browser"]
+    },
+    "process_change": {
+      "required_stages": ["S05", "S06", "S07"],
+      "required_receipts": ["current_target_process_map", "gap_analysis", "product_domain"],
+      "case_dimensions": ["process_transition", "adjacent_state", "cancel_resume"],
+      "acceptance_surfaces": ["product_domain", "product_browser"]
+    },
+    "external_contract": {
+      "required_stages": ["S03", "S04", "S15"],
+      "required_receipts": ["versioned_external_contract", "research_critic", "emulator_or_allowed_sandbox"],
+      "case_dimensions": ["contract_fields", "status_mapping", "pagination", "rate_limit", "partial_success", "outage"],
+      "acceptance_surfaces": ["contract_runner", "emulator_or_allowed_sandbox"]
+    },
+    "new_domain": {
+      "required_stages": ["S03", "S04", "S05", "S06", "S07", "S13", "S14"],
+      "required_receipts": ["domain_dossier", "capability_coverage", "process_map", "gap_analysis", "architecture_review"],
+      "case_dimensions": ["full_journey", "external_contract", "tenant", "worker", "print", "mobile"],
+      "acceptance_surfaces": ["domain_product", "product_browser_matrix"]
+    },
+    "new_module": {
+      "required_stages": ["S03", "S04", "S05", "S06", "S07", "S13", "S14"],
+      "required_receipts": ["module_dossier", "capability_coverage", "process_map", "gap_analysis", "architecture_review"],
+      "case_dimensions": ["module_capability", "reuse_extend_new_reject", "risk_edges"],
+      "acceptance_surfaces": ["domain_product", "declared_module_acceptance"]
+    },
+    "database_change": {
+      "required_stages": ["S13", "S15", "S22", "S23", "S26"],
+      "required_receipts": ["migration_compatibility", "backfill_plan", "integrity_proof", "restore_rollback_rehearsal"],
+      "case_dimensions": ["migration", "backfill", "integrity", "restore", "rollback"],
+      "acceptance_surfaces": ["data_invariant"]
+    },
+    "background_worker": {
+      "required_stages": ["S13", "S15", "S19", "S22"],
+      "required_receipts": ["retry_idempotency", "queue_isolation", "outage_replay"],
+      "case_dimensions": ["enqueue", "retry", "outage", "replay", "queue_isolation", "worker_drain"],
+      "acceptance_surfaces": ["worker_operation"]
+    },
+    "print": {
+      "required_stages": ["S09", "S15", "S22", "S25"],
+      "required_receipts": ["print_content_layout_size", "repeat_print", "printer_or_approved_device"],
+      "case_dimensions": ["content", "layout", "size", "repeat", "scanner_device"],
+      "acceptance_surfaces": ["product_browser", "printer_device"]
+    },
+    "mobile_contract": {
+      "required_stages": ["S15", "S22", "S25"],
+      "required_receipts": ["versioned_consumer_contract", "mobile_consumer_verdict"],
+      "case_dimensions": ["consumer_compatibility", "role", "offline_or_device_specific"],
+      "acceptance_surfaces": ["mobile_consumer"]
+    },
+    "tenant_sensitive": {
+      "required_stages": ["S15", "S22"],
+      "required_receipts": ["negative_authorization", "cross_tenant_isolation"],
+      "case_dimensions": ["tenant", "seller", "warehouse", "role", "forbidden"],
+      "acceptance_surfaces": ["authorization_invariant"]
+    },
+    "release_change": {
+      "required_stages": ["S23", "S26", "S27", "S28"],
+      "required_receipts": ["immutable_artifact_manifest", "exact_promotion", "smoke", "rollback", "production_trace"],
+      "case_dimensions": ["artifact_digest", "runtime_version", "smoke", "rollback", "trace"],
+      "acceptance_surfaces": ["release_controller"]
+    },
+    "emergency": {
+      "required_stages": ["S01", "S02", "S08", "S15", "S20", "S22", "S23", "S25", "S26", "S27", "S28"],
+      "required_receipts": ["signed_bypass_scope", "targeted_review", "targeted_smoke", "rollback_stop", "immutable_debt"],
+      "case_dimensions": ["minimal_diff", "safety_invariant", "direct_regression", "debt_closure"],
+      "acceptance_surfaces": ["targeted_product_browser", "post_gate_debt"]
+    },
+    "pipeline_change": {
+      "required_stages": ["S11", "S13", "S14", "S15", "S20", "S22", "S25", "S26"],
+      "required_receipts": ["owner_authorization", "control_plane_review", "metatests"],
+      "case_dimensions": ["control_plane", "entrypoint_inventory", "role_incompatibility", "activation"],
+      "acceptance_surfaces": ["pipeline_meta_tests"]
+    }
+  },
+  "role_incompatibilities": [
+    ["researcher", "research-critic"],
+    ["architect-1", "architect-2"],
+    ["case-writer", "case-breaker"],
+    ["case-writer", "case-auditor"],
+    ["atomic-dev", "reviewer"],
+    ["atomic-dev", "design-judge"],
+    ["atomic-dev", "product-card"],
+    ["atomic-dev", "product-browser"],
+    ["artifact-producer", "artifact-approver"]
+  ],
+  "entrypoints": [
+    {"path": "AGENTS.md", "mode_before_activation": "status_pointer_plus_existing_rules", "mode_after_activation": "short_pointer_preserving_repo_safety_git_secret_rules"},
+    {"path": "CLAUDE.md", "mode_before_activation": "status_pointer_plus_existing_rules", "mode_after_activation": "short_pointer_preserving_repo_safety_git_secret_rules"},
+    {"path": ".github/pull_request_template.md", "mode_before_activation": "pipeline_status_pointer_plus_existing_product_gate", "mode_after_activation": "pipeline_receipt_template"},
+    {"path": ".dev/PROCESS.md", "mode_before_activation": "legacy_process_marked_superseded_pending_activation", "mode_after_activation": "archived_or_pointer"},
+    {"path": "docs/WMS_FEATURE_GATE_PROTOCOL_RU.md", "mode_before_activation": "legacy_gate_marked_superseded_pending_activation", "mode_after_activation": "archived_or_pointer"},
+    {"path": "docs/WMS_PRODUCT_AGENT_RU.md", "mode_before_activation": "legacy_gate_marked_superseded_pending_activation", "mode_after_activation": "archived_or_pointer"},
+    {"path": "docs/process/PIPELINE-ADDITIONS-RU.md", "mode_before_activation": "legacy_design_doc_marked_superseded_pending_activation", "mode_after_activation": "archived_or_pointer"},
+    {"path": "docs/process/PIPELINE-DESIGN-RU.md", "mode_before_activation": "legacy_design_doc_marked_superseded_pending_activation", "mode_after_activation": "archived_or_pointer"},
+    {"path": "docs/process/TASK-PIPELINE-ARCHITECT-RU.md", "mode_before_activation": "legacy_design_doc_marked_superseded_pending_activation", "mode_after_activation": "archived_or_pointer"}
+  ],
+  "activation_blockers": [
+    "controller_wave_driver_not_implemented",
+    "shared_validation_engine_not_used_by_close_ci_deploy",
+    "build_once_artifact_promotion_not_implemented",
+    "runtime_artifact_digest_verification_not_implemented",
+    "deny_by_default_test_egress_not_enforced_repo_wide",
+    "role_receipt_signatures_not_implemented",
+    "all_40_metatests_declared_but_not_automated_green",
+    "old_process_entrypoints_not_archived_after_activation"
+  ],
+  "required_metatests": [
+    {"id": "MT01", "source": "42.1", "title": "Dev without PRODUCT_APPROVED_FOR_DEV cannot receive workspace", "status": "declared_pending_controller"},
+    {"id": "MT02", "source": "42.2", "title": "Out-of-scope file change is blocked by local guard and CI", "status": "declared_pending_controller"},
+    {"id": "MT03", "source": "42.3", "title": "Ordinary task cannot modify pipeline.yml", "status": "declared_pending_controller"},
+    {"id": "MT04", "source": "42.4", "title": "Stage crash resumes from last receipt", "status": "declared_pending_controller"},
+    {"id": "MT05", "source": "42.5", "title": "Conflicting file/table/process locks serialize agents", "status": "declared_pending_controller"},
+    {"id": "MT06", "source": "42.6", "title": "Diff expansion recalculates profile and adds missing stages", "status": "declared_pending_controller"},
+    {"id": "MT07", "source": "42.7", "title": "Product rejects mockup so development and downstream do not start", "status": "declared_pending_controller"},
+    {"id": "MT08", "source": "42.8", "title": "Post-approval code or input changes invalidate dependent verdicts", "status": "declared_pending_controller"},
+    {"id": "MT09", "source": "42.9", "title": "Case expectation cannot be rewritten to match code without oracle", "status": "declared_pending_controller"},
+    {"id": "MT10", "source": "42.10", "title": "Red GOLD case blocks integration", "status": "declared_pending_controller"},
+    {"id": "MT11", "source": "42.11", "title": "SNAPSHOT change waits for triage before release", "status": "declared_pending_controller"},
+    {"id": "MT12", "source": "42.12", "title": "Evidence with token or cookie is blocked by commit or CI", "status": "declared_pending_controller"},
+    {"id": "MT13", "source": "42.13", "title": "Test service cannot reach production WB or Ozon", "status": "declared_pending_controller"},
+    {"id": "MT14", "source": "42.14", "title": "Worker cannot process another task queue", "status": "declared_pending_controller"},
+    {"id": "MT15", "source": "42.15", "title": "Deploy rolls back when runtime SHA differs from authorized SHA", "status": "declared_pending_controller"},
+    {"id": "MT16", "source": "42.16", "title": "Regression after fix reopens old incident history", "status": "declared_pending_controller"},
+    {"id": "MT17", "source": "42.17", "title": "NOT_REPRODUCED creates observation instead of closing bug", "status": "declared_pending_controller"},
+    {"id": "MT18", "source": "42.18", "title": "Small UI change avoids full domain research", "status": "declared_pending_controller"},
+    {"id": "MT19", "source": "42.19", "title": "External call change always includes contract research and emulator cases", "status": "declared_pending_controller"},
+    {"id": "MT20", "source": "42.20", "title": "Ozon-like request enables full new_domain profile", "status": "declared_pending_controller"},
+    {"id": "MT21", "source": "42.21", "title": "True blocker parks one card while independent cards continue", "status": "declared_pending_controller"},
+    {"id": "MT22", "source": "42.22", "title": "Machine restart restores the whole wave", "status": "declared_pending_controller"},
+    {"id": "MT23", "source": "42.23", "title": "Worker agent cannot accept its own result", "status": "declared_pending_controller"},
+    {"id": "MT24", "source": "42.24", "title": "Card cannot reach DONE without commit, push, tests and final verdicts", "status": "declared_pending_controller"},
+    {"id": "MT25", "source": "42.25", "title": "Morning report is rebuilt from machine state only", "status": "declared_pending_controller"},
+    {"id": "MT26", "source": "42.26", "title": "Forged reviewer or Product role is rejected by controller signature and CI", "status": "declared_pending_controller"},
+    {"id": "MT27", "source": "42.27", "title": "Expired worker write with old fencing token is rejected", "status": "declared_pending_controller"},
+    {"id": "MT28", "source": "42.28", "title": "Large internal module gets new_module research/process/GAP/falsification", "status": "declared_pending_controller"},
+    {"id": "MT29", "source": "42.29", "title": "Required case without runnable binding blocks functional stage", "status": "declared_pending_controller"},
+    {"id": "MT30", "source": "42.30", "title": "UI code without Design Implementation receipt cannot reach Product Browser or release", "status": "declared_pending_controller"},
+    {"id": "MT31", "source": "42.31", "title": "MONITORING_NO_TRAFFIC does not become DONE", "status": "declared_pending_controller"},
+    {"id": "MT32", "source": "42.32", "title": "Same Git SHA with different artifact digest blocks promotion/deploy", "status": "declared_pending_controller"},
+    {"id": "MT33", "source": "42.33", "title": "Activation PR missing any process entrypoint is blocked", "status": "declared_pending_controller"},
+    {"id": "MT34", "source": "42.34", "title": "Emergency profile without signed scope or immutable debt is blocked", "status": "declared_pending_controller"},
+    {"id": "MT35", "source": "42.35", "title": "Mutating cases are commutative or declared ordered journeys", "status": "declared_pending_controller"},
+    {"id": "MT36", "source": "42.36", "title": "Every failure verdict routes to owning stage, repair, waiting or rollback", "status": "declared_pending_controller"},
+    {"id": "MT37", "source": "42.37", "title": "Receipt input change transitively invalidates dependency DAG children", "status": "declared_pending_controller"},
+    {"id": "MT38", "source": "42.38", "title": "Every trait declares stages, receipts, case dimensions and acceptance surface", "status": "declared_pending_controller"},
+    {"id": "MT39", "source": "42.39", "title": "Migration release requires compatibility, restore rehearsal and honest rollback policy", "status": "declared_pending_controller"},
+    {"id": "MT40", "source": "42.40", "title": "Crash between external side effect and state update cannot repeat effect", "status": "declared_pending_controller"}
+  ]
+}

@@ -1,5 +1,13 @@
 @AGENTS.md
 
+# Pipeline v2
+
+Целевой единый процесс WMS теперь описан в
+[`docs/process/PIPELINE-RU.md`](docs/process/PIPELINE-RU.md), а машинный статус
+лежит в [`pipeline/pipeline.yml`](pipeline/pipeline.yml). Пока статус
+`TARGET_PIPELINE_NOT_ENFORCED`, этот файл и `AGENTS.md` сохраняют действующие
+правила окружения, Git, секретов и старого Product gate.
+
 # ⛔️ ЕДИНСТВЕННЫЙ ПРАВИЛЬНЫЙ ПУТЬ ПРОЕКТА
 
 ```

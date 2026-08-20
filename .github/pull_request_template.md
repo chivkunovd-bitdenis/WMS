@@ -1,6 +1,13 @@
 ## Summary
 - 
 
+## Pipeline v2 status
+
+Целевой процесс: `docs/process/PIPELINE-RU.md`. Машинный статус/hash:
+`pipeline/pipeline.yml`. Пока статус `TARGET_PIPELINE_NOT_ENFORCED`, PR обязан
+заполнять старый Product gate ниже; Pipeline v2 нельзя считать активированным без
+owner approval и зелёных метатестов части XII.
+
 ## Product gate
 
 Обязательно для любой WMS-задачи. См. `AGENTS.md`,
