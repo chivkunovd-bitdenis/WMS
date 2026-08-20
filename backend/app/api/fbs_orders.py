@@ -1,3 +1,4 @@
+# ruff: noqa: RUF003
 from __future__ import annotations
 
 import uuid
@@ -94,6 +95,10 @@ class FbsWorklistMetadataStateOut(BaseModel):
     status: str
     reason: str | None
     source: str | None = None
+    # Хвост кода маркировки для экрана упаковки. Без явного поля pydantic молча
+    # выбрасывал его из ответа: сервис клал значение, схема снимала, и колонка «ЧЗ»
+    # на экране всегда показывала прочерк.
+    value_tail: str | None = None
 
 
 class FbsWorklistMetadataOut(BaseModel):
