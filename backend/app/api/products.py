@@ -414,9 +414,10 @@ async def get_seller_wb_catalog(
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
     search: Annotated[str | None, Query()] = None,
-    # Каталог крупного селлера — под десять тысяч позиций. Без потолка ответ весит
-    # шесть мегабайт и строится дюжину секунд: окно выбора товаров выглядит зависшим.
-    limit: Annotated[int, Query(ge=1, le=2000)] = 500,
+    # Потолок выдачи. По умолчанию его НЕТ: портал селлера грузит каталог целиком и
+    # ищет на клиенте — с лимитом товар за границей выборки просто не находится.
+    # Лимит имеет смысл только вместе с search, когда клиент ищет на сервере.
+    limit: Annotated[int | None, Query(ge=1, le=20000)] = None,
 ) -> list[SellerWbCatalogOut]:
     await assert_seller_permission(session, user, PERM_PRODUCTS)
     if user.role != FULFILLMENT_SELLER:

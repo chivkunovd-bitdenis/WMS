@@ -16,10 +16,10 @@ def test_route_has_search_and_limit() -> None:
     assert "search" in params
     assert "limit" in params
     limit_default = params["limit"].default
-    # у Annotated[int, Query(...)] значение лежит либо в самом default,
-    # либо в Query-объекте — проверяем оба вида
     value = getattr(limit_default, "default", limit_default)
-    assert value == 500
+    # по умолчанию потолка нет: портал селлера грузит каталог целиком и ищет
+    # на клиенте — с лимитом товар за границей выборки просто не находился
+    assert value is None
 
 
 def test_service_passes_filters_down() -> None:
