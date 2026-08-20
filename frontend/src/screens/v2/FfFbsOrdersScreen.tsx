@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Alert,
@@ -79,10 +79,7 @@ const TABS = [
 
 type FbsStatusGroup = (typeof TABS)[number]['key']
 
-// Аварийный лимит: обычная MUI-таблица с 500 строками блокирует слабые
-// рабочие ноутбуки при массовом выборе. После создания/пополнения поставки
-// выбранная сотня уходит из «Новых», и экран показывает следующую.
-const NEW_ORDERS_PAGE_LIMIT = 100
+const NEW_ORDERS_PAGE_LIMIT = 500
 
 // HANDOFF-POLISH.md пул 1 п.4 (решение П3): «В работе», «В доставке» и «Завершённые» —
 // это работа с уже собранным документом (поставкой) целиком, не с отдельными заказами.
@@ -151,6 +148,191 @@ function BlockerLine({
   }
   return <MissingText>{blocker.message}</MissingText>
 }
+
+// ProductPhotoThumb сам проверяет ссылку через Image(). Без этой обёртки экран с
+// 500 заказами одновременно запускал 500 проверок фото, хотя оператор видел лишь
+// несколько строк. Подключаем реальный src только рядом с видимой областью.
+function LazyProductPhotoThumb({
+  src,
+  alt,
+  size,
+  previewSize,
+  testId,
+}: {
+  src: string | null | undefined
+  alt: string
+  size: number
+  previewSize: number
+  testId: string
+}) {
+  const anchorRef = useRef<HTMLSpanElement | null>(null)
+  const [nearViewport, setNearViewport] = useState(false)
+
+  useEffect(() => {
+    const node = anchorRef.current
+    if (!node || nearViewport) return undefined
+    if (!('IntersectionObserver' in window)) {
+      setNearViewport(true)
+      return undefined
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting) return
+        setNearViewport(true)
+        observer.disconnect()
+      },
+      { rootMargin: '320px 0px' },
+    )
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [nearViewport])
+
+  return (
+    <Box
+      component="span"
+      ref={anchorRef}
+      sx={{ display: 'inline-flex', width: size, height: size, flex: '0 0 auto' }}
+    >
+      <ProductPhotoThumb
+        src={nearViewport ? src : null}
+        alt={alt}
+        size={size}
+        previewSize={previewSize}
+        testId={testId}
+      />
+    </Box>
+  )
+}
+
+type NewOrderRowProps = {
+  order: FbsWorklistOrder
+  selected: boolean
+  highlighted: boolean
+  serverNow: string | null
+  registerRow: (id: string, node: HTMLTableRowElement | null) => void
+  onToggle: (order: FbsWorklistOrder) => void
+  onOpenWorkspace: (supplyId: string) => void
+  onGoToStockSync: () => void
+}
+
+// Клик по одной галке меняет selected только у одной строки. React.memo не даёт
+// остальным 499 тяжёлым строкам заново строить фото, подсказки и типографику.
+const NewOrderRow = memo(function NewOrderRow({
+  order,
+  selected,
+  highlighted,
+  serverNow,
+  registerRow,
+  onToggle,
+  onOpenWorkspace,
+  onGoToStockSync,
+}: NewOrderRowProps) {
+  const blocked = order.selection_blockers.length > 0
+  return (
+    <TableRow
+      ref={(node) => registerRow(order.id, node)}
+      hover
+      selected={selected}
+      sx={{
+        verticalAlign: 'top',
+        cursor: order.supply_id ? 'pointer' : 'default',
+        scrollMarginBottom: '220px',
+        '& > td': { py: 0.9 },
+        ...(highlighted
+          ? {
+              bgcolor: 'rgba(255, 214, 102, 0.24)',
+              '&:hover': { bgcolor: 'rgba(255, 214, 102, 0.32)' },
+            }
+          : {}),
+      }}
+      onClick={() => order.supply_id && onOpenWorkspace(order.supply_id)}
+      data-testid={`fbs-order-${order.id}`}
+    >
+      <TableCell padding="checkbox">
+        <Checkbox
+          checked={selected}
+          disabled={blocked}
+          onClick={(event) => event.stopPropagation()}
+          onChange={() => onToggle(order)}
+        />
+      </TableCell>
+      <TableCell>
+        <Stack direction="row" spacing={1.25}>
+          <LazyProductPhotoThumb
+            src={order.product.image_url}
+            alt={order.product.name}
+            size={44}
+            previewSize={280}
+            testId={`fbs-product-photo-${order.id}`}
+          />
+          <Box sx={{ minWidth: 0 }}>
+            <Tooltip title={order.product.id ? order.product.name : 'Товар не сопоставлен'}>
+              <Typography variant="subtitle2" noWrap sx={{ lineHeight: 1.25, maxWidth: 150 }}>
+                {order.product.id ? order.product.name : 'Товар не сопоставлен'}
+              </Typography>
+            </Tooltip>
+            {blocked ? (
+              <Stack sx={{ mt: 0.75 }} spacing={0.25}>
+                {order.selection_blockers.map((blocker) => (
+                  <BlockerLine
+                    key={blocker.code}
+                    blocker={blocker}
+                    onGoToStockSync={onGoToStockSync}
+                  />
+                ))}
+              </Stack>
+            ) : null}
+          </Box>
+        </Stack>
+      </TableCell>
+      <TableCell>
+        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+          WB №{order.wb_order_id}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
+          ШК: {order.product.barcode ?? '—'}
+        </Typography>
+        {order.product.sku ? (
+          <Tooltip title={order.product.sku}>
+            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
+              SKU {order.product.sku}
+            </Typography>
+          </Tooltip>
+        ) : order.product.seller_article ? (
+          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
+            Артикул: {order.product.seller_article}
+          </Typography>
+        ) : null}
+      </TableCell>
+      <TableCell>
+        <Tooltip title={order.seller.name ?? '—'}>
+          <Typography variant="body2" noWrap sx={{ maxWidth: 100 }}>{order.seller.name ?? '—'}</Typography>
+        </Tooltip>
+        {order.buyer_type === 'legal' ? (
+          <Typography variant="caption" color="text.secondary">
+            Юридическое лицо
+          </Typography>
+        ) : null}
+      </TableCell>
+      <TableCell>
+        <Tooltip title={order.wb_warehouse.name || `WB ${order.wb_warehouse.id}`}>
+          <Typography variant="body2" noWrap sx={{ fontWeight: 650, maxWidth: 145 }}>
+            {order.wb_warehouse.name || `WB ${order.wb_warehouse.id}`}
+          </Typography>
+        </Tooltip>
+        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 145 }}>
+          WMS: {order.wms_warehouse.name}
+        </Typography>
+      </TableCell>
+      <TableCell>
+        <Typography variant="body2">{formatDateTime(order.created_at_wb)}</Typography>
+        <Typography variant="caption" color="text.secondary">
+          В сборке: {elapsedSince(order.created_at_wb, serverNow)}
+        </Typography>
+      </TableCell>
+    </TableRow>
+  )
+})
 
 // GLOBAL-02: единственное состояние строки, которое реально мешает оператору
 // отгрузить заказ, — незакрытая маркировка Честным знаком. «Не хватает: N» с прошлого
@@ -319,7 +501,6 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [selectedCache, setSelectedCache] = useState<Map<string, FbsWorklistOrder>>(new Map())
   const [selectedOpen, setSelectedOpen] = useState(false)
-  const [selectingAll, setSelectingAll] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -335,6 +516,10 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const [workspaceSeed, setWorkspaceSeed] = useState<FbsWorkspace | null>(null)
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({})
+  const registerRow = useCallback((id: string, node: HTMLTableRowElement | null) => {
+    rowRefs.current[id] = node
+  }, [])
+  const goToStockSync = useCallback(() => navigate('/app/ff/fbs/stock-sync'), [navigate])
   const openedSupplyFromQuery = useRef<string | null>(null)
   const loadingRef = useRef(false)
   // Плавающая панель выбора (fbs-selection-bar) прибита к низу вьюпорта и накрывает
@@ -620,7 +805,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     if (notice === SEARCH_NO_MATCH_NOTICE) setNotice(null)
   }, [matchingOrders.length, notice, orders.length, searchTerm, statusGroup])
 
-  const toggle = (order: FbsWorklistOrder) => {
+  const toggle = useCallback((order: FbsWorklistOrder) => {
     setSelected((current) => {
       const next = new Set(current)
       if (next.has(order.id)) next.delete(order.id)
@@ -632,53 +817,17 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       next.set(order.id, order)
       return next
     })
-  }
+  }, [])
 
-  const toggleAllFilteredSelectable = async (checked: boolean) => {
-    if (!checked) {
-      setSelected(new Set())
-      return
-    }
-
-    setSelectingAll(true)
-    setError(null)
-    try {
-      const allOrders = new Map<string, FbsWorklistOrder>()
-      const seenCursors = new Set<string>()
-      let cursor: string | null = null
-
-      while (true) {
-        const page = await fetchFbsWorklist(token, authHeaders, {
-          seller_id: sellerId === '__all__' ? null : sellerId,
-          status_group: 'new',
-          wb_warehouse_id: wbWarehouseId !== '__all__' ? wbWarehouseId : null,
-          limit: 500,
-          cursor,
-        })
-        page.items.forEach((order) => allOrders.set(order.id, order))
-
-        if (!page.next_cursor) break
-        if (seenCursors.has(page.next_cursor)) {
-          throw new Error('Сервер повторил страницу заказов. Обновите список и попробуйте ещё раз.')
-        }
-        seenCursors.add(page.next_cursor)
-        cursor = page.next_cursor
-      }
-
-      const selectableOrders = [...allOrders.values()].filter(
-        (order) => order.selection_blockers.length === 0,
-      )
-      setSelectedCache((current) => {
-        const next = new Map(current)
-        allOrders.forEach((order, id) => next.set(id, order))
-        return next
+  const toggleVisibleSelectable = (checked: boolean) => {
+    setSelected((current) => {
+      const next = new Set(current)
+      selectableIds.forEach((id) => {
+        if (checked) next.add(id)
+        else next.delete(id)
       })
-      setSelected(new Set(selectableOrders.map((order) => order.id)))
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Не удалось выбрать все заказы.')
-    } finally {
-      setSelectingAll(false)
-    }
+      return next
+    })
   }
 
   const downloadExcel = () => {
@@ -690,12 +839,12 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     setNotice(`Выгружено заказов: ${exportRows.length}.`)
   }
 
-  const openWorkspace = (supplyId: string, seed?: FbsWorkspace) => {
+  const openWorkspace = useCallback((supplyId: string, seed?: FbsWorkspace) => {
     setWorkspaceId(supplyId)
     setWorkspaceSeed(seed ?? null)
     setWorkspaceOpen(true)
     setError(null)
-  }
+  }, [])
 
   const hasNewSelection = statusGroup === 'new' && selected.size > 0
 
@@ -1058,8 +1207,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                   <Checkbox
                     checked={selectableIds.length > 0 && selectableIds.every((id) => selected.has(id))}
                     indeterminate={selected.size > 0 && !selectableIds.every((id) => selected.has(id))}
-                    disabled={busy || selectingAll}
-                    onChange={(_, checked) => void toggleAllFilteredSelectable(checked)}
+                    onChange={(_, checked) => toggleVisibleSelectable(checked)}
                   />
                 ) : null}
               </TableCell>
@@ -1084,27 +1232,34 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
           </TableHead>
           <TableBody>
             {orders.map((order) => {
-              const blocked = order.selection_blockers.length > 0
-              const localSupplyMissing = statusGroup !== 'new' && !order.supply_id
-              const highlighted = statusGroup === 'new' && searchTerm && matchingIds.has(order.id)
+              if (statusGroup === 'new') {
+                return (
+                  <NewOrderRow
+                    key={order.id}
+                    order={order}
+                    selected={selected.has(order.id)}
+                    highlighted={Boolean(searchTerm && matchingIds.has(order.id))}
+                    serverNow={serverNow}
+                    registerRow={registerRow}
+                    onToggle={toggle}
+                    onOpenWorkspace={openWorkspace}
+                    onGoToStockSync={goToStockSync}
+                  />
+                )
+              }
+
+              const localSupplyMissing = !order.supply_id
               const metaFlag = metadataProblem(order)
               const row = (
                 <TableRow
                   key={order.id}
-                  ref={(node) => { rowRefs.current[order.id] = node }}
+                  ref={(node) => registerRow(order.id, node)}
                   hover={!localSupplyMissing}
                   selected={selected.has(order.id)}
                   sx={{
                     verticalAlign: 'top',
                     cursor: order.supply_id ? 'pointer' : 'default',
-                    scrollMarginBottom: hasNewSelection ? '220px' : undefined,
                     '& > td': { py: 0.9 },
-                    ...(highlighted
-                      ? {
-                          bgcolor: 'rgba(255, 214, 102, 0.24)',
-                          '&:hover': { bgcolor: 'rgba(255, 214, 102, 0.32)' },
-                        }
-                      : {}),
                     ...(localSupplyMissing
                       ? {
                           bgcolor: 'action.disabledBackground',
@@ -1117,94 +1272,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                   data-testid={`fbs-order-${order.id}`}
                   aria-disabled={localSupplyMissing ? true : undefined}
                 >
-                  <TableCell padding="checkbox">
-                    {statusGroup === 'new' ? (
-                      <Checkbox
-                        checked={selected.has(order.id)}
-                        disabled={blocked}
-                        onClick={(event) => event.stopPropagation()}
-                        onChange={() => toggle(order)}
-                      />
-                    ) : null}
-                  </TableCell>
-                  {statusGroup === 'new' ? (
-                    <>
-                      <TableCell>
-                        <Stack direction="row" spacing={1.25}>
-                          <ProductPhotoThumb
-                            src={order.product.image_url}
-                            alt={order.product.name}
-                            size={44}
-                            previewSize={280}
-                            testId={`fbs-product-photo-${order.id}`}
-                          />
-                          <Box sx={{ minWidth: 0 }}>
-                            <Tooltip title={order.product.id ? order.product.name : 'Товар не сопоставлен'}>
-                              <Typography variant="subtitle2" noWrap sx={{ lineHeight: 1.25, maxWidth: 150 }}>
-                                {order.product.id ? order.product.name : 'Товар не сопоставлен'}
-                              </Typography>
-                            </Tooltip>
-                            {blocked ? (
-                              <Stack sx={{ mt: 0.75 }} spacing={0.25}>
-                                {order.selection_blockers.map((blocker) => (
-                                  <BlockerLine
-                                    key={blocker.code}
-                                    blocker={blocker}
-                                    onGoToStockSync={() => navigate('/app/ff/fbs/stock-sync')}
-                                  />
-                                ))}
-                              </Stack>
-                            ) : null}
-                          </Box>
-                        </Stack>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                          WB №{order.wb_order_id}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
-                          ШК: {order.product.barcode ?? '—'}
-                        </Typography>
-                        {order.product.sku ? (
-                          <Tooltip title={order.product.sku}>
-                            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
-                              SKU {order.product.sku}
-                            </Typography>
-                          </Tooltip>
-                        ) : order.product.seller_article ? (
-                          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
-                            Артикул: {order.product.seller_article}
-                          </Typography>
-                        ) : null}
-                      </TableCell>
-                      <TableCell>
-                        <Tooltip title={order.seller.name ?? '—'}>
-                          <Typography variant="body2" noWrap sx={{ maxWidth: 100 }}>{order.seller.name ?? '—'}</Typography>
-                        </Tooltip>
-                        {order.buyer_type === 'legal' ? (
-                          <Typography variant="caption" color="text.secondary">
-                            Юридическое лицо
-                          </Typography>
-                        ) : null}
-                      </TableCell>
-                      <TableCell>
-                        <Tooltip title={order.wb_warehouse.name || `WB ${order.wb_warehouse.id}`}>
-                          <Typography variant="body2" noWrap sx={{ fontWeight: 650, maxWidth: 145 }}>
-                            {order.wb_warehouse.name || `WB ${order.wb_warehouse.id}`}
-                          </Typography>
-                        </Tooltip>
-                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 145 }}>
-                          WMS: {order.wms_warehouse.name}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">{formatDateTime(order.created_at_wb)}</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          В сборке: {elapsedSince(order.created_at_wb, serverNow)}
-                        </Typography>
-                      </TableCell>
-                    </>
-                  ) : (
+                  <TableCell padding="checkbox" />
                     <>
                       <TableCell>
                         <Stack direction="row" spacing={1.25}>
@@ -1282,7 +1350,6 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                         ) : null}
                       </TableCell>
                     </>
-                  )}
                 </TableRow>
               )
               return (
