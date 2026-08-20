@@ -413,6 +413,10 @@ async def get_seller_wb_catalog(
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+    search: Annotated[str | None, Query()] = None,
+    # Каталог крупного селлера — под десять тысяч позиций. Без потолка ответ весит
+    # шесть мегабайт и строится дюжину секунд: окно выбора товаров выглядит зависшим.
+    limit: Annotated[int, Query(ge=1, le=2000)] = 500,
 ) -> list[SellerWbCatalogOut]:
     await assert_seller_permission(session, user, PERM_PRODUCTS)
     if user.role != FULFILLMENT_SELLER:
@@ -433,7 +437,9 @@ async def get_seller_wb_catalog(
                 detail="seller_not_linked",
             )
         catalog_seller_id = user.seller_id
-    rows = await list_seller_wb_catalog_rows(session, user.tenant_id, catalog_seller_id)
+    rows = await list_seller_wb_catalog_rows(
+        session, user.tenant_id, catalog_seller_id, search=search, limit=limit
+    )
     return [
         SellerWbCatalogOut(
             **r.as_dict(),

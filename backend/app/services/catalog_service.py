@@ -1,9 +1,10 @@
+# ruff: noqa: RUF002, RUF003
 from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select, update
+from sqlalchemy import String, cast, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -479,7 +480,15 @@ async def list_products(
     tenant_id: uuid.UUID,
     *,
     seller_id: uuid.UUID | None = None,
+    search: str | None = None,
+    limit: int | None = None,
 ) -> list[Product]:
+    """Товары тенанта. ``search`` и ``limit`` фильтруют в БД, а не в памяти.
+
+    У крупного селлера каталог доходит до десяти тысяч позиций: отдавать его целиком
+    и искать на клиенте — шесть мегабайт и десяток секунд на каждый запрос, окно
+    выбора товаров при этом выглядит зависшим.
+    """
     stmt = (
         select(Product)
         .where(Product.tenant_id == tenant_id)
@@ -488,6 +497,20 @@ async def list_products(
     )
     if seller_id is not None:
         stmt = stmt.where(Product.seller_id == seller_id)
+    needle = (search or "").strip()
+    if needle:
+        like = f"%{needle}%"
+        stmt = stmt.where(
+            or_(
+                Product.sku_code.ilike(like),
+                Product.name.ilike(like),
+                Product.wb_barcode.ilike(like),
+                Product.wb_vendor_code.ilike(like),
+                cast(Product.wb_nm_id, String).ilike(like),
+            )
+        )
+    if limit is not None:
+        stmt = stmt.limit(limit)
     res = await session.execute(stmt)
     return list(res.scalars().unique().all())
 
