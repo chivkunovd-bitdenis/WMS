@@ -319,6 +319,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [selectedCache, setSelectedCache] = useState<Map<string, FbsWorklistOrder>>(new Map())
   const [selectedOpen, setSelectedOpen] = useState(false)
+  const [selectingAll, setSelectingAll] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -633,15 +634,51 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     })
   }
 
-  const toggleVisibleSelectable = (checked: boolean) => {
-    setSelected((current) => {
-      const next = new Set(current)
-      selectableIds.forEach((id) => {
-        if (checked) next.add(id)
-        else next.delete(id)
+  const toggleAllFilteredSelectable = async (checked: boolean) => {
+    if (!checked) {
+      setSelected(new Set())
+      return
+    }
+
+    setSelectingAll(true)
+    setError(null)
+    try {
+      const allOrders = new Map<string, FbsWorklistOrder>()
+      const seenCursors = new Set<string>()
+      let cursor: string | null = null
+
+      while (true) {
+        const page = await fetchFbsWorklist(token, authHeaders, {
+          seller_id: sellerId === '__all__' ? null : sellerId,
+          status_group: 'new',
+          wb_warehouse_id: wbWarehouseId !== '__all__' ? wbWarehouseId : null,
+          limit: 500,
+          cursor,
+        })
+        page.items.forEach((order) => allOrders.set(order.id, order))
+
+        if (!page.next_cursor) break
+        if (seenCursors.has(page.next_cursor)) {
+          throw new Error('Сервер повторил страницу заказов. Обновите список и попробуйте ещё раз.')
+        }
+        seenCursors.add(page.next_cursor)
+        cursor = page.next_cursor
+      }
+
+      const selectableOrders = [...allOrders.values()].filter(
+        (order) => order.selection_blockers.length === 0,
+      )
+      setSelectedCache((current) => {
+        const next = new Map(current)
+        allOrders.forEach((order, id) => next.set(id, order))
+        return next
       })
-      return next
-    })
+      setSelected(new Set(selectableOrders.map((order) => order.id)))
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось выбрать все заказы.')
+    } finally {
+      setSelectingAll(false)
+    }
   }
 
   const downloadExcel = () => {
@@ -1021,7 +1058,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                   <Checkbox
                     checked={selectableIds.length > 0 && selectableIds.every((id) => selected.has(id))}
                     indeterminate={selected.size > 0 && !selectableIds.every((id) => selected.has(id))}
-                    onChange={(_, checked) => toggleVisibleSelectable(checked)}
+                    disabled={busy || selectingAll}
+                    onChange={(_, checked) => void toggleAllFilteredSelectable(checked)}
                   />
                 ) : null}
               </TableCell>

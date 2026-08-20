@@ -46,10 +46,14 @@ function order(id: string, over: Partial<FbsWorklistFixture> = {}): FbsWorklistF
   }
 }
 
-function worklist(items: FbsWorklistFixture[], warehouseOptions: FbsWorklistFixture[] = []) {
+function worklist(
+  items: FbsWorklistFixture[],
+  warehouseOptions: FbsWorklistFixture[] = [],
+  nextCursor: string | null = null,
+) {
   return {
     items,
-    next_cursor: null,
+    next_cursor: nextCursor,
     server_now: new Date().toISOString(),
     warehouse_options: warehouseOptions,
   }
@@ -175,28 +179,47 @@ test('fbs orders: list, tabs and empty state', async ({ page }) => {
   await expect(page.getByTestId('fbs-order-5')).toBeVisible()
 })
 
-// HOTFIX 20.08.2026: рабочий ноутбук должен суметь выбрать всю аварийно
-// ограниченную страницу, чтобы оператор собрал заказы сотнями без зависания.
-test('fbs orders: 100 new orders remain selectable as one batch', async ({ page }) => {
-  await registerFf(page, 'hundred-orders')
-  const hundredOrders = Array.from({ length: 100 }, (_, index) => order(String(index + 1)))
+// HOTFIX 20.08.2026: таблица оставляет в DOM только первые 100 строк, но верхняя
+// галка выбирает весь отфильтрованный объём через cursor-страницы API.
+test('fbs orders: select all loads 610 orders without rendering them all', async ({ page }) => {
+  await registerFf(page, 'all-filtered-orders')
+  const allOrders = Array.from({ length: 610 }, (_, index) => order(String(index + 1)))
+  let bulkRequests = 0
 
   await page.route('**/operations/fbs-orders/worklist**', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback()
     const params = new URL(route.request().url()).searchParams
     expect(params.get('status_group')).toBe('new')
-    expect(params.get('limit')).toBe('100')
+    const limit = params.get('limit')
+    const cursor = params.get('cursor')
+    if (limit === '100') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(worklist(allOrders.slice(0, 100))),
+      })
+      return
+    }
+
+    expect(limit).toBe('500')
+    bulkRequests += 1
+    const body = cursor === 'after-500'
+      ? worklist(allOrders.slice(500))
+      : worklist(allOrders.slice(0, 500), [], 'after-500')
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(worklist(hundredOrders)),
+      body: JSON.stringify(body),
     })
   })
 
   await page.getByTestId('nav-ff-fbs').click()
   await expect(page.getByTestId('fbs-order-100')).toBeAttached()
+  await expect(page.getByTestId('fbs-order-101')).toHaveCount(0)
   await page.getByTestId('fbs-worklist-table').getByRole('checkbox').first().click()
-  await expect(page.getByTestId('fbs-selection-bar')).toContainText('Выбрано заказов: 100')
+  await expect(page.getByTestId('fbs-selection-bar')).toContainText('Выбрано заказов: 610')
+  expect(bulkRequests).toBe(2)
+  await expect(page.getByTestId('fbs-order-101')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Сформировать поставку' })).toBeEnabled()
 })
 
