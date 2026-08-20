@@ -1,3 +1,4 @@
+# ruff: noqa: RUF003
 """FBS order marking — WB metadata requirements, pool KIZ, and status sync."""
 
 from __future__ import annotations
@@ -300,6 +301,14 @@ def compute_delivery_allowed(
     return True
 
 
+def _marking_value_tail(value: str | None, length: int = 8) -> str | None:
+    """Последние символы кода маркировки — опознавательный хвост для оператора."""
+    if not value:
+        return None
+    cleaned = value.strip()
+    return cleaned[-length:] if len(cleaned) > length else cleaned
+
+
 def build_order_metadata(
     order: FbsOrder,
     markings: list[FbsOrderMarking],
@@ -316,6 +325,10 @@ def build_order_metadata(
                     "status": mark.meta_status,
                     "reason": mark.reason,
                     "source": mark.source,
+                    # Хвост кода — чтобы оператор глазами сверил строку на экране
+                    # с тем, что напечатано на этикетке. Весь код не отдаём: он
+                    # длинный и в таблицу не помещается.
+                    "value_tail": _marking_value_tail(mark.value),
                 }
             )
         else:
@@ -325,6 +338,7 @@ def build_order_metadata(
                     "status": META_STATUS_MISSING,
                     "reason": None,
                     "source": None,
+                    "value_tail": None,
                 }
             )
     delivery_allowed = (

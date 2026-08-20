@@ -142,6 +142,17 @@ function isOrderMarkingReady(order: FbsWorkspace['orders'][number]) {
 }
 
 // КИЗ, внесённый оператором со стикера, — в отличие от напечатанного нами из пула.
+/** Хвост внесённого Честного знака — пустой, значит заказ ещё не сканировали. */
+function kizTail(order: FbsWorkspace['orders'][number]): string | null {
+  const state = order.metadata.states.find(
+    (item) =>
+      item.kind === 'sgtin' &&
+      item.status !== 'missing' &&
+      item.status !== 'rejected',
+  )
+  return state?.value_tail ?? null
+}
+
 function hasOperatorKiz(order: FbsWorkspace['orders'][number]) {
   return order.metadata.states.some(
     (state) =>
@@ -289,6 +300,14 @@ export function FfFbsSupplyWorkspace({
   const [kizUndoOrderId, setKizUndoOrderId] = useState<string | null>(null)
   const [kizScanActive, setKizScanActive] = useState<FbsKizLookup | null>(null)
   const [kizScanValue, setKizScanValue] = useState('')
+  // Ссылки на строки заказов: после скана стикера подкручиваем список к нужной,
+  // иначе в поставке на 26 позиций оператор не понимает, какая строка ожила.
+  const kizRowRefs = useRef<Record<string, HTMLDivElement | null>>({})
+
+  useEffect(() => {
+    if (!kizScanActive) return
+    kizRowRefs.current[kizScanActive.order_id]?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [kizScanActive])
   const [kizScanBusy, setKizScanBusy] = useState(false)
   const [kizScanError, setKizScanError] = useState<KizScanError | null>(null)
   const [kizScanHints, setKizScanHints] = useState<string[]>([])
@@ -1791,20 +1810,30 @@ export function FfFbsSupplyWorkspace({
                         order.product.barcode,
                         `заказ ${order.wb_order_id}`,
                       ].filter(Boolean).join(' · ')
+                      // Пустая колонка ЧЗ = заказ ещё не сканировали. Внесённый код
+                      // красит строку зелёным, активную (только что отсканированный
+                      // стикер) — голубым: оператор видит, куда сейчас ляжет код.
+                      const tail = kizTail(order)
                       return (
                         <Stack
                           key={order.id}
+                          ref={(node: HTMLDivElement | null) => { kizRowRefs.current[order.id] = node }}
                           direction="row"
                           spacing={1.5}
                           sx={{
                             alignItems: 'center',
                             px: 2,
                             py: 1.25,
-                            bgcolor: kizRowActive ? 'info.light' : (printed ? 'action.hover' : 'background.paper'),
+                            bgcolor: kizRowActive
+                              ? 'info.light'
+                              : tail
+                                ? 'success.light'
+                                : (printed ? 'action.hover' : 'background.paper'),
                             borderLeft: '4px solid',
-                            borderLeftColor: kizRowActive ? 'info.main' : 'transparent',
+                            borderLeftColor: kizRowActive ? 'info.main' : (tail ? 'success.main' : 'transparent'),
                           }}
                           data-testid={kizRowActive ? 'fbs-kiz-row-active' : undefined}
+                          data-kiz-tail={tail ?? ''}
                         >
                           <ProductPhotoThumb src={order.product.image_url} alt={order.product.name} size={40} previewSize={280} />
                           <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -1813,9 +1842,23 @@ export function FfFbsSupplyWorkspace({
                             </Typography>
                             <Typography variant="caption" sx={{ display: 'block', color: printed ? 'text.secondary' : 'text.secondary' }}>
                               {ids}
-                              {hasOperatorKiz(order) ? ' · КИЗ' : ''}
                               {markingShortOrderIds.has(order.id) ? <Box component="span" sx={{ color: '#854f0b' }}> · ЧЗ не хватило</Box> : null}
                             </Typography>
+                          </Box>
+                          <Box sx={{ width: 118, flexShrink: 0, textAlign: 'right' }}>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1 }}>
+                              ЧЗ
+                            </Typography>
+                            {tail ? (
+                              <Typography
+                                sx={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 15, color: 'success.dark' }}
+                                data-testid="fbs-kiz-tail"
+                              >
+                                {tail}
+                              </Typography>
+                            ) : (
+                              <Typography sx={{ color: 'text.disabled', fontSize: 15 }}>—</Typography>
+                            )}
                           </Box>
                           {printed ? <Typography sx={{ color: 'success.main', fontWeight: 700 }}>✓</Typography> : null}
                           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>

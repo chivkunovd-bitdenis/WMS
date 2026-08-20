@@ -164,6 +164,8 @@ export type FbsOrderMetadata = {
       | 'replacement_required'
     reason: string | null
     source?: 'pool' | 'operator'
+    /** Последние символы кода маркировки — чтобы оператор сверил строку с этикеткой. */
+    value_tail?: string | null
   }>
   delivery_allowed: boolean
   last_checked_at: string | null

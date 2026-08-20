@@ -1,4 +1,4 @@
-# ruff: noqa: RUF001
+# ruff: noqa: RUF001, RUF003
 """FBS operator worklist: batched read model for orders (no N+1)."""
 
 from __future__ import annotations
@@ -799,6 +799,14 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
     }
 
 
+def _marking_value_tail(value: str | None, length: int = 8) -> str | None:
+    """Последние символы кода маркировки — опознавательный хвост для оператора."""
+    if not value:
+        return None
+    cleaned = value.strip()
+    return cleaned[-length:] if len(cleaned) > length else cleaned
+
+
 def _build_metadata(
     order: FbsOrder,
     markings: list[FbsOrderMarking],
@@ -815,6 +823,9 @@ def _build_metadata(
                     "status": mark.meta_status,
                     "reason": mark.reason,
                     "source": mark.source,
+                    # Хвост кода: оператор сверяет его глазами с этикеткой на товаре.
+                    # Целиком код в строку таблицы не влезает и читать его незачем.
+                    "value_tail": _marking_value_tail(mark.value),
                 }
             )
         else:
@@ -824,6 +835,7 @@ def _build_metadata(
                     "status": "missing",
                     "reason": None,
                     "source": None,
+                    "value_tail": None,
                 }
             )
     delivery_allowed = (
