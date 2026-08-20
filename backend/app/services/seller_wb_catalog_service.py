@@ -224,12 +224,19 @@ async def list_seller_wb_catalog_rows(
         products,
         seller_id=seller_id,
     )
-    stmt = select(SellerWildberriesImportedCard).where(
-        SellerWildberriesImportedCard.seller_id == seller_id,
-        SellerWildberriesImportedCard.tenant_id == tenant_id,
-    )
-    res = await session.execute(stmt)
-    cards = list(res.scalars().all())
+    # Берём карточки только по товарам этой выдачи. Раньше грузились все карточки
+    # селлера целиком — у крупного это полторы тысячи записей с тяжёлым raw_json,
+    # и запрос занимал секунды даже когда на экран уходила одна строка.
+    nm_ids = {int(p.wb_nm_id) for p in products if p.wb_nm_id is not None}
+    cards: list[SellerWildberriesImportedCard] = []
+    if nm_ids:
+        stmt = select(SellerWildberriesImportedCard).where(
+            SellerWildberriesImportedCard.seller_id == seller_id,
+            SellerWildberriesImportedCard.tenant_id == tenant_id,
+            SellerWildberriesImportedCard.nm_id.in_(nm_ids),
+        )
+        res = await session.execute(stmt)
+        cards = list(res.scalars().all())
     by_nm: dict[int, dict[str, Any] | None] = {}  # nm_id -> raw card json
     for c in cards:
         raw = c.raw_json if isinstance(c.raw_json, dict) else None
