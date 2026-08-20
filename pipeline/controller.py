@@ -21,6 +21,10 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_PATH = ROOT / "pipeline" / "pipeline.yml"
+SCHEMA_PATHS = {
+    "task_state": ROOT / "pipeline" / "task-state.schema.json",
+    "receipt": ROOT / "pipeline" / "receipt.schema.json",
+}
 STORE_ROOT = ROOT / ".pipeline-state" / "tasks"
 SNAPSHOT_ROOT = ROOT / "tasks"
 
@@ -140,6 +144,52 @@ def stable_hash(payload: Any) -> str:
     return "sha256:" + hashlib.sha256(raw).hexdigest()
 
 
+def unsigned_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in payload.items() if key != "signature"}
+
+
+def type_matches(value: Any, expected_type: str) -> bool:
+    if expected_type == "null":
+        return value is None
+    if expected_type == "string":
+        return isinstance(value, str)
+    if expected_type == "object":
+        return isinstance(value, dict)
+    if expected_type == "array":
+        return isinstance(value, list)
+    if expected_type == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if expected_type == "boolean":
+        return isinstance(value, bool)
+    return True
+
+
+def schema_errors(schema_name: str, payload: dict[str, Any], label: str) -> list[str]:
+    schema = load_json(SCHEMA_PATHS[schema_name])
+    errors: list[str] = []
+    for key in schema.get("required", []):
+        if key not in payload:
+            errors.append(f"{label}: schema {schema_name} missing {key}")
+    for key, rules in schema.get("properties", {}).items():
+        if key not in payload:
+            continue
+        if "const" in rules and payload[key] != rules["const"]:
+            errors.append(f"{label}: schema {schema_name} field {key} must be {rules['const']}")
+        expected = rules.get("type")
+        expected_types = expected if isinstance(expected, list) else [expected]
+        if expected and not any(type_matches(payload[key], item) for item in expected_types):
+            errors.append(f"{label}: schema {schema_name} field {key} has invalid type")
+        if rules.get("type") == "array" and isinstance(payload[key], list):
+            item_type = rules.get("items", {}).get("type")
+            if item_type:
+                for index, item in enumerate(payload[key]):
+                    if not type_matches(item, item_type):
+                        errors.append(f"{label}: schema {schema_name} field {key}[{index}] has invalid type")
+        if rules.get("type") == "integer" and "minimum" in rules and payload[key] < rules["minimum"]:
+            errors.append(f"{label}: schema {schema_name} field {key} is below minimum")
+    return errors
+
+
 def git_output(*args: str) -> str:
     try:
         return subprocess.check_output(["git", *args], cwd=ROOT, text=True).strip()
@@ -209,6 +259,13 @@ def required_stages(contract: dict[str, Any], traits: list[str], risk_level: str
     return order_stages(stages)
 
 
+def refresh_contract_binding_if_no_receipts(contract: dict[str, Any], state: dict[str, Any]) -> None:
+    if state.get("verdicts"):
+        return
+    state["pipeline_version"] = contract["pipeline_version"]
+    state["pipeline_hash"] = contract_hash()
+
+
 def source_hash(source: str) -> str:
     return "sha256:" + hashlib.sha256(source.encode("utf-8")).hexdigest()
 
@@ -269,6 +326,7 @@ def command_open(args: argparse.Namespace) -> int:
 def command_classify(args: argparse.Namespace) -> int:
     contract = load_contract()
     state = load_state(args.task_id)
+    refresh_contract_binding_if_no_receipts(contract, state)
     traits = parse_traits(args.traits)
     risk_level = args.risk_level or state.get("risk_level", "low")
     old_required = state["required_stages"]
@@ -367,8 +425,73 @@ def command_advance(args: argparse.Namespace) -> int:
     return 0
 
 
+def path_within_root(relative_path: str) -> Path | None:
+    path = Path(relative_path)
+    if path.is_absolute():
+        return None
+    resolved = (ROOT / path).resolve()
+    try:
+        resolved.relative_to(ROOT.resolve())
+    except ValueError:
+        return None
+    return resolved
+
+
+def validate_receipts(contract: dict[str, Any], state: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    stages = stage_map(contract)
+    previous_hash: str | None = None
+    for stage_id in state.get("required_stages", []):
+        if stage_id not in state.get("verdicts", {}):
+            continue
+        record = state["verdicts"][stage_id]
+        if not isinstance(record, dict):
+            errors.append(f"{state['task_id']}: verdict record for {stage_id} must be object")
+            continue
+        receipt_path_raw = record.get("receipt_path")
+        if not isinstance(receipt_path_raw, str):
+            errors.append(f"{state['task_id']}: verdict record for {stage_id} is missing receipt_path")
+            continue
+        receipt_path = path_within_root(receipt_path_raw)
+        if receipt_path is None:
+            errors.append(f"{state['task_id']}: receipt path for {stage_id} escapes repo root")
+            continue
+        try:
+            receipt = load_json(receipt_path)
+        except PipelineError as exc:
+            errors.append(str(exc))
+            continue
+        errors.extend(schema_errors("receipt", receipt, f"{state['task_id']}:{stage_id}"))
+        expected_receipt_hash = stable_hash(receipt)
+        if record.get("receipt_hash") != expected_receipt_hash:
+            errors.append(f"{state['task_id']}: receipt_hash mismatch for {stage_id}")
+        if receipt.get("signature") != stable_hash(unsigned_payload(receipt)):
+            errors.append(f"{state['task_id']}: invalid receipt signature for {stage_id}")
+        if receipt.get("task_id") != state["task_id"]:
+            errors.append(f"{state['task_id']}: receipt {stage_id} has wrong task_id")
+        if receipt.get("stage_id") != stage_id:
+            errors.append(f"{state['task_id']}: receipt {stage_id} has wrong stage_id")
+        if receipt.get("pipeline_hash") != contract_hash():
+            errors.append(f"{state['task_id']}: receipt {stage_id} has stale pipeline_hash")
+        expected_role = ROLE_BY_STAGE.get(stage_id)
+        if expected_role and receipt.get("role_binding_id") != expected_role:
+            errors.append(f"{state['task_id']}: receipt {stage_id} has wrong role")
+        allowed_verdicts = stages.get(stage_id, {}).get("pass_verdicts", [])
+        if receipt.get("verdict") not in allowed_verdicts:
+            errors.append(f"{state['task_id']}: receipt {stage_id} has invalid verdict")
+        if record.get("verdict") != receipt.get("verdict"):
+            errors.append(f"{state['task_id']}: verdict record mismatch for {stage_id}")
+        if receipt.get("parent_receipt_hash") != previous_hash:
+            errors.append(f"{state['task_id']}: receipt chain mismatch at {stage_id}")
+        previous_hash = expected_receipt_hash
+    if state.get("last_valid_receipt") != previous_hash:
+        errors.append(f"{state['task_id']}: last_valid_receipt does not match receipt chain")
+    return errors
+
+
 def validate_state(contract: dict[str, Any], state: dict[str, Any]) -> list[str]:
     errors: list[str] = []
+    errors.extend(schema_errors("task_state", state, state.get("task_id", "<unknown>")))
     expected_required = required_stages(contract, state.get("traits", []), state.get("risk_level", "low"))
     if state.get("pipeline_version") != contract["pipeline_version"]:
         errors.append(f"{state['task_id']}: stale pipeline_version")
@@ -392,6 +515,7 @@ def validate_state(contract: dict[str, Any], state: dict[str, Any]) -> list[str]
     for stage_id in state.get("verdicts", {}):
         if stage_id not in state.get("required_stages", []):
             errors.append(f"{state['task_id']}: verdict for non-required stage {stage_id}")
+    errors.extend(validate_receipts(contract, state))
     return errors
 
 
@@ -421,9 +545,44 @@ def command_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def report_line(state: dict[str, Any]) -> dict[str, Any]:
+    stage_id = state.get("current_stage") or first_missing_stage(state)
+    blocker = state.get("blocker") or {}
+    blocker_text = "нет"
+    if blocker:
+        blocker_text = f"{blocker.get('type', 'UNKNOWN')}/{blocker.get('reason_code', 'UNKNOWN')}"
+    verdicts = state.get("verdicts", {})
+    evidence = "нет"
+    if verdicts:
+        last_stage = sorted(verdicts.keys(), key=TOTAL_ORDER.index)[-1]
+        evidence = verdicts[last_stage].get("receipt_path") or "нет"
+    return {
+        "task_id": state["task_id"],
+        "status": state["status"],
+        "current_stage": stage_id,
+        "owner": ROLE_BY_STAGE.get(stage_id, "pipeline-dispatcher"),
+        "blocker": blocker_text,
+        "evidence": evidence,
+    }
+
+
+def command_report(args: argparse.Namespace) -> int:
+    rows = [report_line(state) for state in iter_states()]
+    if args.format == "json":
+        print(json.dumps({"tasks": rows}, ensure_ascii=False, indent=2))
+        return 0
+    for row in rows:
+        print(
+            "{task_id}: {status} | current_stage={current_stage} | owner={owner} | "
+            "blocker={blocker} | evidence={evidence}".format(**row)
+        )
+    return 0
+
+
 def command_hold(args: argparse.Namespace) -> int:
     contract = load_contract()
     state = load_state(args.task_id)
+    refresh_contract_binding_if_no_receipts(contract, state)
     resume_stage = args.resume_stage or first_missing_stage(state)
     if resume_stage not in state["required_stages"]:
         raise PipelineError(f"{resume_stage} is not required for task {args.task_id}")
@@ -462,6 +621,7 @@ def command_hold(args: argparse.Namespace) -> int:
 def command_resume(args: argparse.Namespace) -> int:
     contract = load_contract()
     state = load_state(args.task_id)
+    refresh_contract_binding_if_no_receipts(contract, state)
     if state.get("status") != "WAITING":
         raise PipelineError(f"{args.task_id} is not WAITING")
     resumed_from = state.get("blocker")
@@ -582,6 +742,10 @@ def build_parser() -> argparse.ArgumentParser:
     status_p = sub.add_parser("status")
     status_p.add_argument("--task-id", required=True)
     status_p.set_defaults(func=command_status)
+
+    report_p = sub.add_parser("report")
+    report_p.add_argument("--format", choices=["text", "json"], default="text")
+    report_p.set_defaults(func=command_report)
 
     hold_p = sub.add_parser("hold")
     hold_p.add_argument("--task-id", required=True)

@@ -19,10 +19,15 @@ snapshot состояния и packet для S01, но нет receipts, verdicts
 - Есть единый источник правил: `docs/process/PIPELINE-RU.md` и машинная таблица
   стадий, рисков, обязательных доказательств и блокеров в `pipeline/pipeline.yml`.
 - Есть локальный controller с командами `open`, `classify`, `advance`, `validate`,
-  `status`, `hold`, `resume`, `next`, `packet` и `close`. Он создаёт локальный
-  state, packet для следующей роли и receipt для пройденной стадии.
+  `status`, `report`, `hold`, `resume`, `next`, `packet` и `close`. Он создаёт
+  локальный state, packet для следующей роли и receipt для пройденной стадии.
 - `hold` машинно запрещает случайный старт: пока карточка в `WAITING`,
   `advance` завершится ошибкой и потребует явный `resume`.
+- `validate` проверяет state schema, receipt schema, receipt hash, hash-chain,
+  stage/role/verdict и local signature hash.
+- CI режет raw secrets в pipeline evidence/task artifacts.
+- `report` строит утренний статус только из machine state:
+  `python3 scripts/pipeline/run.py report`.
 - Есть генератор dispatch-prompt для Codex, Claude и Cursor:
   `python3 scripts/pipeline/dispatch.py --task-id <id> --executor codex|claude|cursor`.
 - Есть автоматические проверки контракта pipeline и уже реализованной части
@@ -30,6 +35,11 @@ snapshot состояния и packet для S01, но нет receipts, verdicts
   получить workspace раньше продуктового одобрения.
 - В production deploy уже требуется указанный Git SHA, а runtime smoke сверяет
   запущенную версию. Автоматического deploy от push в `main` нет.
+- Production deploy больше не собирает образы на сервере: CI строит offline
+  release artifact для exact SHA, manifest связывает SHA, архивы и Docker image
+  ID, а сервер только проверяет manifest и делает `docker load`.
+- Backend pytest и frontend Playwright в GitHub CI запускаются через
+  fail-closed test egress runner для WB/Ozon.
 - Для всех трёх агентов можно одинаково: снять `WAITING` с одной одобренной
   карточки, выдать dispatch, пройти intake/классификацию, собрать факты о баге
   и остановиться до следующего решения владельца.
@@ -41,14 +51,13 @@ snapshot состояния и packet для S01, но нет receipts, verdicts
   восстановиться после сбоя.
 - Receipt не подписываются независимым ключом, а общая проверка состояния ещё не
   применяется одинаково controller, CI и deploy.
-- Контейнеры по-прежнему собираются на сервере. Не реализована схема «собрать один
-  раз и затем продвигать тот же неизменяемый образ»: поэтому нельзя доказать, что
-  принятый до релиза образ полностью совпадает с запущенным в production.
-- Тестовый контур ещё не закрыт наружу по умолчанию: нет общей технической защиты
-  от случайного обращения тестов к live WB/Ozon.
-- Большая часть из 40 обязательных метатестов только перечислена, но ещё не имеет
-  зелёной автоматической проверки. Старые процессные документы также остаются
-  действующими до явной активации Pipeline v2.
+- Registry promotion не настроен: вместо OCI registry пока используется
+  fail-closed offline artifact. Это уже убирает server-side build, но не заменяет
+  полноценный registry-based promotion.
+- Тестовый контур закрыт для основных CI backend/e2e команд, но ad-hoc локальные
+  команды и browser-level sandbox ещё не унифицированы.
+- 22 из 40 обязательных метатестов ещё pending. Старые процессные документы
+  также остаются действующими до явной активации Pipeline v2.
 
 ## Команды проверки
 
@@ -88,9 +97,9 @@ python3 scripts/pipeline/dispatch.py --task-id BUG-WMS-PV2-001 --executor codex
 4. Не пройдены обязательные для bug stages: воспроизведение, договорённость об
    ожидаемом поведении, анализ причины и регрессионный кейс либо доказанное B04
    закрытие без изменения кода.
-5. Не устранены P0-дыры: полная изоляция controller, единая проверка receipt,
-   неизменяемые образы для deploy, закрытый внешний трафик тестов и все обязательные
-   метатесты.
+5. Не устранены оставшиеся P0-дыры: полная изоляция controller, независимая
+   подпись receipt, полный сетевой sandbox для всех test entrypoint'ов и все
+   обязательные метатесты.
 6. Для FBS/Честного знака остаётся отдельная предметная развилка: owner или
    подтверждённый контракт WB должен определить, допустим ли `sgtinApplied` для
    dispatch. Агент не может выбирать это правило сам.

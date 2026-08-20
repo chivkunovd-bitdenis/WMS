@@ -3,7 +3,7 @@
   "source_hash": "sha256:f3eb6cc00d96feedb820ae35d062e9269c54a0f1c5193429be81d4fa3cf269d1",
   "source_excerpt": "2026-08-21 night queue: FBS label print quantity and supply scope, no live deploy",
   "pipeline_version": "2.0",
-  "pipeline_hash": "sha256:848ad243587ae1da2fe65c56c052f727f9f54bda4fd4340782602e1a24b742f7",
+  "pipeline_hash": "sha256:9ac8f960c26953976fa3d943049101a6acbad8c5f09bba95e72a6b2205b9fcbc",
   "traits": [
     "bug",
     "ui_change",
@@ -48,14 +48,14 @@
   "owner_agent": "manual",
   "attempt": 1,
   "lease_until": "2026-08-20T21:30:20Z",
-  "heartbeat_at": "2026-08-20T20:40:53Z",
+  "heartbeat_at": "2026-08-20T21:03:08Z",
   "last_valid_receipt": null,
   "blocker": {
     "type": "OWNER_INPUT",
     "reason_code": "QUEUED_NOT_STARTED",
-    "details": "Owner asked to finish and report pipeline readiness before launching bug fixes",
+    "details": "Owner asked to finish pipeline before launching bug fixes",
     "owner": "owner",
-    "created_at": "2026-08-20T20:40:53Z",
+    "created_at": "2026-08-20T21:03:08Z",
     "resume_stage": "S01"
   },
   "resume_condition": {

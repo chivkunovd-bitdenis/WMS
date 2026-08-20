@@ -13,11 +13,78 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate-release:
+    runs-on: ubuntu-latest
+    outputs:
+      release_sha: ${{ steps.release.outputs.release_sha }}
+    steps:
+      - id: release
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+        run: |
+          set -euo pipefail
+          case "$RELEASE_SHA" in
+            ''|*[!0-9a-f]*)
+              echo "ERROR: release_sha must be a lowercase full Git SHA" >&2
+              exit 64
+              ;;
+          esac
+          test "${#RELEASE_SHA}" -eq 40
+          echo "release_sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
+
+  build-release-artifact:
+    needs: validate-release
+    runs-on: ubuntu-latest
+    outputs:
+      artifact_digest: ${{ steps.manifest.outputs.artifact_digest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate-release.outputs.release_sha }}
+          fetch-depth: 0
+      - name: Verify checked out exact SHA
+        env:
+          RELEASE_SHA: ${{ needs.validate-release.outputs.release_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+      - name: Run offline release manifest checks
+        run: ./scripts/deploy/test-release-manifest.sh
+      - name: Build immutable offline release artifact
+        env:
+          RELEASE_SHA: ${{ needs.validate-release.outputs.release_sha }}
+        run: ./scripts/deploy/build-offline-release-artifact.sh --release-sha "$RELEASE_SHA" --output release-artifact
+      - id: manifest
+        name: Record release manifest digest
+        run: echo "artifact_digest=sha256:$(sha256sum release-artifact/release-manifest.json | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+      - name: Upload exact-SHA offline release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wms-release-${{ needs.validate-release.outputs.release_sha }}
+          path: release-artifact
+          if-no-files-found: error
+          compression-level: 0
+
   deploy:
+    needs: [validate-release, build-release-artifact]
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - name: Deploy on server (git pull + docker compose)
+      - name: Download exact-SHA offline release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wms-release-${{ needs.validate-release.outputs.release_sha }}
+          path: release-artifact
+      - name: Transfer verified offline release artifact to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_SSH_HOST }}
+          username: ${{ secrets.DEPLOY_SSH_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
+          source: "release-artifact/*"
+          target: /tmp/wms-release/${{ needs.validate-release.outputs.release_sha }}
+      - name: Deploy verified exact-SHA artifact on server
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.DEPLOY_SSH_HOST }}
@@ -27,7 +94,7 @@ jobs:
           command_timeout: 30m
           script: |
             set -euo pipefail
-            RELEASE_SHA="${{ inputs.release_sha }}"
+            RELEASE_SHA="${{ needs.validate-release.outputs.release_sha }}"
             case "$RELEASE_SHA" in
               ''|*[!0-9a-f]*)
                 echo "ERROR: release_sha must be a lowercase full Git SHA" >&2
@@ -43,7 +110,10 @@ jobs:
             git fetch --no-tags origin '+refs/heads/*:refs/remotes/origin/*'
             git cat-file -e "${RELEASE_SHA}^{commit}"
             git checkout --detach "$RELEASE_SHA"
-            WMS_RELEASE_SHA="$RELEASE_SHA" ./scripts/deploy/prod-update.sh
+            WMS_RELEASE_SHA="$RELEASE_SHA" \
+            WMS_RELEASE_ARTIFACT_DIR="/tmp/wms-release/$RELEASE_SHA/release-artifact" \
+            WMS_RELEASE_MANIFEST="/tmp/wms-release/$RELEASE_SHA/release-artifact/release-manifest.json" \
+            ./scripts/deploy/prod-update.sh
 
       - name: Smoke check exact SHA
         run: |
@@ -57,4 +127,5 @@ jobs:
           done
           version_json="$(curl -fsS "http://${HOST}:${PORT}/api/version")"
           echo "$version_json"
-          echo "$version_json" | grep -F "\"git_sha\":\"${{ inputs.release_sha }}\""
+          echo "$version_json" | grep -F "\"git_sha\":\"${{ needs.validate-release.outputs.release_sha }}\""
+          echo "$version_json" | grep -F "\"artifact_digest\":\"${{ needs.build-release-artifact.outputs.artifact_digest }}\""

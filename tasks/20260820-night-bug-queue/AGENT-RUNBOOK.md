@@ -66,6 +66,10 @@ python3 scripts/pipeline/dispatch.py --task-id <task-id> --executor <codex|claud
 
 К 2026-08-21 утром по каждой карточке отдать одну строку:
 
+```bash
+python3 scripts/pipeline/run.py report
+```
+
 ```text
 <task-id>: <status> · current_stage=<stage> · owner=<role> · blocker=<нет|тип> · evidence=<path|нет>
 ```

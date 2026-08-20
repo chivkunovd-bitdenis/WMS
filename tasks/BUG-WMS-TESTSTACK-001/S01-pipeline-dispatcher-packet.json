@@ -38,9 +38,9 @@
   "blocker": {
     "type": "OWNER_INPUT",
     "reason_code": "QUEUED_NOT_STARTED",
-    "details": "Owner asked to finish and report pipeline readiness before launching bug fixes",
+    "details": "Owner asked to finish pipeline before launching bug fixes",
     "owner": "owner",
-    "created_at": "2026-08-20T20:40:53Z",
+    "created_at": "2026-08-20T21:03:08Z",
     "resume_stage": "S01"
   },
   "resume_condition": {

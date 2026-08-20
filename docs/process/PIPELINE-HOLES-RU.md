@@ -9,7 +9,7 @@
 включено в репозитории. Это не список "мелких TODO"; каждый пункт ниже мешает
 честно поставить `PIPELINE_ACTIVATION_APPROVED`.
 
-## P0. Deploy exact-SHA guard включён, но build-once promotion ещё не готов
+## P0. Offline build-once artifact promotion реализован, registry promotion не настроен
 
 Факт из текущих файлов:
 
@@ -19,12 +19,18 @@
   `scripts/deploy/prod-update.sh` и smoke-проверяет `/api/version`;
 - `scripts/deploy/prod-update.sh` больше не делает `checkout main`/`pull main`
   и падает, если `HEAD != WMS_RELEASE_SHA` или worktree dirty;
-- контейнеры всё ещё собираются на сервере через `docker compose build`.
+- CI один раз собирает backend и web для exact SHA, сохраняет их в offline
+  release artifact и создаёт manifest с SHA-256 архивов и Docker image ID;
+- workflow передаёт artifact на production-server вместе с exact SHA;
+- `prod-update.sh` принимает только manifest из этого artifact, повторно
+  сверяет SHA, SHA-256 и image ID, загружает образы и запускает compose без
+  `docker compose build`.
 
-Почему это всё ещё дырка: exact Git SHA уже защищён, но Pipeline v2 требует
-build-once immutable artifacts и promotion готовых digests. Серверная сборка
-ровно того же SHA лучше прежнего `main`, но ещё не доказывает неизменность
-artifact digest между acceptance и production.
+Что ещё не готово: registry promotion (push/pull OCI image digests) не
+реализован и не заявляется реализованным. Для него потребуются отдельно
+выданные registry configuration и credentials. Пока production использует
+fail-closed offline path: отсутствующий, подменённый или несоответствующий SHA
+manifest останавливает deploy до миграций и restart.
 
 ## P0. Controller появился, полный wave-driver и единый validation engine ещё не готовы
 
@@ -40,8 +46,8 @@ structured receipt при `advance`.
 
 Что ещё не закрыто: это минимальный local controller, а не полный `wave-driver`.
 Он ещё не выдаёт настоящие isolated worktrees/ports/DB/Redis/Celery/emulator, не
-подписывает receipts секретным ключом, не реализует полноценный fencing token,
-crash replay и resource scheduler.
+подписывает receipts независимым секретным ключом, не реализует полноценный
+fencing token, crash replay и resource scheduler.
 
 Почему это дырка: без controller рабочий агент всё ещё может "сказать", что
 стадия пройдена, а не получить проверяемый controller-issued receipt.
@@ -51,22 +57,29 @@ crash replay и resource scheduler.
 В `pipeline/pipeline.yml` заведены `MT01`...`MT40`, чтобы CI не потерял ни один
 сценарий части XII. `scripts/ci/check_pipeline_metatests.py` сейчас доказывает
 первый executable slice: Product-before-workspace order, запрет `DONE` до
-`ACTIVE`, entrypoint inventory, trait machine dimensions и exact-SHA deploy
-guard.
+`ACTIVE`, entrypoint inventory, trait machine dimensions, часть routing
+metatests, machine report и базовую защиту от подделки stage/receipt.
 
 Почему это дырка: наличие списка защищает от забывания требований, но не
 доказывает, что Dev без Product approval реально не получает workspace, что
 истёкший lock отклоняется, или что crash между external side effect и state
-update идемпотентно восстанавливается. Большая часть MT02...MT40 ещё pending.
+update идемпотентно восстанавливается. Осталось 22 pending metatests из 40.
 
 ## P0. Fail-closed test egress не включён для всего тестового контура
 
 Из прошлой диагностики и текущих требований известно, что тестовый контур должен
-быть закрыт наружу по умолчанию. В этой правке не добавлен сетевой sandbox для
-всех backend, frontend, worker и emulator прогонов.
+быть закрыт наружу по умолчанию. Добавлен локальный runner
+`scripts/testing/test_egress_guard.py`: он запускает Python/Node тестовую
+команду с deny-by-default allowlist, блокирует WB/Ozon до DNS/соединения и
+требует явный `WMS_TEST_EGRESS_ALLOW_LIVE_MARKETPLACES=1` для live endpoint.
+Его контракт проверяется через MT13. Основной GitHub CI backend `pytest` и
+frontend `npx playwright test` запускаются через этот runner.
 
-Почему это дырка: тесты, которые случайно обращаются в живой WB/Ozon, остаются
-классом риска, пока это не запрещено технически на уровне runner/environment.
+Почему это всё ещё дырка: ad-hoc локальные команды, отдельные shell-entrypoint'ы
+и browser-level сетевой sandbox ещё не унифицированы. Тесты, которые обходят
+runner, всё ещё могут обратиться в живой WB/Ozon, поэтому до полной активации
+нужен audit всех штатных test entrypoint'ов или сетевой sandbox уровнем ниже
+процесса.
 
 ## P1. Старые процессные документы ещё живые
 
@@ -78,15 +91,18 @@ update идемпотентно восстанавливается. Больша
 надо архивировать или превратить в короткие adapters все старые маршруты из
 списка E0, иначе агенты снова увидят два канона.
 
-## P1. Схемы есть, но не подключены к runtime receipts
+## P1. Схемы подключены к controller validate, но не стали независимой подписью
 
 Созданы `pipeline/task-state.schema.json`, `receipt.schema.json`,
-`evidence.schema.json`, `case.schema.json` и `incident.schema.json`. Пока нет
-producer/consumer, который обязательно пишет и проверяет эти структуры для
-каждой стадии.
+`evidence.schema.json`, `case.schema.json` и `incident.schema.json`.
+`pipeline/controller.py validate` уже проверяет task-state schema, receipt
+schema, receipt hash, hash-chain, stage/role/verdict и signature hash для
+выданных controller receipt.
 
-Почему это дырка: schema без обязательного writer/validator остаётся контрактом,
-а не доказательством прохождения стадии.
+Почему это всё ещё дырка: signature пока является hash-подписью внутри локального
+controller, а не подписью независимым ключом, недоступным worker. Эта проверка
+ловит ручную подмену receipt, но ещё не является полноценной trust boundary для
+distributed wave-driver.
 
 ## Что уже закрыто этой настройкой
 
@@ -98,6 +114,11 @@ producer/consumer, который обязательно пишет и пров�
   `scripts/pipeline/run.py`.
 - Появились `hold`/`resume` и `next`/`packet`, чтобы очередь можно было
   подготовить без запуска фиксов и передавать stage между ролями.
+- `validate` теперь проверяет state schema, receipt schema, receipt hash,
+  hash-chain, stage/role/verdict и local signature hash.
+- CI проверяет pipeline evidence/task artifacts на raw Authorization/Cookie/API
+  key/token patterns.
+- Появился `report`, который строит утренние строки только из machine state.
 - Появился `scripts/pipeline/dispatch.py`, который пишет одинаковые handoff
   prompts для Codex, Claude и Cursor.
 - Появился `scripts/ci/check_pipeline_metatests.py`.
