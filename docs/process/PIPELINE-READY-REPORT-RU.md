@@ -1,6 +1,6 @@
 # Отчёт готовности Pipeline v2 перед очередью багов
 
-Дата: 2026-08-20.
+Дата: 2026-08-20. Дополнение: 2026-08-21.
 
 ## Итог
 
@@ -46,6 +46,20 @@ snapshot состояния и packet для S01, но нет receipts, verdicts
   ID, а сервер только проверяет manifest и делает `docker load`.
 - Backend pytest и frontend Playwright в GitHub CI запускаются через
   fail-closed test egress runner для WB/Ozon.
+- UI-kit стал обязательным для новой экранной работы: `scripts/ui/ui_kit_usage_guard.py`
+  держит базовую линию старых экранов и краснит новый экран или новую видимую
+  UI-зону без импорта `frontend/src/ui-kit`, а также новый raw MUI/inline-style
+  в экранном diff.
+- В `frontend/src/ui-kit/` добавлены недостающие базовые элементы для будущих
+  задач: формы, селект, чекбокс, вкладки, меню, модалка и каркас экрана. Контракт
+  задачи теперь обязан называть компоненты из набора, а нехватку элемента фиксировать
+  как `DESIGN_SYSTEM_GAP`.
+- `docs/product/ui-inventory.json` теперь содержит машиночитаемый раздел
+  `components`: компонент, зона, назначение, обязательные props и текущие места
+  использования.
+- Реестр блокировок вынесен в `docs/process/BLOCKERS-REGISTRY-RU.md`: там отдельно
+  описаны pipeline-блокеры и backlog-блокеры с владельцем закрытия и минимальным
+  артефактом.
 - Для всех трёх агентов можно одинаково: снять `WAITING` с одной одобренной
   карточки, выдать dispatch, пройти нужные стадии, получить controller receipt и
   остановиться на Product/owner gate, если он требуется.
@@ -65,6 +79,13 @@ snapshot состояния и packet для S01, но нет receipts, verdicts
 - Старые процессные документы остаются действующими до явной активации Pipeline
   v2. Это безопасно для перехода, но не даёт объявить новый процесс единственным
   каноном без отдельного activation PR/line.
+- У model policy есть дешёвые/средние/дорогие tiers, но ещё нет бюджета на волну,
+  usage receipt и hard stop по стоимости.
+- Backlog пока не сведён в единую versioned очередь со stable IDs, зависимостями,
+  readiness и owner-approved wave.
+- Старый UI-долг не погашен автоматически: экраны не переписаны на `ui-kit`.
+  Новое правило защищает будущие правки, а переезд существующих экранов должен идти
+  по задачам, когда эти экраны всё равно попадают в работу.
 
 ## Команды проверки
 
@@ -73,6 +94,8 @@ snapshot состояния и packet для S01, но нет receipts, verdicts
 ```bash
 python3 scripts/ci/check_pipeline_contract.py
 python3 scripts/ci/check_pipeline_model_policy.py
+python3 scripts/ui/ui_guard.py
+python3 scripts/ui/ui_kit_usage_guard.py
 ```
 
 Проверить реализованную часть метатестов отдельно:

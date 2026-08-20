@@ -30,13 +30,17 @@ Scope реализации:
 - Не расширяй UX, API или поведение «заодно». Если карточка неполная — блокер/rework, а не самовольный scope.
 - Для backend соблюдай слои: API в `backend/app/api`, логика в `backend/app/services`, модели в
   `backend/app/models`, DB в `backend/app/db`, workers в `backend/app/tasks`.
-- Для frontend следуй экранному реестру, ui-kit и утверждённому макету/contract.
+- Для frontend следуй экранному реестру, `UI-kit contract` из S08/S12/S15 и утверждённому
+  макету/contract. Новую экранную зону собирай из `frontend/src/ui-kit/index.ts`; если нужного
+  элемента нет — верни `DESIGN_SYSTEM_GAP`, не верстай локально.
 
 Тесты и evidence:
 - Привяжи реализацию к S15 cases. Если deterministic case автоматизируемый, добавь/обнови pytest,
   Playwright, contract runner или worker harness; не меняй oracle под код.
 - Запускай только релевантные локальные проверки по touched scope. Если полный gate нужен карточке,
   запускай его и фиксируй результат.
+- Для frontend scope обязательны `python3 scripts/ui/ui_guard.py` и
+  `python3 scripts/ui/ui_kit_usage_guard.py`.
 - Не называй Playwright Product approval: это только технический runner.
 
 Git:

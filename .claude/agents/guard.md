@@ -12,11 +12,13 @@ tools: Read, Bash, Grep, Glob
    в `frontend/screens.registry.json`. Лишний файл вне реестра — нарушение.
 2. `python3 scripts/ui/ui_guard.py` (из корня) — код возврата 0, в выводе нет строк
    «НОВОЕ НАРУШЕНИЕ».
-3. `python3 scripts/ui/ui_inventory.py` — новые подписи, попавшие в
+3. `python3 scripts/ui/ui_kit_usage_guard.py` — код возврата 0; новая экранная работа
+   импортирует `frontend/src/ui-kit`, старый долг не растёт.
+4. `python3 scripts/ui/ui_inventory.py` — новые подписи и компоненты, попавшие в
    `docs/product/ui-inventory.json`, реально встречаются в изменённых файлах (сверить `grep`),
    а не выдуманы отчётом.
-4. `npx tsc --noEmit -p tsconfig.app.json` (из `frontend/`) — 0 ошибок.
-5. `npm run test:unit` (из `frontend/`) — зелёный.
+5. `npx tsc --noEmit -p tsconfig.app.json` (из `frontend/`) — 0 ошибок.
+6. `npm run test:unit` (из `frontend/`) — зелёный.
 - Если проверка красная — не чинишь сам, только сообщаешь, что именно и в каком файле.
 - Не судишь, «хорошо ли спроектировано» — это не твоя роль.
 
@@ -26,6 +28,7 @@ tools: Read, Bash, Grep, Glob
 |---|---|---|
 | границы файлов | ok / нарушение | ... |
 | ui_guard.py | ok / новое нарушение | ... |
+| ui_kit_usage_guard.py | ok / новая зона без ui-kit | ... |
 | ui_inventory.py | ok / выдуманная подпись | ... |
 | tsc --noEmit | ok / ошибки | ... |
 | test:unit | ok / red | ... |

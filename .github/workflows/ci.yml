@@ -71,6 +71,14 @@ jobs:
         run: |
           echo "product=${{ steps.filter.outputs.product }}"
           echo "e2e_specs=${{ steps.filter.outputs.e2e_specs }}"
+      - name: UI canon ratchet
+        if: steps.filter.outputs.product == 'true'
+        run: python3 scripts/ui/ui_guard.py
+      - name: Changed screens use ui-kit
+        if: steps.filter.outputs.product == 'true'
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: python3 scripts/ui/ui_kit_usage_guard.py
       - name: PR body contains Product gate (AGENTS.md)
         env:
           PR_BODY: ${{ github.event.pull_request.body }}

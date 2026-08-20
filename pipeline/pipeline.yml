@@ -3,7 +3,7 @@
   "pipeline_version": "2.0",
   "status": "IMPLEMENTATION_IN_PROGRESS",
   "canonical_source": "docs/process/PIPELINE-RU.md",
-  "canonical_source_sha256": "eda6c64c555120a47e4438c1a018b8dc9ae213b498dec2ec41530f047972e36d",
+  "canonical_source_sha256": "b99d54ef3012412a75b8a27cd3e532019d37da43c52196953e8be93a018b7c79",
   "format_note": "This file intentionally uses the JSON subset of YAML so CI can validate it with Python stdlib only.",
   "activation": {
     "implementation_approved": true,

@@ -31,7 +31,7 @@ def main() -> int:
                 "Интерфейс собирается из frontend/src/ui-kit/. Своя вёрстка таблиц, чипов и кнопок — дефект (docs/product/UX_CANON_RU.md).",
                 "Мелкая полоса — без контракта. Обычная (меняется состав данных или действий) — сначала контракт, код после подтверждения.",
                 "«Сделано» без файла-доказательства в docs/evidence/<наряд>/ не считается. Проверка кодом и API вместо живого экрана не засчитывается.",
-                "Перед сдачей фронт: npx tsc --noEmit -p tsconfig.app.json, python3 scripts/ui/ui_guard.py. Бэк: ruff, mypy, pytest, python3 scripts/ci/back_guard.py.",
+                "Перед сдачей фронт: npx tsc --noEmit -p tsconfig.app.json, python3 scripts/ui/ui_guard.py, python3 scripts/ui/ui_kit_usage_guard.py. Бэк: ruff, mypy, pytest, python3 scripts/ci/back_guard.py.",
                 "Новый роут — только вместе с тестом. Миграции только добавляющие: удаление — отдельное решение владельца.",
                 "</wms-правила>",
             ]

@@ -8,6 +8,27 @@ export type InventoryItem = {
   usages: number
 }
 
+export type ComponentInventoryItem = {
+  name: string
+  source: string
+  zone: string
+  purpose: string
+  required_props: string[]
+  optional_props: string[]
+  observed_props: string[]
+  files: string[]
+  screen_ids: string[]
+  usages: number
+}
+
+export type UiInventory = {
+  chips: readonly InventoryItem[]
+  statuses: readonly InventoryItem[]
+  buttons: readonly InventoryItem[]
+  alerts: readonly InventoryItem[]
+  components: readonly ComponentInventoryItem[]
+}
+
 export const INVENTORY = {
   "chips": [
     {
@@ -833,6 +854,487 @@ export const INVENTORY = {
       ],
       "usages": 1
     }
+  ],
+  "components": [
+    {
+      "name": "ActionGroup",
+      "source": "frontend/src/ui-kit/Actions.tsx",
+      "zone": "панель действий",
+      "purpose": "Группа действий одной панели с ровной высотой и шириной кнопок.",
+      "required_props": [],
+      "optional_props": [
+        "children"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "ActionMenu",
+      "source": "frontend/src/ui-kit/Menu.tsx",
+      "zone": "панель действий",
+      "purpose": "Меню вторичных действий строки или документа.",
+      "required_props": [
+        "title",
+        "options"
+      ],
+      "optional_props": [
+        "testId"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "CheckboxField",
+      "source": "frontend/src/ui-kit/Forms.tsx",
+      "zone": "фильтры/форма",
+      "purpose": "Канонический флажок формы.",
+      "required_props": [
+        "label",
+        "checked",
+        "onChange"
+      ],
+      "optional_props": [
+        "disabled",
+        "testId"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "DangerAction",
+      "source": "frontend/src/ui-kit/Actions.tsx",
+      "zone": "панель действий",
+      "purpose": "Опасное действие: удаление, отмена, потеря данных.",
+      "required_props": [
+        "children"
+      ],
+      "optional_props": [
+        "disabledReason"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "DataTable",
+      "source": "frontend/src/ui-kit/DataTable.tsx",
+      "zone": "таблица",
+      "purpose": "Единственная каноническая таблица WMS.",
+      "required_props": [
+        "columns",
+        "rows",
+        "getRowKey"
+      ],
+      "optional_props": [
+        "loading",
+        "hasDiscrepancy",
+        "empty",
+        "testId"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "EmptyState",
+      "source": "frontend/src/ui-kit/States.tsx",
+      "zone": "состояния",
+      "purpose": "Пустое состояние с действием или понятной подсказкой.",
+      "required_props": [
+        "title"
+      ],
+      "optional_props": [
+        "hint",
+        "action",
+        "testId"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "ErrorNotice",
+      "source": "frontend/src/ui-kit/States.tsx",
+      "zone": "состояния",
+      "purpose": "Ошибка в теле экрана на языке склада.",
+      "required_props": [
+        "children"
+      ],
+      "optional_props": [
+        "testId"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "FilterBar",
+      "source": "frontend/src/ui-kit/FilterBar.tsx",
+      "zone": "фильтры",
+      "purpose": "Панель поиска и фильтров над таблицей.",
+      "required_props": [
+        "search",
+        "onSearchChange"
+      ],
+      "optional_props": [
+        "searchPlaceholder",
+        "children",
+        "testId"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "IconAction",
+      "source": "frontend/src/ui-kit/Actions.tsx",
+      "zone": "панель действий",
+      "purpose": "Иконка-действие с обязательной подсказкой.",
+      "required_props": [
+        "title",
+        "children"
+      ],
+      "optional_props": [
+        "testId",
+        "onClick",
+        "disabledReason"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "MarkChip",
+      "source": "frontend/src/ui-kit/StatusChip.tsx",
+      "zone": "статус/признак",
+      "purpose": "Значок-признак товара, например ЧЗ.",
+      "required_props": [
+        "code",
+        "hint"
+      ],
+      "optional_props": [
+        "testId"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "ModalDialog",
+      "source": "frontend/src/ui-kit/Dialog.tsx",
+      "zone": "модалка",
+      "purpose": "Канонический диалог подтверждения или формы.",
+      "required_props": [
+        "open",
+        "title",
+        "onClose"
+      ],
+      "optional_props": [
+        "description",
+        "children",
+        "actions",
+        "testId"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "PlanFactCell",
+      "source": "frontend/src/ui-kit/Cells.tsx",
+      "zone": "таблица",
+      "purpose": "Ячейка план/факт с явным превышением.",
+      "required_props": [
+        "fact",
+        "plan"
+      ],
+      "optional_props": [],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "PrimaryAction",
+      "source": "frontend/src/ui-kit/Actions.tsx",
+      "zone": "панель действий",
+      "purpose": "Главное действие экрана или блока.",
+      "required_props": [
+        "children"
+      ],
+      "optional_props": [
+        "disabledReason"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "PrintAction",
+      "source": "frontend/src/ui-kit/Actions.tsx",
+      "zone": "панель действий",
+      "purpose": "Единый вид печати в строке или панели.",
+      "required_props": [
+        "what",
+        "placement"
+      ],
+      "optional_props": [
+        "onClick",
+        "disabledReason",
+        "testId"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "ProductCell",
+      "source": "frontend/src/ui-kit/Cells.tsx",
+      "zone": "таблица",
+      "purpose": "Ячейка товара: фото и SKU, без склеивания артикулов.",
+      "required_props": [
+        "sku"
+      ],
+      "optional_props": [
+        "photo"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "QtyCell",
+      "source": "frontend/src/ui-kit/Cells.tsx",
+      "zone": "таблица",
+      "purpose": "Числовая ячейка с табличными цифрами.",
+      "required_props": [
+        "value"
+      ],
+      "optional_props": [
+        "muted"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "ScannerLine",
+      "source": "frontend/src/ui-kit/ScannerLine.tsx",
+      "zone": "сканер",
+      "purpose": "Строка состояния сканера.",
+      "required_props": [
+        "active",
+        "expects"
+      ],
+      "optional_props": [
+        "testId"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "ScreenHeader",
+      "source": "frontend/src/ui-kit/States.tsx",
+      "zone": "шапка",
+      "purpose": "Название экрана и одна строка назначения.",
+      "required_props": [
+        "title"
+      ],
+      "optional_props": [
+        "purpose"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "ScreenSection",
+      "source": "frontend/src/ui-kit/Layout.tsx",
+      "zone": "каркас",
+      "purpose": "Единый outlined-блок для рабочей зоны экрана.",
+      "required_props": [
+        "children"
+      ],
+      "optional_props": [
+        "testId"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "ScreenShell",
+      "source": "frontend/src/ui-kit/Layout.tsx",
+      "zone": "каркас",
+      "purpose": "Внешний каркас экрана с рабочей шириной WMS.",
+      "required_props": [
+        "children"
+      ],
+      "optional_props": [
+        "testId"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "SecondaryAction",
+      "source": "frontend/src/ui-kit/Actions.tsx",
+      "zone": "панель действий",
+      "purpose": "Вторичное действие рядом с главным.",
+      "required_props": [
+        "children"
+      ],
+      "optional_props": [
+        "disabledReason"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "SelectField",
+      "source": "frontend/src/ui-kit/Forms.tsx",
+      "zone": "фильтры/форма",
+      "purpose": "Канонический выпадающий список.",
+      "required_props": [
+        "value",
+        "options",
+        "onChange"
+      ],
+      "optional_props": [
+        "label",
+        "testId"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "StatusChip",
+      "source": "frontend/src/ui-kit/StatusChip.tsx",
+      "zone": "статус/признак",
+      "purpose": "Канонический статус документа или строки.",
+      "required_props": [
+        "label"
+      ],
+      "optional_props": [
+        "tone",
+        "hint",
+        "testId"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "TableSkeletonBody",
+      "source": "frontend/src/ui-kit/States.tsx",
+      "zone": "таблица",
+      "purpose": "Скелетон загрузки строк таблицы.",
+      "required_props": [
+        "columns"
+      ],
+      "optional_props": [
+        "rows"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "TabsBar",
+      "source": "frontend/src/ui-kit/Forms.tsx",
+      "zone": "навигация/вкладки",
+      "purpose": "Канонические вкладки внутри рабочего экрана.",
+      "required_props": [
+        "value",
+        "tabs",
+        "onChange"
+      ],
+      "optional_props": [
+        "testId"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "TextCell",
+      "source": "frontend/src/ui-kit/Cells.tsx",
+      "zone": "таблица",
+      "purpose": "Текстовая ячейка с подсказкой полного значения.",
+      "required_props": [
+        "value"
+      ],
+      "optional_props": [
+        "width"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "TextInput",
+      "source": "frontend/src/ui-kit/Forms.tsx",
+      "zone": "фильтры/форма",
+      "purpose": "Каноническое поле ввода.",
+      "required_props": [],
+      "optional_props": [
+        "label",
+        "value",
+        "onChange",
+        "testId"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    },
+    {
+      "name": "ToolbarLine",
+      "source": "frontend/src/ui-kit/Layout.tsx",
+      "zone": "панель действий",
+      "purpose": "Строка действий или вкладок над рабочей зоной.",
+      "required_props": [
+        "children"
+      ],
+      "optional_props": [
+        "testId"
+      ],
+      "observed_props": [],
+      "files": [],
+      "screen_ids": [],
+      "usages": 0
+    }
   ]
-} as const satisfies
-  Record<'chips' | 'statuses' | 'buttons' | 'alerts', readonly InventoryItem[]>
+} as const satisfies UiInventory

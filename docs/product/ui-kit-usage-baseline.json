@@ -1,0 +1,393 @@
+{
+  "generated_by": "scripts/ui/ui_kit_usage_guard.py --update",
+  "legacy_policy": "Existing screens without ui-kit are baseline debt; new debt is blocked.",
+  "rule": "New screens and changed visible UI zones must import frontend/src/ui-kit.",
+  "screen_files": {
+    "src/screens/AppV2Screens.tsx": {
+      "screen_ids": [
+        "S-01",
+        "S-21",
+        "S-22",
+        "S-23",
+        "S-24",
+        "S-25"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/ProfileLoadingScreen.tsx": {
+      "screen_ids": [],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/PublicAuthScreen.tsx": {
+      "screen_ids": [],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/ff/FfDashboard.tsx": {
+      "screen_ids": [
+        "S-02",
+        "S-12"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/ff/FfHonestSignLedgerPage.tsx": {
+      "screen_ids": [
+        "S-07"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/ff/FfHonestSignPage.tsx": {
+      "screen_ids": [
+        "S-05"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/ff/FfHonestSignReprintsPage.tsx": {
+      "screen_ids": [
+        "S-10"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/ff/FfInboundBoxAddDialog.tsx": {
+      "screen_ids": [],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/ff/FfInboundQueuePage.tsx": {
+      "screen_ids": [
+        "S-17",
+        "S-20"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/ff/FfInboundRequestView.tsx": {
+      "screen_ids": [],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/ff/FfInboundSortingPanel.tsx": {
+      "screen_ids": [],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/ff/FfManualProductCreateDialog.tsx": {
+      "screen_ids": [
+        "S-16"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx": {
+      "screen_ids": [
+        "S-12"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/ff/FfPackagingPage.tsx": {
+      "screen_ids": [
+        "S-03",
+        "S-12",
+        "S-14"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/ff/FfPendingMarkingPage.tsx": {
+      "screen_ids": [
+        "S-15"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/ff/FfPlaceholderPage.tsx": {
+      "screen_ids": [
+        "S-11"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/ff/FfProductTzImportDialog.tsx": {
+      "screen_ids": [
+        "S-16"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/ff/FfSellerCreateDialog.tsx": {
+      "screen_ids": [
+        "S-16"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/ff/FfSettingsScreen.tsx": {
+      "screen_ids": [
+        "S-19"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/ff/FfSuppliesShipmentsPage.tsx": {
+      "screen_ids": [
+        "S-12"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/ff/FfWeekCalendar.tsx": {
+      "screen_ids": [
+        "S-02",
+        "S-12"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/shared/HonestSignImportPage.tsx": {
+      "screen_ids": [
+        "S-06"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/shared/HonestSignLedgerPage.tsx": {
+      "screen_ids": [
+        "S-07"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/shared/HonestSignPoolPage.tsx": {
+      "screen_ids": [
+        "S-08"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/shared/HonestSignProductPage.tsx": {
+      "screen_ids": [
+        "S-09"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/shared/HonestSignScreen.tsx": {
+      "screen_ids": [
+        "S-05",
+        "S-27"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/shared/MarkingImportDialog.tsx": {
+      "screen_ids": [
+        "S-05",
+        "S-27"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/shared/MarkingPoolProductsDialog.tsx": {
+      "screen_ids": [
+        "S-08"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/shared/MarkingPoolProductsPanel.tsx": {
+      "screen_ids": [],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/shared/MarkingProductCodesDialog.tsx": {
+      "screen_ids": [],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/shared/MarkingSellerPicker.tsx": {
+      "screen_ids": [
+        "S-05",
+        "S-07",
+        "S-27"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/shared/NotificationsPage.tsx": {
+      "screen_ids": [
+        "S-13",
+        "S-30"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/v2/CorrectionActsPlaceholderScreen.tsx": {
+      "screen_ids": [],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/v2/FbsPrintPreviewDialog.tsx": {
+      "screen_ids": [
+        "S-03"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/v2/FbsSupplyCreateDialog.tsx": {
+      "screen_ids": [
+        "S-03"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/v2/FfFbsOrdersScreen.tsx": {
+      "screen_ids": [
+        "S-03"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/v2/FfFbsPickList.tsx": {
+      "screen_ids": [],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/v2/FfFbsSectionNav.tsx": {
+      "screen_ids": [
+        "S-03",
+        "S-04"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/v2/FfFbsStockSyncScreen.tsx": {
+      "screen_ids": [
+        "S-04"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/v2/FfFbsSupplyDrawer.tsx": {
+      "screen_ids": [],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/v2/FfFbsSupplyWorkspace.tsx": {
+      "screen_ids": [
+        "S-03"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/v2/FfProductsCatalogScreen.tsx": {
+      "screen_ids": [
+        "S-16"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/v2/InboundScreen.tsx": {
+      "screen_ids": [
+        "S-22"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/v2/MovementsScreen.tsx": {
+      "screen_ids": [
+        "S-23"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/v2/OutboundScreen.tsx": {
+      "screen_ids": [
+        "S-24"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/v2/ProductsScreen.tsx": {
+      "screen_ids": [
+        "S-01"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/v2/SellerDashboardScreen.tsx": {
+      "screen_ids": [],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/v2/SellerDocumentsScreen.tsx": {
+      "screen_ids": [
+        "S-26"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/v2/SellerHonestSignScreen.tsx": {
+      "screen_ids": [
+        "S-27"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/v2/SellerInboundDraftScreen.tsx": {
+      "screen_ids": [
+        "S-28",
+        "S-29"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/v2/SellerProductsStockScreen.tsx": {
+      "screen_ids": [
+        "S-31"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/v2/SellerRequestsScreen.tsx": {
+      "screen_ids": [],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/v2/SellerSettingsScreen.tsx": {
+      "screen_ids": [
+        "S-32"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/v2/SellersScreen.tsx": {
+      "screen_ids": [
+        "S-18"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/v2/TransfersScreen.tsx": {
+      "screen_ids": [
+        "S-25"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    },
+    "src/screens/v2/WildberriesScreen.tsx": {
+      "screen_ids": [
+        "S-21"
+      ],
+      "ui_kit_imports": 0,
+      "ui_kit_symbols": []
+    }
+  },
+  "version": 1
+}

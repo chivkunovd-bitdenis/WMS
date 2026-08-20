@@ -31,6 +31,8 @@ tools: Read, Bash, Grep, Glob, Write
 - Контракт S08 отвечает исходной просьбе и не добавляет лишний пользовательский процесс.
 - Для видимого изменения понятны actor, screen/process, цель, warehouse value, success/error/empty/
   forbidden/partial states, данные и invariants.
+- Для UI-изменения есть `UI-kit contract`: зоны экрана названы компонентами из
+  `frontend/src/ui-kit/index.ts`, а отсутствующие компоненты вынесены в blocker, не спрятаны в Dev.
 - Для backend/worker/data/pipeline изменения понятен операционный эффект и отсутствие скрытого UI
   изменения.
 - Оракулы названы; при конфликте оракулов stage не принимается.
@@ -41,6 +43,8 @@ tools: Read, Bash, Grep, Glob, Write
 - Карточка даёт цельный наблюдаемый результат, а не отдельный frontend/backend кусок без пользы.
 - Cases не закрепляют неверное поведение и покрывают важные success/error/empty/forbidden/read-back/
   reload/tenant/volume/external/worker/print ветки по traits.
+- Для новой экранной зоны карточка не уходит в Dev, если она не называет ui-kit components и
+  обязательные props.
 - Никакой Dev не стартует без `PRODUCT_APPROVED_FOR_DEV`.
 
 Как сдаёшь stage:

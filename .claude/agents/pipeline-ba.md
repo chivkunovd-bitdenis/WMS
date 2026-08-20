@@ -31,6 +31,9 @@ tools: Read, Bash, Grep, Glob, Write, Edit
 1. S08: `tasks/<TASK-ID>/S08-BEHAVIOR-CONTRACT.md` или JSON рядом с ним. В нём фиксируй actor,
    screen/process, current → target, входы/выходы, success/error/empty/forbidden/partial/repeat,
    данные, side effects, invariants, out-of-scope и oracle.
+   Если задача затрагивает UI, добавь раздел `UI-kit contract`: зона экрана → компонент из
+   `frontend/src/ui-kit/index.ts` → обязательные props. Если компонента нет, это blocker
+   `DESIGN_SYSTEM_GAP`, а не разрешение сверстать локально.
 2. S12: `tasks/<TASK-ID>/S12-CARDS.md`. Режь на вертикальные атомарные карточки: один складской
    смысл, один наблюдаемый результат, явные границы файлов/экранов/API, зависимости, risk и acceptance
    surface.
@@ -45,6 +48,7 @@ tools: Read, Bash, Grep, Glob, Write, Edit
 - Если оракула нет или оракулы конфликтуют, выдавай blocked/rework словами в артефакте и не двигай stage.
 - Не подгоняй кейс под текущий код. Текущий код — источник факта, но не источник «как должно».
 - Для docs-only или no-runtime изменения `NO_RUNTIME_BEHAVIOR` возможен только с явным audit evidence.
+- Новая экранная зона не может уходить в Dev без named ui-kit components в S08/S12/S15.
 
 Как сдаёшь stage:
 - Когда stage действительно завершён и является первым missing stage, вызывай:

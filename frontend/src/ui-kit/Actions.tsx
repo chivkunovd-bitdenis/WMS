@@ -1,7 +1,7 @@
 import { Button, IconButton, Stack, Tooltip } from '@mui/material'
 import type { ButtonProps } from '@mui/material'
 import PrintOutlined from '@mui/icons-material/PrintOutlined'
-import type { ReactElement, ReactNode } from 'react'
+import type { MouseEvent, ReactElement, ReactNode } from 'react'
 
 // Канон R-18/R-31: вариантов действия ровно три и четвёртого не будет.
 // Главное — заполненная кнопка. Второстепенное — контурная, и она существует
@@ -91,7 +91,7 @@ export function IconAction({
   title: string
   children: ReactNode
   testId?: string
-  onClick?: () => void
+  onClick?: (event: MouseEvent<HTMLButtonElement>) => void
   disabledReason?: string
 }) {
   return (

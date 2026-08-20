@@ -3,20 +3,29 @@ import { INVENTORY } from './inventory.generated'
 import type { InventoryItem } from './inventory.generated'
 import {
   ActionGroup,
+  ActionMenu,
+  CheckboxField,
   DangerAction,
   DataTable,
   EmptyState,
   ErrorNotice,
   FilterBar,
+  ModalDialog,
   PlanFactCell,
   PrimaryAction,
   PrintAction,
   ProductCell,
   QtyCell,
   ScannerLine,
+  ScreenSection,
+  ScreenShell,
   ScreenHeader,
   SecondaryAction,
+  SelectField,
+  TabsBar,
   TextCell,
+  TextInput,
+  ToolbarLine,
 } from './index'
 import type { Column } from './index'
 import { useState } from 'react'
@@ -124,14 +133,40 @@ const LOWERCASE_CHIPS = INVENTORY.chips.filter((item) => /^[а-яёa-z]/.test(it
 
 export function UiKitShowcase() {
   const [search, setSearch] = useState('')
+  const [warehouse, setWarehouse] = useState('main')
+  const [checked, setChecked] = useState(false)
+  const [tab, setTab] = useState('drafts')
+  const [dialogOpen, setDialogOpen] = useState(false)
 
   return (
-    <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 1400, mx: 'auto' }}>
+    <ScreenShell>
       <ScreenHeader
         title="Канон WMS · элементы системы"
         purpose="Собрано из кода экранов скриптом scripts/ui/ui_inventory.py. Выдуманных подписей здесь нет: если элемента нет в системе — его нет и на этой странице."
       />
       <Divider sx={{ mb: 4 }} />
+
+      <Section
+        title={`Компоненты ui-kit — ${INVENTORY.components.length} шт.`}
+        note="Машиночитаемый состав набора: зона экрана, обязательные props и текущие места использования."
+      >
+        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 2 }}>
+          {INVENTORY.components.map((item) => (
+            <Stack key={item.name} spacing={0.5} sx={{ minWidth: 260, maxWidth: 340 }}>
+              <Box>
+                <Chip size="small" color={item.usages ? 'success' : 'default'} label={`${item.name} · ${item.zone}`} />
+              </Box>
+              <Typography variant="body2">{item.purpose}</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'ui-monospace, monospace' }}>
+                required: {item.required_props.length ? item.required_props.join(', ') : '—'}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'ui-monospace, monospace' }}>
+                used: {item.usages} · {item.screen_ids.length ? item.screen_ids.join(', ') : 'экранов пока нет'}
+              </Typography>
+            </Stack>
+          ))}
+        </Stack>
+      </Section>
 
       <Section
         title={`Статусы — ${INVENTORY.statuses.length} шт.`}
@@ -226,6 +261,53 @@ export function UiKitShowcase() {
         </ActionGroup>
       </Section>
 
+      <Section title="Формы, вкладки, меню и модалка" note="Базовые элементы, которых раньше не хватало для честного переезда экранов на ui-kit.">
+        <ScreenSection>
+          <ToolbarLine>
+            <TabsBar
+              value={tab}
+              onChange={setTab}
+              tabs={[
+                { value: 'drafts', label: 'Черновики' },
+                { value: 'accepted', label: 'Принято' },
+                { value: 'closed', label: 'Закрыто' },
+              ]}
+            />
+            <ActionMenu
+              title="Действия с документом"
+              options={[
+                { label: 'Открыть карточку', onClick: () => undefined },
+                { label: 'Удалить короб', danger: true, disabledReason: 'Короб не пустой', onClick: () => undefined },
+              ]}
+            />
+          </ToolbarLine>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ alignItems: { md: 'flex-start' } }}>
+            <TextInput label="Номер документа" value="INB-2026-0819" onChange={() => undefined} />
+            <SelectField
+              label="Склад"
+              value={warehouse}
+              onChange={setWarehouse}
+              options={[
+                { value: 'main', label: 'Основной склад' },
+                { value: 'return', label: 'Зона возвратов' },
+              ]}
+            />
+            <CheckboxField label="Есть несохранённые изменения" checked={checked} onChange={setChecked} />
+            <PrimaryAction onClick={() => setDialogOpen(true)}>Открыть диалог</PrimaryAction>
+          </Stack>
+        </ScreenSection>
+        <ModalDialog
+          open={dialogOpen}
+          title="Закрыть документ?"
+          description="Есть несохранённые изменения. Если закрыть сейчас, оператор потеряет введённые количества."
+          onClose={() => setDialogOpen(false)}
+          actions={[
+            { label: 'Остаться', kind: 'secondary', onClick: () => setDialogOpen(false) },
+            { label: 'Закрыть', kind: 'danger', onClick: () => setDialogOpen(false) },
+          ]}
+        />
+      </Section>
+
       <Section title="Сканер и ошибка">
         <Stack spacing={1.5} sx={{ alignItems: 'flex-start' }}>
           <ScannerLine active expects="пикните ШК товара" />
@@ -241,6 +323,6 @@ export function UiKitShowcase() {
           action={<PrimaryAction>Создать короб</PrimaryAction>}
         />
       </Section>
-    </Box>
+    </ScreenShell>
   )
 }

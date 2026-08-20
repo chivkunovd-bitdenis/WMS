@@ -178,6 +178,8 @@ def main() -> int:
     require("check_pipeline_model_policy.py" in ci_workflow, "CI must run pipeline model policy check", errors)
     require("check_pipeline_policy_metatests.py" in ci_workflow, "CI must run pipeline policy metatests", errors)
     require("check_pipeline_replay_metatests.py" in ci_workflow, "CI must run pipeline replay metatests", errors)
+    require("scripts/ui/ui_guard.py" in ci_workflow, "CI must run UI canon ratchet for product changes", errors)
+    require("scripts/ui/ui_kit_usage_guard.py" in ci_workflow, "CI must run W12 ui-kit usage guard for product changes", errors)
     model_policy_check = subprocess.run(
         [sys.executable, "scripts/ci/check_pipeline_model_policy.py"],
         cwd=ROOT,
@@ -186,6 +188,69 @@ def main() -> int:
         stderr=subprocess.PIPE,
     )
     require(model_policy_check.returncode == 0, f"pipeline model policy check failed: {model_policy_check.stderr}", errors)
+    ui_kit_usage_guard = ROOT / "scripts" / "ui" / "ui_kit_usage_guard.py"
+    require(ui_kit_usage_guard.exists(), "W12 ui-kit usage guard must exist", errors)
+    if ui_kit_usage_guard.exists():
+        current_ui_usage = subprocess.run(
+            [sys.executable, str(ui_kit_usage_guard)],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        require(current_ui_usage.returncode == 0, f"W12 ui-kit usage guard failed on current tree: {current_ui_usage.stderr}", errors)
+        temp_screen = ROOT / "frontend" / "src" / "screens" / "__UiKitMetatestScreen.tsx"
+        try:
+            temp_screen.write_text(
+                "import { Button } from '@mui/material'\n"
+                "export function __UiKitMetatestScreen() {\n"
+                "  return <Button>Плохо</Button>\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            blocked_new_screen = subprocess.run(
+                [sys.executable, str(ui_kit_usage_guard)],
+                cwd=ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            require(blocked_new_screen.returncode != 0, "W12 guard must reject a new screen without ui-kit import", errors)
+            temp_screen.write_text(
+                "import { Button } from '@mui/material'\n"
+                "import { ScreenHeader } from '../ui-kit'\n"
+                "export function __UiKitMetatestScreen() {\n"
+                "  return <><ScreenHeader title=\"Тест\" /><Button>Плохо</Button></>\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            blocked_raw_ui = subprocess.run(
+                [sys.executable, str(ui_kit_usage_guard)],
+                cwd=ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            require(blocked_raw_ui.returncode != 0, "W12 guard must reject raw MUI even when a screen imports ui-kit", errors)
+            temp_screen.write_text(
+                "import { ScreenHeader } from '../ui-kit'\n"
+                "export function __UiKitMetatestScreen() {\n"
+                "  return <ScreenHeader title=\"Тест\" />\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            allowed_new_screen = subprocess.run(
+                [sys.executable, str(ui_kit_usage_guard)],
+                cwd=ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            require(allowed_new_screen.returncode == 0, f"W12 guard must allow a new screen with ui-kit import: {allowed_new_screen.stderr}", errors)
+        finally:
+            temp_screen.unlink(missing_ok=True)
+    ui_inventory = read("scripts/ui/ui_inventory.py")
+    require("UI_KIT_COMPONENTS" in ui_inventory and '"components": components' in ui_inventory, "ui inventory must expose machine-readable ui-kit components", errors)
     require(
         all(item.get("status") == "automated_green" for item in contract.get("required_metatests", [])),
         "all declared pipeline metatests must be automated_green before this implementation slice is accepted",

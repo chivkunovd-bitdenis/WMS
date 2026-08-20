@@ -561,6 +561,10 @@ BEHAVIOR_CONTRACT_BLOCKED`.
 dependency edge в той же волне; родитель не получает S17, пока не зафиксирован принятый
 `ui_kit_version/component_sha`. Это не вопрос владельцу без настоящего blocker.
 
+Контракт UI обязан назвать компоненты из `frontend/src/ui-kit/index.ts` по зонам экрана:
+таблица, действия, статусы, формы, вкладки, меню, модалка, каркас. Если компонент отсутствует,
+stage возвращает typed blocker `DESIGN_SYSTEM_GAP`, а не разрешение сверстать локально.
+
 ### S10. `DESIGN_REVIEW`
 
 `design-judge` проверяет макет по `docs/product/UX_CANON_RU.md`, warehouse noise, scanner-first,
@@ -708,9 +712,10 @@ integrity проверкой. Неприменимость получает `DOC
 Сильный triage-agent не имеет права объявить кейс устаревшим по вкусу. Изменить ожидание можно
 только по новому подтверждённому оракулу. `SNAPSHOT_CHANGED` блокирует интеграцию до классификации.
 
-Для `ui_change` обязательны token/ui-kit provenance check и zone visual regression на нужных
-viewport со loading/empty/error/forbidden/partial/long-data состояниями. Сам Dev не обновляет
-baseline. Любое baseline change требует новых Design и Product receipts.
+Для `ui_change` обязательны `ui_guard.py`, `ui_kit_usage_guard.py`, token/ui-kit provenance check
+и zone visual regression на нужных viewport со loading/empty/error/forbidden/partial/long-data
+состояниями. Сам Dev не обновляет baseline. Любое baseline change требует новых Design и Product
+receipts.
 
 Каждый finding получает тип `PRODUCT_DEFECT | CASE_DEFECT | FIXTURE_DEFECT | ENV_DEFECT | FLAKY`:
 первый возвращает в S18, второй в S15, третий/четвёртый в repair subtask с возвратом S22, пятый —
@@ -736,7 +741,8 @@ Canonical integration ref fast-forward перемещается на тот же
 Обязателен для `ui_change`. Независимый design-judge на живом exact `git_sha + artifact_digests`
 integration stand сравнивает
 реализацию с утверждённым макетом и zone baseline: breakpoints, длинные данные, все состояния,
-типографика, интервалы, переполнение и происхождение компонентов из ui-kit.
+типографика, интервалы, переполнение и происхождение компонентов из ui-kit. Если новая зона
+не импортирует `frontend/src/ui-kit`, это `DESIGN_IMPLEMENTATION_BLOCKED`.
 
 Выход: `DESIGN_IMPLEMENTATION_APPROVED | DESIGN_IMPLEMENTATION_REWORK |
 DESIGN_IMPLEMENTATION_BLOCKED`. Rework возвращается в S18; новый baseline требует S10 и S11.
@@ -1436,7 +1442,9 @@ pipeline close
 
 ### E5. Жёсткий Design system gate
 
-Расширить `ui-kit`, включить zone baselines и запрет новой случайной вёрстки.
+Базовый W12 уже реализован: `ui_kit_usage_guard.py` запрещает новый экран или новую видимую
+UI-зону без импорта `ui-kit`, а `ui-inventory.json` содержит раздел `components`. Дальше:
+zone baselines, codemods переезда старого долга и связка с `invariants.js`.
 
 ### E6. Resumable `wave-driver`
 
