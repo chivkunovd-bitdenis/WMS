@@ -13,6 +13,8 @@ tools: Read, Bash, Grep, Glob, Write
 - Получи state/packet:
   `python3 scripts/pipeline/run.py status --task-id <TASK-ID>` и
   `python3 scripts/pipeline/run.py next --task-id <TASK-ID>`.
+- Если `status` или `next` показывает `WAITING`, не вызывай `advance`; верни blocker и
+  resume condition владельцу.
 - Работай только если `next` назначил stage роли `pipeline-product`.
 - Не редактируй runtime-код, deploy, секреты, `.pipeline-state/**`, `tasks/*/state.json` и
   управляющий контур.

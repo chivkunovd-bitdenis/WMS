@@ -2,7 +2,7 @@
   "task_id": "BUG-WMS-PV2-002",
   "stage": "S01",
   "role": "pipeline-dispatcher",
-  "status": "QUEUED",
+  "status": "WAITING",
   "traits": [
     "bug",
     "external_contract",
@@ -38,9 +38,22 @@
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "base_sha": "7401bc7402e9bba322d8447b34014687bc86cd31",
+  "blocker": {
+    "type": "OWNER_INPUT",
+    "reason_code": "QUEUED_NOT_STARTED",
+    "details": "Owner asked to finish and report pipeline readiness before launching bug fixes",
+    "owner": "owner",
+    "created_at": "2026-08-20T20:40:52Z",
+    "resume_stage": "S01"
+  },
+  "resume_condition": {
+    "stage": "S01",
+    "condition": "Owner explicitly approves starting pipeline stages for this card"
+  },
   "rules": [
     "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
     "Do not accept your own work.",
+    "If status is WAITING, do not advance; report the blocker and wait for resume.",
     "Use python3 scripts/pipeline/run.py advance only for the stage you own.",
     "Do not set DONE while pipeline status is not ACTIVE."
   ]

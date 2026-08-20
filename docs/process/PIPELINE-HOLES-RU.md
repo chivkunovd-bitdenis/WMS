@@ -26,12 +26,17 @@ build-once immutable artifacts и promotion готовых digests. Сервер
 ровно того же SHA лучше прежнего `main`, но ещё не доказывает неизменность
 artifact digest между acceptance и production.
 
-## P0. Controller и единый validation engine не реализованы
+## P0. Controller появился, полный wave-driver и единый validation engine ещё не готовы
 
 Добавлен `pipeline/controller.py` и вход `scripts/pipeline/run.py` с командами
-`open`, `classify`, `advance`, `validate`, `status`, `close`. Контроллер пишет
-runtime state в `.pipeline-state/`, публикует snapshot в `tasks/<task-id>/` и
-создаёт structured receipt при `advance`.
+`open`, `classify`, `hold`, `resume`, `next`, `packet`, `advance`, `validate`,
+`status`, `close`. Контроллер пишет runtime state в `.pipeline-state/`,
+публикует snapshot в `tasks/<task-id>/`, создаёт packet для следующей роли и
+structured receipt при `advance`.
+
+Что закрыто после первичного slice: задачу можно машинно поставить в `WAITING`;
+пока она ждёт владельца, `advance` запрещён. Это защищает подготовленную очередь
+от случайного старта до явного `resume`.
 
 Что ещё не закрыто: это минимальный local controller, а не полный `wave-driver`.
 Он ещё не выдаёт настоящие isolated worktrees/ports/DB/Redis/Celery/emulator, не
@@ -91,6 +96,10 @@ producer/consumer, который обязательно пишет и пров�
 - Появился CI guard `scripts/ci/check_pipeline_contract.py`.
 - Появился executable local controller `pipeline/controller.py` и вход
   `scripts/pipeline/run.py`.
+- Появились `hold`/`resume` и `next`/`packet`, чтобы очередь можно было
+  подготовить без запуска фиксов и передавать stage между ролями.
+- Появился `scripts/pipeline/dispatch.py`, который пишет одинаковые handoff
+  prompts для Codex, Claude и Cursor.
 - Появился `scripts/ci/check_pipeline_metatests.py`.
 - Production deploy больше не стартует автоматически от push в `main` и требует
   exact `release_sha`.

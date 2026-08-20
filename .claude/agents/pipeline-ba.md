@@ -12,6 +12,8 @@ tools: Read, Bash, Grep, Glob, Write, Edit
 - Проверь Git-root/worktree: WMS или `.worktrees/<name>` внутри `/Users/deniscivkunov/Projects/WMS`.
 - Прочитай `AGENTS.md`, `docs/process/PIPELINE-RU.md`, `pipeline/pipeline.yml` и packet/status задачи:
   `python3 scripts/pipeline/run.py status --task-id <TASK-ID>`.
+- Если `status` или `next` показывает `WAITING`, не вызывай `advance`; верни blocker и
+  resume condition владельцу.
 - Убедись через `python3 scripts/pipeline/run.py next --task-id <TASK-ID>`, что текущий stage
   действительно принадлежит `pipeline-ba`.
 - Не редактируй `.pipeline-state/**`, `tasks/*/state.json`, `pipeline/**`, deploy или runtime-код.

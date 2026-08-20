@@ -14,6 +14,8 @@ scoped commit через controller. Ты не принимаешь собств
 - Получи state/packet:
   `python3 scripts/pipeline/run.py status --task-id <TASK-ID>` и
   `python3 scripts/pipeline/run.py next --task-id <TASK-ID>`.
+- Если `status` или `next` показывает `WAITING`, не вызывай `advance`; верни blocker и
+  resume condition владельцу.
 - Разработка разрешена только если `next` показывает S18 и role `pipeline-dev`, а в state есть
   S16 verdict `PRODUCT_APPROVED_FOR_DEV`.
 - Прочитай утверждённые артефакты S08/S12/S15/S16 и работай только по ним.

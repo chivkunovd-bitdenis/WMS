@@ -14,6 +14,8 @@ Product.
 - Получи state/packet:
   `python3 scripts/pipeline/run.py status --task-id <TASK-ID>` и
   `python3 scripts/pipeline/run.py next --task-id <TASK-ID>`.
+- Если `status` или `next` показывает `WAITING`, не вызывай `advance`; верни blocker и
+  resume condition владельцу.
 - Работай только если `next` назначил stage роли `pipeline-reviewer`.
 - Зафиксируй baseline SHA, branch, done stages, required stages и список артефактов.
 - Не редактируй код, runtime state, receipts, deploy или секреты.

@@ -14,6 +14,8 @@ unit-тесты, чтение кода и пересказ разработчи�
 - Получи state/packet:
   `python3 scripts/pipeline/run.py status --task-id <TASK-ID>` и
   `python3 scripts/pipeline/run.py next --task-id <TASK-ID>`.
+- Если `status` или `next` показывает `WAITING`, не вызывай `advance`; верни blocker и
+  resume condition владельцу.
 - Работай только если `next` показывает S25 и role `pipeline-browser-product`.
 - Проверь, что upstream receipts есть по required stages: Product before dev, Dev, Code Review,
   functional/integration и, если UI, Design Implementation.

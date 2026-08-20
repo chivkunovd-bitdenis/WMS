@@ -1,7 +1,8 @@
 ---
 name: wms-pipeline-autopilot
 description: >-
-  Запуск полного Pipeline v2 цикла WMS через controller: open/classify/next/packet/advance/status/validate/close,
+  Запуск полного Pipeline v2 цикла WMS через controller:
+  open/classify/hold/resume/next/packet/advance/status/validate/close,
   с разделением Dispatcher, BA, Product, Dev, Reviewer и Browser Product ролей.
 ---
 
@@ -98,6 +99,21 @@ python3 scripts/pipeline/run.py packet --task-id <TASK-ID>
 
 `next` показывает первый missing stage и роль. Если роль не твоя, остановись и передай packet
 нужному агенту. Агент не выполняет чужую стадию и не принимает собственный результат.
+Если `status` или `next` показывает `WAITING`, нельзя вызывать `advance`: верни blocker и
+resume condition владельцу и жди явного `resume`.
+
+Удержание и снятие удержания:
+
+```bash
+python3 scripts/pipeline/run.py hold \
+  --task-id <TASK-ID> \
+  --blocker-type OWNER_INPUT \
+  --reason-code <CODE> \
+  --reason "<причина>" \
+  --resume-condition "<условие снятия>"
+
+python3 scripts/pipeline/run.py resume --task-id <TASK-ID> --by owner
+```
 
 ### 4. BA stages
 

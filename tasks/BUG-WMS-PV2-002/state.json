@@ -36,7 +36,7 @@
     "S26"
   ],
   "current_stage": "S01",
-  "status": "QUEUED",
+  "status": "WAITING",
   "base_sha": "7401bc7402e9bba322d8447b34014687bc86cd31",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -48,10 +48,20 @@
   "owner_agent": "manual",
   "attempt": 1,
   "lease_until": "2026-08-20T21:30:19Z",
-  "heartbeat_at": "2026-08-20T20:30:19Z",
+  "heartbeat_at": "2026-08-20T20:40:52Z",
   "last_valid_receipt": null,
-  "blocker": null,
-  "resume_condition": null,
+  "blocker": {
+    "type": "OWNER_INPUT",
+    "reason_code": "QUEUED_NOT_STARTED",
+    "details": "Owner asked to finish and report pipeline readiness before launching bug fixes",
+    "owner": "owner",
+    "created_at": "2026-08-20T20:40:52Z",
+    "resume_stage": "S01"
+  },
+  "resume_condition": {
+    "stage": "S01",
+    "condition": "Owner explicitly approves starting pipeline stages for this card"
+  },
   "verdicts": {},
   "commits": [],
   "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."

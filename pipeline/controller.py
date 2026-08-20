@@ -94,6 +94,18 @@ ROLE_BY_STAGE = {
     "S28": "pipeline-reviewer",
 }
 
+BLOCKER_TYPES = [
+    "OWNER_INPUT",
+    "ENV",
+    "FIXTURE",
+    "EXTERNAL",
+    "ORACLE_CONFLICT",
+    "BASELINE",
+    "ACCESS",
+    "SECURITY",
+    "RELEASE",
+]
+
 
 class PipelineError(RuntimeError):
     """User-facing controller error."""
@@ -264,7 +276,9 @@ def command_classify(args: argparse.Namespace) -> int:
     state["traits"] = traits
     state["risk_level"] = risk_level
     state["required_stages"] = new_required
-    if not state.get("verdicts"):
+    if state.get("status") == "WAITING":
+        state["current_stage"] = first_missing_stage(state)
+    elif not state.get("verdicts"):
         state["current_stage"] = first_missing_stage(state)
         state["status"] = "QUEUED"
     elif old_required != new_required:
@@ -318,10 +332,17 @@ def command_advance(args: argparse.Namespace) -> int:
     stages = stage_map(contract)
     state = load_state(args.task_id)
     stage_id = args.stage
+    if state.get("status") == "WAITING":
+        blocker = state.get("blocker") or {}
+        reason = blocker.get("reason_code") or blocker.get("details") or "blocked"
+        raise PipelineError(f"{args.task_id} is WAITING ({reason}); run resume before advance")
     if stage_id not in state["required_stages"]:
         raise PipelineError(f"{stage_id} is not required for task {args.task_id}")
     if stage_id != first_missing_stage(state):
         raise PipelineError(f"{stage_id} is not the next missing stage; expected {first_missing_stage(state)}")
+    expected_role = ROLE_BY_STAGE.get(stage_id)
+    if expected_role and args.role != expected_role:
+        raise PipelineError(f"{args.role} cannot advance {stage_id}; expected role {expected_role}")
     if args.verdict not in stages[stage_id]["pass_verdicts"]:
         raise PipelineError(f"{args.verdict} is not an allowed pass verdict for {stage_id}")
 
@@ -355,12 +376,19 @@ def validate_state(contract: dict[str, Any], state: dict[str, Any]) -> list[str]
         errors.append(f"{state['task_id']}: stale pipeline_hash")
     if state.get("required_stages") != expected_required:
         errors.append(f"{state['task_id']}: required_stages do not match traits/risk")
+    if state.get("status") not in contract.get("lifecycle_statuses", []):
+        errors.append(f"{state['task_id']}: invalid lifecycle status {state.get('status')}")
     if state.get("current_stage") not in TOTAL_ORDER:
         errors.append(f"{state['task_id']}: invalid current_stage")
     if state.get("status") == "DONE" and contract.get("status") != "ACTIVE":
         errors.append(f"{state['task_id']}: DONE is forbidden while pipeline is not ACTIVE")
     if state.get("status") == "DONE" and "S28" not in state.get("verdicts", {}):
         errors.append(f"{state['task_id']}: DONE requires S28 production trace verdict")
+    if state.get("status") == "WAITING":
+        if not state.get("blocker"):
+            errors.append(f"{state['task_id']}: WAITING requires blocker")
+        if not state.get("resume_condition"):
+            errors.append(f"{state['task_id']}: WAITING requires resume_condition")
     for stage_id in state.get("verdicts", {}):
         if stage_id not in state.get("required_stages", []):
             errors.append(f"{state['task_id']}: verdict for non-required stage {stage_id}")
@@ -393,8 +421,69 @@ def command_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_hold(args: argparse.Namespace) -> int:
+    contract = load_contract()
+    state = load_state(args.task_id)
+    resume_stage = args.resume_stage or first_missing_stage(state)
+    if resume_stage not in state["required_stages"]:
+        raise PipelineError(f"{resume_stage} is not required for task {args.task_id}")
+    if args.blocker_type not in contract.get("blocker_types", []):
+        raise PipelineError(f"{args.blocker_type} is not declared in pipeline blocker_types")
+    state["status"] = "WAITING"
+    state["current_stage"] = resume_stage
+    state["blocker"] = {
+        "type": args.blocker_type,
+        "reason_code": args.reason_code,
+        "details": args.reason,
+        "owner": args.owner,
+        "created_at": now_iso(),
+        "resume_stage": resume_stage,
+    }
+    state["resume_condition"] = {
+        "stage": resume_stage,
+        "condition": args.resume_condition,
+    }
+    errors = validate_state(contract, state)
+    if errors:
+        raise PipelineError("; ".join(errors))
+    save_state(
+        state,
+        {
+            "type": "TASK_HELD",
+            "stage": resume_stage,
+            "blocker_type": args.blocker_type,
+            "reason_code": args.reason_code,
+        },
+    )
+    print(json.dumps({"task_id": args.task_id, "status": state["status"], "resume_stage": resume_stage}, ensure_ascii=False))
+    return 0
+
+
+def command_resume(args: argparse.Namespace) -> int:
+    contract = load_contract()
+    state = load_state(args.task_id)
+    if state.get("status") != "WAITING":
+        raise PipelineError(f"{args.task_id} is not WAITING")
+    resumed_from = state.get("blocker")
+    state["blocker"] = None
+    state["resume_condition"] = None
+    state["current_stage"] = first_missing_stage(state)
+    if len(state.get("verdicts", {})) == len(state["required_stages"]):
+        state["status"] = "IMPLEMENTATION_DONE"
+    elif state.get("verdicts"):
+        state["status"] = "RUNNING"
+    else:
+        state["status"] = "QUEUED"
+    errors = validate_state(contract, state)
+    if errors:
+        raise PipelineError("; ".join(errors))
+    save_state(state, {"type": "TASK_RESUMED", "resumed_from": resumed_from, "by": args.by})
+    print(json.dumps({"task_id": args.task_id, "status": state["status"], "current_stage": state["current_stage"]}, ensure_ascii=False))
+    return 0
+
+
 def next_stage_packet(state: dict[str, Any]) -> dict[str, Any]:
-    stage_id = first_missing_stage(state)
+    stage_id = state.get("current_stage") if state.get("status") == "WAITING" else first_missing_stage(state)
     return {
         "task_id": state["task_id"],
         "stage": stage_id,
@@ -407,9 +496,12 @@ def next_stage_packet(state: dict[str, Any]) -> dict[str, Any]:
         "worktree": state["worktree"],
         "branch": state["branch"],
         "base_sha": state["base_sha"],
+        "blocker": state.get("blocker"),
+        "resume_condition": state.get("resume_condition"),
         "rules": [
             "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
             "Do not accept your own work.",
+            "If status is WAITING, do not advance; report the blocker and wait for resume.",
             "Use python3 scripts/pipeline/run.py advance only for the stage you own.",
             "Do not set DONE while pipeline status is not ACTIVE.",
         ],
@@ -490,6 +582,21 @@ def build_parser() -> argparse.ArgumentParser:
     status_p = sub.add_parser("status")
     status_p.add_argument("--task-id", required=True)
     status_p.set_defaults(func=command_status)
+
+    hold_p = sub.add_parser("hold")
+    hold_p.add_argument("--task-id", required=True)
+    hold_p.add_argument("--blocker-type", choices=BLOCKER_TYPES, required=True)
+    hold_p.add_argument("--reason-code", required=True)
+    hold_p.add_argument("--reason", required=True)
+    hold_p.add_argument("--resume-condition", required=True)
+    hold_p.add_argument("--resume-stage")
+    hold_p.add_argument("--owner", default="owner")
+    hold_p.set_defaults(func=command_hold)
+
+    resume_p = sub.add_parser("resume")
+    resume_p.add_argument("--task-id", required=True)
+    resume_p.add_argument("--by", default="owner")
+    resume_p.set_defaults(func=command_resume)
 
     next_p = sub.add_parser("next")
     next_p.add_argument("--task-id", required=True)

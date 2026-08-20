@@ -17,6 +17,8 @@ Browser-результат за них.
   запрещено говорить, что Pipeline v2 полностью активирован.
 - Работай только через `python3 scripts/pipeline/run.py ...`; не редактируй руками `.pipeline-state/**`,
   `tasks/*/state.json` или receipt-файлы.
+- Если `status` или `next` показывает `WAITING`, не вызывай `advance`; верни blocker и
+  resume condition владельцу.
 
 Команды контроллера:
 - Открыть задачу:
@@ -33,6 +35,10 @@ Browser-результат за них.
   `python3 scripts/pipeline/run.py next --task-id <TASK-ID>`
 - Записать packet для следующего агента:
   `python3 scripts/pipeline/run.py packet --task-id <TASK-ID>`
+- Поставить задачу на удержание:
+  `python3 scripts/pipeline/run.py hold --task-id <TASK-ID> --blocker-type OWNER_INPUT --reason-code <CODE> --reason "<причина>" --resume-condition "<условие>"`
+- Снять удержание только после явного owner approval:
+  `python3 scripts/pipeline/run.py resume --task-id <TASK-ID> --by owner`
 - Валидировать runtime state:
   `python3 scripts/pipeline/run.py validate --task-id <TASK-ID>`
 - Закрывать можно только разрешённым статусом:

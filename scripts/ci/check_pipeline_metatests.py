@@ -45,6 +45,13 @@ def main() -> int:
     require('contract.get("status") != "ACTIVE"' in controller, "controller must forbid DONE before ACTIVE", errors)
     require("ROLE_BY_STAGE" in controller, "controller must map stages to agent roles", errors)
     require("command_packet" in controller, "controller must produce agent handoff packets", errors)
+    require("command_hold" in controller, "controller must support owner hold before execution", errors)
+    require("command_resume" in controller, "controller must support explicit resume after owner hold", errors)
+    require('state.get("status") == "WAITING"' in controller, "controller must block advance while task is WAITING", errors)
+    require("BLOCKER_TYPES" in controller, "controller must bind hold choices to pipeline blocker types", errors)
+    for blocker_type in contract["blocker_types"]:
+        require(f'"{blocker_type}"' in controller, f"controller blocker choices must include {blocker_type}", errors)
+    require((ROOT / "scripts" / "pipeline" / "dispatch.py").exists(), "dispatch prompt writer must exist", errors)
     require('"MONITORING_NO_TRAFFIC"' in read("pipeline/pipeline.yml"), "MONITORING_NO_TRAFFIC verdict must be declared", errors)
 
     # MT33: entrypoint inventory is guarded by the contract checker.
@@ -85,6 +92,91 @@ def main() -> int:
         opened = json.loads(result.stdout)
         require("S16" in opened["required_stages"], "opened task must require Product before dev", errors)
         require("S20" in opened["required_stages"], "opened task must require Code Review", errors)
+        hold_result = subprocess.run(
+            [
+                sys.executable,
+                "scripts/pipeline/run.py",
+                "hold",
+                "--task-id",
+                "TASK-METATEST",
+                "--blocker-type",
+                "OWNER_INPUT",
+                "--reason-code",
+                "METATEST_OWNER_HOLD",
+                "--reason",
+                "metatest hold",
+                "--resume-condition",
+                "metatest resume",
+            ],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        require(hold_result.returncode == 0, f"pipeline hold failed: {hold_result.stderr}", errors)
+        blocked_advance = subprocess.run(
+            [
+                sys.executable,
+                "scripts/pipeline/run.py",
+                "advance",
+                "--task-id",
+                "TASK-METATEST",
+                "--stage",
+                "S01",
+                "--verdict",
+                "DISPATCH_READY",
+                "--role",
+                "pipeline-dispatcher",
+                "--agent",
+                "metatest",
+            ],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        require(blocked_advance.returncode != 0, "WAITING task must reject advance", errors)
+        resume_result = subprocess.run(
+            [
+                sys.executable,
+                "scripts/pipeline/run.py",
+                "resume",
+                "--task-id",
+                "TASK-METATEST",
+                "--by",
+                "metatest",
+            ],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        require(resume_result.returncode == 0, f"pipeline resume failed: {resume_result.stderr}", errors)
+        if resume_result.returncode == 0:
+            resumed = json.loads(resume_result.stdout)
+            require(resumed["status"] == "QUEUED", "resume before verdicts must return task to QUEUED", errors)
+        wrong_role_advance = subprocess.run(
+            [
+                sys.executable,
+                "scripts/pipeline/run.py",
+                "advance",
+                "--task-id",
+                "TASK-METATEST",
+                "--stage",
+                "S01",
+                "--verdict",
+                "TASK_INTAKE_READY",
+                "--role",
+                "pipeline-dev",
+                "--agent",
+                "metatest",
+            ],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        require(wrong_role_advance.returncode != 0, "stage must reject a mismatched role", errors)
     shutil.rmtree(ROOT / ".pipeline-state" / "tasks" / "TASK-METATEST", ignore_errors=True)
     shutil.rmtree(ROOT / "tasks" / "TASK-METATEST", ignore_errors=True)
 
