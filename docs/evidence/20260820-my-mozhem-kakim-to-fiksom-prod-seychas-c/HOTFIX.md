@@ -23,5 +23,25 @@
 
 ## Прод
 
-Будет заполнено после развёртывания точного commit SHA и проверки публичного
-HTML/asset.
+- Код hotfix: `cca8d1743845223f47baba86e9453f2c2e73f7df`.
+- Ветка опубликована: `origin/codex/hotfix-fbs-100-orders-20260820`.
+- `/opt/wms` fast-forward выполнен с исходного prod SHA `8a13451f...` на
+  `cca8d174...`.
+- Docker image `wms_prod-web:latest` и запущенный `wms_prod-web-1`:
+  `sha256:ea22dbde0279b6cb7a8e496f70ecaa21e67b9e90007b292c3f055b27c0e5c9e8`.
+- OCI revision label образа: `cca8d1743845223f47baba86e9453f2c2e73f7df`.
+- Локальная и production SHA-256 для `/srv/index.html` совпала:
+  `68af9b02f2afe9839ffe29966775b02b8ea1127fe9b55ba1d9c61b728725f293`.
+- Локальная и production SHA-256 для `/srv/assets/ff-CZrVYEtu.js` совпала:
+  `7b75f714959b9facf82b79f12c7f0f3c51c25cb08337b4645947d27e064a36b6`.
+- `GET /api/health` — `{"status":"ok"}`.
+- `GET /app/ff/fbs` — HTTP 200.
+- Живой браузер после cache-bust загрузил `/assets/ff-CZrVYEtu.js` и показал
+  штатную форму входа WMS. Авторизованный операторский сценарий не выполнялся:
+  в диагностическом браузере нет production-сессии.
+
+Штатная серверная TypeScript-сборка была остановлена до переключения контейнера:
+на VPS с 3.8 GiB RAM компилятор ушёл в длительное ожидание диска. Старый web всё
+это время оставался доступен. Production image собран из локального `dist`, для
+которого до загрузки прошли `npm run build` и Playwright; точные контрольные суммы
+выше подтверждают, что запущен именно этот проверенный артефакт.
