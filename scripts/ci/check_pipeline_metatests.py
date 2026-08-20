@@ -176,6 +176,7 @@ def main() -> int:
     ci_workflow = read(".github/workflows/ci.yml")
     require("check_pipeline_scope_guard.py" in ci_workflow, "CI must run pipeline scope guard", errors)
     require("check_pipeline_model_policy.py" in ci_workflow, "CI must run pipeline model policy check", errors)
+    require("check_pipeline_budget_policy.py" in ci_workflow, "CI must run pipeline budget policy check", errors)
     require("check_pipeline_policy_metatests.py" in ci_workflow, "CI must run pipeline policy metatests", errors)
     require("check_pipeline_replay_metatests.py" in ci_workflow, "CI must run pipeline replay metatests", errors)
     require("scripts/ui/ui_guard.py" in ci_workflow, "CI must run UI canon ratchet for product changes", errors)

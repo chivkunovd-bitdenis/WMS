@@ -25,6 +25,8 @@ jobs:
         run: python3 scripts/ci/check_pipeline_contract.py
       - name: Validate WMS pipeline v2 model policy
         run: python3 scripts/ci/check_pipeline_model_policy.py
+      - name: Validate WMS pipeline v2 budget policy
+        run: python3 scripts/ci/check_pipeline_budget_policy.py
       - name: Run WMS pipeline v2 metatests
         run: python3 scripts/ci/check_pipeline_metatests.py
       - name: Run WMS pipeline v2 policy metatests

@@ -1,0 +1,84 @@
+{
+  "$schema": "./budget-policy.schema.json",
+  "policy_version": "1.0",
+  "status": "ACTIVE_FOR_DISPATCH",
+  "currency": "USD",
+  "purpose": "Stop autonomous Pipeline v2 waves before model spend drifts. The limits are control-plane limits, not billing truth.",
+  "accounting": {
+    "runtime_receipt_required": true,
+    "runtime_enforcement_implemented": false,
+    "runtime_gap": "Provider usage receipts and durable cross-stage aggregation remain outside this scoped control-plane patch."
+  },
+  "limits": {
+    "wave": {
+      "max_usd": 35.0,
+      "max_tokens": 12000000,
+      "warning_ratio": 0.75,
+      "hard_stop_ratio": 1.0
+    },
+    "task": {
+      "max_usd": 8.0,
+      "max_tokens": 2500000,
+      "warning_ratio": 0.75,
+      "hard_stop_ratio": 1.0
+    },
+    "card": {
+      "max_usd": 8.0,
+      "max_tokens": 2500000,
+      "warning_ratio": 0.75,
+      "hard_stop_ratio": 1.0
+    },
+    "stage_tier": {
+      "cheap": {
+        "max_usd": 0.4,
+        "max_tokens": 350000
+      },
+      "moderate": {
+        "max_usd": 1.25,
+        "max_tokens": 600000
+      },
+      "expensive": {
+        "max_usd": 3.0,
+        "max_tokens": 900000
+      }
+    }
+  },
+  "hard_stop": {
+    "enabled": true,
+    "on_missing_usage_receipt": "block_next_stage",
+    "on_budget_exceeded": "hold_task",
+    "blocker_type": "OWNER_INPUT",
+    "reason_code": "BUDGET_HARD_STOP"
+  },
+  "usage_receipt": {
+    "required_fields": [
+      "task_id",
+      "stage",
+      "role",
+      "executor",
+      "model",
+      "tier",
+      "input_tokens",
+      "output_tokens",
+      "estimated_usd",
+      "agent_id",
+      "recorded_at"
+    ]
+  },
+  "owner_override": {
+    "marker": "PIPELINE_BUDGET_OVERRIDE: owner-approved",
+    "requires_reason": true,
+    "requires_new_limit": true,
+    "expires_after_hours": 12
+  },
+  "recovery_packet": {
+    "required_on_hard_stop": true,
+    "required_fields": ["wave_id", "card_id", "stage", "tier", "limit", "observed_or_projected_usage", "next_action"]
+  },
+  "rules": [
+    "Dispatcher includes the stage budget in every handoff prompt.",
+    "A stage that reaches warning_ratio reports usage in its receipt.",
+    "A stage that reaches hard_stop_ratio must stop and request owner override before more expensive work.",
+    "Product, research, architecture, review and browser stages remain expensive when model-policy says so; budget pressure cannot downgrade judgment gates."
+  ]
+}

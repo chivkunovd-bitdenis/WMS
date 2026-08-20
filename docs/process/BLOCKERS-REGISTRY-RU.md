@@ -96,11 +96,13 @@
 ### BLK-COST-001 — Нет бюджета и hard stop по моделям
 
 - **Тип:** cost / model policy / control plane.
-- **Где обнаружен:** `pipeline/model-policy.yml` выбирает tier и модель, но не задаёт денежный/token budget; `docs/process/PIPELINE-RU.md` фиксирует, что без явного лимита hard stop по стоимости не действует.
-- **Почему блокирует бизнес:** схема “дорогие модели только там, где нужно” уже описана, но ночная волна всё ещё может расходовать дорогие модели без общего лимита, без usage receipt и без остановки при превышении. Это особенно рискованно для Product, Research, Architecture, Review и Browser stages.
+- **Статус:** narrowed; static policy closed, runtime accounting remains open.
+- **Где обнаружен:** `pipeline/budget-policy.yml` и `scripts/ci/check_pipeline_budget_policy.py` задают и проверяют лимиты, warning, hard stop, usage receipt, recovery packet и owner override; runtime usage accounting ещё не подключён.
+- **Почему блокирует бизнес:** статический контракт теперь запрещает считать бюджет закрытым без runtime receipts и durable aggregation. До их появления ночная волна всё ещё не имеет доказанной фактической остановки по измеренному расходу.
 - **Кто закрывает:** владелец процесса совместно с pipeline Architect/FinOps.
 - **Resume stage:** S01/S02 для обычной подготовки допустимы; автономная волна и массовый запуск дорогих stages ждут бюджет.
-- **Минимальный артефакт закрытия:** бюджет на волну и карточку, usage receipt по executor/model/stage, warning threshold, hard stop, recovery packet и отдельный owner override для осознанного превышения.
+- **Закрытая часть:** policy, schema, CI-check и metatest покрывают бюджет wave/card/stage tier, warning threshold, hard stop, recovery packet и owner override marker.
+- **Оставшийся минимальный артефакт:** usage receipt по executor/model/stage, durable aggregation по wave/card, runtime dispatch gate с hard stop и доказательство восстановления после остановки.
 
 ## Блокеры разработки по backlog
 

@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from pipeline.controller import load_state, next_stage_packet, write_json  # noqa: E402
+from pipeline.budget_policy import recommendation_for_tier  # noqa: E402
 from pipeline.model_policy import recommendation_for_packet  # noqa: E402
 
 
@@ -60,11 +61,14 @@ def build_prompt(task_id: str, executor: str) -> tuple[dict, str]:
     state = load_state(task_id)
     packet = next_stage_packet(state)
     model_recommendation = recommendation_for_packet(packet, executor)
+    budget_recommendation = recommendation_for_tier(model_recommendation["tier"])
     guides = existing_guides(packet["role"], executor)
     guide_lines = "\n".join(f"- `{path}`" for path in guides) or "- `AGENTS.md`"
     executor_lines = "\n".join(f"- {line}" for line in EXECUTOR_GUIDES[executor])
     model_reason_lines = "\n".join(f"- {line}" for line in model_recommendation["reasons"])
     model_rule_lines = "\n".join(f"- {line}" for line in model_recommendation["rules"])
+    budget_rule_lines = "\n".join(f"- {line}" for line in budget_recommendation["rules"])
+    usage_fields = ", ".join(f"`{field}`" for field in budget_recommendation["usage_receipt_required_fields"])
     packet_json = json.dumps(packet, ensure_ascii=False, indent=2)
     prompt = f"""# WMS Pipeline Dispatch
 
@@ -80,6 +84,7 @@ Recommended model: `{model_recommendation["model"]}` (`{model_recommendation["ti
 - `docs/process/PIPELINE-RU.md`
 - `pipeline/pipeline.yml`
 - `pipeline/model-policy.yml`
+- `pipeline/budget-policy.yml`
 - `tasks/{task_id}/state.json`
 
 ## Executor Rules
@@ -101,6 +106,19 @@ Reasons:
 
 Rules:
 {model_rule_lines}
+
+## Budget Policy
+
+Policy: `{budget_recommendation["policy_path"]}`
+Stage tier budget: `{budget_recommendation["stage_max_usd"]} {budget_recommendation["currency"]}` / `{budget_recommendation["stage_max_tokens"]}` tokens
+Task budget: `{budget_recommendation["task_max_usd"]} {budget_recommendation["currency"]}` / `{budget_recommendation["task_max_tokens"]}` tokens
+Wave budget: `{budget_recommendation["wave_max_usd"]} {budget_recommendation["currency"]}` / `{budget_recommendation["wave_max_tokens"]}` tokens
+Hard stop: `{budget_recommendation["hard_stop"]["enabled"]}`; reason code `{budget_recommendation["hard_stop"]["reason_code"]}`
+Owner override marker: `{budget_recommendation["owner_override"]["marker"]}`
+Usage receipt fields: {usage_fields}
+
+Rules:
+{budget_rule_lines}
 
 ## Controller Packet
 

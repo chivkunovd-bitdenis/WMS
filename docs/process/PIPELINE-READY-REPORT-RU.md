@@ -35,6 +35,9 @@ snapshot состояния и packet для S01, но нет receipts, verdicts
 - Есть машинная политика выбора модели: `pipeline/model-policy.yml`. Dispatch prompt теперь
   прямо пишет tier и конкретную модель: простая разработка уходит на дешёвую модель, dispatcher/BA
   на среднюю, а архитектура, продукт, ресёрч, ревью и живой браузер — на дорогую.
+- Есть machine-readable budget policy: `pipeline/budget-policy.yml` и schema задают лимиты
+  на wave/task/card/stage tier, warning threshold, fail-closed hard stop, usage receipt,
+  recovery packet и owner override marker. CI проверяет policy отдельным check и pipeline metatest.
 - Все `MT01`...`MT40` из части XII сейчас `automated_green`. Метатесты проверяют
   сам процесс: например, что разработка не получает workspace раньше продуктового
   одобрения, старый fencing token отклоняется, красный GOLD case блокирует
@@ -79,8 +82,10 @@ snapshot состояния и packet для S01, но нет receipts, verdicts
 - Старые процессные документы остаются действующими до явной активации Pipeline
   v2. Это безопасно для перехода, но не даёт объявить новый процесс единственным
   каноном без отдельного activation PR/line.
-- У model policy есть дешёвые/средние/дорогие tiers, но ещё нет бюджета на волну,
-  usage receipt и hard stop по стоимости.
+- BLK-COST-001 сужен: статический budget contract, warning/hard stop policy, owner override
+  marker и recovery packet закрыты. Остаётся runtime accounting: provider usage receipts,
+  durable aggregation по wave/card/stage и фактическая блокировка dispatch по измеренному
+  расходу; policy явно не заявляет runtime enforcement.
 - Backlog пока не сведён в единую versioned очередь со stable IDs, зависимостями,
   readiness и owner-approved wave.
 - Старый UI-долг не погашен автоматически: экраны не переписаны на `ui-kit`.
@@ -94,6 +99,7 @@ snapshot состояния и packet для S01, но нет receipts, verdicts
 ```bash
 python3 scripts/ci/check_pipeline_contract.py
 python3 scripts/ci/check_pipeline_model_policy.py
+python3 scripts/ci/check_pipeline_budget_policy.py
 python3 scripts/ui/ui_guard.py
 python3 scripts/ui/ui_kit_usage_guard.py
 ```
