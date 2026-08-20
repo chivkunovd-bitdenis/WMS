@@ -52,18 +52,29 @@ fencing token, crash replay и resource scheduler.
 Почему это дырка: без controller рабочий агент всё ещё может "сказать", что
 стадия пройдена, а не получить проверяемый controller-issued receipt.
 
-## P0. Метатесты частично автоматизированы
+## P0. Метатесты автоматизированы, activation ещё не включён
 
 В `pipeline/pipeline.yml` заведены `MT01`...`MT40`, чтобы CI не потерял ни один
-сценарий части XII. `scripts/ci/check_pipeline_metatests.py` сейчас доказывает
-первый executable slice: Product-before-workspace order, запрет `DONE` до
-`ACTIVE`, entrypoint inventory, trait machine dimensions, часть routing
-metatests, machine report и базовую защиту от подделки stage/receipt.
+сценарий части XII. Все 40 сейчас имеют статус `automated_green` и проверяются
+тремя suite в CI: `check_pipeline_metatests.py`, `check_pipeline_policy_metatests.py`
+и `check_pipeline_replay_metatests.py`.
 
-Почему это дырка: наличие списка защищает от забывания требований, но не
-доказывает, что Dev без Product approval реально не получает workspace, что
-истёкший lock отклоняется, или что crash между external side effect и state
-update идемпотентно восстанавливается. Осталось 22 pending metatests из 40.
+`check_pipeline_metatests.py` доказывает executable controller slice:
+Product-before-workspace order, запрет `DONE` до `ACTIVE`, entrypoint inventory,
+trait machine dimensions, resource locks/fencing, queue isolation, failure routes,
+dependency invalidation, machine report и защиту от подделки stage/receipt.
+
+MT02/MT03 закрыты local scope guard: `scripts/ci/check_pipeline_scope_guard.py`
+сверяет PR diff/base либо локальные staged/working/untracked изменения с
+`control_plane_protected_paths`. Изменение `pipeline/**`, workflow, deploy
+scripts или `tasks/*/state.json` без явного `pipeline_change`/`control-plane`
+в `PIPELINE_SCOPE_ALLOW`, PR label либо PR body marker останавливает CI.
+Сценарии блокировки и трёх способов разрешения выполняются из
+`check_pipeline_metatests.py`.
+
+Почему это всё ещё не `ACTIVE`: метатесты больше не pending, но activation
+остаётся выключен до owner activation line, независимой receipt-подписи,
+унифицированного distributed wave-driver и полного audit старых entrypoint'ов.
 
 ## P0. Fail-closed test egress не включён для всего тестового контура
 
@@ -90,11 +101,10 @@ runner, всё ещё могут обратиться в живой WB/Ozon, п�
 восстанавливает все task-state wave, MT40 не повторяет внешний effect по
 durable `effect_key`, если crash произошёл до обновления task state.
 
-Это автономный contract probe, а не полноценный wave-driver: controller пока
-не пишет отдельный effect ledger и не предоставляет recovery-команду. MT40
-проверяет протокол, где `EXTERNAL_EFFECT_COMMITTED` должен быть durable до
-state update; crash до этой записи или отсутствие provider-side idempotency
-остаются дырой controller/integration слоя.
+Это автономный contract probe плюс controller-level `external-effect`: controller
+пишет durable effect ledger по idempotency key и повторный вызов того же ключа
+не выполняет side effect второй раз. До полной активации всё равно нужен такой
+же idempotency contract для реальных provider adapters и deploy integration.
 
 ## P1. Старые процессные документы ещё живые
 
@@ -137,6 +147,11 @@ distributed wave-driver.
 - Появился `scripts/pipeline/dispatch.py`, который пишет одинаковые handoff
   prompts для Codex, Claude и Cursor.
 - Появился `scripts/ci/check_pipeline_metatests.py`.
+- Появились `scripts/ci/check_pipeline_policy_metatests.py` и
+  `scripts/ci/check_pipeline_replay_metatests.py`; все `MT01`...`MT40`
+  сейчас `automated_green`.
+- Появился scope guard для protected control-plane paths и controller resource
+  leases/fencing tokens для конфликтующих файлов, таблиц, процессов и queues.
 - Production deploy больше не стартует автоматически от push в `main` и требует
   exact `release_sha`.
 - Backend отдаёт `/version`, а deploy smoke сверяет runtime SHA.
@@ -148,7 +163,7 @@ distributed wave-driver.
 
 ## Следующий технический slice
 
-Самый полезный следующий slice: build-once artifact manifest и promotion exact
-digests. Нужно убрать серверный `docker compose build`, собирать backend,
-worker, migrations и frontend один раз в CI, сохранять manifest и продвигать
-именно эти digests на production.
+Самый полезный следующий slice: заменить локальную hash-signature на независимую
+receipt-подпись, недоступную worker, и довести controller до distributed
+wave-driver: isolated worktrees/ports/DB/Redis/Celery/emulator, общий recovery
+store и единый validation engine для controller, CI и deploy.

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import shutil
@@ -26,10 +27,105 @@ def require(condition: bool, message: str, errors: list[str]) -> None:
         errors.append(message)
 
 
+def pipeline_command(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "scripts/pipeline/run.py", *args],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
+ROLE_BY_STAGE = {
+    "S01": "pipeline-dispatcher",
+    "S02": "pipeline-dispatcher",
+    "B01": "pipeline-ba",
+    "B02": "pipeline-ba",
+    "B03": "pipeline-ba",
+    "B04": "pipeline-reviewer",
+    "S03": "pipeline-ba",
+    "S04": "pipeline-reviewer",
+    "S05": "pipeline-ba",
+    "S06": "pipeline-ba",
+    "S07": "pipeline-product",
+    "S08": "pipeline-ba",
+    "S09": "pipeline-ba",
+    "S10": "pipeline-product",
+    "S11": "pipeline-product",
+    "S12": "pipeline-ba",
+    "S13": "solution-architect",
+    "S14": "pipeline-reviewer",
+    "S15": "pipeline-ba",
+    "S16": "pipeline-product",
+    "S17": "pipeline-dispatcher",
+    "S18": "pipeline-dev",
+    "S19": "pipeline-dev",
+    "S20": "pipeline-reviewer",
+    "S21": "pipeline-dev",
+    "S22": "pipeline-reviewer",
+    "S23": "pipeline-reviewer",
+    "S24": "pipeline-product",
+    "S25": "pipeline-browser-product",
+    "S26": "pipeline-dispatcher",
+    "S27": "pipeline-dispatcher",
+    "S28": "pipeline-reviewer",
+}
+
+
+def cleanup_task(task_id: str) -> None:
+    shutil.rmtree(ROOT / ".pipeline-state" / "tasks" / task_id, ignore_errors=True)
+    shutil.rmtree(ROOT / "tasks" / task_id, ignore_errors=True)
+    shutil.rmtree(ROOT / "docs" / "evidence" / task_id, ignore_errors=True)
+
+
+def advance_until(
+    task_id: str,
+    target_stage: str,
+    pass_verdicts: dict[str, str],
+    errors: list[str],
+    *,
+    agent_by_stage: dict[str, str] | None = None,
+) -> dict | None:
+    agent_by_stage = agent_by_stage or {}
+    for _ in range(40):
+        status = pipeline_command("status", "--task-id", task_id)
+        if status.returncode != 0:
+            errors.append(f"{task_id}: cannot read state: {status.stderr}")
+            return None
+        state = json.loads(status.stdout)
+        current = state["current_stage"]
+        if current == target_stage:
+            return state
+        if current not in state["required_stages"]:
+            errors.append(f"{task_id}: current stage {current} is outside required stages")
+            return state
+        if target_stage not in state["required_stages"]:
+            errors.append(f"{task_id}: target stage {target_stage} is not required")
+            return state
+        if state["required_stages"].index(current) > state["required_stages"].index(target_stage):
+            errors.append(f"{task_id}: passed target stage {target_stage}; now at {current}")
+            return state
+        advance = pipeline_command(
+            "advance",
+            "--task-id", task_id,
+            "--stage", current,
+            "--verdict", pass_verdicts[current],
+            "--role", ROLE_BY_STAGE[current],
+            "--agent", agent_by_stage.get(current, f"metatest-{current.lower()}"),
+        )
+        if advance.returncode != 0:
+            errors.append(f"{task_id}: advance {current} failed: {advance.stderr}")
+            return None
+    errors.append(f"{task_id}: did not reach {target_stage}")
+    return None
+
+
 def main() -> int:
     errors: list[str] = []
     contract = load_contract()
     stage_order = [stage["id"] for stage in contract["stages"]]
+    pass_verdicts = {stage["id"]: stage["pass_verdicts"][0] for stage in contract["stages"]}
     traits = contract["traits"]
 
     require(contract["status"] == "IMPLEMENTATION_IN_PROGRESS", "pipeline must be in implementation mode", errors)
@@ -39,8 +135,53 @@ def main() -> int:
     # MT01: Dev workspace cannot be before Product approval in the declared order.
     require(stage_order.index("S16") < stage_order.index("S17"), "S16 must precede S17", errors)
 
-    # MT03: pipeline.yml is explicitly control-plane protected.
+    # MT02/MT03: control-plane paths are protected and require explicit authorization.
     require("pipeline/**" in contract["control_plane_protected_paths"], "pipeline/** must be protected", errors)
+    require(
+        "scripts/ci/check_pipeline_scope_guard.py" in contract["control_plane_protected_paths"],
+        "pipeline scope guard must protect itself",
+        errors,
+    )
+    scope_guard = ROOT / "scripts" / "ci" / "check_pipeline_scope_guard.py"
+    require(scope_guard.exists(), "pipeline scope guard must exist", errors)
+    if scope_guard.exists():
+        ordinary_change = subprocess.run(
+            [sys.executable, str(scope_guard), "--changed-path", "pipeline/pipeline.yml"],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        require(ordinary_change.returncode == 1, "ordinary task must not modify pipeline.yml", errors)
+        workflow_change = subprocess.run(
+            [sys.executable, str(scope_guard), "--changed-path", ".github/workflows/ci.yml"],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        require(workflow_change.returncode == 1, "ordinary task must not modify workflows", errors)
+        allowed_by_env = subprocess.run(
+            [sys.executable, str(scope_guard), "--changed-path", "scripts/deploy/prod-update.sh"],
+            cwd=ROOT, env={**os.environ, "PIPELINE_SCOPE_ALLOW": "pipeline_change"}, text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        require(allowed_by_env.returncode == 0, "pipeline_change env must authorize protected path", errors)
+        allowed_by_label = subprocess.run(
+            [sys.executable, str(scope_guard), "--changed-path", "tasks/TASK-42/state.json"],
+            cwd=ROOT, env={**os.environ, "PR_LABELS": "control-plane"}, text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        require(allowed_by_label.returncode == 0, "control-plane label must authorize protected path", errors)
+        allowed_by_marker = subprocess.run(
+            [sys.executable, str(scope_guard), "--changed-path", "pipeline/pipeline.yml"],
+            cwd=ROOT, env={**os.environ, "PR_BODY": "PIPELINE_SCOPE_ALLOW: pipeline_change"}, text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        require(allowed_by_marker.returncode == 0, "pipeline change marker must authorize protected path", errors)
+    ci_workflow = read(".github/workflows/ci.yml")
+    require("check_pipeline_scope_guard.py" in ci_workflow, "CI must run pipeline scope guard", errors)
+    require("check_pipeline_policy_metatests.py" in ci_workflow, "CI must run pipeline policy metatests", errors)
+    require("check_pipeline_replay_metatests.py" in ci_workflow, "CI must run pipeline replay metatests", errors)
+    require(
+        all(item.get("status") == "automated_green" for item in contract.get("required_metatests", [])),
+        "all declared pipeline metatests must be automated_green before this implementation slice is accepted",
+        errors,
+    )
 
     # MT24 and MT31: controller refuses DONE while not ACTIVE, and no-traffic is not DONE.
     controller = read("pipeline/controller.py")
@@ -418,6 +559,263 @@ def main() -> int:
     shutil.rmtree(ROOT / ".pipeline-state" / "tasks" / "TASK-METATEST-INDEPENDENT", ignore_errors=True)
     shutil.rmtree(ROOT / "tasks" / "TASK-METATEST-INDEPENDENT", ignore_errors=True)
     shutil.rmtree(ROOT / "docs" / "evidence" / "TASK-METATEST-INDEPENDENT", ignore_errors=True)
+
+    # MT05, MT14, MT27: controller-owned resource leases serialize conflicts,
+    # bind workers to their own queues, and reject stale fencing tokens.
+    lock_prefix = f"TASK-METATEST-LOCK-{os.getpid()}"
+    lock_a, lock_b, lock_c, lock_d = [f"{lock_prefix}-{suffix}" for suffix in "ABCD"]
+    queue_a = f"metatest-{os.getpid()}-a"
+    queue_b = f"metatest-{os.getpid()}-b"
+    queue_expiry = f"metatest-{os.getpid()}-expiry"
+    file_resource = f"file:metatest/{os.getpid()}.txt"
+    process_resource = f"process:metatest-worker-{os.getpid()}"
+    table_resource = f"table:metatest_orders_{os.getpid()}"
+    lock_a_resources = f"{file_resource},{process_resource},queue:{queue_a},{table_resource}"
+    lock_b_resources = f"{file_resource},{process_resource},queue:{queue_b},{table_resource}"
+    lock_tasks = [lock_a, lock_b, lock_c, lock_d]
+    try:
+        open_a = pipeline_command(
+            "open", "--task-id", lock_a, "--source", "lock metatest A", "--traits", "pipeline_change",
+            "--celery-queue", queue_a, "--resources", lock_a_resources,
+        )
+        open_b = pipeline_command(
+            "open", "--task-id", lock_b, "--source", "lock metatest B", "--traits", "pipeline_change",
+            "--celery-queue", queue_b, "--resources", lock_b_resources,
+        )
+        require(open_a.returncode == 0 and open_b.returncode == 0, "lock metatest tasks must open", errors)
+        if open_a.returncode == 0 and open_b.returncode == 0:
+            acquired_a = pipeline_command("lock-acquire", "--task-id", lock_a, "--agent", "metatest-a")
+            require(acquired_a.returncode == 0, f"MT05 initial lock acquire failed: {acquired_a.stderr}", errors)
+            tokens_a = json.loads(acquired_a.stdout).get("fencing_tokens", {}) if acquired_a.returncode == 0 else {}
+            conflict = pipeline_command("lock-acquire", "--task-id", lock_b, "--agent", "metatest-b")
+            require(conflict.returncode != 0, "MT05 conflicting file/table/process locks must serialize agents", errors)
+            file_token = tokens_a.get(file_resource)
+            queue_a_token = tokens_a.get(f"queue:{queue_a}")
+            if isinstance(file_token, int):
+                renewed = pipeline_command(
+                    "lock-renew", "--task-id", lock_a, "--agent", "metatest-a",
+                    "--resources", file_resource, "--fencing-token", str(file_token), "--lease-seconds", "120",
+                )
+                require(renewed.returncode == 0, f"lock renew failed: {renewed.stderr}", errors)
+                released = pipeline_command(
+                    "lock-release", "--task-id", lock_a, "--agent", "metatest-a",
+                    "--resources", file_resource, "--fencing-token", str(file_token),
+                )
+                require(released.returncode == 0, f"lock release failed: {released.stderr}", errors)
+                acquired_b_file = pipeline_command(
+                    "lock-acquire", "--task-id", lock_b, "--agent", "metatest-b",
+                    "--resources", file_resource,
+                )
+                require(acquired_b_file.returncode == 0, f"released resource must be acquirable: {acquired_b_file.stderr}", errors)
+            else:
+                errors.append("MT05 acquire must return file fencing token")
+            if isinstance(queue_a_token, int):
+                own_queue = pipeline_command(
+                    "worker-claim", "--task-id", lock_a, "--queue", queue_a, "--agent", "metatest-a",
+                    "--fencing-token", str(queue_a_token),
+                )
+                other_queue = pipeline_command(
+                    "worker-claim", "--task-id", lock_a, "--queue", queue_b, "--agent", "metatest-a",
+                    "--fencing-token", str(queue_a_token),
+                )
+                require(own_queue.returncode == 0, f"MT14 worker must claim its own task queue: {own_queue.stderr}", errors)
+                require(other_queue.returncode != 0, "MT14 worker must reject another task queue", errors)
+            else:
+                errors.append("MT14 acquire must return queue fencing token")
+
+        open_c = pipeline_command(
+            "open", "--task-id", lock_c, "--source", "lock metatest C", "--traits", "pipeline_change",
+            "--celery-queue", queue_expiry, "--resources", f"queue:{queue_expiry}",
+        )
+        open_d = pipeline_command(
+            "open", "--task-id", lock_d, "--source", "lock metatest D", "--traits", "pipeline_change",
+            "--celery-queue", queue_expiry, "--resources", f"queue:{queue_expiry}",
+        )
+        require(open_c.returncode == 0 and open_d.returncode == 0, "expiry metatest tasks must open", errors)
+        if open_c.returncode == 0 and open_d.returncode == 0:
+            expired_acquire = pipeline_command(
+                "lock-acquire", "--task-id", lock_c, "--agent", "metatest-c", "--lease-seconds", "0",
+            )
+            old_token = json.loads(expired_acquire.stdout).get("fencing_tokens", {}).get(f"queue:{queue_expiry}") if expired_acquire.returncode == 0 else None
+            fresh_acquire = pipeline_command("lock-acquire", "--task-id", lock_d, "--agent", "metatest-d")
+            fresh_token = json.loads(fresh_acquire.stdout).get("fencing_tokens", {}).get(f"queue:{queue_expiry}") if fresh_acquire.returncode == 0 else None
+            require(expired_acquire.returncode == 0 and fresh_acquire.returncode == 0, "expiry must permit a fresh lease", errors)
+            if isinstance(old_token, int) and isinstance(fresh_token, int):
+                stale_claim = pipeline_command(
+                    "worker-claim", "--task-id", lock_d, "--queue", queue_expiry, "--agent", "metatest-d",
+                    "--fencing-token", str(old_token),
+                )
+                fresh_claim = pipeline_command(
+                    "worker-claim", "--task-id", lock_d, "--queue", queue_expiry, "--agent", "metatest-d",
+                    "--fencing-token", str(fresh_token),
+                )
+                require(old_token != fresh_token, "expired lease must receive a new fencing token", errors)
+                require(stale_claim.returncode != 0, "MT27 stale fencing token must be rejected", errors)
+                require(fresh_claim.returncode == 0, f"fresh fencing token must be accepted: {fresh_claim.stderr}", errors)
+            else:
+                errors.append("MT27 lease acquire must return old and fresh fencing tokens")
+    finally:
+        for task_id in lock_tasks:
+            cleanup_task(task_id)
+        controller_lock = ROOT / ".pipeline-state" / "controller.lock"
+        controller_lock.parent.mkdir(parents=True, exist_ok=True)
+        with controller_lock.open("a+", encoding="utf-8") as fh:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+            try:
+                lock_store_path = ROOT / ".pipeline-state" / "locks.json"
+                if lock_store_path.exists():
+                    lock_store = json.loads(lock_store_path.read_text(encoding="utf-8"))
+                    locks = lock_store.get("locks")
+                    if isinstance(locks, dict):
+                        lock_store["locks"] = {
+                            resource: lock for resource, lock in locks.items()
+                            if not isinstance(lock, dict) or lock.get("task_id") not in lock_tasks
+                        }
+                        lock_store_path.write_text(json.dumps(lock_store, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            finally:
+                fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+
+    controller_prefix = f"TASK-METATEST-CTL-{os.getpid()}"
+    controller_tasks: list[str] = []
+    try:
+        def open_task(suffix: str, traits_value: str = "") -> str:
+            task_id = f"{controller_prefix}-{suffix}"
+            controller_tasks.append(task_id)
+            opened = pipeline_command("open", "--task-id", task_id, "--source", f"controller metatest {suffix}", "--traits", traits_value)
+            require(opened.returncode == 0, f"{task_id}: open failed: {opened.stderr}", errors)
+            return task_id
+
+        # MT07 and MT36: Product rejection/failure findings route to the owning stage and block downstream.
+        product_task = open_task("PRODUCT", "ui_change")
+        product_reject = pipeline_command("failure", "--task-id", product_task, "--finding", "PRODUCT_REJECTED", "--details", "mockup rejected")
+        require(product_reject.returncode == 0, f"MT07 product reject route failed: {product_reject.stderr}", errors)
+        if product_reject.returncode == 0:
+            product_state = json.loads(pipeline_command("status", "--task-id", product_task).stdout)
+            require(product_state["status"] == "REWORK" and product_state["current_stage"] == "S09", "MT07: Product rejection must return to S09 and block Dev", errors)
+            downstream = pipeline_command("advance", "--task-id", product_task, "--stage", "S17", "--verdict", "WORKSPACE_READY", "--role", "pipeline-dispatcher", "--agent", "metatest")
+            require(downstream.returncode != 0, "MT07: downstream workspace must not start after Product rejection", errors)
+        unmapped_failure = pipeline_command("failure", "--task-id", product_task, "--finding", "UNMAPPED_FAILURE")
+        require(unmapped_failure.returncode != 0, "MT36: unmapped failure verdict must be rejected", errors)
+
+        # MT08 and MT37: changing task inputs/profile after a receipt invalidates the dependent chain.
+        invalidation_task = open_task("INVALIDATION", "ui_change")
+        s01 = pipeline_command("advance", "--task-id", invalidation_task, "--stage", "S01", "--verdict", "TASK_INTAKE_READY", "--role", "pipeline-dispatcher", "--agent", "metatest")
+        require(s01.returncode == 0, f"MT08 setup S01 failed: {s01.stderr}", errors)
+        reprofile = pipeline_command("classify", "--task-id", invalidation_task, "--traits", "ui_change,external_contract")
+        require(reprofile.returncode == 0, f"MT08 reclassify failed: {reprofile.stderr}", errors)
+        if reprofile.returncode == 0:
+            invalidated = json.loads(pipeline_command("status", "--task-id", invalidation_task).stdout)
+            require(invalidated["status"] == "REWORK", "MT08: profile change after approval must enter REWORK", errors)
+            require(not invalidated["verdicts"], "MT37: dependency invalidation must clear old verdicts", errors)
+            require(bool(invalidated.get("invalidations")), "MT37: dependency invalidation must be recorded", errors)
+
+        # MT09: expectation rewrite without a versioned oracle waits on oracle conflict.
+        rewrite_task = open_task("REWRITE")
+        rewrite_block = pipeline_command("expectation-rewrite", "--task-id", rewrite_task, "--case-id", "CASE-1")
+        require(rewrite_block.returncode == 0, f"MT09 rewrite block command failed: {rewrite_block.stderr}", errors)
+        if rewrite_block.returncode == 0:
+            rewrite_state = json.loads(pipeline_command("status", "--task-id", rewrite_task).stdout)
+            require(rewrite_state["status"] == "WAITING" and rewrite_state["current_stage"] == "S15", "MT09: expectation rewrite without oracle must wait at S15", errors)
+
+        # MT10: a red GOLD case routes back before integration.
+        gold_task = open_task("GOLD")
+        gold_red = pipeline_command("case-result", "--task-id", gold_task, "--case-id", "GOLD-1", "--tier", "GOLD", "--status", "red")
+        require(gold_red.returncode == 0, f"MT10 red GOLD command failed: {gold_red.stderr}", errors)
+        if gold_red.returncode == 0:
+            gold_state = json.loads(pipeline_command("status", "--task-id", gold_task).stdout)
+            require(gold_state["status"] == "REWORK" and gold_state["current_stage"] == "S18", "MT10: red GOLD must route to S18 before integration", errors)
+
+        # MT11: snapshot/baseline drift waits for triage, not release.
+        snapshot_task = open_task("SNAPSHOT", "ui_change")
+        snapshot_changed = pipeline_command("failure", "--task-id", snapshot_task, "--finding", "SNAPSHOT_CHANGED", "--details", "visual baseline changed")
+        require(snapshot_changed.returncode == 0, f"MT11 snapshot route failed: {snapshot_changed.stderr}", errors)
+        if snapshot_changed.returncode == 0:
+            snapshot_state = json.loads(pipeline_command("status", "--task-id", snapshot_task).stdout)
+            require(snapshot_state["status"] == "WAITING" and snapshot_state["current_stage"] == "S24", "MT11: snapshot change must wait for S24 triage", errors)
+
+        # MT16: a regression after a fix reopens root-cause/escape history.
+        regression_task = open_task("REGRESSION", "bug")
+        regression = pipeline_command("failure", "--task-id", regression_task, "--finding", "REGRESSION_DETECTED", "--details", "closed incident reproduced")
+        require(regression.returncode == 0, f"MT16 regression route failed: {regression.stderr}", errors)
+        if regression.returncode == 0:
+            regression_state = json.loads(pipeline_command("status", "--task-id", regression_task).stdout)
+            require(regression_state["status"] == "REWORK" and regression_state["current_stage"] == "B03", "MT16: regression must reopen B03 history", errors)
+
+        # MT17: NOT_REPRODUCED creates observation instead of closing the bug.
+        nr_task = open_task("NOTREPRO", "bug")
+        advance_until(nr_task, "B01", pass_verdicts, errors)
+        nr = pipeline_command("advance", "--task-id", nr_task, "--stage", "B01", "--verdict", "NOT_REPRODUCED", "--role", "pipeline-ba", "--agent", "metatest-ba")
+        require(nr.returncode == 0, f"MT17 NOT_REPRODUCED advance failed: {nr.stderr}", errors)
+        if nr.returncode == 0:
+            nr_state = json.loads(pipeline_command("status", "--task-id", nr_task).stdout)
+            require(nr_state["status"] == "WAITING" and nr_state.get("observations"), "MT17: NOT_REPRODUCED must create observation WAITING state", errors)
+
+        # MT23: the producer identity cannot accept its own result.
+        self_accept_task = open_task("SELFACCEPT")
+        advance_until(self_accept_task, "S18", pass_verdicts, errors)
+        dev_done = pipeline_command("advance", "--task-id", self_accept_task, "--stage", "S18", "--verdict", "DEV_DONE", "--role", "pipeline-dev", "--agent", "same-agent")
+        require(dev_done.returncode == 0, f"MT23 setup S18 failed: {dev_done.stderr}", errors)
+        s19 = pipeline_command("advance", "--task-id", self_accept_task, "--stage", "S19", "--verdict", "CASES_EXECUTABLE", "--role", "pipeline-dev", "--agent", "automation-agent")
+        require(s19.returncode == 0, f"MT23 setup S19 failed: {s19.stderr}", errors)
+        self_review = pipeline_command("advance", "--task-id", self_accept_task, "--stage", "S20", "--verdict", "CODE_REVIEW_PASSED", "--role", "pipeline-reviewer", "--agent", "same-agent")
+        require(self_review.returncode != 0, "MT23: worker identity must not accept its own result", errors)
+
+        # MT24: release-ready/DONE require commit, push, checks and final verdicts.
+        close_task = open_task("CLOSE")
+        close_ready = pipeline_command("close", "--task-id", close_task, "--status", "READY_FOR_RELEASE")
+        close_done = pipeline_command("close", "--task-id", close_task, "--status", "DONE")
+        require(close_ready.returncode != 0, "MT24: READY_FOR_RELEASE must require commit/push/tests/verdicts", errors)
+        require(close_done.returncode != 0, "MT24: DONE must be forbidden without final release proof", errors)
+
+        # MT29 and MT36: required case without runnable binding is routed to S19.
+        binding_task = open_task("BINDING")
+        no_binding = pipeline_command("failure", "--task-id", binding_task, "--finding", "REQUIRED_CASE_WITHOUT_BINDING", "--details", "CASE-1 has no executable_ref")
+        require(no_binding.returncode == 0, f"MT29 binding route failed: {no_binding.stderr}", errors)
+        if no_binding.returncode == 0:
+            binding_state = json.loads(pipeline_command("status", "--task-id", binding_task).stdout)
+            require(binding_state["status"] == "WAITING" and binding_state["current_stage"] == "S19", "MT29: missing runnable binding must wait at S19", errors)
+
+        # MT34: emergency cannot even open without signed scope/debt.
+        emergency_block = pipeline_command("open", "--task-id", f"{controller_prefix}-EMERGENCY-BLOCK", "--source", "emergency", "--traits", "emergency")
+        require(emergency_block.returncode != 0, "MT34: emergency without signed scope/debt must be blocked", errors)
+        emergency_ok = pipeline_command(
+            "open", "--task-id", f"{controller_prefix}-EMERGENCY-OK", "--source", "emergency", "--traits", "emergency",
+            "--emergency-scope-receipt", "docs/evidence/emergency-scope.receipt.json", "--emergency-debt-id", "DEBT-PIPELINE-METATEST",
+        )
+        require(emergency_ok.returncode == 0, f"MT34: signed emergency profile should open: {emergency_ok.stderr}", errors)
+        if emergency_ok.returncode == 0:
+            controller_tasks.append(f"{controller_prefix}-EMERGENCY-OK")
+
+        # MT35: mutating cases need isolation or an ordered journey group.
+        mutating_task = open_task("MUTATING")
+        unsafe_case = pipeline_command("case-result", "--task-id", mutating_task, "--case-id", "MUT-1", "--tier", "SILVER", "--status", "green", "--mutates-state")
+        require(unsafe_case.returncode == 0, f"MT35 unsafe mutating case command failed: {unsafe_case.stderr}", errors)
+        if unsafe_case.returncode == 0:
+            mutating_state = json.loads(pipeline_command("status", "--task-id", mutating_task).stdout)
+            require(mutating_state["status"] == "WAITING" and mutating_state["current_stage"] == "S15", "MT35: unsafe mutating case must wait at S15", errors)
+
+        # MT40: controller-side idempotency key fences external side effects.
+        effect_task = open_task("EFFECT")
+        first_effect = pipeline_command("external-effect", "--task-id", effect_task, "--effect", "deploy-comment", "--idempotency-key", "same-key")
+        second_effect = pipeline_command("external-effect", "--task-id", effect_task, "--effect", "deploy-comment", "--idempotency-key", "same-key")
+        require(first_effect.returncode == 0 and second_effect.returncode == 0, "MT40: external effect command must be replayable", errors)
+        if first_effect.returncode == 0 and second_effect.returncode == 0:
+            first_payload = json.loads(first_effect.stdout)
+            second_payload = json.loads(second_effect.stdout)
+            require(first_payload["replayed"] is True and second_payload["replayed"] is False, "MT40: repeated effect key must not run twice", errors)
+    finally:
+        for task_id in controller_tasks:
+            cleanup_task(task_id)
+        effect_store_path = ROOT / ".pipeline-state" / "external-effects.json"
+        if effect_store_path.exists():
+            effect_store = json.loads(effect_store_path.read_text(encoding="utf-8"))
+            effects = effect_store.get("effects")
+            if isinstance(effects, dict):
+                effect_store["effects"] = {
+                    key: value for key, value in effects.items()
+                    if not isinstance(value, dict) or value.get("task_id") not in controller_tasks
+                }
+                effect_store_path.write_text(json.dumps(effect_store, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     reclass = subprocess.run(
         [

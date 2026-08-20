@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import argparse
 import copy
+import fcntl
 import hashlib
 import json
 import subprocess
 import sys
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -27,6 +29,10 @@ SCHEMA_PATHS = {
 }
 STORE_ROOT = ROOT / ".pipeline-state" / "tasks"
 SNAPSHOT_ROOT = ROOT / "tasks"
+LOCK_STORE_PATH = ROOT / ".pipeline-state" / "locks.json"
+LOCK_AUDIT_PATH = ROOT / ".pipeline-state" / "locks.journal.jsonl"
+CONTROLLER_LOCK_PATH = ROOT / ".pipeline-state" / "controller.lock"
+EXTERNAL_EFFECT_STORE_PATH = ROOT / ".pipeline-state" / "external-effects.json"
 
 TOTAL_ORDER = [
     "S01",
@@ -110,6 +116,28 @@ BLOCKER_TYPES = [
     "RELEASE",
 ]
 
+INCOMPATIBLE_STAGE_PAIRS = {
+    ("S18", "S20"),
+    ("S18", "S24"),
+    ("S18", "S25"),
+    ("S15", "S19"),
+    ("S15", "S22"),
+    ("S26", "S27"),
+}
+
+FAILURE_ROUTES = {
+    "PRODUCT_REJECTED": {"status": "REWORK", "resume_stage": "S09", "blocker_type": "OWNER_INPUT"},
+    "PRODUCT_CONTRACT_REJECTED": {"status": "REWORK", "resume_stage": "S08", "blocker_type": "OWNER_INPUT"},
+    "SNAPSHOT_CHANGED": {"status": "WAITING", "resume_stage": "S24", "blocker_type": "BASELINE"},
+    "GOLD_CASE_RED": {"status": "REWORK", "resume_stage": "S18", "blocker_type": "FIXTURE"},
+    "REGRESSION_DETECTED": {"status": "REWORK", "resume_stage": "B03", "blocker_type": "FIXTURE"},
+    "REQUIRED_CASE_WITHOUT_BINDING": {"status": "WAITING", "resume_stage": "S19", "blocker_type": "FIXTURE"},
+    "ORACLE_REWRITE_WITHOUT_SOURCE": {"status": "WAITING", "resume_stage": "S15", "blocker_type": "ORACLE_CONFLICT"},
+    "MUTATING_CASE_UNSAFE": {"status": "WAITING", "resume_stage": "S15", "blocker_type": "FIXTURE"},
+    "EMERGENCY_SCOPE_MISSING": {"status": "WAITING", "resume_stage": "S01", "blocker_type": "OWNER_INPUT"},
+    "PRODUCTION_TRACE_FAILED": {"status": "REWORK", "resume_stage": "S27", "blocker_type": "RELEASE"},
+}
+
 
 class PipelineError(RuntimeError):
     """User-facing controller error."""
@@ -133,6 +161,93 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     tmp.replace(path)
+
+
+@contextmanager
+def controller_store_lock() -> Any:
+    """Serialize local controller updates across separate CLI processes."""
+    CONTROLLER_LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with CONTROLLER_LOCK_PATH.open("a+", encoding="utf-8") as fh:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+
+
+def parse_timestamp(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def parse_resources(raw: str) -> list[str]:
+    resources = [item.strip() for item in raw.split(",") if item.strip()]
+    if len(resources) != len(set(resources)):
+        raise PipelineError("resource list contains duplicates")
+    for resource in resources:
+        if ":" not in resource or resource.startswith(":") or resource.endswith(":"):
+            raise PipelineError(f"resource must use kind:name form: {resource}")
+    return sorted(resources)
+
+
+def load_locks() -> dict[str, Any]:
+    if not LOCK_STORE_PATH.exists():
+        return {"next_fencing_token": 1, "locks": {}}
+    payload = load_json(LOCK_STORE_PATH)
+    if not isinstance(payload.get("locks"), dict) or not isinstance(payload.get("next_fencing_token"), int):
+        raise PipelineError("invalid local lock store")
+    return payload
+
+
+def append_lock_audit(event: dict[str, Any]) -> None:
+    LOCK_AUDIT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with LOCK_AUDIT_PATH.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"at": now_iso(), **event}, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def expire_locks(lock_store: dict[str, Any]) -> list[dict[str, Any]]:
+    expired: list[dict[str, Any]] = []
+    current = datetime.now(UTC)
+    for resource, lock in list(lock_store["locks"].items()):
+        if parse_timestamp(lock["lease_until"]) <= current:
+            expired.append({"type": "LOCK_FORCED_EXPIRED", "resource": resource, **lock})
+            del lock_store["locks"][resource]
+    return expired
+
+
+def lease_until(args: argparse.Namespace) -> str:
+    seconds = args.lease_seconds if args.lease_seconds is not None else args.lease_minutes * 60
+    if seconds < 0:
+        raise PipelineError("lease duration must be zero or positive")
+    until = datetime.now(UTC) + timedelta(seconds=seconds)
+    return until.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def task_resources(state: dict[str, Any], raw_resources: str | None) -> list[str]:
+    resources = parse_resources(raw_resources) if raw_resources is not None else state.get("resources", [])
+    if not resources:
+        raise PipelineError(f"{state['task_id']} has no declared resources")
+    declared = set(state.get("resources", []))
+    if not set(resources).issubset(declared):
+        raise PipelineError("requested resources are outside the task resource list")
+    return resources
+
+
+def active_lock(lock_store: dict[str, Any], resource: str, task_id: str, agent: str, fencing_token: int) -> dict[str, Any]:
+    lock = lock_store["locks"].get(resource)
+    if lock is None:
+        raise PipelineError(f"no active lease for {resource}; fencing token {fencing_token} is stale")
+    if lock["task_id"] != task_id or lock["agent"] != agent or lock["fencing_token"] != fencing_token:
+        raise PipelineError(f"fencing token {fencing_token} is stale for {resource}")
+    return lock
+
+
+def load_external_effects() -> dict[str, Any]:
+    if not EXTERNAL_EFFECT_STORE_PATH.exists():
+        return {"effects": {}}
+    payload = load_json(EXTERNAL_EFFECT_STORE_PATH)
+    if not isinstance(payload.get("effects"), dict):
+        raise PipelineError("invalid external effect store")
+    return payload
 
 
 def sha256_file(path: Path) -> str:
@@ -282,12 +397,33 @@ def parse_traits(raw: str) -> list[str]:
     return [part.strip() for part in raw.split(",") if part.strip()]
 
 
+def invalidate_verdicts(state: dict[str, Any], reason: str, resume_stage: str | None = None) -> None:
+    invalidated = sorted(state.get("verdicts", {}).keys(), key=TOTAL_ORDER.index)
+    if not invalidated:
+        return
+    state.setdefault("invalidations", []).append(
+        {
+            "at": now_iso(),
+            "reason": reason,
+            "invalidated_stages": invalidated,
+            "last_valid_receipt_before_invalidation": state.get("last_valid_receipt"),
+        }
+    )
+    state["verdicts"] = {}
+    state["last_valid_receipt"] = None
+    state["current_stage"] = resume_stage or first_missing_stage(state)
+    state["status"] = "REWORK"
+
+
 def command_open(args: argparse.Namespace) -> int:
     contract = load_contract()
     traits = parse_traits(args.traits)
+    if "emergency" in traits and (not args.emergency_scope_receipt or not args.emergency_debt_id):
+        raise PipelineError("emergency trait requires signed scope receipt and immutable debt id")
     required = required_stages(contract, traits, args.risk_level)
     task_id = args.task_id or "TASK-" + datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     lease_until = datetime.now(UTC) + timedelta(minutes=args.lease_minutes)
+    resources = parse_resources(args.resources)
 
     state = {
         "task_id": task_id,
@@ -308,6 +444,9 @@ def command_open(args: argparse.Namespace) -> int:
         "redis_namespace": args.redis_namespace,
         "celery_queue": args.celery_queue,
         "emulator_namespace": args.emulator_namespace,
+        "resources": resources,
+        "emergency_scope_receipt": args.emergency_scope_receipt,
+        "emergency_debt_id": args.emergency_debt_id,
         "owner_agent": args.owner_agent,
         "attempt": 1,
         "lease_until": lease_until.replace(microsecond=0).isoformat().replace("+00:00", "Z"),
@@ -319,7 +458,7 @@ def command_open(args: argparse.Namespace) -> int:
         "commits": [],
     }
     save_state(state, {"type": "TASK_OPENED", "task_id": task_id, "required_stages": required})
-    print(json.dumps({"task_id": task_id, "status": state["status"], "required_stages": required}, ensure_ascii=False))
+    print(json.dumps({"task_id": task_id, "status": state["status"], "required_stages": required, "resources": resources}, ensure_ascii=False))
     return 0
 
 
@@ -329,12 +468,20 @@ def command_classify(args: argparse.Namespace) -> int:
     refresh_contract_binding_if_no_receipts(contract, state)
     traits = parse_traits(args.traits)
     risk_level = args.risk_level or state.get("risk_level", "low")
+    old_traits = list(state.get("traits", []))
+    old_risk_level = state.get("risk_level", "low")
     old_required = state["required_stages"]
     new_required = required_stages(contract, traits, risk_level)
     state["traits"] = traits
     state["risk_level"] = risk_level
     state["required_stages"] = new_required
+    invalidated = False
+    if state.get("verdicts") and (old_traits != traits or old_risk_level != risk_level or old_required != new_required):
+        invalidate_verdicts(state, "profile_changed_after_approval")
+        invalidated = True
     if state.get("status") == "WAITING":
+        state["current_stage"] = first_missing_stage(state)
+    elif invalidated:
         state["current_stage"] = first_missing_stage(state)
     elif not state.get("verdicts"):
         state["current_stage"] = first_missing_stage(state)
@@ -385,6 +532,75 @@ def receipt_for(state: dict[str, Any], stage_id: str, verdict: str, role: str, a
     return payload
 
 
+def verdict_agent(state: dict[str, Any], stage_id: str) -> str | None:
+    record = state.get("verdicts", {}).get(stage_id)
+    if not isinstance(record, dict):
+        return None
+    if isinstance(record.get("agent_identity"), str):
+        return record["agent_identity"]
+    receipt_path_raw = record.get("receipt_path")
+    if not isinstance(receipt_path_raw, str):
+        return None
+    receipt_path = path_within_root(receipt_path_raw)
+    if receipt_path is None or not receipt_path.exists():
+        return None
+    try:
+        receipt = load_json(receipt_path)
+    except PipelineError:
+        return None
+    agent = receipt.get("agent_identity")
+    return agent if isinstance(agent, str) else None
+
+
+def enforce_independent_acceptance(state: dict[str, Any], stage_id: str, agent: str) -> None:
+    for producer_stage, acceptor_stage in INCOMPATIBLE_STAGE_PAIRS:
+        if stage_id != acceptor_stage:
+            continue
+        producer_agent = verdict_agent(state, producer_stage)
+        if producer_agent and producer_agent == agent:
+            raise PipelineError(f"{agent} cannot accept {acceptor_stage}; same identity already produced {producer_stage}")
+
+
+def red_gold_cases(state: dict[str, Any]) -> list[str]:
+    results = state.get("case_results", {})
+    if not isinstance(results, dict):
+        return []
+    return sorted(
+        case_id
+        for case_id, result in results.items()
+        if isinstance(result, dict) and result.get("tier") == "GOLD" and result.get("status") == "red"
+    )
+
+
+def route_failure(state: dict[str, Any], finding: str, details: str, owner: str) -> dict[str, Any]:
+    route = FAILURE_ROUTES.get(finding)
+    if route is None:
+        raise PipelineError(f"unmapped failure verdict: {finding}")
+    resume_stage = route["resume_stage"]
+    if resume_stage not in state["required_stages"]:
+        raise PipelineError(f"failure route {finding} targets non-required stage {resume_stage}")
+    invalidate_verdicts(state, f"failure:{finding}", resume_stage)
+    state["status"] = route["status"]
+    state["current_stage"] = resume_stage
+    if route["status"] == "WAITING":
+        state["blocker"] = {
+            "type": route["blocker_type"],
+            "reason_code": finding,
+            "details": details,
+            "owner": owner,
+            "created_at": now_iso(),
+            "resume_stage": resume_stage,
+        }
+        state["resume_condition"] = {"stage": resume_stage, "condition": details}
+    else:
+        state["blocker"] = None
+        state["resume_condition"] = None
+    state.setdefault("failure_routes", []).append(
+        {"at": now_iso(), "finding": finding, "status": state["status"], "resume_stage": resume_stage, "details": details}
+    )
+    return route
+
+
 def command_advance(args: argparse.Namespace) -> int:
     contract = load_contract()
     stages = stage_map(contract)
@@ -403,6 +619,13 @@ def command_advance(args: argparse.Namespace) -> int:
         raise PipelineError(f"{args.role} cannot advance {stage_id}; expected role {expected_role}")
     if args.verdict not in stages[stage_id]["pass_verdicts"]:
         raise PipelineError(f"{args.verdict} is not an allowed pass verdict for {stage_id}")
+    enforce_independent_acceptance(state, stage_id, args.agent)
+    if stage_id == "S22" and "S19" in state["required_stages"] and not state.get("case_bindings_complete"):
+        raise PipelineError("S22 functional testing requires S19 runnable case bindings")
+    if stage_id == "S23":
+        red_cases = red_gold_cases(state)
+        if red_cases:
+            raise PipelineError(f"S23 integration is blocked by red GOLD cases: {', '.join(red_cases)}")
 
     receipt = receipt_for(state, stage_id, args.verdict, args.role, args.agent)
     evidence_dir = ROOT / "docs" / "evidence" / args.task_id
@@ -413,15 +636,125 @@ def command_advance(args: argparse.Namespace) -> int:
         "verdict": args.verdict,
         "receipt_path": str(receipt_path.relative_to(ROOT)),
         "receipt_hash": stable_hash(receipt),
+        "role_binding_id": args.role,
+        "agent_identity": args.agent,
     }
     state["last_valid_receipt"] = stable_hash(receipt)
-    if len(state["verdicts"]) == len(state["required_stages"]):
+    if stage_id == "S19" and args.verdict == "CASES_EXECUTABLE":
+        state["case_bindings_complete"] = True
+    if stage_id == "B01" and args.verdict == "NOT_REPRODUCED":
+        state.setdefault("observations", []).append(
+            {
+                "stage": stage_id,
+                "verdict": args.verdict,
+                "created_at": now_iso(),
+                "next_signal": "need observation signal before closure",
+            }
+        )
+        state["status"] = "WAITING"
+        state["current_stage"] = "B02" if "B02" in state["required_stages"] else first_missing_stage(state)
+        state["blocker"] = {
+            "type": "EXTERNAL",
+            "reason_code": "OBSERVATION_REQUIRED",
+            "details": "NOT_REPRODUCED cannot close the bug; wait for observation signal or oracle triage.",
+            "owner": "pipeline-ba",
+            "created_at": now_iso(),
+            "resume_stage": state["current_stage"],
+        }
+        state["resume_condition"] = {"stage": state["current_stage"], "condition": "observation signal or oracle decision recorded"}
+    elif len(state["verdicts"]) == len(state["required_stages"]):
         state["status"] = "IMPLEMENTATION_DONE"
     else:
         state["status"] = "RUNNING"
         state["current_stage"] = first_missing_stage(state)
     save_state(state, {"type": "STAGE_ADVANCED", "stage_id": stage_id, "verdict": args.verdict})
     print(json.dumps({"task_id": args.task_id, "stage": stage_id, "status": state["status"]}, ensure_ascii=False))
+    return 0
+
+
+def command_case_result(args: argparse.Namespace) -> int:
+    contract = load_contract()
+    state = load_state(args.task_id)
+    state.setdefault("case_results", {})[args.case_id] = {
+        "tier": args.tier,
+        "status": args.status,
+        "mutates_state": args.mutates_state,
+        "isolation": args.isolation,
+        "ordered_journey": args.ordered_journey,
+    }
+    if args.status == "red" and args.tier == "GOLD":
+        route_failure(state, "GOLD_CASE_RED", f"red GOLD case {args.case_id}", "case-runner")
+    elif args.mutates_state and args.isolation not in {"fresh_snapshot", "transaction"} and not args.ordered_journey:
+        route_failure(state, "MUTATING_CASE_UNSAFE", f"mutating case {args.case_id} needs isolation or ordered journey", "case-runner")
+    else:
+        errors = validate_state(contract, state)
+        if errors:
+            raise PipelineError("; ".join(errors))
+    save_state(state, {"type": "CASE_RESULT_RECORDED", "case_id": args.case_id, "tier": args.tier, "status": args.status})
+    print(json.dumps({"task_id": args.task_id, "case_id": args.case_id, "status": state["status"]}, ensure_ascii=False))
+    return 0
+
+
+def command_expectation_rewrite(args: argparse.Namespace) -> int:
+    contract = load_contract()
+    state = load_state(args.task_id)
+    if not args.oracle or not args.oracle_version:
+        route_failure(state, "ORACLE_REWRITE_WITHOUT_SOURCE", "case expectation rewrite requires versioned oracle", "case-writer")
+    else:
+        state.setdefault("expectation_rewrites", []).append(
+            {"case_id": args.case_id, "oracle": args.oracle, "oracle_version": args.oracle_version, "at": now_iso()}
+        )
+        errors = validate_state(contract, state)
+        if errors:
+            raise PipelineError("; ".join(errors))
+    save_state(state, {"type": "EXPECTATION_REWRITE_RECORDED", "case_id": args.case_id})
+    print(json.dumps({"task_id": args.task_id, "case_id": args.case_id, "status": state["status"]}, ensure_ascii=False))
+    return 0
+
+
+def command_failure(args: argparse.Namespace) -> int:
+    contract = load_contract()
+    state = load_state(args.task_id)
+    route = route_failure(state, args.finding, args.details, args.owner)
+    errors = validate_state(contract, state)
+    if errors:
+        raise PipelineError("; ".join(errors))
+    save_state(state, {"type": "FAILURE_ROUTED", "finding": args.finding, "route": route})
+    print(json.dumps({"task_id": args.task_id, "finding": args.finding, "status": state["status"], "resume_stage": route["resume_stage"]}, ensure_ascii=False))
+    return 0
+
+
+def command_record_release_proof(args: argparse.Namespace) -> int:
+    contract = load_contract()
+    state = load_state(args.task_id)
+    if args.commit:
+        state.setdefault("commits", []).append(args.commit)
+    if args.pushed_ref:
+        state.setdefault("pushed_refs", []).append(args.pushed_ref)
+    if args.check:
+        state.setdefault("checks_passed", []).append(args.check)
+    errors = validate_state(contract, state)
+    if errors:
+        raise PipelineError("; ".join(errors))
+    save_state(state, {"type": "RELEASE_PROOF_RECORDED", "commit": args.commit, "pushed_ref": args.pushed_ref, "check": args.check})
+    print(json.dumps({"task_id": args.task_id, "commits": state.get("commits", []), "checks_passed": state.get("checks_passed", [])}, ensure_ascii=False))
+    return 0
+
+
+def command_external_effect(args: argparse.Namespace) -> int:
+    state = load_state(args.task_id)
+    key = f"{args.task_id}:{args.effect}:{args.idempotency_key}"
+    with controller_store_lock():
+        effect_store = load_external_effects()
+        existing = effect_store["effects"].get(key)
+        if existing:
+            print(json.dumps({"task_id": args.task_id, "effect": args.effect, "replayed": False, "record": existing}, ensure_ascii=False))
+            return 0
+        record = {"task_id": args.task_id, "effect": args.effect, "idempotency_key": args.idempotency_key, "created_at": now_iso()}
+        effect_store["effects"][key] = record
+        write_json(EXTERNAL_EFFECT_STORE_PATH, effect_store)
+    append_journal(args.task_id, {"type": "EXTERNAL_EFFECT_COMMITTED", "effect_key": key, "effect": args.effect})
+    print(json.dumps({"task_id": args.task_id, "effect": args.effect, "replayed": True, "record": record}, ensure_ascii=False))
     return 0
 
 
@@ -692,12 +1025,129 @@ def command_close(args: argparse.Namespace) -> int:
         allowed.add("DONE")
     if args.status not in allowed:
         raise PipelineError(f"{args.status} is not allowed while pipeline status is {contract.get('status')}")
+    if args.status in {"READY_FOR_RELEASE", "DONE"}:
+        missing: list[str] = []
+        if len(state.get("verdicts", {})) != len(state.get("required_stages", [])):
+            missing.append("all required stage verdicts")
+        if not state.get("commits"):
+            missing.append("commit SHA")
+        if not state.get("pushed_refs"):
+            missing.append("pushed ref")
+        if not state.get("checks_passed"):
+            missing.append("passing checks")
+        if missing:
+            raise PipelineError(f"{args.status} requires {', '.join(missing)}")
     state["status"] = args.status
     errors = validate_state(contract, state)
     if errors:
         raise PipelineError("; ".join(errors))
     save_state(state, {"type": "TASK_CLOSED", "status": args.status})
     print(json.dumps({"task_id": args.task_id, "status": args.status}, ensure_ascii=False))
+    return 0
+
+
+def command_lock_acquire(args: argparse.Namespace) -> int:
+    state = load_state(args.task_id)
+    resources = task_resources(state, args.resources)
+    with controller_store_lock():
+        lock_store = load_locks()
+        expired = expire_locks(lock_store)
+        conflicts = [
+            resource for resource in resources
+            if resource in lock_store["locks"]
+            and (lock_store["locks"][resource]["task_id"] != args.task_id or lock_store["locks"][resource]["agent"] != args.agent)
+        ]
+        if conflicts:
+            for event in expired:
+                append_lock_audit(event)
+            write_json(LOCK_STORE_PATH, lock_store)
+            raise PipelineError(f"resource lease conflict: {', '.join(conflicts)}")
+        issued: dict[str, int] = {}
+        for resource in resources:
+            existing = lock_store["locks"].get(resource)
+            if existing:
+                issued[resource] = existing["fencing_token"]
+                continue
+            token = lock_store["next_fencing_token"]
+            lock_store["next_fencing_token"] = token + 1
+            lock = {
+                "task_id": args.task_id,
+                "agent": args.agent,
+                "fencing_token": token,
+                "lease_until": lease_until(args),
+            }
+            lock_store["locks"][resource] = lock
+            issued[resource] = token
+            append_lock_audit({"type": "LOCK_ACQUIRED", "resource": resource, **lock})
+        for event in expired:
+            append_lock_audit(event)
+        write_json(LOCK_STORE_PATH, lock_store)
+    append_journal(args.task_id, {"type": "RESOURCE_LOCKS_ACQUIRED", "resources": resources, "agent": args.agent, "fencing_tokens": issued})
+    print(json.dumps({"task_id": args.task_id, "resources": resources, "fencing_tokens": issued}, ensure_ascii=False))
+    return 0
+
+
+def command_lock_renew(args: argparse.Namespace) -> int:
+    state = load_state(args.task_id)
+    resources = task_resources(state, args.resources)
+    with controller_store_lock():
+        lock_store = load_locks()
+        expired = expire_locks(lock_store)
+        for event in expired:
+            append_lock_audit(event)
+        if expired:
+            write_json(LOCK_STORE_PATH, lock_store)
+        for resource in resources:
+            active_lock(lock_store, resource, args.task_id, args.agent, args.fencing_token)
+        new_lease_until = lease_until(args)
+        for resource in resources:
+            lock_store["locks"][resource]["lease_until"] = new_lease_until
+            append_lock_audit({"type": "LOCK_RENEWED", "resource": resource, **lock_store["locks"][resource]})
+        write_json(LOCK_STORE_PATH, lock_store)
+    append_journal(args.task_id, {"type": "RESOURCE_LOCKS_RENEWED", "resources": resources, "agent": args.agent, "fencing_token": args.fencing_token})
+    print(json.dumps({"task_id": args.task_id, "resources": resources, "fencing_token": args.fencing_token, "lease_until": new_lease_until}, ensure_ascii=False))
+    return 0
+
+
+def command_lock_release(args: argparse.Namespace) -> int:
+    state = load_state(args.task_id)
+    resources = task_resources(state, args.resources)
+    with controller_store_lock():
+        lock_store = load_locks()
+        expired = expire_locks(lock_store)
+        for event in expired:
+            append_lock_audit(event)
+        if expired:
+            write_json(LOCK_STORE_PATH, lock_store)
+        for resource in resources:
+            active_lock(lock_store, resource, args.task_id, args.agent, args.fencing_token)
+        for resource in resources:
+            lock = lock_store["locks"].pop(resource)
+            append_lock_audit({"type": "LOCK_RELEASED", "resource": resource, **lock})
+        write_json(LOCK_STORE_PATH, lock_store)
+    append_journal(args.task_id, {"type": "RESOURCE_LOCKS_RELEASED", "resources": resources, "agent": args.agent, "fencing_token": args.fencing_token})
+    print(json.dumps({"task_id": args.task_id, "released": resources, "fencing_token": args.fencing_token}, ensure_ascii=False))
+    return 0
+
+
+def command_worker_claim(args: argparse.Namespace) -> int:
+    state = load_state(args.task_id)
+    if args.queue != state["celery_queue"]:
+        raise PipelineError(f"worker queue {args.queue} is not assigned to task {args.task_id}")
+    resource = args.resource or f"queue:{args.queue}"
+    if resource not in state.get("resources", []):
+        raise PipelineError(f"worker resource {resource} is not declared for task {args.task_id}")
+    with controller_store_lock():
+        lock_store = load_locks()
+        expired = expire_locks(lock_store)
+        for event in expired:
+            append_lock_audit(event)
+        if expired:
+            write_json(LOCK_STORE_PATH, lock_store)
+        active_lock(lock_store, resource, args.task_id, args.agent, args.fencing_token)
+        write_json(LOCK_STORE_PATH, lock_store)
+    append_journal(args.task_id, {"type": "WORKER_QUEUE_CLAIMED", "queue": args.queue, "resource": resource, "agent": args.agent, "fencing_token": args.fencing_token})
+    print(json.dumps({"task_id": args.task_id, "queue": args.queue, "resource": resource, "fencing_token": args.fencing_token}, ensure_ascii=False))
     return 0
 
 
@@ -717,6 +1167,9 @@ def build_parser() -> argparse.ArgumentParser:
     open_p.add_argument("--redis-namespace", default="local")
     open_p.add_argument("--celery-queue", default="local")
     open_p.add_argument("--emulator-namespace", default="local")
+    open_p.add_argument("--resources", default="", help="comma-separated canonical resource ids, e.g. file:pipeline/controller.py,queue:task-1")
+    open_p.add_argument("--emergency-scope-receipt")
+    open_p.add_argument("--emergency-debt-id")
     open_p.add_argument("--owner-agent", default="manual")
     open_p.add_argument("--lease-minutes", type=int, default=60)
     open_p.set_defaults(func=command_open)
@@ -774,6 +1227,73 @@ def build_parser() -> argparse.ArgumentParser:
     close_p.add_argument("--task-id", required=True)
     close_p.add_argument("--status", required=True)
     close_p.set_defaults(func=command_close)
+
+    def add_lock_arguments(lock_parser: argparse.ArgumentParser, *, include_lease: bool) -> None:
+        lock_parser.add_argument("--task-id", required=True)
+        lock_parser.add_argument("--agent", required=True)
+        lock_parser.add_argument("--resources", help="comma-separated subset of resources declared when the task opened")
+        if include_lease:
+            lock_parser.add_argument("--lease-minutes", type=int, default=60)
+            lock_parser.add_argument("--lease-seconds", type=int)
+
+    lock_acquire_p = sub.add_parser("lock-acquire")
+    add_lock_arguments(lock_acquire_p, include_lease=True)
+    lock_acquire_p.set_defaults(func=command_lock_acquire)
+
+    lock_renew_p = sub.add_parser("lock-renew")
+    add_lock_arguments(lock_renew_p, include_lease=True)
+    lock_renew_p.add_argument("--fencing-token", type=int, required=True)
+    lock_renew_p.set_defaults(func=command_lock_renew)
+
+    lock_release_p = sub.add_parser("lock-release")
+    add_lock_arguments(lock_release_p, include_lease=False)
+    lock_release_p.add_argument("--fencing-token", type=int, required=True)
+    lock_release_p.set_defaults(func=command_lock_release)
+
+    worker_claim_p = sub.add_parser("worker-claim")
+    worker_claim_p.add_argument("--task-id", required=True)
+    worker_claim_p.add_argument("--queue", required=True)
+    worker_claim_p.add_argument("--agent", required=True)
+    worker_claim_p.add_argument("--fencing-token", type=int, required=True)
+    worker_claim_p.add_argument("--resource")
+    worker_claim_p.set_defaults(func=command_worker_claim)
+
+    case_result_p = sub.add_parser("case-result")
+    case_result_p.add_argument("--task-id", required=True)
+    case_result_p.add_argument("--case-id", required=True)
+    case_result_p.add_argument("--tier", choices=["GOLD", "SILVER", "QUESTION"], required=True)
+    case_result_p.add_argument("--status", choices=["green", "red"], required=True)
+    case_result_p.add_argument("--mutates-state", action="store_true")
+    case_result_p.add_argument("--isolation", choices=["none", "fresh_snapshot", "transaction"], default="none")
+    case_result_p.add_argument("--ordered-journey")
+    case_result_p.set_defaults(func=command_case_result)
+
+    expectation_rewrite_p = sub.add_parser("expectation-rewrite")
+    expectation_rewrite_p.add_argument("--task-id", required=True)
+    expectation_rewrite_p.add_argument("--case-id", required=True)
+    expectation_rewrite_p.add_argument("--oracle")
+    expectation_rewrite_p.add_argument("--oracle-version")
+    expectation_rewrite_p.set_defaults(func=command_expectation_rewrite)
+
+    failure_p = sub.add_parser("failure")
+    failure_p.add_argument("--task-id", required=True)
+    failure_p.add_argument("--finding", required=True)
+    failure_p.add_argument("--details", default="pipeline failure routed by controller")
+    failure_p.add_argument("--owner", default="pipeline-controller")
+    failure_p.set_defaults(func=command_failure)
+
+    release_proof_p = sub.add_parser("record-release-proof")
+    release_proof_p.add_argument("--task-id", required=True)
+    release_proof_p.add_argument("--commit")
+    release_proof_p.add_argument("--pushed-ref")
+    release_proof_p.add_argument("--check")
+    release_proof_p.set_defaults(func=command_record_release_proof)
+
+    external_effect_p = sub.add_parser("external-effect")
+    external_effect_p.add_argument("--task-id", required=True)
+    external_effect_p.add_argument("--effect", required=True)
+    external_effect_p.add_argument("--idempotency-key", required=True)
+    external_effect_p.set_defaults(func=command_external_effect)
 
     return parser
 

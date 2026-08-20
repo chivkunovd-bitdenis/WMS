@@ -10,13 +10,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Enforce pipeline v2 control-plane scope
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: python3 scripts/ci/check_pipeline_scope_guard.py
       - name: Validate WMS pipeline v2 contract
         run: python3 scripts/ci/check_pipeline_contract.py
       - name: Run WMS pipeline v2 metatests
         run: python3 scripts/ci/check_pipeline_metatests.py
+      - name: Run WMS pipeline v2 policy metatests
+        run: python3 scripts/ci/check_pipeline_policy_metatests.py
+      - name: Run WMS pipeline v2 replay metatests
+        run: python3 scripts/ci/check_pipeline_replay_metatests.py
       - name: Check pipeline evidence for raw secrets
         run: python3 scripts/ci/check_pipeline_evidence_secrets.py
 
