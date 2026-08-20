@@ -14,10 +14,10 @@ cd /Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2
 codex/wms-pipeline-unified-v2-20260820
 ```
 
-Последний известный commit пайплайна:
+Перед стартом обязательно подтяни/проверь текущий commit:
 
-```text
-412670354211bde6b0b5bf6ecef594c6bca61bc8
+```bash
+git rev-parse HEAD
 ```
 
 ## Главная задача
@@ -62,20 +62,27 @@ codex/wms-pipeline-unified-v2-20260820
 `BLG-KC01` нельзя сразу отдавать Dev как одну огромную задачу. Его первая работа — Product/BA
 разрезание на атомарные карточки с экраном, контрактом, тест-кейсами и границами файлов.
 
-## Если я не дал конкретные IDs
+## Если я не дал конкретные IDs, но сказал “запускай backlog”
 
-Стартовый безопасный набор:
+Не выбирай сам четыре “удобные” задачи. Бери всю актуальную очередь из
+`docs/product/backlog-queue.json` и запускай backlog wave по всем `BLG-*`, которые там есть.
+На момент подготовки этого handoff это 36 задач:
 
 ```text
-BLG-F01,BLG-I04,BLG-I12,BLG-KC01
+BLG-D01,BLG-D02,BLG-D03,BLG-D04,BLG-D05,BLG-D06,BLG-D07,BLG-D09,BLG-D11,BLG-D14,BLG-D16,BLG-D17,BLG-D19,BLG-D20,BLG-D21,BLG-D22,BLG-D23,BLG-F01,BLG-F1A,BLG-G01,BLG-I01,BLG-I02,BLG-I03,BLG-I04,BLG-I05,BLG-I06,BLG-I07,BLG-I08,BLG-I09,BLG-I10,BLG-I11,BLG-I12,BLG-K02,BLG-KC01,BLG-C01,BLG-C02
 ```
 
-Почему именно они:
+Если владелец кинул список словами, сначала сопоставь каждую фразу с `BLG-*` из очереди.
+Если фича есть только внутри `BLG-KC01.client_items`, не теряй её: оставь `BLG-KC01` в wave,
+а на Product/BA стадии разрежь `client_items` на отдельные атомарные карточки.
 
-- `BLG-F01` — база блокировок и зависимость для клиентского списка.
-- `BLG-I04` — печать, где количество листов возводится в квадрат.
-- `BLG-I12` — предупреждение о закрытии с несохранёнными изменениями.
-- `BLG-KC01` — Product/BA-разбор клиентских входящих, не dev-fix.
+Если команда `start-wave` ругается на зависимости, добавь недостающие зависимости в эту же
+волну. Не обходи зависимости флагом `--allow-missing-dependencies`, если владелец прямо этого
+не сказал.
+
+Отдельно: `BLG-C01` и `BLG-C02` — release-задачи. Owner-approved wave разрешает создать task и
+пройти анализ, но не является разрешением на deploy/prod/release. Для выкатки нужно отдельное
+явное разрешение владельца.
 
 ## Команды запуска
 
@@ -88,15 +95,13 @@ python3 scripts/ci/check_backlog_queue.py
 python3 scripts/ci/check_pipeline_contract.py
 ```
 
-Запуск owner-approved wave:
+Запуск owner-approved wave по полной очереди:
 
 ```bash
-python3 scripts/pipeline/run.py start-wave --backlog-ids BLG-F01,BLG-I04,BLG-I12,BLG-KC01 --owner-approved-by denis
+python3 scripts/pipeline/run.py start-wave --backlog-ids BLG-D01,BLG-D02,BLG-D03,BLG-D04,BLG-D05,BLG-D06,BLG-D07,BLG-D09,BLG-D11,BLG-D14,BLG-D16,BLG-D17,BLG-D19,BLG-D20,BLG-D21,BLG-D22,BLG-D23,BLG-F01,BLG-F1A,BLG-G01,BLG-I01,BLG-I02,BLG-I03,BLG-I04,BLG-I05,BLG-I06,BLG-I07,BLG-I08,BLG-I09,BLG-I10,BLG-I11,BLG-I12,BLG-K02,BLG-KC01,BLG-C01,BLG-C02 --owner-approved-by denis
 ```
 
-Если владелец дал другой список IDs, используй его. Если у выбранной задачи есть зависимости,
-включи зависимости в эту же волну, а не обходи их флагом `--allow-missing-dependencies`, если
-владелец прямо этого не сказал.
+Если владелец дал другой список IDs, используй его, но не урезай список молча.
 
 После `start-wave` для каждой созданной task:
 
