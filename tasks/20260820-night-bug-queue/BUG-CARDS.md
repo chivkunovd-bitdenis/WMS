@@ -113,7 +113,7 @@ python3 scripts/pipeline/run.py open --task-id BUG-WMS-TESTSTACK-001 --source "2
 
 - owner role: `pipeline-ba`
 - stage: `S01/S02`, `B01/B02/B03`, `S03/S04`, `S15`, `S25`
-- traits: `bug,external_contract,tenant_sensitive`
+- traits: `bug,external_contract,tenant_sensitive,ui_change`
 - risk: `critical`
 - источник: FBS/ЧЗ incident, `sgtinApplied` vs `sgtinIntroduced/sgtinSoldB2B`
 
@@ -143,7 +143,7 @@ Tests:
 Command:
 
 ```bash
-python3 scripts/pipeline/run.py open --task-id BUG-WMS-FBS-CZ-001 --source "2026-08-21 night queue: FBS Chestny Znak marking dispatch eligibility, preserve WB/CZ oracle, no live WB calls" --traits bug,external_contract,tenant_sensitive --risk-level critical
+python3 scripts/pipeline/run.py open --task-id BUG-WMS-FBS-CZ-001 --source "2026-08-21 night queue: FBS Chestny Znak marking dispatch eligibility, preserve WB/CZ oracle, no live WB calls" --traits bug,external_contract,tenant_sensitive,ui_change --risk-level critical
 ```
 
 ## BUG-WMS-FBS-PRINT-001 — FBS label print quantity и supply scope

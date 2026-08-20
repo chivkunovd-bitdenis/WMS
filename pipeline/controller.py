@@ -59,6 +59,41 @@ TOTAL_ORDER = [
     "S28",
 ]
 
+ROLE_BY_STAGE = {
+    "S01": "pipeline-dispatcher",
+    "S02": "pipeline-dispatcher",
+    "B01": "pipeline-ba",
+    "B02": "pipeline-ba",
+    "B03": "pipeline-ba",
+    "B04": "pipeline-reviewer",
+    "S03": "pipeline-ba",
+    "S04": "pipeline-reviewer",
+    "S05": "pipeline-ba",
+    "S06": "pipeline-ba",
+    "S07": "pipeline-product",
+    "S08": "pipeline-ba",
+    "S09": "pipeline-ba",
+    "S10": "pipeline-product",
+    "S11": "pipeline-product",
+    "S12": "pipeline-ba",
+    "S13": "solution-architect",
+    "S14": "pipeline-reviewer",
+    "S15": "pipeline-ba",
+    "S16": "pipeline-product",
+    "S17": "pipeline-dispatcher",
+    "S18": "pipeline-dev",
+    "S19": "pipeline-dev",
+    "S20": "pipeline-reviewer",
+    "S21": "pipeline-dev",
+    "S22": "pipeline-reviewer",
+    "S23": "pipeline-reviewer",
+    "S24": "pipeline-product",
+    "S25": "pipeline-browser-product",
+    "S26": "pipeline-dispatcher",
+    "S27": "pipeline-dispatcher",
+    "S28": "pipeline-reviewer",
+}
+
 
 class PipelineError(RuntimeError):
     """User-facing controller error."""
@@ -229,9 +264,12 @@ def command_classify(args: argparse.Namespace) -> int:
     state["traits"] = traits
     state["risk_level"] = risk_level
     state["required_stages"] = new_required
-    if old_required != new_required:
-        state["status"] = "REWORK"
+    if not state.get("verdicts"):
         state["current_stage"] = first_missing_stage(state)
+        state["status"] = "QUEUED"
+    elif old_required != new_required:
+        state["current_stage"] = first_missing_stage(state)
+        state["status"] = "REWORK"
     save_state(
         state,
         {
@@ -355,6 +393,45 @@ def command_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def next_stage_packet(state: dict[str, Any]) -> dict[str, Any]:
+    stage_id = first_missing_stage(state)
+    return {
+        "task_id": state["task_id"],
+        "stage": stage_id,
+        "role": ROLE_BY_STAGE.get(stage_id, "pipeline-dispatcher"),
+        "status": state["status"],
+        "traits": state["traits"],
+        "risk_level": state.get("risk_level", "low"),
+        "required_stages": state["required_stages"],
+        "done_stages": sorted(state.get("verdicts", {}).keys(), key=TOTAL_ORDER.index),
+        "worktree": state["worktree"],
+        "branch": state["branch"],
+        "base_sha": state["base_sha"],
+        "rules": [
+            "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
+            "Do not accept your own work.",
+            "Use python3 scripts/pipeline/run.py advance only for the stage you own.",
+            "Do not set DONE while pipeline status is not ACTIVE.",
+        ],
+    }
+
+
+def command_next(args: argparse.Namespace) -> int:
+    state = load_state(args.task_id)
+    print(json.dumps(next_stage_packet(state), ensure_ascii=False, indent=2))
+    return 0
+
+
+def command_packet(args: argparse.Namespace) -> int:
+    state = load_state(args.task_id)
+    packet = next_stage_packet(state)
+    packet_path = ROOT / "tasks" / args.task_id / f"{packet['stage']}-{packet['role']}-packet.json"
+    write_json(packet_path, packet)
+    append_journal(args.task_id, {"type": "AGENT_PACKET_WRITTEN", "path": str(packet_path.relative_to(ROOT))})
+    print(json.dumps({"packet_path": str(packet_path.relative_to(ROOT)), **packet}, ensure_ascii=False))
+    return 0
+
+
 def command_close(args: argparse.Namespace) -> int:
     contract = load_contract()
     state = load_state(args.task_id)
@@ -413,6 +490,14 @@ def build_parser() -> argparse.ArgumentParser:
     status_p = sub.add_parser("status")
     status_p.add_argument("--task-id", required=True)
     status_p.set_defaults(func=command_status)
+
+    next_p = sub.add_parser("next")
+    next_p.add_argument("--task-id", required=True)
+    next_p.set_defaults(func=command_next)
+
+    packet_p = sub.add_parser("packet")
+    packet_p.add_argument("--task-id", required=True)
+    packet_p.set_defaults(func=command_packet)
 
     close_p = sub.add_parser("close")
     close_p.add_argument("--task-id", required=True)

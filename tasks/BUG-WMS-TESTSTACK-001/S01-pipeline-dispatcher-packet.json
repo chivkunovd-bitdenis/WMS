@@ -1,0 +1,44 @@
+{
+  "task_id": "BUG-WMS-TESTSTACK-001",
+  "stage": "S01",
+  "role": "pipeline-dispatcher",
+  "status": "QUEUED",
+  "traits": [
+    "bug",
+    "database_change",
+    "pipeline_change"
+  ],
+  "risk_level": "high",
+  "required_stages": [
+    "S01",
+    "S02",
+    "B01",
+    "B02",
+    "B03",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S25",
+    "S26"
+  ],
+  "done_stages": [],
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "base_sha": "7401bc7402e9bba322d8447b34014687bc86cd31",
+  "rules": [
+    "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
+    "Do not accept your own work.",
+    "Use python3 scripts/pipeline/run.py advance only for the stage you own.",
+    "Do not set DONE while pipeline status is not ACTIVE."
+  ]
+}

@@ -43,6 +43,8 @@ def main() -> int:
     # MT24 and MT31: controller refuses DONE while not ACTIVE, and no-traffic is not DONE.
     controller = read("pipeline/controller.py")
     require('contract.get("status") != "ACTIVE"' in controller, "controller must forbid DONE before ACTIVE", errors)
+    require("ROLE_BY_STAGE" in controller, "controller must map stages to agent roles", errors)
+    require("command_packet" in controller, "controller must produce agent handoff packets", errors)
     require('"MONITORING_NO_TRAFFIC"' in read("pipeline/pipeline.yml"), "MONITORING_NO_TRAFFIC verdict must be declared", errors)
 
     # MT33: entrypoint inventory is guarded by the contract checker.

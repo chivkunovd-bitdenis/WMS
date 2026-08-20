@@ -25,7 +25,7 @@ python3 scripts/pipeline/run.py open --task-id BUG-WMS-PV2-002 --source "2026-08
 
 python3 scripts/pipeline/run.py open --task-id BUG-WMS-TESTSTACK-001 --source "2026-08-21 night queue: honest WMS test stack, WMS_AUTO_CREATE_SCHEMA/create_all must not replace migrations" --traits bug,database_change,pipeline_change --risk-level high
 
-python3 scripts/pipeline/run.py open --task-id BUG-WMS-FBS-CZ-001 --source "2026-08-21 night queue: FBS Chestny Znak marking dispatch eligibility, preserve WB/CZ oracle, no live WB calls" --traits bug,external_contract,tenant_sensitive --risk-level critical
+python3 scripts/pipeline/run.py open --task-id BUG-WMS-FBS-CZ-001 --source "2026-08-21 night queue: FBS Chestny Znak marking dispatch eligibility, preserve WB/CZ oracle, no live WB calls" --traits bug,external_contract,tenant_sensitive,ui_change --risk-level critical
 
 python3 scripts/pipeline/run.py open --task-id BUG-WMS-FBS-PRINT-001 --source "2026-08-21 night queue: FBS label print quantity and supply scope, no live deploy" --traits bug,ui_change,print --risk-level high
 ```
