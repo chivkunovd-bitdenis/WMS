@@ -726,6 +726,45 @@ export function FfFbsSupplyWorkspace({
     }
   }
 
+  // Печать QR всех коробов одним окном: пятнадцать коробов — пятнадцать кликов по «QR»,
+  // поэтому собираем все картинки разом и отдаём в тот же предпросмотр, что и одиночный QR.
+  const openAllBoxQrPreview = async () => {
+    const boxes = workspace?.boxes ?? []
+    if (boxes.length === 0) return
+    setBusy(true)
+    setError(null)
+    try {
+      const assets: FbsPrintAsset[] = await Promise.all(
+        boxes.map(async (box) => ({
+          id: `box-qr-${box.id}`,
+          kind: 'box_qr' as const,
+          status: 'ready' as const,
+          content_type: 'image/png',
+          width_mm: 58,
+          height_mm: 40,
+          preview_url: await renderBoxQrDataUrl(box.barcode),
+          download_url: null,
+          checksum: null,
+          applied_at: null,
+          error: null,
+        })),
+      )
+      setPrintBatch({
+        requested: assets.length,
+        ready: assets.length,
+        missing: 0,
+        failed: 0,
+        assets,
+        order_errors: [],
+      })
+      setPrintPreviewOpen(true)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'QR коробов не подготовлены.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const createBoxes = async () => {
     if (!workspace) return
     const count = Math.min(100, Math.max(1, Number(boxCount) || 1))
@@ -1907,6 +1946,14 @@ export function FfFbsSupplyWorkspace({
                       </Typography>
                     </Box>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }} useFlexGap>
+                      <Button
+                        startIcon={<PrintOutlinedIcon />}
+                        disabled={busy || workspace.boxes.length === 0}
+                        onClick={() => void openAllBoxQrPreview()}
+                        data-testid="fbs-boxes-print-all-qr"
+                      >
+                        Печать всех QR ({workspace.boxes.length})
+                      </Button>
                       <FormControlLabel
                         control={(
                           <Checkbox
