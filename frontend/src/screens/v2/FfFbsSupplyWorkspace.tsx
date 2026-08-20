@@ -726,19 +726,26 @@ export function FfFbsSupplyWorkspace({
     }
   }
 
-  // Печать QR всех коробов одним окном: пятнадцать коробов — пятнадцать кликов по «QR»,
-  // поэтому собираем все картинки разом и отдаём в тот же предпросмотр, что и одиночный QR.
+  // Лента QR всех коробов: то же, что делает кнопка «QR» у отдельного короба,
+  // только разом. Берём настоящий стикер грузоместа от WB, свой QR из внутреннего
+  // штрихкода рисуем лишь для коробов без грузоместа — как и в одиночной кнопке.
   const openAllBoxQrPreview = async () => {
     const boxes = workspace?.boxes ?? []
     if (boxes.length === 0) return
+    const notReady = boxes.filter((box) => box.wb_trbx_id && !box.qr_asset?.preview_url)
     setBusy(true)
     setError(null)
     try {
-      const assets: FbsPrintAsset[] = await Promise.all(
-        boxes.map(async (box) => ({
+      const assets: FbsPrintAsset[] = []
+      for (const box of boxes) {
+        if (box.wb_trbx_id) {
+          if (box.qr_asset?.preview_url) assets.push(box.qr_asset)
+          continue
+        }
+        assets.push({
           id: `box-qr-${box.id}`,
-          kind: 'box_qr' as const,
-          status: 'ready' as const,
+          kind: 'box_qr',
+          status: 'ready',
           content_type: 'image/png',
           width_mm: 58,
           height_mm: 40,
@@ -747,17 +754,16 @@ export function FfFbsSupplyWorkspace({
           checksum: null,
           applied_at: null,
           error: null,
-        })),
-      )
-      setPrintBatch({
-        requested: assets.length,
-        ready: assets.length,
-        missing: 0,
-        failed: 0,
-        assets,
-        order_errors: [],
-      })
-      setPrintPreviewOpen(true)
+        })
+      }
+      if (assets.length === 0) {
+        setError('QR грузомест ещё не получены от WB — откройте QR любого короба, чтобы запросить.')
+        return
+      }
+      if (notReady.length > 0) {
+        setNotice(`QR ${notReady.length} коробов ещё не готов — печатаются остальные ${assets.length}.`)
+      }
+      openAssetPreview(assets)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'QR коробов не подготовлены.')
     } finally {
