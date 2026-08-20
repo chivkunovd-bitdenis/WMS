@@ -33,6 +33,7 @@ export default defineConfig({
       input: {
         ff: 'index.html',
         seller: 'seller/index.html',
+        uiKit: 'ui-kit.html',
       },
     },
   },
