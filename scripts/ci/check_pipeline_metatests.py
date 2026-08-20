@@ -967,13 +967,16 @@ def main() -> int:
     shutil.rmtree(ROOT / ".pipeline-state" / "tasks" / "TASK-METATEST-RECLASS", ignore_errors=True)
     shutil.rmtree(ROOT / "tasks" / "TASK-METATEST-RECLASS", ignore_errors=True)
 
-    # MT41-MT43: owner-approved backlog wave creates budget-enforced tasks,
-    # missing usage holds the task, and open blockers stop the owning stage.
+    # MT41-MT44: owner-approved backlog wave creates budget-enforced tasks,
+    # missing usage holds the task, open blockers stop the owning stage, and
+    # intake agents receive the full backlog item instead of only a title.
     wave_prefix = f"TASK-METATEST-WAVE-{os.getpid()}-"
     budget_wave = f"metatest-budget-{os.getpid()}"
     budget_task = f"{wave_prefix}BLG-I04"
     blocker_wave = f"metatest-blocker-{os.getpid()}"
     blocker_task = f"{wave_prefix}BLG-D19"
+    client_wave = f"metatest-client-{os.getpid()}"
+    client_task = f"{wave_prefix}BLG-KC01"
     try:
         budget_start = pipeline_command(
             "start-wave",
@@ -1031,11 +1034,29 @@ def main() -> int:
             require(blocked.returncode != 0, "MT43: open blocker must stop its resume stage", errors)
             held_by_blocker = json.loads(pipeline_command("status", "--task-id", blocker_task).stdout)
             require(held_by_blocker["status"] == "WAITING" and held_by_blocker.get("blocker", {}).get("reason_code") == "OPEN_BLOCKER", "MT43: open blocker must hold task", errors)
+
+        client_start = pipeline_command(
+            "start-wave",
+            "--backlog-ids", "BLG-KC01",
+            "--owner-approved-by", "metatest-owner",
+            "--wave-id", client_wave,
+            "--task-prefix", wave_prefix,
+            "--allow-missing-dependencies",
+        )
+        require(client_start.returncode == 0, f"MT44 client intake start-wave failed: {client_start.stderr}", errors)
+        if client_start.returncode == 0:
+            client_packet = json.loads(pipeline_command("next", "--task-id", client_task).stdout)
+            backlog_item = client_packet.get("backlog_item") or {}
+            client_items = backlog_item.get("client_items") or []
+            require(backlog_item.get("id") == "BLG-KC01", "MT44: packet must include full backlog item id", errors)
+            require(any(item.get("id") == "KC-01" and "селлером" in item.get("business_meaning", "") for item in client_items), "MT44: packet must expose client subitems to BA/Product", errors)
     finally:
         cleanup_task(budget_task)
         cleanup_task(blocker_task)
+        cleanup_task(client_task)
         cleanup_wave(budget_wave)
         cleanup_wave(blocker_wave)
+        cleanup_wave(client_wave)
 
     if errors:
         for error in errors:

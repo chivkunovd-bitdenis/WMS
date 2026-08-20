@@ -24,6 +24,7 @@
   ],
   "properties": {
     "task_id": {"type": "string"},
+    "backlog_item": {"type": ["object", "null"]},
     "source_hash": {"type": "string"},
     "pipeline_version": {"const": "2.0"},
     "pipeline_hash": {"type": "string"},
