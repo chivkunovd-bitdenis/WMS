@@ -175,8 +175,17 @@ def main() -> int:
         require(allowed_by_marker.returncode == 0, "pipeline change marker must authorize protected path", errors)
     ci_workflow = read(".github/workflows/ci.yml")
     require("check_pipeline_scope_guard.py" in ci_workflow, "CI must run pipeline scope guard", errors)
+    require("check_pipeline_model_policy.py" in ci_workflow, "CI must run pipeline model policy check", errors)
     require("check_pipeline_policy_metatests.py" in ci_workflow, "CI must run pipeline policy metatests", errors)
     require("check_pipeline_replay_metatests.py" in ci_workflow, "CI must run pipeline replay metatests", errors)
+    model_policy_check = subprocess.run(
+        [sys.executable, "scripts/ci/check_pipeline_model_policy.py"],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    require(model_policy_check.returncode == 0, f"pipeline model policy check failed: {model_policy_check.stderr}", errors)
     require(
         all(item.get("status") == "automated_green" for item in contract.get("required_metatests", [])),
         "all declared pipeline metatests must be automated_green before this implementation slice is accepted",

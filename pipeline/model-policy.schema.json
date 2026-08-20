@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WMS Pipeline Model Policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "policy_version",
+    "status",
+    "purpose",
+    "tiers",
+    "executors",
+    "default_tier_by_role",
+    "stage_overrides",
+    "escalation_rules",
+    "rules"
+  ],
+  "properties": {
+    "$schema": {"const": "./model-policy.schema.json"},
+    "policy_version": {"type": "string"},
+    "status": {"const": "ACTIVE_FOR_DISPATCH"},
+    "purpose": {"type": "string"},
+    "tiers": {
+      "type": "array",
+      "items": {"enum": ["cheap", "moderate", "expensive"]},
+      "minItems": 3,
+      "maxItems": 3,
+      "uniqueItems": true
+    },
+    "executors": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["cheap", "moderate", "expensive"],
+        "additionalProperties": false,
+        "properties": {
+          "cheap": {"type": "string"},
+          "moderate": {"type": "string"},
+          "expensive": {"type": "string"}
+        }
+      }
+    },
+    "default_tier_by_role": {
+      "type": "object",
+      "additionalProperties": {"enum": ["cheap", "moderate", "expensive"]}
+    },
+    "stage_overrides": {
+      "type": "object",
+      "additionalProperties": {"enum": ["cheap", "moderate", "expensive"]}
+    },
+    "escalation_rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "minimum_tier", "reason"],
+        "additionalProperties": true,
+        "properties": {
+          "id": {"type": "string"},
+          "minimum_tier": {"enum": ["cheap", "moderate", "expensive"]},
+          "roles": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+          "stages": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+          "traits": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+          "risk_levels": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+          "reason": {"type": "string"}
+        }
+      }
+    },
+    "rules": {
+      "type": "array",
+      "items": {"type": "string"},
+      "minItems": 1
+    }
+  }
+}

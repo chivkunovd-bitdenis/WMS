@@ -9,6 +9,7 @@
     "release_change"
   ],
   "risk_level": "critical",
+  "model_policy": "pipeline/model-policy.yml",
   "required_stages": [
     "S01",
     "S02",

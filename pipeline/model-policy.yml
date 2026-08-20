@@ -1,0 +1,101 @@
+{
+  "$schema": "./model-policy.schema.json",
+  "policy_version": "1.0",
+  "status": "ACTIVE_FOR_DISPATCH",
+  "purpose": "Choose the cheapest sufficient model for each Pipeline v2 stage, with explicit escalation for product, research, architecture, review and risky implementation.",
+  "tiers": ["cheap", "moderate", "expensive"],
+  "executors": {
+    "codex": {
+      "cheap": "gpt-5.6-luna",
+      "moderate": "gpt-5.6-terra",
+      "expensive": "gpt-5.6-sol"
+    },
+    "claude": {
+      "cheap": "haiku",
+      "moderate": "sonnet",
+      "expensive": "opus"
+    },
+    "cursor": {
+      "cheap": "luna-or-haiku-equivalent",
+      "moderate": "terra-or-sonnet-equivalent",
+      "expensive": "sol-or-opus-equivalent"
+    }
+  },
+  "default_tier_by_role": {
+    "pipeline-dispatcher": "moderate",
+    "pipeline-ba": "moderate",
+    "solution-architect": "expensive",
+    "pipeline-product": "expensive",
+    "pipeline-dev": "cheap",
+    "pipeline-reviewer": "expensive",
+    "pipeline-browser-product": "expensive"
+  },
+  "stage_overrides": {
+    "S01": "moderate",
+    "S02": "moderate",
+    "B01": "moderate",
+    "B02": "moderate",
+    "B03": "moderate",
+    "B04": "expensive",
+    "S03": "expensive",
+    "S04": "expensive",
+    "S05": "moderate",
+    "S06": "moderate",
+    "S07": "expensive",
+    "S08": "moderate",
+    "S09": "moderate",
+    "S10": "expensive",
+    "S11": "expensive",
+    "S12": "moderate",
+    "S13": "expensive",
+    "S14": "expensive",
+    "S15": "moderate",
+    "S16": "expensive",
+    "S17": "moderate",
+    "S18": "cheap",
+    "S19": "cheap",
+    "S20": "expensive",
+    "S21": "cheap",
+    "S22": "expensive",
+    "S23": "expensive",
+    "S24": "expensive",
+    "S25": "expensive",
+    "S26": "moderate",
+    "S27": "moderate",
+    "S28": "expensive"
+  },
+  "escalation_rules": [
+    {
+      "id": "high_risk_code_to_moderate",
+      "minimum_tier": "moderate",
+      "roles": ["pipeline-dev"],
+      "risk_levels": ["high", "critical"],
+      "reason": "High-risk code can still be implemented below expensive tier, but not by the cheapest model."
+    },
+    {
+      "id": "dangerous_code_traits_to_moderate",
+      "minimum_tier": "moderate",
+      "roles": ["pipeline-dev"],
+      "traits": ["database_change", "background_worker", "external_contract", "release_change", "tenant_sensitive", "mobile_contract", "print"],
+      "reason": "Implementation touching data, workers, external systems, release, tenants, mobile or print needs a stronger coding model."
+    },
+    {
+      "id": "research_arch_product_review_browser_expensive",
+      "minimum_tier": "expensive",
+      "roles": ["solution-architect", "pipeline-product", "pipeline-reviewer", "pipeline-browser-product"],
+      "reason": "Architecture, product decisions, review and live browser acceptance are deliberately expensive."
+    },
+    {
+      "id": "domain_research_expensive",
+      "minimum_tier": "expensive",
+      "stages": ["S03", "S04", "S13", "S14"],
+      "reason": "Research and architecture falsification are high-judgment stages."
+    }
+  ],
+  "rules": [
+    "Do not upgrade above the recommendation unless the packet, owner, or fresh evidence shows a higher-risk class.",
+    "Do not downgrade product, research, architecture, review or Product Browser stages.",
+    "Simple implementation defaults to cheap; dangerous implementation escalates to moderate, not automatically to expensive.",
+    "If the executor cannot select the exact named model, use the cheapest available equivalent at the same tier."
+  ]
+}

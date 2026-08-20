@@ -61,6 +61,10 @@ Browser-результат за них.
 - После `classify` снова вызови `next`; если первый missing stage S02, создай `IMPACT_CLASSIFIED`
   через `advance`.
 - После S01/S02 вызови `next`; если нужно передать агенту файл — `packet`.
+- Для handoff генерируй dispatch prompt через
+  `python3 scripts/pipeline/dispatch.py --task-id <TASK-ID> --executor <codex|claude|cursor>`.
+  В prompt будет model recommendation из `pipeline/model-policy.yml`; не повышай модель без факта
+  риска и не понижай Product/Research/Architecture/Review/Browser stages.
 - В ответе называй `task_id`, `current_stage`, роль из packet, traits, risk, required stages и уже
   пройденные stages.
 - Если следующий stage принадлежит другой роли, остановись на handoff. Не выполняй его вместо агента.

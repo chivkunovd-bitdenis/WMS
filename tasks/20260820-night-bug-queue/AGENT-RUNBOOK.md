@@ -10,7 +10,8 @@
 2. Проверить `git status`; не stage-ить чужие изменения вне своей карточки и
    pipeline-файлов, которые прямо требуются текущей стадией.
 3. Прочитать `AGENTS.md`, `docs/process/PIPELINE-HOLES-RU.md`,
-   `pipeline/pipeline.yml`, `docs/process/INCIDENTS-REGISTRY-RU.md`.
+   `pipeline/pipeline.yml`, `pipeline/model-policy.yml`,
+   `docs/process/INCIDENTS-REGISTRY-RU.md`.
 4. Помнить: Pipeline v2 в `IMPLEMENTATION_IN_PROGRESS`, значит старый Product
    gate всё ещё действует до `PIPELINE_ACTIVATION_APPROVED`.
 
@@ -37,6 +38,11 @@ python3 scripts/pipeline/run.py resume --task-id <task-id> --by owner
 python3 scripts/pipeline/run.py next --task-id <task-id>
 python3 scripts/pipeline/dispatch.py --task-id <task-id> --executor <codex|claude|cursor>
 ```
+
+Dispatch prompt обязан содержать model recommendation. Базовое правило стоимости:
+простую реализацию делает дешёвая модель, dispatcher/BA — средняя, архитектуру,
+продукт, ресёрч, ревью и живой browser verdict — дорогая; рискованная разработка
+поднимается минимум до средней.
 
 ## 3. Роли и переходы
 

@@ -9,6 +9,7 @@
     "pipeline_change"
   ],
   "risk_level": "high",
+  "model_policy": "pipeline/model-policy.yml",
   "required_stages": [
     "S01",
     "S02",

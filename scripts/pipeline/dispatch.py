@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from pipeline.controller import load_state, next_stage_packet, write_json  # noqa: E402
+from pipeline.model_policy import recommendation_for_packet  # noqa: E402
 
 
 EXECUTOR_GUIDES = {
@@ -58,9 +59,12 @@ def existing_guides(role: str, executor: str) -> list[str]:
 def build_prompt(task_id: str, executor: str) -> tuple[dict, str]:
     state = load_state(task_id)
     packet = next_stage_packet(state)
+    model_recommendation = recommendation_for_packet(packet, executor)
     guides = existing_guides(packet["role"], executor)
     guide_lines = "\n".join(f"- `{path}`" for path in guides) or "- `AGENTS.md`"
     executor_lines = "\n".join(f"- {line}" for line in EXECUTOR_GUIDES[executor])
+    model_reason_lines = "\n".join(f"- {line}" for line in model_recommendation["reasons"])
+    model_rule_lines = "\n".join(f"- {line}" for line in model_recommendation["rules"])
     packet_json = json.dumps(packet, ensure_ascii=False, indent=2)
     prompt = f"""# WMS Pipeline Dispatch
 
@@ -68,12 +72,14 @@ Executor: `{executor}`
 Task: `{task_id}`
 Stage: `{packet["stage"]}`
 Role: `{packet["role"]}`
+Recommended model: `{model_recommendation["model"]}` (`{model_recommendation["tier"]}`)
 
 ## Read First
 
 {guide_lines}
 - `docs/process/PIPELINE-RU.md`
 - `pipeline/pipeline.yml`
+- `pipeline/model-policy.yml`
 - `tasks/{task_id}/state.json`
 
 ## Executor Rules
@@ -83,6 +89,18 @@ Role: `{packet["role"]}`
 - If packet status is `WAITING`, stop after the required start checks and report the blocker.
 - Do not set `DONE` while `pipeline/pipeline.yml` status is not `ACTIVE`.
 - Do not touch secrets, live deploy, or live WB/Ozon.
+
+## Model Policy
+
+Policy: `{model_recommendation["policy_path"]}`
+Tier: `{model_recommendation["tier"]}`
+Recommended model: `{model_recommendation["model"]}`
+
+Reasons:
+{model_reason_lines}
+
+Rules:
+{model_rule_lines}
 
 ## Controller Packet
 

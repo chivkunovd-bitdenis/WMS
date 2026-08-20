@@ -32,6 +32,9 @@ snapshot состояния и packet для S01, но нет receipts, verdicts
   `python3 scripts/pipeline/run.py report`.
 - Есть генератор dispatch-prompt для Codex, Claude и Cursor:
   `python3 scripts/pipeline/dispatch.py --task-id <id> --executor codex|claude|cursor`.
+- Есть машинная политика выбора модели: `pipeline/model-policy.yml`. Dispatch prompt теперь
+  прямо пишет tier и конкретную модель: простая разработка уходит на дешёвую модель, dispatcher/BA
+  на среднюю, а архитектура, продукт, ресёрч, ревью и живой браузер — на дорогую.
 - Все `MT01`...`MT40` из части XII сейчас `automated_green`. Метатесты проверяют
   сам процесс: например, что разработка не получает workspace раньше продуктового
   одобрения, старый fencing token отклоняется, красный GOLD case блокирует
@@ -69,6 +72,7 @@ snapshot состояния и packet для S01, но нет receipts, verdicts
 
 ```bash
 python3 scripts/ci/check_pipeline_contract.py
+python3 scripts/ci/check_pipeline_model_policy.py
 ```
 
 Проверить реализованную часть метатестов отдельно:

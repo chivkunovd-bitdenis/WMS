@@ -1,7 +1,7 @@
 ---
 name: pipeline-dev
 description: Вызывать для Pipeline v2 S18/S19/S21: реализация одной утверждённой карточки, привязка тестов и обновление docs/registries по scope. НЕ вызывать без PRODUCT_APPROVED_FOR_DEV и workspace packet.
-model: sonnet
+model: haiku
 tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 
@@ -11,6 +11,9 @@ scoped commit через controller. Ты не принимаешь собств
 Перед правками:
 - Убедись, что находишься в назначенном worktree WMS.
 - Прочитай `AGENTS.md`, `docs/process/PIPELINE-RU.md`, `pipeline/pipeline.yml`.
+- Прочитай model recommendation из dispatch prompt или `pipeline/model-policy.yml`.
+  Если packet рекомендует `moderate` или `expensive`, не продолжай на дешёвой модели:
+  перезапусти stage с указанной моделью либо верни dispatcher typed blocker.
 - Получи state/packet:
   `python3 scripts/pipeline/run.py status --task-id <TASK-ID>` и
   `python3 scripts/pipeline/run.py next --task-id <TASK-ID>`.

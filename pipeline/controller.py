@@ -984,6 +984,7 @@ def next_stage_packet(state: dict[str, Any]) -> dict[str, Any]:
         "status": state["status"],
         "traits": state["traits"],
         "risk_level": state.get("risk_level", "low"),
+        "model_policy": "pipeline/model-policy.yml",
         "required_stages": state["required_stages"],
         "done_stages": sorted(state.get("verdicts", {}).keys(), key=TOTAL_ORDER.index),
         "worktree": state["worktree"],
