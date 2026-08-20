@@ -121,7 +121,18 @@ export function FbsPrintPreviewDialog({
       .join('')
     const pageWidthMm = `${labelSize.widthMm}mm`
     const pageHeightMm = `${labelSize.heightMm}mm`
-    popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Печать WB</title><style>@page{size:${pageWidthMm} ${pageHeightMm};margin:0}html,body{margin:0;padding:0}.label{width:${pageWidthMm};height:${pageHeightMm};display:flex;align-items:center;justify-content:center;break-after:page;page-break-after:always;overflow:hidden}.label:last-child{break-after:auto;page-break-after:auto}.label img{width:${pageWidthMm};height:${pageHeightMm};object-fit:contain;image-rendering:auto}</style></head><body>${pages}<script>Promise.all(Array.from(document.images).map(function(img){return img.complete?Promise.resolve():new Promise(function(resolve){img.onload=resolve;img.onerror=resolve})})).then(function(){window.focus();window.print()})</script></body></html>`)
+    // Размер страницы объявляем, но вёрстку привязываем к реальному листу принтера:
+    // рулон 60x40 при объявленных 58x40 обрезал QR по краю. Проценты плюс max-* дают
+    // картинке вписаться в любую бумагу, а поле в 1 мм не даёт ей упереться в срез.
+    const printCss = [
+      `@page{size:${pageWidthMm} ${pageHeightMm};margin:0}`,
+      'html,body{margin:0;padding:0}',
+      '.label{box-sizing:border-box;width:100%;height:100vh;padding:1mm;display:flex;',
+      'align-items:center;justify-content:center;break-after:page;page-break-after:always;overflow:hidden}',
+      '.label:last-child{break-after:auto;page-break-after:auto}',
+      '.label img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;image-rendering:auto}',
+    ].join('')
+    popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Печать WB</title><style>${printCss}</style></head><body>${pages}<script>Promise.all(Array.from(document.images).map(function(img){return img.complete?Promise.resolve():new Promise(function(resolve){img.onload=resolve;img.onerror=resolve})})).then(function(){window.focus();window.print()})</script></body></html>`)
     popup.document.close()
   }
 
