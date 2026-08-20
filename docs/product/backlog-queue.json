@@ -1,0 +1,821 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-08-21",
+  "source_documents": [
+    "docs/BACKLOG-2026-08-19-CHAT-RU.md"
+  ],
+  "queue_policy": "Не запускать автоматически: readiness и wave требуют отдельного owner/Product receipt.",
+  "items": [
+    {
+      "id": "BLG-D01",
+      "title": "Сбрасывать выбор заказов при смене фильтра и показывать состав пачки",
+      "source_section": "D1",
+      "type": "bug",
+      "priority": "high",
+      "status": "queued",
+      "readiness": "needs_product_contract",
+      "dependencies": [],
+      "suggested_roles": [
+        "BA",
+        "Product",
+        "screen-dev",
+        "reviewer"
+      ],
+      "suggested_stages": [
+        "S01",
+        "S08",
+        "S12",
+        "S18"
+      ]
+    },
+    {
+      "id": "BLG-D02",
+      "title": "Создавать задание упаковки при зеркалировании поставки WB",
+      "source_section": "D2",
+      "type": "bug",
+      "priority": "high",
+      "status": "queued",
+      "readiness": "needs_product_contract",
+      "dependencies": [
+        "BLG-D23"
+      ],
+      "suggested_roles": [
+        "BA",
+        "Product",
+        "solution-architect",
+        "screen-dev",
+        "reviewer"
+      ],
+      "suggested_stages": [
+        "S01",
+        "S12",
+        "S18",
+        "S23"
+      ]
+    },
+    {
+      "id": "BLG-D03",
+      "title": "Зафиксировать oracle Честного знака и правило requiredMeta/optionalMeta",
+      "source_section": "D3, H",
+      "type": "external_contract",
+      "priority": "critical",
+      "status": "blocked",
+      "readiness": "waiting_owner_oracle",
+      "dependencies": [],
+      "suggested_roles": [
+        "Product",
+        "BA",
+        "Research",
+        "Compliance",
+        "solution-architect"
+      ],
+      "suggested_stages": [
+        "S01",
+        "S02",
+        "S03",
+        "S12"
+      ]
+    },
+    {
+      "id": "BLG-D04",
+      "title": "Определять необходимость Честного знака по карточке товара",
+      "source_section": "D4",
+      "type": "bug",
+      "priority": "medium",
+      "status": "queued",
+      "readiness": "needs_product_contract",
+      "dependencies": [
+        "BLG-D03"
+      ],
+      "suggested_roles": [
+        "BA",
+        "screen-dev",
+        "reviewer"
+      ],
+      "suggested_stages": [
+        "S08",
+        "S12",
+        "S18"
+      ]
+    },
+    {
+      "id": "BLG-D05",
+      "title": "Разобрать и привязать к карточкам коды Denmarcs без связи",
+      "source_section": "D5",
+      "type": "data",
+      "priority": "medium",
+      "status": "queued",
+      "readiness": "needs_data_policy",
+      "dependencies": [
+        "BLG-F01"
+      ],
+      "suggested_roles": [
+        "BA",
+        "solution-architect",
+        "data-owner",
+        "reviewer"
+      ],
+      "suggested_stages": [
+        "S01",
+        "S02",
+        "S12",
+        "S23"
+      ]
+    },
+    {
+      "id": "BLG-D06",
+      "title": "Скрывать архивные товары OLD/ по умолчанию",
+      "source_section": "D6",
+      "type": "ui_change",
+      "priority": "low",
+      "status": "queued",
+      "readiness": "needs_product_contract",
+      "dependencies": [],
+      "suggested_roles": [
+        "BA",
+        "screen-dev",
+        "ui-critic"
+      ],
+      "suggested_stages": [
+        "S08",
+        "S12",
+        "S18",
+        "S26"
+      ]
+    },
+    {
+      "id": "BLG-D07",
+      "title": "Добавить повторную сверку статусов заказов WB",
+      "source_section": "D7",
+      "type": "background_worker",
+      "priority": "medium",
+      "status": "queued",
+      "readiness": "needs_technical_contract",
+      "dependencies": [],
+      "suggested_roles": [
+        "solution-architect",
+        "screen-dev",
+        "reviewer"
+      ],
+      "suggested_stages": [
+        "S02",
+        "S12",
+        "S18",
+        "S23"
+      ]
+    },
+    {
+      "id": "BLG-D09",
+      "title": "Сделать prod-update exact-SHA и проверять смену bundle",
+      "source_section": "D9",
+      "type": "release_change",
+      "priority": "high",
+      "status": "queued",
+      "readiness": "needs_release_contract",
+      "dependencies": [],
+      "suggested_roles": [
+        "solution-architect",
+        "DevOps",
+        "reviewer"
+      ],
+      "suggested_stages": [
+        "S02",
+        "S12",
+        "S18",
+        "S25",
+        "S28"
+      ]
+    },
+    {
+      "id": "BLG-D11",
+      "title": "Не помечать error заказы с уже сохранённым стикером",
+      "source_section": "D11",
+      "type": "bug",
+      "priority": "medium",
+      "status": "queued",
+      "readiness": "needs_technical_contract",
+      "dependencies": [],
+      "suggested_roles": [
+        "BA",
+        "screen-dev",
+        "reviewer"
+      ],
+      "suggested_stages": [
+        "S08",
+        "S12",
+        "S18"
+      ]
+    },
+    {
+      "id": "BLG-D14",
+      "title": "Устранить deadlock при создании крупной поставки и автоопросе",
+      "source_section": "D14",
+      "type": "concurrency",
+      "priority": "high",
+      "status": "queued",
+      "readiness": "needs_architecture_contract",
+      "dependencies": [],
+      "suggested_roles": [
+        "solution-architect",
+        "screen-dev",
+        "reviewer"
+      ],
+      "suggested_stages": [
+        "S02",
+        "S12",
+        "S18",
+        "S23"
+      ]
+    },
+    {
+      "id": "BLG-D16",
+      "title": "Дать оператору безопасную перевязку КИЗ между заказами",
+      "source_section": "D16",
+      "type": "ui_change",
+      "priority": "high",
+      "status": "queued",
+      "readiness": "waiting_owner_oracle",
+      "dependencies": [
+        "BLG-D03",
+        "BLG-I02"
+      ],
+      "suggested_roles": [
+        "Product",
+        "BA",
+        "solution-architect",
+        "screen-dev",
+        "ui-critic"
+      ],
+      "suggested_stages": [
+        "S01",
+        "S02",
+        "S12",
+        "S18",
+        "S26"
+      ]
+    },
+    {
+      "id": "BLG-D17",
+      "title": "Возвращать не привязанный код из void в available или объяснять аннулирование",
+      "source_section": "D17",
+      "type": "data_integrity",
+      "priority": "high",
+      "status": "queued",
+      "readiness": "needs_architecture_contract",
+      "dependencies": [
+        "BLG-F01"
+      ],
+      "suggested_roles": [
+        "solution-architect",
+        "screen-dev",
+        "reviewer"
+      ],
+      "suggested_stages": [
+        "S02",
+        "S12",
+        "S18",
+        "S23"
+      ]
+    },
+    {
+      "id": "BLG-D19",
+      "title": "Исправить пагинацию импорта каталога WB",
+      "source_section": "D19",
+      "type": "external_contract",
+      "priority": "critical",
+      "status": "queued",
+      "readiness": "needs_technical_contract",
+      "dependencies": [],
+      "suggested_roles": [
+        "solution-architect",
+        "screen-dev",
+        "reviewer"
+      ],
+      "suggested_stages": [
+        "S02",
+        "S12",
+        "S18",
+        "S23"
+      ]
+    },
+    {
+      "id": "BLG-D20",
+      "title": "Добавить фоновую синхронизацию каталога товаров",
+      "source_section": "D20",
+      "type": "background_worker",
+      "priority": "high",
+      "status": "queued",
+      "readiness": "needs_technical_contract",
+      "dependencies": [
+        "BLG-D19"
+      ],
+      "suggested_roles": [
+        "solution-architect",
+        "screen-dev",
+        "reviewer"
+      ],
+      "suggested_stages": [
+        "S02",
+        "S12",
+        "S18",
+        "S23"
+      ]
+    },
+    {
+      "id": "BLG-D21",
+      "title": "Перевести WbProductPickerDialog на серверный поиск каталога",
+      "source_section": "D21",
+      "type": "performance",
+      "priority": "high",
+      "status": "partial",
+      "readiness": "needs_product_contract",
+      "dependencies": [],
+      "suggested_roles": [
+        "BA",
+        "screen-dev",
+        "ui-critic",
+        "reviewer"
+      ],
+      "suggested_stages": [
+        "S08",
+        "S12",
+        "S18",
+        "S26"
+      ]
+    },
+    {
+      "id": "BLG-D22",
+      "title": "Починить полный pytest-гейт и разделить причины зависания",
+      "source_section": "D22",
+      "type": "test_infrastructure",
+      "priority": "high",
+      "status": "queued",
+      "readiness": "needs_technical_contract",
+      "dependencies": [],
+      "suggested_roles": [
+        "solution-architect",
+        "screen-dev",
+        "reviewer"
+      ],
+      "suggested_stages": [
+        "S02",
+        "S12",
+        "S18",
+        "S25"
+      ]
+    },
+    {
+      "id": "BLG-D23",
+      "title": "Показывать точную причину отказа при сдаче поставки",
+      "source_section": "D23",
+      "type": "ui_change",
+      "priority": "medium",
+      "status": "queued",
+      "readiness": "needs_product_contract",
+      "dependencies": [],
+      "suggested_roles": [
+        "BA",
+        "Product",
+        "screen-dev",
+        "ui-critic"
+      ],
+      "suggested_stages": [
+        "S01",
+        "S08",
+        "S12",
+        "S18",
+        "S26"
+      ]
+    },
+    {
+      "id": "BLG-F01",
+      "title": "Собрать библиотеку блокировок и карту зависимостей pipeline",
+      "source_section": "F1, F1-старое",
+      "type": "pipeline_change",
+      "priority": "critical",
+      "status": "queued",
+      "readiness": "needs_architecture_contract",
+      "dependencies": [],
+      "suggested_roles": [
+        "solution-architect",
+        "BA",
+        "reviewer",
+        "guard"
+      ],
+      "suggested_stages": [
+        "S01",
+        "S02",
+        "S12",
+        "S25"
+      ]
+    },
+    {
+      "id": "BLG-F1A",
+      "title": "Добавить проверку реальных артефактов и уровней доказательств",
+      "source_section": "F1a",
+      "type": "pipeline_change",
+      "priority": "critical",
+      "status": "queued",
+      "readiness": "needs_architecture_contract",
+      "dependencies": [
+        "BLG-F01"
+      ],
+      "suggested_roles": [
+        "solution-architect",
+        "reviewer",
+        "guard"
+      ],
+      "suggested_stages": [
+        "S02",
+        "S12",
+        "S25",
+        "S28"
+      ]
+    },
+    {
+      "id": "BLG-G01",
+      "title": "Подготовить архитектурное решение для запуска Ozon",
+      "source_section": "G",
+      "type": "new_domain",
+      "priority": "medium",
+      "status": "queued",
+      "readiness": "needs_architecture_decision",
+      "dependencies": [
+        "BLG-F01"
+      ],
+      "suggested_roles": [
+        "solution-architect",
+        "Product",
+        "BA"
+      ],
+      "suggested_stages": [
+        "S01",
+        "S02",
+        "S12"
+      ]
+    },
+    {
+      "id": "BLG-I01",
+      "title": "Перейти на актуальный WB endpoint статусов маркировки",
+      "source_section": "I1",
+      "type": "external_contract",
+      "priority": "critical",
+      "status": "queued",
+      "readiness": "needs_technical_contract",
+      "dependencies": [
+        "BLG-D03"
+      ],
+      "suggested_roles": [
+        "solution-architect",
+        "screen-dev",
+        "reviewer"
+      ],
+      "suggested_stages": [
+        "S02",
+        "S12",
+        "S18",
+        "S23"
+      ]
+    },
+    {
+      "id": "BLG-I02",
+      "title": "Сохранять вердикты WB и запрещать оптимистичный dispatch",
+      "source_section": "I2",
+      "type": "external_contract",
+      "priority": "critical",
+      "status": "queued",
+      "readiness": "needs_product_contract",
+      "dependencies": [
+        "BLG-I01",
+        "BLG-D03"
+      ],
+      "suggested_roles": [
+        "Product",
+        "BA",
+        "solution-architect",
+        "screen-dev",
+        "reviewer"
+      ],
+      "suggested_stages": [
+        "S01",
+        "S02",
+        "S12",
+        "S18",
+        "S26"
+      ]
+    },
+    {
+      "id": "BLG-I03",
+      "title": "Сохранять GS-разделители при сканировании ЧЗ на всех входах",
+      "source_section": "I3",
+      "type": "mobile_contract",
+      "priority": "critical",
+      "status": "queued",
+      "readiness": "needs_technical_contract",
+      "dependencies": [
+        "BLG-D03"
+      ],
+      "suggested_roles": [
+        "solution-architect",
+        "screen-dev",
+        "reviewer"
+      ],
+      "suggested_stages": [
+        "S02",
+        "S12",
+        "S18",
+        "S23"
+      ]
+    },
+    {
+      "id": "BLG-I04",
+      "title": "Исправить квадратирование числа листов при печати",
+      "source_section": "I4",
+      "type": "print",
+      "priority": "high",
+      "status": "queued",
+      "readiness": "needs_product_contract",
+      "dependencies": [],
+      "suggested_roles": [
+        "BA",
+        "Product",
+        "screen-dev",
+        "ui-critic"
+      ],
+      "suggested_stages": [
+        "S01",
+        "S08",
+        "S12",
+        "S18",
+        "S26"
+      ]
+    },
+    {
+      "id": "BLG-I05",
+      "title": "Хранить полные коды ЧЗ, включая криптохвост и разделители",
+      "source_section": "I5",
+      "type": "data_integrity",
+      "priority": "high",
+      "status": "queued",
+      "readiness": "needs_architecture_contract",
+      "dependencies": [
+        "BLG-I03"
+      ],
+      "suggested_roles": [
+        "solution-architect",
+        "data-owner",
+        "screen-dev",
+        "reviewer"
+      ],
+      "suggested_stages": [
+        "S02",
+        "S12",
+        "S18",
+        "S23"
+      ]
+    },
+    {
+      "id": "BLG-I06",
+      "title": "Обновлять idempotency key при смене способа сдачи",
+      "source_section": "I6",
+      "type": "bug",
+      "priority": "medium",
+      "status": "queued",
+      "readiness": "needs_technical_contract",
+      "dependencies": [],
+      "suggested_roles": [
+        "BA",
+        "screen-dev",
+        "reviewer"
+      ],
+      "suggested_stages": [
+        "S08",
+        "S12",
+        "S18"
+      ]
+    },
+    {
+      "id": "BLG-I07",
+      "title": "Провести capacity/performance remediation прода",
+      "source_section": "I7, K1",
+      "type": "performance",
+      "priority": "high",
+      "status": "queued",
+      "readiness": "needs_architecture_contract",
+      "dependencies": [],
+      "suggested_roles": [
+        "solution-architect",
+        "BA",
+        "DevOps",
+        "screen-dev",
+        "reviewer"
+      ],
+      "suggested_stages": [
+        "S02",
+        "S12",
+        "S18",
+        "S23",
+        "S25"
+      ]
+    },
+    {
+      "id": "BLG-I08",
+      "title": "Показать состояние ключей WB и понятные ошибки операторам",
+      "source_section": "I8",
+      "type": "ui_change",
+      "priority": "high",
+      "status": "queued",
+      "readiness": "needs_product_contract",
+      "dependencies": [],
+      "suggested_roles": [
+        "Product",
+        "BA",
+        "screen-dev",
+        "ui-critic"
+      ],
+      "suggested_stages": [
+        "S01",
+        "S08",
+        "S12",
+        "S18",
+        "S26"
+      ]
+    },
+    {
+      "id": "BLG-I09",
+      "title": "Сверить локальные статусы маркировки с WB после исправления endpoint",
+      "source_section": "I9",
+      "type": "data_integrity",
+      "priority": "medium",
+      "status": "queued",
+      "readiness": "waiting_dependency",
+      "dependencies": [
+        "BLG-I01",
+        "BLG-I02"
+      ],
+      "suggested_roles": [
+        "BA",
+        "data-owner",
+        "reviewer"
+      ],
+      "suggested_stages": [
+        "S02",
+        "S12",
+        "S23",
+        "S28"
+      ]
+    },
+    {
+      "id": "BLG-I10",
+      "title": "Сформировать продуктовую модель склад плюс ячейка",
+      "source_section": "I10",
+      "type": "new_module",
+      "priority": "high",
+      "status": "blocked",
+      "readiness": "needs_product_decision",
+      "dependencies": [],
+      "suggested_roles": [
+        "Product",
+        "BA",
+        "solution-architect"
+      ],
+      "suggested_stages": [
+        "S01",
+        "S02",
+        "S12"
+      ]
+    },
+    {
+      "id": "BLG-I11",
+      "title": "Добавить явный пропуск незаполненной маркировки с подтверждением",
+      "source_section": "I11",
+      "type": "ui_change",
+      "priority": "high",
+      "status": "blocked",
+      "readiness": "waiting_owner_oracle",
+      "dependencies": [
+        "BLG-D03",
+        "BLG-I02"
+      ],
+      "suggested_roles": [
+        "Product",
+        "BA",
+        "solution-architect",
+        "screen-dev",
+        "ui-critic"
+      ],
+      "suggested_stages": [
+        "S01",
+        "S02",
+        "S12",
+        "S18",
+        "S26"
+      ]
+    },
+    {
+      "id": "BLG-I12",
+      "title": "Предупреждать о закрытии с несохранёнными изменениями",
+      "source_section": "I12, клиентский список 6",
+      "type": "ui_change",
+      "priority": "medium",
+      "status": "queued",
+      "readiness": "needs_product_contract",
+      "dependencies": [],
+      "suggested_roles": [
+        "BA",
+        "Product",
+        "screen-dev",
+        "ui-critic"
+      ],
+      "suggested_stages": [
+        "S01",
+        "S08",
+        "S12",
+        "S18",
+        "S26"
+      ]
+    },
+    {
+      "id": "BLG-K02",
+      "title": "Развернуть блок аналитической отчётности для селлера и фулфилмента",
+      "source_section": "K2",
+      "type": "new_module",
+      "priority": "medium",
+      "status": "intake",
+      "readiness": "needs_product_discovery",
+      "dependencies": [],
+      "suggested_roles": [
+        "Product",
+        "BA",
+        "solution-architect"
+      ],
+      "suggested_stages": [
+        "S01",
+        "S02",
+        "S12"
+      ]
+    },
+    {
+      "id": "BLG-KC01",
+      "title": "Развернуть клиентские входящие по приёмке, навигации, остаткам, отгрузке и печати",
+      "source_section": "клиентский список 1-14",
+      "type": "product_intake",
+      "priority": "medium",
+      "status": "intake",
+      "readiness": "needs_product_discovery",
+      "dependencies": [
+        "BLG-F01"
+      ],
+      "suggested_roles": [
+        "Product",
+        "BA",
+        "solution-architect"
+      ],
+      "suggested_stages": [
+        "S01",
+        "S02",
+        "S12"
+      ]
+    },
+    {
+      "id": "BLG-C01",
+      "title": "Выкатить необязательную упаковку FBS после owner decision",
+      "source_section": "C1",
+      "type": "release_change",
+      "priority": "high",
+      "status": "ready_for_release",
+      "readiness": "waiting_owner_release",
+      "dependencies": [],
+      "suggested_roles": [
+        "Product",
+        "DevOps",
+        "reviewer"
+      ],
+      "suggested_stages": [
+        "S15",
+        "S25",
+        "S28"
+      ]
+    },
+    {
+      "id": "BLG-C02",
+      "title": "Включить логирование исходящих запросов WB после release review",
+      "source_section": "C2",
+      "type": "release_change",
+      "priority": "medium",
+      "status": "ready_for_release",
+      "readiness": "waiting_owner_release",
+      "dependencies": [],
+      "suggested_roles": [
+        "Product",
+        "DevOps",
+        "reviewer"
+      ],
+      "suggested_stages": [
+        "S15",
+        "S25",
+        "S28"
+      ]
+    }
+  ]
+}

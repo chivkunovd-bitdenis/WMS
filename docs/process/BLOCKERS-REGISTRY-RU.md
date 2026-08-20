@@ -134,11 +134,13 @@
 ### BLK-BACKLOG-001 — Нет единой versioned backlog-очереди и dependency map
 
 - **Тип:** backlog / product / planning.
+- **Статус:** сужен; очередь создана, но owner-approved wave ещё не выдана.
 - **Где обнаружен:** `docs/BACKLOG-2026-08-19-CHAT-RU.md` прямо фиксирует, что есть два списка, которые нужно свести и приоритизировать; свежие входящие 21.08 добавлены в тот же backlog.
-- **Почему блокирует бизнес:** задачи есть, но без stable IDs, дублей, зависимостей, приоритета и readiness можно запустить не ту работу, разрезать зависимые изменения в неправильном порядке или потерять клиентский пункт при переносе в карточки.
-- **Кто закрывает:** BA/Product и pool Architect.
+- **Что закрыто этим артефактом:** `docs/product/backlog-queue.json` даёт stable IDs, источники, типы, статусы, readiness, зависимости, приоритеты и suggested roles/stages; `scripts/ci/check_backlog_queue.py` проверяет обязательные поля, уникальность IDs и ссылки зависимостей.
+- **Что остаётся блокером:** очередь не является разрешением на разработку. Для конкретной волны нужны owner approval, Product receipt и обычные гейты pipeline; items с `needs_product_*`, `needs_architecture_*` или `waiting_*` нельзя отправлять прямо в Dev.
+- **Кто закрывает остаток:** BA/Product и pool Architect; владелец утверждает конкретную wave.
 - **Resume stage:** S01/S02 для очереди; S12 для нарезки карточек.
-- **Минимальный артефакт закрытия:** единый versioned backlog со stable IDs, источниками, дублями, dependency map, приоритетом, readiness-состоянием и owner-approved wave.
+- **Минимальный артефакт полного закрытия:** owner-approved wave с receipt, привязанная к версии очереди и commit SHA.
 
 ### BLK-ARCH-001 — Не закрыта архитектурная граница для data guard и исправления данных
 
