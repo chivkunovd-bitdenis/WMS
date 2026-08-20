@@ -55,7 +55,10 @@ from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.catalog_service import get_warehouse
 from app.services.fbs_packaging_integration_service import create_packaging_task_for_supply
 from app.services.fbs_print_asset_storage import decode_png_payload
-from app.services.fbs_sticker_code_service import sticker_code_from_wb_row
+from app.services.fbs_sticker_code_service import (
+    sticker_barcode_from_wb_row,
+    sticker_code_from_wb_row,
+)
 from app.services.fbs_supply_reconcile_service import (
     create_pending_operation,
     get_operation_by_idempotency,
@@ -1605,6 +1608,7 @@ async def fetch_and_cache_stickers(
             if sticker_row is None:
                 raise FbsSupplyError("wb_stickers_incomplete")
             sticker_code = sticker_code_from_wb_row(sticker_row)
+            sticker_barcode = sticker_barcode_from_wb_row(sticker_row)
             png_bytes = decode_png_payload(sticker_row.get("file"))
             if png_bytes is None:
                 raise FbsSupplyError("wb_stickers_incomplete")
@@ -1618,6 +1622,7 @@ async def fetch_and_cache_stickers(
                 order=order,
                 png_bytes=png_bytes,
                 sticker_code=sticker_code,
+                sticker_barcode=sticker_barcode,
                 fetched_at=fetched_at,
             )
 

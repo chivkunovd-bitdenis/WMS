@@ -46,7 +46,10 @@ from app.services.fbs_print_asset_storage import (
     sha256_checksum,
     supply_qr_relative_path,
 )
-from app.services.fbs_sticker_code_service import sticker_code_from_wb_row
+from app.services.fbs_sticker_code_service import (
+    sticker_barcode_from_wb_row,
+    sticker_code_from_wb_row,
+)
 from app.services.wildberries_client import (
     WildberriesClientError,
     fetch_marketplace_order_stickers,
@@ -211,6 +214,7 @@ def _persist_order_sticker_bytes(
     order: FbsOrder,
     png_bytes: bytes,
     sticker_code: str | None,
+    sticker_barcode: str | None = None,
     fetched_at: datetime,
 ) -> None:
     rel = order_sticker_relative_path(order.id)
@@ -227,6 +231,8 @@ def _persist_order_sticker_bytes(
     order.sticker_file = rel
     if sticker_code:
         order.sticker_code = sticker_code
+    if sticker_barcode:
+        order.sticker_barcode = sticker_barcode
     order.sticker_status = STICKER_STATUS_READY
 
 
@@ -381,6 +387,7 @@ async def upsert_order_sticker_asset_from_bytes(
     order: FbsOrder,
     png_bytes: bytes,
     sticker_code: str | None,
+    sticker_barcode: str | None = None,
     fetched_at: datetime | None = None,
 ) -> FbsPrintAsset:
     when = fetched_at or datetime.now(tz=UTC)
@@ -401,6 +408,7 @@ async def upsert_order_sticker_asset_from_bytes(
             order=order,
             png_bytes=png_bytes,
             sticker_code=sticker_code,
+            sticker_barcode=sticker_barcode,
             fetched_at=when,
         )
     except FbsPrintAssetStorageError as exc:
@@ -585,6 +593,7 @@ async def request_supply_print_batch(
                     continue
 
                 sticker_code = sticker_code_from_wb_row(sticker_row)
+                sticker_barcode = sticker_barcode_from_wb_row(sticker_row)
                 png_bytes = decode_png_payload(sticker_row.get("file"))
                 asset = await _find_order_sticker_asset(session, tenant_id, order.id)
                 if asset is None:
@@ -622,6 +631,7 @@ async def request_supply_print_batch(
                         order=order,
                         png_bytes=png_bytes,
                         sticker_code=sticker_code,
+                        sticker_barcode=sticker_barcode,
                         fetched_at=fetched_at,
                     )
                 except FbsPrintAssetStorageError as exc:

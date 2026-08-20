@@ -1,3 +1,4 @@
+# ruff: noqa: RUF002, RUF003
 from __future__ import annotations
 
 import uuid
@@ -211,6 +212,11 @@ class FbsOrder(Base):
         index=True,
     )
     sticker_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Технический код с самого стикера WB: именно он закодирован во все QR и
+    # штрихкоды на печатной этикетке, и именно его отдаёт сканер (вид «*DUIkWJJF»).
+    # sticker_code рядом — это человеческий номер partA/partB («5694425 3074»),
+    # напечатанный цифрами сбоку: его читают глазами, но сканер его не выдаёт.
+    sticker_barcode: Mapped[str | None] = mapped_column(String(128), nullable=True)
     sticker_file: Mapped[str | None] = mapped_column(Text, nullable=True)
     trbx_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),

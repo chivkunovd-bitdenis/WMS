@@ -1,3 +1,4 @@
+# ruff: noqa: RUF002
 """Human-readable WB FBS sticker code extraction."""
 
 from __future__ import annotations
@@ -24,3 +25,17 @@ def sticker_code_from_wb_row(row: dict[str, Any]) -> str | None:
     if part_a and part_b:
         return f"{part_a} {part_b}"
     return None
+
+
+def sticker_barcode_from_wb_row(row: dict[str, Any]) -> str | None:
+    """Технический код стикера — тот, что закодирован в QR и читается сканером.
+
+    В ответе WB это поле ``barcode`` (например ``*DUIkWJJF``). Оператор его нигде
+    не видит глазами, но на печатной этикетке им заполнены все семь кодов — и QR,
+    и линейные штрихкоды. Без него скан стикера не сопоставить с заказом.
+    """
+    raw = row.get("barcode") or row.get("sticker_barcode")
+    if not isinstance(raw, str):
+        return None
+    cleaned = raw.strip()
+    return cleaned or None

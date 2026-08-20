@@ -1,3 +1,4 @@
+# ruff: noqa: RUF003
 """FBS KIZ manual binding lookup by WB order sticker."""
 
 from __future__ import annotations
@@ -371,16 +372,21 @@ def _normalized_optional(raw: object) -> str | None:
 
 
 def _find_order_by_sticker(orders: list[FbsOrder], sticker: str) -> FbsOrder | None:
+    # Сначала — технический код стикера. Именно он закодирован во все QR и штрихкоды
+    # печатной этикетки WB, и именно его выдаёт сканер (вид «*DUIkWJJF»). Проверено
+    # 20.08.2026 декодированием реальной этикетки: раньше поиск шёл только по
+    # человеческому номеру partA/partB, поэтому скан не находил заказ никогда.
+    for order in orders:
+        if _normalized_optional(order.sticker_barcode) == sticker:
+            return order
+    # Человеческий номер («5694425 3074») — если оператор вводит его руками с этикетки.
     for order in orders:
         if _normalized_optional(order.sticker_code) == sticker:
             return order
+    # Штрихкод товара — запасной путь, когда стикер заказа ещё не получен.
     for order in orders:
         if _normalized_optional(order.wb_barcode) == sticker:
             return order
-    # A third variant (partA+partB from the WB sticker) is deliberately not implemented:
-    # we store neither part, and what the printed sticker's QR actually encodes is unknown
-    # until the hardware check in TASK.md section 8. Add it together with persisting
-    # partA/partB once a real scan proves it is needed.
     return None
 
 
