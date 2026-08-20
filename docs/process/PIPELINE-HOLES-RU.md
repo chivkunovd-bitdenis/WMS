@@ -32,7 +32,7 @@
 fail-closed offline path: отсутствующий, подменённый или несоответствующий SHA
 manifest останавливает deploy до миграций и restart.
 
-## P0. Controller появился, полный wave-driver и единый validation engine ещё не готовы
+## P0. Controller появился; dry-run wave-driver есть, distributed execution и единый validation engine ещё не готовы
 
 Добавлен `pipeline/controller.py` и вход `scripts/pipeline/run.py` с командами
 `open`, `classify`, `hold`, `resume`, `next`, `packet`, `advance`, `validate`,
@@ -44,10 +44,15 @@ structured receipt при `advance`.
 пока она ждёт владельца, `advance` запрещён. Это защищает подготовленную очередь
 от случайного старта до явного `resume`.
 
-Что ещё не закрыто: это минимальный local controller, а не полный `wave-driver`.
-Он ещё не выдаёт настоящие isolated worktrees/ports/DB/Redis/Celery/emulator, не
-подписывает receipts независимым секретным ключом, не реализует полноценный
-fencing token, crash replay и resource scheduler.
+Что закрыто этим slice: `scripts/pipeline/wave_driver.py` читает `WAITING`
+snapshots и строит deterministic resource plan для isolated worktree, ports,
+DB, Redis, Celery, emulator и evidence. Dry-run не создаёт эти ресурсы, не
+запускает агентов и не пишет state; это проверяет CI smoke.
+
+Что ещё не закрыто: это всё ещё local controller и allocation-plan, а не полный
+distributed executor. Нет распределённого host, который применяет план, и нет
+внешнего controller-owned durable store. Независимая receipt-подпись и единый
+validation engine для controller, CI и deploy также остаются незакрытыми.
 
 Почему это дырка: без controller рабочий агент всё ещё может "сказать", что
 стадия пройдена, а не получить проверяемый controller-issued receipt.
@@ -164,6 +169,6 @@ distributed wave-driver.
 ## Следующий технический slice
 
 Самый полезный следующий slice: заменить локальную hash-signature на независимую
-receipt-подпись, недоступную worker, и довести controller до distributed
-wave-driver: isolated worktrees/ports/DB/Redis/Celery/emulator, общий recovery
-store и единый validation engine для controller, CI и deploy.
+receipt-подпись, недоступную worker, и добавить distributed host, который
+применяет уже существующий dry-run allocation plan через внешний recovery store
+и единый validation engine для controller, CI и deploy.

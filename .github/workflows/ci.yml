@@ -33,6 +33,8 @@ jobs:
         run: python3 scripts/ci/check_pipeline_policy_metatests.py
       - name: Run WMS pipeline v2 replay metatests
         run: python3 scripts/ci/check_pipeline_replay_metatests.py
+      - name: Smoke-test WMS pipeline v2 wave-driver dry-run
+        run: python3 scripts/ci/check_pipeline_wave_driver_smoke.py
       - name: Check pipeline evidence for raw secrets
         run: python3 scripts/ci/check_pipeline_evidence_secrets.py
 

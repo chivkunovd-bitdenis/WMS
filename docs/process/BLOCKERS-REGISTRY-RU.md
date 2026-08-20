@@ -36,12 +36,12 @@
 - **Resume stage:** activation gate, не карточка разработки.
 - **Минимальный артефакт закрытия:** hash-linked activation manifest с commit SHA, owner activation line с датой, машинным переводом `pipeline/pipeline.yml` в `ACTIVE`, сохранёнными E-1…E-7 артефактами, E8 matrix по task profiles/traits, validator proof для controller/CI/deploy и аудитом старых process entrypoint'ов. Зелёные MT01…MT40 сами по себе этот блокер не снимают.
 
-### BLK-PIPE-002 — Нет распределённого wave-driver и изолированных ресурсов
+### BLK-PIPE-002 — Нет distributed host и внешнего durable store для wave-driver
 
 - **Тип:** architecture / environment / integration.
 - **Где обнаружен:** `docs/process/PIPELINE-HOLES-RU.md`, раздел «Controller появился...»; `docs/process/PIPELINE-READY-REPORT-RU.md`, раздел «Что не готово для автономной ночной работы».
-- **Почему блокирует бизнес:** локальный controller может подготовить состояние, но не гарантирует отдельные worktree, порты, базы, очереди и эмуляторы для параллельных задач. В результате соседние работы могут влиять друг на друга, а ночной результат нельзя воспроизвести.
-- **Кто закрывает:** Architect; Dev реализует согласованный исполнительный слой; Reviewer проверяет изоляцию.
+- **Почему блокирует бизнес:** dry-run уже детерминированно планирует отдельные worktree, порты, базы, очереди и эмуляторы, но локальная машина не может надёжно применить этот план для распределённой ночной волны. Без controller-owned внешнего durable store restart на другом host не восстановит authority state и leases.
+- **Кто закрывает:** Architect согласует distributed host и store; Dev реализует исполнительный слой; Reviewer проверяет изоляцию и recovery.
 - **Минимальный артефакт закрытия:** рабочий wave-driver с выдачей изолированного окружения, lease/fencing, возвратом состояния после сбоя и интеграционный receipt на конфликтующие ресурсы.
 
 ### BLK-PIPE-003 — Receipt доверяет локальной hash-подписи

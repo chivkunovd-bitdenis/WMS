@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WMS Pipeline Wave Driver Dry-Run Plan",
+  "type": "object",
+  "required": ["schema_version", "driver_mode", "writes_state", "starts_agents", "creates_worktrees", "source", "wave_id", "tasks"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "driver_mode": {"const": "dry_run"},
+    "writes_state": {"const": false},
+    "starts_agents": {"const": false},
+    "creates_worktrees": {"const": false},
+    "source": {"type": "string"},
+    "wave_id": {"type": "string", "pattern": "^[a-z0-9-]+$"},
+    "tasks": {"type": "array", "items": {"$ref": "#/$defs/task"}}
+  },
+  "$defs": {
+    "task": {
+      "type": "object",
+      "required": ["task_id", "status", "base_sha", "allocation"],
+      "properties": {
+        "task_id": {"type": "string"},
+        "status": {"const": "WAITING"},
+        "base_sha": {"type": "string"},
+        "allocation": {
+          "type": "object",
+          "required": ["worktree", "ports", "database", "redis_namespace", "celery_queue", "emulator_namespace", "evidence_dir", "resources"]
+        }
+      }
+    }
+  }
+}

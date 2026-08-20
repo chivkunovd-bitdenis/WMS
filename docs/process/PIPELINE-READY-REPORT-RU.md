@@ -32,6 +32,11 @@ snapshot состояния и packet для S01, но нет receipts, verdicts
   `python3 scripts/pipeline/run.py report`.
 - Есть генератор dispatch-prompt для Codex, Claude и Cursor:
   `python3 scripts/pipeline/dispatch.py --task-id <id> --executor codex|claude|cursor`.
+- Есть executable dry-run wave-driver:
+  `python3 scripts/pipeline/wave_driver.py --format json`. Он читает только
+  `WAITING` snapshots и показывает isolated worktree/ports/DB/Redis/Celery/
+  emulator/resources plan, не создавая worktree, не запуская агентов и не
+  записывая state.
 - Есть машинная политика выбора модели: `pipeline/model-policy.yml`. Dispatch prompt теперь
   прямо пишет tier и конкретную модель: простая разработка уходит на дешёвую модель, dispatcher/BA
   на среднюю, а архитектура, продукт, ресёрч, ревью и живой браузер — на дорогую.
@@ -69,9 +74,9 @@ snapshot состояния и packet для S01, но нет receipts, verdicts
 
 ## Что не готово для автономной ночной работы
 
-- Controller пока локальный: resource locks и replay checks уже есть, но
-  распределённый wave-driver ещё не выделяет сам isolated worktrees/ports/DB/
-  Redis/Celery/emulator и не хранит controller state во внешнем durable store.
+- Dry-run wave-driver уже выдаёт проверяемый isolated resource plan, но не имеет
+  распределённого host, который мог бы безопасно применить план, и controller
+  state пока не хранится во внешнем durable store.
 - Receipt не подписываются независимым ключом, а общая проверка состояния ещё не
   применяется одинаково controller, CI и deploy.
 - Registry promotion не настроен: вместо OCI registry пока используется
