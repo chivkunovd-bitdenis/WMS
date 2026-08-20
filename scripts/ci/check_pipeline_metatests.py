@@ -1049,6 +1049,7 @@ def main() -> int:
             backlog_item = client_packet.get("backlog_item") or {}
             client_items = backlog_item.get("client_items") or []
             require(backlog_item.get("id") == "BLG-KC01", "MT44: packet must include full backlog item id", errors)
+            require(len(backlog_item.get("business_meaning", "").split(". ")) >= 3, "MT44: packet must expose narrative business meaning", errors)
             require(any(item.get("id") == "KC-01" and "селлером" in item.get("business_meaning", "") for item in client_items), "MT44: packet must expose client subitems to BA/Product", errors)
     finally:
         cleanup_task(budget_task)
