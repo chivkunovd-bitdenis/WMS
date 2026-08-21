@@ -58,7 +58,7 @@
     "S23",
     "S26"
   ],
-  "current_stage": "S12",
+  "current_stage": "S13",
   "status": "RUNNING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
@@ -75,8 +75,8 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T04:07:02Z",
-  "last_valid_receipt": "sha256:14915aa77a72fe83a924d157ff072001b344dd9bd7f901ce2e9f45ed9147cda2",
+  "heartbeat_at": "2026-08-21T04:11:06Z",
+  "last_valid_receipt": "sha256:e8ff86ddbb69f1674965e8b4e01fadd025019526f92a593bd12fae7567752d61",
   "blocker": null,
   "resume_condition": null,
   "verdicts": {
@@ -114,15 +114,22 @@
       "receipt_hash": "sha256:14915aa77a72fe83a924d157ff072001b344dd9bd7f901ce2e9f45ed9147cda2",
       "role_binding_id": "pipeline-product",
       "agent_identity": "codex-blg-i02-s11-pipeline-product"
+    },
+    "S12": {
+      "verdict": "TASK_CUT_READY",
+      "receipt_path": "docs/evidence/BLG-I02/S12-TASK_CUT_READY.receipt.json",
+      "receipt_hash": "sha256:e8ff86ddbb69f1674965e8b4e01fadd025019526f92a593bd12fae7567752d61",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-blg-i02-s12-pipeline-ba"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 144300,
-    "output_tokens": 28100,
-    "estimated_usd": 2.4525
+    "input_tokens": 170300,
+    "output_tokens": 33100,
+    "estimated_usd": 2.8525
   },
   "budget_usage_receipts": [
     {
@@ -189,6 +196,19 @@
       "estimated_usd": 0.95,
       "agent_id": "codex-blg-i02-s11-pipeline-product",
       "recorded_at": "2026-08-21T04:07:02Z"
+    },
+    {
+      "task_id": "BLG-I02",
+      "stage": "S12",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 26000,
+      "output_tokens": 5000,
+      "estimated_usd": 0.4,
+      "agent_id": "codex-blg-i02-s12-pipeline-ba",
+      "recorded_at": "2026-08-21T04:11:06Z"
     }
   ],
   "blocked_by": [],
