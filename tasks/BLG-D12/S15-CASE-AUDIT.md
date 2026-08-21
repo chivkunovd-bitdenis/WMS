@@ -1,63 +1,69 @@
-# S15 independent case audit - BLG-D12
+# S15 independent repaired-package case audit - BLG-D12
 
 ## Verdict
 
-`CASE_AUDIT_FAILED`
+`CASE_AUDIT_PASSED`
 
-This is an independent `case-auditor` audit of the exact S15 package. It does
-not mutate controller state, advance S15, accept S16, or authorize development,
-release, deployment, production access, secret access, or live WB/Ozon work.
+This is an independent `pipeline-case-auditor` / `pipeline-reviewer` re-audit.
+The auditor did not author the repaired case package. This verdict is bound to
+repaired commit `9ff64e10322fbeec1ca12f29a64990e470e04a10`; the BLG-D12 package in
+the working branch matched that commit before this audit artifact was updated.
 
-## Audited package
+This audit does not mutate controller state, resume or advance S15, accept S16,
+authorize development, release or deployment, access production or secrets, or
+perform live WB/Ozon calls.
+
+## Audited exact-SHA package
 
 - `S11-PRODUCT-CONTRACT.md`: `sha256:4fee46a619e1b0d7499737be2bf2ce570834163397a1d83854ceae95592a8159`
-- `S12-TASK-CUT.md`: `sha256:0d968d9f0a0aaba520a3dae3bfeb34f5a270f8bf32c6f338e6e341d132c44442`
+- `S12-TASK-CUT.md`: `sha256:33fe599fc22cf78c85a84726de0acbba98d9b5be8de3b77dc2a44eb4f0759a32`
 - `S13-ARCHITECT-PLAN.md`: `sha256:d3ea5f9aa2bcffdf8b9d089947c510288e5cbce75827dd0888ee81649edd0305`
 - `S14-ARCHITECT-FALSIFICATION.md`: `sha256:7c46808a1aaed2e1c469b34c8a6173795382b1e9cec2f291491f664cda8b08c7`
-- `S15-CASE-FACTORY.md`: `sha256:1081773c63383bc3650e157f59983dd21c058ccb071b6fc4fc57a9ee1e4f5571`
-- `S15-CASES.json`: `sha256:bdec333ba07311361d03cd1e0de0b85e2167255d6abb90720e697fe87b344000`
+- `S15-CASE-FACTORY.md`: `sha256:c985590859b3c1d1870607044c97fc82ade8453d315086558fb881bfab01ddde`
+- `S15-CASES.json`: `sha256:55dc5d3a3c52f102f8a1789bb93f8eb5aabd0e34edc744f561db28faf03e3227`
 
-`next --task-id BLG-D12` reports `S16` owned by `pipeline-product`; `validate
---task-id BLG-D12` passes. Neither result is an S16 acceptance and no controller
-command was used to advance the task.
+## Closure of the failed row
 
-## Covered rows
+The previous complete-current-B-inventory gap is closed by two independent
+planned-S19 cases:
 
-The exact matrix has deterministic direct and breaker coverage for entry HTML
-aliases/fallbacks and `GET`/`HEAD`, stale validators, retained A rollback
-assets and URL-byte collision, ordinary A-warmed same-origin navigation to B,
-false browser shortcuts, effective header ownership, missing/redirect/error
-false proof, fixture reset, S19 executable references, and the stated
-non-production/no-scope-expansion boundary.
+- `D12-C1-15` derives the complete immutable B URL set from the candidate
+  manifest and recursively resolved JS/CSS import graph. It explicitly includes
+  direct and lazy/transitive chunks, CSS imports, fonts and images. It compares
+  both directions: every served immutable response must have one manifest-bound
+  URL/digest member, and every derived immutable URL must be served with the
+  exact immutable policy and recorded bytes for both `GET` and `HEAD`.
+- `D12-C1-16` supplies the independent breaker. A served immutable direct or
+  transitive asset omitted from the candidate manifest/inventory is a hard
+  failure before candidate or browser proof, even if the URL looks hashed, the
+  bytes are readable and its cache header is otherwise correct.
 
-## Missing applicable row
+The Markdown coverage matrix and JSON coverage matrix map both cases to AC02
+and the S14 complete-inventory attack lane. The package contains sixteen unique
+GOLD case IDs; every JSON case has a task-specific fixture, steps, oracle,
+expected result, read-back, executor type and `PLANNED_FOR_S19` binding. The
+planned references are intentionally created at S19, where the pipeline requires
+them to become runnable without changing their oracles.
 
-| Source requirement | Required direct and breaker coverage | Exact gap |
-| --- | --- | --- |
-| S14 falsification, complete immutable asset inventory | Enumerate every current and retained asset served with immutable caching, including transitive chunks, CSS imports, fonts and images; bind each URL and bytes to the candidate manifest. A breaker must fail when an immutable response is absent from that inventory. | `D12-C1-04` verifies only selected referenced hashed JS/CSS. `D12-C1-10` enumerates retained A assets only. No case enumerates the complete current B immutable inventory, and no breaker makes a hashed immutable B response absent from that inventory fail. The fixture's phrase "complete B inventory" and S19 recording plan are not executable assertions. |
+## Full audit result
 
-## Required rework and blocker
+All S12 AC01-AC07 rows and all S14 attack lanes now have deterministic direct
+and breaker coverage. The two-candidate reset contract is isolated,
+non-production, stable-origin and external-egress-denied. Warm-cache proof
+cannot be satisfied by a cold profile, cache clear, disabled cache, origin
+change, hard reload or service-worker shortcut. The package remains scoped to
+frontend entry/asset cache policy and exact-artifact evidence; it does not widen
+into deploy, production, secrets, API, auth, tenant, database, worker, print,
+device or marketplace behavior.
 
-Add a planned-S19 direct case that enumerates the complete current B immutable
-inventory and validates every URL, cache policy and digest against B's manifest,
-including transitive chunks, CSS imports, fonts and images. Add its independent
-breaker for an immutable B URL missing from the inventory/manifest, and map both
-case IDs in the Markdown and JSON coverage matrix to the S14 complete-inventory
-row. Until then the blocker is `CASE_AUDIT_REQUIRED`; S16 must not be accepted
-from this audited package.
+No uncovered applicable row remains. The independent S15 audit requirement is
+satisfied for the exact package above.
 
-## Writer rework closure note
+## Orchestrator next action
 
-`pipeline-ba` repaired the S15 package after this audit snapshot by adding
-`D12-C1-15` as the planned-S19 direct complete-current-B-inventory case and
-`D12-C1-16` as its independent immutable-URL-outside-manifest/inventory
-breaker. Both are mapped in the Markdown and JSON matrices to AC02 and the S14
-complete-inventory attack lane. The direct case requires equality between every
-immutable B response and the candidate-manifest-derived set, recursively
-including chunks, CSS imports, fonts and images; the breaker requires a hard
-failure before browser or candidate proof when an immutable URL has no matching
-manifest/inventory member.
-
-This note is not an audit verdict and does not change `CASE_AUDIT_FAILED` in
-this document. An independent `case-auditor` must re-audit the repaired exact
-S15 package and issue the controller receipt before S16 can proceed.
+Record this independent `CASE_AUDIT_PASSED` closure against repaired SHA
+`9ff64e10322fbeec1ca12f29a64990e470e04a10`, resume BLG-D12 at S15 through the
+controller, and only then use `scripts/pipeline/run.py advance` for the
+controller-declared S15 transition. After `validate`, generate the S16 packet
+and dispatch an independent `pipeline-product` worker. This audit itself is not
+an S16 Product approval.
