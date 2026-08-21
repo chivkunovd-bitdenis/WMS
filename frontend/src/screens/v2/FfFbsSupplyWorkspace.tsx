@@ -2498,7 +2498,15 @@ export function FfFbsSupplyWorkspace({
                     <ProductPhotoThumb src={row.imageUrl} alt={row.name} size={44} />
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Typography variant="body2" sx={{ fontWeight: 700 }}>{row.name}</Typography>
-                      <Typography variant="caption" color="text.secondary">{row.identifiers}</Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                        {row.identifiers}
+                      </Typography>
+                      {/* Оператор не обязан помнить, сколько по этому товару ещё не
+                          разложено: раньше поле было пустым и без подсказки, и человек
+                          не понимал, какое число вводить. */}
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                        осталось разложить: {row.orders.length} шт
+                      </Typography>
                     </Box>
                     <TextField
                       size="small"
@@ -2512,13 +2520,30 @@ export function FfFbsSupplyWorkspace({
                       slotProps={{ htmlInput: { min: 0, max: row.orders.length } }}
                       sx={{ width: 96 }}
                     />
+                    <Button
+                      size="small"
+                      disabled={busy || row.orders.length === 0}
+                      onClick={() =>
+                        setBoxProductQty((current) => ({
+                          ...current,
+                          [row.key]: String(row.orders.length),
+                        }))
+                      }
+                    >
+                      Всё
+                    </Button>
                   </Stack>
                 )
               })}
             </Stack>
           </Stack>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ justifyContent: 'space-between' }}>
+          <Typography variant="caption" color="text.secondary" sx={{ pl: 1 }}>
+            {boxAssignSelectedOrderIds.length > 0
+              ? `В короб уйдёт ${boxAssignSelectedOrderIds.length} шт`
+              : 'Укажите количество хотя бы по одному товару'}
+          </Typography>
           <Button variant="contained" disabled={busy || boxAssignSelectedOrderIds.length === 0} onClick={() => void assignBoxOrders()}>Добавить</Button>
         </DialogActions>
       </Dialog>
