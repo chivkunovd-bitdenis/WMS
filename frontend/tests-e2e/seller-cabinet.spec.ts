@@ -143,6 +143,11 @@ test('admin creates seller user; seller sees filtered catalog and inbound', asyn
   await expect(page.getByTestId('seller-inbound-draft-form')).toBeVisible();
   await page.getByTestId('seller-inbound-add-products').click();
   await expect(page.getByTestId('seller-inbound-picker')).toBeVisible();
+  await page.getByTestId('seller-inbound-picker-apply').click();
+  await expect(page.getByTestId('seller-inbound-picker')).toBeVisible();
+  await expect(page.getByTestId('seller-inbound-picker-error')).toContainText(
+    'Выберите товар и укажите количество.',
+  );
   await page.getByTestId('seller-inbound-picker-search').fill(skuA);
   await page.getByTestId('seller-inbound-picker-qty').first().fill('3');
   await Promise.all([

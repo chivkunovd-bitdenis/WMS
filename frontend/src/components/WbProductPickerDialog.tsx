@@ -287,6 +287,10 @@ export function WbProductPickerDialog({
         selections[productId] = qty
       }
     }
+    if (Object.keys(selections).length === 0) {
+      setPickerError('Выберите товар и укажите количество.')
+      return
+    }
     await onApply(selections)
   }
 
