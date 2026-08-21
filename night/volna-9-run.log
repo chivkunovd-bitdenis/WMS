@@ -150,3 +150,22 @@
 01:02   06-picking-list-order · reviewer: готово
 01:02   06-picking-list-order · reviewer: находки, круг 2 — назад к разработке
 01:03 03-no-distribution-mode: отложено — исключение Command '['docker', 'compose', '-p', 'wms-lane-3', '-f', '/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9/lane-3-03-no-distribution-mode/docker-compose.yml', '-f', '/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9/lane-3-03-no-distribution-mode/docker-compose.lane.yml', 'build']' timed out after 900 seconds
+01:05   01-wb-marking · screen-dev: готово
+01:06   04-warehouse-switch · screen-dev: готово
+01:06   06-picking-list-order · screen-dev: готово
+01:07   02-verdikt-screen · screen-dev: готово
+01:07   05-prod-slow · reviewer: готово
+01:07   05-prod-slow · reviewer: находки, круг 2 — назад к разработке
+01:10   07-reporting · solution-architect: готово
+01:12   04-warehouse-switch · reviewer: готово
+01:12   04-warehouse-switch · reviewer: находки, круг 2 — назад к разработке
+01:13   05-prod-slow · screen-dev: готово
+01:13   06-picking-list-order · reviewer: готово
+01:13 06-picking-list-order: отложено — reviewer, круги кончились
+01:13   01-wb-marking · reviewer: готово
+01:13   01-wb-marking · reviewer: находки, круг 2 — назад к разработке
+01:16   01-wb-marking · screen-dev: готово
+01:16   02-verdikt-screen · reviewer: готово
+01:16 02-verdikt-screen: отложено — reviewer, круги кончились
+01:17   07-reporting · ux-architect: готово
+01:17   04-warehouse-switch · screen-dev: готово
