@@ -1,0 +1,62 @@
+{
+  "schema_version": "1.0",
+  "pipeline_version": "2.0",
+  "status": "ACTIVE",
+  "mode": "managed_controller",
+  "activated_at": "2026-08-21T00:11:16Z",
+  "owner_approval": "PIPELINE_ACTIVATION_APPROVED: 2026-08-21",
+  "activation_commit_sha": "cfd2ab3a3034ee7729b393bb4c6ed11ebbb24503",
+  "canonical_source": {
+    "path": "docs/process/PIPELINE-RU.md",
+    "sha256": "aa10241bbc41e678f3430d3cd2fa81b8cbbeca933277b287da048dfa89929573"
+  },
+  "machine_contract": {
+    "path": "pipeline/pipeline.yml",
+    "sha256": "1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320"
+  },
+  "entrypoints": {
+    "status": "ACTIVE_POINTERS_ENFORCED",
+    "legacy_processes_are_short_pointers": true
+  },
+  "checks": {
+    "strict_contract": "passed",
+    "metatests_mt01_mt40": "passed",
+    "failure_policy_metatests": "passed",
+    "replay_metatests": "passed",
+    "wave_driver_dry_run": "passed",
+    "model_policy": "passed",
+    "budget_policy": "passed",
+    "blockers_registry": "passed",
+    "backlog_queue": "passed_49_unique_items",
+    "evidence_secret_scan": "passed",
+    "controller_state_validation": "passed_54_tasks"
+  },
+  "backlog_wave": {
+    "wave_id": "wave-a1b311d18f07",
+    "manifest_path": "tasks/_waves/wave-a1b311d18f07.json",
+    "manifest_sha256": "197b9957c95900a4283d4404c9fdaf06974185150b3275ee7f8d0488b864f6c9",
+    "task_count": 49,
+    "status": "QUEUED",
+    "current_stage": "S01",
+    "worker_execution_started": false,
+    "execution_receipts": 0,
+    "task_commits": 0
+  },
+  "preexisting_waiting_tasks": {
+    "task_count": 5,
+    "status": "WAITING",
+    "current_stage": "S01",
+    "worker_execution_started": false,
+    "execution_receipts": 0,
+    "task_commits": 0
+  },
+  "boundaries": {
+    "starts_fix_agents": false,
+    "authorizes_production_deploy": false,
+    "authorizes_secret_changes": false,
+    "authorizes_live_marketplace_calls": false,
+    "distributed_unattended_host_enabled": false,
+    "independent_receipt_signing_enabled": false,
+    "remote_oci_registry_enabled": false
+  }
+}

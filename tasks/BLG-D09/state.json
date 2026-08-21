@@ -1,0 +1,100 @@
+{
+  "task_id": "BLG-D09",
+  "backlog_item_id": "BLG-D09",
+  "backlog_title": "Сделать prod-update exact-SHA и проверять смену bundle",
+  "backlog_item": {
+    "id": "BLG-D09",
+    "title": "Сделать prod-update exact-SHA и проверять смену bundle",
+    "source_section": "D9, I18",
+    "business_meaning": "Текущий процесс обновления production может собрать не тот коммит или оставить браузеру старый фронтенд-пакет, хотя команда обновления завершилась без ошибки. Тогда команда считает исправление выкаченным, а оператор продолжает работать на прежней версии. Обновление должно принимать точный Git SHA, подтверждать именно этот SHA на сервере и проверять, что браузер действительно получил новый bundle, то есть новый собранный пакет интерфейса.",
+    "type": "release_change",
+    "priority": "high",
+    "status": "queued",
+    "readiness": "needs_release_contract",
+    "dependencies": [],
+    "suggested_roles": [
+      "solution-architect",
+      "DevOps",
+      "reviewer"
+    ],
+    "suggested_stages": [
+      "S02",
+      "S12",
+      "S18",
+      "S25",
+      "S28"
+    ]
+  },
+  "source_hash": "sha256:3e44747fcc51820e2dbd306ebeb8ab539f487c8a5c21ab3f0d790bbab213e50c",
+  "source_excerpt": "Сделать prod-update exact-SHA и проверять смену bundle",
+  "pipeline_version": "2.0",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "traits": [
+    "release_change"
+  ],
+  "risk_level": "high",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S26",
+    "S27",
+    "S28"
+  ],
+  "current_stage": "S01",
+  "status": "QUEUED",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "environment_id": "local",
+  "database": "local",
+  "redis_namespace": "local",
+  "celery_queue": "wave-a1b311d18f07-blg-d09",
+  "emulator_namespace": "local",
+  "resources": [
+    "backlog:blg-d09",
+    "file:docs/product/backlog-queue.json"
+  ],
+  "owner_agent": "denis",
+  "attempt": 1,
+  "lease_until": "2026-08-21T00:55:55Z",
+  "heartbeat_at": "2026-08-21T00:10:08Z",
+  "last_valid_receipt": null,
+  "blocker": null,
+  "resume_condition": null,
+  "verdicts": {},
+  "commits": [],
+  "wave_id": "wave-a1b311d18f07",
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_usd": 0.0
+  },
+  "budget_usage_receipts": [],
+  "blocked_by": [
+    {
+      "id": "BLK-RELEASE-001",
+      "title": "Cache-control/D12 не включён в browser/release proof",
+      "status": "open",
+      "type": "release",
+      "owner_role": "release-owner",
+      "resume_stage": "S23",
+      "minimum_closure_artifact": "browser/release receipt with exact SHA, asset URL/hash, cache headers and hard reload proof"
+    }
+  ],
+  "blocker_resolutions": [],
+  "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
+}

@@ -1,0 +1,90 @@
+{
+  "task_id": "BLG-D05",
+  "backlog_item_id": "BLG-D05",
+  "backlog_title": "Разобрать и привязать к карточкам коды Denmarcs без связи",
+  "backlog_item": {
+    "id": "BLG-D05",
+    "title": "Разобрать и привязать к карточкам коды Denmarcs без связи",
+    "source_section": "D5",
+    "business_meaning": "В пуле Denmarcs есть загруженные коды маркировки, у которых потеряна или не определена связь с актуальной карточкой товара. Такие коды числятся в системе, но их нельзя безопасно использовать при сборке и отгрузке, потому что непонятно, к какому товару они относятся. Нужно сопоставить старые и новые карточки, привязать подтверждённые коды к правильным товарам, а сомнительные вынести в отдельный понятный статус без автоматического использования.",
+    "type": "data",
+    "priority": "medium",
+    "status": "queued",
+    "readiness": "needs_data_policy",
+    "dependencies": [
+      "BLG-F01"
+    ],
+    "suggested_roles": [
+      "BA",
+      "solution-architect",
+      "data-owner",
+      "reviewer"
+    ],
+    "suggested_stages": [
+      "S01",
+      "S02",
+      "S12",
+      "S23"
+    ]
+  },
+  "source_hash": "sha256:33780c1b0abf17939308c3fa77254185b2281484320cefcce742d716e058ee3f",
+  "source_excerpt": "Разобрать и привязать к карточкам коды Denmarcs без связи",
+  "pipeline_version": "2.0",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "traits": [
+    "database_change",
+    "tenant_sensitive"
+  ],
+  "risk_level": "medium",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S11",
+    "S12",
+    "S13",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S26"
+  ],
+  "current_stage": "S01",
+  "status": "QUEUED",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "environment_id": "local",
+  "database": "local",
+  "redis_namespace": "local",
+  "celery_queue": "wave-a1b311d18f07-blg-d05",
+  "emulator_namespace": "local",
+  "resources": [
+    "backlog:blg-d05",
+    "file:docs/product/backlog-queue.json"
+  ],
+  "owner_agent": "denis",
+  "attempt": 1,
+  "lease_until": "2026-08-21T00:55:55Z",
+  "heartbeat_at": "2026-08-21T00:10:06Z",
+  "last_valid_receipt": null,
+  "blocker": null,
+  "resume_condition": null,
+  "verdicts": {},
+  "commits": [],
+  "wave_id": "wave-a1b311d18f07",
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_usd": 0.0
+  },
+  "budget_usage_receipts": [],
+  "blocked_by": [],
+  "blocker_resolutions": [],
+  "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
+}

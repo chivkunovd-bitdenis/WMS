@@ -1,0 +1,1616 @@
+{
+  "wave_id": "wave-a1b311d18f07",
+  "created_at": "2026-08-20T23:55:57Z",
+  "owner_approved_by": "denis",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "backlog_ids": [
+    "BLG-D01",
+    "BLG-D02",
+    "BLG-D03",
+    "BLG-D04",
+    "BLG-D05",
+    "BLG-D06",
+    "BLG-D07",
+    "BLG-D09",
+    "BLG-D11",
+    "BLG-D14",
+    "BLG-D16",
+    "BLG-D17",
+    "BLG-D19",
+    "BLG-D20",
+    "BLG-D21",
+    "BLG-D22",
+    "BLG-D23",
+    "BLG-F01",
+    "BLG-F1A",
+    "BLG-G01",
+    "BLG-I01",
+    "BLG-I02",
+    "BLG-I03",
+    "BLG-I04",
+    "BLG-I05",
+    "BLG-I06",
+    "BLG-I07",
+    "BLG-I08",
+    "BLG-I09",
+    "BLG-I10",
+    "BLG-I11",
+    "BLG-I12",
+    "BLG-K02",
+    "BLG-KC01",
+    "BLG-D08",
+    "BLG-D12",
+    "BLG-D18",
+    "BLG-F03",
+    "BLG-I13R",
+    "BLG-I14",
+    "BLG-I15",
+    "BLG-I16",
+    "BLG-I17",
+    "BLG-I19",
+    "BLG-J01",
+    "BLG-J02",
+    "BLG-J04",
+    "BLG-C01",
+    "BLG-C02"
+  ],
+  "budget_policy": "pipeline/budget-policy.yml",
+  "tasks": [
+    {
+      "task_id": "BLG-D01",
+      "backlog_item_id": "BLG-D01",
+      "title": "Сбрасывать выбор заказов при смене фильтра и показывать состав пачки",
+      "readiness": "needs_product_contract",
+      "traits": [
+        "bug"
+      ],
+      "risk_level": "high",
+      "required_stages": [
+        "S01",
+        "S02",
+        "B01",
+        "B02",
+        "B03",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": [
+        "BLK-PROD-002"
+      ]
+    },
+    {
+      "task_id": "BLG-D02",
+      "backlog_item_id": "BLG-D02",
+      "title": "Создавать задание упаковки при зеркалировании поставки WB",
+      "readiness": "needs_product_contract",
+      "traits": [
+        "bug",
+        "external_contract"
+      ],
+      "risk_level": "high",
+      "required_stages": [
+        "S01",
+        "S02",
+        "B01",
+        "B02",
+        "B03",
+        "S03",
+        "S04",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": [
+        "BLK-PROD-002"
+      ]
+    },
+    {
+      "task_id": "BLG-D03",
+      "backlog_item_id": "BLG-D03",
+      "title": "Зафиксировать oracle Честного знака и правило requiredMeta/optionalMeta",
+      "readiness": "waiting_owner_oracle",
+      "traits": [
+        "external_contract"
+      ],
+      "risk_level": "critical",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S03",
+        "S04",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": [
+        "BLK-PROD-001"
+      ]
+    },
+    {
+      "task_id": "BLG-D04",
+      "backlog_item_id": "BLG-D04",
+      "title": "Определять необходимость Честного знака по карточке товара",
+      "readiness": "needs_product_contract",
+      "traits": [
+        "bug"
+      ],
+      "risk_level": "medium",
+      "required_stages": [
+        "S01",
+        "S02",
+        "B01",
+        "B02",
+        "B03",
+        "S11",
+        "S12",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-D05",
+      "backlog_item_id": "BLG-D05",
+      "title": "Разобрать и привязать к карточкам коды Denmarcs без связи",
+      "readiness": "needs_data_policy",
+      "traits": [
+        "database_change",
+        "tenant_sensitive"
+      ],
+      "risk_level": "medium",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S11",
+        "S12",
+        "S13",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-D06",
+      "backlog_item_id": "BLG-D06",
+      "title": "Скрывать архивные товары OLD/ по умолчанию",
+      "readiness": "needs_product_contract",
+      "traits": [
+        "ui_change"
+      ],
+      "risk_level": "low",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S09",
+        "S10",
+        "S11",
+        "S12",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S24",
+        "S25",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-D07",
+      "backlog_item_id": "BLG-D07",
+      "title": "Добавить повторную сверку статусов заказов WB",
+      "readiness": "needs_technical_contract",
+      "traits": [
+        "background_worker",
+        "external_contract"
+      ],
+      "risk_level": "medium",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S03",
+        "S04",
+        "S11",
+        "S12",
+        "S13",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-D09",
+      "backlog_item_id": "BLG-D09",
+      "title": "Сделать prod-update exact-SHA и проверять смену bundle",
+      "readiness": "needs_release_contract",
+      "traits": [
+        "release_change"
+      ],
+      "risk_level": "high",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26",
+        "S27",
+        "S28"
+      ],
+      "blocked_by": [
+        "BLK-RELEASE-001"
+      ]
+    },
+    {
+      "task_id": "BLG-D11",
+      "backlog_item_id": "BLG-D11",
+      "title": "Не помечать error заказы с уже сохранённым стикером",
+      "readiness": "needs_technical_contract",
+      "traits": [
+        "bug"
+      ],
+      "risk_level": "medium",
+      "required_stages": [
+        "S01",
+        "S02",
+        "B01",
+        "B02",
+        "B03",
+        "S11",
+        "S12",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-D14",
+      "backlog_item_id": "BLG-D14",
+      "title": "Устранить deadlock при создании крупной поставки и автоопросе",
+      "readiness": "needs_architecture_contract",
+      "traits": [
+        "database_change",
+        "background_worker"
+      ],
+      "risk_level": "high",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": [
+        "BLK-ARCH-002"
+      ]
+    },
+    {
+      "task_id": "BLG-D16",
+      "backlog_item_id": "BLG-D16",
+      "title": "Дать оператору безопасную перевязку КИЗ между заказами",
+      "readiness": "waiting_owner_oracle",
+      "traits": [
+        "ui_change"
+      ],
+      "risk_level": "high",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S09",
+        "S10",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S24",
+        "S25",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-D17",
+      "backlog_item_id": "BLG-D17",
+      "title": "Возвращать не привязанный код из void в available или объяснять аннулирование",
+      "readiness": "needs_architecture_contract",
+      "traits": [
+        "database_change",
+        "tenant_sensitive"
+      ],
+      "risk_level": "high",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-D19",
+      "backlog_item_id": "BLG-D19",
+      "title": "Исправить пагинацию импорта каталога WB",
+      "readiness": "needs_technical_contract",
+      "traits": [
+        "external_contract"
+      ],
+      "risk_level": "critical",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S03",
+        "S04",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": [
+        "BLK-RESEARCH-001",
+        "BLK-INTEGRATION-001"
+      ]
+    },
+    {
+      "task_id": "BLG-D20",
+      "backlog_item_id": "BLG-D20",
+      "title": "Добавить фоновую синхронизацию каталога товаров",
+      "readiness": "needs_technical_contract",
+      "traits": [
+        "background_worker"
+      ],
+      "risk_level": "high",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": [
+        "BLK-INTEGRATION-001"
+      ]
+    },
+    {
+      "task_id": "BLG-D21",
+      "backlog_item_id": "BLG-D21",
+      "title": "Перевести WbProductPickerDialog на серверный поиск каталога",
+      "readiness": "needs_product_contract",
+      "traits": [
+        "database_change",
+        "background_worker",
+        "external_contract"
+      ],
+      "risk_level": "high",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S03",
+        "S04",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": [
+        "BLK-INTEGRATION-001"
+      ]
+    },
+    {
+      "task_id": "BLG-D22",
+      "backlog_item_id": "BLG-D22",
+      "title": "Починить полный pytest-гейт и разделить причины зависания",
+      "readiness": "needs_technical_contract",
+      "traits": [
+        "pipeline_change"
+      ],
+      "risk_level": "high",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S25",
+        "S26"
+      ],
+      "blocked_by": [
+        "BLK-TEST-001"
+      ]
+    },
+    {
+      "task_id": "BLG-D23",
+      "backlog_item_id": "BLG-D23",
+      "title": "Показывать точную причину отказа при сдаче поставки",
+      "readiness": "needs_product_contract",
+      "traits": [
+        "ui_change"
+      ],
+      "risk_level": "medium",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S09",
+        "S10",
+        "S11",
+        "S12",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S24",
+        "S25",
+        "S26"
+      ],
+      "blocked_by": [
+        "BLK-PROD-002"
+      ]
+    },
+    {
+      "task_id": "BLG-F01",
+      "backlog_item_id": "BLG-F01",
+      "title": "Собрать библиотеку блокировок и карту зависимостей pipeline",
+      "readiness": "needs_architecture_contract",
+      "traits": [
+        "pipeline_change"
+      ],
+      "risk_level": "critical",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S25",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-F1A",
+      "backlog_item_id": "BLG-F1A",
+      "title": "Добавить проверку реальных артефактов и уровней доказательств",
+      "readiness": "needs_architecture_contract",
+      "traits": [
+        "pipeline_change"
+      ],
+      "risk_level": "critical",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S25",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-G01",
+      "backlog_item_id": "BLG-G01",
+      "title": "Подготовить архитектурное решение для запуска Ozon",
+      "readiness": "needs_architecture_decision",
+      "traits": [
+        "new_domain",
+        "external_contract"
+      ],
+      "risk_level": "medium",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S03",
+        "S04",
+        "S05",
+        "S06",
+        "S07",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": [
+        "BLK-ARCH-003"
+      ]
+    },
+    {
+      "task_id": "BLG-I01",
+      "backlog_item_id": "BLG-I01",
+      "title": "Перейти на актуальный WB endpoint статусов маркировки",
+      "readiness": "needs_technical_contract",
+      "traits": [
+        "external_contract"
+      ],
+      "risk_level": "critical",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S03",
+        "S04",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": [
+        "BLK-RESEARCH-001"
+      ]
+    },
+    {
+      "task_id": "BLG-I02",
+      "backlog_item_id": "BLG-I02",
+      "title": "Сохранять вердикты WB и запрещать оптимистичный dispatch",
+      "readiness": "needs_product_contract",
+      "traits": [
+        "external_contract"
+      ],
+      "risk_level": "critical",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S03",
+        "S04",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-I03",
+      "backlog_item_id": "BLG-I03",
+      "title": "Сохранять GS-разделители при сканировании ЧЗ на всех входах",
+      "readiness": "needs_technical_contract",
+      "traits": [
+        "mobile_contract"
+      ],
+      "risk_level": "critical",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S25",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-I04",
+      "backlog_item_id": "BLG-I04",
+      "title": "Исправить квадратирование числа листов при печати",
+      "readiness": "needs_product_contract",
+      "traits": [
+        "print"
+      ],
+      "risk_level": "high",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S09",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S25",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-I05",
+      "backlog_item_id": "BLG-I05",
+      "title": "Хранить полные коды ЧЗ, включая криптохвост и разделители",
+      "readiness": "needs_architecture_contract",
+      "traits": [
+        "database_change",
+        "tenant_sensitive"
+      ],
+      "risk_level": "high",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-I06",
+      "backlog_item_id": "BLG-I06",
+      "title": "Обновлять idempotency key при смене способа сдачи",
+      "readiness": "needs_technical_contract",
+      "traits": [
+        "bug"
+      ],
+      "risk_level": "medium",
+      "required_stages": [
+        "S01",
+        "S02",
+        "B01",
+        "B02",
+        "B03",
+        "S11",
+        "S12",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-I07",
+      "backlog_item_id": "BLG-I07",
+      "title": "Провести capacity/performance remediation прода",
+      "readiness": "needs_architecture_contract",
+      "traits": [
+        "database_change",
+        "background_worker"
+      ],
+      "risk_level": "high",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-I08",
+      "backlog_item_id": "BLG-I08",
+      "title": "Показать состояние ключей WB и понятные ошибки операторам",
+      "readiness": "needs_product_contract",
+      "traits": [
+        "ui_change",
+        "external_contract"
+      ],
+      "risk_level": "high",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S03",
+        "S04",
+        "S09",
+        "S10",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S24",
+        "S25",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-I09",
+      "backlog_item_id": "BLG-I09",
+      "title": "Сверить локальные статусы маркировки с WB после исправления endpoint",
+      "readiness": "waiting_dependency",
+      "traits": [
+        "database_change",
+        "tenant_sensitive",
+        "external_contract"
+      ],
+      "risk_level": "medium",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S03",
+        "S04",
+        "S11",
+        "S12",
+        "S13",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-I10",
+      "backlog_item_id": "BLG-I10",
+      "title": "Сформировать продуктовую модель склад плюс ячейка",
+      "readiness": "needs_product_decision",
+      "traits": [
+        "new_module"
+      ],
+      "risk_level": "high",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S03",
+        "S04",
+        "S05",
+        "S06",
+        "S07",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-I11",
+      "backlog_item_id": "BLG-I11",
+      "title": "Добавить явный пропуск незаполненной маркировки с подтверждением",
+      "readiness": "waiting_owner_oracle",
+      "traits": [
+        "ui_change"
+      ],
+      "risk_level": "high",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S09",
+        "S10",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S24",
+        "S25",
+        "S26"
+      ],
+      "blocked_by": [
+        "BLK-PROD-001"
+      ]
+    },
+    {
+      "task_id": "BLG-I12",
+      "backlog_item_id": "BLG-I12",
+      "title": "Предупреждать о закрытии с несохранёнными изменениями",
+      "readiness": "needs_product_contract",
+      "traits": [
+        "ui_change"
+      ],
+      "risk_level": "medium",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S09",
+        "S10",
+        "S11",
+        "S12",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S24",
+        "S25",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-K02",
+      "backlog_item_id": "BLG-K02",
+      "title": "Развернуть блок аналитической отчётности для селлера и фулфилмента",
+      "readiness": "needs_product_discovery",
+      "traits": [
+        "new_module",
+        "tenant_sensitive"
+      ],
+      "risk_level": "medium",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S03",
+        "S04",
+        "S05",
+        "S06",
+        "S07",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": [
+        "BLK-ARCH-003"
+      ]
+    },
+    {
+      "task_id": "BLG-KC01",
+      "backlog_item_id": "BLG-KC01",
+      "title": "Развернуть клиентские входящие по приёмке, навигации, остаткам, отгрузке и печати",
+      "readiness": "needs_product_discovery",
+      "traits": [
+        "process_change"
+      ],
+      "risk_level": "medium",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S05",
+        "S06",
+        "S07",
+        "S11",
+        "S12",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-D08",
+      "backlog_item_id": "BLG-D08",
+      "title": "Удалить или реально подключить мёртвый экран FfFbsPickList",
+      "readiness": "needs_technical_contract",
+      "traits": [
+        "process_change"
+      ],
+      "risk_level": "low",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S05",
+        "S06",
+        "S07",
+        "S11",
+        "S12",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-D12",
+      "backlog_item_id": "BLG-D12",
+      "title": "Настроить Cache-Control для корня приложения и хэшированных assets",
+      "readiness": "needs_release_contract",
+      "traits": [
+        "release_change"
+      ],
+      "risk_level": "high",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26",
+        "S27",
+        "S28"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-D18",
+      "backlog_item_id": "BLG-D18",
+      "title": "Искать КИЗ с учётом визуально неразличимых символов",
+      "readiness": "needs_product_contract",
+      "traits": [
+        "ui_change"
+      ],
+      "risk_level": "low",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S09",
+        "S10",
+        "S11",
+        "S12",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S24",
+        "S25",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-F03",
+      "backlog_item_id": "BLG-F03",
+      "title": "Безопасно разобрать накопившиеся Git worktree",
+      "readiness": "needs_owner_safety_review",
+      "traits": [
+        "process_change"
+      ],
+      "risk_level": "low",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S05",
+        "S06",
+        "S07",
+        "S11",
+        "S12",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-I13R",
+      "backlog_item_id": "BLG-I13R",
+      "title": "Убрать или явно маркировать внутренний fallback QR короба",
+      "readiness": "needs_product_contract",
+      "traits": [
+        "process_change"
+      ],
+      "risk_level": "high",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S05",
+        "S06",
+        "S07",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-I14",
+      "backlog_item_id": "BLG-I14",
+      "title": "Запрещать ПВЗ, если часть заказов нельзя сдавать через ПВЗ",
+      "readiness": "needs_product_contract",
+      "traits": [
+        "ui_change"
+      ],
+      "risk_level": "high",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S09",
+        "S10",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S24",
+        "S25",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-I15",
+      "backlog_item_id": "BLG-I15",
+      "title": "Разрешить включать режим без распределения до фактической раскладки",
+      "readiness": "needs_architecture_contract",
+      "traits": [
+        "database_change",
+        "tenant_sensitive"
+      ],
+      "risk_level": "high",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-I16",
+      "backlog_item_id": "BLG-I16",
+      "title": "Сделать массовое завершение упаковки одной серверной операцией",
+      "readiness": "needs_technical_contract",
+      "traits": [
+        "database_change",
+        "background_worker"
+      ],
+      "risk_level": "medium",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S11",
+        "S12",
+        "S13",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-I17",
+      "backlog_item_id": "BLG-I17",
+      "title": "Дать выход из состояния упакованного заказа без короба",
+      "readiness": "needs_product_contract",
+      "traits": [
+        "ui_change"
+      ],
+      "risk_level": "medium",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S09",
+        "S10",
+        "S11",
+        "S12",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S24",
+        "S25",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-I19",
+      "backlog_item_id": "BLG-I19",
+      "title": "Повторять массовые операции с WB после rate limit",
+      "readiness": "needs_technical_contract",
+      "traits": [
+        "external_contract"
+      ],
+      "risk_level": "low",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S03",
+        "S04",
+        "S11",
+        "S12",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-J01",
+      "backlog_item_id": "BLG-J01",
+      "title": "Подписать отображаемый хвост кода маркировки",
+      "readiness": "needs_product_contract",
+      "traits": [
+        "ui_change"
+      ],
+      "risk_level": "low",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S09",
+        "S10",
+        "S11",
+        "S12",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S24",
+        "S25",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-J02",
+      "backlog_item_id": "BLG-J02",
+      "title": "Заменить invalid_token на понятное сообщение о сессии",
+      "readiness": "needs_product_contract",
+      "traits": [
+        "ui_change"
+      ],
+      "risk_level": "low",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S09",
+        "S10",
+        "S11",
+        "S12",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S24",
+        "S25",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-J04",
+      "backlog_item_id": "BLG-J04",
+      "title": "Разобрать отсутствие кодов партии полуботинок 6720-5A",
+      "readiness": "needs_data_policy",
+      "traits": [
+        "database_change",
+        "tenant_sensitive"
+      ],
+      "risk_level": "medium",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S11",
+        "S12",
+        "S13",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-C01",
+      "backlog_item_id": "BLG-C01",
+      "title": "Выкатить необязательную упаковку FBS после owner decision",
+      "readiness": "waiting_owner_release",
+      "traits": [
+        "release_change"
+      ],
+      "risk_level": "high",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S11",
+        "S12",
+        "S13",
+        "S14",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26",
+        "S27",
+        "S28"
+      ],
+      "blocked_by": []
+    },
+    {
+      "task_id": "BLG-C02",
+      "backlog_item_id": "BLG-C02",
+      "title": "Включить логирование исходящих запросов WB после release review",
+      "readiness": "waiting_owner_release",
+      "traits": [
+        "release_change",
+        "external_contract"
+      ],
+      "risk_level": "medium",
+      "required_stages": [
+        "S01",
+        "S02",
+        "S03",
+        "S04",
+        "S11",
+        "S12",
+        "S15",
+        "S16",
+        "S17",
+        "S18",
+        "S19",
+        "S20",
+        "S21",
+        "S22",
+        "S23",
+        "S26",
+        "S27",
+        "S28"
+      ],
+      "blocked_by": []
+    }
+  ],
+  "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
+}

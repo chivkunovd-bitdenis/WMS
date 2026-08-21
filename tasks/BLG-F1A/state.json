@@ -1,0 +1,90 @@
+{
+  "task_id": "BLG-F1A",
+  "backlog_item_id": "BLG-F1A",
+  "backlog_title": "Добавить проверку реальных артефактов и уровней доказательств",
+  "backlog_item": {
+    "id": "BLG-F1A",
+    "title": "Добавить проверку реальных артефактов и уровней доказательств",
+    "source_section": "F1a, D13",
+    "business_meaning": "Пайплайн может принять рассказ разработчика или результат внутренней функции за доказательство того, что пользовательский сценарий действительно работает. Но словарь из сервиса не доказывает ответ API, зелёный тест не доказывает экран, а локальная сборка не доказывает production. Нужно определить обязательные уровни доказательств для каждого типа задачи и машинно требовать реальные файлы: результаты тестов, API-ответы, данные из базы, скриншоты живого браузера и подтверждение точного SHA там, где это необходимо.",
+    "type": "pipeline_change",
+    "priority": "critical",
+    "status": "queued",
+    "readiness": "needs_architecture_contract",
+    "dependencies": [
+      "BLG-F01"
+    ],
+    "suggested_roles": [
+      "solution-architect",
+      "reviewer",
+      "guard"
+    ],
+    "suggested_stages": [
+      "S02",
+      "S12",
+      "S25",
+      "S28"
+    ]
+  },
+  "source_hash": "sha256:2d56f09e51ae56fb9fb77f77e1e5d6db174d1ac0c749aa3af933900b2d2a6d2a",
+  "source_excerpt": "Добавить проверку реальных артефактов и уровней доказательств",
+  "pipeline_version": "2.0",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "traits": [
+    "pipeline_change"
+  ],
+  "risk_level": "critical",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S25",
+    "S26"
+  ],
+  "current_stage": "S01",
+  "status": "QUEUED",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "environment_id": "local",
+  "database": "local",
+  "redis_namespace": "local",
+  "celery_queue": "wave-a1b311d18f07-blg-f1a",
+  "emulator_namespace": "local",
+  "resources": [
+    "backlog:blg-f1a",
+    "file:docs/product/backlog-queue.json"
+  ],
+  "owner_agent": "denis",
+  "attempt": 1,
+  "lease_until": "2026-08-21T00:55:56Z",
+  "heartbeat_at": "2026-08-21T00:10:13Z",
+  "last_valid_receipt": null,
+  "blocker": null,
+  "resume_condition": null,
+  "verdicts": {},
+  "commits": [],
+  "wave_id": "wave-a1b311d18f07",
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_usd": 0.0
+  },
+  "budget_usage_receipts": [],
+  "blocked_by": [],
+  "blocker_resolutions": [],
+  "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
+}

@@ -1,0 +1,89 @@
+{
+  "task_id": "BLG-C02",
+  "backlog_item_id": "BLG-C02",
+  "backlog_title": "Включить логирование исходящих запросов WB после release review",
+  "backlog_item": {
+    "id": "BLG-C02",
+    "title": "Включить логирование исходящих запросов WB после release review",
+    "source_section": "C2",
+    "business_meaning": "Для разбора интеграционных сбоев нужно видеть, какой метод Wildberries вызывался, по какому адресу и с каким статусом завершился, но текущих безопасных данных для диагностики не хватает. При этом обычное логирование может случайно записать токен, код маркировки или другие чувствительные значения и создать новую проблему. После ревью нужно включить структурированный журнал только с разрешёнными полями, доказать маскирование секретов и дать инженеру понятный способ найти конкретный запрос; отдельное разрешение владельца на release всё равно обязательно.",
+    "type": "release_change",
+    "priority": "medium",
+    "status": "ready_for_release",
+    "readiness": "waiting_owner_release",
+    "dependencies": [],
+    "suggested_roles": [
+      "Product",
+      "DevOps",
+      "reviewer"
+    ],
+    "suggested_stages": [
+      "S15",
+      "S25",
+      "S28"
+    ]
+  },
+  "source_hash": "sha256:f53c580c74d269da9c2be6c92798a61bead48e7a3be78817e0042b9fe34e69f5",
+  "source_excerpt": "Включить логирование исходящих запросов WB после release review",
+  "pipeline_version": "2.0",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "traits": [
+    "release_change",
+    "external_contract"
+  ],
+  "risk_level": "medium",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S03",
+    "S04",
+    "S11",
+    "S12",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S26",
+    "S27",
+    "S28"
+  ],
+  "current_stage": "S01",
+  "status": "QUEUED",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "environment_id": "local",
+  "database": "local",
+  "redis_namespace": "local",
+  "celery_queue": "wave-a1b311d18f07-blg-c02",
+  "emulator_namespace": "local",
+  "resources": [
+    "backlog:blg-c02",
+    "file:docs/product/backlog-queue.json"
+  ],
+  "owner_agent": "denis",
+  "attempt": 1,
+  "lease_until": "2026-08-21T00:55:57Z",
+  "heartbeat_at": "2026-08-21T00:10:05Z",
+  "last_valid_receipt": null,
+  "blocker": null,
+  "resume_condition": null,
+  "verdicts": {},
+  "commits": [],
+  "wave_id": "wave-a1b311d18f07",
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_usd": 0.0
+  },
+  "budget_usage_receipts": [],
+  "blocked_by": [],
+  "blocker_resolutions": [],
+  "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
+}

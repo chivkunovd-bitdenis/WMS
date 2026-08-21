@@ -1,0 +1,93 @@
+{
+  "task_id": "BLG-I15",
+  "backlog_item_id": "BLG-I15",
+  "backlog_title": "Разрешить включать режим без распределения до фактической раскладки",
+  "backlog_item": {
+    "id": "BLG-I15",
+    "title": "Разрешить включать режим без распределения до фактической раскладки",
+    "source_section": "I15",
+    "business_meaning": "Режим «Без распределения» сейчас нельзя включить после создания коробов, даже если оператор ещё не положил в них ни одного товара. Человек, который понял нужный способ работы позже, вынужден удалять и пересоздавать короба или просить ручную правку базы, а шапка продолжает показывать ложный красный остаток. Режим должен переключаться, пока фактическая раскладка не началась, храниться в отдельном нормальном поле и менять тексты прогресса так, чтобы экран не требовал уже отменённого распределения.",
+    "type": "data_integrity",
+    "priority": "high",
+    "status": "queued",
+    "readiness": "needs_architecture_contract",
+    "dependencies": [
+      "BLG-F01"
+    ],
+    "suggested_roles": [
+      "Product",
+      "BA",
+      "solution-architect",
+      "screen-dev",
+      "reviewer"
+    ],
+    "suggested_stages": [
+      "S01",
+      "S02",
+      "S12",
+      "S18",
+      "S23"
+    ]
+  },
+  "source_hash": "sha256:40a844a5773f9b1729d2255e19225dd7758995fdc22cc2eb9a14ac3cd36ebb58",
+  "source_excerpt": "Разрешить включать режим без распределения до фактической раскладки",
+  "pipeline_version": "2.0",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "traits": [
+    "database_change",
+    "tenant_sensitive"
+  ],
+  "risk_level": "high",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S26"
+  ],
+  "current_stage": "S01",
+  "status": "QUEUED",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "environment_id": "local",
+  "database": "local",
+  "redis_namespace": "local",
+  "celery_queue": "wave-a1b311d18f07-blg-i15",
+  "emulator_namespace": "local",
+  "resources": [
+    "backlog:blg-i15",
+    "file:docs/product/backlog-queue.json"
+  ],
+  "owner_agent": "denis",
+  "attempt": 1,
+  "lease_until": "2026-08-21T00:55:56Z",
+  "heartbeat_at": "2026-08-21T00:10:18Z",
+  "last_valid_receipt": null,
+  "blocker": null,
+  "resume_condition": null,
+  "verdicts": {},
+  "commits": [],
+  "wave_id": "wave-a1b311d18f07",
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_usd": 0.0
+  },
+  "budget_usage_receipts": [],
+  "blocked_by": [],
+  "blocker_resolutions": [],
+  "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
+}

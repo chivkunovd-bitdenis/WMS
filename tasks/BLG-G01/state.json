@@ -1,0 +1,104 @@
+{
+  "task_id": "BLG-G01",
+  "backlog_item_id": "BLG-G01",
+  "backlog_title": "Подготовить архитектурное решение для запуска Ozon",
+  "backlog_item": {
+    "id": "BLG-G01",
+    "title": "Подготовить архитектурное решение для запуска Ozon",
+    "source_section": "G",
+    "business_meaning": "Подключение Ozon вводит новый маркетплейс с собственными заказами, статусами, складами, этикетками и ограничениями API. Если сразу копировать текущую логику Wildberries, различия контрактов быстро разойдутся по экранам и данным и приведут к дорогой переделке. Сначала нужно описать бизнес-процесс Ozon, границы общей и отдельной логики, варианты архитектуры, риски интеграции и первую полезную версию, а код начинать только после решения владельца.",
+    "type": "new_domain",
+    "priority": "medium",
+    "status": "queued",
+    "readiness": "needs_architecture_decision",
+    "dependencies": [
+      "BLG-F01"
+    ],
+    "suggested_roles": [
+      "solution-architect",
+      "Product",
+      "BA"
+    ],
+    "suggested_stages": [
+      "S01",
+      "S02",
+      "S12"
+    ]
+  },
+  "source_hash": "sha256:921e16a2f9ed2e5bb92eefe1920b89283a4cbf75debfc448c4a04869fc02d04c",
+  "source_excerpt": "Подготовить архитектурное решение для запуска Ozon",
+  "pipeline_version": "2.0",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "traits": [
+    "new_domain",
+    "external_contract"
+  ],
+  "risk_level": "medium",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S03",
+    "S04",
+    "S05",
+    "S06",
+    "S07",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S26"
+  ],
+  "current_stage": "S01",
+  "status": "QUEUED",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "environment_id": "local",
+  "database": "local",
+  "redis_namespace": "local",
+  "celery_queue": "wave-a1b311d18f07-blg-g01",
+  "emulator_namespace": "local",
+  "resources": [
+    "backlog:blg-g01",
+    "file:docs/product/backlog-queue.json"
+  ],
+  "owner_agent": "denis",
+  "attempt": 1,
+  "lease_until": "2026-08-21T00:55:56Z",
+  "heartbeat_at": "2026-08-21T00:10:14Z",
+  "last_valid_receipt": null,
+  "blocker": null,
+  "resume_condition": null,
+  "verdicts": {},
+  "commits": [],
+  "wave_id": "wave-a1b311d18f07",
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_usd": 0.0
+  },
+  "budget_usage_receipts": [],
+  "blocked_by": [
+    {
+      "id": "BLK-ARCH-003",
+      "title": "Ozon и аналитический модуль требуют dossier/ARCH до разработки",
+      "status": "open",
+      "type": "architecture",
+      "owner_role": "solution-architect",
+      "resume_stage": "S03",
+      "minimum_closure_artifact": "research dossier, role needs, data-source/freshness/access contract and ARCH approval before Dev"
+    }
+  ],
+  "blocker_resolutions": [],
+  "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
+}

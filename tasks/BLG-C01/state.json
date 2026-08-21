@@ -1,0 +1,88 @@
+{
+  "task_id": "BLG-C01",
+  "backlog_item_id": "BLG-C01",
+  "backlog_title": "Выкатить необязательную упаковку FBS после owner decision",
+  "backlog_item": {
+    "id": "BLG-C01",
+    "title": "Выкатить необязательную упаковку FBS после owner decision",
+    "source_section": "C1",
+    "business_meaning": "Изменение, позволяющее проводить часть FBS-поставок без обязательного задания упаковки, уже подготовлено в отдельной ветке, но ещё не подтверждено как работающее в production. Оно должно убрать искусственную остановку там, где упаковка не является обязательным этапом бизнес-процесса, не ломая поставки, которым упаковка действительно нужна. После отдельного разрешения владельца требуется выкатить точный одобренный SHA, применить необходимые миграции и пройти живой операторский сценарий без упаковки; сама карточка не является разрешением на deploy.",
+    "type": "release_change",
+    "priority": "high",
+    "status": "ready_for_release",
+    "readiness": "waiting_owner_release",
+    "dependencies": [],
+    "suggested_roles": [
+      "Product",
+      "DevOps",
+      "reviewer"
+    ],
+    "suggested_stages": [
+      "S15",
+      "S25",
+      "S28"
+    ]
+  },
+  "source_hash": "sha256:4acd556d93c0fcf61d751a36702b7ff5f34dc384b17c10e6eb4d2d9eac8c3023",
+  "source_excerpt": "Выкатить необязательную упаковку FBS после owner decision",
+  "pipeline_version": "2.0",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "traits": [
+    "release_change"
+  ],
+  "risk_level": "high",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S26",
+    "S27",
+    "S28"
+  ],
+  "current_stage": "S01",
+  "status": "QUEUED",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "environment_id": "local",
+  "database": "local",
+  "redis_namespace": "local",
+  "celery_queue": "wave-a1b311d18f07-blg-c01",
+  "emulator_namespace": "local",
+  "resources": [
+    "backlog:blg-c01",
+    "file:docs/product/backlog-queue.json"
+  ],
+  "owner_agent": "denis",
+  "attempt": 1,
+  "lease_until": "2026-08-21T00:55:57Z",
+  "heartbeat_at": "2026-08-21T00:10:05Z",
+  "last_valid_receipt": null,
+  "blocker": null,
+  "resume_condition": null,
+  "verdicts": {},
+  "commits": [],
+  "wave_id": "wave-a1b311d18f07",
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_usd": 0.0
+  },
+  "budget_usage_receipts": [],
+  "blocked_by": [],
+  "blocker_resolutions": [],
+  "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
+}

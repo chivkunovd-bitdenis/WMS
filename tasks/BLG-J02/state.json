@@ -1,0 +1,90 @@
+{
+  "task_id": "BLG-J02",
+  "backlog_item_id": "BLG-J02",
+  "backlog_title": "Заменить invalid_token на понятное сообщение о сессии",
+  "backlog_item": {
+    "id": "BLG-J02",
+    "title": "Заменить invalid_token на понятное сообщение о сессии",
+    "source_section": "J, invalid_token",
+    "business_meaning": "При истёкшей или недействительной сессии WMS показывает оператору технический текст invalid_token. Пользователь может принять его за проблему с ключом Wildberries и искать причину не в том месте, хотя обычно требуется просто повторный вход. Система должна объяснять, что сессия завершилась, предлагать безопасно войти снова и после авторизации возвращать человека к его рабочему экрану, если это возможно.",
+    "type": "ui_change",
+    "priority": "low",
+    "status": "queued",
+    "readiness": "needs_product_contract",
+    "dependencies": [],
+    "suggested_roles": [
+      "BA",
+      "screen-dev",
+      "ui-critic",
+      "reviewer"
+    ],
+    "suggested_stages": [
+      "S08",
+      "S12",
+      "S18",
+      "S26"
+    ]
+  },
+  "source_hash": "sha256:61c45442267e73d1a2053d2362ff7aa1234a0c4812d18a603eac32ea85ea3de4",
+  "source_excerpt": "Заменить invalid_token на понятное сообщение о сессии",
+  "pipeline_version": "2.0",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "traits": [
+    "ui_change"
+  ],
+  "risk_level": "low",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S09",
+    "S10",
+    "S11",
+    "S12",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S24",
+    "S25",
+    "S26"
+  ],
+  "current_stage": "S01",
+  "status": "QUEUED",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "environment_id": "local",
+  "database": "local",
+  "redis_namespace": "local",
+  "celery_queue": "wave-a1b311d18f07-blg-j02",
+  "emulator_namespace": "local",
+  "resources": [
+    "backlog:blg-j02",
+    "file:docs/product/backlog-queue.json"
+  ],
+  "owner_agent": "denis",
+  "attempt": 1,
+  "lease_until": "2026-08-21T00:55:56Z",
+  "heartbeat_at": "2026-08-21T00:10:20Z",
+  "last_valid_receipt": null,
+  "blocker": null,
+  "resume_condition": null,
+  "verdicts": {},
+  "commits": [],
+  "wave_id": "wave-a1b311d18f07",
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_usd": 0.0
+  },
+  "budget_usage_receipts": [],
+  "blocked_by": [],
+  "blocker_resolutions": [],
+  "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
+}

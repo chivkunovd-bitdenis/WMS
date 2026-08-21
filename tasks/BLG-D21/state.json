@@ -1,0 +1,102 @@
+{
+  "task_id": "BLG-D21",
+  "backlog_item_id": "BLG-D21",
+  "backlog_title": "Перевести WbProductPickerDialog на серверный поиск каталога",
+  "backlog_item": {
+    "id": "BLG-D21",
+    "title": "Перевести WbProductPickerDialog на серверный поиск каталога",
+    "source_section": "D21",
+    "business_meaning": "Диалог выбора товара загружает слишком большой каталог в браузер и пытается искать по нему на стороне пользователя. На крупных кабинетах это долго открывается, тормозит интерфейс и может не показать нужную карточку из-за локальных ограничений. Поиск должен отправляться на сервер по мере ввода, возвращать небольшую релевантную страницу результатов и сохранять удобный выбор товара при медленном ответе или пустой выдаче.",
+    "type": "performance",
+    "priority": "high",
+    "status": "partial",
+    "readiness": "needs_product_contract",
+    "dependencies": [],
+    "suggested_roles": [
+      "BA",
+      "screen-dev",
+      "ui-critic",
+      "reviewer"
+    ],
+    "suggested_stages": [
+      "S08",
+      "S12",
+      "S18",
+      "S26"
+    ]
+  },
+  "source_hash": "sha256:c863b13d64a316075f2d7c35e9d21501e50665110c5843dc11ef414293c1fcff",
+  "source_excerpt": "Перевести WbProductPickerDialog на серверный поиск каталога",
+  "pipeline_version": "2.0",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "traits": [
+    "database_change",
+    "background_worker",
+    "external_contract"
+  ],
+  "risk_level": "high",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S03",
+    "S04",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S26"
+  ],
+  "current_stage": "S01",
+  "status": "QUEUED",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "environment_id": "local",
+  "database": "local",
+  "redis_namespace": "local",
+  "celery_queue": "wave-a1b311d18f07-blg-d21",
+  "emulator_namespace": "local",
+  "resources": [
+    "backlog:blg-d21",
+    "file:docs/product/backlog-queue.json"
+  ],
+  "owner_agent": "denis",
+  "attempt": 1,
+  "lease_until": "2026-08-21T00:55:55Z",
+  "heartbeat_at": "2026-08-21T00:10:12Z",
+  "last_valid_receipt": null,
+  "blocker": null,
+  "resume_condition": null,
+  "verdicts": {},
+  "commits": [],
+  "wave_id": "wave-a1b311d18f07",
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_usd": 0.0
+  },
+  "budget_usage_receipts": [],
+  "blocked_by": [
+    {
+      "id": "BLK-INTEGRATION-001",
+      "title": "Импорт WB ограничен и не поддерживает автономную актуализацию каталога",
+      "status": "open",
+      "type": "integration",
+      "owner_role": "pipeline-product",
+      "resume_stage": "S03",
+      "minimum_closure_artifact": "WB pagination/search/sync contract and e2e for item outside first page"
+    }
+  ],
+  "blocker_resolutions": [],
+  "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
+}

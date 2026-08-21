@@ -1,0 +1,101 @@
+{
+  "task_id": "BLG-D03",
+  "backlog_item_id": "BLG-D03",
+  "backlog_title": "Зафиксировать oracle Честного знака и правило requiredMeta/optionalMeta",
+  "backlog_item": {
+    "id": "BLG-D03",
+    "title": "Зафиксировать oracle Честного знака и правило requiredMeta/optionalMeta",
+    "source_section": "D3, H",
+    "business_meaning": "Сейчас в проекте нет единого подтверждённого правила, по какому источнику решать, обязателен ли код маркировки Честного знака и можно ли отправлять заказ при статусе optionalMeta. Из-за этого разные части системы могут по-разному трактовать требования Wildberries, закона и товарной карточки, а оператор получает противоречивые блокировки. Нужно зафиксировать источник истины и таблицу решений для обязательной и необязательной маркировки, согласовать её с владельцем и только после этого строить проверки и интерфейс.",
+    "type": "external_contract",
+    "priority": "critical",
+    "status": "blocked",
+    "readiness": "waiting_owner_oracle",
+    "dependencies": [],
+    "suggested_roles": [
+      "Product",
+      "BA",
+      "Research",
+      "Compliance",
+      "solution-architect"
+    ],
+    "suggested_stages": [
+      "S01",
+      "S02",
+      "S03",
+      "S12"
+    ]
+  },
+  "source_hash": "sha256:8a62b769fd2ce6dde98f56266c7fd944416a54f1f045a2ae57a4abfb532fd7b9",
+  "source_excerpt": "Зафиксировать oracle Честного знака и правило requiredMeta/optionalMeta",
+  "pipeline_version": "2.0",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "traits": [
+    "external_contract"
+  ],
+  "risk_level": "critical",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S03",
+    "S04",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S26"
+  ],
+  "current_stage": "S01",
+  "status": "QUEUED",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "environment_id": "local",
+  "database": "local",
+  "redis_namespace": "local",
+  "celery_queue": "wave-a1b311d18f07-blg-d03",
+  "emulator_namespace": "local",
+  "resources": [
+    "backlog:blg-d03",
+    "file:docs/product/backlog-queue.json"
+  ],
+  "owner_agent": "denis",
+  "attempt": 1,
+  "lease_until": "2026-08-21T00:55:55Z",
+  "heartbeat_at": "2026-08-21T00:10:06Z",
+  "last_valid_receipt": null,
+  "blocker": null,
+  "resume_condition": null,
+  "verdicts": {},
+  "commits": [],
+  "wave_id": "wave-a1b311d18f07",
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_usd": 0.0
+  },
+  "budget_usage_receipts": [],
+  "blocked_by": [
+    {
+      "id": "BLK-PROD-001",
+      "title": "Для спорного поведения Честного знака нет зафиксированного оракула",
+      "status": "open",
+      "type": "product",
+      "owner_role": "pipeline-product",
+      "resume_stage": "S07",
+      "minimum_closure_artifact": "approved oracle/decision record for requiredMeta, optionalMeta and sgtinApplied"
+    }
+  ],
+  "blocker_resolutions": [],
+  "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
+}

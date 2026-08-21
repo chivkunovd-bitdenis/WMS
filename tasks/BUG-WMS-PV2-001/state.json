@@ -3,7 +3,7 @@
   "source_hash": "sha256:98f146ea334b78275017b4be33e24951ee009cee9c1f7fd5981bd1c29f534084",
   "source_excerpt": "2026-08-21 night queue: exact-SHA deploy residue from PIPELINE-HOLES P0 and incidents I15-I17; no live deploy",
   "pipeline_version": "2.0",
-  "pipeline_hash": "sha256:bb04bf731488880acff2dd7bb2f71d8a97a3bcf48f34563013a6782f66d83411",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
   "traits": [
     "bug",
     "pipeline_change",
@@ -47,7 +47,7 @@
   "owner_agent": "manual",
   "attempt": 1,
   "lease_until": "2026-08-20T21:30:19Z",
-  "heartbeat_at": "2026-08-20T21:21:28Z",
+  "heartbeat_at": "2026-08-21T00:11:00Z",
   "last_valid_receipt": null,
   "blocker": {
     "type": "OWNER_INPUT",

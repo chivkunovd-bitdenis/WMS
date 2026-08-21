@@ -1,0 +1,89 @@
+{
+  "task_id": "BLG-I19",
+  "backlog_item_id": "BLG-I19",
+  "backlog_title": "Повторять массовые операции с WB после rate limit",
+  "backlog_item": {
+    "id": "BLG-I19",
+    "title": "Повторять массовые операции с WB после rate limit",
+    "source_section": "I19",
+    "business_meaning": "При массовом снятии кодов маркировки Wildberries ограничивает частоту запросов и может ответить 429 на часть операций. Сейчас такой элемент приходится повторять вручную, а без внимательной проверки локальная база и маркетплейс могут остаться в разных состояниях. Массовая операция должна соблюдать допустимый темп, автоматически повторять запросы после указанной паузы, сохранять прогресс по каждому коду и явно показывать окончательно не обработанные позиции.",
+    "type": "external_contract",
+    "priority": "low",
+    "status": "queued",
+    "readiness": "needs_technical_contract",
+    "dependencies": [
+      "BLG-I02"
+    ],
+    "suggested_roles": [
+      "solution-architect",
+      "screen-dev",
+      "reviewer"
+    ],
+    "suggested_stages": [
+      "S02",
+      "S12",
+      "S18",
+      "S23"
+    ]
+  },
+  "source_hash": "sha256:75284abc12dbcb865af221e48bf45b6999fa99d84d42df8672241e21a7572409",
+  "source_excerpt": "Повторять массовые операции с WB после rate limit",
+  "pipeline_version": "2.0",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "traits": [
+    "external_contract"
+  ],
+  "risk_level": "low",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S03",
+    "S04",
+    "S11",
+    "S12",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S26"
+  ],
+  "current_stage": "S01",
+  "status": "QUEUED",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "environment_id": "local",
+  "database": "local",
+  "redis_namespace": "local",
+  "celery_queue": "wave-a1b311d18f07-blg-i19",
+  "emulator_namespace": "local",
+  "resources": [
+    "backlog:blg-i19",
+    "file:docs/product/backlog-queue.json"
+  ],
+  "owner_agent": "denis",
+  "attempt": 1,
+  "lease_until": "2026-08-21T00:55:56Z",
+  "heartbeat_at": "2026-08-21T00:10:19Z",
+  "last_valid_receipt": null,
+  "blocker": null,
+  "resume_condition": null,
+  "verdicts": {},
+  "commits": [],
+  "wave_id": "wave-a1b311d18f07",
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_usd": 0.0
+  },
+  "budget_usage_receipts": [],
+  "blocked_by": [],
+  "blocker_resolutions": [],
+  "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
+}

@@ -3,7 +3,7 @@
   "source_hash": "sha256:c93edeb57bf3c6d155c98812f76ed4eaa791eb686bf283b3ce81cad53a483514",
   "source_excerpt": "2026-08-21 night queue: fail-closed WB/Ozon test egress; no live marketplace calls",
   "pipeline_version": "2.0",
-  "pipeline_hash": "sha256:bb04bf731488880acff2dd7bb2f71d8a97a3bcf48f34563013a6782f66d83411",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
   "traits": [
     "bug",
     "external_contract",
@@ -48,7 +48,7 @@
   "owner_agent": "manual",
   "attempt": 1,
   "lease_until": "2026-08-20T21:30:19Z",
-  "heartbeat_at": "2026-08-20T21:21:29Z",
+  "heartbeat_at": "2026-08-21T00:11:00Z",
   "last_valid_receipt": null,
   "blocker": {
     "type": "OWNER_INPUT",

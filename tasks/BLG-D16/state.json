@@ -1,0 +1,97 @@
+{
+  "task_id": "BLG-D16",
+  "backlog_item_id": "BLG-D16",
+  "backlog_title": "Дать оператору безопасную перевязку КИЗ между заказами",
+  "backlog_item": {
+    "id": "BLG-D16",
+    "title": "Дать оператору безопасную перевязку КИЗ между заказами",
+    "source_section": "D16",
+    "business_meaning": "Если код идентификации знака, то есть КИЗ, по ошибке привязан не к тому заказу, сейчас оператор не может нормально исправить это через рабочий интерфейс. Ручное исправление в базе опасно: можно оставить код сразу в двух местах или разойтись с состоянием Wildberries. Нужен единый подтверждаемый сценарий, который снимает код со старого заказа, проверяет возможность переноса, привязывает его к новому заказу и показывает итог обеих операций.",
+    "type": "ui_change",
+    "priority": "high",
+    "status": "queued",
+    "readiness": "waiting_owner_oracle",
+    "dependencies": [
+      "BLG-D03",
+      "BLG-I02"
+    ],
+    "suggested_roles": [
+      "Product",
+      "BA",
+      "solution-architect",
+      "screen-dev",
+      "ui-critic"
+    ],
+    "suggested_stages": [
+      "S01",
+      "S02",
+      "S12",
+      "S18",
+      "S26"
+    ]
+  },
+  "source_hash": "sha256:2476af361877086f1bda21f93e1aa8f527044228ab8af9554555d99e07478a8f",
+  "source_excerpt": "Дать оператору безопасную перевязку КИЗ между заказами",
+  "pipeline_version": "2.0",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "traits": [
+    "ui_change"
+  ],
+  "risk_level": "high",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S09",
+    "S10",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S24",
+    "S25",
+    "S26"
+  ],
+  "current_stage": "S01",
+  "status": "QUEUED",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "environment_id": "local",
+  "database": "local",
+  "redis_namespace": "local",
+  "celery_queue": "wave-a1b311d18f07-blg-d16",
+  "emulator_namespace": "local",
+  "resources": [
+    "backlog:blg-d16",
+    "file:docs/product/backlog-queue.json"
+  ],
+  "owner_agent": "denis",
+  "attempt": 1,
+  "lease_until": "2026-08-21T00:55:55Z",
+  "heartbeat_at": "2026-08-21T00:10:09Z",
+  "last_valid_receipt": null,
+  "blocker": null,
+  "resume_condition": null,
+  "verdicts": {},
+  "commits": [],
+  "wave_id": "wave-a1b311d18f07",
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_usd": 0.0
+  },
+  "budget_usage_receipts": [],
+  "blocked_by": [],
+  "blocker_resolutions": [],
+  "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
+}

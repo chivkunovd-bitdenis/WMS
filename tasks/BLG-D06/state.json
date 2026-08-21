@@ -1,0 +1,89 @@
+{
+  "task_id": "BLG-D06",
+  "backlog_item_id": "BLG-D06",
+  "backlog_title": "Скрывать архивные товары OLD/ по умолчанию",
+  "backlog_item": {
+    "id": "BLG-D06",
+    "title": "Скрывать архивные товары OLD/ по умолчанию",
+    "source_section": "D6",
+    "business_meaning": "Архивные карточки товаров с префиксом OLD/ сейчас попадают в обычные рабочие списки и поиск. Оператор может выбрать устаревшую карточку вместо действующей, а большой список становится тяжелее просматривать. По умолчанию система должна показывать только актуальные товары, оставив архив доступным через отдельный явный фильтр для разбора истории.",
+    "type": "ui_change",
+    "priority": "low",
+    "status": "queued",
+    "readiness": "needs_product_contract",
+    "dependencies": [],
+    "suggested_roles": [
+      "BA",
+      "screen-dev",
+      "ui-critic"
+    ],
+    "suggested_stages": [
+      "S08",
+      "S12",
+      "S18",
+      "S26"
+    ]
+  },
+  "source_hash": "sha256:425f47476048abcb6be432a0c608b92ab09904f5b2b8ff879ff3af364eec75b5",
+  "source_excerpt": "Скрывать архивные товары OLD/ по умолчанию",
+  "pipeline_version": "2.0",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "traits": [
+    "ui_change"
+  ],
+  "risk_level": "low",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S09",
+    "S10",
+    "S11",
+    "S12",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S24",
+    "S25",
+    "S26"
+  ],
+  "current_stage": "S01",
+  "status": "QUEUED",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "environment_id": "local",
+  "database": "local",
+  "redis_namespace": "local",
+  "celery_queue": "wave-a1b311d18f07-blg-d06",
+  "emulator_namespace": "local",
+  "resources": [
+    "backlog:blg-d06",
+    "file:docs/product/backlog-queue.json"
+  ],
+  "owner_agent": "denis",
+  "attempt": 1,
+  "lease_until": "2026-08-21T00:55:55Z",
+  "heartbeat_at": "2026-08-21T00:10:07Z",
+  "last_valid_receipt": null,
+  "blocker": null,
+  "resume_condition": null,
+  "verdicts": {},
+  "commits": [],
+  "wave_id": "wave-a1b311d18f07",
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_usd": 0.0
+  },
+  "budget_usage_receipts": [],
+  "blocked_by": [],
+  "blocker_resolutions": [],
+  "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
+}

@@ -1,0 +1,101 @@
+{
+  "task_id": "BLG-I01",
+  "backlog_item_id": "BLG-I01",
+  "backlog_title": "Перейти на актуальный WB endpoint статусов маркировки",
+  "backlog_item": {
+    "id": "BLG-I01",
+    "title": "Перейти на актуальный WB endpoint статусов маркировки",
+    "source_section": "I1",
+    "business_meaning": "WMS использует устаревший метод Wildberries для получения статусов кодов маркировки и поэтому может не видеть реальный итог проверки маркетплейса. На экране код выглядит принятым или неопределённым, хотя Wildberries уже вернул другой вердикт. Нужно подтвердить актуальный контракт API, перейти на действующий endpoint, корректно обработать все его ответы и доказать совпадение результата в HTTP, базе и операторском интерфейсе.",
+    "type": "external_contract",
+    "priority": "critical",
+    "status": "queued",
+    "readiness": "needs_technical_contract",
+    "dependencies": [
+      "BLG-D03"
+    ],
+    "suggested_roles": [
+      "solution-architect",
+      "screen-dev",
+      "reviewer"
+    ],
+    "suggested_stages": [
+      "S02",
+      "S12",
+      "S18",
+      "S23"
+    ]
+  },
+  "source_hash": "sha256:51c1a3991171b6d2d2bef00bd17884f28f4e4f8201c1f9f03e9573342d5b6872",
+  "source_excerpt": "Перейти на актуальный WB endpoint статусов маркировки",
+  "pipeline_version": "2.0",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "traits": [
+    "external_contract"
+  ],
+  "risk_level": "critical",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S03",
+    "S04",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S26"
+  ],
+  "current_stage": "S01",
+  "status": "QUEUED",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "environment_id": "local",
+  "database": "local",
+  "redis_namespace": "local",
+  "celery_queue": "wave-a1b311d18f07-blg-i01",
+  "emulator_namespace": "local",
+  "resources": [
+    "backlog:blg-i01",
+    "file:docs/product/backlog-queue.json"
+  ],
+  "owner_agent": "denis",
+  "attempt": 1,
+  "lease_until": "2026-08-21T00:55:56Z",
+  "heartbeat_at": "2026-08-21T00:10:14Z",
+  "last_valid_receipt": null,
+  "blocker": null,
+  "resume_condition": null,
+  "verdicts": {},
+  "commits": [],
+  "wave_id": "wave-a1b311d18f07",
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_usd": 0.0
+  },
+  "budget_usage_receipts": [],
+  "blocked_by": [
+    {
+      "id": "BLK-RESEARCH-001",
+      "title": "Внешние контракты WB/ЧЗ не собраны по полям и статусам",
+      "status": "open",
+      "type": "research",
+      "owner_role": "pipeline-research",
+      "resume_stage": "S03",
+      "minimum_closure_artifact": "versioned external-contract dossier with fields, statuses, pagination, errors and emulator/sandbox proof"
+    }
+  ],
+  "blocker_resolutions": [],
+  "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
+}

@@ -1,0 +1,93 @@
+{
+  "task_id": "BLG-I09",
+  "backlog_item_id": "BLG-I09",
+  "backlog_title": "Сверить локальные статусы маркировки с WB после исправления endpoint",
+  "backlog_item": {
+    "id": "BLG-I09",
+    "title": "Сверить локальные статусы маркировки с WB после исправления endpoint",
+    "source_section": "I9",
+    "business_meaning": "Пока использовался старый метод проверки, локальные связи и статусы кодов маркировки могли разойтись с фактическим состоянием в Wildberries. Простое исправление endpoint не поправит уже накопленные записи, поэтому часть заказов продолжит показывать неверный результат. После перехода на актуальный API нужно построить сверку, показать все расхождения, определить безопасные автоматические исправления и вынести спорные случаи на подтверждение ответственного человека.",
+    "type": "data_integrity",
+    "priority": "medium",
+    "status": "queued",
+    "readiness": "waiting_dependency",
+    "dependencies": [
+      "BLG-I01",
+      "BLG-I02"
+    ],
+    "suggested_roles": [
+      "BA",
+      "data-owner",
+      "reviewer"
+    ],
+    "suggested_stages": [
+      "S02",
+      "S12",
+      "S23",
+      "S28"
+    ]
+  },
+  "source_hash": "sha256:84a9b11e70a9dcf9a603ea9733ea8ad93d13b162d8ad565593ad2abe05b0c31b",
+  "source_excerpt": "Сверить локальные статусы маркировки с WB после исправления endpoint",
+  "pipeline_version": "2.0",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "traits": [
+    "database_change",
+    "tenant_sensitive",
+    "external_contract"
+  ],
+  "risk_level": "medium",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S03",
+    "S04",
+    "S11",
+    "S12",
+    "S13",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S26"
+  ],
+  "current_stage": "S01",
+  "status": "QUEUED",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "environment_id": "local",
+  "database": "local",
+  "redis_namespace": "local",
+  "celery_queue": "wave-a1b311d18f07-blg-i09",
+  "emulator_namespace": "local",
+  "resources": [
+    "backlog:blg-i09",
+    "file:docs/product/backlog-queue.json"
+  ],
+  "owner_agent": "denis",
+  "attempt": 1,
+  "lease_until": "2026-08-21T00:55:56Z",
+  "heartbeat_at": "2026-08-21T00:10:17Z",
+  "last_valid_receipt": null,
+  "blocker": null,
+  "resume_condition": null,
+  "verdicts": {},
+  "commits": [],
+  "wave_id": "wave-a1b311d18f07",
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_usd": 0.0
+  },
+  "budget_usage_receipts": [],
+  "blocked_by": [],
+  "blocker_resolutions": [],
+  "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
+}

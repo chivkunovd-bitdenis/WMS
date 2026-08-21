@@ -1,0 +1,92 @@
+{
+  "task_id": "BLG-D12",
+  "backlog_item_id": "BLG-D12",
+  "backlog_title": "Настроить Cache-Control для корня приложения и хэшированных assets",
+  "backlog_item": {
+    "id": "BLG-D12",
+    "title": "Настроить Cache-Control для корня приложения и хэшированных assets",
+    "source_section": "D12",
+    "business_meaning": "Корень приложения может отдаваться без явного запрета кэширования, поэтому браузер продолжает использовать старый index.html после новой выкатки. Старый index ссылается на прежний фронтенд-пакет, и оператор не видит исправление, хотя сервер уже обновлён. Для корня и index.html нужен режим no-cache, для файлов с хэшем в имени нужен долгий кэш, а проверка должна подтвердить заголовки и загрузку нового bundle в живом браузере.",
+    "type": "release_change",
+    "priority": "high",
+    "status": "queued",
+    "readiness": "needs_release_contract",
+    "dependencies": [
+      "BLG-D09"
+    ],
+    "suggested_roles": [
+      "solution-architect",
+      "DevOps",
+      "reviewer"
+    ],
+    "suggested_stages": [
+      "S02",
+      "S12",
+      "S18",
+      "S25",
+      "S28"
+    ]
+  },
+  "source_hash": "sha256:7cc481b9f004ed3b20a326ff7dfba869f78a916637a21a7dc50686ce0e135aa2",
+  "source_excerpt": "Настроить Cache-Control для корня приложения и хэшированных assets",
+  "pipeline_version": "2.0",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "traits": [
+    "release_change"
+  ],
+  "risk_level": "high",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S26",
+    "S27",
+    "S28"
+  ],
+  "current_stage": "S01",
+  "status": "QUEUED",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "environment_id": "local",
+  "database": "local",
+  "redis_namespace": "local",
+  "celery_queue": "wave-a1b311d18f07-blg-d12",
+  "emulator_namespace": "local",
+  "resources": [
+    "backlog:blg-d12",
+    "file:docs/product/backlog-queue.json"
+  ],
+  "owner_agent": "denis",
+  "attempt": 1,
+  "lease_until": "2026-08-21T00:55:56Z",
+  "heartbeat_at": "2026-08-21T00:10:08Z",
+  "last_valid_receipt": null,
+  "blocker": null,
+  "resume_condition": null,
+  "verdicts": {},
+  "commits": [],
+  "wave_id": "wave-a1b311d18f07",
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_usd": 0.0
+  },
+  "budget_usage_receipts": [],
+  "blocked_by": [],
+  "blocker_resolutions": [],
+  "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
+}

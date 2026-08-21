@@ -1,0 +1,87 @@
+{
+  "task_id": "BLG-I06",
+  "backlog_item_id": "BLG-I06",
+  "backlog_title": "Обновлять idempotency key при смене способа сдачи",
+  "backlog_item": {
+    "id": "BLG-I06",
+    "title": "Обновлять idempotency key при смене способа сдачи",
+    "source_section": "I6",
+    "business_meaning": "Идентификатор повторной операции, то есть idempotency key, сейчас может остаться прежним после того, как оператор меняет способ сдачи с одного пункта или склада на другой. Сервер воспринимает новую попытку как повтор старой и не применяет изменённый выбор, поэтому оператор застревает в диалоге. При содержательном изменении способа сдачи должна создаваться новая попытка с новым ключом, а простой повтор без изменений должен оставаться защищённым от дублей.",
+    "type": "bug",
+    "priority": "medium",
+    "status": "queued",
+    "readiness": "needs_technical_contract",
+    "dependencies": [],
+    "suggested_roles": [
+      "BA",
+      "screen-dev",
+      "reviewer"
+    ],
+    "suggested_stages": [
+      "S08",
+      "S12",
+      "S18"
+    ]
+  },
+  "source_hash": "sha256:afe5390ecd9927e5a315086883d4d8b265a528091c998ce19b77a2f518a487e5",
+  "source_excerpt": "Обновлять idempotency key при смене способа сдачи",
+  "pipeline_version": "2.0",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "traits": [
+    "bug"
+  ],
+  "risk_level": "medium",
+  "required_stages": [
+    "S01",
+    "S02",
+    "B01",
+    "B02",
+    "B03",
+    "S11",
+    "S12",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S26"
+  ],
+  "current_stage": "S01",
+  "status": "QUEUED",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "environment_id": "local",
+  "database": "local",
+  "redis_namespace": "local",
+  "celery_queue": "wave-a1b311d18f07-blg-i06",
+  "emulator_namespace": "local",
+  "resources": [
+    "backlog:blg-i06",
+    "file:docs/product/backlog-queue.json"
+  ],
+  "owner_agent": "denis",
+  "attempt": 1,
+  "lease_until": "2026-08-21T00:55:56Z",
+  "heartbeat_at": "2026-08-21T00:10:16Z",
+  "last_valid_receipt": null,
+  "blocker": null,
+  "resume_condition": null,
+  "verdicts": {},
+  "commits": [],
+  "wave_id": "wave-a1b311d18f07",
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_usd": 0.0
+  },
+  "budget_usage_receipts": [],
+  "blocked_by": [],
+  "blocker_resolutions": [],
+  "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
+}

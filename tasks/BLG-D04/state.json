@@ -1,0 +1,89 @@
+{
+  "task_id": "BLG-D04",
+  "backlog_item_id": "BLG-D04",
+  "backlog_title": "Определять необходимость Честного знака по карточке товара",
+  "backlog_item": {
+    "id": "BLG-D04",
+    "title": "Определять необходимость Честного знака по карточке товара",
+    "source_section": "D4",
+    "business_meaning": "Сейчас необходимость кода маркировки может определяться по строке задания упаковки, которой у части поставок вообще нет. Тогда товар, который обязан иметь Честный знак, ошибочно выглядит как обычный и проходит без нужной проверки. Источником признака должна стать карточка товара или каталог, чтобы требование сохранялось независимо от наличия и состояния упаковочного задания.",
+    "type": "bug",
+    "priority": "medium",
+    "status": "queued",
+    "readiness": "needs_product_contract",
+    "dependencies": [
+      "BLG-D03"
+    ],
+    "suggested_roles": [
+      "BA",
+      "screen-dev",
+      "reviewer"
+    ],
+    "suggested_stages": [
+      "S08",
+      "S12",
+      "S18"
+    ]
+  },
+  "source_hash": "sha256:4fdb50a4175c658416ea2de24ed9bcdc002ebb8da8d70628f1889b6117dc78f1",
+  "source_excerpt": "Определять необходимость Честного знака по карточке товара",
+  "pipeline_version": "2.0",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "traits": [
+    "bug"
+  ],
+  "risk_level": "medium",
+  "required_stages": [
+    "S01",
+    "S02",
+    "B01",
+    "B02",
+    "B03",
+    "S11",
+    "S12",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S26"
+  ],
+  "current_stage": "S01",
+  "status": "QUEUED",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "environment_id": "local",
+  "database": "local",
+  "redis_namespace": "local",
+  "celery_queue": "wave-a1b311d18f07-blg-d04",
+  "emulator_namespace": "local",
+  "resources": [
+    "backlog:blg-d04",
+    "file:docs/product/backlog-queue.json"
+  ],
+  "owner_agent": "denis",
+  "attempt": 1,
+  "lease_until": "2026-08-21T00:55:55Z",
+  "heartbeat_at": "2026-08-21T00:10:06Z",
+  "last_valid_receipt": null,
+  "blocker": null,
+  "resume_condition": null,
+  "verdicts": {},
+  "commits": [],
+  "wave_id": "wave-a1b311d18f07",
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_usd": 0.0
+  },
+  "budget_usage_receipts": [],
+  "blocked_by": [],
+  "blocker_resolutions": [],
+  "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
+}

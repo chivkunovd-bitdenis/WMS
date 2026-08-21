@@ -1,0 +1,95 @@
+{
+  "task_id": "BLG-I02",
+  "backlog_item_id": "BLG-I02",
+  "backlog_title": "Сохранять вердикты WB и запрещать оптимистичный dispatch",
+  "backlog_item": {
+    "id": "BLG-I02",
+    "title": "Сохранять вердикты WB и запрещать оптимистичный dispatch",
+    "source_section": "I2",
+    "business_meaning": "Система может продолжать отгрузку, не сохранив точный ответ Wildberries о проверке маркировки, и фактически считать отсутствие ошибки разрешением. Это создаёт ложный зелёный статус: оператор думает, что заказ допустим к сдаче, хотя подтверждения маркетплейса нет. Каждый вердикт Wildberries нужно хранить вместе со временем и причиной, а dispatch, то есть передача заказа дальше, должен разрешаться только по явно подтверждённому положительному состоянию.",
+    "type": "external_contract",
+    "priority": "critical",
+    "status": "queued",
+    "readiness": "needs_product_contract",
+    "dependencies": [
+      "BLG-I01",
+      "BLG-D03"
+    ],
+    "suggested_roles": [
+      "Product",
+      "BA",
+      "solution-architect",
+      "screen-dev",
+      "reviewer"
+    ],
+    "suggested_stages": [
+      "S01",
+      "S02",
+      "S12",
+      "S18",
+      "S26"
+    ]
+  },
+  "source_hash": "sha256:36a35b1f0f867091538c42b97475b7540b31317b078cb33a924c6b3fef7a5fda",
+  "source_excerpt": "Сохранять вердикты WB и запрещать оптимистичный dispatch",
+  "pipeline_version": "2.0",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "traits": [
+    "external_contract"
+  ],
+  "risk_level": "critical",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S03",
+    "S04",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S26"
+  ],
+  "current_stage": "S01",
+  "status": "QUEUED",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "environment_id": "local",
+  "database": "local",
+  "redis_namespace": "local",
+  "celery_queue": "wave-a1b311d18f07-blg-i02",
+  "emulator_namespace": "local",
+  "resources": [
+    "backlog:blg-i02",
+    "file:docs/product/backlog-queue.json"
+  ],
+  "owner_agent": "denis",
+  "attempt": 1,
+  "lease_until": "2026-08-21T00:55:56Z",
+  "heartbeat_at": "2026-08-21T00:10:15Z",
+  "last_valid_receipt": null,
+  "blocker": null,
+  "resume_condition": null,
+  "verdicts": {},
+  "commits": [],
+  "wave_id": "wave-a1b311d18f07",
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_usd": 0.0
+  },
+  "budget_usage_receipts": [],
+  "blocked_by": [],
+  "blocker_resolutions": [],
+  "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
+}

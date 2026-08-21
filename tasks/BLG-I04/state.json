@@ -1,0 +1,91 @@
+{
+  "task_id": "BLG-I04",
+  "backlog_item_id": "BLG-I04",
+  "backlog_title": "Исправить квадратирование числа листов при печати",
+  "backlog_item": {
+    "id": "BLG-I04",
+    "title": "Исправить квадратирование числа листов при печати",
+    "source_section": "I4",
+    "business_meaning": "В текущем сценарии количество заказов может одновременно использоваться и как число этикеток, и как число копий, поэтому итоговый тираж случайно умножается сам на себя. Оператор просит один комплект, а принтер получает десятки или сотни лишних листов, расходуя время и бумагу. По умолчанию должна печататься одна копия каждой нужной этикетки, перед запуском нужно показывать итоговое число листов, а необычно большой тираж требовать отдельного подтверждения.",
+    "type": "print",
+    "priority": "high",
+    "status": "queued",
+    "readiness": "needs_product_contract",
+    "dependencies": [],
+    "suggested_roles": [
+      "BA",
+      "Product",
+      "screen-dev",
+      "ui-critic"
+    ],
+    "suggested_stages": [
+      "S01",
+      "S08",
+      "S12",
+      "S18",
+      "S26"
+    ]
+  },
+  "source_hash": "sha256:a1bf2707544628b2dc79564095b7f9383548625b91a7d0f9d5a5f53fb9b05dac",
+  "source_excerpt": "Исправить квадратирование числа листов при печати",
+  "pipeline_version": "2.0",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "traits": [
+    "print"
+  ],
+  "risk_level": "high",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S09",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S25",
+    "S26"
+  ],
+  "current_stage": "S01",
+  "status": "QUEUED",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "environment_id": "local",
+  "database": "local",
+  "redis_namespace": "local",
+  "celery_queue": "wave-a1b311d18f07-blg-i04",
+  "emulator_namespace": "local",
+  "resources": [
+    "backlog:blg-i04",
+    "file:docs/product/backlog-queue.json"
+  ],
+  "owner_agent": "denis",
+  "attempt": 1,
+  "lease_until": "2026-08-21T00:55:56Z",
+  "heartbeat_at": "2026-08-21T00:10:15Z",
+  "last_valid_receipt": null,
+  "blocker": null,
+  "resume_condition": null,
+  "verdicts": {},
+  "commits": [],
+  "wave_id": "wave-a1b311d18f07",
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_usd": 0.0
+  },
+  "budget_usage_receipts": [],
+  "blocked_by": [],
+  "blocker_resolutions": [],
+  "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
+}
