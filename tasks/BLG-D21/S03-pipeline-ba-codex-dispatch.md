@@ -64,7 +64,7 @@ Rules:
   "task_id": "BLG-D21",
   "stage": "S03",
   "role": "pipeline-ba",
-  "status": "RUNNING",
+  "status": "WAITING",
   "traits": [
     "database_change",
     "background_worker",
@@ -141,8 +141,18 @@ Rules:
       "minimum_closure_artifact": "WB pagination/search/sync contract and e2e for item outside first page"
     }
   ],
-  "blocker": null,
-  "resume_condition": null,
+  "blocker": {
+    "type": "OWNER_INPUT",
+    "reason_code": "OPEN_BLOCKER",
+    "details": "BLK-INTEGRATION-001: Импорт WB ограничен и не поддерживает автономную актуализацию каталога",
+    "owner": "pipeline-product",
+    "created_at": "2026-08-21T00:28:07Z",
+    "resume_stage": "S03"
+  },
+  "resume_condition": {
+    "stage": "S03",
+    "condition": "resolve BLK-INTEGRATION-001 with closure evidence"
+  },
   "rules": [
     "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
     "Do not accept your own work.",

@@ -64,7 +64,7 @@ Rules:
   "task_id": "BLG-D06",
   "stage": "S01",
   "role": "pipeline-dispatcher",
-  "status": "QUEUED",
+  "status": "REWORK",
   "traits": [
     "ui_change"
   ],
@@ -120,9 +120,9 @@ Rules:
   },
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 0,
-    "output_tokens": 0,
-    "estimated_usd": 0.0
+    "input_tokens": 1200,
+    "output_tokens": 600,
+    "estimated_usd": 0.0175
   },
   "blocked_by": [],
   "blocker": null,

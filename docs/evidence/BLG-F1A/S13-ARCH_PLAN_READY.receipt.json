@@ -1,0 +1,33 @@
+{
+  "task_id": "BLG-F1A",
+  "run_id": "BLG-F1A:S13:5",
+  "stage_id": "S13",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "role_binding_id": "solution-architect",
+  "agent_identity": "codex-blg-f1a-s13-solution-architect",
+  "input_hashes": {
+    "state_before": "sha256:35e1da145d765ee947ee871667cff7db3939aacc147228241c5c4c852d1dafa0"
+  },
+  "output_hashes": {},
+  "parent_receipt_hash": "sha256:01c7fda7b518fdfa6f87f81a758458ee29f673123d3d7ce79a050333e9df12eb",
+  "baseline_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "started_at": "2026-08-21T01:44:55Z",
+  "finished_at": "2026-08-21T01:44:55Z",
+  "verdict": "ARCH_PLAN_READY",
+  "blocker": null,
+  "resume_stage": null,
+  "usage_receipt": {
+    "task_id": "BLG-F1A",
+    "stage": "S13",
+    "role": "solution-architect",
+    "executor": "codex",
+    "model": "gpt-5.6-sol",
+    "tier": "expensive",
+    "input_tokens": 95000,
+    "output_tokens": 9000,
+    "estimated_usd": 0.95,
+    "agent_id": "codex-blg-f1a-s13-solution-architect",
+    "recorded_at": "2026-08-21T01:44:55Z"
+  },
+  "signature": "sha256:be4c759c97250f9d0a3b8a50841f26155a2b53605547c09eaa4ee14b4b5f14f0"
+}

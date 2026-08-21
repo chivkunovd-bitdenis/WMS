@@ -58,7 +58,7 @@
     "S26"
   ],
   "current_stage": "S09",
-  "status": "RUNNING",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -74,33 +74,28 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T00:25:28Z",
-  "last_valid_receipt": "sha256:7427175cb68c3c5feec1327a59f933a67cacf240c9dd032eb2d78f9b26e57e9e",
-  "blocker": null,
-  "resume_condition": null,
-  "verdicts": {
-    "S01": {
-      "verdict": "TASK_INTAKE_READY",
-      "receipt_path": "docs/evidence/BLG-I17/S01-TASK_INTAKE_READY.receipt.json",
-      "receipt_hash": "sha256:4ad480264e37acfc84ad82a7fe4c9cd0ea33e0a6cd14d1c25230927e026aa64f",
-      "role_binding_id": "pipeline-dispatcher",
-      "agent_identity": "codex-night-orchestrator-dispatcher"
-    },
-    "S02": {
-      "verdict": "IMPACT_CLASSIFIED",
-      "receipt_path": "docs/evidence/BLG-I17/S02-IMPACT_CLASSIFIED.receipt.json",
-      "receipt_hash": "sha256:7427175cb68c3c5feec1327a59f933a67cacf240c9dd032eb2d78f9b26e57e9e",
-      "role_binding_id": "pipeline-dispatcher",
-      "agent_identity": "codex-night-orchestrator-dispatcher"
-    }
+  "heartbeat_at": "2026-08-21T00:56:54Z",
+  "last_valid_receipt": null,
+  "blocker": {
+    "type": "ENV",
+    "reason_code": "CONTROLLER_REWORK_INVALIDATION_BUG",
+    "details": "Controller failure route correctly selected S09 but invalidated accepted predecessor receipts S01 and S02 as well as S09; next/packet therefore regress to S01.",
+    "owner": "pipeline-controller",
+    "created_at": "2026-08-21T00:56:54Z",
+    "resume_stage": "S09"
   },
+  "resume_condition": {
+    "stage": "S09",
+    "condition": "Controller repair restores accepted S01/S02 receipts and routes BLG-I17 to S09 UX contract rework described in tasks/BLG-I17/S10-DESIGN-REVIEW.md."
+  },
+  "verdicts": {},
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 5500,
+    "output_tokens": 2700,
+    "estimated_usd": 0.0435
   },
   "budget_usage_receipts": [
     {
@@ -128,9 +123,43 @@
       "estimated_usd": 0.0015,
       "agent_id": "codex-night-orchestrator-dispatcher",
       "recorded_at": "2026-08-21T00:25:28Z"
+    },
+    {
+      "task_id": "BLG-I17",
+      "stage": "S09",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 5200,
+      "output_tokens": 2600,
+      "estimated_usd": 0.041,
+      "agent_id": "codex-wms-pipeline-ba-blg-i17-s09",
+      "recorded_at": "2026-08-21T00:51:54Z"
     }
   ],
   "blocked_by": [],
   "blocker_resolutions": [],
+  "invalidations": [
+    {
+      "at": "2026-08-21T00:56:04Z",
+      "reason": "failure:PRODUCT_REJECTED",
+      "invalidated_stages": [
+        "S01",
+        "S02",
+        "S09"
+      ],
+      "last_valid_receipt_before_invalidation": "sha256:b5bdafe105093343c09ecc6c03dbc6acbcc4c7345ca596a522ab72543cccad7f"
+    }
+  ],
+  "failure_routes": [
+    {
+      "at": "2026-08-21T00:56:04Z",
+      "finding": "PRODUCT_REJECTED",
+      "status": "REWORK",
+      "resume_stage": "S09",
+      "details": "S10 DESIGN_REWORK: remove nested ScreenSection; correct R-10 and ui-kit component mapping; define safe accepted-or-unknown write read-back before retry/readiness; add explicit long-data narrow-viewport behavior. Review: tasks/BLG-I17/S10-DESIGN-REVIEW.md"
+    }
+  ],
   "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
 }

@@ -54,7 +54,7 @@
     "S26"
   ],
   "current_stage": "S11",
-  "status": "RUNNING",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -70,10 +70,20 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T00:25:02Z",
+  "heartbeat_at": "2026-08-21T01:30:26Z",
   "last_valid_receipt": "sha256:a519e2747bfca24573c21763647737878eb1f9f33400091092c3582d78c2aa2c",
-  "blocker": null,
-  "resume_condition": null,
+  "blocker": {
+    "type": "OWNER_INPUT",
+    "reason_code": "BLG_D03_GS_ORACLE_REQUIRED",
+    "details": "S11 cannot approve GS preservation and recovery while BLG-D03 is WAITING without a versioned external-contract artifact, approved oracle, and source-backed behavior/consumer contract for scanner, mobile terminal, and browser inputs.",
+    "owner": "pipeline-product",
+    "created_at": "2026-08-21T01:30:26Z",
+    "resume_stage": "S11"
+  },
+  "resume_condition": {
+    "stage": "S11",
+    "condition": "Resume S11 after BLG-D03 has a real versioned contract artifact and RESEARCH_PASSED evidence, the required oracle/decision record is approved, and BLG-I03 receives a hash-linked GS behavior/consumer contract defining channel representations, the permitted recovery rule, fail-closed handling, and read-back oracle."
+  },
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",

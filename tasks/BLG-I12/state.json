@@ -55,7 +55,7 @@
     "S26"
   ],
   "current_stage": "S09",
-  "status": "RUNNING",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -71,33 +71,28 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T00:25:16Z",
-  "last_valid_receipt": "sha256:ab64f1252e4b5afcd810f5852e7e435b2c3c84487cfbad416d3e6fcc36d497d9",
-  "blocker": null,
-  "resume_condition": null,
-  "verdicts": {
-    "S01": {
-      "verdict": "TASK_INTAKE_READY",
-      "receipt_path": "docs/evidence/BLG-I12/S01-TASK_INTAKE_READY.receipt.json",
-      "receipt_hash": "sha256:9d4077abc49a4c9bcb17e009fbef01c1a72d9d0d50a906f2c6d74bdfd49be908",
-      "role_binding_id": "pipeline-dispatcher",
-      "agent_identity": "codex-night-orchestrator-dispatcher"
-    },
-    "S02": {
-      "verdict": "IMPACT_CLASSIFIED",
-      "receipt_path": "docs/evidence/BLG-I12/S02-IMPACT_CLASSIFIED.receipt.json",
-      "receipt_hash": "sha256:ab64f1252e4b5afcd810f5852e7e435b2c3c84487cfbad416d3e6fcc36d497d9",
-      "role_binding_id": "pipeline-dispatcher",
-      "agent_identity": "codex-night-orchestrator-dispatcher"
-    }
+  "heartbeat_at": "2026-08-21T00:56:57Z",
+  "last_valid_receipt": null,
+  "blocker": {
+    "type": "ENV",
+    "reason_code": "PIPELINE_REWORK_ROUTE_BROKEN",
+    "details": "Controller recorded PRODUCT_REJECTED with resume_stage S09, but packet ignored REWORK current_stage and routed BLG-I12 to S01 after clearing accepted S01/S02 receipts.",
+    "owner": "pipeline-controller-maintainer",
+    "created_at": "2026-08-21T00:56:57Z",
+    "resume_stage": "S09"
   },
+  "resume_condition": {
+    "stage": "S09",
+    "condition": "Repair or authorize the Pipeline controller rework route so BLG-I12 resumes at S09 without replaying accepted S01/S02, then regenerate packet and dispatch."
+  },
+  "verdicts": {},
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 15300,
+    "output_tokens": 2300,
+    "estimated_usd": 0.2525
   },
   "budget_usage_receipts": [
     {
@@ -125,9 +120,43 @@
       "estimated_usd": 0.0015,
       "agent_id": "codex-night-orchestrator-dispatcher",
       "recorded_at": "2026-08-21T00:25:16Z"
+    },
+    {
+      "task_id": "BLG-I12",
+      "stage": "S09",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 15000,
+      "output_tokens": 2200,
+      "estimated_usd": 0.25,
+      "agent_id": "pipeline-ba-codex-blg-i12-s09",
+      "recorded_at": "2026-08-21T00:50:30Z"
     }
   ],
   "blocked_by": [],
   "blocker_resolutions": [],
+  "invalidations": [
+    {
+      "at": "2026-08-21T00:56:14Z",
+      "reason": "failure:PRODUCT_REJECTED",
+      "invalidated_stages": [
+        "S01",
+        "S02",
+        "S09"
+      ],
+      "last_valid_receipt_before_invalidation": "sha256:0bcb05815b2266e34007b28e5cdb1b7702165b89706727dbf060c723cfb29ac6"
+    }
+  ],
+  "failure_routes": [
+    {
+      "at": "2026-08-21T00:56:14Z",
+      "finding": "PRODUCT_REJECTED",
+      "status": "REWORK",
+      "resume_stage": "S09",
+      "details": "S10 DESIGN_REWORK: S09 must define scanner-listener suspension and safe focus restoration, and register DESIGN_SYSTEM_GAP for ModalDialog safe close/focus policy plus responsive three-action layout; see tasks/BLG-I12/S10-DESIGN-REVIEW.md."
+    }
+  ],
   "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
 }

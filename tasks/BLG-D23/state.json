@@ -55,7 +55,7 @@
     "S26"
   ],
   "current_stage": "S09",
-  "status": "RUNNING",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -71,10 +71,20 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:55Z",
-  "heartbeat_at": "2026-08-21T00:24:54Z",
+  "heartbeat_at": "2026-08-21T00:29:59Z",
   "last_valid_receipt": "sha256:948ea64763b70afb0e25125b0e0088c83dd6c9bf4fe16f055ae20e1ef5435a2a",
-  "blocker": null,
-  "resume_condition": null,
+  "blocker": {
+    "type": "OWNER_INPUT",
+    "reason_code": "OPEN_BLOCKER",
+    "details": "BLK-PROD-002: Часть backlog описана как дефект, но не имеет полного контракта результата",
+    "owner": "pipeline-ba",
+    "created_at": "2026-08-21T00:29:59Z",
+    "resume_stage": "S09"
+  },
+  "resume_condition": {
+    "stage": "S09",
+    "condition": "resolve BLK-PROD-002 with closure evidence"
+  },
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",

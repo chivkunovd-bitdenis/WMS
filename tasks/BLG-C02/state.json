@@ -52,8 +52,8 @@
     "S27",
     "S28"
   ],
-  "current_stage": "S03",
-  "status": "RUNNING",
+  "current_stage": "S04",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -69,10 +69,20 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:57Z",
-  "heartbeat_at": "2026-08-21T00:25:35Z",
-  "last_valid_receipt": "sha256:cf92d235122cfef05607721b9e6ee3a51786330bca917dc3c51d1ab82d0c6462",
-  "blocker": null,
-  "resume_condition": null,
+  "heartbeat_at": "2026-08-21T00:44:34Z",
+  "last_valid_receipt": "sha256:8374c457bc8994ed303bc7fa094c0535d327dda07321a1119ca28fdd92e163f5",
+  "blocker": {
+    "type": "SECURITY",
+    "reason_code": "RESEARCH_CONTRACT_GAPS",
+    "details": "S04 RESEARCH_REWORK: S03 does not close the safe WB logging contract. It must (1) make zero raw WB response body/path/object-id leakage mandatory across every API and worker handler/sink, including log_wb_client_error, rather than allowing the legacy lane to remain outside the structured event; (2) cover current WB auth modes and secrets beyond Authorization, including service/basic-token X-Client-Secret and token-type 401/403 constraints, without reading or changing credentials; (3) assess omitted WB statuses, at minimum 402 on current FBS endpoints and applicability of 406/451; (4) specify rate-limit parsing/proof for token-type aggregation and absent/malformed headers, including X-Ratelimit-Remaining absent on 429 and numeric Retry/Limit/Reset; (5) replace LIVE_SANDBOX not-applicable with the official content/marketplace/supplies sandbox hosts, test-token constraints and lower-limit differences, while keeping deterministic emulator/MockTransport proof and prohibiting live calls.",
+    "owner": "pipeline-ba",
+    "created_at": "2026-08-21T00:44:34Z",
+    "resume_stage": "S04"
+  },
+  "resume_condition": {
+    "stage": "S04",
+    "condition": "Revise the S03 dossier and capability matrix with official WB 2026 auth, error/status, rate-limit and sandbox sources; make end-to-end API+worker leak tests and emulator/sandbox host classification explicit; then resume S04 for independent re-review."
+  },
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",
@@ -87,15 +97,22 @@
       "receipt_hash": "sha256:cf92d235122cfef05607721b9e6ee3a51786330bca917dc3c51d1ab82d0c6462",
       "role_binding_id": "pipeline-dispatcher",
       "agent_identity": "codex-night-orchestrator-dispatcher"
+    },
+    "S03": {
+      "verdict": "RESEARCH_READY",
+      "receipt_path": "docs/evidence/BLG-C02/S03-RESEARCH_READY.receipt.json",
+      "receipt_hash": "sha256:8374c457bc8994ed303bc7fa094c0535d327dda07321a1119ca28fdd92e163f5",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-blg-c02-s03-pipeline-ba"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 38300,
+    "output_tokens": 6300,
+    "estimated_usd": 0.3525
   },
   "budget_usage_receipts": [
     {
@@ -123,6 +140,19 @@
       "estimated_usd": 0.0015,
       "agent_id": "codex-night-orchestrator-dispatcher",
       "recorded_at": "2026-08-21T00:25:35Z"
+    },
+    {
+      "task_id": "BLG-C02",
+      "stage": "S03",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 38000,
+      "output_tokens": 6200,
+      "estimated_usd": 0.35,
+      "agent_id": "codex-blg-c02-s03-pipeline-ba",
+      "recorded_at": "2026-08-21T00:40:27Z"
     }
   ],
   "blocked_by": [],

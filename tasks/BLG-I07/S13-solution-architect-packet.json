@@ -1,0 +1,94 @@
+{
+  "task_id": "BLG-I07",
+  "stage": "S13",
+  "role": "solution-architect",
+  "status": "WAITING",
+  "traits": [
+    "database_change",
+    "background_worker"
+  ],
+  "risk_level": "high",
+  "model_policy": "pipeline/model-policy.yml",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S26"
+  ],
+  "done_stages": [
+    "S01",
+    "S02",
+    "S11",
+    "S12"
+  ],
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "wave_id": "wave-a1b311d18f07",
+  "backlog_item_id": "BLG-I07",
+  "backlog_item": {
+    "id": "BLG-I07",
+    "title": "Провести capacity/performance remediation прода",
+    "source_section": "I7, K1",
+    "business_meaning": "Пользователи сообщают, что система в целом работает очень медленно, но сейчас нет карты, какие именно экраны, запросы и фоновые процессы съедают время и ресурсы. Из-за этого отдельные точечные исправления могут переносить тормоза в другое место и не давать заметного результата оператору. Нужно измерить основные рабочие сценарии до изменений, найти серверные и браузерные узкие места, исправить их по приоритету и зафиксировать измеримые пороги скорости и стабильности после изменений.",
+    "type": "performance",
+    "priority": "high",
+    "status": "queued",
+    "readiness": "needs_architecture_contract",
+    "dependencies": [],
+    "suggested_roles": [
+      "solution-architect",
+      "BA",
+      "DevOps",
+      "screen-dev",
+      "reviewer"
+    ],
+    "suggested_stages": [
+      "S02",
+      "S12",
+      "S18",
+      "S23",
+      "S25"
+    ]
+  },
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 72100,
+    "output_tokens": 9200,
+    "estimated_usd": 0.5725
+  },
+  "blocked_by": [],
+  "blocker": {
+    "type": "BASELINE",
+    "reason_code": "S13_BASELINE_AND_IMPACT_PROFILE_INCOMPLETE",
+    "details": "S13 cannot issue ARCH_PLAN_READY: required visible pagination/cross-page selection and durable print progress are missing ui_change and print traits, and no sanitized capacity/concurrency manifest fixes CPU, memory, service, worker, DB/Redis and ordinary/peak browser limits.",
+    "owner": "pipeline-dispatcher",
+    "created_at": "2026-08-21T01:51:07Z",
+    "resume_stage": "S13"
+  },
+  "resume_condition": {
+    "stage": "S13",
+    "condition": "Pipeline dispatcher reclassifies BLG-I07 with ui_change and print, completes the newly required UX/design and revalidated Product/Task Cut receipts, and provides an owner-authorized sanitized capacity/concurrency manifest; then resume at S13."
+  },
+  "rules": [
+    "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
+    "Do not accept your own work.",
+    "If status is WAITING, do not advance; report the blocker and wait for resume.",
+    "If budget_enforced is true, advance requires usage receipt fields.",
+    "If blocked_by is non-empty, do not pass the blocker resume stage without resolve-blocker evidence.",
+    "Use python3 scripts/pipeline/run.py advance only for the stage you own.",
+    "Do not set DONE while pipeline status is not ACTIVE."
+  ]
+}

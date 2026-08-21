@@ -53,7 +53,7 @@
     "S26"
   ],
   "current_stage": "S03",
-  "status": "RUNNING",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -69,10 +69,20 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T00:25:29Z",
-  "last_valid_receipt": "sha256:4b6649a771a16ba7b0602e7a0cadda704cde55886fdabd5dae6dcb7f2a654844",
-  "blocker": null,
-  "resume_condition": null,
+  "heartbeat_at": "2026-08-21T00:53:31Z",
+  "last_valid_receipt": "sha256:a44b3ce2dba8d4616917c0e0d97893cf1575577b171d1d6a0ebc8283100550bb",
+  "blocker": {
+    "type": "BASELINE",
+    "reason_code": "RESEARCH_REWORK_WB_DELETE_RATE_LIMIT_CONTRACT",
+    "details": "S04 RESEARCH_REWORK: current FBS OpenAPI counts every 4XX as 10 requests; DELETE key=sgtin removes the whole 1..100-code value while S03 tracks only order-level progress; and the Marketplace sandbox limit of 1 request/second is missing.",
+    "owner": "pipeline-ba",
+    "created_at": "2026-08-21T00:53:31Z",
+    "resume_stage": "S03"
+  },
+  "resume_condition": {
+    "stage": "S03",
+    "condition": "Revise both S03 artifacts for all-4XX x10 accounting, explicit delete-all versus subset semantics with per-code outcomes and recovery, and sandbox pacing; then rerun an independent S04."
+  },
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",
@@ -87,15 +97,22 @@
       "receipt_hash": "sha256:4b6649a771a16ba7b0602e7a0cadda704cde55886fdabd5dae6dcb7f2a654844",
       "role_binding_id": "pipeline-dispatcher",
       "agent_identity": "codex-night-orchestrator-dispatcher"
+    },
+    "S03": {
+      "verdict": "RESEARCH_READY",
+      "receipt_path": "docs/evidence/BLG-I19/S03-RESEARCH_READY.receipt.json",
+      "receipt_hash": "sha256:a44b3ce2dba8d4616917c0e0d97893cf1575577b171d1d6a0ebc8283100550bb",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-blg-i19-s03-pipeline-ba"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 30300,
+    "output_tokens": 8600,
+    "estimated_usd": 0.7225
   },
   "budget_usage_receipts": [
     {
@@ -123,6 +140,19 @@
       "estimated_usd": 0.0015,
       "agent_id": "codex-night-orchestrator-dispatcher",
       "recorded_at": "2026-08-21T00:25:29Z"
+    },
+    {
+      "task_id": "BLG-I19",
+      "stage": "S03",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 30000,
+      "output_tokens": 8500,
+      "estimated_usd": 0.72,
+      "agent_id": "codex-blg-i19-s03-pipeline-ba",
+      "recorded_at": "2026-08-21T00:46:11Z"
     }
   ],
   "blocked_by": [],

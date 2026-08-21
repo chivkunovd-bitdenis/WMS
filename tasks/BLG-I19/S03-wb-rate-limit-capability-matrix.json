@@ -1,0 +1,334 @@
+{
+  "schema_version": "1.0",
+  "task_id": "BLG-I19",
+  "stage": "S03",
+  "contract_id": "wb-fbs-sgtin-delete-rate-limit-v1",
+  "snapshot_date": "2026-08-21",
+  "scope": {
+    "kind": "narrow_external_contract",
+    "operation": "delete_fbs_order_sgtin_metadata",
+    "excluded": [
+      "implementation",
+      "production",
+      "deploy",
+      "live_wb_calls",
+      "live_wb_sandbox_calls",
+      "credential_management",
+      "credential_pages",
+      "fbo",
+      "dbs",
+      "dbw"
+    ]
+  },
+  "sources": [
+    {
+      "id": "WB-FBS-OPENAPI",
+      "url": "https://dev.wildberries.ru/docs/openapi/orders-fbs",
+      "document_date": null,
+      "accessed_at": "2026-08-21",
+      "level": "official"
+    },
+    {
+      "id": "WB-FBS-GUIDE",
+      "url": "https://dev.wildberries.ru/knowledge-base/articles/019d49a4-0771-7571-aea9-11d5b597f34c/zakazy-fbs",
+      "document_date": null,
+      "accessed_at": "2026-08-21",
+      "level": "official"
+    },
+    {
+      "id": "WB-RATE-LIMITS",
+      "url": "https://dev.wildberries.ru/knowledge-base/articles/019d49a1-28ca-7735-bf2f-98210695abc7/limity-zaprosov-wb-api",
+      "document_date": "2026-04-03",
+      "accessed_at": "2026-08-21",
+      "level": "official"
+    },
+    {
+      "id": "WB-ERRORS",
+      "url": "https://dev.wildberries.ru/knowledge-base/articles/019d49a1-2cb0-781d-8921-deaf4a014a58/rasshifrovka-kodov-oshibok-wb-api",
+      "document_date": null,
+      "accessed_at": "2026-08-21",
+      "level": "official"
+    },
+    {
+      "id": "WB-META-RELEASE",
+      "url": "https://dev.wildberries.ru/release-notes?id=354",
+      "document_date": "2026-03-31",
+      "accessed_at": "2026-08-21",
+      "level": "official"
+    },
+    {
+      "id": "WB-FBS-BATCH-RELEASE",
+      "url": "https://dev.wildberries.ru/news/161",
+      "document_date": "2025-11-21",
+      "accessed_at": "2026-08-21",
+      "level": "official"
+    },
+    {
+      "id": "WMS-OBSERVED",
+      "path": "backend/app/services/wildberries_fbs_client.py",
+      "checkout_sha": "a6a2a40ce02530a919d4ea979e4f3322591a6a49",
+      "observed_at": "2026-08-21",
+      "level": "observed"
+    },
+    {
+      "id": "BLG-I02-RESEARCH",
+      "path": "tasks/BLG-I02/S03-EXTERNAL-CONTRACT.md",
+      "observed_at": "2026-08-21",
+      "level": "observed"
+    }
+  ],
+  "capability_rows": [
+    {
+      "id": "DELETE-ENDPOINT",
+      "lane": "official_api",
+      "applicable": true,
+      "coverage": "complete",
+      "claim": "FBS removes sgtin with one DELETE /api/v3/orders/{orderId}/meta?key=sgtin request per order.",
+      "level": "official",
+      "source_ids": ["WB-FBS-OPENAPI", "WB-FBS-GUIDE"],
+      "owner_stage": "S15"
+    },
+    {
+      "id": "DELETE-BATCH",
+      "lane": "batch_behavior",
+      "applicable": true,
+      "coverage": "complete",
+      "claim": "No FBS batch-delete endpoint is documented; mass deletion is a WMS queue of single-order requests. The official FBS batch change applies to metadata reads up to 100 IDs.",
+      "level": "official",
+      "source_ids": ["WB-FBS-OPENAPI", "WB-FBS-BATCH-RELEASE"],
+      "owner_stage": "S04"
+    },
+    {
+      "id": "DELETE-SUCCESS",
+      "lane": "success_semantics",
+      "applicable": true,
+      "coverage": "complete",
+      "claim": "HTTP 204 confirms deletion for that order only and has no response body.",
+      "level": "official",
+      "source_ids": ["WB-FBS-OPENAPI"],
+      "owner_stage": "S15"
+    },
+    {
+      "id": "QUOTA-SCOPE",
+      "lane": "rate_limits",
+      "applicable": true,
+      "coverage": "complete",
+      "claim": "The quota is seller-account scoped and shared by all FBS metadata get/delete methods, so API and workers must coordinate one limiter for that seller and method group.",
+      "level": "official",
+      "source_ids": ["WB-FBS-OPENAPI", "WB-RATE-LIMITS"],
+      "owner_stage": "S13"
+    },
+    {
+      "id": "QUOTA-STANDARD",
+      "lane": "rate_limits",
+      "applicable": true,
+      "coverage": "complete",
+      "claim": "The documented standard method profile is 300 requests per minute, 200 ms interval and burst 20; token types can have reduced profiles.",
+      "level": "official",
+      "source_ids": ["WB-FBS-OPENAPI", "WB-RATE-LIMITS"],
+      "owner_stage": "S04"
+    },
+    {
+      "id": "QUOTA-409-WEIGHT",
+      "lane": "rate_limits",
+      "applicable": true,
+      "coverage": "complete",
+      "claim": "One 409 response for this endpoint consumes ten request units and must affect the shared limiter state.",
+      "level": "official",
+      "source_ids": ["WB-FBS-OPENAPI"],
+      "owner_stage": "S15"
+    },
+    {
+      "id": "QUOTA-HEADERS",
+      "lane": "rate_limits",
+      "applicable": true,
+      "coverage": "complete",
+      "claim": "Non-429 responses expose X-Ratelimit-Remaining; 429 exposes X-Ratelimit-Retry, X-Ratelimit-Reset and X-Ratelimit-Limit. Retry-After is not the named WB 429 contract.",
+      "level": "official",
+      "source_ids": ["WB-RATE-LIMITS", "WB-ERRORS"],
+      "owner_stage": "S15"
+    },
+    {
+      "id": "RETRY-429",
+      "lane": "retries",
+      "applicable": true,
+      "coverage": "complete",
+      "claim": "A 429 item cannot retry before X-Ratelimit-Retry; repeated 429 responses increase the delay and retries must stop after a finite 3-5-attempt policy.",
+      "level": "official",
+      "source_ids": ["WB-RATE-LIMITS"],
+      "owner_stage": "S11"
+    },
+    {
+      "id": "RETRY-MALFORMED-HEADER",
+      "lane": "retries",
+      "applicable": true,
+      "coverage": "ready_for_contract",
+      "claim": "Missing, negative or non-numeric WB retry headers must not cause immediate retry; S13 must choose a safe finite fallback delay.",
+      "level": "hypothesis",
+      "source_ids": ["WB-RATE-LIMITS"],
+      "owner_stage": "S13"
+    },
+    {
+      "id": "PARTIAL-PROGRESS",
+      "lane": "partial_success",
+      "applicable": true,
+      "coverage": "complete",
+      "claim": "Partial success exists across the local mass operation: each 204 is durable progress, while 429 or failure on one item does not roll back or authorize any other item.",
+      "level": "observed",
+      "source_ids": ["WB-FBS-OPENAPI"],
+      "owner_stage": "S13"
+    },
+    {
+      "id": "AMBIGUOUS-OUTCOME",
+      "lane": "recovery",
+      "applicable": true,
+      "coverage": "ready_for_contract",
+      "claim": "Timeout, transport failure, 5xx or worker crash after send does not prove whether DELETE took effect and requires read-back before another delete or local clearing.",
+      "level": "hypothesis",
+      "source_ids": ["WB-FBS-OPENAPI", "WB-ERRORS"],
+      "owner_stage": "S13"
+    },
+    {
+      "id": "READBACK",
+      "lane": "reconciliation",
+      "applicable": true,
+      "coverage": "complete",
+      "claim": "POST /api/marketplace/v3/orders/meta reads up to 100 FBS orders and is the documented read-back surface; use current metaDetails, not legacy meta.",
+      "level": "official",
+      "source_ids": ["WB-FBS-OPENAPI", "WB-META-RELEASE", "BLG-I02-RESEARCH"],
+      "owner_stage": "S15"
+    },
+    {
+      "id": "LOCAL-CLEAR-GUARD",
+      "lane": "consistency",
+      "applicable": true,
+      "coverage": "ready_for_contract",
+      "claim": "Local KIZ binding cannot be cleared until a 204 or unambiguous read-back confirms remote deletion for the current marking revision.",
+      "level": "hypothesis",
+      "source_ids": ["WB-FBS-OPENAPI", "BLG-I02-RESEARCH"],
+      "owner_stage": "S13"
+    },
+    {
+      "id": "TERMINAL-ERRORS",
+      "lane": "errors",
+      "applicable": true,
+      "coverage": "complete",
+      "claim": "400, 401, 402, 403 and 409 are not rate-limit retries; they require correction, access handling or final per-item failure.",
+      "level": "official",
+      "source_ids": ["WB-FBS-OPENAPI", "WB-ERRORS"],
+      "owner_stage": "S15"
+    },
+    {
+      "id": "WEBHOOK-POLLING",
+      "lane": "webhooks_polling",
+      "applicable": true,
+      "coverage": "complete",
+      "claim": "No quota-restored webhook is documented; the WMS scheduler resumes at next_attempt_at without frequent active polling.",
+      "level": "official",
+      "source_ids": ["WB-RATE-LIMITS"],
+      "owner_stage": "S13"
+    },
+    {
+      "id": "TENANT-SELLER",
+      "lane": "security_roles_tenant",
+      "applicable": true,
+      "coverage": "complete",
+      "claim": "Progress and limiter state are tenant/seller isolated; token values, raw KIZ and raw response bodies are excluded from operator output and ordinary logs.",
+      "level": "observed",
+      "source_ids": ["WB-RATE-LIMITS", "WMS-OBSERVED"],
+      "owner_stage": "S11"
+    },
+    {
+      "id": "OPERATOR-PROGRESS",
+      "lane": "seller_operator_instruction",
+      "applicable": true,
+      "coverage": "ready_for_product_decision",
+      "claim": "The operator needs per-operation counts and an exact final list of unprocessed orders; manual retry cannot bypass the limiter or next_attempt_at.",
+      "level": "hypothesis",
+      "source_ids": [],
+      "owner_stage": "S11"
+    },
+    {
+      "id": "VOLUME-500",
+      "lane": "volume_outage",
+      "applicable": true,
+      "coverage": "complete",
+      "claim": "Five hundred deletes require at least about 100 seconds at 200 ms with no competing calls, retries, read-back or weighted errors; this is a lower bound, not an SLA.",
+      "level": "official",
+      "source_ids": ["WB-FBS-OPENAPI"],
+      "owner_stage": "S11"
+    },
+    {
+      "id": "PAGINATION",
+      "lane": "pagination",
+      "applicable": false,
+      "coverage": "not_applicable_verified",
+      "claim": "DELETE is single-order and metadata read-back is a bounded batch without a pagination token.",
+      "level": "official",
+      "source_ids": ["WB-FBS-OPENAPI"],
+      "owner_stage": "S03"
+    },
+    {
+      "id": "OTHER-BUSINESS-LANES",
+      "lane": "catalog_stock_reserve_print_cancel_return",
+      "applicable": false,
+      "coverage": "not_applicable_verified",
+      "claim": "The narrow external-call change concerns FBS order marking metadata only and does not change catalog, stock, reserve, print, cancel or return contracts.",
+      "level": "observed",
+      "source_ids": ["WMS-OBSERVED"],
+      "owner_stage": "S03"
+    },
+    {
+      "id": "FBO-COMPETITORS",
+      "lane": "fbo_competitor_workflow_screens",
+      "applicable": false,
+      "coverage": "not_applicable_verified",
+      "claim": "BLG-I19 is a narrow change to an existing FBS external call, not a new domain, module, FBO process or competitor-screen research task.",
+      "level": "observed",
+      "source_ids": [],
+      "owner_stage": "S03"
+    },
+    {
+      "id": "EMULATOR-PROOF",
+      "lane": "sandbox_emulator",
+      "applicable": true,
+      "coverage": "ready_for_cases",
+      "claim": "Deterministic emulator cases are required at S15/S23; no live WB or WB sandbox call is needed or authorized in S03.",
+      "level": "observed",
+      "source_ids": [],
+      "owner_stage": "S15"
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q-S04-001",
+      "classification": "non_blocking",
+      "owner_stage": "S04",
+      "question": "Does the canonical current FBS OpenAPI still expose no batch delete and the same token-profile limits and X-Ratelimit headers?",
+      "required_evidence": "Independent official-doc lookup with retrieval date."
+    },
+    {
+      "id": "Q-S11-001",
+      "classification": "non_blocking",
+      "owner_stage": "S11",
+      "question": "Which exact retry ceiling in WB's documented 3-5 range and which final operator outcome are approved?",
+      "required_evidence": "Product contract with progress and terminal-failure states."
+    },
+    {
+      "id": "Q-S13-001",
+      "classification": "non_blocking",
+      "owner_stage": "S13",
+      "question": "What durable limiter, lease/fencing, fallback delay and transaction boundary preserve per-item progress across API/worker crashes?",
+      "required_evidence": "Architecture plan and recovery sequence."
+    },
+    {
+      "id": "Q-DEPENDENCY-I02",
+      "classification": "non_blocking_for_s03_blocking_before_dev",
+      "owner_stage": "S11",
+      "question": "Has BLG-I02 passed independent critique and approved current-revision read-back and fail-closed verdict persistence?",
+      "required_evidence": "BLG-I02 S04 and downstream Product receipts."
+    }
+  ],
+  "unprocessed_applicable_rows": [],
+  "recommended_verdict": "RESEARCH_READY"
+}

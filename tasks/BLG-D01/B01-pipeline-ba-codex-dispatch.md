@@ -64,7 +64,7 @@ Rules:
   "task_id": "BLG-D01",
   "stage": "B01",
   "role": "pipeline-ba",
-  "status": "RUNNING",
+  "status": "WAITING",
   "traits": [
     "bug"
   ],
@@ -140,8 +140,18 @@ Rules:
       "minimum_closure_artifact": "atomic feature cards with Given/When/Then, roles, data, negatives and visible business result"
     }
   ],
-  "blocker": null,
-  "resume_condition": null,
+  "blocker": {
+    "type": "FIXTURE",
+    "reason_code": "REPRO_FIXTURE_REQUIRED",
+    "details": "B01 requires isolated baseline reproduction fixture for: Сбрасывать выбор заказов при смене фильтра и показывать состав пачки. Backlog business_meaning describes the symptom, but no runnable fixture, test case, screen state, or observation log was supplied in the task packet.",
+    "owner": "pipeline-ba",
+    "created_at": "2026-08-21T00:27:44Z",
+    "resume_stage": "B01"
+  },
+  "resume_condition": {
+    "stage": "B01",
+    "condition": "Provide runnable reproduction fixture or observation packet with baseline SHA, test data/screen, steps, expected/actual result and evidence path; then resume B01."
+  },
   "rules": [
     "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
     "Do not accept your own work.",

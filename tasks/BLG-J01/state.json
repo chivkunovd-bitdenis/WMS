@@ -52,8 +52,8 @@
     "S25",
     "S26"
   ],
-  "current_stage": "S09",
-  "status": "RUNNING",
+  "current_stage": "S18",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -69,10 +69,20 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T00:25:31Z",
-  "last_valid_receipt": "sha256:454665b11c774034a7f0b03a1fad9a9b3ea5118fd32396d0b0ba429fc99b90df",
-  "blocker": null,
-  "resume_condition": null,
+  "heartbeat_at": "2026-08-21T01:27:55Z",
+  "last_valid_receipt": "sha256:811546446b8f63083845b47c59bb050776a33fac05be96224b1641dc5ed2fcd3",
+  "blocker": {
+    "type": "FIXTURE",
+    "reason_code": "S19_TARGET_SURFACE_UNREACHABLE",
+    "details": "S19 cannot bind the required Playwright cases: FfFbsSupplyDrawer contains the approved order-marking dialog, but FfFbsOrdersScreen does not import or render that drawer; the live FBS route opens FfFbsSupplyWorkspace, which has no order-marking dialog. A test would not exercise the approved user flow.",
+    "owner": "pipeline-dev",
+    "created_at": "2026-08-21T01:27:55Z",
+    "resume_stage": "S18"
+  },
+  "resume_condition": {
+    "stage": "S18",
+    "condition": "Integrate the approved order-marking dialog into the live FBS route or revise the approved executable target and S15 case bindings with closure evidence; then rerun S19 bindings for all seven GOLD cases."
+  },
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",
@@ -87,15 +97,71 @@
       "receipt_hash": "sha256:454665b11c774034a7f0b03a1fad9a9b3ea5118fd32396d0b0ba429fc99b90df",
       "role_binding_id": "pipeline-dispatcher",
       "agent_identity": "codex-night-orchestrator-dispatcher"
+    },
+    "S09": {
+      "verdict": "UX_CONTRACT_READY",
+      "receipt_path": "docs/evidence/BLG-J01/S09-UX_CONTRACT_READY.receipt.json",
+      "receipt_hash": "sha256:1d9a910c649021ba3acaffabf81c803f7fabbdf2d67c67a44a3b38d8ed81a57b",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-pipeline-ba-blg-j01-s09"
+    },
+    "S10": {
+      "verdict": "DESIGN_APPROVED",
+      "receipt_path": "docs/evidence/BLG-J01/S10-DESIGN_APPROVED.receipt.json",
+      "receipt_hash": "sha256:cb8f0651c5c4a3652519cb7ff32fdc4dddaf0c8fb085639b5e9e747b11931c44",
+      "role_binding_id": "pipeline-product",
+      "agent_identity": "codex-pipeline-product-blg-j01-s10"
+    },
+    "S11": {
+      "verdict": "PRODUCT_CONTRACT_APPROVED",
+      "receipt_path": "docs/evidence/BLG-J01/S11-PRODUCT_CONTRACT_APPROVED.receipt.json",
+      "receipt_hash": "sha256:1754df03319d2a62e28d9c2a19e5a0aa27692c5505977cf7e5591fd5f539ff0a",
+      "role_binding_id": "pipeline-product",
+      "agent_identity": "codex-pipeline-product-blg-j01-s11"
+    },
+    "S12": {
+      "verdict": "TASK_CUT_READY",
+      "receipt_path": "docs/evidence/BLG-J01/S12-TASK_CUT_READY.receipt.json",
+      "receipt_hash": "sha256:e6391478d7121972e4dd8585e709a57b6a0d640d2d785362a701dcecf1cdf9c0",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-pipeline-ba-blg-j01-s12"
+    },
+    "S15": {
+      "verdict": "CASES_READY",
+      "receipt_path": "docs/evidence/BLG-J01/S15-CASES_READY.receipt.json",
+      "receipt_hash": "sha256:90fd57ae90e99bf367ad313b36fe51438e3833eea754b7d150398910701bd69f",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-pipeline-ba-blg-j01-s15"
+    },
+    "S16": {
+      "verdict": "PRODUCT_APPROVED_FOR_DEV",
+      "receipt_path": "docs/evidence/BLG-J01/S16-PRODUCT_APPROVED_FOR_DEV.receipt.json",
+      "receipt_hash": "sha256:a2024ce7bef5f134b3f63402635505f14420d8ce3317d4cf052e645ff9cf23a9",
+      "role_binding_id": "pipeline-product",
+      "agent_identity": "codex-pipeline-product-blg-j01-s16-repeat"
+    },
+    "S17": {
+      "verdict": "WORKSPACE_READY",
+      "receipt_path": "docs/evidence/BLG-J01/S17-WORKSPACE_READY.receipt.json",
+      "receipt_hash": "sha256:f71cbb496441bcef1c93aaa2e2be73c6431b7aaa1647b6f7b0869c84ce7114df",
+      "role_binding_id": "pipeline-dispatcher",
+      "agent_identity": "codex-night-orchestrator-dispatcher"
+    },
+    "S18": {
+      "verdict": "DEV_DONE",
+      "receipt_path": "docs/evidence/BLG-J01/S18-DEV_DONE.receipt.json",
+      "receipt_hash": "sha256:811546446b8f63083845b47c59bb050776a33fac05be96224b1641dc5ed2fcd3",
+      "role_binding_id": "pipeline-dev",
+      "agent_identity": "codex-pipeline-dev-blg-j01-s18"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 256600,
+    "output_tokens": 22500,
+    "estimated_usd": 1.5365
   },
   "budget_usage_receipts": [
     {
@@ -123,6 +189,110 @@
       "estimated_usd": 0.0015,
       "agent_id": "codex-night-orchestrator-dispatcher",
       "recorded_at": "2026-08-21T00:25:31Z"
+    },
+    {
+      "task_id": "BLG-J01",
+      "stage": "S09",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 11800,
+      "output_tokens": 1900,
+      "estimated_usd": 0.075,
+      "agent_id": "codex-pipeline-ba-blg-j01-s09",
+      "recorded_at": "2026-08-21T00:52:17Z"
+    },
+    {
+      "task_id": "BLG-J01",
+      "stage": "S10",
+      "role": "pipeline-product",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 22000,
+      "output_tokens": 1600,
+      "estimated_usd": 0.13,
+      "agent_id": "codex-pipeline-product-blg-j01-s10",
+      "recorded_at": "2026-08-21T00:55:10Z"
+    },
+    {
+      "task_id": "BLG-J01",
+      "stage": "S11",
+      "role": "pipeline-product",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 56000,
+      "output_tokens": 1900,
+      "estimated_usd": 0.34,
+      "agent_id": "codex-pipeline-product-blg-j01-s11",
+      "recorded_at": "2026-08-21T00:58:10Z"
+    },
+    {
+      "task_id": "BLG-J01",
+      "stage": "S12",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 23800,
+      "output_tokens": 3300,
+      "estimated_usd": 0.135,
+      "agent_id": "codex-pipeline-ba-blg-j01-s12",
+      "recorded_at": "2026-08-21T01:01:01Z"
+    },
+    {
+      "task_id": "BLG-J01",
+      "stage": "S15",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 24500,
+      "output_tokens": 5200,
+      "estimated_usd": 0.149,
+      "agent_id": "codex-pipeline-ba-blg-j01-s15",
+      "recorded_at": "2026-08-21T01:04:18Z"
+    },
+    {
+      "task_id": "BLG-J01",
+      "stage": "S16",
+      "role": "pipeline-product",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 72000,
+      "output_tokens": 2600,
+      "estimated_usd": 0.44,
+      "agent_id": "codex-pipeline-product-blg-j01-s16-repeat",
+      "recorded_at": "2026-08-21T01:17:49Z"
+    },
+    {
+      "task_id": "BLG-J01",
+      "stage": "S17",
+      "role": "pipeline-dispatcher",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 4200,
+      "output_tokens": 900,
+      "estimated_usd": 0.025,
+      "agent_id": "codex-night-orchestrator-dispatcher",
+      "recorded_at": "2026-08-21T01:19:19Z"
+    },
+    {
+      "task_id": "BLG-J01",
+      "stage": "S18",
+      "role": "pipeline-dev",
+      "executor": "codex",
+      "model": "gpt-5.6-luna",
+      "tier": "cheap",
+      "input_tokens": 42000,
+      "output_tokens": 5000,
+      "estimated_usd": 0.24,
+      "agent_id": "codex-pipeline-dev-blg-j01-s18",
+      "recorded_at": "2026-08-21T01:22:50Z"
     }
   ],
   "blocked_by": [],

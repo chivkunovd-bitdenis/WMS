@@ -1,0 +1,209 @@
+{
+  "task_id": "BLG-I09",
+  "stage": "S03",
+  "role": "pipeline-ba",
+  "generated_at": "2026-08-21",
+  "scope": "narrow_external_contract_research_fbs_sgtin_reconciliation",
+  "applicable_rows": 18,
+  "untreated_applicable_rows": 0,
+  "rows": [
+    {
+      "id": "CAP-01",
+      "lane": "official_api",
+      "applicable": true,
+      "status": "covered",
+      "claim": "POST /api/marketplace/v3/orders/meta is the batch read source for FBS metadata and metaDetails",
+      "sources": ["WB-API-1", "WB-REL-1", "WB-REL-2"],
+      "evidence_level": "official"
+    },
+    {
+      "id": "CAP-02",
+      "lane": "versioning",
+      "applicable": true,
+      "status": "covered",
+      "claim": "legacy meta was scheduled for removal on 2026-04-30; new work must use metaDetails",
+      "sources": ["WB-REL-1"],
+      "evidence_level": "official"
+    },
+    {
+      "id": "CAP-03",
+      "lane": "seller_operator_instruction",
+      "applicable": true,
+      "status": "covered",
+      "claim": "WB exposes checking, checked, error and unchecked operator states and continues timed-out validation after delivery",
+      "sources": ["WB-HELP-1", "WB-HELP-2"],
+      "evidence_level": "official"
+    },
+    {
+      "id": "CAP-04",
+      "lane": "order_status_machine",
+      "applicable": true,
+      "status": "covered",
+      "claim": "supplierStatus is new, confirm, complete or cancel; sgtin mutation is limited to confirm",
+      "sources": ["WB-API-1"],
+      "evidence_level": "official"
+    },
+    {
+      "id": "CAP-05",
+      "lane": "marking_read",
+      "applicable": true,
+      "status": "covered",
+      "claim": "reconciliation must preserve every metaDetails entry and raw decision for key sgtin",
+      "sources": ["WB-API-1", "WB-REL-1"],
+      "evidence_level": "official"
+    },
+    {
+      "id": "CAP-06",
+      "lane": "marking_write",
+      "applicable": true,
+      "status": "covered",
+      "claim": "PUT sgtin accepts 1 to 100 codes of 16 to 135 characters and returns 204 on success",
+      "sources": ["WB-API-1"],
+      "evidence_level": "official"
+    },
+    {
+      "id": "CAP-07",
+      "lane": "marking_delete",
+      "applicable": true,
+      "status": "covered",
+      "claim": "DELETE by key removes all values for the metadata key and is unsafe for single-code automatic repair",
+      "sources": ["WB-API-1", "WMS-OBS-3"],
+      "evidence_level": "official"
+    },
+    {
+      "id": "CAP-08",
+      "lane": "delivery_validation",
+      "applicable": true,
+      "status": "covered",
+      "claim": "deliver can return 409 MetaValidationFail; its evidence is a transition result, not a substitute for a complete read snapshot",
+      "sources": ["WB-REL-1", "WB-REL-2"],
+      "evidence_level": "official"
+    },
+    {
+      "id": "CAP-09",
+      "lane": "pagination_batch",
+      "applicable": true,
+      "status": "covered",
+      "claim": "metadata reads are split into seller-scoped batches of at most 100 unique order IDs",
+      "sources": ["WB-API-1", "WMS-OBS-3"],
+      "evidence_level": "official"
+    },
+    {
+      "id": "CAP-10",
+      "lane": "rate_limit_retry",
+      "applicable": true,
+      "status": "covered",
+      "claim": "read/delete limit is 300 per minute, 200 ms interval and burst 20; 429 pauses the read run without mutation",
+      "sources": ["WB-API-1"],
+      "evidence_level": "official"
+    },
+    {
+      "id": "CAP-11",
+      "lane": "partial_success",
+      "applicable": true,
+      "status": "covered",
+      "claim": "missing response rows are classified as REMOTE_MISSING and never inferred as an empty metadata set",
+      "sources": ["WB-API-1"],
+      "evidence_level": "official"
+    },
+    {
+      "id": "CAP-12",
+      "lane": "polling_freshness",
+      "applicable": true,
+      "status": "covered",
+      "claim": "pending and unchecked results remain time-stamped nonfinal facts; stale snapshots cannot unlock dispatch",
+      "sources": ["WB-HELP-1", "WB-HELP-2"],
+      "evidence_level": "official"
+    },
+    {
+      "id": "CAP-13",
+      "lane": "tenant_seller_roles",
+      "applicable": true,
+      "status": "covered",
+      "claim": "scope and batching are isolated by tenant and seller; conflicts require data-owner approval",
+      "sources": ["WMS-OBS-4", "WMS-OBS-5"],
+      "evidence_level": "observed"
+    },
+    {
+      "id": "CAP-14",
+      "lane": "security_privacy",
+      "applicable": true,
+      "status": "covered",
+      "claim": "full KIZ values are excluded from general logs and evidence; reports use masks and fingerprints",
+      "sources": ["WB-HELP-2"],
+      "evidence_level": "hypothesis",
+      "question_disposition": "downstream_blocking_S11_retention_and_access_contract"
+    },
+    {
+      "id": "CAP-15",
+      "lane": "volume_emergency",
+      "applicable": true,
+      "status": "covered",
+      "claim": "large runs are resumable, seller-scoped, rate-limited and read-only by default; emergency mode does not weaken boundaries",
+      "sources": ["WB-API-1"],
+      "evidence_level": "hypothesis",
+      "question_disposition": "downstream_blocking_S13_worker_and_locking_design"
+    },
+    {
+      "id": "CAP-16",
+      "lane": "wms_boundary",
+      "applicable": true,
+      "status": "covered",
+      "claim": "current sync collapses metaDetails by kind, visits local rows only and cannot safely serve as historical reconciliation",
+      "sources": ["WMS-OBS-1", "WMS-OBS-2", "WMS-OBS-3"],
+      "evidence_level": "observed"
+    },
+    {
+      "id": "CAP-17",
+      "lane": "honest_sign_boundary",
+      "applicable": true,
+      "status": "covered",
+      "claim": "WB validation is not proof or mutation authority for the legal code state in Chestny ZNAK",
+      "sources": ["WB-HELP-1", "WB-HELP-2", "WB-HELP-3"],
+      "evidence_level": "official"
+    },
+    {
+      "id": "CAP-18",
+      "lane": "sandbox_testing",
+      "applicable": true,
+      "status": "covered",
+      "claim": "FBS sandbox exists for later contract tests; no sandbox or live call was made in S03",
+      "sources": ["WB-SBX-1"],
+      "evidence_level": "official",
+      "question_disposition": "downstream_blocking_S15_contract_fixtures"
+    },
+    {
+      "id": "CAP-NA-01",
+      "lane": "competitor_workflow_screens",
+      "applicable": false,
+      "status": "not_applicable",
+      "claim": "BLG-I09 is a narrow existing external-contract and data-integrity change, not a new module or operator UX"
+    },
+    {
+      "id": "CAP-NA-02",
+      "lane": "catalog_stock_reserve_print_returns",
+      "applicable": false,
+      "status": "not_applicable",
+      "claim": "these domains are unchanged; only their local KIZ ownership must not be mutated by reconciliation without a later contract"
+    },
+    {
+      "id": "CAP-NA-03",
+      "lane": "webhooks",
+      "applicable": false,
+      "status": "not_applicable",
+      "claim": "official sources describe polling metaDetails; no relevant FBS metadata webhook was identified"
+    }
+  ],
+  "stage_disposition": {
+    "verdict": "RESEARCH_READY",
+    "next_stage": "S04",
+    "blocking_questions_for_S03": [],
+    "downstream_gates": [
+      "BLG-I01 exact endpoint schema and defect window",
+      "BLG-I02 decision mapping and dispatch policy",
+      "S11 retention and access contract",
+      "S13 auto-apply, locking, audit and rollback design",
+      "S15 sandbox contract cases"
+    ]
+  }
+}

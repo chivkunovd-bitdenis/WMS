@@ -54,7 +54,7 @@
     "S26"
   ],
   "current_stage": "S09",
-  "status": "RUNNING",
+  "status": "REWORK",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -70,33 +70,18 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T00:25:32Z",
-  "last_valid_receipt": "sha256:2c1f2c6ce8aaeb2c49404587c4a1c0f1e3ef2435ebd4e237ac70e04126094394",
+  "heartbeat_at": "2026-08-21T00:57:19Z",
+  "last_valid_receipt": null,
   "blocker": null,
   "resume_condition": null,
-  "verdicts": {
-    "S01": {
-      "verdict": "TASK_INTAKE_READY",
-      "receipt_path": "docs/evidence/BLG-J02/S01-TASK_INTAKE_READY.receipt.json",
-      "receipt_hash": "sha256:d45f935c5cd5afc3fac19c26811abff8de5ba1b9b75b679ef8e8fc2b65ef0e5c",
-      "role_binding_id": "pipeline-dispatcher",
-      "agent_identity": "codex-night-orchestrator-dispatcher"
-    },
-    "S02": {
-      "verdict": "IMPACT_CLASSIFIED",
-      "receipt_path": "docs/evidence/BLG-J02/S02-IMPACT_CLASSIFIED.receipt.json",
-      "receipt_hash": "sha256:2c1f2c6ce8aaeb2c49404587c4a1c0f1e3ef2435ebd4e237ac70e04126094394",
-      "role_binding_id": "pipeline-dispatcher",
-      "agent_identity": "codex-night-orchestrator-dispatcher"
-    }
-  },
+  "verdicts": {},
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 9500,
+    "output_tokens": 3900,
+    "estimated_usd": 0.0835
   },
   "budget_usage_receipts": [
     {
@@ -124,9 +109,43 @@
       "estimated_usd": 0.0015,
       "agent_id": "codex-night-orchestrator-dispatcher",
       "recorded_at": "2026-08-21T00:25:32Z"
+    },
+    {
+      "task_id": "BLG-J02",
+      "stage": "S09",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 9200,
+      "output_tokens": 3800,
+      "estimated_usd": 0.081,
+      "agent_id": "codex-pipeline-ba-blg-j02",
+      "recorded_at": "2026-08-21T00:52:33Z"
     }
   ],
   "blocked_by": [],
   "blocker_resolutions": [],
+  "invalidations": [
+    {
+      "at": "2026-08-21T00:57:19Z",
+      "reason": "failure:PRODUCT_REJECTED",
+      "invalidated_stages": [
+        "S01",
+        "S02",
+        "S09"
+      ],
+      "last_valid_receipt_before_invalidation": "sha256:bc87926f1ee58e30deafbbee37095d09d59f128f964ae7dee41566728cca1645"
+    }
+  ],
+  "failure_routes": [
+    {
+      "at": "2026-08-21T00:57:19Z",
+      "finding": "PRODUCT_REJECTED",
+      "status": "REWORK",
+      "resume_stage": "S09",
+      "details": "S10 DESIGN_REWORK: successful safe fallback is rendered with ErrorNotice severity=error; ui-kit mapping silently expands legacy auth-screen scope; narrow-viewport mockup is not reviewable. Closure: tasks/BLG-J02/S10-DESIGN-REVIEW.md"
+    }
+  ],
   "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
 }

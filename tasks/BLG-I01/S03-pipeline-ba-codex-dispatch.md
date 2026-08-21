@@ -64,7 +64,7 @@ Rules:
   "task_id": "BLG-I01",
   "stage": "S03",
   "role": "pipeline-ba",
-  "status": "RUNNING",
+  "status": "WAITING",
   "traits": [
     "external_contract"
   ],
@@ -140,8 +140,18 @@ Rules:
       "minimum_closure_artifact": "versioned external-contract dossier with fields, statuses, pagination, errors and emulator/sandbox proof"
     }
   ],
-  "blocker": null,
-  "resume_condition": null,
+  "blocker": {
+    "type": "OWNER_INPUT",
+    "reason_code": "OPEN_BLOCKER",
+    "details": "BLK-RESEARCH-001: Внешние контракты WB/ЧЗ не собраны по полям и статусам",
+    "owner": "pipeline-research",
+    "created_at": "2026-08-21T00:28:11Z",
+    "resume_stage": "S03"
+  },
+  "resume_condition": {
+    "stage": "S03",
+    "condition": "resolve BLK-RESEARCH-001 with closure evidence"
+  },
   "rules": [
     "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
     "Do not accept your own work.",

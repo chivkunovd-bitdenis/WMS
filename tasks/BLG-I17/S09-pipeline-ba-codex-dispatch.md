@@ -64,7 +64,7 @@ Rules:
   "task_id": "BLG-I17",
   "stage": "S09",
   "role": "pipeline-ba",
-  "status": "RUNNING",
+  "status": "WAITING",
   "traits": [
     "ui_change"
   ],
@@ -90,10 +90,7 @@ Rules:
     "S25",
     "S26"
   ],
-  "done_stages": [
-    "S01",
-    "S02"
-  ],
+  "done_stages": [],
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
@@ -128,13 +125,23 @@ Rules:
   },
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 5500,
+    "output_tokens": 2700,
+    "estimated_usd": 0.0435
   },
   "blocked_by": [],
-  "blocker": null,
-  "resume_condition": null,
+  "blocker": {
+    "type": "ENV",
+    "reason_code": "CONTROLLER_REWORK_INVALIDATION_BUG",
+    "details": "Controller failure route correctly selected S09 but invalidated accepted predecessor receipts S01 and S02 as well as S09; next/packet therefore regress to S01.",
+    "owner": "pipeline-controller",
+    "created_at": "2026-08-21T00:56:54Z",
+    "resume_stage": "S09"
+  },
+  "resume_condition": {
+    "stage": "S09",
+    "condition": "Controller repair restores accepted S01/S02 receipts and routes BLG-I17 to S09 UX contract rework described in tasks/BLG-I17/S10-DESIGN-REVIEW.md."
+  },
   "rules": [
     "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
     "Do not accept your own work.",

@@ -51,7 +51,7 @@
     "S26"
   ],
   "current_stage": "B01",
-  "status": "RUNNING",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -67,10 +67,20 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T00:25:05Z",
+  "heartbeat_at": "2026-08-21T00:27:47Z",
   "last_valid_receipt": "sha256:97044d7cccc85ba4d344d4e80059918ba0cdece6bb827401e51b3e204bfa50b0",
-  "blocker": null,
-  "resume_condition": null,
+  "blocker": {
+    "type": "FIXTURE",
+    "reason_code": "REPRO_FIXTURE_REQUIRED",
+    "details": "B01 requires isolated baseline reproduction fixture for: Обновлять idempotency key при смене способа сдачи. Backlog business_meaning describes the symptom, but no runnable fixture, test case, screen state, or observation log was supplied in the task packet.",
+    "owner": "pipeline-ba",
+    "created_at": "2026-08-21T00:27:47Z",
+    "resume_stage": "B01"
+  },
+  "resume_condition": {
+    "stage": "B01",
+    "condition": "Provide runnable reproduction fixture or observation packet with baseline SHA, test data/screen, steps, expected/actual result and evidence path; then resume B01."
+  },
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",

@@ -1,0 +1,33 @@
+{
+  "task_id": "BLG-D03",
+  "run_id": "BLG-D03:S03:3",
+  "stage_id": "S03",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "role_binding_id": "pipeline-ba",
+  "agent_identity": "codex-night-orchestrator-research-router",
+  "input_hashes": {
+    "state_before": "sha256:bbd028bb117ad7bbcbda0bbe0905b5a4ce18004e1c74062744d8eefc59479cec"
+  },
+  "output_hashes": {},
+  "parent_receipt_hash": "sha256:11e805a43e06cab2cf54f96471e8fb4d2a209c78c0f5aefc4855c1b21efab07b",
+  "baseline_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "started_at": "2026-08-21T00:28:02Z",
+  "finished_at": "2026-08-21T00:28:02Z",
+  "verdict": "RESEARCH_READY",
+  "blocker": null,
+  "resume_stage": null,
+  "usage_receipt": {
+    "task_id": "BLG-D03",
+    "stage": "S03",
+    "role": "pipeline-ba",
+    "executor": "codex",
+    "model": "gpt-5.6-sol",
+    "tier": "expensive",
+    "input_tokens": 50,
+    "output_tokens": 20,
+    "estimated_usd": 0.001,
+    "agent_id": "codex-night-orchestrator-research-router",
+    "recorded_at": "2026-08-21T00:28:02Z"
+  },
+  "signature": "sha256:f6d2d1f5a679975f85dd9efa628d6d2a4410794cff256f60aaade35bc08fef86"
+}

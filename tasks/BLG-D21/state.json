@@ -56,7 +56,7 @@
     "S26"
   ],
   "current_stage": "S03",
-  "status": "RUNNING",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -72,10 +72,20 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:55Z",
-  "heartbeat_at": "2026-08-21T00:24:51Z",
+  "heartbeat_at": "2026-08-21T00:28:07Z",
   "last_valid_receipt": "sha256:93ca51f3815ac777fae5b2c684514f8f2a2cea371dcc4b488e1962623e1a8f5b",
-  "blocker": null,
-  "resume_condition": null,
+  "blocker": {
+    "type": "OWNER_INPUT",
+    "reason_code": "OPEN_BLOCKER",
+    "details": "BLK-INTEGRATION-001: Импорт WB ограничен и не поддерживает автономную актуализацию каталога",
+    "owner": "pipeline-product",
+    "created_at": "2026-08-21T00:28:07Z",
+    "resume_stage": "S03"
+  },
+  "resume_condition": {
+    "stage": "S03",
+    "condition": "resolve BLK-INTEGRATION-001 with closure evidence"
+  },
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",

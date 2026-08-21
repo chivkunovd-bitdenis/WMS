@@ -54,8 +54,8 @@
     "S25",
     "S26"
   ],
-  "current_stage": "S09",
-  "status": "RUNNING",
+  "current_stage": "S13",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -71,10 +71,20 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T00:25:03Z",
-  "last_valid_receipt": "sha256:ea492536b6c308c3f8f347bfbad363d841159683387b3f2879b199f441a197e7",
-  "blocker": null,
-  "resume_condition": null,
+  "heartbeat_at": "2026-08-21T02:03:25Z",
+  "last_valid_receipt": "sha256:b0a5927a2f65b887592774041f4e2a502b01be57be538b2db816a18a2bbb92e1",
+  "blocker": {
+    "type": "BASELINE",
+    "reason_code": "ARCH_REVIEW_REPLAN_REQUIRED",
+    "details": "S14 found unresolved durable idempotency transaction boundaries and unbounded browser page materialization in the S13 print plan.",
+    "owner": "solution-architect",
+    "created_at": "2026-08-21T02:03:25Z",
+    "resume_stage": "S13"
+  },
+  "resume_condition": {
+    "stage": "S13",
+    "condition": "solution-architect revises S13-ARCHITECT-PLAN.md to define committed idempotency phases, same-key crash/concurrency recovery, and a resource-safe very-large-run strategy or approved Product contract revision; then owner resumes at S13 for a new receipt and independent S14 review."
+  },
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",
@@ -89,15 +99,43 @@
       "receipt_hash": "sha256:ea492536b6c308c3f8f347bfbad363d841159683387b3f2879b199f441a197e7",
       "role_binding_id": "pipeline-dispatcher",
       "agent_identity": "codex-night-orchestrator-dispatcher"
+    },
+    "S09": {
+      "verdict": "UX_CONTRACT_READY",
+      "receipt_path": "docs/evidence/BLG-I04/S09-UX_CONTRACT_READY.receipt.json",
+      "receipt_hash": "sha256:a3bf72f12a72509a1d074e3bbcface4bb9058426a1397b863309092fde0d5555",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-pipeline-ba-blg-i04-s09"
+    },
+    "S11": {
+      "verdict": "PRODUCT_CONTRACT_APPROVED",
+      "receipt_path": "docs/evidence/BLG-I04/S11-PRODUCT_CONTRACT_APPROVED.receipt.json",
+      "receipt_hash": "sha256:cf0e8bb95b1bb755e30199b812071792d4f5563d9ebebdc8b65bbc83c2750243",
+      "role_binding_id": "pipeline-product",
+      "agent_identity": "codex-pipeline-product-blg-i04-s11"
+    },
+    "S12": {
+      "verdict": "TASK_CUT_READY",
+      "receipt_path": "docs/evidence/BLG-I04/S12-TASK_CUT_READY.receipt.json",
+      "receipt_hash": "sha256:cb43b1f690a4745e41a990bd415ee723bcf6f47c5f47f3daa4dac23448da8efd",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-pipeline-ba-blg-i04-s12"
+    },
+    "S13": {
+      "verdict": "ARCH_PLAN_READY",
+      "receipt_path": "docs/evidence/BLG-I04/S13-ARCH_PLAN_READY.receipt.json",
+      "receipt_hash": "sha256:b0a5927a2f65b887592774041f4e2a502b01be57be538b2db816a18a2bbb92e1",
+      "role_binding_id": "solution-architect",
+      "agent_identity": "codex-solution-architect-blg-i04-s13"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 142800,
+    "output_tokens": 17300,
+    "estimated_usd": 0.9825
   },
   "budget_usage_receipts": [
     {
@@ -125,6 +163,58 @@
       "estimated_usd": 0.0015,
       "agent_id": "codex-night-orchestrator-dispatcher",
       "recorded_at": "2026-08-21T00:25:03Z"
+    },
+    {
+      "task_id": "BLG-I04",
+      "stage": "S09",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 12500,
+      "output_tokens": 2200,
+      "estimated_usd": 0.08,
+      "agent_id": "codex-pipeline-ba-blg-i04-s09",
+      "recorded_at": "2026-08-21T00:48:52Z"
+    },
+    {
+      "task_id": "BLG-I04",
+      "stage": "S11",
+      "role": "pipeline-product",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 52000,
+      "output_tokens": 3500,
+      "estimated_usd": 0.3,
+      "agent_id": "codex-pipeline-product-blg-i04-s11",
+      "recorded_at": "2026-08-21T01:32:05Z"
+    },
+    {
+      "task_id": "BLG-I04",
+      "stage": "S12",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 22000,
+      "output_tokens": 3500,
+      "estimated_usd": 0.16,
+      "agent_id": "codex-pipeline-ba-blg-i04-s12",
+      "recorded_at": "2026-08-21T01:35:58Z"
+    },
+    {
+      "task_id": "BLG-I04",
+      "stage": "S13",
+      "role": "solution-architect",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 56000,
+      "output_tokens": 8000,
+      "estimated_usd": 0.44,
+      "agent_id": "codex-solution-architect-blg-i04-s13",
+      "recorded_at": "2026-08-21T01:48:15Z"
     }
   ],
   "blocked_by": [],

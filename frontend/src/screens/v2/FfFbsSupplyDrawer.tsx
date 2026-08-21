@@ -51,6 +51,16 @@ import { FfFbsPickList } from './FfFbsPickList'
 
 const MARKING_KINDS: FbsMarkingKind[] = ['sgtin', 'uin', 'imei', 'gtin']
 
+type DisplayableFbsOrderMarking = FbsOrderMarking & { display_tail?: unknown }
+
+function getKizTail(marking: FbsOrderMarking): string | null {
+  if (marking.kind !== 'sgtin' || !['ok', 'accepted'].includes(marking.check_status)) return null
+
+  const displayTail = (marking as DisplayableFbsOrderMarking).display_tail
+  const tail = typeof displayTail === 'string' ? displayTail : marking.value.length === 6 ? marking.value : null
+  return tail && /^\S{6}$/.test(tail) ? tail : null
+}
+
 // Диалог «Идентификаторы заказа» — маркировка WB привязана к заказу, а не к артикулу,
 // поэтому вызывается прямо из строки заказа в таблице отгрузки.
 type OrderMarkingsDialogProps = {
@@ -137,15 +147,26 @@ function OrderMarkingsDialog({ token, authHeaders, order, open, onClose }: Order
             </TableRow>
           </TableHead>
           <TableBody>
-            {markings.map((m) => (
-              <TableRow key={m.id} data-testid="fbs-marking-row">
-                <TableCell>{MARKING_KIND_LABEL[m.kind as FbsMarkingKind] ?? m.kind}</TableCell>
-                <TableCell sx={{ wordBreak: 'break-all' }}>{m.value}</TableCell>
-                <TableCell align="right">
-                  <MarkingCheckStatusChip status={m.check_status} />
-                </TableCell>
-              </TableRow>
-            ))}
+            {markings.map((m) => {
+              const kizTail = getKizTail(m)
+              return (
+                <TableRow key={m.id} data-testid="fbs-marking-row">
+                  <TableCell>{MARKING_KIND_LABEL[m.kind as FbsMarkingKind] ?? m.kind}</TableCell>
+                  <TableCell sx={{ wordBreak: 'break-all' }}>
+                    {kizTail ? (
+                      <Typography component="span" variant="body2" data-testid="fbs-kiz-tail">
+                        Последние 6 символов КИЗ: {kizTail}
+                      </Typography>
+                    ) : (
+                      m.value
+                    )}
+                  </TableCell>
+                  <TableCell align="right">
+                    <MarkingCheckStatusChip status={m.check_status} />
+                  </TableCell>
+                </TableRow>
+              )
+            })}
             {markings.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={3}>

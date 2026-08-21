@@ -55,8 +55,8 @@
     "S27",
     "S28"
   ],
-  "current_stage": "S11",
-  "status": "RUNNING",
+  "current_stage": "S15",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -72,10 +72,20 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T00:25:21Z",
-  "last_valid_receipt": "sha256:21dc3c44062d0010816ce935e75369624fc23fbacc8ac28766004e730d35d88a",
-  "blocker": null,
-  "resume_condition": null,
+  "heartbeat_at": "2026-08-21T01:22:28Z",
+  "last_valid_receipt": "sha256:d602cc6ba9e99d3eb6385c00b251328fdc102c63ef800995dd12ee8f10dbe9f0",
+  "blocker": {
+    "type": "FIXTURE",
+    "reason_code": "CASE_AUDIT_FAILED",
+    "details": "Independent case-auditor found missing direct and breaker coverage for full B immutable inventory including transitive chunks, fonts and images, plus immutable URL outside manifest; do not run S16 Product until repaired and re-audited.",
+    "owner": "pipeline-ba",
+    "created_at": "2026-08-21T01:22:28Z",
+    "resume_stage": "S15"
+  },
+  "resume_condition": {
+    "stage": "S15",
+    "condition": "Add direct and breaker cases for complete B immutable inventory including transitive chunks/fonts/images and immutable URL outside manifest; rerun independent case-auditor before S16."
+  },
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",
@@ -90,15 +100,50 @@
       "receipt_hash": "sha256:21dc3c44062d0010816ce935e75369624fc23fbacc8ac28766004e730d35d88a",
       "role_binding_id": "pipeline-dispatcher",
       "agent_identity": "codex-night-orchestrator-dispatcher"
+    },
+    "S11": {
+      "verdict": "PRODUCT_CONTRACT_APPROVED",
+      "receipt_path": "docs/evidence/BLG-D12/S11-PRODUCT_CONTRACT_APPROVED.receipt.json",
+      "receipt_hash": "sha256:6460d5dc16388af80c14fc4c4674f3818d27bc3340761a825c516da207cea88f",
+      "role_binding_id": "pipeline-product",
+      "agent_identity": "codex-pipeline-product-blg-d12-s11"
+    },
+    "S12": {
+      "verdict": "TASK_CUT_READY",
+      "receipt_path": "docs/evidence/BLG-D12/S12-TASK_CUT_READY.receipt.json",
+      "receipt_hash": "sha256:891a7b79d7b7681c2bc0156bc429605b510b6cf318991d2c2d4b07be42923fa9",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-pipeline-ba-blg-d12-s12"
+    },
+    "S13": {
+      "verdict": "ARCH_PLAN_READY",
+      "receipt_path": "docs/evidence/BLG-D12/S13-ARCH_PLAN_READY.receipt.json",
+      "receipt_hash": "sha256:a978a9bcfaff0aa035e1aabf1c70fdb212ac732d2e6964693588f25c80be1874",
+      "role_binding_id": "solution-architect",
+      "agent_identity": "codex-solution-architect-blg-d12-s13"
+    },
+    "S14": {
+      "verdict": "ARCH_REVIEW_PASSED",
+      "receipt_path": "docs/evidence/BLG-D12/S14-ARCH_REVIEW_PASSED.receipt.json",
+      "receipt_hash": "sha256:c659cc23da39f26162468907700fa53c3d5959ba45a8da655a2ad21028f5735d",
+      "role_binding_id": "pipeline-reviewer",
+      "agent_identity": "codex-pipeline-reviewer-blg-d12-s14"
+    },
+    "S15": {
+      "verdict": "CASES_READY",
+      "receipt_path": "docs/evidence/BLG-D12/S15-CASES_READY.receipt.json",
+      "receipt_hash": "sha256:d602cc6ba9e99d3eb6385c00b251328fdc102c63ef800995dd12ee8f10dbe9f0",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-pipeline-ba-blg-d12-s15"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 346300,
+    "output_tokens": 27400,
+    "estimated_usd": 2.4625
   },
   "budget_usage_receipts": [
     {
@@ -126,6 +171,71 @@
       "estimated_usd": 0.0015,
       "agent_id": "codex-night-orchestrator-dispatcher",
       "recorded_at": "2026-08-21T00:25:21Z"
+    },
+    {
+      "task_id": "BLG-D12",
+      "stage": "S11",
+      "role": "pipeline-product",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 52000,
+      "output_tokens": 2800,
+      "estimated_usd": 0.32,
+      "agent_id": "codex-pipeline-product-blg-d12-s11",
+      "recorded_at": "2026-08-21T01:01:32Z"
+    },
+    {
+      "task_id": "BLG-D12",
+      "stage": "S12",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 18000,
+      "output_tokens": 2200,
+      "estimated_usd": 0.12,
+      "agent_id": "codex-pipeline-ba-blg-d12-s12",
+      "recorded_at": "2026-08-21T01:03:25Z"
+    },
+    {
+      "task_id": "BLG-D12",
+      "stage": "S13",
+      "role": "solution-architect",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 124000,
+      "output_tokens": 9800,
+      "estimated_usd": 0.92,
+      "agent_id": "codex-solution-architect-blg-d12-s13",
+      "recorded_at": "2026-08-21T01:09:01Z"
+    },
+    {
+      "task_id": "BLG-D12",
+      "stage": "S14",
+      "role": "pipeline-reviewer",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 118000,
+      "output_tokens": 8000,
+      "estimated_usd": 0.82,
+      "agent_id": "codex-pipeline-reviewer-blg-d12-s14",
+      "recorded_at": "2026-08-21T01:16:04Z"
+    },
+    {
+      "task_id": "BLG-D12",
+      "stage": "S15",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 34000,
+      "output_tokens": 4500,
+      "estimated_usd": 0.28,
+      "agent_id": "codex-pipeline-ba-blg-d12-s15",
+      "recorded_at": "2026-08-21T01:19:01Z"
     }
   ],
   "blocked_by": [],

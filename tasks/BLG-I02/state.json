@@ -58,8 +58,8 @@
     "S23",
     "S26"
   ],
-  "current_stage": "S03",
-  "status": "RUNNING",
+  "current_stage": "S04",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -75,10 +75,20 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T00:25:01Z",
-  "last_valid_receipt": "sha256:736e189df91d1940baf6582922f9a042328117fb564eb3c0ca31766d036a7248",
-  "blocker": null,
-  "resume_condition": null,
+  "heartbeat_at": "2026-08-21T00:48:50Z",
+  "last_valid_receipt": "sha256:cfb2721ff9fa601922454d83d11fd7f59ddeedbf9fc421a44d3788a5771b1496",
+  "blocker": {
+    "type": "ORACLE_CONFLICT",
+    "reason_code": "RESEARCH_REWORK_WB_VERDICT_CONTRACT",
+    "details": "S04 RESEARCH_REWORK: 409 MetaValidationFail is a partial negative delivery-attempt result, not a complete projection replacement; the S03 required per-observation shape cannot represent bodyless 204 or errors without inventing meta verdicts; current WB docs apply x10 accounting to all 4XX and the metaDetails release note is misdated.",
+    "owner": "pipeline-ba",
+    "created_at": "2026-08-21T00:48:50Z",
+    "resume_stage": "S04"
+  },
+  "resume_condition": {
+    "stage": "S04",
+    "condition": "Revise S03 to separate attempt outcomes from zero-or-more verdict rows, preserve 409 as an append-only partial negative result, record 204 without synthetic per-key decisions, correct all-4XX x10 accounting and the 31.03.2026 FBS release-note provenance; then rerun independent S04."
+  },
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",
@@ -93,15 +103,22 @@
       "receipt_hash": "sha256:736e189df91d1940baf6582922f9a042328117fb564eb3c0ca31766d036a7248",
       "role_binding_id": "pipeline-dispatcher",
       "agent_identity": "codex-night-orchestrator-dispatcher"
+    },
+    "S03": {
+      "verdict": "RESEARCH_READY",
+      "receipt_path": "docs/evidence/BLG-I02/S03-RESEARCH_READY.receipt.json",
+      "receipt_hash": "sha256:cfb2721ff9fa601922454d83d11fd7f59ddeedbf9fc421a44d3788a5771b1496",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-blg-i02-s03-pipeline-ba"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 32300,
+    "output_tokens": 7100,
+    "estimated_usd": 0.6525
   },
   "budget_usage_receipts": [
     {
@@ -129,6 +146,19 @@
       "estimated_usd": 0.0015,
       "agent_id": "codex-night-orchestrator-dispatcher",
       "recorded_at": "2026-08-21T00:25:01Z"
+    },
+    {
+      "task_id": "BLG-I02",
+      "stage": "S03",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 32000,
+      "output_tokens": 7000,
+      "estimated_usd": 0.65,
+      "agent_id": "codex-blg-i02-s03-pipeline-ba",
+      "recorded_at": "2026-08-21T00:42:00Z"
     }
   ],
   "blocked_by": [],

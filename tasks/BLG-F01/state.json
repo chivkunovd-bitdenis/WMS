@@ -52,8 +52,8 @@
     "S25",
     "S26"
   ],
-  "current_stage": "S11",
-  "status": "RUNNING",
+  "current_stage": "S13",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -69,10 +69,20 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T00:24:55Z",
-  "last_valid_receipt": "sha256:3582860f94dde3ec80d8b3ff8be13ba3a7cf89137bc7e9bf0df1d08a51611d35",
-  "blocker": null,
-  "resume_condition": null,
+  "heartbeat_at": "2026-08-21T01:53:11Z",
+  "last_valid_receipt": "sha256:08c69ffe077fc36c1d2f9dd6fb0736832d2c12171c7119b2adf28a3f0e422457",
+  "blocker": {
+    "type": "SECURITY",
+    "reason_code": "ARCH_FALSIFICATION_EXECUTABLE_REGISTRY_GAP",
+    "details": "S14 found three critical control-plane gaps: BLK-PROCESS-001 has no independent pre-S25 closure transition, mutable runtime and Git lifecycle projections cannot be atomically authoritative, and dynamic ENV/FIXTURE/ORACLE/BUDGET holds have no typed registry occurrence model.",
+    "owner": "solution-architect",
+    "created_at": "2026-08-21T01:53:11Z",
+    "resume_stage": "S13"
+  },
+  "resume_condition": {
+    "stage": "S13",
+    "condition": "Revise tasks/BLG-F01/S13-ARCHITECT-PLAN.md to close F1-F3 from tasks/BLG-F01/S14-ARCHITECT-FALSIFICATION.md with a non-circular pre-S25 role-bound lifecycle, one durable mutable authority with explicit Git/CI verification, a typed blocker-definition versus occurrence model, and corresponding negative cases; then resume at S13 and obtain a new independent S14 review."
+  },
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",
@@ -87,15 +97,36 @@
       "receipt_hash": "sha256:3582860f94dde3ec80d8b3ff8be13ba3a7cf89137bc7e9bf0df1d08a51611d35",
       "role_binding_id": "pipeline-dispatcher",
       "agent_identity": "codex-night-orchestrator-dispatcher"
+    },
+    "S11": {
+      "verdict": "PRODUCT_CONTRACT_APPROVED",
+      "receipt_path": "docs/evidence/BLG-F01/S11-PRODUCT_CONTRACT_APPROVED.receipt.json",
+      "receipt_hash": "sha256:ed6773eead786099561e8c3417655129bb2c7a2e388a790e7ef49ce79b7568f1",
+      "role_binding_id": "pipeline-product",
+      "agent_identity": "codex-pipeline-product-blg-f01-s11"
+    },
+    "S12": {
+      "verdict": "TASK_CUT_READY",
+      "receipt_path": "docs/evidence/BLG-F01/S12-TASK_CUT_READY.receipt.json",
+      "receipt_hash": "sha256:fdb611b94dd3bc8b6cfa8dc5ff0667937fc0d885552534b850acd91c3399855c",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-pipeline-ba-blg-f01-s12"
+    },
+    "S13": {
+      "verdict": "ARCH_PLAN_READY",
+      "receipt_path": "docs/evidence/BLG-F01/S13-ARCH_PLAN_READY.receipt.json",
+      "receipt_hash": "sha256:08c69ffe077fc36c1d2f9dd6fb0736832d2c12171c7119b2adf28a3f0e422457",
+      "role_binding_id": "solution-architect",
+      "agent_identity": "codex-solution-architect-blg-f01-s13"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 185100,
+    "output_tokens": 16000,
+    "estimated_usd": 1.2425
   },
   "budget_usage_receipts": [
     {
@@ -123,6 +154,45 @@
       "estimated_usd": 0.0015,
       "agent_id": "codex-night-orchestrator-dispatcher",
       "recorded_at": "2026-08-21T00:24:55Z"
+    },
+    {
+      "task_id": "BLG-F01",
+      "stage": "S11",
+      "role": "pipeline-product",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 70000,
+      "output_tokens": 4500,
+      "estimated_usd": 0.48,
+      "agent_id": "codex-pipeline-product-blg-f01-s11",
+      "recorded_at": "2026-08-21T01:29:59Z"
+    },
+    {
+      "task_id": "BLG-F01",
+      "stage": "S12",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 12800,
+      "output_tokens": 2900,
+      "estimated_usd": 0.08,
+      "agent_id": "codex-pipeline-ba-blg-f01-s12",
+      "recorded_at": "2026-08-21T01:32:42Z"
+    },
+    {
+      "task_id": "BLG-F01",
+      "stage": "S13",
+      "role": "solution-architect",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 102000,
+      "output_tokens": 8500,
+      "estimated_usd": 0.68,
+      "agent_id": "codex-solution-architect-blg-f01-s13",
+      "recorded_at": "2026-08-21T01:45:01Z"
     }
   ],
   "blocked_by": [],

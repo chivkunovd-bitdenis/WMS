@@ -49,7 +49,7 @@
     "S26"
   ],
   "current_stage": "S05",
-  "status": "RUNNING",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -65,10 +65,20 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T00:25:23Z",
-  "last_valid_receipt": "sha256:9613e237a65b5d25fbdf3d4be3c5e8848b69bb1a97306167c770f5bdfc2873a1",
-  "blocker": null,
-  "resume_condition": null,
+  "heartbeat_at": "2026-08-21T01:50:14Z",
+  "last_valid_receipt": "sha256:b5a21bd405084d213e0af3b0f5f1ab1d40e843fb6fda7cc0d4185710b1655641",
+  "blocker": {
+    "type": "BASELINE",
+    "reason_code": "PROCESS_MAP_GENERIC_FOR_WORKTREE_SAFETY",
+    "details": "S05 is a copied generic template: it mixes unrelated QR, screen, and BLG-KC01 flows and omits the actual worktree inventory, dirty-state preservation branches, uniqueness criteria, and deletion authorization boundary required for BLG-F03.",
+    "owner": "denis",
+    "created_at": "2026-08-21T01:50:14Z",
+    "resume_stage": "S05"
+  },
+  "resume_condition": {
+    "stage": "S05",
+    "condition": "Replace S05 with a BLG-F03-specific process map based on a read-only worktree inventory. It must classify each registered worktree (existing/missing/prunable), capture branch and HEAD, establish dirty/untracked and unique-commit/diff preservation branches, define no-delete conditions and owner authorization boundary, and cover empty/error/repeat/cancel traces."
+  },
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",
@@ -83,15 +93,22 @@
       "receipt_hash": "sha256:9613e237a65b5d25fbdf3d4be3c5e8848b69bb1a97306167c770f5bdfc2873a1",
       "role_binding_id": "pipeline-dispatcher",
       "agent_identity": "codex-night-orchestrator-dispatcher"
+    },
+    "S05": {
+      "verdict": "PROCESS_MAP_READY",
+      "receipt_path": "docs/evidence/BLG-F03/S05-PROCESS_MAP_READY.receipt.json",
+      "receipt_hash": "sha256:b5a21bd405084d213e0af3b0f5f1ab1d40e843fb6fda7cc0d4185710b1655641",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-night-orchestrator-ba"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 1200,
+    "output_tokens": 600,
+    "estimated_usd": 0.0175
   },
   "budget_usage_receipts": [
     {
@@ -119,6 +136,19 @@
       "estimated_usd": 0.0015,
       "agent_id": "codex-night-orchestrator-dispatcher",
       "recorded_at": "2026-08-21T00:25:23Z"
+    },
+    {
+      "task_id": "BLG-F03",
+      "stage": "S05",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 900,
+      "output_tokens": 500,
+      "estimated_usd": 0.015,
+      "agent_id": "codex-night-orchestrator-ba",
+      "recorded_at": "2026-08-21T00:29:50Z"
     }
   ],
   "blocked_by": [],

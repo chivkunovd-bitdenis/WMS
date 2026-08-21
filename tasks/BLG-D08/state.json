@@ -51,7 +51,7 @@
     "S26"
   ],
   "current_stage": "S05",
-  "status": "RUNNING",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -67,10 +67,20 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T00:25:19Z",
-  "last_valid_receipt": "sha256:ace9b11a103989d87eb13bfe5c1a2607b74f28847b98114fc1f539c7b6c34e84",
-  "blocker": null,
-  "resume_condition": null,
+  "heartbeat_at": "2026-08-21T01:48:29Z",
+  "last_valid_receipt": "sha256:8b90044ee0e41f7d6b846fc43eac69090e6b3175c2faae84c56962e38500388f",
+  "blocker": {
+    "type": "BASELINE",
+    "reason_code": "S05_PROCESS_MAP_NOT_TASK_SPECIFIC",
+    "details": "S05 mixes unrelated BLG-KC01, QR-print, and client-list scenarios and repeats the false premise that FfFbsPickList is unconnected; baseline code imports it in FfFbsSupplyDrawer.",
+    "owner": "pipeline-controller",
+    "created_at": "2026-08-21T01:48:29Z",
+    "resume_stage": "S05"
+  },
+  "resume_condition": {
+    "stage": "S05",
+    "condition": "Replace S05 with a BLG-D08-specific current-to-target map that names the FfFbsSupplyDrawer entry point, the actual consumer, and evidence-backed keep-versus-remove decision; then controller owner resumes at S05."
+  },
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",
@@ -85,15 +95,22 @@
       "receipt_hash": "sha256:ace9b11a103989d87eb13bfe5c1a2607b74f28847b98114fc1f539c7b6c34e84",
       "role_binding_id": "pipeline-dispatcher",
       "agent_identity": "codex-night-orchestrator-dispatcher"
+    },
+    "S05": {
+      "verdict": "PROCESS_MAP_READY",
+      "receipt_path": "docs/evidence/BLG-D08/S05-PROCESS_MAP_READY.receipt.json",
+      "receipt_hash": "sha256:8b90044ee0e41f7d6b846fc43eac69090e6b3175c2faae84c56962e38500388f",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-night-orchestrator-ba"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 1200,
+    "output_tokens": 600,
+    "estimated_usd": 0.0175
   },
   "budget_usage_receipts": [
     {
@@ -121,6 +138,19 @@
       "estimated_usd": 0.0015,
       "agent_id": "codex-night-orchestrator-dispatcher",
       "recorded_at": "2026-08-21T00:25:19Z"
+    },
+    {
+      "task_id": "BLG-D08",
+      "stage": "S05",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 900,
+      "output_tokens": 500,
+      "estimated_usd": 0.015,
+      "agent_id": "codex-night-orchestrator-ba",
+      "recorded_at": "2026-08-21T00:29:49Z"
     }
   ],
   "blocked_by": [],

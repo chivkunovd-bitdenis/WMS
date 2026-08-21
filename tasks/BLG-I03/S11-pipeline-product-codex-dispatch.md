@@ -64,7 +64,7 @@ Rules:
   "task_id": "BLG-I03",
   "stage": "S11",
   "role": "pipeline-product",
-  "status": "RUNNING",
+  "status": "WAITING",
   "traits": [
     "mobile_contract"
   ],
@@ -129,8 +129,18 @@ Rules:
     "estimated_usd": 0.0025
   },
   "blocked_by": [],
-  "blocker": null,
-  "resume_condition": null,
+  "blocker": {
+    "type": "OWNER_INPUT",
+    "reason_code": "BLG_D03_GS_ORACLE_REQUIRED",
+    "details": "S11 cannot approve GS preservation and recovery while BLG-D03 is WAITING without a versioned external-contract artifact, approved oracle, and source-backed behavior/consumer contract for scanner, mobile terminal, and browser inputs.",
+    "owner": "pipeline-product",
+    "created_at": "2026-08-21T01:30:26Z",
+    "resume_stage": "S11"
+  },
+  "resume_condition": {
+    "stage": "S11",
+    "condition": "Resume S11 after BLG-D03 has a real versioned contract artifact and RESEARCH_PASSED evidence, the required oracle/decision record is approved, and BLG-I03 receives a hash-linked GS behavior/consumer contract defining channel representations, the permitted recovery rule, fail-closed handling, and read-back oracle."
+  },
   "rules": [
     "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
     "Do not accept your own work.",

@@ -51,8 +51,8 @@
     "S27",
     "S28"
   ],
-  "current_stage": "S11",
-  "status": "RUNNING",
+  "current_stage": "S15",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -68,10 +68,20 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:57Z",
-  "heartbeat_at": "2026-08-21T00:25:34Z",
-  "last_valid_receipt": "sha256:1f777aa2d4d5fc413c7b45e08fd605c4b784bb2e3df3ddc2c78c3380c7f67d13",
-  "blocker": null,
-  "resume_condition": null,
+  "heartbeat_at": "2026-08-21T01:22:28Z",
+  "last_valid_receipt": "sha256:9790f818b5c99a7a2db438840b86c0ad8e7f76246f15055ffbedc98358d8574c",
+  "blocker": {
+    "type": "FIXTURE",
+    "reason_code": "CASE_AUDIT_FAILED",
+    "details": "Independent case-auditor found S15 package inconsistency: S15-CASE-FACTORY.md claims 12 GOLD cases but S15-CASES.json contains 11 and misses BLG-C01-AC09; do not run S16 Product until S15 package is repaired and re-audited.",
+    "owner": "pipeline-ba",
+    "created_at": "2026-08-21T01:22:28Z",
+    "resume_stage": "S15"
+  },
+  "resume_condition": {
+    "stage": "S15",
+    "condition": "Repair BLG-C01 S15 case package by adding AC09 with oracle and S19 binding or correcting the declared count and hash-linked artifacts; then run independent case-auditor again before S16."
+  },
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",
@@ -86,15 +96,50 @@
       "receipt_hash": "sha256:1f777aa2d4d5fc413c7b45e08fd605c4b784bb2e3df3ddc2c78c3380c7f67d13",
       "role_binding_id": "pipeline-dispatcher",
       "agent_identity": "codex-night-orchestrator-dispatcher"
+    },
+    "S11": {
+      "verdict": "PRODUCT_CONTRACT_APPROVED",
+      "receipt_path": "docs/evidence/BLG-C01/S11-PRODUCT_CONTRACT_APPROVED.receipt.json",
+      "receipt_hash": "sha256:5c3e2f155da74a070238a0b9b8a40e3ad898d79a58dc59e08bf34b1b009e048b",
+      "role_binding_id": "pipeline-product",
+      "agent_identity": "codex-pipeline-product-blg-c01-s11"
+    },
+    "S12": {
+      "verdict": "TASK_CUT_READY",
+      "receipt_path": "docs/evidence/BLG-C01/S12-TASK_CUT_READY.receipt.json",
+      "receipt_hash": "sha256:7b4ca24dff90d4bf17bfbcf0758a292f493fc750f0d1f4f00bcfb79c25e75aab",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-pipeline-ba-blg-c01-s12"
+    },
+    "S13": {
+      "verdict": "ARCH_PLAN_READY",
+      "receipt_path": "docs/evidence/BLG-C01/S13-ARCH_PLAN_READY.receipt.json",
+      "receipt_hash": "sha256:6b59bfcce3016b338d8761bb28f291a9f69aeb66bee59798862e876c4f6812bf",
+      "role_binding_id": "solution-architect",
+      "agent_identity": "codex-solution-architect-blg-c01-s13"
+    },
+    "S14": {
+      "verdict": "ARCH_REVIEW_PASSED",
+      "receipt_path": "docs/evidence/BLG-C01/S14-ARCH_REVIEW_PASSED.receipt.json",
+      "receipt_hash": "sha256:5f98c51ae8a9678bcb7256329a492b11643a0a741ad39722c5b9ed97af043fe0",
+      "role_binding_id": "pipeline-reviewer",
+      "agent_identity": "codex-pipeline-reviewer-blg-c01-s14"
+    },
+    "S15": {
+      "verdict": "CASES_READY",
+      "receipt_path": "docs/evidence/BLG-C01/S15-CASES_READY.receipt.json",
+      "receipt_hash": "sha256:9790f818b5c99a7a2db438840b86c0ad8e7f76246f15055ffbedc98358d8574c",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-pipeline-ba-blg-c01-s15"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 375300,
+    "output_tokens": 25000,
+    "estimated_usd": 2.3525
   },
   "budget_usage_receipts": [
     {
@@ -122,6 +167,71 @@
       "estimated_usd": 0.0015,
       "agent_id": "codex-night-orchestrator-dispatcher",
       "recorded_at": "2026-08-21T00:25:34Z"
+    },
+    {
+      "task_id": "BLG-C01",
+      "stage": "S11",
+      "role": "pipeline-product",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 70000,
+      "output_tokens": 2600,
+      "estimated_usd": 0.42,
+      "agent_id": "codex-pipeline-product-blg-c01-s11",
+      "recorded_at": "2026-08-21T00:59:27Z"
+    },
+    {
+      "task_id": "BLG-C01",
+      "stage": "S12",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 12000,
+      "output_tokens": 1100,
+      "estimated_usd": 0.07,
+      "agent_id": "codex-pipeline-ba-blg-c01-s12",
+      "recorded_at": "2026-08-21T01:01:03Z"
+    },
+    {
+      "task_id": "BLG-C01",
+      "stage": "S13",
+      "role": "solution-architect",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 115000,
+      "output_tokens": 9000,
+      "estimated_usd": 0.72,
+      "agent_id": "codex-solution-architect-blg-c01-s13",
+      "recorded_at": "2026-08-21T01:09:36Z"
+    },
+    {
+      "task_id": "BLG-C01",
+      "stage": "S14",
+      "role": "pipeline-reviewer",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 150000,
+      "output_tokens": 8000,
+      "estimated_usd": 0.93,
+      "agent_id": "codex-pipeline-reviewer-blg-c01-s14",
+      "recorded_at": "2026-08-21T01:15:12Z"
+    },
+    {
+      "task_id": "BLG-C01",
+      "stage": "S15",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 28000,
+      "output_tokens": 4200,
+      "estimated_usd": 0.21,
+      "agent_id": "codex-pipeline-ba-blg-c01-s15",
+      "recorded_at": "2026-08-21T01:19:00Z"
     }
   ],
   "blocked_by": [],

@@ -54,8 +54,8 @@
     "S23",
     "S26"
   ],
-  "current_stage": "S03",
-  "status": "RUNNING",
+  "current_stage": "S04",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -71,10 +71,20 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:55Z",
-  "heartbeat_at": "2026-08-21T00:24:37Z",
-  "last_valid_receipt": "sha256:11e805a43e06cab2cf54f96471e8fb4d2a209c78c0f5aefc4855c1b21efab07b",
-  "blocker": null,
-  "resume_condition": null,
+  "heartbeat_at": "2026-08-21T00:59:34Z",
+  "last_valid_receipt": "sha256:e8ffebfdc56695e5230688d90e64b256b06481cf72760908b2759012eff9f76a",
+  "blocker": {
+    "type": "OWNER_INPUT",
+    "reason_code": "BLK_PROD_001_RESEARCH_BLOCKED",
+    "details": "S04 cannot issue RESEARCH_PASSED: the S03 receipt has empty output_hashes and no versioned external-contract research artifact or source-backed decision table exists; BLK-PROD-001 remains open.",
+    "owner": "pipeline-product",
+    "created_at": "2026-08-21T00:59:34Z",
+    "resume_stage": "S04"
+  },
+  "resume_condition": {
+    "stage": "S04",
+    "condition": "Provide the minimum closure artifact: approved oracle/decision record for requiredMeta, optionalMeta and sgtinApplied, plus a versioned S03 external-contract artifact with official source/version/date and field/status semantics for independent S04 review."
+  },
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",
@@ -89,15 +99,22 @@
       "receipt_hash": "sha256:11e805a43e06cab2cf54f96471e8fb4d2a209c78c0f5aefc4855c1b21efab07b",
       "role_binding_id": "pipeline-dispatcher",
       "agent_identity": "codex-night-orchestrator-dispatcher"
+    },
+    "S03": {
+      "verdict": "RESEARCH_READY",
+      "receipt_path": "docs/evidence/BLG-D03/S03-RESEARCH_READY.receipt.json",
+      "receipt_hash": "sha256:e8ffebfdc56695e5230688d90e64b256b06481cf72760908b2759012eff9f76a",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-night-orchestrator-research-router"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 350,
+    "output_tokens": 120,
+    "estimated_usd": 0.0035
   },
   "budget_usage_receipts": [
     {
@@ -125,6 +142,19 @@
       "estimated_usd": 0.0015,
       "agent_id": "codex-night-orchestrator-dispatcher",
       "recorded_at": "2026-08-21T00:24:37Z"
+    },
+    {
+      "task_id": "BLG-D03",
+      "stage": "S03",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 50,
+      "output_tokens": 20,
+      "estimated_usd": 0.001,
+      "agent_id": "codex-night-orchestrator-research-router",
+      "recorded_at": "2026-08-21T00:28:02Z"
     }
   ],
   "blocked_by": [

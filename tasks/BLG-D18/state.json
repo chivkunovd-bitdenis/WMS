@@ -52,7 +52,7 @@
     "S26"
   ],
   "current_stage": "S09",
-  "status": "RUNNING",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -68,33 +68,28 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T00:25:22Z",
-  "last_valid_receipt": "sha256:449642a197c90c3f028204374fc97a931c350197f8b8855955110b403a9d53db",
-  "blocker": null,
-  "resume_condition": null,
-  "verdicts": {
-    "S01": {
-      "verdict": "TASK_INTAKE_READY",
-      "receipt_path": "docs/evidence/BLG-D18/S01-TASK_INTAKE_READY.receipt.json",
-      "receipt_hash": "sha256:6f72404e03f2c4d9b11828560595d0fab8d98389268bfef5a29e5de33384c28e",
-      "role_binding_id": "pipeline-dispatcher",
-      "agent_identity": "codex-night-orchestrator-dispatcher"
-    },
-    "S02": {
-      "verdict": "IMPACT_CLASSIFIED",
-      "receipt_path": "docs/evidence/BLG-D18/S02-IMPACT_CLASSIFIED.receipt.json",
-      "receipt_hash": "sha256:449642a197c90c3f028204374fc97a931c350197f8b8855955110b403a9d53db",
-      "role_binding_id": "pipeline-dispatcher",
-      "agent_identity": "codex-night-orchestrator-dispatcher"
-    }
+  "heartbeat_at": "2026-08-21T01:45:00Z",
+  "last_valid_receipt": null,
+  "blocker": {
+    "type": "ENV",
+    "reason_code": "CONTROLLER_REWORK_ROUTE_INCONSISTENT",
+    "details": "After accepted S10 PRODUCT_REJECTED rework, state resume_stage is S09 but controller next reports S01 because S01/S02/S09 receipts were all invalidated.",
+    "owner": "pipeline-controller",
+    "created_at": "2026-08-21T01:45:00Z",
+    "resume_stage": "S09"
   },
+  "resume_condition": {
+    "stage": "S09",
+    "condition": "Controller restores the already accepted S01 and S02 receipts, keeps the S10 DESIGN_REWORK finding, and resumes BLG-D18 at S09 for a revised UX contract."
+  },
+  "verdicts": {},
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 1200,
+    "output_tokens": 600,
+    "estimated_usd": 0.0175
   },
   "budget_usage_receipts": [
     {
@@ -122,9 +117,43 @@
       "estimated_usd": 0.0015,
       "agent_id": "codex-night-orchestrator-dispatcher",
       "recorded_at": "2026-08-21T00:25:22Z"
+    },
+    {
+      "task_id": "BLG-D18",
+      "stage": "S09",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 900,
+      "output_tokens": 500,
+      "estimated_usd": 0.015,
+      "agent_id": "codex-night-orchestrator-ba",
+      "recorded_at": "2026-08-21T00:29:57Z"
     }
   ],
   "blocked_by": [],
   "blocker_resolutions": [],
+  "invalidations": [
+    {
+      "at": "2026-08-21T01:44:37Z",
+      "reason": "failure:PRODUCT_REJECTED",
+      "invalidated_stages": [
+        "S01",
+        "S02",
+        "S09"
+      ],
+      "last_valid_receipt_before_invalidation": "sha256:792f26e1e3ee6b6aef12286174d66ca74578803b5ea35ea006217783a3725203"
+    }
+  ],
+  "failure_routes": [
+    {
+      "at": "2026-08-21T01:44:37Z",
+      "finding": "PRODUCT_REJECTED",
+      "status": "REWORK",
+      "resume_stage": "S09",
+      "details": "S10 DESIGN_REWORK: identify the exact KIZ search screen and zone; provide exact/candidate/no-result mockups with unchanged stored values; define long-code, narrow viewport, loading/error/forbidden and scanner behavior; replace generic ui-kit inventory with a zone mapping. Review: tasks/BLG-D18/S10-DESIGN-REVIEW.md"
+    }
+  ],
   "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
 }

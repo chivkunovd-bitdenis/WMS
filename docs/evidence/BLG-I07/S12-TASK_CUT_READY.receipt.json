@@ -1,0 +1,33 @@
+{
+  "task_id": "BLG-I07",
+  "run_id": "BLG-I07:S12:4",
+  "stage_id": "S12",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "role_binding_id": "pipeline-ba",
+  "agent_identity": "codex-blg-i07-s12-pipeline-ba",
+  "input_hashes": {
+    "state_before": "sha256:5bb8f026076406e50d69a0df306fe3c31dac696b6389b4559b47276174a0b8d6"
+  },
+  "output_hashes": {},
+  "parent_receipt_hash": "sha256:c2ea44696bcd2b58b09b4d26f2351a6fd6757b987b33695d77899cb6a53af49d",
+  "baseline_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "started_at": "2026-08-21T01:37:34Z",
+  "finished_at": "2026-08-21T01:37:34Z",
+  "verdict": "TASK_CUT_READY",
+  "blocker": null,
+  "resume_stage": null,
+  "usage_receipt": {
+    "task_id": "BLG-I07",
+    "stage": "S12",
+    "role": "pipeline-ba",
+    "executor": "codex",
+    "model": "gpt-5.6-terra",
+    "tier": "moderate",
+    "input_tokens": 16800,
+    "output_tokens": 2600,
+    "estimated_usd": 0.12,
+    "agent_id": "codex-blg-i07-s12-pipeline-ba",
+    "recorded_at": "2026-08-21T01:37:34Z"
+  },
+  "signature": "sha256:4320569e9bd646d6b008cf9c4d0bb14a147ebdfbba75632e36b3f4f91343efce"
+}

@@ -58,7 +58,7 @@
     "S26"
   ],
   "current_stage": "S09",
-  "status": "RUNNING",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -74,33 +74,28 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T00:25:25Z",
-  "last_valid_receipt": "sha256:34960364db3d94d57ca0e967b004fff08f270b8c07c65a246bc27fbba5730a15",
-  "blocker": null,
-  "resume_condition": null,
-  "verdicts": {
-    "S01": {
-      "verdict": "TASK_INTAKE_READY",
-      "receipt_path": "docs/evidence/BLG-I14/S01-TASK_INTAKE_READY.receipt.json",
-      "receipt_hash": "sha256:14f4615ecf757a566734374b59f10a8a93891f28e52bd1a5f4fa0c3fe6f6e396",
-      "role_binding_id": "pipeline-dispatcher",
-      "agent_identity": "codex-night-orchestrator-dispatcher"
-    },
-    "S02": {
-      "verdict": "IMPACT_CLASSIFIED",
-      "receipt_path": "docs/evidence/BLG-I14/S02-IMPACT_CLASSIFIED.receipt.json",
-      "receipt_hash": "sha256:34960364db3d94d57ca0e967b004fff08f270b8c07c65a246bc27fbba5730a15",
-      "role_binding_id": "pipeline-dispatcher",
-      "agent_identity": "codex-night-orchestrator-dispatcher"
-    }
+  "heartbeat_at": "2026-08-21T00:54:52Z",
+  "last_valid_receipt": null,
+  "blocker": {
+    "type": "BASELINE",
+    "reason_code": "CONTROLLER_REWORK_ROUTE_INVALIDATED_PREREQUISITES",
+    "details": "S10 design rework must resume at S09, but the controller PRODUCT_REJECTED route invalidated accepted S01/S02/S09 receipts and next now resolves S01 despite current_stage S09.",
+    "owner": "pipeline-dispatcher",
+    "created_at": "2026-08-21T00:54:52Z",
+    "resume_stage": "S09"
   },
+  "resume_condition": {
+    "stage": "S09",
+    "condition": "Repair or reconcile controller rework invalidation so accepted S01/S02 remain valid, then revise and rerun S09 for the recorded design findings before a new independent S10 review."
+  },
+  "verdicts": {},
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 9800,
+    "output_tokens": 1600,
+    "estimated_usd": 0.1125
   },
   "budget_usage_receipts": [
     {
@@ -128,9 +123,43 @@
       "estimated_usd": 0.0015,
       "agent_id": "codex-night-orchestrator-dispatcher",
       "recorded_at": "2026-08-21T00:25:25Z"
+    },
+    {
+      "task_id": "BLG-I14",
+      "stage": "S09",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 9500,
+      "output_tokens": 1500,
+      "estimated_usd": 0.11,
+      "agent_id": "codex-pipeline-ba-blg-i14-s09",
+      "recorded_at": "2026-08-21T00:51:04Z"
     }
   ],
   "blocked_by": [],
   "blocker_resolutions": [],
+  "invalidations": [
+    {
+      "at": "2026-08-21T00:54:14Z",
+      "reason": "failure:PRODUCT_REJECTED",
+      "invalidated_stages": [
+        "S01",
+        "S02",
+        "S09"
+      ],
+      "last_valid_receipt_before_invalidation": "sha256:bf0cac77fa1ec06db01a64f30f97ee46185bc886a83830a97362a6ed302fb4c3"
+    }
+  ],
+  "failure_routes": [
+    {
+      "at": "2026-08-21T00:54:14Z",
+      "finding": "PRODUCT_REJECTED",
+      "status": "REWORK",
+      "resume_stage": "S09",
+      "details": "DESIGN_REWORK: modal actions violate UX canon R-31 because both 'Закрыть' and 'Другой способ сдачи' are SecondaryAction with no primary action. Long-list behavior relies on DataTable pagination/scrolling that the ui-kit component does not provide as a contract, and column widths/long order-number overflow are not fixed as required by R-09. Loading/error mapping does not define the disabledReason/retry control required by R-20. Partial-data behavior is nondeterministic ('dialog closes or returns to loading'). Preserve the exact all-and-only count/list invariant; on S09, define one canonical alternative-method action, deterministic partial behavior, complete long-list/narrow-viewport behavior, and state the evidence-backed warehouse consequence without inventing a can_pvz reason."
+    }
+  ],
   "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
 }

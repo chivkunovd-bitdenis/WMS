@@ -53,7 +53,7 @@
     "S26"
   ],
   "current_stage": "S09",
-  "status": "RUNNING",
+  "status": "REWORK",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -69,33 +69,18 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:55Z",
-  "heartbeat_at": "2026-08-21T00:24:42Z",
-  "last_valid_receipt": "sha256:d12e45ef553e925005ac204ec8e1886772b6532db53b16b41c086aad5807324a",
+  "heartbeat_at": "2026-08-21T01:35:41Z",
+  "last_valid_receipt": null,
   "blocker": null,
   "resume_condition": null,
-  "verdicts": {
-    "S01": {
-      "verdict": "TASK_INTAKE_READY",
-      "receipt_path": "docs/evidence/BLG-D06/S01-TASK_INTAKE_READY.receipt.json",
-      "receipt_hash": "sha256:e8e5ffd05c7ff98e1fa15fbc138bfe5777623af40c3fd679dbaa19798b938ef7",
-      "role_binding_id": "pipeline-dispatcher",
-      "agent_identity": "codex-night-orchestrator-dispatcher"
-    },
-    "S02": {
-      "verdict": "IMPACT_CLASSIFIED",
-      "receipt_path": "docs/evidence/BLG-D06/S02-IMPACT_CLASSIFIED.receipt.json",
-      "receipt_hash": "sha256:d12e45ef553e925005ac204ec8e1886772b6532db53b16b41c086aad5807324a",
-      "role_binding_id": "pipeline-dispatcher",
-      "agent_identity": "codex-night-orchestrator-dispatcher"
-    }
-  },
+  "verdicts": {},
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 1200,
+    "output_tokens": 600,
+    "estimated_usd": 0.0175
   },
   "budget_usage_receipts": [
     {
@@ -123,9 +108,43 @@
       "estimated_usd": 0.0015,
       "agent_id": "codex-night-orchestrator-dispatcher",
       "recorded_at": "2026-08-21T00:24:42Z"
+    },
+    {
+      "task_id": "BLG-D06",
+      "stage": "S09",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 900,
+      "output_tokens": 500,
+      "estimated_usd": 0.015,
+      "agent_id": "codex-night-orchestrator-ba",
+      "recorded_at": "2026-08-21T00:29:54Z"
     }
   ],
   "blocked_by": [],
   "blocker_resolutions": [],
+  "invalidations": [
+    {
+      "at": "2026-08-21T01:35:41Z",
+      "reason": "failure:PRODUCT_REJECTED",
+      "invalidated_stages": [
+        "S01",
+        "S02",
+        "S09"
+      ],
+      "last_valid_receipt_before_invalidation": "sha256:ee39a959ac2caa97141a11ebec0b2e7d9f45673df7b68687ffb3f11db04faa34"
+    }
+  ],
+  "failure_routes": [
+    {
+      "at": "2026-08-21T01:35:41Z",
+      "finding": "PRODUCT_REJECTED",
+      "status": "REWORK",
+      "resume_stage": "S09",
+      "details": "S09 is a generic template: it has no affected surface inventory, concrete archive filter model, exact labels/defaults, archived-row treatment, task-specific states, narrow/long-data mockups, or truthful ui-kit zone mapping. Rework criteria are in tasks/BLG-D06/S10-DESIGN-REVIEW.md."
+    }
+  ],
   "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
 }

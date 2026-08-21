@@ -56,8 +56,8 @@
     "S23",
     "S26"
   ],
-  "current_stage": "S03",
-  "status": "RUNNING",
+  "current_stage": "S04",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -73,10 +73,20 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T00:25:11Z",
-  "last_valid_receipt": "sha256:057950094025192d282c441e31a11e5798602269264eee5c704a545746551e35",
-  "blocker": null,
-  "resume_condition": null,
+  "heartbeat_at": "2026-08-21T00:48:47Z",
+  "last_valid_receipt": "sha256:c3d04e12c328348a77df2c8dd3ca3564593bb3c6e8eebfe2be84aba6ad2874ca",
+  "blocker": {
+    "type": "ORACLE_CONFLICT",
+    "reason_code": "S04_METADETAILS_CONTRACT_INCOMPLETE",
+    "details": "Current WB decision semantics and multi-SGTIN metaDetails cardinality are not fully or correctly captured in S03; RESEARCH_PASSED would allow unsafe reconciliation.",
+    "owner": "pipeline-ba",
+    "created_at": "2026-08-21T00:48:47Z",
+    "resume_stage": "S04"
+  },
+  "resume_condition": {
+    "stage": "S04",
+    "condition": "Provide an amended S03/addendum satisfying tasks/BLG-I09/S04-RESEARCH-CRITIC.md, including the current full decision enum, three-axis semantics, multiset/null rules, cardinality evidence, 4XX limit rule, historical-divergence boundary, and exact-SHA verification."
+  },
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",
@@ -91,15 +101,22 @@
       "receipt_hash": "sha256:057950094025192d282c441e31a11e5798602269264eee5c704a545746551e35",
       "role_binding_id": "pipeline-dispatcher",
       "agent_identity": "codex-night-orchestrator-dispatcher"
+    },
+    "S03": {
+      "verdict": "RESEARCH_READY",
+      "receipt_path": "docs/evidence/BLG-I09/S03-RESEARCH_READY.receipt.json",
+      "receipt_hash": "sha256:c3d04e12c328348a77df2c8dd3ca3564593bb3c6e8eebfe2be84aba6ad2874ca",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-blg-i09-s03-pipeline-ba"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 55300,
+    "output_tokens": 11100,
+    "estimated_usd": 1.1025
   },
   "budget_usage_receipts": [
     {
@@ -127,6 +144,19 @@
       "estimated_usd": 0.0015,
       "agent_id": "codex-night-orchestrator-dispatcher",
       "recorded_at": "2026-08-21T00:25:11Z"
+    },
+    {
+      "task_id": "BLG-I09",
+      "stage": "S03",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 55000,
+      "output_tokens": 11000,
+      "estimated_usd": 1.1,
+      "agent_id": "codex-blg-i09-s03-pipeline-ba",
+      "recorded_at": "2026-08-21T00:41:38Z"
     }
   ],
   "blocked_by": [],

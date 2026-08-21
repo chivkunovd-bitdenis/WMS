@@ -60,7 +60,7 @@
     "S25",
     "S26"
   ],
-  "current_stage": "S09",
+  "current_stage": "S10",
   "status": "RUNNING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
@@ -77,8 +77,8 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:55Z",
-  "heartbeat_at": "2026-08-21T00:24:46Z",
-  "last_valid_receipt": "sha256:1456bb56870f525abaa08db6138463532b091852c0dd3db9a7fbb18ffee96d38",
+  "heartbeat_at": "2026-08-21T00:29:55Z",
+  "last_valid_receipt": "sha256:ad90e4796b6e494c1d6d50c83e3be393c38ebf939d0ae058baddc6e0436c735b",
   "blocker": null,
   "resume_condition": null,
   "verdicts": {
@@ -95,15 +95,22 @@
       "receipt_hash": "sha256:1456bb56870f525abaa08db6138463532b091852c0dd3db9a7fbb18ffee96d38",
       "role_binding_id": "pipeline-dispatcher",
       "agent_identity": "codex-night-orchestrator-dispatcher"
+    },
+    "S09": {
+      "verdict": "UX_CONTRACT_READY",
+      "receipt_path": "docs/evidence/BLG-D16/S09-UX_CONTRACT_READY.receipt.json",
+      "receipt_hash": "sha256:ad90e4796b6e494c1d6d50c83e3be393c38ebf939d0ae058baddc6e0436c735b",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-night-orchestrator-ba"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 1200,
+    "output_tokens": 600,
+    "estimated_usd": 0.0175
   },
   "budget_usage_receipts": [
     {
@@ -131,6 +138,19 @@
       "estimated_usd": 0.0015,
       "agent_id": "codex-night-orchestrator-dispatcher",
       "recorded_at": "2026-08-21T00:24:46Z"
+    },
+    {
+      "task_id": "BLG-D16",
+      "stage": "S09",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 900,
+      "output_tokens": 500,
+      "estimated_usd": 0.015,
+      "agent_id": "codex-night-orchestrator-ba",
+      "recorded_at": "2026-08-21T00:29:55Z"
     }
   ],
   "blocked_by": [],

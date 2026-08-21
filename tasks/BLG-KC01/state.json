@@ -125,7 +125,7 @@
     "S26"
   ],
   "current_stage": "S05",
-  "status": "RUNNING",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -141,10 +141,20 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T00:25:18Z",
-  "last_valid_receipt": "sha256:e6ae846c7041b83e14d436c931fc751e1fa529648889e2d7077861cbec5208ae",
-  "blocker": null,
-  "resume_condition": null,
+  "heartbeat_at": "2026-08-21T01:52:17Z",
+  "last_valid_receipt": "sha256:c3f52d358dba7cdb3163d64fc09f1d581710b44b7eb7cebf6eacb20a80ded44c",
+  "blocker": {
+    "type": "BASELINE",
+    "reason_code": "S05_PROCESS_MAP_GENERIC",
+    "details": "S05-PROCESS-MAP.md is a generic copied template: it mixes unrelated screen cleanup and worktree scenarios and does not map KC-01 through KC-14 into concrete intake, navigation, inventory, shipment, marketplace, and print process variants.",
+    "owner": "pipeline-ba",
+    "created_at": "2026-08-21T01:52:17Z",
+    "resume_stage": "S05"
+  },
+  "resume_condition": {
+    "stage": "S05",
+    "condition": "Replace S05 with a task-specific process map that preserves and separately maps all 14 client_items (KC-01..KC-14), including actors, documents/data, success, empty/error/repeat/cancel states, and handoff boundaries for S06."
+  },
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",
@@ -159,15 +169,22 @@
       "receipt_hash": "sha256:e6ae846c7041b83e14d436c931fc751e1fa529648889e2d7077861cbec5208ae",
       "role_binding_id": "pipeline-dispatcher",
       "agent_identity": "codex-night-orchestrator-dispatcher"
+    },
+    "S05": {
+      "verdict": "PROCESS_MAP_READY",
+      "receipt_path": "docs/evidence/BLG-KC01/S05-PROCESS_MAP_READY.receipt.json",
+      "receipt_hash": "sha256:c3f52d358dba7cdb3163d64fc09f1d581710b44b7eb7cebf6eacb20a80ded44c",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-night-orchestrator-ba"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 1200,
+    "output_tokens": 600,
+    "estimated_usd": 0.0175
   },
   "budget_usage_receipts": [
     {
@@ -195,6 +212,19 @@
       "estimated_usd": 0.0015,
       "agent_id": "codex-night-orchestrator-dispatcher",
       "recorded_at": "2026-08-21T00:25:18Z"
+    },
+    {
+      "task_id": "BLG-KC01",
+      "stage": "S05",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 900,
+      "output_tokens": 500,
+      "estimated_usd": 0.015,
+      "agent_id": "codex-night-orchestrator-ba",
+      "recorded_at": "2026-08-21T00:29:51Z"
     }
   ],
   "blocked_by": [],

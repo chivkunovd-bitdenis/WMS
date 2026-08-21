@@ -1,0 +1,191 @@
+{
+  "schema_version": 1,
+  "task_id": "BLG-D07",
+  "stage": "S03",
+  "role": "pipeline-ba",
+  "research_type": "narrow_existing_external_contract",
+  "generated_at": "2026-08-21",
+  "verdict_candidate": "RESEARCH_READY",
+  "external_calls_performed": false,
+  "sources": [
+    {
+      "id": "SRC-01",
+      "url": "https://dev.wildberries.ru/ru/openapi/orders-fbs",
+      "level": "official",
+      "retrieved_at": "2026-08-21"
+    },
+    {
+      "id": "SRC-02",
+      "url": "https://dev.wildberries.ru/knowledge-base/articles/019d49a4-0771-7571-aea9-11d5b597f34c/zakazy-fbs",
+      "level": "official",
+      "retrieved_at": "2026-08-21"
+    },
+    {
+      "id": "SRC-03",
+      "url": "https://dev.wildberries.ru/docs/openapi-other/sandbox-environment#tag/Marketplejs-FBS",
+      "level": "official",
+      "retrieved_at": "2026-08-21"
+    },
+    {
+      "id": "SRC-04",
+      "path": "backend/app/services/wb_marketplace_orders_service.py",
+      "level": "observed",
+      "retrieved_at": "2026-08-21"
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "endpoint",
+      "applicability": "applicable",
+      "status": "covered",
+      "evidence": ["SRC-01", "SRC-02"],
+      "finding": "POST /api/v3/orders/status is the current FBS pull endpoint."
+    },
+    {
+      "id": "authorization",
+      "applicability": "applicable",
+      "status": "covered",
+      "evidence": ["SRC-01"],
+      "finding": "Marketplace token in Authorization header; no credential operations performed."
+    },
+    {
+      "id": "request_schema",
+      "applicability": "applicable",
+      "status": "covered",
+      "evidence": ["SRC-01", "SRC-02"],
+      "finding": "Required orders array contains 1..1000 int64 assembly-order IDs."
+    },
+    {
+      "id": "response_schema",
+      "applicability": "applicable",
+      "status": "covered",
+      "evidence": ["SRC-01"],
+      "finding": "200 response returns orders rows with id, supplierStatus and wbStatus."
+    },
+    {
+      "id": "status_machine",
+      "applicability": "applicable",
+      "status": "covered",
+      "evidence": ["SRC-01", "SRC-03"],
+      "finding": "Live status enums and sandbox transitions recorded; sorted is non-terminal."
+    },
+    {
+      "id": "batch_behavior",
+      "applicability": "applicable",
+      "status": "covered",
+      "evidence": ["SRC-01", "SRC-02"],
+      "finding": "Maximum 1000 IDs per status request; caller shards larger sets."
+    },
+    {
+      "id": "pagination",
+      "applicability": "not_applicable",
+      "status": "closed",
+      "evidence": ["SRC-01"],
+      "finding": "Status endpoint has no pagination token; batching is the applicable mechanism."
+    },
+    {
+      "id": "rate_limits",
+      "applicability": "applicable",
+      "status": "covered",
+      "evidence": ["SRC-01"],
+      "finding": "300 requests/minute per seller account, 200 ms interval, burst 20; every 4XX counts as 10; sandbox is 1 request/second shared."
+    },
+    {
+      "id": "errors",
+      "applicability": "applicable",
+      "status": "covered",
+      "evidence": ["SRC-01"],
+      "finding": "Documented statuses are 200, 400, 401, 402, 403 and 429; missing rows and transport failures remain unsuccessful."
+    },
+    {
+      "id": "partial_success",
+      "applicability": "applicable",
+      "status": "covered",
+      "evidence": ["SRC-01"],
+      "finding": "No partial-success contract is documented; success is evaluated per returned matching ID."
+    },
+    {
+      "id": "retries",
+      "applicability": "applicable",
+      "status": "covered",
+      "evidence": ["SRC-01", "SRC-04"],
+      "finding": "Retry constraints and current batch-to-single amplification risk are documented; exact retry policy belongs to S13."
+    },
+    {
+      "id": "webhook_or_polling",
+      "applicability": "applicable",
+      "status": "covered",
+      "evidence": ["SRC-01", "SRC-02"],
+      "finding": "Researched FBS contract specifies pull polling and no webhook; S04 must independently challenge this absence."
+    },
+    {
+      "id": "sandbox",
+      "applicability": "applicable",
+      "status": "covered",
+      "evidence": ["SRC-03"],
+      "finding": "Official sandbox status transitions are enumerated; execution is deferred and no sandbox token was used."
+    },
+    {
+      "id": "tenant_seller_isolation",
+      "applicability": "applicable",
+      "status": "covered",
+      "evidence": ["SRC-01", "SRC-04"],
+      "finding": "WB limit is per seller account and local processing is tenant/seller scoped."
+    },
+    {
+      "id": "volume_and_emergency",
+      "applicability": "applicable",
+      "status": "covered",
+      "evidence": ["SRC-01", "SRC-04"],
+      "finding": "Starvation, request amplification, restart safety and rate-budget constraints are documented."
+    },
+    {
+      "id": "operator_last_success",
+      "applicability": "applicable",
+      "status": "covered",
+      "evidence": ["SRC-04"],
+      "finding": "Order last_wb_sync_at exists but is not updated by status reconciliation; success semantics are specified for Product/Architecture."
+    },
+    {
+      "id": "catalog_stocks_reserves_marking_print_supplies_returns",
+      "applicability": "not_applicable",
+      "status": "closed",
+      "evidence": [],
+      "finding": "These domains are outside the touched status-read contract; only status-triggered side effects are handed to Product/Architecture."
+    },
+    {
+      "id": "competitor_workflows_and_user_pains",
+      "applicability": "not_applicable",
+      "status": "closed",
+      "evidence": [],
+      "finding": "Narrow research of an existing external call does not add a new operator workflow or domain."
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q-01",
+      "blocking": false,
+      "owner_stage": "S11",
+      "question": "Which WB statuses are terminal for WMS and what side effects apply to carrier cancellation?"
+    },
+    {
+      "id": "Q-02",
+      "blocking": false,
+      "owner_stage": "S11",
+      "question": "What freshness SLA and last-success surface must the operator see?"
+    },
+    {
+      "id": "Q-03",
+      "blocking": false,
+      "owner_stage": "S13",
+      "question": "What batch size, seller-wide rate limiter, retry budget and durable cursor are selected?"
+    },
+    {
+      "id": "Q-04",
+      "blocking": false,
+      "owner_stage": "S04",
+      "question": "Does any current official webhook or additional wbStatus exist outside the inspected FBS pages?"
+    }
+  ],
+  "unhandled_applicable_rows": 0
+}

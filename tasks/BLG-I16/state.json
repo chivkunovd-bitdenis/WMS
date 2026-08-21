@@ -50,8 +50,8 @@
     "S23",
     "S26"
   ],
-  "current_stage": "S11",
-  "status": "RUNNING",
+  "current_stage": "S13",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -67,10 +67,20 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T00:25:27Z",
-  "last_valid_receipt": "sha256:ee1cba76afd5445063159d3a76a5e3d4fe4579a9cb4300773cfafa77a97c037c",
-  "blocker": null,
-  "resume_condition": null,
+  "heartbeat_at": "2026-08-21T02:36:58Z",
+  "last_valid_receipt": "sha256:5ac0e10325e070bda56daabeac0cad5d0381fb6b318d682dc1bb00cd0a5c7acc",
+  "blocker": {
+    "type": "OWNER_INPUT",
+    "reason_code": "IMPACT_PROFILE_INCOMPLETE",
+    "details": "S13 cannot pass: runtime S08 and ui_change stages S09/S10/S24/S25 are absent from the controller profile although the accepted operation requires durable runtime behavior and visible accepted/progress/partial/final read-back.",
+    "owner": "pipeline-dispatcher",
+    "created_at": "2026-08-21T02:36:58Z",
+    "resume_stage": "S13"
+  },
+  "resume_condition": {
+    "stage": "S13",
+    "condition": "Pipeline dispatcher reclassifies BLG-I16 through the controller, adds S08 and ui_change stages, obtains valid S08/S09/S10 and any invalidated S11/S12 receipts, then returns a refreshed packet to S13."
+  },
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",
@@ -85,15 +95,29 @@
       "receipt_hash": "sha256:ee1cba76afd5445063159d3a76a5e3d4fe4579a9cb4300773cfafa77a97c037c",
       "role_binding_id": "pipeline-dispatcher",
       "agent_identity": "codex-night-orchestrator-dispatcher"
+    },
+    "S11": {
+      "verdict": "PRODUCT_CONTRACT_APPROVED",
+      "receipt_path": "docs/evidence/BLG-I16/S11-PRODUCT_CONTRACT_APPROVED.receipt.json",
+      "receipt_hash": "sha256:ec8107dc3cd4839469425a39bee6cb667676907ea3e84510b45a84c3f7cdcccd",
+      "role_binding_id": "pipeline-product",
+      "agent_identity": "codex-blg-i16-s11-pipeline-product"
+    },
+    "S12": {
+      "verdict": "TASK_CUT_READY",
+      "receipt_path": "docs/evidence/BLG-I16/S12-TASK_CUT_READY.receipt.json",
+      "receipt_hash": "sha256:5ac0e10325e070bda56daabeac0cad5d0381fb6b318d682dc1bb00cd0a5c7acc",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-blg-i16-s12-pipeline-ba"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 89300,
+    "output_tokens": 6500,
+    "estimated_usd": 0.8925
   },
   "budget_usage_receipts": [
     {
@@ -121,6 +145,32 @@
       "estimated_usd": 0.0015,
       "agent_id": "codex-night-orchestrator-dispatcher",
       "recorded_at": "2026-08-21T00:25:27Z"
+    },
+    {
+      "task_id": "BLG-I16",
+      "stage": "S11",
+      "role": "pipeline-product",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 65000,
+      "output_tokens": 4200,
+      "estimated_usd": 0.65,
+      "agent_id": "codex-blg-i16-s11-pipeline-product",
+      "recorded_at": "2026-08-21T02:16:03Z"
+    },
+    {
+      "task_id": "BLG-I16",
+      "stage": "S12",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 24000,
+      "output_tokens": 2200,
+      "estimated_usd": 0.24,
+      "agent_id": "codex-blg-i16-s12-pipeline-ba",
+      "recorded_at": "2026-08-21T02:18:51Z"
     }
   ],
   "blocked_by": [],

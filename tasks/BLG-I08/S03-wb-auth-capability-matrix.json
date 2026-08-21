@@ -1,0 +1,236 @@
+{
+  "schema_version": "1.0",
+  "task_id": "BLG-I08",
+  "stage": "S03",
+  "contract_id": "wb-auth-status-v1",
+  "snapshot_date": "2026-08-21",
+  "scope": {
+    "kind": "narrow_external_contract",
+    "capabilities": ["content", "supplies", "marketplace"],
+    "excluded": [
+      "credential_management",
+      "credential_pages",
+      "live_token_checks",
+      "production",
+      "deploy",
+      "business_method_changes"
+    ]
+  },
+  "sources": [
+    {
+      "id": "WB-API-INFO",
+      "url": "https://dev.wildberries.ru/docs/openapi/api-information",
+      "document_date": null,
+      "accessed_at": "2026-08-21",
+      "level": "official"
+    },
+    {
+      "id": "WB-AUTH-ERRORS",
+      "url": "https://dev.wildberries.ru/knowledge-base/articles/019d49a1-1936-7d84-a59d-41bcac098903/oshibki-avtorizatsii-wb-api-i-ikh-reshenie",
+      "document_date": "2026-04-03",
+      "accessed_at": "2026-08-21",
+      "level": "official"
+    },
+    {
+      "id": "WB-ERROR-CODES",
+      "url": "https://dev.wildberries.ru/knowledge-base/articles/019d49a1-2cb0-781d-8921-deaf4a014a58/rasshifrovka-kodov-oshibok-wb-api",
+      "document_date": "2026-04-06",
+      "accessed_at": "2026-08-21",
+      "level": "official"
+    },
+    {
+      "id": "WB-JWT",
+      "url": "https://dev.wildberries.ru/knowledge-base/articles/019d49a1-1540-76f6-befe-726633dc11be/dekodirovanie-i-proverka-tokenov-wb-api",
+      "document_date": "2026-04-03",
+      "accessed_at": "2026-08-21",
+      "level": "official"
+    },
+    {
+      "id": "WB-SECURITY",
+      "url": "https://dev.wildberries.ru/knowledge-base/articles/019d49a1-1160-7ecf-91e9-abb10256bd0e/bezopasnost-dannykh-prodavtsa-pri-rabote-s-wb-api",
+      "document_date": "2026-04-03",
+      "accessed_at": "2026-08-21",
+      "level": "official"
+    },
+    {
+      "id": "WB-CATEGORIES",
+      "url": "https://seller.wildberries.ru/instructions/ru/kz/material/wb-api-data-categories?recommended=true",
+      "document_date": "2026-05-18",
+      "accessed_at": "2026-08-21",
+      "level": "official"
+    }
+  ],
+  "capability_rows": [
+    {
+      "id": "WB-AUTH-001",
+      "lane": "configuration",
+      "capability": "configured_presence",
+      "applicable": true,
+      "coverage": "complete",
+      "claim": "Absence of a stored effective secret is NOT_CONFIGURED and does not require a WB request.",
+      "level": "observed",
+      "source_ids": [],
+      "states": ["NOT_CONFIGURED"]
+    },
+    {
+      "id": "WB-AUTH-002",
+      "lane": "token_metadata",
+      "capability": "expiry_and_type",
+      "applicable": true,
+      "coverage": "complete",
+      "claim": "WB JWT documents iat, exp, acc, s and t; locally decoded claims are metadata, not proof of active or unrevoked status.",
+      "level": "official",
+      "source_ids": ["WB-JWT"],
+      "states": ["EXPIRED", "AUTH_REJECTED"]
+    },
+    {
+      "id": "WB-AUTH-003",
+      "lane": "probe",
+      "capability": "content",
+      "applicable": true,
+      "coverage": "complete",
+      "claim": "GET content-api.wildberries.ru/ping is the non-mutating content token/category probe.",
+      "level": "official",
+      "source_ids": ["WB-API-INFO"],
+      "states": ["CONNECTED", "AUTH_REJECTED", "CHECK_DELAYED"]
+    },
+    {
+      "id": "WB-AUTH-004",
+      "lane": "probe",
+      "capability": "supplies",
+      "applicable": true,
+      "coverage": "complete",
+      "claim": "GET supplies-api.wildberries.ru/ping is the non-mutating supplies token/category probe.",
+      "level": "official",
+      "source_ids": ["WB-API-INFO"],
+      "states": ["CONNECTED", "AUTH_REJECTED", "CHECK_DELAYED"]
+    },
+    {
+      "id": "WB-AUTH-005",
+      "lane": "probe",
+      "capability": "marketplace",
+      "applicable": true,
+      "coverage": "complete",
+      "claim": "GET marketplace-api.wildberries.ru/ping is the non-mutating marketplace token/category probe.",
+      "level": "official",
+      "source_ids": ["WB-API-INFO"],
+      "states": ["CONNECTED", "AUTH_REJECTED", "CHECK_DELAYED"]
+    },
+    {
+      "id": "WB-AUTH-006",
+      "lane": "permission",
+      "capability": "read_write",
+      "applicable": true,
+      "coverage": "complete_with_nonblocking_question",
+      "claim": "Ping does not prove write access; health diagnostics must not create a mutating request.",
+      "level": "official",
+      "source_ids": ["WB-AUTH-ERRORS", "WB-CATEGORIES"],
+      "states": ["WRITE_ACCESS_UNKNOWN", "INSUFFICIENT_ACCESS"],
+      "question_id": "Q-S04-001"
+    },
+    {
+      "id": "WB-AUTH-007",
+      "lane": "errors",
+      "capability": "http_mapping",
+      "applicable": true,
+      "coverage": "complete",
+      "claim": "401 is an authentication rejection, 403 insufficient access, 429 rate limiting, and 5xx service failure; transient failures must not be reported as a broken key.",
+      "level": "official",
+      "source_ids": ["WB-AUTH-ERRORS", "WB-ERROR-CODES"],
+      "states": ["AUTH_REJECTED", "INSUFFICIENT_ACCESS", "CHECK_DELAYED", "WB_UNAVAILABLE"]
+    },
+    {
+      "id": "WB-AUTH-008",
+      "lane": "rate_limit",
+      "capability": "ping_cadence",
+      "applicable": true,
+      "coverage": "complete",
+      "claim": "Each ping variant permits at most three requests per 30 seconds and must not be aggressively automated.",
+      "level": "official",
+      "source_ids": ["WB-API-INFO"],
+      "states": ["CHECK_DELAYED", "STALE"]
+    },
+    {
+      "id": "WB-AUTH-009",
+      "lane": "availability",
+      "capability": "service_health",
+      "applicable": true,
+      "coverage": "complete",
+      "claim": "Ping is not a WB service-availability check; network and 5xx outcomes preserve last known success and do not invalidate the credential.",
+      "level": "official",
+      "source_ids": ["WB-API-INFO", "WB-ERROR-CODES"],
+      "states": ["NETWORK_UNAVAILABLE", "WB_UNAVAILABLE", "STALE"]
+    },
+    {
+      "id": "WB-AUTH-010",
+      "lane": "security",
+      "capability": "no_secret_disclosure",
+      "applicable": true,
+      "coverage": "complete",
+      "claim": "The UI and external response expose only normalized status metadata and never token material, authorization headers, JWT identifiers or raw upstream bodies.",
+      "level": "official",
+      "source_ids": ["WB-SECURITY"],
+      "states": []
+    },
+    {
+      "id": "WB-AUTH-011",
+      "lane": "roles_tenant",
+      "capability": "operator_read_only",
+      "applicable": true,
+      "coverage": "complete",
+      "claim": "Status is isolated by tenant, seller and capability; the warehouse operator receives diagnosis only and does not manage credentials.",
+      "level": "hypothesis",
+      "source_ids": ["WB-SECURITY"],
+      "states": []
+    },
+    {
+      "id": "WB-AUTH-012",
+      "lane": "freshness",
+      "capability": "last_success",
+      "applicable": true,
+      "coverage": "complete_with_product_parameter",
+      "claim": "Store checked_at and last_success_at per capability; Product must set the stale TTL and expiring-soon window.",
+      "level": "hypothesis",
+      "source_ids": ["WB-API-INFO"],
+      "states": ["STALE"],
+      "question_id": "Q-PRODUCT-001"
+    }
+  ],
+  "applicability_audit": [
+    {"lane": "official_api_docs", "applicable": true, "coverage": "complete"},
+    {"lane": "seller_operator_instructions", "applicable": true, "coverage": "complete"},
+    {"lane": "fbs_fbo_status_machine", "applicable": false, "reason": "No order or supply status behavior changes."},
+    {"lane": "business_domains", "applicable": true, "coverage": "scoped_to_content_supplies_marketplace_auth"},
+    {"lane": "pagination", "applicable": false, "reason": "Ping is not paginated."},
+    {"lane": "rate_batch_partial_retry_webhook_polling", "applicable": true, "coverage": "rate_retry_cache_complete_batch_partial_webhook_not_applicable"},
+    {"lane": "user_pain", "applicable": true, "coverage": "complete"},
+    {"lane": "competitor_workflows", "applicable": false, "reason": "Narrow existing external contract, not a new domain or module."},
+    {"lane": "security_roles_tenant_seller_warehouse", "applicable": true, "coverage": "complete_warehouse_not_applicable"},
+    {"lane": "volume_emergency", "applicable": true, "coverage": "complete"}
+  ],
+  "open_questions": [
+    {
+      "id": "Q-S04-001",
+      "classification": "non_blocking",
+      "owner_stage": "S04",
+      "question": "Must read-only failures be normalized from both 401 with read-only detail and official 403 permission failures?",
+      "required_evidence": "Independent official-doc check plus emulator cases for both status variants."
+    },
+    {
+      "id": "Q-S04-002",
+      "classification": "non_blocking",
+      "owner_stage": "S04",
+      "question": "Does each status probe use the same effective-token fallback as its production capability?",
+      "required_evidence": "Resolution map for content, supplies and marketplace clients."
+    },
+    {
+      "id": "Q-PRODUCT-001",
+      "classification": "non_blocking",
+      "owner_stage": "S09",
+      "question": "What stale TTL, expiring-soon window and incident-reference visibility should Product approve?",
+      "required_evidence": "UX contract and role matrix."
+    }
+  ],
+  "unprocessed_applicable_rows": [],
+  "recommended_verdict": "RESEARCH_READY"
+}

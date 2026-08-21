@@ -64,7 +64,7 @@ Rules:
   "task_id": "BLG-I14",
   "stage": "S09",
   "role": "pipeline-ba",
-  "status": "RUNNING",
+  "status": "WAITING",
   "traits": [
     "ui_change"
   ],
@@ -92,10 +92,7 @@ Rules:
     "S25",
     "S26"
   ],
-  "done_stages": [
-    "S01",
-    "S02"
-  ],
+  "done_stages": [],
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
@@ -128,13 +125,23 @@ Rules:
   },
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 9800,
+    "output_tokens": 1600,
+    "estimated_usd": 0.1125
   },
   "blocked_by": [],
-  "blocker": null,
-  "resume_condition": null,
+  "blocker": {
+    "type": "BASELINE",
+    "reason_code": "CONTROLLER_REWORK_ROUTE_INVALIDATED_PREREQUISITES",
+    "details": "S10 design rework must resume at S09, but the controller PRODUCT_REJECTED route invalidated accepted S01/S02/S09 receipts and next now resolves S01 despite current_stage S09.",
+    "owner": "pipeline-dispatcher",
+    "created_at": "2026-08-21T00:54:52Z",
+    "resume_stage": "S09"
+  },
+  "resume_condition": {
+    "stage": "S09",
+    "condition": "Repair or reconcile controller rework invalidation so accepted S01/S02 remain valid, then revise and rerun S09 for the recorded design findings before a new independent S10 review."
+  },
   "rules": [
     "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
     "Do not accept your own work.",

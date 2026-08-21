@@ -2,7 +2,7 @@
   "task_id": "BLG-G01",
   "stage": "S03",
   "role": "pipeline-ba",
-  "status": "RUNNING",
+  "status": "WAITING",
   "traits": [
     "new_domain",
     "external_contract"
@@ -81,8 +81,18 @@
       "minimum_closure_artifact": "research dossier, role needs, data-source/freshness/access contract and ARCH approval before Dev"
     }
   ],
-  "blocker": null,
-  "resume_condition": null,
+  "blocker": {
+    "type": "OWNER_INPUT",
+    "reason_code": "OPEN_BLOCKER",
+    "details": "BLK-ARCH-003: Ozon и аналитический модуль требуют dossier/ARCH до разработки",
+    "owner": "solution-architect",
+    "created_at": "2026-08-21T00:28:09Z",
+    "resume_stage": "S03"
+  },
+  "resume_condition": {
+    "stage": "S03",
+    "condition": "resolve BLK-ARCH-003 with closure evidence"
+  },
   "rules": [
     "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
     "Do not accept your own work.",

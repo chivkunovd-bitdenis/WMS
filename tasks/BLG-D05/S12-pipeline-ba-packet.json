@@ -1,0 +1,82 @@
+{
+  "task_id": "BLG-D05",
+  "stage": "S12",
+  "role": "pipeline-ba",
+  "status": "RUNNING",
+  "traits": [
+    "database_change",
+    "tenant_sensitive"
+  ],
+  "risk_level": "medium",
+  "model_policy": "pipeline/model-policy.yml",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S11",
+    "S12",
+    "S13",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S26"
+  ],
+  "done_stages": [
+    "S01",
+    "S02",
+    "S11"
+  ],
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "wave_id": "wave-a1b311d18f07",
+  "backlog_item_id": "BLG-D05",
+  "backlog_item": {
+    "id": "BLG-D05",
+    "title": "Разобрать и привязать к карточкам коды Denmarcs без связи",
+    "source_section": "D5",
+    "business_meaning": "В пуле Denmarcs есть загруженные коды маркировки, у которых потеряна или не определена связь с актуальной карточкой товара. Такие коды числятся в системе, но их нельзя безопасно использовать при сборке и отгрузке, потому что непонятно, к какому товару они относятся. Нужно сопоставить старые и новые карточки, привязать подтверждённые коды к правильным товарам, а сомнительные вынести в отдельный понятный статус без автоматического использования.",
+    "type": "data",
+    "priority": "medium",
+    "status": "queued",
+    "readiness": "needs_data_policy",
+    "dependencies": [
+      "BLG-F01"
+    ],
+    "suggested_roles": [
+      "BA",
+      "solution-architect",
+      "data-owner",
+      "reviewer"
+    ],
+    "suggested_stages": [
+      "S01",
+      "S02",
+      "S12",
+      "S23"
+    ]
+  },
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 85300,
+    "output_tokens": 4100,
+    "estimated_usd": 0.5525
+  },
+  "blocked_by": [],
+  "blocker": null,
+  "resume_condition": null,
+  "rules": [
+    "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
+    "Do not accept your own work.",
+    "If status is WAITING, do not advance; report the blocker and wait for resume.",
+    "If budget_enforced is true, advance requires usage receipt fields.",
+    "If blocked_by is non-empty, do not pass the blocker resume stage without resolve-blocker evidence.",
+    "Use python3 scripts/pipeline/run.py advance only for the stage you own.",
+    "Do not set DONE while pipeline status is not ACTIVE."
+  ]
+}

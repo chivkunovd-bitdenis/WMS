@@ -1,0 +1,93 @@
+{
+  "task_id": "BLG-D17",
+  "stage": "S13",
+  "role": "solution-architect",
+  "status": "WAITING",
+  "traits": [
+    "database_change",
+    "tenant_sensitive"
+  ],
+  "risk_level": "high",
+  "model_policy": "pipeline/model-policy.yml",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S26"
+  ],
+  "done_stages": [
+    "S01",
+    "S02",
+    "S11",
+    "S12"
+  ],
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "wave_id": "wave-a1b311d18f07",
+  "backlog_item_id": "BLG-D17",
+  "backlog_item": {
+    "id": "BLG-D17",
+    "title": "Возвращать не привязанный код из void в available или объяснять аннулирование",
+    "source_section": "D17",
+    "business_meaning": "После неудачной попытки привязки код маркировки может попасть в состояние void, хотя фактически он не был использован ни в заказе, ни в Wildberries. Такой код исчезает из доступного пула без понятной причины, и остаток кодов становится недостоверным. Если внешняя привязка не состоялась, система должна атомарно вернуть код в available, а если код действительно нельзя использовать, сохранить проверяемую причину аннулирования и показать её пользователю.",
+    "type": "data_integrity",
+    "priority": "high",
+    "status": "queued",
+    "readiness": "needs_architecture_contract",
+    "dependencies": [
+      "BLG-F01"
+    ],
+    "suggested_roles": [
+      "solution-architect",
+      "screen-dev",
+      "reviewer"
+    ],
+    "suggested_stages": [
+      "S02",
+      "S12",
+      "S18",
+      "S23"
+    ]
+  },
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 83300,
+    "output_tokens": 7100,
+    "estimated_usd": 0.5425
+  },
+  "blocked_by": [],
+  "blocker": {
+    "type": "BASELINE",
+    "reason_code": "S13_ARCH_INPUT_BASELINE_AND_PROFILE_INCOMPLETE",
+    "details": "S13 cannot pass: the current profile omits mandatory runtime/UI gates for the approved user-visible reason, task base_sha lacks the canonical fbs_kiz_service void transition, and no accepted versioned oracle proves definitive WB SGTIN absence. See tasks/BLG-D17/S13-ARCHITECT-PLAN.md.",
+    "owner": "pipeline-dispatcher",
+    "created_at": "2026-08-21T01:47:27Z",
+    "resume_stage": "S13"
+  },
+  "resume_condition": {
+    "stage": "S13",
+    "condition": "Through controller-owned classification/baseline routing: include ui_change and mandatory S08/S09/S10/S24/S25, recreate invalidated upstream receipts by owning roles, pin an exact implementation SHA containing the canonical FBS KIZ flow, and provide an accepted ABSENT_CONFIRMED external contract/emulator receipt or add external_contract S03/S04; then resume S13 with refreshed input hashes."
+  },
+  "rules": [
+    "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
+    "Do not accept your own work.",
+    "If status is WAITING, do not advance; report the blocker and wait for resume.",
+    "If budget_enforced is true, advance requires usage receipt fields.",
+    "If blocked_by is non-empty, do not pass the blocker resume stage without resolve-blocker evidence.",
+    "Use python3 scripts/pipeline/run.py advance only for the stage you own.",
+    "Do not set DONE while pipeline status is not ACTIVE."
+  ]
+}

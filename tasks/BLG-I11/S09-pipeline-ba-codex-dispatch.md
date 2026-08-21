@@ -64,7 +64,7 @@ Rules:
   "task_id": "BLG-I11",
   "stage": "S09",
   "role": "pipeline-ba",
-  "status": "RUNNING",
+  "status": "WAITING",
   "traits": [
     "ui_change"
   ],
@@ -146,8 +146,18 @@ Rules:
       "minimum_closure_artifact": "approved oracle/decision record for requiredMeta, optionalMeta and sgtinApplied"
     }
   ],
-  "blocker": null,
-  "resume_condition": null,
+  "blocker": {
+    "type": "OWNER_INPUT",
+    "reason_code": "OPEN_BLOCKER",
+    "details": "BLK-PROD-001: Для спорного поведения Честного знака нет зафиксированного оракула",
+    "owner": "pipeline-product",
+    "created_at": "2026-08-21T00:50:57Z",
+    "resume_stage": "S09"
+  },
+  "resume_condition": {
+    "stage": "S09",
+    "condition": "resolve BLK-PROD-001 with closure evidence"
+  },
   "rules": [
     "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
     "Do not accept your own work.",

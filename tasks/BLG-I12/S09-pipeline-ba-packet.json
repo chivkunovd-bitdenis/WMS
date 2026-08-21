@@ -2,7 +2,7 @@
   "task_id": "BLG-I12",
   "stage": "S09",
   "role": "pipeline-ba",
-  "status": "RUNNING",
+  "status": "WAITING",
   "traits": [
     "ui_change"
   ],
@@ -28,10 +28,7 @@
     "S25",
     "S26"
   ],
-  "done_stages": [
-    "S01",
-    "S02"
-  ],
+  "done_stages": [],
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
@@ -63,13 +60,23 @@
   },
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 15300,
+    "output_tokens": 2300,
+    "estimated_usd": 0.2525
   },
   "blocked_by": [],
-  "blocker": null,
-  "resume_condition": null,
+  "blocker": {
+    "type": "ENV",
+    "reason_code": "PIPELINE_REWORK_ROUTE_BROKEN",
+    "details": "Controller recorded PRODUCT_REJECTED with resume_stage S09, but packet ignored REWORK current_stage and routed BLG-I12 to S01 after clearing accepted S01/S02 receipts.",
+    "owner": "pipeline-controller-maintainer",
+    "created_at": "2026-08-21T00:56:57Z",
+    "resume_stage": "S09"
+  },
+  "resume_condition": {
+    "stage": "S09",
+    "condition": "Repair or authorize the Pipeline controller rework route so BLG-I12 resumes at S09 without replaying accepted S01/S02, then regenerate packet and dispatch."
+  },
   "rules": [
     "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
     "Do not accept your own work.",

@@ -53,8 +53,8 @@
     "S23",
     "S26"
   ],
-  "current_stage": "S11",
-  "status": "RUNNING",
+  "current_stage": "S13",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -70,10 +70,20 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:55Z",
-  "heartbeat_at": "2026-08-21T00:24:47Z",
-  "last_valid_receipt": "sha256:8f10e535ecdab1da5a7900b95d81ebbc73cbc5e3355ff7877a4ff32464e735d1",
-  "blocker": null,
-  "resume_condition": null,
+  "heartbeat_at": "2026-08-21T01:47:27Z",
+  "last_valid_receipt": "sha256:5ae0a7687520c78fd1e8667a5cb6184db3b9da74e3e81716498db3b0b8447ef7",
+  "blocker": {
+    "type": "BASELINE",
+    "reason_code": "S13_ARCH_INPUT_BASELINE_AND_PROFILE_INCOMPLETE",
+    "details": "S13 cannot pass: the current profile omits mandatory runtime/UI gates for the approved user-visible reason, task base_sha lacks the canonical fbs_kiz_service void transition, and no accepted versioned oracle proves definitive WB SGTIN absence. See tasks/BLG-D17/S13-ARCHITECT-PLAN.md.",
+    "owner": "pipeline-dispatcher",
+    "created_at": "2026-08-21T01:47:27Z",
+    "resume_stage": "S13"
+  },
+  "resume_condition": {
+    "stage": "S13",
+    "condition": "Through controller-owned classification/baseline routing: include ui_change and mandatory S08/S09/S10/S24/S25, recreate invalidated upstream receipts by owning roles, pin an exact implementation SHA containing the canonical FBS KIZ flow, and provide an accepted ABSENT_CONFIRMED external contract/emulator receipt or add external_contract S03/S04; then resume S13 with refreshed input hashes."
+  },
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",
@@ -88,15 +98,29 @@
       "receipt_hash": "sha256:8f10e535ecdab1da5a7900b95d81ebbc73cbc5e3355ff7877a4ff32464e735d1",
       "role_binding_id": "pipeline-dispatcher",
       "agent_identity": "codex-night-orchestrator-dispatcher"
+    },
+    "S11": {
+      "verdict": "PRODUCT_CONTRACT_APPROVED",
+      "receipt_path": "docs/evidence/BLG-D17/S11-PRODUCT_CONTRACT_APPROVED.receipt.json",
+      "receipt_hash": "sha256:b22336a72608e21987e79b5225635d7faccb38981eeb97894741a8490b097fc8",
+      "role_binding_id": "pipeline-product",
+      "agent_identity": "codex-blg-d17-s11-product"
+    },
+    "S12": {
+      "verdict": "TASK_CUT_READY",
+      "receipt_path": "docs/evidence/BLG-D17/S12-TASK_CUT_READY.receipt.json",
+      "receipt_hash": "sha256:5ae0a7687520c78fd1e8667a5cb6184db3b9da74e3e81716498db3b0b8447ef7",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-pipeline-ba-blg-d17-s12"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 83300,
+    "output_tokens": 7100,
+    "estimated_usd": 0.5425
   },
   "budget_usage_receipts": [
     {
@@ -124,6 +148,32 @@
       "estimated_usd": 0.0015,
       "agent_id": "codex-night-orchestrator-dispatcher",
       "recorded_at": "2026-08-21T00:24:47Z"
+    },
+    {
+      "task_id": "BLG-D17",
+      "stage": "S11",
+      "role": "pipeline-product",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 38000,
+      "output_tokens": 3200,
+      "estimated_usd": 0.24,
+      "agent_id": "codex-blg-d17-s11-product",
+      "recorded_at": "2026-08-21T01:30:28Z"
+    },
+    {
+      "task_id": "BLG-D17",
+      "stage": "S12",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 45000,
+      "output_tokens": 3800,
+      "estimated_usd": 0.3,
+      "agent_id": "codex-pipeline-ba-blg-d17-s12",
+      "recorded_at": "2026-08-21T01:33:41Z"
     }
   ],
   "blocked_by": [],

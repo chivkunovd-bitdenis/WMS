@@ -54,8 +54,8 @@
     "S23",
     "S26"
   ],
-  "current_stage": "S03",
-  "status": "RUNNING",
+  "current_stage": "S04",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -71,10 +71,20 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T00:25:13Z",
-  "last_valid_receipt": "sha256:af489406af17d9b9032a618c52e98a5175ef71dfcc6748cd271123bc34593da2",
-  "blocker": null,
-  "resume_condition": null,
+  "heartbeat_at": "2026-08-21T00:48:56Z",
+  "last_valid_receipt": "sha256:9208175716c1bb0f6db1dd553d06f2f8ba9ae0e3e361feade19ea1d7fad67341",
+  "blocker": {
+    "type": "ORACLE_CONFLICT",
+    "reason_code": "RESEARCH_REWORK_WAREHOUSE_POOL_BOUNDARIES",
+    "details": "S04 RESEARCH_REWORK: S03 does not close many-to-one WB-to-physical stock allocation and publish safety, legacy auto-created FBS WB warehouse migration, cross-warehouse cell scan semantics, warehouse-context switch boundaries, or marking-pool versus physical-reserve ownership.",
+    "owner": "pipeline-ba",
+    "created_at": "2026-08-21T00:48:56Z",
+    "resume_stage": "S04"
+  },
+  "resume_condition": {
+    "stage": "S04",
+    "condition": "Revise MODULE-DOSSIER and its capability matrix with explicit allocation/publish/reserve cardinality, legacy FBS WB warehouse reconciliation and rollback, cross-warehouse scan policy, context source-of-truth and switch boundaries, and marking-pool/box applicability; then resume S04 for independent re-review."
+  },
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",
@@ -89,15 +99,22 @@
       "receipt_hash": "sha256:af489406af17d9b9032a618c52e98a5175ef71dfcc6748cd271123bc34593da2",
       "role_binding_id": "pipeline-dispatcher",
       "agent_identity": "codex-night-orchestrator-dispatcher"
+    },
+    "S03": {
+      "verdict": "RESEARCH_READY",
+      "receipt_path": "docs/evidence/BLG-I10/S03-RESEARCH_READY.receipt.json",
+      "receipt_hash": "sha256:9208175716c1bb0f6db1dd553d06f2f8ba9ae0e3e361feade19ea1d7fad67341",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-blg-i10-s03-pipeline-ba"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 60300,
+    "output_tokens": 10100,
+    "estimated_usd": 0.4525
   },
   "budget_usage_receipts": [
     {
@@ -125,6 +142,19 @@
       "estimated_usd": 0.0015,
       "agent_id": "codex-night-orchestrator-dispatcher",
       "recorded_at": "2026-08-21T00:25:13Z"
+    },
+    {
+      "task_id": "BLG-I10",
+      "stage": "S03",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 60000,
+      "output_tokens": 10000,
+      "estimated_usd": 0.45,
+      "agent_id": "codex-blg-i10-s03-pipeline-ba",
+      "recorded_at": "2026-08-21T00:44:06Z"
     }
   ],
   "blocked_by": [],
