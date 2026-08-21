@@ -59,7 +59,7 @@
     "S26"
   ],
   "current_stage": "S13",
-  "status": "WAITING",
+  "status": "RUNNING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -75,20 +75,10 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T04:19:43Z",
+  "heartbeat_at": "2026-08-21T05:56:06Z",
   "last_valid_receipt": "sha256:e8ff86ddbb69f1674965e8b4e01fadd025019526f92a593bd12fae7567752d61",
-  "blocker": {
-    "type": "OWNER_INPUT",
-    "reason_code": "BUDGET_HARD_STOP",
-    "details": "wave budget exceeded",
-    "owner": "owner",
-    "created_at": "2026-08-21T04:19:43Z",
-    "resume_stage": "S13"
-  },
-  "resume_condition": {
-    "stage": "S13",
-    "condition": "record owner budget override or lower scope before continuing"
-  },
+  "blocker": null,
+  "resume_condition": null,
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",
