@@ -506,6 +506,212 @@ def test_normalize_scanned_cis_repairs_russian_aim_prefix_after_layout() -> None
     assert hints == ["aim_prefix", "gs_substitute", "keyboard_layout"]
 
 
+# I3 (docs/BACKLOG-2026-08-19-CHAT-RU.md, раздел I3): браузерное поле ввода
+# вырезает байт-разделитель GS (0x1D) целиком, без всякой замены — в отличие
+# от кейсов выше, где сканер подставляет видимый символ и есть по чему резать.
+# Единственный ориентир — структура самого КИЗ: пример WB-структуры взят из
+# tasks/fbs-marketplace-orders/wb-docs/04-labeling/verify-product-identifiers.md
+# и kiz-common-errors.md — 01<GTIN>21<серийник>91<код,4 симв>92<подпись>,
+# подпись 44 символа для одежды и 88 для обуви.
+_REAL_GTIN = "04606012345678"
+_REAL_SIGNATURE_44 = "MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY="
+_REAL_SIGNATURE_88 = (
+    "MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo9" "0000"
+)
+
+
+def _real_cis(serial: str, verification: str, signature: str, *, with_gs: bool) -> str:
+    prefix = f"01{_REAL_GTIN}21{serial}"
+    sep = _GS if with_gs else ""
+    return f"{prefix}{sep}91{verification}{sep}92{signature}"
+
+
+def test_normalize_scanned_cis_restores_missing_gs_for_clothing_signature() -> None:
+    # TC-NEW-FBS-KIZ-I3-001: 44-символьная подпись (одежда) без разделителей
+    # восстанавливается до буквально того же вида, что дал бы правильно
+    # настроенный сканер.
+    glued = _real_cis("aXq7Tz9Km", "K7pQ", _REAL_SIGNATURE_44, with_gs=False)
+    expected = _real_cis("aXq7Tz9Km", "K7pQ", _REAL_SIGNATURE_44, with_gs=True)
+
+    value, hints = kiz_svc.normalize_scanned_cis(glued)
+
+    assert value == expected
+    assert hints == ["gs_structure_restored"]
+    assert kiz_svc.is_probably_cis(value) is True
+
+
+def test_normalize_scanned_cis_restores_missing_gs_for_footwear_signature() -> None:
+    # TC-NEW-FBS-KIZ-I3-001: та же починка для 88-символьной подписи (обувь).
+    glued = _real_cis("Zk9L2pQ1", "M3xR", _REAL_SIGNATURE_88, with_gs=False)
+    expected = _real_cis("Zk9L2pQ1", "M3xR", _REAL_SIGNATURE_88, with_gs=True)
+
+    value, hints = kiz_svc.normalize_scanned_cis(glued)
+
+    assert value == expected
+    assert hints == ["gs_structure_restored"]
+
+
+def test_normalize_scanned_cis_restore_not_fooled_by_91_92_inside_serial() -> None:
+    # TC-NEW-FBS-KIZ-I3-002: главная ловушка задачи — серийный номер сам
+    # содержит "91" и "92" ("A91XB92YC7z"). Наивный поиск подстроки принял бы
+    # их за начало блоков 91/92 и обрезал бы серийник посреди значения. Разбор
+    # по фиксированным смещениям от конца строки должен найти настоящие
+    # маркеры, а не эти внутри серийника.
+    trap_serial = "A91XB92YC7z"
+    glued = _real_cis(trap_serial, "Q9zK", _REAL_SIGNATURE_44, with_gs=False)
+    expected = _real_cis(trap_serial, "Q9zK", _REAL_SIGNATURE_44, with_gs=True)
+
+    value, hints = kiz_svc.normalize_scanned_cis(glued)
+
+    assert value == expected
+    assert hints == ["gs_structure_restored"]
+    # Серийный номер (включая ложные "91"/"92" внутри) остался внутри поля 21
+    # целиком — а не обрублен на первом ложном совпадении.
+    assert trap_serial in value
+
+
+def test_normalize_scanned_cis_leaves_already_separated_code_untouched() -> None:
+    # TC-NEW-FBS-KIZ-I3-003: если разделители дошли — новый шаг не должен их
+    # трогать и тем более портить нормальный код (регресс — главный риск
+    # задачи, "не сломать нормальные коды").
+    already_ok = _real_cis("aXq7Tz9Km", "K7pQ", _REAL_SIGNATURE_44, with_gs=True)
+
+    value, hints = kiz_svc.normalize_scanned_cis(already_ok)
+
+    assert value == already_ok
+    assert hints == []
+
+
+def test_normalize_scanned_cis_leaves_short_form_kiz_without_crypto_tail() -> None:
+    # TC-NEW-FBS-KIZ-I3-004: короткий КИЗ без криптохвоста — валидный формат
+    # WB (verify-product-identifiers.md, «Короткий и длинный КИЗ»). У него
+    # нет 91/92 и нет разделителя перед последним полем — это не дефект,
+    # чинить тут нечего, и код не должен браковаться как неразбираемый.
+    short_form = "010460601234567821SHORT1234"
+
+    value, hints = kiz_svc.normalize_scanned_cis(short_form)
+
+    assert value == short_form
+    assert hints == []
+    assert kiz_svc.is_probably_cis(value) is True
+
+
+def test_normalize_scanned_cis_marks_unrestorable_when_no_length_matches() -> None:
+    # TC-NEW-FBS-KIZ-I3-005: длина хвоста слишком велика для короткого КИЗ, но
+    # не совпадает ни с одеждой (44), ни с обувью (88) — например, подпись
+    # обрезалась при передаче. Тут гадать нельзя: normalize_scanned_cis обязан
+    # выставить служебный hint, по которому вызывающий код откажется слать
+    # такой КИЗ в WB.
+    glued = _real_cis("aXq7Tz9Km", "K7pQ", _REAL_SIGNATURE_44, with_gs=False)
+    broken = glued[:-5]  # подпись обрублена — под 44 и под 88 уже не подходит
+
+    value, hints = kiz_svc.normalize_scanned_cis(broken)
+
+    assert value == broken  # значение не подменяется на угад
+    assert hints == ["gs_unrestorable"]
+
+
+@pytest.mark.asyncio
+async def test_validate_kiz_pair_rejects_unrestorable_glued_code(
+    async_client: AsyncClient,
+) -> None:
+    # TC-NEW-FBS-KIZ-I3-006: неразбираемый склеенный код не проходит валидацию
+    # с понятной причиной, а не молча падает как generic "not_a_kiz" — оператор
+    # должен увидеть, что именно не так.
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
+        async_client, headers, suffix
+    )
+    supply_id = await _create_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        suffix=suffix,
+    )
+    order = await _create_order(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        supply_id=supply_id,
+        suffix=suffix,
+        wb_order_id=933001,
+        sticker_code="GS-UNRESTORABLE",
+        wb_barcode="GS-UNRESTORABLE-BAR",
+        with_packaging=True,
+    )
+    glued = _real_cis("aXq7Tz9Km", "K7pQ", _REAL_SIGNATURE_44, with_gs=False)
+    broken = glued[:-5]
+
+    response = await async_client.post(
+        "/operations/fbs-orders/kiz/validate",
+        headers=headers,
+        json={"order_id": str(order.order_id), "value": broken},
+    )
+
+    assert response.status_code == 400, response.text
+    body = response.json()
+    assert body["detail"]["code"] == "gs_separator_lost"
+    assert "раздел" in body["detail"]["message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_fbs_kiz_commit_sends_gs_restored_value_to_wb(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # TC-NEW-FBS-KIZ-I3-007: сквозная проверка через настоящий commit-путь —
+    # именно он раньше 20.08 отправлял в WB склеенный код и получал
+    # sgtinNoGS. Проверяем не только код ответа, а то, что WB получил значение
+    # с настоящими GS-разделителями на месте — это и есть суть дефекта I3.
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
+        async_client, headers, suffix
+    )
+    supply_id = await _create_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        suffix=suffix,
+    )
+    order = await _create_order(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        supply_id=supply_id,
+        suffix=suffix,
+        wb_order_id=933002,
+        sticker_code="GS-RESTORE",
+        wb_barcode="GS-RESTORE-BAR",
+        with_packaging=True,
+    )
+    sent = _patch_wb_acceptance(monkeypatch)
+    glued = _real_cis("aXq7Tz9Km", "K7pQ", _REAL_SIGNATURE_44, with_gs=False)
+    expected_on_wb = _real_cis("aXq7Tz9Km", "K7pQ", _REAL_SIGNATURE_44, with_gs=True)
+    assert _GS not in glued  # входной скан действительно склеен, без разделителей
+
+    response = await async_client.post(
+        "/operations/fbs-orders/kiz/commit",
+        headers=headers,
+        json={
+            "idempotency_key": "kiz-gs-restore",
+            "pairs": [{"order_id": str(order.order_id), "value": glued, "confirmed": False}],
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()[0]["status"] == "ok"
+    # Главная проверка дефекта I3: WB получил код с реальными GS-разделителями,
+    # а не склеенную строку, на которой WB раньше отвечал sgtinNoGS.
+    assert sent[933002] == expected_on_wb
+    async with SessionLocal() as session:
+        marking = (
+            await session.execute(
+                select(FbsOrderMarking).where(FbsOrderMarking.order_id == order.order_id)
+            )
+        ).scalar_one()
+        assert marking.value == expected_on_wb
+
+
 def test_windows_russian_keyboard_layout_mapping_is_complete() -> None:
     # TC-NEW-FBS-KIZ-002: every non-identical Windows RU key maps to its US key.
     russian = (

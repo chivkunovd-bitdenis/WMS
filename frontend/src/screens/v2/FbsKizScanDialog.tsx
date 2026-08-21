@@ -19,6 +19,7 @@ import {
 import CloseIcon from '@mui/icons-material/Close'
 import QrCodeScannerOutlined from '@mui/icons-material/QrCodeScannerOutlined'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
+import { restoreCisGs } from '../../utils/restoreCisGs'
 import {
   commitFbsKiz,
   createFbsIdempotencyKey,
@@ -68,6 +69,7 @@ const HINT_TEXT: Record<string, string> = {
   keyboard_layout: 'исправлена раскладка',
   gs_substitute: 'восстановлен разделитель',
   aim_prefix: 'убран префикс сканера',
+  gs_structure_restored: 'разделители восстановлены по структуре кода',
 }
 
 function errorTextByCode(code: string, message: string, context: unknown): string {
@@ -87,6 +89,9 @@ function errorTextByCode(code: string, message: string, context: unknown): strin
     return `На этот заказ уже есть ЧЗ${current}. Внести другой КИЗ?`
   }
   if (code === 'not_a_kiz') return 'Это не похоже на Честный знак'
+  if (code === 'gs_separator_lost') {
+    return 'Разделители кода потеряны при вводе, структуру не восстановить — отсканируйте Честный знак заново целиком'
+  }
   if (code === 'meta_validation_fail') return `WB не принял: ${message}`
   if (code.startsWith('wb_')) return 'WB недоступен, попробуйте ещё раз'
   return message
@@ -100,7 +105,13 @@ function errorText(cause: unknown): string {
 }
 
 function scannerDebug(cause: unknown): ScannerDebug | null {
-  if (!(cause instanceof FbsApiError) || cause.code !== 'not_a_kiz') return null
+  if (!(cause instanceof FbsApiError)) return null
+  // not_a_kiz — совсем не похоже на КИЗ; gs_separator_lost — похоже, но
+  // разделители не восстановить по структуре (I3, серверный рубеж защиты
+  // для входов, которые обошли клиентский restoreCisGs.ts). Оба случая отдают
+  // context.debug той же формы (scan_debug на сервере) — оператору полезно
+  // видеть длину и края значения в обоих.
+  if (cause.code !== 'not_a_kiz' && cause.code !== 'gs_separator_lost') return null
   if (!cause.context || typeof cause.context !== 'object') return null
   const debug = (cause.context as { debug?: unknown }).debug
   if (!debug || typeof debug !== 'object') return null
@@ -113,6 +124,14 @@ function scannerDebug(cause: unknown): ScannerDebug | null {
     return null
   }
   return { length: row.length, first8: row.first8, last8: row.last8 }
+}
+
+// Тот же вид отладочной строки, что отдаёт сервер (scan_debug), но для случая,
+// когда мы отказали ДО сетевого запроса — восстановить разделители по
+// структуре не вышло, отправлять в WB нечего.
+function scanDebugFromRaw(raw: string): ScannerDebug {
+  const visible = (part: string) => part.replaceAll('\x1d', '<GS>')
+  return { length: raw.length, first8: visible(raw.slice(0, 8)), last8: visible(raw.slice(-8)) }
 }
 
 export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, onCommitted }: Props) {
@@ -196,7 +215,31 @@ export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, 
   const scanKiz = useCallback(
     async (raw: string) => {
       if (!active) return
-      if (pairs.some((pair) => pair.value === raw)) {
+
+      // I3: разделители GS иногда вырезаны целиком браузерным полем ввода
+      // (сканер их посылал, поле их не пропустило). Чиним по структуре кода
+      // сразу на клиенте — быстрее для оператора, чем ждать ответ сервера, и
+      // код без единого шанса восстановиться отсекается прямо тут, не уходя
+      // в сеть. Сервер — тот же restoreCisGs.ts, но на бэкенде, в
+      // normalize_scanned_cis — остаётся последним рубежом на случай любого
+      // другого входа (мобильный терминал, ручной ввод), а не только этого
+      // диалога.
+      const structural = restoreCisGs(raw)
+      if (structural.unrestorable) {
+        setError({
+          text: 'Разделители кода потеряны, а структуру не восстановить — отсканируйте Честный знак заново целиком',
+          debug: scanDebugFromRaw(raw),
+        })
+        setHints([])
+        setDebugOpen(false)
+        setValue('')
+        refocus()
+        return
+      }
+      const value = structural.value
+      const localHints = structural.restored ? ['gs_structure_restored'] : []
+
+      if (pairs.some((pair) => pair.value === value)) {
         setError({ text: 'Этот КИЗ уже в списке', debug: null })
         setHints([])
         setDebugOpen(false)
@@ -206,11 +249,11 @@ export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, 
       }
       setBusy(true)
       setError(null)
-      setHints([])
+      setHints(localHints)
       setDebugOpen(false)
       try {
-        const result = await validateFbsKiz(token, authHeaders, active.order_id, raw)
-        setHints(result.hints)
+        const result = await validateFbsKiz(token, authHeaders, active.order_id, value)
+        setHints([...localHints, ...result.hints])
         setPairs((prev) => [
           ...prev,
           {
@@ -218,7 +261,7 @@ export function FbsKizScanDialog({ token, authHeaders, supplyId, open, onClose, 
             wbOrderId: active.wb_order_id,
             productName: active.product.name,
             imageUrl: active.product.image_url,
-            value: raw,
+            value,
             confirmed: active.needs_confirmation,
             status: 'draft',
             message: null,

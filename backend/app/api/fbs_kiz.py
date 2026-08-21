@@ -81,7 +81,7 @@ def _raise_from_service(exc: kiz_svc.FbsKizError) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
     if exc.code == "missing_marketplace_token":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
-    if exc.code == "not_a_kiz":
+    if exc.code in {"not_a_kiz", "gs_separator_lost"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
     if exc.code == "order_frozen":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
