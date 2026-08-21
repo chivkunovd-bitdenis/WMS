@@ -120,9 +120,9 @@ Rules:
   },
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 1200,
-    "output_tokens": 600,
-    "estimated_usd": 0.0175
+    "input_tokens": 19900,
+    "output_tokens": 4300,
+    "estimated_usd": 0.24
   },
   "blocked_by": [],
   "blocker": null,

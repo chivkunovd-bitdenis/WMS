@@ -6,13 +6,13 @@
   "role_binding_id": "pipeline-dispatcher",
   "agent_identity": "codex-night-orchestrator-dispatcher",
   "input_hashes": {
-    "state_before": "sha256:d76a12e7925cd4b8a87630983a8369a68779a79c7018359bfd6fa1890d47f6fd"
+    "state_before": "sha256:a5976dbf915826ef155ead9886d723cfa44fe7876dc2c82b36e2caf61c37cc0b"
   },
   "output_hashes": {},
   "parent_receipt_hash": null,
   "baseline_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
-  "started_at": "2026-08-21T00:23:33Z",
-  "finished_at": "2026-08-21T00:23:33Z",
+  "started_at": "2026-08-21T02:51:40Z",
+  "finished_at": "2026-08-21T02:51:40Z",
   "verdict": "TASK_INTAKE_READY",
   "blocker": null,
   "resume_stage": null,
@@ -27,7 +27,7 @@
     "output_tokens": 40,
     "estimated_usd": 0.001,
     "agent_id": "codex-night-orchestrator-dispatcher",
-    "recorded_at": "2026-08-21T00:23:33Z"
+    "recorded_at": "2026-08-21T02:51:40Z"
   },
-  "signature": "sha256:4b23cea540b11e46cddb68e56780f11ef50a51ae5154990a6912c13113f0ba57"
+  "signature": "sha256:09e559bdc19df8d70f7356754d06b086f322e7e240b09d2ccf8c595f164aa3d4"
 }

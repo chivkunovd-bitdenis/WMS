@@ -61,9 +61,9 @@
   },
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 20200,
+    "output_tokens": 4400,
+    "estimated_usd": 0.2425
   },
   "blocked_by": [],
   "blocker": null,

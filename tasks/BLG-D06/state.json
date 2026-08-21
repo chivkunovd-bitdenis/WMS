@@ -52,8 +52,8 @@
     "S25",
     "S26"
   ],
-  "current_stage": "S09",
-  "status": "REWORK",
+  "current_stage": "S10",
+  "status": "RUNNING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -69,18 +69,40 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:55Z",
-  "heartbeat_at": "2026-08-21T01:35:41Z",
-  "last_valid_receipt": null,
+  "heartbeat_at": "2026-08-21T02:53:54Z",
+  "last_valid_receipt": "sha256:2ec4b364f13bd844233b6717530b5e2172405fe65edd6542eae6cba827f81c1a",
   "blocker": null,
   "resume_condition": null,
-  "verdicts": {},
+  "verdicts": {
+    "S01": {
+      "verdict": "TASK_INTAKE_READY",
+      "receipt_path": "docs/evidence/BLG-D06/S01-TASK_INTAKE_READY.receipt.json",
+      "receipt_hash": "sha256:b792483797cd86a662b326c1c69bd67e6686c965d1fe13c8a77c28106804f7f2",
+      "role_binding_id": "pipeline-dispatcher",
+      "agent_identity": "codex-night-orchestrator-dispatcher"
+    },
+    "S02": {
+      "verdict": "IMPACT_CLASSIFIED",
+      "receipt_path": "docs/evidence/BLG-D06/S02-IMPACT_CLASSIFIED.receipt.json",
+      "receipt_hash": "sha256:e1bab9957766a7acacacc0bd4f6dfc646fb8f2eec786c31a7868ba9dda623503",
+      "role_binding_id": "pipeline-dispatcher",
+      "agent_identity": "codex-night-orchestrator-dispatcher"
+    },
+    "S09": {
+      "verdict": "UX_CONTRACT_READY",
+      "receipt_path": "docs/evidence/BLG-D06/S09-UX_CONTRACT_READY.receipt.json",
+      "receipt_hash": "sha256:2ec4b364f13bd844233b6717530b5e2172405fe65edd6542eae6cba827f81c1a",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-pipeline-ba-blg-d06-s09-rework2"
+    }
+  },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 1200,
-    "output_tokens": 600,
-    "estimated_usd": 0.0175
+    "input_tokens": 30400,
+    "output_tokens": 5900,
+    "estimated_usd": 0.3225
   },
   "budget_usage_receipts": [
     {
@@ -121,6 +143,84 @@
       "estimated_usd": 0.015,
       "agent_id": "codex-night-orchestrator-ba",
       "recorded_at": "2026-08-21T00:29:54Z"
+    },
+    {
+      "task_id": "BLG-D06",
+      "stage": "S01",
+      "role": "pipeline-dispatcher",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 120,
+      "output_tokens": 40,
+      "estimated_usd": 0.001,
+      "agent_id": "codex-night-orchestrator-dispatcher",
+      "recorded_at": "2026-08-21T02:42:16Z"
+    },
+    {
+      "task_id": "BLG-D06",
+      "stage": "S02",
+      "role": "pipeline-dispatcher",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 180,
+      "output_tokens": 60,
+      "estimated_usd": 0.0015,
+      "agent_id": "codex-night-orchestrator-dispatcher",
+      "recorded_at": "2026-08-21T02:42:16Z"
+    },
+    {
+      "task_id": "BLG-D06",
+      "stage": "S09",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 18400,
+      "output_tokens": 3600,
+      "estimated_usd": 0.22,
+      "agent_id": "codex-pipeline-ba-blg-d06-s09-rework",
+      "recorded_at": "2026-08-21T02:45:41Z"
+    },
+    {
+      "task_id": "BLG-D06",
+      "stage": "S01",
+      "role": "pipeline-dispatcher",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 120,
+      "output_tokens": 40,
+      "estimated_usd": 0.001,
+      "agent_id": "codex-night-orchestrator-dispatcher",
+      "recorded_at": "2026-08-21T02:51:40Z"
+    },
+    {
+      "task_id": "BLG-D06",
+      "stage": "S02",
+      "role": "pipeline-dispatcher",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 180,
+      "output_tokens": 60,
+      "estimated_usd": 0.0015,
+      "agent_id": "codex-night-orchestrator-dispatcher",
+      "recorded_at": "2026-08-21T02:51:42Z"
+    },
+    {
+      "task_id": "BLG-D06",
+      "stage": "S09",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 10200,
+      "output_tokens": 1500,
+      "estimated_usd": 0.08,
+      "agent_id": "codex-pipeline-ba-blg-d06-s09-rework2",
+      "recorded_at": "2026-08-21T02:53:54Z"
     }
   ],
   "blocked_by": [],
@@ -135,6 +235,16 @@
         "S09"
       ],
       "last_valid_receipt_before_invalidation": "sha256:ee39a959ac2caa97141a11ebec0b2e7d9f45673df7b68687ffb3f11db04faa34"
+    },
+    {
+      "at": "2026-08-21T02:49:58Z",
+      "reason": "failure:PRODUCT_REJECTED",
+      "invalidated_stages": [
+        "S01",
+        "S02",
+        "S09"
+      ],
+      "last_valid_receipt_before_invalidation": "sha256:74aa781c10b5ce64d43fe6b8fe3e3e339753811535f9f5be23d076d352542564"
     }
   ],
   "failure_routes": [
@@ -144,6 +254,13 @@
       "status": "REWORK",
       "resume_stage": "S09",
       "details": "S09 is a generic template: it has no affected surface inventory, concrete archive filter model, exact labels/defaults, archived-row treatment, task-specific states, narrow/long-data mockups, or truthful ui-kit zone mapping. Rework criteria are in tasks/BLG-D06/S10-DESIGN-REVIEW.md."
+    },
+    {
+      "at": "2026-08-21T02:49:58Z",
+      "finding": "PRODUCT_REJECTED",
+      "status": "REWORK",
+      "resume_stage": "S09",
+      "details": "S10 re-review remains DESIGN_REWORK: narrow mockup shows OLD/ archive while active-only default is selected; FilterBar does not support the promised visible search label and the visible reset control has no truthful ui-kit component mapping. Exact closure criteria are in tasks/BLG-D06/S10-DESIGN-REVIEW.md."
     }
   ],
   "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."

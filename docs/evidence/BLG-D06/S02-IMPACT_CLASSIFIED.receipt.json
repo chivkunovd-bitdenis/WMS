@@ -6,13 +6,13 @@
   "role_binding_id": "pipeline-dispatcher",
   "agent_identity": "codex-night-orchestrator-dispatcher",
   "input_hashes": {
-    "state_before": "sha256:5c3935a68abc27f22de304f16572ff71c1799ca8cf9dbae150addfcab84be717"
+    "state_before": "sha256:0c9866786df9cf8a51946abba191214742db98e62fc452e537983e3bd1e7bed3"
   },
   "output_hashes": {},
-  "parent_receipt_hash": "sha256:e8e5ffd05c7ff98e1fa15fbc138bfe5777623af40c3fd679dbaa19798b938ef7",
+  "parent_receipt_hash": "sha256:b792483797cd86a662b326c1c69bd67e6686c965d1fe13c8a77c28106804f7f2",
   "baseline_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
-  "started_at": "2026-08-21T00:24:42Z",
-  "finished_at": "2026-08-21T00:24:42Z",
+  "started_at": "2026-08-21T02:51:42Z",
+  "finished_at": "2026-08-21T02:51:42Z",
   "verdict": "IMPACT_CLASSIFIED",
   "blocker": null,
   "resume_stage": null,
@@ -27,7 +27,7 @@
     "output_tokens": 60,
     "estimated_usd": 0.0015,
     "agent_id": "codex-night-orchestrator-dispatcher",
-    "recorded_at": "2026-08-21T00:24:42Z"
+    "recorded_at": "2026-08-21T02:51:42Z"
   },
-  "signature": "sha256:5ab07b1aeba7a043421f9cb6e4e9d3e912447cc26b6825894fbad8956aec818d"
+  "signature": "sha256:87cd1e543edeef3909e2e150c8cc50235df9ac0e57ffb6a0328325db6377d5eb"
 }
