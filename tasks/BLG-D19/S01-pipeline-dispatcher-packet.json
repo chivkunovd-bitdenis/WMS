@@ -1,0 +1,96 @@
+{
+  "task_id": "BLG-D19",
+  "stage": "S01",
+  "role": "pipeline-dispatcher",
+  "status": "QUEUED",
+  "traits": [
+    "external_contract"
+  ],
+  "risk_level": "critical",
+  "model_policy": "pipeline/model-policy.yml",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S03",
+    "S04",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S26"
+  ],
+  "done_stages": [],
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "wave_id": "wave-a1b311d18f07",
+  "backlog_item_id": "BLG-D19",
+  "backlog_item": {
+    "id": "BLG-D19",
+    "title": "Исправить пагинацию импорта каталога WB",
+    "source_section": "D19",
+    "business_meaning": "Импорт каталога Wildberries сейчас может останавливаться после первой сотни карточек из-за неверного понимания поля cursor.total. В результате продавец видит в WMS только часть ассортимента и не может выбрать отсутствующие товары в складских операциях. Импорт должен последовательно забирать все страницы до фактического конца выдачи и быть проверен на каталогах ровно из 100, 101 и большого количества карточек.",
+    "type": "external_contract",
+    "priority": "critical",
+    "status": "queued",
+    "readiness": "needs_technical_contract",
+    "dependencies": [],
+    "suggested_roles": [
+      "solution-architect",
+      "screen-dev",
+      "reviewer"
+    ],
+    "suggested_stages": [
+      "S02",
+      "S12",
+      "S18",
+      "S23"
+    ]
+  },
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_usd": 0.0
+  },
+  "blocked_by": [
+    {
+      "id": "BLK-RESEARCH-001",
+      "title": "Внешние контракты WB/ЧЗ не собраны по полям и статусам",
+      "status": "open",
+      "type": "research",
+      "owner_role": "pipeline-research",
+      "resume_stage": "S03",
+      "minimum_closure_artifact": "versioned external-contract dossier with fields, statuses, pagination, errors and emulator/sandbox proof"
+    },
+    {
+      "id": "BLK-INTEGRATION-001",
+      "title": "Импорт WB ограничен и не поддерживает автономную актуализацию каталога",
+      "status": "open",
+      "type": "integration",
+      "owner_role": "pipeline-product",
+      "resume_stage": "S03",
+      "minimum_closure_artifact": "WB pagination/search/sync contract and e2e for item outside first page"
+    }
+  ],
+  "blocker": null,
+  "resume_condition": null,
+  "rules": [
+    "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
+    "Do not accept your own work.",
+    "If status is WAITING, do not advance; report the blocker and wait for resume.",
+    "If budget_enforced is true, advance requires usage receipt fields.",
+    "If blocked_by is non-empty, do not pass the blocker resume stage without resolve-blocker evidence.",
+    "Use python3 scripts/pipeline/run.py advance only for the stage you own.",
+    "Do not set DONE while pipeline status is not ACTIVE."
+  ]
+}

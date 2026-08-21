@@ -1,0 +1,95 @@
+{
+  "task_id": "BLG-I11",
+  "stage": "S01",
+  "role": "pipeline-dispatcher",
+  "status": "QUEUED",
+  "traits": [
+    "ui_change"
+  ],
+  "risk_level": "high",
+  "model_policy": "pipeline/model-policy.yml",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S09",
+    "S10",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S24",
+    "S25",
+    "S26"
+  ],
+  "done_stages": [],
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "wave_id": "wave-a1b311d18f07",
+  "backlog_item_id": "BLG-I11",
+  "backlog_item": {
+    "id": "BLG-I11",
+    "title": "Добавить явный пропуск незаполненной маркировки с подтверждением",
+    "source_section": "I11",
+    "business_meaning": "Иногда бизнес готов осознанно продолжить сдачу, даже если для части товаров не заполнены коды маркировки, но сейчас для этого требуется ручное вмешательство в данные. Скрытый обход опасен, потому что оператор не видит риск, а система не сохраняет, кто и почему его принял. Нужен явный доступный только уполномоченной роли сценарий с перечнем затронутых заказов, предупреждением о последствиях и подтверждением, при этом уже отсканированные коды нельзя удалять или игнорировать.",
+    "type": "ui_change",
+    "priority": "high",
+    "status": "blocked",
+    "readiness": "waiting_owner_oracle",
+    "dependencies": [
+      "BLG-D03",
+      "BLG-I02"
+    ],
+    "suggested_roles": [
+      "Product",
+      "BA",
+      "solution-architect",
+      "screen-dev",
+      "ui-critic"
+    ],
+    "suggested_stages": [
+      "S01",
+      "S02",
+      "S12",
+      "S18",
+      "S26"
+    ]
+  },
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "estimated_usd": 0.0
+  },
+  "blocked_by": [
+    {
+      "id": "BLK-PROD-001",
+      "title": "Для спорного поведения Честного знака нет зафиксированного оракула",
+      "status": "open",
+      "type": "product",
+      "owner_role": "pipeline-product",
+      "resume_stage": "S07",
+      "minimum_closure_artifact": "approved oracle/decision record for requiredMeta, optionalMeta and sgtinApplied"
+    }
+  ],
+  "blocker": null,
+  "resume_condition": null,
+  "rules": [
+    "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
+    "Do not accept your own work.",
+    "If status is WAITING, do not advance; report the blocker and wait for resume.",
+    "If budget_enforced is true, advance requires usage receipt fields.",
+    "If blocked_by is non-empty, do not pass the blocker resume stage without resolve-blocker evidence.",
+    "Use python3 scripts/pipeline/run.py advance only for the stage you own.",
+    "Do not set DONE while pipeline status is not ACTIVE."
+  ]
+}
