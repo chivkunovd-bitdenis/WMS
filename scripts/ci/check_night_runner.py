@@ -128,6 +128,41 @@ def main() -> int:
     вызов.clear()
     with mock.patch.object(n.shutil, "which", return_value="/usr/local/bin/codex"), \
          mock.patch.object(n.subprocess, "run", side_effect=fake_run):
+        n._запустить_codex("solution-architect", "marker")
+    args = вызов.get("args", [])
+    проверь("Codex CLI: solution-architect по умолчанию Luna", "gpt-5.6-luna" in args, True)
+    проверь("Codex CLI: solution-architect сохраняет search", "--search" in args, True)
+
+    вызов.clear()
+    try:
+        with mock.patch.object(n.shutil, "which", return_value="/usr/local/bin/codex"), \
+             mock.patch.object(n.subprocess, "run", side_effect=fake_run):
+            n._запустить_codex("solution-architect", "marker", профиль="terra")
+    except TypeError as ошибка:
+        беды.append(f"Codex CLI: нет явного профиля для MAP-агрегации: {ошибка}")
+    args = вызов.get("args", [])
+    проверь("Codex CLI: MAP override solution-architect -> Terra", "gpt-5.6-terra" in args, True)
+    проверь("Codex CLI: MAP override Terra medium", "model_reasoning_effort=medium" in args, True)
+    проверь("Codex CLI: MAP override сохраняет search до exec",
+            args.index("--search") < args.index("exec")
+            if "--search" in args and "exec" in args else False, True)
+    проверь("Codex CLI: MAP override ignore после exec",
+            args.index("--ignore-user-config") > args.index("exec")
+            if "--ignore-user-config" in args and "exec" in args else False, True)
+
+    # Недопустимый профиль не должен доходить до subprocess: это защищает
+    # контракт от старого/чужого имени модели вроде gpt-5.6-sol.
+    вызов.clear()
+    with mock.patch.object(n.shutil, "which", return_value="/usr/local/bin/codex"), \
+         mock.patch.object(n.subprocess, "run", side_effect=fake_run) as запуск:
+        результат = n._запустить_codex("analyst", "marker", профиль="sol")
+    проверь("Codex CLI: профиль sol отклонён", результат[0] != 0, True)
+    проверь("Codex CLI: профиль sol не доходит до subprocess", запуск.call_count, 0)
+    проверь("Codex CLI: профиль sol не формирует модель", "gpt-5.6-sol" not in вызов.get("args", []), True)
+
+    вызов.clear()
+    with mock.patch.object(n.shutil, "which", return_value="/usr/local/bin/codex"), \
+         mock.patch.object(n.subprocess, "run", side_effect=fake_run):
         n._запустить_codex("intake", "marker")
     args = вызов.get("args", [])
     проверь("Codex CLI: Terra model задан только control-роли", "gpt-5.6-terra" in args, True)
