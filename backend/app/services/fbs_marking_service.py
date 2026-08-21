@@ -34,7 +34,11 @@ from app.models.fbs_order import (
     current_order_marking,
 )
 from app.models.marking_code import STATUS_AVAILABLE, STATUS_RESERVED, MarkingCode
-from app.services.marking_code_service import is_cis_missing_gs_separator, normalize_cis
+from app.services.marking_code_service import (
+    is_cis_missing_gs_separator,
+    normalize_cis,
+    strip_ws_preserve_gs,
+)
 from app.services.wildberries_client import (
     WildberriesClientError,
     put_marketplace_order_meta,
@@ -202,12 +206,12 @@ def parse_wb_meta_statuses(meta: dict[str, Any]) -> dict[tuple[str, str], str]:
             if kind is None:
                 continue
             value = item.get("value")
-            if isinstance(value, str) and value.strip():
+            if isinstance(value, str) and strip_ws_preserve_gs(value):
                 status = normalize_check_status(
                     item.get("checkStatus") or item.get("check_status")
                 )
                 if status:
-                    out[(kind, value.strip())] = status
+                    out[(kind, strip_ws_preserve_gs(value))] = status
         return out
 
     for plural, kind in _META_KIND_FROM_PLURAL.items():
@@ -225,32 +229,32 @@ def _collect_meta_entries(
     kind: str,
     payload: Any,
 ) -> None:
-    if isinstance(payload, str) and payload.strip():
-        out[(kind, payload.strip())] = CHECK_STATUS_NEW
+    if isinstance(payload, str) and strip_ws_preserve_gs(payload):
+        out[(kind, strip_ws_preserve_gs(payload))] = CHECK_STATUS_NEW
         return
     if isinstance(payload, dict):
         value = payload.get("value")
-        if isinstance(value, str) and value.strip():
+        if isinstance(value, str) and strip_ws_preserve_gs(value):
             status = normalize_check_status(
                 payload.get("checkStatus") or payload.get("check_status")
             )
-            out[(kind, value.strip())] = status or CHECK_STATUS_NEW
+            out[(kind, strip_ws_preserve_gs(value))] = status or CHECK_STATUS_NEW
         return
     if not isinstance(payload, list):
         return
     for item in payload:
-        if isinstance(item, str) and item.strip():
-            out[(kind, item.strip())] = CHECK_STATUS_NEW
+        if isinstance(item, str) and strip_ws_preserve_gs(item):
+            out[(kind, strip_ws_preserve_gs(item))] = CHECK_STATUS_NEW
             continue
         if not isinstance(item, dict):
             continue
         value = item.get("value")
-        if not isinstance(value, str) or not value.strip():
+        if not isinstance(value, str) or not strip_ws_preserve_gs(value):
             continue
         status = normalize_check_status(
             item.get("checkStatus") or item.get("check_status")
         )
-        out[(kind, value.strip())] = status or CHECK_STATUS_NEW
+        out[(kind, strip_ws_preserve_gs(value))] = status or CHECK_STATUS_NEW
 
 
 def _meta_details_from_wb(details: tuple[MarketplaceMetaDetail, ...]) -> dict[str, Any]:

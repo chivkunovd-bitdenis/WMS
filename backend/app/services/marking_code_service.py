@@ -518,15 +518,28 @@ _LEDGER_CSV_HEADER = (
 )
 
 
+def strip_ws_preserve_gs(text: str) -> str:
+    """A `.strip()` that never eats the GS separator.
+
+    Python's bare `str.strip()` removes Unicode whitespace, and Python
+    classifies the C0 separator block \\x1c-\\x1f (including our GS
+    separator \\x1d, see GS_SEPARATOR) as whitespace for that purpose. Any
+    code that trims a marking/CIS value before comparing or keying on it
+    must use this instead of a bare `.strip()`, or the trim silently eats a
+    GS terminator sitting at the start or end of the value.
+
+    This exact footgun broke WB meta-status sync once pool codes started
+    being terminated with a real GS byte: fbs_marking_service's
+    parse_wb_meta_statuses/_collect_meta_entries used to `.strip()` the
+    value WB echoes back before using it as a dict key, which quietly
+    dropped the trailing GS separator and made the lookup against
+    FbsOrderMarking.value (which keeps it) miss every time.
+    """
+    return text.strip(" \t\r\n\ufeff")
+
+
 def normalize_cis(raw: str) -> str | None:
-    # str.strip() with no arguments strips *Unicode* whitespace, and Python
-    # classifies the C0 separator block \x1c-\x1f \u2014 including our GS
-    # separator \x1d \u2014 as whitespace for that purpose. A bare `.strip()` here
-    # would silently eat a GS terminator sitting at the very start or end of
-    # the code, undoing the fix in _canonical_cis_from_match /
-    # is_cis_missing_gs_separator the moment the value round-trips through
-    # this function. Strip only real whitespace/BOM explicitly instead.
-    text = raw.strip(" \t\r\n\ufeff").replace("\ufeff", "")
+    text = strip_ws_preserve_gs(raw).replace("\ufeff", "")
     if not text:
         return None
     text = text.replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "")

@@ -262,7 +262,7 @@ async def test_workspace_marking_pool_reports_shortage(async_client: AsyncClient
                 tenant_id=tenant_id,
                 seller_id=seller_id,
                 product_id=product_id,
-                cis_code=f"010000000000012321{uuid.uuid4().hex}",
+                cis_code=f"010000000000012321{uuid.uuid4().hex}\x1d",
                 gtin="00000000000001",
                 status=STATUS_AVAILABLE,
             )
@@ -333,7 +333,7 @@ async def test_order_print_tape_assigns_codes_to_requested_orders(
                     tenant_id=tenant_id,
                     seller_id=seller_id,
                     product_id=product_id,
-                    cis_code=f"010000000000012321{idx:02d}{uuid.uuid4().hex}",
+                    cis_code=f"010000000000012321{idx:02d}{uuid.uuid4().hex}\x1d",
                     gtin="00000000000001",
                     status=STATUS_AVAILABLE,
                 )
