@@ -1,3 +1,65 @@
+# WMS Pipeline Dispatch
+
+Executor: `codex`
+Task: `BLG-J02`
+Stage: `S19`
+Role: `pipeline-dev`
+Recommended model: `gpt-5.6-luna` (`cheap`)
+
+## Read First
+
+- `.codex/skills/wms-pipeline-autopilot/SKILL.md`
+- `AGENTS.md`
+- `docs/process/PIPELINE-RU.md`
+- `pipeline/pipeline.yml`
+- `pipeline/model-policy.yml`
+- `pipeline/budget-policy.yml`
+- `tasks/BLG-J02/state.json`
+
+## Executor Rules
+
+- Use .codex/skills/wms-pipeline-autopilot/SKILL.md if present; otherwise read AGENTS.md directly.
+- If the user explicitly allowed multi-agents, spawn a worker only for this role and disjoint scope.
+- Tell subagents not to push unless the owner explicitly asks for that.
+- Do not fix bugs unless this exact stage and role authorize implementation.
+- If packet status is `WAITING`, stop after the required start checks and report the blocker.
+- Do not set `DONE` while `pipeline/pipeline.yml` status is not `ACTIVE`.
+- Do not touch secrets, live deploy, or live WB/Ozon.
+
+## Model Policy
+
+Policy: `pipeline/model-policy.yml`
+Tier: `cheap`
+Recommended model: `gpt-5.6-luna`
+
+Reasons:
+- stage S19 / role pipeline-dev default tier is cheap
+
+Rules:
+- Do not upgrade above the recommendation unless the packet, owner, or fresh evidence shows a higher-risk class.
+- Do not downgrade product, research, architecture, review or Product Browser stages.
+- Simple implementation defaults to cheap; dangerous implementation escalates to moderate, not automatically to expensive.
+- If the executor cannot select the exact named model, use the cheapest available equivalent at the same tier.
+
+## Budget Policy
+
+Policy: `pipeline/budget-policy.yml`
+Stage tier budget: `0.4 USD` / `350000` tokens
+Task budget: `8.0 USD` / `2500000` tokens
+Wave budget: `35.0 USD` / `12000000` tokens
+Hard stop: `True`; reason code `BUDGET_HARD_STOP`
+Owner override marker: `PIPELINE_BUDGET_OVERRIDE: owner-approved`
+Usage receipt fields: `task_id`, `stage`, `role`, `executor`, `model`, `tier`, `input_tokens`, `output_tokens`, `estimated_usd`, `agent_id`, `recorded_at`
+
+Rules:
+- Dispatcher includes the stage budget in every handoff prompt.
+- A stage that reaches warning_ratio reports usage in its receipt.
+- A stage that reaches hard_stop_ratio must stop and request owner override before more expensive work.
+- Product, research, architecture, review and browser stages remain expensive when model-policy says so; budget pressure cannot downgrade judgment gates.
+
+## Controller Packet
+
+```json
 {
   "task_id": "BLG-J02",
   "stage": "S19",
@@ -86,3 +148,21 @@
     "Do not set DONE while pipeline status is not ACTIVE."
   ]
 }
+```
+
+## Required Start
+
+```bash
+python3 scripts/pipeline/run.py next --task-id BLG-J02
+python3 scripts/pipeline/run.py validate --task-id BLG-J02
+```
+
+## Required Finish
+
+Only after completing the owned stage:
+
+```bash
+python3 scripts/pipeline/run.py advance --task-id BLG-J02 --stage S19 --verdict <ALLOWED_VERDICT> --role pipeline-dev --agent <agent-id> --executor codex --model gpt-5.6-luna --tier cheap --input-tokens <INPUT_TOKENS> --output-tokens <OUTPUT_TOKENS> --estimated-usd <USD>
+python3 scripts/pipeline/run.py packet --task-id BLG-J02
+python3 scripts/pipeline/dispatch.py --task-id BLG-J02 --executor codex
+```
