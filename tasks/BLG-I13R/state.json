@@ -56,8 +56,8 @@
     "S23",
     "S26"
   ],
-  "current_stage": "S05",
-  "status": "WAITING",
+  "current_stage": "S06",
+  "status": "RUNNING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -73,20 +73,10 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T01:50:24Z",
+  "heartbeat_at": "2026-08-21T05:44:51Z",
   "last_valid_receipt": "sha256:8d8ca8a3fa5c76ad9c4da81c9df13277f5e1e821cb4db495d35f7ce124536046",
-  "blocker": {
-    "type": "BASELINE",
-    "reason_code": "S05_PROCESS_MAP_GENERIC",
-    "details": "S05 process map contains irrelevant template content (BLG-KC01, client_items, screen connection/cleanup) and does not identify the fallback QR origin, print trigger, label distinction, or safe handling of historical FBS-prefixed labels required for S06.",
-    "owner": "denis",
-    "created_at": "2026-08-21T01:50:24Z",
-    "resume_stage": "S05"
-  },
-  "resume_condition": {
-    "stage": "S05",
-    "condition": "Return to S05 and provide a task-specific current/target process map for fallback QR boxes: source of external WB label, exact fallback condition and print trigger, operator-visible decision point, handling of previously printed FBS labels, and explicitly unknown facts."
-  },
+  "blocker": null,
+  "resume_condition": null,
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",
