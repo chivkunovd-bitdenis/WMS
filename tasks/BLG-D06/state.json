@@ -52,7 +52,7 @@
     "S25",
     "S26"
   ],
-  "current_stage": "S10",
+  "current_stage": "S11",
   "status": "RUNNING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
@@ -69,8 +69,8 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:55Z",
-  "heartbeat_at": "2026-08-21T02:53:54Z",
-  "last_valid_receipt": "sha256:2ec4b364f13bd844233b6717530b5e2172405fe65edd6542eae6cba827f81c1a",
+  "heartbeat_at": "2026-08-21T02:59:13Z",
+  "last_valid_receipt": "sha256:2a5f1bc34cd191571d6c7da9a831b021f9aab1221392347805e5c6ca9eee702b",
   "blocker": null,
   "resume_condition": null,
   "verdicts": {
@@ -94,15 +94,22 @@
       "receipt_hash": "sha256:2ec4b364f13bd844233b6717530b5e2172405fe65edd6542eae6cba827f81c1a",
       "role_binding_id": "pipeline-ba",
       "agent_identity": "codex-pipeline-ba-blg-d06-s09-rework2"
+    },
+    "S10": {
+      "verdict": "DESIGN_APPROVED",
+      "receipt_path": "docs/evidence/BLG-D06/S10-DESIGN_APPROVED.receipt.json",
+      "receipt_hash": "sha256:2a5f1bc34cd191571d6c7da9a831b021f9aab1221392347805e5c6ca9eee702b",
+      "role_binding_id": "pipeline-product",
+      "agent_identity": "codex-pipeline-product-blg-d06-s10-rereview2"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 30400,
-    "output_tokens": 5900,
-    "estimated_usd": 0.3225
+    "input_tokens": 64400,
+    "output_tokens": 8100,
+    "estimated_usd": 0.6625
   },
   "budget_usage_receipts": [
     {
@@ -221,6 +228,19 @@
       "estimated_usd": 0.08,
       "agent_id": "codex-pipeline-ba-blg-d06-s09-rework2",
       "recorded_at": "2026-08-21T02:53:54Z"
+    },
+    {
+      "task_id": "BLG-D06",
+      "stage": "S10",
+      "role": "pipeline-product",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 34000,
+      "output_tokens": 2200,
+      "estimated_usd": 0.34,
+      "agent_id": "codex-pipeline-product-blg-d06-s10-rereview2",
+      "recorded_at": "2026-08-21T02:59:13Z"
     }
   ],
   "blocked_by": [],
