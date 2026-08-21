@@ -18,6 +18,11 @@ worktree, не пишет `.pipeline-state/`, не берёт lease-lock, не �
 не меняет frontend/backend/product state. Поэтому dry-run можно запускать для
 проверки очереди до owner-approved `resume`, без запуска Dev fixes.
 
+Исполнительный слой поверх controller теперь описан отдельно:
+[`docs/process/NIGHT-RUNNER-RU.md`](NIGHT-RUNNER-RU.md). `night_runner.py` не
+заменяет этот dry-run planner: planner отвечает за детерминированный resource
+plan, runner — за цикл `next → safe advance/dispatch → executor hook → validate`.
+
 Проверка в CI:
 
 ```bash
@@ -28,3 +33,13 @@ Smoke создаёт временные snapshots, проверяет план �
 уникальность ресурсов и отсутствие записей в product code. Реальный
 распределённый host и controller-owned внешний durable store остаются отдельным
 следующим slice; текущий план не выдаёт write-capability исполнителям.
+
+Исполнительный smoke:
+
+```bash
+python3 scripts/ci/check_pipeline_night_runner_smoke.py
+```
+
+Он доказывает, что night-runner двигает только механические `S01/S02`, создаёт
+следующий dispatch prompt и не лезет в карточки с чужим незакоммиченным
+`tasks/<task-id>/` или `docs/evidence/<task-id>/` diff.

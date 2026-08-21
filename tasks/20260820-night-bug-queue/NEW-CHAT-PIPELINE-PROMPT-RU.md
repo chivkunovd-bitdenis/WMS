@@ -120,6 +120,26 @@ python3 scripts/pipeline/run.py next --task-id <TASK_ID>
 python3 scripts/pipeline/dispatch.py --task-id <TASK_ID> --executor codex
 ```
 
+Но на этом нельзя останавливаться, если владелец сказал “запускай задачи” или
+“ночная волна”. `dispatch.py` только пишет prompt, он не запускает исполнителя.
+После создания wave запускай исполнительный loop:
+
+```bash
+python3 scripts/pipeline/night_runner.py \
+  --wave-id <WAVE_ID> \
+  --execute \
+  --max-workers 8 \
+  --max-cycles 100 \
+  --sleep-seconds 5 \
+  --json-lines
+```
+
+Если в текущем Codex доступны multi-agent tools, используй их как внешний executor
+для содержательных ролей; если нужен shell hook, передай его через
+`--executor-command`. Без executor hook runner честно продвинет только безопасные
+dispatcher stages `S01/S02`, а BA/Product/Research/Architect/Dev оставит как
+`handoff_ready`, не подделывая approval.
+
 Если доступны multi-agent tools, используй их для параллельных ролей и независимых задач, но:
 
 - не запускай Dev до Product/BA/Research/Architect stages, если они требуются;

@@ -39,6 +39,29 @@ python3 scripts/pipeline/run.py next --task-id <task-id>
 python3 scripts/pipeline/dispatch.py --task-id <task-id> --executor <codex|claude|cursor>
 ```
 
+Для ночной волны не останавливаться на `dispatch.py`. Дальше запускать
+исполнительный host-loop:
+
+```bash
+python3 scripts/pipeline/night_runner.py \
+  --wave-id wave-a1b311d18f07 \
+  --execute \
+  --max-workers 8 \
+  --max-cycles 100 \
+  --sleep-seconds 5 \
+  --json-lines
+```
+
+Если доступен внешний агентный launcher, передать его через `--executor-command`.
+Без `--executor-command` runner сам продвинет только `S01/S02`, а содержательные
+BA/Product/Research/Architect/Dev stages оставит как `handoff_ready`. Это
+честный стоп, а не имитация Product approval.
+
+По умолчанию runner пропускает карточку, если по ней уже есть незакоммиченный
+`tasks/<task-id>/` или `docs/evidence/<task-id>/` diff другого агента. Не
+выключать это в общей ночной волне; точечно `--allow-dirty-task` использовать
+только если берёшь эту карточку под явное управление.
+
 Dispatch prompt обязан содержать model recommendation. Базовое правило стоимости:
 простую реализацию делает дешёвая модель, dispatcher/BA — средняя, архитектуру,
 продукт, ресёрч, ревью и живой browser verdict — дорогая; рискованная разработка

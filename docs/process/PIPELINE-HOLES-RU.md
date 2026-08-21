@@ -49,10 +49,19 @@ snapshots и строит deterministic resource plan для isolated worktree, 
 DB, Redis, Celery, emulator и evidence. Dry-run не создаёт эти ресурсы, не
 запускает агентов и не пишет state; это проверяет CI smoke.
 
-Что ещё не закрыто: это всё ещё local controller и allocation-plan, а не полный
-distributed executor. Нет распределённого host, который применяет план, и нет
-внешнего controller-owned durable store. Независимая receipt-подпись и единый
-validation engine для controller, CI и deploy также остаются незакрытыми.
+Что закрыто следующим slice: `scripts/pipeline/night_runner.py` добавляет
+локальный исполнительный host-loop. Он читает controller packet, автоматически
+закрывает только механические dispatcher stages `S01/S02`, пишет следующий
+dispatch prompt, умеет параллельно вызвать внешний executor command для
+содержательной роли и после шага запускает `validate`. По умолчанию он
+пропускает карточки, где уже есть незакоммиченный `tasks/<task-id>/` или
+`docs/evidence/<task-id>/` diff, чтобы не затереть параллельного агента.
+
+Что ещё не закрыто: это всё ещё local controller + local runner, а не полный
+distributed executor с внешним controller-owned durable store. Нет общего
+многомашинного host, который применяет resource plan на нескольких узлах.
+Независимая receipt-подпись и единый validation engine для controller, CI и
+deploy также остаются незакрытыми.
 
 Почему это дырка: без controller рабочий агент всё ещё может "сказать", что
 стадия пройдена, а не получить проверяемый controller-issued receipt.
