@@ -21,6 +21,8 @@ from app.services.fbs_stock_availability_service import (
     clamp_nonneg,
     fbs_available_qty_by_product,
     fbs_available_qty_for_product,
+    fbs_stock_by_warehouse_for_products,
+    tenant_warehouse_ids,
 )
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import available_qty_for_fbs_reserve
@@ -440,7 +442,11 @@ async def test_fbs_availability_batch_query_count_bounded(
     finally:
         event.remove(sync_engine, "before_cursor_execute", _count_query)
 
-    assert query_count <= 6, f"expected <=6 queries, got {query_count}"
+    # I10: +1 фиксированный запрос — список складов тенанта для агрегации
+    # остатка по клиенту, а не по одному складу (`tenant_warehouse_ids`).
+    # Он не зависит от числа SKU, поэтому порог по-прежнему O(1), просто
+    # константа выросла с 6 до 7.
+    assert query_count <= 7, f"expected <=7 queries, got {query_count}"
 
 
 # TC-NEW-FBS-STOCK-035 — STOCKFIX-035: sold must not republish unit to WB
@@ -524,3 +530,96 @@ async def test_sold_release_does_not_resurrect_available_after_fbs_write_off(
         )
         assert available_after_sold == 4
         assert available_after_sold != 5
+
+
+# I10 (21.08.2026): регресс на инцидент 20.08 — поставка на 155 заказов встала
+# с «остаток 0», потому что 519 шт. физически лежали в ячейке сортировки
+# ДРУГОГО склада того же тенанта, а не того, к которому был привязан заказ.
+# `fbs_available_qty_by_product` должна находить остаток по всем складам
+# тенанта, а не только по одному, иначе заказ ложно уходит в
+# insufficient_stock, хотя товар у клиента физически есть.
+@pytest.mark.asyncio
+async def test_fbs_available_qty_sums_across_tenant_warehouses(
+    async_client: AsyncClient,
+) -> None:
+    headers, _seller_id, warehouse_a, product_id, _location_a = (
+        await _setup_tenant_product(async_client)
+    )
+    warehouse_b_resp = await async_client.post(
+        "/warehouses",
+        headers=headers,
+        json={"name": "WH B", "code": f"wh-b-{uuid.uuid4().hex[:8]}"},
+    )
+    assert warehouse_b_resp.status_code in (200, 201), warehouse_b_resp.text
+    warehouse_b = uuid.UUID(warehouse_b_resp.json()["id"])
+    location_b_resp = await async_client.post(
+        f"/warehouses/{warehouse_b}/locations",
+        headers=headers,
+        json={"code": f"CELL-B-{uuid.uuid4().hex[:6]}"},
+    )
+    assert location_b_resp.status_code in (200, 201), location_b_resp.text
+    location_b = uuid.UUID(location_b_resp.json()["id"])
+
+    async with SessionLocal() as session:
+        product = await session.get(Product, product_id)
+        assert product is not None
+        tenant_id = product.tenant_id
+
+        # Приёмка положила товар не туда, куда привязан заказ: 5 шт. лежат
+        # на warehouse_b, а warehouse_a (склад заказа) остаётся пустым.
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=location_b,
+            quantity_delta=5,
+            movement_type="inbound_intake",
+        )
+        await session.commit()
+
+        ids = await tenant_warehouse_ids(session, tenant_id)
+        assert set(ids) == {warehouse_a, warehouse_b}
+
+        available_at_a = await fbs_available_qty_by_product(
+            session, tenant_id, warehouse_a, [product_id]
+        )
+        assert available_at_a[product_id] == 5
+
+        by_warehouse = await fbs_stock_by_warehouse_for_products(
+            session, tenant_id, [product_id]
+        )
+        assert by_warehouse[product_id] == {warehouse_b: 5}
+
+
+# I10: с одним складом (обычный случай — большинство клиентов физически
+# работают как с одной площадкой) агрегация по тенанту не должна менять
+# прежнее поведение — иначе это регресс для самого частого сценария.
+@pytest.mark.asyncio
+async def test_fbs_available_qty_unchanged_with_single_warehouse(
+    async_client: AsyncClient,
+) -> None:
+    _headers, _seller_id, warehouse_id, product_id, location_id = (
+        await _setup_tenant_product(async_client)
+    )
+    async with SessionLocal() as session:
+        product = await session.get(Product, product_id)
+        assert product is not None
+        tenant_id = product.tenant_id
+
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=location_id,
+            quantity_delta=3,
+            movement_type="inbound_intake",
+        )
+        await session.commit()
+
+        ids = await tenant_warehouse_ids(session, tenant_id)
+        assert ids == [warehouse_id]
+
+        available = await fbs_available_qty_by_product(
+            session, tenant_id, warehouse_id, [product_id]
+        )
+        assert available[product_id] == 3

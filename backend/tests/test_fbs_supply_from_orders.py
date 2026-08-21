@@ -1394,3 +1394,90 @@ async def test_start_work_idempotent_packaging_task(
         first.json()["supply"]["packaging_task_id"]
         == second.json()["supply"]["packaging_task_id"]
     )
+
+
+# I10 (21.08.2026) — регресс на инцидент 20.08: поставка не должна создаваться
+# молча, если товар физически лежит не на том складе тенанта, к которому
+# привязан заказ. Preflight обязан назвать склад и остаток словами, а не
+# просто пропустить это до отказа на упаковке через час.
+@pytest.mark.asyncio
+async def test_i10_preflight_notice_when_stock_on_other_tenant_warehouse(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    me = await async_client.get("/auth/me", headers=headers)
+    tenant_id = uuid.UUID(me.json()["tenant_id"])
+    seller_id, warehouse_a, _location_a = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+
+    warehouse_b_resp = await async_client.post(
+        "/warehouses",
+        headers=headers,
+        json={"name": "WH B", "code": f"wh-b-{suffix[-8:]}"},
+    )
+    assert warehouse_b_resp.status_code in (200, 201), warehouse_b_resp.text
+    warehouse_b = warehouse_b_resp.json()["id"]
+    location_b_resp = await async_client.post(
+        f"/warehouses/{warehouse_b}/locations",
+        headers=headers,
+        json={"code": f"B-{suffix[-8:]}"},
+    )
+    assert location_b_resp.status_code in (200, 201), location_b_resp.text
+    location_b = location_b_resp.json()["id"]
+
+    product = await _create_product(async_client, headers, seller_id, sku=f"i10-{suffix[-6:]}")
+
+    # Заказ привязан (через FbsWarehouseBinding) к warehouse_a, но приёмка
+    # физически положила товар на warehouse_b — ровно сценарий 20.08.
+    order_id = await _create_ready_order(
+        tenant_id,
+        uuid.UUID(seller_id),
+        uuid.UUID(warehouse_a),
+        uuid.UUID(location_b),
+        product,
+        order_id=862001,
+    )
+
+    preflight = await async_client.post(
+        "/operations/fbs-supplies/preflight",
+        headers=headers,
+        json={
+            "order_ids": [str(order_id)],
+            "planned_delivery_type": "warehouse_sc",
+        },
+    )
+    assert preflight.status_code == 200, preflight.text
+    body = preflight.json()
+    # Не блокирует создание — товар у клиента есть, просто на другом складе.
+    assert body["compatible"] is True
+    assert not any(i["code"] == "insufficient_stock" for i in body["issues"])
+    notices = body["notices"]
+    assert len(notices) == 1
+    notice = notices[0]
+    assert notice["primary_warehouse_name"] == "WH"
+    assert notice["primary_qty"] == 0
+    assert notice["needed_qty"] == 1
+    assert notice["elsewhere"] == [{"warehouse_name": "WH B", "qty": 3}]
+
+    # Когда товар лежит именно там, куда привязан заказ, пояснение не нужно —
+    # лишний шум поверх нормального пути только мешал бы оператору.
+    order_ok = await _create_ready_order(
+        tenant_id,
+        uuid.UUID(seller_id),
+        uuid.UUID(warehouse_a),
+        uuid.UUID(_location_a),
+        product,
+        order_id=862002,
+    )
+    preflight_ok = await async_client.post(
+        "/operations/fbs-supplies/preflight",
+        headers=headers,
+        json={
+            "order_ids": [str(order_ok)],
+            "planned_delivery_type": "warehouse_sc",
+        },
+    )
+    assert preflight_ok.status_code == 200, preflight_ok.text
+    assert preflight_ok.json()["notices"] == []

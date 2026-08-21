@@ -515,7 +515,11 @@ async def test_fbs_worklist_query_count_bounded(async_client: AsyncClient) -> No
     # direction pool (FBS-02/FBS-03). That on-hand lookup is one extra batch
     # query for the whole worklist, not a per-order query, so the bound stays
     # flat regardless of order count.
-    assert query_count <= 22, f"expected <=22 queries, got {query_count}"
+    # Budget raised 22 -> 23 (I10): fbs_available_qty_by_product also loads
+    # the tenant's warehouse ids (`tenant_warehouse_ids`) to sum on-hand stock
+    # across every warehouse of the client, not just the one an order happens
+    # to be bound to — one more fixed query for the whole worklist.
+    assert query_count <= 23, f"expected <=23 queries, got {query_count}"
 
     api_resp = await async_client.get(
         "/operations/fbs-orders/worklist",
