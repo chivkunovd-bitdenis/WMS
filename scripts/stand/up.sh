@@ -26,7 +26,7 @@ URL="http://localhost:$WMS_WEB_PORT"
 креды() {
   local mail
   mail="$(docker exec "$PROJECT-db-1" psql -U postgres -d wms -t -A -c \
-    "select email from users where seller_id is null order by created_at limit 1" 2>/dev/null || true)"
+    "select coalesce((select email from users where email like '%@test.example.com' order by created_at limit 1), (select email from users where seller_id is null order by created_at limit 1))" 2>/dev/null || true)"
   echo "СТЕНД ПОЛОСЫ $LANE"
   echo "  адрес:  $URL"
   echo "  логин:  ${mail:-НЕ НАЙДЕН}"
@@ -52,12 +52,34 @@ done
 echo "    API отвечает"
 
 echo "3/4 разворачиваю боевой снимок"
-WMS_STAND_DB_PREFIX="wms-lane" WMS_STAND_API_PREFIX="wms-lane" \
-  "$ROOT/scripts/stand/restore.sh" "$LANE"
+# Гасим приложение на время подмены базы: пока api и celery подключены, DROP DATABASE
+# не пройдёт. Поднимаем обратно здесь же — только у этого скрипта есть порты полосы.
+"${COMPOSE[@]}" stop api celery_worker celery_beat >/dev/null 2>&1 || true
+"$ROOT/scripts/stand/restore.sh" "$LANE"
+"${COMPOSE[@]}" up -d --no-deps api celery_worker >/dev/null 2>&1
+for i in $(seq 1 60); do
+  curl -sf -m 3 "http://localhost:$WMS_API_PORT/health" >/dev/null 2>&1 && break
+  [[ $i -eq 60 ]] && { echo "    API не вернулся на порт $WMS_API_PORT" >&2; exit 1; }
+  sleep 1
+done
 
-echo "4/4 проверяю, что экран открывается"
-код="$(curl -s -o /dev/null -w '%{http_code}' -m 5 "$URL/" || echo 000)"
-[[ "$код" == "200" ]] || { echo "    фронт отдал $код вместо 200" >&2; exit 1; }
+echo "4/5 ставлю пароль стендовому админу"
+# Хэш считает сам бэкенд своей же функцией — стенд не разойдётся с приложением, если
+# алгоритм поменяют. Делается здесь, а не в restore.sh: там контейнер API ещё погашен.
+HASH="$(docker exec "$PROJECT-api-1" python -c \
+  "from app.services.passwords import hash_password; print(hash_password('$PASS'))" 2>/dev/null)"
+[[ -n "$HASH" ]] || { echo "    не удалось посчитать хэш через api — кликер не войдёт" >&2; exit 1; }
+MAIL="$(docker exec "$PROJECT-db-1" psql -U postgres -d wms -t -A -c \
+  "select coalesce((select email from users where email like '%@test.example.com' order by created_at limit 1),
+                   (select email from users where seller_id is null order by created_at limit 1))")"
+[[ -n "$MAIL" ]] || { echo "    в снимке нет ни одного пользователя ФФ" >&2; exit 1; }
+docker exec "$PROJECT-db-1" psql -U postgres -d wms -q -c \
+  "update users set password_hash='$HASH', must_set_password=false where email='$MAIL'"
+echo "    вход готов"
+
+echo "5/5 проверяю, что экран открывается"
+HTTP_CODE="$(curl -s -o /dev/null -w '%{http_code}' -m 5 "$URL/" || echo 000)"
+[[ "$HTTP_CODE" == "200" ]] || { echo "    фронт отдал $HTTP_CODE вместо 200" >&2; exit 1; }
 echo "    фронт отвечает"
 echo
 креды
