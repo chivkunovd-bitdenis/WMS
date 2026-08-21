@@ -15,7 +15,10 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures as futures
+import json
+import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -61,6 +64,89 @@ from pathlib import Path
 # Роли, чьи находки возвращают карточку разработчику.
 СУДЬИ = ("reviewer", "ux-judge", "ui-critic")
 
+# Codex запускается только в явно выбранном режиме. По умолчанию сохраняем
+# существующий Claude-путь, чтобы безопасная проверка оркестратора не могла
+# случайно начать волну другим исполнителем.
+ИСПОЛНИТЕЛЬ = os.environ.get("NIGHT_EXECUTOR", "claude").strip().lower()
+КОНТРОЛЬНЫЕ_РОЛИ = {"intake", "product-acceptor"}
+ИССЛЕДОВАТЕЛИ = {"analyst", "solution-architect"}
+# Эти роли используют живой браузер или подключённые плагины; им нужен
+# пользовательский конфиг Codex. Остальные роли изолируются от него.
+РОЛИ_С_ПОЛНЫМ_КОНФИГОМ = {"clicker", "ux-judge"}
+
+
+def роль_с_инъекцией(роль: str, промпт: str) -> str:
+    """Явно закрепляет владельца роли при запуске через Codex.
+
+    Luna выполняет содержательную работу. Terra используется только для двух
+    оркестрационных ролей, где нет предметного решения. Это не даёт модели
+    выбрать иной профиль по тексту карточки.
+    """
+    исполнитель = "Terra" if роль in КОНТРОЛЬНЫЕ_РОЛИ else "Luna"
+    файл = КОРЕНЬ / ".claude" / "agents" / f"{роль}.md"
+    инструкция = файл.read_text(encoding="utf-8", errors="replace") if файл.exists() else ""
+    return (f"Профиль исполнителя: {исполнитель}. Выполняй только роль `{роль}`.\n"
+            "Не читай секреты, ключи, токены, .env или кабинеты учётных данных.\n"
+            f"Полный текст инструкции роли:\n{инструкция}\n\n" + промпт)
+
+
+def _codex_текст(вывод: str) -> str:
+    """Извлекает человекочитаемый хвост из JSONL Codex, не доверяя ему как гейту."""
+    сообщения: list[str] = []
+    ошибки: list[str] = []
+    for строка in вывод.splitlines():
+        try:
+            событие = json.loads(строка)
+        except json.JSONDecodeError:
+            if строка.strip():
+                сообщения.append(строка.strip())
+            continue
+        if not isinstance(событие, dict):
+            continue
+        if событие.get("type") == "error" or событие.get("error"):
+            ошибки.append(str(событие.get("error") or событие.get("message") or событие))
+            continue
+        item = событие.get("item")
+        if isinstance(item, dict):
+            текст = item.get("text") or item.get("content")
+            if isinstance(текст, str) and текст.strip():
+                сообщения.append(текст.strip())
+        текст = событие.get("text")
+        if isinstance(текст, str) and текст.strip():
+            сообщения.append(текст.strip())
+    итог = сообщения + [f"ошибка Codex: {e}" for e in ошибки]
+    return "\n".join(итог)[-2000:]
+
+
+def _запустить_codex(роль: str, промпт: str) -> tuple[int, str]:
+    бинарник = os.environ.get("NIGHT_CODEX_BIN", "codex")
+    if not shutil.which(бинарник):
+        return 127, f"в PATH нет команды {бинарник}"
+    try:
+        профиль = "terra" if роль in КОНТРОЛЬНЫЕ_РОЛИ else "luna"
+        модель = f"gpt-5.6-{профиль}"
+        effort = "medium" if профиль == "terra" else "low"
+        команда = [бинарник, "--ask-for-approval", "never", "--sandbox", "workspace-write",
+                   "--model", модель, "--config", f"model_reasoning_effort={effort}",
+                   ]
+        if роль in ИССЛЕДОВАТЕЛИ:
+            команда.append("--search")
+        команда.append("exec")
+        if роль not in РОЛИ_С_ПОЛНЫМ_КОНФИГОМ:
+            команда.append("--ignore-user-config")
+        команда.append("--json")
+        команда.append(роль_с_инъекцией(роль, промпт))
+        р = subprocess.run(
+            команда,
+            cwd=КОРЕНЬ, capture_output=True, text=True, timeout=ТАЙМАУТ,
+        )
+        вывод = (р.stdout or "") + ("\n" + р.stderr if р.stderr else "")
+        return р.returncode, _codex_текст(вывод)
+    except subprocess.TimeoutExpired:
+        return 124, f"шаг превысил {ТАЙМАУТ // 60} минут и снят"
+    except Exception as е:                                   # noqa: BLE001
+        return 1, f"не удалось запустить Codex: {е}"
+
 
 def журнал(волна: Path, строка: str) -> None:
     print(строка, flush=True)
@@ -69,6 +155,8 @@ def журнал(волна: Path, строка: str) -> None:
 
 def запустить(роль: str, промпт: str) -> tuple[int, str]:
     """Один вызов агента. Падение подпроцесса — это просто ненулевой код, а не исключение."""
+    if ИСПОЛНИТЕЛЬ == "codex":
+        return _запустить_codex(роль, промпт)
     try:
         р = subprocess.run(
             ["claude", "-p", промпт, "--agent", роль,
@@ -249,8 +337,9 @@ def проверки_старта() -> list[str]:
     for р in sorted(нужны):
         if р not in АРТЕФАКТ:
             беды.append(f"для роли {р} не назван артефакт в таблице АРТЕФАКТ")
-    if subprocess.run(["which", "claude"], capture_output=True).returncode:
-        беды.append("в PATH нет команды claude")
+    команда = os.environ.get("NIGHT_CODEX_BIN", "codex") if ИСПОЛНИТЕЛЬ == "codex" else "claude"
+    if not shutil.which(команда):
+        беды.append(f"в PATH нет команды {команда}")
     return беды
 
 
