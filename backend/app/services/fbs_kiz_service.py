@@ -598,6 +598,12 @@ async def lookup_order_by_sticker(
     )
 
 
+_SGTIN_MISSING_GS_MESSAGE = (
+    "КИЗ без GS-разделителя после серийного номера — Wildberries его отклонит. "
+    "Отсканируйте DataMatrix заново или дождитесь восстановления пула кодов."
+)
+
+
 def _error_message(exc: FbsKizError) -> str:
     if exc.message:
         return exc.message
@@ -609,6 +615,8 @@ def _error_message(exc: FbsKizError) -> str:
                 reason = first.get("reason")
                 if isinstance(reason, str) and reason:
                     return reason
+    if exc.code == "sgtin_missing_gs":
+        return _SGTIN_MISSING_GS_MESSAGE
     return exc.code
 
 

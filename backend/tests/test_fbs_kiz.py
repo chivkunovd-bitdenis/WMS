@@ -285,7 +285,10 @@ async def _lookup(
 
 
 def _cis(suffix: str) -> str:
-    return f"010460043993125321KIZ{suffix}"
+    # I5: WB отклоняет sGTIN без GS-разделителя после серийного номера
+    # ("sgtinNoGS") — короткий (без криптохвоста) формат обязан завершаться
+    # им, см. marking_code_service.GS_SEPARATOR и _ensure_marking_value_ready_for_wb.
+    return f"010460043993125321KIZ{suffix}{mc_svc.GS_SEPARATOR}"
 
 
 async def _seed_active_marking(
@@ -2886,4 +2889,141 @@ async def test_fbs_marking_pool_counts_replacement_required_order_as_needing_cod
     assert marking_pool["required"] == 1
     assert marking_pool["available"] == 1
     assert marking_pool["shortage"] == 0
-    assert marking_pool["orders_without_code"] == []
+
+
+@pytest.mark.asyncio
+async def test_fbs_kiz_commit_rejects_value_without_gs_separator_before_calling_wb(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """I5: a bare "01<gtin>21<serial>" sGTIN with no GS separator at all is
+    exactly the truncated pool-code shape that made WB answer with
+    "sgtinNoGS" once such a code reached a real supply (20.08 incident,
+    docs/BACKLOG-2026-08-19-CHAT-RU.md). `_ensure_marking_value_ready_for_wb`
+    must catch this locally, with a message the operator can act on, instead
+    of only finding out from a confusing WB-side rejection later.
+    """
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
+        async_client, headers, suffix
+    )
+    supply_id = await _create_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        suffix=suffix,
+    )
+    order = await _create_order(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        supply_id=supply_id,
+        suffix=suffix,
+        wb_order_id=932301,
+        sticker_code="NO-GS-COMMIT",
+        wb_barcode="NO-GS-COMMIT-BAR",
+        with_packaging=True,
+    )
+    async with SessionLocal() as session:
+        db_order = await session.get(FbsOrder, order.order_id)
+        assert db_order is not None
+        db_order.required_meta_json = [MARKING_KIND_SGTIN]
+        await session.commit()
+    sent = _patch_wb_acceptance(monkeypatch)
+    # Deliberately bypass the `_cis()` helper (which now appends GS_SEPARATOR,
+    # see I5) to reproduce exactly the pre-fix truncated shape: no separator
+    # anywhere in the value.
+    bare_value = "010460043993125321KIZNOGS001"
+    assert mc_svc.is_cis_missing_gs_separator(bare_value)
+
+    response = await async_client.post(
+        "/operations/fbs-orders/kiz/commit",
+        headers=headers,
+        json={
+            "idempotency_key": "kiz-no-gs",
+            "pairs": [
+                {
+                    "order_id": str(order.order_id),
+                    "value": bare_value,
+                    "confirmed": False,
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    row = response.json()[0]
+    assert row["status"] == "error"
+    assert row["code"] == "sgtin_missing_gs"
+    assert "GS-раздел" in row["message"]
+    # The guard must fire before any network call to WB — a bare code must
+    # never leave the process, not even to be rejected by the (untrustworthy)
+    # WB emulator.
+    assert sent == {}
+    async with SessionLocal() as session:
+        saved_marking = (
+            await session.execute(
+                select(FbsOrderMarking).where(FbsOrderMarking.order_id == order.order_id)
+            )
+        ).scalar_one_or_none()
+        assert saved_marking is None
+        saved_code = (
+            await session.execute(
+                select(MarkingCode).where(MarkingCode.cis_code == bare_value)
+            )
+        ).scalar_one_or_none()
+        assert saved_code is None
+
+
+@pytest.mark.asyncio
+async def test_fbs_kiz_validate_defers_gs_separator_check_to_commit(
+    async_client: AsyncClient,
+) -> None:
+    """The WB-readiness guard (`_ensure_marking_value_ready_for_wb`) only runs
+    right before the network call inside `attach_order_meta_to_wb_and_sync`,
+    not in the earlier structural `/kiz/validate` step. Pinning that boundary
+    down so a future change doesn't silently start rejecting scans at
+    validate time, which would be a confusing place for this specific error
+    to surface — the operator-facing rejection belongs at commit."""
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
+        async_client, headers, suffix
+    )
+    supply_id = await _create_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        suffix=suffix,
+    )
+    order = await _create_order(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        supply_id=supply_id,
+        suffix=suffix,
+        wb_order_id=932302,
+        sticker_code="NO-GS-VALIDATE",
+        wb_barcode="NO-GS-VALIDATE-BAR",
+        with_packaging=True,
+    )
+    async with SessionLocal() as session:
+        db_order = await session.get(FbsOrder, order.order_id)
+        assert db_order is not None
+        db_order.required_meta_json = [MARKING_KIND_SGTIN]
+        await session.commit()
+
+    # /kiz/validate only checks structural shape and occupancy, not the WB
+    # submission guard (that only runs right before the network call) — so a
+    # bare value is accepted here. This test pins that boundary down so a
+    # future change doesn't silently start rejecting scans at validate time,
+    # which would be a confusing place for this specific error to appear.
+    response = await async_client.post(
+        "/operations/fbs-orders/kiz/validate",
+        headers=headers,
+        json={
+            "order_id": str(order.order_id),
+            "value": "010460043993125321KIZNOGS002",
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["ok"] is True
