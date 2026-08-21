@@ -1,0 +1,33 @@
+{
+  "task_id": "BLG-D05",
+  "run_id": "BLG-D05:S15:6",
+  "stage_id": "S15",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "role_binding_id": "pipeline-ba",
+  "agent_identity": "codex-pipeline-case-auditor-blg-d05-s15",
+  "input_hashes": {
+    "state_before": "sha256:0ab8037545b9ca667d0ec5e05fe38e450859f87fb325a88cdf646f8a19a53234"
+  },
+  "output_hashes": {},
+  "parent_receipt_hash": "sha256:32c7bd98d1b70e8cfef401477bed5de2329f16f06bed3b0d5799bcf1311a38fb",
+  "baseline_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "started_at": "2026-08-21T03:08:22Z",
+  "finished_at": "2026-08-21T03:08:22Z",
+  "verdict": "CASE_AUDIT_PASSED",
+  "blocker": null,
+  "resume_stage": null,
+  "usage_receipt": {
+    "task_id": "BLG-D05",
+    "stage": "S15",
+    "role": "pipeline-ba",
+    "executor": "codex",
+    "model": "gpt-5.6-sol",
+    "tier": "expensive",
+    "input_tokens": 52000,
+    "output_tokens": 3400,
+    "estimated_usd": 0.37,
+    "agent_id": "codex-pipeline-case-auditor-blg-d05-s15",
+    "recorded_at": "2026-08-21T03:08:22Z"
+  },
+  "signature": "sha256:c1efeb54ed891811e3ac5e06dd4e25515e4dfb7397371379655252aba7f5439c"
+}

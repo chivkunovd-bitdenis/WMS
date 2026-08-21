@@ -53,7 +53,7 @@
     "S23",
     "S26"
   ],
-  "current_stage": "S15",
+  "current_stage": "S16",
   "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
@@ -70,19 +70,19 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:55Z",
-  "heartbeat_at": "2026-08-21T01:22:28Z",
-  "last_valid_receipt": "sha256:32c7bd98d1b70e8cfef401477bed5de2329f16f06bed3b0d5799bcf1311a38fb",
+  "heartbeat_at": "2026-08-21T03:11:53Z",
+  "last_valid_receipt": "sha256:e03ee197c29c945820170bc9e4c56be83004a4ecb48ec96b7751db61693fd394",
   "blocker": {
-    "type": "FIXTURE",
-    "reason_code": "CASE_AUDIT_FAILED",
-    "details": "Independent case-auditor found missing independent breaker proof for D05-C2-AC02 and D05-C2-AC04, and JSON lacks direct-vs-breaker role/provenance.",
-    "owner": "pipeline-ba",
-    "created_at": "2026-08-21T01:22:28Z",
-    "resume_stage": "S15"
+    "type": "SECURITY",
+    "reason_code": "BLG_F01_EXECUTABLE_REGISTRY_DEPENDENCY_OPEN",
+    "details": "BLG-D05 C2 cannot pass S16 while declared dependency BLG-F01 is WAITING at S13 with ARCH_FALSIFICATION_EXECUTABLE_REGISTRY_GAP and no versioned executable block/dependency occurrence contract.",
+    "owner": "solution-architect",
+    "created_at": "2026-08-21T03:11:53Z",
+    "resume_stage": "S16"
   },
   "resume_condition": {
-    "stage": "S15",
-    "condition": "Repair BLG-D05 S15 cases with independent breaker cases for D05-C2-AC02 and D05-C2-AC04 and explicit direct/breaker provenance, then rerun independent case-auditor before S16."
+    "stage": "S16",
+    "condition": "Register a controller-approved dependency-resolution receipt satisfying tasks/BLG-D05/S16-PRODUCT-BEFORE-DEV.md: stable versioned block reference or equivalent direct binding, durable occurrence authority, role-bound non-circular lifecycle, Git/CI verification, dynamic blocker negative cases, and resolved or transferred BLG-F01 dependency edge; then resume BLG-D05 at S16 for fresh Product review against unchanged hashes."
   },
   "verdicts": {
     "S01": {
@@ -119,15 +119,22 @@
       "receipt_hash": "sha256:32c7bd98d1b70e8cfef401477bed5de2329f16f06bed3b0d5799bcf1311a38fb",
       "role_binding_id": "solution-architect",
       "agent_identity": "codex-solution-architect-blg-d05-s13"
+    },
+    "S15": {
+      "verdict": "CASE_AUDIT_PASSED",
+      "receipt_path": "docs/evidence/BLG-D05/S15-CASE_AUDIT_PASSED.receipt.json",
+      "receipt_hash": "sha256:e03ee197c29c945820170bc9e4c56be83004a4ecb48ec96b7751db61693fd394",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-pipeline-case-auditor-blg-d05-s15"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 270300,
-    "output_tokens": 19100,
-    "estimated_usd": 1.8525
+    "input_tokens": 322300,
+    "output_tokens": 22500,
+    "estimated_usd": 2.2225
   },
   "budget_usage_receipts": [
     {
@@ -194,6 +201,19 @@
       "estimated_usd": 0.85,
       "agent_id": "codex-solution-architect-blg-d05-s13",
       "recorded_at": "2026-08-21T01:13:40Z"
+    },
+    {
+      "task_id": "BLG-D05",
+      "stage": "S15",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 52000,
+      "output_tokens": 3400,
+      "estimated_usd": 0.37,
+      "agent_id": "codex-pipeline-case-auditor-blg-d05-s15",
+      "recorded_at": "2026-08-21T03:08:22Z"
     }
   ],
   "blocked_by": [],
