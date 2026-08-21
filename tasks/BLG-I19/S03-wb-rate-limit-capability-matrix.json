@@ -64,6 +64,13 @@
       "level": "official"
     },
     {
+      "id": "WB-SANDBOX-LIMITS",
+      "url": "https://dev.wildberries.ru/knowledge-base/articles/019d49a1-24e3-7642-801f-e1f18c5fe708",
+      "document_date": null,
+      "accessed_at": "2026-08-21",
+      "level": "official"
+    },
+    {
       "id": "WMS-OBSERVED",
       "path": "backend/app/services/wildberries_fbs_client.py",
       "checkout_sha": "a6a2a40ce02530a919d4ea979e4f3322591a6a49",
@@ -109,6 +116,18 @@
       "owner_stage": "S15"
     },
     {
+      "id": "DELETE-ALL-VS-SUBSET",
+      "lane": "field_contract_partial_success",
+      "applicable": true,
+      "coverage": "complete",
+      "claim": "The key=sgtin DELETE removes the complete sgtin value for one order. That value is an array of 1..100 marking codes, so a selected subset is rejected before any remote call; only a selection proven equal to the full snapshotted array is eligible for delete-all.",
+      "level": "official",
+      "source_ids": [
+        "WB-FBS-OPENAPI"
+      ],
+      "owner_stage": "S13"
+    },
+    {
       "id": "QUOTA-SCOPE",
       "lane": "rate_limits",
       "applicable": true,
@@ -129,11 +148,11 @@
       "owner_stage": "S04"
     },
     {
-      "id": "QUOTA-409-WEIGHT",
+      "id": "QUOTA-4XX-WEIGHT",
       "lane": "rate_limits",
       "applicable": true,
       "coverage": "complete",
-      "claim": "One 409 response for this endpoint consumes ten request units and must affect the shared limiter state.",
+      "claim": "Every 4XX response for this endpoint consumes ten request units and must affect the shared limiter state, even when the per-order outcome is terminal rather than retryable.",
       "level": "official",
       "source_ids": ["WB-FBS-OPENAPI"],
       "owner_stage": "S15"
@@ -173,7 +192,7 @@
       "lane": "partial_success",
       "applicable": true,
       "coverage": "complete",
-      "claim": "Partial success exists across the local mass operation: each 204 is durable progress, while 429 or failure on one item does not roll back or authorize any other item.",
+      "claim": "Partial success exists across the local mass operation, but not inside one key=sgtin DELETE: one 204 confirms delete-all for that order's full snapshotted sgtin array, while 429 or failure on one order does not roll back or authorize another order.",
       "level": "observed",
       "source_ids": ["WB-FBS-OPENAPI"],
       "owner_stage": "S13"
@@ -186,6 +205,19 @@
       "claim": "Timeout, transport failure, 5xx or worker crash after send does not prove whether DELETE took effect and requires read-back before another delete or local clearing.",
       "level": "hypothesis",
       "source_ids": ["WB-FBS-OPENAPI", "WB-ERRORS"],
+      "owner_stage": "S13"
+    },
+    {
+      "id": "PER_CODE_RECOVERY",
+      "lane": "recovery",
+      "applicable": true,
+      "coverage": "ready_for_contract",
+      "claim": "Persist a hash and outcome for every code in the full pre-delete array. Read-back of the whole array maps only full absence to REMOVED_AS_PART_OF_DELETE_ALL and full presence to STILL_PRESENT_RETRY_ELIGIBLE; a mixed, unknown or changed array is fail-closed review for every affected code.",
+      "level": "hypothesis",
+      "source_ids": [
+        "WB-FBS-OPENAPI",
+        "BLG-I02-RESEARCH"
+      ],
       "owner_stage": "S13"
     },
     {
@@ -213,7 +245,7 @@
       "lane": "errors",
       "applicable": true,
       "coverage": "complete",
-      "claim": "400, 401, 402, 403 and 409 are not rate-limit retries; they require correction, access handling or final per-item failure.",
+      "claim": "400, 401, 402, 403 and 409 are not rate-limit retries; they require correction, access handling or final per-order failure, while every 4XX still debits ten limiter units.",
       "level": "official",
       "source_ids": ["WB-FBS-OPENAPI", "WB-ERRORS"],
       "owner_stage": "S15"
@@ -253,7 +285,7 @@
       "lane": "volume_outage",
       "applicable": true,
       "coverage": "complete",
-      "claim": "Five hundred deletes require at least about 100 seconds at 200 ms with no competing calls, retries, read-back or weighted errors; this is a lower bound, not an SLA.",
+      "claim": "Five hundred single-order delete-all calls require at least about 100 seconds at 200 ms with no competing calls, retries, read-back or weighted 4XX errors; this is a lower bound, not an SLA.",
       "level": "official",
       "source_ids": ["WB-FBS-OPENAPI"],
       "owner_stage": "S11"
@@ -293,9 +325,11 @@
       "lane": "sandbox_emulator",
       "applicable": true,
       "coverage": "ready_for_cases",
-      "claim": "Deterministic emulator cases are required at S15/S23; no live WB or WB sandbox call is needed or authorized in S03.",
+      "claim": "Deterministic emulator cases are required at S15/S23; no live WB or WB sandbox call is needed or authorized in S03. Any future Marketplace sandbox case uses an independent limiter of at most one request per second across all methods.",
       "level": "observed",
-      "source_ids": [],
+      "source_ids": [
+        "WB-SANDBOX-LIMITS"
+      ],
       "owner_stage": "S15"
     }
   ],

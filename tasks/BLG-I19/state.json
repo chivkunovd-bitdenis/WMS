@@ -52,8 +52,8 @@
     "S23",
     "S26"
   ],
-  "current_stage": "S03",
-  "status": "WAITING",
+  "current_stage": "S04",
+  "status": "RUNNING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -69,20 +69,10 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T00:53:31Z",
+  "heartbeat_at": "2026-08-21T05:44:53Z",
   "last_valid_receipt": "sha256:a44b3ce2dba8d4616917c0e0d97893cf1575577b171d1d6a0ebc8283100550bb",
-  "blocker": {
-    "type": "BASELINE",
-    "reason_code": "RESEARCH_REWORK_WB_DELETE_RATE_LIMIT_CONTRACT",
-    "details": "S04 RESEARCH_REWORK: current FBS OpenAPI counts every 4XX as 10 requests; DELETE key=sgtin removes the whole 1..100-code value while S03 tracks only order-level progress; and the Marketplace sandbox limit of 1 request/second is missing.",
-    "owner": "pipeline-ba",
-    "created_at": "2026-08-21T00:53:31Z",
-    "resume_stage": "S03"
-  },
-  "resume_condition": {
-    "stage": "S03",
-    "condition": "Revise both S03 artifacts for all-4XX x10 accounting, explicit delete-all versus subset semantics with per-code outcomes and recovery, and sandbox pacing; then rerun an independent S04."
-  },
+  "blocker": null,
+  "resume_condition": null,
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",
