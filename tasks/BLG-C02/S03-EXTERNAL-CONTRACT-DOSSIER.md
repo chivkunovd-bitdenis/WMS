@@ -41,7 +41,7 @@ object ID, headers, request/response body, credential либо свободны�
 | SRC-10 | `backend/app/services/wildberries_errors.py` | checkout `a0427e890c35da5a05147114f4302dc2987d3a88`, observed 2026-08-21 | observed | Текущий error logger может писать до 500 символов raw WB response body; это отдельный канал утечки, который должен попасть в security review. |
 | SRC-11 | uncommitted `.worktrees/picklist-size` at `8259901bdf3c7ea70f908b37635de7fc21eaf4ef`, files `backend/app/core/logging_setup.py` and `backend/tests/test_outbound_http_logging.py` | observed 2026-08-21; file SHA-256 `8392dd8b19519fde94481b8b63527389b629ac9d8374c20f71eecae380c6911b` and `9c74ee6e044b1c283db48cbea309719339a8e416a9dd3161d38aeb3428d12dce` | observed | Кандидат поднимает глобальный `httpx` logger до INFO, default-on, подключает API и Celery и тестирует только отсутствие `Authorization`/token в одной успешной mock-операции. Это наблюдение, не durable Git artifact и не release proof. |
 | SRC-12 | [Система авторизации WB API](https://dev.wildberries.ru/knowledge-base/articles/019d49a1-0d73-71e9-be3e-b2c44567470c/sistema-avtorizatsii-wb-api) | updated 2026-04-03, accessed 2026-08-21 | official | Четыре типа токенов, Bearer-схема, category/read-write/type проверки и граница `401` против `403`. |
-| SRC-13 | [Работа с токенами для партнёрских сервисов](https://dev.wildberries.ru/knowledge-base/articles/019d49a1-bd37-76b4-931d-fa5fa437b85e) | current public guide, accessed 2026-08-21 | official | Сервисный токен требует `X-Client-Secret`; перечислены `401` secret failures и `403` missing/mismatched/not-allowed constraints. |
+| SRC-13 | [Работа с токенами для партнёрских сервисов](https://dev.wildberries.ru/knowledge-base/articles/019d49a1-bd37-76b4-931d-fa5fa437b85e) | current public guide, accessed 2026-08-21 | official | В partner-service запросах Service и Base tokens требуют `X-Client-Secret`; перечислены `401` secret-verification failures и `403` missing/mismatched/not-allowed constraints. |
 | SRC-14 | [Расшифровка кодов ошибок WB API](https://dev.wildberries.ru/knowledge-base/articles/019d49a1-2cb0-781d-8921-deaf4a014a58/rasshifrovka-kodov-oshibok-wb-api) | updated 2026-04-06, accessed 2026-08-21 | official | Общая семантика `402`, `406`, `451`, `429` и 5xx; response body остаётся чувствительным внешним материалом. |
 | SRC-15 | [Лимиты запросов WB API](https://dev.wildberries.ru/knowledge-base/articles/019d49a1-28ca-7735-bf2f-98210695abc7/limity-zaprosov-wb-api) | updated 2026-04-03, accessed 2026-08-21 | official | Token bucket, лимиты по типам токенов, отсутствие Remaining на `429`, числовые Retry/Limit/Reset. |
 | SRC-16 | [Ограничения тестового контура WB API](https://dev.wildberries.ru/knowledge-base/articles/019d49a1-24e3-7642-801f-e1f18c5fe708) | updated 2026-04-03, accessed 2026-08-21 | official | Официальные content/marketplace/supplies sandbox hosts, test-token-only и ограничения тестового контура. |
@@ -151,23 +151,28 @@ only the new success event is an automatic failure.
 
 ## 6. Auth contract without credential access
 
-`Basic token` below means the WB **Base token type**, not HTTP Basic authentication. Every test uses
+`Base token` below means the WB Base token type, not HTTP Basic authentication. Every test uses
 synthetic canary strings; implementation, review and test must not read, decode, rotate or replace a
-real credential.
+real credential. The `X-Client-Secret` requirement for Service and Base below is scoped to the
+partner-service authorization contract documented by SRC-13; it is not a rule to attach that header
+to Personal, Test or unrelated requests.
 
 | WB token mode | Request headers | Official constraint | Safe observable result |
 |---|---|---|---|
 | Personal | `Authorization: Bearer <token>` | own/on-premise integration; category and read/write rights apply | status only; no token-derived claims |
-| Service | `Authorization: Bearer <seller-service-token>` plus `X-Client-Secret` | both must belong to the same authorized service | status only; neither credential nor auth response text |
-| Base | `Authorization: Bearer <token>`; no `X-Client-Secret` | limited categories and lower limits | status only; `token_type` is not logged |
+| Service | `Authorization: Bearer <seller-service-token>` plus mandatory `X-Client-Secret` | in partner-service requests both credentials must belong to the same authorized service | status only; neither credential nor auth response text |
+| Base | `Authorization: Bearer <base-token>` plus mandatory `X-Client-Secret` | in partner-service requests Base without the service secret is forbidden; token and secret must be an allowed pairing | status only; neither credential, token type nor auth response text |
 | Test | `Authorization: Bearer <token>`; no `X-Client-Secret` | sandbox hosts only, generated data, lower limits | `environment=sandbox`; no token-derived claims |
 
-`401` means token or service-secret verification did not pass: missing/malformed/expired/withdrawn
-credential is one class for logging. `403` means a valid credential cannot perform the operation:
-wrong category/access level, token type mismatch, missing `X-Client-Secret` for a Service token,
-token and secret from different services, or `X-Client-Secret` supplied with a Personal token. The
-WB `detail`, `requestId`, `origin` and any echoed external value remain forbidden even when they
-would make diagnosis easier; the engineer correlates by local `request_ref`.
+`401` means token or service-secret verification did not pass: synthetic cases cover a
+missing/malformed/expired/withdrawn token and an invalid/expired/withdrawn `X-Client-Secret` for both
+Service and Base partner-service lanes. `403` means a credential was understood but cannot perform
+the operation: cases cover wrong category/access level, token type mismatch, missing
+`X-Client-Secret` for Service and Base, token-secret mismatch, a secret disallowed for that
+service/token pairing, and `X-Client-Secret` supplied with a Personal token. Every case records only
+`auth_rejected` and status. The WB `detail`, `requestId`, `origin`, both synthetic credentials and
+any echoed external value remain forbidden even when they would make diagnosis easier; the engineer
+correlates by local `request_ref`.
 
 ## 7. HTTP outcome mapping
 
@@ -276,7 +281,9 @@ the current call inventory rather than silently omitted.
 
 - positive events for `2xx`, `402`, `406`, `409`, `429`, `5xx` and no-response timeout;
 - synthetic Personal/Service/Base/Test auth fixtures cover both headers and the documented
-  `401/403` token-type constraints without accessing credentials;
+  `401/403` token-type constraints without accessing credentials. The Base partner-service lane
+  includes a distinct synthetic `X-Client-Secret` canary for valid, missing, invalid, expired,
+  withdrawn, mismatched and disallowed-secret fixtures;
 - valid, absent and malformed rate-limit headers cover `429` without Remaining and numeric
   Retry/Limit/Reset parsing;
 - retry/pagination produce separate attempts with stable operation correlation;
@@ -285,9 +292,10 @@ the current call inventory rather than silently omitted.
 - the test captures and concatenates structured WB events, `log_wb_client_error`, app/httpx/httpcore
   and access logs, API exception responses, worker task/retry/failure logs, traces, metric labels and
   persisted test evidence;
-- exact searches for canary `Authorization`, `X-Client-Secret`, query secret, raw URL/path/order,
-  supply and warehouse IDs, SGTIN/CIS, UIN/IMEI/GTIN, sticker/body and newline injection return zero
-  matches in that aggregate for success, every HTTP error and every transport error;
+- exact searches for Personal/Service/Base/Test `Authorization` canaries, separate Service and Base
+  `X-Client-Secret` canaries, query secret, raw URL/path/order, supply and warehouse IDs, SGTIN/CIS,
+  UIN/IMEI/GTIN, sticker/body and newline injection return zero matches in that aggregate for
+  success, every HTTP error including every Base `401/403` fixture, and every transport error;
 - non-WB HTTP request does not produce `wb.http.client.*`;
 - logger/storage failure does not change the business HTTP outcome;
 - tests use MockTransport/local emulator under deny-by-default egress; DNS/socket access fails the

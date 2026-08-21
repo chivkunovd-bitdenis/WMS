@@ -2,7 +2,7 @@
   "task_id": "BLG-C02",
   "stage": "S04",
   "role": "pipeline-reviewer",
-  "status": "WAITING",
+  "status": "RUNNING",
   "traits": [
     "release_change",
     "external_contract"
@@ -67,18 +67,8 @@
     "estimated_usd": 0.3525
   },
   "blocked_by": [],
-  "blocker": {
-    "type": "SECURITY",
-    "reason_code": "RESEARCH_CONTRACT_GAPS",
-    "details": "S04 RESEARCH_REWORK: the reworked auth contract still excludes X-Client-Secret from Base-token requests, contradicting current official WB partner-service documentation and leaving Base-token 401/403 plus sink-wide credential leakage cases incomplete.",
-    "owner": "pipeline-ba",
-    "created_at": "2026-08-21T03:58:30Z",
-    "resume_stage": "S04"
-  },
-  "resume_condition": {
-    "stage": "S04",
-    "condition": "S03 must correct the Base-token X-Client-Secret contract in prose and machine rows, propagate it to synthetic 401/403 and aggregate zero-leak cases, then request a fresh independent S04 review; no live call or credential access is required."
-  },
+  "blocker": null,
+  "resume_condition": null,
   "rules": [
     "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
     "Do not accept your own work.",
