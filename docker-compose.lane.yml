@@ -1,0 +1,30 @@
+# Наложение для полос стенда: сторож перед живым кабинетом Wildberries.
+#
+# Владелец разрешил тестировать на своём кабинете Denmarcs. Читать оттуда можно всё,
+# писать нельзя: кнопка «Передать в WB» означает настоящую отгрузку, а оприходованные
+# остатки — обещание маркетплейсу товара, которого нет. Запрет сетевой, а не словесный.
+services:
+  wb-guard:
+    image: python:3.12-slim
+    volumes:
+      - ./scripts/stand/wb_guard:/guard:ro
+    command: python /guard/guard.py
+    environment:
+      WB_GUARD_ALLOW_WRITES: "${WB_GUARD_ALLOW_WRITES:-0}"
+    restart: unless-stopped
+
+  api:
+    environment:
+      WILDBERRIES_MARKETPLACE_API_BASE: http://wb-guard:8000/marketplace
+      WILDBERRIES_CONTENT_API_BASE: http://wb-guard:8000/content
+      WILDBERRIES_SUPPLIES_API_BASE: http://wb-guard:8000/supplies
+    depends_on:
+      - wb-guard
+
+  celery_worker:
+    environment:
+      WILDBERRIES_MARKETPLACE_API_BASE: http://wb-guard:8000/marketplace
+      WILDBERRIES_CONTENT_API_BASE: http://wb-guard:8000/content
+      WILDBERRIES_SUPPLIES_API_BASE: http://wb-guard:8000/supplies
+    depends_on:
+      - wb-guard

@@ -17,8 +17,6 @@ export WMS_WEB_PORT="3017$LANE"
 export WMS_SELLER_WEB_PORT="3018$LANE"
 export WMS_DB_PORT="3043$LANE"
 export WMS_REDIS_PORT="3037$LANE"
-export WB_EMULATOR_PORT="3028$LANE"
-export WB_EMULATOR_ADMIN_TOKEN="${WB_EMULATOR_ADMIN_TOKEN:-fbs-e2e-admin}"
 PROJECT="wms-lane-$LANE"
 PASS="${WMS_STAND_PASSWORD:-Стенд123}"
 URL="http://localhost:$WMS_WEB_PORT"
@@ -26,22 +24,43 @@ URL="http://localhost:$WMS_WEB_PORT"
 креды() {
   local mail
   mail="$(docker exec "$PROJECT-db-1" psql -U postgres -d wms -t -A -c \
-    "select coalesce((select email from users where email like '%@test.example.com' order by created_at limit 1), (select email from users where seller_id is null order by created_at limit 1))" 2>/dev/null || true)"
+    "select coalesce(
+  -- Пользователь того тенанта, где заказов больше всего: кликеру нужен экран с данными,
+  -- а не пустой. Приложение при старте заводит собственного тестового админа в отдельном
+  -- тенанте — залогинившись им, агент видит пустые списки и пишет, что всё в порядке.
+  (select u.email from users u
+     join (select tenant_id, count(*) n from fbs_orders group by tenant_id
+           order by n desc limit 1) t on t.tenant_id = u.tenant_id
+    where u.seller_id is null order by u.created_at limit 1),
+  (select email from users where seller_id is null order by created_at limit 1))" 2>/dev/null || true)"
   echo "СТЕНД ПОЛОСЫ $LANE"
   echo "  адрес:  $URL"
   echo "  логин:  ${mail:-НЕ НАЙДЕН}"
   echo "  пароль: $PASS"
   echo "  API:    http://localhost:$WMS_API_PORT"
+  if [[ "${WB_GUARD_ALLOW_WRITES:-0}" == "1" ]]; then
+    echo "  WB:     ЗАПИСЬ В ЖИВОЙ КАБИНЕТ РАЗРЕШЕНА ВЛАДЕЛЬЦЕМ"
+  else
+    echo "  WB:     живой кабинет Denmarcs, только чтение (запись режет wb-guard)"
+  fi
 }
 
 if [[ "${2:-}" == "--креды" ]]; then креды; exit 0; fi
 
-COMPOSE=(docker compose -p "$PROJECT" -f "$ROOT/docker-compose.yml" -f "$ROOT/docker-compose.emulator.yml")
+# Без эмулятора: владелец разрешил тестировать на своём кабинете Denmarcs, и его ключ
+# в снимке оставлен живым намеренно. Остальные 26 ключей вычищены — чужие кабинеты
+# недостижимы в принципе, потому что токенов для них в базе нет.
+# docker-compose.lane.yml ставит сторожа перед живым кабинетом WB: читать можно всё,
+# писать нельзя. Владелец разрешил тестировать на своём кабинете Denmarcs, но кнопка
+# «Передать в WB» означает настоящую отгрузку, а оприходованные остатки — обещание
+# маркетплейсу товара, которого нет.
+COMPOSE=(docker compose -p "$PROJECT" -f "$ROOT/docker-compose.yml" -f "$ROOT/docker-compose.lane.yml")
 
 echo "1/4 поднимаю стек полосы $LANE (порты 3xx$LANE)"
 "${COMPOSE[@]}" up -d --wait db redis >/dev/null 2>&1
+"${COMPOSE[@]}" up -d wb-guard >/dev/null 2>&1
 "${COMPOSE[@]}" run --rm migrations >/dev/null 2>&1 || true
-"${COMPOSE[@]}" up -d --no-deps api celery_worker web wb-emulator >/dev/null 2>&1
+"${COMPOSE[@]}" up -d --no-deps api celery_worker web >/dev/null 2>&1
 
 echo "2/4 жду, пока API ответит"
 for i in $(seq 1 60); do
@@ -70,8 +89,15 @@ HASH="$(docker exec "$PROJECT-api-1" python -c \
   "from app.services.passwords import hash_password; print(hash_password('$PASS'))" 2>/dev/null)"
 [[ -n "$HASH" ]] || { echo "    не удалось посчитать хэш через api — кликер не войдёт" >&2; exit 1; }
 MAIL="$(docker exec "$PROJECT-db-1" psql -U postgres -d wms -t -A -c \
-  "select coalesce((select email from users where email like '%@test.example.com' order by created_at limit 1),
-                   (select email from users where seller_id is null order by created_at limit 1))")"
+  "select coalesce(
+  -- Пользователь того тенанта, где заказов больше всего: кликеру нужен экран с данными,
+  -- а не пустой. Приложение при старте заводит собственного тестового админа в отдельном
+  -- тенанте — залогинившись им, агент видит пустые списки и пишет, что всё в порядке.
+  (select u.email from users u
+     join (select tenant_id, count(*) n from fbs_orders group by tenant_id
+           order by n desc limit 1) t on t.tenant_id = u.tenant_id
+    where u.seller_id is null order by u.created_at limit 1),
+  (select email from users where seller_id is null order by created_at limit 1))")"
 [[ -n "$MAIL" ]] || { echo "    в снимке нет ни одного пользователя ФФ" >&2; exit 1; }
 docker exec "$PROJECT-db-1" psql -U postgres -d wms -q -c \
   "update users set password_hash='$HASH', must_set_password=false where email='$MAIL'"
