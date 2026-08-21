@@ -6,13 +6,14 @@
 - Wave: `wave-a1b311d18f07`
 - Stage under review: `S15 CASE_FACTORY`
 - Role: `pipeline-case-breaker`
-- Independence: this worker did not author the repaired S15 package, S13 plan,
-  S14 verdict, Product contract or application implementation
-- Package commit: `d19d07845feebdad012ccc1ded1e5a1b26e4fdd9`
+- Independence: this worker did not author the BA repair, S13, S14, Product
+  contract, application implementation or the preceding case audit
+- Reviewed BA repair commit:
+  `acf5aedd55b75bbe25049cc1c74e0ac30e902f76`
 - Reviewed `S15-CASE-FACTORY.md` SHA-256:
-  `fcb7118608d899588aa00bc3aa89524402fb8a0778d0da91ed7176da0f1c6590`
+  `b0ade144d55862e06a1f30ee39358b46256a154766071667b0ab50a48f97b545`
 - Reviewed `S15-CASES.json` SHA-256:
-  `93f96a3d502e40265e70bee8438f8681bdaa1aff0cc8a8de45157d1f0817354a`
+  `be892cde46d6ea0d9e154e16321d7ff30e4073b1cb60139327126a6d9431a575`
 - Accepted S13 SHA-256:
   `d1ca8d5967ed8527595d7c43969464a023c989496aa3658e6d2f85f13377f167`
 - Accepted S14 SHA-256:
@@ -20,94 +21,96 @@
 
 ## Verdict
 
-`CASE_BREAKER_PASSED`
+`CASE_BREAKER_FAILED`
 
-The repaired package closes `CB-F01` through `CB-F04` from the preceding
-independent breaker review without weakening the existing bootstrap,
-authority, dynamic-hold or BLG-D05 attack lanes. No uncovered applicable row,
-unknown coverage reference, duplicate case ID or duplicate planned executable
-binding was found.
+The repair closes the structural coverage defect `CA-F01` and the evidence
+schema defect `CA-F03`. It does not yet close `CA-F02`: the new direct lane
+combines two mutually exclusive failure-route outcomes without defining a
+legal transition between them, and neither new lane exercises a prior persisted
+task snapshot. That leaves the repaired compatibility oracle ambiguous and
+partly impossible to execute without S19 inventing behavior.
 
-This verdict approves the repaired package for an independent `case-auditor`.
-It is not `CASE_AUDIT_PASSED`, Product approval, S16 authorization, Dev,
-release or deploy evidence. This breaker performed no controller transition,
-resume, packet generation, application change, production mutation, secret
-access or live WB/Ozon operation.
+This verdict returns only the S15 case package to BA repair. It does not reopen
+S13/S14, change controller state, advance or resume the card, authorize S16 or
+Dev, or provide release, deploy or production evidence.
 
-## Recheck of prior blocker findings
+## Blocking findings
 
-### CB-F01 - typed ACCESS route: closed
+### CB-R01 - F01-C1-14 has no executable WAITING-to-REWORK route
 
-`F01-C1-09` parameterizes all five reviewed typed source-event kinds: `ENV`,
-`FIXTURE`, `ACCESS`, `ORACLE_CONFLICT` and `BUDGET_HARD_STOP`. The route records
-the named definition hash/revision, exact task and operation/stage scope,
-creator or reporter binding, evidence contract and resume stage. It does not
-use an operator- or agent-authored prose condition as policy.
+Severity: blocking. Reopens: `CA-F02` only.
 
-`F01-C1-B10` includes an active typed `ACCESS` occurrence and checks its
-declared and adjacent operations, unrelated-task continuation and rejected
-cross-task narrow/close. The machine coverage row and human matrix both name
-`ACCESS` explicitly.
+`F01-C1-14` first creates a typed stage failure, routes that failure to
+`WAITING`, and then says to route "the same failure" to `REWORK`. The fixture
+does not name two different typed findings, two fresh task variants, a second
+receipt, a valid resolution event, or any controller command that converts the
+first route into the second.
 
-### CB-F02 - positive exact-scope resume: closed
+That distinction is mandatory, not editorial. Pipeline failure routing assigns
+one deterministic disposition and owning stage to a typed finding. `WAITING`
+retains `state.blocker` plus `resume_condition`; `REWORK` clears those fields
+and invalidates to the owning required stage. Without a named legal boundary
+between the outcomes, an implementation can pass by silently reclassifying the
+same event, clearing a blocker without closure evidence, or treating the two
+states as unrelated despite the ordered prose.
 
-`F01-C1-09` now supplies same-revision, same-scope fresh repair/oracle evidence
-from the required independent binding for every typed route. It expects one
-hash-linked narrow/close event, ordinary gate re-evaluation, resume of only the
-declared stage, no synthetic skipped receipts, no unrelated-task mutation and
-restart-stable read-back.
+`F01-C1-B14` repeats the ambiguity by attacking WAITING and REWORK variants but
+does not identify the valid route records against which each forged variant is
+compared. Its one generic assertion, "malformed routes fail closed", therefore
+cannot prove that the valid paths preserve `blocked_by`, clear only the correct
+orchestration projection and invalidate exactly once.
 
-The negative boundary remains independent in `F01-C1-B03`, `F01-C1-B07` and
-`F01-C1-B10`: self-authored, wrong-role, stale-definition, empty/global and
-cross-task attempts fail closed.
+Minimum closure: make WAITING and REWORK explicit independent fresh-fixture
+variants with named typed findings and expected route records. If an ordered
+WAITING-to-REWORK journey is intended, name the intervening owner/oracle
+evidence, occurrence lifecycle event, controller command and resulting stage
+transition. The breaker variants must mutate one field at a time against those
+valid records and assert exact pre/post state.
 
-### CB-F03 - lifecycle, invalidation and v1 compatibility: closed
+### CB-R02 - restart is covered, prior-snapshot compatibility is not
 
-- `F01-C1-11` executes a valid close, immutable definition supersession and
-  typed reopen, then verifies the predecessor hashes, supersession link,
-  closure evidence and reopened scope after restart.
-- `F01-C1-12` uses two distinct task paths and changes only one definition or
-  closure contract. Its oracle invalidates only receipts linked through the
-  changed definition, occurrence scope or dependency path while preserving the
-  unrelated path.
-- `F01-C1-13` runs a previous-controller reader against the generated additive
-  v1 view, proves that empty `affected_task_ids` is not interpreted as global,
-  and forbids the compatibility reader from writing authority or lifecycle.
+Severity: blocking. Reopens: `CA-F02` only.
 
-The malformed-history and empty/global attacks remain covered by
-`F01-C1-B09` and `F01-C1-B07`.
+Both new cases restart states they have just created under the repaired model.
+Neither fixture seeds a previously persisted task snapshot containing the
+legacy `state.blocker`/`resume_condition` projection alongside an unresolved
+`blocked_by` dependency, then loads or rebuilds it under the new evaluator.
+Consequently the cases do not decide whether restart preserves both channels,
+rejects a stale projection, or deterministically regenerates it from authority;
+all three implementations could claim compliance with the current prose.
 
-### CB-F04 - deterministic fixture: closed
+Minimum closure: add a versioned prior-snapshot fixture and exact expected
+result for load/rebuild, including channel identity, owner, closure evidence,
+required resume stage, dependency path, invalidated receipts and the second
+restart. Add destructive variants for a stale orchestration projection, a
+resolved dependency with a still-open orchestration hold, and the inverse.
 
-The common `blg-f01-blocker-registry-local-v1` fixture pins
-`clock_utc = 2026-08-21T00:00:00Z`,
-`random_seed = blg-f01-blocker-registry-local-v1` and a deterministic
-idempotency/event-key sequence derived from case ID and fixture version. Reset
-recreates those values; teardown asserts that case-owned refs, journal events,
-projections and publication retries do not leak into the next case.
+## Repaired lanes that passed
 
-## Downstream executability check
+### CA-F01 - full coverage chain: closed
 
-The package contains 26 unique GOLD cases: 13 direct and 13 breaker lanes. All
-26 have a versioned fixture/builder, steps, executor type, unique exact
-`executable_ref`, matching `test_id`, `PLANNED_FOR_S19`, timeout, oracle,
-read-back and reload assertion. Every case is referenced by the coverage
-matrix, every coverage reference resolves, and
-`case_audit_handoff.uncovered_applicable_rows` is empty.
+All thirteen machine coverage rows now contain requirement, capability,
+process transition, typed incident/block (or reviewed N/A), non-empty direct
+cases and non-empty breaker cases. The package has 28 unique GOLD IDs, every ID
+is covered, every reference resolves, direct/breaker roles match, and each row's
+incident/block is present in `case_provenance`. The chain is structured and can
+be falsified without interpreting the Markdown matrix.
 
-The planned references are correctly future S19 bindings rather than claims
-that test files already exist. Their assertions are specific enough for S18 to
-implement the accepted contract, S19 to create runnable bindings and S22 to
-execute deterministic local controller/Git/CI checks without rewriting the
-oracle.
+### CA-F03 - planned S19 evidence binding: closed
 
-## State boundary and next action
+All 28 GOLD cases have a unique `executable_ref`, matching `test_id`, executor
+type, fixture version/builder, common deterministic reset, timeout,
+`PLANNED_FOR_S19`, read-back/reload oracle and
+`pipeline-case-execution-v1`. That profile binds
+`pipeline/evidence.schema.json`, lists all 28 IDs and requires the authority,
+decision, scope, lifecycle/denial, command, timestamp, artifact-hash and
+redaction trace fields. The explicit N/A rule prevents silent evidence gaps.
 
-Artifact blocker: none for the reviewed S15 hashes.
+## Scope and next action
 
-The current read-only `tasks/BLG-F01/state.json` snapshot already names S16 as
-the current stage while this repaired package still requires an independent
-case audit. This breaker did not alter that controller-owned state. The
-orchestrator must bind this exact breaker verdict to the reviewed hashes,
-obtain an independent `CASE_AUDIT_PASSED`, and reconcile the controller gate
-before treating S16 or any downstream work as authorized.
+No application code, controller state, packet, receipt, S16 artifact, release
+or external system was changed or invoked by this breaker.
+
+Next action: independent `pipeline-ba` repair of `CB-R01` and `CB-R02` in the
+S15 factory/case package. A fresh independent case-breaker must review the new
+exact hashes before a different case-auditor can run.
