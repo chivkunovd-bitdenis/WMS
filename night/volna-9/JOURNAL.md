@@ -46,3 +46,53 @@
 
 ## Итог: сделано 0, отложено 9
 21:04 отчёт: НЕ СОЗДАН/НЕПОЛОН: нет файла OTCHET.md
+# Волна volna-9
+
+## Понимание
+00:15 карточки уже нарезаны (9), нарезку пропускаю
+00:15 нарезано карточек: 9
+
+### разбор
+00:15   06-picking-list-order · analyst: уже сделано, пропускаю
+00:15   02-verdikt-screen · analyst: уже сделано, пропускаю
+00:15   01-wb-marking · analyst: уже сделано, пропускаю
+00:15   05-prod-slow · analyst: уже сделано, пропускаю
+00:15   03-no-distribution-mode · analyst: уже сделано, пропускаю
+00:15   04-warehouse-switch · analyst: уже сделано, пропускаю
+00:15   08-storage · analyst: уже сделано, пропускаю
+00:15   09-billing · analyst: уже сделано, пропускаю
+00:15   07-reporting · analyst: уже сделано, пропускаю
+
+### сверка
+00:15   01-wb-marking · requirement-critic: уже сделано, пропускаю
+00:15   02-verdikt-screen · requirement-critic: уже сделано, пропускаю
+00:15   04-warehouse-switch · requirement-critic: уже сделано, пропускаю
+00:15   03-no-distribution-mode · requirement-critic: уже сделано, пропускаю
+00:15   05-prod-slow · requirement-critic: уже сделано, пропускаю
+00:15   06-picking-list-order · requirement-critic: уже сделано, пропускаю
+00:15   07-reporting · requirement-critic: уже сделано, пропускаю
+00:15   09-billing · requirement-critic: уже сделано, пропускаю
+00:15   08-storage · requirement-critic: уже сделано, пропускаю
+00:15 вопросов после анализа: 45 — см. /Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-etalon/night/volna-9/VOPROSY.md
+
+### карта задевания
+[сторож 00:17] симптом: оркестратор_жив=false + карточки не доведены · сделано: ничего, симптом ложный — PID 91604 (`night.py полный night/volna-9.md --полос 6`) жив, журнал писал 2 мин назад, health-check pgrep-шаблон `night.py ночь` (scripts/night_health.py:29) не распознаёт фазу `полный` · не трогал: оркестратор (жив и работает), стенды 2–6 (карточки ещё не дошли до DEV.md, оркестратор сам поднимает стенды через scripts/stand/up.sh когда нужно), night_health.py (шаблон pgrep — процессный вопрос владельца, не сторожа)
+00:21 карта: готова
+00:21 
+Понимание собрано, перехожу к исполнению без остановки.
+
+## Ночь · карточек 9 · полос 6
+
+### арх-решения по доменам (6)
+00:21   04-warehouse-switch · solution-architect: нет файла ARCH.md (код 1, попытка 1)
+00:21   07-reporting · solution-architect: нет файла ARCH.md (код 1, попытка 1)
+00:21   01-wb-marking · solution-architect: нет файла ARCH.md (код 1, попытка 1)
+00:21   08-storage · solution-architect: нет файла ARCH.md (код 1, попытка 1)
+00:21   04-warehouse-switch · solution-architect: нет файла ARCH.md (код 1, попытка 2)
+00:21   05-prod-slow · solution-architect: нет файла ARCH.md (код 1, попытка 1)
+00:21   01-wb-marking · solution-architect: нет файла ARCH.md (код 1, попытка 2)
+00:21   09-billing · solution-architect: нет файла ARCH.md (код 1, попытка 1)
+00:21   07-reporting · solution-architect: нет файла ARCH.md (код 1, попытка 2)
+00:21   08-storage · solution-architect: нет файла ARCH.md (код 1, попытка 2)
+00:21   05-prod-slow · solution-architect: нет файла ARCH.md (код 1, попытка 2)
+00:21   09-billing · solution-architect: нет файла ARCH.md (код 1, попытка 2)

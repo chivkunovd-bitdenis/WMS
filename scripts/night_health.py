@@ -26,7 +26,9 @@ from pathlib import Path
 
 
 def жив_оркестратор() -> bool:
-    р = subprocess.run(["pgrep", "-f", "night.py ночь"], capture_output=True, text=True)
+    # Любая фаза, а не только «ночь»: проверка, ищущая одно слово, всю ночь будила
+    # сторожа на живом оркестраторе — и каждое такое пробуждение стоит дорогой модели.
+    р = subprocess.run(["pgrep", "-f", "night.py"], capture_output=True, text=True)
     return bool(р.stdout.strip())
 
 
