@@ -2,7 +2,7 @@
   "task_id": "BLG-C02",
   "stage": "S04",
   "role": "pipeline-reviewer",
-  "status": "WAITING",
+  "status": "RUNNING",
   "traits": [
     "release_change",
     "external_contract"
@@ -67,18 +67,8 @@
     "estimated_usd": 0.3525
   },
   "blocked_by": [],
-  "blocker": {
-    "type": "SECURITY",
-    "reason_code": "RESEARCH_CONTRACT_GAPS",
-    "details": "S04 RESEARCH_REWORK: S03 does not close the safe WB logging contract. It must (1) make zero raw WB response body/path/object-id leakage mandatory across every API and worker handler/sink, including log_wb_client_error, rather than allowing the legacy lane to remain outside the structured event; (2) cover current WB auth modes and secrets beyond Authorization, including service/basic-token X-Client-Secret and token-type 401/403 constraints, without reading or changing credentials; (3) assess omitted WB statuses, at minimum 402 on current FBS endpoints and applicability of 406/451; (4) specify rate-limit parsing/proof for token-type aggregation and absent/malformed headers, including X-Ratelimit-Remaining absent on 429 and numeric Retry/Limit/Reset; (5) replace LIVE_SANDBOX not-applicable with the official content/marketplace/supplies sandbox hosts, test-token constraints and lower-limit differences, while keeping deterministic emulator/MockTransport proof and prohibiting live calls.",
-    "owner": "pipeline-ba",
-    "created_at": "2026-08-21T00:44:34Z",
-    "resume_stage": "S04"
-  },
-  "resume_condition": {
-    "stage": "S04",
-    "condition": "Revise the S03 dossier and capability matrix with official WB 2026 auth, error/status, rate-limit and sandbox sources; make end-to-end API+worker leak tests and emulator/sandbox host classification explicit; then resume S04 for independent re-review."
-  },
+  "blocker": null,
+  "resume_condition": null,
   "rules": [
     "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
     "Do not accept your own work.",

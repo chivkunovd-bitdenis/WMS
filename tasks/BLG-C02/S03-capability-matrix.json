@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.1",
+  "task_id": "BLG-C02",
+  "stage": "S03",
+  "as_of": "2026-08-21",
+  "rework_reason": "RESEARCH_CONTRACT_GAPS",
+  "unprocessed_applicable_rows": 0,
+  "live_calls_performed": false,
+  "rows": [
+    {"id":"AUTH_MODES","applicable":true,"status":"ready_for_contract","sources":["SRC-12","SRC-13"],"decision":"Personal, Base and Test use Authorization Bearer only; Service uses Authorization plus X-Client-Secret; both header values and token-derived payloads are forbidden in every sink","owner_stage":"S15"},
+    {"id":"AUTH_401_403","applicable":true,"status":"ready_for_cases","sources":["SRC-12","SRC-13"],"decision":"401 covers failed token or service-secret verification; 403 covers category/access/type mismatch, missing or mismatched service secret, wrong service token, and X-Client-Secret forbidden with a personal token; tests use synthetic canaries only","owner_stage":"S15"},
+    {"id":"METHOD_HOST_ROUTE","applicable":true,"status":"ready_for_contract","sources":["SRC-04","SRC-08","SRC-09","SRC-16"],"decision":"Log method, exact classified host and controlled route template; never raw path or object ID fallback","owner_stage":"S11"},
+    {"id":"URL_PRIVACY","applicable":true,"status":"ready_for_cases","sources":["SRC-05","SRC-07","SRC-08"],"decision":"Full URL, query, URL credentials, raw path and all object IDs are forbidden across API and worker sinks","owner_stage":"S15"},
+    {"id":"HTTP_402","applicable":true,"status":"ready_for_cases","sources":["SRC-04","SRC-14","SRC-18"],"decision":"Current FBS and stock endpoints document 402; emit payment_required with status only and no WB body","owner_stage":"S15"},
+    {"id":"HTTP_406","applicable":true,"status":"ready_for_cases","sources":["SRC-14","SRC-18"],"decision":"406 applies to the WMS stock update route and maps to operation_blocked without WB body","owner_stage":"S15"},
+    {"id":"HTTP_451","applicable":false,"status":"not_applicable_verified","sources":["SRC-14","SRC-19","SRC-09"],"decision":"451 is documented for moderated files in User Communication, outside the current content, marketplace and supplies call inventory; unknown future 4xx still use generic http_rejected without body","owner_stage":"S03"},
+    {"id":"HTTP_OTHER","applicable":true,"status":"ready_for_cases","sources":["SRC-03","SRC-04","SRC-14"],"decision":"Cover 2xx, 3xx, 400, 401, 403, 404, 409, 413, 422, 429, 5xx and no-response with typed outcomes and no body","owner_stage":"S15"},
+    {"id":"TRANSPORT_ERRORS","applicable":true,"status":"ready_for_cases","sources":["SRC-08"],"decision":"No-response failures use a closed error_type enum without exception text or request repr","owner_stage":"S15"},
+    {"id":"RATE_LIMIT_AGGREGATION","applicable":true,"status":"ready_for_contract","sources":["SRC-03","SRC-15"],"decision":"Service limits aggregate across all tokens of one service; Base and Test have lower limits aggregated within token type; logging records no token identity","owner_stage":"S11"},
+    {"id":"RATE_LIMIT_HEADERS","applicable":true,"status":"ready_for_cases","sources":["SRC-03","SRC-15"],"decision":"Remaining is expected absent on 429; Retry, Limit and Reset are parsed as non-negative numeric seconds/counts; absent, negative, overflow or malformed values become null and raw strings are not logged","owner_stage":"S15"},
+    {"id":"RETRIES","applicable":true,"status":"ready_for_cases","sources":["SRC-08","SRC-15"],"decision":"One event per wire attempt with stable operation_ref, unique request_ref and bounded attempt count","owner_stage":"S15"},
+    {"id":"PAGINATION_BATCH","applicable":true,"status":"ready_for_cases","sources":["SRC-04","SRC-09"],"decision":"One event per page/batch HTTP attempt; cursors, object IDs and partial response bodies are never logged","owner_stage":"S15"},
+    {"id":"MARKING_PRINT","applicable":true,"status":"ready_for_cases","sources":["SRC-04","SRC-07"],"decision":"SGTIN/CIS, UIN, IMEI, GTIN, barcode, sticker, QR, ZPL, PDF and image canaries are absent from every success/error sink","owner_stage":"S15"},
+    {"id":"API_WORKER_SINKS","applicable":true,"status":"ready_for_cases","sources":["SRC-02","SRC-09","SRC-10","SRC-11"],"decision":"Aggregate and scan structured WB events, log_wb_client_error, app/httpx/httpcore/access logs, API exception output, worker task/retry/failure logs, traces, metric labels and test evidence; zero raw canary matches and one event per attempt","owner_stage":"S15"},
+    {"id":"EMULATOR_PROOF","applicable":true,"status":"ready_for_cases","sources":["SRC-06","SRC-09"],"decision":"MockTransport/local emulator executes the full API and worker paths under deny-by-default egress; deterministic fixtures cover success, auth, status, rate-limit, redirect and transport failures","owner_stage":"S15"},
+    {"id":"OFFICIAL_SANDBOX","applicable":true,"status":"contract_documented_no_live_call","sources":["SRC-16","SRC-17"],"decision":"Classify exact content-api-sandbox, marketplace-api-sandbox and supplies-api-sandbox hosts as sandbox; Test token only; Content and Marketplace max 1 rps total, Supplies FBW max 1 rps per method; no sandbox request is authorized by this task","owner_stage":"S23"},
+    {"id":"CORRELATION_ACCESS","applicable":true,"status":"ready_for_product_decision","sources":["SRC-01","SRC-07","SRC-08"],"decision":"Engineer lookup uses request_ref and opaque local refs; reader roles, retention and lookup surface require Product/Release contract","owner_stage":"S11"},
+    {"id":"RELEASE_ACTIVATION","applicable":true,"status":"ready_for_release_decision","sources":["SRC-01","SRC-11"],"decision":"Activation remains config-gated until owner-authorized release stages; S03 grants no release authority","owner_stage":"S26"},
+    {"id":"COMPETITOR_WORKFLOW","applicable":false,"status":"not_applicable_verified","sources":["SRC-01"],"decision":"Infrastructure logging change has no competitor/operator screen or workflow","owner_stage":"S03"}
+  ]
+}

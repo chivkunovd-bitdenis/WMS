@@ -11,10 +11,11 @@
 
 Для расследования интеграционных сбоев нужен отдельный структурированный event на каждую
 фактическую попытку HTTP-вызова к WB. Минимально полезный и безопасный event содержит метод,
-разрешённый WB-host, нормализованный route template, HTTP-статус либо тип transport-ошибки,
-длительность, номер попытки и внутренний `request_ref`. Он не содержит полный URL, query string,
-headers, request/response body, токен, cookie, код маркировки, sticker/QR payload или текст
-исключения.
+классифицированный WB-host, нормализованный route template, HTTP-статус либо тип transport-ошибки,
+длительность, номер попытки и внутренний `request_ref`. Нулевая утечка является сквозным
+инвариантом: ни новый event, ни существующий `log_wb_client_error`, ни API/worker exception,
+access/task log, trace, metric label или тестовое evidence не могут содержать raw URL/path,
+object ID, headers, request/response body, credential либо свободный текст WB/исключения.
 
 Стандартный INFO-лог `httpx` недостаточен для бизнес-требования. Он не пишет headers и body, но
 пишет полный URL и свободный текст, не даёт WMS-корреляцию, не различает logical operation и retry,
@@ -30,7 +31,7 @@ headers, request/response body, токен, cookie, код маркировки,
 |---|---|---|---|---|
 | SRC-01 | `docs/product/backlog-queue.json`, карточка `BLG-C02` | snapshot controller, 2026-08-21 | official | Нужны method/address/status, маскирование секретов, поиск конкретного запроса и отдельное разрешение на release. |
 | SRC-02 | `docs/BACKLOG-2026-08-19-CHAT-RU.md:32` | repository record, 2026-08-19 | observed | Кандидат находился в `.worktrees/picklist-size`; заявлены `logging_setup.py`, method/address/status, token test и API/worker wiring. |
-| SRC-03 | [WB API: общая информация](https://dev.wildberries.ru/ru/openapi/api-information) | current public OpenAPI, accessed 2026-08-21 | official | Токен передаётся в `Authorization`; описаны 4xx/5xx, `429` и числовые rate-limit headers. |
+| SRC-03 | [WB API: общая информация](https://dev.wildberries.ru/ru/openapi/api-information) | current public OpenAPI, accessed 2026-08-21 | official | Токен передаётся в `Authorization`; описаны 4xx/5xx, token-bucket, агрегация лимитов и rate-limit headers. |
 | SRC-04 | [WB API: FBS](https://dev.wildberries.ru/ru/openapi/orders-fbs) | HTTP paths v3, current public OpenAPI, accessed 2026-08-21 | official | FBS endpoints содержат order/supply IDs в path/body; metadata содержит SGTIN/UIN/IMEI/GTIN; `409` расходует лимит как 10 запросов. |
 | SRC-05 | [HTTPX logging](https://www.python-httpx.org/logging/) | current HTTPX docs, accessed 2026-08-21 | official | INFO event имеет форму `HTTP Request: METHOD full-URL HTTP/version status`; network details идут отдельным logger `httpcore`. |
 | SRC-06 | [HTTPX event hooks](https://www.python-httpx.org/advanced/event-hooks/) | current HTTPX docs, accessed 2026-08-21 | official | Client hooks являются штатной точкой для logging/monitoring request и response. |
@@ -39,18 +40,38 @@ headers, request/response body, токен, cookie, код маркировки,
 | SRC-09 | `backend/app/services/wildberries_client.py`, `wildberries_fbs_client.py`, `fbs_stock_sync_service.py` | checkout `a0427e890c35da5a05147114f4302dc2987d3a88`, observed 2026-08-21 | observed | В текущем checkout есть 22 прямые точки HTTP-вызова WB и три разрешённых WB-host settings. |
 | SRC-10 | `backend/app/services/wildberries_errors.py` | checkout `a0427e890c35da5a05147114f4302dc2987d3a88`, observed 2026-08-21 | observed | Текущий error logger может писать до 500 символов raw WB response body; это отдельный канал утечки, который должен попасть в security review. |
 | SRC-11 | uncommitted `.worktrees/picklist-size` at `8259901bdf3c7ea70f908b37635de7fc21eaf4ef`, files `backend/app/core/logging_setup.py` and `backend/tests/test_outbound_http_logging.py` | observed 2026-08-21; file SHA-256 `8392dd8b19519fde94481b8b63527389b629ac9d8374c20f71eecae380c6911b` and `9c74ee6e044b1c283db48cbea309719339a8e416a9dd3161d38aeb3428d12dce` | observed | Кандидат поднимает глобальный `httpx` logger до INFO, default-on, подключает API и Celery и тестирует только отсутствие `Authorization`/token в одной успешной mock-операции. Это наблюдение, не durable Git artifact и не release proof. |
+| SRC-12 | [Система авторизации WB API](https://dev.wildberries.ru/knowledge-base/articles/019d49a1-0d73-71e9-be3e-b2c44567470c/sistema-avtorizatsii-wb-api) | updated 2026-04-03, accessed 2026-08-21 | official | Четыре типа токенов, Bearer-схема, category/read-write/type проверки и граница `401` против `403`. |
+| SRC-13 | [Работа с токенами для партнёрских сервисов](https://dev.wildberries.ru/knowledge-base/articles/019d49a1-bd37-76b4-931d-fa5fa437b85e) | current public guide, accessed 2026-08-21 | official | Сервисный токен требует `X-Client-Secret`; перечислены `401` secret failures и `403` missing/mismatched/not-allowed constraints. |
+| SRC-14 | [Расшифровка кодов ошибок WB API](https://dev.wildberries.ru/knowledge-base/articles/019d49a1-2cb0-781d-8921-deaf4a014a58/rasshifrovka-kodov-oshibok-wb-api) | updated 2026-04-06, accessed 2026-08-21 | official | Общая семантика `402`, `406`, `451`, `429` и 5xx; response body остаётся чувствительным внешним материалом. |
+| SRC-15 | [Лимиты запросов WB API](https://dev.wildberries.ru/knowledge-base/articles/019d49a1-28ca-7735-bf2f-98210695abc7/limity-zaprosov-wb-api) | updated 2026-04-03, accessed 2026-08-21 | official | Token bucket, лимиты по типам токенов, отсутствие Remaining на `429`, числовые Retry/Limit/Reset. |
+| SRC-16 | [Ограничения тестового контура WB API](https://dev.wildberries.ru/knowledge-base/articles/019d49a1-24e3-7642-801f-e1f18c5fe708) | updated 2026-04-03, accessed 2026-08-21 | official | Официальные content/marketplace/supplies sandbox hosts, test-token-only и ограничения тестового контура. |
+| SRC-17 | [Песочница WB API](https://dev.wildberries.ru/sandbox) | current public matrix, accessed 2026-08-21 | official | Content/Marketplace имеют суммарный предел 1 rps, Supplies FBW — 1 rps на метод; sandbox-отличия ответов и данных. |
+| SRC-18 | [WB API: работа с товарами](https://dev.wildberries.ru/ru/openapi/work-with-products) | current public OpenAPI, accessed 2026-08-21 | official | Используемый WMS `PUT /api/v3/stocks/{warehouseId}` документирует `402` и `406`; `406` означает блокировку обновления остатков. |
+| SRC-19 | [WB API: общение с покупателями](https://dev.wildberries.ru/ru/openapi/user-communication) | current public OpenAPI, accessed 2026-08-21 | official | `451` относится к файлу, не прошедшему модерацию, в другом API; текущие BLG-C02 вызовы его не используют. |
 
 У публичной страницы WB нет отдельного номера релиза документа. Для неё версия фиксируется как
 `current public OpenAPI as accessed 2026-08-21`; версии endpoint отражены в самих paths (`v1-v3`).
 
 ## 3. Граница внешнего контракта
 
-В область BLG-C02 входят вызовы только к allowlist hosts:
+В область BLG-C02 входят три явных класса host. Классификация выполняется до отправки и попадает в
+`environment`; совпадение по суффиксу или произвольный `*.wildberries.ru` запрещены.
+
+Production allowlist:
 
 - `content-api.wildberries.ru`;
 - `supplies-api.wildberries.ru`;
 - `marketplace-api.wildberries.ru`;
-- явно разрешённый local emulator host в тестовом окружении с `environment=emulator`.
+
+Official sandbox allowlist (только как контракт, live-вызов в этой задаче запрещён):
+
+- `content-api-sandbox.wildberries.ru`;
+- `marketplace-api-sandbox.wildberries.ru`;
+- `supplies-api-sandbox.wildberries.ru`.
+
+Deterministic test class: фиксированный local `MockTransport` или emulator endpoint с
+`environment=emulator`, который не резолвится и не перенаправляется в сеть. Emulator host не
+маскируется под `sandbox`: `sandbox` означает только официальный WB host из списка выше.
 
 Логирование произвольного `httpx`-трафика WMS не входит в задачу. Redirect на host вне allowlist
 должен завершаться безопасным outcome, а не расширять область сбора данных.
@@ -70,7 +91,7 @@ Competitor workflows/screens и seller instruction не применимы: BLG-
   "event": "wb.http.client.completed",
   "occurred_at": "2026-08-21T00:00:00Z",
   "provider": "wildberries",
-  "environment": "local|emulator|staging|production",
+  "environment": "emulator|sandbox|staging|production",
   "component": "api|worker",
   "operation_ref": "opaque-local-operation-ref",
   "request_ref": "wbreq-uuid",
@@ -84,10 +105,12 @@ Competitor workflows/screens и seller instruction не применимы: BLG-
   "attempt": 1,
   "duration_ms": 123,
   "status_code": 204,
-  "outcome": "http_completed|http_rejected|rate_limited|upstream_error|transport_error|redirect_blocked",
+  "outcome": "http_completed|http_rejected|auth_rejected|payment_required|operation_blocked|rate_limited|upstream_error|transport_error|redirect_blocked",
   "error_type": null,
   "rate_limit_remaining": 19,
-  "rate_limit_retry_seconds": null
+  "rate_limit_retry_seconds": null,
+  "rate_limit_limit": null,
+  "rate_limit_reset_seconds": null
 }
 ```
 
@@ -101,15 +124,17 @@ Rules for fields:
    emails or marketplace credentials. Their access and retention are decided at S11/S26.
 4. `status_code=null` is valid when no response was received. `error_type` is one of
    `timeout|connect|dns|tls|cancelled|protocol|other`.
-5. Only numeric WB response headers `X-Ratelimit-Remaining`, `X-Ratelimit-Retry`,
-   `X-Ratelimit-Limit`, `X-Ratelimit-Reset` may be separately allowlisted. No raw header map.
+5. Only parsed non-negative numeric WB response headers `X-Ratelimit-Remaining`,
+   `X-Ratelimit-Retry`, `X-Ratelimit-Limit`, `X-Ratelimit-Reset` may be separately allowlisted.
+   Missing or malformed values become `null`; raw strings and the raw header map are never logged.
 6. Logging failure must not change the WB request result or warehouse transaction.
 
 ## 5. Denylist
 
 The event must never contain:
 
-- `Authorization`, cookies, API/JWT/session tokens, passwords, encryption keys or connection URLs;
+- `Authorization`, `X-Client-Secret`, cookies, API/JWT/session tokens, service secrets, passwords,
+  encryption keys or connection URLs;
 - full URL, query string, URL credentials, raw request/response headers;
 - request body, response body or their excerpts;
 - SGTIN/CIS, UIN, IMEI, GTIN, customs declaration, barcode, sticker, QR/ZPL/PDF/image payload;
@@ -118,21 +143,46 @@ The event must never contain:
 - exception message, `repr(request)`, `repr(response)` or stack data that repeats URL/body;
 - newline/control characters from external values.
 
-The existing `log_wb_client_error(... wb_response_body=%r)` path (SRC-10) must be included in the
-same negative security tests or removed from the new structured lane. Testing only the new success
-event cannot prove that WB diagnostics are safe end to end.
+The existing `log_wb_client_error(... wb_response_body=%r)` behavior (SRC-10) cannot remain as a
+legacy lane outside the contract. Before BLG-C02 can pass implementation review, every call site in
+API and worker execution must either use a safe structured projection or suppress the body/path/ID
+entirely. The negative tests aggregate every emitted sink and require zero canary matches; testing
+only the new success event is an automatic failure.
 
-## 6. HTTP outcome mapping
+## 6. Auth contract without credential access
+
+`Basic token` below means the WB **Base token type**, not HTTP Basic authentication. Every test uses
+synthetic canary strings; implementation, review and test must not read, decode, rotate or replace a
+real credential.
+
+| WB token mode | Request headers | Official constraint | Safe observable result |
+|---|---|---|---|
+| Personal | `Authorization: Bearer <token>` | own/on-premise integration; category and read/write rights apply | status only; no token-derived claims |
+| Service | `Authorization: Bearer <seller-service-token>` plus `X-Client-Secret` | both must belong to the same authorized service | status only; neither credential nor auth response text |
+| Base | `Authorization: Bearer <token>`; no `X-Client-Secret` | limited categories and lower limits | status only; `token_type` is not logged |
+| Test | `Authorization: Bearer <token>`; no `X-Client-Secret` | sandbox hosts only, generated data, lower limits | `environment=sandbox`; no token-derived claims |
+
+`401` means token or service-secret verification did not pass: missing/malformed/expired/withdrawn
+credential is one class for logging. `403` means a valid credential cannot perform the operation:
+wrong category/access level, token type mismatch, missing `X-Client-Secret` for a Service token,
+token and secret from different services, or `X-Client-Secret` supplied with a Personal token. The
+WB `detail`, `requestId`, `origin` and any echoed external value remain forbidden even when they
+would make diagnosis easier; the engineer correlates by local `request_ref`.
+
+## 7. HTTP outcome mapping
 
 | Signal | Safe interpretation | Required event data |
 |---|---|---|
 | `2xx` | HTTP exchange completed; not proof of full business success | status, duration, attempt |
 | `3xx` | Unexpected for configured API host; redirect policy is explicit | status and `redirect_blocked` or controlled resend |
 | `400/413/422` | Request/contract rejection | status; no body |
-| `401/403` | Authentication/access rejection | status; never token/header |
+| `401/403` | Authentication/access/type rejection | `auth_rejected`, status; never token/header/body |
+| `402` | Insufficient balance for a Catalog service; documented on current FBS/stock methods | `payment_required`, status; no body |
 | `404` | Route or object not found | status and route template |
+| `406` | Operation blocked; applicable to current `PUT /api/v3/stocks/{warehouseId}` | `operation_blocked`, status; no body |
 | `409` | Business conflict; WB counts it as 10 requests in Marketplace category | status and numeric remaining limit when present |
 | `429` | Rate limited | status plus numeric retry/reset fields when present |
+| `451` | File failed moderation in User Communication API | N/A for current WMS call inventory; future unknown 4xx maps to `http_rejected` without body |
 | `5xx` | WB unavailable/internal error | status and retry attempt |
 | no response | DNS/connect/TLS/timeout/protocol failure | `status_code=null`, enum `error_type`, duration |
 
@@ -141,7 +191,49 @@ HTTP event for the batch; a `2xx` does not imply every item succeeded. Sanitized
 (`requested_count`, `accepted_count`, `rejected_count`) may be a separate allowlisted application
 event only after endpoint-specific contract cases exist. Partial response bodies are never logged.
 
-## 7. Candidate assessment
+## 8. Rate-limit contract
+
+WB applies token-bucket limits per method/group and token type. Service-token traffic is aggregated
+across all seller tokens issued for the same Catalog service. Base and Test token limits are lower
+and aggregated within the corresponding token type. This affects pacing, but the event must not
+contain token type, token identity or a credential fingerprint.
+
+Parsing is strict and total:
+
+- on non-`429`, `X-Ratelimit-Remaining` may be parsed as a non-negative integer; absence is accepted
+  as `null` and does not turn the HTTP result into a logging failure;
+- on `429`, official docs say `X-Ratelimit-Remaining` is absent; `null` is the expected value, not a
+  parser defect;
+- `X-Ratelimit-Retry` and `X-Ratelimit-Reset` are non-negative numeric seconds, while
+  `X-Ratelimit-Limit` is a non-negative numeric burst count;
+- whitespace-normalized decimal integer values are accepted. Empty, signed-negative, fractional,
+  non-ASCII numeric, overflow and arbitrary strings become `null`; no raw value is retained;
+- Retry/Limit/Reset missing independently on `429` remain `null`. Retry policy uses a bounded local
+  fallback decided in S15, never the external body or malformed header.
+
+Required deterministic rows are: all four valid; `429` without Remaining; every header absent;
+each header malformed independently; negative and overflow; `409` weighted accounting; Personal,
+Service, Base and Test aggregation fixtures. These are parser/contract fixtures, not live calls.
+
+## 9. Official sandbox versus emulator
+
+The official WB sandbox is applicable to host classification and later integration compatibility,
+even though this research task authorizes no request to it. It accepts only a Test token and uses
+generated data. Exact mappings are:
+
+| Production | Official sandbox | Contract difference relevant here |
+|---|---|---|
+| `content-api.wildberries.ru` | `content-api-sandbox.wildberries.ru` | max 1 request/second total for Content methods |
+| `marketplace-api.wildberries.ru` | `marketplace-api-sandbox.wildberries.ru` | max 1 request/second total; FBS sandbox has synthetic flows and response differences |
+| `supplies-api.wildberries.ru` | `supplies-api-sandbox.wildberries.ru` | FBW sandbox max 1 request/second per method |
+
+For BLG-C02 proof, `MockTransport` is primary: it injects exact response status, body, headers,
+redirect and transport exceptions without DNS/network. A local emulator may additionally prove API
+and Celery worker wiring, but runs under deny-by-default egress and fixed local host classification.
+Official sandbox is a separately classified compatibility lane for S23; it is neither `N/A` nor a
+substitute for deterministic leak tests, and this card gives no authority to execute it.
+
+## 10. Candidate assessment
 
 Observed candidate (SRC-11) has useful intent but does not yet satisfy the card:
 
@@ -151,50 +243,23 @@ Observed candidate (SRC-11) has useful intent but does not yet satisfy the card:
 - gap: full URL is recorded, including path/query values;
 - gap: logger is global for all HTTPX traffic, not WB-host scoped;
 - gap: no correlation ref, tenant/seller/local operation, duration or retry attempt;
-- gap: no event contract for timeout/DNS/TLS/cancel, redirects, `409`, `429`, `5xx`, pagination or
-  partial batch success;
-- gap: no negative tests for marking bodies, response body, query secrets, raw exception text,
-  existing `wb_response_body`, worker duplicate setup or non-WB traffic;
+- gap: no event contract for auth modes, `402`, `406`, timeout/DNS/TLS/cancel, redirects, `409`,
+  malformed/absent `429` headers, `5xx`, pagination or partial batch success;
+- gap: no negative tests for `X-Client-Secret`, marking bodies, response body, raw path/object IDs,
+  query secrets, raw exception text, existing `wb_response_body`, worker duplicate setup or non-WB
+  traffic;
 - gap: `default=True` activates logging as soon as the artifact runs. Whether activation must be
   config-gated until owner-authorized S26/S27 is a Product/Release decision, not an S03 assumption.
 
-## 8. Machine capability matrix
+## 11. Machine capability matrix
 
-All applicable rows are processed. `ready_for_contract` means research is complete and the row is
-handed to the named later stage; it does not mean implementation exists.
+The authoritative machine-readable matrix is
+`tasks/BLG-C02/S03-capability-matrix.json` (`schema_version=1.1`). It has zero unprocessed applicable
+rows. `OFFICIAL_SANDBOX` is now applicable with status `contract_documented_no_live_call`, while
+`EMULATOR_PROOF` remains the deterministic evidence lane. `HTTP_451` is explicitly verified N/A for
+the current call inventory rather than silently omitted.
 
-```json
-{
-  "schema_version": "1.0",
-  "task_id": "BLG-C02",
-  "stage": "S03",
-  "as_of": "2026-08-21",
-  "unprocessed_applicable_rows": 0,
-  "rows": [
-    {"id":"AUTH","applicable":true,"status":"ready_for_contract","sources":["SRC-03","SRC-07"],"decision":"Authorization and every credential are denylisted","owner_stage":"S15"},
-    {"id":"METHOD_HOST_ROUTE","applicable":true,"status":"ready_for_contract","sources":["SRC-04","SRC-08","SRC-09"],"decision":"Log method, allowlisted server and route template, never raw path fallback","owner_stage":"S11"},
-    {"id":"URL_PRIVACY","applicable":true,"status":"ready_for_contract","sources":["SRC-05","SRC-07","SRC-08"],"decision":"Full URL, query and URL credentials are forbidden","owner_stage":"S15"},
-    {"id":"HTTP_STATUS","applicable":true,"status":"ready_for_contract","sources":["SRC-03","SRC-04","SRC-08"],"decision":"Record nullable numeric status and typed HTTP outcome","owner_stage":"S15"},
-    {"id":"TRANSPORT_ERRORS","applicable":true,"status":"ready_for_contract","sources":["SRC-08"],"decision":"No-response failures use a closed error_type enum without exception text","owner_stage":"S15"},
-    {"id":"RATE_LIMIT","applicable":true,"status":"ready_for_contract","sources":["SRC-03","SRC-04"],"decision":"429 and allowlisted numeric rate-limit headers are observable; 409 weight is tested","owner_stage":"S15"},
-    {"id":"RETRIES","applicable":true,"status":"ready_for_contract","sources":["SRC-08"],"decision":"One event per wire attempt with operation_ref, request_ref and attempt","owner_stage":"S15"},
-    {"id":"PAGINATION","applicable":true,"status":"ready_for_contract","sources":["SRC-04","SRC-09"],"decision":"One event per page; cursor and query values are not logged","owner_stage":"S15"},
-    {"id":"BATCH_PARTIAL","applicable":true,"status":"ready_for_contract","sources":["SRC-04"],"decision":"HTTP completion is distinct from business/item success; no response body logging","owner_stage":"S15"},
-    {"id":"MARKING_PRINT","applicable":true,"status":"ready_for_contract","sources":["SRC-04","SRC-07"],"decision":"Marking IDs and printable payloads are denylisted in every success/error path","owner_stage":"S15"},
-    {"id":"CORRELATION","applicable":true,"status":"ready_for_contract","sources":["SRC-01","SRC-08"],"decision":"Engineer lookup uses request_ref plus controlled internal refs","owner_stage":"S11"},
-    {"id":"TENANT_SELLER_ACCESS","applicable":true,"status":"ready_for_product_decision","sources":["SRC-01","SRC-07"],"decision":"Opaque refs only; reader roles and retention require explicit Product/Release contract","owner_stage":"S11"},
-    {"id":"API_WORKER","applicable":true,"status":"ready_for_contract","sources":["SRC-02","SRC-11"],"decision":"Same event schema and no duplicate handlers in API and worker","owner_stage":"S15"},
-    {"id":"VOLUME_OUTAGE","applicable":true,"status":"ready_for_contract","sources":["SRC-03","SRC-08"],"decision":"Bounded-cardinality fields, no success sampling until forensic requirement changes, logger failure cannot break operation","owner_stage":"S15"},
-    {"id":"CURRENT_ERROR_BODY","applicable":true,"status":"ready_for_security_review","sources":["SRC-10","SRC-07"],"decision":"Existing raw response-body logging is in the negative-test and remediation scope","owner_stage":"S04"},
-    {"id":"EMULATOR_PROOF","applicable":true,"status":"ready_for_cases","sources":["SRC-06","SRC-09"],"decision":"Use MockTransport/local emulator and egress guard; no live WB call required","owner_stage":"S15"},
-    {"id":"RELEASE_ACTIVATION","applicable":true,"status":"ready_for_release_decision","sources":["SRC-01","SRC-11"],"decision":"Default-on versus config-gated activation is decided before S26; S03 grants no release authority","owner_stage":"S26"},
-    {"id":"COMPETITOR_WORKFLOW","applicable":false,"status":"not_applicable_verified","sources":["SRC-01"],"decision":"Infrastructure logging change has no competitor/operator screen or workflow","owner_stage":"S03"},
-    {"id":"LIVE_SANDBOX","applicable":false,"status":"not_applicable_verified","sources":["SRC-06","SRC-09"],"decision":"Contract can be proven with deterministic emulator; live marketplace call is prohibited for this task","owner_stage":"S23"}
-  ]
-}
-```
-
-## 9. Non-blocking questions routed forward
+## 12. Non-blocking questions routed forward
 
 1. `S11 Product`: кто имеет право читать журнал и по каким `tenant_ref/seller_ref` фильтрам?
 2. `S11 Product`: какой срок хранения и какой интерфейс/CLI является понятным способом найти
@@ -207,16 +272,26 @@ handed to the named later stage; it does not mean implementation exists.
 Эти вопросы не блокируют S03: для каждого есть безопасная граница и стадия-владелец. Они блокируют
 соответствующее Product/Release утверждение, если останутся без решения.
 
-## 10. Required proof for later stages
+## 13. Required proof for later stages
 
-- positive events for `2xx`, `409`, `429`, `5xx` and no-response timeout;
+- positive events for `2xx`, `402`, `406`, `409`, `429`, `5xx` and no-response timeout;
+- synthetic Personal/Service/Base/Test auth fixtures cover both headers and the documented
+  `401/403` token-type constraints without accessing credentials;
+- valid, absent and malformed rate-limit headers cover `429` without Remaining and numeric
+  Retry/Limit/Reset parsing;
 - retry/pagination produce separate attempts with stable operation correlation;
-- API and worker emit the same schema once, without duplicate lines;
-- searches for canary token, `Authorization`, query secret, SGTIN/CIS, UIN/IMEI/GTIN, response
-  body and newline injection return zero matches across success and error logs;
+- API route and Celery/background worker each traverse a real application handler into the same
+  MockTransport/emulator fixture and emit the same schema once, without duplicate lines;
+- the test captures and concatenates structured WB events, `log_wb_client_error`, app/httpx/httpcore
+  and access logs, API exception responses, worker task/retry/failure logs, traces, metric labels and
+  persisted test evidence;
+- exact searches for canary `Authorization`, `X-Client-Secret`, query secret, raw URL/path/order,
+  supply and warehouse IDs, SGTIN/CIS, UIN/IMEI/GTIN, sticker/body and newline injection return zero
+  matches in that aggregate for success, every HTTP error and every transport error;
 - non-WB HTTP request does not produce `wb.http.client.*`;
 - logger/storage failure does not change the business HTTP outcome;
-- tests use MockTransport/local emulator under deny-by-default egress guard;
+- tests use MockTransport/local emulator under deny-by-default egress; DNS/socket access fails the
+  suite. Official sandbox hosts are classification fixtures only and receive zero requests;
 - release evidence names exact SHA, config decision, log sink/access policy and monitoring signal.
 
 No live WB/Ozon call, production read, secret access or credential-page action was used in S03.
