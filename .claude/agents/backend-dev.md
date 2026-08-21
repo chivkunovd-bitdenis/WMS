@@ -1,7 +1,7 @@
 ---
 name: backend-dev
 description: Вызывать для изменений в backend/ по готовому контракту — эндпоинты, сервисы, модели, миграции, интеграции с маркетплейсами. НЕ вызывать для UI (screen-dev) и без раздела «API и данные» в контракте.
-model: sonnet
+model: haiku
 tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 

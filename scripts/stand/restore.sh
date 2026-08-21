@@ -11,7 +11,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-LANE="${1:?нужен номер полосы: 1, 2 или 3}"
+LANE="${1:?нужен номер полосы: 1..6}"
 READY="$ROOT/.stand/sanitized-latest.dump"
 DB_C="wms-lane-$LANE-db-1"
 TPL="wms_snapshot"

@@ -1,15 +1,23 @@
-# Очередь задач из владельца — 21.08.2026
+# Очередь карточек — 21.08.2026
 
-Всего карточек: 9
+Создано карточек: 9
 
-## По порядку
+## Список по порядку
 
-1. `001-wb-marking-status` — Мы не видим ответов Wildberries по маркировке
-2. `002-wb-readiness-block` — Экран говорит «сдавать можно», когда Wildberries отказывает
-3. `003-no-distribution-mode` — Режим «без распределения» нельзя включить после создания коробов
-4. `004-warehouse-selection` — Склад мешает работать
-5. `005-prod-performance` — Прод тормозит
-6. `006-picking-list-order` — Порядок в листе подбора не совпадает с порядком ленты
-7. `007-seller-reporting` — Раздел отчётности для селлера и ФФ
-8. `008-storage-management` — Хранение: считать, менять габариты и брать за это деньги
-9. `009-invoicing` — Счета и цифровой учёт работы
+1. `01-wildberries-marking`
+2. `02-wildberries-verdict`
+3. `03-distribution-mode`
+4. `04-warehouse-selector`
+5. `05-prod-performance`
+6. `06-picking-order`
+7. `07-seller-reports`
+8. `08-storage-module`
+9. `09-invoicing-module`
+
+## Источник
+
+Файл: `/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-etalon/night/zadachi-2026-08-21.md`
+
+Раздел: Весь документ (9 задач)
+- 6 из раздела «Из разбора дефектов» (задачи 1-6)
+- 3 из раздела «Новые направления» (задачи 7-9)

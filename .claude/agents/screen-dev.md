@@ -1,7 +1,7 @@
 ---
 name: screen-dev
 description: Вызывать для реализации или правки конкретного экрана WMS строго по готовому tasks/<slug>/CONTRACT.md. НЕ вызывать без контракта, не для проектирования (это ux-architect) и не для проверки готового результата.
-model: sonnet
+model: haiku
 tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 
