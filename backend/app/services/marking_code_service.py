@@ -68,6 +68,12 @@ _CIS_MIN_LEN = 15
 _CIS_MAX_LEN = 512
 _GTIN_RE = re.compile(r"(?<!\d)(\d{14})(?!\d)")
 _GS1_GTIN_AI01_RE = re.compile(r"(?:^|\x1d)01(\d{14})")
+# GS1 "group separator" — WB's own docs (kiz-common-errors.md, «короткий и
+# длинный КИЗ») say even a *short* КИЗ, sent without the crypto tail, must
+# still carry this separator right after the serial number (AI 21). A bare
+# "01<gtin>21<serial>" with no separator at all is what WB rejects with
+# "sgtinNoGS" — see I5, docs/BACKLOG-2026-08-19-CHAT-RU.md.
+GS_SEPARATOR = "\x1d"
 MARKING_SOURCE_CATALOG = "catalog"
 MARKING_SOURCE_RECEPTION = "reception"
 MARKING_SOURCE_SORTING = "sorting"
@@ -94,10 +100,36 @@ _CIS_CANDIDATE_RE = re.compile(
 
 
 def _canonical_cis_from_match(match: re.Match[str]) -> str:
-    """Rebuilds the bare GS1 element string, stripping any AI(01)/AI(21)
-    print-formatting punctuation (parens/spaces) captured around the markers.
+    """Rebuilds the GS1 element string for AI(01)+AI(21), stripping any
+    print-formatting punctuation (parens/spaces) captured around the markers,
+    and terminates it with a GS separator.
+
+    Seller PDF labels normally print only "(01) <gtin>" / "(21) <serial>" as
+    human-readable text next to the DataMatrix graphic — the crypto tail
+    (AI 91 key + AI 92/93 signature) lives only inside the barcode image
+    itself, never as extractable PDF text, so there is nothing beyond
+    gtin+serial to recover from these files. But WB's own instructions
+    (tasks/fbs-marketplace-orders/wb-docs/04-labeling/kiz-common-errors.md,
+    "Короткий и длинный КИЗ") say that even the *short* КИЗ format — sent
+    without the crypto tail — must still carry the GS separator right after
+    the serial number. Before this fix we rebuilt a bare
+    "01<gtin>21<serial>" with no separator at all, which WB rejects with
+    "sgtinNoGS" the moment such a pool code reaches a real supply (I5,
+    docs/BACKLOG-2026-08-19-CHAT-RU.md). Terminating with GS_SEPARATOR turns
+    it into the valid short-format code WB documents as an accepted
+    fallback.
     """
-    return f"01{match.group('gtin')}21{match.group('serial')}"
+    return f"01{match.group('gtin')}21{match.group('serial')}{GS_SEPARATOR}"
+
+
+def is_cis_missing_gs_separator(value: str) -> bool:
+    """True for the old truncated pool-code shape: a bare
+    "01<gtin>21<serial>" with no GS separator anywhere. WB rejects values
+    like this with "sgtinNoGS" — see I5. A code is fine to submit as soon as
+    it carries at least one GS separator, whether that's our own short-format
+    terminator or a real one preceding a crypto tail.
+    """
+    return GS_SEPARATOR not in value
 
 
 class MarkingCodeServiceError(Exception):
@@ -450,7 +482,12 @@ class CodeHistoryRow:
 
 
 def mask_cis_code(cis: str) -> str:
-    tail = cis[-12:] if len(cis) > 12 else cis
+    # A short-format code we terminated ourselves ends with an invisible GS
+    # separator (see is_cis_missing_gs_separator) — drop it before slicing
+    # the tail so the operator-facing mask always ends on a real, visible
+    # character instead of a control byte.
+    visible = cis.rstrip(GS_SEPARATOR)
+    tail = visible[-12:] if len(visible) > 12 else visible
     return f"…{tail}"
 
 
@@ -482,10 +519,17 @@ _LEDGER_CSV_HEADER = (
 
 
 def normalize_cis(raw: str) -> str | None:
-    text = raw.strip().replace("\ufeff", "")
+    # str.strip() with no arguments strips *Unicode* whitespace, and Python
+    # classifies the C0 separator block \x1c-\x1f \u2014 including our GS
+    # separator \x1d \u2014 as whitespace for that purpose. A bare `.strip()` here
+    # would silently eat a GS terminator sitting at the very start or end of
+    # the code, undoing the fix in _canonical_cis_from_match /
+    # is_cis_missing_gs_separator the moment the value round-trips through
+    # this function. Strip only real whitespace/BOM explicitly instead.
+    text = raw.strip(" \t\r\n\ufeff").replace("\ufeff", "")
     if not text:
         return None
-    text = text.replace(" ", "").replace("\n", "").replace("\r", "")
+    text = text.replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", "")
     if len(text) < _CIS_MIN_LEN or len(text) > _CIS_MAX_LEN:
         return None
     if not any(ch.isalnum() for ch in text):
@@ -1290,6 +1334,186 @@ async def import_marking_codes(
         skip_reasons=[ImportSkipReason(k, v) for k, v in sorted(skip_counts.items())],
         pools=pool_results,
     )
+
+
+@dataclass(frozen=True)
+class TruncatedCisRestoreRow:
+    """Один код пула, обработанный восстановлением I5."""
+
+    code_id: uuid.UUID
+    tenant_id: uuid.UUID
+    import_batch_id: uuid.UUID | None
+    cis_masked: str
+    outcome: str
+    detail: str | None = None
+
+
+@dataclass(frozen=True)
+class TruncatedCisRestoreReport:
+    scanned: int
+    restored: int
+    rows: list[TruncatedCisRestoreRow]
+
+    def counts_by_outcome(self) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for row in self.rows:
+            counts[row.outcome] = counts.get(row.outcome, 0) + 1
+        return counts
+
+
+def _restore_row(
+    code: MarkingCode,
+    outcome: str,
+    detail: str | None,
+    *,
+    masked: str,
+) -> TruncatedCisRestoreRow:
+    return TruncatedCisRestoreRow(
+        code_id=code.id,
+        tenant_id=code.tenant_id,
+        import_batch_id=code.import_batch_id,
+        cis_masked=masked,
+        outcome=outcome,
+        detail=detail,
+    )
+
+
+async def restore_truncated_pool_cis_codes(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID | None = None,
+    dry_run: bool = False,
+) -> TruncatedCisRestoreReport:
+    """Чинит уже накопленные обрезанные коды пула (I5, docs/BACKLOG-2026-08-19-CHAT-RU.md).
+
+    До фикса `_canonical_cis_from_match` каждый код, пришедший через импорт PDF
+    продавца, сохранялся как голая строка "01<gtin>21<serial>" без единого
+    GS-разделителя — WB отклоняет такую поставку ошибкой "sgtinNoGS". Крипто-
+    хвост эти PDF никогда не несли как текст (продавец печатает только
+    человекочитаемые "(01) …"/"(21) …" рядом с самим DataMatrix), поэтому
+    восстановить можно ровно то же самое GTIN+серийник — но с добавленным
+    в конце GS-разделителем, что превращает код в валидный «короткий» формат
+    из документации WB (см. is_cis_missing_gs_separator).
+
+    Источник восстановления — PDF продавца, сохранённый при импорте
+    (`MarkingCodeImportFile`/object storage). Разбираем его заново тем же
+    парсером, что и сам импорт, и обновляем `cis_code`, только если новый
+    код действительно найден и не конфликтует с уже существующей строкой.
+
+    Ничего не удаляет и не перезаписывает коды, у которых GS-разделитель уже
+    есть. Идемпотентна: то, что было восстановлено в прошлый прогон, во
+    второй раз просто не попадёт в выборку кандидатов.
+    """
+    from app.services.marking_import_storage_service import read_marking_import_source_pdf
+    from app.services.marking_label_artifact_service import extract_label_artifacts_from_pdf
+
+    stmt = select(MarkingCode).where(
+        MarkingCode.import_batch_id.is_not(None),
+        MarkingCode.cis_code.notlike(f"%{GS_SEPARATOR}%"),
+    )
+    if tenant_id is not None:
+        stmt = stmt.where(MarkingCode.tenant_id == tenant_id)
+    stmt = stmt.order_by(MarkingCode.import_batch_id, MarkingCode.id)
+    fetched = list((await session.execute(stmt)).scalars().all())
+    # Second, Python-side check against the same predicate used everywhere
+    # else — belt-and-suspenders against a dialect quirk in the SQL LIKE.
+    candidates = [code for code in fetched if is_cis_missing_gs_separator(code.cis_code)]
+
+    by_batch: dict[uuid.UUID, list[MarkingCode]] = {}
+    for code in candidates:
+        assert code.import_batch_id is not None
+        by_batch.setdefault(code.import_batch_id, []).append(code)
+
+    rows: list[TruncatedCisRestoreRow] = []
+    restored = 0
+
+    for batch_id, codes in by_batch.items():
+        files_stmt = select(MarkingCodeImportFile).where(
+            MarkingCodeImportFile.import_batch_id == batch_id,
+        )
+        files = list((await session.execute(files_stmt)).scalars().all())
+        if not files:
+            for code in codes:
+                rows.append(
+                    _restore_row(
+                        code,
+                        "no_source_pdf",
+                        "у наряда импорта нет сохранённого PDF продавца",
+                        masked=mask_cis_code(code.cis_code),
+                    )
+                )
+            continue
+
+        parsed_cis: list[str] = []
+        batch_error: str | None = None
+        for file_row in files:
+            try:
+                content = read_marking_import_source_pdf(file_row.storage_key)
+            except RuntimeError:
+                batch_error = "storage_unavailable"
+                break
+            except (FileNotFoundError, OSError):
+                batch_error = f"file_missing:{file_row.original_filename}"
+                continue
+            try:
+                artifacts = extract_label_artifacts_from_pdf(content)
+            except RuntimeError:
+                batch_error = "pdf_support_unavailable"
+                continue
+            except Exception as exc:
+                # Один битый PDF не должен ронять весь прогон восстановления.
+                batch_error = f"parse_failed:{exc}"
+                continue
+            parsed_cis.extend(artifact.cis for artifact in artifacts)
+
+        if not parsed_cis and batch_error is not None:
+            outcome = (
+                "storage_unavailable" if batch_error == "storage_unavailable" else "parse_failed"
+            )
+            for code in codes:
+                rows.append(
+                    _restore_row(code, outcome, batch_error, masked=mask_cis_code(code.cis_code))
+                )
+            continue
+
+        for code in codes:
+            masked = mask_cis_code(code.cis_code)
+            match = next((full for full in parsed_cis if full.startswith(code.cis_code)), None)
+            if match is None:
+                rows.append(
+                    _restore_row(
+                        code,
+                        "not_found_in_source",
+                        "код не найден среди КИЗ, распознанных в сохранённых PDF наряда",
+                        masked=masked,
+                    )
+                )
+                continue
+            conflict_stmt = select(MarkingCode.id).where(
+                MarkingCode.tenant_id == code.tenant_id,
+                MarkingCode.cis_code == match,
+                MarkingCode.id != code.id,
+            )
+            conflict_id = (await session.execute(conflict_stmt)).scalar_one_or_none()
+            if conflict_id is not None:
+                rows.append(
+                    _restore_row(
+                        code,
+                        "target_conflict",
+                        f"полный код уже занят другой строкой (code_id={conflict_id})",
+                        masked=masked,
+                    )
+                )
+                continue
+            if not dry_run:
+                code.cis_code = match
+            rows.append(_restore_row(code, "restored", None, masked=masked))
+            restored += 1
+
+    if not dry_run and restored:
+        await session.flush()
+
+    return TruncatedCisRestoreReport(scanned=len(candidates), restored=restored, rows=rows)
 
 
 async def list_inventory(

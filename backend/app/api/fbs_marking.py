@@ -77,6 +77,7 @@ def _raise_from_service(exc: marking_svc.FbsMarkingError) -> None:
         "kind_already_assigned",
         "marking_code_already_assigned",
         "meta_validation_fail",
+        "sgtin_missing_gs",
     }:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
     if exc.code.startswith("wb_"):

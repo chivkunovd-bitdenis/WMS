@@ -92,6 +92,7 @@ def _raise_from_service(exc: kiz_svc.FbsKizError) -> None:
         "needs_confirmation",
         "meta_validation_fail",
         "packaging_line_not_found",
+        "sgtin_missing_gs",
     }:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
     if exc.code.startswith("wb_"):

@@ -34,7 +34,7 @@ from app.models.fbs_order import (
     current_order_marking,
 )
 from app.models.marking_code import STATUS_AVAILABLE, STATUS_RESERVED, MarkingCode
-from app.services.marking_code_service import normalize_cis
+from app.services.marking_code_service import is_cis_missing_gs_separator, normalize_cis
 from app.services.wildberries_client import (
     WildberriesClientError,
     put_marketplace_order_meta,
@@ -542,6 +542,28 @@ def _meta_validation_reasons(exc: WildberriesBusinessError) -> list[dict[str, An
     ]
 
 
+def _ensure_marking_value_ready_for_wb(marking: FbsOrderMarking) -> None:
+    """Last-line guard before a КИЗ/sGTIN value reaches WB.
+
+    A pool code produced before this fix (or a legacy row nobody has
+    restored yet) is a bare "01<gtin>21<serial>" with no GS separator — WB
+    rejects that with an opaque "sgtinNoGS" once the supply reaches it. Catch
+    it here instead, with a message the operator can act on, rather than
+    letting it fail deep inside WB's own validation (I5,
+    docs/BACKLOG-2026-08-19-CHAT-RU.md). Other marking kinds (IMEI, УИН) do
+    not follow the GS1 sGTIN shape, so the check only applies to sGTIN.
+    """
+    if marking.kind != MARKING_KIND_SGTIN:
+        return
+    if is_cis_missing_gs_separator(marking.value):
+        raise FbsMarkingError(
+            "sgtin_missing_gs",
+            context={"marking_code_id": str(marking.marking_code_id)}
+            if marking.marking_code_id
+            else {},
+        )
+
+
 async def attach_order_meta_to_wb_and_sync(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -551,6 +573,7 @@ async def attach_order_meta_to_wb_and_sync(
     *,
     api_token: str | None = None,
 ) -> list[FbsOrderMarking]:
+    _ensure_marking_value_ready_for_wb(marking)
     marking.meta_status = META_STATUS_SENDING
     await session.flush()
 

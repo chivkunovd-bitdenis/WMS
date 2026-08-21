@@ -132,6 +132,7 @@ Envelope для **всех новых** operator-facing FBS-ручек (см. `B
 | `kind_already_assigned` | 409 | false | Идентификатор уже назначен |
 | `meta_validation_fail` | 409 | false | WB отклонил метаданные |
 | `marking_code_already_assigned` | 409 | false | Код маркировки уже назначен другому заказу |
+| `sgtin_missing_gs` | 409 | false | КИЗ без GS-разделителя после серийного номера — WB его отклонит (I5) |
 | `wb_*` | 502 | см. контекст | Ошибка WB |
 
 ---

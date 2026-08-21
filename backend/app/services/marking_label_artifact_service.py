@@ -174,20 +174,22 @@ def _cis_helpers() -> tuple[
     re.Pattern[str],
     Callable[[str], str | None],
     Callable[[str], str | None],
+    Callable[[re.Match[str]], str],
 ]:
     from app.services.marking_code_service import (
         _CIS_CANDIDATE_RE,
+        _canonical_cis_from_match,
         extract_gtin_from_cis,
         normalize_cis,
     )
 
-    return _CIS_CANDIDATE_RE, normalize_cis, extract_gtin_from_cis
+    return _CIS_CANDIDATE_RE, normalize_cis, extract_gtin_from_cis, _canonical_cis_from_match
 
 
 def _find_cis_boxes_on_page(page: object) -> list[tuple[str, object]]:
     import fitz  # pymupdf
 
-    cis_re, normalize_cis, _ = _cis_helpers()
+    cis_re, normalize_cis, _, canonical_cis_from_match = _cis_helpers()
     pg = cast(fitz.Page, page)
     found: list[tuple[str, fitz.Rect]] = []
     seen: set[str] = set()
@@ -228,7 +230,7 @@ def _find_cis_boxes_on_page(page: object) -> list[tuple[str, object]]:
         if not cis_re.search(search_text):
             continue
         for match in cis_re.finditer(search_text):
-            cis = normalize_cis(f"01{match.group('gtin')}21{match.group('serial')}")
+            cis = normalize_cis(canonical_cis_from_match(match))
             if cis is None or cis in seen:
                 continue
             seen.add(cis)
@@ -379,7 +381,7 @@ def extract_label_artifacts_from_pdf(content: bytes) -> list[ExtractedLabelArtif
     except ImportError as exc:
         raise RuntimeError("pdf_support_unavailable") from exc
 
-    _, _, extract_gtin_from_cis = _cis_helpers()
+    _, _, extract_gtin_from_cis, _ = _cis_helpers()
     artifacts: list[ExtractedLabelArtifact] = []
     seen: set[str] = set()
     doc = fitz.open(stream=content, filetype="pdf")
