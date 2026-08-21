@@ -1,0 +1,2661 @@
+{
+  "version": 1,
+  "screens": [
+    {
+      "portal": "ff",
+      "route": "/app/catalog/products",
+      "component": "ProductsScreen",
+      "files": [
+        "src/screens/v2/ProductsScreen.tsx"
+      ],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-01",
+      "shared": {
+        "src/screens/AppV2Screens.tsx": [
+          "S-01",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25"
+        ],
+        "src/ui/Button.tsx": [
+          "S-01",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25"
+        ],
+        "src/ui/Card.tsx": [
+          "S-01",
+          "S-02",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25"
+        ],
+        "src/ui/Input.tsx": [
+          "S-01",
+          "S-21",
+          "S-22",
+          "S-24",
+          "S-25"
+        ],
+        "src/ui/PageHeader.tsx": [
+          "S-01",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-12",
+          "S-14",
+          "S-15",
+          "S-17",
+          "S-20",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25",
+          "S-27"
+        ],
+        "src/ui/Select.tsx": [
+          "S-01",
+          "S-21",
+          "S-22",
+          "S-24",
+          "S-25"
+        ]
+      }
+    },
+    {
+      "portal": "ff",
+      "route": "/app/ff/dashboard",
+      "component": "FfDashboard",
+      "files": [],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-02",
+      "shared": {
+        "src/components/DashboardCard.tsx": [
+          "S-02",
+          "S-12"
+        ],
+        "src/screens/ff/FfDashboard.tsx": [
+          "S-02",
+          "S-12"
+        ],
+        "src/screens/ff/FfWeekCalendar.tsx": [
+          "S-02",
+          "S-12"
+        ],
+        "src/ui/Card.tsx": [
+          "S-01",
+          "S-02",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25"
+        ]
+      }
+    },
+    {
+      "portal": "ff",
+      "route": "/app/ff/fbs",
+      "component": "FfFbsOrdersScreen",
+      "files": [
+        "src/components/fbs/FbsChips.tsx",
+        "src/screens/v2/FbsPrintPreviewDialog.tsx",
+        "src/screens/v2/FbsSupplyCreateDialog.tsx",
+        "src/screens/v2/FfFbsOrdersScreen.tsx",
+        "src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "src/screens/v2/fbsUx.ts"
+      ],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-03",
+      "shared": {
+        "src/api.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-13",
+          "S-14",
+          "S-15",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-30",
+          "S-31",
+          "S-32"
+        ],
+        "src/components/ProductPhotoThumb.tsx": [
+          "S-03",
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31"
+        ],
+        "src/screens/ff/FfPackagingPage.tsx": [
+          "S-03",
+          "S-12",
+          "S-14"
+        ],
+        "src/screens/v2/FfFbsSectionNav.tsx": [
+          "S-03",
+          "S-04"
+        ],
+        "src/screens/v2/fbsApi.ts": [
+          "S-03",
+          "S-04"
+        ],
+        "src/utils/printProductThermalLabel.ts": [
+          "S-03",
+          "S-09",
+          "S-14"
+        ],
+        "src/utils/readApiErrorMessage.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31",
+          "S-32"
+        ],
+        "src/utils/useMarkingCodePrint.tsx": [
+          "S-03",
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-15",
+          "S-27"
+        ]
+      }
+    },
+    {
+      "portal": "ff",
+      "route": "/app/ff/fbs/stock-sync",
+      "component": "FfFbsStockSyncScreen",
+      "files": [
+        "src/screens/v2/FfFbsStockSyncScreen.tsx"
+      ],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-04",
+      "shared": {
+        "src/api.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-13",
+          "S-14",
+          "S-15",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-30",
+          "S-31",
+          "S-32"
+        ],
+        "src/screens/v2/FfFbsSectionNav.tsx": [
+          "S-03",
+          "S-04"
+        ],
+        "src/screens/v2/fbsApi.ts": [
+          "S-03",
+          "S-04"
+        ],
+        "src/utils/readApiErrorMessage.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31",
+          "S-32"
+        ]
+      }
+    },
+    {
+      "portal": "ff",
+      "route": "/app/ff/honest-sign",
+      "component": "FfHonestSignPage",
+      "files": [
+        "src/screens/ff/FfHonestSignPage.tsx"
+      ],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-05",
+      "shared": {
+        "src/api.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-13",
+          "S-14",
+          "S-15",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-30",
+          "S-31",
+          "S-32"
+        ],
+        "src/components/ProductBarcodePrintButton.tsx": [
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-27"
+        ],
+        "src/components/ProductPhotoThumb.tsx": [
+          "S-03",
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31"
+        ],
+        "src/hooks/useWbProductCatalog.ts": [
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-27"
+        ],
+        "src/screens/shared/HonestSignScreen.tsx": [
+          "S-05",
+          "S-27"
+        ],
+        "src/screens/shared/MarkingImportDialog.tsx": [
+          "S-05",
+          "S-27"
+        ],
+        "src/screens/shared/MarkingSellerPicker.tsx": [
+          "S-05",
+          "S-07",
+          "S-27"
+        ],
+        "src/types/wbProductCatalog.ts": [
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-27"
+        ],
+        "src/ui/PageHeader.tsx": [
+          "S-01",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-12",
+          "S-14",
+          "S-15",
+          "S-17",
+          "S-20",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25",
+          "S-27"
+        ],
+        "src/utils/productBarcodePrint.ts": [
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-27"
+        ],
+        "src/utils/readApiErrorMessage.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31",
+          "S-32"
+        ],
+        "src/utils/useFfProductMarkingPrint.tsx": [
+          "S-05",
+          "S-16",
+          "S-27"
+        ],
+        "src/utils/useMarkingCodePrint.tsx": [
+          "S-03",
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-15",
+          "S-27"
+        ]
+      }
+    },
+    {
+      "portal": "ff",
+      "route": "/app/ff/honest-sign/import",
+      "component": "HonestSignImportPage",
+      "files": [
+        "src/screens/shared/HonestSignImportPage.tsx"
+      ],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-06",
+      "shared": {}
+    },
+    {
+      "portal": "ff",
+      "route": "/app/ff/honest-sign/ledger",
+      "component": "FfHonestSignLedgerPage",
+      "files": [
+        "src/hooks/useDebouncedValue.ts",
+        "src/screens/ff/FfHonestSignLedgerPage.tsx",
+        "src/screens/shared/HonestSignLedgerPage.tsx"
+      ],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-07",
+      "shared": {
+        "src/api.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-13",
+          "S-14",
+          "S-15",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-30",
+          "S-31",
+          "S-32"
+        ],
+        "src/screens/shared/MarkingSellerPicker.tsx": [
+          "S-05",
+          "S-07",
+          "S-27"
+        ],
+        "src/ui/PageHeader.tsx": [
+          "S-01",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-12",
+          "S-14",
+          "S-15",
+          "S-17",
+          "S-20",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25",
+          "S-27"
+        ],
+        "src/utils/markingStatus.ts": [
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10"
+        ],
+        "src/utils/readApiErrorMessage.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31",
+          "S-32"
+        ]
+      }
+    },
+    {
+      "portal": "ff",
+      "route": "/app/ff/honest-sign/pool/:poolId",
+      "component": "HonestSignPoolPage",
+      "files": [
+        "src/screens/shared/HonestSignPoolPage.tsx",
+        "src/screens/shared/MarkingPoolProductsDialog.tsx"
+      ],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-08",
+      "shared": {
+        "src/api.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-13",
+          "S-14",
+          "S-15",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-30",
+          "S-31",
+          "S-32"
+        ],
+        "src/ui/PageHeader.tsx": [
+          "S-01",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-12",
+          "S-14",
+          "S-15",
+          "S-17",
+          "S-20",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25",
+          "S-27"
+        ],
+        "src/utils/markingStatus.ts": [
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10"
+        ],
+        "src/utils/readApiErrorMessage.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31",
+          "S-32"
+        ]
+      }
+    },
+    {
+      "portal": "ff",
+      "route": "/app/ff/honest-sign/product/:productId",
+      "component": "HonestSignProductPage",
+      "files": [
+        "src/screens/shared/HonestSignProductPage.tsx",
+        "src/utils/labelSize.ts",
+        "src/utils/markingPrintPresets.ts",
+        "src/utils/parseGs1Cis.ts",
+        "src/utils/printMarkingCodeLabel.ts",
+        "src/utils/printTemplate.ts"
+      ],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-09",
+      "shared": {
+        "src/api.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-13",
+          "S-14",
+          "S-15",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-30",
+          "S-31",
+          "S-32"
+        ],
+        "src/ui/PageHeader.tsx": [
+          "S-01",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-12",
+          "S-14",
+          "S-15",
+          "S-17",
+          "S-20",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25",
+          "S-27"
+        ],
+        "src/utils/markingStatus.ts": [
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10"
+        ],
+        "src/utils/printProductThermalLabel.ts": [
+          "S-03",
+          "S-09",
+          "S-14"
+        ],
+        "src/utils/productLabelText.ts": [
+          "S-09",
+          "S-12",
+          "S-16",
+          "S-28",
+          "S-29"
+        ],
+        "src/utils/readApiErrorMessage.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31",
+          "S-32"
+        ],
+        "src/utils/renderBarcodeDataUrl.ts": [
+          "S-09",
+          "S-12"
+        ]
+      }
+    },
+    {
+      "portal": "ff",
+      "route": "/app/ff/honest-sign/reprints",
+      "component": "FfHonestSignReprintsPage",
+      "files": [
+        "src/screens/ff/FfHonestSignReprintsPage.tsx"
+      ],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-10",
+      "shared": {
+        "src/api.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-13",
+          "S-14",
+          "S-15",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-30",
+          "S-31",
+          "S-32"
+        ],
+        "src/utils/markingStatus.ts": [
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10"
+        ],
+        "src/utils/readApiErrorMessage.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31",
+          "S-32"
+        ]
+      }
+    },
+    {
+      "portal": "ff",
+      "route": "/app/ff/inventory",
+      "component": "FfPlaceholderPage",
+      "files": [
+        "src/screens/ff/FfPlaceholderPage.tsx"
+      ],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-11",
+      "shared": {}
+    },
+    {
+      "portal": "ff",
+      "route": "/app/ff/mp-shipments",
+      "component": "FfSuppliesShipmentsPage",
+      "files": [
+        "src/components/BoxImportDialog.tsx",
+        "src/hooks/useBarcodeScanner.ts",
+        "src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx",
+        "src/screens/ff/FfSuppliesShipmentsPage.tsx",
+        "src/screens/ff/boxFillDialogLayout.ts",
+        "src/utils/printBarcodeLabel.ts",
+        "src/utils/printShipmentPackagingSheet.ts"
+      ],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-12",
+      "shared": {
+        "src/api.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-13",
+          "S-14",
+          "S-15",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-30",
+          "S-31",
+          "S-32"
+        ],
+        "src/components/DashboardCard.tsx": [
+          "S-02",
+          "S-12"
+        ],
+        "src/components/FfProductLineCells.tsx": [
+          "S-12",
+          "S-14"
+        ],
+        "src/components/ProductBarcodeCell.tsx": [
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-26",
+          "S-28",
+          "S-29"
+        ],
+        "src/components/ProductBarcodePrintButton.tsx": [
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-27"
+        ],
+        "src/components/ProductPhotoThumb.tsx": [
+          "S-03",
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31"
+        ],
+        "src/components/WbProductPickerDialog.tsx": [
+          "S-12",
+          "S-28",
+          "S-29"
+        ],
+        "src/components/WmsDateField.tsx": [
+          "S-12",
+          "S-26",
+          "S-28",
+          "S-29"
+        ],
+        "src/hooks/useWbProductCatalog.ts": [
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-27"
+        ],
+        "src/screens/ff/FfDashboard.tsx": [
+          "S-02",
+          "S-12"
+        ],
+        "src/screens/ff/FfPackagingPage.tsx": [
+          "S-03",
+          "S-12",
+          "S-14"
+        ],
+        "src/screens/ff/FfWeekCalendar.tsx": [
+          "S-02",
+          "S-12"
+        ],
+        "src/screens/ff/documentDisplay.ts": [
+          "S-12",
+          "S-14"
+        ],
+        "src/types/wbProductCatalog.ts": [
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-27"
+        ],
+        "src/ui/PageHeader.tsx": [
+          "S-01",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-12",
+          "S-14",
+          "S-15",
+          "S-17",
+          "S-20",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25",
+          "S-27"
+        ],
+        "src/utils/formatDateTimeLocal.ts": [
+          "S-12",
+          "S-17",
+          "S-20"
+        ],
+        "src/utils/inboundQueues.ts": [
+          "S-12",
+          "S-17",
+          "S-20"
+        ],
+        "src/utils/latestRequestSequence.ts": [
+          "S-12",
+          "S-16",
+          "S-26"
+        ],
+        "src/utils/pendingMarkingApi.ts": [
+          "S-12",
+          "S-14",
+          "S-15"
+        ],
+        "src/utils/printShipmentWaybill.ts": [
+          "S-12",
+          "S-24"
+        ],
+        "src/utils/productBarcodePrint.ts": [
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-27"
+        ],
+        "src/utils/productLabelText.ts": [
+          "S-09",
+          "S-12",
+          "S-16",
+          "S-28",
+          "S-29"
+        ],
+        "src/utils/readApiErrorMessage.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31",
+          "S-32"
+        ],
+        "src/utils/renderBarcodeDataUrl.ts": [
+          "S-09",
+          "S-12"
+        ],
+        "src/utils/resolveProductByBarcode.ts": [
+          "S-12",
+          "S-22"
+        ],
+        "src/utils/useMarkingCodePrint.tsx": [
+          "S-03",
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-15",
+          "S-27"
+        ]
+      }
+    },
+    {
+      "portal": "ff",
+      "route": "/app/ff/notifications",
+      "component": "NotificationsPage",
+      "files": [],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-13",
+      "shared": {
+        "src/api.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-13",
+          "S-14",
+          "S-15",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-30",
+          "S-31",
+          "S-32"
+        ],
+        "src/screens/shared/NotificationsPage.tsx": [
+          "S-13",
+          "S-30"
+        ],
+        "src/utils/notificationsApi.ts": [
+          "S-13",
+          "S-30"
+        ]
+      }
+    },
+    {
+      "portal": "ff",
+      "route": "/app/ff/packaging",
+      "component": "FfPackagingPage",
+      "files": [],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-14",
+      "shared": {
+        "src/api.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-13",
+          "S-14",
+          "S-15",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-30",
+          "S-31",
+          "S-32"
+        ],
+        "src/components/FfProductLineCells.tsx": [
+          "S-12",
+          "S-14"
+        ],
+        "src/components/MarkingPrintDialog.tsx": [
+          "S-14",
+          "S-15"
+        ],
+        "src/components/ProductBarcodeCell.tsx": [
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-26",
+          "S-28",
+          "S-29"
+        ],
+        "src/components/ProductBarcodePrintButton.tsx": [
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-27"
+        ],
+        "src/components/ProductPhotoThumb.tsx": [
+          "S-03",
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31"
+        ],
+        "src/hooks/useWbProductCatalog.ts": [
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-27"
+        ],
+        "src/screens/ff/FfPackagingPage.tsx": [
+          "S-03",
+          "S-12",
+          "S-14"
+        ],
+        "src/screens/ff/documentDisplay.ts": [
+          "S-12",
+          "S-14"
+        ],
+        "src/types/wbProductCatalog.ts": [
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-27"
+        ],
+        "src/ui/PageHeader.tsx": [
+          "S-01",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-12",
+          "S-14",
+          "S-15",
+          "S-17",
+          "S-20",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25",
+          "S-27"
+        ],
+        "src/utils/pendingMarkingApi.ts": [
+          "S-12",
+          "S-14",
+          "S-15"
+        ],
+        "src/utils/printProductThermalLabel.ts": [
+          "S-03",
+          "S-09",
+          "S-14"
+        ],
+        "src/utils/productBarcodePrint.ts": [
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-27"
+        ],
+        "src/utils/readApiErrorMessage.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31",
+          "S-32"
+        ],
+        "src/utils/useMarkingCodePrint.tsx": [
+          "S-03",
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-15",
+          "S-27"
+        ]
+      }
+    },
+    {
+      "portal": "ff",
+      "route": "/app/ff/packaging/pending-marking",
+      "component": "FfPendingMarkingPage",
+      "files": [
+        "src/screens/ff/FfPendingMarkingPage.tsx"
+      ],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-15",
+      "shared": {
+        "src/api.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-13",
+          "S-14",
+          "S-15",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-30",
+          "S-31",
+          "S-32"
+        ],
+        "src/components/MarkingPrintDialog.tsx": [
+          "S-14",
+          "S-15"
+        ],
+        "src/ui/PageHeader.tsx": [
+          "S-01",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-12",
+          "S-14",
+          "S-15",
+          "S-17",
+          "S-20",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25",
+          "S-27"
+        ],
+        "src/utils/pendingMarkingApi.ts": [
+          "S-12",
+          "S-14",
+          "S-15"
+        ],
+        "src/utils/useMarkingCodePrint.tsx": [
+          "S-03",
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-15",
+          "S-27"
+        ]
+      }
+    },
+    {
+      "portal": "ff",
+      "route": "/app/ff/products",
+      "component": "FfProductsCatalogScreen",
+      "files": [
+        "src/components/FfProductMarkingPrintProvider.tsx",
+        "src/screens/ff/FfManualProductCreateDialog.tsx",
+        "src/screens/ff/FfProductTzImportDialog.tsx",
+        "src/screens/ff/FfSellerCreateDialog.tsx",
+        "src/screens/v2/FfProductsCatalogScreen.tsx"
+      ],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-16",
+      "shared": {
+        "src/api.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-13",
+          "S-14",
+          "S-15",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-30",
+          "S-31",
+          "S-32"
+        ],
+        "src/components/ProductBarcodeCell.tsx": [
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-26",
+          "S-28",
+          "S-29"
+        ],
+        "src/components/ProductBarcodePrintButton.tsx": [
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-27"
+        ],
+        "src/components/ProductPhotoThumb.tsx": [
+          "S-03",
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31"
+        ],
+        "src/types/wbProductCatalog.ts": [
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-27"
+        ],
+        "src/utils/latestRequestSequence.ts": [
+          "S-12",
+          "S-16",
+          "S-26"
+        ],
+        "src/utils/printPackagingInstructions.ts": [
+          "S-16",
+          "S-31"
+        ],
+        "src/utils/productLabelText.ts": [
+          "S-09",
+          "S-12",
+          "S-16",
+          "S-28",
+          "S-29"
+        ],
+        "src/utils/readApiErrorMessage.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31",
+          "S-32"
+        ],
+        "src/utils/useFfProductMarkingPrint.tsx": [
+          "S-05",
+          "S-16",
+          "S-27"
+        ]
+      }
+    },
+    {
+      "portal": "ff",
+      "route": "/app/ff/reception",
+      "component": "FfInboundQueuePage",
+      "files": [],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-17",
+      "shared": {
+        "src/screens/ff/FfInboundQueuePage.tsx": [
+          "S-17",
+          "S-20"
+        ],
+        "src/ui/PageHeader.tsx": [
+          "S-01",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-12",
+          "S-14",
+          "S-15",
+          "S-17",
+          "S-20",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25",
+          "S-27"
+        ],
+        "src/utils/formatDateTimeLocal.ts": [
+          "S-12",
+          "S-17",
+          "S-20"
+        ],
+        "src/utils/inboundQueues.ts": [
+          "S-12",
+          "S-17",
+          "S-20"
+        ]
+      }
+    },
+    {
+      "portal": "ff",
+      "route": "/app/ff/sellers",
+      "component": "SellersScreen",
+      "files": [
+        "src/screens/v2/SellersScreen.tsx",
+        "src/utils/portalUrls.ts"
+      ],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-18",
+      "shared": {
+        "src/api.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-13",
+          "S-14",
+          "S-15",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-30",
+          "S-31",
+          "S-32"
+        ],
+        "src/utils/readApiErrorMessage.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31",
+          "S-32"
+        ]
+      }
+    },
+    {
+      "portal": "ff",
+      "route": "/app/ff/settings",
+      "component": "FfSettingsScreen",
+      "files": [
+        "src/screens/ff/FfSettingsScreen.tsx",
+        "src/utils/ffPermissions.ts",
+        "src/utils/separateMarkingPrint.ts"
+      ],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-19",
+      "shared": {
+        "src/api.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-13",
+          "S-14",
+          "S-15",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-30",
+          "S-31",
+          "S-32"
+        ],
+        "src/utils/readApiErrorMessage.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31",
+          "S-32"
+        ]
+      }
+    },
+    {
+      "portal": "ff",
+      "route": "/app/ff/sorting",
+      "component": "FfInboundQueuePage",
+      "files": [],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-20",
+      "shared": {
+        "src/screens/ff/FfInboundQueuePage.tsx": [
+          "S-17",
+          "S-20"
+        ],
+        "src/ui/PageHeader.tsx": [
+          "S-01",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-12",
+          "S-14",
+          "S-15",
+          "S-17",
+          "S-20",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25",
+          "S-27"
+        ],
+        "src/utils/formatDateTimeLocal.ts": [
+          "S-12",
+          "S-17",
+          "S-20"
+        ],
+        "src/utils/inboundQueues.ts": [
+          "S-12",
+          "S-17",
+          "S-20"
+        ]
+      }
+    },
+    {
+      "portal": "ff",
+      "route": "/app/integrations/wb",
+      "component": "WildberriesScreen",
+      "files": [
+        "src/screens/v2/WildberriesScreen.tsx"
+      ],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-21",
+      "shared": {
+        "src/screens/AppV2Screens.tsx": [
+          "S-01",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25"
+        ],
+        "src/ui/Button.tsx": [
+          "S-01",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25"
+        ],
+        "src/ui/Card.tsx": [
+          "S-01",
+          "S-02",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25"
+        ],
+        "src/ui/Input.tsx": [
+          "S-01",
+          "S-21",
+          "S-22",
+          "S-24",
+          "S-25"
+        ],
+        "src/ui/PageHeader.tsx": [
+          "S-01",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-12",
+          "S-14",
+          "S-15",
+          "S-17",
+          "S-20",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25",
+          "S-27"
+        ],
+        "src/ui/Select.tsx": [
+          "S-01",
+          "S-21",
+          "S-22",
+          "S-24",
+          "S-25"
+        ]
+      }
+    },
+    {
+      "portal": "ff",
+      "route": "/app/ops/inbound",
+      "component": "InboundScreen",
+      "files": [
+        "src/screens/v2/InboundScreen.tsx"
+      ],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-22",
+      "shared": {
+        "src/screens/AppV2Screens.tsx": [
+          "S-01",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25"
+        ],
+        "src/ui/Button.tsx": [
+          "S-01",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25"
+        ],
+        "src/ui/Card.tsx": [
+          "S-01",
+          "S-02",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25"
+        ],
+        "src/ui/Input.tsx": [
+          "S-01",
+          "S-21",
+          "S-22",
+          "S-24",
+          "S-25"
+        ],
+        "src/ui/PageHeader.tsx": [
+          "S-01",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-12",
+          "S-14",
+          "S-15",
+          "S-17",
+          "S-20",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25",
+          "S-27"
+        ],
+        "src/ui/Select.tsx": [
+          "S-01",
+          "S-21",
+          "S-22",
+          "S-24",
+          "S-25"
+        ],
+        "src/utils/resolveProductByBarcode.ts": [
+          "S-12",
+          "S-22"
+        ]
+      }
+    },
+    {
+      "portal": "ff",
+      "route": "/app/ops/movements",
+      "component": "MovementsScreen",
+      "files": [
+        "src/screens/v2/MovementsScreen.tsx"
+      ],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-23",
+      "shared": {
+        "src/screens/AppV2Screens.tsx": [
+          "S-01",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25"
+        ],
+        "src/ui/Button.tsx": [
+          "S-01",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25"
+        ],
+        "src/ui/Card.tsx": [
+          "S-01",
+          "S-02",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25"
+        ],
+        "src/ui/PageHeader.tsx": [
+          "S-01",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-12",
+          "S-14",
+          "S-15",
+          "S-17",
+          "S-20",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25",
+          "S-27"
+        ]
+      }
+    },
+    {
+      "portal": "ff",
+      "route": "/app/ops/outbound",
+      "component": "OutboundScreen",
+      "files": [
+        "src/screens/v2/OutboundScreen.tsx"
+      ],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-24",
+      "shared": {
+        "src/screens/AppV2Screens.tsx": [
+          "S-01",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25"
+        ],
+        "src/ui/Button.tsx": [
+          "S-01",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25"
+        ],
+        "src/ui/Card.tsx": [
+          "S-01",
+          "S-02",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25"
+        ],
+        "src/ui/Input.tsx": [
+          "S-01",
+          "S-21",
+          "S-22",
+          "S-24",
+          "S-25"
+        ],
+        "src/ui/PageHeader.tsx": [
+          "S-01",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-12",
+          "S-14",
+          "S-15",
+          "S-17",
+          "S-20",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25",
+          "S-27"
+        ],
+        "src/ui/Select.tsx": [
+          "S-01",
+          "S-21",
+          "S-22",
+          "S-24",
+          "S-25"
+        ],
+        "src/utils/printShipmentWaybill.ts": [
+          "S-12",
+          "S-24"
+        ]
+      }
+    },
+    {
+      "portal": "ff",
+      "route": "/app/ops/transfers",
+      "component": "TransfersScreen",
+      "files": [
+        "src/screens/v2/TransfersScreen.tsx"
+      ],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-25",
+      "shared": {
+        "src/screens/AppV2Screens.tsx": [
+          "S-01",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25"
+        ],
+        "src/ui/Button.tsx": [
+          "S-01",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25"
+        ],
+        "src/ui/Card.tsx": [
+          "S-01",
+          "S-02",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25"
+        ],
+        "src/ui/Input.tsx": [
+          "S-01",
+          "S-21",
+          "S-22",
+          "S-24",
+          "S-25"
+        ],
+        "src/ui/PageHeader.tsx": [
+          "S-01",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-12",
+          "S-14",
+          "S-15",
+          "S-17",
+          "S-20",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25",
+          "S-27"
+        ],
+        "src/ui/Select.tsx": [
+          "S-01",
+          "S-21",
+          "S-22",
+          "S-24",
+          "S-25"
+        ]
+      }
+    },
+    {
+      "portal": "seller",
+      "route": "/documents",
+      "component": "SellerDocumentsScreen",
+      "files": [
+        "src/components/SellerMarketplaceUnloadDialog.tsx",
+        "src/screens/v2/SellerDocumentsScreen.tsx"
+      ],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-26",
+      "shared": {
+        "src/api.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-13",
+          "S-14",
+          "S-15",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-30",
+          "S-31",
+          "S-32"
+        ],
+        "src/components/ProductBarcodeCell.tsx": [
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-26",
+          "S-28",
+          "S-29"
+        ],
+        "src/components/ProductPhotoThumb.tsx": [
+          "S-03",
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31"
+        ],
+        "src/components/SellerWbProductPickerDialog.tsx": [
+          "S-26",
+          "S-28",
+          "S-29"
+        ],
+        "src/components/WmsDateField.tsx": [
+          "S-12",
+          "S-26",
+          "S-28",
+          "S-29"
+        ],
+        "src/utils/latestRequestSequence.ts": [
+          "S-12",
+          "S-16",
+          "S-26"
+        ],
+        "src/utils/readApiErrorMessage.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31",
+          "S-32"
+        ]
+      }
+    },
+    {
+      "portal": "seller",
+      "route": "/honest-sign",
+      "component": "SellerHonestSignScreen",
+      "files": [
+        "src/screens/v2/SellerHonestSignScreen.tsx"
+      ],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-27",
+      "shared": {
+        "src/api.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-13",
+          "S-14",
+          "S-15",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-30",
+          "S-31",
+          "S-32"
+        ],
+        "src/components/ProductBarcodePrintButton.tsx": [
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-27"
+        ],
+        "src/components/ProductPhotoThumb.tsx": [
+          "S-03",
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31"
+        ],
+        "src/hooks/useWbProductCatalog.ts": [
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-27"
+        ],
+        "src/screens/shared/HonestSignScreen.tsx": [
+          "S-05",
+          "S-27"
+        ],
+        "src/screens/shared/MarkingImportDialog.tsx": [
+          "S-05",
+          "S-27"
+        ],
+        "src/screens/shared/MarkingSellerPicker.tsx": [
+          "S-05",
+          "S-07",
+          "S-27"
+        ],
+        "src/types/wbProductCatalog.ts": [
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-27"
+        ],
+        "src/ui/PageHeader.tsx": [
+          "S-01",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-12",
+          "S-14",
+          "S-15",
+          "S-17",
+          "S-20",
+          "S-21",
+          "S-22",
+          "S-23",
+          "S-24",
+          "S-25",
+          "S-27"
+        ],
+        "src/utils/productBarcodePrint.ts": [
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-27"
+        ],
+        "src/utils/readApiErrorMessage.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31",
+          "S-32"
+        ],
+        "src/utils/useFfProductMarkingPrint.tsx": [
+          "S-05",
+          "S-16",
+          "S-27"
+        ],
+        "src/utils/useMarkingCodePrint.tsx": [
+          "S-03",
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-15",
+          "S-27"
+        ]
+      }
+    },
+    {
+      "portal": "seller",
+      "route": "/inbound/:requestId",
+      "component": "SellerInboundDraftScreen",
+      "files": [],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-28",
+      "shared": {
+        "src/api.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-13",
+          "S-14",
+          "S-15",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-30",
+          "S-31",
+          "S-32"
+        ],
+        "src/components/ProductBarcodeCell.tsx": [
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-26",
+          "S-28",
+          "S-29"
+        ],
+        "src/components/ProductPhotoThumb.tsx": [
+          "S-03",
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31"
+        ],
+        "src/components/SellerWbProductPickerDialog.tsx": [
+          "S-26",
+          "S-28",
+          "S-29"
+        ],
+        "src/components/WbProductPickerDialog.tsx": [
+          "S-12",
+          "S-28",
+          "S-29"
+        ],
+        "src/components/WmsDateField.tsx": [
+          "S-12",
+          "S-26",
+          "S-28",
+          "S-29"
+        ],
+        "src/screens/v2/SellerInboundDraftScreen.tsx": [
+          "S-28",
+          "S-29"
+        ],
+        "src/utils/productLabelText.ts": [
+          "S-09",
+          "S-12",
+          "S-16",
+          "S-28",
+          "S-29"
+        ],
+        "src/utils/readApiErrorMessage.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31",
+          "S-32"
+        ]
+      }
+    },
+    {
+      "portal": "seller",
+      "route": "/inbound/new",
+      "component": "SellerInboundDraftScreen",
+      "files": [],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-29",
+      "shared": {
+        "src/api.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-13",
+          "S-14",
+          "S-15",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-30",
+          "S-31",
+          "S-32"
+        ],
+        "src/components/ProductBarcodeCell.tsx": [
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-26",
+          "S-28",
+          "S-29"
+        ],
+        "src/components/ProductPhotoThumb.tsx": [
+          "S-03",
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31"
+        ],
+        "src/components/SellerWbProductPickerDialog.tsx": [
+          "S-26",
+          "S-28",
+          "S-29"
+        ],
+        "src/components/WbProductPickerDialog.tsx": [
+          "S-12",
+          "S-28",
+          "S-29"
+        ],
+        "src/components/WmsDateField.tsx": [
+          "S-12",
+          "S-26",
+          "S-28",
+          "S-29"
+        ],
+        "src/screens/v2/SellerInboundDraftScreen.tsx": [
+          "S-28",
+          "S-29"
+        ],
+        "src/utils/productLabelText.ts": [
+          "S-09",
+          "S-12",
+          "S-16",
+          "S-28",
+          "S-29"
+        ],
+        "src/utils/readApiErrorMessage.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31",
+          "S-32"
+        ]
+      }
+    },
+    {
+      "portal": "seller",
+      "route": "/notifications",
+      "component": "NotificationsPage",
+      "files": [],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-30",
+      "shared": {
+        "src/api.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-13",
+          "S-14",
+          "S-15",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-30",
+          "S-31",
+          "S-32"
+        ],
+        "src/screens/shared/NotificationsPage.tsx": [
+          "S-13",
+          "S-30"
+        ],
+        "src/utils/notificationsApi.ts": [
+          "S-13",
+          "S-30"
+        ]
+      }
+    },
+    {
+      "portal": "seller",
+      "route": "/products",
+      "component": "SellerProductsStockScreen",
+      "files": [
+        "src/screens/v2/SellerProductsStockScreen.tsx"
+      ],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-31",
+      "shared": {
+        "src/api.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-13",
+          "S-14",
+          "S-15",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-30",
+          "S-31",
+          "S-32"
+        ],
+        "src/components/ProductPhotoThumb.tsx": [
+          "S-03",
+          "S-05",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31"
+        ],
+        "src/utils/printPackagingInstructions.ts": [
+          "S-16",
+          "S-31"
+        ],
+        "src/utils/readApiErrorMessage.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31",
+          "S-32"
+        ]
+      }
+    },
+    {
+      "portal": "seller",
+      "route": "/settings",
+      "component": "SellerSettingsScreen",
+      "files": [
+        "src/screens/v2/SellerSettingsScreen.tsx"
+      ],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий",
+        "модалка"
+      ],
+      "id": "S-32",
+      "shared": {
+        "src/api.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-13",
+          "S-14",
+          "S-15",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-30",
+          "S-31",
+          "S-32"
+        ],
+        "src/utils/readApiErrorMessage.ts": [
+          "S-03",
+          "S-04",
+          "S-05",
+          "S-07",
+          "S-08",
+          "S-09",
+          "S-10",
+          "S-12",
+          "S-14",
+          "S-16",
+          "S-18",
+          "S-19",
+          "S-26",
+          "S-27",
+          "S-28",
+          "S-29",
+          "S-31",
+          "S-32"
+        ]
+      }
+    }
+  ]
+}
