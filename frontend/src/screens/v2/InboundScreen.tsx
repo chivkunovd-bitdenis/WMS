@@ -7,6 +7,7 @@ import { Input } from '../../ui/Input'
 import { Select } from '../../ui/Select'
 import { Screen } from '../AppV2Screens'
 import { movementTypeLabel } from '../../utils/movementTypeLabel'
+import { realWarehouses } from '../../utils/fbsWarehouse'
 
 type WarehouseRow = { id: string; name: string; code: string }
 type LocationRow = { id: string; code: string; warehouse_id: string }
@@ -174,6 +175,10 @@ export function InboundScreen(props: Props) {
     }
   }, [productQuery, products])
 
+  // I10: склады-подстановки под WB («FBS WB …») не место хранения — выбор
+  // склада не должен показываться из-за них, когда настоящий склад один.
+  const realWh = useMemo(() => realWarehouses(warehouses), [warehouses])
+
   return (
     <Screen title="Приёмка" subtitle="Список заявок → детали → приём по строкам">
       {opsError ? (
@@ -215,7 +220,7 @@ export function InboundScreen(props: Props) {
                     defaultValue={todayIso}
                   />
                 </label>
-                {isFulfillmentSeller && warehouses.length > 1 ? (
+                {isFulfillmentSeller && realWh.length > 1 ? (
                   <label>
                     Склад для заявки
                     <Select
@@ -227,7 +232,7 @@ export function InboundScreen(props: Props) {
                       <option value="" disabled>
                         Выберите склад
                       </option>
-                      {warehouses.map((w) => (
+                      {realWh.map((w) => (
                         <option key={w.id} value={w.id}>
                           {w.code} — {w.name}
                         </option>
@@ -241,7 +246,7 @@ export function InboundScreen(props: Props) {
                   disabled={
                     opsBusy ||
                     warehouses.length === 0 ||
-                    (!isFulfillmentSeller && !selectedWarehouseId && warehouses.length !== 1)
+                    (!isFulfillmentSeller && !selectedWarehouseId && realWh.length !== 1)
                   }
                 >
                   {opsBusy ? '…' : 'Новая заявка на приёмку'}

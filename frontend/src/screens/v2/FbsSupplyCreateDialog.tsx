@@ -245,6 +245,26 @@ export function FbsSupplyCreateDialog({
                   </Stack>
                 </Alert>
               ) : null}
+
+              {/* I10: товар лежит не там, куда привязан заказ — поставку это не блокирует
+                  (подбор и упаковка найдут его на любом складе клиента), но оператор должен
+                  узнать об этом сейчас, а не отказом на упаковке через час. */}
+              {preflight?.notices?.length ? (
+                <Alert severity="warning" data-testid="fbs-supply-stock-location-notice">
+                  <Stack spacing={0.5}>
+                    {preflight.notices.map((notice) => (
+                      <Typography key={notice.product_id} variant="body2">
+                        {notice.product_name}: нужно {notice.needed_qty} шт., на складе «
+                        {notice.primary_warehouse_name}» — {notice.primary_qty}. Возьмут ещё{' '}
+                        {notice.elsewhere
+                          .map((loc) => `${loc.qty} шт. со склада «${loc.warehouse_name}»`)
+                          .join(', ')}
+                        .
+                      </Typography>
+                    ))}
+                  </Stack>
+                </Alert>
+              ) : null}
             </Stack>
           ) : null}
         </Stack>

@@ -6,6 +6,7 @@ import { Select } from '../../ui/Select'
 import { Screen } from '../AppV2Screens'
 import { printOperationalOutboundWaybill } from '../../utils/printShipmentWaybill'
 import { movementTypeLabel } from '../../utils/movementTypeLabel'
+import { realWarehouses } from '../../utils/fbsWarehouse'
 
 type WarehouseRow = { id: string; name: string; code: string }
 type LocationRow = { id: string; code: string; warehouse_id: string }
@@ -99,6 +100,9 @@ export function OutboundScreen(props: Props) {
     onPostOutboundRequest,
   } = props
 
+  // I10: склады-подстановки под WB не место хранения — не в счёт при показе выбора.
+  const realWh = realWarehouses(warehouses)
+
   return (
     <Screen title="Отгрузка" subtitle="Заявки → строки → подбор → списание">
       {opsError ? (
@@ -120,7 +124,7 @@ export function OutboundScreen(props: Props) {
 
             {canEditOutboundDraft ? (
               <form data-testid="outbound-create-form" noValidate onSubmit={onCreateOutboundRequest}>
-                {isFulfillmentSeller && warehouses.length > 1 ? (
+                {isFulfillmentSeller && realWh.length > 1 ? (
                   <label>
                     Склад для отгрузки
                     <Select
@@ -132,7 +136,7 @@ export function OutboundScreen(props: Props) {
                       <option value="" disabled>
                         Выберите склад
                       </option>
-                      {warehouses.map((w) => (
+                      {realWh.map((w) => (
                         <option key={w.id} value={w.id}>
                           {w.code} — {w.name}
                         </option>
@@ -146,7 +150,7 @@ export function OutboundScreen(props: Props) {
                   disabled={
                     opsBusy ||
                     warehouses.length === 0 ||
-                    (!isFulfillmentSeller && !selectedWarehouseId && warehouses.length !== 1)
+                    (!isFulfillmentSeller && !selectedWarehouseId && realWh.length !== 1)
                   }
                 >
                   {opsBusy ? '…' : 'Новая заявка на отгрузку'}

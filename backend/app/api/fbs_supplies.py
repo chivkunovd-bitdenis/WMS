@@ -80,10 +80,28 @@ class FbsSupplyPreflightSummaryOut(BaseModel):
     nearest_deadline_at: str
 
 
+class FbsSupplyStockElsewhereOut(BaseModel):
+    warehouse_name: str
+    qty: int
+
+
+class FbsSupplyStockLocationNoticeOut(BaseModel):
+    """I10: товар нужен на складе поставки, а физически лежит (тоже) на другом —
+    сказано словами прямо на preflight, чтобы не всплыло отказом на упаковке."""
+
+    product_id: str
+    product_name: str
+    needed_qty: int
+    primary_warehouse_name: str
+    primary_qty: int
+    elsewhere: list[FbsSupplyStockElsewhereOut]
+
+
 class FbsSupplyPreflightOut(BaseModel):
     compatible: bool
     summary: FbsSupplyPreflightSummaryOut | None
     issues: list[FbsSupplyPreflightIssueOut]
+    notices: list[FbsSupplyStockLocationNoticeOut] = []
     server_now: str
 
 

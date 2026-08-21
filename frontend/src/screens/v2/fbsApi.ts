@@ -274,6 +274,17 @@ export type FbsSupplyPreflight = {
     nearest_deadline_at: string
   }
   issues: Array<{ order_id: string; code: string; message: string }>
+  // I10: не блокирует создание — называет склад и остаток, если товар лежит не
+  // (только) там, куда привязан заказ, чтобы это было видно прямо на preflight,
+  // а не отказом на упаковке через час.
+  notices?: Array<{
+    product_id: string
+    product_name: string
+    needed_qty: number
+    primary_warehouse_name: string
+    primary_qty: number
+    elsewhere: Array<{ warehouse_name: string; qty: number }>
+  }>
 }
 
 export type FbsSupplyCreateFromOrdersRequest = {

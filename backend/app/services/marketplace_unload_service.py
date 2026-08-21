@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import date
 from typing import TYPE_CHECKING
@@ -301,9 +302,20 @@ async def _outbound_reserved_by_product(
     tenant_id: uuid.UUID,
     warehouse_id: uuid.UUID,
     product_ids: list[uuid.UUID],
+    *,
+    warehouse_ids: Collection[uuid.UUID] | None = None,
 ) -> dict[uuid.UUID, int]:
+    """Зарезервировано под исходящие отгрузки, по складу(ам).
+
+    По умолчанию — один `warehouse_id`, как раньше. `warehouse_ids` — I10:
+    fbs_stock_availability_service считает остаток FBS сразу по всем складам
+    тенанта, а не по одному, к которому исторически привязан заказ, поэтому
+    ей нужно просуммировать резерв тем же набором складов, иначе остаток по
+    сумме складов задвоится с тем, что уже занято на каком-то из них.
+    """
     if not product_ids:
         return {}
+    ids = list(warehouse_ids) if warehouse_ids is not None else [warehouse_id]
     stmt = (
         select(
             InventoryReservation.product_id,
@@ -329,11 +341,11 @@ async def _outbound_reserved_by_product(
                 and_(
                     InventoryReservation.storage_location_id.isnot(None),
                     StorageLocation.tenant_id == tenant_id,
-                    StorageLocation.warehouse_id == warehouse_id,
+                    StorageLocation.warehouse_id.in_(ids),
                 ),
                 and_(
                     InventoryReservation.storage_location_id.is_(None),
-                    InventoryReservation.warehouse_id == warehouse_id,
+                    InventoryReservation.warehouse_id.in_(ids),
                 ),
             ),
         )

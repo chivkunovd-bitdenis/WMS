@@ -4,6 +4,7 @@ import { Alert, Box, Button, Typography } from '@mui/material'
 import { apiUrl, getStoredToken } from '../../api'
 import { useAuth } from '../../hooks/useAuth'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { primaryWarehouseId } from '../../utils/fbsWarehouse'
 import {
   firstAllowedSellerPath,
   resolveSellerPermissions,
@@ -114,7 +115,10 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
       setSelectedWarehouseId((prev) => {
         if (rows.length === 0) return null
         if (prev && rows.some((w) => w.id === prev)) return prev
-        return rows[0]!.id
+        // I10: не первый склад по алфавиту (им часто оказывается служебная
+        // подстановка «FBS WB …», которая на латинице сортируется раньше
+        // кириллического «Основной») — первый настоящий склад тенанта.
+        return primaryWarehouseId(rows)
       })
     },
     [authHeaders],
@@ -350,7 +354,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                   error={opsError}
                   token={token}
                   authHeaders={authHeaders}
-                  warehouseId={selectedWarehouseId ?? warehouses[0]?.id ?? null}
+                  warehouseId={selectedWarehouseId ?? primaryWarehouseId(warehouses)}
                   inboundSummaries={inboundSummaries}
                   mpUnloadSummaries={mpUnloadSummaries}
                   onRefreshInboundList={async () => {
@@ -367,7 +371,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                     if (!token) {
                       return null
                     }
-                    const wid = selectedWarehouseId ?? warehouses[0]?.id
+                    const wid = selectedWarehouseId ?? primaryWarehouseId(warehouses)
                     if (!wid) {
                       setOpsError('Склад ФФ не найден.')
                       return null
@@ -421,7 +425,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                   key={catalogScopeKey}
                   token={token}
                   authHeaders={authHeaders}
-                  warehouseId={selectedWarehouseId ?? (warehouses[0]?.id ?? null)}
+                  warehouseId={selectedWarehouseId ?? primaryWarehouseId(warehouses)}
                   warehouses={warehouses}
                   onRefreshInboundList={() =>
                     token ? refreshInboundList(token) : undefined
@@ -440,7 +444,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                   key={catalogScopeKey}
                   token={token}
                   authHeaders={authHeaders}
-                  warehouseId={selectedWarehouseId ?? (warehouses[0]?.id ?? null)}
+                  warehouseId={selectedWarehouseId ?? primaryWarehouseId(warehouses)}
                   warehouses={warehouses}
                   onRefreshInboundList={() =>
                     token ? refreshInboundList(token) : undefined
