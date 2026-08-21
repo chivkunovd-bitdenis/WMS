@@ -5,6 +5,57 @@
   "verdict": "CASES_READY",
   "baseline_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "oracle_version": "S11-PRODUCT-CONTRACT.md + S12-TASK-CUT.md + S13-ARCHITECT-PLAN.md + S14-ARCHITECT-FALSIFICATION.md",
+  "planned_evidence_schema_profiles": {
+    "pipeline-case-execution-v1": {
+      "schema": "pipeline/evidence.schema.json",
+      "binding_stage": "S19",
+      "required_trace_fields": [
+        "task_id",
+        "wave_id",
+        "case_ids",
+        "fixture_versions",
+        "clock_utc",
+        "event_key",
+        "code_sha",
+        "authority_commit",
+        "blocker_registry_hash",
+        "blocker_decision_hash",
+        "operation",
+        "scope",
+        "lifecycle_or_denial_result",
+        "commands",
+        "timestamps",
+        "artifact_hashes",
+        "redaction_status"
+      ],
+      "na_rule": "A trace field may be N/A only when this case oracle proves that no such value can exist; the evidence manifest records the reason alongside the literal N/A.",
+      "case_ids": [
+        "F01-C1-01", "F01-C1-02", "F01-C1-03", "F01-C1-04", "F01-C1-05", "F01-C1-06", "F01-C1-07", "F01-C1-08", "F01-C1-09", "F01-C1-10", "F01-C1-11", "F01-C1-12", "F01-C1-13", "F01-C1-14",
+        "F01-C1-B01", "F01-C1-B02", "F01-C1-B03", "F01-C1-B04", "F01-C1-B05", "F01-C1-B06", "F01-C1-B07", "F01-C1-B08", "F01-C1-B09", "F01-C1-B10", "F01-C1-B11", "F01-C1-B12", "F01-C1-B13", "F01-C1-B14"
+      ]
+    }
+  },
+  "coverage_validation_contract": {
+    "full_chain": "requirement -> capability -> process_transition -> incident_or_block -> direct_cases -> breaker_cases",
+    "reference_rules": [
+      "Every direct_cases and breaker_cases ID exists exactly once in cases.",
+      "Every direct_cases ID has case_role direct and every breaker_cases ID has case_role breaker.",
+      "Every row identifies a reviewed incident_or_block, including reviewed_na where no concrete incident/block applies.",
+      "Every listed case has the named incident_or_block ID in case_provenance, so uncovered rows are derived rather than self-reported."
+    ]
+  },
+  "case_provenance": {
+    "F01-C1-01": ["BLK-PROCESS-001"], "F01-C1-02": ["BLK-PROCESS-001"], "F01-C1-03": ["BLK-PROCESS-001"], "F01-C1-04": ["BLK-PROCESS-001"],
+    "F01-C1-05": ["INC-BLOCKER-AUTHORITY-PROJECTION-DIVERGENCE"], "F01-C1-06": ["INC-BLOCKER-AUTHORITY-PROJECTION-DIVERGENCE"], "F01-C1-07": ["INC-BLOCKER-OCCURRENCE-REPLAY-DIVERGENCE"],
+    "F01-C1-08": ["INC-BLOCKER-AUTHORITY-PROJECTION-DIVERGENCE", "INC-BLOCKER-OCCURRENCE-REPLAY-DIVERGENCE", "N/A-S12-INTEGRITY"], "F01-C1-09": ["INC-BLOCKER-OCCURRENCE-REPLAY-DIVERGENCE"],
+    "F01-C1-10": ["INC-BLG-D05-PREMATURE-CAPABILITY"], "F01-C1-11": ["INC-BLOCKER-LIFECYCLE-HISTORY-DIVERGENCE"], "F01-C1-12": ["INC-BLOCKER-DEPENDENCY-INVALIDATION-DIVERGENCE", "INC-BLOCKER-V1-COMPATIBILITY-DIVERGENCE"],
+    "F01-C1-13": ["INC-BLOCKER-V1-COMPATIBILITY-DIVERGENCE"], "F01-C1-14": ["INC-STATE-BLOCKER-DEPENDENCY-CHANNEL-DIVERGENCE", "INC-FAILURE-ROUTE-DEPENDENCY-DIVERGENCE"],
+    "F01-C1-B01": ["BLK-PROCESS-001"], "F01-C1-B02": ["BLK-PROCESS-001"], "F01-C1-B03": ["BLK-PROCESS-001", "INC-BLOCKER-OCCURRENCE-REPLAY-DIVERGENCE"], "F01-C1-B04": ["BLK-PROCESS-001"],
+    "F01-C1-B05": ["INC-BLOCKER-AUTHORITY-PROJECTION-DIVERGENCE"], "F01-C1-B06": ["INC-BLOCKER-AUTHORITY-PROJECTION-DIVERGENCE"], "F01-C1-B07": ["INC-BLOCKER-OCCURRENCE-REPLAY-DIVERGENCE", "INC-BLOCKER-V1-COMPATIBILITY-DIVERGENCE"],
+    "F01-C1-B08": ["INC-BLOCKER-OCCURRENCE-REPLAY-DIVERGENCE"], "F01-C1-B09": ["N/A-S12-INTEGRITY", "INC-BLOCKER-OCCURRENCE-REPLAY-DIVERGENCE", "INC-BLOCKER-LIFECYCLE-HISTORY-DIVERGENCE", "INC-BLOCKER-V1-COMPATIBILITY-DIVERGENCE"], "F01-C1-B10": ["INC-BLOCKER-OCCURRENCE-REPLAY-DIVERGENCE"],
+    "F01-C1-B11": ["INC-BLG-D05-PREMATURE-CAPABILITY"], "F01-C1-B12": ["N/A-S12-INTEGRITY"], "F01-C1-B13": ["INC-BLOCKER-AUTHORITY-PROJECTION-DIVERGENCE"],
+    "F01-C1-B14": ["INC-STATE-BLOCKER-DEPENDENCY-CHANNEL-DIVERGENCE", "INC-FAILURE-ROUTE-DEPENDENCY-DIVERGENCE"]
+  },
   "fixture_contract": {
     "name": "blg-f01-blocker-registry-local-v1",
     "reset": "Create a fresh disposable local Git repository, bare controller remote, controller journal, task projections and CI checkout for each case. Seed only synthetic BLG-F01, BLG-D05 and unrelated-task records with the pinned clock, random seed and deterministic event-key sequence. Remove only the case namespace after evidence capture, then assert that no case-owned ref, journal entry, projection or publication retry leaks into the next case. External egress, production data, credentials, deploy, and marketplace calls are forbidden.",
@@ -24,126 +75,105 @@
       "requirement": "S12 valid open blocker exposes exact explanation and refuses only its declared operation",
       "capability": "operation-scoped blocker evaluation",
       "process_transition": "S15-S23 allowed while final acceptance/release/close denied",
-      "cases": [
-        "F01-C1-01",
-        "F01-C1-02",
-        "F01-C1-B01",
-        "F01-C1-B02"
-      ]
+      "incident_or_block": {"kind": "block", "id": "BLK-PROCESS-001", "source": "S13 bootstrap occurrence"},
+      "direct_cases": ["F01-C1-01", "F01-C1-02"],
+      "breaker_cases": ["F01-C1-B01", "F01-C1-B02"]
     },
     {
       "requirement": "S12 narrow/closure resumes declared stage without skipping gates and rejects self/wrong/stale evidence",
       "capability": "independent occurrence authorization",
       "process_transition": "post-S23 narrow then post-S25 close",
-      "cases": [
-        "F01-C1-03",
-        "F01-C1-04",
-        "F01-C1-B03",
-        "F01-C1-B04"
-      ]
+      "incident_or_block": {"kind": "block", "id": "BLK-PROCESS-001", "source": "S13 bootstrap authorization route"},
+      "direct_cases": ["F01-C1-03", "F01-C1-04"],
+      "breaker_cases": ["F01-C1-B03", "F01-C1-B04"]
     },
     {
       "requirement": "S12 parity and stale-snapshot resistance",
       "capability": "authority ref evaluation and deterministic projections",
       "process_transition": "runtime, CI, packet/state/report agree",
-      "cases": [
-        "F01-C1-05",
-        "F01-C1-06",
-        "F01-C1-B05",
-        "F01-C1-B06",
-        "F01-C1-B13"
-      ]
+      "incident_or_block": {"kind": "incident", "id": "INC-BLOCKER-AUTHORITY-PROJECTION-DIVERGENCE", "source": "S13 durable-authority and stale-projection risk"},
+      "direct_cases": ["F01-C1-05", "F01-C1-06"],
+      "breaker_cases": ["F01-C1-B05", "F01-C1-B06", "F01-C1-B13"]
     },
     {
       "requirement": "S12 immutable history, integrity, duplicate IDs/edges/cycles and contradictory state rejection",
       "capability": "schema/history/graph validation",
       "process_transition": "invalid registry cannot become active",
-      "cases": [
-        "F01-C1-08",
-        "F01-C1-B09",
-        "F01-C1-B12"
-      ]
+      "incident_or_block": {"kind": "reviewed_na", "id": "N/A-S12-INTEGRITY", "reason": "Acceptance constraint, not a separately triaged incident or active blocker."},
+      "direct_cases": ["F01-C1-08"],
+      "breaker_cases": ["F01-C1-B09", "F01-C1-B12"]
     },
     {
       "requirement": "S12 restart/recovery and unrelated task continuation",
       "capability": "idempotent typed occurrence replay",
       "process_transition": "same occurrence after duplicate/restart; unrelated task continues",
-      "cases": [
-        "F01-C1-07",
-        "F01-C1-08",
-        "F01-C1-B08",
-        "F01-C1-B10"
-      ]
+      "incident_or_block": {"kind": "incident", "id": "INC-BLOCKER-OCCURRENCE-REPLAY-DIVERGENCE", "source": "S13 occurrence identity/replay risk"},
+      "direct_cases": ["F01-C1-07", "F01-C1-08"],
+      "breaker_cases": ["F01-C1-B08", "F01-C1-B10"]
     },
     {
       "requirement": "S14 F1 non-circular bootstrap",
       "capability": "BLK-PROCESS-001 scoped lifecycle",
       "process_transition": "S15-S23 to independent S25 authorization",
-      "cases": [
-        "F01-C1-01",
-        "F01-C1-02",
-        "F01-C1-03",
-        "F01-C1-04",
-        "F01-C1-B01",
-        "F01-C1-B02",
-        "F01-C1-B03",
-        "F01-C1-B04"
-      ]
+      "incident_or_block": {"kind": "block", "id": "BLK-PROCESS-001", "source": "S14 F1"},
+      "direct_cases": ["F01-C1-01", "F01-C1-02", "F01-C1-03", "F01-C1-04"],
+      "breaker_cases": ["F01-C1-B01", "F01-C1-B02", "F01-C1-B03", "F01-C1-B04"]
     },
     {
       "requirement": "S14 F2 single durable Git authority and exact CI object",
       "capability": "controller-owned authority ref and publication proof",
       "process_transition": "CAS/publication/CI verification",
-      "cases": [
-        "F01-C1-05",
-        "F01-C1-06",
-        "F01-C1-B05",
-        "F01-C1-B06"
-      ]
+      "incident_or_block": {"kind": "incident", "id": "INC-BLOCKER-AUTHORITY-PROJECTION-DIVERGENCE", "source": "S14 F2"},
+      "direct_cases": ["F01-C1-05", "F01-C1-06"],
+      "breaker_cases": ["F01-C1-B05", "F01-C1-B06"]
     },
     {
       "requirement": "S14 F3 typed definition versus occurrence, positive exact-scope resume and fail-closed dynamic holds",
       "capability": "role-bound typed event instantiation and repair/oracle-bound resume",
       "process_transition": "ENV/FIXTURE/ACCESS/ORACLE_CONFLICT/BUDGET_HARD_STOP exact-task holds and declared-stage resume",
-      "cases": [
-        "F01-C1-07",
-        "F01-C1-08",
-        "F01-C1-09",
-        "F01-C1-B03",
-        "F01-C1-B07",
-        "F01-C1-B08",
-        "F01-C1-B09",
-        "F01-C1-B10"
-      ]
+      "incident_or_block": {"kind": "incident", "id": "INC-BLOCKER-OCCURRENCE-REPLAY-DIVERGENCE", "source": "S14 F3"},
+      "direct_cases": ["F01-C1-07", "F01-C1-08", "F01-C1-09"],
+      "breaker_cases": ["F01-C1-B03", "F01-C1-B07", "F01-C1-B08", "F01-C1-B10"]
     },
     {
       "requirement": "S13 closed, superseded and reopened lifecycle history stays hash-linked",
       "capability": "valid lifecycle event history",
       "process_transition": "close, supersede and reopen remain queryable after restart",
-      "cases": [
-        "F01-C1-11",
-        "F01-C1-B09"
-      ]
+      "incident_or_block": {"kind": "incident", "id": "INC-BLOCKER-LIFECYCLE-HISTORY-DIVERGENCE", "source": "S13 lifecycle contract"},
+      "direct_cases": ["F01-C1-11"],
+      "breaker_cases": ["F01-C1-B09"]
     },
     {
       "requirement": "S13 scoped revision invalidation and additive v1 compatibility",
       "capability": "affected-receipt invalidation and conservative previous-controller projection",
       "process_transition": "only affected task paths invalidate; empty legacy scope never becomes global",
-      "cases": [
-        "F01-C1-12",
-        "F01-C1-13",
-        "F01-C1-B07",
-        "F01-C1-B09"
-      ]
+      "incident_or_block": {"kind": "incident", "id": "INC-BLOCKER-V1-COMPATIBILITY-DIVERGENCE", "source": "S13 additive v1 boundary"},
+      "direct_cases": ["F01-C1-12", "F01-C1-13"],
+      "breaker_cases": ["F01-C1-B07", "F01-C1-B09"]
     },
     {
       "requirement": "BLG-D05 dependency receipt boundary",
       "capability": "post-S25 capability publication without dependent mutation",
       "process_transition": "F01 completion permits D05 to evaluate its own declared edge",
-      "cases": [
-        "F01-C1-10",
-        "F01-C1-B11"
-      ]
+      "incident_or_block": {"kind": "incident", "id": "INC-BLG-D05-PREMATURE-CAPABILITY", "source": "S13/S14 D05 dependency boundary"},
+      "direct_cases": ["F01-C1-10"],
+      "breaker_cases": ["F01-C1-B11"]
+    },
+    {
+      "requirement": "Controller compatibility keeps orchestration state.blocker/resume_condition separate from canonical blocked_by dependencies",
+      "capability": "dual-channel projection and independent closure",
+      "process_transition": "simultaneous dependency and orchestration hold survive WAITING, REWORK, restart and read-back without one channel overwriting the other",
+      "incident_or_block": {"kind": "incident", "id": "INC-STATE-BLOCKER-DEPENDENCY-CHANNEL-DIVERGENCE", "source": "CA-F02"},
+      "direct_cases": ["F01-C1-14"],
+      "breaker_cases": ["F01-C1-B14"]
+    },
+    {
+      "requirement": "Typed stage failure/rework routes preserve dependency map and resume at the declared owning required stage",
+      "capability": "failure-route ownership, required-stage validation and exact invalidation",
+      "process_transition": "WAITING creates only scoped orchestration blocker; REWORK clears only that field, retains blocked_by, invalidates to owning stage and rejects non-required targets",
+      "incident_or_block": {"kind": "incident", "id": "INC-FAILURE-ROUTE-DEPENDENCY-DIVERGENCE", "source": "CA-F02 and Pipeline MT36"},
+      "direct_cases": ["F01-C1-14"],
+      "breaker_cases": ["F01-C1-B14"]
     }
   ],
   "cases": [
@@ -167,6 +197,7 @@
       "executable_ref": "scripts/testing/test_blg_f01_blocker_registry.py::test_process_bootstrap_operation_scope",
       "test_id": "F01-C1-01",
       "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
       "timeout": "30s",
       "expected_ui": "N/A: internal control-plane task.",
       "expected_api": "S15-S23 decisions allow; S25/S26/close deny with BLK-PROCESS-001, harm, exact scope, owner, minimum closure evidence, resume condition and stage.",
@@ -201,6 +232,7 @@
       "executable_ref": "scripts/testing/test_blg_f01_blocker_registry.py::test_declared_boundaries_do_not_overblock",
       "test_id": "F01-C1-02",
       "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
       "timeout": "30s",
       "expected_ui": "N/A: internal control-plane task.",
       "expected_api": "Only the definition-declared operation/stage is denied; earlier allowed work and unrelated task dispatch continue.",
@@ -236,6 +268,7 @@
       "executable_ref": "scripts/testing/test_blg_f01_blocker_registry.py::test_post_s23_narrow_is_exact_and_non_circular",
       "test_id": "F01-C1-03",
       "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
       "timeout": "30s",
       "expected_ui": "N/A: internal control-plane task.",
       "expected_api": "Only final_acceptance is removed from the exact occurrence prohibition; release and close remain denied.",
@@ -271,6 +304,7 @@
       "executable_ref": "scripts/testing/test_blg_f01_blocker_registry.py::test_post_s25_close_resumes_without_gate_skip",
       "test_id": "F01-C1-04",
       "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
       "timeout": "30s",
       "expected_ui": "N/A: internal control-plane task.",
       "expected_api": "Close is accepted only after independent S25; resume follows declared stage and does not fabricate Product, case, review, test, integration or release receipts.",
@@ -306,6 +340,7 @@
       "executable_ref": "scripts/testing/test_blg_f01_blocker_registry.py::test_authority_ref_ci_parity",
       "test_id": "F01-C1-05",
       "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
       "timeout": "45s",
       "expected_ui": "N/A: internal control-plane task.",
       "expected_api": "Runtime and CI evaluate the same authority object ID, definition blob, occurrence root and decision hash.",
@@ -338,6 +373,7 @@
       "executable_ref": "scripts/ci/check_blocker_enforcement_metatests.py::test_entrypoint_parity",
       "test_id": "F01-C1-06",
       "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
       "timeout": "45s",
       "expected_ui": "N/A: internal control-plane task.",
       "expected_api": "Every entrypoint uses the evaluator; denied dispatch emits WAITING explanation and refuses handoff.",
@@ -370,6 +406,7 @@
       "executable_ref": "scripts/testing/test_blg_f01_blocker_registry.py::test_dynamic_occurrence_duplicate_delivery",
       "test_id": "F01-C1-07",
       "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
       "timeout": "30s",
       "expected_ui": "N/A: internal control-plane task.",
       "expected_api": "One deterministic BLO-* occurrence is returned; only its exact task/operation/stage is denied.",
@@ -403,6 +440,7 @@
       "executable_ref": "scripts/ci/check_pipeline_replay_metatests.py::test_blocker_authority_replay",
       "test_id": "F01-C1-08",
       "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
       "timeout": "45s",
       "expected_ui": "N/A: internal control-plane task.",
       "expected_api": "Authority remains selected once; stale caches fail closed until rebuilt; no second current truth emerges.",
@@ -437,6 +475,7 @@
       "executable_ref": "scripts/testing/test_blg_f01_blocker_registry.py::test_typed_dynamic_hold_routes_and_exact_scope_resume",
       "test_id": "F01-C1-09",
       "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
       "timeout": "45s",
       "expected_ui": "N/A: internal control-plane task.",
       "expected_api": "Each event maps only to its named reviewed definition and exact task scope; a valid repair/oracle binding creates one hash-linked narrow/close event, resumes only the declared stage after ordinary gate re-evaluation, and never synthesizes skipped receipts.",
@@ -470,6 +509,7 @@
       "executable_ref": "scripts/testing/test_blg_f01_blocker_registry.py::test_d05_dependency_receipt_boundary",
       "test_id": "F01-C1-10",
       "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
       "timeout": "45s",
       "expected_ui": "N/A: internal control-plane task.",
       "expected_api": "Receipt binds candidate SHA/tree, owning receipts, authority commit, schema hashes, engine version and executable coverage only after required sequence.",
@@ -504,6 +544,7 @@
       "executable_ref": "scripts/testing/test_blg_f01_blocker_registry.py::test_close_supersede_reopen_history_is_traceable",
       "test_id": "F01-C1-11",
       "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
       "timeout": "45s",
       "expected_ui": "N/A: internal control-plane task.",
       "expected_api": "The closed occurrence, superseded definition and reopened occurrence remain separately queryable and hash-linked; no prior record is rewritten or deleted.",
@@ -538,6 +579,7 @@
       "executable_ref": "scripts/testing/test_blg_f01_blocker_registry.py::test_registry_revision_invalidates_only_affected_receipts",
       "test_id": "F01-C1-12",
       "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
       "timeout": "45s",
       "expected_ui": "N/A: internal control-plane task.",
       "expected_api": "Only receipts bound to the changed definition, occurrence scope or dependency path invalidate; the unrelated task retains valid decisions and continues.",
@@ -572,6 +614,7 @@
       "executable_ref": "scripts/testing/test_blg_f01_blocker_registry.py::test_previous_controller_v1_view_is_conservative",
       "test_id": "F01-C1-13",
       "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
       "timeout": "30s",
       "expected_ui": "N/A: internal control-plane task.",
       "expected_api": "The previous-controller path treats empty affected_task_ids as no implicit global block, preserves explicit scoped prohibitions conservatively and never becomes an authority writer.",
@@ -582,6 +625,41 @@
       "oracle": "S13 additive v1 compatibility and rollback boundary; S14 F3.",
       "related_blocks": [],
       "related_incidents": [],
+      "status": "GOLD",
+      "case_role": "direct"
+    },
+    {
+      "id": "F01-C1-14",
+      "title": "Compatibility projection keeps state.blocker/resume_condition independent from blocked_by through WAITING and REWORK",
+      "screen": "Pipeline controller compatibility surface",
+      "zone": "task state blocker and dependency projection",
+      "process": "simultaneous orchestration hold, canonical dependency and typed stage-failure route",
+      "actor_role": "controller-system",
+      "fixture": "Synthetic task with an active canonical blocked_by dependency and a separate typed ENV stage-failure occurrence carrying business reason, owner role, minimum evidence and resume condition",
+      "fixture_version": "blg-f01-blocker-registry-local-v1",
+      "fixture_builder": "Local controller route fixture with required-stage graph, authority occurrence and restartable task projection",
+      "external_mode": "local only; external egress forbidden",
+      "steps": [
+        "Create the canonical dependency path in blocked_by and a separate orchestration state.blocker/resume_condition from a typed stage failure.",
+        "Drive the failure route to WAITING and read packet, state and report.",
+        "Route the same failure to REWORK, clear only the orchestration blocker, invalidate to its declared owning required stage and retain blocked_by.",
+        "Restart, re-read all projections and resolve only the channel with eligible evidence."
+      ],
+      "executor_type": "pytest controller compatibility integration",
+      "executable_ref": "scripts/testing/test_blg_f01_blocker_registry.py::test_state_blocker_and_blocked_by_channels_survive_failure_routes",
+      "test_id": "F01-C1-14",
+      "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
+      "timeout": "45s",
+      "expected_ui": "N/A: internal control-plane task.",
+      "expected_api": "WAITING creates only the scoped orchestration state.blocker/resume_condition while blocked_by remains the canonical dependency path. REWORK removes only that orchestration projection, routes to the declared required owning stage and leaves blocked_by intact; neither channel closes or overwrites the other.",
+      "expected_authorization": "The typed failure retains its business reason, owner role, minimum evidence, resume condition and dependency path. Only the eligible owner/oracle evidence may resolve its occurrence; a dependency resolution is separately authorized.",
+      "expected_transaction": "One failure event creates at most one scoped occurrence and deterministic invalidation; REWORK emits no dependency closure event.",
+      "read_back": "State, packet and report distinguish state.blocker/resume_condition from blocked_by, show their different owners and closure requirements, and bind one authority/decision hash.",
+      "reload_assertion": "Restart preserves simultaneous channels, then preserves the exact REWORK invalidation and unresolved dependency path.",
+      "oracle": "CA-F02; S13 controller entrypoints, typed stage-failure routes and scoped invalidation; Pipeline MT36.",
+      "related_blocks": [],
+      "related_incidents": ["INC-STATE-BLOCKER-DEPENDENCY-CHANNEL-DIVERGENCE", "INC-FAILURE-ROUTE-DEPENDENCY-DIVERGENCE"],
       "status": "GOLD",
       "case_role": "direct"
     },
@@ -604,6 +682,7 @@
       "executable_ref": "scripts/ci/check_blocker_enforcement_metatests.py::test_bootstrap_terminal_bypass_denied",
       "test_id": "F01-C1-B01",
       "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
       "timeout": "30s",
       "expected_ui": "N/A.",
       "expected_api": "Every terminal attempt is denied and creates no acceptance/release/close receipt.",
@@ -638,6 +717,7 @@
       "executable_ref": "scripts/testing/test_blg_f01_blocker_registry.py::test_bootstrap_authorizer_rejections",
       "test_id": "F01-C1-B02",
       "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
       "timeout": "30s",
       "expected_ui": "N/A.",
       "expected_api": "All variants reject without narrowing; no operation outside exact final_acceptance may be removed.",
@@ -672,6 +752,7 @@
       "executable_ref": "scripts/testing/test_blg_f01_blocker_registry.py::test_self_or_wrong_role_closure_rejected",
       "test_id": "F01-C1-B03",
       "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
       "timeout": "30s",
       "expected_ui": "N/A.",
       "expected_api": "No rejected evidence changes occurrence status or task status.",
@@ -705,6 +786,7 @@
       "executable_ref": "scripts/testing/test_blg_f01_blocker_registry.py::test_resume_does_not_skip_invalidated_gates",
       "test_id": "F01-C1-B04",
       "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
       "timeout": "30s",
       "expected_ui": "N/A.",
       "expected_api": "Controller rejects closure/resume and never synthesizes omitted gate receipts.",
@@ -739,6 +821,7 @@
       "executable_ref": "scripts/testing/test_blg_f01_blocker_registry.py::test_ci_rejects_non_authority_objects",
       "test_id": "F01-C1-B05",
       "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
       "timeout": "45s",
       "expected_ui": "N/A.",
       "expected_api": "CI fails exact-object verification; no acceptance/release authorization is emitted.",
@@ -771,6 +854,7 @@
       "executable_ref": "scripts/ci/check_pipeline_replay_metatests.py::test_blocker_authority_crash_matrix",
       "test_id": "F01-C1-B06",
       "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
       "timeout": "60s",
       "expected_ui": "N/A.",
       "expected_api": "At most one authority ref target and one lifecycle event exist; failed publication/CI cannot roll ref backward.",
@@ -803,6 +887,7 @@
       "executable_ref": "scripts/testing/test_blg_f01_blocker_registry.py::test_dynamic_hold_policy_and_scope_rejections",
       "test_id": "F01-C1-B07",
       "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
       "timeout": "30s",
       "expected_ui": "N/A.",
       "expected_api": "All invalid events are rejected; empty scope never means global.",
@@ -835,6 +920,7 @@
       "executable_ref": "scripts/testing/test_blg_f01_blocker_registry.py::test_dynamic_occurrence_scope_isolation",
       "test_id": "F01-C1-B08",
       "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
       "timeout": "30s",
       "expected_ui": "N/A.",
       "expected_api": "Duplicate maps to same exact occurrence; foreign task has no inherited prohibition.",
@@ -867,6 +953,7 @@
       "executable_ref": "scripts/ci/check_blockers_registry.py::test_invalid_registry_and_projection_rejected",
       "test_id": "F01-C1-B09",
       "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
       "timeout": "45s",
       "expected_ui": "N/A.",
       "expected_api": "Invalid candidate cannot become active; stale/manual projection fails validate and mutating entrypoints fail closed.",
@@ -900,6 +987,7 @@
       "executable_ref": "scripts/testing/test_blg_f01_blocker_registry.py::test_typed_holds_do_not_overblock",
       "test_id": "F01-C1-B10",
       "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
       "timeout": "30s",
       "expected_ui": "N/A.",
       "expected_api": "Only declared BLG-F01 operations deny; unrelated task dispatch and permitted adjacent work continue.",
@@ -932,6 +1020,7 @@
       "executable_ref": "scripts/testing/test_blg_f01_blocker_registry.py::test_d05_premature_capability_rejected",
       "test_id": "F01-C1-B11",
       "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
       "timeout": "45s",
       "expected_ui": "N/A.",
       "expected_api": "No capability receipt before exact sequence; receipt never mutates D05 state or grants Product approval.",
@@ -964,6 +1053,7 @@
       "executable_ref": "scripts/ci/check_blocker_enforcement_metatests.py::test_projection_tampering_cannot_bypass",
       "test_id": "F01-C1-B12",
       "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
       "timeout": "30s",
       "expected_ui": "N/A.",
       "expected_api": "Validation rejects stale projections; controller reads authority ref and still denies operation.",
@@ -997,6 +1087,7 @@
       "executable_ref": "scripts/ci/check_blocker_enforcement_metatests.py::test_all_entrypoints_use_canonical_evaluator",
       "test_id": "F01-C1-B13",
       "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
       "timeout": "45s",
       "expected_ui": "N/A.",
       "expected_api": "Every supported mutating and dispatch path invokes evaluator; report projects but never authorizes.",
@@ -1007,6 +1098,40 @@
       "oracle": "S12 parity; S13 controller entrypoint binding.",
       "related_blocks": [],
       "related_incidents": [],
+      "status": "GOLD",
+      "case_role": "breaker"
+    },
+    {
+      "id": "F01-C1-B14",
+      "title": "Failure and rework routes cannot collapse state.blocker into blocked_by or route to a non-required stage",
+      "screen": "Pipeline controller compatibility surface",
+      "zone": "orchestration failure routing and dependency preservation",
+      "process": "destructive dual-channel compatibility and invalidation attack",
+      "actor_role": "case-breaker",
+      "fixture": "Simultaneous active blocked_by dependency and typed failure occurrence with forged WAITING/REWORK outcomes, invalid resume target variants and restartable projections",
+      "fixture_version": "blg-f01-blocker-registry-local-v1",
+      "fixture_builder": "Parameterized local controller failure-route, required-stage and projection-tampering fixture",
+      "external_mode": "local only; external egress forbidden",
+      "steps": [
+        "Attempt WAITING that mutates blocked_by, omits reason/owner/evidence/resume fields or closes the canonical dependency.",
+        "Attempt REWORK that retains stale state.blocker, removes blocked_by, targets a non-required stage or resumes beyond the owning stage.",
+        "Restart after every rejected and accepted route, then attempt cross-channel resolution with evidence from the wrong owner."
+      ],
+      "executor_type": "pytest controller negative compatibility integration",
+      "executable_ref": "scripts/testing/test_blg_f01_blocker_registry.py::test_failure_rework_routes_preserve_blocker_channels_and_required_stage",
+      "test_id": "F01-C1-B14",
+      "automation_status": "PLANNED_FOR_S19",
+      "evidence_schema_profile": "pipeline-case-execution-v1",
+      "timeout": "45s",
+      "expected_ui": "N/A.",
+      "expected_api": "Malformed routes fail closed. A valid WAITING route may add only its scoped orchestration blocker; a valid REWORK route may clear only that projection, preserve blocked_by and invalidate exactly to the owning required stage.",
+      "expected_authorization": "No dependency evidence may close the orchestration occurrence, and no orchestration evidence may close the dependency path; wrong-owner evidence is rejected.",
+      "expected_transaction": "Rejected routes create no receipt, dependency mutation or stage movement; accepted REWORK has one exact invalidation event.",
+      "read_back": "Packet, state and report retain both channel identities and show either a precise rejection or one scoped invalidation reason.",
+      "reload_assertion": "Restart cannot restore a stale state.blocker, erase blocked_by or reinterpret a rejected non-required target.",
+      "oracle": "CA-F02; S13 typed failure routes and exact invalidation; Pipeline MT36.",
+      "related_blocks": [],
+      "related_incidents": ["INC-STATE-BLOCKER-DEPENDENCY-CHANNEL-DIVERGENCE", "INC-FAILURE-ROUTE-DEPENDENCY-DIVERGENCE"],
       "status": "GOLD",
       "case_role": "breaker"
     }

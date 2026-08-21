@@ -4,8 +4,8 @@
 
 `CASES_READY`
 
-This package makes the approved BLG-F01 control-plane card executable before
-implementation. It defines thirteen direct GOLD cases and thirteen independent
+This repair package makes the approved BLG-F01 control-plane card executable before
+implementation. It defines fourteen direct GOLD cases and fourteen independent
 case-breaker attack lanes against one canonical blocker decision. It covers
 only local controller, Git-object, CI-fixture and report/packet/state
 projections. It does not authorize Dev, S16 Product approval, release, deploy,
@@ -36,17 +36,35 @@ each named case to a runnable reference without changing its oracle.
 
 ## Coverage matrix
 
-| Requirement / transition | Direct cases | Independent breaker lanes | Oracle |
+`S15-CASES.json.coverage` is the machine contract. Every row encodes the full
+chain `requirement -> capability -> process transition -> incident/block ->
+direct case -> breaker case`; `case_provenance` makes the case-to-source link
+auditable, while `coverage_validation_contract` requires each referenced ID and
+role to match. A `reviewed_na` source is permitted only when an acceptance
+constraint is not a separately triaged incident or an active blocker.
+
+| Requirement / capability / transition | Incident or block | Direct cases | Independent breaker lanes |
 | --- | --- | --- | --- |
-| `BLK-PROCESS-001` lets BLG-F01 complete S15-S23 but denies premature S25, S26 and close | `F01-C1-01`, `F01-C1-02` | `F01-C1-B01`, `F01-C1-B02` | S13 bootstrap and S14 F1 |
-| Post-S23 independent authorizer narrows only final acceptance; post-S25 independent authorizer closes it | `F01-C1-03`, `F01-C1-04` | `F01-C1-B03`, `F01-C1-B04` | S13 lifecycle contract and S14 F1 |
-| One exact authority Git object drives runtime, CI and packet/state/report projections | `F01-C1-05`, `F01-C1-06` | `F01-C1-B05`, `F01-C1-B06` | S13 authority/ref/CI contract and S14 F2 |
-| Definition policy is immutable; typed task-scoped occurrences are idempotent and restart-stable | `F01-C1-07`, `F01-C1-08` | `F01-C1-B07`, `F01-C1-B08`, `F01-C1-B09` | S13 definition/occurrence contract and S14 F3 |
-| Typed ENV, FIXTURE, ACCESS, ORACLE_CONFLICT and BUDGET_HARD_STOP events preserve exact scope and independently resume only the declared stage | `F01-C1-09` | `F01-C1-B03`, `F01-C1-B10` | S13 dynamic-hold routes and S14 F3 |
-| Closed, superseded and reopened lifecycle history remains hash-linked and traceable after restart | `F01-C1-11` | `F01-C1-B09` | S13 lifecycle history contract |
-| A registry revision invalidates only affected downstream receipts, while an additive v1 view stays conservative | `F01-C1-12`, `F01-C1-13` | `F01-C1-B07`, `F01-C1-B09` | S13 scoped invalidation and v1 compatibility; S14 F3 |
-| BLG-D05 receives only a post-S25, post-closure capability receipt and still resolves its own blocker | `F01-C1-10` | `F01-C1-B11` | S13 dependency boundary and S14 D05 boundary |
-| Registry integrity and entrypoint parity fail closed for malformed/contradictory registry and stale projections | `F01-C1-06`, `F01-C1-08` | `F01-C1-B12`, `F01-C1-B13` | S12 acceptance shape; S13 evaluator/entrypoints |
+| Exact operation-scoped bootstrap gate through S15-S23 | `BLK-PROCESS-001` | `F01-C1-01`, `F01-C1-02` | `F01-C1-B01`, `F01-C1-B02` |
+| Independent narrow/close transition without skipped gates | `BLK-PROCESS-001` | `F01-C1-03`, `F01-C1-04` | `F01-C1-B03`, `F01-C1-B04` |
+| One authority object drives runtime, CI and projections | `INC-BLOCKER-AUTHORITY-PROJECTION-DIVERGENCE` | `F01-C1-05`, `F01-C1-06` | `F01-C1-B05`, `F01-C1-B06`, `F01-C1-B13` |
+| Typed occurrence replay, exact scope and independent-card continuation | `INC-BLOCKER-OCCURRENCE-REPLAY-DIVERGENCE` | `F01-C1-07`, `F01-C1-08`, `F01-C1-09` | `F01-C1-B07`, `F01-C1-B08`, `F01-C1-B10` |
+| Registry integrity constraint is reviewed but has no separate incident/block | `N/A-S12-INTEGRITY` | `F01-C1-08` | `F01-C1-B09`, `F01-C1-B12` |
+| Hash-linked close, supersede and reopen | `INC-BLOCKER-LIFECYCLE-HISTORY-DIVERGENCE` | `F01-C1-11` | `F01-C1-B09` |
+| Scoped invalidation and additive v1 compatibility | `INC-BLOCKER-V1-COMPATIBILITY-DIVERGENCE` | `F01-C1-12`, `F01-C1-13` | `F01-C1-B07`, `F01-C1-B09` |
+| Post-S25/post-closure BLG-D05 capability boundary | `INC-BLG-D05-PREMATURE-CAPABILITY` | `F01-C1-10` | `F01-C1-B11` |
+| Orchestration hold versus canonical dependency compatibility | `INC-STATE-BLOCKER-DEPENDENCY-CHANNEL-DIVERGENCE` | `F01-C1-14` | `F01-C1-B14` |
+| WAITING/REWORK ownership, required-stage and exact invalidation | `INC-FAILURE-ROUTE-DEPENDENCY-DIVERGENCE` | `F01-C1-14` | `F01-C1-B14` |
+
+## Planned S19 evidence binding
+
+Every one of the 28 GOLD cases names `pipeline-case-execution-v1` in
+`S15-CASES.json`; that profile binds S19 to `pipeline/evidence.schema.json`.
+Each runnable evidence manifest must record task/wave/case identity, fixture
+version, pinned clock and event key, code SHA, authority and registry/decision
+hashes, operation and scope, lifecycle or denial result, commands and
+timestamps, artifact hashes, and verified redaction. A field may be `N/A` only
+with an oracle-specific reason in the manifest.
 
 ## Applicable dimensions and exclusions
 
