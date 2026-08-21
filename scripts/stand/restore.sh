@@ -12,10 +12,17 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LANE="${1:?нужен номер полосы: 1..6}"
-READY="$ROOT/.stand/sanitized-latest.dump"
+# Worktree may not contain gitignored snapshots. The runner can pass the one
+# sanitized snapshot from its main checkout, but arbitrary/raw dumps are never
+# accepted here.
+READY="${WMS_SANITIZED_SNAPSHOT:-$ROOT/.stand/sanitized-latest.dump}"
 DB_C="wms-lane-$LANE-db-1"
 TPL="wms_snapshot"
 
+if [[ -n "${WMS_SANITIZED_SNAPSHOT:-}" ]]; then
+  [[ "$READY" = /* && "$(basename "$READY")" == "sanitized-latest.dump" ]] || {
+    echo "нужен абсолютный путь к sanitized-latest.dump" >&2; exit 2; }
+fi
 [[ -f "$READY" ]] || { echo "нет снимка $READY — сначала scripts/stand/snapshot.sh" >&2; exit 2; }
 
 psql_() { docker exec "$DB_C" psql -U postgres -d postgres -q "$@"; }

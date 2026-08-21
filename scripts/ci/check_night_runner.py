@@ -218,6 +218,23 @@ def main() -> int:
         n.subprocess.run = настоящий_вызов
 
     проверь("цепочки не изменились при переносе", n.ЦЕПОЧКИ, ОЖИДАЕМЫЕ_ЦЕПОЧКИ)
+
+    # Карточный worktree не содержит gitignored snapshot. Разрешён только
+    # существующий sanitized-latest.dump из главного checkout; raw dump не
+    # подставляется и не читается.
+    with tempfile.TemporaryDirectory(prefix="check-night-snapshot-") as временный:
+        snapshot_root = pathlib.Path(временный)
+        stand = snapshot_root / ".stand"
+        stand.mkdir()
+        sanitized = stand / "sanitized-latest.dump"
+        sanitized.write_bytes(b"sanitized fixture")
+        проверь("snapshot: абсолютный sanitized путь", n.санитарный_снимок(snapshot_root), sanitized.resolve())
+        sanitized.unlink()
+        (stand / "raw-production.dump").write_bytes(b"must not be selected")
+        проверь("snapshot: raw fallback запрещён", n.санитарный_снимок(snapshot_root), None)
+    restore_text = (pathlib.Path(n.КОРЕНЬ) / "scripts/stand/restore.sh").read_text(encoding="utf-8")
+    проверь("snapshot: restore получает только явный env", "WMS_SANITIZED_SNAPSHOT" in restore_text, True)
+    проверь("snapshot: restore требует sanitized имя", "sanitized-latest.dump" in restore_text, True)
     for р in {r for ц in n.ЦЕПОЧКИ.values() for r in ц if r != "dev"}:
         if р not in n.АРТЕФАКТ:
             беды.append(f"роль {р} в цепочке, но её нет в таблице АРТЕФАКТ")

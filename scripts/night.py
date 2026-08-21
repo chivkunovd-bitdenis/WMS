@@ -396,6 +396,12 @@ def проверить_вход_волны(волна: Path, ид_список: 
 _АКТИВНАЯ_ВОЛНА: Path | None = None
 
 
+def санитарный_снимок(корень: Path = КОРЕНЬ) -> Path | None:
+    """Только существующий sanitized snapshot из главного checkout, без fallback."""
+    снимок = (корень / ".stand" / "sanitized-latest.dump").resolve()
+    return снимок if снимок.name == "sanitized-latest.dump" and снимок.is_file() else None
+
+
 def _сигинтум(_сигнал: int, _кадр: object) -> None:
     if _АКТИВНАЯ_ВОЛНА is not None:
         журнал(_АКТИВНАЯ_ВОЛНА, "получен SIGINT; результаты сохранены, продолжение возможно через resume")
@@ -411,6 +417,9 @@ def поднять_стенд(полоса: int, рабочая: Рабочая�
     """
     корень = рабочая.корень if рабочая else КОРЕНЬ
     ид = рабочая.ид if рабочая else f"lane-{полоса}"
+    снимок = санитарный_снимок(КОРЕНЬ)
+    if снимок is None:
+        return ""
     sha_р = _git("rev-parse", "HEAD", cwd=корень)
     sha = sha_р.stdout.strip() if sha_р.returncode == 0 else "unknown"
     ключ = (ид, sha)
@@ -420,7 +429,8 @@ def поднять_стенд(полоса: int, рабочая: Рабочая�
     env.update({"WMS_STAND_FORCE_RECREATE": "1", "COMPOSE_BUILD": "1",
                 "COMPOSE_FORCE_RECREATE": "1", "WMS_API_PORT": f"3008{полоса}",
                 "WMS_WEB_PORT": f"3017{полоса}", "WMS_SELLER_WEB_PORT": f"3018{полоса}",
-                "WMS_DB_PORT": f"3043{полоса}", "WMS_REDIS_PORT": f"3037{полоса}"})
+                "WMS_DB_PORT": f"3043{полоса}", "WMS_REDIS_PORT": f"3037{полоса}",
+                "WMS_SANITIZED_SNAPSHOT": str(снимок)})
     compose = ["docker", "compose", "-p", f"wms-lane-{полоса}",
                "-f", str(корень / "docker-compose.yml"),
                "-f", str(корень / "docker-compose.lane.yml")]

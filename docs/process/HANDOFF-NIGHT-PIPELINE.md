@@ -104,6 +104,14 @@ resume; новый run-id всегда получает новый катало�
 Детерминированный smoke (`python3 scripts/ci/check_night_runner.py`) проверяет этот контракт
 временными каталогами и моками, не запускает модель, git, стенд или бизнес-волну.
 
+### Sanitized snapshot в worktree
+
+`.stand/sanitized-latest.dump` намеренно не попадает в Git, поэтому карточный worktree его
+не ищет и не копирует. Перед browser-проверкой runner передаёт в `restore.sh` абсолютный путь
+`WMS_SANITIZED_SNAPSHOT` к существующему `sanitized-latest.dump` из главного checkout. Скрипт
+принимает только абсолютный путь с этим точным именем; raw/production dump и любой fallback
+запрещены. Если снимка нет, карточка честно блокируется до запуска стенда.
+
 ---
 
 ## Шесть работ
