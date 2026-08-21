@@ -361,6 +361,19 @@ def поле(папка: Path, файл: str, секция: str) -> str:
     return m.group(1).strip() if m else ""
 
 
+def тип_карточки(папка: Path) -> str:
+    """Берёт исправленный критиком тип, понимая обычное Markdown-оформление."""
+    for файл in ("SVERKA.md", "RAZBOR.md"):
+        текст = поле(папка, файл, "Тип").lower()
+        верный = re.search(r"верн(?:ый|о)\s*(?:тип\s*)?(?:[-—:]\s*)?`?(баг|фича|домен)`?", текст)
+        if верный:
+            return верный.group(1)
+        найдено = set(re.findall(r"(?<![а-яё])(баг|фича|домен)(?![а-яё])", текст))
+        if len(найдено) == 1:
+            return найдено.pop()
+    return ""
+
+
 def выбрать_dev(папка: Path) -> str:
     """Экран из реестра — правит фронт, иначе бэкенд."""
     return "screen-dev" if re.search(r"\bS-\d\d\b", поле(папка, "RAZBOR.md", "Экраны")) else "backend-dev"
@@ -516,7 +529,7 @@ def провести(ид: str, волна: Path, рабочая: Рабочая
     папка = рабочая.папка
     волна = рабочая.волна
     папка.mkdir(parents=True, exist_ok=True)
-    тип = поле(папка, "RAZBOR.md", "Тип").strip().lower()
+    тип = тип_карточки(папка)
     if not тип and (папка / "TYPE.txt").exists():
         тип = (папка / "TYPE.txt").read_text(encoding="utf-8").strip().lower()
     if тип not in ЦЕПОЧКИ:
