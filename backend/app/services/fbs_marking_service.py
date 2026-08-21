@@ -1,4 +1,3 @@
-# ruff: noqa: RUF003
 """FBS order marking — WB metadata requirements, pool KIZ, and status sync."""
 
 from __future__ import annotations
