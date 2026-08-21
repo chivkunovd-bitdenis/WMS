@@ -52,7 +52,7 @@
     "S25",
     "S26"
   ],
-  "current_stage": "S12",
+  "current_stage": "S15",
   "status": "RUNNING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
@@ -69,8 +69,8 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:55Z",
-  "heartbeat_at": "2026-08-21T03:04:25Z",
-  "last_valid_receipt": "sha256:14df41f5e1e9251b2e1f7e3d0e2859e2f88333bcd529078bd654339bb63a9576",
+  "heartbeat_at": "2026-08-21T03:08:56Z",
+  "last_valid_receipt": "sha256:9784fa460bbe1e209faa08960c8a2968d8ac345320e0ea1f77c400782a89392a",
   "blocker": null,
   "resume_condition": null,
   "verdicts": {
@@ -108,15 +108,22 @@
       "receipt_hash": "sha256:14df41f5e1e9251b2e1f7e3d0e2859e2f88333bcd529078bd654339bb63a9576",
       "role_binding_id": "pipeline-product",
       "agent_identity": "codex-pipeline-product-blg-d06-s11"
+    },
+    "S12": {
+      "verdict": "TASK_CUT_READY",
+      "receipt_path": "docs/evidence/BLG-D06/S12-TASK_CUT_READY.receipt.json",
+      "receipt_hash": "sha256:9784fa460bbe1e209faa08960c8a2968d8ac345320e0ea1f77c400782a89392a",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-pipeline-ba-blg-d06-s12"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 93900,
-    "output_tokens": 11400,
-    "estimated_usd": 0.9725
+    "input_tokens": 101300,
+    "output_tokens": 14200,
+    "estimated_usd": 1.0625
   },
   "budget_usage_receipts": [
     {
@@ -261,6 +268,19 @@
       "estimated_usd": 0.31,
       "agent_id": "codex-pipeline-product-blg-d06-s11",
       "recorded_at": "2026-08-21T03:04:25Z"
+    },
+    {
+      "task_id": "BLG-D06",
+      "stage": "S12",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 7400,
+      "output_tokens": 2800,
+      "estimated_usd": 0.09,
+      "agent_id": "codex-pipeline-ba-blg-d06-s12",
+      "recorded_at": "2026-08-21T03:08:56Z"
     }
   ],
   "blocked_by": [],
