@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "task_id": "BLG-I08",
   "stage": "S03",
   "contract_id": "wb-auth-status-v1",
@@ -7,11 +7,15 @@
   "scope": {
     "kind": "narrow_external_contract",
     "capabilities": ["content", "supplies", "marketplace"],
+    "environments": ["production", "sandbox"],
     "excluded": [
       "credential_management",
       "credential_pages",
+      "credential_or_secret_reads",
       "live_token_checks",
-      "production",
+      "production_calls",
+      "sandbox_calls",
+      "emulator_execution",
       "deploy",
       "business_method_changes"
     ]
@@ -21,6 +25,13 @@
       "id": "WB-API-INFO",
       "url": "https://dev.wildberries.ru/docs/openapi/api-information",
       "document_date": null,
+      "accessed_at": "2026-08-21",
+      "level": "official"
+    },
+    {
+      "id": "WB-SANDBOX",
+      "url": "https://dev.wildberries.ru/knowledge-base/articles/019d49a1-24e3-7642-801f-e1f18c5fe708",
+      "document_date": "2026-04-03",
       "accessed_at": "2026-08-21",
       "level": "official"
     },
@@ -53,6 +64,13 @@
       "level": "official"
     },
     {
+      "id": "WB-AUTH-SYSTEM",
+      "url": "https://dev.wildberries.ru/knowledge-base/articles/019d49a1-0d73-71e9-be3e-b2c44567470c/sistema-avtorizatsii-wb-api",
+      "document_date": "2026-04-03",
+      "accessed_at": "2026-08-21",
+      "level": "official"
+    },
+    {
       "id": "WB-CATEGORIES",
       "url": "https://seller.wildberries.ru/instructions/ru/kz/material/wb-api-data-categories?recommended=true",
       "document_date": "2026-05-18",
@@ -60,6 +78,87 @@
       "level": "official"
     }
   ],
+  "environment_endpoint_rows": [
+    {
+      "id": "WB-ENDPOINT-001",
+      "capability": "content",
+      "environment": "production",
+      "endpoint": "https://content-api.wildberries.ru/ping",
+      "ping_support_status": "documented_for_ping",
+      "provenance": "official",
+      "provenance_level": "official",
+      "source_ids": ["WB-API-INFO"],
+      "network_call_status": "prohibited_not_executed"
+    },
+    {
+      "id": "WB-ENDPOINT-002",
+      "capability": "content",
+      "environment": "sandbox",
+      "endpoint": "https://content-api-sandbox.wildberries.ru/ping",
+      "ping_support_status": "documented_for_ping",
+      "provenance": "official",
+      "provenance_level": "official",
+      "source_ids": ["WB-API-INFO", "WB-SANDBOX"],
+      "network_call_status": "prohibited_not_executed"
+    },
+    {
+      "id": "WB-ENDPOINT-003",
+      "capability": "marketplace",
+      "environment": "production",
+      "endpoint": "https://marketplace-api.wildberries.ru/ping",
+      "ping_support_status": "documented_for_ping",
+      "provenance": "official",
+      "provenance_level": "official",
+      "source_ids": ["WB-API-INFO"],
+      "network_call_status": "prohibited_not_executed"
+    },
+    {
+      "id": "WB-ENDPOINT-004",
+      "capability": "marketplace",
+      "environment": "sandbox",
+      "endpoint": null,
+      "documented_environment_base_url": "https://marketplace-api-sandbox.wildberries.ru",
+      "ping_support_status": "not_documented_for_ping",
+      "provenance": "not_documented_for_ping",
+      "provenance_level": "official_omission_audit",
+      "provenance_note": "WB-SANDBOX documents the base host, while WB-API-INFO omits a Marketplace sandbox /ping row. No endpoint is inferred from the host pattern.",
+      "source_ids": ["WB-API-INFO", "WB-SANDBOX"],
+      "network_call_status": "prohibited_not_executed"
+    },
+    {
+      "id": "WB-ENDPOINT-005",
+      "capability": "supplies",
+      "environment": "production",
+      "endpoint": "https://supplies-api.wildberries.ru/ping",
+      "ping_support_status": "documented_for_ping",
+      "provenance": "official",
+      "provenance_level": "official",
+      "source_ids": ["WB-API-INFO"],
+      "network_call_status": "prohibited_not_executed"
+    },
+    {
+      "id": "WB-ENDPOINT-006",
+      "capability": "supplies",
+      "environment": "sandbox",
+      "endpoint": null,
+      "documented_environment_base_url": "https://supplies-api-sandbox.wildberries.ru",
+      "ping_support_status": "not_documented_for_ping",
+      "provenance": "not_documented_for_ping",
+      "provenance_level": "official_omission_audit",
+      "provenance_note": "WB-SANDBOX documents the base host, while WB-API-INFO omits a Supplies sandbox /ping row. No endpoint is inferred from the host pattern.",
+      "source_ids": ["WB-API-INFO", "WB-SANDBOX"],
+      "network_call_status": "prohibited_not_executed"
+    }
+  ],
+  "probe_contract": {
+    "method": "GET",
+    "documented_response_statuses": [200, 401, 429],
+    "documented_success_shape": {"TS": "timestamp", "Status": "OK"},
+    "proves": ["request_reached_wb_api", "authorization_token_and_url_valid", "token_category_matches_service"],
+    "does_not_prove": ["wb_service_availability", "business_method_write_access"],
+    "permission_403_evidence_scope": "business_method_contract",
+    "source_ids": ["WB-API-INFO", "WB-AUTH-ERRORS"]
+  },
   "capability_rows": [
     {
       "id": "WB-AUTH-001",
@@ -156,7 +255,7 @@
       "capability": "service_health",
       "applicable": true,
       "coverage": "complete",
-      "claim": "Ping is not a WB service-availability check; network and 5xx outcomes preserve last known success and do not invalidate the credential.",
+      "claim": "Ping is not a WB service-availability check. Every unsuccessful outcome preserves historical last_success_at; network, 5xx and malformed responses do not invalidate the credential.",
       "level": "official",
       "source_ids": ["WB-API-INFO", "WB-ERROR-CODES"],
       "states": ["NETWORK_UNAVAILABLE", "WB_UNAVAILABLE", "STALE"]
@@ -167,9 +266,9 @@
       "capability": "no_secret_disclosure",
       "applicable": true,
       "coverage": "complete",
-      "claim": "The UI and external response expose only normalized status metadata and never token material, authorization headers, JWT identifiers or raw upstream bodies.",
+      "claim": "Authorization, X-Client-Secret, token/JWT material, request headers and raw upstream material are excluded from every persistence, observability, exception, API, UI, support and pipeline-evidence sink.",
       "level": "official",
-      "source_ids": ["WB-SECURITY"],
+      "source_ids": ["WB-SECURITY", "WB-AUTH-SYSTEM"],
       "states": []
     },
     {
@@ -178,7 +277,7 @@
       "capability": "operator_read_only",
       "applicable": true,
       "coverage": "complete",
-      "claim": "Status is isolated by tenant, seller and capability; the warehouse operator receives diagnosis only and does not manage credentials.",
+      "claim": "Status is isolated by tenant, seller, capability and environment; the warehouse operator receives diagnosis only and does not manage credentials.",
       "level": "hypothesis",
       "source_ids": ["WB-SECURITY"],
       "states": []
@@ -189,24 +288,108 @@
       "capability": "last_success",
       "applicable": true,
       "coverage": "complete_with_product_parameter",
-      "claim": "Store checked_at and last_success_at per capability; Product must set the stale TTL and expiring-soon window.",
+      "claim": "Store checked_at separately from last_success_at per tenant, seller, capability and environment. Every failure preserves the historical success; only a new proven success replaces it. Product must set stale TTL and expiring-soon window.",
       "level": "hypothesis",
       "source_ids": ["WB-API-INFO"],
       "states": ["STALE"],
       "question_id": "Q-PRODUCT-001"
     }
   ],
+  "last_success_contract": {
+    "identity_dimensions": ["tenant_id", "seller_id", "capability", "environment"],
+    "failure_states": ["NOT_CONFIGURED", "EXPIRED", "AUTH_REJECTED", "INSUFFICIENT_ACCESS", "CHECK_DELAYED", "NETWORK_UNAVAILABLE", "WB_UNAVAILABLE"],
+    "failure_classes_covered": ["missing_configuration", "malformed_local_credential", "local_expiry", "http_401", "business_method_http_403", "http_429", "transport_timeout", "dns_failure", "http_5xx", "malformed_upstream_response"],
+    "failure_rule": {
+      "state": "replace_with_current_normalized_failure",
+      "checked_at": "replace_with_attempt_time",
+      "last_success_at": "preserve_previous_value_including_null",
+      "success_source": "preserve_previous_value_including_null",
+      "retry_after_at": "set_only_for_delayed_retry_when_available_or_locally_derived",
+      "incident_ref": "replace_with_current_safe_reference_or_null"
+    },
+    "success_rule": {
+      "accepted_evidence": ["valid_200_ping_shape", "successful_authorized_business_call"],
+      "state": "CONNECTED",
+      "checked_at": "replace_with_success_time",
+      "last_success_at": "replace_with_success_time",
+      "success_source": "replace_with_ping_or_business_call",
+      "incident_ref": "clear_current_safe_reference",
+      "environment_isolation": "sandbox_success_must_never_update_production_history"
+    },
+    "stale_rule": "STALE is derived from Product TTL and does not mutate checked_at, last_success_at or success_source.",
+    "ui_interpretation": "Historical last_success_at is shown beside the current failure as a past fact, never as proof that the current connection works."
+  },
+  "redaction_contract": {
+    "allowed_diagnostic_fields": ["capability", "environment", "configured", "normalized_state", "checked_at", "last_success_at", "success_source", "expires_at", "retry_after_at", "safe_incident_ref"],
+    "denied_material": [
+      "Authorization header or value",
+      "X-Client-Secret header or value",
+      "bearer token or any token fragment, mask or fingerprint",
+      "encoded JWT or decoded JWT payload",
+      "decoded JWT identifiers id, sid, asid and for",
+      "JWT category bitmask and token-type internals",
+      "request headers and request body",
+      "raw response headers, body, detail or complete response",
+      "raw upstream URL, query, path parameters or object identifiers",
+      "derived material that can reconstruct or correlate a credential"
+    ],
+    "denied_sinks": [
+      "persistent database or document storage",
+      "cache",
+      "queue, event or worker payload",
+      "application or audit log",
+      "trace, span or profiler payload",
+      "metric value, label or exemplar",
+      "exception message, stack, context or error reporter",
+      "API response or websocket event",
+      "UI state, DOM, browser storage or analytics",
+      "support payload, export or ticket",
+      "pipeline receipt, evidence, screenshot or attachment",
+      "test snapshot or failure artifact"
+    ],
+    "adapter_rule": "Parse only an allowlisted normalized reason in adapter memory, discard raw material before returning, and construct exceptions from the sanitized normalized result.",
+    "evidence_rule": "No test or pipeline artifact may contain credential or raw-upstream sentinels; evidence records only pass/fail, normalized state, safe reference and timestamps."
+  },
+  "emulator_case_defaults": {
+    "execution_status": "test_design_not_executed",
+    "execution_stage": "S15",
+    "production_calls": "prohibited",
+    "sandbox_calls": "prohibited",
+    "credential_or_secret_reads": "prohibited"
+  },
+  "emulator_cases": [
+    {"id": "AUTH-EMU-001", "name": "missing_effective_secret", "execution_status": "test_design_not_executed", "external_calls": "none", "stimulus": {"local_secret": "missing"}, "expected_normalized_state": "NOT_CONFIGURED", "expected_last_success_effect": "preserve", "invariants": ["upstream_call_count_is_zero", "checked_at_records_local_evaluation", "no_denied_material_in_any_denied_sink"]},
+    {"id": "AUTH-EMU-002", "name": "malformed_local_secret", "execution_status": "test_design_not_executed", "external_calls": "none", "stimulus": {"local_secret": "syntactically_malformed_fixture"}, "expected_normalized_state": "AUTH_REJECTED", "expected_reason_class": "MALFORMED_LOCAL_CREDENTIAL", "expected_last_success_effect": "preserve", "invariants": ["upstream_call_count_is_zero", "failure_time_not_written_to_last_success_at", "fixture_absent_from_denied_sinks"]},
+    {"id": "AUTH-EMU-003", "name": "locally_expired_secret", "execution_status": "test_design_not_executed", "external_calls": "none", "stimulus": {"jwt_exp": "before_checked_at"}, "expected_normalized_state": "EXPIRED", "expected_last_success_effect": "preserve", "invariants": ["decoded_jwt_payload_and_identifiers_discarded", "historical_success_labelled_as_historical"]},
+    {"id": "AUTH-EMU-004", "name": "unknown_or_revoked_401", "execution_status": "test_design_not_executed", "external_calls": "emulator_only", "stimulus": {"response_status": 401, "response_reason": "non_allowlisted_fixture"}, "expected_normalized_state": "AUTH_REJECTED", "expected_last_success_effect": "preserve", "invariants": ["revocation_claim_forbidden", "raw_detail_discarded", "UI_does_not_claim_revoked_or_blocked_account"]},
+    {"id": "AUTH-EMU-005", "name": "wrong_category_business_method_403", "execution_status": "test_design_not_executed", "external_calls": "emulator_only", "contract_surface": "business_method_not_ping", "stimulus": {"response_status": 403, "reason_fixture": "wrong_category"}, "expected_normalized_state": "INSUFFICIENT_ACCESS", "expected_last_success_effect": "preserve", "invariants": ["ping_contract_not_falsely_documented_with_403", "no_mutating_health_check"]},
+    {"id": "AUTH-EMU-006", "name": "read_only_business_method_401_compatibility", "execution_status": "test_design_not_executed", "external_calls": "emulator_only", "contract_surface": "observed_wms_compatibility_fixture", "stimulus": {"response_status": 401, "allowlisted_reason_class": "read_only"}, "expected_normalized_state": "INSUFFICIENT_ACCESS", "expected_last_success_effect": "preserve", "invariants": ["normalization_not_based_only_on_http_status", "raw_detail_discarded_after_allowlisted_classification"]},
+    {"id": "AUTH-EMU-007", "name": "read_only_business_method_403", "execution_status": "test_design_not_executed", "external_calls": "emulator_only", "contract_surface": "business_method_not_ping", "stimulus": {"response_status": 403, "reason_fixture": "read_only"}, "expected_normalized_state": "INSUFFICIENT_ACCESS", "expected_last_success_effect": "preserve", "invariants": ["write_access_unknown_after_ping_alone", "no_mutating_health_check"]},
+    {"id": "AUTH-EMU-008", "name": "rate_limit_429_without_retry_header", "execution_status": "test_design_not_executed", "external_calls": "emulator_only", "stimulus": {"response_status": 429, "retry_headers": "missing"}, "expected_normalized_state": "CHECK_DELAYED", "expected_retry_after_source": "local_backoff_policy", "expected_last_success_effect": "preserve", "invariants": ["no_immediate_polling_retry", "failure_time_not_written_to_last_success_at"]},
+    {"id": "AUTH-EMU-009", "name": "rate_limit_429_with_valid_retry_header", "execution_status": "test_design_not_executed", "external_calls": "emulator_only", "stimulus": {"response_status": 429, "retry_headers": "valid_fixture"}, "expected_normalized_state": "CHECK_DELAYED", "expected_retry_after_source": "validated_upstream_header", "expected_last_success_effect": "preserve", "invariants": ["raw_header_text_not_exposed", "retry_after_at_is_iso_8601_utc"]},
+    {"id": "AUTH-EMU-010", "name": "transport_timeout", "execution_status": "test_design_not_executed", "external_calls": "emulator_only", "stimulus": {"transport_failure": "timeout"}, "expected_normalized_state": "NETWORK_UNAVAILABLE", "expected_last_success_effect": "preserve", "invariants": ["credential_not_declared_broken", "historical_success_remains_historical"]},
+    {"id": "AUTH-EMU-011", "name": "dns_failure", "execution_status": "test_design_not_executed", "external_calls": "emulator_only", "stimulus": {"transport_failure": "dns"}, "expected_normalized_state": "NETWORK_UNAVAILABLE", "expected_last_success_effect": "preserve", "invariants": ["raw_host_and_resolver_detail_absent_from_denied_sinks", "current_checked_at_advances"]},
+    {"id": "AUTH-EMU-012", "name": "upstream_5xx", "execution_status": "test_design_not_executed", "external_calls": "emulator_only", "stimulus": {"response_status": 503}, "expected_normalized_state": "WB_UNAVAILABLE", "expected_last_success_effect": "preserve", "invariants": ["credential_not_declared_broken", "raw_response_discarded"]},
+    {"id": "AUTH-EMU-013", "name": "malformed_success_response", "execution_status": "test_design_not_executed", "external_calls": "emulator_only", "stimulus": {"response_status": 200, "response_shape": "invalid_fixture"}, "expected_normalized_state": "WB_UNAVAILABLE", "expected_reason_class": "UPSTREAM_PROTOCOL_ERROR", "expected_last_success_effect": "preserve", "invariants": ["200_alone_does_not_create_success", "malformed_body_and_parser_exception_absent_from_denied_sinks"]},
+    {"id": "AUTH-EMU-014", "name": "recovery_after_any_failure", "execution_status": "test_design_not_executed", "external_calls": "emulator_only", "stimulus": {"previous_state": "each_failure_state_parameterized", "response_status": 200, "response_shape": {"TS": "valid_fixture", "Status": "OK"}}, "expected_normalized_state": "CONNECTED", "expected_last_success_effect": "replace_with_recovery_success_time", "expected_success_source": "ping", "invariants": ["recovery_parameterized_over_every_failure_state", "current_incident_ref_cleared", "sandbox_recovery_cannot_update_production_history"]},
+    {"id": "AUTH-EMU-015", "name": "stale_derived_state", "execution_status": "test_design_not_executed", "external_calls": "none", "stimulus": {"last_success_age": "greater_than_product_ttl"}, "expected_normalized_state": "STALE", "expected_last_success_effect": "preserve", "invariants": ["checked_at_preserved", "stale_is_not_a_failed_probe", "historical_timestamp_has_no_current_health_claim"]},
+    {"id": "AUTH-EMU-016", "name": "end_to_end_no_leakage", "execution_status": "test_design_not_executed", "external_calls": "emulator_only", "stimulus": {"response_status": 401, "credential_sentinels": ["AUTHORIZATION_SENTINEL", "X_CLIENT_SECRET_SENTINEL", "JWT_ID_SENTINEL"], "raw_upstream_sentinels": ["RAW_HEADER_SENTINEL", "RAW_BODY_SENTINEL", "RAW_URL_QUERY_OBJECT_SENTINEL"]}, "expected_normalized_state": "AUTH_REJECTED", "expected_last_success_effect": "preserve", "expected_sentinel_occurrences_in_denied_sinks": 0, "invariants": ["scan_every_denied_sink", "exception_and_evidence_contain_only_sanitized_fields", "raw_payload_discarded_at_adapter_boundary"]}
+  ],
   "applicability_audit": [
     {"lane": "official_api_docs", "applicable": true, "coverage": "complete"},
     {"lane": "seller_operator_instructions", "applicable": true, "coverage": "complete"},
     {"lane": "fbs_fbo_status_machine", "applicable": false, "reason": "No order or supply status behavior changes."},
     {"lane": "business_domains", "applicable": true, "coverage": "scoped_to_content_supplies_marketplace_auth"},
+    {"lane": "environment_endpoint_provenance", "applicable": true, "coverage": "complete"},
     {"lane": "pagination", "applicable": false, "reason": "Ping is not paginated."},
     {"lane": "rate_batch_partial_retry_webhook_polling", "applicable": true, "coverage": "rate_retry_cache_complete_batch_partial_webhook_not_applicable"},
     {"lane": "user_pain", "applicable": true, "coverage": "complete"},
     {"lane": "competitor_workflows", "applicable": false, "reason": "Narrow existing external contract, not a new domain or module."},
     {"lane": "security_roles_tenant_seller_warehouse", "applicable": true, "coverage": "complete_warehouse_not_applicable"},
-    {"lane": "volume_emergency", "applicable": true, "coverage": "complete"}
+    {"lane": "volume_emergency", "applicable": true, "coverage": "complete"},
+    {"lane": "emulator_test_design", "applicable": true, "coverage": "complete_test_design_not_executed"},
+    {"lane": "last_success_failure_and_recovery", "applicable": true, "coverage": "complete"},
+    {"lane": "end_to_end_redaction", "applicable": true, "coverage": "complete"}
   ],
   "open_questions": [
     {
@@ -231,6 +414,15 @@
       "required_evidence": "UX contract and role matrix."
     }
   ],
+  "execution_evidence": {
+    "production_calls": "prohibited_not_executed",
+    "sandbox_calls": "prohibited_not_executed",
+    "credential_or_secret_reads": "prohibited_not_executed",
+    "credential_pages": "prohibited_not_opened",
+    "emulator_cases": "test_design_not_executed",
+    "deploy": "prohibited_not_executed"
+  },
   "unprocessed_applicable_rows": [],
-  "recommended_verdict": "RESEARCH_READY"
+  "recommended_verdict": "RESEARCH_READY",
+  "independent_review_required": "S04"
 }

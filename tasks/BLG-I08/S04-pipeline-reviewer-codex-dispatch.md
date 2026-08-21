@@ -64,7 +64,7 @@ Rules:
   "task_id": "BLG-I08",
   "stage": "S04",
   "role": "pipeline-reviewer",
-  "status": "WAITING",
+  "status": "RUNNING",
   "traits": [
     "ui_change",
     "external_contract"
@@ -136,18 +136,8 @@ Rules:
     "estimated_usd": 0.6225
   },
   "blocked_by": [],
-  "blocker": {
-    "type": "SECURITY",
-    "reason_code": "RESEARCH_REWORK_AUTH_STATUS_CONTRACT",
-    "details": "S04 RESEARCH_REWORK: S03 omits the official Content sandbox /ping environment row and explicit Marketplace/Supplies ping support status; emulator scenarios are prose-only rather than machine rows; last_success_at preservation is not defined for all failure transitions; and the redaction contract does not ban X-Client-Secret and raw credential/upstream material across every storage, log, trace, metric, exception, API/UI and evidence sink.",
-    "owner": "pipeline-ba",
-    "created_at": "2026-08-21T00:48:36Z",
-    "resume_stage": "S04"
-  },
-  "resume_condition": {
-    "stage": "S04",
-    "condition": "Revise the S03 dossier and capability matrix with environment/endpoint provenance, machine-readable non-executed emulator cases, all-failure last_success_at preservation plus recovery, and end-to-end Authorization/X-Client-Secret/raw-response exclusion; keep live credentials, credential pages, production and sandbox calls prohibited; then resume S04 for a new independent review."
-  },
+  "blocker": null,
+  "resume_condition": null,
   "rules": [
     "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
     "Do not accept your own work.",
