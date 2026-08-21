@@ -1,0 +1,33 @@
+{
+  "task_id": "BLG-J02",
+  "run_id": "BLG-J02:S18:10",
+  "stage_id": "S18",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "role_binding_id": "pipeline-dev",
+  "agent_identity": "codex-pipeline-dev-blg-j02-s18",
+  "input_hashes": {
+    "state_before": "sha256:b4f50e8fda2bf21ff2ef7d6875eac30b318398796b984afd2585e867cbb8025e"
+  },
+  "output_hashes": {},
+  "parent_receipt_hash": "sha256:73e03cb30e11869dcb20499580fa89e72ec03d7854c5c1c6b3346c621894d186",
+  "baseline_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "started_at": "2026-08-21T03:18:40Z",
+  "finished_at": "2026-08-21T03:18:40Z",
+  "verdict": "DEV_DONE",
+  "blocker": null,
+  "resume_stage": null,
+  "usage_receipt": {
+    "task_id": "BLG-J02",
+    "stage": "S18",
+    "role": "pipeline-dev",
+    "executor": "codex",
+    "model": "gpt-5.6-luna",
+    "tier": "cheap",
+    "input_tokens": 12000,
+    "output_tokens": 1800,
+    "estimated_usd": 0.08,
+    "agent_id": "codex-pipeline-dev-blg-j02-s18",
+    "recorded_at": "2026-08-21T03:18:40Z"
+  },
+  "signature": "sha256:2a0226169c14ac16928b65c67e9cbb96a40c5ccf7fa5ad72c1dce6b5bd1542d3"
+}

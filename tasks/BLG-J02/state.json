@@ -53,8 +53,8 @@
     "S25",
     "S26"
   ],
-  "current_stage": "S09",
-  "status": "REWORK",
+  "current_stage": "S19",
+  "status": "RUNNING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -70,18 +70,89 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T00:57:19Z",
-  "last_valid_receipt": null,
+  "heartbeat_at": "2026-08-21T03:18:40Z",
+  "last_valid_receipt": "sha256:afdbe985a438e3444130d5926b57a630f08ae5c059645093e1ea36f88802347d",
   "blocker": null,
   "resume_condition": null,
-  "verdicts": {},
+  "verdicts": {
+    "S01": {
+      "verdict": "TASK_INTAKE_READY",
+      "receipt_path": "docs/evidence/BLG-J02/S01-TASK_INTAKE_READY.receipt.json",
+      "receipt_hash": "sha256:794b12ce951548d0c9561e3fd6709de12da5b85d5128ddbfbc5994951aaea773",
+      "role_binding_id": "pipeline-dispatcher",
+      "agent_identity": "codex-night-orchestrator-dispatcher"
+    },
+    "S02": {
+      "verdict": "IMPACT_CLASSIFIED",
+      "receipt_path": "docs/evidence/BLG-J02/S02-IMPACT_CLASSIFIED.receipt.json",
+      "receipt_hash": "sha256:32d891edc2f734bb9f6782b008b4f6034bdbd32972b35ce2b6639ca01b89ad43",
+      "role_binding_id": "pipeline-dispatcher",
+      "agent_identity": "codex-night-orchestrator-dispatcher"
+    },
+    "S09": {
+      "verdict": "UX_CONTRACT_READY",
+      "receipt_path": "docs/evidence/BLG-J02/S09-UX_CONTRACT_READY.receipt.json",
+      "receipt_hash": "sha256:89fccc2d392cf664851dc72f735d5649abe1668db1d55c006636a165a147e81c",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-pipeline-ba-blg-j02-s09-rework"
+    },
+    "S10": {
+      "verdict": "DESIGN_APPROVED",
+      "receipt_path": "docs/evidence/BLG-J02/S10-DESIGN_APPROVED.receipt.json",
+      "receipt_hash": "sha256:0a8a0d25dd01f4ce567482a8eca111212d50a5d4ff27ba4d1f748269ec9264a7",
+      "role_binding_id": "pipeline-product",
+      "agent_identity": "codex-pipeline-product-blg-j02-s10-rereview"
+    },
+    "S11": {
+      "verdict": "PRODUCT_CONTRACT_APPROVED",
+      "receipt_path": "docs/evidence/BLG-J02/S11-PRODUCT_CONTRACT_APPROVED.receipt.json",
+      "receipt_hash": "sha256:02bcd31add056b1aff35397aab769be4029b0f8dbee6bd86f72b9170bbaaef4b",
+      "role_binding_id": "pipeline-product",
+      "agent_identity": "codex-pipeline-product-blg-j02-s11"
+    },
+    "S12": {
+      "verdict": "TASK_CUT_READY",
+      "receipt_path": "docs/evidence/BLG-J02/S12-TASK_CUT_READY.receipt.json",
+      "receipt_hash": "sha256:90d042f20ad3405e302b94cf03b76f924381cb41a3c5d5d8ceca231f5069d7c2",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-pipeline-ba-blg-j02-s12"
+    },
+    "S15": {
+      "verdict": "CASES_READY",
+      "receipt_path": "docs/evidence/BLG-J02/S15-CASES_READY.receipt.json",
+      "receipt_hash": "sha256:93166b1ed0156d22ccb2a899af180d8590811e1ee427f0700d02805ae8f2d52f",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-pipeline-ba-blg-j02-s15"
+    },
+    "S16": {
+      "verdict": "PRODUCT_APPROVED_FOR_DEV",
+      "receipt_path": "docs/evidence/BLG-J02/S16-PRODUCT_APPROVED_FOR_DEV.receipt.json",
+      "receipt_hash": "sha256:68e937b61124b0d276a4cbed2d32c986d458bf7298cd9cce186c17aa542d6987",
+      "role_binding_id": "pipeline-product",
+      "agent_identity": "codex-pipeline-product-blg-j02-s16"
+    },
+    "S17": {
+      "verdict": "WORKSPACE_READY",
+      "receipt_path": "docs/evidence/BLG-J02/S17-WORKSPACE_READY.receipt.json",
+      "receipt_hash": "sha256:73e03cb30e11869dcb20499580fa89e72ec03d7854c5c1c6b3346c621894d186",
+      "role_binding_id": "pipeline-dispatcher",
+      "agent_identity": "codex-night-orchestrator-dispatcher"
+    },
+    "S18": {
+      "verdict": "DEV_DONE",
+      "receipt_path": "docs/evidence/BLG-J02/S18-DEV_DONE.receipt.json",
+      "receipt_hash": "sha256:afdbe985a438e3444130d5926b57a630f08ae5c059645093e1ea36f88802347d",
+      "role_binding_id": "pipeline-dev",
+      "agent_identity": "codex-pipeline-dev-blg-j02-s18"
+    }
+  },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 9500,
-    "output_tokens": 3900,
-    "estimated_usd": 0.0835
+    "input_tokens": 160600,
+    "output_tokens": 29700,
+    "estimated_usd": 1.201
   },
   "budget_usage_receipts": [
     {
@@ -122,6 +193,136 @@
       "estimated_usd": 0.081,
       "agent_id": "codex-pipeline-ba-blg-j02",
       "recorded_at": "2026-08-21T00:52:33Z"
+    },
+    {
+      "task_id": "BLG-J02",
+      "stage": "S01",
+      "role": "pipeline-dispatcher",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 120,
+      "output_tokens": 40,
+      "estimated_usd": 0.001,
+      "agent_id": "codex-night-orchestrator-dispatcher",
+      "recorded_at": "2026-08-21T02:42:17Z"
+    },
+    {
+      "task_id": "BLG-J02",
+      "stage": "S02",
+      "role": "pipeline-dispatcher",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 180,
+      "output_tokens": 60,
+      "estimated_usd": 0.0015,
+      "agent_id": "codex-night-orchestrator-dispatcher",
+      "recorded_at": "2026-08-21T02:42:18Z"
+    },
+    {
+      "task_id": "BLG-J02",
+      "stage": "S09",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 16000,
+      "output_tokens": 3000,
+      "estimated_usd": 0.12,
+      "agent_id": "codex-pipeline-ba-blg-j02-s09-rework",
+      "recorded_at": "2026-08-21T02:45:17Z"
+    },
+    {
+      "task_id": "BLG-J02",
+      "stage": "S10",
+      "role": "pipeline-product",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 32000,
+      "output_tokens": 2500,
+      "estimated_usd": 0.25,
+      "agent_id": "codex-pipeline-product-blg-j02-s10-rereview",
+      "recorded_at": "2026-08-21T02:49:31Z"
+    },
+    {
+      "task_id": "BLG-J02",
+      "stage": "S11",
+      "role": "pipeline-product",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 24000,
+      "output_tokens": 3500,
+      "estimated_usd": 0.19,
+      "agent_id": "codex-pipeline-product-blg-j02-s11",
+      "recorded_at": "2026-08-21T02:54:11Z"
+    },
+    {
+      "task_id": "BLG-J02",
+      "stage": "S12",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 12000,
+      "output_tokens": 4600,
+      "estimated_usd": 0.083,
+      "agent_id": "codex-pipeline-ba-blg-j02-s12",
+      "recorded_at": "2026-08-21T02:58:39Z"
+    },
+    {
+      "task_id": "BLG-J02",
+      "stage": "S15",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 17600,
+      "output_tokens": 5400,
+      "estimated_usd": 0.104,
+      "agent_id": "codex-pipeline-ba-blg-j02-s15",
+      "recorded_at": "2026-08-21T03:03:12Z"
+    },
+    {
+      "task_id": "BLG-J02",
+      "stage": "S16",
+      "role": "pipeline-product",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 36000,
+      "output_tokens": 4500,
+      "estimated_usd": 0.28,
+      "agent_id": "codex-pipeline-product-blg-j02-s16",
+      "recorded_at": "2026-08-21T03:11:51Z"
+    },
+    {
+      "task_id": "BLG-J02",
+      "stage": "S17",
+      "role": "pipeline-dispatcher",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 1200,
+      "output_tokens": 400,
+      "estimated_usd": 0.008,
+      "agent_id": "codex-night-orchestrator-dispatcher",
+      "recorded_at": "2026-08-21T03:12:44Z"
+    },
+    {
+      "task_id": "BLG-J02",
+      "stage": "S18",
+      "role": "pipeline-dev",
+      "executor": "codex",
+      "model": "gpt-5.6-luna",
+      "tier": "cheap",
+      "input_tokens": 12000,
+      "output_tokens": 1800,
+      "estimated_usd": 0.08,
+      "agent_id": "codex-pipeline-dev-blg-j02-s18",
+      "recorded_at": "2026-08-21T03:18:40Z"
     }
   ],
   "blocked_by": [],

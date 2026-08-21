@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   apiUrl,
   getStoredToken,
@@ -54,6 +54,9 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
   const [pendingPasswordSetupEmail, setPendingPasswordSetupEmail] = useState<
     string | null
   >(null)
+  const [sessionExpired, setSessionExpired] = useState(false)
+  const [sessionRecoveryReady, setSessionRecoveryReady] = useState(false)
+  const recoveringSessionRef = useRef(false)
 
   const loadMe = useCallback(async (t: string) => {
     setLoading(true)
@@ -63,6 +66,18 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
         headers: { Authorization: `Bearer ${t}` },
       })
       if (!res.ok) {
+        const structuredError = (await res.clone().json().catch(() => null)) as {
+          detail?: unknown
+        } | null
+        if (res.status === 401 && structuredError?.detail === 'invalid_token') {
+          recoveringSessionRef.current = true
+          setStoredToken(null, portal)
+          setToken(null)
+          setMe(null)
+          setError(null)
+          setSessionExpired(true)
+          return
+        }
         const msg = await readApiErrorMessage(res)
         if (res.status === 401) {
           throw new Error(
@@ -72,6 +87,10 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
         throw new Error(`Не удалось загрузить профиль (${res.status}). ${msg}`)
       }
       setMe((await res.json()) as Me)
+      if (recoveringSessionRef.current) {
+        setSessionRecoveryReady(true)
+        recoveringSessionRef.current = false
+      }
     } catch (e) {
       setStoredToken(null, portal)
       setToken(null)
@@ -133,6 +152,7 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
   const onCancelPasswordSetup = useCallback(() => {
     setPendingPasswordSetupEmail(null)
     setError(null)
+    setSessionExpired(false)
   }, [])
 
   const onRegister = useCallback(async (e: RegisterFormEvent) => {
@@ -211,6 +231,7 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
       e.preventDefault()
       setError(null)
       setPendingPasswordSetupEmail(null)
+      setSessionExpired(false)
       setAuthBusy(true)
       try {
         const fd = new FormData(e.currentTarget)
@@ -319,6 +340,7 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
     setError(null)
     setPortalMismatch(null)
     setPendingPasswordSetupEmail(null)
+    setSessionExpired(false)
   }, [portal])
 
   const applyToken = useCallback(
@@ -350,6 +372,8 @@ export function useAuth(portal: AuthPortal = 'fulfillment') {
     loading,
     authBusy,
     pendingPasswordSetupEmail,
+    sessionExpired,
+    sessionRecoveryReady,
     onRegister,
     onLogin,
     onSetInitialPassword,

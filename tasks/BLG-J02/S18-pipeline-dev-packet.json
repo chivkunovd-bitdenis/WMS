@@ -1,0 +1,88 @@
+{
+  "task_id": "BLG-J02",
+  "stage": "S18",
+  "role": "pipeline-dev",
+  "status": "RUNNING",
+  "traits": [
+    "ui_change"
+  ],
+  "risk_level": "low",
+  "model_policy": "pipeline/model-policy.yml",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S09",
+    "S10",
+    "S11",
+    "S12",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S24",
+    "S25",
+    "S26"
+  ],
+  "done_stages": [
+    "S01",
+    "S02",
+    "S09",
+    "S10",
+    "S11",
+    "S12",
+    "S15",
+    "S16",
+    "S17"
+  ],
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "wave_id": "wave-a1b311d18f07",
+  "backlog_item_id": "BLG-J02",
+  "backlog_item": {
+    "id": "BLG-J02",
+    "title": "Заменить invalid_token на понятное сообщение о сессии",
+    "source_section": "J, invalid_token",
+    "business_meaning": "При истёкшей или недействительной сессии WMS показывает оператору технический текст invalid_token. Пользователь может принять его за проблему с ключом Wildberries и искать причину не в том месте, хотя обычно требуется просто повторный вход. Система должна объяснять, что сессия завершилась, предлагать безопасно войти снова и после авторизации возвращать человека к его рабочему экрану, если это возможно.",
+    "type": "ui_change",
+    "priority": "low",
+    "status": "queued",
+    "readiness": "needs_product_contract",
+    "dependencies": [],
+    "suggested_roles": [
+      "BA",
+      "screen-dev",
+      "ui-critic",
+      "reviewer"
+    ],
+    "suggested_stages": [
+      "S08",
+      "S12",
+      "S18",
+      "S26"
+    ]
+  },
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 148600,
+    "output_tokens": 27900,
+    "estimated_usd": 1.121
+  },
+  "blocked_by": [],
+  "blocker": null,
+  "resume_condition": null,
+  "rules": [
+    "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
+    "Do not accept your own work.",
+    "If status is WAITING, do not advance; report the blocker and wait for resume.",
+    "If budget_enforced is true, advance requires usage receipt fields.",
+    "If blocked_by is non-empty, do not pass the blocker resume stage without resolve-blocker evidence.",
+    "Use python3 scripts/pipeline/run.py advance only for the stage you own.",
+    "Do not set DONE while pipeline status is not ACTIVE."
+  ]
+}

@@ -11,10 +11,12 @@ import {
 import { WmsBrandMark } from '../components/WmsBrandMark'
 import type { AuthPortal } from '../hooks/useAuth'
 import { sellerPortalUrl } from '../utils/portalUrls'
+import { ErrorNotice } from '../ui-kit'
 
 type Props = {
   variant: AuthPortal
   error: string | null
+  sessionExpired: boolean
   authBusy: boolean
   pendingPasswordSetupEmail: string | null
   onRegister: (e: React.FormEvent<HTMLFormElement>) => void
@@ -30,6 +32,7 @@ const fieldStackSx = { display: 'flex', flexDirection: 'column', gap: 2 } as con
 export function PublicAuthScreen({
   variant,
   error,
+  sessionExpired,
   authBusy,
   pendingPasswordSetupEmail,
   onRegister,
@@ -162,6 +165,11 @@ export function PublicAuthScreen({
           <Typography variant="body2" color="text.secondary">
             {subtitle}
           </Typography>
+          {sessionExpired ? (
+            <ErrorNotice testId="session-expired-notice">
+              Сессия завершилась. Войдите снова, чтобы продолжить работу.
+            </ErrorNotice>
+          ) : null}
           {error ? (
             <Alert severity="error" data-testid="auth-error">
               {error}

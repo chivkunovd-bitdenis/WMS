@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { apiUrl } from '../../api'
 import { useAuth } from '../../hooks/useAuth'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
@@ -12,6 +12,11 @@ import { SellerHonestSignScreen } from '../../screens/v2/SellerHonestSignScreen'
 import { SellerSettingsScreen } from '../../screens/v2/SellerSettingsScreen'
 import { NotificationsPage } from '../../screens/shared/NotificationsPage'
 import { SellerLayout } from './SellerLayout'
+import {
+  captureAuthReturnTarget,
+  consumeAuthReturnTarget,
+  type AuthReturnTarget,
+} from '../../utils/authReturnTarget'
 
 type InboundSummaryRow = {
   id: string
@@ -37,7 +42,33 @@ export function SellerApp() {
     logout,
     applyToken,
     reloadMe,
+    sessionExpired,
+    sessionRecoveryReady,
   } = useAuth('seller')
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [pendingAuthReturn, setPendingAuthReturn] = useState<AuthReturnTarget | null>(null)
+  const [capturedExpiredSession, setCapturedExpiredSession] = useState(false)
+
+  useEffect(() => {
+    if (!sessionExpired || capturedExpiredSession) {
+      return
+    }
+    setPendingAuthReturn(
+      captureAuthReturnTarget('seller', location.pathname, location.search, location.hash),
+    )
+    setCapturedExpiredSession(true)
+  }, [capturedExpiredSession, location.hash, location.pathname, location.search, sessionExpired])
+
+  useEffect(() => {
+    if (!sessionRecoveryReady || me?.role !== 'fulfillment_seller') {
+      return
+    }
+    const target = pendingAuthReturn
+    setPendingAuthReturn(null)
+    setCapturedExpiredSession(false)
+    navigate(consumeAuthReturnTarget(target, 'seller'), { replace: true })
+  }, [me, navigate, pendingAuthReturn, sessionRecoveryReady])
 
   const [shopsBusy, setShopsBusy] = useState(false)
 
@@ -221,6 +252,7 @@ export function SellerApp() {
         <PublicAuthScreen
           variant="seller"
           error={portalMismatch ?? error}
+          sessionExpired={sessionExpired}
           authBusy={authBusy}
           pendingPasswordSetupEmail={pendingPasswordSetupEmail}
           onRegister={(e) => e.preventDefault()}
@@ -417,4 +449,3 @@ export function SellerApp() {
     </Routes>
   )
 }
-

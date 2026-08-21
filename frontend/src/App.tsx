@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import './App.css'
 import { apiUrl } from './api'
-import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { ProfileLoadingScreen } from './screens/ProfileLoadingScreen'
 import { PublicAuthScreen } from './screens/PublicAuthScreen'
 import { AuthedAppLayout } from './layouts/AuthedAppLayout'
@@ -50,9 +50,15 @@ import { FfSettingsScreen } from './screens/ff/FfSettingsScreen'
 import {
   canAccessFfBlock,
   ffRoleLabel,
+  isFfPortalRole,
   resolveFfPermissions,
 } from './utils/ffPermissions'
 import { setSeparateMarkingPrintEnabled } from './utils/separateMarkingPrint'
+import {
+  captureAuthReturnTarget,
+  consumeAuthReturnTarget,
+  type AuthReturnTarget,
+} from './utils/authReturnTarget'
 
 type WarehouseRow = { id: string; name: string; code: string }
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
@@ -231,8 +237,38 @@ export default function App() {
     onCancelPasswordSetup,
     logout,
     reloadMe,
+    sessionExpired,
+    sessionRecoveryReady,
   } = useAuth('fulfillment')
   const navigate = useNavigate()
+  const location = useLocation()
+  const [pendingAuthReturn, setPendingAuthReturn] = useState<AuthReturnTarget | null>(null)
+  const [capturedExpiredSession, setCapturedExpiredSession] = useState(false)
+
+  useEffect(() => {
+    if (!sessionExpired || capturedExpiredSession) {
+      return
+    }
+    setPendingAuthReturn(
+      captureAuthReturnTarget(
+        'fulfillment',
+        location.pathname,
+        location.search,
+        location.hash,
+      ),
+    )
+    setCapturedExpiredSession(true)
+  }, [capturedExpiredSession, location.hash, location.pathname, location.search, sessionExpired])
+
+  useEffect(() => {
+    if (!sessionRecoveryReady || !me || !isFfPortalRole(me.role)) {
+      return
+    }
+    const target = pendingAuthReturn
+    setPendingAuthReturn(null)
+    setCapturedExpiredSession(false)
+    navigate(consumeAuthReturnTarget(target, 'fulfillment'), { replace: true })
+  }, [me, navigate, pendingAuthReturn, sessionRecoveryReady])
   const [pendingMpUnloadId, setPendingMpUnloadId] = useState<string | null>(null)
   const [warehouses, setWarehouses] = useState<WarehouseRow[]>([])
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(
@@ -2373,6 +2409,7 @@ export default function App() {
         <PublicAuthScreen
           variant="fulfillment"
           error={portalMismatch ?? error}
+          sessionExpired={sessionExpired}
           authBusy={authBusy}
           pendingPasswordSetupEmail={pendingPasswordSetupEmail}
           onRegister={(e) => void onRegister(e)}
