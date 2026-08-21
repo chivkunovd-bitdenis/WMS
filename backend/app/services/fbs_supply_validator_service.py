@@ -19,7 +19,10 @@ from app.models.fbs_order import (
 from app.models.seller import Seller
 from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
 from app.models.warehouse import Warehouse
-from app.services.fbs_stock_availability_service import fbs_available_qty_by_product
+from app.services.fbs_stock_availability_service import (
+    fbs_available_qty_by_product,
+    fbs_stock_by_warehouse_for_products,
+)
 from app.services.fbs_worklist_service import compute_selection_blockers
 
 
@@ -54,11 +57,28 @@ class SupplyPreflightSummary:
 
 
 @dataclass(frozen=True)
+class SupplyStockLocationNotice:
+    """I10: товар нужен на одном складе, а физически лежит (тоже) на другом.
+
+    Не блокирует создание поставки — просто называет склад и количество
+    словами прямо в preflight, а не молчит до отказа на упаковке через час.
+    """
+
+    product_id: uuid.UUID
+    product_name: str
+    needed_qty: int
+    primary_warehouse_name: str
+    primary_qty: int
+    elsewhere: tuple[tuple[str, int], ...]  # (имя склада, остаток на нём)
+
+
+@dataclass(frozen=True)
 class SupplyPreflightResult:
     compatible: bool
     summary: SupplyPreflightSummary | None
     issues: tuple[SupplyValidationIssue, ...]
     orders: tuple[FbsOrder, ...]
+    notices: tuple[SupplyStockLocationNotice, ...] = ()
 
 
 _BLOCKER_TO_ISSUE: dict[str, tuple[str, str]] = {
@@ -144,6 +164,70 @@ async def _availability_by_order(
         for oid in order_ids:
             out[oid] = qty
     return out
+
+
+async def _build_stock_location_notices(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    orders: list[FbsOrder],
+) -> list[SupplyStockLocationNotice]:
+    """I10: назвать оператору склад и количество, если товар физически лежит
+    не (только) там, куда привязан заказ — до создания поставки, а не после
+    отказа на упаковке через час. Ничего не блокирует: `insufficient_stock` в
+    `_per_order_issues` уже отработал по остатку тенанта в целом, тут — только
+    пояснение «откуда реально возьмут».
+    """
+    needed_by_product: dict[uuid.UUID, int] = {}
+    primary_warehouse_by_product: dict[uuid.UUID, uuid.UUID] = {}
+    product_name_by_id: dict[uuid.UUID, str] = {}
+    for order in orders:
+        if order.product_id is None or order.warehouse_id is None:
+            continue
+        needed_by_product[order.product_id] = needed_by_product.get(order.product_id, 0) + 1
+        primary_warehouse_by_product.setdefault(order.product_id, order.warehouse_id)
+        if order.product is not None:
+            product_name_by_id[order.product_id] = order.product.name
+    if not needed_by_product:
+        return []
+
+    breakdown = await fbs_stock_by_warehouse_for_products(
+        session, tenant_id, list(needed_by_product)
+    )
+    relevant_warehouse_ids: set[uuid.UUID] = set(primary_warehouse_by_product.values())
+    for by_wh in breakdown.values():
+        relevant_warehouse_ids.update(by_wh)
+    if not relevant_warehouse_ids:
+        return []
+    name_rows = await session.execute(
+        select(Warehouse.id, Warehouse.name).where(Warehouse.id.in_(relevant_warehouse_ids))
+    )
+    wh_names = {wid: name for wid, name in name_rows.all()}
+
+    notices: list[SupplyStockLocationNotice] = []
+    for product_id, needed in needed_by_product.items():
+        primary_wh = primary_warehouse_by_product[product_id]
+        by_wh = breakdown.get(product_id, {})
+        primary_qty = by_wh.get(primary_wh, 0)
+        if primary_qty >= needed:
+            continue
+        elsewhere = tuple(
+            (wh_names.get(wh_id, "Неизвестный склад"), qty)
+            for wh_id, qty in sorted(by_wh.items(), key=lambda kv: -kv[1])
+            if wh_id != primary_wh and qty > 0
+        )
+        if not elsewhere:
+            continue
+        notices.append(
+            SupplyStockLocationNotice(
+                product_id=product_id,
+                product_name=product_name_by_id.get(product_id, "Товар"),
+                needed_qty=needed,
+                primary_warehouse_name=wh_names.get(primary_wh, "Склад не найден"),
+                primary_qty=primary_qty,
+                elsewhere=elsewhere,
+            )
+        )
+    return notices
 
 
 async def _wb_warehouse_name(
@@ -313,6 +397,19 @@ def preflight_to_dict(
             }
             for issue in result.issues
         ],
+        "notices": [
+            {
+                "product_id": str(n.product_id),
+                "product_name": n.product_name,
+                "needed_qty": n.needed_qty,
+                "primary_warehouse_name": n.primary_warehouse_name,
+                "primary_qty": n.primary_qty,
+                "elsewhere": [
+                    {"warehouse_name": name, "qty": qty} for name, qty in n.elsewhere
+                ],
+            }
+            for n in result.notices
+        ],
         "server_now": now.isoformat(),
     }
 
@@ -347,9 +444,15 @@ async def validate_supply_composition(
     ]
     summary = await _build_summary(session, tenant_id, orders)
     compatible = len(issues) == 0
+    # I10: считаем пояснения, только если состав уже совместим — иначе на
+    # заблокированном составе просто лишний шум поверх настоящей причины отказа.
+    notices = (
+        await _build_stock_location_notices(session, tenant_id, orders) if compatible else []
+    )
     return SupplyPreflightResult(
         compatible=compatible,
         summary=summary,
         issues=tuple(issues),
         orders=tuple(orders),
+        notices=tuple(notices),
     )

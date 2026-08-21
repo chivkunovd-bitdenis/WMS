@@ -7,6 +7,7 @@ import { PublicAuthScreen } from './screens/PublicAuthScreen'
 import { AuthedAppLayout } from './layouts/AuthedAppLayout'
 import { CatalogSection } from './sections/CatalogSection'
 import { readApiErrorMessage } from './utils/readApiErrorMessage'
+import { primaryWarehouseId, realWarehouses } from './utils/fbsWarehouse'
 import { useAuth } from './hooks/useAuth'
 import { Screen } from './screens/AppV2Screens'
 import { ProductsScreen } from './screens/v2/ProductsScreen'
@@ -414,7 +415,9 @@ export default function App() {
         if (prev && data.some((w) => w.id === prev)) {
           return prev
         }
-        return data[0]!.id
+        // I10: не первый склад по алфавиту (им может оказаться автосозданная
+        // подстановка под склад WB) — первый настоящий.
+        return primaryWarehouseId(data)
       })
     },
     [authHeaders],
@@ -1364,13 +1367,14 @@ export default function App() {
       const planned_delivery_date = planned_delivery_date_raw || null
       const operation_type =
         String(fd.get('inbound_operation_type') ?? 'inbound').trim() || 'inbound'
+      // I10: «настоящих» складов может быть меньше, чем строк в API — служебные
+      // подстановки под склад WB выбором не считаются.
+      const realWh = realWarehouses(warehouses)
       const warehouseId =
-        whFromForm ||
-        selectedWarehouseId ||
-        (warehouses.length === 1 ? warehouses[0]!.id : null)
+        whFromForm || selectedWarehouseId || (realWh.length === 1 ? realWh[0]!.id : null)
       if (!warehouseId) {
         setOpsError(
-          me.role === 'fulfillment_seller' && warehouses.length > 1
+          me.role === 'fulfillment_seller' && realWh.length > 1
             ? 'Выберите склад для новой заявки.'
             : 'Выберите склад в списке выше.',
         )
@@ -1895,13 +1899,13 @@ export default function App() {
     }
     const fd = new FormData(form)
     const whFromForm = String(fd.get('outbound_warehouse_id') ?? '').trim()
+    // I10: служебные склады-подстановки под WB выбором не считаются.
+    const realWh = realWarehouses(warehouses)
     const warehouseId =
-      whFromForm ||
-      selectedWarehouseId ||
-      (warehouses.length === 1 ? warehouses[0]!.id : null)
+      whFromForm || selectedWarehouseId || (realWh.length === 1 ? realWh[0]!.id : null)
     if (!warehouseId) {
       setOpsError(
-        me.role === 'fulfillment_seller' && warehouses.length > 1
+        me.role === 'fulfillment_seller' && realWh.length > 1
           ? 'Выберите склад для новой заявки на отгрузку.'
           : 'Выберите склад в каталоге.',
       )
@@ -2530,7 +2534,9 @@ export default function App() {
       setOpsError('Выберите селлера (ИП) для отгрузки.')
       return null
     }
-    let wid: string | null = selectedWarehouseId ?? warehouses[0]?.id ?? null
+    // I10: первый настоящий склад, а не первый по алфавиту среди строк API —
+    // иначе документ ФФ по умолчанию уезжает на служебную подстановку под WB.
+    let wid: string | null = selectedWarehouseId ?? primaryWarehouseId(warehouses)
     if (!wid) {
       try {
         const res = await fetch(apiUrl('/warehouses'), {
@@ -2538,7 +2544,7 @@ export default function App() {
         })
         if (res.ok) {
           const list = (await res.json()) as WarehouseRow[]
-          wid = list[0]?.id ?? null
+          wid = primaryWarehouseId(list)
         }
       } catch {
         wid = null
@@ -2631,7 +2637,7 @@ export default function App() {
     if (!token) {
       return null
     }
-    const wid = selectedWarehouseId ?? warehouses[0]?.id ?? null
+    const wid = selectedWarehouseId ?? primaryWarehouseId(warehouses)
     if (!wid) {
       setOpsError('Склад ФФ не найден.')
       return null
