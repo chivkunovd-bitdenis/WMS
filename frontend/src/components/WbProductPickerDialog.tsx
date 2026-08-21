@@ -58,6 +58,13 @@ type Props = {
   busy: boolean
   /** Каталог ещё едет с сервера: окно уже открыто, таблицы пока нет. */
   catalogLoading?: boolean
+  /**
+   * Поиск идёт на сервере: в каталоге больше товаров, чем разумно грузить в браузер.
+   * Тогда фильтр по категориям прячется — он считается по загруженным строкам и на
+   * неполной выборке врал бы, — а сам поиск уходит наружу через onSearchChange.
+   */
+  serverSearch?: boolean
+  onSearchChange?: (value: string) => void
   catalog: WbProductPickerCatalogRow[] | null
   disabledProductIds: Set<string>
   testIdPrefix: string
@@ -133,6 +140,8 @@ export function WbProductPickerDialog({
   open,
   busy,
   catalogLoading = false,
+  serverSearch = false,
+  onSearchChange,
   catalog,
   disabledProductIds,
   testIdPrefix,
@@ -161,6 +170,9 @@ export function WbProductPickerDialog({
 
   useEffect(() => {
     setPickerSearch(open ? initialSearch : '')
+    if (open) {
+      onSearchChange?.(initialSearch)
+    }
     setPickerCategories([])
     setPickerQtyByProduct({})
     setSelectedProductIds(new Set())
@@ -376,6 +388,7 @@ export function WbProductPickerDialog({
             onChange={(e) => {
               setPickerSearch(e.target.value)
               setPickerError(null)
+              onSearchChange?.(e.target.value)
             }}
             onKeyDown={(e) => {
               if (e.key !== 'Enter' || !catalog) {
@@ -405,7 +418,10 @@ export function WbProductPickerDialog({
             slotProps={{ htmlInput: { 'data-testid': `${testIdPrefix}-search` } }}
           />
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ alignItems: { md: 'center' } }}>
-            <FormControl size="small" sx={{ minWidth: 260 }}>
+            {/* Фильтр по категориям считается по загруженным строкам. Когда каталог
+                большой и приходит частями, полного списка категорий у экрана нет —
+                показывать неполный значит врать, поэтому фильтр прячется. */}
+            <FormControl size="small" sx={{ minWidth: 260, display: serverSearch ? 'none' : undefined }}>
               <InputLabel id={`${testIdPrefix}-cat-label`}>Категории WB</InputLabel>
               <Select
                 multiple
@@ -467,11 +483,11 @@ export function WbProductPickerDialog({
             <Typography variant="body2">Загружаем каталог товаров…</Typography>
           </Stack>
         ) : null}
-        {hiddenPickerRowsCount > 0 ? (
+        {serverSearch || hiddenPickerRowsCount > 0 ? (
           <Alert severity="info" sx={{ mb: 1 }} data-testid={`${testIdPrefix}-limited`}>
-            Показаны первые {visiblePickerRows.length} товаров из {filteredPickerRows.length}.
-            Поиск и «Выбрать все» работают по всему каталогу — введите артикул, штрихкод или
-            название, чтобы найти нужный товар.
+            {serverSearch
+              ? `В каталоге товаров больше, чем показано (${visiblePickerRows.length}). Введите артикул, штрихкод, номер WB или часть названия — поиск идёт по всему каталогу.`
+              : `Показаны первые ${visiblePickerRows.length} товаров из ${filteredPickerRows.length}. Уточните поиск, чтобы увидеть нужный.`}
           </Alert>
         ) : null}
         <TableContainer sx={{ width: '100%', overflowX: 'hidden' }}>

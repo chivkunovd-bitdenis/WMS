@@ -201,6 +201,14 @@ export function SellerInboundDraftScreen({
   const [busy, setBusy] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [catalogLoading, setCatalogLoading] = useState(false)
+  /**
+   * Каталог грузится страницами. У продавца может быть девять тысяч товаров: тянуть
+   * их целиком — это мегабайты разбора на сервере при каждом нажатии, и всё это время
+   * стоит весь бэкенд, он однопроцессный. Берём первую страницу, а дальше человек
+   * ищет — и поиск уходит на сервер, он умеет искать по артикулу, названию, штрихкоду,
+   * артикулу продавца и номеру WB.
+   */
+  const [catalogPaged, setCatalogPaged] = useState(false)
   const [printMeta, setPrintMeta] = useState<ProductLineDisplayMeta | null>(null)
   const [plannedDateDraft, setPlannedDateDraft] = useState<string>('')
   const [plannedBoxCountDraft, setPlannedBoxCountDraft] = useState<string>('')
@@ -339,28 +347,63 @@ export function SellerInboundDraftScreen({
    * товаров это выглядело так, будто кнопка не работает вовсе: нажимаешь, и
    * несколько секунд не происходит ничего.
    */
+  /** Сколько строк просим у сервера за раз. Лишняя строка сверх потолка — способ
+   *  узнать, что найдено больше, чем показано, без отдельного запроса на количество. */
+  const CATALOG_PAGE_SIZE = 200
+
+  const loadCatalogPage = useCallback(
+    async (search: string) => {
+      const params = new URLSearchParams({ limit: String(CATALOG_PAGE_SIZE + 1) })
+      const needle = search.trim()
+      if (needle) {
+        params.set('search', needle)
+      }
+      setCatalogLoading(true)
+      try {
+        const res = await fetch(apiUrl(`/products/wb-catalog?${params.toString()}`), {
+          headers: { ...authHeaders(token) },
+        })
+        if (!res.ok) {
+          setLocalError(await readApiErrorMessage(res))
+          return false
+        }
+        const rows = (await res.json()) as WbCatalogRow[]
+        setCatalogPaged(rows.length > CATALOG_PAGE_SIZE)
+        setCatalog(rows.slice(0, CATALOG_PAGE_SIZE))
+        return true
+      } catch (e) {
+        setLocalError(e instanceof Error ? e.message : 'Не удалось загрузить каталог.')
+        return false
+      } finally {
+        setCatalogLoading(false)
+      }
+    },
+    [token, authHeaders],
+  )
+
+  /** Пауза перед запросом: человек печатает артикул, а не шлёт запрос на каждую букву. */
+  const searchTimerRef = useRef<number | null>(null)
+  const onPickerSearchChange = useCallback(
+    (value: string) => {
+      if (searchTimerRef.current !== null) {
+        window.clearTimeout(searchTimerRef.current)
+      }
+      searchTimerRef.current = window.setTimeout(() => {
+        void loadCatalogPage(value)
+      }, 350)
+    },
+    [loadCatalogPage],
+  )
+
   const openPicker = async () => {
     setLocalError(null)
     setPickerOpen(true)
     if (catalog !== null) {
       return
     }
-    setCatalogLoading(true)
-    try {
-      const res = await fetch(apiUrl('/products/wb-catalog'), {
-        headers: { ...authHeaders(token) },
-      })
-      if (!res.ok) {
-        setLocalError(await readApiErrorMessage(res))
-        setPickerOpen(false)
-        return
-      }
-      setCatalog((await res.json()) as WbCatalogRow[])
-    } catch (e) {
-      setLocalError(e instanceof Error ? e.message : 'Не удалось загрузить каталог.')
+    const ok = await loadCatalogPage('')
+    if (!ok) {
       setPickerOpen(false)
-    } finally {
-      setCatalogLoading(false)
     }
   }
 
@@ -1105,6 +1148,8 @@ export function SellerInboundDraftScreen({
       <SellerWbProductPickerDialog
         open={pickerOpen}
         catalogLoading={catalogLoading}
+        serverSearch={catalogPaged}
+        onSearchChange={onPickerSearchChange}
         busy={busy}
         catalog={catalog}
         disabledProductIds={lineProductIds}
