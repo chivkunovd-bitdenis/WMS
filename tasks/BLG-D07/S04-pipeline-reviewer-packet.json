@@ -2,7 +2,7 @@
   "task_id": "BLG-D07",
   "stage": "S04",
   "role": "pipeline-reviewer",
-  "status": "WAITING",
+  "status": "RUNNING",
   "traits": [
     "background_worker",
     "external_contract"
@@ -67,18 +67,8 @@
     "estimated_usd": 1.1525
   },
   "blocked_by": [],
-  "blocker": {
-    "type": "ORACLE_CONFLICT",
-    "reason_code": "RESEARCH_REWORK_WB_STATUS_CONTRACT",
-    "details": "S03 has an unresolved WB status/error contract: postponed_delivery is omitted, carrier cancel values lack reproducible provenance, and 4XX x10 is incorrect because the documented multiplier applies to 409; sandbox cases are documented designs, not executed proof.",
-    "owner": "pipeline-ba",
-    "created_at": "2026-08-21T00:46:33Z",
-    "resume_stage": "S04"
-  },
-  "resume_condition": {
-    "stage": "S04",
-    "condition": "Correct S03 status and error matrices with dated reproducible official provenance, state 409 x10 precisely, distinguish documented sandbox scenarios from executed proof, and hand explicit local-emulator coverage to S15; then rerun independent S04."
-  },
+  "blocker": null,
+  "resume_condition": null,
   "rules": [
     "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
     "Do not accept your own work.",

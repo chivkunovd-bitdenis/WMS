@@ -53,7 +53,7 @@
     "S26"
   ],
   "current_stage": "S04",
-  "status": "WAITING",
+  "status": "RUNNING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -69,20 +69,10 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:55Z",
-  "heartbeat_at": "2026-08-21T00:46:33Z",
+  "heartbeat_at": "2026-08-21T03:54:45Z",
   "last_valid_receipt": "sha256:db3d0a3862bb0ad8477a2b856ae6fe5a97bea0e2a1bfbeb6c98113752e6d22ec",
-  "blocker": {
-    "type": "ORACLE_CONFLICT",
-    "reason_code": "RESEARCH_REWORK_WB_STATUS_CONTRACT",
-    "details": "S03 has an unresolved WB status/error contract: postponed_delivery is omitted, carrier cancel values lack reproducible provenance, and 4XX x10 is incorrect because the documented multiplier applies to 409; sandbox cases are documented designs, not executed proof.",
-    "owner": "pipeline-ba",
-    "created_at": "2026-08-21T00:46:33Z",
-    "resume_stage": "S04"
-  },
-  "resume_condition": {
-    "stage": "S04",
-    "condition": "Correct S03 status and error matrices with dated reproducible official provenance, state 409 x10 precisely, distinguish documented sandbox scenarios from executed proof, and hand explicit local-emulator coverage to S15; then rerun independent S04."
-  },
+  "blocker": null,
+  "resume_condition": null,
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",

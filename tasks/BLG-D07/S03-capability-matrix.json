@@ -10,9 +10,21 @@
   "sources": [
     {
       "id": "SRC-01",
-      "url": "https://dev.wildberries.ru/ru/openapi/orders-fbs",
-      "level": "official",
-      "retrieved_at": "2026-08-21"
+      "url": "https://dev.wildberries.ru/en/docs/openapi/orders-fbs",
+      "section": "Get Assembly Orders Statuses /api/v3/orders/status",
+      "level": "official_live_visible",
+      "retrieved_at": "2026-08-21T06:52:00+03:00",
+      "access": "public rendered DOM; no sign-in or Marketplace API call",
+      "reproduce": "Open URL, find endpoint heading, inspect supplierStatus, wbStatus, Request limit and Responses."
+    },
+    {
+      "id": "SRC-01-OLD",
+      "url": "https://dev.wildberries.ru/en/docs/openapi/orders-fbs",
+      "section": "Get Assembly Orders Statuses /api/v3/orders/status",
+      "level": "official_indexed_snapshot",
+      "snapshot_observed_at": "2026-08-21",
+      "crawler_age_at_observation": "5 months",
+      "finding": "Older indexed text says 409 x10 and omits carrier-cancel values; retained only to explain version skew."
     },
     {
       "id": "SRC-02",
@@ -22,9 +34,10 @@
     },
     {
       "id": "SRC-03",
-      "url": "https://dev.wildberries.ru/docs/openapi-other/sandbox-environment#tag/Marketplejs-FBS",
-      "level": "official",
-      "retrieved_at": "2026-08-21"
+      "url": "https://dev.wildberries.ru/en/docs/openapi-other/sandbox-environment#tag/Marketplace-FBS",
+      "section": "Status Model for FBS",
+      "level": "official_documented_not_executed",
+      "retrieved_at": "2026-08-21T06:52:00+03:00"
     },
     {
       "id": "SRC-04",
@@ -33,6 +46,32 @@
       "retrieved_at": "2026-08-21"
     }
   ],
+  "contract_snapshot": {
+    "endpoint": "POST /api/v3/orders/status",
+    "supplier_status_current": ["new", "confirm", "complete", "cancel", "cancel_carrier"],
+    "wb_status_current": [
+      "waiting",
+      "sorted",
+      "sold",
+      "canceled",
+      "canceled_by_client",
+      "declined_by_client",
+      "defect",
+      "ready_for_pickup",
+      "postponed_delivery",
+      "accepted_by_carrier",
+      "sent_to_carrier",
+      "canceled_by_carrier"
+    ],
+    "responses_current": [200, 400, 401, 402, 403, 429],
+    "rate_accounting": {
+      "older_indexed_snapshot": "409 response counts as 10 requests",
+      "current_live_visible": "each 4XX response counts as 10 requests",
+      "selected_for_current_budget": "4XX_x10",
+      "required_explicit_s15_case": "409_x10"
+    },
+    "version_skew_policy": "Preserve raw values, avoid irreversible effects for unknown values, and make S04 independently reproduce the current official page."
+  },
   "capabilities": [
     {
       "id": "endpoint",
@@ -53,7 +92,7 @@
       "applicability": "applicable",
       "status": "covered",
       "evidence": ["SRC-01", "SRC-02"],
-      "finding": "Required orders array contains 1..1000 int64 assembly-order IDs."
+      "finding": "Required orders array contains 1..1000 int64 assembly-order IDs. The visible schema does not claim uniqueness; caller-side uniqueness is a local invariant."
     },
     {
       "id": "response_schema",
@@ -67,7 +106,7 @@
       "applicability": "applicable",
       "status": "covered",
       "evidence": ["SRC-01", "SRC-03"],
-      "finding": "Live status enums and sandbox transitions recorded; sorted is non-terminal."
+      "finding": "Current official enum includes postponed_delivery plus carrier values; documented sandbox transitions show why sorted must remain polled, but were not executed."
     },
     {
       "id": "batch_behavior",
@@ -87,15 +126,15 @@
       "id": "rate_limits",
       "applicability": "applicable",
       "status": "covered",
-      "evidence": ["SRC-01"],
-      "finding": "300 requests/minute per seller account, 200 ms interval, burst 20; every 4XX counts as 10; sandbox is 1 request/second shared."
+      "evidence": ["SRC-01", "SRC-01-OLD"],
+      "finding": "300/minute, 200 ms and burst 20. Older indexed official text says precisely 409 x10; current live-visible text broadens accounting to every 4XX x10. Current budget uses the broader rule and S15 must cover 409 x10 explicitly."
     },
     {
       "id": "errors",
       "applicability": "applicable",
       "status": "covered",
       "evidence": ["SRC-01"],
-      "finding": "Documented statuses are 200, 400, 401, 402, 403 and 429; missing rows and transport failures remain unsuccessful."
+      "finding": "Current status endpoint documents 200, 400, 401, 402, 403 and 429. A 404 is an unexpected-response emulator case, not a documented status response."
     },
     {
       "id": "partial_success",
@@ -123,7 +162,7 @@
       "applicability": "applicable",
       "status": "covered",
       "evidence": ["SRC-03"],
-      "finding": "Official sandbox status transitions are enumerated; execution is deferred and no sandbox token was used."
+      "finding": "Official sandbox status transitions are test designs with evidence_state=documented_not_executed; no sandbox token, API execution or emulator proof exists in S03."
     },
     {
       "id": "tenant_seller_isolation",
@@ -138,6 +177,13 @@
       "status": "covered",
       "evidence": ["SRC-01", "SRC-04"],
       "finding": "Starvation, request amplification, restart safety and rate-budget constraints are documented."
+    },
+    {
+      "id": "local_emulator_handoff",
+      "applicability": "applicable",
+      "status": "covered",
+      "evidence": ["SRC-01", "SRC-03", "SRC-04"],
+      "finding": "Explicit runnable S15 coverage is enumerated for complete/partial/malformed 200, missing/duplicate/foreign IDs, unknown and late statuses, carrier values, 400/401/402/403/404/409/429, current 4XX x10 accounting, timeout/5XX, fallback cap, restart/replay and starvation."
     },
     {
       "id": "operator_last_success",
@@ -184,8 +230,46 @@
       "id": "Q-04",
       "blocking": false,
       "owner_stage": "S04",
-      "question": "Does any current official webhook or additional wbStatus exist outside the inspected FBS pages?"
+      "question": "Can the independent critic reproduce the current official 4XX x10 wording and full enum, and how should the older 409 x10 indexed snapshot be recorded as version skew?"
     }
+  ],
+  "sandbox_scenarios": {
+    "evidence_state": "documented_not_executed",
+    "executed_sandbox_proofs": 0,
+    "executed_local_emulator_proofs": 0,
+    "documented_cases": [
+      "waiting/new",
+      "declined_by_client/new",
+      "waiting/confirm",
+      "canceled/cancel",
+      "waiting/complete",
+      "sorted/complete",
+      "ready_for_pickup/complete",
+      "sold/complete",
+      "canceled_by_client/complete",
+      "defect/complete"
+    ]
+  },
+  "s15_local_emulator_handoff": [
+    "D07-EMU-200-FULL",
+    "D07-EMU-200-PARTIAL",
+    "D07-EMU-200-DUPLICATE",
+    "D07-EMU-200-FOREIGN-ID",
+    "D07-EMU-UNKNOWN-STATUS",
+    "D07-EMU-LATE-STATUS",
+    "D07-EMU-CARRIER",
+    "D07-EMU-400",
+    "D07-EMU-401-403",
+    "D07-EMU-402",
+    "D07-EMU-404-UNEXPECTED",
+    "D07-EMU-409-X10",
+    "D07-EMU-4XX-X10-CURRENT",
+    "D07-EMU-429",
+    "D07-EMU-TIMEOUT-5XX",
+    "D07-EMU-MALFORMED",
+    "D07-EMU-FALLBACK-CAP",
+    "D07-EMU-RESTART-REPLAY",
+    "D07-EMU-STARVATION"
   ],
   "unhandled_applicable_rows": 0
 }
