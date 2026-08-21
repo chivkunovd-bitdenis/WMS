@@ -51,8 +51,8 @@
     "S27",
     "S28"
   ],
-  "current_stage": "S15",
-  "status": "WAITING",
+  "current_stage": "S17",
+  "status": "RUNNING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -68,20 +68,10 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:57Z",
-  "heartbeat_at": "2026-08-21T01:22:28Z",
-  "last_valid_receipt": "sha256:9790f818b5c99a7a2db438840b86c0ad8e7f76246f15055ffbedc98358d8574c",
-  "blocker": {
-    "type": "FIXTURE",
-    "reason_code": "CASE_AUDIT_FAILED",
-    "details": "Independent case-auditor found S15 package inconsistency: S15-CASE-FACTORY.md claims 12 GOLD cases but S15-CASES.json contains 11 and misses BLG-C01-AC09; do not run S16 Product until S15 package is repaired and re-audited.",
-    "owner": "pipeline-ba",
-    "created_at": "2026-08-21T01:22:28Z",
-    "resume_stage": "S15"
-  },
-  "resume_condition": {
-    "stage": "S15",
-    "condition": "Repair BLG-C01 S15 case package by adding AC09 with oracle and S19 binding or correcting the declared count and hash-linked artifacts; then run independent case-auditor again before S16."
-  },
+  "heartbeat_at": "2026-08-21T02:57:32Z",
+  "last_valid_receipt": "sha256:7c156bfed7d5744912cbb4a2ebd864a00f96bad0b6b77322fc0b41524de0336a",
+  "blocker": null,
+  "resume_condition": null,
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",
@@ -131,15 +121,22 @@
       "receipt_hash": "sha256:9790f818b5c99a7a2db438840b86c0ad8e7f76246f15055ffbedc98358d8574c",
       "role_binding_id": "pipeline-ba",
       "agent_identity": "codex-pipeline-ba-blg-c01-s15"
+    },
+    "S16": {
+      "verdict": "PRODUCT_APPROVED_FOR_DEV",
+      "receipt_path": "docs/evidence/BLG-C01/S16-PRODUCT_APPROVED_FOR_DEV.receipt.json",
+      "receipt_hash": "sha256:7c156bfed7d5744912cbb4a2ebd864a00f96bad0b6b77322fc0b41524de0336a",
+      "role_binding_id": "pipeline-product",
+      "agent_identity": "codex-pipeline-product-blg-c01-s16"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 375300,
-    "output_tokens": 25000,
-    "estimated_usd": 2.3525
+    "input_tokens": 427300,
+    "output_tokens": 28500,
+    "estimated_usd": 2.6925
   },
   "budget_usage_receipts": [
     {
@@ -232,6 +229,19 @@
       "estimated_usd": 0.21,
       "agent_id": "codex-pipeline-ba-blg-c01-s15",
       "recorded_at": "2026-08-21T01:19:00Z"
+    },
+    {
+      "task_id": "BLG-C01",
+      "stage": "S16",
+      "role": "pipeline-product",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 52000,
+      "output_tokens": 3500,
+      "estimated_usd": 0.34,
+      "agent_id": "codex-pipeline-product-blg-c01-s16",
+      "recorded_at": "2026-08-21T02:57:32Z"
     }
   ],
   "blocked_by": [],
