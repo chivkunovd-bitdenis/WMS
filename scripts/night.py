@@ -1,0 +1,290 @@
+#!/usr/bin/env python3
+"""Ночной оркестратор WMS.
+
+Запускает агентов по цепочке ролей и следит только за одним: появился ли на диске файл,
+который роль обязана была оставить. Состояние конвейера — это файлы, а не ответы модели.
+Поэтому забытое агентом поле, непредусмотренный вердикт или оборванный ответ не могут
+подвесить очередь: файла нет — шаг не пройден, карточка откладывается, остальные едут.
+
+  вечер:  python3 scripts/night.py вечер night/2026-08-22.md
+  ночь:   python3 scripts/night.py ночь  night/2026-08-22
+
+Повторный запуск продолжает с того места, где встали: шаг, чей файл уже лежит, пропускается.
+"""
+from __future__ import annotations
+
+import argparse
+import concurrent.futures as futures
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+КОРЕНЬ = Path(__file__).resolve().parents[1]
+ТАЙМАУТ = 20 * 60          # один шаг не имеет права съесть ночь
+ПОВТОРОВ = 1               # столько раз перезапускаем шаг, не оставивший файла
+КРУГОВ = 2                 # столько раз возвращаем карточку разработчику по находкам
+
+# Роль → файл, который она обязана оставить, и секции, которые в нём обязаны быть.
+# None вместо файла означает «шаг проверяется гейтами, а не артефактом».
+АРТЕФАКТ = {
+    "intake":             ("ISTOCHNIK.md",     ["Дословно"]),
+    "analyst":            ("RAZBOR.md",        ["Дословно", "Что сейчас", "Что должно быть", "Тип"]),
+    "requirement-critic": ("SVERKA.md",        ["Расхождения"]),
+    "solution-architect": ("ARCH.md",          ["Решение", "Границы"]),
+    "ux-architect":       ("CONTRACT.md",      ["Контракт", "Канон"]),
+    "ui-critic":          ("DESIGN-REVIEW.md", ["Находки"]),
+    "tester":             ("CASES.md",         ["Назначенные кейсы"]),
+    "breaker":            ("CASES.md",         ["Ломающие кейсы", "Смежные кейсы"]),
+    "screen-dev":         ("DEV.md",           ["Изменённые файлы", "Гейты"]),
+    "backend-dev":        ("DEV.md",           ["Изменённые файлы", "Гейты"]),
+    "reviewer":           ("REVIEW.md",        ["Находки"]),
+    "ux-judge":           ("JUDGE.md",         ["Находки", "Пройденные кейсы"]),
+    "guard":              ("GUARD.md",         ["Находки"]),
+    "product-acceptor":   (None,               []),
+}
+
+# Пути по типам задач. Ровно то, чем баг отличается от фичи: у бага нет проектирования.
+ЦЕПОЧКИ = {
+    "баг":   ["tester", "dev", "reviewer", "ux-judge"],
+    "фича":  ["ux-architect", "ui-critic", "tester", "breaker", "dev", "reviewer", "ux-judge"],
+    "домен": ["solution-architect", "ux-architect", "ui-critic", "tester", "breaker",
+              "dev", "reviewer", "ux-judge"],
+}
+
+# Роли, чьи находки возвращают карточку разработчику.
+СУДЬИ = ("reviewer", "ux-judge", "ui-critic")
+
+
+def журнал(волна: Path, строка: str) -> None:
+    print(строка, flush=True)
+    (волна / "JOURNAL.md").open("a", encoding="utf-8").write(строка + "\n")
+
+
+def запустить(роль: str, промпт: str) -> tuple[int, str]:
+    """Один вызов агента. Падение подпроцесса — это просто ненулевой код, а не исключение."""
+    try:
+        р = subprocess.run(
+            ["claude", "-p", промпт, "--agent", роль],
+            cwd=КОРЕНЬ, capture_output=True, text=True, timeout=ТАЙМАУТ,
+        )
+        return р.returncode, (р.stdout or р.stderr or "")[-2000:]
+    except subprocess.TimeoutExpired:
+        return 124, f"шаг превысил {ТАЙМАУТ // 60} минут и снят"
+    except Exception as е:                                   # noqa: BLE001
+        return 1, f"не удалось запустить агента: {е}"
+
+
+def секции(текст: str) -> set[str]:
+    return {m.strip() for m in re.findall(r"^#{1,4}\s+(.+?)\s*$", текст, re.M)}
+
+
+def артефакт_готов(папка: Path, роль: str) -> tuple[bool, str]:
+    """Единственная проверка, которую делает оркестратор. Никакого разбора вердиктов."""
+    имя, нужны = АРТЕФАКТ.get(роль, (None, []))
+    if имя is None:
+        return True, ""
+    файл = папка / имя
+    if not файл.exists():
+        return False, f"нет файла {имя}"
+    текст = файл.read_text(encoding="utf-8", errors="replace")
+    есть = секции(текст)
+    нет = [s for s in нужны if not any(s.lower() in e.lower() for e in есть)]
+    if нет:
+        return False, f"в {имя} нет секций: {', '.join(нет)}"
+    return True, ""
+
+
+def есть_находки(папка: Path, роль: str) -> bool:
+    """Непустая секция «Находки». Пустая — это «чисто», отсутствие — уже поймано выше."""
+    имя, _ = АРТЕФАКТ.get(роль, (None, []))
+    if имя is None or not (папка / имя).exists():
+        return False
+    текст = (папка / имя).read_text(encoding="utf-8", errors="replace")
+    m = re.search(r"^#{1,4}\s*Находки\s*$(.*?)(?=^#{1,4}\s|\Z)", текст, re.M | re.S)
+    if not m:
+        return False
+    тело = re.sub(r"^\s*[-*]\s*$", "", m.group(1), flags=re.M).strip()
+    return bool(тело) and тело.lower() not in {"нет", "чисто", "пусто", "—", "-"}
+
+
+def поле(папка: Path, файл: str, секция: str) -> str:
+    п = папка / файл
+    if not п.exists():
+        return ""
+    m = re.search(rf"^#{{1,4}}\s*{re.escape(секция)}\s*$(.*?)(?=^#{{1,4}}\s|\Z)",
+                  п.read_text(encoding="utf-8", errors="replace"), re.M | re.S)
+    return m.group(1).strip() if m else ""
+
+
+def выбрать_dev(папка: Path) -> str:
+    """Экран из реестра — правит фронт, иначе бэкенд."""
+    return "screen-dev" if re.search(r"\bS-\d\d\b", поле(папка, "RAZBOR.md", "Экраны")) else "backend-dev"
+
+
+def промпт(роль: str, ид: str, папка: Path, волна: Path) -> str:
+    имя, нужны = АРТЕФАКТ.get(роль, (None, []))
+    хвост = (f"Результат запиши в `{папка.relative_to(КОРЕНЬ)}/{имя}`, "
+             f"обязательные секции: {', '.join(нужны)}." if имя else
+             "Артефакта не оставляешь, результат проверяется гейтами.")
+    return (
+        f"Карточка `{ид}`. Твоя рабочая папка — `{папка.relative_to(КОРЕНЬ)}`, "
+        f"там уже лежат артефакты предыдущих ролей, прочитай их.\n"
+        f"Карта задевания волны — `{(волна / 'MAP.md').relative_to(КОРЕНЬ)}`, "
+        f"из неё берутся смежные экраны.\n"
+        f"Действуй строго по своей роли. {хвост}"
+    )
+
+
+def шаг(ид: str, роль: str, папка: Path, волна: Path) -> tuple[bool, str]:
+    if артефакт_готов(папка, роль)[0] and роль not in СУДЬИ:
+        журнал(волна, f"  {ид} · {роль}: уже сделано, пропускаю")
+        return True, ""
+    for попытка in range(ПОВТОРОВ + 1):
+        код, хвост = запустить(роль, промпт(роль, ид, папка, волна))
+        готов, беда = артефакт_готов(папка, роль)
+        if готов:
+            журнал(волна, f"  {ид} · {роль}: готово")
+            return True, ""
+        журнал(волна, f"  {ид} · {роль}: {беда} (код {код}, попытка {попытка + 1})")
+    return False, f"{роль}: {беда}\n{хвост.strip()[-600:]}"
+
+
+def провести(ид: str, волна: Path) -> str:
+    папка = волна / "cards" / ид
+    папка.mkdir(parents=True, exist_ok=True)
+    тип = поле(папка, "RAZBOR.md", "Тип").strip().lower()
+    if тип not in ЦЕПОЧКИ:
+        журнал(волна, f"{ид}: тип «{тип or 'не назван'}» — отложено")
+        (папка / "OTLOZHENO.md").write_text(f"Тип не определён: «{тип}»\n", encoding="utf-8")
+        return "отложено"
+
+    круг = 0
+    цепочка = ЦЕПОЧКИ[тип]
+    i = 0
+    while i < len(цепочка):
+        роль = выбрать_dev(папка) if цепочка[i] == "dev" else цепочка[i]
+        ок, беда = шаг(ид, роль, папка, волна)
+        if not ок:
+            (папка / "OTLOZHENO.md").write_text(беда + "\n", encoding="utf-8")
+            журнал(волна, f"{ид}: отложено на шаге {роль}")
+            return "отложено"
+        if роль in СУДЬИ and есть_находки(папка, роль):
+            круг += 1
+            if круг > КРУГОВ:
+                (папка / "OTLOZHENO.md").write_text(
+                    f"{роль} нашёл находки после {КРУГОВ} кругов правки\n", encoding="utf-8")
+                журнал(волна, f"{ид}: отложено — {роль}, круги кончились")
+                return "отложено"
+            журнал(волна, f"  {ид} · {роль}: находки, круг {круг} — назад к разработке")
+            for мусор in ("DEV.md", АРТЕФАКТ[роль][0]):
+                (папка / мусор).unlink(missing_ok=True)
+            i = цепочка.index("dev")
+            continue
+        i += 1
+    журнал(волна, f"{ид}: СДЕЛАНО")
+    return "сделано"
+
+
+def карточки(волна: Path) -> list[str]:
+    корзина = волна / "cards"
+    return sorted(п.name for п in корзина.iterdir() if п.is_dir()) if корзина.exists() else []
+
+
+def проверки_старта() -> list[str]:
+    """Падать надо при владельце, а не в три ночи на двадцатой карточке."""
+    беды = []
+    if not (КОРЕНЬ / ".claude/agents").exists():
+        беды.append("нет каталога .claude/agents")
+        return беды
+    роли = {p.stem for p in (КОРЕНЬ / ".claude/agents").glob("*.md")}
+    нужны = {r for ц in ЦЕПОЧКИ.values() for r in ц if r != "dev"}
+    нужны |= {"intake", "analyst", "requirement-critic", "product-acceptor",
+              "screen-dev", "backend-dev"}
+    for р in sorted(нужны - роли):
+        беды.append(f"роль {р} есть в цепочке, но нет файла .claude/agents/{р}.md")
+    for р in sorted(нужны):
+        if р not in АРТЕФАКТ:
+            беды.append(f"для роли {р} не назван артефакт в таблице АРТЕФАКТ")
+    if subprocess.run(["which", "claude"], capture_output=True).returncode:
+        беды.append("в PATH нет команды claude")
+    return беды
+
+
+def вечер(исходник: Path) -> int:
+    волна = КОРЕНЬ / "night" / исходник.stem
+    (волна / "cards").mkdir(parents=True, exist_ok=True)
+    журнал(волна, f"# Волна {волна.name}\n\n## Вечер")
+
+    код, хвост = запустить("intake", (
+        f"Разрежь список владельца из `{исходник.relative_to(КОРЕНЬ)}` на карточки. "
+        f"На каждую заведи `{(волна / 'cards').relative_to(КОРЕНЬ)}/<id>/ISTOCHNIK.md` "
+        f"с дословной цитатой, и общий `{(волна / 'QUEUE.md').relative_to(КОРЕНЬ)}` со списком id."))
+    ид_список = карточки(волна)
+    if not ид_список:
+        журнал(волна, f"нарезка не дала карточек (код {код}): {хвост.strip()[-400:]}")
+        return 1
+    журнал(волна, f"нарезано карточек: {len(ид_список)}")
+
+    for имя, роль in (("разбор", "analyst"), ("сверка", "requirement-critic")):
+        журнал(волна, f"\n### {имя}")
+        with futures.ThreadPoolExecutor(max_workers=6) as пул:
+            список = ид_список if роль == "analyst" else [
+                и for и in ид_список
+                if поле(волна / "cards" / и, "RAZBOR.md", "Тип").strip().lower() in ("фича", "домен")]
+            list(пул.map(lambda и: шаг(и, роль, волна / "cards" / и, волна), список))
+
+    журнал(волна, "\n### карта задевания")
+    запустить("solution-architect", (
+        f"Собери карту задевания волны. Прочитай RAZBOR.md всех карточек в "
+        f"`{(волна / 'cards').relative_to(КОРЕНЬ)}` целиком, все сразу, и напиши "
+        f"`{(волна / 'MAP.md').relative_to(КОРЕНЬ)}`: по каждой карточке — задетые экраны, "
+        f"файлы и таблицы, столкновения с другими карточками, порядок и полоса, и список "
+        f"смежных экранов, чьи кейсы придётся перекликать. Секции: `## Карта`, `## Порядок`."))
+    журнал(волна, "карта: " + ("готова" if (волна / "MAP.md").exists() else "НЕ СОЗДАНА"))
+    журнал(волна, f"\nВечер закончен. Посмотри вопросы и допущения, потом: "
+                  f"python3 scripts/night.py ночь night/{волна.name}")
+    return 0
+
+
+def ночь(волна: Path, полос: int) -> int:
+    ид_список = карточки(волна)
+    if not ид_список:
+        print(f"в {волна}/cards нет карточек — сначала вечер", file=sys.stderr)
+        return 1
+    журнал(волна, f"\n## Ночь · карточек {len(ид_список)} · полос {полос}")
+    with futures.ThreadPoolExecutor(max_workers=полос) as пул:
+        итоги = list(пул.map(lambda и: провести(и, волна), ид_список))
+    сделано = итоги.count("сделано")
+    журнал(волна, f"\n## Итог: сделано {сделано}, отложено {len(итоги) - сделано}")
+
+    запустить("product-acceptor", (
+        f"Прими работу ночи одним проходом. Карточки — `{(волна / 'cards').relative_to(КОРЕНЬ)}`, "
+        f"скриншоты — `docs/evidence/`. Отчёт запиши в "
+        f"`{(волна / 'OTCHET.md').relative_to(КОРЕНЬ)}`."))
+    журнал(волна, "отчёт: " + ("готов" if (волна / "OTCHET.md").exists() else "НЕ СОЗДАН"))
+    return 0
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(description="Ночной оркестратор WMS")
+    p.add_argument("фаза", choices=["вечер", "ночь", "проверка"])
+    p.add_argument("путь", nargs="?", help="файл со списком (вечер) или папка волны (ночь)")
+    p.add_argument("--полос", type=int, default=6)
+    a = p.parse_args()
+
+    if беды := проверки_старта():
+        print("не запускаюсь, пока это не починено:", file=sys.stderr)
+        for б in беды:
+            print(f"  - {б}", file=sys.stderr)
+        return 2
+    if a.фаза == "проверка":
+        print("проверки старта пройдены")
+        return 0
+    if not a.путь:
+        p.error("нужен путь")
+    return вечер(Path(a.путь).resolve()) if a.фаза == "вечер" else ночь(Path(a.путь).resolve(), a.полос)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
