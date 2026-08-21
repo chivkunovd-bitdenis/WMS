@@ -64,7 +64,7 @@ Rules:
   "task_id": "BLG-D22",
   "stage": "S13",
   "role": "solution-architect",
-  "status": "RUNNING",
+  "status": "WAITING",
   "traits": [
     "pipeline_change"
   ],
@@ -124,9 +124,9 @@ Rules:
   },
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 72300,
-    "output_tokens": 7900,
-    "estimated_usd": 0.3625
+    "input_tokens": 137300,
+    "output_tokens": 19900,
+    "estimated_usd": 0.8825
   },
   "blocked_by": [
     {
@@ -139,8 +139,18 @@ Rules:
       "minimum_closure_artifact": "isolated hanging test ID, timeout and successful full run log"
     }
   ],
-  "blocker": null,
-  "resume_condition": null,
+  "blocker": {
+    "type": "OWNER_INPUT",
+    "reason_code": "BUDGET_HARD_STOP",
+    "details": "wave budget exceeded; S13 solution-architect rework is expensive and cannot be started without owner budget override",
+    "owner": "owner",
+    "created_at": "2026-08-21T04:32:34Z",
+    "resume_stage": "S13"
+  },
+  "resume_condition": {
+    "stage": "S13",
+    "condition": "owner-approved budget override or lower scope recorded before S13 architecture rework"
+  },
   "rules": [
     "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
     "Do not accept your own work.",

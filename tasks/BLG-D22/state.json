@@ -51,8 +51,8 @@
     "S25",
     "S26"
   ],
-  "current_stage": "S14",
-  "status": "RUNNING",
+  "current_stage": "S13",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -68,10 +68,20 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:55Z",
-  "heartbeat_at": "2026-08-21T04:09:45Z",
-  "last_valid_receipt": "sha256:cf8bf3c01c6c0aa3d0bc418aab40ec54b19971aa9589cbe4cd99426548ecdc80",
-  "blocker": null,
-  "resume_condition": null,
+  "heartbeat_at": "2026-08-21T04:32:34Z",
+  "last_valid_receipt": "sha256:af0c979d7f65d0c36990d119132000eab89efca1f9e075561b953d55128804cf",
+  "blocker": {
+    "type": "OWNER_INPUT",
+    "reason_code": "BUDGET_HARD_STOP",
+    "details": "wave budget exceeded; S13 solution-architect rework is expensive and cannot be started without owner budget override",
+    "owner": "owner",
+    "created_at": "2026-08-21T04:32:34Z",
+    "resume_stage": "S13"
+  },
+  "resume_condition": {
+    "stage": "S13",
+    "condition": "owner-approved budget override or lower scope recorded before S13 architecture rework"
+  },
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",
@@ -100,13 +110,6 @@
       "receipt_hash": "sha256:af0c979d7f65d0c36990d119132000eab89efca1f9e075561b953d55128804cf",
       "role_binding_id": "pipeline-ba",
       "agent_identity": "codex-pipeline-ba-blg-d22-s12"
-    },
-    "S13": {
-      "verdict": "ARCH_PLAN_READY",
-      "receipt_path": "docs/evidence/BLG-D22/S13-ARCH_PLAN_READY.receipt.json",
-      "receipt_hash": "sha256:cf8bf3c01c6c0aa3d0bc418aab40ec54b19971aa9589cbe4cd99426548ecdc80",
-      "role_binding_id": "solution-architect",
-      "agent_identity": "codex-solution-architect-blg-d22-s13"
     }
   },
   "commits": [],
@@ -196,5 +199,24 @@
     }
   ],
   "blocker_resolutions": [],
+  "invalidations": [
+    {
+      "at": "2026-08-21T04:32:04Z",
+      "reason": "failure:ARCH_REVIEW_REWORK",
+      "invalidated_stages": [
+        "S13"
+      ],
+      "last_valid_receipt_before_invalidation": "sha256:cf8bf3c01c6c0aa3d0bc418aab40ec54b19971aa9589cbe4cd99426548ecdc80"
+    }
+  ],
+  "failure_routes": [
+    {
+      "at": "2026-08-21T04:32:04Z",
+      "finding": "ARCH_REVIEW_REWORK",
+      "status": "REWORK",
+      "resume_stage": "S13",
+      "details": "S14 architect falsification rejected the full pytest gate plan; return to S13 for architecture rework instead of falsifying ARCH_REVIEW_PASSED."
+    }
+  ],
   "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
 }
