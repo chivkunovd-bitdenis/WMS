@@ -59,8 +59,8 @@
     "S25",
     "S26"
   ],
-  "current_stage": "S10",
-  "status": "RUNNING",
+  "current_stage": "S09",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -76,47 +76,21 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T04:09:20Z",
-  "last_valid_receipt": "sha256:42e1c0cd04a657eea1bb8762871c3451c6d6a5d4460c76e5625bda37034043a7",
-  "blocker": null,
-  "resume_condition": null,
-  "verdicts": {
-    "S01": {
-      "verdict": "TASK_INTAKE_READY",
-      "receipt_path": "docs/evidence/BLG-I08/S01-TASK_INTAKE_READY.receipt.json",
-      "receipt_hash": "sha256:fac97cb646d28b17be991ae28b803b8ec41b526825249fd70ba8666c260dbff4",
-      "role_binding_id": "pipeline-dispatcher",
-      "agent_identity": "codex-night-orchestrator-dispatcher"
-    },
-    "S02": {
-      "verdict": "IMPACT_CLASSIFIED",
-      "receipt_path": "docs/evidence/BLG-I08/S02-IMPACT_CLASSIFIED.receipt.json",
-      "receipt_hash": "sha256:67eeb48b130335ce92fe2cd947ddf2494a616074ba59333dfabeb24950865fb8",
-      "role_binding_id": "pipeline-dispatcher",
-      "agent_identity": "codex-night-orchestrator-dispatcher"
-    },
-    "S03": {
-      "verdict": "RESEARCH_READY",
-      "receipt_path": "docs/evidence/BLG-I08/S03-RESEARCH_READY.receipt.json",
-      "receipt_hash": "sha256:aae5a847dec01c036c666fd3e9769ec567089e4803370291fe8ac476701c3638",
-      "role_binding_id": "pipeline-ba",
-      "agent_identity": "codex-blg-i08-s03-pipeline-ba"
-    },
-    "S04": {
-      "verdict": "RESEARCH_PASSED",
-      "receipt_path": "docs/evidence/BLG-I08/S04-RESEARCH_PASSED.receipt.json",
-      "receipt_hash": "sha256:3b4cc3bc2b980f197ce448803086f80422b8c6f2f90defb4c4659c0343e4d2fe",
-      "role_binding_id": "pipeline-reviewer",
-      "agent_identity": "codex-blg-i08-s04-research-critic-recheck"
-    },
-    "S09": {
-      "verdict": "UX_CONTRACT_READY",
-      "receipt_path": "docs/evidence/BLG-I08/S09-UX_CONTRACT_READY.receipt.json",
-      "receipt_hash": "sha256:42e1c0cd04a657eea1bb8762871c3451c6d6a5d4460c76e5625bda37034043a7",
-      "role_binding_id": "pipeline-ba",
-      "agent_identity": "codex-blg-i08-s09-pipeline-ba"
-    }
+  "heartbeat_at": "2026-08-21T04:15:18Z",
+  "last_valid_receipt": null,
+  "blocker": {
+    "type": "ENV",
+    "reason_code": "CONTROLLER_REWORK_PACKET_MISMATCH",
+    "details": "PRODUCT_REJECTED routed to S09 but invalidated S01-S04 receipts; non-WAITING packet/next resolves first_missing_stage as S01 and cannot hand off the declared S09 resume stage safely.",
+    "owner": "pipeline-controller",
+    "created_at": "2026-08-21T04:15:18Z",
+    "resume_stage": "S09"
   },
+  "resume_condition": {
+    "stage": "S09",
+    "condition": "Repair controller failure invalidation so upstream S01-S04 receipts remain valid and S09 is the first missing stage, then resume BLG-I08 at S09."
+  },
+  "verdicts": {},
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
@@ -194,5 +168,28 @@
   ],
   "blocked_by": [],
   "blocker_resolutions": [],
+  "invalidations": [
+    {
+      "at": "2026-08-21T04:14:03Z",
+      "reason": "failure:PRODUCT_REJECTED",
+      "invalidated_stages": [
+        "S01",
+        "S02",
+        "S03",
+        "S04",
+        "S09"
+      ],
+      "last_valid_receipt_before_invalidation": "sha256:42e1c0cd04a657eea1bb8762871c3451c6d6a5d4460c76e5625bda37034043a7"
+    }
+  ],
+  "failure_routes": [
+    {
+      "at": "2026-08-21T04:14:03Z",
+      "finding": "PRODUCT_REJECTED",
+      "status": "REWORK",
+      "resume_stage": "S09",
+      "details": "S10 DESIGN_REWORK: S09 must remove nested ScreenSection/DataTable outlined Paper, resolve long-data narrow-viewport instructions without hover-only truncation, and align CONNECTED tone with UX canon R-16; see tasks/BLG-I08/S10-DESIGN-REVIEW.md"
+    }
+  ],
   "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."
 }

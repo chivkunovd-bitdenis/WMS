@@ -2,7 +2,7 @@
   "task_id": "BLG-I08",
   "stage": "S09",
   "role": "pipeline-ba",
-  "status": "RUNNING",
+  "status": "WAITING",
   "traits": [
     "ui_change",
     "external_contract"
@@ -33,12 +33,7 @@
     "S25",
     "S26"
   ],
-  "done_stages": [
-    "S01",
-    "S02",
-    "S03",
-    "S04"
-  ],
+  "done_stages": [],
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
@@ -70,13 +65,23 @@
   },
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 94300,
-    "output_tokens": 16600,
-    "estimated_usd": 1.3725
+    "input_tokens": 123300,
+    "output_tokens": 22800,
+    "estimated_usd": 1.7825
   },
   "blocked_by": [],
-  "blocker": null,
-  "resume_condition": null,
+  "blocker": {
+    "type": "ENV",
+    "reason_code": "CONTROLLER_REWORK_PACKET_MISMATCH",
+    "details": "PRODUCT_REJECTED routed to S09 but invalidated S01-S04 receipts; non-WAITING packet/next resolves first_missing_stage as S01 and cannot hand off the declared S09 resume stage safely.",
+    "owner": "pipeline-controller",
+    "created_at": "2026-08-21T04:15:18Z",
+    "resume_stage": "S09"
+  },
+  "resume_condition": {
+    "stage": "S09",
+    "condition": "Repair controller failure invalidation so upstream S01-S04 receipts remain valid and S09 is the first missing stage, then resume BLG-I08 at S09."
+  },
   "rules": [
     "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
     "Do not accept your own work.",
