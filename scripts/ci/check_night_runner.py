@@ -243,15 +243,14 @@ def main() -> int:
         if имя is not None and not секции:
             беды.append(f"для роли {р} назван файл {имя}, но нет обязательных секций")
 
-    # Контракт Codex-адаптера: роли предметной работы идут Luna, две
-    # управляющие роли — Terra. Проверяем это через публичный helper, не
-    # запуская CLI.
+    # Контракт Codex-адаптера повторяет класс модели из файла роли:
+    # opus → Sol, sonnet → Terra, haiku → Luna.
     analyst_prompt = n.роль_с_инъекцией("analyst", "marker")
     intake_prompt = n.роль_с_инъекцией("intake", "marker")
-    проверь("роль analyst принадлежит Luna", analyst_prompt.startswith(
-        "Профиль исполнителя: Luna. Выполняй только роль `analyst`."), True)
-    проверь("роль intake принадлежит Terra", intake_prompt.startswith(
-        "Профиль исполнителя: Terra. Выполняй только роль `intake`."), True)
+    проверь("роль analyst opus → Sol", analyst_prompt.startswith(
+        "Профиль исполнителя: Sol. Выполняй только роль `analyst`."), True)
+    проверь("роль intake haiku → Luna", intake_prompt.startswith(
+        "Профиль исполнителя: Luna. Выполняй только роль `intake`."), True)
     проверь("промпт analyst содержит полный текст роли",
             pathlib.Path(n.КОРЕНЬ, ".claude/agents/analyst.md").read_text(encoding="utf-8") in analyst_prompt, True)
 
@@ -279,28 +278,27 @@ def main() -> int:
     проверь("Codex CLI: ignore-user-config после exec для analyst",
             args.index("--ignore-user-config") > args.index("exec")
             if "--ignore-user-config" in args and "exec" in args else False, True)
-    проверь("Codex CLI: Luna model задан явно", "gpt-5.6-luna" in args, True)
-    проверь("Codex CLI: Luna без Sol", "gpt-5.6-sol" not in args, True)
-    проверь("Codex CLI: Luna low задан явно", "model_reasoning_effort=low" in args, True)
+    проверь("Codex CLI: analyst opus → Sol", "gpt-5.6-sol" in args, True)
+    проверь("Codex CLI: Sol medium задан явно", "model_reasoning_effort=medium" in args, True)
 
     вызов.clear()
     with mock.patch.object(n.shutil, "which", return_value="/usr/local/bin/codex"), \
          mock.patch.object(n.subprocess, "run", side_effect=fake_run):
         n._запустить_codex("solution-architect", "marker")
     args = вызов.get("args", [])
-    проверь("Codex CLI: solution-architect по умолчанию Luna", "gpt-5.6-luna" in args, True)
+    проверь("Codex CLI: solution-architect opus → Sol", "gpt-5.6-sol" in args, True)
     проверь("Codex CLI: solution-architect сохраняет search", "--search" in args, True)
 
     вызов.clear()
     try:
         with mock.patch.object(n.shutil, "which", return_value="/usr/local/bin/codex"), \
              mock.patch.object(n.subprocess, "run", side_effect=fake_run):
-            n._запустить_codex("solution-architect", "marker", профиль="terra")
+            n._запустить_codex("solution-architect", "marker", профиль="sol")
     except TypeError as ошибка:
         беды.append(f"Codex CLI: нет явного профиля для MAP-агрегации: {ошибка}")
     args = вызов.get("args", [])
-    проверь("Codex CLI: MAP override solution-architect -> Terra", "gpt-5.6-terra" in args, True)
-    проверь("Codex CLI: MAP override Terra medium", "model_reasoning_effort=medium" in args, True)
+    проверь("Codex CLI: MAP solution-architect → Sol", "gpt-5.6-sol" in args, True)
+    проверь("Codex CLI: MAP Sol medium", "model_reasoning_effort=medium" in args, True)
     проверь("Codex CLI: MAP override сохраняет search до exec",
             args.index("--search") < args.index("exec")
             if "--search" in args and "exec" in args else False, True)
@@ -308,24 +306,21 @@ def main() -> int:
             args.index("--ignore-user-config") > args.index("exec")
             if "--ignore-user-config" in args and "exec" in args else False, True)
 
-    # Недопустимый профиль не должен доходить до subprocess: это защищает
-    # контракт от старого/чужого имени модели вроде gpt-5.6-sol.
+    # Недопустимый профиль не должен доходить до subprocess.
     вызов.clear()
     with mock.patch.object(n.shutil, "which", return_value="/usr/local/bin/codex"), \
          mock.patch.object(n.subprocess, "run", side_effect=fake_run) as запуск:
-        результат = n._запустить_codex("analyst", "marker", профиль="sol")
-    проверь("Codex CLI: профиль sol отклонён", результат[0] != 0, True)
-    проверь("Codex CLI: профиль sol не доходит до subprocess", запуск.call_count, 0)
-    проверь("Codex CLI: профиль sol не формирует модель", "gpt-5.6-sol" not in вызов.get("args", []), True)
+        результат = n._запустить_codex("analyst", "marker", профиль="opus")
+    проверь("Codex CLI: профиль opus отклонён", результат[0] != 0, True)
+    проверь("Codex CLI: профиль opus не доходит до subprocess", запуск.call_count, 0)
 
     вызов.clear()
     with mock.patch.object(n.shutil, "which", return_value="/usr/local/bin/codex"), \
          mock.patch.object(n.subprocess, "run", side_effect=fake_run):
         n._запустить_codex("intake", "marker")
     args = вызов.get("args", [])
-    проверь("Codex CLI: Terra model задан только control-роли", "gpt-5.6-terra" in args, True)
-    проверь("Codex CLI: Terra без Sol", "gpt-5.6-sol" not in args, True)
-    проверь("Codex CLI: Terra medium задан явно", "model_reasoning_effort=medium" in args, True)
+    проверь("Codex CLI: intake haiku → Luna", "gpt-5.6-luna" in args, True)
+    проверь("Codex CLI: intake Luna low", "model_reasoning_effort=low" in args, True)
     проверь("Codex CLI: control-роль без search", "--search" not in args, True)
 
     вызов.clear()
@@ -333,9 +328,8 @@ def main() -> int:
          mock.patch.object(n.subprocess, "run", side_effect=fake_run):
         n._запустить_codex("product-acceptor", "marker")
     args = вызов.get("args", [])
-    проверь("Codex CLI: product-acceptor Terra", "gpt-5.6-terra" in args, True)
-    проверь("Codex CLI: product-acceptor Terra medium", "model_reasoning_effort=medium" in args, True)
-    проверь("Codex CLI: product-acceptor без Sol", "gpt-5.6-sol" not in args, True)
+    проверь("Codex CLI: product-acceptor opus → Sol", "gpt-5.6-sol" in args, True)
+    проверь("Codex CLI: product-acceptor Sol medium", "model_reasoning_effort=medium" in args, True)
 
     вызов.clear()
     with mock.patch.object(n.shutil, "which", return_value="/usr/local/bin/codex"), \
