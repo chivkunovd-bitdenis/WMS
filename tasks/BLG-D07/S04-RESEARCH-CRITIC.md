@@ -1,114 +1,89 @@
-# BLG-D07 — S04 RESEARCH_CRITIC
+# BLG-D07 - S04 RESEARCH_CRITIC
 
-## Паспорт
+## Паспорт повторного review
 
 - Роль: `pipeline-reviewer`, независимый `research-critic`.
-- Модельный класс: `gpt-5.6-sol`, `expensive`.
-- Дата проверки: `2026-08-21`, Europe/Moscow.
-- Проверенный вход: `S03-DOMAIN-RESEARCH.md`, `S03-capability-matrix.json`, официальный WB FBS
-  OpenAPI, FBS guide, sandbox documentation и локальный status worker.
-- Внешние операции: production/sandbox API не вызывались; секреты и авторизованные кабинеты не
-  использовались.
-- Verdict: `RESEARCH_REWORK`.
+- Проверенный rework commit: `d091d645a15ddc6392847a339b8d78ee6a282e4c`.
+- Модельный класс dispatch: `gpt-5.6-sol`, `expensive`.
+- Дата повторной проверки: `2026-08-21`, Europe/Moscow.
+- Вход: `S03-DOMAIN-RESEARCH.md`, `S03-capability-matrix.json`,
+  `S03-RESEARCH-REWORK-CLOSURE.md`, предыдущий S04 verdict и controller packet.
+- Независимая внешняя сверка: публичные страницы WB FBS OpenAPI и sandbox documentation открыты
+  без авторизации; Marketplace production/sandbox API не вызывался.
+- Секреты, кабинеты учётных данных, deploy и application code не затрагивались.
+- Verdict: `RESEARCH_PASSED`.
 
-## Итог критика
+## Итог
 
-S03 правильно нашёл основной бизнес-дефект: локальный `sorted` исключён из последующей сверки, хотя
-официальная песочница показывает переходы после `sorted`. Верно зафиксированы размер запроса до 1000
-ID, общий FBS rate limit 300 запросов в минуту с интервалом 200 мс и burst 20, а также риск
-batch-to-single amplification.
+Rework закрывает все три блокирующие находки предыдущего S04. Текущий официальный FBS OpenAPI
+воспроизводимо подтверждает полный status enum, включая `postponed_delivery`, `cancel_carrier` и
+`canceled_by_carrier`, а также действующее правило `4XX x10`. Исследование больше не смешивает
+документированные sandbox-переходы с исполненным proof и передаёт в S15 явный набор из 19 runnable
+local-emulator cases без разрешения live-вызовов.
 
-Но исследование пока нельзя пропустить дальше. В нём неполный и внутренне противоречивый контракт
-статусов, неверно посчитана цена `4XX`, а перечисленные sandbox cases являются только выпиской из
-документации, не proof исполнения. Эти ошибки напрямую влияют на mapping, retry policy и расчёт
-нагрузки worker.
+Research достаточен для перехода к Product-контракту S11. Он не утверждает terminal/reopen policy за
+Product и не выдаёт будущую emulator execution за уже полученное доказательство.
 
-## Блокирующие находки
+## Независимая проверка blocker
 
-### RC-01 — статусная модель не закрыта
+### RC-01 - status enum и provenance: закрыто
 
-Официальная английская FBS OpenAPI-страница перечисляет `postponed_delivery`, но S03 исключает его из
-таблицы и называет только признаком старого снимка. При этом S03 добавляет `cancel_carrier` и
-`canceled_by_carrier`, которые независимый поиск в доступных официальных FBS OpenAPI/guide snapshots
-не подтвердил. Русская и английская страницы также расходятся по части enum и error responses.
+На публичной странице `https://dev.wildberries.ru/en/docs/openapi/orders-fbs` в разделе
+`Get Assembly Orders Statuses /api/v3/orders/status` независимо воспроизведены:
 
-До pass нужен один датированный, воспроизводимый contract snapshot или сохранённые точные выдержки,
-которые объясняют языковой/version skew и дают полный список `supplierStatus`/`wbStatus`. Неизвестные
-значения всё равно должны сохраняться как raw и не запускать необратимые действия.
+- `supplierStatus`: `new`, `confirm`, `complete`, `cancel`, `cancel_carrier`;
+- `wbStatus`: `waiting`, `sorted`, `sold`, `canceled`, `canceled_by_client`,
+  `declined_by_client`, `defect`, `ready_for_pickup`, `postponed_delivery`,
+  `accepted_by_carrier`, `sent_to_carrier`, `canceled_by_carrier`.
 
-Источники:
+S03 включает `postponed_delivery` как нетерминальный статус, даёт carrier-значениям точный URL,
+endpoint heading и дату извлечения, а неизвестные значения сохраняет raw без необратимого действия.
+Carrier-cancel provenance теперь воспроизводим и не зависит от предположения автора.
 
-- https://dev.wildberries.ru/en/docs/openapi/orders-fbs
-- https://dev.wildberries.ru/ru/openapi/orders-fbs
-- https://dev.wildberries.ru/knowledge-base/articles/019d49a4-0771-7571-aea9-11d5b597f34c/zakazy-fbs
+### RC-02 - rate-limit version skew: закрыто
 
-### RC-02 — неверный учёт `4XX`
+Текущий видимый DOM того же endpoint содержит правило: `One request with 4XX response codes is
+counted as 10 requests.` S03 явно отделяет его от старого indexed observation `409 x10` и выбирает
+для текущего общего seller budget более широкое `4XX x10`.
 
-S03 утверждает, что любой `4XX` считается как десять запросов. Официальная FBS документация говорит
-иначе: как десять запросов учитывается ответ `409`. Нельзя переносить этот множитель на `400`, `401`,
-`402`, `403` или `429` без отдельного источника. Batch-to-single fallback по-прежнему опасен: auth,
-rate-limit или transport failure может превратить один batch в сотни обычных запросов, но расчёт
-бюджета должен быть фактическим.
+Старый indexed snapshot не является immutable сохранённым артефактом этой карточки, поэтому на нём
+нельзя строить текущую retry/rate policy. Это не blocker: текущий источник независимо воспроизведён,
+а выбранное правило консервативно охватывает `409` и не трактует остальные `4XX` как бесплатные.
+Response matrix также не смешана: `404` обозначен как unexpected emulator case, а не как
+документированный ответ status endpoint.
 
-Отдельно нужно согласовать response matrix: доступные snapshots показывают `402` в английской версии
-и `404` в русской, тогда как S03 фиксирует `402`, но не `404`. Без versioned snapshot этот список
-нельзя объявлять исчерпывающим.
+### RC-03 - sandbox и S15 handoff: закрыто
 
-### RC-03 — sandbox cases не являются исполненным proof
+Публичная sandbox documentation независимо подтверждает model rows от `waiting/new` до
+`sorted/complete`, `ready_for_pickup/complete`, `sold/complete`,
+`canceled_by_client/complete` и `defect/complete`. Carrier statuses и `postponed_delivery` в этой
+sandbox status model не найдены, что совпадает с границей S03.
 
-Официальная песочница действительно документирует цепочку `sorted -> ready_for_pickup -> sold` и
-варианты `canceled_by_client`/`defect`; лимит Marketplace sandbox — 1 запрос в секунду суммарно для
-всех методов. Но S03 не запускал песочницу и не приложил emulator output. Поэтому таблица
-`WB-FBS-STATUS-01..10` является test design, а не доказательством исполнения.
+Все десять sandbox rows имеют единый evidence state `documented_not_executed`; счётчики исполненных
+sandbox и local-emulator proofs равны нулю. В S15 переданы 19 machine-readable case IDs для полного,
+частичного, malformed и неоднозначного `200`, unknown/late/carrier statuses, error/rate classes,
+timeout/`5XX`, fallback cap, restart/replay и starvation. Это полноценный test design handoff, но не
+execution proof.
 
-Для carrier statuses и `postponed_delivery` в найденной sandbox matrix нет переходов. S03 должен
-явно отделить документированные переходы от непокрытых и передать в S15 executable local-emulator
-cases: полный/частичный `200`, пропущенный ID, дубликат ID, неизвестный status, `400/401/402/403/404`,
-`429`, timeout/`5XX`, restart/replay и batch-to-single cap. Никакой live WB вызов для rework не нужен.
+## Closure matrix
 
-Источники:
-
-- https://dev.wildberries.ru/sandbox
-- https://dev.wildberries.ru/en/openapi-other/sandbox-environment
-
-## Проверенные области
-
-| Область | Вердикт критика | Обоснование |
+| Область | Результат | Основание |
 |---|---|---|
-| Endpoint | pass | `POST /api/v3/orders/status` подтверждён официально. |
-| Request size | pass с уточнением | `1..1000` ID подтверждены OpenAPI/guide; обязательная уникальность ID в S03 не подкреплена отдельным официальным claim. |
-| Rate limit | pass | 300/min, 200 мс, burst 20 на seller account для общей группы FBS methods. |
-| `4XX` accounting | rework | Вес x10 относится к `409`, не ко всем `4XX`. |
-| Status enum | rework | Пропущен `postponed_delivery`; carrier cancel values не имеют воспроизводимого provenance. |
-| Webhook | pass | Общий WB webhook catalog не перечисляет событие изменения статуса FBS; polling остаётся источником reconciliation. |
-| Sandbox/emulator | rework | Документация есть, исполненного proof и покрытия недоступных sandbox transitions нет. |
-| Stale-status edges | rework | Риски найдены, но terminal/reopen policy и executable cases не закрыты. |
+| `postponed_delivery` | pass | Есть в текущем `wbStatus` и в обеих S03-матрицах как non-terminal. |
+| Carrier cancel values | pass | Независимо воспроизведены на текущем canonical FBS OpenAPI URL. |
+| `409 x10` / `4XX x10` skew | pass | Версии разделены; current budget использует более широкий текущий oracle. |
+| Error response matrix | pass | Текущие documented responses отделены от unexpected `404` case. |
+| Sandbox evidence class | pass | Все rows помечены `documented_not_executed`; executed proof равен нулю. |
+| S15 local emulator | pass | 19 явных runnable case IDs с безопасными oracle. |
+| Unknown statuses | pass | Raw сохраняется, необратимые side effects запрещены до Product mapping. |
+| Live calls / secrets | pass | Production и sandbox API, токены и кабинеты не использовались. |
 
-## Stale-status edge cases, обязательные для следующих артефактов
+## Остаточные обязательства следующих стадий
 
-1. `sorted` сейчас попадает в `STATUSES_EXCLUDED_FROM_WB_SYNC`, поэтому WMS никогда не увидит
-   последующие `ready_for_pickup`, `sold`, `canceled_by_client` или `defect`.
-2. Любой локальный `done`, `cancelled` или `defect` также исключается навсегда. Product должен назвать
-   допустима ли поздняя коррекция WB после такого статуса; до решения нельзя считать terminal policy
-   фактом внешнего контракта.
-3. Worker каждый cycle снова сортирует по `created_at_wb` и ограничивается 10 000 строками. Без
-   freshness ordering/cursor хвост старше лимита может не получить сверку.
-4. Ответ `200` без части ID не должен обновлять их success time. Дублированный ID в ответе сейчас
-   молча перезаписывается последней строкой в `by_id`, поэтому нужен отдельный invalid-response case.
-5. Неизвестный raw status должен сохраняться и сигнализироваться, но не снимать резерв и не менять
-   локальное состояние необратимо.
-6. `last_wb_sync_at` должен означать валидную строку именно этого заказа, а не факт успешного HTTP или
-   неполного seller cycle; attempt time, per-order success и full-cycle success должны различаться.
+1. S11 должен утвердить terminal/reopen policy; S03 не подменяет Product-решение.
+2. S13 должен задать общий seller rate budget, bounded retry/circuit breaker и restart semantics.
+3. S15 должен материализовать все 19 переданных case IDs, а S19 - дать им runnable bindings.
+4. Ни один из этих будущих пунктов не является пропущенной research capability row.
 
-## Условие снятия blocker
-
-Автор S03 должен:
-
-1. исправить status enum и приложить воспроизводимый dated provenance для спорных значений;
-2. заменить утверждение про все `4XX` на точное правило `409 x10` и согласовать error matrix;
-3. отделить documented sandbox scenarios от executed proof;
-4. передать в S15 явную emulator coverage matrix для partial/malformed responses, rate/error classes,
-   неизвестных и поздно меняющихся статусов;
-5. оставить `unhandled_applicable_rows: 0` только после закрытия этих строк.
-
-После этого нужен новый независимый запуск S04. До выполнения условия `RESEARCH_PASSED` запрещён.
+Предыдущий verdict `RESEARCH_REWORK` снят только после повторной независимой проверки rework commit.
+Дополнительных S04 blocker нет.

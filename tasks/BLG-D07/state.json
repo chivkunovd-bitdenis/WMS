@@ -52,7 +52,7 @@
     "S23",
     "S26"
   ],
-  "current_stage": "S04",
+  "current_stage": "S11",
   "status": "RUNNING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
@@ -69,8 +69,8 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:55Z",
-  "heartbeat_at": "2026-08-21T03:54:45Z",
-  "last_valid_receipt": "sha256:db3d0a3862bb0ad8477a2b856ae6fe5a97bea0e2a1bfbeb6c98113752e6d22ec",
+  "heartbeat_at": "2026-08-21T04:01:05Z",
+  "last_valid_receipt": "sha256:951591a5a37f3d68f18bf13770fee8f1d4b97a902a57b419a52bb359561ed618",
   "blocker": null,
   "resume_condition": null,
   "verdicts": {
@@ -94,15 +94,22 @@
       "receipt_hash": "sha256:db3d0a3862bb0ad8477a2b856ae6fe5a97bea0e2a1bfbeb6c98113752e6d22ec",
       "role_binding_id": "pipeline-ba",
       "agent_identity": "codex-blg-d07-s03-pipeline-ba"
+    },
+    "S04": {
+      "verdict": "RESEARCH_PASSED",
+      "receipt_path": "docs/evidence/BLG-D07/S04-RESEARCH_PASSED.receipt.json",
+      "receipt_hash": "sha256:951591a5a37f3d68f18bf13770fee8f1d4b97a902a57b419a52bb359561ed618",
+      "role_binding_id": "pipeline-reviewer",
+      "agent_identity": "codex-blg-d07-s04-pipeline-reviewer-r2"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 82300,
-    "output_tokens": 14100,
-    "estimated_usd": 1.1525
+    "input_tokens": 124300,
+    "output_tokens": 19600,
+    "estimated_usd": 1.7725
   },
   "budget_usage_receipts": [
     {
@@ -143,6 +150,19 @@
       "estimated_usd": 1.15,
       "agent_id": "codex-blg-d07-s03-pipeline-ba",
       "recorded_at": "2026-08-21T00:41:37Z"
+    },
+    {
+      "task_id": "BLG-D07",
+      "stage": "S04",
+      "role": "pipeline-reviewer",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 42000,
+      "output_tokens": 5500,
+      "estimated_usd": 0.62,
+      "agent_id": "codex-blg-d07-s04-pipeline-reviewer-r2",
+      "recorded_at": "2026-08-21T04:01:05Z"
     }
   ],
   "blocked_by": [],

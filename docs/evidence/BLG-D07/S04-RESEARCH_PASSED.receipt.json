@@ -1,0 +1,33 @@
+{
+  "task_id": "BLG-D07",
+  "run_id": "BLG-D07:S04:4",
+  "stage_id": "S04",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "role_binding_id": "pipeline-reviewer",
+  "agent_identity": "codex-blg-d07-s04-pipeline-reviewer-r2",
+  "input_hashes": {
+    "state_before": "sha256:93054ebd6eb7c9f3989202c957434f07355e45fd2a9e0d3a5291e1d9540c8dc7"
+  },
+  "output_hashes": {},
+  "parent_receipt_hash": "sha256:db3d0a3862bb0ad8477a2b856ae6fe5a97bea0e2a1bfbeb6c98113752e6d22ec",
+  "baseline_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "started_at": "2026-08-21T04:01:05Z",
+  "finished_at": "2026-08-21T04:01:05Z",
+  "verdict": "RESEARCH_PASSED",
+  "blocker": null,
+  "resume_stage": null,
+  "usage_receipt": {
+    "task_id": "BLG-D07",
+    "stage": "S04",
+    "role": "pipeline-reviewer",
+    "executor": "codex",
+    "model": "gpt-5.6-sol",
+    "tier": "expensive",
+    "input_tokens": 42000,
+    "output_tokens": 5500,
+    "estimated_usd": 0.62,
+    "agent_id": "codex-blg-d07-s04-pipeline-reviewer-r2",
+    "recorded_at": "2026-08-21T04:01:05Z"
+  },
+  "signature": "sha256:f30f0f8ec6e13c2529243ef32639060ce1d814da6be90492a64359743ec5b6c7"
+}
