@@ -1,4 +1,3 @@
-# ruff: noqa: RUF003
 """FBS order marking — WB metadata requirements, pool KIZ, and status sync."""
 
 from __future__ import annotations
@@ -479,6 +478,7 @@ def _apply_meta_detail_to_marking(
     marking.meta_details_json = {
         "decision": detail.decision,
         "value": detail.value,
+        "reason": detail.reason,
     }
 
 

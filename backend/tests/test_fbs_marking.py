@@ -189,6 +189,74 @@ async def test_fbs_marking_sync_updates_check_status(
     assert rows[0]["check_status"] == CHECK_STATUS_CHECKING
 
 
+# TC-NEW-FBS-MARK-005 — missing from WB does not erase local code binding
+@pytest.mark.asyncio
+async def test_fbs_marking_sync_preserves_binding_when_wb_code_is_absent(
+    async_client: AsyncClient,
+    enable_wb_marketplace_marking_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    order_id = await _create_order(
+        tenant_id,
+        uuid.UUID(seller_id),
+        uuid.UUID(warehouse_id),
+        order_id=920002,
+        status=FBS_ORDER_STATUS_PACKED,
+    )
+    local_code_id = uuid.uuid4()
+    cis = "01CIS-LOCAL-BINDING"
+    async with SessionLocal() as session:
+        session.add(
+            FbsOrderMarking(
+                order_id=order_id,
+                tenant_id=tenant_id,
+                kind="sgtin",
+                value=cis,
+                marking_code_id=local_code_id,
+                check_status=CHECK_STATUS_CHECKING,
+                meta_status=META_STATUS_PENDING,
+            )
+        )
+        await session.commit()
+
+    from app.services.wildberries_fbs_client import MarketplaceOrderMetaRow
+
+    async def fake_meta_batch(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[MarketplaceOrderMetaRow]:
+        assert order_ids == [920002]
+        return [MarketplaceOrderMetaRow(order_id=920002, meta_details=(), meta={})]
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch",
+        fake_meta_batch,
+    )
+    sync = await async_client.post(
+        f"/operations/fbs-orders/{order_id}/markings/sync", headers=headers
+    )
+    assert sync.status_code == 200, sync.text
+
+    async with SessionLocal() as session:
+        marking = (
+            (
+                await session.execute(
+                    select(FbsOrderMarking).where(FbsOrderMarking.order_id == order_id)
+                )
+            )
+            .scalar_one()
+        )
+        assert marking.check_status == CHECK_STATUS_CHECKING
+        assert marking.marking_code_id == local_code_id
+
+
 # TC-NEW-FBS-MARK-004 — GET list all kinds; empty → []
 @pytest.mark.asyncio
 async def test_fbs_marking_get_list_all_kinds(

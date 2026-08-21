@@ -19,6 +19,7 @@ from app.services.wildberries_errors import (
 )
 from app.services.wildberries_fbs_client import (
     MAX_MARKETPLACE_FBS_BATCH,
+    MAX_META_429_RETRIES,
     WB_FBS_OPENAPI_VERIFIED_DATE,
     add_orders_to_marketplace_supply_batch,
     delete_marketplace_order_meta,
@@ -103,7 +104,19 @@ async def test_fetch_orders_meta_batch_exact_contract_and_parse() -> None:
                     {
                         "id": 123456,
                         "metaDetails": [
-                            {"key": "sgtin", "value": "010460...", "decision": "filled"},
+                            {
+                                "key": "sgtin",
+                                "value": "010460...",
+                                "decision": "filled",
+                            },
+                            {
+                                "key": "uin",
+                                "value": "1234567890123456",
+                                "decision": "required",
+                                "reason": "uinBadStatus",
+                            },
+                            {"key": "imei", "value": "356938035643809", "decision": "pending"},
+                            {"key": "gtin", "value": "04601234567890", "decision": "optional"},
                         ],
                     }
                 ]
@@ -126,6 +139,37 @@ async def test_fetch_orders_meta_batch_exact_contract_and_parse() -> None:
     assert rows[0].order_id == 123456
     assert rows[0].meta_details[0].key == "sgtin"
     assert rows[0].meta_details[0].decision == "filled"
+    assert rows[0].meta_details[1].reason == "uinBadStatus"
+    assert [item.decision for item in rows[0].meta_details] == [
+        "filled",
+        "required",
+        "pending",
+        "optional",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_fetch_orders_meta_retries_429_only_with_bounded_attempts() -> None:
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls <= MAX_META_429_RETRIES:
+            return httpx.Response(429, headers={"Retry-After": "0"})
+        return httpx.Response(200, json={"orders": []})
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport, base_url="https://wb-mock.test") as client:
+        rows = await fetch_marketplace_orders_meta_batch(
+            client,
+            api_token="wb-token",
+            order_ids=[123456],
+            marketplace_api_base="https://wb-mock.test",
+        )
+
+    assert calls == MAX_META_429_RETRIES + 1
+    assert rows == []
 
 
 @pytest.mark.asyncio
