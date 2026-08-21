@@ -119,6 +119,20 @@ class FbsSupply(Base):
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # Режим «без распределения» — оператор решил не раскладывать заказы по
+    # коробам (сдаём как есть). Живёт на поставке, а не на коробе: до
+    # 2026-08-21 признак прятался припиской к creation_idempotency_key
+    # каждого короба и терялся при пересоздании коробов (дефект I15). Флаг
+    # на поставке переживает пересоздание коробов и включается/выключается
+    # переключателем, а не только в момент создания первой партии коробов.
+    boxes_without_distribution_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    boxes_without_distribution_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     tenant: Mapped[Tenant] = relationship("Tenant")
     seller: Mapped[Seller] = relationship("Seller")
