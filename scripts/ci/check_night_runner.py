@@ -25,6 +25,146 @@ import night as n  # noqa: E402
 }
 
 
+def fake_e2e_smoke(проверь) -> None:
+    """Детерминированный full-chain smoke без Codex, git и стенда.
+
+    Это намеренно не мок ``провести``: вечер и ночная цепочка выполняются настоящим
+    оркестратором, а fake executor оставляет только контрактные артефакты. Так smoke
+    ловит регрессии в пропусках, отложении и resume, не создавая worktree или оплату
+    модели. Красные проверки в конце фиксируют обязательные hard-gates для следующего
+    слоя оркестратора (commit карточки, идентичность стенда и SHA для acceptor).
+    """
+    with tempfile.TemporaryDirectory(prefix="check-night-e2e-") as временный:
+        root = pathlib.Path(временный)
+        source = root / "raw.md"
+        source.write_text("# Список\n- карточка ok\n- карточка fail\n", encoding="utf-8")
+        calls: list[tuple[str, str]] = []
+        stands: list[tuple[int, str]] = []
+        fail_card = {"enabled": True}
+        committed: dict[str, bool] = {}
+        current_wave: dict[str, pathlib.Path] = {}
+        original_root = n.КОРЕНЬ
+        original_launch = n.запустить
+        original_cards = n.рабочие_карточки
+        original_stand = n.поднять_стенд
+        original_git = n._git
+        original_startup = n.проверки_старта
+        original_cache = dict(n.СТЕНД)
+
+        def card_from_prompt(prompt: str) -> pathlib.Path:
+            marker = "Твоя папка — `"
+            start = prompt.index(marker) + len(marker)
+            return pathlib.Path(prompt[start:prompt.index("`", start)])
+
+        def fake_launch(role: str, prompt: str, профиль=None, cwd=n.КОРЕНЬ):
+            calls.append((role, prompt))
+            if role == "intake":
+                queue_marker = "и общий `"
+                queue_start = prompt.index(queue_marker) + len(queue_marker)
+                queue_path = pathlib.Path(prompt[queue_start:prompt.index("`", queue_start)])
+                wave = queue_path.parent
+                current_wave["path"] = wave
+                for card in ("ok", "fail"):
+                    folder = wave / "cards" / card
+                    folder.mkdir(parents=True, exist_ok=True)
+                    (folder / "ISTOCHNIK.md").write_text("## Дословно\nкарточка\n", encoding="utf-8")
+                (wave / "QUEUE.md").write_text("ok\nfail\n", encoding="utf-8")
+                return 0, "fake intake"
+            if role == "solution-architect":
+                wave = current_wave["path"]
+                (wave / "MAP.md").write_text(
+                    "## Карта\nok, fail\n## Порядок\n1. ok\n2. fail\n", encoding="utf-8")
+                return 0, "fake map"
+            if role == "product-acceptor":
+                wave = current_wave["path"]
+                (wave / "OTCHET.md").write_text(
+                    "## Сделано\nok\n## Не доехало\nнет\n## Допущения аналитиков\nнет\n"
+                    "## Вопросы владельцу\nнет\n## Оформление\nпроверено\n", encoding="utf-8")
+                return 0, "fake acceptor"
+            folder = card_from_prompt(prompt)
+            card = folder.name
+            if role == "analyst":
+                (folder / "RAZBOR.md").write_text(
+                    "## Дословно\nx\n## Что сейчас\nx\n## Что должно быть\nx\n## Тип\nбаг\n",
+                    encoding="utf-8")
+            elif role == "requirement-critic":
+                (folder / "SVERKA.md").write_text("## Тип\nбаг\n## Расхождения\nнет\n", encoding="utf-8")
+            elif role == "tester":
+                if card == "fail" and fail_card["enabled"]:
+                    return 1, "fake timeout"
+                (folder / "CASES.md").write_text("## Назначенные кейсы\n- smoke\n", encoding="utf-8")
+            elif role in {"screen-dev", "backend-dev"}:
+                (folder / "DEV.md").write_text("## Изменённые файлы\n- fake\n## Гейты\npass\n", encoding="utf-8")
+                # Fake executor models a real card commit. ``base_sha`` differs
+                # from this branch SHA and fake _git below exposes clean status.
+                committed[card] = True
+            elif role == "reviewer":
+                (folder / "REVIEW.md").write_text("## Находки\nнет\n", encoding="utf-8")
+            elif role == "clicker":
+                (folder / "CLICKS.md").write_text("## Пройденные кейсы\n- smoke\n## Не прошло\nнет\n", encoding="utf-8")
+            elif role == "ux-judge":
+                (folder / "JUDGE.md").write_text("## Находки\nнет\n## Пройденные кейсы\n- smoke\n", encoding="utf-8")
+            return 0, "fake ok"
+
+        def fake_stand(lane: int, worker=None) -> str:
+            stands.append((lane, worker.ид if worker else "unknown"))
+            return f"FAKE-STAND lane={lane} card={worker.ид if worker else 'unknown'}"
+
+        def fake_git(*args: str, cwd=root):
+            if args[:2] == ("rev-parse", "HEAD"):
+                return mock.Mock(returncode=0, stdout=f"branch-sha-{pathlib.Path(cwd).name}\n", stderr="")
+            if args[:2] == ("status", "--porcelain"):
+                return mock.Mock(returncode=0, stdout="", stderr="")
+            return mock.Mock(returncode=0, stdout="", stderr="")
+
+        class FakeWorker:
+            def __init__(self, card: str, wave: pathlib.Path):
+                self.ид = card
+                self.lane = 1
+                self.корень = root
+                self.волна = wave
+                self.папка = wave / "cards" / card
+                self.ветка = f"fake/{card}"
+                self.base_sha = f"base-sha-{card}"
+
+        def fake_workers(wave, cards, lanes):
+            return {card: FakeWorker(card, wave) for card in cards}
+
+        try:
+            n.КОРЕНЬ = root
+            n.СТЕНД.clear()
+            n.запустить = fake_launch
+            n.рабочие_карточки = fake_workers
+            n.поднять_стенд = fake_stand
+            n._git = fake_git
+            n.проверки_старта = lambda: []
+            with mock.patch.object(sys, "argv", ["night.py", "полный", str(source), "--fresh",
+                                                   "--run-id", "fake-run", "--полос", "1"]):
+                проверь("fake E2E: полный запуск завершает остальные карточки и сигнализирует deferred", n.main(), 2)
+            wave = root / "night" / f"{source.stem}-fake-run"
+            проверь("fake E2E: MAP создан", (wave / "MAP.md").exists(), True)
+            проверь("fake E2E: ok карточка завершена", not (wave / "cards" / "ok" / "OTLOZHENO.md").exists(), True)
+            проверь("fake E2E: fail карточка отложена", (wave / "cards" / "fail" / "OTLOZHENO.md").exists(), True)
+            fail_card["enabled"] = False
+            проверь("fake E2E: resume проходит", n.ночь(wave, 1), 0)
+            проверь("fake E2E: resume снимает отложено", (wave / "cards" / "fail" / "OTLOZHENO.md").exists(), False)
+            проверь("fake E2E: acceptor вызван", sum(role == "product-acceptor" for role, _ in calls), 2)
+            проверь("fake E2E: отдельный stand на карточку", len(stands), 2)
+            проверь("fake E2E: dev обязан сохранить commit", all(committed.values()), True)
+            acceptor_prompts = [p for role, p in calls if role == "product-acceptor"]
+            проверь("fake E2E: acceptor получает SHA карточек",
+                    all("SHA branch-sha-" in p and "artifacts" in p for p in acceptor_prompts), True)
+        finally:
+            n.КОРЕНЬ = original_root
+            n.запустить = original_launch
+            n.рабочие_карточки = original_cards
+            n.поднять_стенд = original_stand
+            n._git = original_git
+            n.проверки_старта = original_startup
+            n.СТЕНД.clear()
+            n.СТЕНД.update(original_cache)
+
+
 def main() -> int:
     беды: list[str] = []
 
@@ -218,6 +358,10 @@ def main() -> int:
                 проверь("fresh run: source записан", manifest.get("source"), str(source))
                 проверь("fresh run: run-id записан", manifest.get("run_id"), "run-20260821-01")
             проверь("fresh run: исходник не изменён", source.read_text(encoding="utf-8"), "# исходный список\n- карточка\n")
+
+    # Full-chain fake smoke: один запуск проходит вечер и ночь, плохая карточка
+    # откладывается, а повтор продолжает её. Все внешние границы подменены.
+    fake_e2e_smoke(проверь)
 
     if беды:
         print("ПРОВЕРКА ОРКЕСТРАТОРА КРАСНАЯ:", file=sys.stderr)

@@ -19,6 +19,7 @@ from dataclasses import dataclass
 import json
 import os
 import re
+import signal
 import shutil
 import subprocess
 import sys
@@ -48,7 +49,7 @@ from pathlib import Path
     "guard":              ("GUARD.md",         ["Находки"]),
     "blocker-collector":  ("BLOCKERS.md",     ["Блокировки", "Без обоснования", "Разошлись слои"]),
     "blocker-skeptic":    ("SKEPTIC.md",      ["Находки", "Проверено"]),
-    "product-acceptor":   (None,               []),
+    "product-acceptor":   ("OTCHET.md",        ["Сделано", "Не доехало", "Допущения аналитиков", "Вопросы владельцу", "Оформление"]),
 }
 
 # Пути по типам задач. Ровно то, чем баг отличается от фичи: у бага нет проектирования.
@@ -105,6 +106,7 @@ class РабочаяКарточка:
     волна: Path
     папка: Path
     ветка: str
+    base_sha: str = ""
 
 
 def _имя_ветки(волна: Path, ид: str, полоса: int) -> str:
@@ -163,7 +165,8 @@ def _создать_рабочую_карточку(ид: str, волна: Path,
         if источник.exists() and not (рабочая_волна / имя).exists():
             рабочая_волна.mkdir(parents=True, exist_ok=True)
             shutil.copy2(источник, рабочая_волна / имя)
-    return РабочаяКарточка(ид, полоса, путь, рабочая_волна, рабочая_папка, ветка)
+    база = _git("rev-parse", "HEAD", cwd=КОРЕНЬ).stdout.strip()
+    return РабочаяКарточка(ид, полоса, путь, рабочая_волна, рабочая_папка, ветка, база)
 
 
 def рабочие_карточки(волна: Path, карточки_: list[str], полос: int) -> dict[str, РабочаяКарточка]:
@@ -352,27 +355,95 @@ def выбрать_dev(папка: Path) -> str:
     return "screen-dev" if re.search(r"\bS-\d\d\b", поле(папка, "RAZBOR.md", "Экраны")) else "backend-dev"
 
 
+def проверить_сохранение(рабочая: РабочаяКарточка) -> tuple[bool, str]:
+    """Dev обязан оставить коммит; разрешены только ночные артефакты."""
+    sha = _git("rev-parse", "HEAD", cwd=рабочая.корень)
+    if sha.returncode != 0 or not sha.stdout.strip():
+        return False, "у карточки нет branch SHA"
+    if getattr(рабочая, "base_sha", "") and sha.stdout.strip() == рабочая.base_sha:
+        return False, "dev не оставил отдельный коммит в карточной ветке"
+    статус = _git("status", "--porcelain", cwd=рабочая.корень)
+    грязные = []
+    for строка in статус.stdout.splitlines():
+        путь = строка[3:].strip()
+        if путь.startswith("night/") or путь.startswith("docs/evidence/"):
+            continue
+        грязные.append(путь)
+    if грязные:
+        return False, "грязный implementation diff: " + ", ".join(грязные[:8])
+    return True, sha.stdout.strip()
+
+
+def проверить_вход_волны(волна: Path, ид_список: list[str]) -> list[str]:
+    ошибки = []
+    if not (волна / "MAP.md").exists() or not all(
+            s.lower() in " ".join(секции((волна / "MAP.md").read_text(encoding="utf-8"))) .lower()
+            for s in ("Карта", "Порядок")):
+        ошибки.append("MAP.md: нет секций «Карта» и «Порядок»")
+    for ид in ид_список:
+        папка = волна / "cards" / ид
+        for файл, нужны in (("RAZBOR.md", АРТЕФАКТ["analyst"][1]),
+                            ("SVERKA.md", АРТЕФАКТ["requirement-critic"][1])):
+            текст = (папка / файл).read_text(encoding="utf-8", errors="replace") if (папка / файл).exists() else ""
+            есть = секции(текст)
+            if any(not any(s.lower() in e.lower() for e in есть) for s in нужны):
+                ошибки.append(f"{ид}/{файл}: обязательные секции отсутствуют")
+    return ошибки
+
+
 ПОЛОСА: dict[str, int] = {}          # карточка -> номер полосы стенда
-СТЕНД: dict[int, str] = {}           # полоса -> строка с адресом и кредами
+СТЕНД: dict[tuple[str, str], str] = {}  # карточка/worktree SHA -> строка с адресом и кредами
+_АКТИВНАЯ_ВОЛНА: Path | None = None
 
 
-def поднять_стенд(полоса: int) -> str:
+def _сигинтум(_сигнал: int, _кадр: object) -> None:
+    if _АКТИВНАЯ_ВОЛНА is not None:
+        журнал(_АКТИВНАЯ_ВОЛНА, "получен SIGINT; результаты сохранены, продолжение возможно через resume")
+    raise KeyboardInterrupt
+
+
+def поднять_стенд(полоса: int, рабочая: РабочаяКарточка | None = None) -> str:
     """Стенд поднимает скрипт, а не агент.
 
     Агенту, которому дали искать стенд самому, ничего не стоит найти «похожий» и молча
     проверить не то — а хуже честного отказа только успешный отчёт о проверке чужого экрана.
     Поэтому кликер получает готовые адрес и пароль строкой в промпте.
     """
-    if полоса in СТЕНД:
-        return СТЕНД[полоса]
-    р = subprocess.run([str(КОРЕНЬ / "scripts/stand/up.sh"), str(полоса)],
-                       cwd=КОРЕНЬ, capture_output=True, text=True, timeout=15 * 60)
+    корень = рабочая.корень if рабочая else КОРЕНЬ
+    ид = рабочая.ид if рабочая else f"lane-{полоса}"
+    sha_р = _git("rev-parse", "HEAD", cwd=корень)
+    sha = sha_р.stdout.strip() if sha_р.returncode == 0 else "unknown"
+    ключ = (ид, sha)
+    if ключ in СТЕНД:
+        return СТЕНД[ключ]
+    env = os.environ.copy()
+    env.update({"WMS_STAND_FORCE_RECREATE": "1", "COMPOSE_BUILD": "1",
+                "COMPOSE_FORCE_RECREATE": "1", "WMS_API_PORT": f"3008{полоса}",
+                "WMS_WEB_PORT": f"3017{полоса}", "WMS_SELLER_WEB_PORT": f"3018{полоса}",
+                "WMS_DB_PORT": f"3043{полоса}", "WMS_REDIS_PORT": f"3037{полоса}"})
+    compose = ["docker", "compose", "-p", f"wms-lane-{полоса}",
+               "-f", str(корень / "docker-compose.yml"),
+               "-f", str(корень / "docker-compose.lane.yml")]
+    # `up.sh` intentionally owns restoring the snapshot, but it does not accept
+    # compose flags. Build and remove the previous lane containers here so its
+    # subsequent `up -d` can only start images from this card worktree.
+    build = subprocess.run(compose + ["build"], cwd=корень, env=env,
+                           capture_output=True, text=True, timeout=15 * 60)
+    if build.returncode != 0:
+        return ""
+    recreate = subprocess.run(compose + ["rm", "-sf"], cwd=корень, env=env,
+                               capture_output=True, text=True, timeout=5 * 60)
+    if recreate.returncode != 0:
+        return ""
+    р = subprocess.run([str(корень / "scripts/stand/up.sh"), str(полоса)],
+                       cwd=корень, env=env, capture_output=True, text=True, timeout=15 * 60)
     хвост = (р.stdout or "") + (р.stderr or "")
-    СТЕНД[полоса] = хвост[-600:] if р.returncode == 0 else ""
-    return СТЕНД[полоса]
+    СТЕНД[ключ] = хвост[-600:] if р.returncode == 0 else ""
+    return СТЕНД[ключ]
 
 
-def промпт(роль: str, ид: str, папка: Path, волна: Path, корень: Path = КОРЕНЬ) -> str:
+def промпт(роль: str, ид: str, папка: Path, волна: Path, корень: Path = КОРЕНЬ,
+           рабочая: РабочаяКарточка | None = None) -> str:
     имя, нужны = АРТЕФАКТ.get(роль, (None, []))
     хвост = (f"Результат запиши в `{папка / имя}`, "
              f"обязательные секции: {', '.join(нужны)}." if имя else
@@ -383,14 +454,18 @@ def промпт(роль: str, ид: str, папка: Path, волна: Path, �
         f"даже если в CLAUDE.md указан иной путь: это отдельная рабочая копия.\n"
         f"Твоя папка — `{папка}`, там лежат артефакты предыдущих ролей, прочитай их.\n"
         f"Карта задевания волны — `{волна / 'MAP.md'}`.\n"
-        f"Действуй строго по своей роли. {хвост}" + стенд_для(роль, ид)
+        f"Действуй строго по своей роли. {хвост}" + стенд_для(роль, ид, рабочая)
     )
 
 
-def стенд_для(роль: str, ид: str) -> str:
+def стенд_для(роль: str, ид: str, рабочая: РабочаяКарточка | None = None) -> str:
     if роль != "clicker":
         return ""
-    креды = поднять_стенд(ПОЛОСА.get(ид, 1))
+    try:
+        креды = поднять_стенд(ПОЛОСА.get(ид, 1), рабочая)
+    except TypeError:
+        # Совместимость с тестовым адаптером старого контракта.
+        креды = поднять_стенд(ПОЛОСА.get(ид, 1))
     if not креды:
         return ("\n\nСТЕНД НЕ ПОДНЯЛСЯ. Не ищи его сам и не подбирай порты — "
                 "запиши это как причину и остановись.")
@@ -399,12 +474,13 @@ def стенд_для(роль: str, ид: str) -> str:
 
 
 def шаг(ид: str, роль: str, папка: Path, волна: Path,
-        корень: Path = КОРЕНЬ) -> tuple[bool, str]:
+        корень: Path = КОРЕНЬ,
+        рабочая: РабочаяКарточка | None = None) -> tuple[bool, str]:
     if артефакт_готов(папка, роль)[0] and роль not in СУДЬИ:
         журнал(волна, f"  {ид} · {роль}: уже сделано, пропускаю")
         return True, ""
     for попытка in range(ПОВТОРОВ + 1):
-        код, хвост = запустить(роль, промпт(роль, ид, папка, волна, корень), cwd=корень)
+        код, хвост = запустить(роль, промпт(роль, ид, папка, волна, корень, рабочая), cwd=корень)
         готов, беда = артефакт_готов(папка, роль)
         if готов:
             журнал(волна, f"  {ид} · {роль}: готово")
@@ -432,7 +508,7 @@ def провести(ид: str, волна: Path, рабочая: Рабочая
     i = 0
     while i < len(цепочка):
         роль = выбрать_dev(папка) if цепочка[i] == "dev" else цепочка[i]
-        ок, беда = шаг(ид, роль, папка, волна, рабочая.корень)
+        ок, беда = шаг(ид, роль, папка, волна, рабочая.корень, рабочая)
         if not ок:
             (папка / "OTLOZHENO.md").write_text(беда + "\n", encoding="utf-8")
             журнал(волна, f"{ид}: отложено на шаге {роль}")
@@ -445,11 +521,21 @@ def провести(ид: str, волна: Path, рабочая: Рабочая
                 журнал(волна, f"{ид}: отложено — {роль}, круги кончились")
                 return "отложено"
             журнал(волна, f"  {ид} · {роль}: находки, круг {круг} — назад к разработке")
-            for мусор in ("DEV.md", АРТЕФАКТ[роль][0]):
+            мусор_для_повтора = ("DEV.md", АРТЕФАКТ[роль][0])
+            if роль == "ui-critic":
+                мусор_для_повтора += ("CONTRACT.md", "CASES.md", "DESIGN-REVIEW.md")
+            for мусор in мусор_для_повтора:
                 (папка / мусор).unlink(missing_ok=True)
-            i = цепочка.index("dev")
+            i = цепочка.index("ux-architect" if роль == "ui-critic" else "dev")
             continue
         i += 1
+    сохранено, сведения = проверить_сохранение(рабочая)
+    if not сохранено:
+        (папка / "OTLOZHENO.md").write_text(сведения + "\n", encoding="utf-8")
+        журнал(волна, f"{ид}: отложено — {сведения}")
+        return "отложено"
+    (папка / "BRANCH-SHA.txt").write_text(сведения + "\n", encoding="utf-8")
+    (папка / "OTLOZHENO.md").unlink(missing_ok=True)
     журнал(волна, f"{ид}: СДЕЛАНО")
     return "сделано"
 
@@ -516,7 +602,16 @@ def вечер(исходник: Path, fresh: bool = False, run_id: str | None =
             # работа — поймать неверный тип, а неверный тип чаще всего выглядит как «баг»:
             # если фильтровать по типу, ошибка аналитика становится невидимой навсегда.
             список = ид_список
-            list(пул.map(lambda и: шаг(и, роль, волна / "cards" / и, волна), список))
+            def безопасный_шаг(и: str) -> tuple[bool, str]:
+                try:
+                    return шаг(и, роль, волна / "cards" / и, волна)
+                except Exception as е:  # одна карточка не останавливает вечер
+                    папка = волна / "cards" / и
+                    папка.mkdir(parents=True, exist_ok=True)
+                    (папка / "OTLOZHENO.md").write_text(f"исключение: {е}\n", encoding="utf-8")
+                    журнал(волна, f"{и} · {роль}: отложено — исключение {е}")
+                    return False, str(е)
+            list(пул.map(безопасный_шаг, список))
 
     журнал(волна, "\n### карта задевания")
     запустить("solution-architect", (
@@ -527,17 +622,25 @@ def вечер(исходник: Path, fresh: bool = False, run_id: str | None =
         f"файлы и таблицы, столкновения с другими карточками, порядок и полоса, и список "
         f"смежных экранов, чьи кейсы придётся перекликать. Секции: `## Карта`, `## Порядок`."),
         профиль="terra")
-    журнал(волна, "карта: " + ("готова" if (волна / "MAP.md").exists() else "НЕ СОЗДАНА"))
+    карта_готова = not any(e.startswith("MAP.md:") for e in проверить_вход_волны(волна, ид_список))
+    журнал(волна, "карта: " + ("готова" if карта_готова else "НЕ СОЗДАНА"))
     журнал(волна, f"\nВечер закончен. Посмотри вопросы и допущения, потом: "
                   f"python3 scripts/night.py ночь night/{волна.name}")
-    return 0
+    return 0 if карта_готова else 2
 
 
 def ночь(волна: Path, полос: int) -> int:
+    global _АКТИВНАЯ_ВОЛНА
+    _АКТИВНАЯ_ВОЛНА = волна
+    signal.signal(signal.SIGINT, _сигинтум)
     ид_список = карточки(волна)
     if not ид_список:
         print(f"в {волна}/cards нет карточек — сначала вечер", file=sys.stderr)
         return 1
+    входные_ошибки = проверить_вход_волны(волна, ид_список)
+    if входные_ошибки:
+        журнал(волна, "входной гейт красный: " + "; ".join(входные_ошибки))
+        return 2
     for н, и in enumerate(ид_список):
         ПОЛОСА[и] = н % полос + 1
     try:
@@ -547,7 +650,16 @@ def ночь(волна: Path, полос: int) -> int:
         return 2
     журнал(волна, f"\n## Ночь · карточек {len(ид_список)} · полос {полос}")
     with futures.ThreadPoolExecutor(max_workers=полос) as пул:
-        итоги = list(пул.map(lambda и: провести(и, волна, рабочие[и]), ид_список))
+        def безопасно(и: str) -> str:
+            try:
+                return провести(и, волна, рабочие[и])
+            except Exception as е:  # карточка не должна остановить соседей
+                папка = рабочие[и].папка
+                папка.mkdir(parents=True, exist_ok=True)
+                (папка / "OTLOZHENO.md").write_text(f"исключение: {е}\n", encoding="utf-8")
+                журнал(волна, f"{и}: отложено — исключение {е}")
+                return "отложено"
+        итоги = list(пул.map(безопасно, ид_список))
     сделано = итоги.count("сделано")
     журнал(волна, f"\n## Итог: сделано {сделано}, отложено {len(итоги) - сделано}")
 
@@ -555,15 +667,21 @@ def ночь(волна: Path, полос: int) -> int:
         f"Твоя рабочая копия — `{КОРЕНЬ}`, все пути абсолютные.\n"
         f"Прими работу ночи одним проходом. Карточки — `{волна / 'cards'}`, "
         f"скриншоты — `{КОРЕНЬ}/docs/evidence/`. Карточки проверяй в отдельных ветках/worktree:\n"
-        + "\n".join(f"- {и}: {рабочие[и].ветка} ({рабочие[и].корень})" for и in ид_список)
+        + "\n".join(
+            f"- {и}: branch {рабочие[и].ветка}, SHA "
+            f"{_git('rev-parse', 'HEAD', cwd=рабочие[и].корень).stdout.strip() or 'unknown'}, "
+            f"worktree {рабочие[и].корень}, artifacts {рабочие[и].папка}"
+            for и in ид_список)
         + f"\nНе смешивай и не объединяй ветки автоматически. Отчёт запиши в `{волна / 'OTCHET.md'}`."))
-    журнал(волна, "отчёт: " + ("готов" if (волна / "OTCHET.md").exists() else "НЕ СОЗДАН"))
-    return 0
+    готов, беда = артефакт_готов(волна, "product-acceptor")
+    журнал(волна, "отчёт: " + ("готов" if готов else "НЕ СОЗДАН/НЕПОЛОН: " + беда))
+    _АКТИВНАЯ_ВОЛНА = None
+    return 0 if готов and not any(итог == "отложено" for итог in итоги) else 2
 
 
 def main() -> int:
     p = argparse.ArgumentParser(description="Ночной оркестратор WMS")
-    p.add_argument("фаза", choices=["вечер", "ночь", "проверка", "очистить"])
+    p.add_argument("фаза", choices=["вечер", "ночь", "полный", "проверка", "очистить"])
     p.add_argument("путь", nargs="?", help="файл со списком (вечер) или папка волны (ночь)")
     p.add_argument("--полос", type=int, default=6)   # полоса на агента: ждать нечего
     p.add_argument("--fresh", action="store_true",
@@ -590,6 +708,14 @@ def main() -> int:
         return 0
     if a.фаза == "вечер":
         return вечер(путь, fresh=a.fresh, run_id=a.run_id)
+    if a.фаза == "полный":
+        if not a.fresh or not a.run_id:
+            p.error("для полного прогона обязательны --fresh и --run-id")
+        код = вечер(путь, fresh=a.fresh, run_id=a.run_id)
+        if код != 0:
+            return код
+        имя = f"{путь.stem}-{a.run_id}" if a.fresh and a.run_id else путь.stem
+        return ночь(КОРЕНЬ / "night" / имя, a.полос)
     return ночь(путь, a.полос)
 
 
