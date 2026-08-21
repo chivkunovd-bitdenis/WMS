@@ -59,7 +59,7 @@
     "S25",
     "S26"
   ],
-  "current_stage": "S04",
+  "current_stage": "S09",
   "status": "RUNNING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
@@ -76,8 +76,8 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T03:55:22Z",
-  "last_valid_receipt": "sha256:aae5a847dec01c036c666fd3e9769ec567089e4803370291fe8ac476701c3638",
+  "heartbeat_at": "2026-08-21T04:03:14Z",
+  "last_valid_receipt": "sha256:3b4cc3bc2b980f197ce448803086f80422b8c6f2f90defb4c4659c0343e4d2fe",
   "blocker": null,
   "resume_condition": null,
   "verdicts": {
@@ -101,15 +101,22 @@
       "receipt_hash": "sha256:aae5a847dec01c036c666fd3e9769ec567089e4803370291fe8ac476701c3638",
       "role_binding_id": "pipeline-ba",
       "agent_identity": "codex-blg-i08-s03-pipeline-ba"
+    },
+    "S04": {
+      "verdict": "RESEARCH_PASSED",
+      "receipt_path": "docs/evidence/BLG-I08/S04-RESEARCH_PASSED.receipt.json",
+      "receipt_hash": "sha256:3b4cc3bc2b980f197ce448803086f80422b8c6f2f90defb4c4659c0343e4d2fe",
+      "role_binding_id": "pipeline-reviewer",
+      "agent_identity": "codex-blg-i08-s04-research-critic-recheck"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 42300,
-    "output_tokens": 9100,
-    "estimated_usd": 0.6225
+    "input_tokens": 94300,
+    "output_tokens": 16600,
+    "estimated_usd": 1.3725
   },
   "budget_usage_receipts": [
     {
@@ -150,6 +157,19 @@
       "estimated_usd": 0.62,
       "agent_id": "codex-blg-i08-s03-pipeline-ba",
       "recorded_at": "2026-08-21T00:39:55Z"
+    },
+    {
+      "task_id": "BLG-I08",
+      "stage": "S04",
+      "role": "pipeline-reviewer",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 52000,
+      "output_tokens": 7500,
+      "estimated_usd": 0.75,
+      "agent_id": "codex-blg-i08-s04-research-critic-recheck",
+      "recorded_at": "2026-08-21T04:03:14Z"
     }
   ],
   "blocked_by": [],
