@@ -329,6 +329,7 @@ class FbsWorkspaceSupplyOut(BaseModel):
     nearest_deadline_at: str
     packaging_task_id: str | None
     barcode_asset: FbsWorkspacePrintAssetOut | None
+    honest_sign_skipped: bool
 
 
 class FbsWorkspaceProgressOut(BaseModel):
@@ -993,6 +994,33 @@ async def start_fbs_supply_work(
         except supply_svc.FbsSupplyError as exc:
             _raise_from_service(exc)
     await session.commit()
+    return FbsWorkspaceOut.model_validate(workspace)
+
+
+@router.post("/{supply_id}/honest-sign-skip", response_model=FbsWorkspaceOut)
+async def skip_fbs_supply_honest_sign(
+    supply_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    try:
+        await supply_svc.skip_honest_sign(
+            session,
+            user.tenant_id,
+            supply_id,
+            actor_user_id=user.id,
+        )
+        workspace = await get_supply_workspace(session, user.tenant_id, supply_id)
+    except supply_svc.FbsSupplyError as exc:
+        if exc.code == "supply_not_found":
+            raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
+        if exc.code == "supply_already_submitted":
+            raise_fbs_http(status.HTTP_409_CONFLICT, exc.code)
+        raise_fbs_http(status.HTTP_400_BAD_REQUEST, exc.code)
+    except FbsWorkspaceError as exc:
+        if exc.code == "supply_not_found":
+            raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
+        raise_fbs_http(status.HTTP_500_INTERNAL_SERVER_ERROR, exc.code)
     return FbsWorkspaceOut.model_validate(workspace)
 
 

@@ -348,7 +348,10 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     // Этикетка ШК ВБ клеится на единицу товара: разумное первое значение — сколько
     // единиц нужно напечатать/упаковать, а не жёсткая «1» (иначе оператор по умолчанию
     // печатает одну этикетку на несколько единиц и должен сам это заметить).
-    const wbDefaultQty = ctx.source === 'catalog' ? 1 : Math.max(1, ctx.qtyNeedPack || 1)
+    // I4 (20.08.2026): в ленте FBS печать идёт циклом по заказам, и это поле —
+    // число ШК-этикеток НА ОДИН заказ. Подставлять сюда число заказов значило
+    // печатать 155 × 155 = 24 тысячи листов, что и случилось на бою.
+    const wbDefaultQty = ctx.source === 'catalog' || ctx.fbsTape ? 1 : Math.max(1, ctx.qtyNeedPack || 1)
     setWbBarcodeQty(wbDefaultQty)
     setPrintDoubleWbBarcode(false)
     setCatalogPrintQty(1)
@@ -472,6 +475,18 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         : (ctx?.qtyNeedPack ?? 0)
   const totalWbLabels = resolveManualWbLabelCount(wbBarcodeQty, printDoubleWbBarcode)
   /**
+   * I4/L2 (21.08.2026): в ленте FBS «Количество этикеток» — это копии ШК на ОДИН
+   * заказ, и ноль здесь разрешён: тогда в ленту идут только QR заказов.
+   * resolveManualWbLabelCount поднимает любое значение до единицы, поэтому для
+   * ленты считаем отдельно, не трогая остальные экраны печати.
+   */
+  const fbsLabelCopiesPerOrder =
+    Math.max(0, Math.min(999, Math.floor(Number(wbBarcodeQty) || 0))) * (printDoubleWbBarcode ? 2 : 1)
+  /** Сколько листов реально уйдёт на принтер лентой FBS без Честного знака. */
+  const fbsTapeSheets = fbsTapeMode
+    ? fbsTapeOrders.length * (fbsLabelCopiesPerOrder + (includesOrderQr ? 1 : 0))
+    : 0
+  /**
    * PRN-04: printFbsTape (ниже) печатает циклом по заказам — на каждый заказ
    * сначала QR, потом его этикетки. Раньше предпросмотр строил один общий QR +
    * один список «единиц» независимо от заказов, поэтому при нескольких заказах в
@@ -482,7 +497,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
    */
   const fbsPreviewOrders = includesOrderQr ? fbsTapeOrders : undefined
   const fbsPreviewLabelCopies =
-    fbsHonestSignOrders.length > 0 ? Math.max(1, labelCopiesFromLayout(layout)) : Math.max(1, totalWbLabels)
+    fbsHonestSignOrders.length > 0 ? Math.max(1, labelCopiesFromLayout(layout)) : fbsLabelCopiesPerOrder
   const available = ctx?.markingAvailable ?? 0
   const quantitySummaryText = requiresHonestSign
     ? effectiveReprint
@@ -651,7 +666,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     const qrAssetsToConfirm: FbsTapeAsset[] = []
     const fallbackLabelCopies = fbsHonestSignOrders.length > 0
       ? Math.max(1, labelCopiesFromLayout(printLayout))
-      : Math.max(1, totalWbLabels)
+      : fbsLabelCopiesPerOrder
     for (const printedOrder of result.orders) {
       const order = orderById.get(printedOrder.order_id)
       if (!order) continue
@@ -683,7 +698,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
             labelSize: size,
           })),
         )
-      } else {
+      } else if (fallbackLabelCopies > 0) {
         sections.push(...buildProductLabelSections(order.productLabel, fallbackLabelCopies, size))
       }
     }
@@ -863,6 +878,14 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     setError(null)
     try {
       if (ctx.fbsTape) {
+        // I4 (20.08.2026): 155 заказов уже уезжали на принтер как 22 тысячи листов.
+        // Пока нет нормального окна подтверждения из ui-kit — спрашиваем прямо здесь,
+        // но только когда лента действительно большая.
+        if (fbsTapeSheets > 100 && !window.confirm(
+          `На печать уйдёт ${fbsTapeSheets} листов. Продолжить?`,
+        )) {
+          return
+        }
         // PRN-05 (18.08.2026): для пачки, где ни одному заказу не нужен Честный знак,
         // размер надо брать тот, который оператор реально видит и меняет в поле
         // «Размер ШК ВБ» (nonCzPrintSize). czTapePrintSize читает другое хранилище,
@@ -972,7 +995,12 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     (!effectiveReprint && qtyNeed < 1) ||
     (requiresHonestSign && !effectiveReprint && !forceReprintOnConfirm && available < 1) ||
     (requiresHonestSign && !effectiveReprint && !forceReprintOnConfirm && !allowPartial && shortage > 0) ||
-    (!requiresHonestSign && totalWbLabels < 1)
+    // L2 (21.08.2026): ноль этикеток ШК — не повод гасить кнопку, если в ленту всё равно
+    // идут QR заказов. Гасим, только когда печатать действительно нечего. Считаем по
+    // fbsLabelCopiesPerOrder: totalWbLabels проходит через clampPackUnits и никогда не
+    // бывает меньше единицы, поэтому проверять его тут бессмысленно.
+    (!requiresHonestSign && !includesOrderQr && fbsTapeMode && fbsLabelCopiesPerOrder < 1) ||
+    (!requiresHonestSign && !fbsTapeMode && totalWbLabels < 1)
 
   const dialogTitle = effectiveReprint
     ? 'Повторная печать'
@@ -1133,13 +1161,22 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               <>
                 <TextField
                   size="small"
-                  label="Количество этикеток"
+                  label={fbsTapeMode ? 'ШК ВБ на заказ' : 'Количество этикеток'}
+                  helperText={
+                    fbsTapeMode
+                      ? '0 — печатать ленту только с QR заказов'
+                      : undefined
+                  }
                   type="number"
                   value={wbBarcodeQty}
-                  onChange={(e) =>
-                    setWbBarcodeQty(Math.max(1, Math.min(999, Number(e.target.value) || 1)))
-                  }
-                  slotProps={{ htmlInput: { min: 1, max: 999 } }}
+                  onChange={(e) => {
+                    const raw = Number(e.target.value)
+                    const floor = fbsTapeMode ? 0 : 1
+                    setWbBarcodeQty(
+                      Math.max(floor, Math.min(999, Number.isFinite(raw) ? Math.floor(raw) : floor)),
+                    )
+                  }}
+                  slotProps={{ htmlInput: { min: fbsTapeMode ? 0 : 1, max: 999 } }}
                   data-testid="marking-print-wb-qty"
                   sx={{ maxWidth: 280 }}
                 />
@@ -1581,7 +1618,16 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               </Typography>
             ) : null}
 
-            {!effectiveReprint && !requiresHonestSign && totalWbLabels > 0 ? (
+            {!effectiveReprint && !requiresHonestSign && fbsTapeMode ? (
+              <Typography variant="body2" data-testid="marking-print-will-print">
+                К печати: {fbsTapeOrders.length} {plural(fbsTapeOrders.length, ['заказ', 'заказа', 'заказов'])} ·{' '}
+                {includesOrderQr ? `${fbsTapeOrders.length} QR + ` : ''}
+                {fbsTapeOrders.length * fbsLabelCopiesPerOrder} ШК ВБ · итого {fbsTapeSheets}{' '}
+                {plural(fbsTapeSheets, ['лист', 'листа', 'листов'])}
+              </Typography>
+            ) : null}
+
+            {!effectiveReprint && !requiresHonestSign && !fbsTapeMode && totalWbLabels > 0 ? (
               <Typography variant="body2" data-testid="marking-print-will-print">
                 К печати: {totalWbLabels} ШК ВБ{printDoubleWbBarcode ? ' (× 2)' : ''}
               </Typography>

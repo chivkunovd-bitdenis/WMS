@@ -465,6 +465,7 @@ export type FbsWorkspace = {
     nearest_deadline_at: string
     packaging_task_id: string | null
     barcode_asset: FbsPrintAsset | null
+    honest_sign_skipped?: boolean
   }
   stage:
     | 'composition'
@@ -641,6 +642,22 @@ export async function retryFbsSupplyQr(
     await fetch(apiUrl(`/operations/fbs-supplies/${id}/retry-supply-qr`), {
       method: 'POST',
       headers: { ...ah(token) },
+    }),
+  )
+}
+
+export async function skipFbsSupplyHonestSign(
+  token: string,
+  ah: AuthHeaders,
+  id: string,
+): Promise<FbsWorkspace> {
+  // Снятие требования Честного знака со всей поставки.
+  // Тело пустое, ответ — обычная выдача поставки с обновлённым флагом honest_sign_skipped.
+  return jsonOrThrow<FbsWorkspace>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${id}/honest-sign-skip`), {
+      method: 'POST',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify({}),
     }),
   )
 }

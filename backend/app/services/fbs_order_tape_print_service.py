@@ -156,7 +156,11 @@ async def print_fbs_order_tape(
             )
             continue
         requires_honest_sign = _order_requires_sgtin(order)
-        if not requires_honest_sign:
+        # Поставка со снятым требованием Честного знака печатается как немаркированная:
+        # новые коды из пула не выпускаются и в WB не привязываются. Уже отсканированные
+        # коды остаются на месте и уходят в WB как обычно.
+        honest_sign_skipped = supply.honest_sign_skipped_at is not None
+        if not requires_honest_sign or honest_sign_skipped:
             result_orders.append(
                 FbsOrderTapeOrder(
                     order_id=order.id,

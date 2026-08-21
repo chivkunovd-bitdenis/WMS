@@ -76,6 +76,7 @@ class FulfilledOrderOut(BaseModel):
 class PackProgressOut(BaseModel):
     packaging_task: PackagingTaskOut
     fulfilled_order: FulfilledOrderOut | None = None
+    warnings: list[str] | None = None
 
 
 class PackagingTaskLineOut(BaseModel):
@@ -522,6 +523,7 @@ async def record_pack_progress(
     return PackProgressOut(
         packaging_task=await _task_out(session, user.tenant_id, result.task),
         fulfilled_order=fulfilled_order,
+        warnings=result.warnings if result.warnings else None,
     )
 
 

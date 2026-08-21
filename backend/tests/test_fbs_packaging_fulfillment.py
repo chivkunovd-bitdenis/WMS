@@ -630,7 +630,7 @@ async def test_fbs_pack_succeeds_when_line_balance_already_marked_packed(
 # balance is zero), packing must still fail honestly, with a message that tells
 # the operator what is missing and where to look.
 @pytest.mark.asyncio
-async def test_fbs_pack_rejected_when_location_has_no_stock_at_all(
+async def test_fbs_pack_continues_when_location_has_no_stock_at_all(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
@@ -722,16 +722,35 @@ async def test_fbs_pack_rejected_when_location_has_no_stock_at_all(
     assert task.status_code == 200, task.text
     line = task.json()["lines"][0]
 
-    blocked = await async_client.post(
+    # 21.08.2026: пустая ячейка больше не повод останавливать упаковку. Подбор уже
+    # прошёл, товар физически собран, а остаток мог остаться в ячейке сортировки другого
+    # склада. Раньше здесь ждали ответ 409 и вставший склад. Теперь упаковка проходит,
+    # а несписанный остаток честно называется оператору словами.
+    packed = await async_client.post(
         f"/operations/packaging-tasks/{task_id}/lines/{line['id']}/pack",
         headers=headers,
         json={"quantity": 1, "idempotency_key": "pack-no-stock-at-all"},
     )
-    assert blocked.status_code == 409, blocked.text
-    detail = blocked.json()["detail"]
-    assert isinstance(detail, dict)
-    assert detail["code"] == "insufficient_packaging_stock"
-    assert isinstance(detail.get("message"), str)
-    assert detail["message"]
-    # The message should be useful: point at the product and say how much is on hand.
-    assert "0" in detail["message"]
+    assert packed.status_code == 200, packed.text
+    body = packed.json()
+    assert body["fulfilled_order"] is not None
+    warnings = body.get("warnings") or []
+    assert warnings, "оператор должен увидеть, что остаток не списан"
+    joined = " ".join(warnings)
+    assert "остаток не списан" in joined
+    # В сообщении по-прежнему видно, чего и где не хватило.
+    assert "0" in joined
+
+    async with SessionLocal() as session:
+        balances = (
+            await session.execute(
+                select(InventoryBalance).where(
+                    InventoryBalance.tenant_id == tenant_id,
+                    InventoryBalance.product_id == product_id,
+                )
+            )
+        ).scalars().all()
+    for balance in balances:
+        assert balance.quantity >= 0, "остаток не должен уходить в минус"
+        assert balance.quantity_unpacked >= 0
+        assert balance.quantity_packed >= 0

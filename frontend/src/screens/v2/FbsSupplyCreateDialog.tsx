@@ -66,12 +66,15 @@ export function FbsSupplyCreateDialog({
 
   const orderKey = useMemo(() => orderIds.join(','), [orderIds])
 
+  // I6 (20.08.2026): сервер считает отпечаток запроса вместе со способом сдачи. Если
+  // ключ не менять при переключении «Склад или СЦ» ↔ «Пункт выдачи», оператор упирается
+  // в «ключ уже использован с другими параметрами» и выходит только перезакрытием окна.
   useEffect(() => {
     if (!open) return
     setIdempotencyKey(createFbsIdempotencyKey())
     setError(null)
     setPending(null)
-  }, [open, orderKey])
+  }, [open, orderKey, deliveryType])
 
   useEffect(() => {
     if (!open || orderIds.length === 0) {
@@ -129,6 +132,9 @@ export function FbsSupplyCreateDialog({
         const wbSupply = typeof context?.wb_supply_id === 'string' ? ` WB: ${context.wb_supply_id}.` : ''
         setPending(`${cause.message}${wbSupply} Повторите проверку, чтобы прочитать фактический состав WB.`)
       } else {
+        // Неудачная попытка не должна запирать оператора на использованном ключе:
+        // следующее нажатие уходит со свежим.
+        setIdempotencyKey(createFbsIdempotencyKey())
         setError(cause instanceof Error ? cause.message : 'Не удалось создать поставку.')
       }
     } finally {

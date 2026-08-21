@@ -1,4 +1,3 @@
-# ruff: noqa: RUF001
 """FBS supply assembly — preflight, atomic from-orders, legacy add, stickers."""
 
 from __future__ import annotations
@@ -98,6 +97,12 @@ from app.services.wildberries_errors import (
 from app.services.wildberries_fbs_client import split_marketplace_order_id_batches
 
 logger = logging.getLogger(__name__)
+
+# L1 (21.08.2026): действие оператора важнее фонового опроса WB. Фоновый цикл держит
+# блокировку селлера дольше полуминуты (замер на бою — около пятидесяти секунд).
+# Создание поставки ждало всего пятнадцать секунд и отдавало 503 «синхронизация ещё
+# идёт». Ждём дольше обычного цикла: оператор дожидается очереди вместо отказа.
+WB_LOCK_WAIT_FOR_OPERATOR_SEC = 90.0
 
 _VALID_DELIVERY_TYPES = {FBS_DELIVERY_TYPE_WAREHOUSE_SC, FBS_DELIVERY_TYPE_PVZ}
 _MOSCOW_TZ = ZoneInfo("Europe/Moscow")
@@ -525,27 +530,13 @@ async def create_supply_from_orders(
             http_status=409,
         )
 
-    locked = await validate_supply_composition(
-        session,
-        tenant_id,
-        order_ids,
-        planned_delivery_type=planned_delivery_type,
-        for_update=True,
-    )
-    if not locked.compatible:
-        raise FbsSupplyError(
-            "order_incompatible",
-            message="Заказ нельзя добавить в выбранную поставку.",
-            context=_issue_context(locked),
-            retryable=False,
-            http_status=409,
-        )
-
-    orders = list(locked.orders)
-    summary = locked.summary
-    assert summary is not None
-    token = await _require_marketplace_token(session, tenant_id, seller_id)
-    async with wb_seller_lock(session, seller_id, wait_timeout_sec=15.0) as wb_lock_acquired:
+    # Порядок важен: сначала встаём в очередь к WB по селлеру, и только потом берём
+    # строки заказов на запись. Иначе ожидание очереди (до полутора минут) держало бы
+    # заблокированными строки заказов и соединение с базой — как раз в момент, когда
+    # несколько операторов жмут «Создать поставку» одновременно.
+    async with wb_seller_lock(
+        session, seller_id, wait_timeout_sec=WB_LOCK_WAIT_FOR_OPERATOR_SEC
+    ) as wb_lock_acquired:
         if not wb_lock_acquired:
             raise FbsSupplyError(
                 "operation_in_progress",
@@ -553,6 +544,26 @@ async def create_supply_from_orders(
                 retryable=True,
                 http_status=503,
             )
+        locked = await validate_supply_composition(
+            session,
+            tenant_id,
+            order_ids,
+            planned_delivery_type=planned_delivery_type,
+            for_update=True,
+        )
+        if not locked.compatible:
+            raise FbsSupplyError(
+                "order_incompatible",
+                message="Заказ нельзя добавить в выбранную поставку.",
+                context=_issue_context(locked),
+                retryable=False,
+                http_status=409,
+            )
+
+        orders = list(locked.orders)
+        summary = locked.summary
+        assert summary is not None
+        token = await _require_marketplace_token(session, tenant_id, seller_id)
         operation = await create_pending_operation(
             session,
             tenant_id=tenant_id,
@@ -1281,6 +1292,44 @@ async def update_planned_shipment_date(
     return supply
 
 
+async def skip_honest_sign(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    *,
+    actor_user_id: uuid.UUID,
+) -> FbsSupply:
+    """Пропустить требование маркировки Честный знак для поставки.
+
+    Идемпотентна: повторный вызов ничего не меняет и не падает.
+    Нельзя применять к поставке, уже сданной в WB (статусы in_delivery или done).
+    """
+    supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
+    if supply is None:
+        raise FbsSupplyError("supply_not_found")
+
+    # Нельзя пропускать маркировку на уже переданных поставках.
+    # in_delivery значит, поставка уже передана в WB для доставки.
+    # done значит, поставка полностью завершена.
+    if supply.status in (FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE):
+        raise FbsSupplyError(
+            "supply_already_submitted",
+            message="Невозможно пропустить маркировку: поставка уже передана в WB.",
+            http_status=409,
+        )
+
+    # Идемпотентность: если флаг уже стоит, ничего не делаем.
+    if supply.honest_sign_skipped_at is not None:
+        return supply
+
+    supply.honest_sign_skipped_at = datetime.now(UTC)
+    supply.honest_sign_skipped_by_user_id = actor_user_id
+    await session.commit()
+    await session.refresh(supply)
+    await session.refresh(supply, attribute_names=["orders"])
+    return supply
+
+
 async def add_order_to_supply(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -1443,7 +1492,9 @@ async def add_orders_to_existing_supply(
     token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
     requested_wb_order_ids = [int(order.wb_order_id) for order in orders]
     existing_wb_order_ids = {int(order.wb_order_id) for order in supply.orders}
-    async with wb_seller_lock(session, supply.seller_id, wait_timeout_sec=15.0) as wb_lock_acquired:
+    async with wb_seller_lock(
+        session, supply.seller_id, wait_timeout_sec=WB_LOCK_WAIT_FOR_OPERATOR_SEC
+    ) as wb_lock_acquired:
         if not wb_lock_acquired:
             raise FbsSupplyError(
                 "operation_in_progress",

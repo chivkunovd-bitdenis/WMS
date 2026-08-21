@@ -404,6 +404,10 @@ def _build_delivery_checks(
     without_distribution: bool = False,
     unassigned_packed_order_ids: frozenset[uuid.UUID] = frozenset(),
 ) -> list[DeliveryCheck]:
+    # «Сдать без Честного знака» снимает НАШЕ требование маркировки по поставке.
+    # Требование самого Wildberries, записанное в required_meta_json заказа, этим
+    # флагом не отменяется: такой заказ по-прежнему не уедет, и это правильно.
+    honest_sign_skipped = supply.honest_sign_skipped_at is not None
     checks: list[DeliveryCheck] = []
 
     if supply.status in _DELIVER_BLOCKED_SUPPLY_STATUSES:
@@ -479,8 +483,11 @@ def _build_delivery_checks(
             )
 
         product = order.product
-        if product is not None and product.requires_honest_sign and not _order_has_sgtin_marking(
-            order
+        if (
+            product is not None
+            and product.requires_honest_sign
+            and not _order_has_sgtin_marking(order)
+            and not honest_sign_skipped
         ):
             checks.append(
                 DeliveryCheck(
@@ -547,7 +554,7 @@ def _build_delivery_checks(
         checks.append(
             DeliveryCheck(
                 code="boxes_without_distribution",
-                message="Короба созданы без распределения товаров.",  # noqa: RUF001
+                message="Короба созданы без распределения товаров.",
                 ok=True,
             )
         )

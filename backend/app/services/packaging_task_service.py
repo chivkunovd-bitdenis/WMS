@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -109,6 +109,8 @@ def task_progress(task: PackagingTask) -> PackagingTaskProgress:
 class PackProgressResult:
     task: PackagingTask
     fulfilled_order: object | None = None
+    # Предупреждения по остатку: упаковка FBS их больше не превращает в отказ.
+    warnings: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -912,7 +914,11 @@ async def record_pack_progress(
         loaded = await get_task(session, tenant_id, task_id)
         assert loaded is not None
         fulfilled_order = pack_result.units[-1].order if pack_result.units else None
-        return PackProgressResult(task=loaded, fulfilled_order=fulfilled_order)
+        return PackProgressResult(
+            task=loaded,
+            fulfilled_order=fulfilled_order,
+            warnings=pack_result.warnings,
+        )
 
     if _is_mp_unload_task(task):
         line.qty_packed_in_task = int(line.qty_packed_in_task) + qty

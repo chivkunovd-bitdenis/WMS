@@ -169,6 +169,7 @@ async def get_supply_workspace(
                 str(supply.packaging_task_id) if supply.packaging_task_id else None
             ),
             "barcode_asset": barcode_asset,
+            "honest_sign_skipped": supply.honest_sign_skipped_at is not None,
         },
         "stage": stage,
         "progress": {

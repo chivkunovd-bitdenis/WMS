@@ -51,6 +51,11 @@ extend-exclude = ["alembic/versions", "alembic/env.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+# Комментарии и сообщения оператору в этом проекте написаны по-русски, и линтер
+# принимает кириллические буквы, похожие на латинские, за опечатку. Из-за этого
+# правки начинали глушить проверку целыми файлами. Разрешаем эти буквы явно.
+allowed-confusables = ["а", "б", "в", "е", "и", "к", "м", "н", "о", "р", "с", "у", "х", "р",
+                       "А", "Б", "В", "Е", "З", "И", "К", "М", "Н", "О", "Р", "С", "Т", "У", "Х"]
 
 [tool.ruff.lint.per-file-ignores]
 # DATABASE_URL must be set before importing app.db.session (shared engine for HTTP + BackgroundTasks).

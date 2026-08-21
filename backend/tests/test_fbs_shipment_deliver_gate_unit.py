@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -25,12 +26,16 @@ def _mock_supply(
     *,
     delivery_type: str = FBS_DELIVERY_TYPE_WAREHOUSE_SC,
     trbxes: list | None = None,
+    honest_sign_skipped_at: datetime | None = None,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         id=uuid.uuid4(),
         status=FBS_SUPPLY_STATUS_PACKED,
         delivery_type=delivery_type,
         trbxes=trbxes or [],
+        # Поставка, по которой оператор нажал «Сдать без Честного знака», хранит здесь
+        # время снятия требования; у обычной поставки поле пустое.
+        honest_sign_skipped_at=honest_sign_skipped_at,
     )
 
 
@@ -128,3 +133,30 @@ def test_deliver_allows_boxes_without_distribution() -> None:
     codes = {check.code for check in checks}
     assert "boxes_without_distribution" in codes
     assert "packed_order_unassigned" not in codes
+
+
+def _mock_order_needing_honest_sign() -> SimpleNamespace:
+    """Заказ на маркированный товар, по которому код так и не отсканировали."""
+    order = _mock_order(FBS_ORDER_STATUS_PACKED)
+    order.product = SimpleNamespace(requires_honest_sign=True)
+    return order
+
+
+def test_marking_required_blocks_delivery_by_default() -> None:
+    checks = _build_delivery_checks(
+        _mock_supply(),
+        [_mock_order_needing_honest_sign()],
+        cargo_qr_ready=True,
+    )
+    assert any(check.code == "marking_required" and not check.ok for check in checks)
+
+
+def test_skip_honest_sign_removes_our_marking_gate() -> None:
+    """«Сдать без Честного знака» снимает требование, выставленное нами."""
+    checks = _build_delivery_checks(
+        _mock_supply(honest_sign_skipped_at=datetime.now(UTC)),
+        [_mock_order_needing_honest_sign()],
+        cargo_qr_ready=True,
+    )
+    assert not any(check.code == "marking_required" for check in checks)
+    _validate_checks_pass(checks)

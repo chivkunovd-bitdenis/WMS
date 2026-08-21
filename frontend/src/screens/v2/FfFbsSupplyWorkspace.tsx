@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Checkbox,
+  Chip,
   CircularProgress,
   Collapse,
   Dialog,
@@ -70,6 +71,7 @@ import {
   scanFbsPickLocation,
   scanFbsPickProduct,
   selectFbsManualPickLocation,
+  skipFbsSupplyHonestSign,
   startFbsSupplyWork,
   undoFbsPick,
   updateFbsSupplyPlannedShipmentDate,
@@ -319,6 +321,8 @@ export function FfFbsSupplyWorkspace({
   const [addableSelected, setAddableSelected] = useState<Set<string>>(() => new Set())
   const [addOrdersBusy, setAddOrdersBusy] = useState(false)
   const [plannedShipmentDateDraft, setPlannedShipmentDateDraft] = useState('')
+  const [skipHonestSignOpen, setSkipHonestSignOpen] = useState(false)
+  const [skipHonestSignBusy, setSkipHonestSignBusy] = useState(false)
   const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
 
   const load = useCallback(
@@ -885,6 +889,8 @@ export function FfFbsSupplyWorkspace({
   }, [workspace?.supply.packaging_task_id, token, authHeaders, load])
 
   const requiresOrderHonestSign = (order: FbsWorkspace['orders'][number]) => {
+    // Если поставка помечена как честный знак пропущен, требование снято со всей поставки.
+    if (workspace?.supply.honest_sign_skipped) return false
     const line = order.product.id ? packLineByProduct.get(order.product.id) : undefined
     return Boolean(line?.requires_honest_sign || order.metadata.required.includes('sgtin'))
   }
@@ -1000,6 +1006,10 @@ export function FfFbsSupplyWorkspace({
     setNotice(null)
     try {
       let current = packagingTask
+      // Упаковка больше не падает из-за остатка в ячейке, но сервер может сказать, что
+      // списал из другой ячейки или не списал вовсе. Молчать об этом нельзя — собираем
+      // все предупреждения и показываем одним сообщением в конце.
+      const stockWarnings: string[] = []
       for (const line of current.lines) {
         const remaining = line.qty_need_pack - line.qty_packed_in_task
         if (remaining <= 0) continue
@@ -1012,7 +1022,14 @@ export function FfFbsSupplyWorkspace({
           setError(await readApiErrorMessage(response))
           return
         }
-        current = ((await response.json()) as { packaging_task: PackagingTask }).packaging_task
+        const packed = (await response.json()) as {
+          packaging_task: PackagingTask
+          warnings?: string[] | null
+        }
+        for (const warning of packed.warnings ?? []) {
+          if (!stockWarnings.includes(warning)) stockWarnings.push(warning)
+        }
+        current = packed.packaging_task
       }
       const done = await fetch(apiUrl(`/operations/packaging-tasks/${current.id}/complete`), {
         method: 'POST',
@@ -1024,12 +1041,32 @@ export function FfFbsSupplyWorkspace({
         return
       }
       setPackagingTask((await done.json()) as PackagingTask)
-      setNotice('Упаковка завершена.')
+      setNotice(
+        stockWarnings.length > 0
+          ? `Упаковка завершена. ${stockWarnings.join(' ')}`
+          : 'Упаковка завершена.',
+      )
       await load()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Не удалось завершить упаковку.')
     } finally {
       setBusy(false)
+    }
+  }
+
+  const performSkipHonestSign = async () => {
+    if (!workspace) return
+    setSkipHonestSignBusy(true)
+    setError(null)
+    try {
+      const next = await skipFbsSupplyHonestSign(token, authHeaders, workspace.supply.id)
+      setWorkspace(next)
+      setSkipHonestSignOpen(false)
+      setNotice('Требование Честного знака снято со всей поставки.')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось снять требование Честного знака.')
+    } finally {
+      setSkipHonestSignBusy(false)
     }
   }
 
@@ -1718,7 +1755,17 @@ export function FfFbsSupplyWorkspace({
                   <Box sx={{ px: 2, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
                       <Box>
-                        <Typography variant="h6">Упаковка и маркировка</Typography>
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
+                          <Typography variant="h6">Упаковка и маркировка</Typography>
+                          {workspace.supply.honest_sign_skipped ? (
+                            <Chip
+                              size="small"
+                              color="warning"
+                              label="Сдаём без Честного знака"
+                              data-testid="fbs-honest-sign-skipped-chip"
+                            />
+                          ) : null}
+                        </Stack>
                         <Typography variant="body2" color="text.secondary">
                           Напечатано {printedOrdersCount} из {packingOrders.length} · упаковано {workspace.progress.packed} из {workspace.progress.total}
                         </Typography>
@@ -1737,6 +1784,16 @@ export function FfFbsSupplyWorkspace({
                         <Button variant="contained" disabled={!packagingEditable || busy} onClick={() => void packEverything()}>
                           Всё упаковано
                         </Button>
+                        {!workspace.supply.honest_sign_skipped && packingOrders.length > 0 ? (
+                          <Button
+                            color="warning"
+                            disabled={!packagingEditable || skipHonestSignBusy || busy}
+                            onClick={() => setSkipHonestSignOpen(true)}
+                            data-testid="fbs-skip-honest-sign"
+                          >
+                            Сдать без Честного знака
+                          </Button>
+                        ) : null}
                       </Stack>
                     </Stack>
                   </Box>
@@ -2219,6 +2276,45 @@ export function FfFbsSupplyWorkspace({
             data-testid="fbs-05-workspace-add-orders-submit"
           >
             Добавить заказы
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog open={skipHonestSignOpen} onClose={skipHonestSignBusy ? undefined : () => setSkipHonestSignOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Сдать без Честного знака?</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.5}>
+            <Typography variant="body2">
+              Требование маркировки снимается со всей поставки. При отправке:
+            </Typography>
+            <Stack component="ul" spacing={0.5} sx={{ pl: 3, my: 0 }}>
+              <Typography component="li" variant="body2">
+                Коды Честного знака по незаполненным заказам в WB не уйдут.
+              </Typography>
+              <Typography component="li" variant="body2">
+                Вывод из оборота в системе Честного знака остаётся на продавце.
+              </Typography>
+              <Typography component="li" variant="body2">
+                Уже отсканированные коды сохранятся и будут отправлены как обычно.
+              </Typography>
+              <Typography component="li" variant="body2">
+                Если Wildberries по заказу требует маркировку обязательной, сдать его без
+                кода всё равно не выйдет — это ограничение маркетплейса, а не наше.
+              </Typography>
+            </Stack>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSkipHonestSignOpen(false)} disabled={skipHonestSignBusy}>
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            disabled={skipHonestSignBusy}
+            onClick={() => void performSkipHonestSign()}
+            data-testid="fbs-skip-honest-sign-confirm"
+          >
+            Сдать без Честного знака
           </Button>
         </DialogActions>
       </Dialog>

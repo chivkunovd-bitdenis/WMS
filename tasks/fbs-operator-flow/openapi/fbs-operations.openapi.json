@@ -1477,6 +1477,54 @@
         }
       }
     },
+    "/operations/fbs-supplies/{supply_id}/honest-sign-skip": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Skip Fbs Supply Honest Sign",
+        "operationId": "skip_fbs_supply_honest_sign_operations_fbs_supplies__supply_id__honest_sign_skip_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsWorkspaceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/operations/fbs-supplies/worklist": {
       "get": {
         "tags": [
@@ -8268,6 +8316,17 @@
               }
             ],
             "title": "Source"
+          },
+          "value_tail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Tail"
           }
         },
         "type": "object",
@@ -9494,6 +9553,10 @@
                 "type": "null"
               }
             ]
+          },
+          "honest_sign_skipped": {
+            "type": "boolean",
+            "title": "Honest Sign Skipped"
           }
         },
         "type": "object",
@@ -9510,7 +9573,8 @@
           "planned_shipment_date",
           "nearest_deadline_at",
           "packaging_task_id",
-          "barcode_asset"
+          "barcode_asset",
+          "honest_sign_skipped"
         ],
         "title": "FbsWorkspaceSupplyOut"
       },
@@ -12301,6 +12365,10 @@
           "available": {
             "type": "integer",
             "title": "Available"
+          },
+          "picked": {
+            "type": "integer",
+            "title": "Picked"
           }
         },
         "type": "object",
@@ -12309,7 +12377,8 @@
           "location_code",
           "quantity",
           "reserved",
-          "available"
+          "available",
+          "picked"
         ],
         "title": "MarketplaceUnloadPickOptionLocationOut"
       },
@@ -12470,6 +12539,33 @@
           "kind"
         ],
         "title": "MarketplaceUnloadPickScanOut"
+      },
+      "MarketplaceUnloadPickSetBody": {
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Product Id"
+          },
+          "storage_location_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Storage Location Id"
+          },
+          "quantity": {
+            "type": "integer",
+            "maximum": 1000000000.0,
+            "minimum": 0.0,
+            "title": "Quantity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "storage_location_id",
+          "quantity"
+        ],
+        "title": "MarketplaceUnloadPickSetBody"
       },
       "MarketplaceUnloadRequestCreate": {
         "properties": {
@@ -13802,6 +13898,20 @@
                 "type": "null"
               }
             ]
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
           }
         },
         "type": "object",
