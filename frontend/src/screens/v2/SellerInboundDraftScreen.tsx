@@ -200,6 +200,7 @@ export function SellerInboundDraftScreen({
   const [localError, setLocalError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [catalogLoading, setCatalogLoading] = useState(false)
   const [printMeta, setPrintMeta] = useState<ProductLineDisplayMeta | null>(null)
   const [plannedDateDraft, setPlannedDateDraft] = useState<string>('')
   const [plannedBoxCountDraft, setPlannedBoxCountDraft] = useState<string>('')
@@ -332,24 +333,35 @@ export function SellerInboundDraftScreen({
     }
   }, [authHeaders, catalog, token])
 
+  /**
+   * 21.08.2026: окно открывается сразу, каталог едет следом. Раньше сначала ждали
+   * весь каталог и только потом показывали окно — у продавца с девятью тысячами
+   * товаров это выглядело так, будто кнопка не работает вовсе: нажимаешь, и
+   * несколько секунд не происходит ничего.
+   */
   const openPicker = async () => {
     setLocalError(null)
-    if (catalog === null) {
-      try {
-        const res = await fetch(apiUrl('/products/wb-catalog'), {
-          headers: { ...authHeaders(token) },
-        })
-        if (!res.ok) {
-          setLocalError(await readApiErrorMessage(res))
-          return
-        }
-        setCatalog((await res.json()) as WbCatalogRow[])
-      } catch (e) {
-        setLocalError(e instanceof Error ? e.message : 'Не удалось загрузить каталог.')
+    setPickerOpen(true)
+    if (catalog !== null) {
+      return
+    }
+    setCatalogLoading(true)
+    try {
+      const res = await fetch(apiUrl('/products/wb-catalog'), {
+        headers: { ...authHeaders(token) },
+      })
+      if (!res.ok) {
+        setLocalError(await readApiErrorMessage(res))
+        setPickerOpen(false)
         return
       }
+      setCatalog((await res.json()) as WbCatalogRow[])
+    } catch (e) {
+      setLocalError(e instanceof Error ? e.message : 'Не удалось загрузить каталог.')
+      setPickerOpen(false)
+    } finally {
+      setCatalogLoading(false)
     }
-    setPickerOpen(true)
   }
 
   const applyPicker = async (pickerQtyByProduct: Record<string, number>) => {
@@ -1092,6 +1104,7 @@ export function SellerInboundDraftScreen({
 
       <SellerWbProductPickerDialog
         open={pickerOpen}
+        catalogLoading={catalogLoading}
         busy={busy}
         catalog={catalog}
         disabledProductIds={lineProductIds}

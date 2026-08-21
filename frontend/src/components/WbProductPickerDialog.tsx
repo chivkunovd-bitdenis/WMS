@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Checkbox,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -55,6 +56,8 @@ type PickerVariant = 'seller' | 'ff'
 type Props = {
   open: boolean
   busy: boolean
+  /** Каталог ещё едет с сервера: окно уже открыто, таблицы пока нет. */
+  catalogLoading?: boolean
   catalog: WbProductPickerCatalogRow[] | null
   disabledProductIds: Set<string>
   testIdPrefix: string
@@ -129,6 +132,7 @@ function inDraftCaption(message: string): ReactNode {
 export function WbProductPickerDialog({
   open,
   busy,
+  catalogLoading = false,
   catalog,
   disabledProductIds,
   testIdPrefix,
@@ -176,6 +180,13 @@ export function WbProductPickerDialog({
   }, [catalog])
 
   const categories = useMemo(() => wbCategories(catalog), [catalog])
+  /**
+   * Потолок отрисовки. 21.08.2026: у продавца с 9266 товарами окно выбора рисовало
+   * все строки разом — с фотографией, галкой и полем ввода в каждой. Вкладка
+   * замирала намертво, и человек считал, что кнопка не работает. Поиск и выбор
+   * по-прежнему идут по всему каталогу: ограничена только отрисовка.
+   */
+  const PICKER_VISIBLE_LIMIT = 200
   const filteredPickerRows = useMemo(
     () => {
       if (!catalog) {
@@ -233,6 +244,12 @@ export function WbProductPickerDialog({
       return next
     })
   }
+
+  const visiblePickerRows = useMemo(
+    () => filteredPickerRows.slice(0, PICKER_VISIBLE_LIMIT),
+    [filteredPickerRows],
+  )
+  const hiddenPickerRowsCount = filteredPickerRows.length - visiblePickerRows.length
 
   const selectCurrentRows = () => {
     const selectable = filteredPickerRows.filter((row) => !disabledProductIds.has(row.id))
@@ -439,6 +456,24 @@ export function WbProductPickerDialog({
             </Button>
           </Stack>
         </Stack>
+        {catalogLoading ? (
+          <Stack
+            direction="row"
+            spacing={1.5}
+            sx={{ alignItems: 'center', py: 3 }}
+            data-testid={`${testIdPrefix}-loading`}
+          >
+            <CircularProgress size={22} />
+            <Typography variant="body2">Загружаем каталог товаров…</Typography>
+          </Stack>
+        ) : null}
+        {hiddenPickerRowsCount > 0 ? (
+          <Alert severity="info" sx={{ mb: 1 }} data-testid={`${testIdPrefix}-limited`}>
+            Показаны первые {visiblePickerRows.length} товаров из {filteredPickerRows.length}.
+            Поиск и «Выбрать все» работают по всему каталогу — введите артикул, штрихкод или
+            название, чтобы найти нужный товар.
+          </Alert>
+        ) : null}
         <TableContainer sx={{ width: '100%', overflowX: 'hidden' }}>
           <Table
             size="small"
@@ -476,7 +511,7 @@ export function WbProductPickerDialog({
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredPickerRows.map((r) => {
+              {visiblePickerRows.map((r) => {
                 const inDraft = disabledProductIds.has(r.id)
                 const available = getAvailable?.(r.id) ?? 0
                 return (
