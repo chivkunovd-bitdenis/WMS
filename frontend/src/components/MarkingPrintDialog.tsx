@@ -711,6 +711,21 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       await ctx.fbsTape.confirmQrApplied(asset)
     }
     ctx.onPrinted()
+    // L8 (21.08.2026): заказы, по которым сервер не смог собрать стикер, раньше молча
+    // выпадали из ленты — сообщение показывалось только когда не напечаталось вообще
+    // ничего. Оператор получал ленту короче листа подбора и не знал об этом. Теперь
+    // окно остаётся открытым и прямо называет, каких заказов в ленте нет.
+    if (result.order_errors.length > 0) {
+      const missing = result.order_errors
+      const numbers = missing.slice(0, 12).map((item) => item.wb_order_id).join(', ')
+      const tail = missing.length > 12 ? ` и ещё ${missing.length - 12}` : ''
+      setError(
+        `Напечатано заказов: ${result.orders.length} из ${result.orders.length + missing.length}. ` +
+        `Не попали в ленту: ${numbers}${tail}. Причина по первому: ${missing[0].message}. ` +
+        'Повторите печать по этим заказам.',
+      )
+      return false
+    }
     if (closeAfter) {
       onClose()
     }

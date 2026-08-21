@@ -121,7 +121,13 @@ async def print_fbs_order_tape(
                 supply_id,
                 kind="order_sticker",
                 order_ids=order_ids,
-                retry_missing=False,
+                # L8 (21.08.2026): лента печаталась короче листа подбора. Причина —
+                # False здесь означает «перезапросить у WB стикеры по ВСЕМ заказам
+                # заново». На полутора сотнях заказов любая осечка WB на одном куске
+                # (лимит запросов, таймаут) выбивала эти заказы из ленты молча.
+                # True — переиспользуем уже полученные стикеры и просим только то,
+                # чего не хватает.
+                retry_missing=True,
                 http_client=http_client,
             )
         except FbsPrintAssetError as exc:
