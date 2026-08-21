@@ -45,3 +45,19 @@ breaker for an immutable B URL missing from the inventory/manifest, and map both
 case IDs in the Markdown and JSON coverage matrix to the S14 complete-inventory
 row. Until then the blocker is `CASE_AUDIT_REQUIRED`; S16 must not be accepted
 from this audited package.
+
+## Writer rework closure note
+
+`pipeline-ba` repaired the S15 package after this audit snapshot by adding
+`D12-C1-15` as the planned-S19 direct complete-current-B-inventory case and
+`D12-C1-16` as its independent immutable-URL-outside-manifest/inventory
+breaker. Both are mapped in the Markdown and JSON matrices to AC02 and the S14
+complete-inventory attack lane. The direct case requires equality between every
+immutable B response and the candidate-manifest-derived set, recursively
+including chunks, CSS imports, fonts and images; the breaker requires a hard
+failure before browser or candidate proof when an immutable URL has no matching
+manifest/inventory member.
+
+This note is not an audit verdict and does not change `CASE_AUDIT_FAILED` in
+this document. An independent `case-auditor` must re-audit the repaired exact
+S15 package and issue the controller receipt before S16 can proceed.

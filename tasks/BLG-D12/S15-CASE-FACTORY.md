@@ -10,7 +10,7 @@ secret access, or any live WB/Ozon action.
 
 **BA verdict:** `CASES_READY`.
 
-`S15-CASES.json` defines fourteen GOLD cases. Together they prove the one
+`S15-CASES.json` defines sixteen GOLD cases. Together they prove the one
 release outcome: a changed entry document is revalidated during an ordinary
 warm-cache navigation, it loads the candidate's immutable referenced assets,
 and the prior immutable artifact remains internally consistent through the
@@ -47,13 +47,14 @@ production resource is addressed; external egress is forbidden.
 | --- | --- | --- | --- | --- |
 | AC01: FF entry aliases and fallback revalidate for `GET` and `HEAD` | `D12-C1-01` | `D12-C1-02`, `D12-C1-11` | S11 entry-document rule; S13 A1 | `scripts/testing/test_blg_d12_cache_control.py::test_ff_entry_aliases` |
 | AC01: seller aliases and fallback have the same policy | `D12-C1-03` | `D12-C1-11` | S13 A1; S14 alias falsification | `scripts/testing/test_blg_d12_cache_control.py::test_seller_entry_aliases` |
-| AC02: referenced content-addressed asset is immutable and manifest-bound | `D12-C1-04` | `D12-C1-05`, `D12-C1-12` | S11 hashed-asset policy; S13 A2 | `scripts/testing/test_blg_d12_cache_control.py::test_manifest_bound_immutable_assets` |
+| AC02: referenced content-addressed asset is immutable and manifest-bound | `D12-C1-04`, `D12-C1-15` | `D12-C1-05`, `D12-C1-12`, `D12-C1-16` | S11 hashed-asset policy; S13 A2 | `scripts/testing/test_blg_d12_cache_control.py::test_manifest_bound_immutable_assets`, `scripts/testing/test_blg_d12_cache_control.py::test_complete_b_immutable_inventory` |
 | AC03: HTML and non-hashed assets never become immutable | `D12-C1-05` | `D12-C1-12` | S11 non-hashed prohibition | `scripts/testing/test_blg_d12_cache_control.py::test_non_hashed_never_immutable` |
 | AC04: A-warmed ordinary navigation/reload reaches B without cache clearing | `D12-C1-06` | `D12-C1-07`, `D12-C1-13` | S11 operator outcome; S13 warm-cache proof | `frontend/tests-e2e/release-cache-control.spec.ts#D12-C1-06` |
 | AC05: stale validator cannot preserve changed A HTML; identical current HTML may 304 | `D12-C1-08` | `D12-C1-09` | S11 validator boundary | `scripts/testing/test_blg_d12_cache_control.py::test_entry_validators` |
 | AC06: prior immutable assets are retained and never overwritten | `D12-C1-10` | `D12-C1-14` | S11 rollback retention; S13 A3 | `scripts/testing/test_blg_d12_cache_control.py::test_retained_a_assets` |
 | AC07: missing/redirect/error responses are not asset or entry proof | `D12-C1-12` | `D12-C1-02` | S11 proof boundary; S13 A2 | `scripts/testing/test_blg_d12_cache_control.py::test_false_proof_responses_rejected` |
 | Effective policy is candidate-bound and unmodified by outer layer | `D12-C1-11` | `D12-C1-02` | S13 A4; S14 header-conflict attack | `scripts/testing/test_blg_d12_cache_control.py::test_effective_header_has_one_owner` |
+| S14 complete immutable inventory: current B, transitive chunks, CSS imports, fonts and images are candidate-manifest-bound | `D12-C1-15` | `D12-C1-16` | S14 complete-inventory constraint; S13 A2 | `scripts/testing/test_blg_d12_cache_control.py::test_complete_b_immutable_inventory`, `scripts/testing/test_blg_d12_cache_control.py::test_immutable_url_outside_manifest_rejected` |
 
 There are no applicable API, authentication, authorization, tenant, database,
 worker, print, device, or marketplace cases: every approved upstream artifact
@@ -83,8 +84,12 @@ console errors and failed requests. Digest comparisons request
 `Accept-Encoding: identity`.
 
 S19 must fail closed for a missing D09 identity interface, an inventory that
-omits transitive chunks/fonts/images, non-deterministic A/B switching, a
-profile/origin reset, or an oracle change. Hard reload may be collected only
+omits transitive chunks/fonts/images, an immutable URL outside that inventory
+or its candidate manifest, non-deterministic A/B switching, a profile/origin
+reset, or an oracle change. `D12-C1-15` derives the complete current-B set from
+the candidate manifest plus its transitive import graph and verifies every
+served immutable response; `D12-C1-16` proves that the same verifier rejects a
+served immutable URL absent from that set. Hard reload may be collected only
 after `D12-C1-06` succeeds as supporting recovery evidence. S23 later executes
 the same package against the immutable candidate outside production; S28 only
 repeats it after separately authorized deployment.
