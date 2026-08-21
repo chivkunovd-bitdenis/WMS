@@ -2171,6 +2171,64 @@
         }
       }
     },
+    "/operations/fbs-supplies/{supply_id}/boxes-without-distribution": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Toggle the boxes-without-distribution mode for a supply",
+        "operationId": "set_fbs_boxes_without_distribution_operations_fbs_supplies__supply_id__boxes_without_distribution_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsBoxesWithoutDistributionBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsWorkspaceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/operations/fbs-supplies/{supply_id}/boxes/{box_id}/orders": {
       "post": {
         "tags": [
@@ -4599,6 +4657,19 @@
           "created_at"
         ],
         "title": "DiscrepancyActSummaryOut"
+      },
+      "FbsBoxesWithoutDistributionBody": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "FbsBoxesWithoutDistributionBody"
       },
       "FbsCargoPlaceDraftBody": {
         "properties": {
@@ -9557,6 +9628,10 @@
           "honest_sign_skipped": {
             "type": "boolean",
             "title": "Honest Sign Skipped"
+          },
+          "boxes_without_distribution": {
+            "type": "boolean",
+            "title": "Boxes Without Distribution"
           }
         },
         "type": "object",
@@ -9574,7 +9649,8 @@
           "nearest_deadline_at",
           "packaging_task_id",
           "barcode_asset",
-          "honest_sign_skipped"
+          "honest_sign_skipped",
+          "boxes_without_distribution"
         ],
         "title": "FbsWorkspaceSupplyOut"
       },

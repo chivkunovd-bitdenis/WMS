@@ -71,6 +71,7 @@ import {
   scanFbsPickLocation,
   scanFbsPickProduct,
   selectFbsManualPickLocation,
+  setFbsBoxesWithoutDistribution,
   skipFbsSupplyHonestSign,
   startFbsSupplyWork,
   undoFbsPick,
@@ -791,6 +792,21 @@ export function FfFbsSupplyWorkspace({
     if (next) clearPersistentOperationKey(workspace.supply.id, 'box-create', `${boxMode}:${count}`)
   }
 
+  // Переключатель режима «без распределения» после того, как короба уже
+  // созданы — то, чего раньше не было (дефект I15): галка была заблокирована,
+  // как только появился хотя бы один короб, и передумавший оператор мог
+  // только удалить короба и создать заново.
+  const toggleBoxesWithoutDistribution = async (nextEnabled: boolean) => {
+    if (!workspace) return
+    const next = await run(
+      () => setFbsBoxesWithoutDistribution(token, authHeaders, workspace.supply.id, nextEnabled),
+      nextEnabled ? 'Режим «без распределения» включён.' : 'Режим «без распределения» выключен.',
+    )
+    // Держим локальный предвыбор в синхроне, чтобы следующее «Добавить
+    // короба» отправило тот же режим, что уже действует на поставке.
+    if (next) setBoxesWithoutDistribution(nextEnabled)
+  }
+
   const assignBoxOrders = async () => {
     if (!workspace || !boxAssignTarget || boxAssignSelectedOrderIds.length === 0) return
     const next = await run(
@@ -1279,6 +1295,14 @@ export function FfFbsSupplyWorkspace({
   const boxDistributedCount = assignedBoxOrderIds.size
   const boxTotalCount = workspace?.progress.total ?? 0
   const boxRemainingCount = Math.max(0, boxTotalCount - boxDistributedCount)
+  // Дефект I15: пока короба ещё не созданы, режим — это только предвыбор
+  // перед первым «Добавить короба» (локальный boxesWithoutDistribution). Как
+  // только короба есть, галка отражает и меняет персистентный флаг поставки —
+  // но только пока в короба ничего не разложено, иначе переключение молча
+  // стёрло бы уже сделанную раскладку.
+  const boxesExist = (workspace?.boxes.length ?? 0) > 0
+  const boxesAlreadyDistributed = boxesExist && boxDistributedCount > 0
+  const boxesWithoutDistributionChecked = boxesExist ? hasNoDistributionBoxes : boxesWithoutDistribution
   const supplyQrAsset = workspace?.supply.barcode_asset ?? null
   const needsSupplyQr = Boolean(workspace?.supply)
   // A cargo-place QR is available per-box whenever WB registered a cargo
@@ -2022,19 +2046,30 @@ export function FfFbsSupplyWorkspace({
                       >
                         Печать всех QR ({workspace.boxes.length})
                       </Button>
-                      <FormControlLabel
-                        control={(
-                          <Checkbox
-                            checked={boxesWithoutDistribution}
-                            onChange={(event) => setBoxesWithoutDistribution(event.target.checked)}
-                            disabled={!stageIsCurrent || !packagingEditable || workspace.boxes.length > 0}
-                            data-testid="fbs-boxes-without-distribution"
+                      <Tooltip
+                        title={boxesAlreadyDistributed ? 'В короба уже разложены заказы — сначала уберите их из коробов.' : ''}
+                        disableHoverListener={!boxesAlreadyDistributed}
+                      >
+                        <span>
+                          <FormControlLabel
+                            control={(
+                              <Checkbox
+                                checked={boxesWithoutDistributionChecked}
+                                onChange={(event) => {
+                                  const checked = event.target.checked
+                                  if (boxesExist) void toggleBoxesWithoutDistribution(checked)
+                                  else setBoxesWithoutDistribution(checked)
+                                }}
+                                disabled={!stageIsCurrent || !packagingEditable || busy || boxesAlreadyDistributed}
+                                data-testid="fbs-boxes-without-distribution"
+                                data-task-id="FBS-12"
+                              />
+                            )}
+                            label="Без распределения"
                             data-task-id="FBS-12"
                           />
-                        )}
-                        label="Без распределения"
-                        data-task-id="FBS-12"
-                      />
+                        </span>
+                      </Tooltip>
                       <TextField label="Коробов" value={boxCount} size="small" type="number" disabled={!stageIsCurrent || !packagingEditable} onChange={(e) => setBoxCount(e.target.value)} slotProps={{ htmlInput: { min: 1, max: 100 } }} sx={{ width: 104 }} data-task-id="FBS-12" />
                       <Button variant="contained" disabled={!stageIsCurrent || !packagingEditable || !Number(boxCount)} onClick={() => void createBoxes()} data-task-id="FBS-12">Добавить короба</Button>
                     </Stack>
