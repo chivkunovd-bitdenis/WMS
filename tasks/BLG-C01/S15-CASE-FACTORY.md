@@ -38,6 +38,7 @@ candidate tree invalidates the bindings and returns to the owning stage.
 | Retry and concurrent assignment are one atomic outcome | BLG-C01 | AC06 | `backend/tests/test_fbs_packing_box.py` |
 | Marking, cargo-place, delivery and other gates remain independent | BLG-C01 | AC07 | `backend/tests/test_fbs_packing_box.py` |
 | Invalid migration parent, second head and destructive rollback are rejected | BLG-C01 | AC08 | `backend/tests/test_optional_packing_migration.py` |
+| Returning a tenant to required packing affects only future eligibility and preserves historic bypass truth | BLG-C01 | AC09 | `backend/tests/test_fbs_packing_box.py`, `frontend/tests-e2e/ff-fbs-supply.spec.ts` |
 | Tenant configuration uses one-UUID compare-and-set after runtime verification | BLG-C01 | AC10 | `backend/tests/test_release_configuration_contract.py` |
 | CAS zero/multiple/ambiguous scope stops release without mutation | BLG-C01 | AC11 | `backend/tests/test_release_configuration_contract.py` |
 | S28 operator journey is bounded, exact-SHA-bound and has no live marketplace call | BLG-C01 | AC12 | `frontend/tests-e2e/ff-fbs-supply.spec.ts`, release-controller contract test |

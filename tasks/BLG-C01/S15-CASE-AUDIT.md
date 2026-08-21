@@ -51,3 +51,16 @@ No Dev, release, deployment, migration, configuration mutation, secret access,
 production action, or live WB/Ozon operation was performed. The finding returns
 to S15 case ownership; a new independent audit is required after the S15 input
 hashes change.
+
+## Closure status after S15 repair
+
+`CASE_AUDIT_REAUDIT_REQUIRED`
+
+The case writer repaired the missing `BLG-C01-AC09` in the S15 inputs and made
+the factory, coverage matrix and planned S19 binding internally cardinality-
+consistent. This section is a closure note for the original cardinality
+finding, not an audit acceptance: the inputs have changed, therefore the
+immutable hashes above are historical and no longer usable for a pass verdict.
+Only an independent `case-auditor` may issue `CASE_AUDIT_PASSED` after checking
+the repaired files, including AC09's future-eligibility and historical-audit
+negative coverage.
