@@ -233,3 +233,47 @@
 
 
 ### карта задевания
+20:56 карта: готова
+20:56 
+Понимание собрано, перехожу к исполнению без остановки.
+
+## Ночь · карточек 9 · полос 6
+21:00   03-no-distribution-mode · tester: готово
+21:00   02-verdikt-screen · ux-architect: готово
+21:01   06-picking-list-order · ux-architect: готово
+21:02   01-wb-marking · solution-architect: готово
+21:03   05-prod-slow · solution-architect: готово
+21:03   02-verdikt-screen · product: готово
+21:03   02-verdikt-screen · tester: нет файла CASES.md (код 1, попытка 1)
+21:03   05-prod-slow · ux-architect: нет файла CONTRACT.md (код 1, попытка 1)
+21:03   02-verdikt-screen · tester: нет файла CASES.md (код 1, попытка 2)
+21:03 02-verdikt-screen: отложено на шаге tester
+21:03   05-prod-slow · ux-architect: нет файла CONTRACT.md (код 1, попытка 2)
+21:03 05-prod-slow: отложено на шаге ux-architect
+21:03   07-reporting · solution-architect: нет файла ARCH.md (код 1, попытка 1)
+21:03   08-storage · solution-architect: нет файла ARCH.md (код 1, попытка 1)
+21:03   07-reporting · solution-architect: нет файла ARCH.md (код 1, попытка 2)
+21:03 07-reporting: отложено на шаге solution-architect
+21:03   08-storage · solution-architect: нет файла ARCH.md (код 1, попытка 2)
+21:03 08-storage: отложено на шаге solution-architect
+21:03   09-billing · solution-architect: нет файла ARCH.md (код 1, попытка 1)
+21:03   04-warehouse-switch · solution-architect: готово
+21:03   09-billing · solution-architect: нет файла ARCH.md (код 1, попытка 2)
+21:03 09-billing: отложено на шаге solution-architect
+21:03   04-warehouse-switch · ux-architect: нет файла CONTRACT.md (код 1, попытка 1)
+21:03   04-warehouse-switch · ux-architect: нет файла CONTRACT.md (код 1, попытка 2)
+21:03 04-warehouse-switch: отложено на шаге ux-architect
+21:03   06-picking-list-order · product: готово
+21:03   01-wb-marking · ux-architect: нет файла CONTRACT.md (код 1, попытка 1)
+21:03   06-picking-list-order · tester: нет файла CASES.md (код 1, попытка 1)
+21:03   01-wb-marking · ux-architect: нет файла CONTRACT.md (код 1, попытка 2)
+21:03 01-wb-marking: отложено на шаге ux-architect
+21:03   06-picking-list-order · tester: нет файла CASES.md (код 1, попытка 2)
+21:03 06-picking-list-order: отложено на шаге tester
+21:03   03-no-distribution-mode · screen-dev: готово
+21:04   03-no-distribution-mode · reviewer: нет файла REVIEW.md (код 1, попытка 1)
+21:04   03-no-distribution-mode · reviewer: нет файла REVIEW.md (код 1, попытка 2)
+21:04 03-no-distribution-mode: отложено на шаге reviewer
+
+## Итог: сделано 0, отложено 9
+21:04 отчёт: НЕ СОЗДАН/НЕПОЛОН: нет файла OTCHET.md
