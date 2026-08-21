@@ -66,6 +66,20 @@ package again.
 Nothing in this audit resolves it, accepts S16, or authorizes deployment,
 rollback execution, production access, secret access, or marketplace activity.
 
+## Repair closure note
+
+The case writer has supplied the requested repair as `BLG-D09-AC13` and
+`BLG-D09-AC14`. `AC13` injects migration-preflight incompatibility and missing
+restore evidence, then requires a stop before any migration, application
+promotion, or data-rollback claim. `AC14` uses an egress-denied local fake
+WB-sync boundary and requires an empty invocation log for release success;
+an invocation, timeout, failure, or masked best-effort result is a failed
+release-success boundary.
+
+This note is not a replacement for an independent audit and does not change
+the `CASE_AUDIT_FAILED` verdict above. The exact repaired package must now be
+reviewed by a new `case-auditor` identity before S16 can be considered.
+
 ## Controller checks
 
 `python3 scripts/pipeline/run.py next --task-id BLG-D09` reported S16 owned by

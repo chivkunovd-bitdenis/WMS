@@ -17,7 +17,10 @@ Fixture set `blg-d09-exact-sha-release-v1` contains two deterministic immutable
 candidate packages: a prior accepted package and a known frontend-changing
 candidate. Each has synthetic full SHA, canonical manifest digest, backend/web
 archives, OCI IDs/revision labels, five runtime identity rows, entry HTML, and
-hashed JS/CSS assets. Tamper variants alter exactly one field or byte.
+hashed JS/CSS assets. Tamper variants alter exactly one field or byte. The
+fixture also contains migration-preflight variants for an incompatible schema
+and missing restore evidence, plus an egress-denied fake WB-sync boundary that
+records every attempted invocation without contacting a marketplace.
 
 Every case runs in a fresh isolated local runner/container namespace with a
 fresh browser profile. It starts from the recorded previous package and removes
@@ -34,11 +37,15 @@ authorization material before persistence.
 | Manifest digests -> complete API/worker/beat/migration/web identities | AC01 | AC05, AC06, AC07 | S13 runtime identity matrix | `tests/deploy/test_release_verifier.py` |
 | Candidate entry HTML -> loaded hashed asset -> visible browser -> hard reload | AC01 | AC08, AC09, AC10 | S11 browser/cache contract; S13 browser proof | `frontend/tests-e2e/release-bundle-proof.spec.ts` plus verifier test |
 | Failed candidate -> named previous immutable package -> complete read-back | AC11 | AC12 | S11/S13 rollback boundary | `tests/deploy/test_release_rollback.py` |
+| Migration preflight -> migration/promotion only after compatibility and restore evidence | AC01 | AC13 | S11 migration boundary; S13/S14 preflight and honest rollback policy | `tests/deploy/test_release_preflight.py` |
+| Exact-artifact promotion -> release result excludes marketplace side effects | AC01 | AC14 | S13 atomic release boundary; S14 best-effort side-effect attack | `tests/deploy/test_release_side_effect_boundary.py` |
 
-There are no applicable tenant, warehouse, print/device, pagination, worker
-business-job, or external-marketplace cases: the approved card changes only the
-release-engineer control path. Worker and migration *runtime identity* are
-covered because they are explicit release-chain members.
+There are no applicable tenant, warehouse, print/device, pagination or worker
+business-job cases: the approved card changes only the release-engineer control
+path. Worker and migration *runtime identity* are covered because they are
+explicit release-chain members. Marketplace business behavior is not tested;
+AC14 instead proves the negative release invariant that promotion must neither
+invoke nor classify a best-effort marketplace sync as release success.
 
 ## GOLD and breaker cases
 
@@ -48,19 +55,24 @@ source selection, dirty-source/build drift, transfer/manifest tampering,
 target-side rebuild, incomplete or conflicting runtime identities, health-only
 false proof, stale entry document, old/unlisted browser asset, and missing
 cache/hard-reload proof. `AC11` proves a named rollback and `AC12` breaks
-rollback substitution or incomplete recovery.
+rollback substitution or incomplete recovery. `AC13` injects migration
+preflight incompatibility and missing restore evidence before any migration or
+application promotion. `AC14` makes any attempted WB-sync invocation visible
+at a local egress-denied boundary and rejects both invocation and any success
+verdict that depends on or masks it.
 
 ## S19 binding plan
 
 S19 must implement each `executable_ref` against this fixture set without
 changing its oracle. Unit/integration cases validate manifest canonicalization,
 archive/image/revision comparison, source/ref rejection, complete identity
-rows, and rollback selection. The browser case records the final `index.html`
-URL, effective cache headers, requested content-hashed asset URL, response
-status and SHA-256, manifest lookup, visible screen identity, and a hard
-reload. The known frontend-changing candidate must differ from the prior asset
-URL or byte hash. S19 may mark a case executable only after fresh reset and
-read-back prove it is independent of prior case state.
+rows, migration preflight/restore gating, side-effect exclusion, and rollback
+selection. The browser case records the final `index.html` URL, effective cache
+headers, requested content-hashed asset URL, response status and SHA-256,
+manifest lookup, visible screen identity, and a hard reload. The known
+frontend-changing candidate must differ from the prior asset URL or byte hash.
+S19 may mark a case executable only after fresh reset and read-back prove it is
+independent of prior case state.
 
 ## Independent audit requirement
 
