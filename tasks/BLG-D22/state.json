@@ -51,7 +51,7 @@
     "S25",
     "S26"
   ],
-  "current_stage": "S12",
+  "current_stage": "S13",
   "status": "RUNNING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
@@ -68,8 +68,8 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:55Z",
-  "heartbeat_at": "2026-08-21T03:51:04Z",
-  "last_valid_receipt": "sha256:0c15ea17a0ba0c5e904f2a34b20e796e134baa9c63654143efb814d640f68c3d",
+  "heartbeat_at": "2026-08-21T03:58:21Z",
+  "last_valid_receipt": "sha256:af0c979d7f65d0c36990d119132000eab89efca1f9e075561b953d55128804cf",
   "blocker": null,
   "resume_condition": null,
   "verdicts": {
@@ -93,15 +93,22 @@
       "receipt_hash": "sha256:0c15ea17a0ba0c5e904f2a34b20e796e134baa9c63654143efb814d640f68c3d",
       "role_binding_id": "pipeline-product",
       "agent_identity": "codex-pipeline-product-blg-d22-s11"
+    },
+    "S12": {
+      "verdict": "TASK_CUT_READY",
+      "receipt_path": "docs/evidence/BLG-D22/S12-TASK_CUT_READY.receipt.json",
+      "receipt_hash": "sha256:af0c979d7f65d0c36990d119132000eab89efca1f9e075561b953d55128804cf",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-pipeline-ba-blg-d22-s12"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 42300,
-    "output_tokens": 4300,
-    "estimated_usd": 0.3225
+    "input_tokens": 72300,
+    "output_tokens": 7900,
+    "estimated_usd": 0.3625
   },
   "budget_usage_receipts": [
     {
@@ -142,6 +149,19 @@
       "estimated_usd": 0.32,
       "agent_id": "codex-pipeline-product-blg-d22-s11",
       "recorded_at": "2026-08-21T03:51:04Z"
+    },
+    {
+      "task_id": "BLG-D22",
+      "stage": "S12",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 30000,
+      "output_tokens": 3600,
+      "estimated_usd": 0.04,
+      "agent_id": "codex-pipeline-ba-blg-d22-s12",
+      "recorded_at": "2026-08-21T03:58:21Z"
     }
   ],
   "blocked_by": [
