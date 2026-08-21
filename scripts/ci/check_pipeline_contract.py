@@ -101,9 +101,26 @@ STATUS_POINTER_FILES = [
     "CLAUDE.md",
     ".github/pull_request_template.md",
     ".dev/PROCESS.md",
+    ".dev/.dev/PROCESS.md",
+    ".cursor/skills/feature-test-coverage/SKILL.md",
+    "docs/CURSOR_PIPELINE_REFERENCE_RU.md",
     "docs/WMS_FEATURE_GATE_PROTOCOL_RU.md",
     "docs/WMS_PRODUCT_AGENT_RU.md",
+    "docs/process/PIPELINE-ADDITIONS-RU.md",
+    "docs/process/PIPELINE-DESIGN-RU.md",
+    "docs/process/TASK-PIPELINE-ARCHITECT-RU.md",
 ]
+
+SUPERSEDED_POINTER_FILES = {
+    ".dev/PROCESS.md",
+    ".dev/.dev/PROCESS.md",
+    "docs/CURSOR_PIPELINE_REFERENCE_RU.md",
+    "docs/WMS_FEATURE_GATE_PROTOCOL_RU.md",
+    "docs/WMS_PRODUCT_AGENT_RU.md",
+    "docs/process/PIPELINE-ADDITIONS-RU.md",
+    "docs/process/PIPELINE-DESIGN-RU.md",
+    "docs/process/TASK-PIPELINE-ARCHITECT-RU.md",
+}
 
 REQUIRED_SCHEMA_FILES = [
     "pipeline/pipeline.schema.json",
@@ -167,6 +184,17 @@ def validate_contract(data: dict[str, Any], *, strict_activation: bool) -> list[
             errors,
         )
         source_text = source_path.read_text(encoding="utf-8")
+        if data.get("status") == "ACTIVE":
+            require(
+                "Статус: **ACTIVE" in source_text,
+                "ACTIVE machine contract requires ACTIVE status in PIPELINE-RU.md header",
+                errors,
+            )
+            require(
+                "ещё не активирована" not in source_text,
+                "ACTIVE PIPELINE-RU.md cannot claim that the pipeline is not activated",
+                errors,
+            )
         activation_line = get_owner_line_state(source_text, "PIPELINE_ACTIVATION_APPROVED")
         implementation_line = get_owner_line_state(source_text, "PIPELINE_IMPLEMENTATION_APPROVED")
         activation = data.get("activation", {})
@@ -243,10 +271,18 @@ def validate_contract(data: dict[str, Any], *, strict_activation: bool) -> list[
     for rel_path in STATUS_POINTER_FILES:
         text = (ROOT / rel_path).read_text(encoding="utf-8")
         require(
-            "docs/process/PIPELINE-RU.md" in text and "pipeline/pipeline.yml" in text,
+            "PIPELINE-RU.md" in text and "pipeline/pipeline.yml" in text,
             f"{rel_path} must point to docs/process/PIPELINE-RU.md and pipeline/pipeline.yml",
             errors,
         )
+        if data.get("status") == "ACTIVE":
+            require("ACTIVE" in text, f"{rel_path} must declare ACTIVE pipeline status", errors)
+        if rel_path in SUPERSEDED_POINTER_FILES:
+            require(
+                len(text.splitlines()) <= 30,
+                f"{rel_path} must be a short pointer, not a competing process",
+                errors,
+            )
 
     active = data.get("status") == "ACTIVE" or bool(data.get("activation", {}).get("activation_approved"))
     if strict_activation or active:

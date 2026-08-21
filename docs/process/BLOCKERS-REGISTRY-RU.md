@@ -28,17 +28,19 @@
 
 ## Блокеры автономного запуска pipeline
 
-### BLK-PIPE-001 — Pipeline v2 не активирован
+### BLK-PIPE-001 — Pipeline v2 активирован как единый канон
 
+- **Статус:** закрыт 21.08.2026 прямым решением владельца; `pipeline/pipeline.yml` имеет `status: ACTIVE`.
 - **Тип:** pipeline / owner approval / release.
-- **Где обнаружен:** `pipeline/pipeline.yml` (`status: IMPLEMENTATION_IN_PROGRESS`, `activation_approved: false`); `docs/process/PIPELINE-READY-REPORT-RU.md`, раздел «Итог».
-- **Почему блокирует бизнес:** ночная очередь не может работать по одному окончательному канону. До активации остаётся действующим старый Product gate, поэтому автоматический запуск может дать разные правила допуска одной и той же задачи.
+- **Где закрыт:** `docs/process/PIPELINE-RU.md`, `pipeline/pipeline.yml`, activation manifest и обновлённые entrypoint'ы.
+- **Что изменилось для бизнеса:** все новые задачи идут по одному controller flow; старый Product gate больше не является параллельным маршрутом.
 - **Кто закрывает:** владелец процесса; control-plane Reviewer и release owner подтверждают комплектность.
 - **Resume stage:** activation gate, не карточка разработки.
 - **Минимальный артефакт закрытия:** hash-linked activation manifest с commit SHA, owner activation line с датой, машинным переводом `pipeline/pipeline.yml` в `ACTIVE`, сохранёнными E-1…E-7 артефактами, E8 matrix по task profiles/traits, validator proof для controller/CI/deploy и аудитом старых process entrypoint'ов. Зелёные MT01…MT40 сами по себе этот блокер не снимают.
 
 ### BLK-PIPE-002 — Нет distributed host и внешнего durable store для wave-driver
 
+- **Статус относительно ACTIVE:** не блокирует управляемый локальный controller; блокирует обещание полностью автономного распределённого запуска.
 - **Тип:** architecture / environment / integration.
 - **Где обнаружен:** `docs/process/PIPELINE-HOLES-RU.md`, раздел «Controller появился...»; `docs/process/PIPELINE-READY-REPORT-RU.md`, раздел «Что не готово для автономной ночной работы».
 - **Почему блокирует бизнес:** dry-run уже детерминированно планирует отдельные worktree, порты, базы, очереди и эмуляторы, но локальная машина не может надёжно применить этот план для распределённой ночной волны. Без controller-owned внешнего durable store restart на другом host не восстановит authority state и leases.
@@ -47,6 +49,7 @@
 
 ### BLK-PIPE-003 — Receipt доверяет локальной hash-подписи
 
+- **Статус относительно ACTIVE:** не блокирует управляемый controller; остаётся ограничением независимой trust boundary.
 - **Тип:** architecture / security / control plane.
 - **Где обнаружен:** `docs/process/PIPELINE-HOLES-RU.md`, раздел «Схемы подключены...»; `docs/process/PIPELINE-RU.md`, разделы 7–8.
 - **Почему блокирует бизнес:** worker потенциально не отделён от источника вердикта. Нельзя надёжно доказать, что receipt не был создан или изменён тем же исполнителем, который получил результат своей работы.
@@ -55,6 +58,7 @@
 
 ### BLK-PIPE-004 — Не весь тестовый контур закрыт от внешних marketplace-вызовов
 
+- **Статус относительно ACTIVE:** штатный CI закрыт guard'ом; ad-hoc и browser network sandbox остаются отдельным ограничением и не разрешают live marketplace-вызовы.
 - **Тип:** integration / test / security.
 - **Где обнаружен:** `docs/process/PIPELINE-HOLES-RU.md`, раздел «Fail-closed test egress...».
 - **Почему блокирует бизнес:** обход штатного runner или browser-level sandbox может обратиться в живой WB/Ozon. Это создаёт риск реальных изменений, утечки тестовых данных и неповторяемого результата.
@@ -63,6 +67,7 @@
 
 ### BLK-PIPE-005 — Не доказан durable recovery вне локального controller
 
+- **Статус относительно ACTIVE:** локальный replay активен; внешний multi-host recovery остаётся ограничением распределённой автономности.
 - **Тип:** architecture / integration / release.
 - **Где обнаружен:** `docs/process/PIPELINE-HOLES-RU.md`, раздел «Crash/restart lane»; `docs/process/PIPELINE-RU.md`, разделы 7 и 8.
 - **Почему блокирует бизнес:** controller-level ledger и replay MT40 уже проверяют локальный контракт, но ночной автономный запуск требует доказать restart на durable state и provider-specific crash proof. Иначе после падения между внешним эффектом и записью состояния можно повторить операцию, миграцию, комментарий или deploy.
@@ -71,18 +76,20 @@
 
 ### BLK-PIPE-006 — Нет автономной promotion/rollback-доставки
 
+- **Статус относительно ACTIVE:** offline exact-SHA delivery остаётся единственным разрешённым transport; production release всё равно требует отдельного owner authorization.
 - **Тип:** release / integration / access.
 - **Где обнаружен:** `docs/process/PIPELINE-HOLES-RU.md`, раздел «Offline build-once artifact promotion...».
 - **Почему блокирует бизнес:** offline exact-SHA artifact уже fail-closed и защищает от server-side build. Блокер остаётся не потому, что обязательно нужен OCI registry, а потому что автономная доставка, права доступа, promotion между контурами и rollback ещё не оформлены end-to-end.
 - **Кто закрывает:** Architect и DevOps/Dev; Reviewer.
 - **Минимальный артефакт закрытия:** проверенный promotion/rollback receipt независимо от транспорта: artifact/digest manifest, exact SHA, delivery proof, rollback proof и отдельное владелецкое решение по доступам/секретам.
 
-### BLK-PIPE-007 — Старые process entrypoint'ы сосуществуют с новым каноном
+### BLK-PIPE-007 — Старые process entrypoint'ы переведены в adapters
 
+- **Статус:** закрыт 21.08.2026; обязательные entrypoint'ы указывают на Pipeline v2, а старые документы сокращены до pointers.
 - **Тип:** process / product / architecture.
-- **Где обнаружен:** `docs/process/PIPELINE-HOLES-RU.md`, раздел «Старые процессные документы ещё живые»; `AGENTS.md` и `CLAUDE.md` явно сохраняют переходный режим.
-- **Почему блокирует бизнес:** разные исполнители могут выбрать разные цепочки gate и разные критерии готовности. Это увеличивает риск обхода Product/Browser-приёмки и несопоставимых отчётов по backlog.
-- **Кто закрывает:** BA и Product; Architect оформляет переходный адаптер; Reviewer.
+- **Где закрыт:** `AGENTS.md`, `CLAUDE.md`, PR template, `.dev/PROCESS.md`, Cursor skill и legacy process docs.
+- **Результат:** Codex, Claude и Cursor получают один machine-backed маршрут S01–S28 и не могут выбрать старую цепочку как альтернативу.
+- **Кто закрывает:** pipeline BA/Architect; Reviewer проверяет inventory всех entrypoint'ов.
 - **Минимальный артефакт закрытия:** карта старых entrypoint'ов к Pipeline v2, архивирование или короткие adapters без конкурирующих правил и receipt аудита отсутствия второго канона.
 
 ### BLK-PIPE-008 — Очередь задач остановлена на `WAITING`

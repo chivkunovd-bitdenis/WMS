@@ -1,12 +1,12 @@
 @AGENTS.md
 
-# Pipeline v2
+# Pipeline v2 — ACTIVE
 
-Целевой единый процесс WMS теперь описан в
+Единственный действующий процесс WMS описан в
 [`docs/process/PIPELINE-RU.md`](docs/process/PIPELINE-RU.md), а машинный статус
-лежит в [`pipeline/pipeline.yml`](pipeline/pipeline.yml). Пока статус
-не `ACTIVE`, этот файл и `AGENTS.md` сохраняют действующие
-правила окружения, Git, секретов и старого Product gate.
+лежит в [`pipeline/pipeline.yml`](pipeline/pipeline.yml). Этот файл сохраняет
+правила окружения, Git, структуры проекта и проверок, но не задаёт отдельный
+маршрут стадий. Новая задача открывается и ведётся через controller Pipeline v2.
 
 # ⛔️ ЕДИНСТВЕННЫЙ ПРАВИЛЬНЫЙ ПУТЬ ПРОЕКТА
 
@@ -52,7 +52,7 @@ WMS фулфилмент-центра (3PL для маркетплейсов). B
 
 - **Ветвление:** фича-ветка (`feat/…`, `fix/…`, `chore/…`) → PR → зелёный CI → merge. Прямо в `main` не коммитим.
 - **CI-контракт:** PR, трогающий `backend/app/api|services` или `frontend/src`, обязан нести в описании блок `### Test coverage` с `TC-ID` и маркерами Given/When/Then (см. AGENTS.md), иначе CI красный. Таблицу берём из `tasks/<slug>/04-test-cases.md`.
-- **Регламент задачи** — [`.dev/PROCESS.md`](.dev/PROCESS.md), читать перед работой. Арх-карта — [`.dev/ARCHITECTURE.md`](.dev/ARCHITECTURE.md).
+- **Регламент задачи** — [`docs/process/PIPELINE-RU.md`](docs/process/PIPELINE-RU.md) и машинный packet controller. [`.dev/PROCESS.md`](.dev/PROCESS.md) теперь только legacy-pointer. Арх-карта проекта — [`.dev/ARCHITECTURE.md`](.dev/ARCHITECTURE.md).
 - **На каждый ответ:** [`.dev/COMMUNICATION.md`](.dev/COMMUNICATION.md) (по-человечески, пояснять термины) и [`.dev/LEARNING.md`](.dev/LEARNING.md).
 - **Терминология (UI и общение):** «приёмка» = селлер→ФФ (`inbound`), «отгрузка» = ФФ→маркетплейс (`marketplace_unload`). Слово «поставка» в пользовательском UI для селлер→ФФ не используем. Источник — `docs/MVP_DECISIONS_RU.md`.
 - **Ритм:** маленькие связные коммиты после каждой единицы; не оставлять грязное дерево; не тащить несвязанный рефактор в задачу.

@@ -1,15 +1,15 @@
 {
   "$schema": "./pipeline.schema.json",
   "pipeline_version": "2.0",
-  "status": "IMPLEMENTATION_IN_PROGRESS",
+  "status": "ACTIVE",
   "canonical_source": "docs/process/PIPELINE-RU.md",
-  "canonical_source_sha256": "b99d54ef3012412a75b8a27cd3e532019d37da43c52196953e8be93a018b7c79",
+  "canonical_source_sha256": "aa10241bbc41e678f3430d3cd2fa81b8cbbeca933277b287da048dfa89929573",
   "format_note": "This file intentionally uses the JSON subset of YAML so CI can validate it with Python stdlib only.",
   "activation": {
     "implementation_approved": true,
-    "activation_approved": false,
+    "activation_approved": true,
     "activation_requires_owner_line": "PIPELINE_ACTIVATION_APPROVED: <date>",
-    "current_truth": "The v2 process implementation is in progress: local controller, contract/scope guards, all 40 declared metatests, offline exact-SHA artifact promotion and CI test egress guard exist; full activation is still blocked."
+    "current_truth": "Pipeline v2 is the active canonical process for all new WMS work. Managed controller execution is active; distributed unattended hosting, independent receipt signing, remote registry transport and production actions remain explicit capability and authorization boundaries."
   },
   "refs": {
     "canonical_base_ref": "origin/etalon",
@@ -391,14 +391,7 @@
     {"path": "docs/process/PIPELINE-DESIGN-RU.md", "mode_before_activation": "legacy_design_doc_marked_superseded_pending_activation", "mode_after_activation": "archived_or_pointer"},
     {"path": "docs/process/TASK-PIPELINE-ARCHITECT-RU.md", "mode_before_activation": "legacy_design_doc_marked_superseded_pending_activation", "mode_after_activation": "archived_or_pointer"}
   ],
-  "activation_blockers": [
-    "controller_wave_driver_not_full_resumable",
-    "shared_validation_engine_not_used_by_close_ci_deploy",
-    "registry_promotion_not_configured_for_remote_oci_digests",
-    "deny_by_default_test_egress_not_enforced_repo_wide",
-    "role_receipt_signatures_not_implemented",
-    "old_process_entrypoints_not_archived_after_activation"
-  ],
+  "activation_blockers": [],
   "required_metatests": [
     {"id": "MT01", "source": "42.1", "title": "Dev without PRODUCT_APPROVED_FOR_DEV cannot receive workspace", "status": "automated_green"},
     {"id": "MT02", "source": "42.2", "title": "Out-of-scope file change is blocked by local guard and CI", "status": "automated_green"},

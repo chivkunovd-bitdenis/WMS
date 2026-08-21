@@ -1,19 +1,19 @@
 # AGENT-RUNBOOK — ночная очередь WMS-багов на 2026-08-21
 
-Этот runbook для завтрашнего `pipeline-dispatcher`. Очередь имеет статус
-`WAITING` с блокером `OWNER_INPUT/QUEUED_NOT_STARTED`: баги не начаты, receipts
-и verdicts отсутствуют. Runbook не запускает live deploy и не требует секретов.
+Этот runbook для `pipeline-dispatcher`. Pipeline v2 имеет статус `ACTIVE`, а
+owner-approved backlog wave создана в controller. Сам runbook не запускает
+исправления, live deploy, live marketplace-вызовы и не требует секретов.
 
 ## 0. Перед стартом
 
 1. Работать из `/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2`.
 2. Проверить `git status`; не stage-ить чужие изменения вне своей карточки и
    pipeline-файлов, которые прямо требуются текущей стадией.
-3. Прочитать `AGENTS.md`, `docs/process/PIPELINE-HOLES-RU.md`,
+3. Прочитать `AGENTS.md`, `docs/process/PIPELINE-RU.md`,
    `pipeline/pipeline.yml`, `pipeline/model-policy.yml`,
    `docs/process/INCIDENTS-REGISTRY-RU.md`.
-4. Помнить: Pipeline v2 в `IMPLEMENTATION_IN_PROGRESS`, значит старый Product
-   gate всё ещё действует до `PIPELINE_ACTIVATION_APPROVED`.
+4. Помнить: Pipeline v2 — единственный действующий процесс; старый Product gate
+   и наряды не являются альтернативным маршрутом.
 
 ## 1. Граница owner approval
 

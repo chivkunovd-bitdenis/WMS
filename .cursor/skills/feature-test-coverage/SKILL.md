@@ -3,20 +3,22 @@ name: feature-test-coverage
 description: >-
   Помогает оформить таблицу покрытия кейсами (TC-ID, негативы) для issue/PR по
   AGENTS.md репозитория WMS. Используется при словах «кейсы», «test coverage»,
-  «TC-». Не заменяет обязательные BA feature cards, Product before dev и
-  Product Browser Review after dev.
+  «TC-». Не заменяет обязательные controller stages и receipts Pipeline v2.
 ---
 
 # Feature test coverage (WMS)
+
+Pipeline v2 is `ACTIVE`. Canon: `docs/process/PIPELINE-RU.md`; machine contract:
+`pipeline/pipeline.yml`.
 
 ## Когда включать
 
 Когда нужно быстро собрать блок `### Test coverage` для issue или PR (удобно любому агенту/человеку). **Жёсткая проверка таблицы** — в CI (`scripts/ci/check_pr_test_coverage.py`).
 
 Важно: этот skill не принимает задачу как продукт. Для любой WMS-задачи сначала
-читай `docs/WMS_FEATURE_GATE_PROTOCOL_RU.md` и запускай обязательный цикл
-`BA feature cards -> Product before dev -> Dev -> Code Review -> Product Browser Review`.
-Зеленый CI, таблица TC-ID и Playwright не заменяют product verdict.
+читай `docs/process/PIPELINE-RU.md` и текущий controller packet из
+`pipeline/pipeline.yml`. Таблица относится к стадиям S15/S19/S22/S23; зелёный CI,
+TC-ID и Playwright не заменяют Product, Review и живой Browser QA receipt.
 
 ## Источники (читать по порядку)
 

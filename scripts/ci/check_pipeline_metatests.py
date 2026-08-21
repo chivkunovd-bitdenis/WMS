@@ -133,9 +133,9 @@ def main() -> int:
     pass_verdicts = {stage["id"]: stage["pass_verdicts"][0] for stage in contract["stages"]}
     traits = contract["traits"]
 
-    require(contract["status"] == "IMPLEMENTATION_IN_PROGRESS", "pipeline must be in implementation mode", errors)
+    require(contract["status"] == "ACTIVE", "pipeline must be active", errors)
     require(contract["activation"]["implementation_approved"] is True, "implementation approval must be recorded", errors)
-    require(contract["activation"]["activation_approved"] is False, "activation must remain false", errors)
+    require(contract["activation"]["activation_approved"] is True, "activation approval must be recorded", errors)
 
     # MT01: Dev workspace cannot be before Product approval in the declared order.
     require(stage_order.index("S16") < stage_order.index("S17"), "S16 must precede S17", errors)
@@ -1063,7 +1063,7 @@ def main() -> int:
         for error in errors:
             print(f"error: {error}", file=sys.stderr)
         return 1
-    print("pipeline metatests ok: implementation slice is executable, activation still closed")
+    print("pipeline metatests ok: ACTIVE managed pipeline is executable")
     return 0
 
 

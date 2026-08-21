@@ -1,18 +1,17 @@
-# Отчёт готовности Pipeline v2 перед очередью багов
+# Отчёт активного Pipeline v2
 
 Дата: 2026-08-20. Дополнение: 2026-08-21.
 
 ## Итог
 
-Pipeline v2 находится в статусе `IMPLEMENTATION_IN_PROGRESS`, а не `ACTIVE`.
-Ночная очередь из пяти карточек заведена в controller и сразу поставлена в
-`WAITING` с блокером `OWNER_INPUT/QUEUED_NOT_STARTED`: у карточек есть Git
-snapshot состояния и packet для S01, но нет receipts, verdicts, назначенного
-исполнителя или начатого исправления.
+Pipeline v2 находится в статусе `ACTIVE` по прямому решению владельца от 21.08.2026.
+Это единственный действующий процесс для новых задач WMS; старый Product gate и
+старые process docs переведены в короткие pointers.
 
-Это означает, что pipeline уже можно использовать как исполнимый управляемый
-контур для запуска стадий и агентов, но глобальный режим `ACTIVE` ещё не включён:
-старый Product gate остаётся действующим до отдельной owner activation line.
+В controller создана owner-approved волна из 49 backlog-карточек. Они находятся
+на S01 и сами по себе не означают, что исправления или агенты уже запущены:
+каждая карточка должна получить stage dispatch, receipts и обязательные Product,
+Research, Architecture, Test, Review и Browser QA verdicts по своему профилю.
 
 ## Что уже готово для Codex, Claude и Cursor
 
@@ -88,7 +87,7 @@ snapshot состояния и packet для S01, но нет receipts, verdicts
   карточки, выдать dispatch, пройти нужные стадии, получить controller receipt и
   остановиться на Product/owner gate, если он требуется.
 
-## Что не готово для автономной ночной работы
+## Ограничения управляемого ACTIVE-режима
 
 - Dry-run wave-driver уже выдаёт проверяемый isolated resource plan, но не имеет
   распределённого host, который мог бы безопасно применить план, и controller
@@ -100,9 +99,8 @@ snapshot состояния и packet для S01, но нет receipts, verdicts
   полноценный registry-based promotion.
 - Тестовый контур закрыт для основных CI backend/e2e команд, но ad-hoc локальные
   команды и browser-level sandbox ещё не унифицированы.
-- Старые процессные документы остаются действующими до явной активации Pipeline
-  v2. Это безопасно для перехода, но не даёт объявить новый процесс единственным
-  каноном без отдельного activation PR/line.
+- Старые процессные документы больше не действуют как отдельный канон: они
+  сокращены до adapters на Pipeline v2 и проверяются activation contract guard.
 - BLK-COST-001 сужен сильнее: controller runtime enforcement для `start-wave`
   задач есть, но расход пока self-reported агентом, а не подтверждён provider
   billing API.
@@ -139,37 +137,32 @@ python3 scripts/ci/check_pipeline_wave_driver_smoke.py
 python3 scripts/ci/check_pipeline_replay_metatests.py
 ```
 
-## Как начать только после разрешения
+## Как начать выбранную карточку
 
-Сейчас все пять карточек уже стоят в `WAITING`. Чтобы начать одну конкретную
-карточку, нужно письменное owner approval именно на неё, затем:
+Owner-approved wave уже создана. Для выбранной карточки dispatcher сначала читает
+её текущее состояние и выдаёт следующий stage; если карточка была отдельно поставлена
+на `WAITING`, её сначала снимают с удержания:
 
 ```bash
-python3 scripts/pipeline/run.py resume --task-id BUG-WMS-PV2-001 --by owner
-python3 scripts/pipeline/run.py next --task-id BUG-WMS-PV2-001
-python3 scripts/pipeline/dispatch.py --task-id BUG-WMS-PV2-001 --executor codex
+python3 scripts/pipeline/run.py status --task-id <TASK_ID>
+python3 scripts/pipeline/run.py next --task-id <TASK_ID>
+python3 scripts/pipeline/dispatch.py --task-id <TASK_ID> --executor codex
 ```
 
-После `resume` допустима только подготовительная работа по S01/S02 и B01–B03.
-Переход к разработке (`S18 DEVELOPMENT`) возможен лишь после product receipt
-`PRODUCT_APPROVED_FOR_DEV` и отдельного owner approval на начало исправления.
+Переход к разработке (`S18 DEVELOPMENT`) возможен лишь после всех требуемых
+ранних стадий и receipt `PRODUCT_APPROVED_FOR_DEV`. Активация процесса не является
+разрешением на production, секреты или live-вызовы маркетплейсов.
 
-## Блокеры до запуска фиксов багов
+## Блокеры конкретных карточек
 
-1. Нет письменного owner approval на запуск конкретной карточки; текущая очередь
-   остаётся `WAITING`.
-2. Pipeline v2 не `ACTIVE`, поэтому прежний Product gate продолжает действовать.
-3. Нет product receipt `PRODUCT_APPROVED_FOR_DEV` для каждой карточки.
-4. Не пройдены обязательные для bug stages: воспроизведение, договорённость об
+1. Нет product receipt `PRODUCT_APPROVED_FOR_DEV` для каждой карточки.
+2. Не пройдены обязательные для bug stages: воспроизведение, договорённость об
    ожидаемом поведении, анализ причины и регрессионный кейс либо доказанное B04
    закрытие без изменения кода.
-5. Не устранены оставшиеся activation blockers: distributed controller,
-   независимая подпись receipt, полный сетевой sandbox для всех test entrypoint'ов
-   и архивирование старых process entrypoint'ов после activation.
-6. Для FBS/Честного знака остаётся отдельная предметная развилка: owner или
+3. Для FBS/Честного знака остаётся отдельная предметная развилка: owner или
    подтверждённый контракт WB должен определить, допустим ли `sgtinApplied` для
    dispatch. Агент не может выбирать это правило сам.
 
-До снятия этих блокеров допускаются только чтение материалов, проверка contract и
-подготовка карточек; production deploy, реальные вызовы WB/Ozon, работа с секретами
-и изменения product/controller кода не запускаются.
+Независимые карточки продолжают ранние стадии, пока другие ждут своих typed blockers.
+Production deploy, реальные вызовы WB/Ozon и работа с секретами не разрешаются
+самим статусом `ACTIVE`.

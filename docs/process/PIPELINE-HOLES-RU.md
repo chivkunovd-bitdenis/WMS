@@ -1,13 +1,13 @@
-# Pipeline v2: дырки перед активацией
+# Pipeline v2: ограничения после активации
 
 Дата: 2026-08-20.
 
-Статус: `IMPLEMENTATION_IN_PROGRESS`.
+Статус: `ACTIVE` в управляемом controller-режиме с 21.08.2026.
 
-Этот файл фиксирует разрыв между целевой спецификацией
-[`docs/process/PIPELINE-RU.md`](PIPELINE-RU.md) и тем, что сейчас реально
-включено в репозитории. Это не список "мелких TODO"; каждый пункт ниже мешает
-честно поставить `PIPELINE_ACTIVATION_APPROVED`.
+Этот файл фиксирует ограничения между активным управляемым controller-контуром и
+полностью автономным распределённым исполнением. Они не создают второй процесс и
+не отменяют `ACTIVE`, но запрещают обещать multi-host autonomy, независимую
+криптографическую trust boundary или production-действия без отдельных разрешений.
 
 ## P0. Offline build-once artifact promotion реализован, registry promotion не настроен
 
@@ -57,7 +57,7 @@ validation engine для controller, CI и deploy также остаются н
 Почему это дырка: без controller рабочий агент всё ещё может "сказать", что
 стадия пройдена, а не получить проверяемый controller-issued receipt.
 
-## P0. Метатесты автоматизированы, activation ещё не включён
+## P0. Метатесты автоматизированы, managed activation включён
 
 В `pipeline/pipeline.yml` заведены `MT01`...`MT40`, чтобы CI не потерял ни один
 сценарий части XII. Все 40 сейчас имеют статус `automated_green` и проверяются
@@ -77,9 +77,9 @@ scripts или `tasks/*/state.json` без явного `pipeline_change`/`contr
 Сценарии блокировки и трёх способов разрешения выполняются из
 `check_pipeline_metatests.py`.
 
-Почему это всё ещё не `ACTIVE`: метатесты больше не pending, но activation
-остаётся выключен до owner activation line, независимой receipt-подписи,
-унифицированного distributed wave-driver и полного audit старых entrypoint'ов.
+Статус `ACTIVE` подтверждён owner activation line. Независимая receipt-подпись и
+distributed wave-driver остаются усилением автономности, а старые entrypoint'ы
+переведены в короткие adapters и проверяются contract guard.
 
 ## P0. Fail-closed test egress не включён для всего тестового контура
 
@@ -111,15 +111,11 @@ durable `effect_key`, если crash произошёл до обновлени�
 не выполняет side effect второй раз. До полной активации всё равно нужен такой
 же idempotency contract для реальных provider adapters и deploy integration.
 
-## P1. Старые процессные документы ещё живые
+## P1. Старые процессные документы переведены в pointers
 
-Входные документы теперь получили указатель на
-`docs/process/PIPELINE-RU.md` и `pipeline/pipeline.yml`, но старые Product gate
-и `.dev/PROCESS.md` осознанно оставлены действующими до активации.
-
-Почему это дырка: это безопасно для переходного состояния, но после activation
-надо архивировать или превратить в короткие adapters все старые маршруты из
-списка E0, иначе агенты снова увидят два канона.
+Все обязательные входные документы указывают на `docs/process/PIPELINE-RU.md` и
+`pipeline/pipeline.yml`. Старые Product gate, `.dev/PROCESS.md`, Cursor reference
+и проектные документы больше не содержат отдельной исполнимой цепочки.
 
 ## P1. Схемы подключены к controller validate, но не стали независимой подписью
 
@@ -161,8 +157,7 @@ distributed wave-driver.
   exact `release_sha`.
 - Backend отдаёт `/version`, а deploy smoke сверяет runtime SHA.
 - `.github/workflows/ci.yml` запускает этот guard.
-- Основные process entrypoints прямо указывают на новый канон и текущий
-  неактивированный статус.
+- Основные process entrypoints прямо указывают на новый канон и статус `ACTIVE`.
 - Ветка больше не может незаметно поменять `PIPELINE-RU.md` без обновления
   `canonical_source_sha256`.
 

@@ -1,64 +1,51 @@
 ## Summary
-- 
 
-## Pipeline v2 status
+-
 
-Целевой процесс: `docs/process/PIPELINE-RU.md`. Машинный статус/hash:
-`pipeline/pipeline.yml`. Пока статус не `ACTIVE`, PR обязан
-заполнять старый Product gate ниже; Pipeline v2 нельзя считать активированным без
-owner approval и зелёных метатестов части XII.
+## Pipeline v2
 
-## Product gate
+Pipeline v2 is `ACTIVE`. Canon: `docs/process/PIPELINE-RU.md`; machine contract:
+`pipeline/pipeline.yml`.
 
-Обязательно для любой WMS-задачи. См. `AGENTS.md`,
-`docs/WMS_FEATURE_GATE_PROTOCOL_RU.md` и `docs/WMS_PRODUCT_AGENT_RU.md`.
+| Field | Value |
+|---|---|
+| Task ID | |
+| Backlog ID | |
+| Base SHA | |
+| Final SHA | |
+| Current/final stage | |
+| Controller validation | |
+| Blockers | none / IDs |
 
-- [ ] BA feature cards созданы для каждой карточки
-- [ ] `BA_READY` есть для каждой карточки
-- [ ] `PRODUCT_APPROVED_FOR_DEV` получен до разработки
-- [ ] Каждая роль выполнялась отдельным изолированным агентом
-- [ ] `CODE_REVIEW_PASSED` получен после разработки
-- [ ] `PRODUCT_BROWSER_APPROVED` получен после разработки в реальной видимой вкладке браузера
-- [ ] Rework, если был, повторно прошел BA/Product/Dev/Review/Product Browser
-- [ ] Emergency bypass не использован или явно одобрен пользователем
+Required receipts and evidence:
 
-Product evidence:
-
-```yaml
-feature_cards_path:
-feature_ids:
-ba_agents:
-product_agents_before_dev:
-dev_agents:
-code_review_agents:
-product_browser_agents_after_dev:
-environment_url:
-roles:
-actions_clicked:
-visible_states:
-evidence_paths:
-verdicts:
-  ba:
-  product_before_dev:
-  code_review:
-  product_browser_after_dev:
-emergency_bypass:
-```
+- [ ] Product/BA contract approved before development
+- [ ] Architecture/Research receipts present when required by traits
+- [ ] Executable cases bound to the task
+- [ ] Independent code review passed
+- [ ] Functional and integration stages passed
+- [ ] Live visible-browser Product QA passed when required
+- [ ] Result committed and pushed; evidence paths contain no secrets
+- [ ] Release authorization recorded separately, or release is explicitly out of scope
 
 ## Test coverage
 
-Обязательно для PR, который трогает `frontend/src`, `frontend/tests-e2e`, `backend/app/api` или `backend/app/services` (см. `AGENTS.md`). Label **`skip-test-coverage-check`** отключает только TC-таблицу и только по согласованию; Product gate он не отключает.
+Required for changes under `frontend/src`, `frontend/tests-e2e`, `backend/app/api` or
+`backend/app/services`. Include at least two TC rows, one applicable row, Given/When/Then and a
+negative or restriction case.
 
-Скопируйте из issue блок `### Test coverage` (таблица TC-ID) или заполните здесь. **Notes** — не пусто: Given/When/Then (или дано/когда/тогда), негативы/ограничения, ожидаемый вид UI; иначе CI отсечёт короткий «формализм» (`AGENTS.md` → Quality bar).
+| TC-ID | Title | Applies (Y/N) | Notes |
+|---|---|---|---|
+| TC- | | Y | Given ... When ... Then ... |
+| TC- | | N | Negative/restriction: ... |
 
-**Порог CI** (`scripts/ci/check_pr_test_coverage.py`): в **описании** PR добавьте отдельным блоком заголовок ровно `### Test coverage` (три решётки); внутри секции не меньше **двух** строк таблицы с `TC-...`, хотя бы одна с **Y** в колонке Applies; суммарно секция не короче **~400 символов**; в тексте (таблица + абзацы под ней) встречаются **не меньше трёх** разных маркеров из набора: given / when / then, дано / когда / тогда, negative / негатив, restriction / огранич, expected / ожидаемо.
+## Verification
 
-## Test plan
-- [ ] `ruff check .` (backend)
-- [ ] `mypy .` (backend)
-- [ ] `pytest` (backend)
-- [ ] `npm run build` (frontend)
-- [ ] `npm run test:e2e` (frontend)
+- [ ] `python3 scripts/pipeline/run.py validate --task-id <TASK_ID>`
+- [ ] Relevant backend checks
+- [ ] Relevant frontend checks
+- [ ] Required browser/evidence receipts
 
 ## Notes / risks
-- 
+
+-
