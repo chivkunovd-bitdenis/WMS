@@ -53,8 +53,8 @@
     "S27",
     "S28"
   ],
-  "current_stage": "S15",
-  "status": "WAITING",
+  "current_stage": "S17",
+  "status": "RUNNING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -70,20 +70,10 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:55Z",
-  "heartbeat_at": "2026-08-21T01:22:28Z",
-  "last_valid_receipt": "sha256:5b046a867c07889bee6ae0cfdb5ed6b7c7228f8b4f51aa4d72fd193595419c57",
-  "blocker": {
-    "type": "FIXTURE",
-    "reason_code": "CASE_AUDIT_FAILED",
-    "details": "Independent case-auditor found missing destructive S15 cases: migration preflight before launch and exclusion of best-effort WB sync from release-success; do not run S16 Product until S15 is repaired and re-audited.",
-    "owner": "pipeline-ba",
-    "created_at": "2026-08-21T01:22:28Z",
-    "resume_stage": "S15"
-  },
-  "resume_condition": {
-    "stage": "S15",
-    "condition": "Add destructive GOLD/breaker cases for migration preflight before launch and for excluding best-effort WB sync from release-success; rerun independent case-auditor before S16. BLK-RELEASE-001 remains a future S23 stopper."
-  },
+  "heartbeat_at": "2026-08-21T02:56:23Z",
+  "last_valid_receipt": "sha256:6fec197a2655cfc90f8741360a57c9ed93595f86cbcb97f126a2085e3059b77e",
+  "blocker": null,
+  "resume_condition": null,
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",
@@ -133,15 +123,22 @@
       "receipt_hash": "sha256:5b046a867c07889bee6ae0cfdb5ed6b7c7228f8b4f51aa4d72fd193595419c57",
       "role_binding_id": "pipeline-ba",
       "agent_identity": "codex-pipeline-ba-blg-d09-s15"
+    },
+    "S16": {
+      "verdict": "PRODUCT_APPROVED_FOR_DEV",
+      "receipt_path": "docs/evidence/BLG-D09/S16-PRODUCT_APPROVED_FOR_DEV.receipt.json",
+      "receipt_hash": "sha256:6fec197a2655cfc90f8741360a57c9ed93595f86cbcb97f126a2085e3059b77e",
+      "role_binding_id": "pipeline-product",
+      "agent_identity": "codex-pipeline-product-blg-d09-s16"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 279300,
-    "output_tokens": 24300,
-    "estimated_usd": 1.8525
+    "input_tokens": 327300,
+    "output_tokens": 28800,
+    "estimated_usd": 2.2025
   },
   "budget_usage_receipts": [
     {
@@ -234,6 +231,19 @@
       "estimated_usd": 0.2,
       "agent_id": "codex-pipeline-ba-blg-d09-s15",
       "recorded_at": "2026-08-21T01:18:20Z"
+    },
+    {
+      "task_id": "BLG-D09",
+      "stage": "S16",
+      "role": "pipeline-product",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 48000,
+      "output_tokens": 4500,
+      "estimated_usd": 0.35,
+      "agent_id": "codex-pipeline-product-blg-d09-s16",
+      "recorded_at": "2026-08-21T02:56:23Z"
     }
   ],
   "blocked_by": [
