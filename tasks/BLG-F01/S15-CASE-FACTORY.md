@@ -26,6 +26,18 @@ publication retry leaks into the next case. The fixture intercepts external
 egress and has no production data, credentials, deploy target, WB or Ozon
 access.
 
+`F01-C1-14` and `F01-C1-B14` additionally use the versioned
+`blg-f01-blocker-registry-prior-snapshot-v1` compatibility fixture. It seeds a
+previous-controller `controller-task-snapshot-v1` whose legacy
+`state.blocker`/`resume_condition` projection and unresolved canonical
+`blocked_by` dependency identify different authority occurrences. The fixture
+pins their IDs, owner bindings, closure-evidence state, required resume stage,
+dependency path and invalidated-receipt set. The new evaluator must validate
+the snapshot against its authority commit, reject a stale projection, or
+rebuild it deterministically; a second restart must produce the same channels
+and decision hash. This is a local fixture only and is reset with the common
+case namespace.
+
 The planned S19 harnesses are
 `scripts/testing/test_blg_f01_blocker_registry.py`,
 `scripts/ci/check_blockers_registry.py`,
@@ -53,8 +65,8 @@ constraint is not a separately triaged incident or an active blocker.
 | Hash-linked close, supersede and reopen | `INC-BLOCKER-LIFECYCLE-HISTORY-DIVERGENCE` | `F01-C1-11` | `F01-C1-B09` |
 | Scoped invalidation and additive v1 compatibility | `INC-BLOCKER-V1-COMPATIBILITY-DIVERGENCE` | `F01-C1-12`, `F01-C1-13` | `F01-C1-B07`, `F01-C1-B09` |
 | Post-S25/post-closure BLG-D05 capability boundary | `INC-BLG-D05-PREMATURE-CAPABILITY` | `F01-C1-10` | `F01-C1-B11` |
-| Orchestration hold versus canonical dependency compatibility | `INC-STATE-BLOCKER-DEPENDENCY-CHANNEL-DIVERGENCE` | `F01-C1-14` | `F01-C1-B14` |
-| WAITING/REWORK ownership, required-stage and exact invalidation | `INC-FAILURE-ROUTE-DEPENDENCY-DIVERGENCE` | `F01-C1-14` | `F01-C1-B14` |
+| Orchestration hold versus canonical dependency compatibility, including a prior persisted projection | `INC-STATE-BLOCKER-DEPENDENCY-CHANNEL-DIVERGENCE` | `F01-C1-14` | `F01-C1-B14` |
+| Independent typed `ENV -> WAITING` and `FIXTURE -> REWORK` records, required-stage ownership and exact invalidation | `INC-FAILURE-ROUTE-DEPENDENCY-DIVERGENCE` | `F01-C1-14` | `F01-C1-B14` |
 
 ## Planned S19 evidence binding
 
