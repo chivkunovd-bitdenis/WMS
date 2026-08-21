@@ -136,6 +136,7 @@ INCOMPATIBLE_STAGE_PAIRS = {
 FAILURE_ROUTES = {
     "PRODUCT_REJECTED": {"status": "REWORK", "resume_stage": "S09", "blocker_type": "OWNER_INPUT"},
     "PRODUCT_CONTRACT_REJECTED": {"status": "REWORK", "resume_stage": "S08", "blocker_type": "OWNER_INPUT"},
+    "ARCH_REVIEW_REWORK": {"status": "REWORK", "resume_stage": "S13", "blocker_type": "BASELINE"},
     "SNAPSHOT_CHANGED": {"status": "WAITING", "resume_stage": "S24", "blocker_type": "BASELINE"},
     "GOLD_CASE_RED": {"status": "REWORK", "resume_stage": "S18", "blocker_type": "FIXTURE"},
     "REGRESSION_DETECTED": {"status": "REWORK", "resume_stage": "B03", "blocker_type": "FIXTURE"},
@@ -690,7 +691,21 @@ def record_budget_usage(state: dict[str, Any], usage: dict[str, Any] | None) -> 
 
 
 def invalidate_verdicts(state: dict[str, Any], reason: str, resume_stage: str | None = None) -> None:
-    invalidated = sorted(state.get("verdicts", {}).keys(), key=TOTAL_ORDER.index)
+    verdicts = state.get("verdicts", {})
+    if resume_stage is None:
+        invalidated = sorted(verdicts.keys(), key=TOTAL_ORDER.index)
+        preserved: dict[str, Any] = {}
+    else:
+        resume_index = TOTAL_ORDER.index(resume_stage)
+        invalidated = sorted(
+            (stage for stage in verdicts if TOTAL_ORDER.index(stage) >= resume_index),
+            key=TOTAL_ORDER.index,
+        )
+        preserved = {
+            stage: verdict
+            for stage, verdict in verdicts.items()
+            if TOTAL_ORDER.index(stage) < resume_index
+        }
     if not invalidated:
         return
     state.setdefault("invalidations", []).append(
@@ -701,8 +716,14 @@ def invalidate_verdicts(state: dict[str, Any], reason: str, resume_stage: str | 
             "last_valid_receipt_before_invalidation": state.get("last_valid_receipt"),
         }
     )
-    state["verdicts"] = {}
-    state["last_valid_receipt"] = None
+    state["verdicts"] = preserved
+    preserved_stages = sorted(preserved.keys(), key=TOTAL_ORDER.index)
+    if preserved_stages:
+        last_stage = preserved_stages[-1]
+        last_verdict = preserved[last_stage]
+        state["last_valid_receipt"] = last_verdict.get("receipt_hash") if isinstance(last_verdict, dict) else None
+    else:
+        state["last_valid_receipt"] = None
     state["current_stage"] = resume_stage or first_missing_stage(state)
     state["status"] = "REWORK"
 

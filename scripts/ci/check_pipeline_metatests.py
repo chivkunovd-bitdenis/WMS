@@ -806,6 +806,25 @@ def main() -> int:
         unmapped_failure = pipeline_command("failure", "--task-id", product_task, "--finding", "UNMAPPED_FAILURE")
         require(unmapped_failure.returncode != 0, "MT36: unmapped failure verdict must be rejected", errors)
 
+        # MT37: failure rework invalidates the owning stage and children, not already accepted prerequisites.
+        selective_task = open_task("SELECTIVE-REWORK", "ui_change")
+        advance_until(selective_task, "S10", pass_verdicts, errors)
+        selective_reject = pipeline_command("failure", "--task-id", selective_task, "--finding", "PRODUCT_REJECTED", "--details", "mockup rejected")
+        require(selective_reject.returncode == 0, f"MT37 selective rework route failed: {selective_reject.stderr}", errors)
+        if selective_reject.returncode == 0:
+            selective_state = json.loads(pipeline_command("status", "--task-id", selective_task).stdout)
+            selective_verdicts = selective_state.get("verdicts", {})
+            require(selective_state["current_stage"] == "S09", "MT37: selective Product rework must resume at S09", errors)
+            require({"S01", "S02"}.issubset(selective_verdicts), "MT37: rework must preserve prerequisites before the resume stage", errors)
+            require("S09" not in selective_verdicts, "MT37: rework must invalidate the returned owning stage", errors)
+
+        arch_rework_task = open_task("ARCH-REWORK", "database_change")
+        arch_rework = pipeline_command("failure", "--task-id", arch_rework_task, "--finding", "ARCH_REVIEW_REWORK", "--details", "plan falsified")
+        require(arch_rework.returncode == 0, f"MT36 S14 architect rework route failed: {arch_rework.stderr}", errors)
+        if arch_rework.returncode == 0:
+            arch_state = json.loads(pipeline_command("status", "--task-id", arch_rework_task).stdout)
+            require(arch_state["status"] == "REWORK" and arch_state["current_stage"] == "S13", "MT36: S14 architecture rework must return to S13", errors)
+
         # MT08 and MT37: changing task inputs/profile after a receipt invalidates the dependent chain.
         invalidation_task = open_task("INVALIDATION", "ui_change")
         s01 = pipeline_command("advance", "--task-id", invalidation_task, "--stage", "S01", "--verdict", "TASK_INTAKE_READY", "--role", "pipeline-dispatcher", "--agent", "metatest")

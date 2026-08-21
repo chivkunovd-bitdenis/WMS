@@ -50,6 +50,7 @@ def bug_reproduction_route(verdict: str) -> PolicyDecision:
 
 
 FAILURE_ROUTES: dict[tuple[str, str], tuple[str, str]] = {
+    ("S14", "ARCH_REVIEW_REWORK"): ("S13", "REWORK"),
     ("S20", "CONTRACT"): ("S08", "REWORK"),
     ("S20", "PLAN"): ("S13", "REWORK"),
     ("S20", "IMPLEMENTATION"): ("S18", "REWORK"),
