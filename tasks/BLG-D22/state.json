@@ -51,7 +51,7 @@
     "S25",
     "S26"
   ],
-  "current_stage": "S11",
+  "current_stage": "S12",
   "status": "RUNNING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
@@ -68,8 +68,8 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:55Z",
-  "heartbeat_at": "2026-08-21T00:24:53Z",
-  "last_valid_receipt": "sha256:36838e55b6cd785fe290df434a48494dfb7c702f2d9ee28fc8ee4024df8c24f8",
+  "heartbeat_at": "2026-08-21T03:51:04Z",
+  "last_valid_receipt": "sha256:0c15ea17a0ba0c5e904f2a34b20e796e134baa9c63654143efb814d640f68c3d",
   "blocker": null,
   "resume_condition": null,
   "verdicts": {
@@ -86,15 +86,22 @@
       "receipt_hash": "sha256:36838e55b6cd785fe290df434a48494dfb7c702f2d9ee28fc8ee4024df8c24f8",
       "role_binding_id": "pipeline-dispatcher",
       "agent_identity": "codex-night-orchestrator-dispatcher"
+    },
+    "S11": {
+      "verdict": "PRODUCT_CONTRACT_APPROVED",
+      "receipt_path": "docs/evidence/BLG-D22/S11-PRODUCT_CONTRACT_APPROVED.receipt.json",
+      "receipt_hash": "sha256:0c15ea17a0ba0c5e904f2a34b20e796e134baa9c63654143efb814d640f68c3d",
+      "role_binding_id": "pipeline-product",
+      "agent_identity": "codex-pipeline-product-blg-d22-s11"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 300,
-    "output_tokens": 100,
-    "estimated_usd": 0.0025
+    "input_tokens": 42300,
+    "output_tokens": 4300,
+    "estimated_usd": 0.3225
   },
   "budget_usage_receipts": [
     {
@@ -122,6 +129,19 @@
       "estimated_usd": 0.0015,
       "agent_id": "codex-night-orchestrator-dispatcher",
       "recorded_at": "2026-08-21T00:24:53Z"
+    },
+    {
+      "task_id": "BLG-D22",
+      "stage": "S11",
+      "role": "pipeline-product",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 42000,
+      "output_tokens": 4200,
+      "estimated_usd": 0.32,
+      "agent_id": "codex-pipeline-product-blg-d22-s11",
+      "recorded_at": "2026-08-21T03:51:04Z"
     }
   ],
   "blocked_by": [

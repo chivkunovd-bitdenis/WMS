@@ -1,0 +1,33 @@
+{
+  "task_id": "BLG-D22",
+  "run_id": "BLG-D22:S11:3",
+  "stage_id": "S11",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "role_binding_id": "pipeline-product",
+  "agent_identity": "codex-pipeline-product-blg-d22-s11",
+  "input_hashes": {
+    "state_before": "sha256:f683fd783db5f67502f21129d49b4794fd51be4a70ad6fd15dcf3218fa38f637"
+  },
+  "output_hashes": {},
+  "parent_receipt_hash": "sha256:36838e55b6cd785fe290df434a48494dfb7c702f2d9ee28fc8ee4024df8c24f8",
+  "baseline_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "started_at": "2026-08-21T03:51:04Z",
+  "finished_at": "2026-08-21T03:51:04Z",
+  "verdict": "PRODUCT_CONTRACT_APPROVED",
+  "blocker": null,
+  "resume_stage": null,
+  "usage_receipt": {
+    "task_id": "BLG-D22",
+    "stage": "S11",
+    "role": "pipeline-product",
+    "executor": "codex",
+    "model": "gpt-5.6-sol",
+    "tier": "expensive",
+    "input_tokens": 42000,
+    "output_tokens": 4200,
+    "estimated_usd": 0.32,
+    "agent_id": "codex-pipeline-product-blg-d22-s11",
+    "recorded_at": "2026-08-21T03:51:04Z"
+  },
+  "signature": "sha256:bb7b760685931e3a8af2eaf6f41b1b07f897f6ea9d8af2823be8476092abb205"
+}
