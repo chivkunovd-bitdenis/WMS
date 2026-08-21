@@ -611,9 +611,21 @@ def _extract_cis_codes_from_text(text: str, seen: set[str]) -> list[str]:
     if text.strip():
         for line in text.splitlines():
             # Product titles on seller PDF pages are not CIS; only lines that match GS1 CIS shape.
-            if not _CIS_CANDIDATE_RE.search(line):
+            line_match = _CIS_CANDIDATE_RE.search(line)
+            if line_match is None:
                 continue
-            cis = normalize_cis(line)
+            # Canonicalize the same way as the first pass above (see
+            # `_canonical_cis_from_match`) instead of normalizing the raw line
+            # verbatim. Seller PDF text never carries a real embedded GS
+            # separator or crypto tail — only the human-readable "(01) …
+            # (21) …" groups — so treating the raw line as already-complete
+            # produced a second, GS-less "duplicate" of the very same label
+            # that the first pass had already reconstructed *with* the
+            # separator. That spurious second entry broke
+            # `is_printable_label_artifact`'s "exactly one CIS on this label"
+            # check for every PDF-imported code once short codes started
+            # being terminated with GS_SEPARATOR (I5).
+            cis = normalize_cis(_canonical_cis_from_match(line_match))
             if cis is None or cis in seen:
                 continue
             seen.add(cis)
@@ -1378,6 +1390,46 @@ def _restore_row(
     )
 
 
+async def _restore_row_from_candidates(
+    session: AsyncSession,
+    code: MarkingCode,
+    parsed_cis: list[str],
+    *,
+    dry_run: bool,
+) -> TruncatedCisRestoreRow | None:
+    """Ищет полный код среди уже распознанных `parsed_cis` и, если нашёл и он
+    не занят другой строкой, применяет его к `code.cis_code` (если не dry_run).
+
+    Возвращает `None`, если код не встретился среди `parsed_cis` вовсе — тогда
+    вызывающая сторона вправе попробовать другой источник восстановления,
+    а не сразу репортить «не найден».
+    """
+    masked = mask_cis_code(code.cis_code)
+    # Exact match on "<старый обрезанный код><GS>", а не startswith: два разных
+    # серийника с одним GTIN могут быть цифровым префиксом друг друга
+    # (например "…0001" и "…00012"), и startswith тогда сросся бы не с тем
+    # распознанным кодом.
+    target = f"{code.cis_code}{GS_SEPARATOR}"
+    if target not in parsed_cis:
+        return None
+    conflict_stmt = select(MarkingCode.id).where(
+        MarkingCode.tenant_id == code.tenant_id,
+        MarkingCode.cis_code == target,
+        MarkingCode.id != code.id,
+    )
+    conflict_id = (await session.execute(conflict_stmt)).scalar_one_or_none()
+    if conflict_id is not None:
+        return _restore_row(
+            code,
+            "target_conflict",
+            f"полный код уже занят другой строкой (code_id={conflict_id})",
+            masked=masked,
+        )
+    if not dry_run:
+        code.cis_code = target
+    return _restore_row(code, "restored", None, masked=masked)
+
+
 async def restore_truncated_pool_cis_codes(
     session: AsyncSession,
     *,
@@ -1395,14 +1447,23 @@ async def restore_truncated_pool_cis_codes(
     в конце GS-разделителем, что превращает код в валидный «короткий» формат
     из документации WB (см. is_cis_missing_gs_separator).
 
-    Источник восстановления — PDF продавца, сохранённый при импорте
-    (`MarkingCodeImportFile`/object storage). Разбираем его заново тем же
-    парсером, что и сам импорт, и обновляем `cis_code`, только если новый
-    код действительно найден и не конфликтует с уже существующей строкой.
+    Источник восстановления, по приоритету:
 
-    Ничего не удаляет и не перезаписывает коды, у которых GS-разделитель уже
-    есть. Идемпотентна: то, что было восстановлено в прошлый прогон, во
-    второй раз просто не попадёт в выборку кандидатов.
+    1. Собственная этикетка кода — `MarkingCode.label_artifact_pdf`. Это уже
+       обрезанный при импорте PDF ровно с этой одной этикеткой, поэтому здесь
+       нет никакой неоднозначности «какому коду принадлежит распознанный
+       текст» и не нужно поднимать объектное хранилище — колонка лежит прямо
+       в БД. Для PDF-импорта это должно закрывать почти все строки.
+    2. Оригинальный файл наряда импорта — `MarkingCodeImportFile`/object
+       storage — на случай, если у конкретной строки нет своей этикетки
+       (например, она была импортирована до появления обрезки по одной
+       этикетке на код). Разбираем его тем же парсером, что и сам импорт.
+
+    Обновляем `cis_code`, только если новый код действительно найден и не
+    конфликтует с уже существующей строкой. Ничего не удаляет и не
+    перезаписывает коды, у которых GS-разделитель уже есть. Идемпотентна: то,
+    что было восстановлено в прошлый прогон, во второй раз просто не попадёт
+    в выборку кандидатов.
     """
     from app.services.marking_import_storage_service import read_marking_import_source_pdf
     from app.services.marking_label_artifact_service import extract_label_artifacts_from_pdf
@@ -1419,13 +1480,60 @@ async def restore_truncated_pool_cis_codes(
     # else — belt-and-suspenders against a dialect quirk in the SQL LIKE.
     candidates = [code for code in fetched if is_cis_missing_gs_separator(code.cis_code)]
 
-    by_batch: dict[uuid.UUID, list[MarkingCode]] = {}
-    for code in candidates:
-        assert code.import_batch_id is not None
-        by_batch.setdefault(code.import_batch_id, []).append(code)
-
     rows: list[TruncatedCisRestoreRow] = []
     restored = 0
+    pending: list[MarkingCode] = []
+
+    # Шаг 1 — собственная этикетка каждого кода, если она сохранена.
+    for code in candidates:
+        label_pdf = code.label_artifact_pdf
+        if not label_pdf:
+            pending.append(code)
+            continue
+        try:
+            artifacts = extract_label_artifacts_from_pdf(label_pdf)
+        except RuntimeError:
+            rows.append(
+                _restore_row(
+                    code,
+                    "pdf_support_unavailable",
+                    "pdf_support_unavailable",
+                    masked=mask_cis_code(code.cis_code),
+                )
+            )
+            continue
+        except Exception as exc:
+            # Одна битая этикетка не должна ронять весь прогон восстановления.
+            rows.append(
+                _restore_row(
+                    code,
+                    "parse_failed",
+                    f"собственная этикетка кода: {exc}",
+                    masked=mask_cis_code(code.cis_code),
+                )
+            )
+            continue
+        row = await _restore_row_from_candidates(
+            session,
+            code,
+            [artifact.cis for artifact in artifacts],
+            dry_run=dry_run,
+        )
+        if row is None:
+            # На собственной этикетке не нашли (не должно случаться, но не
+            # исключено на очень старых строках) — попробуем файл наряда.
+            pending.append(code)
+            continue
+        rows.append(row)
+        if row.outcome == "restored":
+            restored += 1
+
+    # Шаг 2 — фолбэк на оригинальный файл наряда импорта для всего, что
+    # осталось без своей этикетки или в ней не нашлось.
+    by_batch: dict[uuid.UUID, list[MarkingCode]] = {}
+    for code in pending:
+        assert code.import_batch_id is not None
+        by_batch.setdefault(code.import_batch_id, []).append(code)
 
     for batch_id, codes in by_batch.items():
         files_stmt = select(MarkingCodeImportFile).where(
@@ -1438,7 +1546,7 @@ async def restore_truncated_pool_cis_codes(
                     _restore_row(
                         code,
                         "no_source_pdf",
-                        "у наряда импорта нет сохранённого PDF продавца",
+                        "нет ни собственной этикетки, ни сохранённого PDF наряда импорта",
                         masked=mask_cis_code(code.cis_code),
                     )
                 )
@@ -1454,6 +1562,13 @@ async def restore_truncated_pool_cis_codes(
                 break
             except (FileNotFoundError, OSError):
                 batch_error = f"file_missing:{file_row.original_filename}"
+                continue
+            except Exception as exc:
+                # Локальный бэкенд роняет FileNotFoundError/OSError, но S3-бэкенд —
+                # свои собственные исключения (boto3/botocore), которые сюда не
+                # попадают под конкретные except выше. Один недоступный файл не
+                # должен ронять весь прогон восстановления по остальным нарядам.
+                batch_error = f"read_failed:{file_row.original_filename}:{exc}"
                 continue
             try:
                 artifacts = extract_label_artifacts_from_pdf(content)
@@ -1477,38 +1592,17 @@ async def restore_truncated_pool_cis_codes(
             continue
 
         for code in codes:
-            masked = mask_cis_code(code.cis_code)
-            match = next((full for full in parsed_cis if full.startswith(code.cis_code)), None)
-            if match is None:
-                rows.append(
-                    _restore_row(
-                        code,
-                        "not_found_in_source",
-                        "код не найден среди КИЗ, распознанных в сохранённых PDF наряда",
-                        masked=masked,
-                    )
+            row = await _restore_row_from_candidates(session, code, parsed_cis, dry_run=dry_run)
+            if row is None:
+                row = _restore_row(
+                    code,
+                    "not_found_in_source",
+                    "код не найден среди КИЗ, распознанных в сохранённых PDF наряда",
+                    masked=mask_cis_code(code.cis_code),
                 )
-                continue
-            conflict_stmt = select(MarkingCode.id).where(
-                MarkingCode.tenant_id == code.tenant_id,
-                MarkingCode.cis_code == match,
-                MarkingCode.id != code.id,
-            )
-            conflict_id = (await session.execute(conflict_stmt)).scalar_one_or_none()
-            if conflict_id is not None:
-                rows.append(
-                    _restore_row(
-                        code,
-                        "target_conflict",
-                        f"полный код уже занят другой строкой (code_id={conflict_id})",
-                        masked=masked,
-                    )
-                )
-                continue
-            if not dry_run:
-                code.cis_code = match
-            rows.append(_restore_row(code, "restored", None, masked=masked))
-            restored += 1
+            rows.append(row)
+            if row.outcome == "restored":
+                restored += 1
 
     if not dry_run and restored:
         await session.flush()
