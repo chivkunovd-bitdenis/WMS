@@ -1774,12 +1774,17 @@ export function FfFbsSupplyWorkspace({
                         <Button
                           disabled={!packagingEditable || busy || packingOrders.length === 0}
                           onClick={() => openBulkOrderMarkingPrint(
-                            unprintedPackingOrders.length > 0 ? unprintedPackingOrders : packingOrders,
+                            // L8 (21.08.2026): в ленту идут ВСЕ заказы поставки, а не только
+                            // ненапечатанные. Иначе после первой печати (или после зажёванной
+                            // бумаги) лента выходила короче листа подбора, и оператор об этом
+                            // не знал. Коды Честного знака от этого не жгутся: у заказа, где
+                            // код уже выпущен, сервер переиспользует его, а не берёт новый.
+                            packingOrders,
                             unprintedPackingOrders.length === 0,
                           )}
                           data-task-id="FBS-21"
                         >
-                          Печать всего
+                          Печать всего ({packingOrders.length})
                         </Button>
                         <Button variant="contained" disabled={!packagingEditable || busy} onClick={() => void packEverything()}>
                           Всё упаковано

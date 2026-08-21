@@ -226,7 +226,13 @@ export function MarkingLabelPreview(props: Props) {
       ? props.fbsOrders.slice(0, MAX_PREVIEW_UNITS)
       : null
   const fbsOrdersTotal = props.fbsOrders?.length ?? 0
-  const nonHonestLabelCopies = Math.max(1, Math.floor(props.fbsNonHonestLabelCopies ?? 1) || 1)
+  // L2 (21.08.2026): ноль копий ШК — законное значение, лента тогда идёт только с QR.
+  // Прежний Math.max(1, …) поднимал ноль до единицы, и предпросмотр рисовал штрихкод,
+  // которого в печати не будет: окно показывало не то, что уйдёт на принтер.
+  const nonHonestLabelCopies =
+    props.fbsNonHonestLabelCopies === undefined
+      ? 1
+      : Math.max(0, Math.floor(props.fbsNonHonestLabelCopies) || 0)
   const fbsOrdersKey = fbsOrdersCapped
     ? JSON.stringify(
         fbsOrdersCapped.map((order) => ({

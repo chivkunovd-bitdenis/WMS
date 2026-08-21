@@ -1299,3 +1299,69 @@ async def test_fbs_supply_completes_even_without_stock_anywhere(
             assert balance.quantity >= 0
             assert balance.quantity_unpacked >= 0
             assert balance.quantity_packed >= 0
+
+
+@pytest.mark.asyncio
+async def test_tape_covers_every_order_and_matches_picking_list(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """Гарантия полноты: в ленте столько же заказов, сколько в поставке и в листе подбора.
+
+    Оператор печатает ленту и лист подбора, идёт собирать по ним. Если лента короче
+    состава поставки, часть заказов просто не существует для склада — 21.08.2026 так и
+    было. Тест держит равенство трёх чисел: заказы поставки, строки листа подбора,
+    заказы в ленте.
+    """
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    token_payload = await async_client.get("/auth/me", headers=headers)
+    tenant_id = uuid.UUID(token_payload.json()["tenant_id"])
+
+    supply_id, order_ids = await _create_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+    )
+    assert order_ids
+
+    picking = await async_client.get(
+        f"/operations/fbs-supplies/{supply_id}/picking-list", headers=headers
+    )
+    assert picking.status_code == 200, picking.text
+    picking_total = sum(int(item["quantity"]) for item in picking.json()["items"])
+    assert picking_total == len(order_ids), "лист подбора обязан покрывать все заказы поставки"
+
+    tape = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/order-print-tape",
+        headers=headers,
+        json={
+            "order_ids": [str(oid) for oid in order_ids],
+            "layout": None,
+            "allow_partial": False,
+            "include_order_qr": True,
+            "reprint": False,
+        },
+    )
+    assert tape.status_code == 200, tape.text
+    tape_body = tape.json()
+    assert len(tape_body["orders"]) == len(order_ids), tape_body.get("order_errors")
+    assert not tape_body.get("order_errors")
+
+    # Повторная печать не должна давать ленту короче: заказы уже помечены напечатанными,
+    # но в ленту обязаны попасть все — иначе после зажёванной бумаги не перепечатать.
+    again = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/order-print-tape",
+        headers=headers,
+        json={
+            "order_ids": [str(oid) for oid in order_ids],
+            "layout": None,
+            "allow_partial": False,
+            "include_order_qr": True,
+            "reprint": True,
+        },
+    )
+    assert again.status_code == 200, again.text
+    assert len(again.json()["orders"]) == len(order_ids)
