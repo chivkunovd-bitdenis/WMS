@@ -1,0 +1,33 @@
+{
+  "task_id": "BLG-D03",
+  "run_id": "BLG-D03:S02:2",
+  "stage_id": "S02",
+  "pipeline_hash": "sha256:1a06c5edc07554e2efab7af8adaa69815f70b49751ed1980f0192f204c388320",
+  "role_binding_id": "pipeline-dispatcher",
+  "agent_identity": "codex-night-orchestrator-dispatcher",
+  "input_hashes": {
+    "state_before": "sha256:9b4c2986550d73e5612c1b5edc70d7d10e303d6319a2bdb4b3e4cc806155babc"
+  },
+  "output_hashes": {},
+  "parent_receipt_hash": "sha256:74bf1d6f0673ae394f74f1a67536dd5f4e3e69612ec65840f90fd02a582fad86",
+  "baseline_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "started_at": "2026-08-21T00:24:37Z",
+  "finished_at": "2026-08-21T00:24:37Z",
+  "verdict": "IMPACT_CLASSIFIED",
+  "blocker": null,
+  "resume_stage": null,
+  "usage_receipt": {
+    "task_id": "BLG-D03",
+    "stage": "S02",
+    "role": "pipeline-dispatcher",
+    "executor": "codex",
+    "model": "gpt-5.6-terra",
+    "tier": "moderate",
+    "input_tokens": 180,
+    "output_tokens": 60,
+    "estimated_usd": 0.0015,
+    "agent_id": "codex-night-orchestrator-dispatcher",
+    "recorded_at": "2026-08-21T00:24:37Z"
+  },
+  "signature": "sha256:549565377c55b0057ed35c9df215b8d3ab88eafa78e649f812d6fc0e880fabc0"
+}

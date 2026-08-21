@@ -1,0 +1,91 @@
+{
+  "task_id": "BLG-D01",
+  "stage": "S02",
+  "role": "pipeline-dispatcher",
+  "status": "RUNNING",
+  "traits": [
+    "bug"
+  ],
+  "risk_level": "high",
+  "model_policy": "pipeline/model-policy.yml",
+  "required_stages": [
+    "S01",
+    "S02",
+    "B01",
+    "B02",
+    "B03",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S26"
+  ],
+  "done_stages": [
+    "S01"
+  ],
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "wave_id": "wave-a1b311d18f07",
+  "backlog_item_id": "BLG-D01",
+  "backlog_item": {
+    "id": "BLG-D01",
+    "title": "Сбрасывать выбор заказов при смене фильтра и показывать состав пачки",
+    "source_section": "D1",
+    "business_meaning": "На экране списка заказов оператор может отметить заказы, затем сменить фильтр и сохранить невидимый выбор из предыдущей выборки. Из-за этого в одну поставку можно случайно собрать заказы разных селлеров или складов, хотя на экране видна только текущая часть списка. При смене фильтра система должна либо сбрасывать выбор, либо явно показывать весь состав будущей пачки и запрещать несовместимое объединение до создания поставки.",
+    "type": "bug",
+    "priority": "high",
+    "status": "queued",
+    "readiness": "needs_product_contract",
+    "dependencies": [],
+    "suggested_roles": [
+      "BA",
+      "Product",
+      "screen-dev",
+      "reviewer"
+    ],
+    "suggested_stages": [
+      "S01",
+      "S08",
+      "S12",
+      "S18"
+    ]
+  },
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 120,
+    "output_tokens": 40,
+    "estimated_usd": 0.001
+  },
+  "blocked_by": [
+    {
+      "id": "BLK-PROD-002",
+      "title": "Часть backlog описана как дефект, но не имеет полного контракта результата",
+      "status": "open",
+      "type": "product",
+      "owner_role": "pipeline-ba",
+      "resume_stage": "S08",
+      "minimum_closure_artifact": "atomic feature cards with Given/When/Then, roles, data, negatives and visible business result"
+    }
+  ],
+  "blocker": null,
+  "resume_condition": null,
+  "rules": [
+    "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
+    "Do not accept your own work.",
+    "If status is WAITING, do not advance; report the blocker and wait for resume.",
+    "If budget_enforced is true, advance requires usage receipt fields.",
+    "If blocked_by is non-empty, do not pass the blocker resume stage without resolve-blocker evidence.",
+    "Use python3 scripts/pipeline/run.py advance only for the stage you own.",
+    "Do not set DONE while pipeline status is not ACTIVE."
+  ]
+}

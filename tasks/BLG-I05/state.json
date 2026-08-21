@@ -54,8 +54,8 @@
     "S23",
     "S26"
   ],
-  "current_stage": "S01",
-  "status": "QUEUED",
+  "current_stage": "S11",
+  "status": "RUNNING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -71,20 +71,62 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T00:10:16Z",
-  "last_valid_receipt": null,
+  "heartbeat_at": "2026-08-21T00:25:04Z",
+  "last_valid_receipt": "sha256:e6af5bf49a05965d16024302e679b89178b7289200270e684141d669157604b4",
   "blocker": null,
   "resume_condition": null,
-  "verdicts": {},
+  "verdicts": {
+    "S01": {
+      "verdict": "TASK_INTAKE_READY",
+      "receipt_path": "docs/evidence/BLG-I05/S01-TASK_INTAKE_READY.receipt.json",
+      "receipt_hash": "sha256:4f541ce57854cacd16b0e946bd7b8ea794fcadc916eb018069ad334f43556f1f",
+      "role_binding_id": "pipeline-dispatcher",
+      "agent_identity": "codex-night-orchestrator-dispatcher"
+    },
+    "S02": {
+      "verdict": "IMPACT_CLASSIFIED",
+      "receipt_path": "docs/evidence/BLG-I05/S02-IMPACT_CLASSIFIED.receipt.json",
+      "receipt_hash": "sha256:e6af5bf49a05965d16024302e679b89178b7289200270e684141d669157604b4",
+      "role_binding_id": "pipeline-dispatcher",
+      "agent_identity": "codex-night-orchestrator-dispatcher"
+    }
+  },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 0,
-    "output_tokens": 0,
-    "estimated_usd": 0.0
+    "input_tokens": 300,
+    "output_tokens": 100,
+    "estimated_usd": 0.0025
   },
-  "budget_usage_receipts": [],
+  "budget_usage_receipts": [
+    {
+      "task_id": "BLG-I05",
+      "stage": "S01",
+      "role": "pipeline-dispatcher",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 120,
+      "output_tokens": 40,
+      "estimated_usd": 0.001,
+      "agent_id": "codex-night-orchestrator-dispatcher",
+      "recorded_at": "2026-08-21T00:23:49Z"
+    },
+    {
+      "task_id": "BLG-I05",
+      "stage": "S02",
+      "role": "pipeline-dispatcher",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 180,
+      "output_tokens": 60,
+      "estimated_usd": 0.0015,
+      "agent_id": "codex-night-orchestrator-dispatcher",
+      "recorded_at": "2026-08-21T00:25:04Z"
+    }
+  ],
   "blocked_by": [],
   "blocker_resolutions": [],
   "_snapshot_note": "Read-only Git snapshot; controller state lives in .pipeline-state/."

@@ -1,0 +1,85 @@
+{
+  "task_id": "BLG-I17",
+  "stage": "S09",
+  "role": "pipeline-ba",
+  "status": "RUNNING",
+  "traits": [
+    "ui_change"
+  ],
+  "risk_level": "medium",
+  "model_policy": "pipeline/model-policy.yml",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S09",
+    "S10",
+    "S11",
+    "S12",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S24",
+    "S25",
+    "S26"
+  ],
+  "done_stages": [
+    "S01",
+    "S02"
+  ],
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "wave_id": "wave-a1b311d18f07",
+  "backlog_item_id": "BLG-I17",
+  "backlog_item": {
+    "id": "BLG-I17",
+    "title": "Дать выход из состояния упакованного заказа без короба",
+    "source_section": "I17",
+    "business_meaning": "Заказ может быть отмечен упакованным, но не попасть ни в один короб, после чего вся поставка блокируется перед сдачей. Сейчас экран сообщает о проблеме общей фразой, но не показывает конкретный заказ и не даёт исправить состояние из этого же места. Система должна вывести каждый потерянный заказ, предложить положить его в подходящий короб и сразу пересчитать готовность поставки после успешного назначения.",
+    "type": "ui_change",
+    "priority": "medium",
+    "status": "queued",
+    "readiness": "needs_product_contract",
+    "dependencies": [
+      "BLG-D23"
+    ],
+    "suggested_roles": [
+      "BA",
+      "Product",
+      "screen-dev",
+      "ui-critic",
+      "reviewer"
+    ],
+    "suggested_stages": [
+      "S01",
+      "S08",
+      "S12",
+      "S18",
+      "S26"
+    ]
+  },
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 300,
+    "output_tokens": 100,
+    "estimated_usd": 0.0025
+  },
+  "blocked_by": [],
+  "blocker": null,
+  "resume_condition": null,
+  "rules": [
+    "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
+    "Do not accept your own work.",
+    "If status is WAITING, do not advance; report the blocker and wait for resume.",
+    "If budget_enforced is true, advance requires usage receipt fields.",
+    "If blocked_by is non-empty, do not pass the blocker resume stage without resolve-blocker evidence.",
+    "Use python3 scripts/pipeline/run.py advance only for the stage you own.",
+    "Do not set DONE while pipeline status is not ACTIVE."
+  ]
+}

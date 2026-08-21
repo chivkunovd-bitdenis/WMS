@@ -1,0 +1,80 @@
+{
+  "task_id": "BLG-D07",
+  "stage": "S03",
+  "role": "pipeline-ba",
+  "status": "RUNNING",
+  "traits": [
+    "background_worker",
+    "external_contract"
+  ],
+  "risk_level": "medium",
+  "model_policy": "pipeline/model-policy.yml",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S03",
+    "S04",
+    "S11",
+    "S12",
+    "S13",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S26"
+  ],
+  "done_stages": [
+    "S01",
+    "S02"
+  ],
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "wave_id": "wave-a1b311d18f07",
+  "backlog_item_id": "BLG-D07",
+  "backlog_item": {
+    "id": "BLG-D07",
+    "title": "Добавить повторную сверку статусов заказов WB",
+    "source_section": "D7",
+    "business_meaning": "После первичной загрузки заказа WMS не всегда повторно проверяет его актуальный статус в Wildberries. Поэтому отменённый, изменённый или уже обработанный заказ может долго оставаться в старом состоянии и вести оператора по неверному сценарию. Нужна регулярная фоновая сверка с ограничением частоты, повторными попытками при сбоях и понятным временем последнего успешного обновления.",
+    "type": "background_worker",
+    "priority": "medium",
+    "status": "queued",
+    "readiness": "needs_technical_contract",
+    "dependencies": [],
+    "suggested_roles": [
+      "solution-architect",
+      "screen-dev",
+      "reviewer"
+    ],
+    "suggested_stages": [
+      "S02",
+      "S12",
+      "S18",
+      "S23"
+    ]
+  },
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 300,
+    "output_tokens": 100,
+    "estimated_usd": 0.0025
+  },
+  "blocked_by": [],
+  "blocker": null,
+  "resume_condition": null,
+  "rules": [
+    "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
+    "Do not accept your own work.",
+    "If status is WAITING, do not advance; report the blocker and wait for resume.",
+    "If budget_enforced is true, advance requires usage receipt fields.",
+    "If blocked_by is non-empty, do not pass the blocker resume stage without resolve-blocker evidence.",
+    "Use python3 scripts/pipeline/run.py advance only for the stage you own.",
+    "Do not set DONE while pipeline status is not ACTIVE."
+  ]
+}

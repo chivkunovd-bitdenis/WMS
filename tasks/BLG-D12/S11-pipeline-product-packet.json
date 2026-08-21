@@ -1,0 +1,83 @@
+{
+  "task_id": "BLG-D12",
+  "stage": "S11",
+  "role": "pipeline-product",
+  "status": "RUNNING",
+  "traits": [
+    "release_change"
+  ],
+  "risk_level": "high",
+  "model_policy": "pipeline/model-policy.yml",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S26",
+    "S27",
+    "S28"
+  ],
+  "done_stages": [
+    "S01",
+    "S02"
+  ],
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "wave_id": "wave-a1b311d18f07",
+  "backlog_item_id": "BLG-D12",
+  "backlog_item": {
+    "id": "BLG-D12",
+    "title": "Настроить Cache-Control для корня приложения и хэшированных assets",
+    "source_section": "D12",
+    "business_meaning": "Корень приложения может отдаваться без явного запрета кэширования, поэтому браузер продолжает использовать старый index.html после новой выкатки. Старый index ссылается на прежний фронтенд-пакет, и оператор не видит исправление, хотя сервер уже обновлён. Для корня и index.html нужен режим no-cache, для файлов с хэшем в имени нужен долгий кэш, а проверка должна подтвердить заголовки и загрузку нового bundle в живом браузере.",
+    "type": "release_change",
+    "priority": "high",
+    "status": "queued",
+    "readiness": "needs_release_contract",
+    "dependencies": [
+      "BLG-D09"
+    ],
+    "suggested_roles": [
+      "solution-architect",
+      "DevOps",
+      "reviewer"
+    ],
+    "suggested_stages": [
+      "S02",
+      "S12",
+      "S18",
+      "S25",
+      "S28"
+    ]
+  },
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 300,
+    "output_tokens": 100,
+    "estimated_usd": 0.0025
+  },
+  "blocked_by": [],
+  "blocker": null,
+  "resume_condition": null,
+  "rules": [
+    "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
+    "Do not accept your own work.",
+    "If status is WAITING, do not advance; report the blocker and wait for resume.",
+    "If budget_enforced is true, advance requires usage receipt fields.",
+    "If blocked_by is non-empty, do not pass the blocker resume stage without resolve-blocker evidence.",
+    "Use python3 scripts/pipeline/run.py advance only for the stage you own.",
+    "Do not set DONE while pipeline status is not ACTIVE."
+  ]
+}

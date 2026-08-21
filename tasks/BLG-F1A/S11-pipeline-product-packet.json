@@ -1,0 +1,81 @@
+{
+  "task_id": "BLG-F1A",
+  "stage": "S11",
+  "role": "pipeline-product",
+  "status": "RUNNING",
+  "traits": [
+    "pipeline_change"
+  ],
+  "risk_level": "critical",
+  "model_policy": "pipeline/model-policy.yml",
+  "required_stages": [
+    "S01",
+    "S02",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20",
+    "S21",
+    "S22",
+    "S23",
+    "S25",
+    "S26"
+  ],
+  "done_stages": [
+    "S01",
+    "S02"
+  ],
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
+  "branch": "codex/wms-pipeline-unified-v2-20260820",
+  "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
+  "wave_id": "wave-a1b311d18f07",
+  "backlog_item_id": "BLG-F1A",
+  "backlog_item": {
+    "id": "BLG-F1A",
+    "title": "Добавить проверку реальных артефактов и уровней доказательств",
+    "source_section": "F1a, D13",
+    "business_meaning": "Пайплайн может принять рассказ разработчика или результат внутренней функции за доказательство того, что пользовательский сценарий действительно работает. Но словарь из сервиса не доказывает ответ API, зелёный тест не доказывает экран, а локальная сборка не доказывает production. Нужно определить обязательные уровни доказательств для каждого типа задачи и машинно требовать реальные файлы: результаты тестов, API-ответы, данные из базы, скриншоты живого браузера и подтверждение точного SHA там, где это необходимо.",
+    "type": "pipeline_change",
+    "priority": "critical",
+    "status": "queued",
+    "readiness": "needs_architecture_contract",
+    "dependencies": [
+      "BLG-F01"
+    ],
+    "suggested_roles": [
+      "solution-architect",
+      "reviewer",
+      "guard"
+    ],
+    "suggested_stages": [
+      "S02",
+      "S12",
+      "S25",
+      "S28"
+    ]
+  },
+  "budget_enforced": true,
+  "budget_usage": {
+    "input_tokens": 300,
+    "output_tokens": 100,
+    "estimated_usd": 0.0025
+  },
+  "blocked_by": [],
+  "blocker": null,
+  "resume_condition": null,
+  "rules": [
+    "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
+    "Do not accept your own work.",
+    "If status is WAITING, do not advance; report the blocker and wait for resume.",
+    "If budget_enforced is true, advance requires usage receipt fields.",
+    "If blocked_by is non-empty, do not pass the blocker resume stage without resolve-blocker evidence.",
+    "Use python3 scripts/pipeline/run.py advance only for the stage you own.",
+    "Do not set DONE while pipeline status is not ACTIVE."
+  ]
+}
