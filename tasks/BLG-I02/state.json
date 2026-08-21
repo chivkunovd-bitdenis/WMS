@@ -58,7 +58,7 @@
     "S23",
     "S26"
   ],
-  "current_stage": "S11",
+  "current_stage": "S12",
   "status": "RUNNING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
@@ -75,8 +75,8 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T04:02:26Z",
-  "last_valid_receipt": "sha256:e2151d4f89dd09afc63be7b21623d33145d39a091590ddeb241c854694688cdf",
+  "heartbeat_at": "2026-08-21T04:07:02Z",
+  "last_valid_receipt": "sha256:14915aa77a72fe83a924d157ff072001b344dd9bd7f901ce2e9f45ed9147cda2",
   "blocker": null,
   "resume_condition": null,
   "verdicts": {
@@ -107,15 +107,22 @@
       "receipt_hash": "sha256:e2151d4f89dd09afc63be7b21623d33145d39a091590ddeb241c854694688cdf",
       "role_binding_id": "pipeline-reviewer",
       "agent_identity": "codex-blg-i02-s04-pipeline-reviewer"
+    },
+    "S11": {
+      "verdict": "PRODUCT_CONTRACT_APPROVED",
+      "receipt_path": "docs/evidence/BLG-I02/S11-PRODUCT_CONTRACT_APPROVED.receipt.json",
+      "receipt_hash": "sha256:14915aa77a72fe83a924d157ff072001b344dd9bd7f901ce2e9f45ed9147cda2",
+      "role_binding_id": "pipeline-product",
+      "agent_identity": "codex-blg-i02-s11-pipeline-product"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 84300,
-    "output_tokens": 18100,
-    "estimated_usd": 1.5025
+    "input_tokens": 144300,
+    "output_tokens": 28100,
+    "estimated_usd": 2.4525
   },
   "budget_usage_receipts": [
     {
@@ -169,6 +176,19 @@
       "estimated_usd": 0.85,
       "agent_id": "codex-blg-i02-s04-pipeline-reviewer",
       "recorded_at": "2026-08-21T04:02:26Z"
+    },
+    {
+      "task_id": "BLG-I02",
+      "stage": "S11",
+      "role": "pipeline-product",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 60000,
+      "output_tokens": 10000,
+      "estimated_usd": 0.95,
+      "agent_id": "codex-blg-i02-s11-pipeline-product",
+      "recorded_at": "2026-08-21T04:07:02Z"
     }
   ],
   "blocked_by": [],
