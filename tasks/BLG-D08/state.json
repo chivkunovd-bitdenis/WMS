@@ -50,8 +50,8 @@
     "S23",
     "S26"
   ],
-  "current_stage": "S05",
-  "status": "WAITING",
+  "current_stage": "S06",
+  "status": "RUNNING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -67,20 +67,10 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T01:48:29Z",
+  "heartbeat_at": "2026-08-21T05:44:01Z",
   "last_valid_receipt": "sha256:8b90044ee0e41f7d6b846fc43eac69090e6b3175c2faae84c56962e38500388f",
-  "blocker": {
-    "type": "BASELINE",
-    "reason_code": "S05_PROCESS_MAP_NOT_TASK_SPECIFIC",
-    "details": "S05 mixes unrelated BLG-KC01, QR-print, and client-list scenarios and repeats the false premise that FfFbsPickList is unconnected; baseline code imports it in FfFbsSupplyDrawer.",
-    "owner": "pipeline-controller",
-    "created_at": "2026-08-21T01:48:29Z",
-    "resume_stage": "S05"
-  },
-  "resume_condition": {
-    "stage": "S05",
-    "condition": "Replace S05 with a BLG-D08-specific current-to-target map that names the FfFbsSupplyDrawer entry point, the actual consumer, and evidence-backed keep-versus-remove decision; then controller owner resumes at S05."
-  },
+  "blocker": null,
+  "resume_condition": null,
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",
