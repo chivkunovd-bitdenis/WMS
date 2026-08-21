@@ -105,7 +105,13 @@ function errorText(cause: unknown): string {
 }
 
 function scannerDebug(cause: unknown): ScannerDebug | null {
-  if (!(cause instanceof FbsApiError) || cause.code !== 'not_a_kiz') return null
+  if (!(cause instanceof FbsApiError)) return null
+  // not_a_kiz — совсем не похоже на КИЗ; gs_separator_lost — похоже, но
+  // разделители не восстановить по структуре (I3, серверный рубеж защиты
+  // для входов, которые обошли клиентский restoreCisGs.ts). Оба случая отдают
+  // context.debug той же формы (scan_debug на сервере) — оператору полезно
+  // видеть длину и края значения в обоих.
+  if (cause.code !== 'not_a_kiz' && cause.code !== 'gs_separator_lost') return null
   if (!cause.context || typeof cause.context !== 'object') return null
   const debug = (cause.context as { debug?: unknown }).debug
   if (!debug || typeof debug !== 'object') return null
