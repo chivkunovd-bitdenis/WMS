@@ -11,6 +11,7 @@ from __future__ import annotations
 import pathlib
 import sys
 import tempfile
+import json
 from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
@@ -186,6 +187,37 @@ def main() -> int:
     args = вызов.get("args", [])
     проверь("Codex CLI: browser role без ignore-user-config",
             "--ignore-user-config" not in args, True)
+
+    # Контракт свежего прогона: существующая волна может быть грязной или
+    # частично выполненной, поэтому --fresh/--run-id никогда не переиспользуют
+    # её каталог и не требуют ручного копирования исходника. Проверяем только
+    # публичный helper на временных каталогах; бизнес-волна и git не затрагиваются.
+    with tempfile.TemporaryDirectory(prefix="check-night-fresh-") as временный:
+        root = pathlib.Path(временный)
+        source = root / "zadachi-2026-08-21.md"
+        source.write_text("# исходный список\n- карточка\n", encoding="utf-8")
+        old = root / "zadachi-2026-08-21"
+        (old / "cards" / "partial").mkdir(parents=True)
+        (old / "JOURNAL.md").write_text("старый прогон\n", encoding="utf-8")
+        old_marker = (old / "JOURNAL.md").read_text(encoding="utf-8")
+
+        try:
+            fresh = n.создать_свежую_волну(source, "run-20260821-01", базовый_каталог=root)
+        except AttributeError:
+            беды.append("fresh run: нет публичного helper создать_свежую_волну")
+        else:
+            проверь("fresh run: отдельный каталог", fresh != old, True)
+            проверь("fresh run: run-id в имени", fresh.name.endswith("-run-20260821-01"), True)
+            проверь("fresh run: старая волна сохранена", (old / "JOURNAL.md").read_text(encoding="utf-8"), old_marker)
+            проверь("fresh run: новая папка создана", fresh.is_dir(), True)
+            try:
+                manifest = json.loads((fresh / "RUN.json").read_text(encoding="utf-8"))
+            except (FileNotFoundError, json.JSONDecodeError) as ошибка:
+                беды.append(f"fresh run: нет корректного RUN.json ({ошибка})")
+            else:
+                проверь("fresh run: source записан", manifest.get("source"), str(source))
+                проверь("fresh run: run-id записан", manifest.get("run_id"), "run-20260821-01")
+            проверь("fresh run: исходник не изменён", source.read_text(encoding="utf-8"), "# исходный список\n- карточка\n")
 
     if беды:
         print("ПРОВЕРКА ОРКЕСТРАТОРА КРАСНАЯ:", file=sys.stderr)
