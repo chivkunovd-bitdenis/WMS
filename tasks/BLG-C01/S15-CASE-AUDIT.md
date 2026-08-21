@@ -1,66 +1,65 @@
 # S15 CASE_AUDIT - BLG-C01
 
-## Verdict
+## Independent verdict
 
-`CASE_AUDIT_FAILED`
+`CASE_AUDIT_PASSED`
 
-The case package is not internally exact: `S15-CASE-FACTORY.md` states that it
-contains twelve `GOLD` cases, while `S15-CASES.json` contains eleven case rows
-only (`AC01`-`AC08`, `AC10`-`AC12`) and has no `BLG-C01-AC09`. Pipeline v2
-requires case count to follow risk coverage rather than a target number, so
-the package must either add the missing concrete case row with oracle and S19
-binding, or correct the stated count to eleven and refresh the dependent hash
-receipt before S16 can rely on it.
+Independent re-audit of the repaired S15 package at exact commit
+`d8b0eca59d3c61b621bd0cf3d359af67682a5226` passed. The auditor did not author
+the repair. This verdict closes the previous cardinality finding only; it does
+not resume or advance controller state and does not authorize Dev or release.
 
 ## Audited immutable inputs
 
+- Repair commit: `d8b0eca59d3c61b621bd0cf3d359af67682a5226`
+- Commit tree: `6f8fda026190ce3fdaf39299aa1c1627a39a5392`
 - `tasks/BLG-C01/S15-CASE-FACTORY.md`
-  `sha256:f068c63c38b776f71a932560c2728963ba86ec0d586e4821f43dbbea6739adae`
+  `sha256:c0c85fd4cb1db33231845a8d5c0b2722a2f96aea931840560028b00fdc0fe09f`
 - `tasks/BLG-C01/S15-CASES.json`
-  `sha256:f302db0d08711e22d7eeb730bfcdb6c28c0584a7c998d5f2db1089f1638a4fa9`
-- Controller `validate --task-id BLG-C01`: passed.
-- Controller `next --task-id BLG-C01`: `S16`, role `pipeline-product`.
-  This audit does not accept Product S16 and does not advance the controller.
+  `sha256:24a2458fc3b6f971c333e5a8cc6ea2dfcb97bd02350ae0e9acfb8ac4e66b7b8d`
+- `tasks/BLG-C01/S15-BLOCKER-CLOSURE.md`
+  `sha256:e554df828f16e386799b71cfc677834c92d1609b584c17730bea51e2597830f4`
+- The current copies of these inputs are byte-identical to the repair commit.
+- `python3 scripts/pipeline/run.py validate --task-id BLG-C01`: passed.
 
-## Exact S15 matrix audit
+## Package audit
 
-| Audit row | Required proof | Matrix coverage | Result |
-| --- | --- | --- | --- |
-| Fresh exact-SHA candidate | Discovery SHA cannot become a candidate; future candidate is immutable and S23-bound | AC01, AC12 | Covered |
-| Additive migration | Current-head parent, one head, defaults preserved, old app compatible, no destructive rollback | AC01, AC08 | Covered |
-| Tenant UUID CAS | One owner-named UUID, exactly one conditional row, target/control read-back, retry | AC10, AC11 | Covered |
-| Durable audit truth | `tenant_optional` reason/timestamp survives commit, API read-back, reload and future flag reversal | AC02, AC04, AC06 | Covered |
-| Isolation | Tenant, seller, warehouse and authenticated scope cannot cross-mutate | AC05 | Covered |
-| Retry and concurrency | Concurrent assignment and retry leave one durable transition and one box link | AC06 | Covered |
-| Independent gates | Marking, cargo-place, delivery and authorization remain blocking | AC07 | Covered |
-| Deterministic fixture/reset | Local DB/schema, synthetic UUID graph, namespaced Redis/Celery/emulator, frozen seed/clock, drain/ack, teardown, no egress | Fixture contract for AC01-AC12 | Covered |
-| Planned S19 binding | Every listed case has a planned executable test reference without changing its oracle | AC01-AC08, AC10-AC12 | Covered, subject to S19 implementation |
-| Future S28 operator trace | Exact-SHA/manifest/one-UUID stopper, bounded local simulation, reject live marketplace effect | AC12 | Covered |
-| No live or production action | Every case is local-only and external egress is forbidden | AC01-AC12 | Covered |
-| Case-matrix cardinality | Factory claim and machine-readable case rows must agree | Factory: 12; JSON: 11 | **Failed** |
-
-## Exact missing row
-
-| Missing ID | Evidence | Required repair |
+| Audit row | Evidence | Result |
 | --- | --- | --- |
-| `BLG-C01-AC09` | The factory declares twelve GOLD cases; the JSON matrix jumps from `BLG-C01-AC08` to `BLG-C01-AC10`. No AC09 record, oracle, fixture, expected effects or S19 `executable_ref` exists. | Add the intended AC09 row and corresponding matrix/binding, or revise the factory to declare eleven cases and regenerate the dependent S15 receipt/hash chain. |
+| Cardinality | JSON contains exactly twelve rows, `BLG-C01-AC01` through `BLG-C01-AC12` | Passed |
+| Uniqueness and status | Twelve unique IDs; all twelve have status `GOLD` | Passed |
+| Factory/JSON consistency | Factory declares twelve cases; every coverage and binding reference resolves to an existing JSON row | Passed |
+| Required case fields | Every row has task-specific fixture, oracle, executor/binding plan, read-back and reload assertions | Passed |
+| Fixture isolation | Local isolated DB/schema and synthetic tenant graph; namespaced Redis/Celery/emulator; frozen clock/seed; drain/ack, teardown and fail-closed egress | Passed |
+| Risk coverage | Migration/default, optional and required paths, audit history, isolation, concurrency/retry, independent gates, CAS stop conditions and exact-SHA boundary are represented | Passed |
+| Generic filler check | Each row names a BLG-C01 behavior, state transition, expected durable effect and concrete S19 reference; no generic placeholder row was found | Passed |
 
-## Boundary
+## AC09 direct proof
 
-No Dev, release, deployment, migration, configuration mutation, secret access,
-production action, or live WB/Ozon operation was performed. The finding returns
-to S15 case ownership; a new independent audit is required after the S15 input
-hashes change.
+`BLG-C01-AC09` is present in both the factory coverage matrix and
+`S15-CASES.json`. It is a task-specific ordered local journey with these
+independent assertions:
 
-## Closure status after S15 repair
+1. A historic order is durably committed while `fbs_packing_required=false`
+   with `pack_status=packed`, `packing_bypass_reason=tenant_optional` and its
+   original timestamp.
+2. The isolated fixture changes only the same tenant flag to `true`.
+3. Assignment of a new unpacked order is rejected with `order_not_packed`; the
+   new row remains pending with null bypass reason and no box link.
+4. API read-back of both orders proves that only future eligibility changed.
+5. Workspace reload preserves the historic `tenant_optional` truth and the new
+   required-packing blocker as distinct states.
 
-`CASE_AUDIT_REAUDIT_REQUIRED`
+This matches the approved S11 boundary and the S13/S14 configuration-history
+oracle. The case has planned pytest and local Playwright bindings for S19 and
+does not authorize a production configuration mutation.
 
-The case writer repaired the missing `BLG-C01-AC09` in the S15 inputs and made
-the factory, coverage matrix and planned S19 binding internally cardinality-
-consistent. This section is a closure note for the original cardinality
-finding, not an audit acceptance: the inputs have changed, therefore the
-immutable hashes above are historical and no longer usable for a pass verdict.
-Only an independent `case-auditor` may issue `CASE_AUDIT_PASSED` after checking
-the repaired files, including AC09's future-eligibility and historical-audit
-negative coverage.
+## Boundary and next action
+
+No controller transition, Dev, release, deploy, migration, tenant mutation,
+secret access or live WB/Ozon call was performed. BLG-C01 remains `WAITING` at
+S15 until the orchestrator records this independent verdict and clears the
+`CASE_AUDIT_FAILED` wait through the controller. The orchestrator must then
+revalidate the task and continue from the controller-reported next action;
+S27 remains forbidden until a separate owner approval names the exact release
+candidate SHA and immutable manifest.
