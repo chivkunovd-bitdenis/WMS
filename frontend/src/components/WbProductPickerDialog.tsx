@@ -167,6 +167,9 @@ export function WbProductPickerDialog({
     () => filterCatalogRows(catalog, pickerSearch, pickerCategory, filterRow),
     [catalog, filterRow, pickerCategory, pickerSearch],
   )
+  const hasSelectedQuantity = Object.values(pickerQtyByProduct).some(
+    (qty) => Number.isFinite(qty) && qty > 0,
+  )
 
   const setPickerQty = (productId: string, qty: number) => {
     setPickerQtyByProduct((prev) => ({ ...prev, [productId]: qty }))
@@ -404,7 +407,7 @@ export function WbProductPickerDialog({
         <Button
           variant="contained"
           onClick={() => void handleApply()}
-          disabled={busy}
+          disabled={busy || !hasSelectedQuantity}
           data-testid={`${testIdPrefix}-apply`}
         >
           {applyLabel}
