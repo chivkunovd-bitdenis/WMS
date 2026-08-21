@@ -569,7 +569,7 @@ def поднять_стенд(полоса: int, рабочая: Рабочая�
     # compose flags. Build and remove the previous lane containers here so its
     # subsequent `up -d` can only start images from this card worktree.
     build = subprocess.run(compose + ["build"], cwd=корень, env=env,
-                           capture_output=True, text=True, timeout=15 * 60)
+                           capture_output=True, text=True, timeout=25 * 60)
     if build.returncode != 0:
         return ""
     recreate = subprocess.run(compose + ["rm", "-sf"], cwd=корень, env=env,
@@ -577,7 +577,7 @@ def поднять_стенд(полоса: int, рабочая: Рабочая�
     if recreate.returncode != 0:
         return ""
     р = subprocess.run([str(корень / "scripts/stand/up.sh"), str(полоса)],
-                       cwd=корень, env=env, capture_output=True, text=True, timeout=15 * 60)
+                       cwd=корень, env=env, capture_output=True, text=True, timeout=25 * 60)
     хвост = (р.stdout or "") + (р.stderr or "")
     СТЕНД[ключ] = хвост[-600:] if р.returncode == 0 else ""
     return СТЕНД[ключ]

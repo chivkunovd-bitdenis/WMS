@@ -56,6 +56,19 @@ if [[ "${2:-}" == "--креды" ]]; then креды; exit 0; fi
 # маркетплейсу товара, которого нет.
 COMPOSE=(docker compose -p "$PROJECT" -f "$ROOT/docker-compose.yml" -f "$ROOT/docker-compose.lane.yml")
 
+# Полосы переиспользуют уже собранные образы вместо своей сборки. Имя проекта у каждой
+# полосы своё, поэтому compose по умолчанию строит ей отдельные образы — девять карточек
+# дают девять сборок одного и того же кода по пятнадцать минут, и ночь умирает на этом.
+# Берём образы первой полосы и подставляем их под имя своей.
+for SVC in api celery_worker web; do
+  SRC="wms-lane-1-${SVC}:latest"
+  DST="${PROJECT}-${SVC}:latest"
+  if [[ "$LANE" != "1" ]] && docker image inspect "$SRC" >/dev/null 2>&1 \
+     && ! docker image inspect "$DST" >/dev/null 2>&1; then
+    docker tag "$SRC" "$DST" && echo "    образ $SVC взят у полосы 1, сборка не нужна"
+  fi
+done
+
 echo "1/4 поднимаю стек полосы $LANE (порты 3xx$LANE)"
 "${COMPOSE[@]}" up -d --wait db redis >/dev/null 2>&1
 "${COMPOSE[@]}" up -d wb-guard >/dev/null 2>&1

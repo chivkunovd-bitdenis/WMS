@@ -122,3 +122,31 @@
 00:34   05-prod-slow · tester: готово
 00:35   06-picking-list-order · breaker: готово
 00:37   04-warehouse-switch · tester: готово
+00:39   01-wb-marking · breaker: готово
+00:41   02-verdikt-screen · screen-dev: готово
+00:41   06-picking-list-order · screen-dev: готово
+00:42   03-no-distribution-mode · ui-critic: в DESIGN-REVIEW.md нет машинной строки «ВЕРДИКТ: ...» (код 124, попытка 1)
+00:43   05-prod-slow · breaker: готово
+00:45   01-wb-marking · screen-dev: готово
+00:46   04-warehouse-switch · breaker: готово
+00:48   02-verdikt-screen · reviewer: готово
+00:48   02-verdikt-screen · reviewer: находки, круг 1 — назад к разработке
+00:48   03-no-distribution-mode · ui-critic: готово
+00:49   06-picking-list-order · reviewer: готово
+00:49   06-picking-list-order · reviewer: находки, круг 1 — назад к разработке
+00:49   05-prod-slow · screen-dev: готово
+00:52   04-warehouse-switch · screen-dev: готово
+00:53   02-verdikt-screen · screen-dev: готово
+00:53   05-prod-slow · reviewer: готово
+00:53   05-prod-slow · reviewer: находки, круг 1 — назад к разработке
+00:55   06-picking-list-order · screen-dev: готово
+00:58   05-prod-slow · screen-dev: готово
+00:58   04-warehouse-switch · reviewer: готово
+00:58   04-warehouse-switch · reviewer: находки, круг 1 — назад к разработке
+01:00   02-verdikt-screen · reviewer: готово
+01:00   02-verdikt-screen · reviewer: находки, круг 2 — назад к разработке
+01:01   01-wb-marking · reviewer: готово
+01:01   01-wb-marking · reviewer: находки, круг 1 — назад к разработке
+01:02   06-picking-list-order · reviewer: готово
+01:02   06-picking-list-order · reviewer: находки, круг 2 — назад к разработке
+01:03 03-no-distribution-mode: отложено — исключение Command '['docker', 'compose', '-p', 'wms-lane-3', '-f', '/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9/lane-3-03-no-distribution-mode/docker-compose.yml', '-f', '/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9/lane-3-03-no-distribution-mode/docker-compose.lane.yml', 'build']' timed out after 900 seconds
