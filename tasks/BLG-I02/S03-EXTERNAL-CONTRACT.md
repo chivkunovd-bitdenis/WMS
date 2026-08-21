@@ -12,11 +12,13 @@ The authoritative runtime signal is each `metaDetails[]` row returned by
 `POST /api/marketplace/v3/orders/meta`, not the legacy `meta` object and not WMS's own inference
 from `requiredMeta` or `optionalMeta`.
 
-WMS must persist the exact WB `key`, `value`, and raw `decision` for every requested assembly order,
-with a locally recorded observation time and the source request. Dispatch must be fail-closed: it is
-allowed only when every applicable current verdict is explicitly positive and belongs to the current
-set of marking identifiers. Missing, stale, pending, unknown, conflicting, or failed responses do not
-mean permission.
+WMS must persist one outcome for every WB call and the exact `key`, `value`, and raw `decision` for
+every verdict row WB actually returns, with a locally recorded observation time and the source
+request. Completeness is checked separately against the requested assembly-order scope; an omitted
+row is missing evidence, not a synthetic verdict. Dispatch must be fail-closed: it is allowed only
+when every applicable current verdict is explicitly positive and belongs to the current set of
+marking identifiers. Missing, stale, pending, unknown, conflicting, or failed responses do not mean
+permission.
 
 WB exposes one exceptional state: `deadlineExceeded`. WB documents it as technically eligible for
 delivery while also saying that validation is unfinished and may later succeed or fail. It is not an
@@ -29,7 +31,7 @@ unless Product deliberately approves a weaker policy at S11.
 |---|---|---:|---|---|
 | WB-FBS-OPENAPI | [Official WB FBS OpenAPI](https://dev.wildberries.ru/docs/openapi/orders-fbs) | 2026-08-21 | `official` | canonical endpoint, request/response shape, errors, limits, deliver contract |
 | WB-MARCH-2026 | [Official WB API March 2026 digest](https://dev.wildberries.ru/news/302) | 2026-08-21 | `official` | `metaDetails` migration, preflight before deliver, `MetaValidationFail`, positive rule published at that date |
-| WB-RELEASE-2026-03-26 | [Official WB release note](https://dev.wildberries.ru/release-notes?id=291) | 2026-08-21 | `official` | introduction of `metaDetails`; removal of deprecated `meta` announced for 2026-04-30 |
+| WB-RELEASE-2026-03-31 | [Official WB release-note journal, entry dated 31.03.2026](https://dev.wildberries.ru/release-notes) | 2026-08-21 | `official` | FBS entry "Changes in FBS Orders Methods" (observed by S04 as DOM id `note-500`): `metaDetails`, validation during deliver, and removal of deprecated `meta` announced for 2026-04-30 |
 | WB-RATE-LIMITS | [Official WB API information](https://dev.wildberries.ru/docs/openapi/api-information) | 2026-08-21 | `official` | Marketplace rate-limit headers and retry behavior |
 | WB-FBS-GUIDE | [Official WB FBS guide](https://dev.wildberries.ru/knowledge-base/articles/019d49a4-0771-7571-aea9-11d5b597f34c/zakazy-fbs) | 2026-08-21 | `official` | seller workflow and marking metadata availability |
 | WB-SPEC-SNAPSHOT | [Public snapshot of WB OpenAPI](https://github.com/eslazarev/wildberries-sdk/blob/539e44fc044f4c75cd7c349b62d64c4b55bd88a5/specs/03-orders-fbs.yaml) | 2026-08-21 | `observed` | immutable transport copy of the complete current enum and schema |
@@ -60,8 +62,9 @@ sandbox request was made.
   HTTP `5xx` are also non-success outcomes.
 - No pagination token exists. Volume is handled by deterministic batches of at most 100 IDs.
 - Limit for FBS marking reads/deletes: 300 requests per minute per seller account, 200 ms interval,
-  burst 20. Marketplace `409` consumes 10 request units; current schema snapshot says `4XX` may be
-  weighted, so implementation must use actual `X-Ratelimit-*` headers.
+  burst 20. Under the canonical FBS documentation current on the research date, every response with
+  an HTTP `4XX` status counts as 10 requests. This is not special to `409`. Runtime protection must
+  still use the actual `X-Ratelimit-*` headers returned by WB.
 - On `429`, retry only after `X-Ratelimit-Retry`; observe `X-Ratelimit-Reset` and
   `X-Ratelimit-Limit`.
 - The success schema does not provide a WB verdict timestamp. WMS must store its own UTC
@@ -73,13 +76,18 @@ sandbox request was made.
 ### 3.2 Delivery response
 
 - Operation: `PATCH /api/v3/supplies/{supplyId}/deliver`.
-- HTTP `204` is the terminal WB success for moving the supply to delivery.
+- HTTP `204` is the terminal WB success for moving the supply to delivery. It has no response body
+  and therefore contains no order-level or metadata-key verdict rows.
 - HTTP `409` with `code: "MetaValidationFail"` contains
   `data.orders[].id` and `data.orders[].metaDetails[]` with `key`, `value`, and `decision`.
-- The `409` verdict is authoritative for that delivery attempt and must be persisted even if a
-  preceding preflight was positive.
+- `data.orders[]` is the subset whose metadata failed validation or is still being validated. WB
+  does not promise that it contains every order in the supply, every positive order, or every key.
+- The `409` response is an authoritative negative result for that delivery attempt and must be
+  appended even if a preceding preflight was positive. It blocks that attempt but is not a complete
+  metadata snapshot and must not replace the preflight projection.
 - Other HTTP failures, timeout, malformed response, or absence of the expected `204` are not
-  permission and must not be converted into a green WMS state.
+  permission and must not be converted into a green WMS state. They can legitimately contain zero
+  metadata verdict rows.
 
 ## 4. Verdict matrix
 
@@ -134,47 +142,82 @@ returns one, persist it exactly and classify it `UNKNOWN_BLOCK`; do not silently
 
 ## 5. Persistence contract for downstream Product and Architecture
 
-Every WB observation is append-only. A mutable "latest" projection may be derived from history, but
-must not replace it.
+Persistence has two append-only levels: exactly one attempt outcome for every call, plus zero or
+more verdict detail rows returned by WB for that attempt. A mutable "latest" projection may be
+derived from this history, but must not replace either level.
 
-Required fields per observation:
+### 5.1 Attempt outcome: exactly one row per call
+
+An attempt row is mandatory even when WB returns no `metaDetails`, no body, or no HTTP response.
 
 | Field | Requirement |
 |---|---|
+| `attempt_id` | stable local identity for one preflight or deliver call; parent for all returned detail rows |
 | `tenant_id`, `seller_id` | mandatory ownership boundary; rate limits and tokens are seller-scoped |
-| `wb_order_id`, nullable `wb_supply_id` | external business identity and dispatch context |
 | `source_operation` | `orders_meta_preflight` or `supply_deliver` |
-| `attempt_id` | links every order row and HTTP result from one request/dispatch attempt |
-| `http_status`, nullable `wb_error_code` | preserves `200`, `204`, `409/MetaValidationFail`, and failures |
+| nullable `wb_supply_id` | required for `supply_deliver`; nullable for a standalone preflight |
+| `request_scope` and `requested_order_ids_hash` | exact tenant-scoped order set, ordering and batch identity; protected raw IDs or a durable protected reference are retained when needed for completeness checks |
+| `transport_outcome` | `HTTP_RESPONSE`, `TIMEOUT`, `CONNECTION_ERROR`, or `MALFORMED_RESPONSE`; absence of HTTP is explicit |
+| nullable `http_status`, nullable `wb_error_code` | preserves `200`, bodyless `204`, `409/MetaValidationFail`, other HTTP failures, and non-HTTP outcomes without invented values |
+| `attempt_result` | `PREFLIGHT_RESPONSE`, `DELIVER_ACCEPTED`, `DELIVER_REJECTED_PARTIAL`, `HTTP_ERROR`, `TRANSPORT_ERROR`, or `MALFORMED_RESPONSE` |
 | nullable `wb_request_id` | store when WB returns it in body or headers; absence is allowed |
-| `meta_ordinal`, `meta_key` | preserve repeated rows and original response order |
+| `observed_at_utc` | WMS receive/completion time; explicitly not a WB or Chestny ZNAK event time |
+| `request_payload_hash`, nullable `response_payload_hash` | request audit plus exact response bytes when a body exists; bodyless `204` and no-response failures remain honestly nullable |
+| `response_body_present` | explicit boolean; `false` for a canonical bodyless `204` and for transport outcomes without response bytes |
+| nullable protected `response_payload` or durable object reference | exact WB body for incident reconstruction when present; tenant-scoped and excluded from ordinary logs |
+| `contract_snapshot_sha256` | binds interpretation to the versioned external contract used above |
+
+Attempt semantics are explicit:
+
+- `200` from `orders_meta_preflight` stores the attempt and every returned detail row. Completeness
+  is evaluated only after both have been persisted.
+- bodyless `204` from `supply_deliver` stores `DELIVER_ACCEPTED` on the attempt. It proves that WB
+  accepted the supply transition, but creates zero synthetic order/key decisions and does not turn
+  prior detail rows into `CONFIRMED_ALLOW` rows.
+- `409 MetaValidationFail` stores `DELIVER_REJECTED_PARTIAL`, the raw response, and only the
+  negative or unfinished rows WB actually returned. It blocks this attempt and never deletes,
+  fills, or replaces rows absent from the partial response.
+- timeout, `429`, other `4XX`, `5XX`, and malformed responses store their honest attempt outcome
+  with zero or more detail rows. None authorize dispatch.
+
+### 5.2 Verdict detail: zero or more rows per attempt
+
+Detail rows exist only when WB supplied a real `metaDetails[]` item. No placeholder row is allowed.
+
+| Field | Requirement |
+|---|---|
+| `attempt_id` | mandatory parent link to the attempt outcome |
+| `wb_order_id` | external order identity exactly associated with this returned detail |
+| `order_ordinal`, `meta_ordinal`, `meta_key` | preserve response order, repeated rows, and the exact WB key |
 | nullable protected `meta_value`, `meta_value_hash` | bind the verdict to the exact identifier revision without leaking KIZ to logs |
 | `decision_raw` | exact case-sensitive WB string, never overwritten by normalized status |
-| `decision_class` | `CONFIRMED_ALLOW`, `WB_ELIGIBLE_UNCONFIRMED`, `WAIT`, `BLOCK`, `UNKNOWN_BLOCK`, `INCOMPLETE_BLOCK` |
-| `reason_text` | operator-safe Russian reason derived from the raw WB code; raw code remains visible for support |
-| `dispatch_allowed` | derived, never default `true`; true only for `CONFIRMED_ALLOW` |
-| `observed_at_utc` | WMS receive time; explicitly not a WB/Chestny ZNAK event time |
-| `request_payload_hash`, `response_payload_hash` | audit/deduplication and proof that the projection came from a specific response |
-| protected `response_payload` or durable object reference | exact WB answer for incident reconstruction; tenant-scoped, excluded from ordinary logs |
-| `contract_snapshot_sha256` | binds interpretation to the versioned enum used above |
+| `decision_class` | `CONFIRMED_ALLOW`, `WB_ELIGIBLE_UNCONFIRMED`, `WAIT`, `BLOCK`, `UNKNOWN_BLOCK`, or `INCOMPLETE_BLOCK` |
+| `reason_text` | operator-safe Russian reason derived from the raw WB code; raw code remains available for support |
 
-The latest projection additionally needs `is_complete`, `superseded_at`, and the current marking-set
-revision or fingerprint. A positive verdict for an earlier KIZ value must not authorize a later value.
+The latest preflight projection additionally needs `is_complete`, `superseded_at`, and the current
+marking-set revision or fingerprint. It may be complete only from a successful `orders/meta` response
+that includes every requested order and all applicable real detail rows under the checks in section
+6. A `409` may add newer negative evidence for returned order/key pairs, but cannot establish or
+replace a complete snapshot. A positive verdict for an earlier KIZ value must not authorize a later
+value.
 
 ## 6. Fail-closed dispatch invariant
 
 For the current supply and current marking-set revision:
 
 1. Fetch metadata in batches of at most 100 immediately in the dispatch execution path.
-2. Persist the whole HTTP attempt before evaluating permission.
-3. Require every requested order to be present and every applicable metadata row to be complete.
+2. Persist the attempt outcome and all real detail rows atomically before evaluating permission.
+3. For the successful preflight projection, require every requested order to be present and every
+   applicable metadata row to be complete.
 4. Require every current row to normalize to `CONFIRMED_ALLOW`.
 5. Treat `deadlineExceeded`, `pending`, unknown values, missing rows, stale value hashes, conflicting
    duplicates, HTTP/transport errors, `429`, and malformed responses as blocked.
 6. Call WB deliver only after the preflight invariant passes.
-7. Persist the deliver response. Only HTTP `204` means WB accepted dispatch; a
-   `409 MetaValidationFail` replaces the preflight projection for the affected attempt and remains
-   blocked.
+7. Persist the deliver attempt outcome before reporting its result. Only HTTP `204` means WB
+   accepted dispatch, and it creates no per-key verdict rows.
+8. Persist `409 MetaValidationFail` as an append-only partial negative attempt result plus only its
+   returned real detail rows. It blocks that delivery attempt without replacing the complete
+   preflight projection or inventing decisions for omitted orders/keys.
 
 There is no documented freshness TTL and no webhook for these verdicts. Polling is required for
 `pending`; use bounded backoff under WB rate limits. A time-of-check/time-of-use race remains possible,
@@ -190,8 +233,8 @@ so the delivery response is the final authority for the attempt.
 | Catalog/orders/stocks/reserves | order identity applicable; other lanes out of scope | `requiredMeta`/`optionalMeta` identify availability; no catalog or stock change | covered |
 | Marking/dispatch/cancel/return | marking and dispatch applicable; cancel/return unchanged | full verdict and 409 matrix | covered |
 | Pagination/batch | applicable | no pagination; max 100 IDs per request | covered |
-| Rate limits/retries | applicable | 300/min, 200 ms, burst 20, weighted errors, `X-Ratelimit-*` | covered |
-| Partial success | applicable | omissions/conflicts are incomplete and block | covered |
+| Rate limits/retries | applicable | 300/min, 200 ms, burst 20, every `4XX` counts as 10 requests, runtime `X-Ratelimit-*` protection | covered |
+| Partial success | applicable | attempt outcome plus `0..N` real detail rows; omissions/conflicts are incomplete and block | covered |
 | Webhooks/polling | applicable | no webhook documented; bounded polling for `pending` | covered |
 | Security/roles/tenant | applicable | Marketplace authorization; tenant/seller-scoped storage and limits | covered |
 | Volume/emergency | applicable | deterministic batches; no optimistic fallback during outage | covered |
@@ -217,3 +260,16 @@ No applicable capability row is left without a disposition.
 
 Research can advance to isolated S04 critique. The S04 critic must independently verify the current
 enum, the `deadlineExceeded` conflict, and the `gtin/expiration required` documentation contradiction.
+
+## 9. S04 rework closure map
+
+| S04 finding | Contract correction |
+|---|---|
+| `RC-01` | Sections 3.2, 5.1, 5.2 and 6 define `409 MetaValidationFail` as an append-only partial negative delivery-attempt result, never a projection replacement. |
+| `RC-02` | Section 5 separates one mandatory attempt outcome from `0..N` real verdict details; bodyless `204` and no-body failures require no synthetic key or decision. |
+| `RC-03` | Sections 3.1 and 7 state the current canonical accounting rule: every HTTP `4XX` counts as 10 requests, with runtime header protection retained. |
+| `RC-04` | Section 2 attributes `metaDetails`, deliver validation, and legacy `meta` removal to the official FBS release-note entry dated `31.03.2026` in the canonical journal, observed by S04 as DOM id `note-500`. |
+
+All enum mappings, the Product question for `deadlineExceeded`, and fail-closed `UNKNOWN_BLOCK`
+semantics remain unchanged. Closure of these four findings makes S03 ready for a new independent
+S04 run; it does not self-issue `RESEARCH_PASSED`.

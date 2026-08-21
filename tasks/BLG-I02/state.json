@@ -59,7 +59,7 @@
     "S26"
   ],
   "current_stage": "S04",
-  "status": "WAITING",
+  "status": "RUNNING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -75,20 +75,10 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T00:48:50Z",
+  "heartbeat_at": "2026-08-21T03:51:22Z",
   "last_valid_receipt": "sha256:cfb2721ff9fa601922454d83d11fd7f59ddeedbf9fc421a44d3788a5771b1496",
-  "blocker": {
-    "type": "ORACLE_CONFLICT",
-    "reason_code": "RESEARCH_REWORK_WB_VERDICT_CONTRACT",
-    "details": "S04 RESEARCH_REWORK: 409 MetaValidationFail is a partial negative delivery-attempt result, not a complete projection replacement; the S03 required per-observation shape cannot represent bodyless 204 or errors without inventing meta verdicts; current WB docs apply x10 accounting to all 4XX and the metaDetails release note is misdated.",
-    "owner": "pipeline-ba",
-    "created_at": "2026-08-21T00:48:50Z",
-    "resume_stage": "S04"
-  },
-  "resume_condition": {
-    "stage": "S04",
-    "condition": "Revise S03 to separate attempt outcomes from zero-or-more verdict rows, preserve 409 as an append-only partial negative result, record 204 without synthetic per-key decisions, correct all-4XX x10 accounting and the 31.03.2026 FBS release-note provenance; then rerun independent S04."
-  },
+  "blocker": null,
+  "resume_condition": null,
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",
