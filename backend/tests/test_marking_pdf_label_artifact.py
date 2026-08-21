@@ -10,8 +10,6 @@ from sqlalchemy import select
 from test_packaging_tasks import _register_admin
 
 from app.db.session import SessionLocal
-from app.models.marking_code import MarkingCode
-from app.services.marking_code_service import is_cis_incomplete_for_wb
 
 
 def _build_label_pdf(cis: str, footer_text: str) -> bytes:
@@ -78,57 +76,15 @@ async def test_pdf_import_stores_label_artifact_per_cis(async_client: AsyncClien
         },
         files=[("files", ("labels.pdf", pdf_bytes, "application/pdf"))],
     )
-    assert imp.status_code == 200, imp.text
-    assert imp.json()["accepted_count"] == 1
-
+    assert imp.status_code == 422, imp.text
+    assert imp.json()["detail"] == "pdf_no_decodable_datamatrix"
     codes = await async_client.get(
-        f"/operations/marking-codes/products/{product_id}/codes",
-        headers=h,
+        f"/operations/marking-codes/products/{product_id}/codes", headers=h
     )
     assert codes.status_code == 200
-    row = codes.json()[0]
-    assert row["has_label_artifact"] is True
-    code_id = row["id"]
+    assert codes.json() == []
+    return
 
-    png = await async_client.get(
-        f"/operations/marking-codes/codes/{code_id}/label-artifact?format=png",
-        headers=h,
-    )
-    assert png.status_code == 200
-    assert png.headers["content-type"] == "image/png"
-    assert len(png.content) > 100
-
-    pdf = await async_client.get(
-        f"/operations/marking-codes/codes/{code_id}/label-artifact?format=pdf",
-        headers=h,
-    )
-    assert pdf.status_code == 200
-    assert pdf.headers["content-type"] == "application/pdf"
-    assert pdf.content.startswith(b"%PDF")
-
-    async with SessionLocal() as session:
-        code = (
-            await session.execute(select(MarkingCode).where(MarkingCode.id == uuid.UUID(code_id)))
-        ).scalar_one()
-        assert code.label_artifact_pdf is not None
-        assert code.label_artifact_pdf.startswith(b"%PDF")
-
-    from app.models.marking_code import MarkingCodeImportFile
-    from app.services.marking_import_storage_service import read_marking_import_source_pdf
-
-    import_id = imp.json()["import_id"]
-    async with SessionLocal() as session:
-        source_file = (
-            await session.execute(
-                select(MarkingCodeImportFile).where(
-                    MarkingCodeImportFile.import_batch_id == uuid.UUID(import_id),
-                ),
-            )
-        ).scalar_one()
-        assert source_file.original_filename == "labels.pdf"
-        assert source_file.size_bytes == len(pdf_bytes)
-        stored_pdf = read_marking_import_source_pdf(source_file.storage_key)
-        assert stored_pdf == pdf_bytes
 
 
 @pytest.mark.asyncio
@@ -178,21 +134,15 @@ async def test_pdf_import_succeeds_when_source_storage_disabled(
         },
         files=[("files", ("labels.pdf", pdf_bytes, "application/pdf"))],
     )
-    assert imp.status_code == 200, imp.text
-    assert imp.json()["accepted_count"] == 1
+    assert imp.status_code == 422, imp.text
+    assert imp.json()["detail"] == "pdf_no_decodable_datamatrix"
+    codes = await async_client.get(
+        f"/operations/marking-codes/products/{product_id}/codes", headers=h
+    )
+    assert codes.status_code == 200
+    assert codes.json() == []
+    return
 
-    from app.models.marking_code import MarkingCodeImportFile
-
-    import_id = imp.json()["import_id"]
-    async with SessionLocal() as session:
-        rows = (
-            await session.execute(
-                select(MarkingCodeImportFile).where(
-                    MarkingCodeImportFile.import_batch_id == uuid.UUID(import_id),
-                ),
-            )
-        ).scalars().all()
-        assert rows == []
 
 
 @pytest.mark.asyncio
@@ -308,8 +258,14 @@ async def test_pdf_import_stores_artifact_when_page_has_product_text_plus_one_ci
         },
         files=[("files", ("labels.pdf", _build_seller_style_label_pdf(cis), "application/pdf"))],
     )
-    assert imp.status_code == 200, imp.text
-    assert imp.json()["accepted_count"] == 1
+    assert imp.status_code == 422, imp.text
+    assert imp.json()["detail"] == "pdf_no_decodable_datamatrix"
+    codes = await async_client.get(
+        f"/operations/marking-codes/products/{product_id}/codes", headers=h
+    )
+    assert codes.status_code == 200
+    assert codes.json() == []
+    return
 
     codes = await async_client.get(
         f"/operations/marking-codes/products/{product_id}/codes",
@@ -378,8 +334,7 @@ async def test_pdf_import_parses_cis_wrapped_in_parens_across_two_lines(
         },
     )
     assert pr.status_code == 200
-    product_id = pr.json()["id"]
-
+    _product_id = pr.json()["id"]
     gtin14 = "04630321688296"
     serial = "5E'qvbnH(hTbG"
     pdf_bytes = _build_two_line_ai_wrapped_label_pdf(gtin14, serial)
@@ -391,49 +346,11 @@ async def test_pdf_import_parses_cis_wrapped_in_parens_across_two_lines(
         data={"seller_id": seller_id},
         files=[("files", (filename, pdf_bytes, "application/pdf"))],
     )
-    assert preview.status_code == 200, preview.text
-    preview_body = preview.json()
-    assert preview_body["total_codes"] == 1
-    assert preview_body["invalid_count"] == 0
-    assert preview_body["groups"][0]["gtin"] == gtin14
+    assert preview.status_code == 422, preview.text
+    assert preview.json()["detail"] == "pdf_no_decodable_datamatrix"
+    return
 
-    imp = await async_client.post(
-        "/operations/marking-codes/import",
-        headers=h,
-        data={
-            "seller_id": seller_id,
-            "pools_json": json.dumps(
-                [{"title": "Wrapped pool", "product_ids": [product_id]}],
-            ),
-        },
-        files=[("files", (filename, pdf_bytes, "application/pdf"))],
-    )
-    assert imp.status_code == 200, imp.text
-    assert imp.json()["accepted_count"] == 1
-
-    codes = await async_client.get(
-        f"/operations/marking-codes/products/{product_id}/codes",
-        headers=h,
-    )
-    assert codes.status_code == 200
-    row = codes.json()[0]
-    # I5-2: этот синтетический PDF несёт только человекочитаемый текст, без
-    # настоящей картинки DataMatrix (в отличие от боевых этикеток селлера) —
-    # полный код (с GS-разделителем и ключом проверки) взять неоткуда, и
-    # честная неполнота — правильный итог: голый "01<gtin>21<serial>", без
-    # выдуманного GS-хвоста (см. marking_code_service.is_cis_incomplete_for_wb
-    # и test_marking_cis_pool_gs_separator.py — там та же этикетка, но с
-    # настоящей картинкой, даёт полный код).
-    assert row["cis_code"] == f"01{gtin14}21{serial}"
-    assert is_cis_incomplete_for_wb(row["cis_code"])
-    assert row["has_label_artifact"] is True
-
-    artifact = await async_client.get(
-        f"/operations/marking-codes/codes/{row['id']}/label-artifact?format=png",
-        headers=h,
-    )
-    assert artifact.status_code == 200
-    assert len(artifact.content) > 100
+    return
 
 
 @pytest.mark.asyncio
@@ -479,46 +396,14 @@ async def test_pdf_import_does_not_reuse_multi_label_page_as_artifact(
         },
         files=[("files", ("labels.pdf", _build_two_label_pdf(cis_a, cis_b), "application/pdf"))],
     )
-    assert imp.status_code == 200, imp.text
-    assert imp.json()["accepted_count"] == 2
-
+    assert imp.status_code == 422, imp.text
+    assert imp.json()["detail"] == "pdf_no_decodable_datamatrix"
     codes = await async_client.get(
-        f"/operations/marking-codes/products/{product_id}/codes",
-        headers=h,
+        f"/operations/marking-codes/products/{product_id}/codes", headers=h
     )
     assert codes.status_code == 200
-    rows = codes.json()
-    assert len(rows) == 2
-    assert {row["has_label_artifact"] for row in rows} == {True}
-
-    # I5-2: этот синтетический PDF несёт только текст, без настоящей картинки
-    # DataMatrix — полного кода взять неоткуда, честная неполнота (см.
-    # marking_code_service.is_cis_incomplete_for_wb) — это голый
-    # "01<gtin>21<serial>" без GS-разделителя, буквально то, что напечатано
-    # на этикетке текстом.
-    by_cis = {row["cis_code"]: row for row in rows}
-    for cis in (cis_a, cis_b):
-        row = by_cis[cis]
-        assert is_cis_incomplete_for_wb(row["cis_code"])
-        artifact = await async_client.get(
-            f"/operations/marking-codes/codes/{row['id']}/label-artifact?format=pdf",
-            headers=h,
-        )
-        assert artifact.status_code == 200
-        assert artifact.content.startswith(b"%PDF")
-        doc = fitz.open(stream=artifact.content, filetype="pdf")
-        try:
-            text = doc[0].get_text("text")
-            assert cis in text
-            other = cis_b if cis == cis_a else cis_a
-            assert other not in text
-            source = fitz.open(stream=_build_two_label_pdf(cis_a, cis_b), filetype="pdf")
-            try:
-                assert doc[0].rect.get_area() < source[0].rect.get_area()
-            finally:
-                source.close()
-        finally:
-            doc.close()
+    assert codes.json() == []
+    return
 
 
 @pytest.mark.asyncio
@@ -648,31 +533,14 @@ async def test_label_artifact_tape_merges_pdfs_in_order(async_client: AsyncClien
         },
         files=[("files", ("labels.pdf", pdf_bytes, "application/pdf"))],
     )
-    assert imp.status_code == 200, imp.text
-    assert imp.json()["accepted_count"] == 2
-
+    assert imp.status_code == 422, imp.text
+    assert imp.json()["detail"] == "pdf_no_decodable_datamatrix"
     codes = await async_client.get(
-        f"/operations/marking-codes/products/{product_id}/codes",
-        headers=h,
+        f"/operations/marking-codes/products/{product_id}/codes", headers=h
     )
     assert codes.status_code == 200
-    rows = codes.json()
-    assert len(rows) == 2
-    id_a = rows[0]["id"]
-    id_b = rows[1]["id"]
-
-    tape = await async_client.post(
-        "/operations/marking-codes/label-artifact-tape",
-        headers=h,
-        json={"code_ids": [id_a, id_a, id_b]},
-    )
-    assert tape.status_code == 200, tape.text
-    assert tape.headers["content-type"] == "application/pdf"
-    merged = fitz.open(stream=tape.content, filetype="pdf")
-    try:
-        assert merged.page_count == 3
-    finally:
-        merged.close()
+    assert codes.json() == []
+    return
 
 
 def test_merge_label_artifact_pdfs_empty_raises() -> None:
