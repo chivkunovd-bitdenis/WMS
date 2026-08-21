@@ -55,7 +55,7 @@
     "S26"
   ],
   "current_stage": "S11",
-  "status": "RUNNING",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -71,10 +71,20 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T00:25:04Z",
+  "heartbeat_at": "2026-08-21T04:34:56Z",
   "last_valid_receipt": "sha256:e6af5bf49a05965d16024302e679b89178b7289200270e684141d669157604b4",
-  "blocker": null,
-  "resume_condition": null,
+  "blocker": {
+    "type": "OWNER_INPUT",
+    "reason_code": "BUDGET_HARD_STOP",
+    "details": "wave budget exceeded; S11 Product contract approval is expensive and cannot continue without owner budget override",
+    "owner": "owner",
+    "created_at": "2026-08-21T04:34:56Z",
+    "resume_stage": "S11"
+  },
+  "resume_condition": {
+    "stage": "S11",
+    "condition": "owner-approved budget override or lower scope recorded before S11 Product approval"
+  },
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",

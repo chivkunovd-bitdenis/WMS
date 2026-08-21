@@ -2,7 +2,7 @@
   "task_id": "BLG-F01",
   "stage": "S16",
   "role": "pipeline-product",
-  "status": "RUNNING",
+  "status": "WAITING",
   "traits": [
     "pipeline_change"
   ],
@@ -71,8 +71,18 @@
     "estimated_usd": 2.0825
   },
   "blocked_by": [],
-  "blocker": null,
-  "resume_condition": null,
+  "blocker": {
+    "type": "FIXTURE",
+    "reason_code": "F01_CASE_AUDIT_REQUIRED_BEFORE_PRODUCT_S16",
+    "details": "S16 Product approval cannot start until an independent case-auditor verifies the latest repaired S15 case breaker artifacts; budget hard stop also prevents running that additional worker now",
+    "owner": "pipeline-orchestrator",
+    "created_at": "2026-08-21T04:35:11Z",
+    "resume_stage": "S16"
+  },
+  "resume_condition": {
+    "stage": "S16",
+    "condition": "independent case-auditor PASS for latest S15 artifacts, then owner budget override if the wave remains over budget"
+  },
   "rules": [
     "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
     "Do not accept your own work.",

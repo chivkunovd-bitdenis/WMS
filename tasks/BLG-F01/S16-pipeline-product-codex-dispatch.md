@@ -1,8 +1,8 @@
 # WMS Pipeline Dispatch
 
 Executor: `codex`
-Task: `BLG-D16`
-Stage: `S10`
+Task: `BLG-F01`
+Stage: `S16`
 Role: `pipeline-product`
 Recommended model: `gpt-5.6-sol` (`expensive`)
 
@@ -14,7 +14,7 @@ Recommended model: `gpt-5.6-sol` (`expensive`)
 - `pipeline/pipeline.yml`
 - `pipeline/model-policy.yml`
 - `pipeline/budget-policy.yml`
-- `tasks/BLG-D16/state.json`
+- `tasks/BLG-F01/state.json`
 
 ## Executor Rules
 
@@ -33,7 +33,7 @@ Tier: `expensive`
 Recommended model: `gpt-5.6-sol`
 
 Reasons:
-- stage S10 / role pipeline-product default tier is expensive
+- stage S16 / role pipeline-product default tier is expensive
 
 Rules:
 - Do not upgrade above the recommendation unless the packet, owner, or fresh evidence shows a higher-risk class.
@@ -61,20 +61,18 @@ Rules:
 
 ```json
 {
-  "task_id": "BLG-D16",
-  "stage": "S10",
+  "task_id": "BLG-F01",
+  "stage": "S16",
   "role": "pipeline-product",
   "status": "WAITING",
   "traits": [
-    "ui_change"
+    "pipeline_change"
   ],
-  "risk_level": "high",
+  "risk_level": "critical",
   "model_policy": "pipeline/model-policy.yml",
   "required_stages": [
     "S01",
     "S02",
-    "S09",
-    "S10",
     "S11",
     "S12",
     "S13",
@@ -88,66 +86,64 @@ Rules:
     "S21",
     "S22",
     "S23",
-    "S24",
     "S25",
     "S26"
   ],
   "done_stages": [
     "S01",
     "S02",
-    "S09"
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15"
   ],
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "wave_id": "wave-a1b311d18f07",
-  "backlog_item_id": "BLG-D16",
+  "backlog_item_id": "BLG-F01",
   "backlog_item": {
-    "id": "BLG-D16",
-    "title": "Дать оператору безопасную перевязку КИЗ между заказами",
-    "source_section": "D16",
-    "business_meaning": "Если код идентификации знака, то есть КИЗ, по ошибке привязан не к тому заказу, сейчас оператор не может нормально исправить это через рабочий интерфейс. Ручное исправление в базе опасно: можно оставить код сразу в двух местах или разойтись с состоянием Wildberries. Нужен единый подтверждаемый сценарий, который снимает код со старого заказа, проверяет возможность переноса, привязывает его к новому заказу и показывает итог обеих операций.",
-    "type": "ui_change",
-    "priority": "high",
+    "id": "BLG-F01",
+    "title": "Собрать библиотеку блокировок и карту зависимостей pipeline",
+    "source_section": "F1, F1-старое",
+    "business_meaning": "Правила, которые запрещают оператору или агенту продолжать работу, сейчас разбросаны по коду, интерфейсу и процессным документам. Из-за этого одна и та же операция может быть разрешена на экране, запрещена сервером или остановлена агентом по правилу, которого никто заранее не видел. Нужно собрать единый реестр блокировок с бизнес-причиной, владельцем, затронутым сценарием и условием снятия, а затем связать его с этапами пайплайна и автоматическими проверками.",
+    "type": "pipeline_change",
+    "priority": "critical",
     "status": "queued",
-    "readiness": "waiting_owner_oracle",
-    "dependencies": [
-      "BLG-D03",
-      "BLG-I02"
-    ],
+    "readiness": "needs_architecture_contract",
+    "dependencies": [],
     "suggested_roles": [
-      "Product",
-      "BA",
       "solution-architect",
-      "screen-dev",
-      "ui-critic"
+      "BA",
+      "reviewer",
+      "guard"
     ],
     "suggested_stages": [
       "S01",
       "S02",
       "S12",
-      "S18",
-      "S26"
+      "S25"
     ]
   },
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 1200,
-    "output_tokens": 600,
-    "estimated_usd": 0.0175
+    "input_tokens": 296100,
+    "output_tokens": 30300,
+    "estimated_usd": 2.0825
   },
   "blocked_by": [],
   "blocker": {
-    "type": "OWNER_INPUT",
-    "reason_code": "BUDGET_HARD_STOP",
-    "details": "wave budget exceeded; S10 Product review is expensive and cannot continue without owner budget override",
-    "owner": "owner",
-    "created_at": "2026-08-21T04:34:47Z",
-    "resume_stage": "S10"
+    "type": "FIXTURE",
+    "reason_code": "F01_CASE_AUDIT_REQUIRED_BEFORE_PRODUCT_S16",
+    "details": "S16 Product approval cannot start until an independent case-auditor verifies the latest repaired S15 case breaker artifacts; budget hard stop also prevents running that additional worker now",
+    "owner": "pipeline-orchestrator",
+    "created_at": "2026-08-21T04:35:11Z",
+    "resume_stage": "S16"
   },
   "resume_condition": {
-    "stage": "S10",
-    "condition": "owner-approved budget override or lower scope recorded before S10 Product review"
+    "stage": "S16",
+    "condition": "independent case-auditor PASS for latest S15 artifacts, then owner budget override if the wave remains over budget"
   },
   "rules": [
     "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
@@ -164,8 +160,8 @@ Rules:
 ## Required Start
 
 ```bash
-python3 scripts/pipeline/run.py next --task-id BLG-D16
-python3 scripts/pipeline/run.py validate --task-id BLG-D16
+python3 scripts/pipeline/run.py next --task-id BLG-F01
+python3 scripts/pipeline/run.py validate --task-id BLG-F01
 ```
 
 ## Required Finish
@@ -173,7 +169,7 @@ python3 scripts/pipeline/run.py validate --task-id BLG-D16
 Only after completing the owned stage:
 
 ```bash
-python3 scripts/pipeline/run.py advance --task-id BLG-D16 --stage S10 --verdict <ALLOWED_VERDICT> --role pipeline-product --agent <agent-id> --executor codex --model gpt-5.6-sol --tier expensive --input-tokens <INPUT_TOKENS> --output-tokens <OUTPUT_TOKENS> --estimated-usd <USD>
-python3 scripts/pipeline/run.py packet --task-id BLG-D16
-python3 scripts/pipeline/dispatch.py --task-id BLG-D16 --executor codex
+python3 scripts/pipeline/run.py advance --task-id BLG-F01 --stage S16 --verdict <ALLOWED_VERDICT> --role pipeline-product --agent <agent-id> --executor codex --model gpt-5.6-sol --tier expensive --input-tokens <INPUT_TOKENS> --output-tokens <OUTPUT_TOKENS> --estimated-usd <USD>
+python3 scripts/pipeline/run.py packet --task-id BLG-F01
+python3 scripts/pipeline/dispatch.py --task-id BLG-F01 --executor codex
 ```

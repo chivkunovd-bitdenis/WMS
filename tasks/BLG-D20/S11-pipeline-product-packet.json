@@ -2,7 +2,7 @@
   "task_id": "BLG-D20",
   "stage": "S11",
   "role": "pipeline-product",
-  "status": "RUNNING",
+  "status": "WAITING",
   "traits": [
     "background_worker"
   ],
@@ -76,8 +76,18 @@
       "minimum_closure_artifact": "WB pagination/search/sync contract and e2e for item outside first page"
     }
   ],
-  "blocker": null,
-  "resume_condition": null,
+  "blocker": {
+    "type": "OWNER_INPUT",
+    "reason_code": "BUDGET_HARD_STOP",
+    "details": "wave budget exceeded; S11 Product contract approval is expensive and cannot continue without owner budget override; existing BLK-INTEGRATION-001 remains in blocked_by",
+    "owner": "owner",
+    "created_at": "2026-08-21T04:34:52Z",
+    "resume_stage": "S11"
+  },
+  "resume_condition": {
+    "stage": "S11",
+    "condition": "owner-approved budget override or lower scope recorded before S11 Product approval"
+  },
   "rules": [
     "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
     "Do not accept your own work.",

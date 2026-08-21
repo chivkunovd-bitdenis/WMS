@@ -1,10 +1,10 @@
 # WMS Pipeline Dispatch
 
 Executor: `codex`
-Task: `BLG-D16`
-Stage: `S10`
-Role: `pipeline-product`
-Recommended model: `gpt-5.6-sol` (`expensive`)
+Task: `BLG-D09`
+Stage: `S18`
+Role: `pipeline-dev`
+Recommended model: `gpt-5.6-terra` (`moderate`)
 
 ## Read First
 
@@ -14,7 +14,7 @@ Recommended model: `gpt-5.6-sol` (`expensive`)
 - `pipeline/pipeline.yml`
 - `pipeline/model-policy.yml`
 - `pipeline/budget-policy.yml`
-- `tasks/BLG-D16/state.json`
+- `tasks/BLG-D09/state.json`
 
 ## Executor Rules
 
@@ -29,11 +29,12 @@ Recommended model: `gpt-5.6-sol` (`expensive`)
 ## Model Policy
 
 Policy: `pipeline/model-policy.yml`
-Tier: `expensive`
-Recommended model: `gpt-5.6-sol`
+Tier: `moderate`
+Recommended model: `gpt-5.6-terra`
 
 Reasons:
-- stage S10 / role pipeline-product default tier is expensive
+- stage S18 / role pipeline-dev default tier is cheap
+- high_risk_code_to_moderate: High-risk code can still be implemented below expensive tier, but not by the cheapest model.
 
 Rules:
 - Do not upgrade above the recommendation unless the packet, owner, or fresh evidence shows a higher-risk class.
@@ -44,7 +45,7 @@ Rules:
 ## Budget Policy
 
 Policy: `pipeline/budget-policy.yml`
-Stage tier budget: `3.0 USD` / `900000` tokens
+Stage tier budget: `1.25 USD` / `600000` tokens
 Task budget: `8.0 USD` / `2500000` tokens
 Wave budget: `35.0 USD` / `12000000` tokens
 Hard stop: `True`; reason code `BUDGET_HARD_STOP`
@@ -61,20 +62,18 @@ Rules:
 
 ```json
 {
-  "task_id": "BLG-D16",
-  "stage": "S10",
-  "role": "pipeline-product",
+  "task_id": "BLG-D09",
+  "stage": "S18",
+  "role": "pipeline-dev",
   "status": "WAITING",
   "traits": [
-    "ui_change"
+    "release_change"
   ],
   "risk_level": "high",
   "model_policy": "pipeline/model-policy.yml",
   "required_stages": [
     "S01",
     "S02",
-    "S09",
-    "S10",
     "S11",
     "S12",
     "S13",
@@ -88,66 +87,77 @@ Rules:
     "S21",
     "S22",
     "S23",
-    "S24",
-    "S25",
-    "S26"
+    "S26",
+    "S27",
+    "S28"
   ],
   "done_stages": [
     "S01",
     "S02",
-    "S09"
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17"
   ],
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "wave_id": "wave-a1b311d18f07",
-  "backlog_item_id": "BLG-D16",
+  "backlog_item_id": "BLG-D09",
   "backlog_item": {
-    "id": "BLG-D16",
-    "title": "Дать оператору безопасную перевязку КИЗ между заказами",
-    "source_section": "D16",
-    "business_meaning": "Если код идентификации знака, то есть КИЗ, по ошибке привязан не к тому заказу, сейчас оператор не может нормально исправить это через рабочий интерфейс. Ручное исправление в базе опасно: можно оставить код сразу в двух местах или разойтись с состоянием Wildberries. Нужен единый подтверждаемый сценарий, который снимает код со старого заказа, проверяет возможность переноса, привязывает его к новому заказу и показывает итог обеих операций.",
-    "type": "ui_change",
+    "id": "BLG-D09",
+    "title": "Сделать prod-update exact-SHA и проверять смену bundle",
+    "source_section": "D9, I18",
+    "business_meaning": "Текущий процесс обновления production может собрать не тот коммит или оставить браузеру старый фронтенд-пакет, хотя команда обновления завершилась без ошибки. Тогда команда считает исправление выкаченным, а оператор продолжает работать на прежней версии. Обновление должно принимать точный Git SHA, подтверждать именно этот SHA на сервере и проверять, что браузер действительно получил новый bundle, то есть новый собранный пакет интерфейса.",
+    "type": "release_change",
     "priority": "high",
     "status": "queued",
-    "readiness": "waiting_owner_oracle",
-    "dependencies": [
-      "BLG-D03",
-      "BLG-I02"
-    ],
+    "readiness": "needs_release_contract",
+    "dependencies": [],
     "suggested_roles": [
-      "Product",
-      "BA",
       "solution-architect",
-      "screen-dev",
-      "ui-critic"
+      "DevOps",
+      "reviewer"
     ],
     "suggested_stages": [
-      "S01",
       "S02",
       "S12",
       "S18",
-      "S26"
+      "S25",
+      "S28"
     ]
   },
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 1200,
-    "output_tokens": 600,
-    "estimated_usd": 0.0175
+    "input_tokens": 328500,
+    "output_tokens": 29200,
+    "estimated_usd": 2.2105
   },
-  "blocked_by": [],
+  "blocked_by": [
+    {
+      "id": "BLK-RELEASE-001",
+      "title": "Cache-control/D12 не включён в browser/release proof",
+      "status": "open",
+      "type": "release",
+      "owner_role": "release-owner",
+      "resume_stage": "S23",
+      "minimum_closure_artifact": "browser/release receipt with exact SHA, asset URL/hash, cache headers and hard reload proof"
+    }
+  ],
   "blocker": {
-    "type": "OWNER_INPUT",
-    "reason_code": "BUDGET_HARD_STOP",
-    "details": "wave budget exceeded; S10 Product review is expensive and cannot continue without owner budget override",
-    "owner": "owner",
-    "created_at": "2026-08-21T04:34:47Z",
-    "resume_stage": "S10"
+    "type": "RELEASE",
+    "reason_code": "BLK_RELEASE_001_RELEASE_CHANGE_DEV_HELD",
+    "details": "release_change card cannot continue Dev/release path while BLK-RELEASE-001 is open and no separate owner exact-SHA release authorization is present",
+    "owner": "release-owner",
+    "created_at": "2026-08-21T04:36:01Z",
+    "resume_stage": "S18"
   },
   "resume_condition": {
-    "stage": "S10",
-    "condition": "owner-approved budget override or lower scope recorded before S10 Product review"
+    "stage": "S18",
+    "condition": "close BLK-RELEASE-001 with exact SHA, asset URL/hash, cache headers and hard reload proof; obtain separate owner release authorization before release actions"
   },
   "rules": [
     "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
@@ -164,8 +174,8 @@ Rules:
 ## Required Start
 
 ```bash
-python3 scripts/pipeline/run.py next --task-id BLG-D16
-python3 scripts/pipeline/run.py validate --task-id BLG-D16
+python3 scripts/pipeline/run.py next --task-id BLG-D09
+python3 scripts/pipeline/run.py validate --task-id BLG-D09
 ```
 
 ## Required Finish
@@ -173,7 +183,7 @@ python3 scripts/pipeline/run.py validate --task-id BLG-D16
 Only after completing the owned stage:
 
 ```bash
-python3 scripts/pipeline/run.py advance --task-id BLG-D16 --stage S10 --verdict <ALLOWED_VERDICT> --role pipeline-product --agent <agent-id> --executor codex --model gpt-5.6-sol --tier expensive --input-tokens <INPUT_TOKENS> --output-tokens <OUTPUT_TOKENS> --estimated-usd <USD>
-python3 scripts/pipeline/run.py packet --task-id BLG-D16
-python3 scripts/pipeline/dispatch.py --task-id BLG-D16 --executor codex
+python3 scripts/pipeline/run.py advance --task-id BLG-D09 --stage S18 --verdict <ALLOWED_VERDICT> --role pipeline-dev --agent <agent-id> --executor codex --model gpt-5.6-terra --tier moderate --input-tokens <INPUT_TOKENS> --output-tokens <OUTPUT_TOKENS> --estimated-usd <USD>
+python3 scripts/pipeline/run.py packet --task-id BLG-D09
+python3 scripts/pipeline/dispatch.py --task-id BLG-D09 --executor codex
 ```

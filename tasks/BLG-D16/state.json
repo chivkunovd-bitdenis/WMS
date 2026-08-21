@@ -61,7 +61,7 @@
     "S26"
   ],
   "current_stage": "S10",
-  "status": "RUNNING",
+  "status": "WAITING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
   "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-unified-v2",
@@ -77,10 +77,20 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:55Z",
-  "heartbeat_at": "2026-08-21T00:29:55Z",
+  "heartbeat_at": "2026-08-21T04:34:47Z",
   "last_valid_receipt": "sha256:ad90e4796b6e494c1d6d50c83e3be393c38ebf939d0ae058baddc6e0436c735b",
-  "blocker": null,
-  "resume_condition": null,
+  "blocker": {
+    "type": "OWNER_INPUT",
+    "reason_code": "BUDGET_HARD_STOP",
+    "details": "wave budget exceeded; S10 Product review is expensive and cannot continue without owner budget override",
+    "owner": "owner",
+    "created_at": "2026-08-21T04:34:47Z",
+    "resume_stage": "S10"
+  },
+  "resume_condition": {
+    "stage": "S10",
+    "condition": "owner-approved budget override or lower scope recorded before S10 Product review"
+  },
   "verdicts": {
     "S01": {
       "verdict": "TASK_INTAKE_READY",

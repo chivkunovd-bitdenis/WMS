@@ -64,7 +64,7 @@ Rules:
   "task_id": "BLG-J04",
   "stage": "S11",
   "role": "pipeline-product",
-  "status": "RUNNING",
+  "status": "WAITING",
   "traits": [
     "database_change",
     "tenant_sensitive"
@@ -128,8 +128,18 @@ Rules:
     "estimated_usd": 0.0025
   },
   "blocked_by": [],
-  "blocker": null,
-  "resume_condition": null,
+  "blocker": {
+    "type": "OWNER_INPUT",
+    "reason_code": "BUDGET_HARD_STOP",
+    "details": "wave budget exceeded; S11 Product contract approval is expensive and cannot continue without owner budget override",
+    "owner": "owner",
+    "created_at": "2026-08-21T04:35:05Z",
+    "resume_stage": "S11"
+  },
+  "resume_condition": {
+    "stage": "S11",
+    "condition": "owner-approved budget override or lower scope recorded before S11 Product approval"
+  },
   "rules": [
     "Read AGENTS.md, docs/process/PIPELINE-RU.md and pipeline/pipeline.yml first.",
     "Do not accept your own work.",
