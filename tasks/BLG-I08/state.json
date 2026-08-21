@@ -59,7 +59,7 @@
     "S25",
     "S26"
   ],
-  "current_stage": "S09",
+  "current_stage": "S10",
   "status": "RUNNING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
@@ -76,8 +76,8 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:56Z",
-  "heartbeat_at": "2026-08-21T04:03:14Z",
-  "last_valid_receipt": "sha256:3b4cc3bc2b980f197ce448803086f80422b8c6f2f90defb4c4659c0343e4d2fe",
+  "heartbeat_at": "2026-08-21T04:09:20Z",
+  "last_valid_receipt": "sha256:42e1c0cd04a657eea1bb8762871c3451c6d6a5d4460c76e5625bda37034043a7",
   "blocker": null,
   "resume_condition": null,
   "verdicts": {
@@ -108,15 +108,22 @@
       "receipt_hash": "sha256:3b4cc3bc2b980f197ce448803086f80422b8c6f2f90defb4c4659c0343e4d2fe",
       "role_binding_id": "pipeline-reviewer",
       "agent_identity": "codex-blg-i08-s04-research-critic-recheck"
+    },
+    "S09": {
+      "verdict": "UX_CONTRACT_READY",
+      "receipt_path": "docs/evidence/BLG-I08/S09-UX_CONTRACT_READY.receipt.json",
+      "receipt_hash": "sha256:42e1c0cd04a657eea1bb8762871c3451c6d6a5d4460c76e5625bda37034043a7",
+      "role_binding_id": "pipeline-ba",
+      "agent_identity": "codex-blg-i08-s09-pipeline-ba"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 94300,
-    "output_tokens": 16600,
-    "estimated_usd": 1.3725
+    "input_tokens": 123300,
+    "output_tokens": 22800,
+    "estimated_usd": 1.7825
   },
   "budget_usage_receipts": [
     {
@@ -170,6 +177,19 @@
       "estimated_usd": 0.75,
       "agent_id": "codex-blg-i08-s04-research-critic-recheck",
       "recorded_at": "2026-08-21T04:03:14Z"
+    },
+    {
+      "task_id": "BLG-I08",
+      "stage": "S09",
+      "role": "pipeline-ba",
+      "executor": "codex",
+      "model": "gpt-5.6-terra",
+      "tier": "moderate",
+      "input_tokens": 29000,
+      "output_tokens": 6200,
+      "estimated_usd": 0.41,
+      "agent_id": "codex-blg-i08-s09-pipeline-ba",
+      "recorded_at": "2026-08-21T04:09:20Z"
     }
   ],
   "blocked_by": [],
