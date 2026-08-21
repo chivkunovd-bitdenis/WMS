@@ -103,7 +103,9 @@ async def get_supply_workspace(
     await _inject_order_pick_fallback(session, tenant_id, supply, worklist_items)
     cargo_places = await _build_cargo_places(session, tenant_id, supply)
     boxes = await _build_boxes(session, tenant_id, supply)
-    boxes_without_distribution = _boxes_without_distribution(boxes)
+    boxes_without_distribution = _boxes_without_distribution(
+        boxes, supply.boxes_without_distribution_at is not None
+    )
     marking_pool = await _build_marking_pool(session, tenant_id, orders)
     progress = _compute_progress(orders)
     picking_auto_passed_reason = await _picking_auto_passed_reason(
@@ -504,8 +506,16 @@ def _unassigned_packed_order_ids(
     }
 
 
-def _boxes_without_distribution(boxes: list[dict[str, object]]) -> bool:
-    return bool(boxes) and any(bool(box.get("without_distribution")) for box in boxes)
+def _boxes_without_distribution(
+    boxes: list[dict[str, object]], supply_without_distribution: bool
+) -> bool:
+    # Флаг на поставке решает сам по себе: режим можно включить переключателем
+    # до того, как создан хоть один короб, и тогда пустой список коробов не
+    # должен гасить признак — иначе шапка вкладки снова покажет
+    # «Распределено 0 из N» при включённом режиме (дефект I15).
+    return supply_without_distribution or any(
+        bool(box.get("without_distribution")) for box in boxes
+    )
 
 
 async def _build_cargo_places(

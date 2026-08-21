@@ -416,8 +416,9 @@ def _box_without_distribution(box: FbsPackingBox, supply_without_distribution: b
 def _boxes_without_distribution(
     boxes: list[FbsPackingBox], supply_without_distribution: bool
 ) -> bool:
-    if not boxes:
-        return False
+    # Флаг на поставке — источник истины сам по себе: режим может быть включён
+    # переключателем ДО того, как создан хоть один короб (или после того, как
+    # все короба удалены), и тогда пустой список коробов не должен гасить его.
     return supply_without_distribution or any(
         _box_without_distribution(box, False) for box in boxes
     )

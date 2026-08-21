@@ -304,6 +304,37 @@ async def test_boxes_without_distribution_toggle_rejected_once_distributed(
     assert unblocked.json()["supply"]["boxes_without_distribution"] is True
 
 
+@pytest.mark.asyncio
+async def test_boxes_without_distribution_flag_survives_empty_box_list(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """Дефект I15, третье: режим включён на поставке переключателем ДО того,
+    как создан хоть один короб — раньше признак «без распределения» читался
+    только с самих коробов (`bool(boxes) and any(...)`), поэтому пустой
+    список коробов гасил флаг и шапка вкладки снова показывала «Распределено
+    0 из N», хотя раскладка не требуется. Флаг на поставке обязан быть
+    источником истины сам по себе, независимо от того, есть ли уже короба."""
+    headers, supply_id, _ = await _packed_supply(async_client)
+
+    enabled = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes-without-distribution",
+        headers=headers,
+        json={"enabled": True},
+    )
+    assert enabled.status_code == 200, enabled.text
+    assert enabled.json()["boxes"] == []
+    assert enabled.json()["supply"]["boxes_without_distribution"] is True
+
+    workspace = await async_client.get(
+        f"/operations/fbs-supplies/{supply_id}/workspace",
+        headers=headers,
+    )
+    assert workspace.status_code == 200, workspace.text
+    assert workspace.json()["boxes"] == []
+    assert workspace.json()["supply"]["boxes_without_distribution"] is True
+
+
 def test_workspace_handoff_requires_boxes_and_every_packed_order_assignment() -> None:
     order_id = uuid.uuid4()
     supply = SimpleNamespace(

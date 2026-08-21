@@ -1291,7 +1291,14 @@ export function FfFbsSupplyWorkspace({
   const boxMenuBox = workspace?.boxes.find((box) => box.id === boxMenu?.boxId) ?? null
   const boxMenuAssignedCount = boxMenuBox?.assigned_order_ids.length ?? 0
   const boxRouteLabel = workspace?.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ'
-  const hasNoDistributionBoxes = Boolean(workspace?.boxes.some((box) => box.without_distribution))
+  // Источник истины — поле на поставке (см. комментарий у boxes_without_distribution
+  // в fbsApi.ts): переключатель может включить режим и до того, как создан хоть
+  // один короб (или после того, как все короба удалены), и тогда пустой список
+  // коробов не должен гасить признак — иначе шапка снова покажет «Распределено
+  // 0 из N» при включённом режиме, ровно дефект I15. Держим и запасное чтение по
+  // самим коробам (совместимость со старыми коробами до переноса на поле поставки).
+  const hasNoDistributionBoxes = Boolean(workspace?.supply.boxes_without_distribution)
+    || Boolean(workspace?.boxes.some((box) => box.without_distribution))
   const boxDistributedCount = assignedBoxOrderIds.size
   const boxTotalCount = workspace?.progress.total ?? 0
   const boxRemainingCount = Math.max(0, boxTotalCount - boxDistributedCount)
