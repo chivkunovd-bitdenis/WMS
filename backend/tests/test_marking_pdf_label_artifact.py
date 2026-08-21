@@ -350,8 +350,6 @@ async def test_pdf_import_parses_cis_wrapped_in_parens_across_two_lines(
     assert preview.json()["detail"] == "pdf_no_decodable_datamatrix"
     return
 
-    return
-
 
 @pytest.mark.asyncio
 async def test_pdf_import_does_not_reuse_multi_label_page_as_artifact(
