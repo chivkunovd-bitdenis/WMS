@@ -18,11 +18,81 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 import night as n  # noqa: E402
 
 ОЖИДАЕМЫЕ_ЦЕПОЧКИ = {
-    "баг": ["tester", "dev", "reviewer", "clicker", "ux-judge"],
-    "фича": ["ux-architect", "ui-critic", "tester", "breaker", "dev", "reviewer", "clicker", "ux-judge"],
-    "домен": ["solution-architect", "ux-architect", "ui-critic", "tester", "breaker", "dev", "reviewer", "clicker", "ux-judge"],
-    "блокировки": ["blocker-collector", "blocker-skeptic"],
-}
+                    "баг": ["tester", "dev", "reviewer", "ui-critic", "clicker", "ux-judge"],
+                    "фича": ["ux-architect", "product", "tester", "breaker", "dev", "reviewer",
+                             "ui-critic", "clicker", "ux-judge"],
+                    "домен": ["solution-architect", "ux-architect", "product", "tester", "breaker",
+                              "dev", "reviewer", "ui-critic", "clicker", "ux-judge"],
+                    "блокировки": ["blocker-collector", "blocker-skeptic"],
+                }
+
+
+
+def регрессии_r04(проверь) -> None:
+    """Каждый дефект ночи r04 — отдельной проверкой, чтобы он не мог вернуться.
+
+    Волна r04 завалила все девять карточек не из-за одной упавшей модели, а из-за семи
+    поломок конструкции. Каждая из них ловится здесь без единого вызова модели.
+    """
+    import pathlib
+    import tempfile
+
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+    import night as n
+
+    # 1. Критик исполнения стоял до разработки и честно находил, что реализации нет.
+    было = dict(n.ЦЕПОЧКИ)
+    try:
+        n.ЦЕПОЧКИ = {"фича": ["ux-architect", "ui-critic", "tester", "dev", "reviewer"]}
+        проверь("r04-1: ui-critic до dev ловится на старте", bool(n.проверить_стыки()), True)
+        n.ЦЕПОЧКИ = {"баг": ["dev", "reviewer"]}
+        проверь("r04-2: dev без входа ловится на старте", bool(n.проверить_стыки()), True)
+    finally:
+        n.ЦЕПОЧКИ = было
+    проверь("r04-2: настоящие цепочки сходятся", n.проверить_стыки(), [])
+
+    t = pathlib.Path(tempfile.mkdtemp())
+
+    # 3. Контракты 07/08/09 сами себя остановили до утра.
+    (t / "CONTRACT.md").write_text(
+        "## Контракт\nx\n## Канон\nR-01\n\n"
+        "Документ не разрешает разработку до подтверждения владельца.\n", encoding="utf-8")
+    проверь("r04-3: контракт со стопом до владельца отклонён",
+            n.артефакт_готов(t, "ux-architect")[0], False)
+    (t / "CONTRACT.md").write_text("## Контракт\nx\n## Канон\nR-01\n", encoding="utf-8")
+    проверь("r04-3: чистый контракт принят", n.артефакт_готов(t, "ux-architect")[0], True)
+
+    # 4. «Нет, тип неверный: ... это домен» рядом со словом «фича».
+    (t / "RAZBOR.md").write_text("## Тип\nТИП: фича\n## Экраны\n- S-03\n", encoding="utf-8")
+    (t / "SVERKA.md").write_text(
+        "ВЕРДИКТ: НАХОДКИ 1\nТИП: домен\n\n## Тип\n"
+        "Нет, тип определён неверно: в разборе указано «фича», но это домен.\n"
+        "## Расхождения\n- тип\n", encoding="utf-8")
+    проверь("r04-4: отрицательная коррекция типа читается как домен", n.тип_карточки(t), "домен")
+
+    # 5. «Нарушений не найдено» под заголовком «Находки».
+    (t / "DESIGN-REVIEW.md").write_text(
+        "ВЕРДИКТ: ЧИСТО\n\n## Находки\nНарушений не найдено\n", encoding="utf-8")
+    проверь("r04-5: положительная фраза не считается находкой",
+            n.есть_находки(t, "ui-critic"), False)
+    (t / "DESIGN-REVIEW.md").write_text("## Находки\nНарушений не найдено\n", encoding="utf-8")
+    проверь("r04-5: судья без машинной строки не принят",
+            n.артефакт_готов(t, "ui-critic")[0], False)
+
+    # 6. Ревьюер считал кейсы тестировщика выходом за границы экрана.
+    класс = type("Р", (), {"корень": t})
+    with mock.patch.object(n, "_git", return_value=mock.Mock(
+            returncode=0, stdout=" M tests/cases/S-03.md\n M night/x/RAZBOR.md\n"
+                                 " M frontend/src/screens/v2/FfFbsOrdersScreen.tsx\n", stderr="")):
+        файлы = n.дифф_реализации(t)
+        текст = n.дифф_для("reviewer", класс())
+    проверь("r04-6: кейсы и разборы не попадают в дифф реализации",
+            файлы, ["frontend/src/screens/v2/FfFbsOrdersScreen.tsx"])
+    проверь("r04-6: ревьюеру назван состав правки", "FfFbsOrdersScreen.tsx" in текст, True)
+    проверь("r04-6: тестировщику нечего инкриминировать", "tests/cases" in текст, False)
+
+    # 7. Карточка обязана оставить коммит реализации.
+    проверь("r04-7: проверка коммита существует", hasattr(n, "проверить_сохранение"), True)
 
 
 def fake_e2e_smoke(проверь) -> None:
@@ -79,16 +149,17 @@ def fake_e2e_smoke(проверь) -> None:
                 wave = current_wave["path"]
                 (wave / "OTCHET.md").write_text(
                     "## Сделано\nok\n## Не доехало\nнет\n## Допущения аналитиков\nнет\n"
-                    "## Вопросы владельцу\nнет\n## Оформление\nпроверено\n", encoding="utf-8")
+                    "## Решения продакта\nнет\n## Оформление\nпроверено\n", encoding="utf-8")
                 return 0, "fake acceptor"
             folder = card_from_prompt(prompt)
             card = folder.name
             if role == "analyst":
                 (folder / "RAZBOR.md").write_text(
-                    "## Дословно\nx\n## Что сейчас\nx\n## Что должно быть\nx\n## Тип\nбаг\n",
+                    "## Дословно\nx\n## Что сейчас\nx\n## Что должно быть\nx\n## Тип\nТИП: баг\n",
                     encoding="utf-8")
             elif role == "requirement-critic":
-                (folder / "SVERKA.md").write_text("## Тип\nбаг\n## Расхождения\nнет\n", encoding="utf-8")
+                (folder / "SVERKA.md").write_text(
+                    "ВЕРДИКТ: ЧИСТО\nТИП: баг\n\n## Тип\nбаг\n## Расхождения\nнет\n", encoding="utf-8")
             elif role == "tester":
                 if card == "fail" and fail_card["enabled"]:
                     return 1, "fake timeout"
@@ -99,11 +170,16 @@ def fake_e2e_smoke(проверь) -> None:
                 # from this branch SHA and fake _git below exposes clean status.
                 committed[card] = True
             elif role == "reviewer":
-                (folder / "REVIEW.md").write_text("## Находки\nнет\n", encoding="utf-8")
+                (folder / "REVIEW.md").write_text(
+                    "ВЕРДИКТ: ЧИСТО\n\n## Находки\nнет\n", encoding="utf-8")
+            elif role == "ui-critic":
+                (folder / "DESIGN-REVIEW.md").write_text(
+                    "ВЕРДИКТ: ЧИСТО\n\n## Находки\nнет\n", encoding="utf-8")
             elif role == "clicker":
                 (folder / "CLICKS.md").write_text("## Пройденные кейсы\n- smoke\n## Не прошло\nнет\n", encoding="utf-8")
             elif role == "ux-judge":
-                (folder / "JUDGE.md").write_text("## Находки\nнет\n## Пройденные кейсы\n- smoke\n", encoding="utf-8")
+                (folder / "JUDGE.md").write_text(
+                    "ВЕРДИКТ: ЧИСТО\n\n## Находки\nнет\n## Пройденные кейсы\n- smoke\n", encoding="utf-8")
             return 0, "fake ok"
 
         def fake_stand(lane: int, worker=None) -> str:
@@ -189,16 +265,27 @@ def main() -> int:
             (t / "REVIEW.md").write_text("## Проверено и нормально\nвсё ок\n", encoding="utf-8")
             проверь("нет обязательной секции", n.артефакт_готов(t, "reviewer")[0], False)
 
-            (t / "REVIEW.md").write_text("## Находки\n\n## Проверено и нормально\nсмотрел\n", encoding="utf-8")
-            проверь("пустые Находки — шаг пройден", n.артефакт_готов(t, "reviewer")[0], True)
-            проверь("пустые Находки — без возврата", n.есть_находки(t, "reviewer"), False)
+            (t / "REVIEW.md").write_text(
+                "ВЕРДИКТ: ЧИСТО\n\n## Находки\n\n## Проверено и нормально\nсмотрел\n", encoding="utf-8")
+            проверь("вердикт ЧИСТО — шаг пройден", n.артефакт_готов(t, "reviewer")[0], True)
+            проверь("вердикт ЧИСТО — без возврата", n.есть_находки(t, "reviewer"), False)
+
+            # Ровно та формулировка, которая в волне r04 остановила готовую карточку 09.
+            (t / "REVIEW.md").write_text(
+                "ВЕРДИКТ: ЧИСТО\n\n## Находки\nНарушений не найдено\n", encoding="utf-8")
+            проверь("«Нарушений не найдено» не считается находкой", n.есть_находки(t, "reviewer"), False)
+
+            (t / "REVIEW.md").write_text("## Находки\nчто-то\n", encoding="utf-8")
+            проверь("нет машинной строки — шаг не пройден", n.артефакт_готов(t, "reviewer")[0], False)
 
             (t / "REVIEW.md").write_text(
-                "## Находки\n- fbs.py:81 упадёт на статусе sorted\n\n## Проверено и нормально\nда\n",
+                "ВЕРДИКТ: НАХОДКИ 1\n\n## Находки\n- fbs.py:81 упадёт на статусе sorted\n\n"
+                "## Проверено и нормально\nда\n",
                 encoding="utf-8")
             проверь("непустые Находки — возврат", n.есть_находки(t, "reviewer"), True)
 
-            (t / "REVIEW.md").write_text("## Находки\nнет\n\n## Проверено и нормально\nда\n", encoding="utf-8")
+            (t / "REVIEW.md").write_text(
+                "ВЕРДИКТ: ЧИСТО\n\n## Находки\nнет\n\n## Проверено и нормально\nда\n", encoding="utf-8")
             проверь("«нет» словом — без возврата", n.есть_находки(t, "reviewer"), False)
 
             (t / "JUDGE.md").write_text("\x00 мусор без секций", encoding="utf-8", errors="replace")
@@ -378,6 +465,7 @@ def main() -> int:
     # Full-chain fake smoke: один запуск проходит вечер и ночь, плохая карточка
     # откладывается, а повтор продолжает её. Все внешние границы подменены.
     fake_e2e_smoke(проверь)
+    регрессии_r04(проверь)
 
     if беды:
         print("ПРОВЕРКА ОРКЕСТРАТОРА КРАСНАЯ:", file=sys.stderr)
