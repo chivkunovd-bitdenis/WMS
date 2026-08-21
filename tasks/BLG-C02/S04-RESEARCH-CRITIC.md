@@ -3,66 +3,62 @@
 ## Passport
 
 - Role: `pipeline-reviewer`, independent `research-critic`.
-- Reviewed rework commit: `ad8da528f8064712162ae75bfc48cb64ad3ff050`.
+- Reviewed BA repair commit: `18e5f207a60bb33a830bee568c436d4006862b84`.
 - Model tier: `gpt-5.6-sol`, `expensive`.
 - Review date: `2026-08-21`, Europe/Moscow.
-- Inputs: `S03-EXTERNAL-CONTRACT-DOSSIER.md`, `S03-capability-matrix.json`, controller S04
-  packet, and independently located public WB documentation.
-- External operations: no production or sandbox API calls; no credentials, secret pages, deploy,
-  release, S27 or S28 actions.
-- Verdict: `RESEARCH_REWORK`.
+- Inputs: `S03-EXTERNAL-CONTRACT-DOSSIER.md`, `S03-capability-matrix.json`,
+  `S03-RESEARCH-REWORK-CLOSURE.md`, the current S04 controller packet and the official WB
+  partner-service authorization documentation.
+- Scope: exact RC-01 re-review only; no application code review or modification.
+- External operations: public documentation read only; no production or sandbox API calls,
+  credentials, secret pages, deploy, release, S27 or S28 actions.
+- Verdict: `RESEARCH_PASSED`.
 
 ## Result
 
-The rework closes four of the five original finding groups. It now makes zero raw-data leakage an
-end-to-end invariant across API and worker sinks, including `log_wb_client_error`; maps `402`,
-`406`, and verified-N/A `451`; specifies strict absent/malformed/numeric rate-limit parsing; and
-separates official sandbox classification from deterministic MockTransport/emulator proof without
-authorizing live calls.
+The BA repair closes RC-01 without broadening the task. The current official WB partner-service
+contract states that both Service and Base token requests require `Authorization` plus
+`X-Client-Secret`, and that Base without the service secret is forbidden. The repaired prose and
+machine matrix now preserve that requirement while keeping Personal and Test Bearer-only in their
+documented contexts.
 
-Research cannot pass because the auth matrix contradicts the current official WB partner-service
-contract for the Base token. This is the same `RESEARCH_CONTRACT_GAPS` blocker, not a new scope.
+The synthetic Base lane now covers every reviewer-required service-secret outcome: missing,
+invalid, expired, withdrawn, mismatched and disallowed. These cases retain only status and
+`auth_rejected`; neither credential nor raw WB response text is an allowed diagnostic field.
 
-## Blocking finding
+The Base secret is also propagated into the aggregate zero-leak proof as a distinct canary. The
+required scan spans structured WB events, `log_wb_client_error`, application, HTTP client, access
+and worker logs, API exception output, traces, metric labels and persisted test evidence. It runs
+across success, every HTTP error including all Base `401/403` fixtures, and transport errors. Any
+Base token or secret match fails the later case.
 
-### RC-01 - Base token incorrectly excludes X-Client-Secret
+## RC-01 closure matrix
 
-The dossier says Base uses only `Authorization: Bearer <token>` and no `X-Client-Secret`. The machine
-row `AUTH_MODES` repeats that Base and Test use Bearer only. Current official WB documentation for
-partner services states that the service secret is mandatory for requests made with both Service
-and Base tokens; using a Base token without the service secret is not allowed.
+| Required correction | Verdict | Evidence |
+|---|---|---|
+| Base partner-service requests require `Authorization` and `X-Client-Secret` | Closed | Dossier section 6 and machine row `AUTH_MODES` require both headers and forbid Base without the service secret. |
+| Base secret failures cover missing, invalid, expired, withdrawn, mismatched and disallowed | Closed | Dossier sections 6 and 13 plus machine row `AUTH_401_403` enumerate all six synthetic outcomes. |
+| Base-secret canary participates in aggregate zero-leak verification | Closed | Dossier section 13 and machine row `API_WORKER_SINKS` require a distinct Base canary across logs, errors, traces, metrics and evidence for Base `401/403` and other outcomes. |
+| Review requires no real credential or live call | Closed | Matrix has `live_calls_performed=false`; dossier and closure explicitly prohibit credential access and live sandbox/production calls. |
 
-This mismatch leaves the original requirement for Service/Base `X-Client-Secret` uncovered and can
-produce a false S15 case design: a Base-token credential canary would be omitted from request
-fixtures and from sink-wide leakage assertions.
+## Independent source check
 
-Required rework:
-
-1. Correct the prose auth table and `AUTH_MODES` machine row so Base has both `Authorization` and
-   `X-Client-Secret` in the applicable partner-service context; keep Test separate according to its
-   documented sandbox contract.
-2. Correct `AUTH_401_403` cases so Base-token missing, invalid, expired, withdrawn, mismatched, or
-   disallowed service-secret outcomes are classified without logging either credential or raw WB
-   response text.
-3. Extend the later S15 synthetic fixture and aggregate zero-leak proof explicitly to the Base-token
-   `X-Client-Secret` lane. No real credential or live request is needed.
-
-Official source:
+Official WB source, updated `2026-04-03`:
 
 - https://dev.wildberries.ru/knowledge-base/articles/019d49a1-bd37-76b4-931d-fa5fa437b85e
 
-## Original blocker closure matrix
+It states that the service secret is mandatory for requests using both Service and Base tokens and
+lists the relevant `401` secret-verification and `403` missing/mismatched/not-allowed classes. The
+S03 contract uses synthetic cases and a stricter denylist; it does not require a real secret to
+validate the logging contract.
 
-| Finding group | Review result | Evidence in rework |
-|---|---|---|
-| Zero leakage across API/worker sinks | Closed | Denylist and aggregate canary scan include structured event, `log_wb_client_error`, app/httpx/httpcore/access logs, API exceptions, worker logs, traces, metric labels, and persisted evidence. |
-| Auth modes and 401/403 | Open | Service is covered, but Base incorrectly excludes `X-Client-Secret`; machine rows would generate incomplete cases. |
-| 402/406/451 applicability | Closed | `402` and stock-update `406` are applicable; `451` is explicitly N/A for the current call inventory with safe unknown-4xx fallback. |
-| Rate-limit aggregation and parsing | Closed | Personal/Service/Base/Test aggregation plus absent, malformed, negative, overflow, and numeric Retry/Limit/Reset cases are specified. |
-| Official sandbox and deterministic proof | Closed | Exact content/marketplace/supplies sandbox hosts, Test-token restriction, lower limits, zero authorized sandbox requests, and deny-egress MockTransport/emulator proof are explicit. |
+## Release boundary
 
-## Resume condition
+`RESEARCH_PASSED` approves only the corrected S03 research contract. It does not approve an
+implementation, enable logging, authorize a release, or permit S27/S28. Because BLG-C02 has the
+`release_change` trait, release still requires separate owner approval for the exact SHA at the
+controller release stage.
 
-S03 must correct the Base-token secret contract in prose and machine rows and propagate it to the
-required synthetic 401/403 and sink-wide leakage cases. A fresh independent S04 review is required;
-until then `RESEARCH_PASSED` is prohibited.
+## Blockers
+
+None for S04. The next stage must be selected by the controller.

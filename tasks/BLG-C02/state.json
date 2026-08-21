@@ -52,7 +52,7 @@
     "S27",
     "S28"
   ],
-  "current_stage": "S04",
+  "current_stage": "S11",
   "status": "RUNNING",
   "base_sha": "69c271678782d7dcfa39df97cd905cbee1678727",
   "branch": "codex/wms-pipeline-unified-v2-20260820",
@@ -69,8 +69,8 @@
   "owner_agent": "denis",
   "attempt": 1,
   "lease_until": "2026-08-21T00:55:57Z",
-  "heartbeat_at": "2026-08-21T04:02:58Z",
-  "last_valid_receipt": "sha256:8374c457bc8994ed303bc7fa094c0535d327dda07321a1119ca28fdd92e163f5",
+  "heartbeat_at": "2026-08-21T04:07:34Z",
+  "last_valid_receipt": "sha256:ea78c6a43b9090a7d0ad7c1da9f7fd343789e3f31dce40bebfed30a159021db9",
   "blocker": null,
   "resume_condition": null,
   "verdicts": {
@@ -94,15 +94,22 @@
       "receipt_hash": "sha256:8374c457bc8994ed303bc7fa094c0535d327dda07321a1119ca28fdd92e163f5",
       "role_binding_id": "pipeline-ba",
       "agent_identity": "codex-blg-c02-s03-pipeline-ba"
+    },
+    "S04": {
+      "verdict": "RESEARCH_PASSED",
+      "receipt_path": "docs/evidence/BLG-C02/S04-RESEARCH_PASSED.receipt.json",
+      "receipt_hash": "sha256:ea78c6a43b9090a7d0ad7c1da9f7fd343789e3f31dce40bebfed30a159021db9",
+      "role_binding_id": "pipeline-reviewer",
+      "agent_identity": "codex-blg-c02-s04-pipeline-reviewer"
     }
   },
   "commits": [],
   "wave_id": "wave-a1b311d18f07",
   "budget_enforced": true,
   "budget_usage": {
-    "input_tokens": 38300,
-    "output_tokens": 6300,
-    "estimated_usd": 0.3525
+    "input_tokens": 90300,
+    "output_tokens": 10800,
+    "estimated_usd": 0.7325
   },
   "budget_usage_receipts": [
     {
@@ -143,6 +150,19 @@
       "estimated_usd": 0.35,
       "agent_id": "codex-blg-c02-s03-pipeline-ba",
       "recorded_at": "2026-08-21T00:40:27Z"
+    },
+    {
+      "task_id": "BLG-C02",
+      "stage": "S04",
+      "role": "pipeline-reviewer",
+      "executor": "codex",
+      "model": "gpt-5.6-sol",
+      "tier": "expensive",
+      "input_tokens": 52000,
+      "output_tokens": 4500,
+      "estimated_usd": 0.38,
+      "agent_id": "codex-blg-c02-s04-pipeline-reviewer",
+      "recorded_at": "2026-08-21T04:07:34Z"
     }
   ],
   "blocked_by": [],
