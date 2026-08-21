@@ -12,13 +12,16 @@ from sqlalchemy import func, select
 
 from app.db.session import SessionLocal
 from app.models.fbs_order import (
+    CHECK_STATUS_CHECKING,
     FBS_ORDER_STATUS_DONE,
     FBS_ORDER_STATUS_EXTERNAL_PROCESSING,
     FBS_ORDER_STATUS_IN_DELIVERY,
     FBS_ORDER_STATUS_NEW,
     FBS_ORDER_STATUS_SORTED,
     FbsOrder,
+    FbsOrderMarking,
 )
+from app.models.fbs_supply import FBS_SUPPLY_STATUS_ASSEMBLING, FbsSupply
 from app.models.seller import Seller
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.models.tenant import Tenant
@@ -29,6 +32,7 @@ from app.services.fbs_autopoll_service import (
     poll_fbs_orders_for_seller,
     sync_fbs_order_statuses_all_sellers,
     sync_fbs_order_statuses_for_seller,
+    sync_marking_statuses_for_assembling_supplies,
     sync_seller_stocks,
 )
 from app.services.integration_fernet import encrypt_secret
@@ -37,6 +41,7 @@ from app.services.wb_marketplace_orders_service import (
     upsert_order_from_wb_row,
 )
 from app.services.wildberries_client import WildberriesClientError
+from app.services.wildberries_fbs_client import MarketplaceOrderMetaRow
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 
 
@@ -195,6 +200,105 @@ async def test_fbs_autopoll_syncs_orders_for_one_seller(
             )
         )
     assert count == 5
+
+
+# TC-NEW-FBS-AUTOPOLL-006 — metadata sync batches all assembling orders at 100
+@pytest.mark.asyncio
+async def test_fbs_autopoll_metadata_sync_batches_over_100_and_preserves_missing_wb_row(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id = uuid.uuid4()
+    warehouse_id = uuid.uuid4()
+    seller_id = await _seed_seller_with_marketplace_token(tenant_id, token_suffix="meta-batch")
+    supply_id = uuid.uuid4()
+    async with SessionLocal() as session:
+        from app.models.warehouse import Warehouse
+
+        session.add(
+            Warehouse(
+                id=warehouse_id,
+                tenant_id=tenant_id,
+                name="WH",
+                code=f"wh-{time.time_ns()}",
+            )
+        )
+        session.add(
+            FbsSupply(
+                id=supply_id,
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                warehouse_id=warehouse_id,
+                wb_supply_id="WB-GI-META-BATCH",
+                name="Batch metadata",
+                status=FBS_SUPPLY_STATUS_ASSEMBLING,
+                delivery_type="pvz",
+            )
+        )
+        await session.flush()
+        for index in range(101):
+            order, _ = await upsert_order_from_wb_row(
+                session,
+                tenant_id,
+                seller_id,
+                _wb_order_row(order_id=970000 + index),
+            )
+            order.supply_id = supply_id
+            if index == 100:
+                session.add(
+                    FbsOrderMarking(
+                        order_id=order.id,
+                        tenant_id=tenant_id,
+                        kind="sgtin",
+                        value="01LOCAL-KEEP",
+                        marking_code_id=uuid.uuid4(),
+                        check_status=CHECK_STATUS_CHECKING,
+                    )
+                )
+        await session.commit()
+
+    batches: list[list[int]] = []
+
+    async def fake_meta_batch(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[MarketplaceOrderMetaRow]:
+        batches.append(order_ids)
+        # The last order is deliberately absent, matching WB's partial response.
+        return [MarketplaceOrderMetaRow(order_id=oid) for oid in order_ids[:-1]]
+
+    monkeypatch.setattr(
+        "app.services.wildberries_fbs_client.fetch_marketplace_orders_meta_batch",
+        fake_meta_batch,
+    )
+
+    async def noop_supply_update(*args: object, **kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service._notify_supply_marking_update",
+        noop_supply_update,
+    )
+    target = SellerPollTarget(tenant_id=tenant_id, seller_id=seller_id)
+    async with SessionLocal() as session, httpx.AsyncClient() as client:
+        synced = await sync_marking_statuses_for_assembling_supplies(
+            session, target, client
+        )
+
+    assert [len(batch) for batch in batches] == [100, 1]
+    assert all(len(batch) <= 100 for batch in batches)
+    assert synced == 101
+    async with SessionLocal() as session:
+        marking = (
+            await session.execute(
+                select(FbsOrderMarking).join(FbsOrder).where(FbsOrder.wb_order_id == 970100)
+            )
+        ).scalar_one()
+        assert marking.value == "01LOCAL-KEEP"
+        assert marking.marking_code_id is not None
 
 
 # TC-NEW-FBS-AUTOPOLL-002
