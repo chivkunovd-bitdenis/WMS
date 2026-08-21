@@ -178,18 +178,30 @@ def _cis_helpers() -> tuple[
 ]:
     from app.services.marking_code_service import (
         _CIS_CANDIDATE_RE,
-        _canonical_cis_from_match,
+        _bare_gtin_serial_prefix_from_match,
         extract_gtin_from_cis,
         normalize_cis,
     )
 
-    return _CIS_CANDIDATE_RE, normalize_cis, extract_gtin_from_cis, _canonical_cis_from_match
+    return (
+        _CIS_CANDIDATE_RE,
+        normalize_cis,
+        extract_gtin_from_cis,
+        _bare_gtin_serial_prefix_from_match,
+    )
 
 
 def _find_cis_boxes_on_page(page: object) -> list[tuple[str, object]]:
+    """Находит на странице текстовые упоминания "(01) <gtin>" / "(21)
+    <serial>" и их положение. Возвращает голый префикс "01<gtin>21<serial>"
+    (без GS-разделителя и ключа проверки — их этот текст никогда не несёт,
+    см. `_bare_gtin_serial_prefix_from_match`), а не готовый код: он нужен
+    только чтобы (a) понять, где на странице граница конкретной этикетки для
+    обрезки, и (b) сверить с этим префиксом код, распознанный с картинки
+    DataMatrix рядом (см. `extract_label_artifacts_from_pdf`)."""
     import fitz  # pymupdf
 
-    cis_re, normalize_cis, _, canonical_cis_from_match = _cis_helpers()
+    cis_re, normalize_cis, _, bare_prefix_from_match = _cis_helpers()
     pg = cast(fitz.Page, page)
     found: list[tuple[str, fitz.Rect]] = []
     seen: set[str] = set()
@@ -230,7 +242,7 @@ def _find_cis_boxes_on_page(page: object) -> list[tuple[str, object]]:
         if not cis_re.search(search_text):
             continue
         for match in cis_re.finditer(search_text):
-            cis = normalize_cis(canonical_cis_from_match(match))
+            cis = normalize_cis(bare_prefix_from_match(match))
             if cis is None or cis in seen:
                 continue
             seen.add(cis)
@@ -375,13 +387,71 @@ def _label_rect_for_cis(
     return _fallback_label_rect(cis_bbox, cis_boxes, pg.rect, _content_rect_for_page(page))
 
 
+def _nearest_decoded_value(
+    prefix: str,
+    decoded: list[Any],
+    cis_bbox: object,
+    gs_separator: str,
+) -> str | None:
+    """Среди штрихкодов страницы (`decoded`, элементы —
+    `marking_datamatrix_service.DecodedDataMatrix`) находит тот, что
+    относится к товару `prefix` ("01<gtin>21<serial>") — по совпадению
+    начала декодированной строки, не по равенству: полный код несёт больше,
+    чем этот текстовый префикс (ключ проверки и, возможно, криптохвост). Это
+    и есть проверка «остался ли тот же товар» — берём соответствие
+    декодированного значения не из соседнего описания, а по факту сверки
+    GTIN+серийника.
+
+    Если совпадений несколько (редкий случай — повторяющаяся заготовка на
+    одной странице), берёт ближайший по расположению к тексту этой этикетки.
+    """
+    import fitz  # pymupdf
+
+    needle = f"{prefix}{gs_separator}"
+    matches = [item for item in decoded if item.value.startswith(needle)]
+    if not matches:
+        return None
+    if len(matches) == 1:
+        return cast(str, matches[0].value)
+    bbox = cast(fitz.Rect, cis_bbox)
+    anchor = ((bbox.x0 + bbox.x1) / 2, (bbox.y0 + bbox.y1) / 2)
+
+    def _distance(item: Any) -> float:
+        x0, y0, x1, y1 = item.page_rect
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        return float((cx - anchor[0]) ** 2 + (cy - anchor[1]) ** 2)
+
+    return cast(str, min(matches, key=_distance).value)
+
+
 def extract_label_artifacts_from_pdf(content: bytes) -> list[ExtractedLabelArtifact]:
+    """Разбирает PDF селлера на отдельные этикетки: одна страница может
+    содержать от одной до сотни этикеток (лента печати).
+
+    Для каждой этикетки, найденной по человекочитаемому тексту рядом с
+    DataMatrix (`_find_cis_boxes_on_page`), пытается распознать саму картинку
+    штрихкода на той же странице (`marking_datamatrix_service`) и
+    подтвердить, что она относится к тому же товару — её декодированное
+    значение должно начинаться с того же "01<gtin>21<serial>", что и текст.
+
+    Если распознать не удалось или ни один штрихкод на странице не подошёл
+    по товару, этикетка не попадает в результат. Текстовый префикс намеренно
+    не возвращается: он не является КИЗ и никогда не должен попасть в
+    `marking_codes.cis_code`, даже как временный или «честно неполный» код.
+    Вызывающий импорт тем самым пропускает такую этикетку как
+    `invalid_format` (а если все этикетки такие — возвращает явный
+    `no_valid_codes`), не создавая записи, которую потом можно случайно
+    отправить в WB.
+    """
     try:
         import fitz  # pymupdf
     except ImportError as exc:
         raise RuntimeError("pdf_support_unavailable") from exc
 
-    _, _, extract_gtin_from_cis, _ = _cis_helpers()
+    from app.services.marking_code_service import GS_SEPARATOR
+    from app.services.marking_datamatrix_service import decode_datamatrix_codes_on_pdf_page
+
+    _, normalize_cis, extract_gtin_from_cis, _ = _cis_helpers()
     artifacts: list[ExtractedLabelArtifact] = []
     seen: set[str] = set()
     doc = fitz.open(stream=content, filetype="pdf")
@@ -392,13 +462,23 @@ def extract_label_artifacts_from_pdf(content: bytes) -> list[ExtractedLabelArtif
             if not cis_boxes:
                 continue
             frames = _drawing_rects(page)
-            for cis, cis_bbox in cis_boxes:
-                if cis in seen:
+            # Один рендер страницы на все этикетки этой страницы — заметно
+            # дешевле, чем перерендеривать её под каждую найденную этикетку.
+            decoded = decode_datamatrix_codes_on_pdf_page(page)
+            for prefix, cis_bbox in cis_boxes:
+                if prefix in seen:
                     continue
-                seen.add(cis)
+                seen.add(prefix)
                 label_rect = _label_rect_for_cis(cis_bbox, cis_boxes, frames, page)
                 label_pdf = crop_pdf_page_to_single_label_pdf(doc, page_index, label_rect)
-                gtin = extract_gtin_from_cis(cis) or ""
+                gtin = extract_gtin_from_cis(prefix) or ""
+                decoded_value = _nearest_decoded_value(prefix, decoded, cis_bbox, GS_SEPARATOR)
+                # Human-readable (01)/(21) text is only a cross-check. Never
+                # use it as a fallback value: a bare prefix is not a CIS and
+                # must not be persisted by PDF import or restore.
+                cis = normalize_cis(decoded_value) if decoded_value else None
+                if cis is None:
+                    continue
                 artifacts.append(
                     ExtractedLabelArtifact(
                         cis=cis,

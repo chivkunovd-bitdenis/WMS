@@ -66,9 +66,9 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     "marking_code_already_assigned": "Код маркировки уже назначен другому заказу.",
     "meta_validation_fail": "Wildberries отклонил метаданные.",
     "sgtin_missing_gs": (
-        "КИЗ без служебного GS-разделителя после серийного номера — Wildberries его не "
-        "примет. Запустите восстановление пула (python -m app.cli."
-        "restore_truncated_marking_cis) или отсканируйте DataMatrix заново."
+        "КИЗ без служебного GS-разделителя или без ключа проверки после серийного "
+        "номера — Wildberries его не примет. Запустите восстановление пула (python -m "
+        "app.cli.restore_truncated_marking_cis) или отсканируйте DataMatrix заново."
     ),
     "sticker_not_found": "Стикер не найден в этой поставке.",
     "order_frozen": "Заказ уже передан в доставку — КИЗ не изменить.",

@@ -11,7 +11,7 @@ from test_packaging_tasks import _register_admin
 
 from app.db.session import SessionLocal
 from app.models.marking_code import MarkingCode
-from app.services.marking_code_service import GS_SEPARATOR
+from app.services.marking_code_service import is_cis_incomplete_for_wb
 
 
 def _build_label_pdf(cis: str, footer_text: str) -> bytes:
@@ -417,10 +417,15 @@ async def test_pdf_import_parses_cis_wrapped_in_parens_across_two_lines(
     )
     assert codes.status_code == 200
     row = codes.json()[0]
-    # I5: короткий (без криптохвоста) код пула хранится с завершающим
-    # GS-разделителем — WB отклоняет голый "01<gtin>21<serial>" ошибкой
-    # "sgtinNoGS", см. marking_code_service.GS_SEPARATOR.
-    assert row["cis_code"].endswith(serial + GS_SEPARATOR)
+    # I5-2: этот синтетический PDF несёт только человекочитаемый текст, без
+    # настоящей картинки DataMatrix (в отличие от боевых этикеток селлера) —
+    # полный код (с GS-разделителем и ключом проверки) взять неоткуда, и
+    # честная неполнота — правильный итог: голый "01<gtin>21<serial>", без
+    # выдуманного GS-хвоста (см. marking_code_service.is_cis_incomplete_for_wb
+    # и test_marking_cis_pool_gs_separator.py — там та же этикетка, но с
+    # настоящей картинкой, даёт полный код).
+    assert row["cis_code"] == f"01{gtin14}21{serial}"
+    assert is_cis_incomplete_for_wb(row["cis_code"])
     assert row["has_label_artifact"] is True
 
     artifact = await async_client.get(
@@ -486,13 +491,15 @@ async def test_pdf_import_does_not_reuse_multi_label_page_as_artifact(
     assert len(rows) == 2
     assert {row["has_label_artifact"] for row in rows} == {True}
 
-    # I5: хранимый cis_code теперь завершается GS-разделителем (короткий
-    # формат без криптохвоста, который WB принимает — см. GS_SEPARATOR),
-    # поэтому сверяем не буквальный литерал, напечатанный на этикетке PDF,
-    # а его канонизированную форму.
+    # I5-2: этот синтетический PDF несёт только текст, без настоящей картинки
+    # DataMatrix — полного кода взять неоткуда, честная неполнота (см.
+    # marking_code_service.is_cis_incomplete_for_wb) — это голый
+    # "01<gtin>21<serial>" без GS-разделителя, буквально то, что напечатано
+    # на этикетке текстом.
     by_cis = {row["cis_code"]: row for row in rows}
     for cis in (cis_a, cis_b):
-        row = by_cis[cis + GS_SEPARATOR]
+        row = by_cis[cis]
+        assert is_cis_incomplete_for_wb(row["cis_code"])
         artifact = await async_client.get(
             f"/operations/marking-codes/codes/{row['id']}/label-artifact?format=pdf",
             headers=h,

@@ -28,6 +28,11 @@ dependencies = [
   "pymupdf>=1.24",
   "openpyxl>=3.1",
   "boto3>=1.34",
+  # Распознавание DataMatrix-картинок КИЗ на PDF-этикетках селлера (I5-2,
+  # backend/app/services/marking_datamatrix_service.py) — готовые wheel-колёса
+  # под все нужные платформы, ставится через pip без системных библиотек
+  # (в отличие от pylibdmtx, которому нужна системная libdmtx).
+  "zxing-cpp>=2.2",
 ]
 
 [project.optional-dependencies]

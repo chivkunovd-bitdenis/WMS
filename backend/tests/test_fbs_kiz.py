@@ -285,10 +285,15 @@ async def _lookup(
 
 
 def _cis(suffix: str) -> str:
-    # I5: WB отклоняет sGTIN без GS-разделителя после серийного номера
-    # ("sgtinNoGS") — короткий (без криптохвоста) формат обязан завершаться
-    # им, см. marking_code_service.GS_SEPARATOR и _ensure_marking_value_ready_for_wb.
-    return f"010460043993125321KIZ{suffix}{mc_svc.GS_SEPARATOR}"
+    # I5 / I5-2: WB отклоняет sGTIN без GS-разделителя после серийного номера
+    # ("sgtinNoGS") — а прошлый, недостаточный фикс показал, что мало и
+    # одного GS: короткий (без криптохвоста) формат обязан нести ещё и ключ
+    # проверки (тег 91) сразу после него, см.
+    # marking_code_service.is_cis_incomplete_for_wb и
+    # _ensure_marking_value_ready_for_wb. "91FFFF" здесь — валидный по форме,
+    # но не настоящий ключ: тестам, использующим этот хелпер, важна только
+    # структура, а не реальная проверка в «Честном знаке».
+    return f"010460043993125321KIZ{suffix}{mc_svc.GS_SEPARATOR}91FFFF"
 
 
 async def _seed_active_marking(
@@ -2767,6 +2772,85 @@ async def test_fbs_kiz_commit_rejects_value_without_gs_separator_before_calling_
             )
         ).scalar_one_or_none()
         assert saved_code is None
+
+
+@pytest.mark.asyncio
+async def test_fbs_kiz_commit_rejects_value_with_gs_but_no_verification_key_before_calling_wb(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """I5-2: a value with a GS separator but *nothing after it* is exactly
+    what a prior, insufficient restore pass left on production — it has a
+    separator, so the older `is_cis_missing_gs_separator` check alone would
+    wave it through, but WB's own docs say the verification key (AI 91) must
+    follow the separator even in the short (no crypto tail) format. This is
+    the regression this fix closes: the guard must catch a keyless value the
+    same way it catches a fully bare one.
+    """
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
+        async_client, headers, suffix
+    )
+    supply_id = await _create_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        suffix=suffix,
+    )
+    order = await _create_order(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        supply_id=supply_id,
+        suffix=suffix,
+        wb_order_id=932303,
+        sticker_code="NO-KEY-COMMIT",
+        wb_barcode="NO-KEY-COMMIT-BAR",
+        with_packaging=True,
+    )
+    async with SessionLocal() as session:
+        db_order = await session.get(FbsOrder, order.order_id)
+        assert db_order is not None
+        db_order.required_meta_json = [MARKING_KIND_SGTIN]
+        await session.commit()
+    sent = _patch_wb_acceptance(monkeypatch)
+    # Deliberately bypass the `_cis()` helper (which now appends
+    # "{GS}91FFFF", see I5-2) — a GS separator with nothing after it, not the
+    # fully bare I5 shape.
+    gs_only_value = f"010460043993125321KIZNOKEY001{mc_svc.GS_SEPARATOR}"
+    assert not mc_svc.is_cis_missing_gs_separator(gs_only_value)
+    assert mc_svc.is_cis_missing_verification_key(gs_only_value)
+    assert mc_svc.is_cis_incomplete_for_wb(gs_only_value)
+
+    response = await async_client.post(
+        "/operations/fbs-orders/kiz/commit",
+        headers=headers,
+        json={
+            "idempotency_key": "kiz-no-key",
+            "pairs": [
+                {
+                    "order_id": str(order.order_id),
+                    "value": gs_only_value,
+                    "confirmed": False,
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    row = response.json()[0]
+    assert row["status"] == "error"
+    assert row["code"] == "sgtin_missing_gs"
+    # The guard must fire before any network call to WB — same as the fully
+    # bare case.
+    assert sent == {}
+    async with SessionLocal() as session:
+        saved_marking = (
+            await session.execute(
+                select(FbsOrderMarking).where(FbsOrderMarking.order_id == order.order_id)
+            )
+        ).scalar_one_or_none()
+        assert saved_marking is None
 
 
 @pytest.mark.asyncio

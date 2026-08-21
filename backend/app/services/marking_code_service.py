@@ -99,37 +99,80 @@ _CIS_CANDIDATE_RE = re.compile(
 )
 
 
-def _canonical_cis_from_match(match: re.Match[str]) -> str:
-    """Rebuilds the GS1 element string for AI(01)+AI(21), stripping any
-    print-formatting punctuation (parens/spaces) captured around the markers,
-    and terminates it with a GS separator.
+def _bare_gtin_serial_prefix_from_match(match: re.Match[str]) -> str:
+    """Rebuilds the bare "01<gtin>21<serial>" text seen next to a DataMatrix
+    on a seller PDF label, stripping any print-formatting punctuation
+    (parens/spaces) captured around the AI markers. Deliberately *not*
+    terminated with a GS separator and deliberately not claimed to be a
+    complete, sendable КИЗ.
 
     Seller PDF labels normally print only "(01) <gtin>" / "(21) <serial>" as
-    human-readable text next to the DataMatrix graphic — the crypto tail
-    (AI 91 key + AI 92/93 signature) lives only inside the barcode image
-    itself, never as extractable PDF text, so there is nothing beyond
-    gtin+serial to recover from these files. But WB's own instructions
-    (tasks/fbs-marketplace-orders/wb-docs/04-labeling/kiz-common-errors.md,
-    "Короткий и длинный КИЗ") say that even the *short* КИЗ format — sent
-    without the crypto tail — must still carry the GS separator right after
-    the serial number. Before this fix we rebuilt a bare
-    "01<gtin>21<serial>" with no separator at all, which WB rejects with
-    "sgtinNoGS" the moment such a pool code reaches a real supply (I5,
-    docs/BACKLOG-2026-08-19-CHAT-RU.md). Terminating with GS_SEPARATOR turns
-    it into the valid short-format code WB documents as an accepted
-    fallback.
+    human-readable text next to the DataMatrix graphic — the verification key
+    (AI 91) and crypto tail (AI 92/93) live only inside the barcode image
+    itself, never as extractable PDF text (verified by hand on a real
+    production PDF — I5-2, docs/BACKLOG-2026-08-19-CHAT-RU.md). This
+    function's result is therefore only ever a *candidate prefix*, used to
+    (a) locate where a label sits on the page for cropping and (b) confirm
+    a DataMatrix decoded from the picture belongs to the right product,
+    before that decoded value — not this text-only prefix — becomes the
+    stored `cis_code`.
+
+    Earlier code (`_canonical_cis_from_match`) terminated this same prefix
+    with a bare GS separator and stored *that* as the final code, on the
+    theory that WB's documented "short КИЗ" format (no crypto tail, but with
+    the GS separator) would accept it. That was still wrong: WB's own
+    instructions (tasks/fbs-marketplace-orders/wb-docs/04-labeling/
+    kiz-common-errors.md, "Короткий и длинный КИЗ") say the short format
+    keeps the verification key (AI 91) — which, per the paragraph above, this
+    text never carries. A GS-terminated-but-keyless code is exactly what a
+    prior, insufficient restore pass left behind on production; see
+    `is_cis_missing_verification_key`.
     """
-    return f"01{match.group('gtin')}21{match.group('serial')}{GS_SEPARATOR}"
+    return f"01{match.group('gtin')}21{match.group('serial')}"
 
 
 def is_cis_missing_gs_separator(value: str) -> bool:
-    """True for the old truncated pool-code shape: a bare
+    """True for the oldest, crudest truncated pool-code shape: a bare
     "01<gtin>21<serial>" with no GS separator anywhere. WB rejects values
-    like this with "sgtinNoGS" — see I5. A code is fine to submit as soon as
-    it carries at least one GS separator, whether that's our own short-format
-    terminator or a real one preceding a crypto tail.
+    like this with "sgtinNoGS" — see I5.
+
+    This alone is *not* sufficient to prove a code is ready for WB — see
+    `is_cis_missing_verification_key` and `is_cis_incomplete_for_wb` below,
+    which a prior restore pass on production learned the hard way: it
+    appended a GS separator with nothing after it, which satisfies this
+    check but is still not a valid short-format КИЗ.
     """
     return GS_SEPARATOR not in value
+
+
+# A GS separator immediately followed by AI(91) — the verification key that
+# WB's docs say every КИЗ carries, even the *short* format sent without the
+# crypto tail (kiz-common-errors.md, "Короткий и длинный КИЗ"). Matches right
+# after AI(21)'s serial number, which is where AI(91) always sits in the
+# codes this service handles (GTIN and the key are both fixed-length AIs
+# that need no separator of their own before them).
+_AI91_AFTER_GS_RE = re.compile(re.escape(GS_SEPARATOR) + r"91")
+
+
+def is_cis_missing_verification_key(value: str) -> bool:
+    """True unless `value` carries AI(91) — the verification key — right
+    after a GS separator. Catches the specific shape a prior, insufficient
+    restore pass left on production: a GS separator with nothing after it,
+    which `is_cis_missing_gs_separator` alone does not flag as broken.
+    """
+    return _AI91_AFTER_GS_RE.search(value) is None
+
+
+def is_cis_incomplete_for_wb(value: str) -> bool:
+    """The actual "is this safe to send to WB" structural check (I5-2).
+
+    True if `value` is missing the GS separator entirely (the original,
+    cruder pool-import bug) *or* has a GS separator but no verification key
+    after it (what a prior restore pass, before this fix, mistakenly treated
+    as already-fixed). Either shape makes WB answer "sgtinNoGS" or an
+    equivalent structural rejection once the code reaches a real supply.
+    """
+    return is_cis_missing_gs_separator(value) or is_cis_missing_verification_key(value)
 
 
 class MarkingCodeServiceError(Exception):
@@ -482,11 +525,14 @@ class CodeHistoryRow:
 
 
 def mask_cis_code(cis: str) -> str:
-    # A short-format code we terminated ourselves ends with an invisible GS
-    # separator (see is_cis_missing_gs_separator) — drop it before slicing
-    # the tail so the operator-facing mask always ends on a real, visible
-    # character instead of a control byte.
-    visible = cis.rstrip(GS_SEPARATOR)
+    # A code decoded from a real DataMatrix picture (I5-2) carries a GS
+    # separator *in the middle* of the string — right before AI(91)'s
+    # verification key, not just as a trailing terminator on our own
+    # short-format codes (see is_cis_missing_gs_separator). Drop every
+    # occurrence, not just a trailing one, before slicing the tail — an
+    # operator-facing mask must never show a raw control byte, wherever in
+    # the string it happens to land.
+    visible = cis.replace(GS_SEPARATOR, "")
     tail = visible[-12:] if len(visible) > 12 else visible
     return f"…{tail}"
 
@@ -601,9 +647,17 @@ def _parse_csv_rows(content: bytes) -> list[dict[str, str]]:
 
 
 def _extract_cis_codes_from_text(text: str, seen: set[str]) -> list[str]:
+    """Finds every distinct "01<gtin>21<serial>" prefix mentioned as *text* on
+    a page — used only by `is_printable_label_artifact` to sanity-check that
+    a cropped label PDF shows exactly one КИЗ, not to produce a value fit to
+    send to WB. See `_bare_gtin_serial_prefix_from_match` for why this is
+    deliberately just the bare prefix, with no fabricated GS separator or
+    verification key: the real full code lives only in the DataMatrix
+    picture (`marking_datamatrix_service`), never as extractable PDF text.
+    """
     found: list[str] = []
     for match in _CIS_CANDIDATE_RE.finditer(text):
-        cis = normalize_cis(_canonical_cis_from_match(match))
+        cis = normalize_cis(_bare_gtin_serial_prefix_from_match(match))
         if cis is None or cis in seen:
             continue
         seen.add(cis)
@@ -614,18 +668,13 @@ def _extract_cis_codes_from_text(text: str, seen: set[str]) -> list[str]:
             line_match = _CIS_CANDIDATE_RE.search(line)
             if line_match is None:
                 continue
-            # Canonicalize the same way as the first pass above (see
-            # `_canonical_cis_from_match`) instead of normalizing the raw line
-            # verbatim. Seller PDF text never carries a real embedded GS
-            # separator or crypto tail — only the human-readable "(01) …
-            # (21) …" groups — so treating the raw line as already-complete
-            # produced a second, GS-less "duplicate" of the very same label
-            # that the first pass had already reconstructed *with* the
-            # separator. That spurious second entry broke
-            # `is_printable_label_artifact`'s "exactly one CIS on this label"
-            # check for every PDF-imported code once short codes started
-            # being terminated with GS_SEPARATOR (I5).
-            cis = normalize_cis(_canonical_cis_from_match(line_match))
+            # Build the same bare prefix as the first pass above instead of
+            # normalizing the raw line verbatim — otherwise a line that
+            # merely *contains* the same AI(01)/AI(21) text as an
+            # already-seen match (e.g. wrapped onto two lines) would count
+            # as a second, distinct CIS on the same label and break the
+            # "exactly one CIS on this label" check below.
+            cis = normalize_cis(_bare_gtin_serial_prefix_from_match(line_match))
             if cis is None or cis in seen:
                 continue
             seen.add(cis)
@@ -651,7 +700,15 @@ def _parse_pdf_label_rows(content: bytes) -> list[dict[str, str | bytes]]:
     try:
         artifacts = extract_label_artifacts_from_pdf(content)
     except RuntimeError as exc:
-        raise MarkingCodeServiceError("pdf_support_unavailable") from exc
+        # `str(exc)` — либо "pdf_support_unavailable" (нет pymupdf), либо
+        # "datamatrix_support_unavailable" (нет zxing-cpp) — обе ситуации
+        # означают одно и то же для оператора: сервер не смог разобрать PDF.
+        raise MarkingCodeServiceError(str(exc) or "pdf_support_unavailable") from exc
+    if not artifacts:
+        # Textual (01)/(21) data without a matching decoded DataMatrix is not
+        # a CIS. Surface the import contract error instead of creating a
+        # database row from a bare prefix.
+        raise MarkingCodeServiceError("pdf_no_decodable_datamatrix")
     rows: list[dict[str, str | bytes]] = []
     seen: set[str] = set()
     for artifact in artifacts:
@@ -671,6 +728,17 @@ def _parse_pdf_label_rows(content: bytes) -> list[dict[str, str | bytes]]:
 
 
 def is_printable_label_artifact(pdf_bytes: bytes | None, cis_code: str | None = None) -> bool:
+    """True if `pdf_bytes` shows exactly one КИЗ's worth of text, and — when
+    `cis_code` is given — that it's the *same* one.
+
+    The comparison is a prefix check, not equality: `_extract_cis_codes_from_text`
+    only ever recovers a bare "01<gtin>21<serial>" from the PDF's text (see
+    `_bare_gtin_serial_prefix_from_match` for why), while `cis_code` may now
+    be the full value decoded from the DataMatrix picture — GS separator,
+    verification key and possibly a crypto tail included — or, for a code
+    nobody has restored yet, the same bare prefix. Either way, the bare
+    text-derived prefix is always the start of the real stored value.
+    """
     if not pdf_bytes:
         return False
     try:
@@ -688,7 +756,7 @@ def is_printable_label_artifact(pdf_bytes: bytes | None, cis_code: str | None = 
         return False
     finally:
         doc.close()
-    if expected is not None and expected not in seen:
+    if expected is not None and not any(expected.startswith(prefix) for prefix in seen):
         return False
     return len(seen) == 1
 
@@ -1365,6 +1433,12 @@ class TruncatedCisRestoreReport:
     scanned: int
     restored: int
     rows: list[TruncatedCisRestoreRow]
+    # Коды, которые структурно так же обрезаны, как и `scanned`, но не
+    # тронуты вообще — их статус не «доступен» (уже привязаны к заказу,
+    # напечатаны, применены и т.д., см. restore_truncated_pool_cis_codes).
+    # Не входят в `rows`: они не обрабатывались, а только посчитаны отдельным
+    # запросом, чтобы отчёт был честным и без риска случайно задеть их.
+    skipped_not_available: int = 0
 
     def counts_by_outcome(self) -> dict[str, int]:
         counts: dict[str, int] = {}
@@ -1397,24 +1471,39 @@ async def _restore_row_from_candidates(
     *,
     dry_run: bool,
 ) -> TruncatedCisRestoreRow | None:
-    """Ищет полный код среди уже распознанных `parsed_cis` и, если нашёл и он
-    не занят другой строкой, применяет его к `code.cis_code` (если не dry_run).
+    """Ищет среди `parsed_cis` (полных кодов, распознанных с картинок
+    DataMatrix — см. marking_datamatrix_service) тот, что принадлежит тому же
+    товару, что и уже сохранённый обрезанный `code.cis_code`, и если нашёл и
+    он не занят другой строкой, применяет его (если не dry_run).
 
-    Возвращает `None`, если код не встретился среди `parsed_cis` вовсе — тогда
-    вызывающая сторона вправе попробовать другой источник восстановления,
-    а не сразу репортить «не найден».
+    «Тот же товар» проверяется как startswith по «<GTIN><серийник><GS>», а не
+    равенство: `parsed_cis` теперь несёт полный код (с ключом проверки и,
+    возможно, криптохвостом), а не голый префикс, так что сравнивать на
+    равенство было бы уже неверно. Startswith, а не substring: два разных
+    серийника с одним GTIN могут быть цифровым префиксом друг друга (например
+    "…0001" и "…00012"), поэтому сверяем именно начало строки, с границей по
+    GS-разделителю сразу после серийника.
+
+    `code.cis_code` в базе мог уже нести чужой мусорный GS-хвост без ключа
+    проверки — след предыдущей, недостаточной попытки восстановления (I5-2):
+    `rstrip` снимает его перед сравнением.
+
+    Возвращает `None`, если код не встретился среди `parsed_cis` вовсе —
+    значит либо ни один DataMatrix на этих страницах не относится к этому
+    товару (реальное несовпадение — сравнивать «остался ли тот же товар»
+    именно эта проверка и должна была отсечь), либо картинка не распозналась.
+    Вызывающая сторона в этом случае вправе попробовать другой источник
+    восстановления, а не сразу репортить «не найден».
     """
     masked = mask_cis_code(code.cis_code)
-    # Exact match on "<старый обрезанный код><GS>", а не startswith: два разных
-    # серийника с одним GTIN могут быть цифровым префиксом друг друга
-    # (например "…0001" и "…00012"), и startswith тогда сросся бы не с тем
-    # распознанным кодом.
-    target = f"{code.cis_code}{GS_SEPARATOR}"
-    if target not in parsed_cis:
+    bare_prefix = code.cis_code.rstrip(GS_SEPARATOR)
+    needle = f"{bare_prefix}{GS_SEPARATOR}"
+    full = next((value for value in parsed_cis if value.startswith(needle)), None)
+    if full is None:
         return None
     conflict_stmt = select(MarkingCode.id).where(
         MarkingCode.tenant_id == code.tenant_id,
-        MarkingCode.cis_code == target,
+        MarkingCode.cis_code == full,
         MarkingCode.id != code.id,
     )
     conflict_id = (await session.execute(conflict_stmt)).scalar_one_or_none()
@@ -1426,7 +1515,7 @@ async def _restore_row_from_candidates(
             masked=masked,
         )
     if not dry_run:
-        code.cis_code = target
+        code.cis_code = full
     return _restore_row(code, "restored", None, masked=masked)
 
 
@@ -1438,39 +1527,68 @@ async def restore_truncated_pool_cis_codes(
 ) -> TruncatedCisRestoreReport:
     """Чинит уже накопленные обрезанные коды пула (I5, docs/BACKLOG-2026-08-19-CHAT-RU.md).
 
-    До фикса `_canonical_cis_from_match` каждый код, пришедший через импорт PDF
-    продавца, сохранялся как голая строка "01<gtin>21<serial>" без единого
-    GS-разделителя — WB отклоняет такую поставку ошибкой "sgtinNoGS". Крипто-
-    хвост эти PDF никогда не несли как текст (продавец печатает только
-    человекочитаемые "(01) …"/"(21) …" рядом с самим DataMatrix), поэтому
-    восстановить можно ровно то же самое GTIN+серийник — но с добавленным
-    в конце GS-разделителем, что превращает код в валидный «короткий» формат
-    из документации WB (см. is_cis_missing_gs_separator).
+    До фикса импорт PDF продавца сохранял код как голую строку
+    "01<gtin>21<serial>" без GS-разделителя — WB отклоняет такую поставку
+    ошибкой "sgtinNoGS". Более ранняя, недостаточная версия этой команды
+    пыталась починить это, «досочиняя» короткий код прямо из текста PDF
+    (`01<gtin>21<serial><GS>`) — но человекочитаемый текст рядом с
+    DataMatrix никогда не несёт ключ проверки (тег 91), который по
+    документации WB (tasks/fbs-marketplace-orders/wb-docs/04-labeling/
+    kiz-common-errors.md, «Короткий и длинный КИЗ») обязателен даже у
+    короткого формата. Такая «починка» просто заменяла один невалидный код
+    другим, тоже невалидным — WB продолжал бы его отклонять.
 
-    Источник восстановления, по приоритету:
+    Полный код, с ключом проверки и (если он есть у конкретного КИЗ)
+    криптохвостом, закодирован только в самой картинке DataMatrix — эту
+    команду теперь чинит `marking_datamatrix_service.decode_datamatrix_codes_on_pdf_page`,
+    распознавая штрихкод с картинки, а не собирая код из текста.
+
+    Источник картинки, по приоритету:
 
     1. Собственная этикетка кода — `MarkingCode.label_artifact_pdf`. Это уже
-       обрезанный при импорте PDF ровно с этой одной этикеткой, поэтому здесь
-       нет никакой неоднозначности «какому коду принадлежит распознанный
-       текст» и не нужно поднимать объектное хранилище — колонка лежит прямо
-       в БД. Для PDF-импорта это должно закрывать почти все строки.
+       обрезанный при импорте PDF ровно с этой одной этикеткой (текстом и
+       картинкой DataMatrix), поэтому здесь нет неоднозначности «какому коду
+       принадлежит распознанный штрихкод» и не нужно поднимать объектное
+       хранилище — колонка лежит прямо в БД. Для PDF-импорта это должно
+       закрывать почти все строки.
     2. Оригинальный файл наряда импорта — `MarkingCodeImportFile`/object
        storage — на случай, если у конкретной строки нет своей этикетки
        (например, она была импортирована до появления обрезки по одной
-       этикетке на код). Разбираем его тем же парсером, что и сам импорт.
+       этикетке на код). Разбираем его тем же способом, что и сам импорт, и
+       сверяем распознанный код с ожидаемым GTIN+серийником — на странице
+       может быть до сотни чужих этикеток, и брать первый попавшийся
+       штрихкод было бы неверно (см. `_restore_row_from_candidates`).
 
-    Обновляем `cis_code`, только если новый код действительно найден и не
-    конфликтует с уже существующей строкой. Ничего не удаляет и не
-    перезаписывает коды, у которых GS-разделитель уже есть. Идемпотентна: то,
-    что было восстановлено в прошлый прогон, во второй раз просто не попадёт
-    в выборку кандидатов.
+    Не трогает коды, привязанные к заказу или иначе выведенные из пула:
+    выбираются только строки со статусом «доступен»
+    (`MarkingCode.status == STATUS_AVAILABLE`). Причина — при привязке кода к
+    заказу его значение копируется отдельной строкой в
+    `FbsOrderMarking.value` (см. `app/services/fbs_marking_service.py`);
+    переписать `cis_code` в `marking_codes` после этого значило бы разъехаться
+    с уже скопированным значением, а не «дочинить» его.
+
+    Обновляем `cis_code`, только если новый код действительно найден,
+    относится к тому же товару (тот же GTIN+серийник, см.
+    `_restore_row_from_candidates`) и не конфликтует с уже существующей
+    строкой. Ничего не удаляет. Идемпотентна: то, что было восстановлено в
+    прошлый прогон (полный код с ключом проверки), во второй раз просто не
+    попадёт в выборку кандидатов — как и код, у которого прошлый,
+    недостаточный прогон этой же команды успел дописать GS без ключа (см.
+    `is_cis_incomplete_for_wb`).
     """
     from app.services.marking_import_storage_service import read_marking_import_source_pdf
     from app.services.marking_label_artifact_service import extract_label_artifacts_from_pdf
 
+    # SQL-фильтр — грубое приближение (быстро отсекает заведомо готовые
+    # строки прямо в базе), точная проверка — `is_cis_incomplete_for_wb`
+    # ниже на Python-стороне. `notlike %GS%91%` — так же намеренно шире, чем
+    # был бы `notlike %GS%`: старый прогон этой же команды (до фикса) мог
+    # уже дописать GS без ключа проверки, и такую строку нужно перепроверить
+    # заново, а не пропустить как «уже восстановленную».
     stmt = select(MarkingCode).where(
         MarkingCode.import_batch_id.is_not(None),
-        MarkingCode.cis_code.notlike(f"%{GS_SEPARATOR}%"),
+        MarkingCode.status == STATUS_AVAILABLE,
+        MarkingCode.cis_code.notlike(f"%{GS_SEPARATOR}91%"),
     )
     if tenant_id is not None:
         stmt = stmt.where(MarkingCode.tenant_id == tenant_id)
@@ -1478,7 +1596,23 @@ async def restore_truncated_pool_cis_codes(
     fetched = list((await session.execute(stmt)).scalars().all())
     # Second, Python-side check against the same predicate used everywhere
     # else — belt-and-suspenders against a dialect quirk in the SQL LIKE.
-    candidates = [code for code in fetched if is_cis_missing_gs_separator(code.cis_code)]
+    candidates = [code for code in fetched if is_cis_incomplete_for_wb(code.cis_code)]
+
+    # Отдельный подсчёт для отчёта: сколько структурно таких же обрезанных
+    # строк не попало в `candidates` только из-за статуса — они привязаны к
+    # заказу или иначе не «доступны», и эта команда их сознательно не
+    # трогает (см. докстринг выше). Считаем, а не трогаем.
+    not_available_stmt = select(MarkingCode.cis_code).where(
+        MarkingCode.import_batch_id.is_not(None),
+        MarkingCode.status != STATUS_AVAILABLE,
+        MarkingCode.cis_code.notlike(f"%{GS_SEPARATOR}91%"),
+    )
+    if tenant_id is not None:
+        not_available_stmt = not_available_stmt.where(MarkingCode.tenant_id == tenant_id)
+    not_available_cis_codes = (await session.execute(not_available_stmt)).scalars().all()
+    skipped_not_available = sum(
+        1 for cis_code in not_available_cis_codes if is_cis_incomplete_for_wb(cis_code)
+    )
 
     rows: list[TruncatedCisRestoreRow] = []
     restored = 0
@@ -1492,12 +1626,13 @@ async def restore_truncated_pool_cis_codes(
             continue
         try:
             artifacts = extract_label_artifacts_from_pdf(label_pdf)
-        except RuntimeError:
+        except RuntimeError as exc:
+            reason = str(exc) or "pdf_support_unavailable"
             rows.append(
                 _restore_row(
                     code,
-                    "pdf_support_unavailable",
-                    "pdf_support_unavailable",
+                    reason,
+                    reason,
                     masked=mask_cis_code(code.cis_code),
                 )
             )
@@ -1572,8 +1707,8 @@ async def restore_truncated_pool_cis_codes(
                 continue
             try:
                 artifacts = extract_label_artifacts_from_pdf(content)
-            except RuntimeError:
-                batch_error = "pdf_support_unavailable"
+            except RuntimeError as exc:
+                batch_error = str(exc) or "pdf_support_unavailable"
                 continue
             except Exception as exc:
                 # Один битый PDF не должен ронять весь прогон восстановления.
@@ -1607,7 +1742,12 @@ async def restore_truncated_pool_cis_codes(
     if not dry_run and restored:
         await session.flush()
 
-    return TruncatedCisRestoreReport(scanned=len(candidates), restored=restored, rows=rows)
+    return TruncatedCisRestoreReport(
+        scanned=len(candidates),
+        restored=restored,
+        rows=rows,
+        skipped_not_available=skipped_not_available,
+    )
 
 
 async def list_inventory(
