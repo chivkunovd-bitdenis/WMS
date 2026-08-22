@@ -96,6 +96,10 @@ class FbsSupplyCreateBody(BaseModel):
     wb_office_id: int | None = None
 
 
+class FbsSupplyWarehouseBody(BaseModel):
+    warehouse_id: uuid.UUID
+
+
 class FbsSupplyAddOrderBody(BaseModel):
     order_id: uuid.UUID
 
@@ -855,6 +859,14 @@ def _raise_from_service_legacy(exc: supply_svc.FbsSupplyError) -> None:
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=exc.code)
 
 
+def _raise_from_warehouse_change(exc: supply_svc.FbsSupplyError) -> None:
+    if exc.code in {"supply_not_found", "warehouse_not_found"}:
+        raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
+    if exc.code == "supply_warehouse_locked":
+        raise_fbs_http(status.HTTP_409_CONFLICT, exc.code, message=exc.message)
+    raise_fbs_http(status.HTTP_500_INTERNAL_SERVER_ERROR, exc.code)
+
+
 def _raise_from_packaging_integration(
     exc: pack_int_svc.FbsPackagingIntegrationError,
 ) -> None:
@@ -1216,6 +1228,23 @@ async def get_fbs_supply_workspace(
         if exc.code == "supply_not_found":
             raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
         raise_fbs_http(status.HTTP_500_INTERNAL_SERVER_ERROR, exc.code)
+    return FbsWorkspaceOut.model_validate(workspace)
+
+
+@router.patch("/{supply_id}/warehouse", response_model=FbsWorkspaceOut)
+async def patch_fbs_supply_warehouse(
+    supply_id: uuid.UUID,
+    body: FbsSupplyWarehouseBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    try:
+        workspace = await supply_svc.change_supply_warehouse(
+            session, user.tenant_id, supply_id, body.warehouse_id
+        )
+    except supply_svc.FbsSupplyError as exc:
+        _raise_from_warehouse_change(exc)
+    await session.commit()
     return FbsWorkspaceOut.model_validate(workspace)
 
 

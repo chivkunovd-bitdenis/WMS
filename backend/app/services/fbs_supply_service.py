@@ -222,10 +222,49 @@ async def _get_supply(
     )
     if with_orders:
         stmt = stmt.options(
-            selectinload(FbsSupply.orders).selectinload(FbsOrder.product)
+            selectinload(FbsSupply.orders).selectinload(FbsOrder.product),
+            selectinload(FbsSupply.trbxes),
         )
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
+
+
+async def change_supply_warehouse(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+) -> dict[str, Any]:
+    """Move an untouched supply to another operational warehouse."""
+    supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
+    if supply is None:
+        raise FbsSupplyError("supply_not_found")
+
+    warehouse = await session.scalar(
+        select(Warehouse).where(
+            Warehouse.id == warehouse_id,
+            Warehouse.tenant_id == tenant_id,
+            Warehouse.is_operational.is_(True),
+        )
+    )
+    if warehouse is None:
+        raise FbsSupplyError("warehouse_not_found")
+
+    started = (
+        supply.packaging_task_id is not None
+        or bool(supply.trbxes)
+        or any(order.pick_status != PICK_STATUS_PENDING for order in supply.orders)
+    )
+    if started:
+        raise FbsSupplyError(
+            "supply_warehouse_locked",
+            message="Склад закреплён: подбор уже начат",
+        )
+
+    supply.warehouse_id = warehouse.id
+    await session.flush()
+    workspace = await get_supply_workspace(session, tenant_id, supply_id)
+    return workspace
 
 
 def _issue_context(validation: SupplyPreflightResult) -> dict[str, Any]:
