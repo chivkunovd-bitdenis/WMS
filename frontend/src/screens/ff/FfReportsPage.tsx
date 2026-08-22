@@ -43,6 +43,8 @@ type Row = {
 const dateString = (date: Date) => date.toISOString().slice(0, 10)
 const monthStart = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`
 const monthEnd = (date: Date) => dateString(new Date(date.getFullYear(), date.getMonth() + 1, 0))
+const yearStart = (date: Date) => `${date.getFullYear()}-01-01`
+const yearEnd = (date: Date) => `${date.getFullYear()}-12-31`
 
 export function FfReportsPage({ token, sellers = [] }: Props) {
   const now = useMemo(() => new Date(), [])
@@ -62,6 +64,7 @@ export function FfReportsPage({ token, sellers = [] }: Props) {
   const [summaryError, setSummaryError] = useState(false)
   const [tableError, setTableError] = useState(false)
   const [csvError, setCsvError] = useState(false)
+  const [periodError, setPeriodError] = useState('')
   const abortRef = useRef<AbortController | null>(null)
 
   const params = useCallback((group?: string, requestedPage?: number) => {
@@ -92,6 +95,7 @@ export function FfReportsPage({ token, sellers = [] }: Props) {
   }, [params, token])
 
   const load = useCallback(async () => {
+    if (periodError) return
     abortRef.current?.abort()
     const controller = new AbortController()
     abortRef.current = controller
@@ -108,7 +112,7 @@ export function FfReportsPage({ token, sellers = [] }: Props) {
     } finally {
       if (!controller.signal.aborted) setLoading(false)
     }
-  }, [loadOverview, loadTable, token])
+  }, [loadOverview, loadTable, periodError, token])
 
   useEffect(() => { void load(); return () => abortRef.current?.abort() }, [load])
 
@@ -137,13 +141,21 @@ export function FfReportsPage({ token, sellers = [] }: Props) {
     if (value === '7') { const start = new Date(end); start.setDate(end.getDate() - 6); setDateFrom(dateString(start)); setDateTo(dateString(end)) }
     if (value === '30') { const start = new Date(end); start.setDate(end.getDate() - 29); setDateFrom(dateString(start)); setDateTo(dateString(end)) }
     if (value === 'month') { setDateFrom(monthStart(end)); setDateTo(monthEnd(end)) }
+    if (value === 'year') { setDateFrom(yearStart(end)); setDateTo(yearEnd(end)) }
   }
+
+  useEffect(() => {
+    const from = new Date(`${dateFrom}T00:00:00`)
+    const to = new Date(`${dateTo}T00:00:00`)
+    const days = Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) ? 0 : (to.getTime() - from.getTime()) / 86_400_000 + 1
+    setPeriodError(days < 1 ? 'Дата начала не может быть позже даты окончания' : days > 366 ? 'Период не может быть длиннее 366 дней' : '')
+  }, [dateFrom, dateTo])
 
   const metrics = [
     { key: 'balance', label: 'Остаток сейчас', value: overview?.current_balance ?? null },
     { key: 'inbound', label: 'Приход за период', value: overview?.in_qty ?? null },
     { key: 'outbound', label: 'Расход за период', value: overview?.out_qty ?? null },
-    { key: 'comparison', label: 'Расход к прошлому периоду', value: overview?.comparison.change ?? null, delta: overview?.comparison.change_percent == null ? undefined : { value: overview.comparison.change_percent, direction: overview.comparison.change_percent >= 0 ? 'up' as const : 'down' as const, a11yLabel: 'Процент изменения расхода' } },
+    { key: 'comparison', label: 'Расход к прошлому периоду', value: overview?.comparison.change ?? null, delta: overview?.comparison.change_percent == null ? undefined : { value: overview.comparison.change_percent, unit: 'percent' as const, direction: overview.comparison.change_percent >= 0 ? 'up' as const : 'down' as const, a11yLabel: 'Процент изменения расхода' }, nullValueLabel: 'В прошлом периоде расхода не было' },
   ]
 
   return <Stack spacing={0} data-testid="ff-reports-page">
@@ -156,6 +168,7 @@ export function FfReportsPage({ token, sellers = [] }: Props) {
       <TextField size="small" label="По" type="date" value={dateTo} onChange={event => { setPeriod('custom'); setDateTo(event.target.value) }} data-testid="ff-reports-date-to" slotProps={{ inputLabel: { shrink: true } }} />
     </FilterBar>
     {overview?.warnings.map(warning => <WarningNotice key={warning} testId="ff-reports-warning">{warning}</WarningNotice>)}
+    {periodError ? <ErrorNotice testId="ff-reports-period-error">{periodError}</ErrorNotice> : null}
     {summaryError ? <ErrorNotice testId="ff-reports-summary-error">Не удалось загрузить сводку. <PrimaryAction onClick={() => void load()}>Повторить</PrimaryAction></ErrorNotice> : null}
     <ReportMetricStrip items={metrics} loading={loading} testId="ff-reports-metrics" />
     <MovementFlowChart series={overview?.daily.map(day => ({ date: day.date, inbound: day.in_qty, outbound: day.out_qty })) ?? []} showPrevious={comparison === 'previous'} loading={loading} ariaDescription="Дневной приход и расход" testId="ff-reports-chart" />
@@ -166,7 +179,7 @@ export function FfReportsPage({ token, sellers = [] }: Props) {
       <TextField select size="small" label="Группировка" value={grouping} onChange={event => { const next = event.target.value as 'product' | 'operation'; groupingRef.current = next; setGrouping(next); void changeTable(next, 1) }} data-testid="ff-reports-grouping">
         <MenuItem value="product">По товарам</MenuItem><MenuItem value="operation">По операциям</MenuItem>
       </TextField>
-      <PrimaryAction onClick={() => void downloadCsv()} disabledReason={rows.length === 0 ? 'За выбранный период нечего выгружать' : undefined} data-testid="ff-reports-download-csv">Скачать CSV</PrimaryAction>
+      <PrimaryAction onClick={() => void downloadCsv()} disabledReason={periodError || (rows.length === 0 ? 'За выбранный период нечего выгружать' : undefined)} data-testid="ff-reports-download-csv">Скачать CSV</PrimaryAction>
     </Stack>
     <DataTable<Row> columns={grouping === 'product' ? [
       { key: 'product', header: 'Товар', width: 150, render: row => <ProductCell sku={row.sku_code} photo={row.photo_url ? <img src={row.photo_url} alt="" width="32" height="32" /> : undefined} /> },
