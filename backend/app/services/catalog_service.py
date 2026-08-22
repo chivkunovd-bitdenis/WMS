@@ -715,6 +715,51 @@ async def update_product_dimensions(
     return p
 
 
+async def update_product_container_volume(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    *,
+    volume_liters: float,
+    container_basis: str,
+    author_user_id: uuid.UUID,
+) -> Product:
+    if volume_liters <= 0 or not container_basis.strip():
+        raise CatalogError("invalid_container_dimensions")
+    p = await get_product(session, tenant_id, product_id)
+    if p is None:
+        raise CatalogError("product_not_found")
+    p.length_mm = p.width_mm = p.height_mm = None
+    p.volume_liters = volume_liters
+    p.dimensions_source = "container"
+    p.dimensions_updated_at = datetime.now(UTC)
+    p.dimensions_updated_by_user_id = author_user_id
+    await _record_dimension_event(
+        session, p, source="container", author_user_id=author_user_id,
+        length_mm=None, width_mm=None, height_mm=None, weight_g=p.weight_g,
+        volume_liters=volume_liters, container_basis=container_basis.strip(),
+        fingerprint=_dimension_fingerprint(None, None, None, p.weight_g, container_basis.strip()),
+        apply=True,
+    )
+    await session.commit()
+    await session.refresh(p, attribute_names=["seller"])
+    return p
+
+
+async def list_product_dimension_events(
+    session: AsyncSession, tenant_id: uuid.UUID, product_id: uuid.UUID
+) -> list[ProductDimensionEvent]:
+    p = await get_product(session, tenant_id, product_id)
+    if p is None:
+        raise CatalogError("product_not_found")
+    result = await session.execute(
+        select(ProductDimensionEvent)
+        .where(ProductDimensionEvent.product_id == product_id)
+        .order_by(ProductDimensionEvent.observed_at.desc())
+    )
+    return list(result.scalars().all())
+
+
 def _dimension_fingerprint(length_mm: int | None, width_mm: int | None, height_mm: int | None,
                            weight_g: int | None, container_basis: str | None) -> str:
     payload = [length_mm, width_mm, height_mm, weight_g, container_basis]

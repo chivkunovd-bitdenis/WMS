@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import uuid
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
@@ -12,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.box_import_api_shared import read_xlsx_upload
 from app.api.deps import (
+    assert_inventory_read_access,
     assert_product_catalog_read_access,
     assert_seller_permission,
     get_current_user,
@@ -35,8 +37,11 @@ from app.services.catalog_service import (
     bulk_update_products_requires_honest_sign,
     create_product,
     get_product,
+    list_product_dimension_events,
     list_products,
+    restore_latest_wb_dimensions,
     update_packaging_instructions,
+    update_product_container_volume,
     update_product_dimensions,
     update_product_fbs_stock_sync,
     volume_liters_from_mm,
@@ -56,6 +61,7 @@ from app.services.seller_wb_catalog_service import (
     list_seller_wb_catalog_rows,
 )
 from app.services.staff_permissions_service import (
+    PERM_INVENTORY,
     PERM_RECEPTION,
     PERM_SHIFT_LEAD,
     get_staff_permissions,
@@ -226,6 +232,39 @@ class ProductDimensionsPatch(BaseModel):
     width_mm: int | None = Field(default=None, ge=1, le=10_000_000)
     height_mm: int | None = Field(default=None, ge=1, le=10_000_000)
     weight_g: int | None = Field(default=None, ge=1, le=1_000_000_000)
+
+
+class ProductContainerDimensions(BaseModel):
+    volume_liters: float = Field(gt=0, le=1_000_000)
+    container_basis: str = Field(min_length=1, max_length=2000)
+
+
+class ProductDimensionEventOut(BaseModel):
+    id: str
+    source: str
+    observed_at: datetime
+    author_user_id: str | None
+    length_mm: int | None
+    width_mm: int | None
+    height_mm: int | None
+    weight_g: int | None
+    volume_liters: float | None
+    container_basis: str | None
+    applied: bool
+
+
+def _dimension_event_out(event: object) -> ProductDimensionEventOut:
+    from app.models.product_dimension_event import ProductDimensionEvent
+
+    assert isinstance(event, ProductDimensionEvent)
+    return ProductDimensionEventOut(
+        id=str(event.id), source=event.source, observed_at=event.observed_at,
+        author_user_id=str(event.author_user_id) if event.author_user_id else None,
+        length_mm=event.length_mm, width_mm=event.width_mm, height_mm=event.height_mm,
+        weight_g=event.weight_g,
+        volume_liters=float(event.volume_liters) if event.volume_liters is not None else None,
+        container_basis=event.container_basis, applied=event.applied,
+    )
 
 
 class ProductHonestSignBulkPatch(BaseModel):
@@ -746,6 +785,61 @@ async def patch_product_dimensions(
                 detail="product_not_found",
             ) from None
         raise
+    return _product_out(updated)
+
+
+@router.get("/{product_id}/dimensions/history", response_model=list[ProductDimensionEventOut])
+async def get_product_dimension_history(
+    product_id: uuid.UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[ProductDimensionEventOut]:
+    await assert_inventory_read_access(session, user)
+    try:
+        events = await list_product_dimension_events(session, user.tenant_id, product_id)
+    except CatalogError as exc:
+        raise HTTPException(status_code=404, detail=exc.code) from None
+    return [_dimension_event_out(event) for event in events]
+
+
+@router.post("/{product_id}/dimensions/container", response_model=ProductOut)
+async def post_product_container_dimensions(
+    product_id: uuid.UUID,
+    body: ProductContainerDimensions,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ProductOut:
+    if user.role != FULFILLMENT_ADMIN:
+        await assert_inventory_read_access(session, user)
+        if user.role != FULFILLMENT_STAFF:
+            raise HTTPException(status_code=403, detail="forbidden")
+        perms = await get_staff_permissions(session, user)
+        if not perms.has(PERM_INVENTORY):
+            raise HTTPException(status_code=403, detail="forbidden")
+    try:
+        product = await update_product_container_volume(
+            session, user.tenant_id, product_id,
+            volume_liters=body.volume_liters,
+            container_basis=body.container_basis,
+            author_user_id=user.id,
+        )
+    except CatalogError as exc:
+        code = 404 if exc.code == "product_not_found" else 422
+        raise HTTPException(status_code=code, detail=exc.code) from None
+    return _product_out(product)
+
+
+@router.post("/{product_id}/dimensions/restore-wb", response_model=ProductOut)
+async def restore_product_wb_dimensions(
+    product_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ProductOut:
+    try:
+        updated = await restore_latest_wb_dimensions(session, user.tenant_id, product_id)
+    except CatalogError as exc:
+        code = 404 if exc.code in ("product_not_found", "wb_dimensions_not_found") else 422
+        raise HTTPException(status_code=code, detail=exc.code) from None
     return _product_out(updated)
 
 
