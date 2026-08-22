@@ -136,7 +136,11 @@ async def create_tariff(
     # A tenant row is present for every authenticated caller. Lock it to make an
     # empty tariff stream serializable too; locking only existing versions leaves
     # two first writes free to create overlapping open-ended periods.
-    await session.execute(select(Tenant.id).where(Tenant.id == tenant_id).with_for_update())
+    tenant = await session.scalar(
+        select(Tenant).where(Tenant.id == tenant_id).with_for_update()
+    )
+    if tenant is None:
+        raise BillingConfigurationError("Тенант не найден")
     query = (
         select(BillingTariffVersion)
         .where(
@@ -160,6 +164,8 @@ async def create_tariff(
         amount=amount,
         valid_from=valid_from,
     )
+    if tenant.billing_enabled_from is None:
+        tenant.billing_enabled_from = valid_from
     nested = await session.begin_nested()
     try:
         session.add(tariff)

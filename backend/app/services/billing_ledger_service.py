@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.billing import BillingLedgerEntry, BillingTariffVersion
+from app.models.tenant import Tenant
 
 MOSCOW = ZoneInfo("Europe/Moscow")
 
@@ -26,8 +27,15 @@ async def record_operational_charge(
     quantity: Decimal,
     occurred_at: datetime,
     performer_id: uuid.UUID | None,
-) -> BillingLedgerEntry:
+) -> BillingLedgerEntry | None:
     """Record the first final operational fact, without blocking on a missing tariff."""
+    fact_date = occurred_at.astimezone(MOSCOW).date()
+    billing_enabled_from = await session.scalar(
+        select(Tenant.billing_enabled_from).where(Tenant.id == tenant_id)
+    )
+    if billing_enabled_from is None or fact_date < billing_enabled_from:
+        return None
+
     existing = await session.scalar(
         select(BillingLedgerEntry).where(
             BillingLedgerEntry.tenant_id == tenant_id,
@@ -39,7 +47,6 @@ async def record_operational_charge(
     if existing is not None:
         return existing
 
-    fact_date = occurred_at.astimezone(MOSCOW).date()
     tariff = await session.scalar(
         select(BillingTariffVersion)
         .where(

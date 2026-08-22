@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from unittest.mock import AsyncMock, Mock
 
@@ -20,7 +20,7 @@ def _savepoint_session() -> AsyncMock:
 async def test_operational_charge_without_tariff_is_unpriced() -> None:
     session = _savepoint_session()
     session.add = Mock()
-    session.scalar = AsyncMock(side_effect=[None, None])
+    session.scalar = AsyncMock(side_effect=[date(2026, 1, 1), None, None])
     tenant_id = uuid.uuid4()
     source_id = uuid.uuid4()
 
@@ -59,7 +59,7 @@ async def test_repeated_operational_charge_returns_existing_entry() -> None:
         quantity=Decimal("4"),
         occurred_at=datetime.now(UTC),
     )
-    session.scalar = AsyncMock(return_value=existing)
+    session.scalar = AsyncMock(side_effect=[date(2026, 1, 1), existing])
 
     result = await record_operational_charge(
         session,
@@ -83,7 +83,7 @@ async def test_tariff_period_uses_moscow_calendar_date() -> None:
     session = _savepoint_session()
     session.add = Mock()
     tariff = Mock(id=uuid.uuid4(), amount=Decimal("10.00"), unit="item")
-    session.scalar = AsyncMock(side_effect=[None, tariff])
+    session.scalar = AsyncMock(side_effect=[date(2026, 1, 1), None, tariff])
 
     entry = await record_operational_charge(
         session,
@@ -100,3 +100,26 @@ async def test_tariff_period_uses_moscow_calendar_date() -> None:
 
     assert entry.tariff_version_id == tariff.id
     assert session.add.call_args.args[0] is entry
+
+
+@pytest.mark.asyncio
+async def test_operational_charge_before_billing_activation_is_not_recorded() -> None:
+    session = _savepoint_session()
+    session.add = Mock()
+    session.scalar = AsyncMock(return_value=date(2026, 3, 1))
+
+    entry = await record_operational_charge(
+        session,
+        tenant_id=uuid.uuid4(),
+        seller_id=uuid.uuid4(),
+        source_type="inbound_intake",
+        source_id=uuid.uuid4(),
+        source="inbound",
+        service_code="inbound",
+        quantity=Decimal("3"),
+        occurred_at=datetime(2026, 2, 28, 20, 30, tzinfo=UTC),
+        performer_id=uuid.uuid4(),
+    )
+
+    assert entry is None
+    session.add.assert_not_called()

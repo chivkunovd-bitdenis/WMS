@@ -54,6 +54,28 @@ async def test_tariff_versions_cannot_overlap_by_unit() -> None:
 
 
 @pytest.mark.asyncio
+async def test_first_tariff_explicitly_activates_billing_from_its_start_date() -> None:
+    session = AsyncMock()
+    session.add = Mock()
+    tenant = Mock(billing_enabled_from=None)
+    session.scalar = AsyncMock(return_value=tenant)
+    session.scalars = AsyncMock(return_value=Mock(first=lambda: None))
+    start = date(2026, 3, 1)
+
+    await create_tariff(
+        session,
+        tenant_id=uuid4(),
+        seller_id=None,
+        service_code="inbound",
+        unit="item",
+        amount=Decimal("10.00"),
+        valid_from=start,
+    )
+
+    assert tenant.billing_enabled_from == start
+
+
+@pytest.mark.asyncio
 async def test_tariff_rejects_unknown_service_and_invalid_unit_pair() -> None:
     session = AsyncMock()
     with pytest.raises(BillingConfigurationError, match="Недопустимая услуга"):
