@@ -1,32 +1,21 @@
-# Backend-dev отчёт · 05-prod-slow
+# Backend dev · 05-prod-slow · атом 1
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_wb_marketplace_orders_service.py` — усилен тест ошибки страницы: незавершённая `reconcile` делает rollback и не запускает связывание поставок.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/night/volna-9-recovery/cards/05-prod-slow/DEV.md` — отчёт этой роли.
-
-Сервисный код `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/wb_marketplace_orders_service.py` проверен: `new` использует только `fetch_marketplace_orders_new`, а `reconcile` проходит курсор до пустой финальной страницы и вызывает связывание поставок только после успешного завершения.
-
-## Миграции
-
-Нет.
-
-## Тесты
-
-- `test_new_sync_does_not_fetch_paginated_orders` — `new` не вызывает полный постраничный список и выполняет idempotent upsert.
-- `test_reconcile_walks_cursor_and_fails_incomplete_pass` — ошибка страницы вызывает rollback, не считается успешной сверкой и не запускает связывание поставок.
-- `test_reconcile_walks_past_ten_pages_and_links_supplies` — `reconcile` проходит курсор после десятой страницы и связывает поставки после полного прохода.
+- Нет: продуктовый backend-код и тесты не изменялись.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/night/volna-9-recovery/cards/05-prod-slow/DEV.md` — этот отчёт.
 
 ## Гейты
 
-- `ruff check backend/app/services/wb_marketplace_orders_service.py backend/tests/test_wb_marketplace_orders_service.py` — PASS.
-- `mypy .` из `backend/` — FAIL на 21 существующей ошибке в шести несвязанных файлах; изменённые файлы в выводе отсутствуют.
-- `pytest -q backend/tests/test_wb_marketplace_orders_service.py` — PASS, 12 тестов.
-- `python3 scripts/ci/back_guard.py` — NOT RUN: файл отсутствует в рабочей копии.
-- `python3 scripts/ci/check_migrations.py` — NOT RUN: файл отсутствует в рабочей копии; миграций нет.
-- `git diff --check` — PASS.
+- ruff: FAIL, 79 существующих нарушений вне атома; файлы атома не менялись.
+- mypy: FAIL, 21 существующая ошибка в 6 несвязанных файлах; файлы атома не менялись.
+- pytest: целевой `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_wb_marketplace_orders_service.py` — PASS, 12 passed. Полный запуск собрал 830 тестов, но его итог в доступном выводе не был получен; поэтому полный gate не подтверждён.
+- back_guard.py: не запускался — `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/scripts/ci/back_guard.py` отсутствует в рабочей копии.
+- check_migrations.py: не запускался — `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/scripts/ci/check_migrations.py` отсутствует в рабочей копии.
 
 ## Не реализовано
 
-- Находки ревью про print worker, `background_job`-уникальность, frontend и E2E относятся к другим слоям/атомам и не изменялись.
+- Атом 1 не реализован. В обязательном входном файле `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/night/volna-9-recovery/cards/05-prod-slow/CONTRACT.md` отсутствует раздел «API и данные», поэтому backend-dev не может менять поведение `new`/`reconcile` или трактовать ошибку повторного `next_token` из ревью как утверждённый API-контракт.
+- Релевантная находка ревью №3 зафиксирована: полная сверка не защищена от повторяющегося `next_token`; её исправление требует явного серверного контракта для результата и ошибки обхода.
+- Отдельный Git-коммит не создан: Git отказал в создании `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-05-prod-slow/index.lock` с `Operation not permitted`. Артефакт остаётся незакоммиченным в рабочей копии.
 - Секреты, ключи, токены, `.env`, кабинеты учётных данных, боевой прод и живой кабинет Wildberries не читались и не затрагивались.

@@ -57,3 +57,7 @@
 17:15   05-prod-slow · dev: фича 6/7 сохранена 4bd485eeae74
 17:18   05-prod-slow · screen-dev: готово
 17:18   05-prod-slow · dev: фича 7/7 сохранена d400783ea727
+17:25   05-prod-slow · reviewer: готово
+17:25 05-prod-slow: отложено — reviewer, круги кончились
+19:54   05-prod-slow · resume: поатомный rework Terra по сохранённым находкам
+19:57   05-prod-slow · backend-dev: готово
