@@ -1,15 +1,15 @@
-# Backend-dev · 02-verdikt-screen · rework
+# Backend-dev · 02-verdikt-screen · фича 2/5
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/app/services/fbs_workspace_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/tests/test_fbs_marking.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/app/services/fbs_shipment_service.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/tests/test_fbs_shipment_deliver_gate_unit.py`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/night/volna-9-recovery/cards/02-verdikt-screen/DEV.md`
 
 ## Что реализовано
 
-- Сервис workspace: `_metadata_ready` теперь принимает сохранённый `metadata_delivery_allowed` как единый серверный вердикт, включая явный `False`; fallback к прежним статусам применяется только для старых записей без этого признака.
-- Тест: S-03-TC-003 подтверждает, что `filled + reason=uinBadStatus` с техническим `accepted` не повышает готовность workspace; legacy-запись без серверного признака сохраняет прежний fallback.
+- Сервис передачи поставки: финальная серверная проверка повторно применяет единый WB-вердикт заказа и при блокировке возвращает исходный `DeliveryCheck` с понятным сообщением, идентификатором заказа и HTTP 400; прямой запрос не может отбросить этот результат.
+- Сервис workspace: находка REVIEW.md о `accepted` вместе с WB reason уже исправлена в текущем HEAD (`298542a5`): явный сохранённый `metadata_delivery_allowed=False` имеет приоритет над legacy fallback.
 
 ## Миграции
 
@@ -17,23 +17,23 @@
 
 ## Тесты
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/tests/test_fbs_marking.py`: добавлена регрессия server-verdict → workspace progress для S-03-TC-003.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/tests/test_fbs_shipment_deliver_gate_unit.py`: S-03-TC-003 проверяет, что `filled` с причиной, `pending`, `required` и неизвестное решение останавливают доставку; ошибка финальной проверки сохраняет сообщение и идентификатор конкретного заказа.
+- Целевой прогон `tests/test_fbs_shipment_deliver_gate_unit.py tests/test_fbs_marking.py`: PASS, 44 passed.
 
 ## Гейты
 
-- `ruff check app/services/fbs_marking_service.py app/services/fbs_workspace_service.py tests/test_fbs_marking.py` — PASS.
-- `ruff check .` — FAIL: 81 предсуществующая ошибка вне изменённых файлов.
-- `mypy .` — FAIL: 21 предсуществующая ошибка в 6 файлах вне изменённых файлов.
-- `pytest -q tests/test_fbs_marking.py` — PASS: 27 passed.
-- `pytest` — FAIL/прерван после первого падения: `tests/test_fbs_kiz.py::test_fbs_marking_readers_prefer_active_row_over_newer_rejected_row`, 167 passed, 3 skipped. Фикстура ожидает разрешение при WB `decision=accepted`, которое не является допустимым положительным decision контракта этого атома; изменённый workspace-сервис в traceback не участвует.
-- `python3 scripts/ci/back_guard.py` — BLOCKED: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/scripts/ci/back_guard.py` отсутствует.
-- `python3 scripts/ci/check_migrations.py` — BLOCKED: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/scripts/ci/check_migrations.py` отсутствует.
+- `ruff check app/services/fbs_shipment_service.py tests/test_fbs_shipment_deliver_gate_unit.py` — PASS.
+- `ruff check .` — FAIL: 81 предсуществующее нарушение вне изменённых файлов.
+- `mypy .` — FAIL: 21 предсуществующее нарушение в 6 файлах вне атома.
+- `pytest` — INCOMPLETE: среда прервала полный прогон без итоговой сводки; целевой прогон PASS, 44 passed.
+- `python3 scripts/ci/back_guard.py` — BLOCKED: файла `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/scripts/ci/back_guard.py` нет в рабочей копии.
+- `python3 scripts/ci/check_migrations.py` — BLOCKED: файла `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/scripts/ci/check_migrations.py` нет в рабочей копии.
 
 ## Не реализовано
 
-- Frontend-находки 1 и 3 из REVIEW.md не входят в роль backend-dev и не менялись.
-- Полные repo-гейты не зелёные по указанным предсуществующим проблемам вне атома.
+- Frontend-находки 1 и 3 из REVIEW.md не входят в слой backend-dev и не менялись.
+- Полные repo-гейты не стали зелёными из-за перечисленных предсуществующих нарушений вне атома.
 
 ## Блокеры
 
-Нет.
+- Git commit не выполнен: песочница запретила создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-02-verdikt-screen1/index.lock`; итог существует только как локальный diff рабочей копии.

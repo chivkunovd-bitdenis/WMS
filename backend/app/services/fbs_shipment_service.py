@@ -591,7 +591,23 @@ def _checks_to_payload(checks: list[DeliveryCheck]) -> list[dict[str, Any]]:
 def _validate_checks_pass(checks: list[DeliveryCheck]) -> None:
     for check in checks:
         if not check.ok:
-            raise FbsShipmentError(check.code)
+            # The final deliver endpoint reruns this preflight.  Preserve the
+            # particular failed check so a direct request cannot discard the
+            # order-bound WB verdict that the workspace already showed.
+            raise FbsShipmentError(
+                check.code,
+                message=check.message,
+                context={
+                    "delivery_check": {
+                        "code": check.code,
+                        "message": check.message,
+                        "order_id": (
+                            str(check.order_id) if check.order_id is not None else None
+                        ),
+                    }
+                },
+                http_status=400,
+            )
 
 
 async def _sync_and_validate_deliver(

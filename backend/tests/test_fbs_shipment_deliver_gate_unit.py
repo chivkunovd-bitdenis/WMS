@@ -113,8 +113,18 @@ def test_delivery_blocks_wb_verdict_and_attaches_order(
     assert str(order_id) in failed.message
     if reason:
         assert reason in failed.message
-    with pytest.raises(FbsShipmentError):
+    with pytest.raises(FbsShipmentError) as exc:
         _validate_checks_pass(checks)
+    assert exc.value.code == "marking_not_allowed"
+    assert exc.value.message == failed.message
+    assert exc.value.context == {
+        "delivery_check": {
+            "code": "marking_not_allowed",
+            "message": failed.message,
+            "order_id": str(order_id),
+        }
+    }
+    assert exc.value.http_status == 400
 
 
 def test_deliver_blocked_for_in_supply() -> None:
