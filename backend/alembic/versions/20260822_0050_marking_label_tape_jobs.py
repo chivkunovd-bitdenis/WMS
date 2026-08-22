@@ -3,6 +3,7 @@
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "20260822_0050"
@@ -21,7 +22,10 @@ def upgrade() -> None:
         postgresql_where=sa.text("status IN ('pending', 'running')"),
         sqlite_where=sa.text("status IN ('pending', 'running')"),
     )
-    op.add_column("fbs_print_assets", sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True))
+    op.add_column(
+        "fbs_print_assets",
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
+    )
 
 
 def downgrade() -> None:

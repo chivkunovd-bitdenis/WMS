@@ -3,11 +3,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 import httpx
-from sqlalchemy import func, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,6 +30,11 @@ JOB_TYPE_WILDBERRIES_SUPPLIES_SYNC = "wildberries_supplies_sync"
 JOB_TYPE_WILDBERRIES_MARKETPLACE_ORDERS_SYNC = "wildberries_marketplace_orders_sync"
 JOB_TYPE_FBS_STOCK_SYNC = "fbs_stock_sync"
 JOB_TYPE_MARKING_LABEL_TAPE = "marking_label_tape"
+
+# A print worker that dies after claiming a job must not leave the operator's
+# idempotent request permanently stuck.  A repeated request republishes the
+# same job and can reclaim it only after this lease has elapsed.
+MARKING_LABEL_TAPE_RUNNING_LEASE = timedelta(minutes=15)
 
 
 async def create_pending_job(
@@ -91,6 +96,39 @@ async def get_job(
     if job is None or job.tenant_id != tenant_id:
         return None
     return job
+
+
+def should_enqueue_marking_label_tape_job(job: BackgroundJob) -> bool:
+    """Every active tape job is safe to publish again; DB claiming is single-flight."""
+    return job.status in (JOB_STATUS_PENDING, JOB_STATUS_RUNNING)
+
+
+async def _claim_marking_label_tape_job(
+    session: AsyncSession,
+    job_id: uuid.UUID,
+) -> bool:
+    now = datetime.now(UTC)
+    stale_before = now - MARKING_LABEL_TAPE_RUNNING_LEASE
+    claimed = await session.execute(
+        update(BackgroundJob)
+        .where(
+            BackgroundJob.id == job_id,
+            or_(
+                BackgroundJob.status == JOB_STATUS_PENDING,
+                and_(
+                    BackgroundJob.status == JOB_STATUS_RUNNING,
+                    or_(
+                        BackgroundJob.started_at.is_(None),
+                        BackgroundJob.started_at <= stale_before,
+                    ),
+                ),
+            ),
+        )
+        .values(status=JOB_STATUS_RUNNING, started_at=now)
+        .execution_options(synchronize_session=False)
+    )
+    await session.commit()
+    return isinstance(claimed, CursorResult) and claimed.rowcount == 1
 
 
 async def run_movements_digest_job(job_id: uuid.UUID) -> None:
@@ -395,13 +433,7 @@ async def run_marking_label_tape_job(job_id: uuid.UUID) -> None:
         job = await session.get(BackgroundJob, job_id)
         if job is None:
             return
-        claimed = await session.execute(
-            update(BackgroundJob)
-            .where(BackgroundJob.id == job_id, BackgroundJob.status == JOB_STATUS_PENDING)
-            .values(status=JOB_STATUS_RUNNING, started_at=datetime.now(UTC))
-        )
-        await session.commit()
-        if not isinstance(claimed, CursorResult) or claimed.rowcount != 1:
+        if not await _claim_marking_label_tape_job(session, job_id):
             return
         await session.refresh(job)
         try:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -16,8 +17,10 @@ from app.services.background_job_service import (
     JOB_STATUS_RUNNING,
     JOB_TYPE_MARKING_LABEL_TAPE,
     JOB_TYPE_MOVEMENTS_DIGEST,
+    MARKING_LABEL_TAPE_RUNNING_LEASE,
     create_pending_job,
     run_marking_label_tape_job,
+    should_enqueue_marking_label_tape_job,
 )
 from app.services.tokens import decode_access_token
 
@@ -56,7 +59,9 @@ async def test_marking_label_tape_idempotency_and_result_contract(
 
 
 @pytest.mark.asyncio
-async def test_duplicate_pending_job_is_not_republished(async_client: AsyncClient) -> None:
+async def test_duplicate_pending_job_is_republished_without_creating_a_second_job(
+    async_client: AsyncClient,
+) -> None:
     reg = await async_client.post("/auth/register", json={
         "organization_name": "Tape API Co", "slug": f"tape-api-{int(time.time() * 1000)}",
         "admin_email": f"tape-api-{int(time.time() * 1000)}@example.com", "password": "password123",
@@ -69,7 +74,7 @@ async def test_duplicate_pending_job_is_not_republished(async_client: AsyncClien
             session, tenant_id, job_type=JOB_TYPE_MARKING_LABEL_TAPE,
             idempotency_key="duplicate-publish", payload_json=payload,
         )
-        first_was_created = first.created_by_call
+        first_was_created = first.__dict__["created_by_call"]
         second = await create_pending_job(
             session, tenant_id, job_type=JOB_TYPE_MARKING_LABEL_TAPE,
             idempotency_key="duplicate-publish", payload_json=payload,
@@ -77,6 +82,7 @@ async def test_duplicate_pending_job_is_not_republished(async_client: AsyncClien
         assert first.id == second.id
         assert first_was_created is True
         assert second.__dict__["created_by_call"] is False
+        assert should_enqueue_marking_label_tape_job(second) is True
 
 
 @pytest.mark.asyncio
@@ -112,7 +118,7 @@ async def test_finished_marking_job_can_be_retried_with_same_idempotency_key(
 
 
 @pytest.mark.asyncio
-async def test_marking_label_tape_worker_does_not_reclaim_running_job(
+async def test_marking_label_tape_worker_does_not_reclaim_fresh_running_job(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -128,6 +134,7 @@ async def test_marking_label_tape_worker_does_not_reclaim_running_job(
             idempotency_key="worker-request", payload_json={"code_ids": []},
         )
         job.status = JOB_STATUS_RUNNING
+        job.started_at = datetime.now(UTC)
         await session.commit()
         monkeypatch.setattr(
             "app.services.marking_code_service.build_label_artifact_tape_pdf",
@@ -137,6 +144,39 @@ async def test_marking_label_tape_worker_does_not_reclaim_running_job(
         await session.refresh(job)
         assert job.status == JOB_STATUS_RUNNING
         assert job.result_json is None
+
+
+@pytest.mark.asyncio
+async def test_marking_label_tape_worker_reclaims_stale_running_job(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post("/auth/register", json={
+        "organization_name": "Tape Recovery Co", "slug": f"tape-recovery-{suffix}",
+        "admin_email": f"tape-recovery-{suffix}@example.com", "password": "password123",
+    })
+    tenant_id = uuid.UUID(str(decode_access_token(reg.json()["access_token"])["tenant_id"]))
+    async with SessionLocal() as session:
+        job = await create_pending_job(
+            session, tenant_id, job_type=JOB_TYPE_MARKING_LABEL_TAPE,
+            idempotency_key="stale-worker-request", payload_json={"code_ids": []},
+        )
+        job.status = JOB_STATUS_RUNNING
+        job.started_at = datetime.now(UTC) - MARKING_LABEL_TAPE_RUNNING_LEASE - timedelta(seconds=1)
+        await session.commit()
+
+        async def interrupted_build(*args: object, **kwargs: object) -> bytes:
+            raise RuntimeError("recovered_stale_job")
+
+        monkeypatch.setattr(
+            "app.services.marking_code_service.build_label_artifact_tape_pdf",
+            interrupted_build,
+        )
+        await run_marking_label_tape_job(job.id)
+        await session.refresh(job)
+        assert job.status == JOB_STATUS_FAILED
+        assert job.error_message == "recovered_stale_job"
 
 
 def test_marking_job_status_contract() -> None:
