@@ -126,7 +126,7 @@ export function PrintAction({
   busy?: boolean
   testId?: string
 }) {
-  const title = `Печать ${what}`
+  const title = what === 'стикеры заказов' ? 'Печать стикеров' : `Печать ${what}`
   const reason = busy ? 'Подготовка печати…' : disabledReason
   if (placement === 'row') {
     return <IconAction title={reason ?? title} onClick={onClick} disabledReason={reason} testId={testId}>
