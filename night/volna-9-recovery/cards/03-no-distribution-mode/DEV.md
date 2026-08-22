@@ -1,38 +1,24 @@
-# Backend Dev — 03-no-distribution-mode — атом 1
-
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/models/fbs_supply.py` — сохраняемые nullable-поля времени включения режима и пользователя, включившего режим.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/alembic/versions/20260821_0094_fbs_supplies_boxes_without_distribution.py` — добавляющая миграция колонок и внешнего ключа на `users` с `SET NULL`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/services/fbs_packing_box_service.py` — переключение режима на уровне поставки; запрет только при наличии записей назначений заказа в коробах; сохранена совместимость чтения старой приписки через существующий код.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/tests/test_fbs_packing_box.py` — сценарий пустого короба, удаления/пересоздания, выключения режима, запрета при назначении и повторного включения после удаления назначения.
 
-Изменения атома уже присутствовали в рабочей копии из коммита `bf6bc61`; сервис, API и UI не изменялись.
-
-## Миграции
-
-- `20260821_0094` — добавляет `fbs_supplies.boxes_without_distribution_at`, `fbs_supplies.boxes_without_distribution_by_user_id` и внешний ключ на `users`.
-
-## Тесты
-
-- Целевой тест `backend/tests/test_fbs_packing_box.py` запускался системным `pytest`, но процесс не вернул результат в доступное время.
+Изменения backend-файлов уже присутствовали в рабочей копии до запуска этой роли; проверка подтвердила соответствие атомарному куску 2. Новых роутов и миграций для этого куска нет.
 
 ## Гейты
 
-- `ruff` — PASS для двух изменённых backend-файлов (`All checks passed!`). Полный `ruff check .` не подтверждён из-за отсутствующего проектного окружения.
-- `mypy` — NOT RUN: проектное виртуальное окружение отсутствует; системный запуск полного набора не получил результата.
-- `pytest` — NOT CONFIRMED: системный целевой запуск не вернул результат; проектное виртуальное окружение отсутствует.
-- `back_guard.py` — NOT RUN: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/scripts/ci/back_guard.py` отсутствует.
-- `check_migrations.py` — NOT RUN: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/scripts/ci/check_migrations.py` отсутствует.
+- `ruff check .` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend` — FAIL: 82 ошибки в существующих несвязанных файлах; в изменённых файлах этой фичи нарушений не показано.
+- `mypy .` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend` — FAIL: 21 ошибка в 6 существующих несвязанных файлах; ошибок в изменённых файлах этой фичи нет.
+- `pytest -q tests/test_fbs_packing_box.py -k without_distribution_mode_depends_on_assignments_not_box_count` — PASS: 1 passed, 7 deselected.
+- `pytest -q` из backend — прерван после ~8% длительного прогона без обнаруженной ошибки; целевой тест выполнен отдельно и зелёный.
+- `python3 scripts/ci/back_guard.py` — BLOCKED: файл `scripts/ci/back_guard.py` отсутствует в этой рабочей копии.
+- `python3 scripts/ci/check_migrations.py` — BLOCKED: файл `scripts/ci/check_migrations.py` отсутствует в этой рабочей копии; миграций в этом атоме нет.
 
 ## Не реализовано
 
-- Сервис переключения, API/workspace и UI не входят в атом 1 и не изменялись.
-- Массовая миграция legacy-ключей `no-distribution:` не входит в контракт атома; совместимость остаётся для следующих слоёв.
+- Нет непринесённых пунктов атомарного backend-контракта 2.
 
 ## Находки
 
-- Секреты, ключи, токены и `.env` не читались.
-- Боевой прод и кабинет Wildberries не затрагивались.
-
-## Блокеры
-
-- Нет блокеров реализации; техническая верификация полного набора gate-команд ограничена отсутствующими локальными файлами окружения и CI-скриптами.
+- Контрактный файл `CONTRACT.md` в указанной папке отсутствует; раздел API и данные подтверждён по `FEATURES.md` и артефактам предыдущих ролей.
+- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались.
