@@ -122,7 +122,8 @@ test('S-03 marking tape restores either of two background jobs and opens PDF exp
   await expect(page.getByTestId('marking-print-confirm')).toHaveCount(0)
   expect(contentRequests).toBe(0)
 
-  await page.getByTestId('marking-print-close-preparing').click()
+  // Закрываем через Esc — кнопки «Закрыть» в состоянии preparing нет (R-31)
+  await page.keyboard.press('Escape')
   await expect(page.getByTestId('marking-print-dialog')).toBeHidden()
   await secondPrintAction.click()
   await expect(page.getByTestId('marking-print-preparing')).toHaveCount(0)
@@ -130,7 +131,8 @@ test('S-03 marking tape restores either of two background jobs and opens PDF exp
   await expect(page.getByTestId('marking-print-preparing')).toBeVisible()
   expect(tapeStarts).toBe(2)
 
-  await page.getByTestId('marking-print-close-preparing').click()
+  // Закрываем через Esc — кнопки «Закрыть» в состоянии preparing нет (R-31)
+  await page.keyboard.press('Escape')
   await expect(page.getByTestId('marking-print-dialog')).toBeHidden()
   await firstPrintAction.click()
   await expect(page.getByTestId('marking-print-preparing')).toBeVisible()
