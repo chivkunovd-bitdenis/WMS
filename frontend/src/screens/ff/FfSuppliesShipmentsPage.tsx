@@ -2704,8 +2704,13 @@ export function FfSuppliesShipmentsPage({
                       // короб и товар — скан короба делегируется существующему флоу привязки.
                       onBoxBarcodeScan={requestAttachBoxScan}
                       onUpdated={(task) => {
+                        const changedStage =
+                          task.status !== packagingTask.status ||
+                          task.is_complete !== packagingTask.is_complete
                         setPackagingTask(task)
-                        void loadDocDetail()
+                        if (changedStage) {
+                          void loadDocDetail()
+                        }
                       }}
                     />
                   ) : unloadDetail?.linked_packaging_task ? (
@@ -3287,6 +3292,24 @@ export function FfSuppliesShipmentsPage({
           }}
           onAddSuccess={(quantity) =>
             setBoxAddSuccessMsg(`Добавлено ${quantity} шт`)
+          }
+          onProductScanned={(line) =>
+            setUnloadDetail((current) => {
+              if (!current) return current
+              return {
+                ...current,
+                boxes: current.boxes.map((box) => {
+                  if (box.id !== boxAddDialogBoxId) return box
+                  const exists = box.lines.some((item) => item.id === line.id)
+                  return {
+                    ...box,
+                    lines: exists
+                      ? box.lines.map((item) => (item.id === line.id ? line : item))
+                      : [...box.lines, line],
+                  }
+                }),
+              }
+            })
           }
         />
       ) : null}

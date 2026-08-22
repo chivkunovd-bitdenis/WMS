@@ -382,10 +382,82 @@ async def scan_product_into_box(
     box_id: uuid.UUID,
     *,
     barcode: str,
+    product_id_hint: uuid.UUID | None = None,
 ) -> InboundIntakeBoxLine:
     raw = barcode.strip()
     if not raw:
         raise InboundIntakeBoxError("barcode_empty")
+
+    if product_id_hint is not None:
+        req_stmt = (
+            select(InboundIntakeRequest)
+            .where(
+                InboundIntakeRequest.id == request_id,
+                InboundIntakeRequest.tenant_id == tenant_id,
+            )
+            .with_for_update()
+        )
+        req = (await session.execute(req_stmt)).scalar_one_or_none()
+        if req is None:
+            raise InboundIntakeBoxError("request_not_found")
+        if req.status not in INTAKE_STATUSES:
+            raise InboundIntakeBoxError("bad_status")
+
+        box_stmt = (
+            select(InboundIntakeBox)
+            .where(
+                InboundIntakeBox.id == box_id,
+                InboundIntakeBox.request_id == request_id,
+                InboundIntakeBox.tenant_id == tenant_id,
+            )
+            .with_for_update()
+        )
+        box = (await session.execute(box_stmt)).scalar_one_or_none()
+        if box is None:
+            raise InboundIntakeBoxError("box_not_found")
+        if box.intake_opened_at is None:
+            box.intake_opened_at = datetime.now(UTC)
+
+        request_line_stmt = select(InboundIntakeLine).where(
+            InboundIntakeLine.request_id == request_id,
+            InboundIntakeLine.product_id == product_id_hint,
+        )
+        request_line = (await session.execute(request_line_stmt)).scalar_one_or_none()
+        if request_line is None or int(request_line.expected_qty) <= 0:
+            raise InboundIntakeBoxError("product_not_on_request")
+
+        box_line_stmt = select(InboundIntakeBoxLine).where(
+            InboundIntakeBoxLine.box_id == box_id,
+            InboundIntakeBoxLine.product_id == product_id_hint,
+        )
+        line = (await session.execute(box_line_stmt)).scalar_one_or_none()
+        if line is None:
+            line = InboundIntakeBoxLine(
+                box_id=box_id,
+                product_id=product_id_hint,
+                quantity=1,
+            )
+            session.add(line)
+        else:
+            line.quantity = int(line.quantity) + 1
+        await session.flush()
+
+        box_total = await _total_scanned_for_product(
+            session, request_id, product_id_hint
+        )
+        loose_qty = int(request_line.actual_qty or 0)
+        if request_line.posted_qty > loose_qty + box_total:
+            raise InboundIntakeBoxError("actual_below_posted")
+        if req.status == intake_svc.STATUS_SUBMITTED:
+            req.status = intake_svc.STATUS_RECEIVING
+        await session.commit()
+
+        result_stmt = (
+            select(InboundIntakeBoxLine)
+            .where(InboundIntakeBoxLine.id == line.id)
+            .options(selectinload(InboundIntakeBoxLine.product))
+        )
+        return (await session.execute(result_stmt)).scalar_one()
 
     req = await intake_svc.get_request_for_receiving_scan(session, tenant_id, request_id)
     if req is None:

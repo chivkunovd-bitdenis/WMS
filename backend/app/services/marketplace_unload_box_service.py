@@ -79,7 +79,11 @@ async def _barcode_index_for_seller(
 async def _request_for_picking(
     session: AsyncSession, tenant_id: uuid.UUID, request_id: uuid.UUID
 ) -> MarketplaceUnloadRequest:
-    req = await mu_svc.get_request(session, tenant_id, request_id)
+    stmt = select(MarketplaceUnloadRequest).where(
+        MarketplaceUnloadRequest.id == request_id,
+        MarketplaceUnloadRequest.tenant_id == tenant_id,
+    )
+    req = (await session.execute(stmt)).scalar_one_or_none()
     if req is None:
         raise MarketplaceUnloadBoxError("not_found")
     if req.status not in mu_svc.EXECUTION_STATUSES:
@@ -282,6 +286,8 @@ async def scan_barcode_into_box(
     box_id: uuid.UUID,
     *,
     barcode: str,
+    request_id: uuid.UUID | None = None,
+    product_id_hint: uuid.UUID | None = None,
     storage_location_id: uuid.UUID | None,
     quantity: int = 1,
     allow_over_plan: bool = False,
@@ -294,7 +300,7 @@ async def scan_barcode_into_box(
         raise MarketplaceUnloadBoxError("invalid_quantity")
 
     box = await session.get(MarketplaceUnloadBox, box_id)
-    if box is None:
+    if box is None or (request_id is not None and box.request_id != request_id):
         raise MarketplaceUnloadBoxError("box_not_found")
 
     req = await _request_for_picking(session, tenant_id, box.request_id)
@@ -321,10 +327,13 @@ async def scan_barcode_into_box(
             allow_over_plan=allow_over_plan,
         )
 
-    idx = await _barcode_index_for_seller(session, tenant_id, req.seller_id)
-    product_id = idx.get(raw)
-    if product_id is None:
-        raise MarketplaceUnloadBoxError("barcode_unknown")
+    if product_id_hint is None:
+        idx = await _barcode_index_for_seller(session, tenant_id, req.seller_id)
+        product_id = idx.get(raw)
+        if product_id is None:
+            raise MarketplaceUnloadBoxError("barcode_unknown")
+    else:
+        product_id = product_id_hint
 
     if not await _product_in_shipment(session, req.id, product_id):
         raise MarketplaceUnloadBoxError("product_not_in_shipment")

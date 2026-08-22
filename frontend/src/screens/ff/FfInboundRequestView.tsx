@@ -59,6 +59,7 @@ import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { inboundOperationTypeReceptionLabel } from '../../utils/inboundOperationType'
 import { FfInboundBoxAddDialog } from './FfInboundBoxAddDialog'
 import { FfInboundSortingPanel } from './FfInboundSortingPanel'
+import { buildInboundScanProductMap, findInboundScanProductId } from './inboundScanLookup'
 import { BoxImportDialog } from '../../components/BoxImportDialog'
 import {
   buildInboundDiscrepancyLines,
@@ -929,6 +930,11 @@ export function FfInboundRequestView({
     return m
   }, [catalog])
 
+  const scanProductByBarcode = useMemo(
+    () => buildInboundScanProductMap(detail?.lines ?? [], catalogById),
+    [catalogById, detail?.lines],
+  )
+
   const lineProductIds = useMemo(
     () => new Set(detail?.lines.map((l) => l.product_id) ?? []),
     [detail],
@@ -1633,15 +1639,15 @@ export function FfInboundRequestView({
   const scanToReceiving = async (raw?: string) => {
     const code = (raw ?? '').trim()
     if (!code) return
-    setBusy(true)
     setError(null)
     try {
+      const productId = findInboundScanProductId(code, scanProductByBarcode)
       const res = await fetch(
         apiUrl(`/operations/inbound-intake-requests/${requestId}/receiving/scan`),
         {
           method: 'POST',
           headers: { ...authHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ barcode: code }),
+          body: JSON.stringify({ barcode: code, product_id: productId }),
         },
       )
       if (!res.ok) {
@@ -1672,8 +1678,6 @@ export function FfInboundRequestView({
       receivingScanReconciler.schedule()
     } catch (e) {
       setScanToastError(e instanceof Error ? e.message : 'Не удалось выполнить скан.')
-    } finally {
-      setBusy(false)
     }
   }
 

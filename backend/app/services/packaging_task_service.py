@@ -257,6 +257,27 @@ async def get_task(
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
+async def get_task_for_scan(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    task_id: uuid.UUID,
+) -> PackagingTask | None:
+    """Load only data needed to match and apply one scan; event history is response-only."""
+    stmt = (
+        select(PackagingTask)
+        .where(PackagingTask.id == task_id, PackagingTask.tenant_id == tenant_id)
+        .options(
+            selectinload(PackagingTask.lines)
+            .selectinload(PackagingTaskLine.product)
+            .selectinload(Product.seller),
+            selectinload(PackagingTask.lines).selectinload(PackagingTaskLine.storage_location),
+            selectinload(PackagingTask.warehouse),
+        )
+        .execution_options(populate_existing=True)
+    )
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
 async def get_task_for_unload(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -537,6 +558,8 @@ async def sync_lines_from_pick_allocations(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     task: PackagingTask,
+    *,
+    reload_result: bool = True,
 ) -> SyncPickResult:
     """Rebuild packaging lines for an MP-unload task, one row per product.
 
@@ -546,10 +569,6 @@ async def sync_lines_from_pick_allocations(
     product with the summed quantity.
     """
     pick_changed_with_progress = False
-    loaded = await get_task(session, tenant_id, task.id)
-    if loaded is None:
-        return SyncPickResult(task=task, pick_changed_with_progress=False)
-    task = loaded
     if task.marketplace_unload_request_id is None:
         return SyncPickResult(task=task, pick_changed_with_progress=False)
     unload_id = task.marketplace_unload_request_id
@@ -629,9 +648,11 @@ async def sync_lines_from_pick_allocations(
     task.pick_resync_warning = pick_changed_with_progress
     _touch_task(task)
     await session.commit()
-    loaded = await get_task(session, tenant_id, task.id)
-    assert loaded is not None
-    return SyncPickResult(task=loaded, pick_changed_with_progress=pick_changed_with_progress)
+    if reload_result:
+        loaded = await get_task(session, tenant_id, task.id)
+        assert loaded is not None
+        task = loaded
+    return SyncPickResult(task=task, pick_changed_with_progress=pick_changed_with_progress)
 
 
 async def sync_mp_task_packed_from_boxes(
@@ -853,10 +874,11 @@ async def record_pack_progress(
     order_id: uuid.UUID | None = None,
     idempotency_key: str | None = None,
     action: str = PACKAGING_EVENT_MANUAL_PACK,
+    preloaded_task: PackagingTask | None = None,
 ) -> PackProgressResult:
     if qty < 1:
         raise PackagingTaskServiceError("invalid_qty")
-    task = await get_task(session, tenant_id, task_id)
+    task = preloaded_task or await get_task(session, tenant_id, task_id)
     if task is None:
         raise PackagingTaskServiceError("not_found")
     if task.status == STATUS_DONE:
@@ -971,7 +993,7 @@ async def record_pack_scan(
     cleaned = barcode.strip()
     if not cleaned:
         raise PackagingTaskServiceError("invalid_qty")
-    task = await get_task(session, tenant_id, task_id)
+    task = await get_task_for_scan(session, tenant_id, task_id)
     if task is None:
         raise PackagingTaskServiceError("not_found")
     if task.status in (STATUS_DONE, STATUS_CANCELLED):
@@ -997,6 +1019,7 @@ async def record_pack_scan(
         1,
         acting_user_id=acting_user_id,
         action=PACKAGING_EVENT_SCAN_PACK,
+        preloaded_task=task,
     )
 
 

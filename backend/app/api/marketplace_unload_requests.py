@@ -150,6 +150,7 @@ class MarketplaceUnloadBoxBatchCreate(BaseModel):
 
 class MarketplaceUnloadScanBody(BaseModel):
     barcode: str = Field(min_length=1, max_length=128)
+    product_id: uuid.UUID | None = None
     storage_location_id: uuid.UUID | None = None
     quantity: int = Field(default=1, ge=1, le=1_000_000_000)
     allow_over_plan: bool = False
@@ -224,6 +225,7 @@ class MarketplaceUnloadPickOptionProductOut(BaseModel):
 
 class MarketplaceUnloadPickScanBody(BaseModel):
     barcode: str = Field(min_length=1, max_length=128)
+    product_id: uuid.UUID | None = None
     storage_location_id: uuid.UUID | None = None
 
 
@@ -1158,6 +1160,7 @@ async def scan_marketplace_unload_pick(
             user.tenant_id,
             request_id,
             barcode=body.barcode,
+            product_id_hint=body.product_id,
             storage_location_id=body.storage_location_id,
         )
     except MarketplaceUnloadPickError as exc:
@@ -1542,15 +1545,14 @@ async def scan_marketplace_unload_box(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MarketplaceUnloadBoxScanOut:
     _require_ff_execution(user)
-    bx = await session.get(MarketplaceUnloadBox, box_id)
-    if bx is None or bx.request_id != request_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="box_not_found")
     try:
         result = await box_svc.scan_barcode_into_box(
             session,
             user.tenant_id,
             box_id,
             barcode=body.barcode,
+            request_id=request_id,
+            product_id_hint=body.product_id,
             storage_location_id=body.storage_location_id,
             quantity=body.quantity,
             allow_over_plan=body.allow_over_plan,

@@ -191,6 +191,56 @@ async def test_receiving_scans_limit_catalog_lookup_to_request_products(
 
 
 @pytest.mark.asyncio
+async def test_product_hint_skips_catalog_and_updates_only_requested_line(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    suffix = str(int(time.time() * 1000) + 13)
+    ah, tenant_id = await _register_admin(async_client, suffix)
+    rid, pid, sku = await _submitted_request(async_client, ah, suffix, expected_qty=4)
+
+    async def catalog_must_not_be_loaded(*args: object, **kwargs: object) -> list[object]:
+        raise AssertionError("product_id fast path must not rebuild the WB catalog")
+
+    monkeypatch.setattr(
+        "app.services.inbound_intake_service.list_seller_wb_catalog_rows",
+        catalog_must_not_be_loaded,
+    )
+    monkeypatch.setattr(
+        "app.services.inbound_intake_box_service.list_seller_wb_catalog_rows",
+        catalog_must_not_be_loaded,
+    )
+
+    loose = await async_client.post(
+        f"/operations/inbound-intake-requests/{rid}/receiving/scan",
+        headers=ah,
+        json={"barcode": sku, "product_id": str(pid)},
+    )
+    assert loose.status_code == 200, loose.text
+    assert loose.json()["actual_qty"] == 1
+
+    async with SessionLocal() as session:
+        box = await box_svc.create_open_box(session, tenant_id, rid)
+        box_id = box.id
+
+    boxed = await async_client.post(
+        f"/operations/inbound-intake-requests/{rid}/boxes/{box_id}/scan",
+        headers=ah,
+        json={"barcode": sku, "product_id": str(pid)},
+    )
+    assert boxed.status_code == 200, boxed.text
+    assert boxed.json()["quantity"] == 1
+
+    wrong_hint = await async_client.post(
+        f"/operations/inbound-intake-requests/{rid}/boxes/{box_id}/scan",
+        headers=ah,
+        json={"barcode": sku, "product_id": str(uuid.uuid4())},
+    )
+    assert wrong_hint.status_code == 422, wrong_hint.text
+    assert wrong_hint.json()["detail"] == "product_not_on_request"
+
+
+@pytest.mark.asyncio
 async def test_box_total_validation_keeps_zero_quantity_box_line_membership(
     async_client: AsyncClient,
 ) -> None:
