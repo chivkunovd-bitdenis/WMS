@@ -1,24 +1,24 @@
-# Реализация · 02-verdikt-screen · атом 3
+# DEV · 02-verdikt-screen · атом 4
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/fbsApi.ts`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/utils/metaStatus.ts`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/utils/metaStatus.test.ts`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/tests-e2e/ff-fbs-orders.spec.ts`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/night/volna-9-recovery/cards/02-verdikt-screen/DEV.md`
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/FfFbsOrdersScreen.tsx — существующая зона «Статус» выводит серверный вердикт через `StatusChip`; при отказе и отсутствии ответа рядом остаётся понятный `TextCell` без технических полей.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/utils/metaStatus.ts — `uinBadStatus` переведён в «неверный статус УИН».
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/tests-e2e/ff-fbs-orders.spec.ts — S-03-TC-001, S-03-TC-002, S-03-TC-003 и S-03-TC-006 используют реальный `uinBadStatus` и проверяют видимый русский текст.
 
-`uinBadStatus` переводится в `неверный статус УИН`; экранный сценарий теперь использует это реальное значение WB. Тип тона вердикта ограничен контрактными `neutral`, `ok` и `stop`. Unit-тест покрывает все шесть фиксированных подписей, реальную причину WB и безопасный fallback для неизвестной причины.
+Исправление первого пункта REVIEW.md уже присутствует в текущей ветке (commit `e8a5ee45`). Пункты 2–3 относятся к backend/workspace и не входят в разрешённый атом списка S-03; их не менял.
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` — не запущен до результата: в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend` отсутствует `node_modules`, локального `tsc` нет; `npx --no-install` в этом окружении не завершился.
-- `python3 scripts/ui/ui_guard.py` — красный по не относящимся к атому файлам: `src/components/WbProductPickerDialog.tsx` (экран-монолит `0 → 646`) и `src/screens/v2/SellerInboundDraftScreen.tsx` (экран-монолит `1111 → 1169`). Затрагивать их роль не разрешает.
-- `npm run test:unit` — красный: `sh: vitest: command not found`, потому что зависимости frontend не установлены.
-- `git diff --check` — зелёный.
+- `npx tsc --noEmit -p tsconfig.app.json` — не запущен до компиляции: в `frontend/node_modules` нет TypeScript, `npx` попытался скачать пакет из npm и завершился `ENOTFOUND` (сеть недоступна).
+- `python3 scripts/ui/ui_guard.py` — красный только из-за новых нарушений в чужих файлах `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/components/WbProductPickerDialog.tsx` и `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/SellerInboundDraftScreen.tsx`. В `FfFbsOrdersScreen.tsx` храповик сообщает улучшение; базовую линию не обновлял.
+- `npm run test:unit` — красный: `vitest: command not found`, зависимости frontend отсутствуют.
+- `npx playwright test tests-e2e/ff-fbs-orders.spec.ts --grep 'shows the server WB verdict'` — не запущен: Playwright отсутствует, `npx` завершился `ENOTFOUND` при попытке скачать пакет из npm.
 
 ## Не реализовано
 
-В атоме 3 не осталось нереализованных пунктов контракта. Находки 2 и 3 из `REVIEW.md` относятся соответственно к серверному workspace и `FfFbsSupplyWorkspace.tsx`, то есть к другим атомам; по ограничениям этой роли они не менялись.
+- Нет. Для этого атома все пункты контракта уже представлены в текущем коде списка: один `StatusChip` в существующей зоне статуса, `TextCell` с русской причиной при отказе, `Нет ответа WB` с «Сдача пока недоступна», без новой колонки и без технических WB-полей.
 
-Коммит не создан: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-02-verdikt-screen1/index.lock` из-за отсутствия права записи на метаданные общего репозитория. Итог сохранён только как локальный diff этой рабочей копии.
+## Находки
+
+- REVIEW.md, находки 2–3: единый серверный признак в workspace и локальная готовность строки требуют отдельной работы в backend/workspace; они находятся вне данного атома списка и его разрешённых файлов.
