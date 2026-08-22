@@ -40,9 +40,8 @@ class DeliveryBoxReadiness:
 
 
 WITHOUT_DISTRIBUTION_KEY_PREFIX = "no-distribution:"
-# Keep this marker exactly as wide as the legacy marker: the stored key may
-# already occupy the full String(128) column when the mode is switched off.
 RETIRED_WITHOUT_DISTRIBUTION_KEY_PREFIX = "retired-no-dist:"
+CREATION_IDEMPOTENCY_KEY_MAX_LENGTH = 128
 
 
 async def get_delivery_box_readiness(
@@ -379,7 +378,9 @@ def _stored_creation_key(idempotency_key: str, *, without_distribution: bool) ->
     key = idempotency_key.strip()
     if not without_distribution:
         return key
-    max_raw_len = 128 - len(WITHOUT_DISTRIBUTION_KEY_PREFIX)
+    max_raw_len = CREATION_IDEMPOTENCY_KEY_MAX_LENGTH - len(
+        WITHOUT_DISTRIBUTION_KEY_PREFIX
+    )
     return f"{WITHOUT_DISTRIBUTION_KEY_PREFIX}{key[:max_raw_len]}"
 
 
@@ -563,10 +564,11 @@ async def _boxes_by_creation_key(
 def _retired_legacy_creation_key(key: str) -> str:
     if not key.startswith(WITHOUT_DISTRIBUTION_KEY_PREFIX):
         return key
-    return (
-        f"{RETIRED_WITHOUT_DISTRIBUTION_KEY_PREFIX}"
-        f"{key.removeprefix(WITHOUT_DISTRIBUTION_KEY_PREFIX)}"
+    raw_key = key.removeprefix(WITHOUT_DISTRIBUTION_KEY_PREFIX)
+    max_raw_len = CREATION_IDEMPOTENCY_KEY_MAX_LENGTH - len(
+        RETIRED_WITHOUT_DISTRIBUTION_KEY_PREFIX
     )
+    return f"{RETIRED_WITHOUT_DISTRIBUTION_KEY_PREFIX}{raw_key[:max_raw_len]}"
 
 
 async def _retire_legacy_without_distribution_markers(

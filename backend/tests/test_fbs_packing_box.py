@@ -430,6 +430,22 @@ async def test_boxes_without_distribution_api_returns_persisted_workspace_flag(
     assert enabled.status_code == 200, enabled.text
     assert enabled.json()["supply"]["boxes_without_distribution"] is True
 
+    boxes_url = f"/operations/fbs-supplies/{supply_id}/boxes"
+    created = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={"count": 1, "idempotency_key": "persist-mode-after-last-box-delete"},
+    )
+    assert created.status_code == 201, created.text
+    deleted = await async_client.request(
+        "DELETE",
+        f"{boxes_url}/{created.json()['boxes'][0]['id']}",
+        headers=headers,
+        json={"idempotency_key": "delete-last-box-with-persisted-mode"},
+    )
+    assert deleted.status_code == 200, deleted.text
+    assert deleted.json()["boxes"] == []
+
     workspace = await async_client.get(
         f"/operations/fbs-supplies/{supply_id}/workspace", headers=headers
     )

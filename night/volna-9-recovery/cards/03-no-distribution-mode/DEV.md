@@ -1,45 +1,44 @@
-# DEV · 03-no-distribution-mode · переделка атома 2
+# DEV · 03-no-distribution-mode · атом 3 · переделка по ревью
 
 ## Что реализовано
 
-- Эндпоинты: новых нет; существующее выключение режима через `POST /operations/fbs-supplies/{supply_id}/boxes-without-distribution` не переполняет `fbs_packing_boxes.creation_idempotency_key` для разрешённого ключа длиной 128 символов.
-- Сервис: `fbs_packing_box_service` заменяет legacy-префикс `no-distribution:` на равный ему по длине `retired-no-dist:`, сохраняя значение в пределах `VARCHAR(128)` и возможность идемпотентно найти прежний короб при повторе создания.
+- `POST /operations/fbs-supplies/{supply_id}/boxes-without-distribution` — проверен контракт: операция возвращает обновлённый workspace, сохраняет `supply.boxes_without_distribution` без коробов и отвечает `409 boxes_already_distributed`, не меняя состояние, если заказ уже назначен.
+- `fbs_packing_box_service` — служебный ключ выключенного legacy-режима теперь всегда обрезается до фактического предела колонки `String(128)` независимо от длины префикса; допустимый 128-символьный API-ключ больше не может привести к ошибке PostgreSQL при выключении режима.
+- `fbs_workspace_service` — проверено целевым API-тестом, что workspace читает сохраняемый признак поставки после удаления последнего короба.
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/services/fbs_packing_box_service.py` — retired-маркер сделан 16-символьным, как legacy-маркер; максимальная длина сохранённого ключа остаётся 128 символов.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/tests/test_fbs_packing_box.py` — регрессионный сценарий использует максимальный 128-символьный API-ключ и проверяет длину и значение retired-ключа после выключения режима.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/night/volna-9-recovery/cards/03-no-distribution-mode/DEV.md` — отчёт этого backend-прохода.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/services/fbs_packing_box_service.py` — введён единый предел длины служебного ключа и безопасное усечение содержимого при создании и снятии legacy-маркера.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/tests/test_fbs_packing_box.py` — API-сценарий расширен буквальной проверкой `создать короб → удалить последний короб → GET workspace`, после которой признак режима остаётся `true`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/night/volna-9-recovery/cards/03-no-distribution-mode/DEV.md` — отчёт переделки backend-атома.
 
 ## Миграции
 
-- Новых нет. Добавляющая миграция `20260821_0094` из зависимости «фича 1» не изменялась.
+- Нет: переделка не меняет схему и использует добавляющие поля атома 1.
 
 ## Тесты
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/tests/test_fbs_packing_box.py::test_without_distribution_toggle_preserves_legacy_key_for_create_retry` — создаёт короб с ключом длиной 128 символов, выключает режим, проверяет ровно 128 символов в БД и успешный повтор без дубля.
-- Полный целевой файл `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/tests/test_fbs_packing_box.py` покрывает включение после создания пустого короба, удаление и пересоздание короба, выключение режима, доменную ошибку при назначенном заказе и повторное разрешение после удаления назначения.
+- `test_without_distribution_toggle_preserves_legacy_key_for_create_retry` — принимает максимальный API-ключ длиной 128 символов, выключает режим, проверяет длину сохранённого ключа и успешный идемпотентный повтор без дубля короба.
+- `test_boxes_without_distribution_api_returns_persisted_workspace_flag` — включает режим отдельной API-операцией на пустой поставке, создаёт и удаляет последний короб, затем проверяет сохранённый `true` в новом workspace.
+- `test_boxes_without_distribution_api_conflicts_when_order_is_assigned` — проверяет понятный `409 boxes_already_distributed` и отсутствие изменения состояния при назначенном заказе.
 
 ## Гейты
 
-- Из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend`: `ruff check app/services/fbs_packing_box_service.py tests/test_fbs_packing_box.py` — PASS, `All checks passed!`.
-- Из того же каталога: `mypy app/services/fbs_packing_box_service.py` — FAIL на ранее существующей ошибке импортируемого `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/services/wildberries_credentials_service.py:167`; изменённый сервис в диагностике отсутствует.
-- Из того же каталога: `mypy --follow-imports=skip app/services/fbs_packing_box_service.py` — PASS, `Success: no issues found in 1 source file`.
-- Из того же каталога: `pytest -q tests/test_fbs_packing_box.py` — PASS, `11 passed in 16.57s`.
-- `python3 scripts/ci/back_guard.py` — не применим: текущая переделка не добавляет роут.
-- `python3 scripts/ci/check_migrations.py` — не применим: текущая переделка не добавляет миграцию.
+- `ruff check app/services/fbs_packing_box_service.py tests/test_fbs_packing_box.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend` — PASS: `All checks passed!`.
+- `mypy app/services/fbs_packing_box_service.py app/api/fbs_supplies.py app/services/fbs_workspace_service.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend` — FAIL из-за 4 существующих ошибок в импортируемых несвязанных файлах `wildberries_credentials_service.py`, `fbs_stock_sync_service.py` и `fbs_warehouse_binding_service.py`; в трёх проверяемых файлах атома диагностик нет.
+- `mypy --follow-imports=skip app/services/fbs_packing_box_service.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend` — PASS: `Success: no issues found in 1 source file`; это изолированная проверка изменённого сервиса без базовых ошибок импортируемых соседей.
+- `pytest -q tests/test_fbs_packing_box.py tests/test_fbs_openapi_contract.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend` — PASS: `15 passed in 11.15s`.
+- `back_guard.py` не применим: эта переделка не добавляет новый роут; маршрут атома уже существовал до текущего изменения.
+- `check_migrations.py` не применим: миграций в переделке нет.
 
 ## Не реализовано
 
-- Находка 2 из `REVIEW.md` относится к `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx` и не входит в роль `backend-dev` и файлы этого атома.
-- Следующие атомы карточки и соседние продуктовые задачи не затрагивались.
+- Находка 2 из `REVIEW.md` о фоновой синхронизации checkbox находится в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx`; frontend исключён профилем `backend-dev` и границами этого атома.
 
 ## Находки
 
 - Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались.
-- Стандартный целевой `mypy` захватывает импортируемый соседний модуль с базовой ошибкой типов; отдельная проверка изменённого сервиса без обхода импортов зелёная.
-- Backend-исправление и его регрессионный тест сохранены в Git-коммите `13ab613e275ce5445327fc7655a3d3614b41e563`.
 
 ## Блокеры
 
-- Текущую редакцию `DEV.md` не удалось закоммитить: Git не может создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-03-no-distribution-mode1/index.lock` (`Operation not permitted`). Артефакт записан в требуемый файл рабочей копии, но его новые результаты гейтов пока не имеют отдельного commit SHA.
+- Backend-изменение локально реализовано и проверено, но не сохранено отдельным Git-коммитом: `git add backend/app/services/fbs_packing_box_service.py backend/tests/test_fbs_packing_box.py night/volna-9-recovery/cards/03-no-distribution-mode/DEV.md` не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-03-no-distribution-mode1/index.lock` и завершился с `Operation not permitted`. Текущий восстановимый HEAD — `53b54bda5b22f65c76271cd32152d68ac264600d`, он не содержит эту переделку. Чужое изменение `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/night/volna-9-recovery/JOURNAL.md` в индекс не добавлялось.
