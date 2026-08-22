@@ -33,7 +33,8 @@ psql_() { docker exec "$DB_C" psql -U postgres -d postgres -q "$@"; }
 
 if ! есть_шаблон; then
   echo "    шаблона нет — разворачиваю снимок один раз (это минуты, дальше будут секунды)"
-  python3 "$ROOT/scripts/ci/check_stand_sanitized.py" "$READY"
+  WMS_STAND_SCRATCH_DB="$DB_C" \
+    python3 "$ROOT/scripts/ci/check_stand_sanitized.py" "$READY"
   psql_ -c "CREATE DATABASE $TPL"
   docker exec -i "$DB_C" pg_restore -U postgres -d "$TPL" --no-owner --no-acl < "$READY" 2>&1 \
     | grep -viE "warning|already exists" | head -3 || true
