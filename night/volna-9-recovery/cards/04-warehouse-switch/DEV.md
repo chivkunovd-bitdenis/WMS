@@ -1,43 +1,21 @@
-# DEV · 04-warehouse-switch · атом 3
+# DEV · 04-warehouse-switch
 
 ## Изменённые файлы
 
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/api/fbs_supplies.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_supply_reconcile_service.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_supply_service.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_supply_validator_service.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/ui-kit/WarehouseContextSwitch.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/ui-kit/WarningNotice.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/ui-kit/index.ts`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/ui-kit/WarehouseContextSwitch.test.tsx`
 
-## Что реализовано
-
-- Preflight API теперь сохраняет в ответе `stock_preflight`, варианты операционных складов, рекомендованный склад и агрегированный inventory.
-- Выбранный операционный склад участвует в расчёте текущего остатка и рекомендаций; источник межскладского подбора выбирается по максимальному доступному остатку.
-- Idempotency-хэш создания поставки учитывает `selected_warehouse_id`, поэтому повтор с тем же ключом и другим складом не переиспользует старый результат.
-
-## Миграции
-
-Нет.
-
-## Тесты
-
-- `backend/tests/test_fbs_supply_from_orders.py`: targeted набор проверяет preflight и создание/смену склада; 17 passed, 1 skipped, 1 календарный fail на фиксированной дате `2026-08-15`, уже прошедшей в текущем окружении.
+Компоненты и тесты уже соответствуют контракту: выбор скрыт при одном складе, при двух и более открывается по клику, показывает только имена, вызывает `onChange` и закрывается; loading, error и disabled-состояния объясняют причину и блокируют действие. `WarningNotice` экспортируется из ui-kit как неблокирующее предупреждение.
 
 ## Гейты
 
-- ruff: PASS для изменённых backend-файлов.
-- mypy: FAIL из-за 4 предсуществующих ошибок в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py`, `fbs_warehouse_binding_service.py`.
-- pytest: 17 passed, 1 skipped, 1 unrelated calendar failure.
-- back_guard.py: запуск невозможен — `scripts/ci/back_guard.py` отсутствует в этой рабочей копии.
-- check_migrations.py: запуск невозможен — `scripts/ci/check_migrations.py` отсутствует в этой рабочей копии.
+- `npx tsc --noEmit -p tsconfig.app.json` — красный: локальный `tsc` отсутствует, `npx` попытался скачать пакет и получил `ENOTFOUND registry.npmjs.org`.
+- `python3 scripts/ui/ui_guard.py` — красный из-за пяти предварительно существующих нарушений в соседних экранах: `WbProductPickerDialog.tsx`, `FfFbsOrdersScreen.tsx`, `FfFbsStockSyncScreen.tsx`, `FfFbsSupplyWorkspace.tsx`, `SellerInboundDraftScreen.tsx`. В ui-kit новых нарушений не выявлено; базовую линию не обновлял.
+- `npm run test:unit -- --run src/ui-kit/WarehouseContextSwitch.test.tsx` — красный: `vitest: command not found`, зависимости frontend не установлены.
 
 ## Не реализовано
 
-- UI-находки REVIEW и соседние picking/packing/transfer-задачи не входят в backend-атом 3.
-
-## Находки
-
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не открывались и не изменялись.
-
-## Блокеры
-
-- Только общие инфраструктурные гейты: отсутствующие guard-скрипты, предсуществующие mypy-ошибки и календарный тест с устаревшей фиксированной датой.
+- Находки 1–16 из `REVIEW.md` относятся к backend или конкретным продуктовым экранам и не относятся к четырём файлам этого ui-kit-атома; по границам роли `screen-dev` они не менялись.
+- Полный запуск TypeScript и unit-тестов невозможен без локальных frontend-зависимостей и сетевого доступа к npm registry.
