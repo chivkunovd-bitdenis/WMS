@@ -20,6 +20,7 @@ const skus: Sku[] = [
 export function FfStoragePage({ isFulfillmentAdmin }: { isFulfillmentAdmin: boolean }) {
   const [search, setSearch] = useState('')
   const [month, setMonth] = useState('2026-07')
+  const [generating, setGenerating] = useState(false)
   const [expanded, setExpanded] = useState<string | null>('beauty')
   const [sellers, setSellers] = useState(initialSellers)
   const [measureOpen, setMeasureOpen] = useState(false)
@@ -27,7 +28,10 @@ export function FfStoragePage({ isFulfillmentAdmin }: { isFulfillmentAdmin: bool
   const [historyOpen, setHistoryOpen] = useState(false)
   const [printOpen, setPrintOpen] = useState(false)
   const [measured, setMeasured] = useState(false)
-  const visible = useMemo(() => sellers.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()) || (expanded === s.id && skus.some((x) => `${x.sku} ${x.vendor}`.toLowerCase().includes(search.toLowerCase())))), [search, sellers, expanded])
+  const visible = useMemo(() => sellers.filter((s) => {
+    const needle = search.trim().toLowerCase()
+    return !needle || s.name.toLowerCase().includes(needle) || (expanded === s.id && skus.some((x) => `${x.sku} ${x.vendor}`.toLowerCase().includes(needle)))
+  }), [search, sellers, expanded])
   const detailRows = measured ? skus.map((s) => s.id === '11890' ? { ...s, volume: '13,44', source: 'Ручной обмер', liters: '4 000,00', total: '2 800,00', missing: false } : s) : skus
   const canFix = isFulfillmentAdmin && measured
   const fix = () => { setSellers((rows) => rows.map((s) => s.id === 'beauty' ? { ...s, status: 'Зафиксирован', problems: 0 } : s)); setPrintOpen(true) }
@@ -37,7 +41,7 @@ export function FfStoragePage({ isFulfillmentAdmin }: { isFulfillmentAdmin: bool
       <TextField label="Месяц" type="month" value={month} onChange={(e) => setMonth(e.target.value)} size="small" inputProps={{ 'data-testid': 'storage-month' }} />
       <TextField label="Склад" value="Основной склад" size="small" disabled />
     </FilterBar>
-    <ActionGroup><PrimaryAction onClick={() => setSellers(initialSellers)} data-testid="storage-generate">Сформировать за месяц</PrimaryAction>{isFulfillmentAdmin && <SecondaryAction onClick={() => setRateOpen(true)} data-testid="storage-rate">Изменить тариф</SecondaryAction>}</ActionGroup>
+    <ActionGroup><PrimaryAction onClick={() => { setGenerating(true); window.setTimeout(() => { setSellers(initialSellers); setGenerating(false) }, 0) }} disabled={generating} data-testid="storage-generate">{generating ? 'Формирование…' : 'Сформировать за месяц'}</PrimaryAction>{isFulfillmentAdmin && <SecondaryAction onClick={() => setRateOpen(true)} data-testid="storage-rate">Изменить тариф</SecondaryAction>}</ActionGroup>
     <Box sx={{ mt: 2 }}><DataTable columns={[
       { key: 'seller', header: 'Селлер', width: 240, render: (r: Seller) => <TextCell>{r.name}</TextCell> },
       { key: 'status', header: 'Статус', width: 180, render: (r: Seller) => <StatusChip tone={r.status === 'Зафиксирован' ? 'ok' : r.status === 'Требует исправления' ? 'stop' : 'neutral'}>{r.status}</StatusChip> },

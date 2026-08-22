@@ -1,23 +1,23 @@
-# DEV · 08-storage · атом 7
+# 08-storage · screen-dev
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/storage_statement_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/api/storage.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend/src/screens/ff/FfStoragePage.tsx`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/night/volna-9-recovery/cards/08-storage/DEV.md`
+
+`App.tsx` и `frontend/tests-e2e/storage.spec.ts` в этом проходе не изменялись: маршрут S-11 уже подключён, а существующие тесты не требуют изменения для внесённой экранной правки.
 
 ## Гейты
 
-- `ruff`: PASS для изменённых backend-файлов.
-- `mypy`: FAIL в существующих несвязанных местах `wildberries_credentials_service.py`, `fbs_stock_sync_service.py`, `fbs_warehouse_binding_service.py`.
-- `pytest`: PASS: `tests/test_storage_statement_service.py` — 1 passed.
-- `back_guard.py`: НЕ ЗАПУЩЕН — файл отсутствует в этой рабочей копии (`scripts/ci/back_guard.py`).
-- `check_migrations.py`: НЕ ЗАПУЩЕН — файл отсутствует в этой рабочей копии (`scripts/ci/check_migrations.py`).
+- `npx tsc --noEmit -p tsconfig.app.json` — не подтверждён: в `frontend/` отсутствует исполняемый `tsc`, а `npx --no-install` не доступен.
+- `python3 scripts/ui/ui_guard.py` — красный из-за трёх предсуществующих нарушений вне атома S-11: `src/components/WbProductPickerDialog.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`. Базовую линию не обновлял.
+- `npm run test:unit` — не подтверждён: исполняемый `vitest` отсутствует в `frontend/node_modules`.
 
 ## Не реализовано
 
-- Общие модели `BillingTariffVersion` / `BillingLedgerEntry` отсутствуют в текущей рабочей копии; собственный storage-ledger не добавлялся по обязательной границе `ARCH-CROSS.md`.
-- Создание нулевого statement и полноценная A4-схема с SKU, ставкой-снимком и итогом требуют соседнего слоя измерений/09-A; в этом атоме не добавлялись новые таблицы и миграции.
-- Полный набор конкурентных интеграционных тестов не добавлен: доступные в копии тесты не содержат billing-моделей для исполнения фиксации.
+- API-персистентность, реальные тарифы, измерения, расчёт и фиксация не реализованы: находки REVIEW относятся к backend-файлам, которые запрещены границами screen-dev.
+- Исправление подписи `PrintAction` «Печать накладной» не внесено: контракт указывает `frontend/src/ui-kit/Actions.tsx`, но этот файл не входит в разрешённый список атома.
+- Полное покрытие `S-11-TC-001`—`S-11-TC-020` не расширялось: добавление сценариев, требующих авторизации и backend-состояний, без доступного API было бы недостоверным.
+- В экранной логике исправлены только локальные проблемы слоя экрана: поиск учитывает пробелы и пустой запрос, а формирование показывает состояние загрузки и не допускает повторный запуск.
 
-Блокеры: нет; ограничения отражены выше.
+Изменения не удалось закоммитить: Git заблокирован правами окружения на `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-08-storage1/index.lock` (`Operation not permitted`).
