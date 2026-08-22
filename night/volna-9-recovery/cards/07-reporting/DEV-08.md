@@ -1,16 +1,10 @@
-# DEV · 07-reporting · атом 8
+# DEV · 07-reporting · атом 8 · переделка по review
 
-## Изменённые файлы
+## Что реализовано
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/app/services/reporting_service.py` — CSV строится единым агрегированным запросом и отдаётся асинхронным потоком; заголовки и поля повторяют видимую таблицу: `Товар` содержит SKU, `Название` — наименование.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/app/api/reports.py` — `GET /reports/inventory/export.csv` передаёт асинхронный поток в `StreamingResponse`, не собирая весь файл в памяти.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/tests/test_reports_csv_export.py` — добавлены проверки соответствия CSV ответу таблицы и невозможности расширить seller-область параметром `seller_id`.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/DEV.md` — этот отчёт атома.
-
-## Реализовано
-
-- `GET /reports/inventory/export.csv` — потоковый CSV текущего авторизованного среза, с теми же фильтрами, группировкой и порядком по умолчанию, что у таблицы.
-- `app.services.reporting_service.build_inventory_csv` — проверяет пустой срез и период, не длиннее 366 дней, перед началом ответа; данные не пагинируются повторными полными агрегациями.
+- `GET /reports/inventory/export.csv` — принимает `sort_by` и `sort_order` и потоково возвращает CSV в той же группировке, фильтрах и порядке, что `GET /reports/inventory`.
+- `reporting_service.validated_sort` — единообразно проверяет группировку и разрешённую сортировку таблицы и CSV, не позволяя их контрактам расходиться.
+- `reporting_service.build_inventory_csv` — применяет сортировку текущей таблицы для товарной и операционной группировок; русские агрегированные названия операций формируются тем же выражением, что в таблице.
 
 ## Миграции
 
@@ -18,25 +12,34 @@
 
 ## Тесты
 
-- `test_inventory_csv_matches_visible_product_table_columns_and_rows` — сравнивает заголовок и строку CSV с `/reports/inventory` при одинаковых параметрах.
-- `test_inventory_csv_for_seller_ignores_requested_foreign_seller_scope` — подтверждает, что URL-параметр чужого селлера не раскрывает его данные пользователю селлерского портала.
-- Сохранены проверки доменных ошибок пустого среза и периода более 366 дней.
+- В `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/tests/test_reports_csv_export.py` добавлено сравнение заголовков, агрегированных строк и порядка CSV с `GET /reports/inventory` при группировке по операциям и сортировке по нетто.
+- Там же подтверждено, что операции выгружаются как «Приёмка» и «Отгрузка», а не внутренними кодами.
+- Там же добавлен сценарий московских календарных границ: CSV и таблица одинаково включают движение 1 августа в 01:30 МСК и исключают движение ровно на верхней границе 2 августа.
+- Повторно проверены существующие сценарии пустого среза, периода свыше 366 дней, совпадения товарных колонок и строк и принудительной seller-области без чужих данных.
+
+## Изменённые файлы
+
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/app/api/reports.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/app/services/reporting_service.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/tests/test_reports_csv_export.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/DEV.md`
 
 ## Гейты
 
-- В каталоге `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend`: `python3 -m ruff check app/services/reporting_service.py app/api/reports.py tests/test_reports_csv_export.py` — `All checks passed!`.
-- В каталоге `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend`: `python3 -m mypy app/services/reporting_service.py app/api/reports.py` — `Success: no issues found in 2 source files`.
-- В каталоге `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend`: `python3 -m pytest -q tests/test_reports_csv_export.py tests/test_reports_inventory.py` — `7 passed in 6.03s`.
-- В каталоге `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting`: `git diff --check` — пройден без ошибок.
-- `python3 scripts/ci/back_guard.py` — не выполнен: файла `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/scripts/ci/back_guard.py` в рабочей копии нет.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && ruff check app/services/reporting_service.py app/api/reports.py tests/test_reports_csv_export.py` — `All checks passed!`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && mypy app/services/reporting_service.py app/api/reports.py` — `Success: no issues found in 2 source files`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && pytest -q tests/test_reports_csv_export.py tests/test_reports_inventory.py` — `10 passed in 10.21s`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && git diff --check` — успешно, ошибок форматирования diff нет.
+- `python3 scripts/ci/back_guard.py` — не запускался: переделка не добавляет новый роут, а расширяет параметры существующего `GET /reports/inventory/export.csv`.
+- `python3 scripts/ci/check_migrations.py` — не запускался: миграций в атоме нет.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && git add -- backend/app/api/reports.py backend/app/services/reporting_service.py backend/tests/test_reports_csv_export.py night/volna-9-recovery/cards/07-reporting/DEV.md && git diff --cached --check && git diff --cached --stat && git commit -m "fix(reports): align CSV with table sorting"` — не выполнено: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-07-reporting1/index.lock`, ошибка `Operation not permitted`.
 
 ## Не реализовано
 
-- Находки ревью по UI, календарю Москвы, графику и ошибочным состояниям не менялись: они лежат вне backend-слоя и файлов атома 8.
-- Скрипт `back_guard.py` отсутствует в этой рабочей копии; миграций этот атом не добавляет, поэтому `check_migrations.py` неприменим.
+- Frontend-находки review по списку складов, декабрьскому пресету, отображению предупреждений и `integrity_error`, а также независимому retry не относятся к роли `backend-dev` и файлам атома 8.
+- Backend-находки review по дневному графику и свежести WB относятся к overview атома 6; их исправления уже присутствовали в текущем `HEAD` и были только подтверждены чтением кода, без повторного изменения в этом атоме.
+- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались.
 
 ## Блокеры
 
-Нет. Отсутствие `scripts/ci/back_guard.py` зафиксировано в гейтах как инфраструктурная находка; реализацию и целевые проверки оно не блокирует.
-
-Сохранение в Git не выполнено: `git add … && git commit -m "fix(reports): stream inventory csv export"` не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-07-reporting1/index.lock` (`Operation not permitted`). Изменения остаются в рабочем дереве и требуют коммита в окружении с доступом к git-worktree metadata.
+- Изменения локально реализованы и проверены, но отдельный commit создать невозможно: политика файловой системы запрещает запись в общий Git-каталог зарегистрированного worktree. Чужое изменение `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/JOURNAL.md` не изменялось и не добавлялось в индекс этой ролью.

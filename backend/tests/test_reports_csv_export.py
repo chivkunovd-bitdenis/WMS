@@ -44,6 +44,8 @@ async def _report_context(
 async def _seed_movement(
     *, tenant_id: uuid.UUID, seller_id: str, warehouse_id: str, location_id: str,
     sku: str, name: str, quantity_delta: int,
+    movement_type: str = "inbound_intake",
+    created_at: datetime | None = None,
 ) -> None:
     async with SessionLocal() as session:
         product_id = uuid.uuid4()
@@ -55,8 +57,8 @@ async def _seed_movement(
         session.add(InventoryMovement(
             tenant_id=tenant_id, product_id=product_id, seller_id=uuid.UUID(seller_id),
             warehouse_id=uuid.UUID(warehouse_id), storage_location_id=uuid.UUID(location_id),
-            quantity_delta=quantity_delta, movement_type="inbound_intake",
-            created_at=datetime(2026, 8, 1, 12, tzinfo=UTC),
+            quantity_delta=quantity_delta, movement_type=movement_type,
+            created_at=created_at or datetime(2026, 8, 1, 12, tzinfo=UTC),
         ))
         await session.commit()
 
@@ -107,6 +109,71 @@ async def test_inventory_csv_matches_visible_product_table_columns_and_rows(
         row["seller_name"], str(row["current_balance"]), str(row["total_in"]),
         str(row["total_out"]), str(row["net"]),
     ]
+
+
+@pytest.mark.asyncio
+async def test_inventory_csv_matches_table_grouping_and_requested_order(
+    async_client: AsyncClient,
+) -> None:
+    headers, tenant_id, seller_id, warehouse_id, location_id = await _report_context(async_client)
+    await _seed_movement(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id,
+        location_id=location_id, sku="SKU-IN", name="Incoming", quantity_delta=2,
+        movement_type="inbound_intake",
+    )
+    await _seed_movement(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id,
+        location_id=location_id, sku="SKU-OUT", name="Outgoing", quantity_delta=-7,
+        movement_type="outbound_shipment",
+    )
+    params = {
+        "date_from": "2026-08-01T00:00:00Z",
+        "date_to": "2026-08-02T00:00:00Z",
+        "group_by": "operation",
+        "sort_by": "net",
+        "sort_order": "desc",
+    }
+
+    table = await async_client.get("/reports/inventory", headers=headers, params=params)
+    export = await async_client.get("/reports/inventory/export.csv", headers=headers, params=params)
+
+    assert table.status_code == 200
+    assert export.status_code == 200
+    csv_rows = list(csv.reader(io.StringIO(export.content.decode("utf-8-sig"))))
+    assert csv_rows[0] == ["Операция", "Приход", "Расход", "Нетто"]
+    assert csv_rows[1:] == [
+        [row["operation"], str(row["in_qty"]), str(row["out_qty"]), str(row["net"])]
+        for row in table.json()["rows"]
+    ]
+    assert [row[0] for row in csv_rows[1:]] == ["Приёмка", "Отгрузка"]
+
+
+@pytest.mark.asyncio
+async def test_inventory_csv_uses_same_moscow_calendar_boundaries_as_table(
+    async_client: AsyncClient,
+) -> None:
+    headers, tenant_id, seller_id, warehouse_id, location_id = await _report_context(async_client)
+    await _seed_movement(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id,
+        location_id=location_id, sku="SKU-INCLUDED", name="Included", quantity_delta=1,
+        created_at=datetime(2026, 7, 31, 22, 30, tzinfo=UTC),
+    )
+    await _seed_movement(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id,
+        location_id=location_id, sku="SKU-EXCLUDED", name="Excluded", quantity_delta=1,
+        created_at=datetime(2026, 8, 1, 21, 0, tzinfo=UTC),
+    )
+    params = {"date_from": "2026-08-01T00:00:00", "date_to": "2026-08-02T00:00:00"}
+
+    table = await async_client.get("/reports/inventory", headers=headers, params=params)
+    export = await async_client.get("/reports/inventory/export.csv", headers=headers, params=params)
+
+    assert table.status_code == 200
+    assert export.status_code == 200
+    csv_rows = list(csv.reader(io.StringIO(export.content.decode("utf-8-sig"))))
+    assert [row[0] for row in csv_rows[1:]] == [
+        row["sku_code"] for row in table.json()["rows"]
+    ] == ["SKU-INCLUDED"]
 
 
 @pytest.mark.asyncio

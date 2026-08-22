@@ -88,6 +88,8 @@ async def export_inventory_report(
     seller_id: Annotated[uuid.UUID | None, Query()] = None,
     warehouse_id: Annotated[uuid.UUID | None, Query()] = None,
     search: Annotated[str | None, Query()] = None,
+    sort_by: Annotated[str | None, Query()] = None,
+    sort_order: Annotated[str, Query()] = "asc",
 ) -> StreamingResponse:
     await assert_inventory_read_access(session, user)
     try:
@@ -97,6 +99,7 @@ async def export_inventory_report(
             seller_id=seller_scope if seller_scope is not None else seller_id,
             warehouse_id=warehouse_id,
             search=search, include_seller=seller_scope is None,
+            sort_by=sort_by, sort_order=sort_order,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

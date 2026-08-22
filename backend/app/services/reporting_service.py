@@ -73,6 +73,20 @@ def operation_group_expr() -> ColumnElement[str]:
     )
 
 
+def validated_sort(
+    group_by: str, sort_by: str | None, sort_order: str
+) -> tuple[str, str]:
+    if group_by not in GROUP_BY_VALUES:
+        raise ValueError("group_by must be product or operation")
+    allowed_sorts = PRODUCT_SORTS if group_by == "product" else OPERATION_SORTS
+    resolved_sort = sort_by or ("name" if group_by == "product" else "operation")
+    if resolved_sort not in allowed_sorts:
+        raise ValueError("unsupported sort_by")
+    if sort_order not in {"asc", "desc"}:
+        raise ValueError("sort_order must be asc or desc")
+    return resolved_sort, sort_order
+
+
 async def build_inventory_report(
     session: AsyncSession, tenant_id: uuid.UUID, *, date_from: datetime,
     date_to: datetime, group_by: str, page: int, seller_id: uuid.UUID | None = None,
@@ -80,15 +94,7 @@ async def build_inventory_report(
     sort_by: str | None = None, sort_order: str = "asc",
 ) -> dict[str, object]:
     date_from, date_to = normalize_period(date_from, date_to)
-    if group_by not in GROUP_BY_VALUES:
-        raise ValueError("group_by must be product or operation")
-    allowed_sorts = PRODUCT_SORTS if group_by == "product" else OPERATION_SORTS
-    default_sort = "name" if group_by == "product" else "operation"
-    sort_by = sort_by or default_sort
-    if sort_by not in allowed_sorts:
-        raise ValueError("unsupported sort_by")
-    if sort_order not in {"asc", "desc"}:
-        raise ValueError("sort_order must be asc or desc")
+    sort_by, sort_order = validated_sort(group_by, sort_by, sort_order)
     filters = [InventoryMovement.tenant_id == tenant_id, InventoryMovement.created_at >= date_from,
         InventoryMovement.created_at < date_to, Warehouse.is_operational.is_(True)]
     # Transfers are an internal flow.  They are useful only when an operator
@@ -248,12 +254,12 @@ async def build_inventory_csv(
     session: AsyncSession, tenant_id: uuid.UUID, *, date_from: datetime,
     date_to: datetime, group_by: str, seller_id: uuid.UUID | None = None,
     warehouse_id: uuid.UUID | None = None, search: str | None = None,
-    include_seller: bool = True,
+    include_seller: bool = True, sort_by: str | None = None,
+    sort_order: str = "asc",
 ) -> AsyncIterator[bytes]:
     """Stream the complete, table-shaped export for the authorised slice."""
     date_from, date_to = normalize_period(date_from, date_to)
-    if group_by not in GROUP_BY_VALUES:
-        raise ValueError("group_by must be product or operation")
+    sort_by, sort_order = validated_sort(group_by, sort_by, sort_order)
 
     # The export deliberately does not page through ``build_inventory_report``:
     # doing so used to rerun the complete GROUP BY for every 50 rows and built
@@ -314,7 +320,15 @@ async def build_inventory_csv(
             Warehouse, Warehouse.id == InventoryMovement.warehouse_id).where(*filters).group_by(
             Product.id, Product.name, Product.sku_code, Product.wb_vendor_code,
             Product.wb_barcode, Seller.name,
-        ).order_by(Product.name.asc(), Product.id)
+        )
+        sort_columns = {
+            "name": Product.name, "sku": Product.sku_code, "in_qty": in_qty,
+            "out_qty": out_qty, "net": in_qty - out_qty,
+        }
+        grouped = grouped.order_by(
+            sort_columns[sort_by].desc() if sort_order == "desc" else sort_columns[sort_by].asc(),
+            Product.id,
+        )
     else:
         operation = operation_group_expr()
         grouped = select(
@@ -323,7 +337,15 @@ async def build_inventory_csv(
         ).select_from(InventoryMovement).join(
             Product, Product.id == InventoryMovement.product_id).join(
             Warehouse, Warehouse.id == InventoryMovement.warehouse_id).where(*filters).group_by(
-            operation).order_by(operation)
+            operation)
+        sort_columns = {
+            "operation": operation, "in_qty": in_qty,
+            "out_qty": out_qty, "net": in_qty - out_qty,
+        }
+        grouped = grouped.order_by(
+            sort_columns[sort_by].desc() if sort_order == "desc" else sort_columns[sort_by].asc(),
+            operation,
+        )
 
     if (await session.execute(grouped.limit(1))).first() is None:
         raise ValueError("nothing to export for the selected period")
