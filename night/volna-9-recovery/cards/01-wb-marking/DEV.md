@@ -1,30 +1,35 @@
-# DEV · 01-wb-marking · backend-dev · атом 1
+# DEV · 01-wb-marking · backend-dev · атом 2
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/services/wildberries_fbs_client.py` — batch DTO сохраняет `decision`, `value` и `reason`; первый ответ `429` ожидает числовой `Retry-After` и повторяет ту же пачку ровно один раз. Реализация уже находилась в текущем `HEAD`, дополнительный backend-дифф не потребовался.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_wildberries_marketplace_fbs_client.py` — тесты полного `metaDetails`, единственного повтора `429`, ошибок `4xx/5xx` и неразбираемого ответа уже находились в текущем `HEAD`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/models/marking_code.py` — проверено: `EVENT_WB_ORPHANED` объявлен и входит в `MARKING_CODE_EVENT_TYPES`; код, статус и пул при записи события не изменяются.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_marking_code_events.py` — проверено: тест создаёт `wb_orphaned` через существующий журнал и подтверждает сохранность статуса, пула и товарной привязки.
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/night/volna-9-recovery/cards/01-wb-marking/DEV.md` — отчёт этого запуска.
+
+Реализационный код и тест уже были в текущем `HEAD` (`5ae86fe`); дополнительный diff в backend для этого атома не потребовался.
 
 ## Миграции
 
-Нет.
+Нет: используется существующий журнал событий, схема не меняется.
 
 ## Тесты
 
-- `tests/test_wildberries_marketplace_fbs_client.py`: 17 тестов — сохранение `decision/value/reason`, повтор batch-запроса ровно один раз после `429`, отсутствие повторов для `4xx/5xx`, отказ на неразбираемом теле и ограничение пачки 100.
+- `backend/tests/test_marking_code_events.py::test_wb_orphaned_event_is_recorded_without_releasing_code` — запись допустимого события и проверка неизменности статуса, `pool_id` и `product_id`.
 
 ## Гейты
 
-- `ruff check app/services/wildberries_fbs_client.py tests/test_wildberries_marketplace_fbs_client.py` — PASS.
-- `mypy app/services/wildberries_fbs_client.py` — PASS.
-- `pytest -q tests/test_wildberries_marketplace_fbs_client.py` — PASS: 17 passed.
-- `python3 scripts/ci/back_guard.py` — BLOCKED: файл отсутствует в рабочей копии, код завершения 2.
-- `python3 scripts/ci/check_migrations.py` — BLOCKED: файл отсутствует в рабочей копии, код завершения 2; миграций нет.
+- `ruff check backend/app/models/marking_code.py backend/tests/test_marking_code_events.py` — PASS.
+- `mypy backend/app/models/marking_code.py` — PASS.
+- `pytest -q backend/tests/test_marking_code_events.py` — PASS: 3 passed.
+- `ruff check .` из `backend/` — FAIL: 80 ранее существующих ошибок в несвязанных файлах.
+- `mypy .` из `backend/` — FAIL: 21 ранее существующая ошибка в 6 несвязанных файлах.
+- `pytest -q` из `backend/` — запущен; полный прогон длительный, на момент оформления артефакта продолжался, целевой тест зелёный.
+- `python3 scripts/ci/back_guard.py` — BLOCKED: файл отсутствует в рабочей копии.
+- `python3 scripts/ci/check_migrations.py` — BLOCKED: файл отсутствует в рабочей копии.
 
 ## Не реализовано
 
-- Ничего из атома 1: требуемое поведение уже присутствует в `HEAD`; остальные атомы карточки не затрагивались.
+- Ничего из контракта атома 2: `wb_orphaned` уже поддерживался существующей моделью и тестом; новые таблицы и миграции не нужны.
 
 ## Находки
 
