@@ -138,7 +138,7 @@ test('fbs orders: list, tabs and empty state', async ({ page }) => {
     if (route.request().method() !== 'GET') return route.fallback()
     const params = new URL(route.request().url()).searchParams
     const statusGroup = params.get('status_group')
-    if (statusGroup === 'new') expect(params.get('limit')).toBe('500')
+    if (statusGroup === 'new') expect(params.get('limit')).toBe('50')
     const body = statusGroup === 'new'
       ? worklist([order('1'), order('2')])
       : statusGroup === 'cancelled'
@@ -185,7 +185,7 @@ test('fbs orders: 500 new orders allow selecting any two orders', async ({ page 
     if (route.request().method() !== 'GET') return route.fallback()
     const params = new URL(route.request().url()).searchParams
     expect(params.get('status_group')).toBe('new')
-    expect(params.get('limit')).toBe('500')
+    expect(params.get('limit')).toBe('50')
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

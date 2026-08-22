@@ -56,6 +56,7 @@ import {
   type FbsWorklistWarehouseOption,
   type FbsWorkspace,
 } from './fbsApi'
+import { TableLoadMore } from '../../ui-kit'
 
 type SellerRow = { id: string; name: string }
 
@@ -79,7 +80,7 @@ const TABS = [
 
 type FbsStatusGroup = (typeof TABS)[number]['key']
 
-const NEW_ORDERS_PAGE_LIMIT = 500
+const NEW_ORDERS_PAGE_LIMIT = 50
 
 // HANDOFF-POLISH.md пул 1 п.4 (решение П3): «В работе», «В доставке» и «Завершённые» —
 // это работа с уже собранным документом (поставкой) целиком, не с отдельными заказами.
@@ -492,6 +493,9 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [search, setSearch] = useState('')
   const [activeSearch, setActiveSearch] = useState('')
   const [orders, setOrders] = useState<FbsWorklistOrder[]>([])
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null)
   const [activeSupplies, setActiveSupplies] = useState<FbsSupplyWorklistItem[]>([])
   const [externalActiveOrders, setExternalActiveOrders] = useState<FbsWorklistOrder[]>([])
   const [warehouseOptions, setWarehouseOptions] = useState<FbsWorklistWarehouseOption[]>([])
@@ -522,6 +526,9 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const goToStockSync = useCallback(() => navigate('/app/ff/fbs/stock-sync'), [navigate])
   const openedSupplyFromQuery = useRef<string | null>(null)
   const loadingRef = useRef(false)
+  const loadMoreRef = useRef(false)
+  const ordersLengthRef = useRef(0)
+  ordersLengthRef.current = orders.length
   // Плавающая панель выбора (fbs-selection-bar) прибита к низу вьюпорта и накрывает
   // собой последние строки таблицы — оператор кликал по чекбоксу второго заказа и
   // попадал в панель (см. tests-e2e/ff-fbs-orders.spec.ts:277). Меряем реальную высоту
@@ -535,7 +542,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     // если предыдущий запрос ещё летит, новый тик пропускаем.
     if (loadingRef.current) return
     loadingRef.current = true
-    setBusy(true)
+    const backgroundRefresh = statusGroup === 'new' && ordersLengthRef.current > 0
+    if (!backgroundRefresh) setBusy(true)
     setError(null)
     try {
       if (isFbsSupplyGroup(statusGroup)) {
@@ -563,9 +571,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         seller_id: sellerId === '__all__' ? null : sellerId,
         status_group: statusGroup,
         wb_warehouse_id: statusGroup === 'new' && wbWarehouseId !== '__all__' ? wbWarehouseId : null,
-        limit: statusGroup === 'new' ? NEW_ORDERS_PAGE_LIMIT : 500,
+        limit: statusGroup === 'new' ? NEW_ORDERS_PAGE_LIMIT : 100,
       })
-      setOrders(page.items)
+      setOrders((current) => (backgroundRefresh && statusGroup === 'new'
+        ? [...page.items, ...current.filter((old) => !page.items.some((fresh) => fresh.id === old.id))]
+        : page.items))
       setActiveSupplies([])
       setExternalActiveOrders([])
       setSelectedCache((current) => {
@@ -574,6 +584,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         return next
       })
       setWarehouseOptions(statusGroup === 'new' ? page.warehouse_options ?? [] : [])
+      setNextCursor(statusGroup === 'new' ? page.next_cursor : null)
+      setLoadMoreError(null)
       if (
         statusGroup === 'new' &&
         wbWarehouseId !== '__all__' &&
@@ -586,10 +598,39 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Не удалось загрузить заказы FBS.')
     } finally {
-      setBusy(false)
+      if (!backgroundRefresh) setBusy(false)
       loadingRef.current = false
     }
   }, [token, authHeaders, sellerId, statusGroup, wbWarehouseId])
+
+  const loadMore = useCallback(async () => {
+    if (statusGroup !== 'new' || !nextCursor || loadMoreRef.current) return
+    loadMoreRef.current = true
+    setLoadingMore(true)
+    setLoadMoreError(null)
+    try {
+      const page = await fetchFbsWorklist(token, authHeaders, {
+        seller_id: sellerId === '__all__' ? null : sellerId,
+        status_group: 'new',
+        wb_warehouse_id: wbWarehouseId !== '__all__' ? wbWarehouseId : null,
+        limit: NEW_ORDERS_PAGE_LIMIT,
+        cursor: nextCursor,
+      })
+      setOrders((current) => [...current, ...page.items.filter((item) => !current.some((old) => old.id === item.id))])
+      setSelectedCache((current) => {
+        const next = new Map(current)
+        page.items.forEach((item) => next.set(item.id, item))
+        return next
+      })
+      setNextCursor(page.next_cursor)
+      setServerNow(page.server_now)
+    } catch (cause) {
+      setLoadMoreError(cause instanceof Error ? cause.message : 'Не удалось загрузить следующие заказы')
+    } finally {
+      setLoadingMore(false)
+      loadMoreRef.current = false
+    }
+  }, [authHeaders, nextCursor, sellerId, statusGroup, token, wbWarehouseId])
 
   useEffect(() => {
     void load()
@@ -819,7 +860,31 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     })
   }, [])
 
-  const toggleVisibleSelectable = (checked: boolean) => {
+  const toggleVisibleSelectable = async (checked: boolean) => {
+    if (checked && statusGroup === 'new' && nextCursor) {
+      let cursor = nextCursor
+      const pages: FbsWorklistOrder[] = []
+      try {
+        while (cursor) {
+          const page = await fetchFbsWorklist(token, authHeaders, {
+            seller_id: sellerId === '__all__' ? null : sellerId,
+            status_group: 'new',
+            wb_warehouse_id: wbWarehouseId !== '__all__' ? wbWarehouseId : null,
+            limit: NEW_ORDERS_PAGE_LIMIT,
+            cursor,
+          })
+          pages.push(...page.items)
+          cursor = page.next_cursor
+        }
+        setOrders((current) => [...current, ...pages.filter((item) => !current.some((old) => old.id === item.id))])
+        setSelectedCache((current) => new Map([...current, ...pages.map((item) => [item.id, item] as const)]))
+        setNextCursor(null)
+        setSelected((current) => new Set([...current, ...orders.filter((order) => order.selection_blockers.length === 0).map((order) => order.id), ...pages.filter((order) => order.selection_blockers.length === 0).map((order) => order.id)]))
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'Не удалось выбрать все заказы.')
+      }
+      return
+    }
     setSelected((current) => {
       const next = new Set(current)
       selectableIds.forEach((id) => {
@@ -1385,6 +1450,16 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         ) : null}
       </TableContainer>
       )}
+
+      {statusGroup === 'new' ? (
+        <TableLoadMore
+          hasNext={Boolean(nextCursor)}
+          loading={loadingMore}
+          error={loadMoreError}
+          onLoadMore={() => void loadMore()}
+          testId="fbs-orders-load-more"
+        />
+      ) : null}
 
       {statusGroup === 'new' && selected.size ? (
         <Paper
