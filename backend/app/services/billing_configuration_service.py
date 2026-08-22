@@ -30,9 +30,9 @@ def validate_inn(inn: str) -> str:
             raise BillingConfigurationError("Проверьте ИНН: контрольное число не совпадает")
     else:
         weights = (7, 2, 4, 10, 3, 5, 9, 4, 6, 8)
-        check_11 = sum(d * w for d, w in zip(digits[:-1], weights, strict=True)) % 11 % 10
+        check_11 = sum(d * w for d, w in zip(digits[:10], weights, strict=True)) % 11 % 10
         check_12 = (
-            sum(d * w for d, w in zip(digits[:-2], (3, 7, 2, 4, 10, 3, 5, 9, 4, 6, 8), strict=True))
+            sum(d * w for d, w in zip(digits[:11], (3, 7, 2, 4, 10, 3, 5, 9, 4, 6, 8), strict=True))
             % 11
             % 10
         )
@@ -112,7 +112,6 @@ async def create_tariff(
             BillingTariffVersion.tenant_id == tenant_id,
             BillingTariffVersion.seller_id == seller_id,
             BillingTariffVersion.service_code == service_code,
-            BillingTariffVersion.unit == unit,
         )
         .order_by(BillingTariffVersion.valid_from.desc())
     )

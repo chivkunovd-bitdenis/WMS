@@ -1,0 +1,52 @@
+from datetime import date
+from decimal import Decimal
+from unittest.mock import AsyncMock, Mock
+from uuid import uuid4
+
+import pytest
+
+from app.services.billing_configuration_service import (
+    BillingConfigurationError,
+    create_tariff,
+    validate_inn,
+)
+
+
+def test_validate_inn_accepts_valid_twelve_digit_inn() -> None:
+    assert validate_inn("500100732259") == "500100732259"
+
+
+def test_validate_inn_rejects_invalid_twelve_digit_inn_with_domain_error() -> None:
+    with pytest.raises(BillingConfigurationError, match="контрольное число"):
+        validate_inn("500100732250")
+
+
+@pytest.mark.asyncio
+async def test_tariff_versions_cannot_overlap_by_unit() -> None:
+    session = AsyncMock()
+    session.add = Mock()
+    tenant_id = uuid4()
+    start = date(2026, 1, 1)
+    session.scalars = AsyncMock(
+        side_effect=[Mock(first=lambda: None), Mock(first=lambda: Mock(valid_from=start))]
+    )
+    await create_tariff(
+        session,
+        tenant_id=tenant_id,
+        seller_id=None,
+        service_code="inbound",
+        unit="document",
+        amount=Decimal("10.00"),
+        valid_from=start,
+    )
+
+    with pytest.raises(BillingConfigurationError, match="будущую версию"):
+        await create_tariff(
+            session,
+            tenant_id=tenant_id,
+            seller_id=None,
+            service_code="inbound",
+            unit="item",
+            amount=Decimal("1.00"),
+            valid_from=start,
+        )
