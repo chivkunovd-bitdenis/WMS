@@ -26,10 +26,12 @@
       <button data-show="loading">Загрузка</button>
       <button data-show="empty">Пусто</button>
       <button data-show="first-error">Ошибка списка</button>
+      <button data-show="more-loading">Догрузка</button>
       <button data-show="more-error">Ошибка догрузки</button>
       <button data-show="dialog-running">Лента · готовим</button>
       <button data-show="dialog-ready">Лента · готово</button>
       <button data-show="dialog-failed">Лента · ошибка</button>
+      <button data-show="dialog-expired">Лента · истекла</button>
     </nav>
 
     <section class="state active" id="normal"><div class="screen">
@@ -68,8 +70,20 @@
       <h1>Заказы FBS</h1><div class="purpose">Новые заказы и работа с отгрузками на Wildberries.</div>
       <div class="tabs"><div class="tab on">Новые</div><div class="tab">В работе</div><div class="tab">В доставке</div></div>
       <div class="filters"><div class="field">Все селлеры</div><div class="field">Все маршруты</div><div class="field">Заказ, товар, артикул, ШК</div></div>
-      <div class="notice">Не удалось получить список заказов. Попробуйте обновить ещё раз</div>
+      <div class="notice">Не удалось получить список заказов</div>
       <div class="tablebox"><table class="table"><thead><tr><th class="check">□</th><th class="product">Товар</th><th class="seller">Селлер</th><th class="route">Маршрут сдачи</th><th class="deadline">Отгрузить до</th></tr></thead><tbody><tr><td colspan="5" style="height:100px"></td></tr></tbody></table></div>
+      <div class="actions"><button class="primary">Повторить</button></div>
+    </div></section>
+
+    <section class="state" id="more-loading"><div class="screen">
+      <h1>Заказы FBS</h1><div class="purpose">Новые заказы и работа с отгрузками на Wildberries.</div>
+      <div class="tabs"><div class="tab on">Новые</div><div class="tab">В работе</div><div class="tab">В доставке</div></div>
+      <div class="filters"><div class="field">Все селлеры</div><div class="field">Все маршруты</div><div class="field">Заказ, товар, артикул, ШК</div></div>
+      <div class="tablebox"><table class="table"><thead><tr><th class="check">☑</th><th class="product">Товар</th><th class="seller">Селлер</th><th class="route">Маршрут сдачи</th><th class="deadline">Отгрузить до</th></tr></thead><tbody>
+        <tr><td>☑</td><td><div class="sku">Футболка базовая · SKU-10432</div><div class="sub">WB № 284911022</div></td><td>Красотка</td><td>Склад / СЦ Коледино</td><td><b>сегодня, 18:00</b></td></tr>
+        <tr><td>□</td><td><div class="sku">Толстовка графит · SKU-20218</div><div class="sub">WB № 284911107</div></td><td>Норд</td><td>ПВЗ Нагорная</td><td><b>завтра, 12:00</b></td></tr>
+      </tbody></table><div class="loadmore"><button class="textbutton" disabled><span class="spinner"></span>Загружаем…</button></div></div>
+      <div class="note">Загруженные строки и выбор остаются на месте; повторный клик недоступен.</div>
     </div></section>
 
     <section class="state" id="more-error"><div class="screen">
@@ -91,7 +105,11 @@
     </div></div></section>
 
     <section class="state" id="dialog-failed"><div class="modalback"><div class="modal">
-      <h2>Печать ЧЗ</h2><div class="modalbody"><b>Футболка базовая · SKU-10432</b><div class="sub">Лента: 155 этикеток · 58×40 мм</div><div class="notice">Не удалось собрать ленту. Попробуйте ещё раз</div><p class="sub">Для истёкшего файла здесь будет: «Срок хранения ленты истёк. Соберите её ещё раз».</p></div><div class="modalfooter"><div class="actions" style="margin:0"><button class="primary">Повторить</button><button class="secondary">Закрыть</button></div></div>
+      <h2>Печать ЧЗ</h2><div class="modalbody"><b>Футболка базовая · SKU-10432</b><div class="sub">Лента: 155 этикеток · 58×40 мм</div><div class="notice">Не удалось собрать ленту. Попробуйте ещё раз</div></div><div class="modalfooter"><div class="actions" style="margin:0"><button class="primary">Повторить</button><button class="secondary">Закрыть</button></div></div>
+    </div></div></section>
+
+    <section class="state" id="dialog-expired"><div class="modalback"><div class="modal">
+      <h2>Печать ЧЗ</h2><div class="modalbody"><b>Футболка базовая · SKU-10432</b><div class="sub">Лента: 155 этикеток · срок хранения закончился</div><div class="notice">Срок хранения ленты истёк. Соберите её ещё раз</div></div><div class="modalfooter"><div class="actions" style="margin:0"><button class="primary">Повторить</button><button class="secondary">Закрыть</button></div></div>
     </div></div></section>
   </main>
   <script>
