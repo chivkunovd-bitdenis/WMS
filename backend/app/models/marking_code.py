@@ -62,6 +62,7 @@ EVENT_TRANSFERRED = "transferred"
 EVENT_DEFECTIVE = "defective"
 EVENT_REPLACED = "replaced"
 EVENT_VOIDED = "voided"
+EVENT_WB_ORPHANED = "wb_orphaned"
 
 MARKING_CODE_EVENT_TYPES = frozenset(
     {
@@ -75,6 +76,7 @@ MARKING_CODE_EVENT_TYPES = frozenset(
         EVENT_DEFECTIVE,
         EVENT_REPLACED,
         EVENT_VOIDED,
+        EVENT_WB_ORPHANED,
     }
 )
 

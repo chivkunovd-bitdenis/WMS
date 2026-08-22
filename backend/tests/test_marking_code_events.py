@@ -13,6 +13,9 @@ from app.models.marking_code import (
     EVENT_IMPORTED,
     EVENT_PRINTED,
     EVENT_REPRINTED,
+    EVENT_WB_ORPHANED,
+    MARKING_CODE_EVENT_TYPES,
+    MarkingCode,
     MarkingCodeEvent,
 )
 
@@ -70,6 +73,81 @@ async def test_import_records_imported_events(async_client: AsyncClient) -> None
             )
         ).scalar_one()
         assert imported_count == 3
+
+
+@pytest.mark.asyncio
+async def test_wb_orphaned_event_is_recorded_without_releasing_code(
+    async_client: AsyncClient,
+) -> None:
+    assert EVENT_WB_ORPHANED in MARKING_CODE_EVENT_TYPES
+
+    h = await _register_admin(async_client)
+    seller = await async_client.post(
+        "/sellers",
+        headers=h,
+        json={"name": "WB orphan seller", "email": f"orphan-{uuid.uuid4().hex[:8]}@example.com"},
+    )
+    assert seller.status_code == 201, seller.text
+    seller_id = seller.json()["id"]
+
+    product = await async_client.post(
+        "/products",
+        headers=h,
+        json={
+            "name": "WB orphan product",
+            "sku_code": f"WBO-{uuid.uuid4().hex[:6]}",
+            "length_mm": 100,
+            "width_mm": 100,
+            "height_mm": 100,
+            "seller_id": seller_id,
+        },
+    )
+    assert product.status_code == 200, product.text
+    product_id = product.json()["id"]
+    cis_code = f"01{'0' * 10}7777{'21'}{'E' * 20}0001"
+    imported = await async_client.post(
+        "/operations/marking-codes/import",
+        headers=h,
+        data={
+            "seller_id": seller_id,
+            "pools_json": json.dumps([{"title": "WB orphan pool", "product_ids": [product_id]}]),
+        },
+        files=[("files", ("codes.csv", f"cis\n{cis_code}".encode(), "text/csv"))],
+    )
+    assert imported.status_code == 200, imported.text
+
+    async with SessionLocal() as session:
+        code = (
+            await session.execute(select(MarkingCode).where(MarkingCode.cis_code == cis_code))
+        ).scalar_one()
+        original_status = code.status
+        original_pool_id = code.pool_id
+        original_product_id = code.product_id
+        session.add(
+            MarkingCodeEvent(
+                tenant_id=code.tenant_id,
+                seller_id=code.seller_id,
+                code_id=code.id,
+                pool_id=code.pool_id,
+                event_type=EVENT_WB_ORPHANED,
+                reason="Wildberries no longer references the local marking",
+            )
+        )
+        await session.commit()
+
+        event = (
+            await session.execute(
+                select(MarkingCodeEvent).where(
+                    MarkingCodeEvent.code_id == code.id,
+                    MarkingCodeEvent.event_type == EVENT_WB_ORPHANED,
+                )
+            )
+        ).scalar_one()
+        await session.refresh(code)
+        assert event.pool_id == original_pool_id
+        assert code.status == original_status
+        assert code.pool_id == original_pool_id
+        assert code.product_id == original_product_id
 
 
 @pytest.mark.asyncio
