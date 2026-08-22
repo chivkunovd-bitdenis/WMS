@@ -21,16 +21,25 @@ export function PeriodPicker({
   error,
   testId,
 }: PeriodPickerProps) {
+  const helperTextId = testId ? `${testId}-helper` : undefined
+
   return (
     <TextField
       label={label}
       type="month"
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      inputProps={{ min, max, 'data-testid': testId }}
+      inputProps={{
+        min,
+        max,
+        'data-testid': testId,
+        'aria-invalid': Boolean(error),
+        'aria-describedby': helperTextId,
+      }}
       disabled={disabled}
       error={Boolean(error)}
       helperText={error}
+      FormHelperTextProps={{ id: helperTextId }}
       size="small"
     />
   )
