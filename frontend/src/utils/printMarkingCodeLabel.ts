@@ -441,16 +441,44 @@ export async function fetchCzArtifactTapePdf(
 }
 
 export type CzArtifactTapeJobStatus = 'pending' | 'running' | 'done' | 'failed' | 'expired'
-export type CzArtifactTapePreparationState = 'idle' | 'preparing' | 'ready' | 'failed' | 'expired'
+export type CzArtifactTapePreparationState =
+  | 'idle'
+  | 'preparing'
+  | 'ready'
+  | 'failed'
+  | 'open_failed'
+  | 'expired'
 
 export type PreparedCzArtifactTape = { assetId: string }
+
+export class CzArtifactTapeAssetFetchError extends Error {
+  readonly reason: 'expired' | 'unavailable'
+
+  constructor(reason: 'expired' | 'unavailable') {
+    super(
+      reason === 'expired'
+        ? 'Срок хранения ленты истёк. Соберите её ещё раз'
+        : 'Не удалось открыть ленту. Попробуйте ещё раз',
+    )
+    this.name = 'CzArtifactTapeAssetFetchError'
+    this.reason = reason
+  }
+}
 
 export async function fetchPreparedCzArtifactTapePdf(assetId: string, authToken: string): Promise<Blob> {
   const asset = await fetch(apiUrl(`/operations/fbs-print-assets/${assetId}/content`), {
     headers: { Authorization: `Bearer ${authToken}` },
   })
   if (!asset.ok) {
-    throw new Error('Срок хранения ленты истёк. Соберите её ещё раз')
+    const payload = await asset.json().catch(() => null) as {
+      detail?: { code?: unknown } | null
+    } | null
+    const errorCode = payload?.detail && typeof payload.detail === 'object'
+      ? payload.detail.code
+      : null
+    throw new CzArtifactTapeAssetFetchError(
+      errorCode === 'asset_expired' ? 'expired' : 'unavailable',
+    )
   }
   return asset.blob()
 }
@@ -514,9 +542,9 @@ type CzArtifactTapePreparationSnapshot = {
   assetId: string | null
 }
 
-/** Keeps only the latest dialog preparation alive while the mounted dialog is closed. */
+/** Keeps every dialog preparation alive while the mounted dialog is closed. */
 export class CzArtifactTapePreparationTracker {
-  private session: CzArtifactTapePreparationSession | null = null
+  private sessions = new Map<string, CzArtifactTapePreparationSession>()
   private listeners = new Set<{
     contextKey: string
     listener: (snapshot: CzArtifactTapePreparationSnapshot) => void
@@ -543,39 +571,49 @@ export class CzArtifactTapePreparationTracker {
       state: 'preparing',
       assetId: null,
     }
-    this.session = session
-    this.emit()
+    this.sessions.set(contextKey, session)
+    this.emit(contextKey)
     void prepareCzArtifactTape(codeIds, authToken, pageSize).then(
       ({ assetId }) => {
-        if (this.session !== session) return
+        if (this.sessions.get(contextKey) !== session) return
         session.state = 'ready'
         session.assetId = assetId
-        this.emit()
+        this.emit(contextKey)
       },
       (error: unknown) => {
-        if (this.session !== session) return
+        if (this.sessions.get(contextKey) !== session) return
         session.state = error instanceof Error && error.message.includes('истёк') ? 'expired' : 'failed'
-        this.emit()
+        this.emit(contextKey)
       },
     )
   }
 
   retry(contextKey: string): void {
-    const session = this.session
-    if (!session || session.contextKey !== contextKey) return
+    const session = this.sessions.get(contextKey)
+    if (!session) return
     this.start(contextKey, session.codeIds, session.authToken, session.pageSize)
   }
 
-  private snapshot(contextKey: string): CzArtifactTapePreparationSnapshot {
-    if (!this.session || this.session.contextKey !== contextKey) return { state: 'idle', assetId: null }
-    return { state: this.session.state, assetId: this.session.assetId }
+  setAssetOpenState(
+    contextKey: string,
+    state: Extract<CzArtifactTapePreparationState, 'ready' | 'open_failed' | 'expired'>,
+  ): void {
+    const session = this.sessions.get(contextKey)
+    if (!session?.assetId) return
+    session.state = state
+    this.emit(contextKey)
   }
 
-  private emit(): void {
-    if (!this.session) return
-    const snapshot = this.snapshot(this.session.contextKey)
+  private snapshot(contextKey: string): CzArtifactTapePreparationSnapshot {
+    const session = this.sessions.get(contextKey)
+    if (!session) return { state: 'idle', assetId: null }
+    return { state: session.state, assetId: session.assetId }
+  }
+
+  private emit(contextKey: string): void {
+    const snapshot = this.snapshot(contextKey)
     this.listeners.forEach((subscription) => {
-      if (subscription.contextKey === this.session?.contextKey) subscription.listener(snapshot)
+      if (subscription.contextKey === contextKey) subscription.listener(snapshot)
     })
   }
 }

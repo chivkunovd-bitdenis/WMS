@@ -28,7 +28,7 @@ async function openCatalogArtifactTapeDialog(page: Page) {
     data: JSON.stringify({ name: 'E2E Background Tape Seller' }),
   })
   const sellerId = String(((await sellerResponse.json()) as { id: string }).id)
-  const { productX } = await seedHonestSignProductFirstInventory(
+  const { productX, productY } = await seedHonestSignProductFirstInventory(
     page,
     e2eApi,
     auth,
@@ -40,39 +40,49 @@ async function openCatalogArtifactTapeDialog(page: Page) {
     headers: auth,
     data: JSON.stringify({ requires_honest_sign: true, packaging_instructions: 'ЧЗ' }),
   })
+  await page.request.patch(`${e2eApi}/products/${productY.id}/packaging-instructions`, {
+    headers: auth,
+    data: JSON.stringify({ requires_honest_sign: true, packaging_instructions: 'ЧЗ' }),
+  })
 
   await page.getByTestId('nav-ff-honest-sign').click()
   await selectHonestSignSeller(page, sellerId)
-  const printAction = page.getByTestId(`ff-honest-sign-product-print-${productX.id}`)
-  await printAction.click()
+  const firstPrintAction = page.getByTestId(`ff-honest-sign-product-print-${productX.id}`)
+  const secondPrintAction = page.getByTestId(`ff-honest-sign-product-print-${productY.id}`)
+  await firstPrintAction.click()
   await expect(page.getByTestId('marking-print-dialog')).toBeVisible()
-  return { printAction }
+  return { firstPrintAction, secondPrintAction, productX, productY }
 }
 
 // S-03-TC-008 — ожидание подготовки и только явное открытие готового PDF.
 // S-03-TC-009 — повторное открытие тех же данных показывает существующее активное задание.
-test('S-03 marking tape keeps one background job across dialog reopen and opens PDF explicitly', async ({ page }) => {
+test('S-03 marking tape restores either of two background jobs and opens PDF explicitly', async ({ page }) => {
   test.setTimeout(180_000)
-  const { printAction } = await openCatalogArtifactTapeDialog(page)
+  const { firstPrintAction, secondPrintAction, productX } = await openCatalogArtifactTapeDialog(page)
   let tapeStarts = 0
   let contentRequests = 0
-  let releaseJob = false
+  let releaseFirstJob = false
 
   await page.route('**/operations/marking-codes/products/*/print', async (route) => {
     const request = route.request()
     const body = request.postDataJSON() as { layout_json: unknown }
+    const isFirstProduct = request.url().includes(`/products/${productX.id}/print`)
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        codes: ['010460000000000121BACKGROUND0001'],
+        codes: [isFirstProduct
+          ? '010460000000000121BACKGROUND0001'
+          : '010460000000000121BACKGROUND0002'],
         duplicate_copies: 1,
         quantity: 1,
         shortage: 0,
         layout: body.layout_json,
         printed_codes: [{
-          id: 'code-background-1',
-          cis_code: '010460000000000121BACKGROUND0001',
+          id: isFirstProduct ? 'code-background-1' : 'code-background-2',
+          cis_code: isFirstProduct
+            ? '010460000000000121BACKGROUND0001'
+            : '010460000000000121BACKGROUND0002',
           has_label_artifact: true,
         }],
       }),
@@ -80,17 +90,22 @@ test('S-03 marking tape keeps one background job across dialog reopen and opens 
   })
   await page.route('**/operations/marking-codes/label-artifact-tape', async (route) => {
     tapeStarts += 1
+    const body = route.request().postDataJSON() as { code_ids: string[] }
+    const jobId = body.code_ids.includes('code-background-1')
+      ? 'job-background-1'
+      : 'job-background-2'
     await route.fulfill({
       status: 202,
       contentType: 'application/json',
-      body: JSON.stringify({ job_id: 'job-background-1' }),
+      body: JSON.stringify({ job_id: jobId }),
     })
   })
-  await page.route('**/operations/background-jobs/job-background-1', async (route) => {
+  await page.route('**/operations/background-jobs/job-background-*', async (route) => {
+    const isFirstJob = route.request().url().endsWith('/job-background-1')
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(releaseJob
+      body: JSON.stringify(isFirstJob && releaseFirstJob
         ? { status: 'done', result_json: { asset_id: 'asset-background-1' } }
         : { status: 'running', result_json: null }),
     })
@@ -109,11 +124,19 @@ test('S-03 marking tape keeps one background job across dialog reopen and opens 
 
   await page.getByTestId('marking-print-close-preparing').click()
   await expect(page.getByTestId('marking-print-dialog')).toBeHidden()
-  await printAction.click()
+  await secondPrintAction.click()
+  await expect(page.getByTestId('marking-print-preparing')).toHaveCount(0)
+  await page.getByTestId('marking-print-confirm').click()
   await expect(page.getByTestId('marking-print-preparing')).toBeVisible()
-  expect(tapeStarts).toBe(1)
+  expect(tapeStarts).toBe(2)
 
-  releaseJob = true
+  await page.getByTestId('marking-print-close-preparing').click()
+  await expect(page.getByTestId('marking-print-dialog')).toBeHidden()
+  await firstPrintAction.click()
+  await expect(page.getByTestId('marking-print-preparing')).toBeVisible()
+  expect(tapeStarts).toBe(2)
+
+  releaseFirstJob = true
   await expect(page.getByTestId('marking-print-ready')).toContainText('Готово')
   await expect(page.getByTestId('marking-print-open-ready')).toBeVisible()
   expect(contentRequests).toBe(0)
@@ -124,7 +147,7 @@ test('S-03 marking tape keeps one background job across dialog reopen and opens 
   ])
   await expect.poll(() => contentRequests).toBe(1)
   expect(popup).toBeTruthy()
-  expect(tapeStarts).toBe(1)
+  expect(tapeStarts).toBe(2)
 })
 
 // TC-NEW-002 — ЧЗ T1.3: конструктор печати — баннер нехватки, пресет «Парами», частичная печать.

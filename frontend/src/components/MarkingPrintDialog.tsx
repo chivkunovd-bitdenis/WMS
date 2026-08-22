@@ -36,6 +36,7 @@ import {
   beginPrintUserGesture,
   buildMarkingTapeSections,
   buildWbOrderQrLabelHtml,
+  CzArtifactTapeAssetFetchError,
   CzArtifactTapePreparationTracker,
   printCzArtifactTape,
   fetchPreparedCzArtifactTapePdf,
@@ -108,12 +109,10 @@ type FbsTapeContext = {
   print: (args: { layout: PrintLayout; allowPartial: boolean; reprint: boolean }) => Promise<FbsTapePrintResult>
   confirmQrApplied: (asset: FbsTapeAsset) => Promise<void>
 }
-
 /** Fixed layout for non-ЧЗ: one WB barcode label per unit, no constructor. */
 const NON_HONEST_SIGN_LABEL_LAYOUT: PrintLayout = {
   units: [{ block: 'label', copies: 1 }],
 }
-
 function TapePreparationStatus({
   state,
   onOpen,
@@ -131,9 +130,9 @@ function TapePreparationStatus({
   if (state === 'ready') {
     return <Box data-testid="marking-print-ready"><StatusChip label="Готово" tone="ok" /><PrimaryAction onClick={onOpen} data-testid="marking-print-open-ready">Открыть для печати</PrimaryAction></Box>
   }
-  return <Box data-testid="marking-print-preparation-error"><ErrorNotice>{state === 'expired' ? 'Срок хранения ленты истёк. Соберите её ещё раз' : 'Не удалось собрать ленту. Попробуйте ещё раз'}</ErrorNotice><ActionGroup><PrimaryAction onClick={onRetry} data-testid="marking-print-retry">Повторить</PrimaryAction><SecondaryAction onClick={onClose} data-testid="marking-print-close-error">Закрыть</SecondaryAction></ActionGroup></Box>
+  const message = state === 'expired' ? 'Срок хранения ленты истёк. Соберите её ещё раз' : state === 'open_failed' ? 'Не удалось открыть ленту. Попробуйте ещё раз' : 'Не удалось собрать ленту. Попробуйте ещё раз'
+  return <Box data-testid="marking-print-preparation-error"><ErrorNotice>{message}</ErrorNotice><ActionGroup><PrimaryAction onClick={onRetry} data-testid="marking-print-retry">Повторить</PrimaryAction><SecondaryAction onClick={onClose} data-testid="marking-print-close-error">Закрыть</SecondaryAction></ActionGroup></Box>
 }
-
 async function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -246,10 +245,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const [sepCzQty, setSepCzQty] = useState(2)
   const [sepWbQty, setSepWbQty] = useState(1)
   const [sepCzDone, setSepCzDone] = useState(false)
-  const [tapePreparation, setTapePreparation] = useState<'idle' | 'preparing' | 'ready' | 'failed' | 'expired'>('idle')
+  const [tapePreparation, setTapePreparation] = useState<CzArtifactTapePreparationState>('idle')
   const [preparedTapeAssetId, setPreparedTapeAssetId] = useState<string | null>(null)
   const tapePreparationTracker = useRef(new CzArtifactTapePreparationTracker()).current
-
   const requiresHonestSign = ctx?.requiresHonestSign ?? true
   const fbsTapeMode = Boolean(ctx?.fbsTape)
   const fbsTapeOrders = ctx?.fbsTape?.orders ?? []
@@ -663,18 +661,19 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       onClose()
     }
   }
-
   const openPreparedTape = async () => {
     if (!preparedTapeAssetId || !ctx) return
     try {
       await printPdfBlob(await fetchPreparedCzArtifactTapePdf(preparedTapeAssetId, ctx.token))
+      if (tapePreparationContextKey) tapePreparationTracker.setAssetOpenState(tapePreparationContextKey, 'ready')
       ctx?.onPrinted()
       onClose()
     } catch (error) {
-      setTapePreparation(error instanceof Error && error.message.includes('истёк') ? 'expired' : 'failed')
+      const state = error instanceof CzArtifactTapeAssetFetchError && error.reason === 'expired' ? 'expired' : 'open_failed'
+      if (tapePreparationContextKey) tapePreparationTracker.setAssetOpenState(tapePreparationContextKey, state)
+      else setTapePreparation(state)
     }
   }
-
   const printLabelOnlyTape = async (
     count: number,
     size: LabelSize,
@@ -1711,7 +1710,8 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                 state={tapePreparation}
                 onOpen={() => { beginPrintUserGesture(); void openPreparedTape() }}
                 onRetry={() => {
-                  if (tapePreparationContextKey) tapePreparationTracker.retry(tapePreparationContextKey)
+                  if (tapePreparation === 'open_failed') { beginPrintUserGesture(); void openPreparedTape() }
+                  else if (tapePreparationContextKey) tapePreparationTracker.retry(tapePreparationContextKey)
                 }}
                 onClose={onClose}
               />

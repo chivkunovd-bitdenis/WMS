@@ -94,7 +94,19 @@ test('S-03 marking tape retries safely after failure and expired asset', async (
   })
   await page.route('**/operations/fbs-print-assets/asset-expired-1/content', async (route) => {
     assetRequests += 1
-    await route.fulfill({ status: 410, contentType: 'application/json', body: JSON.stringify({ detail: 'expired' }) })
+    if (assetRequests === 1) {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ detail: { code: 'asset_error', message: 'temporary storage error' } }),
+      })
+      return
+    }
+    await route.fulfill({
+      status: 404,
+      contentType: 'application/json',
+      body: JSON.stringify({ detail: { code: 'asset_expired', message: 'expired' } }),
+    })
   })
 
   await page.getByTestId('marking-print-confirm').click()
@@ -119,9 +131,18 @@ test('S-03 marking tape retries safely after failure and expired asset', async (
 
   await page.getByTestId('marking-print-open-ready').click()
   await expect(page.getByTestId('marking-print-preparation-error')).toContainText(
+    'Не удалось открыть ленту. Попробуйте ещё раз',
+  )
+  await expect(page.getByTestId('marking-print-preparation-error')).not.toContainText('истёк')
+  expect(assetRequests).toBe(1)
+  expect(tapeStarts).toBe(2)
+
+  await page.getByTestId('marking-print-retry').click()
+  await expect(page.getByTestId('marking-print-preparation-error')).toContainText(
     'Срок хранения ленты истёк. Соберите её ещё раз',
   )
-  expect(assetRequests).toBe(1)
+  expect(assetRequests).toBe(2)
+  expect(tapeStarts).toBe(2)
   await page.getByTestId('marking-print-retry').click()
   await expect(page.getByTestId('marking-print-preparing')).toBeVisible()
   expect(tapeStarts).toBe(3)
