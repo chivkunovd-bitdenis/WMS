@@ -54,7 +54,12 @@ export function WarehouseContextSwitch({
         {loading ? 'Загружаем склады' : selected?.name ?? 'Выберите склад'}
       </Button>
       {reason ? <Typography variant="body2" color="text.secondary">{reason}</Typography> : null}
-      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={() => setAnchorEl(null)}
+        data-testid={testId ? `${testId}-menu` : undefined}
+      >
         {options.map((option) => (
           <MenuItem
             key={option.id}
