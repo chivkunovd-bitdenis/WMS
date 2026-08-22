@@ -1,25 +1,20 @@
-# Backend development · 06-picking-list-order · атомарный кусок 4
+# Backend-dev · 06-picking-list-order
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/app/services/fbs_order_tape_print_service.py` — полная поставка проверяется целиком; заказы сортируются сервером тем же каноном, что лист подбора; каждому заказу и ошибке получения стикера возвращается постоянный `order_number`.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/app/api/fbs_supplies.py` — опубликованы `order_number` в ленте и ошибках.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/tests/test_fbs_supply_assembly.py` — добавлена проверка независимости канонического порядка от порядка входного состава.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/app/services/fbs_order_tape_print_service.py — разрешён выбор подмножества заказов для существующей строковой печати; порядок и `order_number` вычисляются по полной канонической поставке.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/tests/test_fbs_supply_assembly.py — тесты одиночной печати с сохранением полного номера и отказа для заказа вне поставки.
 
 ## Гейты
 
-- `ruff`: PASS для изменённых backend-файлов.
-- `mypy`: BLOCKED существующими ошибками в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py`, `fbs_warehouse_binding_service.py`; в изменённых файлах новых ошибок не выявлено.
-- `pytest`: PASS целевых тестов: `2 passed, 13 deselected` для канона/лист-подбора; смежный tape/sticker smoke: `1 passed, 19 deselected`.
-- `back_guard.py`: BLOCKED — `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/scripts/ci/back_guard.py` отсутствует.
-- `check_migrations.py`: BLOCKED — `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/scripts/ci/check_migrations.py` отсутствует; миграций нет.
+- ruff — целевые файлы: PASS (`ruff check app/services/fbs_order_tape_print_service.py tests/test_fbs_supply_assembly.py`); полный запуск репозитория: FAIL на существующих несвязанных нарушениях.
+- mypy — FAIL на существующих несвязанных ошибках в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py` и `fbs_warehouse_binding_service.py`; ошибок в изменённых файлах не показано.
+- pytest — PASS: `17 passed, 1 skipped` (`tests/test_fbs_supply_assembly.py`).
+- back_guard.py — не запущен: файл отсутствует в этой рабочей копии.
+- check_migrations.py — не запущен: файл отсутствует в этой рабочей копии.
+- git diff --check — PASS.
 
 ## Не реализовано
 
-- Новая бинарная генерация WMS-этикетки с номером не добавлялась: существующий контракт печати уже возвращает служебные артефакты, а этот атомарный кусок закрепляет серверный состав, порядок и номер заказа.
-- UI и клиентская типизация не изменялись по границе backend-dev.
-
-## Находки
-
-- Секреты, ключи, токены и `.env` не читались.
-- Боевой прод и живой кабинет Wildberries не затрагивались.
+- UI-находки ревью не реализовывались: они относятся к роли screen-dev и не входят в API и данные этого атома.
+- Генерация отдельной WMS-этикетки в физическом print-preview не изменялась: текущий backend-атом сохраняет серверные номера и обработку ошибок получения WB-стикеров.

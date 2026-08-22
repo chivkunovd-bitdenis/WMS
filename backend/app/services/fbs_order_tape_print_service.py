@@ -100,13 +100,17 @@ async def print_fbs_order_tape(
         raise FbsOrderTapePrintError("supply_not_found")
     ordered = _orders_in_canonical_order(supply)
     requested_ids = list(dict.fromkeys(order_ids))
-    if len(requested_ids) != len(ordered) or set(requested_ids) != {order.id for order in ordered}:
-        raise FbsOrderTapePrintError("order_not_in_supply")
+    try:
+        selected_orders = _select_requested_orders(ordered, requested_ids)
+    except KeyError as exc:
+        raise FbsOrderTapePrintError("order_not_in_supply") from exc
     order_number_by_id = {order.id: number for number, order in enumerate(ordered, start=1)}
-    canonical_order_ids = [order.id for order in ordered]
+    # Keep numbers anchored to the complete supply, while allowing the existing
+    # row action to print just its requested order(s).
+    canonical_order_ids = [order.id for order in selected_orders]
     line_by_product = await _line_by_product(session, tenant_id, supply)
     if not reprint and not allow_partial:
-        preflight_shortage = await _preflight_new_code_shortage(session, tenant_id, ordered)
+        preflight_shortage = await _preflight_new_code_shortage(session, tenant_id, selected_orders)
         if preflight_shortage > 0:
             return FbsOrderTapePrintResult(
                 orders=[],
@@ -155,7 +159,7 @@ async def print_fbs_order_tape(
 
     result_orders: list[FbsOrderTapeOrder] = []
     shortage_total = 0
-    for order in ordered:
+    for order in selected_orders:
         qr_asset_id = qr_asset_by_order.get(order.id)
         if include_order_qr and qr_asset_id is None:
             errors.append(
@@ -313,6 +317,16 @@ def _orders_in_canonical_order(supply: FbsSupply) -> list[FbsOrder]:
         return (article, sku_code, size, product_name, int(order.wb_order_id), str(order.id))
 
     return sorted(supply.orders, key=sort_key)
+
+
+def _select_requested_orders(
+    ordered: list[FbsOrder], requested_ids: list[uuid.UUID]
+) -> list[FbsOrder]:
+    by_id = {order.id: order for order in ordered}
+    if any(order_id not in by_id for order_id in requested_ids):
+        raise KeyError("order_not_in_supply")
+    requested = set(requested_ids)
+    return [order for order in ordered if order.id in requested]
 
 
 async def _line_by_product(

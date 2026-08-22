@@ -17,7 +17,10 @@ from app.db.session import SessionLocal
 from app.models.fbs_order import FBS_ORDER_STATUS_IN_SUPPLY, FBS_ORDER_STATUS_NEW, FbsOrder
 from app.models.fbs_supply import FBS_SUPPLY_STATUS_DRAFT, FbsSupply
 from app.models.product import Product
-from app.services.fbs_order_tape_print_service import _orders_in_canonical_order
+from app.services.fbs_order_tape_print_service import (
+    _orders_in_canonical_order,
+    _select_requested_orders,
+)
 from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
 from app.services.wildberries_client import WildberriesClientError
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
@@ -183,6 +186,28 @@ def test_fbs_order_tape_canonical_order_is_independent_of_requested_order() -> N
     )
 
     assert _orders_in_canonical_order(SimpleNamespace(orders=[first, second])) == [second, first]
+
+
+# TC-NEW-FBS-SUPPLY-005 — row reprint may select one order, but keeps its full-tape number.
+def test_fbs_order_tape_subset_keeps_full_supply_sequence() -> None:
+    first = SimpleNamespace(id=uuid.UUID("00000000-0000-0000-0000-000000000001"))
+    second = SimpleNamespace(id=uuid.UUID("00000000-0000-0000-0000-000000000002"))
+    third = SimpleNamespace(id=uuid.UUID("00000000-0000-0000-0000-000000000003"))
+
+    selected = _select_requested_orders([first, second, third], [third.id])
+
+    assert selected == [third]
+    assert {order.id: number for number, order in enumerate([first, second, third], 1)}[
+        selected[0].id
+    ] == 3
+
+
+def test_fbs_order_tape_rejects_order_outside_supply() -> None:
+    first = SimpleNamespace(id=uuid.UUID("00000000-0000-0000-0000-000000000001"))
+    outside = uuid.UUID("00000000-0000-0000-0000-000000000099")
+
+    with pytest.raises(KeyError):
+        _select_requested_orders([first], [outside])
 
 
 # TC-NEW-FBS-SUPPLY-ORDER-001 — supply.orders is stable by WB id, then UUID.
