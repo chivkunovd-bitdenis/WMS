@@ -969,15 +969,14 @@ async def test_fbs_promote_write_off_shelf_confirm_sold_does_not_resurrect_avail
         assert available_after_sold != 5
 
 
-# Упаковка без остатка в строке задания должна проходить с предупреждением
+# Упаковка без остатка в строке задания должна блокироваться
 @pytest.mark.asyncio
 async def test_fbs_packing_without_stock_in_line_location(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
     """
-    Когда в ячейке строки задания нет остатка товара, упаковка должна пройти
-    с предупреждением, а не упасть с ошибкой insufficient_packaging_stock.
+    Когда в ячейке строки задания нет остатка товара, упаковка блокируется.
     """
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
@@ -1041,22 +1040,9 @@ async def test_fbs_packing_without_stock_in_line_location(
         json={"quantity": 1, "idempotency_key": str(uuid.uuid4())},
     )
 
-    # Должно быть успешно (200), а не 400 с insufficient_packaging_stock
-    assert pack_resp.status_code == 200, pack_resp.text
+    assert pack_resp.status_code == 422, pack_resp.text
+    assert pack_resp.json()["detail"]["code"] == "insufficient_sorting_stock"
 
-    pack_result = pack_resp.json()
-
-    # Проверить, что warning есть в ответе
-    assert pack_result.get("warnings") is not None
-    assert len(pack_result["warnings"]) > 0
-    # Warning должен содержать информацию о том, что упаковка продолжена без списания
-    warning_text = " ".join(pack_result["warnings"])
-    assert "Упаковка продолжена" in warning_text or "упаковка продолжена" in warning_text.lower()
-
-    # Проверить, что заказ помечен как упакованный в ответе
-    assert pack_result["fulfilled_order"] is not None
-    fulfilled_order_from_api = pack_result["fulfilled_order"]
-    assert fulfilled_order_from_api["pack_status"] == "packed"
 
     # Проверить, что остаток не ушёл в минус
     async with SessionLocal() as session:
@@ -1101,7 +1087,7 @@ async def test_fbs_packing_takes_stock_from_other_warehouse_sorting(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
-    """Товар лежит в сортировке другого склада — берём оттуда, а не отказываем.
+    """Товар в сортировке другого склада не списывается без подтверждённого pick.
 
     Ровно случай 20.08.2026: приёмка положила товар в сортировку склада «FBS WB …»,
     поставка создалась на складе «основной», и упаковка вставала на нулевом остатке.
@@ -1191,13 +1177,8 @@ async def test_fbs_packing_takes_stock_from_other_warehouse_sorting(
         headers=headers,
         json={"quantity": 1, "idempotency_key": str(uuid.uuid4())},
     )
-    assert pack_resp.status_code == 200, pack_resp.text
-    body = pack_resp.json()
-    warnings = body.get("warnings") or []
-    assert warnings, "оператор должен узнать, что списали не из своей ячейки"
-    joined = " ".join(warnings)
-    assert "другой ячейки сортировки" in joined
-    assert "остаток не списан" not in joined
+    assert pack_resp.status_code == 422, pack_resp.text
+    assert pack_resp.json()["detail"]["code"] == "insufficient_sorting_stock"
 
     async with SessionLocal() as session:
         after = await session.scalar(
@@ -1207,8 +1188,8 @@ async def test_fbs_packing_takes_stock_from_other_warehouse_sorting(
                 InventoryBalance.storage_location_id == other_sorting_id,
             )
         )
-        # Ровно одна единица переведена в упакованные, и именно в чужой ячейке.
-        assert int(before or 0) - int(after or 0) == 1
+        # Чужая сортировка не затрагивается упаковочным обходом.
+        assert int(before or 0) == int(after or 0)
         balances = list(
             (
                 await session.execute(
@@ -1226,11 +1207,11 @@ async def test_fbs_packing_takes_stock_from_other_warehouse_sorting(
 
 
 @pytest.mark.asyncio
-async def test_fbs_supply_completes_even_without_stock_anywhere(
+async def test_fbs_supply_stays_open_without_stock_anywhere(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
-    """Путь доходит до конца, даже когда остатка нет нигде.
+    """Поставка не упаковывается, когда остатка нет нигде.
 
     Раньше склад вставал дважды: сначала на упаковке, а если её пропустить — на
     завершении задания, где списание требовало остаток в той же ячейке.
@@ -1272,20 +1253,21 @@ async def test_fbs_supply_completes_even_without_stock_anywhere(
             headers=headers,
             json={"quantity": remaining, "idempotency_key": str(uuid.uuid4())},
         )
-        assert packed.status_code == 200, packed.text
+        assert packed.status_code == 422, packed.text
+        assert packed.json()["detail"]["code"] == "insufficient_sorting_stock"
 
     done = await async_client.post(
         f"/operations/packaging-tasks/{task_id}/complete",
         headers=headers,
         json={"acknowledge_all_packed": False},
     )
-    assert done.status_code == 200, done.text
+    assert done.status_code == 422, done.text
 
     supply_after = await async_client.get(
         f"/operations/fbs-supplies/{supply_id}", headers=headers
     )
     assert supply_after.status_code == 200, supply_after.text
-    assert supply_after.json()["status"] == "packed"
+    assert supply_after.json()["status"] == "assembling"
 
     async with SessionLocal() as session:
         balances = list(

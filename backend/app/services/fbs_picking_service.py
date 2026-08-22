@@ -60,7 +60,6 @@ async def scan_pick_location(
     location = await _resolve_storage_location(
         session,
         tenant_id,
-        warehouse_id=supply.warehouse_id,
         location_barcode=location_barcode,
     )
     if location is None:
@@ -91,7 +90,6 @@ async def select_pick_location(
         .where(
             StorageLocation.id == location_id,
             StorageLocation.tenant_id == tenant_id,
-            StorageLocation.warehouse_id == supply.warehouse_id,
         )
     )
     if location is None:
@@ -168,11 +166,18 @@ async def scan_pick_product(
         return await get_supply_workspace(session, tenant_id, supply_id)
 
     supply = await _load_supply(session, tenant_id, supply_id)
-    location = await session.get(StorageLocation, location_id)
+    location = await session.scalar(
+        select(StorageLocation)
+        .options(selectinload(StorageLocation.warehouse))
+        .where(
+            StorageLocation.id == location_id,
+            StorageLocation.tenant_id == tenant_id,
+        )
+    )
     if (
         location is None
-        or location.tenant_id != tenant_id
-        or location.warehouse_id != supply.warehouse_id
+        or location.warehouse is None
+        or not location.warehouse.is_operational
     ):
         raise FbsPickingError(
             "wrong_location",
@@ -517,7 +522,6 @@ async def _resolve_storage_location(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     *,
-    warehouse_id: uuid.UUID,
     location_barcode: str,
 ) -> StorageLocation | None:
     stmt = (
@@ -525,14 +529,19 @@ async def _resolve_storage_location(
         .options(selectinload(StorageLocation.warehouse))
         .where(
             StorageLocation.tenant_id == tenant_id,
-            StorageLocation.warehouse_id == warehouse_id,
             or_(
                 StorageLocation.barcode == location_barcode,
                 StorageLocation.code == location_barcode,
             ),
         )
     )
-    return (await session.execute(stmt)).scalar_one_or_none()
+    location = (await session.execute(stmt)).scalar_one_or_none()
+    if location is None:
+        return None
+    warehouse = location.warehouse
+    if warehouse is not None and not warehouse.is_operational:
+        return None
+    return location
 
 
 def _pending_orders_by_product(

@@ -1185,10 +1185,6 @@ async def transfer_on_hand_between_locations(
     ):
         msg = "storage location not found"
         raise ValueError(msg)
-    if loc_from.warehouse_id != loc_to.warehouse_id:
-        msg = "locations must be in the same warehouse"
-        raise ValueError(msg)
-
     on_hand = await _physical_on_hand(session, tenant_id, product_id, from_storage_location_id)
     if on_hand < quantity:
         msg = "insufficient stock"
