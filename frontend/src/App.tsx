@@ -55,9 +55,16 @@ import {
 } from './utils/ffPermissions'
 import { setSeparateMarkingPrintEnabled } from './utils/separateMarkingPrint'
 import { useWarehouseContext } from './contexts/WarehouseContext'
+import { chooseWarehouseId, operationalWarehouses } from './utils/fbsWarehouse'
 import type { InboundOperationType } from './utils/inboundOperationType'
 
-type WarehouseRow = { id: string; name: string; code: string; is_operational?: boolean }
+type WarehouseRow = {
+  id: string
+  name: string
+  code: string
+  is_operational?: boolean
+  is_primary?: boolean
+}
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
 type ProductRow = {
   id: string
@@ -278,7 +285,7 @@ export default function App() {
     selectWarehouse,
     clearWarehouseContext,
   } =
-    useWarehouseContext('fulfillment')
+    useWarehouseContext('fulfillment', me?.id ?? null)
   const [locations, setLocations] = useState<LocationRow[]>([])
   const [products, setProducts] = useState<ProductRow[]>([])
   const [sellers, setSellers] = useState<SellerRow[]>([])
@@ -2520,8 +2527,11 @@ export default function App() {
           headers: authHeaders(token),
         })
         if (res.ok) {
-          const list = (await res.json()) as WarehouseRow[]
-          wid = list[0]?.id ?? null
+          const list = operationalWarehouses((await res.json()) as WarehouseRow[])
+          wid = chooseWarehouseId(list, selectedWarehouseId, null)
+          if (wid && wid !== selectedWarehouseId) {
+            selectWarehouse(wid)
+          }
         }
       } catch {
         wid = null
@@ -2602,8 +2612,8 @@ export default function App() {
   }, [
     token,
     selectedWarehouseId,
-    warehouses,
     authHeaders,
+    selectWarehouse,
     refreshMarketplaceUnloadList,
   ])
 

@@ -17,7 +17,7 @@ import { SellerHonestSignScreen } from '../../screens/v2/SellerHonestSignScreen'
 import { SellerSettingsScreen } from '../../screens/v2/SellerSettingsScreen'
 import { NotificationsPage } from '../../screens/shared/NotificationsPage'
 import { SellerLayout } from './SellerLayout'
-import { useWarehouseContext } from '../../contexts/WarehouseContext'
+import { operationalWarehouses } from '../../utils/fbsWarehouse'
 
 type InboundSummaryRow = {
   id: string
@@ -35,7 +35,13 @@ type InboundSummaryRow = {
   created_at?: string
 }
 
-type WarehouseRow = { id: string; name: string; code: string; is_operational?: boolean }
+type WarehouseRow = {
+  id: string
+  name: string
+  code: string
+  is_operational?: boolean
+  is_primary?: boolean
+}
 
 type SellerAppProps = {
   navigationBasePath?: string
@@ -62,8 +68,8 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
 
   const [shopsBusy, setShopsBusy] = useState(false)
 
-  const { warehouses, selectedWarehouseId, setWarehouses, clearWarehouseContext } =
-    useWarehouseContext('seller')
+  const [warehouses, setWarehouses] = useState<WarehouseRow[]>([])
+  const singleWarehouseId = warehouses.length === 1 ? warehouses[0].id : null
 
   const [opsBusy, setOpsBusy] = useState(false)
   const [opsError, setOpsError] = useState<string | null>(null)
@@ -95,9 +101,8 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
   )
 
   const onLogout = useCallback(() => {
-    clearWarehouseContext()
     logout()
-  }, [clearWarehouseContext, logout])
+  }, [logout])
 
   useEffect(() => {
     const previousTitle = document.title
@@ -114,7 +119,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
         throw new Error(await readApiErrorMessage(res))
       }
       const rows = (await res.json()) as WarehouseRow[]
-      setWarehouses(rows)
+      setWarehouses(operationalWarehouses(rows))
     },
     [authHeaders],
   )
@@ -236,7 +241,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
 
   useEffect(() => {
     if (!token || !me) {
-      clearWarehouseContext()
+      setWarehouses([])
       setOpsBusy(false)
       setOpsError(null)
       setInboundSummaries([])
@@ -254,7 +259,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
         setOpsError(e instanceof Error ? e.message : 'Не удалось загрузить данные.')
       }
     })()
-  }, [clearWarehouseContext, me, refreshInboundList, refreshMpUnloadList, refreshWarehouses, token])
+  }, [me, refreshInboundList, refreshMpUnloadList, refreshWarehouses, token])
 
   const rootElement = (() => {
     if (!token) {
@@ -348,7 +353,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                   error={opsError}
                   token={token}
                   authHeaders={authHeaders}
-                  warehouseId={selectedWarehouseId}
+                  warehouseId={null}
                   inboundSummaries={inboundSummaries}
                   mpUnloadSummaries={mpUnloadSummaries}
                   onRefreshInboundList={async () => {
@@ -365,7 +370,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                     if (!token) {
                       return null
                     }
-                    const wid = selectedWarehouseId
+                    const wid = singleWarehouseId
                     if (!wid) {
                       setOpsError('Склад ФФ не найден.')
                       return null
@@ -419,7 +424,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                   key={catalogScopeKey}
                   token={token}
                   authHeaders={authHeaders}
-                  warehouseId={selectedWarehouseId}
+                  warehouseId={singleWarehouseId}
                   warehouses={warehouses}
                   onRefreshInboundList={() =>
                     token ? refreshInboundList(token) : undefined
@@ -438,7 +443,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                   key={catalogScopeKey}
                   token={token}
                   authHeaders={authHeaders}
-                  warehouseId={selectedWarehouseId}
+                  warehouseId={singleWarehouseId}
                   warehouses={warehouses}
                   onRefreshInboundList={() =>
                     token ? refreshInboundList(token) : undefined
