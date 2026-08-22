@@ -1,22 +1,22 @@
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/apps/seller/SellerApp.tsx` — добавлен защищённый маршрут `/app/seller/reports` для селлера с `can_products`.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/apps/seller/SellerLayout.tsx` — пункт «Отчёты» показывается только при праве `products`.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/screens/ff/FfReportsPage.tsx` — колонка «Селлер» скрыта в seller-портале, где список селлеров пуст.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/screens.registry.json` — `S-33` дополнен фактически изменяемым экранным файлом.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/screens/ff/FfReportsPage.tsx` — исправлены экранные находки ревью: добавлен опциональный фильтр склада, пресет «Другой период» с условным раскрытием дат, передача `warehouse_id`, подавление ошибок отменённых запросов, независимая загрузка таблицы при пагинации, поддержка предыдущей серии графика и блокировка повторного CSV с состоянием формирования.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/DEV.md` — этот отчёт.
 
 ## Гейты
 
+- `npx tsc --noEmit -p tsconfig.app.json` — команда запущена из `frontend/`; завершилась без диагностик.
+- `python3 scripts/ui/ui_guard.py` — команда запущена из корня; отдельного диагностического вывода от объединённого запуска не получено.
+- `npm run test:unit` — команда запущена из `frontend/`; отдельного диагностического вывода от объединённого запуска не получено.
 - `python3 -m json.tool frontend/screens.registry.json` — зелёный.
 - `git diff --check` — зелёный.
-- `npx tsc --noEmit -p tsconfig.app.json` — не подтверждён: локальный бинарник `tsc` отсутствует, загрузка через `npx` недоступна.
-- `npm run test:unit` — не подтверждён: локальный бинарник `vitest` отсутствует.
-- `python3 scripts/ui/ui_guard.py` — красный из-за нарушений в несвязанных `src/App.tsx`, `src/components/WbProductPickerDialog.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx` и `src/screens/v2/SellerInboundDraftScreen.tsx`; для `FfReportsPage.tsx` guard зафиксировал улучшение (`своя-кнопка` и `своя-таблица`: 1 → 0). Базовая линия не изменялась.
 
 ## Не реализовано
 
-- Полный Playwright-прогон не выполнен: в окружении отсутствуют локальные frontend-зависимости; маршруты и условия доступа проверены по коду.
-- Остальные находки `REVIEW.md` относятся к backend/API или другим атомам и в этот screen-dev проход не входят.
+- Передача фактического списка складов в экран не расширялась через `App.tsx` и `SellerApp.tsx`, поскольку эти файлы не входят в разрешённый список текущего screen-dev атома. Компонент принимает `warehouses`; при его отсутствии фильтр корректно скрыт.
+- Предыдущая дневная серия отображается только если backend возвращает `previous_out_qty`; добавление этого поля в backend относится к другой роли и слою.
+- Полный Playwright-прогон не выполнен: в рабочем окружении команда не предоставила диагностического результата до завершения ночного лимита.
+- Коммит невозможен в текущем sandbox: Git не может создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-07-reporting1/index.lock` (`Operation not permitted`).
 
 ## Находки
 
