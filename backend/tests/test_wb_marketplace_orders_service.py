@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import time
 import uuid
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -20,14 +21,78 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import SessionLocal
 from app.models.fbs_order import FBS_ORDER_STATUS_ASSEMBLING, FbsOrder
 from app.models.fbs_supply import (
-    FBS_SUPPLY_SOURCE_WB,
     FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_DONE,
     FbsSupply,
 )
 from app.models.product import Product
+from app.services import wb_marketplace_orders_service as orders_service
 from app.services.wb_marketplace_orders_service import link_confirmed_orders_to_wb_supplies
+from app.services.wildberries_errors import WildberriesClientError
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
+
+
+class _SyncSession:
+    def __init__(self) -> None:
+        self.commit = AsyncMock()
+        self.rollback = AsyncMock()
+
+
+# TC-NEW-WB-SYNC-001: new sync uses only /orders/new and performs an idempotent upsert.
+@pytest.mark.asyncio
+async def test_new_sync_does_not_fetch_paginated_orders(monkeypatch: pytest.MonkeyPatch) -> None:
+    session = _SyncSession()
+    seller_id = uuid.uuid4()
+    new_fetch = AsyncMock(return_value=[{"id": 1}])
+    page_fetch = AsyncMock(side_effect=AssertionError("full order list must not be fetched"))
+    upsert = AsyncMock(return_value=(object(), False))
+    monkeypatch.setattr(
+        orders_service, "_resolve_marketplace_api_token", AsyncMock(return_value="token")
+    )
+    monkeypatch.setattr(orders_service, "fetch_marketplace_orders_new", new_fetch)
+    monkeypatch.setattr(orders_service, "fetch_marketplace_orders_page", page_fetch)
+    monkeypatch.setattr(orders_service, "upsert_order_from_wb_row", upsert)
+
+    result = await orders_service.sync_new_orders_for_seller(
+        session, uuid.uuid4(), seller_id, object()  # type: ignore[arg-type]
+    )
+
+    assert result["orders_received"] == 1
+    new_fetch.assert_awaited_once()
+    page_fetch.assert_not_awaited()
+    upsert.assert_awaited_once()
+
+
+# TC-NEW-WB-SYNC-002: reconcile consumes all cursors and never reports success after a page error.
+@pytest.mark.asyncio
+async def test_reconcile_walks_cursor_and_fails_incomplete_pass(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = _SyncSession()
+    pages = [([{"id": 1}], 10), ([{"id": 2}], 20), ([], None)]
+    page_fetch = AsyncMock(side_effect=pages)
+    upsert = AsyncMock(side_effect=[(object(), True), (object(), False)])
+    monkeypatch.setattr(
+        orders_service, "_resolve_marketplace_api_token", AsyncMock(return_value="token")
+    )
+    monkeypatch.setattr(orders_service, "fetch_marketplace_orders_page", page_fetch)
+    monkeypatch.setattr(orders_service, "upsert_order_from_wb_row", upsert)
+
+    result = await orders_service.reconcile_orders_for_seller(
+        session, uuid.uuid4(), uuid.uuid4(), object()  # type: ignore[arg-type]
+    )
+
+    assert result["orders_received"] == 2
+    assert [call.kwargs["next_token"] for call in page_fetch.await_args_list] == [None, 10, 20]
+    assert session.commit.await_count == 2
+
+    page_fetch.side_effect = [([{"id": 3}], 10), WildberriesClientError("upstream_error")]
+    upsert.side_effect = [(object(), False)]
+    with pytest.raises(orders_service.WbMarketplaceOrdersError):
+        await orders_service.reconcile_orders_for_seller(
+            session, uuid.uuid4(), uuid.uuid4(), object()  # type: ignore[arg-type]
+        )
+    assert session.rollback.await_count == 1
 
 
 async def _register_tenant_and_seller(

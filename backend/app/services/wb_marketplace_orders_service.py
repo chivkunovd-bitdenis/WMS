@@ -1454,6 +1454,25 @@ async def sync_seller_orders(
     *,
     warehouse_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
+    """Backward-compatible alias for the lightweight new-orders sync."""
+    return await sync_new_orders_for_seller(
+        session,
+        tenant_id,
+        seller_id,
+        http_client,
+        warehouse_id=warehouse_id,
+    )
+
+
+async def sync_new_orders_for_seller(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    http_client: httpx.AsyncClient,
+    *,
+    warehouse_id: uuid.UUID | None = None,
+) -> dict[str, Any]:
+    """Import only current WB assembly tasks; never walk the historical list."""
     _ = warehouse_id  # ignored: WMS warehouse resolved per order via WB binding
     api_token = await _resolve_marketplace_api_token(session, tenant_id, seller_id)
 
@@ -1474,9 +1493,6 @@ async def sync_seller_orders(
     created = 0
     upserted = 0
     orders_received = 0
-    orders_page_error: str | None = None
-    status_sync_error: str | None = None
-    supply_link_result: dict[str, Any] = {}
     pool_debit_totals: dict[str, int] = {"debited": 0, "shortfall": 0}
 
     for row in new_rows:
@@ -1490,7 +1506,33 @@ async def sync_seller_orders(
     if orders_received:
         await session.commit()
 
+    return {
+        "seller_id": str(seller_id),
+        "orders_received": orders_received,
+        "orders_upserted": upserted,
+        "orders_created": created,
+        "stock_pool_debited_units": pool_debit_totals["debited"],
+        "stock_pool_debit_shortfall_units": pool_debit_totals["shortfall"],
+    }
+
+
+async def reconcile_orders_for_seller(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    http_client: httpx.AsyncClient,
+    *,
+    warehouse_id: uuid.UUID | None = None,
+) -> dict[str, Any]:
+    """Re-read the complete WB order list and only succeed after its last page."""
+    _ = warehouse_id
+    api_token = await _resolve_marketplace_api_token(session, tenant_id, seller_id)
+    created = 0
+    upserted = 0
+    orders_received = 0
+    pool_debit_totals: dict[str, int] = {"debited": 0, "shortfall": 0}
     next_token: int | None = None
+
     for _page in range(MAX_ORDERS_PAGES):
         try:
             page_rows, next_token = await fetch_marketplace_orders_page(
@@ -1509,11 +1551,7 @@ async def sync_seller_orders(
                 ref=ref,
             )
             error = _wb_orders_error_from_client(exc, ref=ref)
-            code = error.code
-            if orders_received:
-                orders_page_error = code
-                await session.rollback()
-                break
+            await session.rollback()
             raise error from exc
 
         if not page_rows:
@@ -1530,49 +1568,14 @@ async def sync_seller_orders(
         if next_token is None:
             break
 
-    statuses_updated = 0
-    if orders_page_error is None:
-        try:
-            statuses_updated = await sync_order_statuses(
-                session, tenant_id, seller_id, http_client, api_token
-            )
-            await session.commit()
-        except WbMarketplaceOrdersError as exc:
-            await session.rollback()
-            if not orders_received:
-                raise
-            status_sync_error = exc.code
-        if status_sync_error is None:
-            try:
-                supply_link_result = await link_confirmed_orders_to_wb_supplies(
-                    session, tenant_id, seller_id, http_client, api_token
-                )
-                await session.commit()
-            except Exception as exc:
-                await session.rollback()
-                logger.exception(
-                    "wb supply link failed: seller=%s step=local error=%s",
-                    seller_id,
-                    type(exc).__name__,
-                )
-                supply_link_result = _empty_supply_link_result(
-                    supply_link_error="local_exception",
-                )
-
     result: dict[str, Any] = {
         "seller_id": str(seller_id),
         "orders_received": orders_received,
         "orders_upserted": upserted,
         "orders_created": created,
-        "statuses_updated": statuses_updated,
         "stock_pool_debited_units": pool_debit_totals["debited"],
         "stock_pool_debit_shortfall_units": pool_debit_totals["shortfall"],
     }
-    result.update(supply_link_result)
-    if orders_page_error is not None:
-        result["orders_page_error"] = orders_page_error
-    if status_sync_error is not None:
-        result["status_sync_error"] = status_sync_error
     return result
 
 
