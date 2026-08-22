@@ -1,0 +1,25 @@
+{
+  "milestones": {
+    "01-ready": {"card": "01-wb-marking", "feature": 5},
+    "02-ready": {"card": "02-verdikt-screen", "feature": 5},
+    "03-ready": {"card": "03-no-distribution-mode", "feature": 4},
+    "05-ready": {"card": "05-prod-slow", "feature": 7},
+    "06-ready": {"card": "06-picking-list-order", "feature": 6},
+    "07-A": {"card": "07-reporting", "feature": 2},
+    "09-A": {"card": "09-billing", "feature": 3},
+    "04-D": {"card": "04-warehouse-switch", "feature": 11},
+    "08-B": {"card": "08-storage", "feature": 7}
+  },
+  "requires": {
+    "05-prod-slow#1": ["01-ready", "02-ready"],
+    "06-picking-list-order#1": ["03-ready", "05-ready"],
+    "07-reporting#1": ["01-ready", "03-ready"],
+    "07-reporting#6": ["04-D"],
+    "04-warehouse-switch#9": ["02-ready", "06-ready"],
+    "04-warehouse-switch#10": ["02-ready", "05-ready", "06-ready"],
+    "04-warehouse-switch#11": ["02-ready", "06-ready", "07-A"],
+    "08-storage#5": ["07-A"],
+    "08-storage#7": ["09-A"],
+    "09-billing#8": ["08-B"]
+  }
+}

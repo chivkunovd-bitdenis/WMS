@@ -7,6 +7,9 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
+from math import isfinite
 from typing import Any, cast
 
 import httpx
@@ -19,9 +22,6 @@ from app.services.wildberries_errors import (
 )
 
 MAX_MARKETPLACE_FBS_BATCH = 100
-# A seller poll must not be held by an arbitrary upstream Retry-After value.
-# The marking contract permits one short retry only; the next poll handles the rest.
-MAX_MARKETPLACE_META_RETRY_AFTER_SECONDS = 1.0
 
 MARKETPLACE_SUPPLIES_BATCH_ORDERS_PATH = "/api/marketplace/v3/supplies/{supply_id}/orders"
 MARKETPLACE_SUPPLY_ORDER_IDS_PATH = "/api/marketplace/v3/supplies/{supply_id}/order-ids"
@@ -182,6 +182,57 @@ def _parse_meta_detail(entry: dict[str, Any]) -> MarketplaceMetaDetail | None:
     return MarketplaceMetaDetail(
         key=key, value=value, decision=decision, reason=reason
     )
+
+
+def _retry_after_seconds(value: str | None) -> float:
+    if value is None:
+        return 0.0
+    try:
+        seconds = float(value)
+    except ValueError:
+        try:
+            retry_at = parsedate_to_datetime(value)
+        except (TypeError, ValueError, OverflowError):
+            return 0.0
+        if retry_at.tzinfo is None:
+            retry_at = retry_at.replace(tzinfo=UTC)
+        return max(0.0, (retry_at - datetime.now(UTC)).total_seconds())
+    if not isfinite(seconds):
+        return 0.0
+    return max(0.0, seconds)
+
+
+def _mock_meta_details(snapshot: dict[str, Any]) -> tuple[MarketplaceMetaDetail, ...]:
+    details: list[MarketplaceMetaDetail] = []
+    for source_key, kind in {
+        "sgtins": "sgtin",
+        "uin": "uin",
+        "imei": "imei",
+        "gtin": "gtin",
+    }.items():
+        entries = snapshot.get(source_key)
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            value = entry.get("value")
+            if not isinstance(value, str):
+                continue
+            check_status = entry.get("checkStatus")
+            decision = (
+                "pending"
+                if check_status in {None, "new", "checking"}
+                else str(check_status)
+            )
+            details.append(
+                MarketplaceMetaDetail(
+                    key=kind,
+                    value=value,
+                    decision=decision,
+                )
+            )
+    return tuple(details)
 
 
 def _extend_meta_validation_items(
@@ -636,8 +687,7 @@ async def fetch_marketplace_orders_meta_batch(
         return [
             MarketplaceOrderMetaRow(
                 order_id=order_id,
-                meta_details=(),
-                meta=mock_order_meta_snapshot(order_id),
+                meta_details=_mock_meta_details(mock_order_meta_snapshot(order_id)),
             )
             for order_id in order_ids
         ]
@@ -653,15 +703,7 @@ async def fetch_marketplace_orders_meta_batch(
         json_body={"orders": order_ids},
     )
     if response.status_code == 429:
-        retry_after_raw = response.headers.get("Retry-After")
-        try:
-            retry_after = min(
-                MAX_MARKETPLACE_META_RETRY_AFTER_SECONDS,
-                max(0.0, float(retry_after_raw or "0")),
-            )
-        except ValueError:
-            retry_after = 0.0
-        await asyncio.sleep(retry_after)
+        await asyncio.sleep(_retry_after_seconds(response.headers.get("Retry-After")))
         response = await marketplace_request(
             client,
             "POST",

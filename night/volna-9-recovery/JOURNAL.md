@@ -77,3 +77,9 @@
 21:20   01-wb-marking · dev: фича 4/5 сохранена df3c44a27c13
 21:24   01-wb-marking · backend-dev: готово
 21:24   01-wb-marking · dev: фича 5/5 сохранена f6d57e4b4091
+21:30   01-wb-marking · reviewer: готово
+21:30 01-wb-marking: отложено — reviewer, эскалация не помогла
+22:12   01-wb-marking · resume: поатомный rework Sol по сохранённым находкам
+22:13   01-wb-marking · resume: поатомный rework Sol по сохранённым находкам
+22:14   01-wb-marking · resume: поатомный rework Sol по сохранённым находкам
+22:17   01-wb-marking · backend-dev: готово

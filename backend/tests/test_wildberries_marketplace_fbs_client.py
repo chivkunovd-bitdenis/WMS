@@ -5,14 +5,19 @@ OpenAPI reference: dev.wildberries.ru/docs/openapi/orders-fbs (verified 2026-08-
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+from email.utils import format_datetime
 from unittest.mock import patch
 
 import httpx
 import pytest
 
+from app.core.settings import settings
 from app.services.wildberries_client import (
     add_orders_to_marketplace_supply,
     deliver_marketplace_supply,
+    put_marketplace_order_meta,
+    reset_mock_marketplace_order_meta,
 )
 from app.services.wildberries_errors import (
     MetaValidationFailItem,
@@ -21,8 +26,8 @@ from app.services.wildberries_errors import (
 )
 from app.services.wildberries_fbs_client import (
     MAX_MARKETPLACE_FBS_BATCH,
-    MAX_MARKETPLACE_META_RETRY_AFTER_SECONDS,
     WB_FBS_OPENAPI_VERIFIED_DATE,
+    MarketplaceMetaDetail,
     add_orders_to_marketplace_supply_batch,
     delete_marketplace_order_meta,
     delete_marketplace_supply_trbx,
@@ -157,8 +162,75 @@ async def test_fetch_orders_meta_batch_retries_429_once_after_retry_after() -> N
             )
 
     assert calls == 2
-    sleep.assert_awaited_once_with(MAX_MARKETPLACE_META_RETRY_AFTER_SECONDS)
+    sleep.assert_awaited_once_with(3600.0)
     assert rows[0].order_id == 123456
+
+
+@pytest.mark.asyncio
+async def test_fetch_orders_meta_batch_honors_retry_after_http_date() -> None:
+    calls = 0
+    retry_at = datetime.now(UTC) + timedelta(seconds=60)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(
+                429,
+                headers={"Retry-After": format_datetime(retry_at, usegmt=True)},
+            )
+        return httpx.Response(200, json={"orders": [{"id": 123456, "metaDetails": []}]})
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport, base_url="https://wb-mock.test") as client:
+        with patch("app.services.wildberries_fbs_client.asyncio.sleep") as sleep:
+            await fetch_marketplace_orders_meta_batch(
+                client,
+                api_token="wb-token",
+                order_ids=[123456],
+                marketplace_api_base="https://wb-mock.test",
+            )
+
+    assert calls == 2
+    delay = sleep.await_args.args[0]
+    assert 58.0 <= delay <= 60.0
+
+
+@pytest.mark.asyncio
+async def test_fetch_orders_meta_batch_mock_returns_meta_details(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "e2e_mock_wb_marketplace_marking", True)
+    reset_mock_marketplace_order_meta()
+    transport = httpx.MockTransport(
+        lambda request: pytest.fail("mock marking mode must not call the network")
+    )
+
+    async with httpx.AsyncClient(transport=transport, base_url="https://wb-mock.test") as client:
+        await put_marketplace_order_meta(
+            client,
+            api_token="wb-token",
+            order_id=123456,
+            kind="sgtin",
+            value="010460...",
+            marketplace_api_base="https://wb-mock.test",
+        )
+        rows = await fetch_marketplace_orders_meta_batch(
+            client,
+            api_token="wb-token",
+            order_ids=[123456],
+            marketplace_api_base="https://wb-mock.test",
+        )
+
+    assert rows[0].meta is None
+    assert rows[0].meta_details == (
+        MarketplaceMetaDetail(
+            key="sgtin",
+            value="010460...",
+            decision="pending",
+            reason=None,
+        ),
+    )
 
 
 @pytest.mark.asyncio
