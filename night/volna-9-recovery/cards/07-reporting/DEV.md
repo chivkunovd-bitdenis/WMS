@@ -1,25 +1,24 @@
-# Backend development · 07-reporting · атом 1
+# DEV · 07-reporting · атом 5
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/alembic/versions/20260822_0094_inventory_movement_reporting_dimensions.py` — backfill сохраняет доступные текущие измерения, но помечает каждую исторически реконструированную строку как `reporting_dimensions_legacy`, чтобы текущая связь не была выдана за доказанный факт прошлого.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/tests/test_inventory_movement_reporting_dimensions.py` — зафиксирован консервативный контракт legacy-backfill и индексов.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/DEV.md` — отчёт атома.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/MovementFlowChart.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/MovementFlowChart.test.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/DEV.md`
 
 ## Гейты
 
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && ruff check app/models/inventory_movement.py alembic/versions/20260822_0094_inventory_movement_reporting_dimensions.py tests/test_inventory_movement_reporting_dimensions.py` — `All checks passed!`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && mypy app/models/inventory_movement.py` — `Success: no issues found in 1 source file`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && pytest -q tests/test_inventory_movement_reporting_dimensions.py` — `2 passed in 0.02s`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && python3 scripts/ci/back_guard.py` — не применён: файла `scripts/ci/back_guard.py` в этой рабочей копии нет.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && python3 scripts/ci/check_migrations.py` — не запускался, потому что названный скрипт также отсутствует в этой рабочей копии.
-- `git diff --check` — без ошибок.
+- Зелёный: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npx tsc --noEmit -p tsconfig.app.json`.
+- Красный: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && python3 scripts/ui/ui_guard.py`. Новые нарушения зафиксированы в чужих файлах вне атома: `frontend/src/App.tsx`, `frontend/src/components/WbProductPickerDialog.tsx`, `frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx`, `frontend/src/screens/v2/SellerInboundDraftScreen.tsx`. Базовая линия не обновлялась.
+- Красный: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npm run test:unit -- src/ui-kit/MovementFlowChart.test.tsx --run`. Причина: `sh: vitest: command not found`; зависимости для frontend не установлены в этой рабочей копии.
+
+Точная команда, выполненная ранее в составе связанной проверки: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npx tsc --noEmit -p tsconfig.app.json && npm run test:unit -- MovementFlowChart.test.tsx`.
 
 ## Не реализовано
 
-- Пункты следующих атомов из `FEATURES.md` не затрагивались.
-- Фактический PostgreSQL round-trip миграции не запускался: в репозитории нет требуемых CI-скриптов, а отдельный тестовый URL базы не предоставлен. Целевой тест фиксирует SQL-контракт миграции.
+Нет. Находка review №7, относящаяся к этому атому, исправлена: график теперь показывает пустое состояние и для непустой дневной серии, в которой все отображаемые значения равны нулю, а не рисует нулевые линии.
 
 ## Находки
 
-- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались.
+- `ui_guard.py` обнаружил новые нарушения вне разрешённых файлов атома; они не изменялись.
+- Установленные frontend-зависимости отсутствуют, поэтому Vitest не запускается.

@@ -79,3 +79,5 @@
 22:12   07-reporting · resume: поатомный rework Terra по сохранённым находкам
 23:02   07-reporting · resume: поатомный rework Terra по сохранённым находкам
 23:04   07-reporting · backend-dev: готово
+23:04   07-reporting · dev: фича 1/11 сохранена 6d7e6d11278f
+23:06   07-reporting · screen-dev: готово

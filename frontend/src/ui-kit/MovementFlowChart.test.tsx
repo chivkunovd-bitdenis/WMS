@@ -26,6 +26,15 @@ describe('MovementFlowChart', () => {
   it('renders the empty-period message and loading skeleton', () => {
     const empty = renderToStaticMarkup(<MovementFlowChart series={[]} showPrevious ariaDescription="Описание" />)
     expect(empty).toContain('За выбранный период движений нет')
+    const zeroSeries = renderToStaticMarkup(
+      <MovementFlowChart
+        series={series.map((point) => ({ ...point, inbound: 0, outbound: 0, previousOutbound: 0 }))}
+        showPrevious
+        ariaDescription="Описание"
+      />,
+    )
+    expect(zeroSeries).toContain('За выбранный период движений нет')
+    expect(zeroSeries).not.toContain('<polyline')
     const loading = renderToStaticMarkup(<MovementFlowChart series={series} showPrevious loading ariaDescription="Описание" testId="flow" />)
     expect(loading).toContain('MuiSkeleton-root')
     expect(loading).not.toContain('stroke-dasharray')

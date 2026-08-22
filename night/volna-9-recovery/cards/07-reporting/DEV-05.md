@@ -1,24 +1,24 @@
+# DEV · 07-reporting · атом 5
+
 ## Изменённые файлы
 
-Изменений в исходных файлах атома нет: `MovementFlowChart` уже реализован в соответствии с контрактом, экспортирован через ui-kit и покрыт требуемыми unit-сценариями.
-
-Проверенные файлы:
-
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/MovementFlowChart.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/index.ts`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/MovementFlowChart.test.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/DEV.md`
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` — зелёный.
-- `python3 scripts/ui/ui_guard.py` — красный из-за четырёх новых нарушений в несвязанных файлах: `frontend/src/App.tsx`, `frontend/src/components/WbProductPickerDialog.tsx`, `frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx`, `frontend/src/screens/v2/SellerInboundDraftScreen.tsx`. Базовую линию не обновлял.
-- `npm run test:unit -- --run frontend/src/ui-kit/MovementFlowChart.test.tsx` — не запущен: в `frontend` отсутствует локальный исполняемый `vitest` (`node_modules` не установлен).
+- Зелёный: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npx tsc --noEmit -p tsconfig.app.json`.
+- Красный: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && python3 scripts/ui/ui_guard.py`. Новые нарушения зафиксированы в чужих файлах вне атома: `frontend/src/App.tsx`, `frontend/src/components/WbProductPickerDialog.tsx`, `frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx`, `frontend/src/screens/v2/SellerInboundDraftScreen.tsx`. Базовая линия не обновлялась.
+- Красный: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npm run test:unit -- src/ui-kit/MovementFlowChart.test.tsx --run`. Причина: `sh: vitest: command not found`; зависимости для frontend не установлены в этой рабочей копии.
 
-Проверены сценарии контракта: видимая легенда и доступное описание серий, отсутствие пунктирной серии при выключенном сравнении, сообщение «За выбранный период движений нет» и отдельный скелет при загрузке.
+Точная команда, выполненная ранее в составе связанной проверки: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npx tsc --noEmit -p tsconfig.app.json && npm run test:unit -- MovementFlowChart.test.tsx`.
 
 ## Не реализовано
 
-- Замечание ревью о том, что экран/API не передают предыдущую дневную серию, не исправлялось: оно относится к `FfReportsPage` и backend, а не к разрешённым файлам атома `MovementFlowChart`.
-- Полный зелёный `ui_guard.py` невозможен без правок четырёх чужих экранов или обновления базовой линии; оба действия выходят за границы атома.
-- Unit-тест не подтверждён запуском из-за отсутствующего `vitest`; установка зависимостей не выполнялась.
+Нет. Находка review №7, относящаяся к этому атому, исправлена: график теперь показывает пустое состояние и для непустой дневной серии, в которой все отображаемые значения равны нулю, а не рисует нулевые линии.
 
+## Находки
+
+- `ui_guard.py` обнаружил новые нарушения вне разрешённых файлов атома; они не изменялись.
+- Установленные frontend-зависимости отсутствуют, поэтому Vitest не запускается.

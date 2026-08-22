@@ -63,6 +63,12 @@ export function MovementFlowChart({
   testId,
 }: MovementFlowChartProps) {
   const hasPrevious = showPrevious && series.some((point) => point.previousOutbound !== undefined)
+  const hasMovement = series.some(
+    (point) =>
+      point.inbound !== 0 ||
+      point.outbound !== 0 ||
+      (hasPrevious && (point.previousOutbound ?? 0) !== 0),
+  )
   const values = series.flatMap((point) => [point.inbound, point.outbound, ...(hasPrevious && point.previousOutbound !== undefined ? [point.previousOutbound] : [])])
   const maximum = Math.max(...values, 1)
 
@@ -73,7 +79,7 @@ export function MovementFlowChart({
       </Typography>
       {loading ? (
         <Skeleton variant="rounded" height={180} sx={{ mt: 1 }} data-testid={testId ? `${testId}-skeleton` : undefined} />
-      ) : series.length === 0 ? (
+      ) : !hasMovement ? (
         <Box sx={{ py: 5, textAlign: 'center' }}>
           <Typography fontWeight={600}>{empty.title}</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
