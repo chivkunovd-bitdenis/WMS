@@ -4,6 +4,7 @@ import {
   deleteFbsCargoPlaces,
   deliverFbsSupply,
   FbsApiError,
+  fetchFbsWorkspace,
   fetchFbsWorklist,
   retryFbsSupplyQr,
   validateFbsKiz,
@@ -16,6 +17,58 @@ afterEach(() => {
 })
 
 describe('FBS API client', () => {
+  it('uses the server verdict for both S-03 responses and fails closed when it is absent', async () => {
+    const acceptedVerdict = {
+      signature: 'WB: принято',
+      tone: 'ok',
+      reason: null,
+      delivery_allowed: true,
+    }
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            items: [
+              { id: 'order-accepted', metadata: { verdict: acceptedVerdict } },
+              { id: 'order-without-answer', metadata: {} },
+            ],
+            next_cursor: null,
+            server_now: '2026-08-22T18:00:00Z',
+            warehouse_options: [],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            supply: { id: 'supply-1' },
+            stage: 'packing',
+            orders: [
+              { id: 'order-accepted', metadata: { verdict: acceptedVerdict } },
+              { id: 'order-without-answer', metadata: {} },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const worklist = await fetchFbsWorklist('token', authHeaders)
+    const workspace = await fetchFbsWorkspace('token', authHeaders, 'supply-1')
+
+    for (const orders of [worklist.items, workspace.orders]) {
+      expect(orders[0].metadata.verdict).toEqual(acceptedVerdict)
+      expect(orders[1].metadata.verdict).toEqual({
+        signature: 'Нет ответа WB',
+        tone: 'stop',
+        reason: null,
+        delivery_allowed: false,
+      })
+    }
+  })
+
   it('returns scanner normalization hints from KIZ validation', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(

@@ -9,6 +9,12 @@ const verdict = (
   reason: string | null = null,
 ): FbsOrderVerdict => ({ signature, tone: 'stop', reason, delivery_allowed })
 
+const assertServerDeliveryAllowedIsReadonly = (serverVerdict: FbsOrderVerdict) => {
+  // @ts-expect-error The screen must not overwrite the server's delivery decision.
+  serverVerdict.delivery_allowed = false
+}
+void assertServerDeliveryAllowedIsReadonly
+
 describe('metaStatusView', () => {
   it.each([
     ['WB: принято', true, 'WB: принято', 'ok'],
@@ -39,6 +45,37 @@ describe('metaStatusView', () => {
       label: 'WB не принял',
       tone: 'stop',
       reason: 'otherWbReason',
+    })
+  })
+
+  it('lets a rejection reason override an otherwise positive verdict', () => {
+    expect(metaStatusView(verdict('WB: принято', true, 'invalid_code'))).toEqual({
+      label: 'WB не принял',
+      tone: 'stop',
+      reason: 'Код маркировки не принят',
+      disabledReason: 'WB не принял: Код маркировки не принят',
+    })
+  })
+
+  it('fails closed when the WB verdict is missing or has an unknown signature', () => {
+    const unknownVerdict = {
+      signature: 'unexpected',
+      tone: 'ok',
+      reason: null,
+      delivery_allowed: true,
+    } as unknown as FbsOrderVerdict
+
+    expect(metaStatusView(undefined)).toEqual({
+      label: 'Нет ответа WB',
+      tone: 'stop',
+      reason: null,
+      disabledReason: 'Сдача пока недоступна',
+    })
+    expect(metaStatusView(unknownVerdict)).toEqual({
+      label: 'Нет ответа WB',
+      tone: 'stop',
+      reason: null,
+      disabledReason: 'Сдача пока недоступна',
     })
   })
 })
