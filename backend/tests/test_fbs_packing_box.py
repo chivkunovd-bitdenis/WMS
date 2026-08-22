@@ -16,6 +16,7 @@ from sqlalchemy import select
 from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.fbs_order import PACK_STATUS_PACKED, FbsOrder
+from app.models.fbs_packing_box import FbsPackingBox
 from app.models.fbs_supply import (
     FBS_DELIVERY_TYPE_WAREHOUSE_SC,
     FBS_SUPPLY_STATUS_PACKED,
@@ -284,6 +285,48 @@ async def test_without_distribution_mode_depends_on_assignments_not_box_count(
         assert await set_boxes_without_distribution(
             session, tenant_id, supply_id, True, actor_user_id=None
         )
+
+
+@pytest.mark.asyncio
+async def test_without_distribution_toggle_is_idempotent_and_retires_legacy_marker(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """TC-NEW-005: explicit supply toggles supersede the legacy box marker."""
+    headers, supply_id, _ = await _packed_supply(async_client)
+    created = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes",
+        headers=headers,
+        json={
+            "count": 1,
+            "idempotency_key": "legacy-mode-box",
+            "without_distribution": True,
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, supply_id)
+        assert supply is not None
+        tenant_id = supply.tenant_id
+        first_at = supply.boxes_without_distribution_at
+        first_by = supply.boxes_without_distribution_by_user_id
+        await set_boxes_without_distribution(
+            session, tenant_id, supply_id, True, actor_user_id=uuid.uuid4()
+        )
+        assert supply.boxes_without_distribution_at == first_at
+        assert supply.boxes_without_distribution_by_user_id == first_by
+        await set_boxes_without_distribution(
+            session, tenant_id, supply_id, False, actor_user_id=None
+        )
+        await session.commit()
+
+    async with SessionLocal() as session:
+        box_id = uuid.UUID(created.json()["boxes"][0]["id"])
+        box = await session.get(FbsPackingBox, box_id)
+        assert box is not None
+        assert box.creation_idempotency_key is not None
+        assert not box.creation_idempotency_key.startswith("no-distribution:")
 
 
 @pytest.mark.asyncio

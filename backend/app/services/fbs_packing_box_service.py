@@ -174,11 +174,18 @@ async def set_boxes_without_distribution(
         raise FbsPackingBoxError("boxes_already_distributed")
 
     if enabled and supply.boxes_without_distribution_at is None:
+        # A legacy box prefix is only an input for compatibility.  Once the
+        # mode is changed through this operation, the supply fields become
+        # the durable source of truth and the audit timestamp is immutable
+        # for an idempotent retry.
         supply.boxes_without_distribution_at = datetime.now(UTC)
         supply.boxes_without_distribution_by_user_id = actor_user_id
     elif not enabled:
         supply.boxes_without_distribution_at = None
         supply.boxes_without_distribution_by_user_id = None
+        await _remove_legacy_without_distribution_markers(
+            session, tenant_id, supply_id
+        )
     await session.flush()
     return enabled
 
@@ -490,6 +497,29 @@ async def _boxes_by_creation_key(
         .order_by(FbsPackingBox.box_number)
     )
     return list(result.scalars().all())
+
+
+async def _remove_legacy_without_distribution_markers(
+    session: AsyncSession, tenant_id: uuid.UUID, supply_id: uuid.UUID
+) -> None:
+    """Retire the old per-box marker after an explicit supply-level disable."""
+    boxes = list(
+        (
+            await session.scalars(
+                select(FbsPackingBox).where(
+                    FbsPackingBox.tenant_id == tenant_id,
+                    FbsPackingBox.supply_id == supply_id,
+                    FbsPackingBox.creation_idempotency_key.like(
+                        f"{WITHOUT_DISTRIBUTION_KEY_PREFIX}%"
+                    ),
+                )
+            )
+        ).all()
+    )
+    prefix_length = len(WITHOUT_DISTRIBUTION_KEY_PREFIX)
+    for box in boxes:
+        assert box.creation_idempotency_key is not None
+        box.creation_idempotency_key = box.creation_idempotency_key[prefix_length:]
 
 
 async def _load_boxes(

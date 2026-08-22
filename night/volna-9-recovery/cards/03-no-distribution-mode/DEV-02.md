@@ -1,24 +1,33 @@
+# Backend development report · 03-no-distribution-mode
+
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/services/fbs_packing_box_service.py` — переключение режима на уровне поставки; запрет только при наличии записей назначений заказа в коробах; сохранена совместимость чтения старой приписки через существующий код.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/tests/test_fbs_packing_box.py` — сценарий пустого короба, удаления/пересоздания, выключения режима, запрета при назначении и повторного включения после удаления назначения.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/services/fbs_packing_box_service.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/tests/test_fbs_packing_box.py`
 
-Изменения backend-файлов уже присутствовали в рабочей копии до запуска этой роли; проверка подтвердила соответствие атомарному куску 2. Новых роутов и миграций для этого куска нет.
+Режим переключается только после проверки назначений под блокировкой строки поставки. Повторное включение не перезаписывает аудит; явное выключение очищает legacy-префикс `no-distribution:` у коробов, после чего источником истины остаются поля поставки. Добавлен регрессионный тест идемпотентности и отключения legacy-поставки.
+
+## Миграции
+
+Нет: схема для этого атома уже добавлена предыдущей фичей.
+
+## Тесты
+
+- `pytest -q tests/test_fbs_packing_box.py` — 9 passed.
 
 ## Гейты
 
-- `ruff check .` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend` — FAIL: 82 ошибки в существующих несвязанных файлах; в изменённых файлах этой фичи нарушений не показано.
-- `mypy .` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend` — FAIL: 21 ошибка в 6 существующих несвязанных файлах; ошибок в изменённых файлах этой фичи нет.
-- `pytest -q tests/test_fbs_packing_box.py -k without_distribution_mode_depends_on_assignments_not_box_count` — PASS: 1 passed, 7 deselected.
-- `pytest -q` из backend — прерван после ~8% длительного прогона без обнаруженной ошибки; целевой тест выполнен отдельно и зелёный.
-- `python3 scripts/ci/back_guard.py` — BLOCKED: файл `scripts/ci/back_guard.py` отсутствует в этой рабочей копии.
-- `python3 scripts/ci/check_migrations.py` — BLOCKED: файл `scripts/ci/check_migrations.py` отсутствует в этой рабочей копии; миграций в этом атоме нет.
+- `ruff check .` — не пройден: 80 существующих ошибок в несвязанных файлах; проверка изменённых файлов проходит.
+- `mypy .` — не пройден: существующие ошибки в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py`, `fbs_warehouse_binding_service.py` и тестах; после исправления nullable-проверки новых ошибок в добавленном тесте нет.
+- `pytest` — полный прогон запущен, остановлен во время длительного прогона после прохождения целевого набора; целевой набор зелёный.
+- `back_guard.py` — недоступен: файл отсутствует в этой рабочей копии.
+- `check_migrations.py` — недоступен: файл отсутствует в этой рабочей копии.
 
 ## Не реализовано
 
-- Нет непринесённых пунктов атомарного backend-контракта 2.
+- Находки, относящиеся к API, workspace и frontend, не входят в backend-атом 2 и не изменялись.
+- Полный репозиторный прогон невозможно объявить зелёным из-за предварительно существующих ошибок и отсутствующих CI-скриптов в этой копии.
 
-## Находки
+## Блокеры
 
-- Контрактный файл `CONTRACT.md` в указанной папке отсутствует; раздел API и данные подтверждён по `FEATURES.md` и артефактам предыдущих ролей.
-- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались.
+Нет блокеров для реализации атома; ограничения проверок описаны выше.
