@@ -58,8 +58,15 @@ test('invalid seller INN leaves previously saved profile intact', async ({ page 
     page.getByTestId('seller-profile-save').click(),
   ])
   await expect(page.getByTestId('seller-profile-error')).toContainText('контрольное число не совпадает')
-  await expect(page.getByTestId('seller-profile-success')).toHaveText('Реквизиты сохранены')
+  await expect(page.getByTestId('seller-profile-success')).toHaveCount(0)
   await expect(page.getByTestId('seller-legal-name')).toHaveValue(legalName)
   await expect(page.getByTestId('seller-inn')).toHaveValue('7707083894')
+  await expect(page.getByTestId('seller-kpp')).toHaveValue(kpp)
+
+  await page.getByRole('button', { name: 'Закрыть' }).click()
+  await page.getByTestId('seller-row').click()
+  await page.getByText('Реквизиты для счетов').click()
+  await expect(page.getByTestId('seller-legal-name')).toHaveValue(legalName)
+  await expect(page.getByTestId('seller-inn')).toHaveValue('7707083893')
   await expect(page.getByTestId('seller-kpp')).toHaveValue(kpp)
 })

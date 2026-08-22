@@ -59,3 +59,5 @@
 19:27   09-billing · backend-dev: готово
 19:27   09-billing · dev: фича 3/11 сохранена cc4f3d9f3b70
 19:29   09-billing · backend-dev: готово
+19:29   09-billing · dev: фича 4/11 сохранена 3f9aa585cccf
+19:32   09-billing · screen-dev: готово

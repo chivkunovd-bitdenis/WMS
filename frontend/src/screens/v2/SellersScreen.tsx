@@ -48,9 +48,11 @@ export function SellersScreen({
   const [selectedSeller, setSelectedSeller] = useState<SellerRow | null>(null)
   const [profileOpen, setProfileOpen] = useState(false)
   const [profileBusy, setProfileBusy] = useState(false)
+  const [profileLoading, setProfileLoading] = useState(false)
   const [profileError, setProfileError] = useState<string | null>(null)
   const [profileSuccess, setProfileSuccess] = useState(false)
   const [profiles, setProfiles] = useState<Record<string, SellerProfile>>({})
+  const [profileRevision, setProfileRevision] = useState(0)
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -109,6 +111,30 @@ export function SellersScreen({
     setProfileSuccess(false)
   }
 
+  async function loadSellerProfile(sellerId: string) {
+    if (!token) return
+    setProfileError(null)
+    setProfileLoading(true)
+    try {
+      const res = await fetch(apiUrl(`/billing/profiles/sellers/${sellerId}`), {
+        headers: authHeaders(token),
+      })
+      if (!res.ok) {
+        setProfileError(await readApiErrorMessage(res))
+        return
+      }
+      const profile = (await res.json()) as SellerProfile | null
+      if (profile) {
+        setProfiles((current) => ({ ...current, [sellerId]: profile }))
+        setProfileRevision((current) => current + 1)
+      }
+    } catch (err) {
+      setProfileError(err instanceof Error ? err.message : 'Не удалось загрузить реквизиты.')
+    } finally {
+      setProfileLoading(false)
+    }
+  }
+
   async function saveSellerProfile(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!selectedSeller) return
@@ -142,6 +168,7 @@ export function SellersScreen({
       }
       setProfiles((current) => ({ ...current, [selectedSeller.id]: profile }))
       setProfileSuccess(true)
+      setProfileRevision((current) => current + 1)
     } catch (err) {
       setProfileError(err instanceof Error ? err.message : 'Не удалось сохранить реквизиты.')
     } finally {
@@ -259,20 +286,24 @@ export function SellersScreen({
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Данные аккаунта селлера
           </Typography>
-          <Box component="details" open={profileOpen} onToggle={(event) => setProfileOpen((event.currentTarget as HTMLDetailsElement).open)} data-testid="seller-billing-details">
+          <Box component="details" open={profileOpen} onToggle={(event) => {
+            const open = (event.currentTarget as HTMLDetailsElement).open
+            setProfileOpen(open)
+            if (open && selectedSeller) void loadSellerProfile(selectedSeller.id)
+          }} data-testid="seller-billing-details">
             <Typography component="summary" sx={{ cursor: 'pointer', fontWeight: 600 }}>
               Реквизиты для счетов
             </Typography>
             {profileOpen && selectedSeller ? (
-              <Box component="form" onSubmit={(e) => void saveSellerProfile(e)} sx={{ pt: 2 }}>
+              <Box component="form" key={`${selectedSeller.id}-${profileRevision}`} onSubmit={(e) => void saveSellerProfile(e)} sx={{ pt: 2 }}>
                 {profileError ? <ErrorNotice testId="seller-profile-error">{profileError}</ErrorNotice> : null}
                 {profileSuccess ? <Typography color="success.main" sx={{ mb: 2 }} data-testid="seller-profile-success">Реквизиты сохранены</Typography> : null}
                 <Stack spacing={2}>
-                  <TextField name="legal_name" label="Юридическое наименование" required defaultValue={profiles[selectedSeller.id]?.legal_name ?? ''} fullWidth size="small" inputProps={{ 'data-testid': 'seller-legal-name' }} />
-                  <TextField name="inn" label="ИНН" required defaultValue={profiles[selectedSeller.id]?.inn ?? ''} fullWidth size="small" inputProps={{ 'data-testid': 'seller-inn' }} />
-                  <TextField name="kpp" label="КПП" defaultValue={profiles[selectedSeller.id]?.kpp ?? ''} fullWidth size="small" inputProps={{ 'data-testid': 'seller-kpp' }} />
-                  <PrimaryAction type="submit" disabled={profileBusy} data-testid="seller-profile-save">
-                    {profileBusy ? 'Сохранение…' : 'Сохранить реквизиты'}
+                  <TextField name="legal_name" label="Юридическое наименование" required defaultValue={profiles[selectedSeller.id]?.legal_name ?? ''} fullWidth size="small" disabled={profileLoading} inputProps={{ 'data-testid': 'seller-legal-name' }} />
+                  <TextField name="inn" label="ИНН" required defaultValue={profiles[selectedSeller.id]?.inn ?? ''} fullWidth size="small" disabled={profileLoading} inputProps={{ 'data-testid': 'seller-inn' }} />
+                  <TextField name="kpp" label="КПП" defaultValue={profiles[selectedSeller.id]?.kpp ?? ''} fullWidth size="small" disabled={profileLoading} inputProps={{ 'data-testid': 'seller-kpp' }} />
+                  <PrimaryAction type="submit" disabled={profileBusy || profileLoading} data-testid="seller-profile-save">
+                    {profileLoading ? 'Загрузка…' : profileBusy ? 'Сохранение…' : 'Сохранить реквизиты'}
                   </PrimaryAction>
                 </Stack>
               </Box>
