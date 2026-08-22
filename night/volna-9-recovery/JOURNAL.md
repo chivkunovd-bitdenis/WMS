@@ -99,3 +99,5 @@
 21:48 02-verdikt-screen: отложено — reviewer, эскалация не помогла
 23:43   02-verdikt-screen · resume: поатомный rework Sol по сохранённым находкам
 23:49   02-verdikt-screen · backend-dev: готово
+23:49   02-verdikt-screen · dev: фича 1/5 сохранена d4282f371a83
+23:53   02-verdikt-screen · backend-dev: готово

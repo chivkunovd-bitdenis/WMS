@@ -2,15 +2,13 @@
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/app/services/fbs_shipment_service.py`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/tests/test_fbs_shipment_deliver_gate_unit.py`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/night/volna-9-recovery/cards/02-verdikt-screen/DEV.md`
 
 ## Что реализовано
 
-- Эндпоинты: новых нет; существующая финальная передача поставки продолжает вызывать серверный preflight и не получает отдельного пути обхода.
-- `_sync_supply_orders_from_wb`: любой `FbsMarkingError`, в том числе возникший до запроса метаданных WB, теперь явно сбрасывает прежний положительный вердикт заказа и сохраняет блокирующее неизвестное состояние.
-- `_build_delivery_checks` / `_validate_checks_pass`: после сбоя свежей синхронизации возвращают `Нет ответа WB` с идентификатором конкретного заказа и отклоняют прямой запрос на передачу HTTP 400.
+- Эндпоинты: новых нет; существующий серверный путь передачи поставки повторно выполняет `_build_delivery_checks` и возвращает привязанный к заказу `marking_not_allowed`, поэтому прямой запрос не обходит WB-вердикт.
+- Сервисы: производственное правило в `_build_delivery_checks` уже читает единый `_wb_order_verdict`; зависимая фича 1 в текущем `HEAD` уже сохраняет ответ `optional`/`notRequired` без локальной строки маркировки и поддерживает ранее сохранённый `accepted`, поэтому дополнительная правка сервиса после ревью не потребовалась.
 
 ## Миграции
 
@@ -18,30 +16,31 @@
 
 ## Тесты
 
-- `backend/tests/test_fbs_shipment_deliver_gate_unit.py`: добавлен S-03-TC-006/012 на переход `filled → ошибка свежей синхронизации`; старое решение очищается, передача блокируется, а результат содержит конкретный `order_id`.
-- Существующий параметризованный тест подтверждает, что `filled`, `optional` и `notRequired` без причины проходят, а `filled` с причиной, `pending`, `required` и неизвестное решение WB останавливают передачу.
-- Целевой прогон `tests/test_fbs_shipment_deliver_gate_unit.py tests/test_fbs_marking.py`: PASS, 47 passed.
-- Полный прогон: 843 passed, 5 skipped, 2 failed. Оба падения предсуществующие и вне атома: `test_fbs_marking_readers_prefer_active_row_over_newer_rejected_row` ожидает разрешение для неконтрактного решения `accepted`; `test_fbs_cutoff_autoplans_supply_manual_date_and_calendar` использует прошедшую дату и получает `deadline_passed`.
+- В `backend/tests/test_fbs_shipment_deliver_gate_unit.py` добавлена регрессия S-03-TC-002: обязательный `sgtin=filled` существует локально, необязательный `imei=optional` существует только в агрегированных данных заказа, и финальный серверный gate разрешает передачу.
+- Параметризованный тест проходных решений расширен ранее сохранённым `accepted`; `filled`, `optional` и `notRequired` без причины по-прежнему проходят.
+- Целевой прогон включает весь unit-файл атома и два прямо названных ревью-регресса: сохранение необязательного ответа без локальной строки и чтение активной строки с `accepted`.
 
 ## Гейты
 
-- `ruff check .` — FAIL: 79 предсуществующих нарушений вне изменённого атома; целевой `ruff check app/services/fbs_shipment_service.py tests/test_fbs_shipment_deliver_gate_unit.py` — PASS.
-- `mypy .` — FAIL: 21 предсуществующая ошибка в 6 файлах вне изменённого атома; изменённые файлы в полном выводе отсутствуют.
-- `pytest` — FAIL: 843 passed, 5 skipped, 2 предсуществующих падения вне атома; целевой прогон — PASS, 47 passed.
-- `python3 scripts/ci/back_guard.py` — BLOCKED: файл `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/scripts/ci/back_guard.py` отсутствует.
-- `python3 scripts/ci/check_migrations.py` — BLOCKED: файл `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/scripts/ci/check_migrations.py` отсутствует.
-- `git diff --check` — PASS.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend && ruff check app/services/fbs_shipment_service.py tests/test_fbs_shipment_deliver_gate_unit.py` — PASS, `All checks passed!`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend && mypy app/services/fbs_shipment_service.py app/services/fbs_marking_service.py` — FAIL на 4 предсуществующих ошибках в импортируемых соседних файлах `wildberries_credentials_service.py`, `fbs_stock_sync_service.py` и `fbs_warehouse_binding_service.py`; в двух целевых сервисах ошибок этим прогоном не найдено.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend && mypy --follow-imports=skip app/services/fbs_shipment_service.py app/services/fbs_marking_service.py` — FAIL на 11 предсуществующих `no-any-return` в самих сервисах; изменённый тест новых mypy-ошибок не добавляет.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend && pytest -q tests/test_fbs_shipment_deliver_gate_unit.py tests/test_fbs_marking.py::test_fbs_metadata_preserves_optional_wb_decision_without_local_marking tests/test_fbs_kiz.py::test_fbs_marking_readers_prefer_active_row_over_newer_rejected_row` — PASS, `23 passed in 2.74s`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen && git diff --check` — PASS.
+- `back_guard.py` не запускался: атом не добавляет роут.
+- `check_migrations.py` не запускался: атом не добавляет миграцию.
 
 ## Не реализовано
 
-- Новые роуты и миграции не добавлялись: контракт атома их не требует.
-- Находка ревью о схеме `metadata.verdict` и сброс при пустом batch уже исправлена зависимой фичей 1 в текущем HEAD; соседние UI-задачи не менялись.
+- Frontend-находка ревью о зелёной заливке строки не исправлялась: она находится вне роли `backend-dev` и вне файлов backend-атома.
+- Новые роуты, сервисные ветки и миграции не добавлялись: производственные исправления обеих backend-находок ревью уже находятся в зависимой фиче 1 текущего `HEAD`; этот проход закрыл недостающую регрессию именно на финальном shipment-gate.
+- Полный backend-регресс не запускался по прямому запрету атомарного задания.
 
 ## Находки
 
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных, живой WB и production `194.87.96.144` не читались и не затрагивались.
+- Целевой `mypy` остаётся красным на ранее существовавших ошибках, перечисленных в секции «Гейты»; тестовый и производственный код этого атома их не создаёт.
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных, живой Wildberries и production `194.87.96.144` не читались и не затрагивались.
 
 ## Блокеры
 
-- Реализация и целевые тесты завершены локально, но результат не сохранён коммитом: песочница запретила создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-02-verdikt-screen1/index.lock` (`Operation not permitted`). Риск: изменения пока существуют только в рабочем дереве этой постоянной рабочей копии.
-- Незелёные и отсутствующие общие гейты перечислены выше; они не относятся к изменённому атому.
+Нет.
