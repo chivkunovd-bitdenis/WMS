@@ -21,6 +21,16 @@ export function QtyCell({ value, muted = false }: { value: number | null | undef
 
 // Денежные значения всегда показываются в RUB с двумя знаками и табличными цифрами.
 // Отрицательная сумма — обычное сторно, поэтому не получает сигнальную окраску.
+export function formatMoney(value: number | null | undefined): string {
+  if (value === null || value === undefined) return '—'
+
+  const amount = value.toLocaleString('ru-RU', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+  return `${amount}\u00a0₽`
+}
+
 export function MoneyCell({ value }: { value: number | null | undefined }) {
   return (
     <Typography
@@ -34,9 +44,7 @@ export function MoneyCell({ value }: { value: number | null | undefined }) {
         whiteSpace: 'nowrap',
       }}
     >
-      {value === null || value === undefined
-        ? '—'
-        : `${value.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽`}
+      {formatMoney(value)}
     </Typography>
   )
 }

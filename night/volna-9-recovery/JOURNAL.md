@@ -26,3 +26,6 @@
 18:25   09-billing · dev: фича 10/11 сохранена 6b0df44cf23f
 18:30   09-billing · screen-dev: готово
 18:30   09-billing · dev: фича 11/11 сохранена 08dcedbe76b1
+18:36   09-billing · reviewer: готово
+18:36   09-billing · reviewer: находки, круг 1 — назад к разработке
+18:39   09-billing · screen-dev: готово
