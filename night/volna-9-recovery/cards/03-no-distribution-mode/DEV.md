@@ -1,34 +1,26 @@
-# Backend Dev — 03-no-distribution-mode — атом 3
-
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/api/fbs_supplies.py` — POST-операция переключения режима, workspace-ответ и HTTP 409 для назначенных заказов.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/services/fbs_workspace_service.py` — workspace берёт режим из сохранённого признака поставки даже при пустом списке коробов.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/tests/test_fbs_packing_box.py` — API-проверки сохранения режима без коробов и конфликтного ответа при назначенном заказе.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx
 
-## Миграции
+Экран использует сохранённый признак `workspace.supply.boxes_without_distribution` для нейтральной шапки. Переключатель доступен при пустых коробах и блокируется только при наличии назначенных заказов; рядом показано объяснение, что сначала нужно убрать назначения из коробов.
 
-Нет новых миграций в этом атоме. Поля поставки добавлены предыдущим атомом миграцией `20260821_0094`.
+Тип workspace и операция переключения уже реализованы предыдущими атомами в текущей ветке:
 
-## Тесты
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/frontend/src/screens/v2/fbsApi.ts
 
-- `backend/tests/test_fbs_packing_box.py`: 8 целевых тестов прошли, включая сохранение `supply.boxes_without_distribution=true` после GET workspace без коробов и HTTP 409 без изменения состояния при назначении заказа.
+Файл OpenAPI по указанному в карточке пути отсутствует в checkout. Найденный файл `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/tasks/fbs-operator-flow/openapi/fbs-operations.openapi.json` не входит в разрешённые файлы экрана и не изменялся.
 
 ## Гейты
 
-- `ruff check .` — FAIL на 82 существующих нарушениях по всему backend; в затронутом `fbs_workspace_service.py` отмечено существующее неиспользуемое `noqa`.
-- `mypy .` — FAIL: 21 существующая ошибка в 6 файлах, затронутые API/сервис в списке ошибок отсутствуют.
-- `pytest -q tests/test_fbs_packing_box.py` — PASS, 8 passed.
-- `pytest -q` — выполняется; результат будет дополнен после завершения процесса.
-- `python3 scripts/ci/back_guard.py` — NOT RUN: файл отсутствует в рабочей копии.
-- `python3 scripts/ci/check_migrations.py` — NOT RUN: файл отсутствует в рабочей копии.
+- `npx tsc --noEmit -p tsconfig.app.json` из frontend — не подтверждён: локальный `tsc` отсутствует (`frontend/node_modules/.bin/tsc` не найден), команда не выдала диагностик.
+- `python3 scripts/ui/ui_guard.py` из корня — FAIL: нарушения `экран-монолит` в `src/components/WbProductPickerDialog.tsx` (0 → 646), `src/screens/v2/FfFbsSupplyWorkspace.tsx` (2493 → 2503) и `src/screens/v2/SellerInboundDraftScreen.tsx` (1111 → 1169). Базовую линию не обновлял.
+- `npm run test:unit` из frontend — FAIL до запуска тестов: `vitest: command not found`.
 
 ## Не реализовано
 
-- Пункты API-контракта для этого атома реализованы. Новых внешних API, секретов, токенов и кабинетов не использовалось.
-- Полный pytest не завершился к моменту записи артефакта; целевой набор прошёл.
+- Изменение отсутствующего OpenAPI-файла по пути `frontend/openapi/fbs-operations.openapi.json`: файла нет в checkout, а создание или перенос вне разрешённого набора файлов экрана запрещены ролью.
 
 ## Находки
 
-- Секреты, ключи, токены и `.env` не читались.
+- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались.
 - Боевой прод и живой кабинет Wildberries не затрагивались.
