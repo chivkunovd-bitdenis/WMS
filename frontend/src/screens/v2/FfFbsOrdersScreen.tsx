@@ -574,7 +574,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       setServerNow(page.server_now)
       setLastLoadedAt(new Date().toISOString())
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Не удалось загрузить заказы FBS.')
+      setError('Не удалось получить список заказов')
     } finally {
       if (!backgroundRefresh) setBusy(false)
       loadingRef.current = false
@@ -603,7 +603,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       setNextCursor(page.next_cursor)
       setServerNow(page.server_now)
     } catch (cause) {
-      setLoadMoreError(cause instanceof Error ? cause.message : 'Не удалось загрузить следующие заказы')
+      setLoadMoreError('Не удалось загрузить следующие заказы')
     } finally {
       setLoadingMore(false)
       loadMoreRef.current = false
@@ -1413,8 +1413,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               <TableRow>
                 <TableCell colSpan={5}>
                   <EmptyState
-                    title="Новых заказов нет"
-                    hint="Новые заказы загружаются автоматически из Wildberries."
+                    title="Новых заказов пока нет"
+                    hint="Заказы появятся здесь автоматически после загрузки из Wildberries"
                     testId="fbs-orders-empty"
                   />
                 </TableCell>

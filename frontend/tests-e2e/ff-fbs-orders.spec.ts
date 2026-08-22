@@ -46,10 +46,10 @@ function order(id: string, over: Partial<FbsWorklistFixture> = {}): FbsWorklistF
   }
 }
 
-function worklist(items: FbsWorklistFixture[], warehouseOptions: FbsWorklistFixture[] = []) {
+function worklist(items: FbsWorklistFixture[], warehouseOptions: FbsWorklistFixture[] = [], nextCursor: string | null = null) {
   return {
     items,
-    next_cursor: null,
+    next_cursor: nextCursor,
     server_now: new Date().toISOString(),
     warehouse_options: warehouseOptions,
   }
@@ -175,30 +175,40 @@ test('fbs orders: list, tabs and empty state', async ({ page }) => {
   await expect(page.getByTestId('fbs-order-5')).toBeVisible()
 })
 
-// HOTFIX 20.08.2026: оператор видит полный список и может отметить любые отдельные
-// заказы; memo-строки не заставляют React заново строить остальные 499 строк.
-test('fbs orders: 500 new orders allow selecting any two orders', async ({ page }) => {
-  await registerFf(page, 'five-hundred-orders')
-  const allOrders = Array.from({ length: 500 }, (_, index) => order(String(index + 1)))
+// S-03-TC-001 / S-03-TC-002 / S-03-TC-003 / S-03-TC-004 / S-03-TC-005:
+// first page is 50 rows, continuation appends without duplicates and keeps selection.
+test('fbs orders: cursor pagination preserves rows and selection', async ({ page }) => {
+  await registerFf(page, 'cursor-pagination')
+  const firstPage = Array.from({ length: 50 }, (_, index) => order(String(index + 1)))
+  const secondPage = Array.from({ length: 50 }, (_, index) => order(String(index + 51)))
+  let requests = 0
 
   await page.route('**/operations/fbs-orders/worklist**', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback()
     const params = new URL(route.request().url()).searchParams
     expect(params.get('status_group')).toBe('new')
     expect(params.get('limit')).toBe('50')
+    requests += 1
+    const body = params.get('cursor') === 'page-2' ? worklist(secondPage) : worklist(firstPage, [], 'page-2')
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(worklist(allOrders)),
+      body: JSON.stringify(body),
     })
   })
 
   await page.getByTestId('nav-ff-fbs').click()
-  await expect(page.getByTestId('fbs-order-500')).toBeAttached()
+  await expect(page.getByTestId('fbs-order-50')).toBeVisible()
+  await expect(page.getByTestId('fbs-order-51')).toHaveCount(0)
   await page.getByTestId('fbs-order-1').getByRole('checkbox').click()
-  await page.getByTestId('fbs-order-500').getByRole('checkbox').click()
-  await expect(page.getByTestId('fbs-selection-bar')).toContainText('Выбрано заказов: 2')
-  await expect(page.getByRole('button', { name: 'Сформировать поставку' })).toBeEnabled()
+  await expect(page.getByTestId('fbs-selection-bar')).toContainText('Выбрано заказов: 1')
+  await page.getByTestId('fbs-orders-load-more-action').click()
+  await expect(page.getByTestId('fbs-order-51')).toBeVisible()
+  await expect(page.getByTestId('fbs-order-1').getByRole('checkbox')).toBeChecked()
+  await expect(page.getByTestId('fbs-order-50')).toHaveCount(1)
+  await expect(page.getByTestId('fbs-order-51')).toHaveCount(1)
+  await expect(page.getByTestId('fbs-orders-load-more')).toHaveCount(0)
+  expect(requests).toBe(2)
 })
 
 // TC-FBS-FE-002 — seller_id передаётся в canonical worklist и меняет строки ответа.
