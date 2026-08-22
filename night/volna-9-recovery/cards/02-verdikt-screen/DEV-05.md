@@ -1,20 +1,18 @@
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/tests-e2e/ff-fbs-supply.spec.ts`
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/tests-e2e/ff-fbs-supply.spec.ts — добавлены пользовательские сценарии S-03-TC-004, S-03-TC-005 и S-03-TC-007 для рабочего места поставки: ожидание и требование кода блокируют передачу, один блокирующий заказ блокирует всю поставку и объясняет причину.
 
-В рабочем месте поставки вердикт WB показывается в существующей зоне ЧЗ строки через `StatusChip`, причина отказа — через `TextCell`. Действие «Передать в WB» блокируется по серверному `metadata.verdict.delivery_allowed`; причина привязана к конкретному заказу. Положительный сценарий сохраняет доступность прежнего действия.
+Экранный код `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx` уже содержит реализацию этой атомарной части из предыдущего прохода: `StatusChip` в зоне ЧЗ и блокировку `PrimaryAction` по серверному `metadata.verdict.delivery_allowed`; в этом проходе файл не изменялся.
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` — BLOCKED: локальный `npx` завис без вывода и был остановлен; проверка не завершилась.
-- `python3 scripts/ui/ui_guard.py` — не запущен в текущей проверке: команда из корня требует отдельного запуска после зависшего frontend-процесса.
-- `npm run test:unit` — не запущен в текущей проверке: frontend-зависимости/локальная команда требуют отдельного запуска.
+- `npx tsc --noEmit -p tsconfig.app.json` — не завершён: локальный `npx` запустился без вывода и был остановлен после ожидания; сеть для загрузки отсутствующих зависимостей недоступна.
+- `python3 scripts/ui/ui_guard.py` — FAIL: обнаружены новые нарушения базовой линии, включая `FfFbsSupplyWorkspace.tsx: экран-монолит 2493 → 2510`; базовую линию флагом `--update` не изменял.
+- `npm run test:unit` — FAIL: `vitest: command not found`, зависимости frontend не установлены.
 
 ## Не реализовано
 
-- Playwright-сценарии S-03-TC-004, S-03-TC-005 и S-03-TC-007 локально не прогонялись, потому что обязательная frontend-проверка TypeScript не завершилась.
-- Изменения API и словаря вердикта не выполнялись: они относятся к зависимым фичам и не входят в разрешённые файлы этого атомарного куска.
+- Пунктов контракта для этого атомарного куска, которые не удалось реализовать в коде, нет. Проверка браузером и unit-тесты локально не завершены из-за отсутствующих frontend-зависимостей.
 
 ## Находки
 

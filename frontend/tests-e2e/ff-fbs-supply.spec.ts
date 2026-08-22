@@ -161,6 +161,17 @@ async function mockSupplyWorklist(page: Page, items: JsonObject[]) {
   )
 }
 
+async function openVerdictWorkspace(page: Page, tag: string, orders: JsonObject[]) {
+  await registerFf(page, tag)
+  await mockWorklist(page, orders)
+  await page.route('**/operations/fbs-supplies/sup-1/workspace', (route) =>
+    json(route, workspace({ stage: 'boxes', status: 'packed', orders })),
+  )
+  await page.getByTestId('nav-ff-fbs').click()
+  await page.getByTestId('fbs-order-1').click()
+  await expect(page.getByTestId('fbs-workspace')).toBeVisible()
+}
+
 // TC-S17-019 / TC-S17-021 — fresh preflight and idempotent warehouse/SC delivery.
 test('fbs workspace: preflight and deliver', async ({ page }) => {
   await registerFf(page, 'deliver')
@@ -204,6 +215,62 @@ test('fbs workspace: preflight and deliver', async ({ page }) => {
   await expect(page.getByText('Поставка передана, QR получить не удалось')).toBeVisible()
   expect(deliverBody?.confirmed_preflight_version).toBeUndefined()
   expect(deliverBody?.idempotency_key).toEqual(expect.any(String))
+})
+
+// S-03-TC-004 — server pending verdict is visible in the ЧЗ row and blocks delivery.
+test('fbs workspace: pending WB verdict blocks delivery', async ({ page }) => {
+  const pending = order('1', {
+    supply_id: 'sup-1',
+    metadata: {
+      required: ['sgtin'], optional: [], states: [], delivery_allowed: false,
+      verdict: { signature: 'WB: проверяет', tone: 'stop', reason: null, delivery_allowed: false },
+      last_checked_at: new Date().toISOString(),
+    },
+  })
+  await openVerdictWorkspace(page, 'verdict-pending', [pending])
+
+  await expect(page.getByTestId('fbs-wb-verdict-1')).toHaveText('WB: проверяет')
+  const deliver = page.getByRole('button', { name: 'Передать в WB' })
+  await expect(deliver).toBeDisabled()
+  await deliver.hover()
+  await expect(page.getByRole('tooltip')).toContainText('Заказ №1: Сдача пока недоступна')
+})
+
+// S-03-TC-005 — required verdict tells the operator that a code is needed.
+test('fbs workspace: required WB verdict explains missing code', async ({ page }) => {
+  const required = order('1', {
+    supply_id: 'sup-1',
+    metadata: {
+      required: ['sgtin'], optional: [], states: [], delivery_allowed: false,
+      verdict: { signature: 'WB: нужен код', tone: 'stop', reason: null, delivery_allowed: false },
+      last_checked_at: new Date().toISOString(),
+    },
+  })
+  await openVerdictWorkspace(page, 'verdict-required', [required])
+
+  await expect(page.getByTestId('fbs-wb-verdict-1')).toHaveText('WB: нужен код')
+  await expect(page.getByRole('button', { name: 'Передать в WB' })).toBeDisabled()
+})
+
+// S-03-TC-007 — one server-side blocker disables the whole supply and names its order.
+test('fbs workspace: one blocked order prevents whole-supply delivery', async ({ page }) => {
+  const accepted = order('1', { supply_id: 'sup-1' })
+  const blocked = order('2', {
+    supply_id: 'sup-1',
+    metadata: {
+      required: ['sgtin'], optional: [], states: [], delivery_allowed: false,
+      verdict: { signature: 'WB не принял', tone: 'stop', reason: 'invalid_code', delivery_allowed: false },
+      last_checked_at: new Date().toISOString(),
+    },
+  })
+  await openVerdictWorkspace(page, 'verdict-aggregate', [accepted, blocked])
+
+  await expect(page.getByTestId('fbs-wb-verdict-2')).toHaveText('WB не принял')
+  await expect(page.getByText('Код маркировки не принят')).toBeVisible()
+  const deliver = page.getByRole('button', { name: 'Передать в WB' })
+  await expect(deliver).toBeDisabled()
+  await deliver.hover()
+  await expect(page.getByRole('tooltip')).toContainText('Заказ №2: WB не принял: Код маркировки не принят')
 })
 
 // TC-S17-006 — compatible selection creates one atomic supply and opens its workspace.
