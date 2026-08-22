@@ -67,6 +67,29 @@ async def build_inventory_report(
             Warehouse.id == InventoryMovement.warehouse_id).where(*filters).group_by(
             InventoryMovement.movement_type).order_by(InventoryMovement.movement_type)
     rows = (await session.execute(stmt)).all()
+    balances_by_product: dict[uuid.UUID, int] = {}
+    if group_by == "product" and rows:
+        product_ids = [row[0] for row in rows]
+        balance_stmt = (
+            select(
+                InventoryBalance.product_id,
+                func.coalesce(func.sum(InventoryBalance.quantity), 0),
+            )
+            .join(StorageLocation, StorageLocation.id == InventoryBalance.storage_location_id)
+            .join(Warehouse, Warehouse.id == StorageLocation.warehouse_id)
+            .where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.product_id.in_(product_ids),
+                ~Warehouse.name.startswith("FBS WB "),
+            )
+            .group_by(InventoryBalance.product_id)
+        )
+        if warehouse_id is not None:
+            balance_stmt = balance_stmt.where(Warehouse.id == warehouse_id)
+        balances_by_product = {
+            product_id: int(quantity)
+            for product_id, quantity in (await session.execute(balance_stmt)).all()
+        }
     incomplete_transfer = False
     if warehouse_id is not None:
         integrity_filters = [InventoryMovement.tenant_id == tenant_id,
@@ -87,6 +110,7 @@ async def build_inventory_report(
             pid, name, sku, vendor, barcode, seller_name, incoming, outgoing = row
             result.append({"product_id": str(pid), "product_name": name, "sku_code": sku,
                 "wb_vendor_code": vendor, "wb_barcode": barcode, "seller_name": seller_name,
+                "current_balance": balances_by_product.get(pid, 0),
                 "total_in": int(incoming), "total_out": int(outgoing),
                 "net": int(incoming) - int(outgoing), "integrity_error": incomplete_transfer})
         else:
@@ -133,7 +157,7 @@ async def build_inventory_csv(
         headers = ["Товар", "SKU", "Артикул продавца", "ШК"]
         if include_seller:
             headers.append("Селлер")
-        headers.extend(["Приход", "Расход", "Нетто"])
+        headers.extend(["Остаток сейчас", "Приход", "Расход", "Нетто"])
         writer.writerow(headers)
         for report_page in pages:
             for row in cast(list[dict[str, Any]], report_page["rows"]):
@@ -143,7 +167,9 @@ async def build_inventory_csv(
                 ]
                 if include_seller:
                     values.append(row["seller_name"])
-                values.extend([row["total_in"], row["total_out"], row["net"]])
+                values.extend([
+                    row["current_balance"], row["total_in"], row["total_out"], row["net"]
+                ])
                 writer.writerow(values)
     else:
         writer.writerow(["Операция", "Приход", "Расход", "Нетто"])
