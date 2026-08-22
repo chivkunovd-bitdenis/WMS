@@ -9,9 +9,16 @@ from app.models.billing import BillingLedgerEntry
 from app.services.billing_ledger_service import record_operational_charge
 
 
+def _savepoint_session() -> AsyncMock:
+    session = AsyncMock()
+    savepoint = AsyncMock()
+    session.begin_nested = AsyncMock(return_value=savepoint)
+    return session
+
+
 @pytest.mark.asyncio
 async def test_operational_charge_without_tariff_is_unpriced() -> None:
-    session = AsyncMock()
+    session = _savepoint_session()
     session.add = Mock()
     session.scalar = AsyncMock(side_effect=[None, None])
     tenant_id = uuid.uuid4()
@@ -40,7 +47,7 @@ async def test_operational_charge_without_tariff_is_unpriced() -> None:
 
 @pytest.mark.asyncio
 async def test_repeated_operational_charge_returns_existing_entry() -> None:
-    session = AsyncMock()
+    session = _savepoint_session()
     session.add = Mock()
     existing = BillingLedgerEntry(
         tenant_id=uuid.uuid4(),

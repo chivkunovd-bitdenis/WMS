@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.billing import BillingLedgerEntry, BillingTariffVersion
@@ -70,4 +71,26 @@ async def record_operational_charge(
         occurred_at=occurred_at,
     )
     session.add(entry)
-    return entry
+    # The unique source-event constraint is the concurrency guard.  Flush in a
+    # savepoint so a concurrent finalisation can safely turn its constraint
+    # error into the already committed ledger row without aborting the caller's
+    # warehouse transaction.
+    nested = await session.begin_nested()
+    try:
+        await session.flush()
+    except IntegrityError:
+        await nested.rollback()
+        concurrent = await session.scalar(
+            select(BillingLedgerEntry).where(
+                BillingLedgerEntry.tenant_id == tenant_id,
+                BillingLedgerEntry.source_type == source_type,
+                BillingLedgerEntry.source_id == source_id,
+                BillingLedgerEntry.entry_type == "charge",
+            )
+        )
+        if concurrent is None:
+            raise
+        return concurrent
+    else:
+        await nested.commit()
+        return entry

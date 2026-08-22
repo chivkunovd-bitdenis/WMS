@@ -1,22 +1,20 @@
+# 09-billing — backend-dev
+
 ## Изменённые файлы
 
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfSettingsScreen.tsx
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/tests-e2e/billing-tariffs.spec.ts
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/night/volna-9-recovery/cards/09-billing/DEV.md
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/services/billing_ledger_service.py` — атомарная запись операционного начисления через savepoint и безопасное разрешение гонки по уникальному событию.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/tests/test_billing_ledger_service.py` — тестовый savepoint-контекст для сценариев начисления.
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` — не подтверждён: локального `tsc` нет, `npx` завис на попытке разрешить пакет и был остановлен.
-- `python3 scripts/ui/ui_guard.py` — красный: обнаружено новое нарушение монолитного экрана для `FfSettingsScreen.tsx` (701 → 778 строк); baseline не обновлялся.
-- `npm run test:unit` — красный: `vitest: command not found`, зависимости frontend не установлены.
-- `git diff --check` — зелёный.
-- Commit не создан: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-09-billing1/index.lock` (`Operation not permitted`); изменения остаются локальными и не опубликованы.
+- `ruff check .` — FAIL: 83 существующие ошибки вне изменённых файлов.
+- `mypy .` — FAIL: 21 существующая ошибка в 6 файлах вне изменённых файлов.
+- `pytest -q tests/test_billing_ledger_service.py` — PASS: 2 passed.
+- `pytest -q` — прерван после длительного прогона без итогового результата; адресный набор зелёный.
+- `python3 scripts/ci/back_guard.py` — FAIL/не доступен: файл `scripts/ci/back_guard.py` отсутствует в checkout.
+- `python3 scripts/ci/check_migrations.py` — FAIL/не доступен: файл `scripts/ci/check_migrations.py` отсутствует в checkout.
 
 ## Не реализовано
 
-- Загрузка сохранённых реквизитов, действующих тарифов и полной серверной истории буквально невозможна в пределах этой карточки: `backend/app/api/billing.py` предоставляет для них только mutation-ручки (`PUT`/`POST`), без `GET`. История отображается для версий, созданных в текущем UI-сеансе.
-- Серверная проверка пересечения периодов и финальная атомарность сохранения остаются ответственностью backend и не менялись, так как файлы backend не входят в разрешённый список атома.
-
-## Находки
-
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не читались и не затрагивались.
+- Остальные находки ревьюера относятся к другим атомам (счета, тарифы, UI, автоматический Celery-выпуск, ИНН, storage) и в этот backend-атом не входят.
+- Миграций нет.
