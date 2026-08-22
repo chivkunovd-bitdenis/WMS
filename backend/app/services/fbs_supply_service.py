@@ -237,7 +237,13 @@ async def change_supply_warehouse(
     warehouse_id: uuid.UUID,
 ) -> dict[str, Any]:
     """Move an untouched supply to another operational warehouse."""
-    supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
+    supply_stmt = (
+        select(FbsSupply)
+        .where(FbsSupply.id == supply_id, FbsSupply.tenant_id == tenant_id)
+        .options(selectinload(FbsSupply.orders), selectinload(FbsSupply.trbxes))
+        .with_for_update()
+    )
+    supply = (await session.execute(supply_stmt)).scalar_one_or_none()
     if supply is None:
         raise FbsSupplyError("supply_not_found")
 
@@ -252,6 +258,8 @@ async def change_supply_warehouse(
         raise FbsSupplyError("warehouse_not_found")
 
     started = (
+        supply.status in {FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE}
+        or
         supply.packaging_task_id is not None
         or bool(supply.trbxes)
         or any(order.pick_status != PICK_STATUS_PENDING for order in supply.orders)
@@ -335,6 +343,7 @@ async def preflight_supply_composition(
     order_ids: list[uuid.UUID],
     *,
     planned_delivery_type: str,
+    selected_warehouse_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     try:
         result = await validate_supply_composition(
@@ -345,7 +354,18 @@ async def preflight_supply_composition(
         )
     except FbsSupplyValidationError as exc:
         raise FbsSupplyError(exc.code) from exc
-    return preflight_to_dict(result)
+    payload = preflight_to_dict(result)
+    if selected_warehouse_id is not None:
+        warehouse = await session.scalar(select(Warehouse).where(
+            Warehouse.id == selected_warehouse_id,
+            Warehouse.tenant_id == tenant_id,
+            Warehouse.is_operational.is_(True),
+        ))
+        if warehouse is None:
+            raise FbsSupplyError("warehouse_not_found")
+        if payload.get("summary") is not None:
+            payload["summary"]["wms_warehouse"] = {"id": str(warehouse.id), "name": warehouse.name}
+    return payload
 
 
 async def _bind_orders_to_supply(
@@ -513,6 +533,7 @@ async def create_supply_from_orders(
     order_ids: list[uuid.UUID],
     planned_delivery_type: str,
     planned_destination: dict[str, Any] | None,
+    selected_warehouse_id: uuid.UUID | None = None,
     idempotency_key: str,
     http_client: httpx.AsyncClient,
 ) -> dict[str, Any]:
@@ -520,6 +541,16 @@ async def create_supply_from_orders(
         raise FbsSupplyError("missing_idempotency_key", http_status=400)
     if not order_ids:
         raise FbsSupplyError("empty_order_set", http_status=400)
+
+    selected_warehouse = None
+    if selected_warehouse_id is not None:
+        selected_warehouse = await session.scalar(select(Warehouse).where(
+            Warehouse.id == selected_warehouse_id,
+            Warehouse.tenant_id == tenant_id,
+            Warehouse.is_operational.is_(True),
+        ))
+        if selected_warehouse is None:
+            raise FbsSupplyError("warehouse_not_found")
 
     request_hash = request_hash_for_from_orders(
         name=name,
@@ -636,7 +667,11 @@ async def create_supply_from_orders(
         supply = FbsSupply(
             tenant_id=tenant_id,
             seller_id=seller_id,
-            warehouse_id=summary.wms_warehouse_id,
+            warehouse_id=(
+                selected_warehouse.id
+                if selected_warehouse is not None
+                else summary.wms_warehouse_id
+            ),
             wb_supply_id=f"PENDING-{operation.id}",
             name=name,
             source=FBS_SUPPLY_SOURCE_WMS,

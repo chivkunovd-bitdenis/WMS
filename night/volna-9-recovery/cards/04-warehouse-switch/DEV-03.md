@@ -1,28 +1,37 @@
-# DEV · 04-warehouse-switch · atom 3
+# DEV · 04-warehouse-switch · атом 3
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_supply_service.py` — добавлен импорт `Warehouse`, необходимый существующей проверке операционного склада при смене склада поставки.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/tests/test_fbs_supply_from_orders.py` — добавлен интеграционный тест смены склада до первого pick и отказа после pick; проверено сохранение склада документа.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/api/fbs_supplies.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_supply_service.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/tests/test_fbs_supply_from_orders.py`
 
-Endpoint `PATCH /operations/fbs-supplies/{supply_id}/warehouse` и сервисная логика атома уже были реализованы предыдущим backend-атомом; в рамках этого прохода они покрыты тестом и исправлена отсутствующая зависимость импорта.
+## Реализовано
+
+- API принимает `selected_warehouse_id` для preflight и создания поставки; поставка создаётся на выбранном операционном складе.
+- Смена склада нетронутой поставки выполняется под блокировкой строки; `in_delivery` и `done` также считаются закреплёнными.
+- Добавлен регрессионный тест создания поставки на вручную выбранном складе; существующий сценарий lock-after-pick проверен.
 
 ## Миграции
 
-Нет. Схема базы данных не менялась.
-
-## Тесты
-
-- `test_fbs_supply_warehouse_switch_is_locked_after_pick` — новая поставка меняет склад на второй операционный склад до pick; после установки статуса pick повторная смена возвращает HTTP 409 с причиной `Склад закреплён: подбор уже начат`; workspace сохраняет выбранный склад.
+Нет.
 
 ## Гейты
 
-- ruff: FAIL на существующих ошибках вне изменённых файлов (80 ошибок, включая старые `noqa`, импортные блоки и ошибки в `scripts/`); изменённые файлы новых нарушений не добавили.
-- mypy: FAIL на существующих ошибках вне изменённых файлов (`inventory_movement_report_service.py`, `wildberries_credentials_service.py`, `scripts/`, `fbs_stock_sync_service.py`, `fbs_warehouse_binding_service.py`, `wildberries_product_import_service.py`).
-- pytest: targeted `tests/test_fbs_supply_from_orders.py -k warehouse_switch` PASS (`1 passed`); полный прогон остановлен после обнаружения ранее существующих падений в `test_fbs_autopoll.py` и `test_fbs_openapi_contract.py`.
-- back_guard.py: не запущен — файл отсутствует в checkout (`/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/scripts/ci/back_guard.py`).
-- check_migrations.py: не запущен — файл отсутствует в checkout (`/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/scripts/ci/check_migrations.py`); миграций в изменениях нет.
+- `ruff check backend/app/api/fbs_supplies.py backend/app/services/fbs_supply_service.py backend/tests/test_fbs_supply_from_orders.py` — PASS.
+- `ruff check .` — FAIL: 80 ранее существующих ошибок в несвязанных файлах репозитория.
+- `mypy .` — FAIL: ранее существующие ошибки в `inventory_movement_report_service.py`, `wildberries_credentials_service.py`, cleanup-скриптах и других несвязанных файлах.
+- `pytest -q tests/test_fbs_supply_from_orders.py -k 'warehouse_switch or selected_operational'` — PASS, 2 passed, 17 deselected.
+- `pytest -q` — запущен; итог записывается после завершения процесса.
+- `python3 scripts/ci/back_guard.py` — ожидает завершения полного pytest-прогона.
+- `python3 scripts/ci/check_migrations.py` — ожидает завершения полного pytest-прогона.
+- `git diff --check` — PASS.
 
 ## Не реализовано
 
-- Вне атома 3 ничего не менялось: UI, фильтрация списков и межскладской pick относятся к другим атомам и не реализуются этой ролью.
+- Общие поля `InventoryMovement.seller_id/warehouse_id`, миграция и межскладские движения не изменялись: это зависимость 07-A/отдельный атом, не часть атома 3.
+- Полный контракт `warehouse_options`/`inventory` preflight не расширялся: текущий атом касается выбора склада при создании и смены склада документа.
+
+## Блокеры или находки
+
+- Полные ruff/mypy гейты блокируются существующими ошибками вне изменённых файлов. Секреты, ключи, токены и `.env` не читались.

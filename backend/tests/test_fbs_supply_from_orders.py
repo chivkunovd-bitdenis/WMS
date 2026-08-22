@@ -328,6 +328,45 @@ async def test_fbs_supply_warehouse_switch_is_locked_after_pick(
     assert workspace.json()["supply"]["wms_warehouse"]["id"] == target_warehouse_id
 
 
+# TC-NEW-04-WH-selected — creation honors the explicitly selected operational warehouse
+@pytest.mark.asyncio
+async def test_fbs_supply_creation_uses_selected_operational_warehouse(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    me = await async_client.get("/auth/me", headers=headers)
+    tenant_id = uuid.UUID(me.json()["tenant_id"])
+    seller_id, source_warehouse_id, location_id = await _setup_seller_with_token(
+        async_client, headers, f"selected-wh-{suffix}"
+    )
+    target = await async_client.post(
+        "/warehouses",
+        headers=headers,
+        json={"name": "Consolidation B", "code": f"consolidation-{uuid.uuid4().hex[:10]}"},
+    )
+    assert target.status_code in (200, 201), target.text
+    target_id = target.json()["id"]
+    product = await _create_product(async_client, headers, seller_id, sku=f"selected-{suffix[-6:]}")
+    order_id = await _create_ready_order(
+        tenant_id, uuid.UUID(seller_id), uuid.UUID(source_warehouse_id), uuid.UUID(location_id),
+        product, order_id=851002,
+    )
+    response = await async_client.post(
+        "/operations/fbs-supplies/from-orders",
+        headers=headers,
+        json={
+            "name": "Selected warehouse supply",
+            "order_ids": [str(order_id)],
+            "planned_delivery_type": "warehouse_sc",
+            "selected_warehouse_id": target_id,
+            "idempotency_key": str(uuid.uuid4()),
+        },
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["supply"]["wms_warehouse"]["id"] == target_id
+
+
 # TC-02 — different WB warehouses → preflight incompatible
 @pytest.mark.asyncio
 async def test_tc02_preflight_different_wb_warehouses(

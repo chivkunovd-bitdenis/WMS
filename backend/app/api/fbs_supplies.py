@@ -40,6 +40,7 @@ router = APIRouter(prefix="/operations/fbs-supplies", tags=["operations"])
 class FbsSupplyPreflightBody(BaseModel):
     order_ids: list[uuid.UUID] = Field(min_length=1)
     planned_delivery_type: str
+    selected_warehouse_id: uuid.UUID | None = None
 
 
 class FbsSupplyPlannedDestinationBody(BaseModel):
@@ -54,6 +55,7 @@ class FbsSupplyFromOrdersBody(BaseModel):
     planned_delivery_type: str
     planned_destination: FbsSupplyPlannedDestinationBody | None = None
     idempotency_key: str = Field(min_length=1, max_length=128)
+    selected_warehouse_id: uuid.UUID | None = None
 
 
 class FbsSupplyAddOrdersBody(BaseModel):
@@ -895,6 +897,7 @@ async def preflight_fbs_supply(
             user.tenant_id,
             body.order_ids,
             planned_delivery_type=body.planned_delivery_type,
+            selected_warehouse_id=body.selected_warehouse_id,
         )
     except supply_svc.FbsSupplyError as exc:
         _raise_from_service(exc)
@@ -919,6 +922,7 @@ async def create_fbs_supply_from_orders(
                 order_ids=body.order_ids,
                 planned_delivery_type=body.planned_delivery_type,
                 planned_destination=planned_dest,
+                selected_warehouse_id=body.selected_warehouse_id,
                 idempotency_key=body.idempotency_key,
                 http_client=http_client,
             )
