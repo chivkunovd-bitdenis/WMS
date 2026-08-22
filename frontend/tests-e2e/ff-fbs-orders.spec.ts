@@ -195,7 +195,7 @@ test('fbs orders: shows the server WB verdict and safe operator reason', async (
     order('3', {
       metadata: wbVerdict('WB не принял', {
         tone: 'stop',
-        reason: 'invalid_code',
+        reason: 'uinBadStatus',
         delivery_allowed: false,
       }),
     }),
@@ -218,10 +218,10 @@ test('fbs orders: shows the server WB verdict and safe operator reason', async (
   await expect(page.getByTestId('fbs-order-1-wb-verdict')).toHaveText('WB: принято')
   await expect(page.getByTestId('fbs-order-2-wb-verdict')).toHaveText('WB: код не требуется')
   await expect(page.getByTestId('fbs-order-3-wb-verdict')).toHaveText('WB не принял')
-  await expect(page.getByTestId('fbs-order-3')).toContainText('Код маркировки не принят')
+  await expect(page.getByTestId('fbs-order-3')).toContainText('неверный статус УИН')
   await expect(page.getByTestId('fbs-order-4-wb-verdict')).toHaveText('Нет ответа WB')
   await expect(page.getByTestId('fbs-order-4')).toContainText('Сдача пока недоступна')
-  await expect(page.getByTestId('fbs-order-3')).not.toContainText('invalid_code')
+  await expect(page.getByTestId('fbs-order-3')).not.toContainText('uinBadStatus')
 })
 
 // S-03-TC-006 — a packed supply without order-level verdict data must not claim readiness.

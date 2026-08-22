@@ -197,7 +197,7 @@ export type FbsOrderVerdictSignature =
   | 'WB: нужен код'
   | 'Нет ответа WB'
 
-export type FbsOrderVerdictTone = 'neutral' | 'ok' | 'warn' | 'stop'
+export type FbsOrderVerdictTone = 'neutral' | 'ok' | 'stop'
 
 export type FbsWorklistWarehouseOption = {
   id: string

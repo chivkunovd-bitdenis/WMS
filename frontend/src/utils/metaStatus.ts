@@ -2,6 +2,7 @@ import type { StatusTone } from '../ui-kit'
 import type { FbsOrderVerdict, FbsOrderVerdictSignature } from '../screens/v2/fbsApi'
 
 const REASON_LABELS: Record<string, string> = {
+  uinbadstatus: 'неверный статус УИН',
   missing_code: 'Не найден обязательный код маркировки',
   code_required: 'Нужен обязательный код маркировки',
   invalid_code: 'Код маркировки не принят',
