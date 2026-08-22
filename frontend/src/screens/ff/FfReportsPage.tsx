@@ -89,6 +89,7 @@ export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
   const [csvLoading, setCsvLoading] = useState(false)
   const [periodError, setPeriodError] = useState('')
   const abortRef = useRef<AbortController | null>(null)
+  const tableAbortRef = useRef<AbortController | null>(null)
 
   const params = useCallback((group?: string, requestedPage?: number) => {
     const query = new URLSearchParams({ date_from: `${dateFrom}T00:00:00`, date_to: `${dateTo}T23:59:59` })
@@ -141,11 +142,15 @@ export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
   useEffect(() => { void load(); return () => abortRef.current?.abort() }, [load])
 
   const changeTable = useCallback(async (nextGrouping: 'product' | 'operation', nextPage: number) => {
+    tableAbortRef.current?.abort()
     const controller = new AbortController()
+    tableAbortRef.current = controller
     setTableLoading(true); setTableError(false)
     try { await loadTable(controller.signal, nextPage, nextGrouping); setPage(nextPage) }
     catch (error) { if (!(error instanceof DOMException && error.name === 'AbortError')) setTableError(true) }
-    finally { setTableLoading(false) }
+    finally {
+      if (tableAbortRef.current === controller) setTableLoading(false)
+    }
   }, [loadTable])
 
   const downloadCsv = async () => {
@@ -225,7 +230,7 @@ export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
     ]} rows={rows} getRowKey={row => row.product_id ?? (row as Row & { operation?: string }).operation ?? 'report-row'} loading={loading || tableLoading} empty={{ title: 'За выбранный период движений нет', hint: 'Измените период или снимите фильтры.' }} testId="ff-reports-table" />
     <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ py: 2 }} data-testid="ff-reports-pagination">
       <Typography variant="body2" color="text.secondary">{total === 0 ? '0 из 0' : `${(page - 1) * 50 + 1}–${Math.min(page * 50, total)} из ${total}`}</Typography>
-      <Stack direction="row" spacing={1}><PrimaryAction disabledReason={page <= 1 ? 'Это первая страница' : undefined} onClick={() => void changeTable(grouping, page - 1)}>Назад</PrimaryAction><PrimaryAction disabledReason={page * 50 >= total ? 'Это последняя страница' : undefined} onClick={() => void changeTable(grouping, page + 1)}>Вперёд</PrimaryAction></Stack>
+      <Stack direction="row" spacing={1}><PrimaryAction testId="ff-reports-previous-page" disabledReason={page <= 1 ? 'Это первая страница' : undefined} onClick={() => void changeTable(grouping, page - 1)}>Назад</PrimaryAction><PrimaryAction testId="ff-reports-next-page" disabledReason={page * 50 >= total ? 'Это последняя страница' : undefined} onClick={() => void changeTable(grouping, page + 1)}>Вперёд</PrimaryAction></Stack>
     </Stack>
   </Stack>
 }

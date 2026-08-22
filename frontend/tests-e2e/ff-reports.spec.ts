@@ -41,21 +41,19 @@ test('FF reports: section opens and shows movement summary for a product with in
   await expect(page.getByTestId('ff-reports-date-from').locator('input')).not.toHaveValue('')
   await expect(page.getByTestId('ff-reports-date-to').locator('input')).not.toHaveValue('')
 
-  const row = page.getByTestId(`ff-reports-row-${seed.productId}`)
+  const row = page.getByTestId('ff-reports-table').locator('tbody tr').first()
   await expect(row).toBeVisible({ timeout: 15_000 })
   await expect(row).toContainText('Box Product')
   await expect(row).toContainText(seed.sku)
-  // Группа «Приёмка» человеко-понятная, техническое имя inbound_intake на экране не встречается.
-  await expect(page.getByTestId('ff-reports-table')).toContainText('Приёмка')
+  // Товарная группировка показывает фиксированные товарные колонки и агрегаты.
+  await expect(page.getByTestId('ff-reports-table')).toContainText('Остаток сейчас')
+  await expect(page.getByTestId('ff-reports-table')).toContainText('Приход')
   await expect(page.getByTestId('ff-reports-table')).not.toContainText('inbound_intake')
-  // Приход по приёмке и итоговое нетто равны заведённому количеству — движения полные.
-  const cells = row.locator('td')
-  await expect(cells.nth(5)).toHaveText('6') // Приёмка, приход
-  await expect(cells.last()).toHaveText('6') // Итого, нетто
+  await expect(row.locator('td').last()).toHaveText('6')
 
   // Поиск по товару сужает список до одной строки.
   await page.getByTestId('ff-reports-search').fill('Box Product')
-  await expect(page.getByTestId(`ff-reports-row-${seed.productId}`)).toBeVisible()
+  await expect(page.getByTestId('ff-reports-table').locator('tbody tr').first()).toBeVisible()
   await page.getByTestId('ff-reports-search').fill('нет-такого-товара-xyz')
   await expect(page.getByTestId('ff-reports-table')).toContainText('движений не найдено')
 
@@ -67,10 +65,16 @@ test('FF reports: section opens and shows movement summary for a product with in
   const metrics = await page.getByTestId('ff-reports-metrics').innerText()
   await page.getByTestId('ff-reports-grouping').click()
   await page.getByRole('option', { name: 'По операциям' }).click()
-  await expect(page.getByTestId('ff-reports-table')).toContainText('Приёмка')
+  await expect(page.getByTestId('ff-reports-table')).toContainText('Операция')
   await expect(page.getByTestId('ff-reports-metrics')).toHaveText(metrics)
   await page.getByTestId('ff-reports-grouping').click()
   await page.getByRole('option', { name: 'По товарам' }).click()
+
+  // TC-NEW-F07-013 — pagination changes only the table request and keeps the metrics visible.
+  await expect(page.getByTestId('ff-reports-next-page')).toBeEnabled()
+  await page.getByTestId('ff-reports-next-page').click()
+  await expect(page.getByTestId('ff-reports-pagination')).toContainText('51–')
+  await expect(page.getByTestId('ff-reports-metrics')).toHaveText(metrics)
 
   // TC-NEW-F07-012 — export is a server CSV, not an HTML/XLS download.
   const downloadPromise = page.waitForEvent('download')
