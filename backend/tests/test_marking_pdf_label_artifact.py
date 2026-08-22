@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 import uuid
+from collections.abc import AsyncIterator
 
 import fitz
 import pytest
@@ -678,6 +680,98 @@ def test_merge_label_artifact_pdfs_empty_raises() -> None:
 
     with pytest.raises(ValueError, match="empty_parts"):
         merge_label_artifact_pdfs([])
+
+
+@pytest.mark.asyncio
+async def test_streaming_tape_merge_consumes_one_source_at_a_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services import marking_label_artifact_service as artifact_svc
+
+    source = fitz.open()
+    source.new_page(width=170, height=113)
+    source_bytes = bytes(source.tobytes())
+    source.close()
+
+    produced = 0
+    appended = 0
+    original_append = artifact_svc._append_label_artifact_pdf
+
+    async def parts() -> AsyncIterator[bytes]:
+        nonlocal produced
+        for _ in range(155):
+            assert produced == appended
+            produced += 1
+            yield source_bytes
+
+    def tracked_append(
+        out: fitz.Document,
+        pdf_bytes: bytes,
+        page_width_mm: float | None,
+        page_height_mm: float | None,
+    ) -> None:
+        nonlocal appended
+        original_append(out, pdf_bytes, page_width_mm, page_height_mm)
+        appended += 1
+
+    monkeypatch.setattr(artifact_svc, "_append_label_artifact_pdf", tracked_append)
+    merged_bytes = await artifact_svc.merge_label_artifact_pdfs_for_print_stream(parts())
+
+    assert produced == appended == 155
+    merged = fitz.open(stream=merged_bytes, filetype="pdf")
+    try:
+        assert merged.page_count == 155
+    finally:
+        merged.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("label_count", [155, 500])
+async def test_label_tape_load_does_not_block_health(
+    async_client: AsyncClient,
+    label_count: int,
+) -> None:
+    from app.services.marking_label_artifact_service import (
+        merge_label_artifact_pdfs_for_print_stream,
+    )
+
+    source = fitz.open()
+    source.new_page(width=170, height=113)
+    source_bytes = bytes(source.tobytes())
+    source.close()
+
+    def build_in_isolated_worker() -> bytes:
+        async def parts() -> AsyncIterator[bytes]:
+            for _ in range(label_count):
+                yield source_bytes
+
+        return asyncio.run(merge_label_artifact_pdfs_for_print_stream(parts()))
+
+    started_at = time.perf_counter()
+    job = asyncio.create_task(asyncio.to_thread(build_in_isolated_worker))
+    await asyncio.sleep(0)
+    health_latencies: list[float] = []
+    while True:
+        health_started_at = time.perf_counter()
+        health = await async_client.get("/health")
+        health_latencies.append(time.perf_counter() - health_started_at)
+        assert health.status_code == 200
+        if job.done():
+            break
+        await asyncio.sleep(0)
+    merged_bytes = await job
+    elapsed = time.perf_counter() - started_at
+
+    merged = fitz.open(stream=merged_bytes, filetype="pdf")
+    try:
+        assert merged.page_count == label_count
+    finally:
+        merged.close()
+    assert max(health_latencies) < 1.0
+    print(
+        f"label_tape_load labels={label_count} job_seconds={elapsed:.3f} "
+        f"health_max_seconds={max(health_latencies):.3f}"
+    )
 
 
 def test_fit_label_artifact_pdf_to_page_sets_tall_page_size() -> None:

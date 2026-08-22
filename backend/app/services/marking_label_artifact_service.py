@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import AsyncIterable, Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
@@ -109,6 +109,75 @@ def fit_label_artifact_pdf_to_page(
             out.close()
     finally:
         src.close()
+
+
+def _append_label_artifact_pdf(
+    out: fitz.Document,
+    pdf_bytes: bytes,
+    page_width_mm: float | None,
+    page_height_mm: float | None,
+) -> None:
+    """Append one source PDF without retaining it or a transformed copy."""
+    import fitz  # pymupdf
+
+    src = fitz.open(stream=pdf_bytes, filetype="pdf")
+    try:
+        if page_width_mm is None or page_height_mm is None:
+            out.insert_pdf(src)
+            return
+        if page_width_mm <= 0 or page_height_mm <= 0:
+            raise ValueError("invalid_page_size")
+        if src.page_count < 1:
+            raise ValueError("empty_pdf")
+
+        src_rect = src[0].rect
+        page_w_pt = _mm_to_pt(page_width_mm)
+        page_h_pt = _mm_to_pt(page_height_mm)
+        src_landscape = src_rect.width > src_rect.height * 1.05
+        target_tall = page_height_mm / page_width_mm >= 1.2
+        rotate = 90 if target_tall and src_landscape else 0
+        if rotate in (90, 270):
+            content_w = src_rect.height
+            content_h = src_rect.width
+        else:
+            content_w = src_rect.width
+            content_h = src_rect.height
+        scale = min(page_w_pt / content_w, page_h_pt / content_h)
+        draw_w = content_w * scale
+        draw_h = content_h * scale
+        target = fitz.Rect(
+            (page_w_pt - draw_w) / 2,
+            (page_h_pt - draw_h) / 2,
+            (page_w_pt + draw_w) / 2,
+            (page_h_pt + draw_h) / 2,
+        )
+        page = out.new_page(width=page_w_pt, height=page_h_pt)
+        page.show_pdf_page(target, src, 0, rotate=rotate)
+    finally:
+        src.close()
+
+
+async def merge_label_artifact_pdfs_for_print_stream(
+    parts: AsyncIterable[bytes],
+    page_width_mm: float | None = None,
+    page_height_mm: float | None = None,
+) -> bytes:
+    """Merge an async stream while holding only one source label at a time."""
+    import fitz  # pymupdf
+
+    if (page_width_mm is None) != (page_height_mm is None):
+        raise ValueError("incomplete_page_size")
+    out = fitz.open()
+    part_count = 0
+    try:
+        async for part in parts:
+            _append_label_artifact_pdf(out, part, page_width_mm, page_height_mm)
+            part_count += 1
+        if part_count == 0:
+            raise ValueError("empty_parts")
+        return cast(bytes, out.tobytes())
+    finally:
+        out.close()
 
 
 def merge_label_artifact_pdfs_for_print(

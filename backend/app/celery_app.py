@@ -16,6 +16,7 @@ celery_app = Celery(
 celery_app.conf.task_ignore_result = True
 celery_app.conf.task_routes = {
     "wms.marking_label_tape": {"queue": "print"},
+    "wms.purge_expired_label_tape_assets": {"queue": "print"},
     "wms.wb_orders_new": {"queue": "wb_sync"},
     "wms.wb_orders_reconcile": {"queue": "wb_sync"},
 }

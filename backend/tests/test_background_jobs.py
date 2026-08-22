@@ -26,6 +26,14 @@ from app.services.background_job_service import (
 from app.services.tokens import decode_access_token
 
 
+def test_label_tape_and_expiry_cleanup_share_print_queue() -> None:
+    from app.celery_app import celery_app
+
+    routes = celery_app.conf.task_routes
+    assert routes["wms.marking_label_tape"] == {"queue": "print"}
+    assert routes["wms.purge_expired_label_tape_assets"] == {"queue": "print"}
+
+
 def test_marking_label_tape_enqueue_failure_keeps_request_retryable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

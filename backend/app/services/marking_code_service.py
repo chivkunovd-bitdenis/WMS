@@ -5,6 +5,7 @@ import io
 import json
 import re
 import uuid
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
@@ -653,18 +654,31 @@ async def build_label_artifact_tape_pdf(
     if len(code_ids) > _MAX_LABEL_ARTIFACT_TAPE:
         raise MarkingCodeServiceError("too_many_codes")
 
-    from app.services.marking_label_artifact_service import merge_label_artifact_pdfs_for_print
+    from app.services.marking_label_artifact_service import (
+        merge_label_artifact_pdfs_for_print_stream,
+    )
 
-    parts: list[bytes] = []
-    for code_id in code_ids:
-        code = await session.get(MarkingCode, code_id)
-        if code is None or code.tenant_id != tenant_id:
-            raise MarkingCodeServiceError("code_not_found")
-        pdf_bytes = code.label_artifact_pdf
-        if not pdf_bytes or not is_printable_label_artifact(pdf_bytes, code.cis_code):
-            raise MarkingCodeServiceError("label_artifact_missing")
-        parts.append(pdf_bytes)
-    return merge_label_artifact_pdfs_for_print(parts, page_width_mm, page_height_mm)
+    async def label_artifacts() -> AsyncIterator[bytes]:
+        for code_id in code_ids:
+            row = (
+                await session.execute(
+                    select(
+                        MarkingCode.tenant_id,
+                        MarkingCode.cis_code,
+                        MarkingCode.label_artifact_pdf,
+                    ).where(MarkingCode.id == code_id)
+                )
+            ).one_or_none()
+            if row is None or row.tenant_id != tenant_id:
+                raise MarkingCodeServiceError("code_not_found")
+            pdf_bytes = row.label_artifact_pdf
+            if not pdf_bytes or not is_printable_label_artifact(pdf_bytes, row.cis_code):
+                raise MarkingCodeServiceError("label_artifact_missing")
+            yield pdf_bytes
+
+    return await merge_label_artifact_pdfs_for_print_stream(
+        label_artifacts(), page_width_mm, page_height_mm
+    )
 
 
 def _parse_pdf_text_rows(content: bytes) -> list[dict[str, str]]:
