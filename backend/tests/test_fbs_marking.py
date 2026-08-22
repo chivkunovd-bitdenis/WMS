@@ -322,11 +322,13 @@ async def test_fbs_metadata_gate_rejected_blocks_allowed_without_check_ok(
                 value="01CIS-ALLOWED",
                 check_status=CHECK_STATUS_NEW,
                 meta_status=META_STATUS_ALLOWED_WITHOUT_CHECK,
+                meta_details_json={"decision": "notRequired"},
             )
         )
         await session.commit()
         order = await session.get(FbsOrder, order_id)
         assert order is not None
+        order.optional_meta_json = []
         markings = list(
             (
                 await session.execute(
@@ -356,7 +358,10 @@ def test_fbs_metadata_gate_pending_blocks_filled_allows() -> None:
         )
         == META_STATUS_ACCEPTED
     )
-    filled = SimpleNamespace(kind="sgtin", value="01CIS-FILLED", meta_status=META_STATUS_ACCEPTED)
+    filled = SimpleNamespace(
+        kind="sgtin", value="01CIS-FILLED", meta_status=META_STATUS_ACCEPTED,
+        meta_details_json={"decision": "filled"},
+    )
     assert compute_delivery_allowed(order, [filled]) is True
 
 
@@ -512,15 +517,47 @@ def test_wb_order_verdict_aggregates_blocker_over_positive() -> None:
     assert verdict["delivery_allowed"] is False
 
 
-def test_wb_order_verdict_does_not_block_absent_optional_requirement() -> None:
+def test_wb_order_verdict_blocks_absent_optional_response() -> None:
     from types import SimpleNamespace
 
     from app.services.fbs_marking_service import _wb_order_verdict
 
     order = SimpleNamespace(required_meta_json=[], optional_meta_json=["imei"])
     verdict = _wb_order_verdict(order, [])
-    assert verdict["signature"] == "WB: код не требуется"
-    assert verdict["delivery_allowed"] is True
+    assert verdict["signature"] == "Нет ответа WB"
+    assert verdict["delivery_allowed"] is False
+
+
+def test_wb_order_verdict_missing_response_wins_over_pending() -> None:
+    from types import SimpleNamespace
+
+    from app.services.fbs_marking_service import _wb_order_verdict
+
+    order = SimpleNamespace(required_meta_json=["sgtin", "imei"], optional_meta_json=[])
+    pending = SimpleNamespace(
+        kind="sgtin", meta_status="pending", reason=None,
+        meta_details_json={"decision": "pending"},
+    )
+    assigned_without_decision = SimpleNamespace(
+        kind="imei", meta_status="assigned", reason=None,
+        meta_details_json={},
+    )
+    verdict = _wb_order_verdict(order, [pending, assigned_without_decision])
+    assert verdict["signature"] == "Нет ответа WB"
+    assert verdict["delivery_allowed"] is False
+
+
+def test_compute_delivery_allowed_uses_reason_and_decision() -> None:
+    from types import SimpleNamespace
+
+    from app.services.fbs_marking_service import compute_delivery_allowed
+
+    order = SimpleNamespace(required_meta_json=["sgtin"], optional_meta_json=[])
+    marking = SimpleNamespace(
+        kind="sgtin", meta_status="accepted", reason="uinBadStatus",
+        meta_details_json={"decision": "filled"},
+    )
+    assert compute_delivery_allowed(order, [marking]) is False
 
 
 def test_wb_order_verdict_allows_order_without_metadata_requirements() -> None:

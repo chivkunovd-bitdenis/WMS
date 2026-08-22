@@ -57,3 +57,6 @@
 15:06   02-verdikt-screen · dev: фича 4/5 сохранена d01379698d4b
 15:09   02-verdikt-screen · screen-dev: готово
 15:09   02-verdikt-screen · dev: фича 5/5 сохранена 2dc881a56ede
+15:15   02-verdikt-screen · reviewer: готово
+15:15   02-verdikt-screen · reviewer: находки, круг 2 — назад к разработке
+15:19   02-verdikt-screen · backend-dev: готово

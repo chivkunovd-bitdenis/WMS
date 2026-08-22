@@ -47,6 +47,7 @@ from app.models.storage_location import StorageLocation
 from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
 from app.models.warehouse import Warehouse
 from app.services.fbs_stock_availability_service import fbs_available_qty_by_product
+from app.services.fbs_marking_service import _wb_order_verdict
 from app.services.inventory_service import OUTBOUND_RESERVE_STATUSES
 from app.services.wb_card_enrichment import (
     color_from_card,
@@ -838,16 +839,13 @@ def _build_metadata(
                     "value_tail": None,
                 }
             )
-    delivery_allowed = (
-        bool(order.metadata_delivery_allowed)
-        if order.metadata_delivery_allowed is not None
-        else False
-    )
+    verdict = _wb_order_verdict(order, markings)
     return {
         "required": required,
         "optional": optional,
         "states": states,
-        "delivery_allowed": delivery_allowed,
+        "delivery_allowed": verdict["delivery_allowed"],
+        "verdict": verdict,
         "last_checked_at": (
             order.metadata_last_checked_at.isoformat()
             if order.metadata_last_checked_at

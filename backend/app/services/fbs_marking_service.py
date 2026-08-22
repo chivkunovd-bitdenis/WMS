@@ -292,22 +292,21 @@ def _wb_order_verdict(
 ) -> dict[str, Any]:
     """Return the single operator-facing WB verdict and its delivery gate."""
     required = list(order.required_meta_json or [])
-    optional = list(order.optional_meta_json or [])
+    optional = list(getattr(order, "optional_meta_json", None) or [])
     requested = required + [kind for kind in optional if kind not in required]
     states: list[dict[str, Any]] = []
     for kind in requested:
         is_required = kind in required
         mark = current_order_marking(markings, kind, include_rejected=True)
-        details = (
-            mark.meta_details_json
-            if mark and isinstance(mark.meta_details_json, dict)
-            else {}
-        )
+        details: dict[str, Any] = {}
+        raw_details = getattr(mark, "meta_details_json", None) if mark else None
+        if isinstance(raw_details, dict):
+            details = raw_details
         states.append({
             "kind": kind,
             "required": is_required,
             "decision": details.get("decision") if mark else None,
-            "reason": mark.reason if mark else None,
+            "reason": getattr(mark, "reason", None) if mark else None,
             "status": mark.meta_status if mark else META_STATUS_MISSING,
         })
 
@@ -331,9 +330,9 @@ def _wb_order_verdict(
         for state in states
         if state["decision"] is not None
     }
-    statuses = {state["status"] for state in states}
     if "required" in decisions or any(
-        state["required"] and state["status"] == META_STATUS_MISSING
+        state["required"] and state["decision"] is None
+        and state["status"] == META_STATUS_MISSING
         for state in states
     ):
         return {
@@ -342,35 +341,27 @@ def _wb_order_verdict(
             "reason": None,
             "delivery_allowed": False,
         }
-    if "pending" in decisions or META_STATUS_PENDING in statuses:
+    if any(
+        state["decision"] is None and not state["required"]
+        for state in states
+    ) or not decisions.issubset(
+        {"filled", "optional", "notrequired", "not_required", "pending", "required"}
+    ) or any(
+        state["decision"] is None and state["status"] not in {META_STATUS_MISSING}
+        for state in states
+    ):
+        return {
+            "signature": "Нет ответа WB",
+            "tone": "stop",
+            "reason": None,
+            "delivery_allowed": False,
+        }
+    if "pending" in decisions:
         return {
             "signature": "WB: проверяет",
             "tone": "stop",
             "reason": None,
             "delivery_allowed": False,
-        }
-    if any(state["decision"] is None and state["required"] for state in states):
-        return {
-            "signature": "Нет ответа WB",
-            "tone": "stop",
-            "reason": None,
-            "delivery_allowed": False,
-        }
-    if not decisions.issubset({"filled", "optional", "notrequired", "not_required"}):
-        return {
-            "signature": "Нет ответа WB",
-            "tone": "stop",
-            "reason": None,
-            "delivery_allowed": False,
-        }
-    if any(
-        not state["required"] and state["decision"] is None for state in states
-    ):
-        return {
-            "signature": "WB: код не требуется",
-            "tone": "neutral",
-            "reason": None,
-            "delivery_allowed": True,
         }
     if decisions.issubset({"optional", "notrequired", "not_required"}):
         return {
@@ -386,18 +377,7 @@ def compute_delivery_allowed(
     order: FbsOrder,
     markings: list[FbsOrderMarking],
 ) -> bool:
-    required = list(order.required_meta_json or [])
-    if not required:
-        return True
-    for kind in required:
-        mark = current_order_marking(markings, kind)
-        if mark is None:
-            return False
-        if mark.meta_status in {META_STATUS_REJECTED, META_STATUS_REPLACEMENT_REQUIRED}:
-            return False
-        if mark.meta_status not in _META_DELIVERY_OK:
-            return False
-    return True
+    return bool(_wb_order_verdict(order, markings)["delivery_allowed"])
 
 
 def _marking_value_tail(value: str | None, length: int = 8) -> str | None:
