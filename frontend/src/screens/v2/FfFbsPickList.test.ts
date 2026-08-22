@@ -4,9 +4,9 @@ import { buildNumberedItems, markKey } from './FfFbsPickList'
 describe('Лист подбора: отметки «Собрал» и «Упаковал»', () => {
   it('сохраняет сквозные диапазоны при скрытии строк представления', () => {
     const rows = buildNumberedItems([
-      { article: 'A', sku_code: null, size: 'M', product_name: 'A', quantity: 3 },
-      { article: 'B', sku_code: null, size: null, product_name: 'B', quantity: 1 },
-      { article: 'C', sku_code: null, size: 'L', product_name: 'C', quantity: 2 },
+      { article: 'A', sku_code: null, size: 'M', product_name: 'A', quantity: 3, number_start: 1, number_end: 3, order_ids: ['1', '2', '3'] },
+      { article: 'B', sku_code: null, size: null, product_name: 'B', quantity: 1, number_start: 4, number_end: 4, order_ids: ['4'] },
+      { article: 'C', sku_code: null, size: 'L', product_name: 'C', quantity: 2, number_start: 5, number_end: 6, order_ids: ['5', '6'] },
     ])
     expect(rows.map(({ numberFrom, numberTo }) => [numberFrom, numberTo])).toEqual([[1, 3], [4, 4], [5, 6]])
   })

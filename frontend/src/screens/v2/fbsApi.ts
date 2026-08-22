@@ -365,6 +365,7 @@ export type FbsOrderPrintTapeRequest = {
 export type FbsOrderPrintTapeOrder = {
   order_id: string
   wb_order_id: number
+  order_number?: number
   requires_honest_sign: boolean
   qr_asset: FbsPrintAsset | null
   codes: string[]
@@ -378,7 +379,7 @@ export type FbsOrderPrintTape = {
   ready: number
   missing: number
   failed: number
-  order_errors: Array<{ order_id: string; wb_order_id: number; code: string; message: string }>
+  order_errors: Array<{ order_id: string; wb_order_id: number; code: string; message: string; order_number?: number }>
   shortage: number
 }
 
@@ -1046,6 +1047,9 @@ export type FbsPickingItem = {
   size: string | null
   product_name: string
   quantity: number
+  number_start: number
+  number_end: number
+  order_ids: string[]
 }
 
 export async function getFbsPickingList(
