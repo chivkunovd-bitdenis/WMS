@@ -1,4 +1,4 @@
-import { Alert, Box, Skeleton, Stack, TableBody, TableCell, TableRow, Typography } from '@mui/material'
+import { Alert, Box, Button, CircularProgress, Skeleton, Stack, TableBody, TableCell, TableRow, Typography } from '@mui/material'
 import type { ReactNode } from 'react'
 
 // Канон R-21: пустой раздел говорит, что пусто, почему и что нажать.
@@ -67,5 +67,46 @@ export function ScreenHeader({ title, purpose }: { title: string; purpose?: stri
         </Typography>
       ) : null}
     </Box>
+  )
+}
+
+// Канон R-37: «Показать ещё» под таблицей — текстовая кнопка в строке TableRow с colSpan
+// во всю ширину. Скрывается если hasNext=false. Во время загрузки — «Загружаем…» со спиннером.
+// Не SecondaryAction (R-31 запрещает solo-outlined), не PrimaryAction (главное в шапке).
+export function TableLoadMore({
+  hasNext,
+  loading,
+  onLoadMore,
+  columns,
+  testId,
+}: {
+  hasNext: boolean
+  loading: boolean
+  onLoadMore: () => void
+  columns: number
+  testId?: string
+}) {
+  if (!hasNext) return null
+  return (
+    <TableRow>
+      <TableCell colSpan={columns} sx={{ textAlign: 'center', py: 1 }}>
+        <Button
+          variant="text"
+          size="small"
+          disabled={loading}
+          onClick={onLoadMore}
+          data-testid={testId}
+        >
+          {loading ? (
+            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+              <CircularProgress size={12} />
+              <span>Загружаем…</span>
+            </Stack>
+          ) : (
+            'Показать ещё'
+          )}
+        </Button>
+      </TableCell>
+    </TableRow>
   )
 }

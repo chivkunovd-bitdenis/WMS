@@ -41,8 +41,22 @@ import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { FbsSupplyCreateDialog } from './FbsSupplyCreateDialog'
 import { FfFbsSectionNav } from './FfFbsSectionNav'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
-import { ordersWord } from './fbsUx'
+import {
+  ordersWord,
+  formatDateTime,
+  formatNullableDateTime,
+  supplyStatusLabel,
+  supplyStatusColor,
+  elapsedSince,
+  formatFreshness,
+  normalizeSearch,
+  orderSearchText,
+  warehouseOptionLabel,
+  metadataProblem,
+  downloadOrdersExcel,
+} from './fbsUx'
 import { plural } from '../../utils/plural'
+import { TableSkeletonBody, EmptyState, ErrorNotice, TableLoadMore } from '../../ui-kit'
 import {
   fetchFbsSellerWarehouses,
   fetchFbsSupplyWorklist,
@@ -79,7 +93,8 @@ const TABS = [
 
 type FbsStatusGroup = (typeof TABS)[number]['key']
 
-const NEW_ORDERS_PAGE_LIMIT = 500
+const NEW_ORDERS_PAGE_LIMIT = 50
+const OTHER_ORDERS_PAGE_LIMIT = 100
 
 // HANDOFF-POLISH.md пул 1 п.4 (решение П3): «В работе», «В доставке» и «Завершённые» —
 // это работа с уже собранным документом (поставкой) целиком, не с отдельными заказами.
@@ -99,7 +114,7 @@ const SUPPLY_EMPTY_STATE: Record<'active' | 'delivery' | 'done', { title: string
     hint: 'Поставки появятся здесь после передачи в доставку.',
   },
   done: {
-    title: 'Завершённых поставок нет',
+    title: 'Завершённых поставок за период нет',
     hint: 'Поставки появятся здесь после приёмки Wildberries.',
   },
 }
@@ -334,155 +349,6 @@ const NewOrderRow = memo(function NewOrderRow({
   )
 })
 
-// GLOBAL-02: единственное состояние строки, которое реально мешает оператору
-// отгрузить заказ, — незакрытая маркировка Честным знаком. «Не хватает: N» с прошлого
-// стейджа заказчик прочитал как нехватку товара на складе — на деле это нехватка кодов
-// маркировки (order.metadata), поэтому подпись теперь называет вещь напрямую и красный
-// цвет держится только за тем, что действительно блокирует работу.
-type MetadataProblem = { label: string; color: 'error' }
-
-function metadataProblem(order: FbsWorklistOrder): MetadataProblem | null {
-  if (order.metadata.required.length === 0) {
-    return null
-  }
-  const rejected = order.metadata.states.some((state) =>
-    ['rejected', 'replacement_required'].includes(state.status),
-  )
-  if (rejected) return { label: 'Отклонено WB', color: 'error' }
-  const missing = order.metadata.states.filter((state) => state.status === 'missing').length
-  if (missing > 0) return { label: `Не хватает честных знаков: ${missing}`, color: 'error' }
-  return null
-}
-
-function warehouseOptionLabel(
-  option: FbsWorklistWarehouseOption,
-  sellerWarehouseNames: Record<string, string>,
-) {
-  return sellerWarehouseNames[option.id] || option.name || option.wb_warehouse.name || `WB ${option.wb_warehouse.id}`
-}
-
-function normalizeSearch(value: string): string {
-  return value.trim().toLocaleLowerCase('ru-RU')
-}
-
-function orderSearchText(order: FbsWorklistOrder): string {
-  return [
-    order.wb_order_id,
-    order.product.name,
-    order.product.category,
-    order.product.seller_article,
-    order.product.wb_article,
-    order.product.barcode,
-    order.product.sku,
-    order.product.chrt_id,
-    order.product.color,
-    order.product.size,
-  ]
-    .filter((value) => value !== null && value !== undefined && String(value).trim())
-    .join(' ')
-    .toLocaleLowerCase('ru-RU')
-}
-
-function formatDateTime(value: string): string {
-  return new Date(value).toLocaleString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-function formatNullableDateTime(value: string | null): string {
-  return value ? formatDateTime(value) : '—'
-}
-
-function supplyStatusLabel(status: string): string {
-  const labels: Record<string, string> = {
-    // «Состав» — это название первой вкладки внутри карточки поставки, а не статус
-    // документа. В списке поставок черновик должен называться черновиком.
-    draft: 'Черновик',
-    assembling: 'В работе',
-    packed: 'Готова к сдаче',
-    in_delivery: 'В доставке',
-    done: 'Завершена',
-  }
-  return labels[status] ?? 'Статус уточняется'
-}
-
-function supplyStatusColor(status: string): 'default' | 'primary' | 'success' | 'warning' {
-  if (status === 'done') return 'success'
-  if (status === 'in_delivery') return 'primary'
-  if (status === 'draft' || status === 'assembling' || status === 'packed') return 'warning'
-  return 'default'
-}
-
-function elapsedSince(value: string, serverNow: string | null): string {
-  const start = new Date(value).getTime()
-  const end = serverNow ? new Date(serverNow).getTime() : Date.now()
-  const minutes = Math.max(0, Math.floor((end - start) / 60000))
-  const days = Math.floor(minutes / 1440)
-  const hours = Math.floor((minutes % 1440) / 60)
-  const mins = minutes % 60
-  if (days > 0) return `${days} д ${hours} ч`
-  if (hours > 0) return `${hours} ч ${mins} мин`
-  return `${mins} мин`
-}
-
-// Задача 9 пула (HANDOFF-POLISH.md): отметка свежести данных — сколько прошло с последней
-// успешной загрузки списка.
-function formatFreshness(lastLoadedAt: string | null): string | null {
-  if (!lastLoadedAt) return null
-  const minutes = Math.max(0, Math.floor((Date.now() - new Date(lastLoadedAt).getTime()) / 60000))
-  if (minutes < 1) return 'Обновлено только что'
-  return `Обновлено ${minutes} ${plural(minutes, ['минуту', 'минуты', 'минут'])} назад`
-}
-
-function excelCell(value: string | number | null | undefined): string {
-  const text = value === null || value === undefined ? '' : String(value)
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
-
-function downloadOrdersExcel(rows: FbsWorklistOrder[]): void {
-  const headers = [
-    'Наименование',
-    'Артикул продавца',
-    'Цвет',
-    'Размер',
-    'Склад селлера WB',
-    'Номер заказа WB',
-    'ШК/SKU',
-    'Количество',
-  ]
-  const bodyRows = rows.map((order) => [
-    order.product.name,
-    order.product.seller_article,
-    order.product.color,
-    order.product.size,
-    order.wb_warehouse.name || `WB ${order.wb_warehouse.id}`,
-    order.wb_order_id,
-    [order.product.barcode, order.product.sku].filter(Boolean).join(' / '),
-    1,
-  ])
-  const html = [
-    '<html><head><meta charset="utf-8" /></head><body><table>',
-    `<thead><tr>${headers.map((header) => `<th>${excelCell(header)}</th>`).join('')}</tr></thead>`,
-    `<tbody>${bodyRows
-      .map((row) => `<tr>${row.map((cell) => `<td>${excelCell(cell)}</td>`).join('')}</tr>`)
-      .join('')}</tbody>`,
-    '</table></body></html>',
-  ].join('')
-  const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `fbs-new-orders-${new Date().toISOString().slice(0, 10)}.xls`
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
-}
-
 export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false }: Props) {
   const location = useLocation()
   const navigate = useNavigate()
@@ -492,6 +358,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [search, setSearch] = useState('')
   const [activeSearch, setActiveSearch] = useState('')
   const [orders, setOrders] = useState<FbsWorklistOrder[]>([])
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [activeSupplies, setActiveSupplies] = useState<FbsSupplyWorklistItem[]>([])
   const [externalActiveOrders, setExternalActiveOrders] = useState<FbsWorklistOrder[]>([])
   const [warehouseOptions, setWarehouseOptions] = useState<FbsWorklistWarehouseOption[]>([])
@@ -503,6 +371,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [selectedOpen, setSelectedOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [syncNote, setSyncNote] = useState<string | null>(null)
@@ -545,7 +414,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         const params = {
           seller_id: sellerId === '__all__' ? null : sellerId,
           status_group: statusGroup,
-          limit: 500,
+          limit: OTHER_ORDERS_PAGE_LIMIT,
         }
         const [suppliesPage, ordersPage] = await Promise.all([
           fetchFbsSupplyWorklist(token, authHeaders, params),
@@ -554,6 +423,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         setActiveSupplies(suppliesPage.items)
         setExternalActiveOrders(ordersPage.items.filter((order) => !order.supply_id))
         setOrders([])
+        setNextCursor(null)
+        setLoadMoreError(null)
         setWarehouseOptions([])
         setServerNow(suppliesPage.server_now)
         setLastLoadedAt(new Date().toISOString())
@@ -563,9 +434,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         seller_id: sellerId === '__all__' ? null : sellerId,
         status_group: statusGroup,
         wb_warehouse_id: statusGroup === 'new' && wbWarehouseId !== '__all__' ? wbWarehouseId : null,
-        limit: statusGroup === 'new' ? NEW_ORDERS_PAGE_LIMIT : 500,
+        limit: statusGroup === 'new' ? NEW_ORDERS_PAGE_LIMIT : OTHER_ORDERS_PAGE_LIMIT,
       })
       setOrders(page.items)
+      setNextCursor(statusGroup === 'new' ? page.next_cursor : null)
+      setLoadMoreError(null)
       setActiveSupplies([])
       setExternalActiveOrders([])
       setSelectedCache((current) => {
@@ -584,9 +457,70 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       setServerNow(page.server_now)
       setLastLoadedAt(new Date().toISOString())
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Не удалось загрузить заказы FBS.')
+      setError('Не удалось получить список заказов')
     } finally {
       setBusy(false)
+      loadingRef.current = false
+    }
+  }, [token, authHeaders, sellerId, statusGroup, wbWarehouseId])
+
+  const loadMore = useCallback(async () => {
+    if (statusGroup !== 'new' || !nextCursor || isLoadingMore) return
+    setIsLoadingMore(true)
+    setLoadMoreError(null)
+    try {
+      const page = await fetchFbsWorklist(token, authHeaders, {
+        seller_id: sellerId === '__all__' ? null : sellerId,
+        status_group: 'new',
+        wb_warehouse_id: wbWarehouseId !== '__all__' ? wbWarehouseId : null,
+        limit: NEW_ORDERS_PAGE_LIMIT,
+        cursor: nextCursor,
+      })
+      setOrders((prev) => [...prev, ...page.items])
+      setNextCursor(page.next_cursor)
+      setSelectedCache((current) => {
+        const next = new Map(current)
+        page.items.forEach((order) => next.set(order.id, order))
+        return next
+      })
+    } catch (cause) {
+      setLoadMoreError(cause instanceof Error ? cause.message : 'Не удалось подгрузить следующие заказы.')
+    } finally {
+      setIsLoadingMore(false)
+    }
+  }, [token, authHeaders, sellerId, statusGroup, wbWarehouseId, nextCursor, isLoadingMore])
+
+  // Обновление только первой страницы при тике 30 с: мержим новые заказы с существующими,
+  // скролл оператора не сбрасывается, подгруженные страницы остаются.
+  const updateFirstPage = useCallback(async () => {
+    if (statusGroup !== 'new' || loadingRef.current) return
+    loadingRef.current = true
+    try {
+      const page = await fetchFbsWorklist(token, authHeaders, {
+        seller_id: sellerId === '__all__' ? null : sellerId,
+        status_group: 'new',
+        wb_warehouse_id: wbWarehouseId !== '__all__' ? wbWarehouseId : null,
+        limit: NEW_ORDERS_PAGE_LIMIT,
+      })
+      setOrders((prev) => {
+        // Мержим: новые заказы (из ответа) добавляются сверху, существующие обновляются на месте
+        const newIdToOrder = new Map(page.items.map((o) => [o.id, o]))
+        const updated = prev.map((o) => newIdToOrder.get(o.id) || o)
+        // Добавляем заказы, которые есть в ответе, но не в текущем списке
+        const existingIds = new Set(prev.map((o) => o.id))
+        const freshOnes = page.items.filter((o) => !existingIds.has(o.id))
+        return [...freshOnes, ...updated]
+      })
+      // Обновляем selectedCache для массовых операций
+      setSelectedCache((current) => {
+        const next = new Map(current)
+        page.items.forEach((order) => next.set(order.id, order))
+        return next
+      })
+      setLastLoadedAt(new Date().toISOString())
+    } catch {
+      // Тик ошибки не показываем — просто пропускаем этот ход
+    } finally {
       loadingRef.current = false
     }
   }, [token, authHeaders, sellerId, statusGroup, wbWarehouseId])
@@ -597,22 +531,32 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
 
   // Задача 9 пула (HANDOFF-POLISH.md): список раньше не обновлялся сам никогда. Поллинг
   // активной вкладки каждые 30 секунд; останавливается, когда вкладка браузера скрыта —
-  // обновлять то, что оператор не видит, незачем. loadingRef внутри load() не даёт
-  // соседним тикам наслоиться друг на друга.
+  // обновлять то, что оператор не видит, незачем. На вкладке «Новые» обновляем только
+  // первую страницу (merge с существующим), на остальных вкладках — полную перезагрузку.
   useEffect(() => {
     const intervalId = window.setInterval(() => {
       if (document.hidden) return
-      void load()
+      if (statusGroup === 'new') {
+        void updateFirstPage()
+      } else {
+        void load()
+      }
     }, 30000)
     const onVisibilityChange = () => {
-      if (!document.hidden) void load()
+      if (!document.hidden) {
+        if (statusGroup === 'new') {
+          void updateFirstPage()
+        } else {
+          void load()
+        }
+      }
     }
     document.addEventListener('visibilitychange', onVisibilityChange)
     return () => {
       window.clearInterval(intervalId)
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [load])
+  }, [statusGroup, load, updateFirstPage])
 
   useEffect(() => {
     let cancelled = false
@@ -1049,9 +993,9 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       </Paper>
 
       {error ? (
-        <Alert severity="error" sx={{ mt: 2 }} onClose={() => setError(null)}>
+        <ErrorNotice testId="fbs-orders-error">
           {error}
-        </Alert>
+        </ErrorNotice>
       ) : null}
 
       {syncNote ? (
@@ -1120,69 +1064,63 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                 <TableCell sx={{ minWidth: 135 }}>Дата отгрузки</TableCell>
               </TableRow>
             </TableHead>
-            <TableBody>
-              {activeSupplies.map((supply) => (
-                <TableRow
-                  key={supply.id}
-                  hover
-                  onClick={() => openWorkspace(supply.id)}
-                  sx={{ cursor: 'pointer', '& > td': { py: 1 } }}
-                  data-testid={`fbs-18-supply-${supply.id}`}
-                >
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontWeight: 750 }}>
-                      {supply.name}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      WB №{supply.wb_supply_id}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{supply.seller.name}</TableCell>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontWeight: 650 }}>
-                      {supply.wb_warehouse.name || `WB ${supply.wb_warehouse.id}`}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      WMS: {supply.wms_warehouse.name}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{supply.orders_count} / {supply.units_count}</TableCell>
-                  <TableCell>{supply.boxes_count}</TableCell>
-                  <TableCell>
-                    <Chip
-                      size="small"
-                      variant="outlined"
-                      color={supplyStatusColor(supply.status)}
-                      label={supplyStatusLabel(supply.status)}
-                      data-testid="fbs-18-supply-status"
-                    />
-                  </TableCell>
-                  <TableCell>{formatNullableDateTime(supply.planned_shipment_date)}</TableCell>
-                </TableRow>
-              ))}
-              {!busy && activeSupplies.length === 0 && isFbsSupplyGroup(statusGroup) ? (
-                <TableRow>
-                  <TableCell colSpan={7}>
-                    <Box sx={{ py: 8, textAlign: 'center' }}>
-                      <Inventory2OutlinedIcon sx={{ fontSize: 42, color: 'text.disabled' }} />
-                      <Typography variant="subtitle1" sx={{ mt: 1 }}>
-                        {SUPPLY_EMPTY_STATE[statusGroup].title}
+            {busy && activeSupplies.length === 0 ? (
+              <TableSkeletonBody columns={7} rows={5} />
+            ) : (
+              <TableBody>
+                {activeSupplies.map((supply) => (
+                  <TableRow
+                    key={supply.id}
+                    hover
+                    onClick={() => openWorkspace(supply.id)}
+                    sx={{ cursor: 'pointer', '& > td': { py: 1 } }}
+                    data-testid={`fbs-18-supply-${supply.id}`}
+                  >
+                    <TableCell>
+                      <Typography variant="body2" sx={{ fontWeight: 750 }}>
+                        {supply.name}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {SUPPLY_EMPTY_STATE[statusGroup].hint}
+                      <Typography variant="caption" color="text.secondary">
+                        WB №{supply.wb_supply_id}
                       </Typography>
-                    </Box>
-                  </TableCell>
-                </TableRow>
-              ) : null}
-            </TableBody>
+                    </TableCell>
+                    <TableCell>{supply.seller.name}</TableCell>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ fontWeight: 650 }}>
+                        {supply.wb_warehouse.name || `WB ${supply.wb_warehouse.id}`}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        WMS: {supply.wms_warehouse.name}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>{supply.orders_count} / {supply.units_count}</TableCell>
+                    <TableCell>{supply.boxes_count}</TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        color={supplyStatusColor(supply.status)}
+                        label={supplyStatusLabel(supply.status)}
+                        data-testid="fbs-18-supply-status"
+                      />
+                    </TableCell>
+                    <TableCell>{formatNullableDateTime(supply.planned_shipment_date)}</TableCell>
+                  </TableRow>
+                ))}
+                {!busy && activeSupplies.length === 0 && isFbsSupplyGroup(statusGroup) ? (
+                  <TableRow>
+                    <TableCell colSpan={7}>
+                      <EmptyState
+                        title={SUPPLY_EMPTY_STATE[statusGroup].title}
+                        hint={SUPPLY_EMPTY_STATE[statusGroup].hint}
+                        testId={`fbs-supplies-${statusGroup}-empty`}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            )}
           </Table>
-          {busy ? (
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'center', py: 2 }}>
-              <CircularProgress size={20} />
-              <Typography variant="body2">Обновляем поставки…</Typography>
-            </Stack>
-          ) : null}
         </TableContainer>
       ) : (
       <TableContainer
@@ -1230,6 +1168,9 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               )}
             </TableRow>
           </TableHead>
+          {busy && orders.length === 0 ? (
+            <TableSkeletonBody columns={6} rows={5} />
+          ) : (
           <TableBody>
             {orders.map((order) => {
               if (statusGroup === 'new') {
@@ -1362,22 +1303,39 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
             })}
             {!busy && orders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6}>
-                  <Box sx={{ py: 8, textAlign: 'center' }}>
-                    <Inventory2OutlinedIcon sx={{ fontSize: 42, color: 'text.disabled' }} />
-                    <Typography variant="subtitle1" sx={{ mt: 1 }}>
-                      Заказов в этой группе нет
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Измените фильтры или обновите синхронизацию с WB.
-                    </Typography>
-                  </Box>
+                <TableCell colSpan={statusGroup === 'new' ? 6 : 6}>
+                  <EmptyState
+                    title={statusGroup === 'new' ? 'Новых заказов пока нет' : 'Заказов в этой группе нет'}
+                    hint={statusGroup === 'new' ? 'Заказы приходят из Wildberries автоматически, обновление каждые 3 минуты' : 'Измените фильтры или обновите синхронизацию с WB.'}
+                    testId={statusGroup === 'new' ? 'fbs-new-orders-empty' : 'fbs-orders-empty'}
+                  />
                 </TableCell>
               </TableRow>
             ) : null}
+            {statusGroup === 'new' && (nextCursor || loadMoreError) ? (
+              <>
+                {loadMoreError ? (
+                  <TableRow>
+                    <TableCell colSpan={6} sx={{ py: 1 }}>
+                      <ErrorNotice testId="fbs-orders-load-more-error">
+                        Не удалось подгрузить следующие 50 заказов
+                      </ErrorNotice>
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+                <TableLoadMore
+                  hasNext={Boolean(nextCursor)}
+                  loading={isLoadingMore}
+                  onLoadMore={() => void loadMore()}
+                  columns={6}
+                  testId="fbs-orders-load-more"
+                />
+              </>
+            ) : null}
           </TableBody>
+          )}
         </Table>
-        {busy ? (
+        {busy && orders.length > 0 ? (
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'center', py: 2 }}>
             <CircularProgress size={20} />
             <Typography variant="body2">Обновляем рабочий список…</Typography>

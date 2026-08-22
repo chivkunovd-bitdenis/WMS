@@ -1,3 +1,6 @@
+import type { FbsWorklistOrder, FbsWorklistWarehouseOption } from './fbsApi'
+import { plural } from '../../utils/plural'
+
 export function ordersWord(count: number) {
   const lastTwo = Math.abs(count) % 100
   if (lastTwo >= 11 && lastTwo <= 14) return 'заказов'
@@ -144,4 +147,137 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
     </script>
   </body>
 </html>`
+}
+
+// ─── Утилиты FfFbsOrdersScreen ───────────────────────────────────────────────
+
+type MetadataProblem = { label: string; color: 'error' }
+
+export function metadataProblem(order: FbsWorklistOrder): MetadataProblem | null {
+  if (order.metadata.required.length === 0) return null
+  const rejected = order.metadata.states.some((state) =>
+    ['rejected', 'replacement_required'].includes(state.status),
+  )
+  if (rejected) return { label: 'Отклонено WB', color: 'error' }
+  const missing = order.metadata.states.filter((state) => state.status === 'missing').length
+  if (missing > 0) return { label: `Не хватает честных знаков: ${missing}`, color: 'error' }
+  return null
+}
+
+export function warehouseOptionLabel(
+  option: FbsWorklistWarehouseOption,
+  sellerWarehouseNames: Record<string, string>,
+) {
+  return sellerWarehouseNames[option.id] || option.name || option.wb_warehouse.name || `WB ${option.wb_warehouse.id}`
+}
+
+export function normalizeSearch(value: string): string {
+  return value.trim().toLocaleLowerCase('ru-RU')
+}
+
+export function orderSearchText(order: FbsWorklistOrder): string {
+  return [
+    order.wb_order_id,
+    order.product.name,
+    order.product.category,
+    order.product.seller_article,
+    order.product.wb_article,
+    order.product.barcode,
+    order.product.sku,
+    order.product.chrt_id,
+    order.product.color,
+    order.product.size,
+  ]
+    .filter((v) => v !== null && v !== undefined && String(v).trim())
+    .join(' ')
+    .toLocaleLowerCase('ru-RU')
+}
+
+export function formatDateTime(value: string): string {
+  return new Date(value).toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+export function formatNullableDateTime(value: string | null): string {
+  return value ? formatDateTime(value) : '—'
+}
+
+export function supplyStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    draft: 'Черновик',
+    assembling: 'В работе',
+    packed: 'Готова к сдаче',
+    in_delivery: 'В доставке',
+    done: 'Завершена',
+  }
+  return labels[status] ?? 'Статус уточняется'
+}
+
+export function supplyStatusColor(status: string): 'default' | 'primary' | 'success' | 'warning' {
+  if (status === 'done') return 'success'
+  if (status === 'in_delivery') return 'primary'
+  if (status === 'draft' || status === 'assembling' || status === 'packed') return 'warning'
+  return 'default'
+}
+
+export function elapsedSince(value: string, serverNow: string | null): string {
+  const start = new Date(value).getTime()
+  const end = serverNow ? new Date(serverNow).getTime() : Date.now()
+  const minutes = Math.max(0, Math.floor((end - start) / 60000))
+  const days = Math.floor(minutes / 1440)
+  const hours = Math.floor((minutes % 1440) / 60)
+  const mins = minutes % 60
+  if (days > 0) return `${days} д ${hours} ч`
+  if (hours > 0) return `${hours} ч ${mins} мин`
+  return `${mins} мин`
+}
+
+// Отметка свежести данных — сколько прошло с последней успешной загрузки.
+export function formatFreshness(lastLoadedAt: string | null): string | null {
+  if (!lastLoadedAt) return null
+  const minutes = Math.max(0, Math.floor((Date.now() - new Date(lastLoadedAt).getTime()) / 60000))
+  if (minutes < 1) return 'Обновлено только что'
+  return `Обновлено ${minutes} ${plural(minutes, ['минуту', 'минуты', 'минут'])} назад`
+}
+
+function excelCell(value: string | number | null | undefined): string {
+  const text = value === null || value === undefined ? '' : String(value)
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+export function downloadOrdersExcel(rows: FbsWorklistOrder[]): void {
+  const headers = [
+    'Наименование', 'Артикул продавца', 'Цвет', 'Размер',
+    'Склад селлера WB', 'Номер заказа WB', 'ШК/SKU', 'Количество',
+  ]
+  const bodyRows = rows.map((order) => [
+    order.product.name,
+    order.product.seller_article,
+    order.product.color,
+    order.product.size,
+    order.wb_warehouse.name || `WB ${order.wb_warehouse.id}`,
+    order.wb_order_id,
+    [order.product.barcode, order.product.sku].filter(Boolean).join(' / '),
+    1,
+  ])
+  const html = [
+    '<html><head><meta charset="utf-8" /></head><body><table>',
+    `<thead><tr>${headers.map((h) => `<th>${excelCell(h)}</th>`).join('')}</tr></thead>`,
+    `<tbody>${bodyRows.map((row) => `<tr>${row.map((c) => `<td>${excelCell(c)}</td>`).join('')}</tr>`).join('')}</tbody>`,
+    '</table></body></html>',
+  ].join('')
+  const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `fbs-new-orders-${new Date().toISOString().slice(0, 10)}.xls`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
 }

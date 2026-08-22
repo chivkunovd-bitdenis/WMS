@@ -38,3 +38,51 @@
 
 ### карта задевания
 20:51 вопросов после анализа: 45 — см. night/volna-9/VOPROSY.md
+21:03   05-prod-slow · solution-architect: готово
+21:03   05-prod-slow · ux-architect: нет файла CONTRACT.md (код 1, попытка 1)
+21:03   05-prod-slow · ux-architect: нет файла CONTRACT.md (код 1, попытка 2)
+21:03 05-prod-slow: отложено на шаге ux-architect
+00:21   05-prod-slow · solution-architect: уже сделано, пропускаю
+00:25   05-prod-slow · ux-architect: готово
+00:29   05-prod-slow · product: готово
+00:34   05-prod-slow · tester: готово
+00:43   05-prod-slow · breaker: готово
+00:49   05-prod-slow · screen-dev: готово
+00:53   05-prod-slow · reviewer: готово
+00:53   05-prod-slow · reviewer: находки, круг 1 — назад к разработке
+00:58   05-prod-slow · screen-dev: готово
+01:07   05-prod-slow · reviewer: готово
+01:07   05-prod-slow · reviewer: находки, круг 2 — назад к разработке
+01:13   05-prod-slow · screen-dev: готово
+01:19   05-prod-slow · reviewer: готово
+01:19 05-prod-slow: отложено — reviewer, круги кончились
+05:18   05-prod-slow · solution-architect: уже сделано, пропускаю
+05:18   05-prod-slow · ux-architect: уже сделано, пропускаю
+05:18   05-prod-slow · product: уже сделано, пропускаю
+05:18   05-prod-slow · tester: уже сделано, пропускаю
+05:18   05-prod-slow · breaker: уже сделано, пропускаю
+05:18   05-prod-slow · screen-dev: уже сделано, пропускаю
+05:27   05-prod-slow · reviewer: готово
+05:27   05-prod-slow · reviewer: находки, круг 1 — назад к разработке
+05:47   05-prod-slow · screen-dev: нет файла DEV.md (код 124, попытка 1)
+05:56   05-prod-slow · screen-dev: готово
+06:04   05-prod-slow · reviewer: готово
+06:04   05-prod-slow · reviewer: находки, круг 2 — назад к разработке
+06:12   05-prod-slow · screen-dev: готово
+06:16   05-prod-slow · reviewer: нет файла REVIEW.md (код 1, попытка 1)
+06:16   05-prod-slow · reviewer: нет файла REVIEW.md (код 1, попытка 2)
+06:16 05-prod-slow: отложено на шаге reviewer
+10:16   05-prod-slow · solution-architect: уже сделано, пропускаю
+10:16   05-prod-slow · ux-architect: уже сделано, пропускаю
+10:16   05-prod-slow · product: уже сделано, пропускаю
+10:16   05-prod-slow · tester: уже сделано, пропускаю
+10:16   05-prod-slow · breaker: уже сделано, пропускаю
+10:16   05-prod-slow · screen-dev: уже сделано, пропускаю
+10:25   05-prod-slow · reviewer: готово
+10:25   05-prod-slow · reviewer: находки, круг 1 — назад к разработке
+10:31   05-prod-slow · screen-dev: готово
+10:37   05-prod-slow · reviewer: готово
+10:37   05-prod-slow · reviewer: находки, круг 2 — назад к разработке
+10:51   05-prod-slow · screen-dev: готово
+10:57   05-prod-slow · reviewer: готово
+10:57 05-prod-slow: отложено — reviewer, круги кончились
