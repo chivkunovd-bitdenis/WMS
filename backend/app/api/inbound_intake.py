@@ -960,10 +960,10 @@ async def scan_barcode_to_loose_intake(
             detail="product_missing",
         )
     await session.refresh(line, attribute_names=["storage_location"])
-    req = await svc.get_request(session, user.tenant_id, request_id)
-    assert req is not None
+    request_status = await svc.get_request_status(session, user.tenant_id, request_id)
+    assert request_status is not None
     return await _line_out_for_request(
-        session, request_id, req.status, line, prod
+        session, request_id, request_status, line, prod
     )
 
 

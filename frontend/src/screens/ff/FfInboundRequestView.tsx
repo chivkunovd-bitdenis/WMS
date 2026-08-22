@@ -134,6 +134,33 @@ type InboundLine = {
   storage_location_code: string | null
 }
 
+export function applyScannedInboundLine<T extends { id: string }>(
+  lines: T[],
+  scannedLine: T,
+): T[] {
+  const exists = lines.some((line) => line.id === scannedLine.id)
+  return exists
+    ? lines.map((line) => (line.id === scannedLine.id ? scannedLine : line))
+    : [...lines, scannedLine]
+}
+
+export function reconcileInboundScan(reload: () => Promise<unknown>): void {
+  void reload().catch(() => undefined)
+}
+
+export function isLatestScannedInboundLine(lineId: string, lastScannedLineId: string | null): boolean {
+  return lineId === lastScannedLineId
+}
+
+export function createSerialScanQueue() {
+  let tail = Promise.resolve()
+  return (scan: () => Promise<void>): Promise<void> => {
+    const next = tail.then(scan, scan)
+    tail = next.catch(() => undefined)
+    return next
+  }
+}
+
 type DiscrepancyActLine = {
   id: string
   product_id: string
@@ -438,6 +465,7 @@ export function FfInboundRequestView({
   const [finishConfirmOpen, setFinishConfirmOpen] = useState(false)
   const [scanToastError, setScanToastError] = useState<string | null>(null)
   const [scanAddBarcode, setScanAddBarcode] = useState<string | null>(null)
+  const [lastScannedLineId, setLastScannedLineId] = useState<string | null>(null)
   const [importSuccessMsg, setImportSuccessMsg] = useState<string | null>(null)
   const [boxImportOpen, setBoxImportOpen] = useState(false)
   const [packagesExpanded, setPackagesExpanded] = useState(false)
@@ -452,6 +480,7 @@ export function FfInboundRequestView({
   const [discrepancyActsBusy, setDiscrepancyActsBusy] = useState(false)
   const [discrepancyActsError, setDiscrepancyActsError] = useState<string | null>(null)
   const loadDetailSeq = useRef(0)
+  const receivingScanQueue = useRef(createSerialScanQueue()).current
 
   const sortingView = workspace === 'sorting'
 
@@ -488,7 +517,7 @@ export function FfInboundRequestView({
       !pickerOpen &&
       dimensionsLine == null,
     onScan: (code) => {
-      void scanToReceiving(code)
+      void receivingScanQueue(() => scanToReceiving(code))
     },
   })
 
@@ -1601,10 +1630,20 @@ export function FfInboundRequestView({
       }
       setScanAddBarcode(null)
       const scannedLine = (await res.json()) as InboundLine
+      setDetail((current) => {
+        if (!current) return current
+        return {
+          ...current,
+          lines: applyScannedInboundLine(current.lines, scannedLine),
+        }
+      })
+      setLastScannedLineId(scannedLine.id)
       if (isReturnOperation && returnAutoPrint) {
         printReturnBarcodeForLine(scannedLine)
       }
-      await loadDetail()
+      // POST already returned the authoritative changed line. Reconcile the rest of the
+      // document in the background so the next physical scan is not held by a full reload.
+      reconcileInboundScan(loadDetail)
     } catch (e) {
       setScanToastError(e instanceof Error ? e.message : 'Не удалось выполнить скан.')
     } finally {
@@ -2311,6 +2350,13 @@ export function FfInboundRequestView({
                           ? {
                               backgroundColor: (theme) =>
                                 alpha(theme.palette.error.main, 0.08),
+                          }
+                          : null),
+                        ...(isLatestScannedInboundLine(ln.id, lastScannedLineId)
+                          ? {
+                              backgroundColor: (theme) => alpha(theme.palette.success.main, 0.16),
+                              boxShadow: (theme) =>
+                                `inset 0 0 0 1px ${alpha(theme.palette.success.main, 0.6)}`,
                             }
                           : null),
                       }}

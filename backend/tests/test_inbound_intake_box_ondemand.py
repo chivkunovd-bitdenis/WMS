@@ -10,6 +10,7 @@ from httpx import AsyncClient
 from inbound_box_intake_helpers import set_planned_boxes
 
 from app.db.session import SessionLocal
+from app.models.inbound_intake import InboundIntakeBoxLine
 from app.services import inbound_intake_box_service as box_svc
 from app.services import inbound_intake_service as intake_svc
 from app.services.tokens import decode_access_token
@@ -146,6 +147,91 @@ async def test_box_two_scans_only_box_two(async_client: AsyncClient) -> None:
         assert by_number[3].lines == []
         assert len(by_number[2].lines) == 1
         assert by_number[2].lines[0].quantity == 2
+
+
+@pytest.mark.asyncio
+async def test_receiving_scans_limit_catalog_lookup_to_request_products(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    suffix = str(int(time.time() * 1000) + 10)
+    ah, tenant_id = await _register_admin(async_client, suffix)
+    rid, pid, sku = await _submitted_request(async_client, ah, suffix, expected_qty=4)
+    looked_up_product_ids: list[set[uuid.UUID] | None] = []
+
+    async def capture_catalog_lookup(*args: object, **kwargs: object) -> list[object]:
+        product_ids = kwargs.get("product_ids")
+        looked_up_product_ids.append(product_ids if isinstance(product_ids, set) else None)
+        return []
+
+    monkeypatch.setattr(
+        "app.services.inbound_intake_service.list_seller_wb_catalog_rows",
+        capture_catalog_lookup,
+    )
+    monkeypatch.setattr(
+        "app.services.inbound_intake_box_service.list_seller_wb_catalog_rows",
+        capture_catalog_lookup,
+    )
+
+    async with SessionLocal() as session:
+        box = await box_svc.create_open_box(session, tenant_id, rid)
+        for _ in range(2):
+            line = await intake_svc.scan_barcode_to_loose_intake(
+                session, tenant_id, rid, barcode=sku
+            )
+        assert line.actual_qty == 2
+
+        for _ in range(2):
+            box_line = await box_svc.scan_product_into_box(
+                session, tenant_id, rid, box.id, barcode=sku
+            )
+        assert box_line.quantity == 2
+
+    assert looked_up_product_ids == [{pid}, {pid}, {pid}, {pid}]
+
+
+@pytest.mark.asyncio
+async def test_box_total_validation_keeps_zero_quantity_box_line_membership(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000) + 11)
+    ah, tenant_id = await _register_admin(async_client, suffix)
+    rid, pid, _sku = await _submitted_request(async_client, ah, suffix, expected_qty=1)
+
+    async with SessionLocal() as session:
+        box = await box_svc.create_open_box(session, tenant_id, rid)
+        session.add(InboundIntakeBoxLine(box_id=box.id, product_id=pid, quantity=0))
+        await session.flush()
+        req = await intake_svc.get_request_for_receiving_scan(session, tenant_id, rid)
+        assert req is not None
+        req.lines[0].posted_qty = 1
+
+        with pytest.raises(box_svc.InboundIntakeBoxError, match="actual_below_posted"):
+            await box_svc._sync_line_actuals_from_box_totals(session, req)
+
+
+@pytest.mark.asyncio
+async def test_loose_scan_api_does_not_reload_full_request(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    suffix = str(int(time.time() * 1000) + 12)
+    ah, _tenant_id = await _register_admin(async_client, suffix)
+    rid, _pid, sku = await _submitted_request(async_client, ah, suffix, expected_qty=2)
+
+    async def full_request_must_not_be_used(*args: object, **kwargs: object) -> object:
+        raise AssertionError("full request graph must not be loaded by loose scan API")
+
+    monkeypatch.setattr(
+        "app.api.inbound_intake.svc.get_request", full_request_must_not_be_used
+    )
+    response = await async_client.post(
+        f"/operations/inbound-intake-requests/{rid}/receiving/scan",
+        headers=ah,
+        json={"barcode": sku},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["actual_qty"] == 1
 
 
 @pytest.mark.asyncio
