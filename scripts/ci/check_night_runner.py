@@ -13,6 +13,7 @@ import sys
 import tempfile
 import json
 import os
+import inspect
 from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
@@ -705,6 +706,8 @@ def main() -> int:
         проверь("snapshot: raw fallback запрещён", n.санитарный_снимок(snapshot_root), None)
     restore_text = (pathlib.Path(n.КОРЕНЬ) / "scripts/stand/restore.sh").read_text(encoding="utf-8")
     проверь("snapshot: restore получает только явный env", "WMS_SANITIZED_SNAPSHOT" in restore_text, True)
+    проверь("snapshot: runner указывает scratch DB активной полосы",
+            "WMS_STAND_SCRATCH_DB" in inspect.getsource(n.поднять_стенд), True)
     проверь("snapshot: restore требует sanitized имя", "sanitized-latest.dump" in restore_text, True)
     for р in {r for ц in n.ЦЕПОЧКИ.values() for r in ц if r != "dev"}:
         if р not in n.АРТЕФАКТ:

@@ -656,7 +656,8 @@ def поднять_стенд(полоса: int, рабочая: Рабочая�
                 "COMPOSE_FORCE_RECREATE": "1", "WMS_API_PORT": f"3008{полоса}",
                 "WMS_WEB_PORT": f"3017{полоса}", "WMS_SELLER_WEB_PORT": f"3018{полоса}",
                 "WMS_DB_PORT": f"3043{полоса}", "WMS_REDIS_PORT": f"3037{полоса}",
-                "WMS_SANITIZED_SNAPSHOT": str(снимок)})
+                "WMS_SANITIZED_SNAPSHOT": str(снимок),
+                "WMS_STAND_SCRATCH_DB": f"wms-lane-{полоса}-db-1"})
     compose = ["docker", "compose", "-p", f"wms-lane-{полоса}",
                "-f", str(корень / "docker-compose.yml"),
                "-f", str(корень / "docker-compose.lane.yml")]
