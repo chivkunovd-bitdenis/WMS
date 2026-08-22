@@ -1900,7 +1900,7 @@ export function FfPackagingPage({ token }: PageProps) {
 
   useEffect(() => {
     void load()
-  }, [load])
+  }, [load, selectedWarehouseId])
 
   useEffect(() => {
     const state = location.state as { taskId?: string } | null
