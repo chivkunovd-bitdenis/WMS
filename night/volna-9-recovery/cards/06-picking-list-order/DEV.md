@@ -1,27 +1,23 @@
-# DEV · 06-picking-list-order · атом 1
+# Backend Dev · 06-picking-list-order · атом 2
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/ui-kit/ModalFrame.tsx` — `busy` теперь явно блокирует Escape; длинное тело модального документа имеет ограниченную высоту и прокрутку.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/ui-kit/FilterBar.tsx` — `ChoiceFilter` получил недоступное состояние с объясняющей подсказкой и корректным `aria-disabled`.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/ui-kit/Cells.tsx` — причина блокировки `CheckCell` доступна через подсказку на обёртке, которая принимает события у disabled-контрола.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/ui-kit/UiKitShowcase.tsx` — витрина показывает недоступный фильтр с причиной; при `busy` кнопка закрытия получает причину и блокируется.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/night/volna-9-recovery/cards/06-picking-list-order/DEV.md` — отчёт этого атома.
-
-`PrintAction` со значением `стикеры заказов` и экспорты `ModalFrame`, `ChoiceFilter`, `CheckCell` уже присутствовали в разрешённых файлах и не требовали изменений в этой переделке.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/tests/test_fbs_supply_assembly.py` — расширена интеграционная проверка загрузки поставки: заказы с одинаковым `wb_order_id`, вставленные в обратном порядке, возвращаются по `order.id`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/app/models/fbs_supply.py` — без изменений в этом проходе: relationship уже задан как `order_by="(FbsOrder.wb_order_id, FbsOrder.id)"`.
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` — красный: локального `tsc` нет; `npx` не смог скачать пакет из-за недоступности `registry.npmjs.org` (`ENOTFOUND`).
-- `python3 scripts/ui/ui_guard.py` — красный только из-за двух существующих нарушений вне атома: `frontend/src/components/WbProductPickerDialog.tsx` и `frontend/src/screens/v2/SellerInboundDraftScreen.tsx`. Базовая линия не менялась.
-- `npm run test:unit` — красный: локальный `vitest` отсутствует (`sh: vitest: command not found`).
-- `git diff --check` — зелёный.
+- `ruff check .` (из `backend/`) — не пройден: 82 существующие ошибки вне изменённого атома; `ruff check tests/test_fbs_supply_assembly.py` — пройден.
+- `mypy .` (из `backend/`) — не пройден: 21 существующая ошибка в 6 посторонних файлах.
+- `pytest` (из `backend/`) — начат, собрано 821 тестов; среда вернула поток без финального итога. Целевой прогон `pytest tests/test_fbs_supply_assembly.py -k 'orders_are_returned_in_stable_order or relationship_orders_by_wb_id_then_internal_id'` — пройден, 2 passed.
+- `python3 scripts/ci/back_guard.py` — не запущен: файл отсутствует в этой рабочей копии.
+- `python3 scripts/ci/check_migrations.py` — не запущен: файл отсутствует в этой рабочей копии.
+- `git diff --check` — пройден.
 
 ## Не реализовано
 
-- Находки 1–5 из `REVIEW.md` относятся к `FfFbsPickList.tsx`, `FbsPrintPreviewDialog.tsx`, API, backend-сервису и тестам экрана. Эти файлы вне слоя и границы атома 1, поэтому не менялись.
-- Изолированный unit-тест нового примитива не добавлен: в данной рабочей копии нет установленного раннера `vitest`, а ревьюер не назвал тест ui-kit как разрешённый дополнительный файл.
+- Нет. Находки `REVIEW.md` относятся к печати, API-валидации и фронтенду следующих атомов; этот атом покрывает только стабильный порядок relationship поставки.
 
 ## Находки
 
-- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались.
+- Для одного селлера одинаковый `wb_order_id` защищён производственным уникальным ограничением. Тест развязки использует двух селлеров одной организации, не отключая ограничение, и проверяет фактическую загрузку relationship через endpoint поставки.

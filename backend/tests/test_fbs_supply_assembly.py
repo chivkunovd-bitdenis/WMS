@@ -4,6 +4,7 @@ import asyncio
 import os
 import time
 import uuid
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -228,27 +229,58 @@ async def test_fbs_supply_orders_are_returned_in_stable_order(
         assert seller is not None
         tenant_id = seller.tenant_id
 
-    first_id = await _create_order(
-        tenant_id, seller_uuid, warehouse_uuid, order_id=810102
-    )
-    second_id = await _create_order(
-        tenant_id, seller_uuid, warehouse_uuid, order_id=810101
-    )
     supply = await _create_supply(async_client, headers, seller_id, warehouse_id)
 
-    for order_id in (first_id, second_id):
-        response = await async_client.post(
-            f"/operations/fbs-supplies/{supply['id']}/orders",
-            headers=headers,
-            json={"order_id": str(order_id)},
+    # A duplicate WB ID is impossible for one seller by the production unique
+    # constraint.  Two sellers let this relationship-level test exercise the
+    # tie-breaker without disabling that constraint.
+    second_seller = await async_client.post(
+        "/sellers", headers=headers, json={"name": f"Second seller {suffix}"}
+    )
+    assert second_seller.status_code in (200, 201), second_seller.text
+
+    first_id = uuid.UUID("00000000-0000-0000-0000-000000000002")
+    second_id = uuid.UUID("00000000-0000-0000-0000-000000000001")
+    now = datetime.now(tz=UTC)
+    async with SessionLocal() as session:
+        session.add_all(
+            [
+                FbsOrder(
+                    id=first_id,
+                    tenant_id=tenant_id,
+                    seller_id=seller_uuid,
+                    warehouse_id=warehouse_uuid,
+                    supply_id=uuid.UUID(supply["id"]),
+                    wb_order_id=810101,
+                    status=FBS_ORDER_STATUS_IN_SUPPLY,
+                    created_at_wb=now,
+                    deadline_at=now + timedelta(days=1),
+                    mapping_status="missing",
+                    reserve_status="skipped_no_product",
+                ),
+                FbsOrder(
+                    id=second_id,
+                    tenant_id=tenant_id,
+                    seller_id=uuid.UUID(second_seller.json()["id"]),
+                    warehouse_id=warehouse_uuid,
+                    supply_id=uuid.UUID(supply["id"]),
+                    wb_order_id=810101,
+                    status=FBS_ORDER_STATUS_IN_SUPPLY,
+                    created_at_wb=now,
+                    deadline_at=now + timedelta(days=1),
+                    mapping_status="missing",
+                    reserve_status="skipped_no_product",
+                ),
+            ]
         )
-        assert response.status_code == 200, response.text
+        await session.commit()
 
     loaded = await async_client.get(
         f"/operations/fbs-supplies/{supply['id']}", headers=headers
     )
     assert loaded.status_code == 200, loaded.text
-    assert [row["wb_order_id"] for row in loaded.json()["orders"]] == [810101, 810102]
+    assert [row["wb_order_id"] for row in loaded.json()["orders"]] == [810101, 810101]
+    assert [row["id"] for row in loaded.json()["orders"]] == [str(second_id), str(first_id)]
 
 
 def test_fbs_supply_relationship_orders_by_wb_id_then_internal_id() -> None:
