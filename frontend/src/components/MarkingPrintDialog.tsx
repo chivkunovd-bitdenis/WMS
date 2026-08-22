@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   beginPrintUserGesture,
   Alert,
@@ -125,7 +125,7 @@ function TapePreparationStatus({
   onClose: () => void
 }) {
   if (state === 'preparing') {
-    return <Box data-testid="marking-print-preparing"><StatusChip label="Готовим ленту…" tone="neutral" /><Typography variant="body2" color="text.secondary">Можно продолжать работу в WMS — лента собирается в фоне</Typography></Box>
+    return <Box data-testid="marking-print-preparing"><StatusChip label="Готовим к печати" tone="neutral" /><Typography variant="body2" color="text.secondary">Можно продолжать работу в WMS — лента собирается в фоне</Typography></Box>
   }
   if (state === 'ready') {
     return <Box data-testid="marking-print-ready"><StatusChip label="Готово" tone="ok" /><PrimaryAction onClick={onOpen} data-testid="marking-print-open-ready">Открыть для печати</PrimaryAction></Box>
@@ -247,6 +247,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const [sepCzDone, setSepCzDone] = useState(false)
   const [tapePreparation, setTapePreparation] = useState<'idle' | 'preparing' | 'ready' | 'failed' | 'expired'>('idle')
   const [preparedTapeAssetId, setPreparedTapeAssetId] = useState<string | null>(null)
+  // The dialog stays mounted while its context changes. A generation makes a
+  // delayed job response from a closed dialog harmless for the next context.
+  const tapePreparationGeneration = useRef(0)
 
   const requiresHonestSign = ctx?.requiresHonestSign ?? true
   const fbsTapeMode = Boolean(ctx?.fbsTape)
@@ -366,12 +369,13 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
    * смену lineId при том же товаре).
    */
   useEffect(() => {
+    tapePreparationGeneration.current += 1
     if (!open || !ctx) {
       return
     }
     setError(null)
     setTapePreparation('idle')
-    setPreparedTapePdf(null)
+    setPreparedTapeAssetId(null)
     setAllowPartial(false)
     setSeparateModeChoice(null)
     // Этикетка ШК ВБ клеится на единицу товара: разумное первое значение — сколько
@@ -629,12 +633,19 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     const codeIds = resolveCzArtifactTapeCodeIds(tapeUnits, printLayout)
     try {
       if (codeIds) {
+        const generation = tapePreparationGeneration.current
         setTapePreparation('preparing')
         try {
           const prepared = await prepareCzArtifactTape(codeIds, ctx.token, size)
+          if (generation !== tapePreparationGeneration.current) {
+            return
+          }
           setPreparedTapeAssetId(prepared.assetId)
           setTapePreparation('ready')
         } catch (error) {
+          if (generation !== tapePreparationGeneration.current) {
+            return
+          }
           setTapePreparation(error instanceof Error && error.message.includes('истёк') ? 'expired' : 'failed')
           throw error
         }
@@ -664,8 +675,8 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       await printPdfBlob(await fetchPreparedCzArtifactTapePdf(preparedTapeAssetId, ctx.token))
       ctx?.onPrinted()
       onClose()
-    } catch {
-      setTapePreparation('failed')
+    } catch (error) {
+      setTapePreparation(error instanceof Error && error.message.includes('истёк') ? 'expired' : 'failed')
     }
   }
 

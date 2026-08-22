@@ -1,29 +1,20 @@
-# DEV · 05-prod-slow · S-03 pagination rework
-
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend/src/screens/v2/FfFbsOrdersScreen.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend/tests-e2e/ff-fbs-orders.spec.ts`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend/src/components/MarkingPrintDialog.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/docs/blockers/S-03.md`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/night/volna-9-recovery/cards/05-prod-slow/DEV.md`
 
-`/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend/src/screens/v2/fbsApi.ts` не менялся: его запрос уже передаёт `limit` и `cursor` по контракту этого атома.
-
-Фоновый 30-секундный тик теперь явно отделён от обычной загрузки: он заменяет только первую порцию, сохраняет реально догруженный хвост и удаляет устаревшие строки именно из первой порции. Смена селлера, склада или вкладки выполняет обычную замену списка и не смешивает выдачи. Устаревший ответ отменяется номером запроса. Пустое состояние остальных вкладок снова использует их общий текст, а не текст вкладки «Новые».
-
-В E2E добавлены/уточнены сценарии `S-03-TC-001`–`S-03-TC-007` и `S-03-TC-010`–`S-03-TC-012`: 50 строк, догрузка, «Выбрать все» по курсорам, скелет, пустой ответ, фоновый тик, лимит 100 на рабочей вкладке, двойной клик, ошибка с повтором и скрытая вкладка.
+Исправлен несуществующий setter состояния, добавлена защита от завершения старого polling после закрытия или смены контекста диалога, а истечение подготовленного PDF сохраняет отдельное операторское состояние. В журнал блокировок добавлено правило запрета повторной печати активной/готовой ленты.
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` (из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend`) — зелёный.
-- `npm run test:unit` (из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend`) — зелёный.
-- `python3 scripts/ui/ui_guard.py` (из корня) — красный. Скрипт сообщает новые нарушения монолитности в `src/components/MarkingPrintDialog.tsx`, `src/components/WbProductPickerDialog.tsx`, `src/screens/v2/FfFbsOrdersScreen.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`. Baseline через `--update` не менялась; три из пяти файлов не входят в разрешённую границу этого атома.
-- `npm run test:e2e -- tests-e2e/ff-fbs-orders.spec.ts` — не запущен: в локальном `frontend/node_modules` нет `playwright`; npm вызвал постороннюю команду `playwright`, которая вернула `error: unknown command 'test'`.
+- `npx tsc --noEmit -p tsconfig.app.json` — зелёный.
+- `python3 scripts/ui/ui_guard.py` — красный: сообщает о новых baseline-отклонениях в `src/components/MarkingPrintDialog.tsx`, `src/components/WbProductPickerDialog.tsx`, `src/screens/v2/FfFbsOrdersScreen.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`. Базовую линию не обновлял.
+- `npm run test:unit -- --runInBand` — красный: `vitest: command not found` в этой рабочей копии.
+- `npm run test:e2e -- --grep "S-03-TC-008|S-03-TC-009|S-03-TC-014|S-03-TC-015"` — команда завершилась без совпавших тестов; в разрешённых спецификациях нет сценариев с этими TC-ID, поэтому перечисленные Playwright-пути не подтверждены.
+- `git commit` — не выполнен: Git не разрешил создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-05-prod-slow/index.lock` (`Operation not permitted`). Изменения не сохранены коммитом.
 
 ## Не реализовано
 
-- Браузерный прогон новых `S-03` сценариев не подтверждён из-за отсутствующего локального Playwright. Сами сценарии записаны в разрешённый E2E-файл.
-- Зелёный `ui_guard.py` не получен: исправление остальных четырёх указанных скриптом файлов либо изменение baseline запрещены границей роли и атома.
-
-## Находки
-
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных, боевой прод и живой кабинет Wildberries не читались и не затрагивались.
+- Находки ревью о backend-задачах и `FfFbsOrdersScreen.tsx` не исправлялись: они находятся вне файлов и слоя данного атома.
+- В `frontend/tests-e2e/ff-marking-print-constructor.spec.ts` и `frontend/tests-e2e/ff-separate-marking-print.spec.ts` отсутствуют требуемые сценарии `S-03-TC-008`, `S-03-TC-009`, `S-03-TC-014`, `S-03-TC-015`; их нельзя выдать за пройденные без отдельной реализации тестов.
