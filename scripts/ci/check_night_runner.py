@@ -406,6 +406,21 @@ def main() -> int:
             (t / "JUDGE.md").write_text("\x00 мусор без секций", encoding="utf-8", errors="replace")
             проверь("битый файл — не пройден, без исключения", n.артефакт_готов(t, "ux-judge")[0], False)
 
+            (t / "JUDGE.md").write_text(
+                "ВЕРДИКТ: НАХОДКИ 1\nSCREEN_VERDICT: BLOCKED\n\n"
+                "## Находки\nСтенд не поднялся, экран не видел.\n",
+                encoding="utf-8",
+            )
+            проверь("браузерный BLOCKED не возвращает код в dev",
+                    n.браузерный_блокер(t, "ux-judge"), True)
+            (t / "JUDGE.md").write_text(
+                "ВЕРДИКТ: НАХОДКИ 1\nSCREEN_VERDICT: FAIL\n\n"
+                "## Находки\nКнопка теряет заказ.\n",
+                encoding="utf-8",
+            )
+            проверь("реальная находка остаётся возвратом в dev",
+                    n.браузерный_блокер(t, "ux-judge"), False)
+
             (t / "RAZBOR.md").write_text("## Экраны\n- S-03 FBS\n", encoding="utf-8")
             проверь("экран из реестра — фронтовик", n.выбрать_dev(t), "screen-dev")
             (t / "RAZBOR.md").write_text("## Экраны\nэкран будет создан\n", encoding="utf-8")
