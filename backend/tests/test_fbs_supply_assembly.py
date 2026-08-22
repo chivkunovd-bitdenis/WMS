@@ -163,6 +163,47 @@ async def test_fbs_supply_create_ok(
     assert body["delivery_type"] == "warehouse_sc"
 
 
+# TC-NEW-FBS-SUPPLY-ORDER-001 — supply.orders is stable by WB id, then UUID.
+@pytest.mark.asyncio
+async def test_fbs_supply_orders_are_returned_in_stable_order(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    seller_uuid = uuid.UUID(seller_id)
+    warehouse_uuid = uuid.UUID(warehouse_id)
+
+    from app.models.seller import Seller
+
+    async with SessionLocal() as session:
+        seller = await session.get(Seller, seller_uuid)
+        assert seller is not None
+        tenant_id = seller.tenant_id
+
+    first_id = await _create_order(
+        tenant_id, seller_uuid, warehouse_uuid, order_id=810102
+    )
+    second_id = await _create_order(
+        tenant_id, seller_uuid, warehouse_uuid, order_id=810101
+    )
+    supply = await _create_supply(async_client, headers, seller_id, warehouse_id)
+
+    for order_id in (first_id, second_id):
+        response = await async_client.post(
+            f"/operations/fbs-supplies/{supply['id']}/orders",
+            headers=headers,
+            json={"order_id": str(order_id)},
+        )
+        assert response.status_code == 200, response.text
+
+    loaded = await async_client.get(
+        f"/operations/fbs-supplies/{supply['id']}", headers=headers
+    )
+    assert loaded.status_code == 200, loaded.text
+    assert [row["wb_order_id"] for row in loaded.json()["orders"]] == [810101, 810102]
+
+
 @pytest.mark.asyncio
 async def test_fbs_supply_create_wb_error_no_db_row(
     async_client: AsyncClient,

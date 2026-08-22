@@ -5,3 +5,5 @@
 16:04   06-picking-list-order · breaker: готово
 16:07   06-picking-list-order · splitter: готово
 16:11   06-picking-list-order · screen-dev: готово
+16:11   06-picking-list-order · dev: фича 1/6 сохранена bf59e2970476
+16:14   06-picking-list-order · backend-dev: готово

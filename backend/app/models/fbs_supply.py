@@ -126,6 +126,7 @@ class FbsSupply(Base):
     orders: Mapped[list[FbsOrder]] = relationship(
         "FbsOrder",
         back_populates="supply",
+        order_by="(FbsOrder.wb_order_id, FbsOrder.id)",
     )
     trbxes: Mapped[list[FbsTrbx]] = relationship(
         "FbsTrbx",
