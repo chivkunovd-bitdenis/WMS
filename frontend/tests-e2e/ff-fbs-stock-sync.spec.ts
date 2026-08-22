@@ -11,12 +11,13 @@ async function registerFf(page: import('@playwright/test').Page, tag: string) {
   await page.getByTestId('register-form').getByLabel('Организация').fill(`E2E FBS Stock ${tag}`)
   await page.getByTestId('register-form').getByLabel('Email администратора').fill(email)
   await page.getByTestId('register-form').getByLabel('Пароль').fill('password123')
-  await Promise.all([
+  const [registration] = await Promise.all([
     waitForPostOk(page, '/api/auth/register'),
     waitForGetOk(page, '/api/auth/me'),
     page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
   ])
   await expect(page.getByTestId('dashboard')).toBeVisible()
+  return String(((await registration.json()) as { access_token: string }).access_token)
 }
 
 // TC-NEW-FBS-STOCK-UI-001 — привязка реального WB-склада из строки к WMS-складу.
@@ -24,9 +25,7 @@ async function registerFf(page: import('@playwright/test').Page, tag: string) {
 // When: открывает склады селлера, выбирает WMS-склад в строке WB-склада и включает публикацию;
 // Then: ручного ввода WB ID нет, связь видна в строке, sync/status работают по выбранному складу.
 test('fbs seller warehouses: row binding, manual sync, status panel', async ({ page }) => {
-  await registerFf(page, 'ui')
-
-  const token = (await page.evaluate(() => localStorage.getItem('wms_token_ff'))) ?? ''
+  const token = await registerFf(page, 'ui')
   const h = { Authorization: `Bearer ${token}` }
 
   const seller = (await (
@@ -46,6 +45,12 @@ test('fbs seller warehouses: row binding, manual sync, status panel', async ({ p
     await page.request.post('/api/warehouses', {
       headers: h,
       data: { name: 'Склад FBS', code: whCode },
+    })
+  ).json()) as { id: string; name: string }
+  const secondWh = (await (
+    await page.request.post('/api/warehouses', {
+      headers: h,
+      data: { name: 'Склад FBS Юг', code: `wh-stock-south-${Date.now()}` },
     })
   ).json()) as { id: string; name: string }
 
@@ -76,6 +81,28 @@ test('fbs seller warehouses: row binding, manual sync, status panel', async ({ p
     row.getByTestId('fbs-stock-sync-toggle').click(),
   ])
   await expect(row).toContainText('публикация включена')
+
+  // S-04-TC-001 / TC-NEW-04-006: контекст S-04 меняет только видимые привязки.
+  // Given две операционные зоны и привязка WB к первой; When оператор выбирает вторую;
+  // Then строка первой зоны скрыта, показана понятная пустота, а POST публикации не выполняется.
+  let syncPostRequests = 0
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && request.url().includes('/stocks/sync')) {
+      syncPostRequests += 1
+    }
+  })
+  await page.getByTestId('fbs-stock-warehouse-context-button').click()
+  await page.getByTestId(`fbs-stock-warehouse-context-option-${secondWh.id}`).click()
+  await expect(page.getByTestId('fbs-stock-bindings-empty')).toContainText(
+    'На выбранном складе нет привязок',
+  )
+  await expect(page.getByTestId('fbs-stock-binding-row')).toHaveCount(0)
+  expect(syncPostRequests).toBe(0)
+
+  await page.getByTestId('fbs-stock-warehouse-context-button').click()
+  await page.getByTestId(`fbs-stock-warehouse-context-option-${wh.id}`).click()
+  await expect(row).toContainText('публикация включена')
+  expect(syncPostRequests).toBe(0)
 
   await Promise.all([
     page.waitForResponse(
@@ -115,4 +142,79 @@ test('fbs seller warehouses: row binding, manual sync, status panel', async ({ p
   // Seller id used for binding API path
   expect(seller.id).toBeTruthy()
   expect(wh.id).toBeTruthy()
+})
+
+// S-01-TC-001 / TC-NEW-04-006 — S-01 меняет только количество выбранного склада.
+test('products: warehouse context changes quantity without changing product properties', async ({ page }) => {
+  const token = await registerFf(page, 'products-context')
+  const h = { Authorization: `Bearer ${token}` }
+
+  const north = (await (
+    await page.request.post('/api/warehouses', {
+      headers: h,
+      data: { name: 'Склад Север', code: `products-north-${Date.now()}` },
+    })
+  ).json()) as { id: string }
+  const south = (await (
+    await page.request.post('/api/warehouses', {
+      headers: h,
+      data: { name: 'Склад Юг', code: `products-south-${Date.now()}` },
+    })
+  ).json()) as { id: string }
+  const product = (await (
+    await page.request.post('/api/products', {
+      headers: h,
+      data: {
+        name: 'Товар складского контекста',
+        sku_code: `SKU-WH-${Date.now()}`,
+        length_mm: 100,
+        width_mm: 80,
+        height_mm: 20,
+      },
+    })
+  ).json()) as { id: string; sku_code: string }
+
+  await page.route('**/api/operations/inventory-balances/summary?*', async (route) => {
+    const requestUrl = new URL(route.request().url())
+    const warehouseId = requestUrl.searchParams.get('warehouse_id')
+    const quantity = warehouseId === south.id ? 3 : 7
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([{ product_id: product.id, quantity }]),
+    })
+  })
+
+  let syncPostRequests = 0
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && request.url().includes('/stocks/sync')) {
+      syncPostRequests += 1
+    }
+  })
+
+  await page.goto('/app/catalog/products')
+  const productRow = page.getByTestId('product-item').filter({ hasText: product.sku_code })
+  await expect(productRow).toContainText('Товар складского контекста')
+  await expect(productRow.getByTestId('product-warehouse-quantity')).toHaveText('7')
+
+  await page.getByTestId('products-warehouse-context-button').click()
+  await page.getByTestId(`products-warehouse-context-option-${south.id}`).click()
+  await expect(productRow.getByTestId('product-warehouse-quantity')).toHaveText('3')
+  await expect(productRow).toContainText(product.sku_code)
+  await expect(productRow).toContainText('Товар складского контекста')
+  expect(syncPostRequests).toBe(0)
+  expect(north.id).toBeTruthy()
+})
+
+// S-04-TC-001 / TC-NEW-04-006 — ноль складов блокирует зону понятной пустотой.
+test('stock sync: no operational warehouses shows the required empty state', async ({ page }) => {
+  await registerFf(page, 'no-warehouse')
+
+  await page.goto('/app/ff/fbs/stock-sync')
+  await expect(page.getByTestId('fbs-stock-no-wms')).toContainText('Нет рабочего склада')
+  await expect(page.getByTestId('fbs-stock-no-wms')).toContainText(
+    'Попросите администратора добавить рабочий склад',
+  )
+  await expect(page.getByTestId('fbs-stock-filters')).toHaveCount(0)
+  await expect(page.getByTestId('fbs-stock-bindings-list')).toHaveCount(0)
 })

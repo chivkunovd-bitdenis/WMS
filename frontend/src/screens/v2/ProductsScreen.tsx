@@ -1,12 +1,23 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEventHandler } from 'react'
+import { apiUrl } from '../../api'
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
 import { Input } from '../../ui/Input'
 import { Select } from '../../ui/Select'
+import {
+  EmptyState,
+  ErrorNotice,
+  QtyCell,
+  TableSkeletonBody,
+  WarehouseContextSwitch,
+} from '../../ui-kit'
 import { Screen } from '../AppV2Screens'
+import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { productWarehouseQuantity } from './productsWarehouse'
 
 type SellerRow = { id: string; name: string }
+type WarehouseRow = { id: string; name: string }
 
 type ProductRow = {
   id: string
@@ -21,26 +32,40 @@ type ProductRow = {
   wb_nm_id?: number | null
   wb_vendor_code?: string | null
 }
+type ProductStockSummaryRow = { product_id: string; quantity: number }
 
 type Props = {
+  token: string
+  authHeaders: (token: string) => Record<string, string>
   isFulfillmentAdmin: boolean
   catalogBusy: boolean
   catalogError: string | null
   sellers: SellerRow[]
+  warehouses: WarehouseRow[]
+  selectedWarehouseId: string | null
+  onWarehouseChange: (warehouseId: string) => void
   products: ProductRow[]
   onCreateProduct: FormEventHandler<HTMLFormElement>
 }
 
 export function ProductsScreen({
+  token,
+  authHeaders,
   isFulfillmentAdmin,
   catalogBusy,
   catalogError,
   sellers,
+  warehouses,
+  selectedWarehouseId,
+  onWarehouseChange,
   products,
   onCreateProduct,
 }: Props) {
   const [q, setQ] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [productQuantities, setProductQuantities] = useState<Record<string, number>>({})
+  const [productStockBusy, setProductStockBusy] = useState(false)
+  const [productStockError, setProductStockError] = useState<string | null>(null)
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase()
@@ -58,6 +83,48 @@ export function ProductsScreen({
     [products, selectedId],
   )
 
+  const warehouseOptions = useMemo(
+    () => warehouses.map((warehouse) => ({ id: warehouse.id, name: warehouse.name })),
+    [warehouses],
+  )
+
+  useEffect(() => {
+    if (!selectedWarehouseId) {
+      setProductQuantities({})
+      setProductStockBusy(false)
+      setProductStockError(null)
+      return
+    }
+    let cancelled = false
+    setProductStockBusy(true)
+    setProductStockError(null)
+    void (async () => {
+      try {
+        const params = new URLSearchParams({ warehouse_id: selectedWarehouseId })
+        const res = await fetch(apiUrl(`/operations/inventory-balances/summary?${params}`), {
+          headers: authHeaders(token),
+        })
+        if (!res.ok) throw new Error(await readApiErrorMessage(res))
+        const rows = (await res.json()) as ProductStockSummaryRow[]
+        if (!cancelled) {
+          setProductQuantities(
+            Object.fromEntries(rows.map((row) => [row.product_id, Number(row.quantity) || 0])),
+          )
+        }
+      } catch {
+        if (!cancelled) {
+          setProductQuantities({})
+          setProductStockError('Не удалось загрузить остатки выбранного склада. Обновите страницу.')
+        }
+      } finally {
+        if (!cancelled) setProductStockBusy(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [authHeaders, selectedWarehouseId, token])
+
   return (
     <Screen title="Товары (SKU)" subtitle="Таблица SKU, детали, создание и привязки">
       {catalogError ? (
@@ -68,7 +135,26 @@ export function ProductsScreen({
         </Card>
       ) : null}
 
-      <div className="screen-grid">
+      {warehouses.length === 0 ? (
+        <EmptyState
+          title="Нет рабочего склада"
+          hint="Попросите администратора добавить рабочий склад."
+          testId="products-no-warehouse"
+        />
+      ) : (
+        <>
+          <WarehouseContextSwitch
+            options={warehouseOptions}
+            value={selectedWarehouseId}
+            onChange={onWarehouseChange}
+            testId="products-warehouse-context"
+          />
+
+          {productStockError ? (
+            <ErrorNotice testId="products-stock-error">{productStockError}</ErrorNotice>
+          ) : null}
+
+          <div className="screen-grid">
         <div className="stack">
           <Card className="card">
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -93,8 +179,12 @@ export function ProductsScreen({
                 <th>Название</th>
                 <th>Объём</th>
                 <th>Селлер</th>
+                <th>Остаток</th>
               </tr>
             </thead>
+            {productStockBusy ? (
+              <TableSkeletonBody columns={5} />
+            ) : (
             <tbody>
               {filtered.map((p) => (
                 <tr
@@ -118,16 +208,20 @@ export function ProductsScreen({
                       <span className="subtle">—</span>
                     )}
                   </td>
+                  <td data-testid="product-warehouse-quantity">
+                    <QtyCell value={productWarehouseQuantity(p.id, productQuantities)} />
+                  </td>
                 </tr>
               ))}
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={4}>
+                  <td colSpan={5}>
                     <span className="subtle">Ничего не найдено.</span>
                   </td>
                 </tr>
               ) : null}
             </tbody>
+            )}
           </table>
         </div>
 
@@ -235,8 +329,9 @@ export function ProductsScreen({
             </Card>
           ) : null}
         </div>
-      </div>
+          </div>
+        </>
+      )}
     </Screen>
   )
 }
-

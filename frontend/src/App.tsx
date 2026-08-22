@@ -3227,10 +3227,15 @@ export default function App() {
             element={
               token && isFulfillmentAdmin ? (
                 <ProductsScreen
+                  token={token}
+                  authHeaders={authHeaders}
                   isFulfillmentAdmin={isFulfillmentAdmin}
                   catalogBusy={catalogBusy}
                   catalogError={catalogError}
                   sellers={sellers}
+                  warehouses={warehouses}
+                  selectedWarehouseId={selectedWarehouseId}
+                  onWarehouseChange={selectWarehouse}
                   products={products}
                   onCreateProduct={(e) => void onCreateProduct(e)}
                 />
