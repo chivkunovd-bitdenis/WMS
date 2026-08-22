@@ -73,3 +73,4 @@
 20:28   05-prod-slow · screen-dev: готово
 20:28   05-prod-slow · dev: фича 6/7 сохранена 2378125f3405
 20:33   05-prod-slow · screen-dev: готово
+20:33   05-prod-slow · dev: фича 7/7 сохранена d6b517d10121
