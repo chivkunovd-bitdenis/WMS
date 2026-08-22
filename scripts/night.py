@@ -217,7 +217,7 @@ def рабочие_карточки(волна: Path, карточки_: list[st
     """Подготовка до пула важна: git worktree add не должен гоняться параллельно."""
     if полос < 1:
         raise ValueError("число полос должно быть больше нуля")
-    return {ид: _создать_рабочую_карточку(ид, волна, н % полос + 1)
+    return {ид: _создать_рабочую_карточку(ид, волна, ПОЛОСА.get(ид, н % полос + 1))
             for н, ид in enumerate(карточки_)}
 
 
@@ -721,7 +721,7 @@ def стенд_для(роль: str, ид: str, рабочая: РабочаяК
 
 def шаг(*args, круг: int = 0, **kwargs):
     """Обёртка: на переделке поднимает модель разработчика."""
-    if круг > КРУГОВ:
+    if круг > КРУГОВ and args[1] in МОДЕЛЬ_ПЕРЕДЕЛКИ:
         kwargs["модель"], kwargs["профиль"] = МОДЕЛЬ_ЭСКАЛАЦИИ
     elif круг > 0 and args[1] in МОДЕЛЬ_ПЕРЕДЕЛКИ:
         kwargs["модель"], kwargs["профиль"] = МОДЕЛЬ_ПЕРЕДЕЛКИ[args[1]]
@@ -918,8 +918,33 @@ def снять_устаревшую_парковку(папка: Path) -> bool:
     return False
 
 
+def файл_эскалации(папка: Path) -> Path:
+    """Маркер живёт в Git metadata: не попадает в diff карточки."""
+    точка_git = КОРЕНЬ / ".git"
+    if not точка_git.exists():
+        основа = КОРЕНЬ / ".night-state"
+    elif точка_git.is_dir():
+        основа = точка_git
+    else:
+        ссылка = точка_git.read_text(encoding="utf-8").removeprefix("gitdir:").strip()
+        gitdir = Path(ссылка)
+        if not gitdir.is_absolute():
+            gitdir = (КОРЕНЬ / gitdir).resolve()
+        commondir = gitdir / "commondir"
+        основа = ((gitdir / commondir.read_text(encoding="utf-8").strip()).resolve()
+                  if commondir.exists() else gitdir)
+    return основа / "night-escalation" / папка.parent.parent.name / папка.name
+
+
 def круг_из_парковки(папка: Path) -> int:
     """Возвращает сохранённый уровень rework после перезапуска ночи."""
+    маркер = файл_эскалации(папка)
+    if маркер.exists():
+        статус = маркер.read_text(encoding="utf-8", errors="replace")
+        if "СТАТУС: DONE" in статус:
+            return КРУГОВ + ЭСКАЛАЦИОННЫХ_КРУГОВ + 1
+        if "СТАТУС: ACTIVE" in статус:
+            return КРУГОВ + 1
     о = папка / "OTLOZHENO.md"
     if not о.exists():
         return 0
@@ -954,7 +979,11 @@ def провести(ид: str, волна: Path, рабочая: Рабочая
     if круг > КРУГОВ:
         # Старый DEV доказанно не закрыл вердикт. Оставляем REVIEW как вход
         # для сильного исполнителя и не переигрываем product/UX/tester.
-        (папка / "DEV.md").unlink(missing_ok=True)
+        маркер = файл_эскалации(папка)
+        if not маркер.exists():
+            маркер.parent.mkdir(parents=True, exist_ok=True)
+            маркер.write_text("СТАТУС: ACTIVE\n", encoding="utf-8")
+            (папка / "DEV.md").unlink(missing_ok=True)
         i = цепочка.index("dev")
         журнал(волна, f"  {ид} · resume: прямая эскалация Sol по сохранённым находкам")
     else:
@@ -978,6 +1007,9 @@ def провести(ид: str, волна: Path, рабочая: Рабочая
         if роль in ВОЗВРАЩАЮТ_К_DEV and есть_находки(папка, роль):
             круг += 1
             if круг > КРУГОВ + ЭСКАЛАЦИОННЫХ_КРУГОВ:
+                маркер = файл_эскалации(папка)
+                маркер.parent.mkdir(parents=True, exist_ok=True)
+                маркер.write_text("СТАТУС: DONE\n", encoding="utf-8")
                 (папка / "OTLOZHENO.md").write_text(
                     f"{роль} нашёл находки после {круг - 1} кругов правки "
                     "и финальной эскалации\n", encoding="utf-8")
@@ -1003,6 +1035,7 @@ def провести(ид: str, волна: Path, рабочая: Рабочая
         return "отложено"
     (папка / "BRANCH-SHA.txt").write_text(сведения + "\n", encoding="utf-8")
     (папка / "OTLOZHENO.md").unlink(missing_ok=True)
+    файл_эскалации(папка).unlink(missing_ok=True)
     журнал(волна, f"{ид}: СДЕЛАНО")
     return "сделано"
 
@@ -1138,19 +1171,35 @@ def вечер(исходник: Path, fresh: bool = False, run_id: str | None =
     return 0 if карта_готова else 2
 
 
-def ночь(волна: Path, полос: int) -> int:
+def выбрать_карточки(все: list[str], фильтр: str | None) -> list[str]:
+    if not фильтр:
+        return все
+    нужны = {имя.strip() for имя in фильтр.split(",") if имя.strip()}
+    неизвестные = нужны - set(все)
+    if неизвестные:
+        raise ValueError("неизвестные карточки: " + ", ".join(sorted(неизвестные)))
+    return [имя for имя in все if имя in нужны]
+
+
+def ночь(волна: Path, полос: int, фильтр: str | None = None) -> int:
     global _АКТИВНАЯ_ВОЛНА
     _АКТИВНАЯ_ВОЛНА = волна
     signal.signal(signal.SIGINT, _сигинтум)
-    ид_список = карточки(волна)
-    if not ид_список:
+    все_карточки = карточки(волна)
+    if not все_карточки:
         print(f"в {волна}/cards нет карточек — сначала вечер", file=sys.stderr)
         return 1
+    try:
+        ид_список = выбрать_карточки(все_карточки, фильтр)
+    except ValueError as е:
+        print(str(е), file=sys.stderr)
+        return 2
     входные_ошибки = проверить_вход_волны(волна, ид_список)
     if входные_ошибки:
         журнал(волна, "входной гейт красный: " + "; ".join(входные_ошибки))
         return 2
-    for н, и in enumerate(ид_список):
+    # Номера полос считаются по полной очереди: точечный resume не меняет worktree.
+    for н, и in enumerate(все_карточки):
         ПОЛОСА[и] = н % полос + 1
     try:
         рабочие = рабочие_карточки(волна, ид_список, полос)
@@ -1318,6 +1367,7 @@ def main() -> int:
     p.add_argument("фаза", choices=["вечер", "ночь", "полный", "проверка", "обзор", "очистить"])
     p.add_argument("путь", nargs="?", help="файл со списком (вечер) или папка волны (ночь)")
     p.add_argument("--полос", type=int, default=6)   # полоса на агента: ждать нечего
+    p.add_argument("--карточки", help="точечный resume: id через запятую")
     p.add_argument("--fresh", action="store_true",
                    help="вечером создать новый каталог прогона")
     p.add_argument("--run-id", help="идентификатор свежего прогона")
@@ -1358,8 +1408,8 @@ def main() -> int:
         волна = КОРЕНЬ / "night" / имя
         if not волна.exists():
             волна = путь if путь.is_dir() else КОРЕНЬ / "night" / путь.stem
-        return ночь(волна, a.полос)
-    return ночь(путь, a.полос)
+        return ночь(волна, a.полос, a.карточки)
+    return ночь(путь, a.полос, a.карточки)
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@ import pathlib
 import sys
 import tempfile
 import json
+import os
 from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
@@ -439,12 +440,15 @@ def main() -> int:
                 n.шаг("x", "backend-dev", t, t, круг=0)
                 n.шаг("x", "backend-dev", t, t, круг=1)
                 n.шаг("x", "backend-dev", t, t, круг=n.КРУГОВ + 1)
+                n.шаг("x", "reviewer", t, t, круг=n.КРУГОВ + 1)
             проверь("rework: первичный dev остаётся дешёвым",
                     выбор_модели[0], (None, None))
             проверь("rework: обычная переделка идёт Sonnet/Terra",
                     выбор_модели[1], ("sonnet", "terra"))
             проверь("rework: финальная эскалация идёт Opus/Sol",
                     выбор_модели[2], ("opus", "sol"))
+            проверь("rework: reviewer сохраняет свой штатный профиль",
+                    выбор_модели[3], (None, None))
 
             (t / "OTLOZHENO.md").write_text(
                 "reviewer нашёл находки после 2 кругов правки\n", encoding="utf-8")
@@ -456,6 +460,26 @@ def main() -> int:
                     n.круг_из_парковки(t),
                     n.КРУГОВ + n.ЭСКАЛАЦИОННЫХ_КРУГОВ + 1)
             (t / "OTLOZHENO.md").unlink()
+
+            маркер = t / "escalation-state"
+            маркер.write_text("СТАТУС: ACTIVE\n", encoding="utf-8")
+            (t / "OTLOZHENO.md").write_text("старая парковка\n", encoding="utf-8")
+            (t / "DEV.md").write_text("## Изменённые файлы\nx\n## Гейты\npass\n", encoding="utf-8")
+            os.utime(t / "OTLOZHENO.md", (1, 1))
+            os.utime(t / "DEV.md", (2, 2))
+            with mock.patch.object(n, "файл_эскалации", return_value=маркер):
+                проверь("resume: устаревшая парковка снята", n.снять_устаревшую_парковку(t), True)
+                проверь("resume: отдельный маркер помнит эскалацию",
+                        n.круг_из_парковки(t), n.КРУГОВ + 1)
+
+            проверь("resume: фильтр сохраняет порядок",
+                    n.выбрать_карточки(["01", "02", "03"], "03,01"), ["01", "03"])
+            try:
+                n.выбрать_карточки(["01"], "99")
+                ошибка_фильтра = False
+            except ValueError:
+                ошибка_фильтра = True
+            проверь("resume: неизвестная карточка отклоняется", ошибка_фильтра, True)
 
             (t / "RAZBOR.md").write_text("## Тип\nбаг\n## Экраны\n- S-03\n", encoding="utf-8")
             проверь("тип читается", n.поле(t, "RAZBOR.md", "Тип").strip(), "баг")
