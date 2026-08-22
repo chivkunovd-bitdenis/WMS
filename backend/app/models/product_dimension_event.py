@@ -39,6 +39,8 @@ class ProductDimensionEvent(Base):
             "product_id",
             "fingerprint",
             unique=True,
+            postgresql_where="source = 'wb'",
+            sqlite_where=text("source = 'wb'"),
         ),
         Index(
             "uq_product_dimension_events_one_applied",

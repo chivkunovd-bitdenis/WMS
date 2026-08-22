@@ -792,11 +792,14 @@ async def _record_dimension_event(session: AsyncSession, product: Product, *, so
                                   volume_liters: float | None, container_basis: str | None,
                                   fingerprint: str, apply: bool,
                                   force_new: bool = False) -> ProductDimensionEvent:
-    result = await session.execute(select(ProductDimensionEvent).where(
-        ProductDimensionEvent.product_id == product.id,
-        ProductDimensionEvent.fingerprint == fingerprint,
-    ))
-    existing_event = result.scalar_one_or_none()
+    existing_event = None
+    if source == "wb":
+        result = await session.execute(select(ProductDimensionEvent).where(
+            ProductDimensionEvent.product_id == product.id,
+            ProductDimensionEvent.source == "wb",
+            ProductDimensionEvent.fingerprint == fingerprint,
+        ))
+        existing_event = result.scalar_one_or_none()
     event = None if force_new else existing_event
     if event is None:
         if force_new and existing_event is not None:

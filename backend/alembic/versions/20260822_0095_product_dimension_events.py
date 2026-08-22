@@ -82,6 +82,8 @@ def upgrade() -> None:
         "product_dimension_events",
         ["product_id", "fingerprint"],
         unique=True,
+        postgresql_where=sa.text("source = 'wb'"),
+        sqlite_where=sa.text("source = 'wb'"),
     )
     op.create_index(
         "uq_product_dimension_events_one_applied",

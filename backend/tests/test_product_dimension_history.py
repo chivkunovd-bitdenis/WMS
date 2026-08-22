@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import SessionLocal
 from app.models.product import Product
 from app.models.product_dimension_event import ProductDimensionEvent
+from app.models.user import User
 from app.services.catalog_service import (
     CatalogError,
     restore_latest_wb_dimensions,
@@ -180,3 +181,69 @@ async def test_wb_observation_does_not_replace_manual_measurement_and_restore_ma
         assert [event.source for event in events] == ["manual", "wb", "wb"]
         assert sum(event.applied for event in events) == 1
         assert events[-1].applied is True
+
+
+@pytest.mark.asyncio
+async def test_repeated_manual_measurement_keeps_both_immutable_observations(
+    async_client: AsyncClient,
+) -> None:
+    tenant_id, seller_id, operator_id = await _tenant_seller_and_operator(async_client)
+    barcode = f"WB-DIM-REPEAT-{time.time_ns()}"
+    async with SessionLocal() as session:
+        product = Product(
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            name="Повторный ручной обмер",
+            sku_code=f"WB-MANUAL-REPEAT-{time.time_ns()}",
+            wb_barcode=barcode,
+        )
+        session.add(product)
+        await session.commit()
+        product_id = product.id
+
+        await update_product_dimensions(
+            session,
+            tenant_id,
+            product_id,
+            length_mm=100,
+            width_mm=100,
+            height_mm=100,
+            author_user_id=operator_id,
+        )
+        first_manual = (await _events(session, product_id))[0]
+        first_manual_id = first_manual.id
+        first_manual_observed_at = first_manual.observed_at
+
+        second_operator = User(
+            tenant_id=tenant_id,
+            email=f"second-dimension-operator-{time.time_ns()}@example.com",
+            password_hash="unused-in-service-test",
+            role="FULFILLMENT_EMPLOYEE",
+        )
+        session.add(second_operator)
+        await session.flush()
+        second_operator_id = second_operator.id
+
+        await upsert_products_from_wb_cards(session, tenant_id, seller_id, [_wb_card(barcode)])
+        await restore_latest_wb_dimensions(session, tenant_id, product_id)
+        await update_product_dimensions(
+            session,
+            tenant_id,
+            product_id,
+            length_mm=100,
+            width_mm=100,
+            height_mm=100,
+            author_user_id=second_operator_id,
+        )
+
+        events = await _events(session, product_id)
+        manual_events = [event for event in events if event.source == "manual"]
+        assert len(manual_events) == 2
+        assert manual_events[0].id == first_manual_id
+        assert manual_events[0].observed_at == first_manual_observed_at
+        assert manual_events[0].author_user_id == operator_id
+        assert manual_events[0].applied is False
+        assert manual_events[1].id != first_manual_id
+        assert manual_events[1].author_user_id == second_operator_id
+        assert manual_events[1].applied is True
+        assert sum(event.applied for event in events) == 1

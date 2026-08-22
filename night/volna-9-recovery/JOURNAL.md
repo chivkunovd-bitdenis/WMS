@@ -79,3 +79,5 @@
 22:05   08-storage · reviewer: Terra-rework не закрыл вердикт — эскалация Sol
 22:05   08-storage · reviewer: находки, круг 2 — назад к разработке
 22:09   08-storage · screen-dev: готово
+22:09   08-storage · dev: фича 1/8 сохранена 6d2e9193e205
+22:14   08-storage · backend-dev: готово
