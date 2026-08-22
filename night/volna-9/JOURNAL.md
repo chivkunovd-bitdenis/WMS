@@ -38,3 +38,49 @@
 
 ### карта задевания
 20:51 вопросов после анализа: 45 — см. night/volna-9/VOPROSY.md
+21:01   06-picking-list-order · ux-architect: готово
+21:03   06-picking-list-order · product: готово
+21:03   06-picking-list-order · tester: нет файла CASES.md (код 1, попытка 1)
+21:03   06-picking-list-order · tester: нет файла CASES.md (код 1, попытка 2)
+21:03 06-picking-list-order: отложено на шаге tester
+00:21   06-picking-list-order · ux-architect: уже сделано, пропускаю
+00:21   06-picking-list-order · product: уже сделано, пропускаю
+00:25   06-picking-list-order · tester: готово
+00:35   06-picking-list-order · breaker: готово
+00:41   06-picking-list-order · screen-dev: готово
+00:49   06-picking-list-order · reviewer: готово
+00:49   06-picking-list-order · reviewer: находки, круг 1 — назад к разработке
+00:55   06-picking-list-order · screen-dev: готово
+01:02   06-picking-list-order · reviewer: готово
+01:02   06-picking-list-order · reviewer: находки, круг 2 — назад к разработке
+01:06   06-picking-list-order · screen-dev: готово
+01:13   06-picking-list-order · reviewer: готово
+01:13 06-picking-list-order: отложено — reviewer, круги кончились
+05:18   06-picking-list-order · ux-architect: уже сделано, пропускаю
+05:18   06-picking-list-order · product: уже сделано, пропускаю
+05:18   06-picking-list-order · tester: уже сделано, пропускаю
+05:18   06-picking-list-order · breaker: уже сделано, пропускаю
+05:18   06-picking-list-order · screen-dev: уже сделано, пропускаю
+05:22   06-picking-list-order · reviewer: готово
+05:22   06-picking-list-order · reviewer: находки, круг 1 — назад к разработке
+05:32   06-picking-list-order · screen-dev: готово
+05:37   06-picking-list-order · reviewer: готово
+05:37   06-picking-list-order · reviewer: находки, круг 2 — назад к разработке
+05:57   06-picking-list-order · screen-dev: нет файла DEV.md (код 124, попытка 1)
+06:05   06-picking-list-order · screen-dev: готово
+06:14   06-picking-list-order · reviewer: готово
+06:14 06-picking-list-order: отложено — reviewer, круги кончились
+10:16   06-picking-list-order · ux-architect: уже сделано, пропускаю
+10:16   06-picking-list-order · product: уже сделано, пропускаю
+10:16   06-picking-list-order · tester: уже сделано, пропускаю
+10:16   06-picking-list-order · breaker: уже сделано, пропускаю
+10:16   06-picking-list-order · screen-dev: уже сделано, пропускаю
+10:25   06-picking-list-order · reviewer: готово
+10:25   06-picking-list-order · reviewer: находки, круг 1 — назад к разработке
+10:43   06-picking-list-order · screen-dev: готово
+10:53   06-picking-list-order · reviewer: готово
+10:53   06-picking-list-order · reviewer: находки, круг 2 — назад к разработке
+11:03   06-picking-list-order · screen-dev: готово
+11:03   06-picking-list-order · reviewer: нет файла REVIEW.md (код 1, попытка 1)
+11:03   06-picking-list-order · reviewer: нет файла REVIEW.md (код 1, попытка 2)
+11:03 06-picking-list-order: отложено на шаге reviewer

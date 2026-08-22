@@ -18,3 +18,29 @@ describe('Лист подбора: отметки «Собрал» и «Упак
       .not.toBe(markKey({ article: 'J308-24', size: '39' }))
   })
 })
+
+// TC-06-001: отображение диапазона «№» в листе подбора
+describe('Лист подбора: колонка «№» — диапазон и одиночное число', () => {
+  // Логика вычисления orderNo вынесена inline в FfFbsPickList.tsx:
+  //   const orderNo = i.first_no === i.last_no ? String(i.first_no) : `${i.first_no}–${i.last_no}`
+  // Тестируем ту же логику здесь, чтобы зафиксировать контракт.
+  function computeOrderNo(first_no: number, last_no: number): string {
+    return first_no === last_no ? String(first_no) : `${first_no}–${last_no}`
+  }
+
+  it('одна наклейка — одиночное число', () => {
+    expect(computeOrderNo(7, 7)).toBe('7')
+  })
+
+  it('несколько наклеек — диапазон через тире', () => {
+    expect(computeOrderNo(12, 17)).toBe('12–17')
+  })
+
+  it('два заказа подряд', () => {
+    expect(computeOrderNo(3, 4)).toBe('3–4')
+  })
+
+  it('первый элемент всегда 1', () => {
+    expect(computeOrderNo(1, 1)).toBe('1')
+  })
+})

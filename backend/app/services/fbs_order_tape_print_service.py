@@ -53,6 +53,7 @@ class FbsOrderTapeOrder:
     wb_order_id: int
     requires_honest_sign: bool
     qr_asset_id: uuid.UUID | None
+    sticker_no: int
     codes: list[str] = field(default_factory=list)
     printed_codes: list[FbsOrderTapePrintedCode] = field(default_factory=list)
     shortage: int | None = None
@@ -149,7 +150,7 @@ async def print_fbs_order_tape(
 
     result_orders: list[FbsOrderTapeOrder] = []
     shortage_total = 0
-    for order in ordered:
+    for sticker_no, order in enumerate(ordered, start=1):
         qr_asset_id = qr_asset_by_order.get(order.id)
         if include_order_qr and qr_asset_id is None:
             errors.append(
@@ -173,6 +174,7 @@ async def print_fbs_order_tape(
                     wb_order_id=int(order.wb_order_id),
                     requires_honest_sign=False,
                     qr_asset_id=qr_asset_id,
+                    sticker_no=sticker_no,
                 )
             )
             continue
@@ -241,6 +243,7 @@ async def print_fbs_order_tape(
                 wb_order_id=int(order.wb_order_id),
                 requires_honest_sign=True,
                 qr_asset_id=qr_asset_id,
+                sticker_no=sticker_no,
                 codes=printed.codes,
                 printed_codes=[
                     FbsOrderTapePrintedCode(

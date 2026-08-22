@@ -580,6 +580,21 @@ async def test_fbs_supply_picking_list_grouping(
     assert leggings["quantity"] == 2
     assert leggings["article"] == "ART-A"
     assert leggings["size"] == "M"
+    # TC-06-001: first_no/last_no returned; multi-order row has range, single has equal nos
+    assert "first_no" in leggings and "last_no" in leggings
+    assert leggings["first_no"] <= leggings["last_no"]
+    # Leggings has 2 orders (820001 + 820002), so range must span 2
+    assert leggings["last_no"] - leggings["first_no"] == 1
+    # Every item must have first_no/last_no and single-order items have first_no == last_no
+    for item in items:
+        assert "first_no" in item and "last_no" in item
+        assert item["first_no"] <= item["last_no"]
+    single_order_items = [i for i in items if i["quantity"] == 1]
+    for item in single_order_items:
+        assert item["first_no"] == item["last_no"]
+    # TC-06-002: items returned in canonical alphabetical order (article asc)
+    articles = [i["article"] for i in items]
+    assert articles == sorted(articles)
 
     empty_supply = await _create_supply(
         async_client, headers, seller_id, warehouse_id, name="Empty"

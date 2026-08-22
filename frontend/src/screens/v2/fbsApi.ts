@@ -100,6 +100,7 @@ export type FbsSticker = {
   wb_order_id: number
   sticker_code: string | null
   sticker_file: string | null
+  sticker_no: number
 }
 
 async function jsonOrThrow<T>(res: Response): Promise<T> {
@@ -245,6 +246,8 @@ export type FbsWorklistOrder = {
   deadline_at: string
   supply_id: string | null
   selection_blockers: Array<{ code: string; message: string }>
+  /** Порядковый номер стикера в едином ключе поставки (1..N). Только в workspace. */
+  order_no?: number | null
 }
 
 export type FbsWorklistPage = {
@@ -335,6 +338,8 @@ export type FbsPrintAsset = {
   checksum: string | null
   applied_at: string | null
   error: { code: string; message: string } | null
+  /** Порядковый номер наклейки в едином ключе поставки (1..N). Только для kind=order_sticker. */
+  sticker_no?: number | null
 }
 
 export type FbsPrintBatchRequest = {
@@ -365,6 +370,7 @@ export type FbsOrderPrintTapeOrder = {
   wb_order_id: number
   requires_honest_sign: boolean
   qr_asset: FbsPrintAsset | null
+  sticker_no: number
   codes: string[]
   printed_codes: Array<{ id: string; cis_code: string; has_label_artifact: boolean }>
   shortage: number | null
@@ -1044,6 +1050,8 @@ export type FbsPickingItem = {
   size: string | null
   product_name: string
   quantity: number
+  first_no: number
+  last_no: number
 }
 
 export async function getFbsPickingList(

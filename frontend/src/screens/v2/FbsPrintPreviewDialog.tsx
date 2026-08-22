@@ -111,11 +111,20 @@ export function FbsPrintPreviewDialog({
       return
     }
     popup.opener = null
-    const pages = items
+    // Порядок стикеров в ленте = единый ключ: сначала № 1, потом № N.
+    // Сортируем только при печати — визуальный порядок в диалоге не трогаем.
+    const sorted = items.slice().sort((a, b) => (a.asset.sticker_no ?? 0) - (b.asset.sticker_no ?? 0))
+    const pages = sorted
       .flatMap(({ objectUrl, asset }) =>
         Array.from(
           { length: safeCopies },
-          () => `<section class="label"><img src="${objectUrl}" alt="${assetLabel(asset)}"></section>`,
+          () => {
+            // Номер стикера «№ K» — отдельным блоком НАД изображением, не поверх PNG WB.
+            const noHtml = asset.sticker_no != null
+              ? `<div class="no">№ ${asset.sticker_no}</div>`
+              : ''
+            return `<section class="label">${noHtml}<img src="${objectUrl}" alt="${assetLabel(asset)}"></section>`
+          },
         ),
       )
       .join('')
@@ -128,9 +137,11 @@ export function FbsPrintPreviewDialog({
       `@page{size:${pageWidthMm} ${pageHeightMm};margin:0}`,
       'html,body{margin:0;padding:0}',
       '.label{box-sizing:border-box;width:100%;height:100vh;padding:1mm;display:flex;',
-      'align-items:center;justify-content:center;break-after:page;page-break-after:always;overflow:hidden}',
+      'flex-direction:column;align-items:center;justify-content:center;',
+      'break-after:page;page-break-after:always;overflow:hidden}',
       '.label:last-child{break-after:auto;page-break-after:auto}',
-      '.label img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;image-rendering:auto}',
+      '.no{font-size:18pt;font-weight:700;text-align:center;margin-bottom:1mm;line-height:1.2;flex:0 0 auto}',
+      '.label img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;image-rendering:auto;flex:1 1 auto;min-height:0}',
     ].join('')
     popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Печать WB</title><style>${printCss}</style></head><body>${pages}<script>Promise.all(Array.from(document.images).map(function(img){return img.complete?Promise.resolve():new Promise(function(resolve){img.onload=resolve;img.onerror=resolve})})).then(function(){window.focus();window.print()})</script></body></html>`)
     popup.document.close()
@@ -195,6 +206,11 @@ export function FbsPrintPreviewDialog({
             {previews.map(({ asset, objectUrl }) => (
               <Paper key={asset.id} variant="outlined" sx={{ p: 2 }}>
                 <Typography variant="subtitle2">{assetLabel(asset)}</Typography>
+                {asset.sticker_no != null ? (
+                  <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5 }} data-testid="fbs-print-preview-sticker-no">
+                    № {asset.sticker_no}
+                  </Typography>
+                ) : null}
                 <Box component="img" src={objectUrl} alt={assetLabel(asset)} sx={{ width: '100%', aspectRatio: `${labelSize.widthMm} / ${labelSize.heightMm}`, objectFit: 'contain', bgcolor: '#fff', my: 1.5 }} />
                 <Stack direction="row" spacing={1}>
                   {previews.length > 1 ? <Button startIcon={<PrintOutlinedIcon />} onClick={() => print([{ asset, objectUrl }])} data-task-id="FBS-10">Печать только этого</Button> : null}

@@ -96,10 +96,23 @@ async def get_supply_workspace(
     if supply is None:
         raise FbsWorkspaceError("supply_not_found")
     server_now = datetime.now(tz=UTC)
-    orders = list(supply.orders)
+
+    # Sort orders by unified canonical key: (article, sku_code, size, product_name, wb_order_id)
+    def order_sort_key(order: Any) -> tuple[str, str | None, str | None, str, int]:
+        product = order.product
+        article = order.wb_article or (product.sku_code if product is not None else "") or ""
+        sku_code = product.sku_code if product is not None else None
+        size = product.wb_size if product is not None and product.wb_size else None
+        product_name = product.name if product is not None else (order.wb_article or "Unknown")
+        return (article, sku_code, size, product_name, order.wb_order_id)
+
+    orders = sorted(supply.orders, key=order_sort_key)
     worklist_items = await build_worklist_items(
         session, tenant_id, orders, server_now=server_now
     )
+    # Inject canonical order_no (1..N) so frontend can display the sticker sequence number.
+    for order_no, item in enumerate(worklist_items, start=1):
+        item["order_no"] = order_no
     await _inject_order_pick_fallback(session, tenant_id, supply, worklist_items)
     cargo_places = await _build_cargo_places(session, tenant_id, supply)
     boxes = await _build_boxes(session, tenant_id, supply_id)

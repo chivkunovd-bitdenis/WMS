@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import require_fbs_operator_access
 from app.api.fbs_errors import envelope_from_exc, raise_fbs_http
@@ -26,6 +27,7 @@ from app.services import fbs_picking_service as picking_svc
 from app.services import fbs_shipment_pvz_service as pvz_svc
 from app.services import fbs_shipment_service as shipment_svc
 from app.services import fbs_supply_service as supply_svc
+from app.services.fbs_supply_service import _order_sort_key
 from app.services.fbs_print_asset_service import (
     FbsPrintAssetError,
     map_print_asset,
@@ -161,6 +163,8 @@ class FbsPickingListItemOut(BaseModel):
     size: str | None
     product_name: str
     quantity: int
+    first_no: int
+    last_no: int
 
 
 class FbsPickingListOut(BaseModel):
@@ -172,6 +176,7 @@ class FbsStickerMetaOut(BaseModel):
     wb_order_id: int
     sticker_code: str | None
     sticker_file: str | None
+    sticker_no: int
 
 
 class FbsStickersOut(BaseModel):
@@ -196,6 +201,7 @@ class FbsPrintAssetOut(BaseModel):
     checksum: str | None
     applied_at: str | None
     error: dict[str, str] | None = None
+    sticker_no: int | None = None
 
 
 class FbsPrintOrderErrorOut(BaseModel):
@@ -233,6 +239,7 @@ class FbsOrderTapeOrderOut(BaseModel):
     wb_order_id: int
     requires_honest_sign: bool
     qr_asset: FbsPrintAssetOut | None
+    sticker_no: int
     codes: list[str]
     printed_codes: list[FbsOrderTapePrintedCodeOut]
     shortage: int | None
@@ -1456,6 +1463,8 @@ async def get_fbs_supply_picking_list(
                 size=item.size,
                 product_name=item.product_name,
                 quantity=item.quantity,
+                first_no=item.first_no,
+                last_no=item.last_no,
             )
             for item in items
         ]
@@ -1480,6 +1489,19 @@ async def fetch_fbs_supply_stickers(
     user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsStickersOut:
+    # Load supply to get orders in unified canonical order
+    supply = await session.get(
+        FbsSupply,
+        supply_id,
+        options=[selectinload(FbsSupply.orders).selectinload(FbsOrder.product)],
+    )
+    if supply is None:
+        raise HTTPException(status_code=404, detail="Supply not found")
+
+    # Build sticker order number map
+    sorted_orders = sorted(supply.orders, key=_order_sort_key)
+    order_no_map = {order.id: no for no, order in enumerate(sorted_orders, start=1)}
+
     async with httpx.AsyncClient() as http_client:
         try:
             stickers = await supply_svc.fetch_and_cache_stickers(
@@ -1499,6 +1521,7 @@ async def fetch_fbs_supply_stickers(
                 wb_order_id=meta.wb_order_id,
                 sticker_code=meta.sticker_code,
                 sticker_file=meta.sticker_file,
+                sticker_no=order_no_map.get(meta.order_id, 0),
             )
             for meta in stickers
         ]
@@ -1512,6 +1535,19 @@ async def fetch_fbs_supply_print_assets(
     user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsPrintBatchOut:
+    # Build order_no_map for sticker_no: assets of kind order_sticker carry a canonical
+    # sequence number 1..N that matches the picking list (first_no/last_no per row).
+    order_no_map: dict[uuid.UUID, int] = {}
+    if body.kind == "order_sticker":
+        supply_for_no = await session.get(
+            FbsSupply,
+            supply_id,
+            options=[selectinload(FbsSupply.orders).selectinload(FbsOrder.product)],
+        )
+        if supply_for_no is not None:
+            sorted_orders = sorted(supply_for_no.orders, key=_order_sort_key)
+            order_no_map = {order.id: no for no, order in enumerate(sorted_orders, start=1)}
+
     async with httpx.AsyncClient() as http_client:
         try:
             batch = await request_supply_print_batch(
@@ -1531,7 +1567,13 @@ async def fetch_fbs_supply_print_assets(
         ready=batch.ready,
         missing=batch.missing,
         failed=batch.failed,
-        assets=[FbsPrintAssetOut(**map_print_asset(asset)) for asset in batch.assets],
+        assets=[
+            FbsPrintAssetOut(
+                **map_print_asset(asset),
+                sticker_no=order_no_map.get(asset.fbs_order_id) if asset.fbs_order_id else None,
+            )
+            for asset in batch.assets
+        ],
         order_errors=[
             FbsPrintOrderErrorOut(
                 order_id=str(err.order_id),
@@ -1579,6 +1621,7 @@ async def print_fbs_supply_order_tape(
                 wb_order_id=order.wb_order_id,
                 requires_honest_sign=order.requires_honest_sign,
                 qr_asset=assets_by_id.get(order.qr_asset_id) if order.qr_asset_id else None,
+                sticker_no=order.sticker_no,
                 codes=order.codes,
                 printed_codes=[
                     FbsOrderTapePrintedCodeOut(

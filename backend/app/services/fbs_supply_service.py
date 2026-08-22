@@ -133,6 +133,8 @@ class PickingListItem:
     size: str | None
     product_name: str
     quantity: int
+    first_no: int
+    last_no: int
 
 
 @dataclass(frozen=True)
@@ -1571,6 +1573,16 @@ async def add_orders_to_existing_supply(
     return workspace
 
 
+def _order_sort_key(order: Any) -> tuple[str, str | None, str | None, str, int]:
+    """Compute the canonical sort key for an FbsOrder."""
+    product = order.product
+    article = order.wb_article or (product.sku_code if product is not None else "") or ""
+    sku_code = product.sku_code if product is not None else None
+    size = product.wb_size if product is not None and product.wb_size else None
+    product_name = product.name if product is not None else (order.wb_article or "Unknown")
+    return (article, sku_code, size, product_name, order.wb_order_id)
+
+
 async def get_picking_list(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -1580,7 +1592,27 @@ async def get_picking_list(
     if supply is None:
         raise FbsSupplyError("supply_not_found")
 
-    groups: dict[tuple[str, str | None, str | None, str], int] = defaultdict(int)
+    # Step 1: Build list of all orders in unified order: (article, sku_code, size, product_name, wb_order_id)
+    # This is the single canonical order for both picking list and sticker tape.
+    order_info_list: list[tuple[str, str | None, str | None, str, int, uuid.UUID]] = []
+    for order in supply.orders:
+        product = order.product
+        article = order.wb_article or (product.sku_code if product is not None else "") or ""
+        sku_code = product.sku_code if product is not None else None
+        size = product.wb_size if product is not None and product.wb_size else None
+        product_name = product.name if product is not None else (order.wb_article or "Unknown")
+        order_info_list.append((article, sku_code, size, product_name, order.wb_order_id, order.id))
+
+    # Sort by canonical key, then by wb_order_id
+    order_info_list.sort(key=lambda x: (x[0], x[1], x[2], x[3], x[4]))
+
+    # Step 2: Assign sequential order numbers (1..N)
+    order_no_map: dict[uuid.UUID, int] = {}
+    for idx, (_, _, _, _, _, order_id) in enumerate(order_info_list, start=1):
+        order_no_map[order_id] = idx
+
+    # Step 3: Group by product key and collect order numbers
+    groups: dict[tuple[str, str | None, str | None, str], list[int]] = defaultdict(list)
     for order in supply.orders:
         product = order.product
         article = order.wb_article or (product.sku_code if product is not None else "") or ""
@@ -1588,18 +1620,30 @@ async def get_picking_list(
         size = product.wb_size if product is not None and product.wb_size else None
         product_name = product.name if product is not None else (order.wb_article or "Unknown")
         key = (article, sku_code, size, product_name)
-        groups[key] += 1
+        order_no = order_no_map[order.id]
+        groups[key].append(order_no)
 
-    items = [
-        PickingListItem(
-            article=article,
-            sku_code=sku_code,
-            size=size,
-            product_name=product_name,
-            quantity=qty,
+    # Step 4: Build result items in canonical order (preserving order of appearance)
+    # Iterate through order_info_list to preserve the sorted order and avoid re-sorting
+    seen_keys = set()
+    items = []
+    for article, sku_code, size, product_name, _, _ in order_info_list:
+        key = (article, sku_code, size, product_name)
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        nos = groups[key]
+        items.append(
+            PickingListItem(
+                article=article,
+                sku_code=sku_code,
+                size=size,
+                product_name=product_name,
+                quantity=len(nos),
+                first_no=min(nos),
+                last_no=max(nos),
+            )
         )
-        for (article, sku_code, size, product_name), qty in sorted(groups.items())
-    ]
     return items
 
 

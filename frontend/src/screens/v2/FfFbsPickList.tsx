@@ -56,10 +56,10 @@ function saveMarks(supplyId: string, marks: Marks): void {
   localStorage.setItem(`fbs-picklist-${supplyId}`, JSON.stringify(marks))
 }
 
-function printImages(title: string, dataUrls: string[]): void {
+function printImages(title: string, dataUrls: Array<{ src: string; no: number }>): void {
   const w = window.open('', '_blank')
   if (!w) return
-  const imgs = dataUrls.map((s) => `<img src="${s}" style="display:block;margin:0 auto 8px" />`).join('')
+  const imgs = dataUrls.map((item) => `<div style="margin-bottom:8px"><div style="font-size:24px;font-weight:bold;margin-bottom:4px;text-align:center">${item.no}</div><img src="${item.src}" style="display:block;margin:0 auto" /></div>`).join('')
   w.document.write(`<title>${title}</title><body onload="window.print()">${imgs}</body>`)
   w.document.close()
 }
@@ -136,12 +136,15 @@ export function FfFbsPickList({ token, authHeaders, supplyId, open, onClose }: P
     setError(null)
     try {
       const stickers = await generateFbsSupplyStickers(token, authHeaders, supplyId)
-      const urls = stickers
-        .map((s) => s.sticker_file)
-        .filter((f): f is string => !!f)
-        .map((f) => (f.startsWith('data:') ? f : `data:image/png;base64,${f}`))
-      if (urls.length === 0) setError('Стикеры ещё не готовы — попробуйте позже.')
-      else printImages('Стикеры заказов FBS', urls)
+      const stickerData = stickers
+        .filter((s) => s.sticker_file)
+        .sort((a, b) => a.sticker_no - b.sticker_no)
+        .map((s) => ({
+          src: s.sticker_file!.startsWith('data:') ? s.sticker_file : `data:image/png;base64,${s.sticker_file}`,
+          no: s.sticker_no,
+        }))
+      if (stickerData.length === 0) setError('Стикеры ещё не готовы — попробуйте позже.')
+      else printImages('Стикеры заказов FBS', stickerData)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось получить стикеры')
     } finally {
@@ -199,6 +202,9 @@ export function FfFbsPickList({ token, authHeaders, supplyId, open, onClose }: P
           <Table stickyHeader size="small" data-testid="fbs-pick-table">
             <TableHead>
               <TableRow>
+                <TableCell width={72} align="center">
+                  №
+                </TableCell>
                 <TableCell>Товар</TableCell>
                 <TableCell width={92} align="center">
                   Размер
@@ -218,8 +224,14 @@ export function FfFbsPickList({ token, authHeaders, supplyId, open, onClose }: P
               {visible.map((i) => {
                 const key = markKey(i)
                 const m = marks[key] ?? { collected: false, packed: false }
+                const orderNo = i.first_no === i.last_no ? String(i.first_no) : `${i.first_no}–${i.last_no}`
                 return (
                   <TableRow key={key} data-testid="fbs-pick-row" data-article={i.article} data-size={i.size ?? ''}>
+                    <TableCell align="center">
+                      <Typography variant="body2" data-testid="fbs-pick-order-no">
+                        {orderNo}
+                      </Typography>
+                    </TableCell>
                     <TableCell>
                       <Typography variant="body2">{i.product_name}</Typography>
                       <Typography variant="caption" color="text.secondary">
@@ -251,7 +263,7 @@ export function FfFbsPickList({ token, authHeaders, supplyId, open, onClose }: P
               })}
               {!busy && visible.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5}>
+                  <TableCell colSpan={6}>
                     <Box sx={{ py: 3, textAlign: 'center' }} data-testid="fbs-pick-empty">
                       <Typography variant="body2" color="text.secondary">
                         Нет позиций по фильтру.
