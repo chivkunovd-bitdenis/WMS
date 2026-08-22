@@ -116,7 +116,7 @@ const PRINT_LABELS: Record<Printable, string> = {
   'ЧЗ и ШК': 'ЧЗ и ШК',
   'ШК короба': 'ШК короба',
   'ШК ячейки': 'ШК ячейки',
-  накладную: 'накладную',
+  накладную: 'накладной',
 }
 
 export function PrintAction({

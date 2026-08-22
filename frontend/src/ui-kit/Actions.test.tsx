@@ -6,8 +6,8 @@ describe('PrintAction', () => {
     const row = PrintAction({ what: 'накладную', placement: 'row' })
     const panel = PrintAction({ what: 'накладную', placement: 'panel' })
 
-    expect(row.props.title).toBe('Печать накладную')
-    expect(panel.props.children).toBe('Печать накладную')
+    expect(row.props.title).toBe('Печать накладной')
+    expect(panel.props.children).toBe('Печать накладной')
   })
 
   it('keeps existing labels and disabled explanations', () => {
