@@ -1,3 +1,5 @@
+# screen-dev · 04-warehouse-switch
+
 ## Изменённые файлы
 
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/ui-kit/WarehouseContextSwitch.tsx`
@@ -7,12 +9,10 @@
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` — красный: локальный `tsc` отсутствует, а загрузка через `npx` невозможна из-за отсутствия сети (`ENOTFOUND registry.npmjs.org`).
-- `python3 scripts/ui/ui_guard.py` — красный на уже существующих нарушениях вне разрешённых файлов: `src/components/WbProductPickerDialog.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`. Новых нарушений в изменённых ui-kit-файлах не выявлено.
-- `npm run test:unit` — красный: локальный бинарник `vitest` отсутствует (`vitest: command not found`).
+- `npx tsc --noEmit -p tsconfig.app.json` — зелёный, команда завершилась с кодом 0.
+- `python3 scripts/ui/ui_guard.py` — красный: обнаружены новые нарушения в соседних файлах `src/components/WbProductPickerDialog.tsx`, `src/screens/v2/FfFbsOrdersScreen.tsx`, `src/screens/v2/FfFbsStockSyncScreen.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`; эти файлы не входят в атом и не изменялись.
+- `npm run test:unit` — красный: `vitest: command not found`, локальные зависимости отсутствуют.
 
 ## Не реализовано
 
-Буквально не проверено только прохождение обязательных локальных гейтов из-за отсутствующих зависимостей и недоступной сети. Реализация контракта добавлена: переключатель скрывается при 0–1 варианте, открывает список имён, вызывает `onChange` и закрывается после выбора; загрузка и недоступность объясняются оператору, ошибка выводится через `ErrorNotice`, `WarningNotice` остаётся неблокирующим.
-
-Отдельный Git-коммит не создан: среда запрещает запись `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-04-warehouse-switch/index.lock` (`Operation not permitted`).
+Замечания `REVIEW.md` относятся к backend и соседним экранам; они не входят в слой этого атома и не изменялись по границам роли `screen-dev`. Проверка `ui_guard.py` также выявила нарушения в соседних экранах, которые нельзя исправлять в этой карточке.
