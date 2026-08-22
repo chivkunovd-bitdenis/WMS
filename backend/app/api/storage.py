@@ -19,6 +19,7 @@ from app.services.storage_statement_service import (
     StorageStatementError,
     fix_storage_statement,
     get_fixed_storage_statement,
+    get_storage_ledger_rows,
 )
 
 router = APIRouter(prefix="/operations/storage", tags=["storage"])
@@ -42,6 +43,8 @@ class StorageStatementOut(BaseModel):
     fixed_at: str | None
     period_start: str
     period_end: str
+    seller_id: uuid.UUID
+    warehouse_id: uuid.UUID
     measurements: list[dict[str, object]]
     total_liter_days: str
     total_amount: str
@@ -55,8 +58,15 @@ def _statement_out(statement, rows) -> StorageStatementOut:
         fixed_at=statement.fixed_at.isoformat() if statement.fixed_at else None,
         period_start=statement.period_start.isoformat(),
         period_end=statement.period_end.isoformat(),
+        seller_id=statement.seller_id,
+        warehouse_id=statement.warehouse_id,
         measurements=[
-            {"product_id": row.product_id, "liter_days": str(row.liter_days)} for row in rows
+            {
+                "product_id": row.product_id,
+                "liter_days": str(row.liter_days),
+                "source_type": "storage_measurement",
+            }
+            for row in rows
         ],
         total_liter_days=str(total_liter_days),
         total_amount="0",
@@ -112,7 +122,22 @@ async def fix_statement(
             status_code=409 if code in {"missing_dimensions", "not_editable"} else 404,
             detail=code,
         ) from exc
-    return _statement_out(statement, rows)
+    out = _statement_out(statement, rows)
+    ledger = await get_storage_ledger_rows(session, user.tenant_id, statement.id)
+    out.measurements = [
+        {
+            "product_id": measurement.product_id,
+            "liter_days": str(measurement.liter_days),
+            "source_type": ledger_row.source_type,
+            "service_code": ledger_row.service_code,
+            "unit": ledger_row.unit,
+            "rate_snapshot": str(ledger_row.rate_snapshot),
+            "amount": str(ledger_row.amount),
+        }
+        for measurement, ledger_row in zip(rows, ledger, strict=True)
+    ]
+    out.total_amount = str(sum((Decimal(str(row.amount)) for row in ledger), Decimal(0)))
+    return out
 
 
 @router.get("/statements/{statement_id}/print", response_model=StorageStatementOut)
@@ -127,4 +152,19 @@ async def print_statement(
             raise StorageStatementError("not_found")
     except StorageStatementError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return _statement_out(statement, rows)
+    out = _statement_out(statement, rows)
+    ledger = await get_storage_ledger_rows(session, user.tenant_id, statement.id)
+    out.measurements = [
+        {
+            "product_id": measurement.product_id,
+            "liter_days": str(measurement.liter_days),
+            "source_type": ledger_row.source_type,
+            "service_code": ledger_row.service_code,
+            "unit": ledger_row.unit,
+            "rate_snapshot": str(ledger_row.rate_snapshot),
+            "amount": str(ledger_row.amount),
+        }
+        for measurement, ledger_row in zip(rows, ledger, strict=True)
+    ]
+    out.total_amount = str(sum((Decimal(str(row.amount)) for row in ledger), Decimal(0)))
+    return out

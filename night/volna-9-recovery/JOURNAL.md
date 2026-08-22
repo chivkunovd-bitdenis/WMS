@@ -51,3 +51,5 @@
 19:16   08-storage · backend-dev: готово
 19:16   08-storage · dev: фича 5/8 сохранена 23edcc03731b
 19:20   08-storage · backend-dev: готово
+19:20   08-storage · dev: фича 6/8 сохранена 2716074bee49
+19:22   08-storage · backend-dev: готово

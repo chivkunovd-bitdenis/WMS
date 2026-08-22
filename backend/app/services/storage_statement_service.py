@@ -60,25 +60,49 @@ async def fix_storage_statement(
         raise StorageStatementError("missing_dimensions")
 
     BillingTariffVersion, BillingLedgerEntry = _billing_models()
+    # A tariff is a month-level snapshot.  Prefer a seller-specific version;
+    # only fall back to the warehouse default when no specific version exists.
     tariff = await session.scalar(
         select(BillingTariffVersion)
         .where(BillingTariffVersion.tenant_id == tenant_id)
         .where(BillingTariffVersion.warehouse_id == statement.warehouse_id)
         .where(BillingTariffVersion.service_code == "storage_liter_day")
         .where(BillingTariffVersion.unit == "liter_day")
-        .where(BillingTariffVersion.effective_from <= statement.period_end)
+        .where(BillingTariffVersion.effective_from <= statement.period_start)
         .where(
             or_(
                 BillingTariffVersion.seller_id.is_(None),
                 BillingTariffVersion.seller_id == statement.seller_id,
             )
         )
-        .order_by(BillingTariffVersion.effective_from.desc())
+        .order_by(
+            BillingTariffVersion.seller_id.is_not(None).desc(),
+            BillingTariffVersion.effective_from.desc(),
+            BillingTariffVersion.id.desc(),
+        )
     )
     if tariff is None:
         raise StorageStatementError("tariff_not_found")
 
+    measurement_ids = {measurement.id for measurement in measurements}
+    existing_rows = list(
+        (
+            await session.scalars(
+                select(BillingLedgerEntry).where(
+                    BillingLedgerEntry.tenant_id == tenant_id,
+                    BillingLedgerEntry.source_type == "storage_measurement",
+                    BillingLedgerEntry.service_code == "storage_liter_day",
+                    BillingLedgerEntry.source_id.in_(measurement_ids)
+                    if measurement_ids
+                    else False,
+                )
+            )
+        ).all()
+    )
+    existing_ids = {row.source_id for row in existing_rows}
     for measurement in measurements:
+        if measurement.id in existing_ids:
+            continue
         session.add(
             BillingLedgerEntry(
                 tenant_id=tenant_id,
@@ -90,6 +114,22 @@ async def fix_storage_statement(
                 quantity=measurement.liter_days,
                 rate_snapshot=tariff.rate,
                 amount=Decimal(measurement.liter_days) * Decimal(tariff.rate),
+                occurred_at=datetime.now(UTC),
+            )
+        )
+    if not measurements and not existing_rows:
+        # A zero statement still has one auditable ledger publication.
+        session.add(
+            BillingLedgerEntry(
+                tenant_id=tenant_id,
+                seller_id=statement.seller_id,
+                service_code="storage_liter_day",
+                unit="liter_day",
+                source_type="storage_measurement",
+                source_id=None,
+                quantity=Decimal(0),
+                rate_snapshot=tariff.rate,
+                amount=Decimal(0),
                 occurred_at=datetime.now(UTC),
             )
         )
@@ -121,19 +161,67 @@ async def get_fixed_storage_statement(
     )
     if statement is None:
         raise StorageStatementError("not_found")
-    # Measurements are immutable input, but a fixed document is reconstructed
-    # from its ledger rows so a later rebuild can never change the printout.
+    # Reconstruct only this document's source measurements.  A seller may have
+    # several fixed months, so a broad seller ledger query is incorrect.
     _, BillingLedgerEntry = _billing_models()
+    measurements = list(
+        (
+            await session.scalars(
+                select(StorageMeasurement)
+                .where(StorageMeasurement.tenant_id == tenant_id)
+                .where(StorageMeasurement.seller_id == statement.seller_id)
+                .where(StorageMeasurement.warehouse_id == statement.warehouse_id)
+                .where(StorageMeasurement.period_start == statement.period_start)
+                .where(StorageMeasurement.period_end == statement.period_end)
+                .order_by(StorageMeasurement.id)
+            )
+        ).all()
+    )
+    measurement_ids = {row.id for row in measurements}
     ledger_rows = list((await session.scalars(select(BillingLedgerEntry).where(
         BillingLedgerEntry.tenant_id == tenant_id,
         BillingLedgerEntry.seller_id == statement.seller_id,
         BillingLedgerEntry.source_type == "storage_measurement",
         BillingLedgerEntry.service_code == "storage_liter_day",
-        BillingLedgerEntry.source_id.is_not(None),
+        BillingLedgerEntry.source_id.in_(measurement_ids) if measurement_ids else False,
     ).order_by(BillingLedgerEntry.id))).all())
-    ids = [row.source_id for row in ledger_rows]
-    rows = list((await session.scalars(select(StorageMeasurement).where(
+    by_id = {row.id: row for row in measurements}
+    return statement, [by_id[row.source_id] for row in ledger_rows if row.source_id in by_id]
+
+
+async def get_storage_ledger_rows(
+    session: AsyncSession, tenant_id: uuid.UUID, statement_id: uuid.UUID
+) -> list[object]:
+    """Return the immutable ledger snapshot belonging to one fixed statement."""
+    statement = await session.scalar(
+        select(StorageStatement).where(
+            StorageStatement.id == statement_id,
+            StorageStatement.tenant_id == tenant_id,
+            StorageStatement.status == "fixed",
+        )
+    )
+    if statement is None:
+        raise StorageStatementError("not_found")
+    _, BillingLedgerEntry = _billing_models()
+    measurements = list((await session.scalars(select(StorageMeasurement.id).where(
         StorageMeasurement.tenant_id == tenant_id,
-        StorageMeasurement.id.in_(ids) if ids else False,
-    ).order_by(StorageMeasurement.id))).all())
-    return statement, rows
+        StorageMeasurement.seller_id == statement.seller_id,
+        StorageMeasurement.warehouse_id == statement.warehouse_id,
+        StorageMeasurement.period_start == statement.period_start,
+        StorageMeasurement.period_end == statement.period_end,
+    ))).all())
+    if not measurements:
+        return list((await session.scalars(select(BillingLedgerEntry).where(
+            BillingLedgerEntry.tenant_id == tenant_id,
+            BillingLedgerEntry.seller_id == statement.seller_id,
+            BillingLedgerEntry.source_type == "storage_measurement",
+            BillingLedgerEntry.service_code == "storage_liter_day",
+            BillingLedgerEntry.source_id.is_(None),
+        ))).all())
+    return list((await session.scalars(select(BillingLedgerEntry).where(
+        BillingLedgerEntry.tenant_id == tenant_id,
+        BillingLedgerEntry.seller_id == statement.seller_id,
+        BillingLedgerEntry.source_type == "storage_measurement",
+        BillingLedgerEntry.service_code == "storage_liter_day",
+        BillingLedgerEntry.source_id.in_(measurements),
+    ).order_by(BillingLedgerEntry.id))).all())
