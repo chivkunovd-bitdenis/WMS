@@ -60,6 +60,8 @@ from app.models.seller_wildberries_imported_card import SellerWildberriesImporte
 from app.models.seller_wildberries_imported_supply import SellerWildberriesImportedSupply
 from app.models.stock_direction import StockDirection, StockMonthlySnapshot
 from app.models.storage_location import StorageLocation
+from app.models.storage_measurement import StorageMeasurement
+from app.models.storage_statement import StorageStatement
 from app.models.tenant import Tenant
 from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
 from app.models.user import User
@@ -131,6 +133,8 @@ __all__ = [
     "StockDirection",
     "StockMonthlySnapshot",
     "StorageLocation",
+    "StorageMeasurement",
+    "StorageStatement",
     "Tenant",
     "TenantWbMpWarehouse",
     "User",
