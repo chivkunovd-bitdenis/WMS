@@ -18,11 +18,13 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 import night as n  # noqa: E402
 
 ОЖИДАЕМЫЕ_ЦЕПОЧКИ = {
-                    "баг": ["tester", "dev", "reviewer", "ui-critic", "clicker", "ux-judge"],
-                    "фича": ["ux-architect", "product", "tester", "breaker", "dev", "reviewer",
-                             "ui-critic", "clicker", "ux-judge"],
-                    "домен": ["solution-architect", "ux-architect", "product", "tester", "breaker",
-                              "dev", "reviewer", "ui-critic", "clicker", "ux-judge"],
+                    "баг": ["tester", "splitter", "dev", "reviewer", "ui-critic",
+                            "clicker", "ux-judge"],
+                    "фича": ["ux-architect", "product", "tester", "breaker", "splitter",
+                             "dev", "reviewer", "ui-critic", "clicker", "ux-judge"],
+                    "домен": ["solution-architect", "ux-architect", "product", "tester",
+                              "breaker", "splitter", "dev", "reviewer", "ui-critic",
+                              "clicker", "ux-judge"],
                     "блокировки": ["blocker-collector", "blocker-skeptic"],
                 }
 
@@ -172,6 +174,9 @@ def fake_e2e_smoke(проверь) -> None:
             elif role == "reviewer":
                 (folder / "REVIEW.md").write_text(
                     "ВЕРДИКТ: ЧИСТО\n\n## Находки\nнет\n", encoding="utf-8")
+            elif role == "splitter":
+                (folder / "FEATURES.md").write_text(
+                    "ФИЧ: 1\n\n## Фичи\n1. smoke\n\n## Порядок\n1\n", encoding="utf-8")
             elif role == "ui-critic":
                 (folder / "DESIGN-REVIEW.md").write_text(
                     "ВЕРДИКТ: ЧИСТО\n\n## Находки\nнет\n", encoding="utf-8")

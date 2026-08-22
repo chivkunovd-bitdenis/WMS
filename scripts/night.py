@@ -49,6 +49,7 @@ from pathlib import Path
     "screen-dev":         ("DEV.md",           ["Изменённые файлы", "Гейты"]),
     "backend-dev":        ("DEV.md",           ["Изменённые файлы", "Гейты"]),
     "arch-critic":        (None,               []),
+    "splitter":           ("FEATURES.md",      ["Фичи", "Порядок"]),
     "product":            ("RESHENIYA.md",     ["Решения", "Открытых вопросов не осталось"]),
     "reviewer":           ("REVIEW.md",        ["Находки"]),
     "clicker":            ("CLICKS.md",        ["Пройденные кейсы", "Не прошло"]),
@@ -82,6 +83,7 @@ from pathlib import Path
     # что уже написано.
     "screen-dev":         [("CONTRACT.md",), ("RAZBOR.md", "CASES.md")],
     "backend-dev":        [("CONTRACT.md",), ("RAZBOR.md", "CASES.md")],
+    "splitter":           [("CONTRACT.md",), ("RAZBOR.md", "CASES.md")],
     "reviewer":           [("DEV.md",)],
     "ui-critic":          [("DEV.md",)],
     "clicker":            [("CASES.md", "DEV.md")],
@@ -93,11 +95,11 @@ from pathlib import Path
 # Пути по типам задач. Порядок продиктован тем, что роли требуют на входе, а не вкусом:
 # критик исполнения смотрит уже написанный код, поэтому стоит после разработки и ревью.
 ЦЕПОЧКИ = {
-    "баг":   ["tester", "dev", "reviewer", "ui-critic", "clicker", "ux-judge"],
-    "фича":  ["ux-architect", "product", "tester", "breaker", "dev", "reviewer",
+    "баг":   ["tester", "splitter", "dev", "reviewer", "ui-critic", "clicker", "ux-judge"],
+    "фича":  ["ux-architect", "product", "tester", "breaker", "splitter", "dev", "reviewer",
               "ui-critic", "clicker", "ux-judge"],
     "домен": ["solution-architect", "ux-architect", "product", "tester", "breaker",
-              "dev", "reviewer", "ui-critic", "clicker", "ux-judge"],
+              "splitter", "dev", "reviewer", "ui-critic", "clicker", "ux-judge"],
     # Разовый проход сборки реестра блокировок. Ничего не правит — только читает код
     # и пишет документы, поэтому им же безопасно обкатать сам оркестратор.
     "блокировки": ["blocker-collector", "blocker-skeptic"],
@@ -667,7 +669,10 @@ def стенд_для(роль: str, ид: str, рабочая: РабочаяК
 # другого класса: надо понять чужой разбор и не сломать соседнее. Луна на ней буксует,
 # и три карточки подряд легли на «круги кончились», не пройдя ни одной правки. Поэтому
 # первый заход остаётся дешёвым, а каждая переделка идёт на модель выше.
-МОДЕЛЬ_ПЕРЕДЕЛКИ = {"screen-dev": "sonnet", "backend-dev": "sonnet"}
+# Разработчик остаётся дешёвым и на переделке — по решению владельца. Настоящая причина
+# провалов не в модели, а в том, что ей отдавали целый раздел одним куском: контракт на
+# четыреста строк на один вызов. Лечится нарезкой на мелкие фичи, а не дорогой моделью.
+МОДЕЛЬ_ПЕРЕДЕЛКИ: dict[str, str] = {}
 
 
 def шаг(*args, круг: int = 0, **kwargs):
@@ -675,6 +680,16 @@ def шаг(*args, круг: int = 0, **kwargs):
     if круг > 0 and args[1] in МОДЕЛЬ_ПЕРЕДЕЛКИ:
         kwargs["модель"] = МОДЕЛЬ_ПЕРЕДЕЛКИ[args[1]]
     return _шаг(*args, **kwargs)
+
+
+def фичи(папка: Path) -> list[str]:
+    """Названия кусков из FEATURES.md. Пусто — значит карточка не резалась."""
+    ф = папка / "FEATURES.md"
+    if not ф.exists():
+        return []
+    имена = re.findall(r"^\s*(?:###\s*)?(\d+)[.)]\s+(.{5,120})$",
+                       ф.read_text(encoding="utf-8", errors="replace"), re.M)
+    return [f"{н}. {и.strip()}" for н, и in имена]
 
 
 def _шаг(ид: str, роль: str, папка: Path, волна: Path,
