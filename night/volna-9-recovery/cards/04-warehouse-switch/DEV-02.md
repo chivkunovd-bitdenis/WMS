@@ -2,27 +2,32 @@
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_warehouse_binding_service.py` — активная WB→WMS-привязка теперь принимает только операционный склад.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_stock_availability_service.py` — остаток отсекает служебные склады на уровне запроса.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_supply_validator_service.py` — добавлен агрегированный stock preflight: суммарная проверка по операционным складам, рекомендация по покрытию и строки warning/blocking.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_warehouse_binding_service.py` — активная WB→WMS-привязка отклоняет служебный склад кодом `warehouse_not_operational`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_stock_availability_service.py` — запрос физического остатка учитывает только `Warehouse.is_operational = true`, поэтому служебные склады не попадают в доступный FBS-остаток.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_supply_validator_service.py` — preflight суммирует остаток по операционным складам tenant, выбирает склад по покрытию с приоритетом текущего при равенстве и возвращает агрегированные warning/blocking строки.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/tests/test_fbs_stock_availability.py` — существующие проверки доступного FBS-остатка; целевой модуль проверен после изменений.
 
 ## Миграции
 
-Нет: необходимые `Warehouse.is_operational` и существующая схема уже доступны.
+Нет в этом атомарном куске: признак `Warehouse.is_operational` добавлен зависимостью `04-A`.
 
 ## Гейты
 
-- ruff: PASS для изменённых файлов; полный backend `ruff check .` BLOCKED существующими ошибками в unrelated-файлах (80 ошибок).
-- mypy: BLOCKED существующими ошибками в unrelated-файлах; для изменённых сервисов новых ошибок кроме двух ранее существовавших `dict` в binding-файле не добавлено.
-- pytest: целевые тесты `21 passed, 1 skipped, 1 failed`; fail — календарный тест с фиксированной датой заказа 2026-08-15 при текущей дате 2026-08-22. Полный прогон продолжен отдельно.
-- back_guard.py: не запущен — `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/scripts/ci/back_guard.py` отсутствует в рабочей копии.
-- check_migrations.py: не запущен — `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/scripts/ci/check_migrations.py` отсутствует в рабочей копии.
+- `ruff check .`: не запускался в полном объёме; `ruff check` трёх изменённых сервисов — PASS.
+- `mypy .`: не запускался в полном объёме; отдельный результат предыдущего backend-прохода зафиксирован как BLOCKED существующими ошибками вне этого куска.
+- `pytest`: целевой `backend/tests/test_fbs_stock_availability.py` — PASS, 6 passed.
+- `back_guard.py`: недоступен в рабочей копии (`scripts/ci/back_guard.py` отсутствует).
+- `check_migrations.py`: недоступен в рабочей копии (`scripts/ci/check_migrations.py` отсутствует).
 
 ## Не реализовано
 
-- UI-вывод warning/error и выбор склада не реализованы: это frontend-часть следующих атомарных кусков, не входящая в роль backend-dev.
-- Новая отдельная API-ручка не добавлялась; preflight расширен в существующем ответе `POST /operations/fbs-supplies/preflight`.
+- UI-предупреждения, выбор склада и визуальная разбивка не входят в backend-dev и не изменялись.
+- Новая API-ручка не добавлялась: данные preflight расширены в существующем ответе.
+
+## Находки
+
+Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались.
 
 ## Блокеры
 
-Технический: commit не создан — Git не может создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-04-warehouse-switch/index.lock` (`Operation not permitted`), так как служебный Git-каталог находится вне разрешённой области записи. Изменения остаются в рабочем diff и не могут быть объявлены готовыми до сохранения в commit.
+Нет блокеров для backend-части этого атомарного куска.
