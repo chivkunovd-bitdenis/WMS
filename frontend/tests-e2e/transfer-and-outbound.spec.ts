@@ -102,11 +102,13 @@ test('stock transfer and outbound shipment — UI', async ({ page }) => {
   await page.getByTestId('transfer-to-loc').selectOption({ label: 'TO-01' });
   await page.getByTestId('transfer-product').selectOption({ label: `${sku} — Товар` });
   await page.getByTestId('transfer-qty').fill('3');
+  await expect(page.getByTestId('transfer-summary')).toContainText('FROM-01 → TO-01');
   const [trRes] = await Promise.all([
     waitForPostOk(page, '/api/operations/stock-transfers'),
     page.getByTestId('transfer-submit').click(),
   ]);
   expect(trRes.ok()).toBeTruthy();
+  await expect(page.getByTestId('transfer-operation-row')).toContainText('FROM-01 → TO-01');
 
   await page.goto('/app/ops/movements');
   await Promise.all([

@@ -14,6 +14,7 @@ import { Screen } from '../AppV2Screens'
 
 type LocationRow = { id: string; code: string; warehouse_id: string }
 type ProductRow = { id: string; name: string; sku_code: string }
+type TransferSummary = { quantity: number; product: string; from: string; to: string }
 
 type Props = {
   opsError: string | null
@@ -36,6 +37,7 @@ export function TransfersScreen({
   const [toLoc, setToLoc] = useState('')
   const [productId, setProductId] = useState('')
   const [quantity, setQuantity] = useState('')
+  const [lastTransfer, setLastTransfer] = useState<TransferSummary | null>(null)
 
   const fromLabel = useMemo(
     () => locations.find((loc) => loc.id === fromLoc)?.code ?? '',
@@ -83,6 +85,7 @@ export function TransfersScreen({
       event.preventDefault()
       return
     }
+    setLastTransfer({ quantity: quantityNumber, product: productLabel, from: fromLabel, to: toLabel })
     onStockTransfer(event)
   }
 
@@ -98,6 +101,11 @@ export function TransfersScreen({
       ) : (
         <Paper variant="outlined" sx={{ p: 2 }} data-testid="stock-transfer-section">
           <Stack spacing={2}>
+            {lastTransfer ? (
+              <Alert severity="success" data-testid="transfer-operation-row">
+                Перемещение: {lastTransfer.quantity} шт · {lastTransfer.product} · {lastTransfer.from} → {lastTransfer.to}
+              </Alert>
+            ) : null}
             <Typography variant="body2" color="text.secondary">
               Выберите товар, ячейку списания и ячейку назначения. Система проведёт расход из первой ячейки и приход во вторую.
             </Typography>
@@ -207,7 +215,7 @@ export function TransfersScreen({
               </Stack>
               {readyForSubmit ? (
                 <Alert severity="info" data-testid="transfer-summary">
-                  Переместить {quantityNumber} шт: {productLabel} · {fromLabel} → {toLabel}
+                  Перемещение: {quantityNumber} шт · {productLabel} · {fromLabel} → {toLabel}
                 </Alert>
               ) : null}
               <Button
