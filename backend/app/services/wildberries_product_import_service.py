@@ -282,11 +282,8 @@ async def upsert_products_from_wb_cards(
                             volume_liters=p.volume_liters,
                             container_basis=None,
                             fingerprint=_dimension_fingerprint(
-                                card_length_mm,
-                                card_width_mm,
-                                card_height_mm,
-                                p.weight_g,
-                                None,
+                                card_length_mm, card_width_mm, card_height_mm,
+                                p.weight_g, p.volume_liters, "wb", None,
                             ),
                             apply=True,
                         )
@@ -327,18 +324,20 @@ async def upsert_products_from_wb_cards(
                 and card_width_mm is not None
                 and card_height_mm is not None
             ):
-                p.volume_liters = volume_liters_from_mm(
+                wb_volume_liters = volume_liters_from_mm(
                     card_length_mm, card_width_mm, card_height_mm
                 )
                 await _record_dimension_event(
                     session, p, source="wb", author_user_id=None,
                     length_mm=card_length_mm, width_mm=card_width_mm, height_mm=card_height_mm,
-                    weight_g=p.weight_g, volume_liters=p.volume_liters, container_basis=None,
+                    weight_g=p.weight_g, volume_liters=wb_volume_liters, container_basis=None,
                     fingerprint=_dimension_fingerprint(
-                        card_length_mm, card_width_mm, card_height_mm, p.weight_g, None
-                    ), apply=p.dimensions_source not in {"manual", "container_override"},
+                        card_length_mm, card_width_mm, card_height_mm,
+                        p.weight_g, wb_volume_liters, "wb", None,
+                    ), apply=p.dimensions_source not in {"manual", "container"},
                 )
-                if p.dimensions_source not in {"manual", "container_override"}:
+                if p.dimensions_source not in {"manual", "container"}:
+                    p.volume_liters = wb_volume_liters
                     p.dimensions_source = "wb"
             # Same rule for country of origin / shelf life: WB card fills the gap,
             # never overwrites a value already present (e.g. entered by hand).

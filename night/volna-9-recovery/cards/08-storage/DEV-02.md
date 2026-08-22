@@ -1,36 +1,26 @@
+# DEV · 08-storage · backend-dev
+
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/models/product.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/models/product_dimension_event.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/models/__init__.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/alembic/versions/20260822_0095_product_dimension_events.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/api/products.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/catalog_service.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/wildberries_product_import_service.py`
 
-`Product` получил быстрый снимок действующего источника, времени и автора. Новая
-`ProductDimensionEvent` хранит источник, аудитора, время наблюдения, размеры, объём,
-основание объёма тары, fingerprint и признак действующей версии. Уникальные индексы
-защищают от дублей и оставляют ровно одну действующую версию на товар.
+Исправлена атомарная часть хранения версий габаритов: fingerprint учитывает источник и объём, WB-наблюдение больше не перезаписывает действующий ручной обмер или объём тары, ручной автор сохраняется при активации версии, сотрудники с правом `inventory` могут вносить обмер, а история товара проверяет принадлежность селлеру.
 
-## Миграции
-
-- `20260822_0095_product_dimension_events` — добавляет три поля действующего источника
-  в `products` и создаёт журнал `product_dimension_events` с FK, fingerprint-индексом и
-  частичным уникальным индексом действующей версии.
+Миграции: нет; миграция `20260822_0095_product_dimension_events.py` уже присутствует и не изменялась.
 
 ## Гейты
 
-- `ruff` — targeted checks новых файлов зелёные; полный `ruff check .` красный на 82
-  существующих нарушениях базовой линии.
-- `mypy` — красный: 21 существующая ошибка в 6 файлах; новых ошибок в изменённых моделях
-  не выявлено.
-- `pytest` — 32 passed, 63 ошибки и остановка полного запуска по таймауту/KeyboardInterrupt;
-  ошибки относятся к существующему тестовому контуру.
-- `back_guard.py` — не запущен: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/scripts/ci/back_guard.py` отсутствует.
-- `check_migrations.py` — не запущен: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/scripts/ci/check_migrations.py` отсутствует.
-- Metadata smoke test импорта моделей — зелёный.
+- ruff: целевые файлы прошли; полный `ruff check .` заблокирован 23 существующими ошибками в несвязанных файлах.
+- mypy: полный и целевой запуск заблокирован 5 существующими ошибками в несвязанных местах; новых ошибок в изменённых строках не выявлено.
+- pytest: `tests/test_wb_import_dimensions.py tests/test_catalog.py` — 9 passed.
+- back_guard.py: не запущен — `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/scripts/ci/back_guard.py` отсутствует в этой рабочей копии.
+- check_migrations.py: не запущен — `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/scripts/ci/check_migrations.py` отсутствует в этой рабочей копии.
 
 ## Не реализовано
 
-- Сервис записи, переключения действующей версии и API истории не реализованы: они
-  относятся к атомарным кускам 3–4 и намеренно не входят в этот backend-dev проход.
-- Изменение Wildberries-импорта не выполнялось: оно также относится к куску 3.
-- Найденные в рабочем дереве секреты, ключи, токены и `.env` не открывались.
+- Замечания ревью по расчёту хранения, биллингу, тарифам, печати и фронтенду не относятся к этому атомарному backend-слою и не изменялись.
+- `external_updated_at` не заполняется: текущий WB-клиент не передаёт дату обновления карточки; поле миграции сохранено для будущего значения.
+
+Блокеры: Git-коммит не создан: Git пытается создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-08-storage1/index.lock`, путь находится вне разрешённой рабочей копии и недоступен для записи. Изменения локальны и требуют сохранения/коммита владельцем или расширения прав.

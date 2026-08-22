@@ -753,7 +753,11 @@ async def patch_product_dimensions(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     elif user.role == FULFILLMENT_STAFF:
         perms = await get_staff_permissions(session, user)
-        if not (perms.has(PERM_RECEPTION) or perms.has(PERM_SHIFT_LEAD)):
+        if not (
+            perms.has(PERM_RECEPTION)
+            or perms.has(PERM_SHIFT_LEAD)
+            or perms.has(PERM_INVENTORY)
+        ):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     elif user.role != FULFILLMENT_ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
@@ -796,6 +800,15 @@ async def get_product_dimension_history(
 ) -> list[ProductDimensionEventOut]:
     await assert_inventory_read_access(session, user)
     try:
+        product = await get_product(session, user.tenant_id, product_id)
+        if product is None:
+            raise CatalogError("product_not_found")
+        if user.role == FULFILLMENT_SELLER:
+            owner_id = user.seller_id
+            if user_can_manage_seller_shops(user):
+                owner_id = user.seller_id
+            if owner_id is None or product.seller_id != owner_id:
+                raise CatalogError("product_not_found")
         events = await list_product_dimension_events(session, user.tenant_id, product_id)
     except CatalogError as exc:
         raise HTTPException(status_code=404, detail=exc.code) from None

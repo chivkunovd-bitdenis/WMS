@@ -4,6 +4,7 @@ import hashlib
 import json
 import uuid
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from sqlalchemy import String, cast, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
@@ -704,7 +705,9 @@ async def update_product_dimensions(
         session, p, source=source, author_user_id=author_user_id,
         length_mm=dim_l, width_mm=dim_w, height_mm=dim_h, weight_g=p.weight_g,
         volume_liters=p.volume_liters, container_basis=container_basis,
-        fingerprint=_dimension_fingerprint(dim_l, dim_w, dim_h, p.weight_g, container_basis),
+        fingerprint=_dimension_fingerprint(
+            dim_l, dim_w, dim_h, p.weight_g, p.volume_liters, source, container_basis
+        ),
         apply=True,
     )
     if commit:
@@ -738,7 +741,9 @@ async def update_product_container_volume(
         session, p, source="container", author_user_id=author_user_id,
         length_mm=None, width_mm=None, height_mm=None, weight_g=p.weight_g,
         volume_liters=volume_liters, container_basis=container_basis.strip(),
-        fingerprint=_dimension_fingerprint(None, None, None, p.weight_g, container_basis.strip()),
+        fingerprint=_dimension_fingerprint(
+            None, None, None, p.weight_g, volume_liters, "container", container_basis.strip()
+        ),
         apply=True,
     )
     await session.commit()
@@ -760,9 +765,16 @@ async def list_product_dimension_events(
     return list(result.scalars().all())
 
 
-def _dimension_fingerprint(length_mm: int | None, width_mm: int | None, height_mm: int | None,
-                           weight_g: int | None, container_basis: str | None) -> str:
-    payload = [length_mm, width_mm, height_mm, weight_g, container_basis]
+def _dimension_fingerprint(
+    length_mm: int | None,
+    width_mm: int | None,
+    height_mm: int | None,
+    weight_g: int | None,
+    volume_liters: float | Decimal | None,
+    source: str,
+    container_basis: str | None,
+) -> str:
+    payload = [length_mm, width_mm, height_mm, weight_g, volume_liters, source, container_basis]
     encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()
 
@@ -794,6 +806,7 @@ async def _record_dimension_event(session: AsyncSession, product: Product, *, so
             ProductDimensionEvent.product_id == product.id
         ).values(applied=False))
         event.applied = True
+        event.author_user_id = author_user_id
     return event
 
 
@@ -819,7 +832,10 @@ async def restore_latest_wb_dimensions(session: AsyncSession, tenant_id: uuid.UU
         session, p, source="wb", author_user_id=None, length_mm=p.length_mm,
         width_mm=p.width_mm, height_mm=p.height_mm, weight_g=p.weight_g,
         volume_liters=p.volume_liters, container_basis=event.container_basis,
-        fingerprint=event.fingerprint, apply=True,
+        fingerprint=_dimension_fingerprint(
+            p.length_mm, p.width_mm, p.height_mm, p.weight_g, p.volume_liters,
+            "wb", event.container_basis
+        ), apply=True,
     )
     await session.commit()
     await session.refresh(p)
