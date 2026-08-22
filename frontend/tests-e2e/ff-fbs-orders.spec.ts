@@ -411,6 +411,54 @@ test('fbs orders: select all includes every cursor page', async ({ page }) => {
   await expect(page.getByTestId('fbs-order-100')).toBeVisible()
 })
 
+// S-03-TC-003 / S-03-TC-010 — an in-flight select-all traversal from the old filter is discarded.
+test('fbs orders: changing warehouse discards an in-flight select all', async ({ page }) => {
+  await registerFf(page, 'pagination-select-all-filter-race')
+  const warehouseOptions = [
+    { id: '501001', name: 'WB Подольск', wb_warehouse: { id: 501001, name: 'WB Подольск' } },
+    { id: '501002', name: 'WB Казань', wb_warehouse: { id: 501002, name: 'WB Казань' } },
+  ]
+  let releaseOldTraversal: (() => void) | null = null
+  const oldTraversalReleased = new Promise<void>((resolve) => {
+    releaseOldTraversal = resolve
+  })
+
+  await page.route('**/operations/fbs-orders/worklist**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    const params = new URL(route.request().url()).searchParams
+    if (params.get('cursor') === 'old-page-2') {
+      await oldTraversalReleased
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(worklist([order('old-select-all')], warehouseOptions)),
+      })
+    }
+    const filtered = params.get('wb_warehouse_id') === '501002'
+    const body = filtered
+      ? worklist([order('new-filter')], warehouseOptions)
+      : worklist([order('old-first')], warehouseOptions, 'old-page-2')
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  })
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await expect(page.getByTestId('fbs-order-old-first')).toBeVisible()
+  await Promise.all([
+    page.waitForRequest((request) => new URL(request.url()).searchParams.get('cursor') === 'old-page-2'),
+    page.getByTestId('fbs-worklist-table').locator('thead input[type="checkbox"]').check(),
+  ])
+
+  await page.getByRole('combobox', { name: 'Склад селлера / WB' }).click()
+  await page.getByRole('option', { name: 'WB Казань' }).click()
+  await expect(page.getByTestId('fbs-order-new-filter')).toBeVisible()
+  releaseOldTraversal?.()
+
+  await expect(page.getByTestId('fbs-order-old-select-all')).toHaveCount(0)
+  await expect(page.getByTestId('fbs-order-old-first')).toHaveCount(0)
+  await expect(page.getByTestId('fbs-order-new-filter').getByRole('checkbox')).not.toBeChecked()
+  await expect(page.getByTestId('fbs-selection-bar')).toHaveCount(0)
+})
+
 // TC-FBS-FE-002 — seller_id передаётся в canonical worklist и меняет строки ответа.
 test('fbs orders: filter by seller', async ({ page }) => {
   await registerFf(page, 'seller')

@@ -871,6 +871,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
 
   const toggleVisibleSelectable = async (checked: boolean) => {
     if (checked && statusGroup === 'new' && nextCursor) {
+      const requestId = loadRequestRef.current
+      const queryKey = worklistQueryKeyRef.current
       let cursor: string | null = nextCursor
       const pages: FbsWorklistOrder[] = []
       try {
@@ -882,6 +884,10 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
             limit: NEW_ORDERS_PAGE_LIMIT,
             cursor,
           })
+          // «Выбрать все» обходит все курсоры асинхронно. Если за это время
+          // оператор сменил вкладку, селлера или WB-склад, страницы прежнего
+          // фильтра нельзя добавлять в новую выдачу и её выбор.
+          if (requestId !== loadRequestRef.current || queryKey !== worklistQueryKeyRef.current) return
           pages.push(...page.items)
           cursor = page.next_cursor
         }
@@ -890,6 +896,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         setNextCursor(null)
         setSelected((current) => new Set([...current, ...orders.filter((order) => order.selection_blockers.length === 0).map((order) => order.id), ...pages.filter((order) => order.selection_blockers.length === 0).map((order) => order.id)]))
       } catch (cause) {
+        if (requestId !== loadRequestRef.current || queryKey !== worklistQueryKeyRef.current) return
         setError(cause instanceof Error ? cause.message : 'Не удалось выбрать все заказы.')
       }
       return
