@@ -532,7 +532,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   }, [])
   const goToStockSync = useCallback(() => navigate('/app/ff/fbs/stock-sync'), [navigate])
   const openedSupplyFromQuery = useRef<string | null>(null)
-  const loadingRef = useRef(false)
+  const abortControllerRef = useRef<AbortController | null>(null)
   // Плавающая панель выбора (fbs-selection-bar) прибита к низу вьюпорта и накрывает
   // собой последние строки таблицы — оператор кликал по чекбоксу второго заказа и
   // попадал в панель (см. tests-e2e/ff-fbs-orders.spec.ts:277). Меряем реальную высоту
@@ -579,10 +579,12 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       setBusy(false)
       return
     }
-    // Задача 9 пула (HANDOFF-POLISH.md): поллинг не должен наслаиваться сам на себя —
-    // если предыдущий запрос ещё летит, новый тик пропускаем.
-    if (loadingRef.current) return
-    loadingRef.current = true
+    // Прерываем предыдущий запрос и стартуем новый немедленно. Так смена склада
+    // не ждёт завершения предыдущего тика и не оставляет «слепое пятно».
+    abortControllerRef.current?.abort()
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+    const { signal } = controller
     setBusy(true)
     setError(null)
     try {
@@ -595,11 +597,13 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
           warehouse_id: wmsWarehouseId,
           status_group: statusGroup,
           limit: 500,
+          signal,
         }
         const orderParams = {
           seller_id: sellerId === '__all__' ? null : sellerId,
           status_group: statusGroup,
           limit: 500,
+          signal,
         }
         const [suppliesPage, ordersPage] = await Promise.all([
           fetchFbsSupplyWorklist(token, authHeaders, supplyParams),
@@ -617,6 +621,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         status_group: statusGroup,
         wb_warehouse_id: statusGroup === 'new' && wbWarehouseId !== '__all__' ? wbWarehouseId : null,
         limit: statusGroup === 'new' ? NEW_ORDERS_PAGE_LIMIT : 500,
+        signal,
       }
       const firstPage = await fetchFbsWorklist(token, authHeaders, params)
       // API worklist пока не принимает WMS-склад отдельным параметром. Чтобы контекст
@@ -649,10 +654,16 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       setServerNow(page.server_now)
       setLastLoadedAt(new Date().toISOString())
     } catch (cause) {
+      // AbortError означает, что запрос прерван сменой склада или новым тиком поллинга —
+      // это штатное поведение, не пишем в state.
+      if (cause instanceof DOMException && cause.name === 'AbortError') return
       setError(cause instanceof Error ? cause.message : 'Не удалось загрузить заказы FBS.')
     } finally {
-      setBusy(false)
-      loadingRef.current = false
+      // Снимаем индикатор только если этот экземпляр load() — последний запущенный;
+      // иначе параллельно стартовавший новый load() уже выставил busy=true.
+      if (abortControllerRef.current === controller) {
+        setBusy(false)
+      }
     }
   }, [token, authHeaders, sellerId, statusGroup, wbWarehouseId, wmsWarehouseId])
 
@@ -662,8 +673,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
 
   // Задача 9 пула (HANDOFF-POLISH.md): список раньше не обновлялся сам никогда. Поллинг
   // активной вкладки каждые 30 секунд; останавливается, когда вкладка браузера скрыта —
-  // обновлять то, что оператор не видит, незачем. loadingRef внутри load() не даёт
-  // соседним тикам наслоиться друг на друга.
+  // обновлять то, что оператор не видит, незачем. AbortController внутри load() прерывает
+  // предыдущий запрос и стартует новый, не позволяя тикам наслаиваться или блокировать смену склада.
   useEffect(() => {
     const intervalId = window.setInterval(() => {
       if (document.hidden) return

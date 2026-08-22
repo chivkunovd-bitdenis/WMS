@@ -584,6 +584,7 @@ export async function fetchFbsWorklist(
     search?: string | null
     limit?: number
     cursor?: string | null
+    signal?: AbortSignal
   } = {},
 ): Promise<FbsWorklistPage> {
   const qs = new URLSearchParams({ limit: String(params.limit ?? 100) })
@@ -595,6 +596,7 @@ export async function fetchFbsWorklist(
   return jsonOrThrow<FbsWorklistPage>(
     await fetch(apiUrl(`/operations/fbs-orders/worklist?${qs.toString()}`), {
       headers: { ...ah(token) },
+      ...(params.signal !== undefined ? { signal: params.signal } : {}),
     }),
   )
 }
@@ -635,6 +637,7 @@ export async function fetchFbsSupplyWorklist(
     warehouse_id?: string | null
     status_group?: string | null
     limit?: number
+    signal?: AbortSignal
   } = {},
 ): Promise<FbsSupplyWorklistPage> {
   const qs = new URLSearchParams({ limit: String(params.limit ?? 100) })
@@ -644,6 +647,7 @@ export async function fetchFbsSupplyWorklist(
   return jsonOrThrow<FbsSupplyWorklistPage>(
     await fetch(apiUrl(`/operations/fbs-supplies/worklist?${qs.toString()}`), {
       headers: { ...ah(token) },
+      ...(params.signal !== undefined ? { signal: params.signal } : {}),
     }),
   )
 }

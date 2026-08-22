@@ -152,6 +152,67 @@ describe('FBS API client', () => {
     )
   })
 
+  it('passes AbortSignal to the underlying fetch in fetchFbsWorklist', async () => {
+    const controller = new AbortController()
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ items: [], server_now: '2026-08-22T00:00:00Z', next_cursor: null }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await fetchFbsWorklist('token', authHeaders, {
+      seller_id: 'seller-1',
+      status_group: 'new',
+      signal: controller.signal,
+    })
+
+    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(options.signal).toBe(controller.signal)
+  })
+
+  it('passes AbortSignal to the underlying fetch in fetchFbsSupplyWorklist', async () => {
+    const controller = new AbortController()
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ items: [], server_now: '2026-08-22T00:00:00Z' }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await fetchFbsSupplyWorklist('token', authHeaders, {
+      warehouse_id: 'wh-south',
+      status_group: 'active',
+      signal: controller.signal,
+    })
+
+    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(options.signal).toBe(controller.signal)
+  })
+
+  it('rejects with DOMException AbortError when the signal fires before fetch resolves', async () => {
+    const controller = new AbortController()
+    // Mock that honours AbortSignal — simulates a slow in-flight request that listens to abort
+    const fetchMock = vi.fn().mockImplementation((_url: string, options: RequestInit) =>
+      new Promise<Response>((_, reject) => {
+        options.signal?.addEventListener('abort', () => {
+          reject(new DOMException('The operation was aborted.', 'AbortError'))
+        })
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const pending = fetchFbsWorklist('token', authHeaders, {
+      seller_id: 'seller-1',
+      signal: controller.signal,
+    })
+    controller.abort()
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
   it('calls delete cargo-places with wb ids and idempotency key', async () => {
     const cargoPlaces = [{ id: 'place-1', wb_trbx_id: 'MOCK-TRBX-1', qr_asset: null }]
     const fetchMock = vi.fn().mockResolvedValue(
