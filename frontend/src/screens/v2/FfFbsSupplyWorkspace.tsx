@@ -316,6 +316,7 @@ export function FfFbsSupplyWorkspace({
   const [kizScanDebugOpen, setKizScanDebugOpen] = useState(false)
   const [kizConfirmTarget, setKizConfirmTarget] = useState<FbsKizLookup | null>(null)
   const kizScanInputRef = useRef<HTMLInputElement | null>(null)
+  const workspaceMutationEpochRef = useRef(0)
   const [addOrdersOpen, setAddOrdersOpen] = useState(false)
   const [addableOrders, setAddableOrders] = useState<FbsWorklistOrder[]>([])
   const [addableSelected, setAddableSelected] = useState<Set<string>>(() => new Set())
@@ -324,13 +325,14 @@ export function FfFbsSupplyWorkspace({
   const [skipHonestSignOpen, setSkipHonestSignOpen] = useState(false)
   const [skipHonestSignBusy, setSkipHonestSignBusy] = useState(false)
   const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
-
   const load = useCallback(
     async (silent = false) => {
       if (!supplyId) return
+      const mutationEpoch = workspaceMutationEpochRef.current
       if (!silent) setBusy(true)
       try {
         const next = await fetchFbsWorkspace(token, authHeaders, supplyId)
+        if (mutationEpoch !== workspaceMutationEpochRef.current) return
         setWorkspace(next)
         if (!silent) setStage(visualStage(next.stage))
       } catch (cause) {
@@ -341,9 +343,9 @@ export function FfFbsSupplyWorkspace({
     },
     [supplyId, token, authHeaders],
   )
-
   useEffect(() => {
     if (!open || !supplyId) return
+    workspaceMutationEpochRef.current += 1
     setError(null)
     setNotice(null)
     setWorkspace(initialWorkspace ?? null)
@@ -374,7 +376,6 @@ export function FfFbsSupplyWorkspace({
     setKizConfirmTarget(null)
     if (!initialWorkspace) void load()
   }, [open, supplyId, initialWorkspace, load])
-
   useEffect(() => {
     setNotice(null)
   }, [workspace?.stage])
@@ -382,7 +383,6 @@ export function FfFbsSupplyWorkspace({
   useEffect(() => {
     setPlannedShipmentDateDraft(workspace?.supply.planned_shipment_date ?? '')
   }, [workspace?.supply.planned_shipment_date])
-
   useEffect(() => {
     if (!open || !supplyId || !['picking', 'boxes'].includes(stage)) return
     const timer = window.setInterval(() => {
@@ -390,7 +390,6 @@ export function FfFbsSupplyWorkspace({
     }, 15_000)
     return () => window.clearInterval(timer)
   }, [open, supplyId, stage, load])
-
   useEffect(() => {
     const taskId = workspace?.supply.packaging_task_id
     if (!open || stage !== 'packing' || !taskId) {
@@ -412,14 +411,15 @@ export function FfFbsSupplyWorkspace({
       active = false
     }
   }, [open, stage, workspace?.supply.packaging_task_id, workspace?.orders.length, token, authHeaders])
-
   const run = async (operation: () => Promise<FbsWorkspace>, success: string) => {
+    workspaceMutationEpochRef.current += 1
     setBusy(true)
     setError(null)
     setNotice(null)
     setRetryAction(null)
     try {
       const next = await operation()
+      workspaceMutationEpochRef.current += 1
       setWorkspace(next)
       setStage(visualStage(next.stage))
       if (success) setNotice(success)

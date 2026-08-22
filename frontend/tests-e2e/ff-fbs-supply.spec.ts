@@ -451,13 +451,16 @@ test('fbs workspace: boxes without distribution follows assigned orders', async 
   await expect(page.getByTestId('fbs-boxes-without-distribution')).toBeEnabled()
 })
 
-// S-03-TC-001/S-03-TC-003 — a background workspace refresh keeps the checkbox
-// and header aligned when another operator changes the durable supply mode.
-test('fbs workspace: boxes without distribution follows background refresh', async ({ page }) => {
+// S-03-TC-001/S-03-TC-003 — a stale background workspace response must not undo
+// a newer successful mode change made by the operator.
+test('fbs workspace: boxes without distribution ignores stale background refresh after toggle', async ({ page }) => {
   await page.addInitScript(() => {
     const nativeSetInterval = window.setInterval.bind(window)
+    const nativeSetTimeout = window.setTimeout.bind(window)
     window.setInterval = ((handler: TimerHandler, timeout?: number) => (
-      nativeSetInterval(handler, timeout === 15_000 ? 50 : timeout)
+      timeout === 15_000
+        ? nativeSetTimeout(handler, 50)
+        : nativeSetInterval(handler, timeout)
     )) as typeof window.setInterval
   })
   await registerFf(page, 'boxes-no-distribution-refresh')
@@ -469,26 +472,49 @@ test('fbs workspace: boxes without distribution follows background refresh', asy
   })
   await mockWorklist(page, [packedOrder])
   let currentWorkspace = workspace({ stage: 'handoff_prep', status: 'packed', orders: [packedOrder] })
+  let workspaceRequestCount = 0
+  let announceStaleRefresh: (() => void) | undefined
+  let releaseStaleRefresh: (() => void) | undefined
+  const staleRefreshStarted = new Promise<void>((resolve) => { announceStaleRefresh = resolve })
+  const staleRefreshReleased = new Promise<void>((resolve) => { releaseStaleRefresh = resolve })
 
-  await page.route('**/operations/fbs-supplies/sup-1/workspace', (route) => json(route, currentWorkspace))
+  await page.route('**/operations/fbs-supplies/sup-1/workspace', async (route) => {
+    workspaceRequestCount += 1
+    const responseWorkspace = currentWorkspace
+    if (workspaceRequestCount === 2) {
+      announceStaleRefresh?.()
+      await staleRefreshReleased
+    }
+    await json(route, responseWorkspace)
+  })
+  await page.route('**/operations/fbs-supplies/sup-1/boxes-without-distribution', async (route) => {
+    currentWorkspace = {
+      ...currentWorkspace,
+      supply: { ...(currentWorkspace.supply as JsonObject), boxes_without_distribution: true },
+    }
+    await json(route, currentWorkspace)
+  })
   await page.getByTestId('nav-ff-fbs').click()
   await page.getByTestId('fbs-order-1').click()
   await expect(page.getByTestId('fbs-boxes')).toBeVisible()
   await expect(page.getByTestId('fbs-boxes-without-distribution')).not.toBeChecked()
 
-  currentWorkspace = {
-    ...currentWorkspace,
-    supply: { ...(currentWorkspace.supply as JsonObject), boxes_without_distribution: true },
-  }
+  await staleRefreshStarted
+  await page.getByTestId('fbs-boxes-without-distribution').check()
   await expect(page.getByText('Без распределения · коробов 0')).toBeVisible()
   await expect(page.getByTestId('fbs-boxes-without-distribution')).toBeChecked()
 
-  currentWorkspace = {
-    ...currentWorkspace,
-    supply: { ...(currentWorkspace.supply as JsonObject), boxes_without_distribution: false },
-  }
-  await expect(page.getByText('Распределено 0 из 1 шт · осталось 1')).toBeVisible()
-  await expect(page.getByTestId('fbs-boxes-without-distribution')).not.toBeChecked()
+  const staleResponse = page.waitForResponse((response) => (
+    response.url().includes('/operations/fbs-supplies/sup-1/workspace')
+      && response.request().method() === 'GET'
+  ))
+  releaseStaleRefresh?.()
+  await staleResponse
+  await page.waitForTimeout(100)
+
+  await expect(page.getByText('Без распределения · коробов 0')).toBeVisible()
+  await expect(page.getByText(/Распределено 0 из 1/)).toHaveCount(0)
+  await expect(page.getByTestId('fbs-boxes-without-distribution')).toBeChecked()
 })
 
 // TC-NEW-FBS-10/FBS-09 — one print preview shows the asset and copy count before printing.
