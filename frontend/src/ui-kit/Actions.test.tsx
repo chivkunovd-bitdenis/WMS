@@ -10,15 +10,38 @@ describe('PrintAction', () => {
     expect(panel.props.children).toBe('Печать накладной')
   })
 
-  it('keeps existing labels and disabled explanations', () => {
+  it('keeps existing labels in panel placement', () => {
+    const labels = [
+      ['ШК товара', 'Печать ШК товара'],
+      ['ЧЗ и ШК', 'Печать ЧЗ и ШК'],
+      ['ШК короба', 'Печать ШК короба'],
+      ['ШК ячейки', 'Печать ШК ячейки'],
+    ] as const
+
+    for (const [what, label] of labels) {
+      const action = PrintAction({ what, placement: 'panel' })
+      expect(action.props.children).toBe(label)
+    }
+  })
+
+  it('preserves disabled explanations in row and panel placements', () => {
+    const reason = 'Расчёт ещё не зафиксирован'
     const barcode = PrintAction({ what: 'ШК товара', placement: 'panel' })
     const disabled = PrintAction({
       what: 'накладную',
       placement: 'panel',
-      disabledReason: 'Расчёт ещё не зафиксирован',
+      disabledReason: reason,
+    })
+    const disabledRow = PrintAction({
+      what: 'накладную',
+      placement: 'row',
+      disabledReason: reason,
     })
 
     expect(barcode.props.children).toBe('Печать ШК товара')
-    expect(disabled.props.disabledReason).toBe('Расчёт ещё не зафиксирован')
+    expect(disabled.props.title).toBe(reason)
+    expect(disabled.props.children.props.disabled).toBe(true)
+    expect(disabledRow.props.title).toBe(reason)
+    expect(disabledRow.props.children.props.children.props.disabled).toBe(true)
   })
 })

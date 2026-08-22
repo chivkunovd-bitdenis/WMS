@@ -38,3 +38,6 @@
 18:52   08-storage · dev: фича 7/8 сохранена f6895d029209
 18:54   08-storage · screen-dev: готово
 18:54   08-storage · dev: фича 8/8 сохранена 334ebd12352a
+18:59   08-storage · reviewer: готово
+18:59   08-storage · reviewer: находки, круг 2 — назад к разработке
+19:01   08-storage · screen-dev: готово
