@@ -232,7 +232,12 @@ async def _barcode_index_for_request(
         if key:
             idx[key] = p.id
     if req.seller_id is not None:
-        rows = await list_seller_wb_catalog_rows(session, tenant_id, req.seller_id)
+        rows = await list_seller_wb_catalog_rows(
+            session,
+            tenant_id,
+            req.seller_id,
+            product_ids=product_ids,
+        )
         for r in rows:
             if r.product_id not in product_ids:
                 continue
@@ -322,23 +327,26 @@ async def _sync_line_actuals_from_box_totals(
     req: InboundIntakeRequest,
 ) -> None:
     """During receiving: validate effective fact; keep actual_qty as loose-only component."""
+    totals_stmt = (
+        select(InboundIntakeBoxLine.product_id, func.sum(InboundIntakeBoxLine.quantity))
+        .join(InboundIntakeBox, InboundIntakeBoxLine.box_id == InboundIntakeBox.id)
+        .where(InboundIntakeBox.request_id == req.id)
+        .group_by(InboundIntakeBoxLine.product_id)
+    )
+    totals = {
+        product_id: int(quantity)
+        for product_id, quantity in (await session.execute(totals_stmt)).all()
+    }
     for ln in req.lines:
-        recorded = await _product_recorded_in_boxes(session, req.id, ln.product_id)
-        if not recorded:
-            continue
-        effective = await intake_svc.effective_actual_qty(
-            session, req.id, ln, request_status=req.status
-        )
-        if ln.posted_qty > effective:
+        box_total = totals.get(ln.product_id, 0)
+        loose_qty = int(ln.actual_qty or 0)
+        if ln.product_id in totals and ln.posted_qty > loose_qty + box_total:
             raise InboundIntakeBoxError("actual_below_posted")
-    if req.status == intake_svc.STATUS_SUBMITTED:
-        for ln in req.lines:
-            effective = await intake_svc.effective_actual_qty(
-                session, req.id, ln, request_status=req.status
-            )
-            if effective > 0:
-                req.status = intake_svc.STATUS_RECEIVING
-                break
+    if req.status == intake_svc.STATUS_SUBMITTED and any(
+        int(ln.actual_qty or 0) + totals.get(ln.product_id, 0) > 0
+        for ln in req.lines
+    ):
+        req.status = intake_svc.STATUS_RECEIVING
 
 
 async def open_box_by_barcode(
@@ -379,7 +387,11 @@ async def scan_product_into_box(
     if not raw:
         raise InboundIntakeBoxError("barcode_empty")
 
-    req = await _get_request_for_intake(session, tenant_id, request_id)
+    req = await intake_svc.get_request_for_receiving_scan(session, tenant_id, request_id)
+    if req is None:
+        raise InboundIntakeBoxError("request_not_found")
+    if req.status not in INTAKE_STATUSES:
+        raise InboundIntakeBoxError("bad_status")
     box = await session.get(InboundIntakeBox, box_id)
     if box is None or box.request_id != request_id or box.tenant_id != tenant_id:
         raise InboundIntakeBoxError("box_not_found")
@@ -408,7 +420,7 @@ async def scan_product_into_box(
         line.quantity = int(line.quantity) + 1
 
     await session.flush()
-    req_loaded = await intake_svc.get_request(session, tenant_id, request_id)
+    req_loaded = await intake_svc.get_request_for_receiving_scan(session, tenant_id, request_id)
     if req_loaded is None:
         raise InboundIntakeBoxError("request_not_found")
     await _sync_line_actuals_from_box_totals(session, req_loaded)

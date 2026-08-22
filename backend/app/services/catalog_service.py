@@ -1,4 +1,3 @@
-# ruff: noqa: RUF002, RUF003
 from __future__ import annotations
 
 import uuid
@@ -480,6 +479,7 @@ async def list_products(
     tenant_id: uuid.UUID,
     *,
     seller_id: uuid.UUID | None = None,
+    product_ids: set[uuid.UUID] | None = None,
     search: str | None = None,
     limit: int | None = None,
 ) -> list[Product]:
@@ -497,6 +497,10 @@ async def list_products(
     )
     if seller_id is not None:
         stmt = stmt.where(Product.seller_id == seller_id)
+    if product_ids is not None:
+        if not product_ids:
+            return []
+        stmt = stmt.where(Product.id.in_(product_ids))
     needle = (search or "").strip()
     if needle:
         like = f"%{needle}%"

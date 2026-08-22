@@ -250,6 +250,35 @@ async def get_request(
     return req
 
 
+async def get_request_for_receiving_scan(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+) -> InboundIntakeRequest | None:
+    """Load only the request state and lines needed by a receiving barcode scan."""
+    stmt = (
+        select(InboundIntakeRequest)
+        .where(
+            InboundIntakeRequest.id == request_id,
+            InboundIntakeRequest.tenant_id == tenant_id,
+        )
+        .options(selectinload(InboundIntakeRequest.lines))
+    )
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def get_request_status(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+) -> str | None:
+    stmt = select(InboundIntakeRequest.status).where(
+        InboundIntakeRequest.id == request_id,
+        InboundIntakeRequest.tenant_id == tenant_id,
+    )
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
 async def _line_on_request(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -671,7 +700,12 @@ async def _request_barcode_index(
             if key:
                 idx[key] = p.id
     if req.seller_id is not None:
-        rows = await list_seller_wb_catalog_rows(session, tenant_id, req.seller_id)
+        rows = await list_seller_wb_catalog_rows(
+            session,
+            tenant_id,
+            req.seller_id,
+            product_ids=product_ids,
+        )
         for row in rows:
             if not include_seller_catalog and row.product_id not in product_ids:
                 continue
@@ -724,10 +758,11 @@ async def add_or_increment_received_product(
     *,
     product_id: uuid.UUID,
     actual_qty: int = 1,
+    request: InboundIntakeRequest | None = None,
 ) -> InboundIntakeLine:
     if actual_qty < 1:
         raise InboundIntakeError("invalid_qty")
-    req = await get_request(session, tenant_id, request_id)
+    req = request or await get_request_for_receiving_scan(session, tenant_id, request_id)
     if req is None:
         raise InboundIntakeError("request_not_found")
     if req.status == STATUS_SUBMITTED:
@@ -783,7 +818,7 @@ async def scan_barcode_to_loose_intake(
     raw = barcode.strip()
     if not raw:
         raise InboundIntakeError("barcode_empty")
-    req = await get_request(session, tenant_id, request_id)
+    req = await get_request_for_receiving_scan(session, tenant_id, request_id)
     if req is None:
         raise InboundIntakeError("request_not_found")
     if req.status == STATUS_SUBMITTED:
@@ -806,6 +841,7 @@ async def scan_barcode_to_loose_intake(
         request_id,
         product_id=product_id,
         actual_qty=1,
+        request=req,
     )
 
 

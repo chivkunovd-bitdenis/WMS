@@ -214,9 +214,15 @@ async def list_seller_wb_catalog_rows(
     *,
     search: str | None = None,
     limit: int | None = None,
+    product_ids: set[uuid.UUID] | None = None,
 ) -> list[SellerWbCatalogRow]:
     products = await list_products(
-        session, tenant_id, seller_id=seller_id, search=search, limit=limit
+        session,
+        tenant_id,
+        seller_id=seller_id,
+        search=search,
+        limit=limit,
+        product_ids=product_ids,
     )
     sync_state_by_key = await _load_fbs_sync_state_by_seller_chrt(
         session,

@@ -19,6 +19,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
+import { alpha } from '@mui/material/styles'
 import { apiUrl } from '../../api'
 import { FfProductLineCells, FfProductTableHeadCells } from '../../components/FfProductLineCells'
 import {
@@ -84,30 +85,41 @@ export function FfInboundBoxAddDialog({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [scanBarcode, setScanBarcode] = useState('')
+  const [localBoxLines, setLocalBoxLines] = useState<InboundBoxLine[]>(boxLines)
+  const [lastScannedProductId, setLastScannedProductId] = useState<string | null>(null)
   const [draftQtyByProductId, setDraftQtyByProductId] = useState<Record<string, string>>({})
   const draftQtyRef = useRef(draftQtyByProductId)
+  const scanQueueRef = useRef<Promise<void>>(Promise.resolve())
 
   const qtyInBoxByProductId = useMemo(() => {
     const m = new Map<string, number>()
-    for (const ln of boxLines) {
+    for (const ln of localBoxLines) {
       m.set(ln.product_id, ln.quantity)
     }
     return m
+  }, [localBoxLines])
+
+  useEffect(() => {
+    setLocalBoxLines(boxLines)
   }, [boxLines])
 
   useEffect(() => {
     if (!open) {
       setScanBarcode('')
+      setLastScannedProductId(null)
       setError(null)
       setDraftQtyByProductId({})
       return
     }
+    const quantitiesFromParent = new Map<string, number>(
+      boxLines.map((line) => [line.product_id, line.quantity]),
+    )
     const next: Record<string, string> = {}
     for (const ln of requestLines) {
-      next[ln.product_id] = String(qtyInBoxByProductId.get(ln.product_id) ?? 0)
+      next[ln.product_id] = String(quantitiesFromParent.get(ln.product_id) ?? 0)
     }
     setDraftQtyByProductId(next)
-  }, [open, qtyInBoxByProductId, requestLines])
+  }, [boxLines, open, requestLines])
 
   useEffect(() => {
     draftQtyRef.current = draftQtyByProductId
@@ -194,8 +206,21 @@ export function FfInboundBoxAddDialog({
         setError(scanErrorMessageRu(await readApiErrorMessage(res)))
         return
       }
+      const scannedLine = (await res.json()) as InboundBoxLine
+      setLocalBoxLines((current) => {
+        const exists = current.some((line) => line.product_id === scannedLine.product_id)
+        return exists
+          ? current.map((line) => (line.product_id === scannedLine.product_id ? scannedLine : line))
+          : [...current, scannedLine]
+      })
+      setDraftQtyByProductId((current) => ({
+        ...current,
+        [scannedLine.product_id]: String(scannedLine.quantity),
+      }))
+      setLastScannedProductId(scannedLine.product_id)
       setScanBarcode('')
-      await onUpdated()
+      // Keep the parent document coherent, but do not make the next scan wait for it.
+      void onUpdated().catch(() => undefined)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось выполнить скан.')
     } finally {
@@ -203,11 +228,20 @@ export function FfInboundBoxAddDialog({
     }
   }
 
+  const enqueueScanIntoBox = (rawInput?: string): Promise<void> => {
+    const next = scanQueueRef.current.then(
+      () => scanIntoBox(rawInput),
+      () => scanIntoBox(rawInput),
+    )
+    scanQueueRef.current = next.catch(() => undefined)
+    return next
+  }
+
   useBarcodeScanner({
     enabled: open && !readOnly,
     onScan: (code) => {
       setScanBarcode(code)
-      void scanIntoBox(code)
+      void enqueueScanIntoBox(code)
     },
   })
 
@@ -261,7 +295,7 @@ export function FfInboundBoxAddDialog({
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault()
-                    void scanIntoBox()
+                    void enqueueScanIntoBox()
                   }
                 }}
                 disabled={busy}
@@ -271,7 +305,7 @@ export function FfInboundBoxAddDialog({
               />
               <Button
                 variant="contained"
-                onClick={() => void scanIntoBox()}
+                onClick={() => void enqueueScanIntoBox()}
                 disabled={busy || !scanBarcode.trim()}
                 data-testid="ff-inbound-box-add-scan-submit"
                 sx={{ flexShrink: 0 }}
@@ -301,6 +335,16 @@ export function FfInboundBoxAddDialog({
                     <TableRow
                       key={ln.id}
                       data-testid={`ff-inbound-box-add-line-row-${ln.product_id}`}
+                      sx={
+                        lastScannedProductId === ln.product_id
+                          ? {
+                              backgroundColor: (theme) =>
+                                alpha(theme.palette.success.main, 0.16),
+                              boxShadow: (theme) =>
+                                `inset 0 0 0 1px ${alpha(theme.palette.success.main, 0.6)}`,
+                            }
+                          : undefined
+                      }
                     >
                       <FfProductLineCells
                         meta={displayMeta}
