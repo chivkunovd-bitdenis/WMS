@@ -716,7 +716,7 @@ export async function scanFbsPickProduct(
   token: string,
   ah: AuthHeaders,
   id: string,
-  body: { location_id: string; product_barcode: string; order_id?: string; idempotency_key: string },
+  body: { location_id: string; product_barcode: string; order_id: string; idempotency_key: string },
 ): Promise<FbsWorkspace> {
   return jsonOrThrow<FbsWorkspace>(
     await fetch(apiUrl(`/operations/fbs-supplies/${id}/pick/scan-product`), {

@@ -566,18 +566,32 @@ export function FfFbsSupplyWorkspace({
   const scanProduct = async () => {
     if (!workspace || !pickLocation || !productBarcode.trim()) return
     const barcode = productBarcode.trim()
-    const matchingOrder = workspace.orders.find((order) =>
+    const pendingOrder = workspace.orders.find((order) =>
       order.pick.status !== 'picked' &&
       (order.product.barcode === barcode || order.product.sku === barcode || String(order.product.wb_article ?? '') === barcode),
     )
-    const scanFingerprint = `${pickLocation.id}:${matchingOrder?.id ?? barcode}`
-    const key = pickIdempotencyKeys.current.get(scanFingerprint) ?? createFbsIdempotencyKey()
+    const scanFingerprint = `${pickLocation.id}:${barcode}`
+    const rememberedKey = pickIdempotencyKeys.current.get(scanFingerprint)
+    const matchingOrder = pendingOrder ?? (rememberedKey
+      ? workspace.orders.find((order) =>
+        order.product.barcode === barcode || order.product.sku === barcode || String(order.product.wb_article ?? '') === barcode,
+      )
+      : undefined)
+    if (!matchingOrder) {
+      setError('Товар не входит в эту поставку или уже подобран.')
+      return
+    }
+    // Keep the key stable after workspace read-back: the successful order is
+    // no longer a pending match, but a repeated physical scan is still the
+    // same operation.
+    const key = rememberedKey ?? createFbsIdempotencyKey()
     pickIdempotencyKeys.current.set(scanFingerprint, key)
     const next = await run(
       () =>
         scanFbsPickProduct(token, authHeaders, workspace.supply.id, {
           location_id: pickLocation.id,
           product_barcode: barcode,
+          order_id: matchingOrder.id,
           idempotency_key: key,
         }),
       'Товар подобран. Прогресс синхронизирован для всех операторов.',

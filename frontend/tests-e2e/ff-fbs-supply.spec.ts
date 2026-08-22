@@ -323,7 +323,9 @@ test('fbs workspace: scan location then product', async ({ page }) => {
     }),
   )
   const productScanBodies: JsonObject[] = []
+  let productScanRequests = 0
   await page.route('**/operations/fbs-supplies/sup-1/pick/scan-product', async (route) => {
+    productScanRequests += 1
     productScanBodies.push(route.request().postDataJSON() as JsonObject)
     await json(route, workspace({
       stage: 'picking',
@@ -352,12 +354,17 @@ test('fbs workspace: scan location then product', async ({ page }) => {
   await expect(page.getByText('Товар подобран. Прогресс синхронизирован для всех операторов.')).toBeVisible()
   await expect(page.getByTestId('fbs-pick-result')).toContainText('Взято: Основной склад / ячейка A-01')
   await expect.poll(() => productScanBodies).toHaveLength(1)
+  expect(productScanRequests).toBe(1)
+  expect(productScanBodies[0]?.location_id).toBe('loc-1')
+  expect(productScanBodies[0]?.product_barcode).toBe('2000001')
+  expect(productScanBodies[0]?.order_id).toBe('1')
 
   // Повтор того же скана возвращает тот же результат через тот же idempotency key.
   await page.getByLabel('Штрихкод товара').fill('2000001')
   await page.getByRole('button', { name: 'Подобрать товар' }).click()
   await expect(page.getByTestId('fbs-pick-result')).toContainText('Взято: Основной склад / ячейка A-01')
   await expect.poll(() => productScanBodies).toHaveLength(2)
+  expect(productScanRequests).toBe(2)
   expect(productScanBodies[1]?.idempotency_key).toBe(productScanBodies[0]?.idempotency_key)
   expect(productScanBodies[1]?.order_id).toBe(productScanBodies[0]?.order_id)
 })
