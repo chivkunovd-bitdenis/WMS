@@ -1277,7 +1277,7 @@ export function FfFbsSupplyWorkspace({
   const boxMenuBox = workspace?.boxes.find((box) => box.id === boxMenu?.boxId) ?? null
   const boxMenuAssignedCount = boxMenuBox?.assigned_order_ids.length ?? 0
   const boxRouteLabel = workspace?.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ'
-  const hasNoDistributionBoxes = Boolean(workspace?.boxes.some((box) => box.without_distribution))
+  const hasNoDistributionBoxes = Boolean(workspace?.supply.boxes_without_distribution)
   const boxDistributedCount = assignedBoxOrderIds.size
   const boxTotalCount = workspace?.progress.total ?? 0
   const boxRemainingCount = Math.max(0, boxTotalCount - boxDistributedCount)
