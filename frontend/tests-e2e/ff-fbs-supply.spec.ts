@@ -309,12 +309,9 @@ test('fbs workspace: scan location then product', async ({ page }) => {
     json(route, workspace({ stage: 'picking', status: 'assembling', orders: [pendingOrder] })),
   )
   await page.route('**/warehouses/resolve?barcode=*', (route) =>
-    json(route, {
-      type: 'location',
-      id: 'loc-1',
-      warehouse_id: 'w-1',
-      code: 'A-01',
-    }),
+    route.request().url().includes('WAREHOUSE-B')
+      ? json(route, { type: 'warehouse', id: 'w-2', warehouse_id: 'w-2', name: 'Склад Юг', code: 'WAREHOUSE-B' })
+      : json(route, { type: 'location', id: 'loc-1', warehouse_id: 'w-1', code: 'A-01' }),
   )
   await page.route('**/operations/fbs-supplies/sup-1/pick/scan-location', (route) =>
     json(route, {
@@ -341,6 +338,9 @@ test('fbs workspace: scan location then product', async ({ page }) => {
   await page.getByTestId('fbs-order-1').click()
   await expect(page.getByTestId('fbs-workspace')).toBeVisible()
   await expect(page.getByTestId('fbs-picking-scanner-line')).toContainText('пикните ШК склада или ячейки')
+  await page.getByLabel('Штрихкод ячейки').fill('WAREHOUSE-B')
+  await page.getByRole('button', { name: 'Подтвердить ячейку' }).click()
+  await expect(page.getByTestId('fbs-picking-scanner-line')).toContainText('пикните ШК склада или ячейки')
   await page.getByLabel('Штрихкод ячейки').fill('CELL-A-01')
   await page.getByRole('button', { name: 'Подтвердить ячейку' }).click()
   await expect(page.getByTestId('fbs-picking-scanner-line')).toContainText('пикните ШК товара')
@@ -348,6 +348,11 @@ test('fbs workspace: scan location then product', async ({ page }) => {
   await page.getByRole('button', { name: 'Подобрать товар' }).click()
 
   await expect(page.getByText('Товар подобран. Прогресс синхронизирован для всех операторов.')).toBeVisible()
+  await expect(page.getByTestId('fbs-pick-result')).toContainText('Взято: Основной склад / ячейка A-01')
+
+  // Повтор того же скана возвращает тот же результат через тот же idempotency key.
+  await page.getByLabel('Штрихкод товара').fill('2000001')
+  await page.getByRole('button', { name: 'Подобрать товар' }).click()
   await expect(page.getByTestId('fbs-pick-result')).toContainText('Взято: Основной склад / ячейка A-01')
 })
 

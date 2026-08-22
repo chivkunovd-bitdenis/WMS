@@ -286,6 +286,9 @@ export function FfFbsSupplyWorkspace({
   const [locationBarcode, setLocationBarcode] = useState('')
   const [productBarcode, setProductBarcode] = useState('')
   const [pickLocation, setPickLocation] = useState<FbsPickLocation | null>(null)
+  // Один и тот же физический скан должен повторять прежний результат, а не
+  // создавать новый pick. Ключ живёт только в рамках открытой поставки.
+  const pickIdempotencyKeys = useRef(new Map<string, string>())
   const [printBatch, setPrintBatch] = useState<FbsPrintBatch | null>(null)
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false)
   const [packagingTask, setPackagingTask] = useState<PackagingTask | null>(null)
@@ -398,6 +401,7 @@ export function FfFbsSupplyWorkspace({
     setDeliveryKey(persistentOperationKey(supplyId, 'delivery'))
     setPrintBatch(null)
     setPickLocation(null)
+    pickIdempotencyKeys.current.clear()
     setManualPickLocationRows({})
     setBoxCount('1')
     setBoxesWithoutDistribution(false)
@@ -561,12 +565,19 @@ export function FfFbsSupplyWorkspace({
 
   const scanProduct = async () => {
     if (!workspace || !pickLocation || !productBarcode.trim()) return
-    const key = createFbsIdempotencyKey()
+    const barcode = productBarcode.trim()
+    const matchingOrder = workspace.orders.find((order) =>
+      order.pick.status !== 'picked' &&
+      (order.product.barcode === barcode || order.product.sku === barcode || String(order.product.wb_article ?? '') === barcode),
+    )
+    const scanFingerprint = `${pickLocation.id}:${matchingOrder?.id ?? barcode}`
+    const key = pickIdempotencyKeys.current.get(scanFingerprint) ?? createFbsIdempotencyKey()
+    pickIdempotencyKeys.current.set(scanFingerprint, key)
     const next = await run(
       () =>
         scanFbsPickProduct(token, authHeaders, workspace.supply.id, {
           location_id: pickLocation.id,
-          product_barcode: productBarcode.trim(),
+          product_barcode: barcode,
           idempotency_key: key,
         }),
       'Товар подобран. Прогресс синхронизирован для всех операторов.',

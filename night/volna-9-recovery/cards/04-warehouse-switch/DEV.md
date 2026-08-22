@@ -1,36 +1,21 @@
-# DEV · 04-warehouse-switch · атом 11
+# DEV · 04-warehouse-switch · screen-dev
 
 ## Изменённые файлы
 
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/models/inventory_movement.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/inventory_service.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_picking_service.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/tests/test_fbs_picking.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/alembic/versions/20260822_0095_inventory_movement_dimensions.py
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/tests-e2e/ff-fbs-supply.spec.ts`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md`
 
-## Реализовано
-
-- Пустая исходная ячейка больше не создаёт фиктивный `fbs_order_pick`: pick отклоняется с `insufficient_unpacked`.
-- Каждая запись движения фиксирует `seller_id` и `warehouse_id`, а миграция добавляет и заполняет эти измерения для существующей истории.
-- Существующий идемпотентный transfer-путь и undo-пара сохранены; упаковка продолжает списывать только из `PackagingTaskLine.storage_location_id`.
-
-## Тесты
-
-- `test_fbs_pick_empty_location_is_rejected` проверяет отказ пустой ячейки и отсутствие записи pick.
-- Полный целевой набор `tests/test_fbs_picking.py tests/test_fbs_packaging_integration.py`: 23 passed.
+Изменён только экран рабочего места FBS и его пользовательский E2E-сценарий. Повторный товарный скан получает стабильный ключ для той же ячейки и заказа, поэтому повтор запроса возвращает прежний результат. Сценарий также проверяет скан склада, последующий выбор ячейки и неизменность строки «Взято…» при повторе.
 
 ## Гейты
 
-- ruff: targeted files — passed; полный `ruff check .` — не пройден из-за 80 существующих ошибок вне изменённых файлов.
-- mypy: не пройден из-за 4 существующих ошибок в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py`, `fbs_warehouse_binding_service.py`; в изменённых файлах новых ошибок не показано.
-- pytest: targeted — passed, 23 passed.
-- back_guard.py: недоступен в этой рабочей копии (`scripts/ci/back_guard.py` отсутствует).
-- check_migrations.py: недоступен в этой рабочей копии (`scripts/ci/check_migrations.py` отсутствует).
+- `npx tsc --noEmit -p tsconfig.app.json` — не подтверждён: локальный процесс `npx` завис без вывода и был остановлен после ожидания; результат не объявляю зелёным.
+- `python3 scripts/ui/ui_guard.py` — КРАСНЫЙ: храповик сообщил новые нарушения в `WbProductPickerDialog.tsx`, `FfFbsOrdersScreen.tsx`, `FfFbsStockSyncScreen.tsx`, `FfFbsSupplyWorkspace.tsx` и `SellerInboundDraftScreen.tsx`. Базовую линию не обновлял.
+- `npm run test:unit` — КРАСНЫЙ: `vitest: command not found`.
+- `git diff --check` — зелёный.
 
 ## Не реализовано
 
-- Полные repository-гейты `ruff`, `mypy`, `back_guard.py` и `check_migrations.py` нельзя подтвердить из-за существующих ошибок и отсутствующих скриптов.
-
-## Находки
-
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не открывались и не изменялись.
+- Полный продуктовый browser review не выполнялся: роль screen-dev ограничена кодом и обязательными локальными gate-командами.
+- `frontend/src/screens/v2/fbsApi.ts` и `frontend/src/ui-kit/ScannerLine.tsx` не потребовали изменений: существующие resolver/client и текстовые состояния уже соответствуют контракту.
