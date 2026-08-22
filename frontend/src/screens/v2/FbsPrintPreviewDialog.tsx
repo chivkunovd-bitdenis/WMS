@@ -16,6 +16,7 @@ import {
 } from '@mui/material'
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined'
 import { resolveFbsAssetUrl, type FbsPrintAsset, type FbsPrintBatch } from './fbsApi'
+import { ErrorNotice } from '../../ui-kit'
 import { loadLabelSizeId, resolveLabelSize, type LabelSize } from '../../utils/labelSize'
 import { LabelSizeSelect } from '../../components/LabelSizeSelect'
 
@@ -111,13 +112,13 @@ export function FbsPrintPreviewDialog({
       return
     }
     popup.opener = null
-    const pages = items
-      .flatMap(({ objectUrl, asset }) =>
-        Array.from(
-          { length: safeCopies },
-          () => `<section class="label"><img src="${objectUrl}" alt="${assetLabel(asset)}"></section>`,
-        ),
-      )
+    const pages = items.flatMap(({ objectUrl, asset }) =>
+      Array.from({ length: safeCopies }, () => {
+        const wbPage = `<section class="label"><img src="${objectUrl}" alt="${assetLabel(asset)}"></section>`
+        if (asset.kind !== 'order_sticker' || asset.order_number == null) return wbPage
+        return `${wbPage}<section class="label service-label"><div>Служебная этикетка WMS<br><strong>№ ${asset.order_number}</strong></div></section>`
+      }),
+    )
       .join('')
     const pageWidthMm = `${labelSize.widthMm}mm`
     const pageHeightMm = `${labelSize.heightMm}mm`
@@ -131,6 +132,7 @@ export function FbsPrintPreviewDialog({
       'align-items:center;justify-content:center;break-after:page;page-break-after:always;overflow:hidden}',
       '.label:last-child{break-after:auto;page-break-after:auto}',
       '.label img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;image-rendering:auto}',
+      '.service-label{font-family:Arial,sans-serif;text-align:center;font-size:18pt;font-weight:700}',
     ].join('')
     popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Печать WB</title><style>${printCss}</style></head><body>${pages}<script>Promise.all(Array.from(document.images).map(function(img){return img.complete?Promise.resolve():new Promise(function(resolve){img.onload=resolve;img.onerror=resolve})})).then(function(){window.focus();window.print()})</script></body></html>`)
     popup.document.close()
@@ -178,9 +180,9 @@ export function FbsPrintPreviewDialog({
           </Stack>
           {error ? <Alert severity="error">{error}</Alert> : null}
           {batch?.order_errors.map((item) => (
-            <Alert key={item.order_id} severity="error">
+            <ErrorNotice key={item.order_id}>
               Заказ WB №{item.wb_order_id}: стикер не получен
-            </Alert>
+            </ErrorNotice>
           ))}
           {loading ? (
             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', py: 4 }}>
@@ -197,7 +199,7 @@ export function FbsPrintPreviewDialog({
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ alignItems: 'stretch' }}><Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography variant="subtitle2">Стикер WB №{asset.wb_order_id ?? '—'}</Typography><Box component="img" src={objectUrl} alt={assetLabel(asset)} sx={{ width: '100%', aspectRatio: `${labelSize.widthMm} / ${labelSize.heightMm}`, objectFit: 'contain', bgcolor: '#fff', my: 1.5 }} />
                   </Box>
-                  <Paper variant="outlined" sx={{ width: { xs: '100%', md: 180 }, minHeight: 120, p: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'grey.50' }}><Typography variant="h6" sx={{ textAlign: 'center' }}>Служебная этикетка WMS<br />№ {asset.order_number ?? '—'}</Typography></Paper>
+                  {asset.kind === 'order_sticker' ? <Paper variant="outlined" sx={{ width: { xs: '100%', md: 180 }, minHeight: 120, p: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'grey.50' }}><Typography variant="h6" sx={{ textAlign: 'center' }}>Служебная этикетка WMS<br />№ {asset.order_number ?? '—'}</Typography></Paper> : null}
                 </Stack>
                 <Stack direction="row" spacing={1}>
                   {previews.length > 1 ? <Button startIcon={<PrintOutlinedIcon />} onClick={() => print([{ asset, objectUrl }])} data-task-id="FBS-10">Печать только этого</Button> : null}

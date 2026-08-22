@@ -644,13 +644,13 @@ export function FfFbsSupplyWorkspace({
       setBusy(false)
     }
   }
-  const requestPrintBatch = async (_orderIds?: string[], retryMissing = false) => {
+  const requestPrintBatch = async (orderIds?: string[], retryMissing = false) => {
     if (!workspace) return
     setBusy(true); setError(null)
     try {
       const batch = await fetchFbsPrintBatch(token, authHeaders, workspace.supply.id, {
         kind: 'order_sticker',
-        order_ids: workspace.orders.map((order) => order.id),
+        order_ids: orderIds ?? (await fetchFbsWorkspace(token, authHeaders, workspace.supply.id)).orders.map((order) => order.id),
         retry_missing: retryMissing,
       })
       setPrintBatch(batch); if (batch.ready === 0) {
