@@ -19,6 +19,7 @@ from app.models.fbs_order import FBS_ORDER_STATUS_IN_SUPPLY, FBS_ORDER_STATUS_NE
 from app.models.fbs_supply import FBS_SUPPLY_STATUS_DRAFT, FbsSupply
 from app.models.product import Product
 from app.services.fbs_order_tape_print_service import (
+    _is_complete_supply_order_set,
     _orders_in_canonical_order,
     _select_requested_orders,
 )
@@ -209,6 +210,16 @@ def test_fbs_order_tape_rejects_order_outside_supply() -> None:
 
     with pytest.raises(KeyError):
         _select_requested_orders([first], [outside])
+
+
+# TC-NEW-FBS-SUPPLY-006 — a full tape must name every current order exactly once.
+def test_fbs_order_tape_full_set_check_requires_every_order_exactly_once() -> None:
+    first = SimpleNamespace(id=uuid.UUID("00000000-0000-0000-0000-000000000001"))
+    second = SimpleNamespace(id=uuid.UUID("00000000-0000-0000-0000-000000000002"))
+
+    assert _is_complete_supply_order_set([first, second], [second.id, first.id])
+    assert not _is_complete_supply_order_set([first, second], [first.id])
+    assert not _is_complete_supply_order_set([first, second], [first.id, first.id])
 
 
 # TC-NEW-FBS-SUPPLY-ORDER-001 — supply.orders is stable by WB id, then UUID.

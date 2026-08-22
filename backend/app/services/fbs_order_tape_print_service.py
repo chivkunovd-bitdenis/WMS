@@ -104,6 +104,11 @@ async def print_fbs_order_tape(
         selected_orders = _select_requested_orders(ordered, requested_ids)
     except KeyError as exc:
         raise FbsOrderTapePrintError("order_not_in_supply") from exc
+    # The picking-list action is an all-or-nothing tape: accepting a stale
+    # subset would produce labels whose numbers refer to a longer current list.
+    # The older row-level action deliberately keeps its subset behaviour.
+    if include_order_qr and not _is_complete_supply_order_set(ordered, order_ids):
+        raise FbsOrderTapePrintError("full_supply_order_set_required")
     order_number_by_id = {order.id: number for number, order in enumerate(ordered, start=1)}
     # Keep numbers anchored to the complete supply, while allowing the existing
     # row action to print just its requested order(s).
@@ -327,6 +332,15 @@ def _select_requested_orders(
         raise KeyError("order_not_in_supply")
     requested = set(requested_ids)
     return [order for order in ordered if order.id in requested]
+
+
+def _is_complete_supply_order_set(
+    ordered: list[FbsOrder], requested_ids: list[uuid.UUID]
+) -> bool:
+    """Return whether the request names every current supply order exactly once."""
+    return len(requested_ids) == len(ordered) and set(requested_ids) == {
+        order.id for order in ordered
+    }
 
 
 async def _line_by_product(

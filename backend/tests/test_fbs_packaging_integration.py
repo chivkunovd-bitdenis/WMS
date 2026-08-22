@@ -1339,6 +1339,22 @@ async def test_tape_covers_every_order_and_matches_picking_list(
         for order_id in item["order_ids"]
     ]
 
+    # TC-NEW-FBS-SUPPLY-006 — a stale browser snapshot cannot create a shorter
+    # "full" tape after another tab has changed the supply composition.
+    incomplete = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/order-print-tape",
+        headers=headers,
+        json={
+            "order_ids": [str(order_ids[0])],
+            "layout": None,
+            "allow_partial": False,
+            "include_order_qr": True,
+            "reprint": False,
+        },
+    )
+    assert incomplete.status_code == 409, incomplete.text
+    assert incomplete.json()["detail"]["code"] == "full_supply_order_set_required"
+
     # The full-print endpoint receives the complete set, but the client order is
     # not authoritative.  The response must follow the same server sequence as
     # the picking list and retain stable numbers for a reprint.
@@ -1364,6 +1380,12 @@ async def test_tape_covers_every_order_and_matches_picking_list(
     assert [row["order_number"] for row in tape_body["orders"]] == list(
         range(1, len(order_ids) + 1)
     )
+    assert [row["qr_asset"]["order_number"] for row in tape_body["orders"]] == list(
+        range(1, len(order_ids) + 1)
+    )
+    assert [row["qr_asset"]["wb_order_id"] for row in tape_body["orders"]] == [
+        row["wb_order_id"] for row in tape_body["orders"]
+    ]
 
     # Повторная печать не должна давать ленту короче: заказы уже помечены напечатанными,
     # но в ленту обязаны попасть все — иначе после зажёванной бумаги не перепечатать.

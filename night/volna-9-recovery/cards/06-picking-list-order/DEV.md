@@ -1,28 +1,38 @@
-# DEV · 06-picking-list-order · атом 3
+# Backend development report · 06-picking-list-order · atom 4 rework
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/tests/test_fbs_supply_assembly.py` — расширен API-сценарий `S-03-TC-009`: две позиции без товарных признаков образуют одну каноническую строку `№ 1–2`, а полный `order_ids` отсортирован по `wb_order_id`; запрос повторяется с идентичным ответом.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/night/volna-9-recovery/cards/06-picking-list-order/DEV.md` — отчёт backend-разработки по атому 3.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/app/services/fbs_order_tape_print_service.py` — полная лента (`include_order_qr=true`) теперь принимает только актуальный полный состав поставки, по одному ID каждого заказа; построчная печать (`include_order_qr=false`) сохраняет прежний режим подмножества.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/app/api/fbs_supplies.py` — неполный состав полной ленты возвращает `409 full_supply_order_set_required`; PNG-ассеты заказа отдают `order_id`, `wb_order_id` и канонический `order_number` для предпросмотра и физической пары WB → WMS № K.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/tests/test_fbs_supply_assembly.py` — проверка точного полного множества ID, включая перемешанный порядок и дубликат.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/tests/test_fbs_packaging_integration.py` — endpoint-регресс: неполный состав отклоняется, перемешанный полный состав сохраняет канонические номера; QR-ассеты несут номер и WB ID.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/night/volna-9-recovery/cards/06-picking-list-order/DEV.md` — отчёт этого прохода.
 
-Существующая реализация в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/app/services/fbs_supply_service.py` и `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/app/api/fbs_supplies.py` уже возвращает канонический порядок `(article, sku_code, size, product_name)`, непрерывные диапазоны и полный `order_ids`; изменений в ней не потребовалось.
+## Миграции
+
+Нет: изменены правила валидации и API-представление существующих данных.
+
+## Тесты
+
+- `tests/test_fbs_supply_assembly.py -k fbs_order_tape` — 4 passed: канонический порядок, номер подмножества для старого режима, внешний ID и полный набор ID.
+- `tests/test_fbs_packaging_integration.py -k tape_covers_every_order_and_matches_picking_list` — 1 passed: полный состав в перемешанном порядке, стабильная повторная печать, отказ для неполного состава и метаданные ассета.
 
 ## Гейты
 
-- `ruff check tests/test_fbs_supply_assembly.py` — PASS.
-- `ruff check .` — FAIL: 82 существующие несвязанные нарушения в backend; изменённый тест в них не указан.
-- `mypy .` — FAIL: 21 существующая ошибка в 6 несвязанных файлах; атом 3 их не меняет.
-- `pytest tests/test_fbs_supply_assembly.py` — PASS: `18 passed`.
-- `pytest` — не завершён: после `61 passed` за 178 секунд остановлен вручную; до остановки ошибок не было.
-- `python3 scripts/ci/back_guard.py` — NOT RUN: файл `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/scripts/ci/back_guard.py` отсутствует.
-- `python3 scripts/ci/check_migrations.py` — NOT RUN: файл `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/scripts/ci/check_migrations.py` отсутствует.
-- `git diff --check` — PASS.
+- `ruff check .` — не пройден: 82 существующие диагностики вне изменённых файлов; точечный `ruff check` четырёх изменённых backend-файлов пройден.
+- `mypy .` — не пройден: 21 существующая ошибка в 6 других файлах; затронутые сервис и API среди ошибок отсутствуют.
+- `pytest` — полный запуск не дал финального отчёта в среде запуска (вывод остановился после первых тестов без диагностик); обязательные целевые тесты пройдены, как указано выше.
+- `python3 scripts/ci/back_guard.py` — не запущен: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/scripts/ci/back_guard.py` отсутствует.
+- `python3 scripts/ci/check_migrations.py` — не запущен: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/scripts/ci/check_migrations.py` отсутствует.
+- `git diff --check` — пройден.
+- `git commit` — не выполнен: среда запретила создание `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-06-picking-list-order/index.lock` (`Operation not permitted`); изменения остаются незакоммиченными в этой рабочей копии.
 
 ## Не реализовано
 
-- Миграций нет: атом 3 меняет вычисление и выдачу листа, не схему данных.
-- Находки `REVIEW.md` о физической печати, popup, Честном знаке и предпросмотре относятся к frontend и слою ленты, не к серверной выдаче листа этого атома.
+- Frontend-находки ревью о печати кодов Честного знака и popup относятся к UI-слою и не менялись в роли `backend-dev`.
+- Новые маршруты и миграции не нужны.
 
 ## Находки
 
-- Нет.
+- Рабочее дерево уже содержало несвязанные изменения в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/night/volna-9-recovery/JOURNAL.md`; они не изменялись.
+- Git-метаданные общего worktree недоступны для записи, поэтому commit SHA не создан.

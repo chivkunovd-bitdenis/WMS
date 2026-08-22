@@ -16,6 +16,7 @@ from app.api.fbs_orders import FbsWorklistOrderOut, FbsWorklistProductOut
 from app.db.session import get_db
 from app.models.fbs_order import FbsOrder
 from app.models.fbs_packing_box import FbsPackingBox
+from app.models.fbs_print_asset import FbsPrintAsset
 from app.models.fbs_supply import FbsSupply
 from app.models.user import User
 from app.models.warehouse import Warehouse
@@ -199,6 +200,9 @@ class FbsPrintAssetOut(BaseModel):
     checksum: str | None
     applied_at: str | None
     error: dict[str, str] | None = None
+    order_id: str | None = None
+    wb_order_id: int | None = None
+    order_number: int | None = None
 
 
 class FbsPrintOrderErrorOut(BaseModel):
@@ -251,6 +255,34 @@ class FbsOrderTapePrintOut(BaseModel):
     failed: int
     order_errors: list[FbsPrintOrderErrorOut]
     shortage: int
+
+
+async def _map_supply_print_assets(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    assets: list[FbsPrintAsset],
+) -> dict[uuid.UUID, FbsPrintAssetOut]:
+    """Expose the immutable picking-list number alongside each order sticker."""
+    supply = await order_tape_svc._load_supply(session, tenant_id, supply_id)
+    if supply is None:
+        return {asset.id: FbsPrintAssetOut(**map_print_asset(asset)) for asset in assets}
+    order_context = {
+        order.id: (int(order.wb_order_id), number)
+        for number, order in enumerate(order_tape_svc._orders_in_canonical_order(supply), start=1)
+    }
+    mapped: dict[uuid.UUID, FbsPrintAssetOut] = {}
+    for asset in assets:
+        payload = map_print_asset(asset)
+        if asset.fbs_order_id is not None and asset.fbs_order_id in order_context:
+            wb_order_id, order_number = order_context[asset.fbs_order_id]
+            payload.update(
+                order_id=str(asset.fbs_order_id),
+                wb_order_id=wb_order_id,
+                order_number=order_number,
+            )
+        mapped[asset.id] = FbsPrintAssetOut(**payload)
+    return mapped
 
 
 class FbsTrbxCreateBody(BaseModel):
@@ -635,11 +667,17 @@ def _raise_from_order_tape_service(exc: order_tape_svc.FbsOrderTapePrintError) -
         raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
     if exc.code in {
         "empty_order_set",
+        "full_supply_order_set_required",
         "invalid_layout_json",
         "invalid_layout_block",
         "invalid_layout_copies",
     }:
-        raise_fbs_http(status.HTTP_422_UNPROCESSABLE_ENTITY, exc.code)
+        raise_fbs_http(
+            status.HTTP_409_CONFLICT
+            if exc.code == "full_supply_order_set_required"
+            else status.HTTP_422_UNPROCESSABLE_ENTITY,
+            exc.code,
+        )
     if exc.code.startswith("wb_"):
         raise_fbs_http(status.HTTP_502_BAD_GATEWAY, exc.code)
     raise_fbs_http(status.HTTP_500_INTERNAL_SERVER_ERROR, exc.code)
@@ -1534,12 +1572,15 @@ async def fetch_fbs_supply_print_assets(
         except FbsPrintAssetError as exc:
             _raise_from_print_asset_service(exc)
     await session.commit()
+    assets_by_id = await _map_supply_print_assets(
+        session, user.tenant_id, supply_id, batch.assets
+    )
     return FbsPrintBatchOut(
         requested=batch.requested,
         ready=batch.ready,
         missing=batch.missing,
         failed=batch.failed,
-        assets=[FbsPrintAssetOut(**map_print_asset(asset)) for asset in batch.assets],
+        assets=[assets_by_id[asset.id] for asset in batch.assets],
         order_errors=[
             FbsPrintOrderErrorOut(
                 order_id=str(err.order_id),
@@ -1576,10 +1617,12 @@ async def print_fbs_supply_order_tape(
         except order_tape_svc.FbsOrderTapePrintError as exc:
             _raise_from_order_tape_service(exc)
     await session.commit()
-    assets_by_id = {
-        asset.id: FbsPrintAssetOut(**map_print_asset(asset))
-        for asset in (result.print_batch.assets if result.print_batch else [])
-    }
+    assets_by_id = await _map_supply_print_assets(
+        session,
+        user.tenant_id,
+        supply_id,
+        result.print_batch.assets if result.print_batch else [],
+    )
     return FbsOrderTapePrintOut(
         orders=[
             FbsOrderTapeOrderOut(
