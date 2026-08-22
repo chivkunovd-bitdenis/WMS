@@ -28,7 +28,10 @@ class Warehouse(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     code: Mapped[str] = mapped_column(String(64), nullable=False)
     is_operational: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    barcode: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    barcode: Mapped[str] = mapped_column(
+        String(64), nullable=False, unique=True, index=True,
+        default=lambda: f"WH-{uuid.uuid4().hex[:12].upper()}",
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

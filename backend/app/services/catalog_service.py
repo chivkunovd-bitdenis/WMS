@@ -48,11 +48,31 @@ async def list_warehouses(session: AsyncSession, tenant_id: uuid.UUID) -> list[W
 async def create_warehouse(
     session: AsyncSession, tenant_id: uuid.UUID, *, name: str, code: str
 ) -> Warehouse:
+    normalized_code = code.strip().lower()
+    warehouse_collision = await session.execute(
+        select(Warehouse.id).where(
+            Warehouse.tenant_id == tenant_id,
+            func.lower(Warehouse.code) == normalized_code,
+        ).limit(1)
+    )
+    if warehouse_collision.scalar_one_or_none() is not None:
+        raise CatalogError("warehouse_code_taken")
+    location_collision = await session.execute(
+        select(StorageLocation.id).where(
+            StorageLocation.tenant_id == tenant_id,
+            StorageLocation.deleted_at.is_(None),
+            or_(
+                func.lower(StorageLocation.code) == normalized_code,
+                StorageLocation.barcode == code.strip(),
+            ),
+        ).limit(1)
+    )
+    if location_collision.scalar_one_or_none() is not None:
+        raise CatalogError("warehouse_code_taken")
     wh = Warehouse(
         tenant_id=tenant_id,
         name=name.strip(),
-        code=code.strip().lower(),
-        barcode=f"WH-{uuid.uuid4().hex[:12].upper()}",
+        code=normalized_code,
     )
     session.add(wh)
     try:

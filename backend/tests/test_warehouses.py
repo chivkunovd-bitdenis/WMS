@@ -54,9 +54,10 @@ async def test_operational_warehouse_list_and_scan_resolver(async_client: AsyncC
     second = await async_client.post(
         "/warehouses", headers=headers, json={"name": "Юг", "code": "A-01"}
     )
-    assert second.status_code == 200, second.text
+    assert second.status_code == 409, second.text
+    assert second.json()["detail"] == "warehouse_code_taken"
     collision = await async_client.get(
         "/warehouses/resolve", headers=headers, params={"barcode": "A-01"}
     )
-    assert collision.status_code == 409
-    assert collision.json()["detail"] == "barcode_ambiguous"
+    assert collision.status_code == 200, collision.text
+    assert collision.json()["type"] == "location"

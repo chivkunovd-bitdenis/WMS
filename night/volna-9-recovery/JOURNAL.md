@@ -40,3 +40,6 @@
 15:32   04-warehouse-switch · dev: фича 12/13 сохранена 529797aaff5a
 15:35   04-warehouse-switch · screen-dev: готово
 15:35   04-warehouse-switch · dev: фича 13/13 сохранена 44665797b11f
+15:44   04-warehouse-switch · reviewer: готово
+15:44   04-warehouse-switch · reviewer: находки, круг 1 — назад к разработке
+15:46   04-warehouse-switch · backend-dev: готово
