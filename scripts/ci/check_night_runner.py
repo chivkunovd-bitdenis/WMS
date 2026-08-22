@@ -339,7 +339,8 @@ def fake_e2e_smoke(проверь) -> None:
             fail_card["enabled"] = False
             проверь("fake E2E: resume проходит", n.ночь(wave, 1), 0)
             проверь("fake E2E: resume снимает отложено", (wave / "cards" / "fail" / "OTLOZHENO.md").exists(), False)
-            проверь("fake E2E: acceptor вызван", sum(role == "product-acceptor" for role, _ in calls), 2)
+            проверь("fake E2E: acceptor вызван только после полного завершения",
+                    sum(role == "product-acceptor" for role, _ in calls), 1)
             проверь("fake E2E: clicker и judge получили stand карточки", len(stands), 4)
             проверь("fake E2E: dev обязан сохранить commit", all(committed.values()), True)
             acceptor_prompts = [p for role, p in calls if role == "product-acceptor"]
