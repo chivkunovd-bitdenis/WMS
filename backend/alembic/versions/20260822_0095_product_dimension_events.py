@@ -10,9 +10,8 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "20260822_0095"
-# Wave order is 0093 -> 0094 (card 03) -> 0095.  Keeping this linear avoids
-# creating an Alembic branch when the approved card-03 migration is integrated.
-down_revision: str | Sequence[str] | None = "20260821_0094"
+# Wave order is card 03 -> 07-A movement dimensions -> product dimensions.
+down_revision: str | Sequence[str] | None = "20260822_0094"
 branch_labels = None
 depends_on = None
 

@@ -16,6 +16,8 @@ from app.models.inventory_movement import (
     MOVEMENT_TYPE_STOCK_TRANSFER_OUT,
     InventoryMovement,
 )
+from app.models.product import Product
+from app.models.storage_location import StorageLocation
 from app.services.tokens import decode_access_token
 
 # fbs_order_pick — raw movement_type literal from fbs_picking_service.scan_pick_product,
@@ -37,11 +39,17 @@ async def _insert_movement(
     created_at: datetime,
 ) -> None:
     async with SessionLocal() as session:
+        product = await session.get(Product, uuid.UUID(product_id))
+        location = await session.get(StorageLocation, uuid.UUID(storage_location_id))
+        assert product is not None
+        assert location is not None
         session.add(
             InventoryMovement(
                 tenant_id=tenant_id,
                 product_id=uuid.UUID(product_id),
+                seller_id=product.seller_id,
                 storage_location_id=uuid.UUID(storage_location_id),
+                warehouse_id=location.warehouse_id,
                 quantity_delta=quantity_delta,
                 movement_type=movement_type,
                 created_at=created_at,
@@ -181,7 +189,7 @@ async def test_inventory_movements_summary_groups_and_period_filter(
         movement_type=MOVEMENT_TYPE_INBOUND_INTAKE,
         created_at=outside_window,
     )
-    # На другом складе — должно исключаться фильтром warehouse_id=wid1.  # noqa: RUF003
+    # На другом складе — должно исключаться фильтром warehouse_id=wid1.
     await _insert_movement(
         tenant_id=tenant_id,
         product_id=pid1,
@@ -225,7 +233,7 @@ async def test_inventory_movements_summary_groups_and_period_filter(
     assert g1["fbs"]["label"] == "FBS"
 
     row1 = next(r for r in rows if r["product_id"] == pid1)
-    # intake (оба склада) 14 + transfer_in 3 + fbs pick 2 = 19 total_in;  # noqa: RUF003
+    # intake (оба склада) 14 + transfer_in 3 + fbs pick 2 = 19 total_in;
     # transfer_out 3 + fbs shipment 2 = 5 total_out.
     assert row1["total_in"] == 19
     assert row1["total_out"] == 5

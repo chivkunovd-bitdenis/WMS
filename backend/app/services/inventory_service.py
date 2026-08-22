@@ -561,7 +561,9 @@ async def record_movement_and_adjust_balance(
     movement = InventoryMovement(
         tenant_id=tenant_id,
         product_id=product_id,
+        seller_id=prod.seller_id,
         storage_location_id=storage_location_id,
+        warehouse_id=loc.warehouse_id,
         quantity_delta=quantity_delta,
         movement_type=movement_type,
         inbound_intake_line_id=inbound_intake_line_id,
