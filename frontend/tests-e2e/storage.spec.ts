@@ -1,5 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
 
+import { waitForGetOk, waitForPostOk } from './api-waits'
+import { openFulfillmentRegistration } from './auth-flow'
+
 const rows = [
   { id: 'draft-problem', seller_id: 'seller-1', seller_name: 'Красотка', warehouse_id: 'warehouse-1', warehouse_name: 'Основной склад', status: 'draft', fixed_at: null, total_liter_days: '12840.50', total_amount: '8988.35', problem_count: 1, measurements: [{ product_id: 'product-missing', sku: 'SKU-11890', seller_article: 'NRD-2XL-LONG', volume_liters: null, dimensions_source: null, liter_days: '0', rate_snapshot: '0.70', amount: null, status: 'missing_dimensions' }, { product_id: 'product-ready', sku: 'SKU-10432', seller_article: 'KRS-44-BLK', volume_liters: '2.40', dimensions_source: 'manual', liter_days: '8928.00', rate_snapshot: '0.70', amount: '6249.60', status: 'calculated' }] },
   { id: 'draft-ready', seller_id: 'seller-3', seller_name: 'Норд', warehouse_id: 'warehouse-1', warehouse_name: 'Основной склад', status: 'draft', fixed_at: null, total_liter_days: '6432.00', total_amount: '4502.40', problem_count: 0, measurements: [{ product_id: 'product-nord', sku: 'SKU-20001', seller_article: 'NRD-READY', volume_liters: '1.20', dimensions_source: 'wildberries', liter_days: '6432.00', rate_snapshot: '0.70', amount: '4502.40', status: 'calculated' }] },
@@ -23,23 +26,121 @@ async function openStorage(page: Page, role: 'fulfillment_admin' | 'fulfillment_
   await expect(page.getByTestId('ff-storage-page')).toBeVisible()
 }
 
+function moscowDate(offsetDays = 0) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Moscow',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date(Date.now() + offsetDays * 24 * 60 * 60 * 1000))
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? ''
+  return `${part('year')}-${part('month')}-${part('day')}`
+}
+
+async function waitForLiveJob(page: Page, headers: Record<string, string>, jobId: string) {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const response = await page.request.get(`/api/operations/background-jobs/${jobId}`, { headers })
+    expect(response.ok()).toBeTruthy()
+    const job = await response.json() as { status: string; error_message?: string | null }
+    if (job.status === 'done') return
+    expect(job.status, job.error_message ?? 'storage rebuild failed').not.toBe('failed')
+    await page.waitForTimeout(50)
+  }
+  throw new Error('storage rebuild timed out')
+}
+
 test('S-11-TC-001 administrator opens the previous-month storage screen', async ({ page }) => {
   await openStorage(page)
   await expect(page.getByRole('heading', { name: 'Хранение' })).toBeVisible()
   await expect(page.getByTestId('storage-month')).toHaveValue('2026-07')
 })
 
-test('S-11-TC-002 administrator saves a warehouse rate and seller exception in one request', async ({ page }) => {
-  await openStorage(page, 'fulfillment_admin', false)
-  await page.getByRole('button', { name: 'Задать тариф' }).click()
+test('S-11-TC-002 administrator saves a future warehouse rate and seller exception in one request', async ({ page }) => {
+  const suffix = Date.now()
+  const email = `storage-${suffix}@example.com`
+  const moscowToday = moscowDate()
+  const validFrom = moscowDate(1)
+  const currentMonth = moscowToday.slice(0, 7)
+
+  await page.goto('/')
+  await openFulfillmentRegistration(page)
+  await page.getByTestId('register-form').getByLabel('Организация').fill(`Storage ${suffix}`)
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email)
+  await page.getByTestId('register-form').getByLabel('Пароль').fill('password123')
+  const [registration] = await Promise.all([
+    waitForPostOk(page, '/api/auth/register'),
+    waitForGetOk(page, '/api/auth/me'),
+    page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
+  ])
+  const token = String(((await registration.json()) as { access_token: string }).access_token)
+  const headers = { Authorization: `Bearer ${token}` }
+  const warehouseResponse = await page.request.post('/api/warehouses', {
+    headers,
+    data: { name: 'Основной склад', code: `storage-${suffix}` },
+  })
+  expect(warehouseResponse.ok()).toBeTruthy()
+  const warehouseId = String(((await warehouseResponse.json()) as { id: string }).id)
+  const sellerResponse = await page.request.post('/api/sellers', { headers, data: { name: 'Красотка' } })
+  expect(sellerResponse.ok()).toBeTruthy()
+  const sellerId = String(((await sellerResponse.json()) as { id: string }).id)
+  const initialTariff = await page.request.post('/api/operations/storage/tariffs', {
+    headers,
+    data: { warehouse_id: warehouseId, amount: 0.5, valid_from: moscowToday },
+  })
+  expect(initialTariff.status()).toBe(201)
+  const initialRebuild = await page.request.post('/api/operations/storage/measurements/rebuild', {
+    headers,
+    data: { year: Number(currentMonth.slice(0, 4)), month: Number(currentMonth.slice(5, 7)), warehouse_id: warehouseId },
+  })
+  expect(initialRebuild.status()).toBe(202)
+  await waitForLiveJob(page, headers, String(((await initialRebuild.json()) as { id: string }).id))
+
+  await page.goto('/app/ff/inventory')
+  await expect(page.getByTestId('ff-storage-page')).toBeVisible()
+  await Promise.all([
+    page.waitForResponse((response) => response.request().method() === 'GET' && response.url().includes('/api/operations/storage/statements?') && response.ok()),
+    page.getByTestId('storage-month').fill(currentMonth),
+  ])
+  await expect(page.getByTestId('storage-seller-table')).toContainText('Красотка')
+
+  let tariffPosts = 0
+  let rebuildPosts = 0
+  let tariffBody: unknown = null
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && request.url().includes('/api/operations/storage/tariffs')) {
+      tariffPosts += 1
+      tariffBody = request.postDataJSON()
+    }
+    if (request.method() === 'POST' && request.url().includes('/api/operations/storage/measurements/rebuild')) rebuildPosts += 1
+  })
+
+  await page.getByTestId('storage-rate').click()
+  await expect(page.getByTestId('storage-rate-valid-from')).toHaveValue(moscowToday)
   await page.getByTestId('storage-rate-amount').fill('0,70')
-  await page.getByTestId('storage-rate-valid-from').fill('2026-08-01')
+  await page.getByTestId('storage-rate-valid-from').fill('2000-01-01')
+  await expect(page.getByTestId('storage-rate-save')).toBeDisabled()
+  await page.getByTestId('storage-rate-valid-from').fill(validFrom)
   await page.getByText('Индивидуальная ставка селлера', { exact: true }).click()
-  await page.getByLabel('Селлер').selectOption('seller-1')
+  await page.getByLabel('Селлер').click()
+  await page.getByRole('option', { name: 'Красотка' }).click()
   await page.getByLabel('Ставка, ₽/л·день').nth(1).fill('0,65')
-  await page.getByLabel('Дата начала').nth(1).fill('2026-08-01')
-  await page.getByTestId('storage-rate-save').click()
+  await page.getByLabel('Дата начала').nth(1).fill(validFrom)
+  const [tariffResponse] = await Promise.all([
+    waitForPostOk(page, '/api/operations/storage/tariffs'),
+    waitForPostOk(page, '/api/operations/storage/measurements/rebuild'),
+    page.getByTestId('storage-rate-save').click(),
+  ])
+  expect(tariffResponse.status()).toBe(201)
   await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(page.getByTestId('storage-generate')).toBeEnabled()
+  expect(tariffPosts).toBe(1)
+  expect(rebuildPosts).toBe(1)
+  expect(tariffBody).toEqual({
+    warehouse_id: warehouseId,
+    amount: 0.7,
+    valid_from: validFrom,
+    seller_exception: { seller_id: sellerId, amount: 0.65, valid_from: validFrom },
+  })
 })
 
 test('S-11-TC-003 forms only the selected month through the storage API', async ({ page }) => {

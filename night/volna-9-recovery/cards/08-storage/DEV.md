@@ -1,74 +1,34 @@
-# DEV · 08-storage · атом 1 · переделка по REVIEW
+# 08-storage · screen-dev · атом 3
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/api/storage.py` — для `POST /operations/storage/tariffs` добавлена серверная проверка строго положительной ставки и точное сопоставление доменных ошибок HTTP-статусам; `GET /operations/storage/statements` теперь заново рассчитывает видимую предварительную сумму открытого черновика по актуальным датированным тарифам, не публикуя финансовые строки.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/storage_statement_service.py` — создание тарифа запрещает прошедшую по Москве дату, чужой tenant, неоперационный склад и чужого селлера; добавлен расчёт тарифного превью открытого черновика, ограниченный фактически прошедшей частью текущего месяца.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_storage_tariff_api.py` — к исходным сценариям добавлены проверки нулевой/отрицательной ставки, прошедшей даты, tenant-границ, служебного склада и обновления предварительной суммы после создания новой версии тарифа.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/night/volna-9-recovery/cards/08-storage/DEV.md` — отчёт повторной backend-разработки атома.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend/src/screens/ff/FfStoragePage.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend/tests-e2e/storage.spec.ts`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/night/volna-9-recovery/cards/08-storage/DEV.md`
 
-## Что реализовано
+В диалоге тарифа обе даты ограничены сегодняшним московским днём, а прошедшая дата дополнительно блокируется логикой формы. После единственного `POST /operations/storage/tariffs` экран запускает существующий пересчёт выбранного месяца и только после завершения обновляет видимый расчёт. Тело одного POST содержит `seller_exception`, когда индивидуальная ставка раскрыта и заполнена.
 
-- Эндпоинт `POST /operations/storage/tariffs`: атомарно создаёт общую ставку склада и необязательное исключение селлера, принимает только положительные суммы и даты не раньше текущего московского дня, проверяет tenant и операционный статус склада.
-- Эндпоинт `GET /operations/storage/statements`: для незакрытых документов возвращает заново рассчитанные `rate_snapshot`, `amount` и итоги по действующим версиям тарифа; ledger (неизменяемый журнал начислений) до фиксации не создаётся.
-- Сервис `create_storage_tariff()`: централизует инварианты даты, tenant, склада и селлера до обеих вставок.
-- Сервис `get_storage_draft_pricing()`: рассчитывает предварительную сумму открытого statement (месячного расчёта хранения) без изменения зафиксированных документов.
-
-## Миграции
-
-Нет.
-
-## Тесты
-
-- Сохранены исходные тесты создания общей ставки, общей ставки с исключением и полного отката при конфликте второй вставки, а также запрета для `fulfillment_staff` с правом `inventory`.
-- Добавлены тесты HTTP 422 для нулевой/отрицательной ставки и прошедшей по Москве даты.
-- Добавлен тест HTTP 404/422 для чужого склада, чужого селлера и неоперационного склада с доказательством отсутствия записей тарифа.
-- Добавлен сценарий повторной загрузки открытого черновика после POST: предварительная сумма меняется по новой версии тарифа.
+`S-11-TC-002` переведён с подменённых storage-ответов на живой API: сценарий регистрирует администратора, создаёт операционный склад и селлера, подготавливает черновик, проверяет московскую дату по умолчанию, запрет прошедшей даты, единственный объединённый POST и следующий за ним rebuild.
 
 ## Гейты
 
-```text
-cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && ruff check app/api/storage.py app/services/storage_statement_service.py tests/test_storage_tariff_api.py
-```
-
-Результат: `All checks passed!`.
-
-```text
-cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && mypy --follow-imports=silent app/api/storage.py app/services/storage_statement_service.py
-```
-
-Результат: `Success: no issues found in 2 source files`.
-
-Обычная целевая команда `mypy app/api/storage.py app/services/storage_statement_service.py` также запускалась и остановилась на четырёх уже существующих ошибках в импортируемых несвязанных модулях `wildberries_credentials_service.py`, `fbs_stock_sync_service.py` и `fbs_warehouse_binding_service.py`; в двух изменённых модулях ошибок не показала. Режим `--follow-imports=silent` проверил целевые модули с типами зависимостей, но не вывел ошибки самих импортированных модулей.
-
-```text
-cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && pytest -q tests/test_storage_tariff_api.py
-```
-
-Результат: `8 passed in 8.21s`.
-
-```text
-cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && pytest -q tests/test_storage_tariff_api.py tests/test_storage_statement_service.py
-```
-
-Результат относящейся к изменённому расчёту регрессии: `17 passed in 10.48s`.
-
-```text
-cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage && python3 scripts/ci/back_guard.py
-```
-
-Результат: скрипт отсутствует в этой рабочей копии (`scripts/ci/back_guard.py: No such file or directory`). Новый маршрут относительно исходного атома покрыт целевым API-тестом; в текущем ремонтном diff новый маршрут не добавлялся. `check_migrations.py` не применим, потому что миграций нет.
+- Зелёный: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend && npx tsc --noEmit -p tsconfig.app.json` — exit 0.
+- Красный вне файлов атома: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage && python3 scripts/ui/ui_guard.py` — exit 1. Храповик сообщил только уже присутствующие изменения в `src/components/WbProductPickerDialog.tsx` (`0 → 646`), `src/screens/v2/FfFbsSupplyWorkspace.tsx` (`2493 → 2498`) и `src/screens/v2/SellerInboundDraftScreen.tsx` (`1111 → 1169`). `FfStoragePage.tsx` в новых нарушениях отсутствует; baseline не обновлялся.
+- Зелёный: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend && npm run test:unit -- src/utils/moscowDate.test.ts` — 1 файл, 4 теста пройдены.
+- Зелёный: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend && npx eslint src/screens/ff/FfStoragePage.tsx tests-e2e/storage.spec.ts` — exit 0.
+- Зелёный: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend && npx playwright test tests-e2e/storage.spec.ts --grep "S-11-TC-002" --list` — найден ровно один назначенный тест, файл компилируется.
+- Красный из-за ограничения среды до исполнения кейса: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend && npx playwright test tests-e2e/storage.spec.ts --grep "S-11-TC-002"` — Playwright-managed backend не смог открыть `127.0.0.1:18000`, ошибка `[Errno 1] operation not permitted`; тестовые шаги не начались.
+- Зелёный: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage && git diff --check` — ошибок пробелов нет.
+- Красный из-за ограничения среды: `git add frontend/src/screens/ff/FfStoragePage.tsx frontend/tests-e2e/storage.spec.ts night/volna-9-recovery/cards/08-storage/DEV.md && git commit -m "fix(storage): repair tariff dialog retry flow"` — Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-08-storage1/index.lock`, ошибка `Operation not permitted`. Коммит не создан.
 
 ## Не реализовано
 
-- Находка 5 из `REVIEW.md` относится к `frontend/tests-e2e/storage.spec.ts` и живому Playwright-сценарию. Она намеренно не исправлялась: роль этого шага — только `backend-dev`, а разрешённый атом ограничен backend-файлами и их тестом.
-- Следующие атомы из `FEATURES.md` не выполнялись.
+Пункты контракта этого экранного атома реализованы буквально. Живой браузерный прогон `S-11-TC-002` не подтверждён: sandbox запретил локальному тестовому серверу открыть порт 18000 до запуска сценария. Поэтому этот артефакт не утверждает `PRODUCT_BROWSER_APPROVED`.
+
+Изменения локально реализованы, но не сохранены в новом Git-коммите: sandbox запрещает запись в служебный каталог текущего зарегистрированного worktree. Для завершения сохранности оркестратору нужно закоммитить три файла из секции «Изменённые файлы» в этой же ветке.
+
+Backend-находки ревью о tenant/операционном складе и положительной ставке не менялись ролью `screen-dev`: они вне файла и слоя атома. В текущей рабочей копии соответствующие серверные проверки уже присутствуют в `create_storage_tariff()` и Pydantic-модели запроса.
 
 ## Находки
 
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных и production не открывались и не использовались.
-- Команда сохранения `git add backend/app/api/storage.py backend/app/services/storage_statement_service.py backend/tests/test_storage_tariff_api.py night/volna-9-recovery/cards/08-storage/DEV.md && git diff --cached --check && git status --short && git commit -m "fix(storage): validate and reprice tariffs"` не дошла до индексации: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-08-storage1/index.lock` (`Operation not permitted`). Чужие изменения `night/volna-9-recovery/JOURNAL.md` и `night/volna-9-recovery/cards/08-storage/REVIEW.md` не индексировались.
-
-## Блокеры
-
-- Среда запрещает запись в общий служебный каталог Git зарегистрированного worktree, поэтому отдельный commit этого ремонта создать невозможно. Реализация и отчёт находятся только в рабочем дереве и требуют сохранения из процесса с правом записи в `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-08-storage1`.
+Секреты, ключи, токены, `.env`, кабинеты учётных данных и production не открывались и не использовались. Боевой адрес `194.87.96.144` не затрагивался.
