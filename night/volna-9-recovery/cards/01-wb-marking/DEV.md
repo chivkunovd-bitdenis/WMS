@@ -1,46 +1,46 @@
-# DEV · 01-wb-marking · атом 2/5 · rework после JUDGE
+# DEV · 01-wb-marking · атом 3 · rework по JUDGE
 
 ## Что реализовано
 
-- Эндпоинты: новых и изменённых эндпоинтов нет.
-- Сервисы: новых и изменённых сервисов нет; атом расширяет допустимые типы существующего журнала КИЗ.
-- Модель `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/models/marking_code.py`: константа `EVENT_WB_ORPHANED = "wb_orphaned"` включена в `MARKING_CODE_EVENT_TYPES`.
-- Существующий журнал `MarkingCodeEvent` принимает событие `wb_orphaned` со ссылками на исходный код и пул. Создание события само по себе не меняет статус, пул или продуктовую привязку КИЗ и не освобождает код.
-- Backend-реализация атома уже сохранена в истории текущей ветки: основной код и тест — `5ae86fe8018170fc68064e87b5815f8cb8af0fd3`, дополнительные проверки ссылок события — `acb19c362589b5544d961eda1b75e896790a3388`.
-
-## Миграции
-
-Нет. `marking_code_events.event_type` уже является строковым полем `String(32)`, поэтому добавление нового допустимого значения не меняет схему данных.
-
-## Тесты
-
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_marking_code_events.py::test_wb_orphaned_event_is_recorded_without_releasing_code` создаёт `wb_orphaned` через существующую модель журнала и проверяет тип события, ссылку на КИЗ, пул, статус и продуктовую привязку после сохранения.
+- Эндпоинты: нет.
+- Сервис `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/services/fbs_marking_service.py`: применяет `metaDetails.decision` к существующей привязке КИЗ, сохраняет `reason` и сырой блок, переводит `required` без значения в `missing`, а отличающееся заполненное значение — в `replacement_required`.
+- Сервис `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/services/fbs_marking_service.py`: сохраняет `marking_code_id` и жизненный статус КИЗ, однократно пишет `wb_orphaned`, а пропущенную строку, отсутствующий ожидаемый `kind` и неизвестное решение обрабатывает как безопасный `unknown` без ложной даты успешной проверки.
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/models/marking_code.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_marking_code_events.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/night/volna-9-recovery/cards/01-wb-marking/DEV.md`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/services/fbs_marking_service.py` — реализация атома уже сохранена в истории текущей ветки; по находке `JUDGE.md` дополнительная backend-правка не потребовалась.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_fbs_kiz.py` — целевые сценарии атома уже сохранены в истории текущей ветки; в rework повторно проверены адресно.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/night/volna-9-recovery/cards/01-wb-marking/DEV.md` — обновлён отчёт rework с фактическими результатами гейтов.
 
-В текущем rework backend-файлы не менялись: `JUDGE.md` не содержит находок в модели, журнале или тесте этого атома. Обязательный отчёт `DEV.md` восстановлен после удаления внешним оркестратором.
+## Миграции
+
+- Нет.
+
+## Тесты
+
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_fbs_kiz.py::test_fbs_marking_wb_meta_decision_is_safe_and_preserves_raw_detail` — отображения `filled`, `optional`, `pending`, `required` без значения, `invalid`, неизвестного решения и несовпадающего кода; сохранение причины и сырого блока.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_fbs_kiz.py::test_fbs_marking_partial_wb_row_is_unknown_without_fresh_check_time` — отсутствие ожидаемого `kind` даёт `unknown`, не стирает прежние детали КИЗ и не ставит дату успешной проверки.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_fbs_kiz.py::test_fbs_marking_omitted_wb_row_clears_stale_verdict_only` — пропущенный `order_id` не меняет привязку, жизненный статус КИЗ, прежнюю причину, сырой блок и время последней успешной проверки.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_fbs_kiz.py::test_fbs_marking_orphaned_audit_is_created_once_for_concurrent_and_repeated_mismatch` — повторные и конкурентные `missing` / `replacement_required` оставляют один аудит-факт `wb_orphaned`.
 
 ## Гейты
 
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend && ruff check app/models/marking_code.py tests/test_marking_code_events.py` — PASS: `All checks passed!`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend && mypy app/models/marking_code.py` — PASS: `Success: no issues found in 1 source file`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend && pytest -q tests/test_marking_code_events.py::test_wb_orphaned_event_is_recorded_without_releasing_code` — PASS: `1 passed in 0.96s`.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/scripts/ci/back_guard.py` — не запускался: атом не добавляет и не меняет роуты.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/scripts/ci/check_migrations.py` — не запускался: атом не добавляет миграцию.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking && ruff check backend/app/services/fbs_marking_service.py backend/tests/test_fbs_kiz.py` — успешно: `All checks passed!`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend && mypy app/services/fbs_marking_service.py` — код выхода 1 из-за четырёх ранее существующих ошибок в импортируемых соседних модулях: `app/services/wildberries_credentials_service.py:167`, `app/services/fbs_stock_sync_service.py:617`, `app/services/fbs_warehouse_binding_service.py:23` и `app/services/fbs_warehouse_binding_service.py:291`; в файле атома ошибок не выведено.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend && pytest -q tests/test_fbs_kiz.py::test_fbs_marking_wb_meta_decision_is_safe_and_preserves_raw_detail tests/test_fbs_kiz.py::test_fbs_marking_partial_wb_row_is_unknown_without_fresh_check_time tests/test_fbs_kiz.py::test_fbs_marking_omitted_wb_row_clears_stale_verdict_only tests/test_fbs_kiz.py::test_fbs_marking_orphaned_audit_is_created_once_for_concurrent_and_repeated_mismatch` — успешно: `13 passed in 10.25s`.
+- `python3 /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/scripts/ci/back_guard.py` — не запускался: атом не добавляет маршрут.
+- `python3 /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/scripts/ci/check_migrations.py` — не запускался: атом не добавляет миграцию.
 
 ## Не реализовано
 
-- Повторная и конкурентная дедупликация `wb_orphaned` не входит в этот атом: по `FEATURES.md` её покрывает следующая фича сверки без новой таблицы или миграции.
-- Единственная находка `JUDGE.md` — недоступность живого UI-стенда и отсутствие браузерных снимков экранов `S-03`, `S-14`, `S-15`. Она не относится к backend-файлам или слою этого атома и не требует изменения модели либо теста.
+- Единственная находка `JUDGE.md` — неподнятый живой UI-стенд и отсутствие browser evidence — не относится к файлам и backend-слою атома 3; backend-изменений для неё нет.
+- Новые эндпоинты, модели, миграции, UI и обращения к внешнему Wildberries не добавлялись.
+
+## Блокеры
+
+- Backend-блокеров атома нет. Целевой `mypy` остаётся не зелёным только из-за четырёх ошибок в соседних импортируемых модулях вне разрешённых файлов этого атома.
+- Новый отчёт `DEV.md` локально записан, но не сохранён отдельным коммитом: `git commit` не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-01-wb-marking1/index.lock` из-за запрета записи sandbox (`Operation not permitted`). Реализация и тесты атома уже находятся в истории текущей ветки.
 
 ## Находки
 
 - Секреты, ключи, токены, `.env`, кабинеты учётных данных, боевой прод и живой кабинет Wildberries не читались и не затрагивались.
-
-## Блокеры
-
-Нет для backend-атома. Браузерная продуктовая проверка остаётся отдельным заблокированным этапом согласно `JUDGE.md`.
