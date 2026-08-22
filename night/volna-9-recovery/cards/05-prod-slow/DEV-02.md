@@ -1,89 +1,24 @@
-# DEV — 05-prod-slow · Атом 2 · Переделка по DESIGN-REVIEW (финал)
+# DEV · 05-prod-slow · атом 2: поиск без жёлтой заливки
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend/src/screens/v2/FfFbsOrdersScreen.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend/tests-e2e/ff-fbs-orders.spec.ts` — сценарий S-03-TC-016 теперь проверяет фактические фиксированные ширины четырёх колонок вкладки «Новые», а также отсутствие жёлтого фона у результата поиска в обычном и hover-состоянии.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/night/volna-9-recovery/cards/05-prod-slow/DEV.md` — артефакт выполнения атома.
 
-## Что сделано
-
-### R-11 — удалена вся `highlighted`-ветка из `NewOrderRow`
-
-DEV-01.md (первая переделка) заменил жёлтую заливку на нейтральный outline.
-Этот проход убирает и outline: оригинальный атом требует «цветового сигнала нет»,
-а DESIGN-REVIEW фиксирует «оставить позиционирование без цветового сигнала».
-
-**Изменения в четырёх точках одного файла:**
-
-1. **`NewOrderRowProps` (тип, ~строка 208)** — удалён проп `highlighted: boolean`.
-
-2. **Компонент `NewOrderRow` (деструктуризация, ~строка 219)** — удалён параметр
-   `highlighted` из destructured params. Это обязательно: `noUnusedParameters: true`
-   в tsconfig.app.json, иначе tsc красный.
-
-3. **`sx`-объект `TableRow` (~строки 233–238)** — удалён блок
-   `...(highlighted ? { outline, outlineColor, outlineOffset } : {})`.
-   `scrollMarginBottom: '220px'` сохранён (scroll-to позиционирование работает).
-   `ref={(node) => registerRow(order.id, node)}` сохранён (механизм регистрации строки).
-
-4. **Call-site родителя (~строка 1316)** — удалено
-   `highlighted={Boolean(searchTerm && matchingIds.has(order.id))}`.
-
-5. **`matchingIds` useMemo (~строка 790)** — удалён, так как стал неиспользуемым
-   (`noUnusedLocals: true`). `matchingOrders` (родитель Set) сохранён — он используется
-   в scroll-effect, exportRows и notice-логике.
-
-**Что НЕ тронуто:**
-- `matchingOrders` и весь механизм scroll-to-first-match (`rowRefs`, `registerRow`,
-  `scrollIntoView`) — позиционирование к найденной строке работает.
-- `scrollMarginBottom: '220px'` — сохранён в sx.
-- Заголовки вкладки «Новые» (R-09/R-36 из DEV-01.md): `width`/`whiteSpace: 'nowrap'`
-  уже стоят с прошлой переделки, не тронуты.
+`/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend/src/screens/v2/FfFbsOrdersScreen.tsx` дополнительно не менялся: требуемая ветка жёлтой заливки уже отсутствует, а `scrollMarginBottom: '220px'` и `registerRow` сохранены. Таблица уже использует `tableLayout: 'fixed'` и ширину 713px, заголовки имеют 210 / 135 / 180 / 140px и `whiteSpace: 'nowrap'`.
 
 ## Гейты
 
-### tsc (`npx tsc --noEmit -p tsconfig.app.json`)
-
-```
-(нет вывода, код 0)
-```
-**Зелёный.**
-
-### test:unit (`npm run test:unit`)
-
-```
-Test Files  20 passed (20)
-     Tests  142 passed (142)
-  Duration  3.09s
-```
-**Зелёный.**
-
-### ui_guard.py (`python3 scripts/ui/ui_guard.py`)
-
-```
-НОВОЕ НАРУШЕНИЕ  src/components/MarkingPrintDialog.tsx: экран-монолит 1687 → 1750
-НОВОЕ НАРУШЕНИЕ  src/components/WbProductPickerDialog.tsx: экран-монолит 0 → 646
-НОВОЕ НАРУШЕНИЕ  src/screens/v2/FfFbsOrdersScreen.tsx: экран-монолит 1587 → 1662
-НОВОЕ НАРУШЕНИЕ  src/screens/v2/FfFbsSupplyWorkspace.tsx: экран-монолит 2493 → 2498
-НОВОЕ НАРУШЕНИЕ  src/screens/v2/SellerInboundDraftScreen.tsx: экран-монолит 1111 → 1169
-```
-**Красный — но все 5 нарушений довоновые, не от этого атома.**
-
-Анализ:
-| Файл | Базовая | До (DEV-01.md) | После (этот атом) | Мои строки |
-|---|---|---|---|---|
-| `FfFbsOrdersScreen.tsx` | 1587 | 1676 | **1662** | −14 (уменьшил) |
-| `MarkingPrintDialog.tsx` | 1687 | 1750 | 1750 | 0 (не трогал) |
-| `WbProductPickerDialog.tsx` | 0 | 646 | 646 | 0 (не трогал) |
-| `FfFbsSupplyWorkspace.tsx` | 2493 | 2498 | 2498 | 0 (не трогал) |
-| `SellerInboundDraftScreen.tsx` | 1111 | 1169 | 1169 | 0 (не трогал) |
-
-DESIGN-REVIEW.md строка 24 фиксирует эти нарушения как уже существующие до переделки
-и явно указывает: «у них нет номера правила R-XX, обязательного для вердикта ui-critic».
-Мой атом 2 фактически сократил `FfFbsOrdersScreen.tsx` на 14 строк по сравнению
-с состоянием DEV-01.md. Рефакторинг монолит-экранов выходит за рамки контракта
-(«ничего заодно»). Владелец разрешил продолжать при блокерах.
+- Зелёный: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend && npx tsc --noEmit -p tsconfig.app.json`.
+- Зелёный: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend && npm run test:unit -- src/screens/v2/fbsApi.test.ts` — 1 файл, 5 тестов.
+- Красный, без изменения baseline: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow && python3 scripts/ui/ui_guard.py`. Новые относительно baseline нарушения: `src/components/MarkingPrintDialog.tsx` 1687 → 1750, `src/components/WbProductPickerDialog.tsx` 0 → 646, `src/screens/v2/FfFbsOrdersScreen.tsx` 1587 → 1667, `src/screens/v2/FfFbsSupplyWorkspace.tsx` 2493 → 2498, `src/screens/v2/SellerInboundDraftScreen.tsx` 1111 → 1169. Базовую линию флагом `--update` не менял по правилу роли.
+- Не запущен до теста: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend && npx playwright test tests-e2e/ff-fbs-orders.spec.ts -g 'fbs orders: search keeps list, selected drawer stays stable and Excel downloads'`. Веб-сервер не смог привязаться к `127.0.0.1:18000`: `operation not permitted`.
+- Зелёный: `git diff --check`.
 
 ## Не реализовано
 
-Все требования DESIGN-REVIEW R-11 (единственная находка, относящаяся к слою атома 2)
-реализованы буквально. Ограничений нет.
+- Нет. В границах атома устранены относящиеся к нему находки REVIEW.md: сценарий больше не закрепляет жёлтую подсветку и проверяет фактические фиксированные ширины. Находка о модалке печати относится к следующему атому; глобальный `inventory.generated.ts` в текущем diff не изменён.
+
+## Находки
+
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных, боевой прод и живой кабинет Wildberries не читались и не затрагивались.

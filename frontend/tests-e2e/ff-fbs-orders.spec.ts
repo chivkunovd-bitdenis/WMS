@@ -738,6 +738,10 @@ test('fbs orders: search keeps list, selected drawer stays stable and Excel down
   await expect(page.getByRole('columnheader', { name: 'Селлер', exact: true })).toHaveCSS('white-space', 'nowrap')
   await expect(page.getByRole('columnheader', { name: 'Маршрут сдачи', exact: true })).toHaveCSS('white-space', 'nowrap')
   await expect(page.getByRole('columnheader', { name: 'Отгрузить до', exact: true })).toHaveCSS('white-space', 'nowrap')
+  await expect(page.getByRole('columnheader', { name: 'Товар', exact: true })).toHaveCSS('width', '210px')
+  await expect(page.getByRole('columnheader', { name: 'Селлер', exact: true })).toHaveCSS('width', '135px')
+  await expect(page.getByRole('columnheader', { name: 'Маршрут сдачи', exact: true })).toHaveCSS('width', '180px')
+  await expect(page.getByRole('columnheader', { name: 'Отгрузить до', exact: true })).toHaveCSS('width', '140px')
   await expect
     .poll(async () => page.getByTestId('fbs-order-1').evaluate((node) => getComputedStyle(node).backgroundColor))
     .not.toBe('rgba(255, 214, 102, 0.24)')
