@@ -39,6 +39,12 @@ function order(id: string, over: JsonObject = {}): JsonObject {
       optional: [],
       states: [],
       delivery_allowed: true,
+      verdict: {
+        signature: 'WB: принято',
+        tone: 'ok',
+        reason: null,
+        delivery_allowed: true,
+      },
       last_checked_at: null,
     },
     sticker: { status: 'applied', asset_url: null, applied_at: new Date().toISOString() },

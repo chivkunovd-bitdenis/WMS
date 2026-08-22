@@ -46,6 +46,8 @@ import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import type { ProductThermalLabelData } from '../../utils/printProductThermalLabel'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
+import { PrimaryAction, StatusChip, TextCell } from '../../ui-kit'
+import { metaStatusView } from '../../utils/metaStatus'
 import { buildFbsPickingListPrintHtml, ordersWord } from './fbsUx'
 import {
   confirmFbsPrintApplied,
@@ -1269,6 +1271,12 @@ export function FfFbsSupplyWorkspace({
   const availableForBox = (workspace?.orders ?? []).filter(
     (order) => order.pack.status === 'packed' && !assignedBoxOrderIds.has(order.id),
   )
+  const deliveryBlocker = useMemo(() => {
+    const blockedOrder = workspace?.orders.find((order) => !order.metadata.verdict.delivery_allowed)
+    if (!blockedOrder) return null
+    const status = metaStatusView(blockedOrder.metadata.verdict)
+    return `Заказ №${blockedOrder.wb_order_id}: ${status.disabledReason ?? status.label}`
+  }, [workspace])
   const boxAssignName = workspace?.boxes.find((box) => box.id === boxAssignTarget)?.box_number
   const reprintOrder = workspace?.orders.find((order) => order.id === reprintMenu?.orderId) ?? null
   const reprintLine = reprintOrder?.product.id ? packLineByProduct.get(reprintOrder.product.id) : undefined
@@ -1921,6 +1929,7 @@ export function FfFbsSupplyWorkspace({
                       // красит строку зелёным, активную (только что отсканированный
                       // стикер) — голубым: оператор видит, куда сейчас ляжет код.
                       const tail = kizTail(order)
+                      const metaStatus = metaStatusView(order.metadata.verdict)
                       return (
                         <Stack
                           key={order.id}
@@ -1966,6 +1975,11 @@ export function FfFbsSupplyWorkspace({
                             ) : (
                               <Typography sx={{ color: 'text.disabled', fontSize: 15 }}>—</Typography>
                             )}
+                            <Stack spacing={0.25} sx={{ alignItems: 'flex-end', mt: 0.5 }}>
+                              <StatusChip label={metaStatus.label} tone={metaStatus.tone} testId={`fbs-wb-verdict-${order.id}`} />
+                              {metaStatus.reason ? <TextCell value={metaStatus.reason} width={180} /> : null}
+                              {metaStatus.label === 'Нет ответа WB' ? <TextCell value="Сдача пока недоступна" width={180} /> : null}
+                            </Stack>
                           </Box>
                           {printed ? <Typography sx={{ color: 'success.main', fontWeight: 700 }}>✓</Typography> : null}
                           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
@@ -2153,15 +2167,13 @@ export function FfFbsSupplyWorkspace({
               </Paper>
               {!deliveryConfirmed ? (
                 <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
-                  <Button
-                    variant="contained"
-                    size="large"
-                    disabled={busy}
+                  <PrimaryAction
+                    disabledReason={busy ? 'Идёт операция' : deliveryBlocker ?? undefined}
                     onClick={() => setDeliverConfirmOpen(true)}
                     data-testid="fbs-deliver-open"
                   >
                     Передать в WB
-                  </Button>
+                  </PrimaryAction>
                 </Stack>
               ) : null}
               {deliveryConfirmed && needsSupplyQr && supplyQrAsset?.preview_url ? (
