@@ -4,6 +4,7 @@ import calendar
 import uuid
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
+from itertools import pairwise
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import delete, select
@@ -73,6 +74,53 @@ def _stock_segments(
     if cursor < end:
         segments.append((cursor, end, quantity))
     return segments
+
+
+def _as_moscow(value: datetime) -> datetime:
+    return value.replace(tzinfo=MOSCOW) if value.tzinfo is None else value.astimezone(MOSCOW)
+
+
+def _volume_segments(
+    movements: list[InventoryMovement],
+    events: list[ProductDimensionEvent],
+    start: datetime,
+    end: datetime,
+    *,
+    legacy_volume_liters: Decimal | float | None,
+) -> list[tuple[datetime, datetime, int, Decimal | None, ProductDimensionEvent | None]]:
+    """Split held stock at both movement and dimension-version boundaries.
+
+    A legacy value can describe a product only until it has version history.  Once
+    events exist, time before the first event deliberately has no volume instead
+    of applying a later measurement retroactively.
+    """
+    boundaries = {start, end}
+    boundaries.update(
+        _as_moscow(movement.created_at)
+        for movement in movements
+        if start < _as_moscow(movement.created_at) < end
+    )
+    boundaries.update(
+        _as_moscow(event.observed_at)
+        for event in events
+        if start < _as_moscow(event.observed_at) < end
+    )
+    points = sorted(boundaries)
+    stock_segments = _stock_segments(movements, start, end)
+    result: list[tuple[datetime, datetime, int, Decimal | None, ProductDimensionEvent | None]] = []
+    for segment_start, segment_end in pairwise(points):
+        held = next(
+            (quantity for left, right, quantity in stock_segments
+             if left <= segment_start and segment_end <= right),
+            0,
+        )
+        applicable = [event for event in events if _as_moscow(event.observed_at) <= segment_start]
+        event = applicable[-1] if applicable else None
+        volume = event.volume_liters if event is not None else None
+        if volume is None and not events and legacy_volume_liters is not None:
+            volume = Decimal(str(legacy_volume_liters))
+        result.append((segment_start, segment_end, held, volume, event))
+    return result
 
 
 async def rebuild_storage_measurements(
@@ -181,22 +229,23 @@ async def rebuild_storage_measurements(
             product = products[product_id]
             effective_events = events_by_product.get(product_id, [])
             volume_days = Decimal(0)
-            for start, end, held in _stock_segments(
-                product_moves, period_start_at, period_end_exclusive
+            has_missing_dimensions = False
+            applicable_dimension_event: ProductDimensionEvent | None = None
+            for start, end, held, volume, dimension_event in _volume_segments(
+                product_moves,
+                effective_events,
+                period_start_at,
+                period_end_exclusive,
+                legacy_volume_liters=product.volume_liters,
             ):
                 if held <= 0:
                     continue
-                applicable = [e for e in effective_events if e.observed_at <= start]
-                applicable_event = applicable[-1] if applicable else None
-                volume = applicable_event.volume_liters if applicable_event else (
-                    Decimal(str(product.volume_liters))
-                    if product.volume_liters is not None
-                    else None
-                )
                 if volume is not None:
                     volume_days += Decimal(held) * _seconds(start, end) * volume
-            dimension_event = effective_events[-1] if effective_events else None
-            missing_dimensions = quantity_days > 0 and volume_days == 0
+                    applicable_dimension_event = dimension_event
+                else:
+                    has_missing_dimensions = True
+            missing_dimensions = quantity_days > 0 and has_missing_dimensions
             if missing_dimensions:
                 problems += 1
             rows.append(
@@ -205,7 +254,9 @@ async def rebuild_storage_measurements(
                     seller_id=seller_id,
                     warehouse_id=wh_id,
                     product_id=product_id,
-                    dimension_event_id=dimension_event.id if dimension_event else None,
+                    dimension_event_id=(
+                        applicable_dimension_event.id if applicable_dimension_event else None
+                    ),
                     period_start=period_start,
                     period_end=period_end,
                     quantity_days=quantity_days,

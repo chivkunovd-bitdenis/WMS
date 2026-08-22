@@ -1,34 +1,33 @@
-# DEV · 08-storage · атом 5
+# DEV · 08-storage · атом 6 · исправления ревью
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/models/storage_measurement.py` — добавлена уникальность измерения по tenant, селлеру, операционному складу, SKU и месяцу; это защищает повторный rebuild от дублей.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/alembic/versions/20260822_0096_storage_measurements_and_statements.py` — миграция создаёт тот же уникальный ключ; существующие ограничения отформатированы по лимиту ruff.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_storage_models.py` — проверяет состав нового ключа и отсутствие изменяемой ссылки на ячейку вместо диапазона зафиксированных движений.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/night/volna-9-recovery/cards/08-storage/DEV.md` — отчёт backend-dev по атому.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/storage_measurement_service.py` — расчёт теперь режет положительный остаток также в момент смены версии габаритов; поздний обмер не применяется к более раннему остатку, а любой положительный интервал без объёма остаётся проблемой.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/api/storage.py` — запрос rebuild сразу отклоняет неполную пару года и месяца, несуществующий и будущий месяц; при отсутствии периода по-прежнему передаётся предыдущий календарный месяц МСК.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_storage_measurement_service.py` — добавлены проверки разбиения непрерывного остатка сменой габаритов и запрета ретроактивного применения позднего обмера.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/night/volna-9-recovery/cards/08-storage/DEV.md` — обязательный отчёт backend-dev по текущему атому.
 
 ## Миграции
 
-- `20260822_0096_storage_measurements_and_statements` — добавляет `uq_storage_measurements_tenant_seller_warehouse_product_period`; отдельная таблица денег, локальный тариф или счёт не добавлялись.
+Нет.
 
 ## Тесты
 
-- `test_measurement_is_unique_for_tenant_seller_warehouse_sku_and_month` — состав ключа идемпотентности monthly measurement.
-- `test_measurement_keeps_immutable_movement_boundary_references` — измерение не содержит `storage_location_id` и хранит только FK на границы `InventoryMovement`.
+- `test_volume_segments_split_continuous_stock_at_dimension_change` — литро-дни используют прежний объём до даты новой версии и новый после неё.
+- `test_volume_segments_do_not_apply_later_measurement_to_earlier_stock` — отсутствие исторического объёма до первого обмера не подменяется текущим значением товара.
 
 ## Гейты
 
-- `ruff check backend/app/models/storage_measurement.py backend/app/models/storage_statement.py backend/tests/test_storage_models.py backend/alembic/versions/20260822_0096_storage_measurements_and_statements.py` — `All checks passed!`
-- `cd backend && mypy -m app.models.storage_measurement -m app.models.storage_statement` — `Success: no issues found in 2 source files`.
-- `cd backend && pytest -q tests/test_storage_models.py` — `5 passed`.
+- `cd backend && ruff check app/services/storage_measurement_service.py app/api/storage.py tests/test_storage_measurement_service.py` — `All checks passed!`.
+- `cd backend && pytest -q tests/test_storage_measurement_service.py` — `5 passed in 0.02s`.
+- `cd backend && mypy app/services/storage_measurement_service.py app/api/storage.py` — не прошёл из-за 48 уже существующих ошибок вне расчёта: отсутствует внешний `app.models.billing` (находка ревью о зависимости 09-A), а также существующие типовые ошибки `storage_statement_service` и его зависимостей.
+- `cd backend && mypy --follow-imports=skip app/services/storage_measurement_service.py app/api/storage.py` — не прошёл из-за 7 существующих типовых ошибок API-модуля: FastAPI/Pydantic импортируются как `Any` в этом режиме и у старого `_statement_out` нет полной аннотации.
 - `git diff --check` — пройден без вывода.
-- `python3 scripts/ci/check_migrations.py` — не запущен: файла `scripts/ci/check_migrations.py` в этой рабочей копии нет.
-- Эквивалентная проверка `cd backend && alembic heads` — обнаружила отсутствующую внешнюю ревизию `20260821_0094`, на которую ссылается уже существующая `20260822_0095`; изменения атома 5 эту внешнюю цепочку не меняют.
-- `python3 scripts/ci/back_guard.py` неприменим: новых роутов в атоме нет.
-- `git add … && git commit -m 'night(08-storage): enforce measurement idempotency'` — не выполнен: sandbox запретил создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-08-storage1/index.lock`. Изменения остаются в рабочем дереве и требуют коммита из среды с доступом к Git metadata.
+- `python3 scripts/ci/back_guard.py` — неприменим: новый роут не добавлялся, исправлена валидация существующего `/operations/storage/measurements/rebuild`.
+- `python3 scripts/ci/check_migrations.py` — неприменим: миграции не добавлялись и не изменялись.
 
 ## Не реализовано
 
-- Из вердикта ревью №3 не менялся контракт `InventoryMovement.seller_id/warehouse_id`, backfill и writers: это единоличная зона внешнего фундамента 07-A по `ARCH-CROSS.md`, не слой атома 5.
-- Денежная фиксация statement, выбор тарифа, печатный DTO и API из находок №2 и №5–9 не менялись: этот атом создаёт только неизменяемые модели и миграцию без финансовых таблиц или новых роутов.
-- Нахождение внешней отсутствующей миграции `20260821_0094` записано выше как факт проверки; секреты, ключи, токены, `.env` и кабинеты учётных данных не читались.
+- Находка ревью №3 о `InventoryMovement.seller_id/warehouse_id`, backfill и writer-контракте не изменялась: это внешний фундамент 07-A, прямо исключённый границей атома 6.
+- Находки №2 и №5–9 о фиксации, тарифах, ledger, печатном DTO и API габаритов относятся к другим атомам и финансовому фундаменту 09-A; в этом атоме деньги не создаются.
+- Находки по секретам, ключам, токенам, `.env` и кабинетам учётных данных отсутствуют: они не читались и не использовались.

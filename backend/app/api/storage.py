@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from decimal import Decimal
 from typing import Annotated
 
@@ -15,6 +16,12 @@ from app.models.user import User
 from app.services import background_job_service as job_svc
 from app.services.background_job_service import JOB_TYPE_STORAGE_MEASUREMENT_REBUILD
 from app.services.staff_permissions_service import PERM_INVENTORY
+from app.services.storage_measurement_service import (
+    MOSCOW,
+    StorageMeasurementError,
+    month_bounds,
+    previous_month,
+)
 from app.services.storage_statement_service import (
     StorageStatementError,
     fix_storage_statement,
@@ -82,6 +89,18 @@ async def rebuild_storage(
     user: Annotated[User, Depends(require_storage_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> StorageRebuildOut:
+    if (body.year is None) != (body.month is None):
+        raise HTTPException(status_code=422, detail="year_and_month_required_together")
+    try:
+        period_start, _ = (
+            month_bounds(body.year, body.month)
+            if body.year is not None and body.month is not None
+            else previous_month()
+        )
+    except StorageMeasurementError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if period_start > datetime.now(MOSCOW).date().replace(day=1):
+        raise HTTPException(status_code=422, detail="future_month")
     payload = {
         k: v
         for k, v in {

@@ -1,9 +1,11 @@
 from datetime import date, datetime
+from decimal import Decimal
 from types import SimpleNamespace
 
 from app.services.storage_measurement_service import (
     MOSCOW,
     _stock_segments,
+    _volume_segments,
     month_bounds,
     previous_month,
 )
@@ -34,4 +36,39 @@ def test_stock_segments_keep_fractional_day_boundaries() -> None:
         (start, datetime(2026, 7, 1, 12, tzinfo=MOSCOW), 0),
         (datetime(2026, 7, 1, 12, tzinfo=MOSCOW), datetime(2026, 7, 2, 12, tzinfo=MOSCOW), 2),
         (datetime(2026, 7, 2, 12, tzinfo=MOSCOW), end, 1),
+    ]
+
+
+def test_volume_segments_split_continuous_stock_at_dimension_change() -> None:
+    start = datetime(2026, 7, 1, tzinfo=MOSCOW)
+    change_at = datetime(2026, 7, 20, tzinfo=MOSCOW)
+    end = datetime(2026, 8, 1, tzinfo=MOSCOW)
+    movements = [SimpleNamespace(created_at=start, quantity_delta=2)]
+    old = SimpleNamespace(observed_at=start, volume_liters=Decimal("1"))
+    new = SimpleNamespace(observed_at=change_at, volume_liters=Decimal("3"))
+
+    segments = _volume_segments(
+        movements, [old, new], start, end, legacy_volume_liters=None
+    )
+
+    assert [(left, right, held, volume) for left, right, held, volume, _ in segments] == [
+        (start, change_at, 2, Decimal("1")),
+        (change_at, end, 2, Decimal("3")),
+    ]
+
+
+def test_volume_segments_do_not_apply_later_measurement_to_earlier_stock() -> None:
+    start = datetime(2026, 7, 1, tzinfo=MOSCOW)
+    measured_at = datetime(2026, 7, 20, tzinfo=MOSCOW)
+    end = datetime(2026, 8, 1, tzinfo=MOSCOW)
+    movements = [SimpleNamespace(created_at=start, quantity_delta=1)]
+    event = SimpleNamespace(observed_at=measured_at, volume_liters=Decimal("2"))
+
+    segments = _volume_segments(
+        movements, [event], start, end, legacy_volume_liters=Decimal("9")
+    )
+
+    assert [(held, volume) for _, _, held, volume, _ in segments] == [
+        (1, None),
+        (1, Decimal("2")),
     ]
