@@ -6,6 +6,7 @@ import asyncio
 import logging
 import uuid
 from collections import defaultdict
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
@@ -28,11 +29,9 @@ from app.services.fbs_warehouse_binding_service import is_auto_fbs_wms_warehouse
 from app.services.fbs_wb_seller_lock_service import wb_seller_lock
 from app.services.wb_marketplace_orders_service import (
     WbMarketplaceOrdersError,
-    sync_seller_orders,
-)
-from app.services.wb_marketplace_orders_service import (
     reconcile_orders_for_seller,
     sync_new_orders_for_seller,
+    sync_seller_orders,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,7 +40,9 @@ _sync_locks: defaultdict[tuple[uuid.UUID, str], asyncio.Lock] = defaultdict(asyn
 
 
 @asynccontextmanager
-async def seller_sync_flight(seller_id: uuid.UUID, sync_kind: str):
+async def seller_sync_flight(
+    seller_id: uuid.UUID, sync_kind: str
+) -> AsyncIterator[bool]:
     """Prevent overlapping jobs of one kind without serializing the other kind."""
     lock = _sync_locks[(seller_id, sync_kind)]
     if lock.locked():

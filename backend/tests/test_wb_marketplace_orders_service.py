@@ -26,9 +26,9 @@ from app.models.fbs_supply import (
     FbsSupply,
 )
 from app.models.product import Product
+from app.services import fbs_autopoll_service
 from app.services import wb_marketplace_orders_service as orders_service
 from app.services.wb_marketplace_orders_service import link_confirmed_orders_to_wb_supplies
-from app.services import fbs_autopoll_service
 from app.services.wildberries_errors import WildberriesClientError
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 
