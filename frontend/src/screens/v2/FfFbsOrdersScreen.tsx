@@ -57,10 +57,8 @@ import {
   type FbsWorklistWarehouseOption,
   type FbsWorkspace,
 } from './fbsApi'
-import { WarehouseContextSwitch, type WarehouseOption } from '../../ui-kit'
-
-const FBS_WMS_WAREHOUSE_SESSION_KEY = 'wms_operational_warehouse:fulfillment'
-
+import { EmptyState, WarehouseContextSwitch, type WarehouseOption } from '../../ui-kit'
+import { useWarehouseContext } from '../../contexts/WarehouseContext'
 type SellerRow = { id: string; name: string }
 
 type Props = {
@@ -490,6 +488,9 @@ function downloadOrdersExcel(rows: FbsWorklistOrder[]): void {
 export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false }: Props) {
   const location = useLocation()
   const navigate = useNavigate()
+  const warehouseContext = useWarehouseContext('fulfillment')
+  const wmsWarehouseId = warehouseContext.selectedWarehouseId
+  const setWmsWarehouseId = warehouseContext.selectWarehouse
   const [statusGroup, setStatusGroup] = useState<(typeof TABS)[number]['key']>('new')
   const [sellerId, setSellerId] = useState('__all__')
   const [wbWarehouseId, setWbWarehouseId] = useState('__all__')
@@ -499,8 +500,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [activeSupplies, setActiveSupplies] = useState<FbsSupplyWorklistItem[]>([])
   const [externalActiveOrders, setExternalActiveOrders] = useState<FbsWorklistOrder[]>([])
   const [warehouseOptions, setWarehouseOptions] = useState<FbsWorklistWarehouseOption[]>([])
-  const [wmsWarehouseOptions, setWmsWarehouseOptions] = useState<WarehouseOption[]>([])
   const [wmsWarehouseLoadError, setWmsWarehouseLoadError] = useState<string | null>(null)
+  const [wmsWarehousesLoading, setWmsWarehousesLoading] = useState(true)
   const [sellerWarehouseNames, setSellerWarehouseNames] = useState<Record<string, string>>({})
   const [serverNow, setServerNow] = useState<string | null>(null)
   const [lastLoadedAt, setLastLoadedAt] = useState<string | null>(null)
@@ -521,13 +522,10 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const [workspaceSeed, setWorkspaceSeed] = useState<FbsWorkspace | null>(null)
-  const [wmsWarehouseId, setWmsWarehouseId] = useState<string | null>(() => {
-    try {
-      return window.sessionStorage.getItem(FBS_WMS_WAREHOUSE_SESSION_KEY)
-    } catch {
-      return null
-    }
-  })
+  const wmsWarehouseOptions = useMemo<WarehouseOption[]>(
+    () => warehouseContext.warehouses.map(({ id, name }) => ({ id, name })),
+    [warehouseContext.warehouses],
+  )
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({})
   const registerRow = useCallback((id: string, node: HTMLTableRowElement | null) => {
     rowRefs.current[id] = node
@@ -542,45 +540,34 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   // панель — так нижние строки остаются кликабельными при любой высоте панели.
   const selectionBarRef = useRef<HTMLDivElement | null>(null)
   const [selectionBarHeight, setSelectionBarHeight] = useState(0)
-  const visibleOrders = useMemo(() => wmsWarehouseId ? orders.filter((item) => item.wms_warehouse.id === wmsWarehouseId) : orders, [orders, wmsWarehouseId])
-  const visibleSupplies = useMemo(() => wmsWarehouseId ? activeSupplies.filter((item) => item.wms_warehouse.id === wmsWarehouseId) : activeSupplies, [activeSupplies, wmsWarehouseId])
-  const visibleExternalOrders = useMemo(() => wmsWarehouseId ? externalActiveOrders.filter((item) => item.wms_warehouse.id === wmsWarehouseId) : externalActiveOrders, [externalActiveOrders, wmsWarehouseId])
-  useEffect(() => {
-    if (wmsWarehouseOptions.length === 1) setWmsWarehouseId(wmsWarehouseOptions[0].id)
-    if (wmsWarehouseId && !wmsWarehouseOptions.some((option) => option.id === wmsWarehouseId)) setWmsWarehouseId(null)
-  }, [wmsWarehouseOptions, wmsWarehouseId])
-
-  useEffect(() => {
-    try {
-      if (wmsWarehouseId) window.sessionStorage.setItem(FBS_WMS_WAREHOUSE_SESSION_KEY, wmsWarehouseId)
-      else window.sessionStorage.removeItem(FBS_WMS_WAREHOUSE_SESSION_KEY)
-    } catch {
-      // Session storage is optional; the screen still works for the current mount.
-    }
-  }, [wmsWarehouseId])
+  const visibleOrders = useMemo(() => wmsWarehouseId ? orders.filter((item) => item.wms_warehouse.id === wmsWarehouseId) : [], [orders, wmsWarehouseId])
+  const visibleSupplies = useMemo(() => wmsWarehouseId ? activeSupplies.filter((item) => item.wms_warehouse.id === wmsWarehouseId) : [], [activeSupplies, wmsWarehouseId])
+  const visibleExternalOrders = useMemo(() => wmsWarehouseId ? externalActiveOrders.filter((item) => item.wms_warehouse.id === wmsWarehouseId) : [], [externalActiveOrders, wmsWarehouseId])
 
   useEffect(() => {
     let cancelled = false
+    setWmsWarehousesLoading(true)
     void fetch(apiUrl('/warehouses'), { headers: authHeaders(token) })
       .then(async (response) => {
         if (!response.ok) throw new Error('Не удалось загрузить склады.')
-        return (await response.json()) as Array<{ id?: string; name?: string; is_operational?: boolean }>
+        return (await response.json()) as Array<{ id: string; name: string; code: string; is_operational?: boolean; is_primary?: boolean }>
       })
       .then((warehouses) => {
         if (cancelled) return
-        setWmsWarehouseOptions(warehouses
-          .filter((warehouse) => warehouse.is_operational !== false && warehouse.id && warehouse.name?.trim())
-          .map((warehouse) => ({ id: String(warehouse.id), name: warehouse.name!.trim() })))
+        warehouseContext.setWarehouses(warehouses)
         setWmsWarehouseLoadError(null)
       })
       .catch(() => {
         if (!cancelled) {
-          setWmsWarehouseOptions([])
+          warehouseContext.setWarehouses([])
           setWmsWarehouseLoadError('Не удалось загрузить склады. Обновите страницу.')
         }
       })
+      .finally(() => {
+        if (!cancelled) setWmsWarehousesLoading(false)
+      })
     return () => { cancelled = true }
-  }, [authHeaders, token])
+  }, [authHeaders, token, warehouseContext.setWarehouses])
 
   const load = useCallback(async () => {
     // Задача 9 пула (HANDOFF-POLISH.md): поллинг не должен наслаиваться сам на себя —
@@ -941,6 +928,19 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     openWorkspace(supplyId)
   }, [location.search])
 
+  if (!wmsWarehousesLoading && !wmsWarehouseLoadError && wmsWarehouseOptions.length === 0) {
+    return (
+      <Box data-testid="fbs-orders-screen">
+        <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', mb: 1.5 }}>
+          <Inventory2OutlinedIcon color="primary" />
+          <Typography variant="h5">Заказы FBS</Typography>
+        </Stack>
+        <FfFbsSectionNav showStockSync={isAdmin} />
+        <Box sx={{ mt: 2 }} data-testid="fbs-orders-no-wms-warehouse"><EmptyState title="Нет рабочего склада" hint="Попросите администратора добавить рабочий склад." /></Box>
+      </Box>
+    )
+  }
+
   return (
     <Box
       data-testid="fbs-orders-screen"
@@ -1005,7 +1005,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         options={wmsWarehouseOptions}
         value={wmsWarehouseId}
         onChange={setWmsWarehouseId}
-        loading={busy && wmsWarehouseOptions.length === 0}
+        loading={wmsWarehousesLoading}
         error={wmsWarehouseLoadError ?? undefined}
         testId="fbs-wms-warehouse-context"
       />

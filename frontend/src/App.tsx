@@ -284,8 +284,7 @@ export default function App() {
     setWarehouses,
     selectWarehouse,
     clearWarehouseContext,
-  } =
-    useWarehouseContext('fulfillment', me?.id ?? null)
+  } = useWarehouseContext('fulfillment')
   const [locations, setLocations] = useState<LocationRow[]>([])
   const [products, setProducts] = useState<ProductRow[]>([])
   const [sellers, setSellers] = useState<SellerRow[]>([])

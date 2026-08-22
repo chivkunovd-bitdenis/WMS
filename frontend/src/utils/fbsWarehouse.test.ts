@@ -17,6 +17,14 @@ describe('fbs warehouse selection', () => {
     expect(chooseWarehouseId([north, south], null, null)).toBeNull()
   })
 
+  it('restores the warehouse selected earlier in the same session', () => {
+    expect(chooseWarehouseId([north, south], null, 'south')).toBe('south')
+  })
+
+  it('does not restore a warehouse that is absent from the current operational list', () => {
+    expect(chooseWarehouseId([north], null, 'foreign')).toBe('north')
+  })
+
   it('excludes legacy FBS WB warehouses from operational choices', () => {
     expect(
       operationalWarehouses([

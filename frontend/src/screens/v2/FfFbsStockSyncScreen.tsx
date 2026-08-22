@@ -292,18 +292,6 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
     [physicalWarehouses],
   )
 
-  useEffect(() => {
-    if (physicalWarehouses.length === 0) {
-      selectWarehouse(null)
-      return
-    }
-    const current = physicalWarehouses.some((warehouse) => warehouse.id === selectedOperationalWarehouseId)
-    if (!current) {
-      const next = physicalWarehouses[0].id
-      selectWarehouse(next)
-    }
-  }, [physicalWarehouses, selectWarehouse, selectedOperationalWarehouseId])
-
   const officeCityById = useMemo(() => {
     const m = new Map<number, string>()
     for (const office of sellerOffices) {
