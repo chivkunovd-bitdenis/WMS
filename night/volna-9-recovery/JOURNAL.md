@@ -126,3 +126,5 @@
 01:02 08-storage: отложено на шаге dev
 01:16   08-storage · resume: поатомный rework Terra по сохранённым находкам
 01:18   08-storage · backend-dev: готово
+01:18   08-storage · dev: фича 1/4 сохранена 2d8d0b9c948a
+01:20   08-storage · screen-dev: готово

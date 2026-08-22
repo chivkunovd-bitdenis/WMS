@@ -29,7 +29,7 @@ test('S-11-TC-001 administrator opens the previous-month storage screen', async 
   await expect(page.getByTestId('storage-month')).toHaveValue('2026-07')
 })
 
-test('S-11-TC-002 administrator saves a warehouse storage rate effective forward', async ({ page }) => {
+test('S-11-TC-002 administrator saves a warehouse rate and seller exception in one request', async ({ page }) => {
   await openStorage(page, 'fulfillment_admin', false)
   let tariffBody: unknown = null
   await page.route('**/api/operations/storage/tariffs', async (route) => {
@@ -39,9 +39,18 @@ test('S-11-TC-002 administrator saves a warehouse storage rate effective forward
   await page.getByRole('button', { name: 'Задать тариф' }).click()
   await page.getByTestId('storage-rate-amount').fill('0,70')
   await page.getByTestId('storage-rate-valid-from').fill('2026-08-01')
+  await page.getByText('Индивидуальная ставка селлера', { exact: true }).click()
+  await page.getByLabel('Селлер').selectOption('seller-1')
+  await page.getByLabel('Ставка, ₽/л·день').nth(1).fill('0,65')
+  await page.getByLabel('Дата начала').nth(1).fill('2026-08-01')
   await page.getByTestId('storage-rate-save').click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
-  expect(tariffBody).toEqual({ warehouse_id: 'warehouse-1', amount: 0.7, valid_from: '2026-08-01' })
+  expect(tariffBody).toEqual({
+    warehouse_id: 'warehouse-1',
+    amount: 0.7,
+    valid_from: '2026-08-01',
+    seller_exception: { seller_id: 'seller-1', amount: 0.65, valid_from: '2026-08-01' },
+  })
 })
 
 test('S-11-TC-003 forms only the selected month through the storage API', async ({ page }) => {
