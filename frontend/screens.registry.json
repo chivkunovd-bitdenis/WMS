@@ -2656,6 +2656,23 @@
           "S-32"
         ]
       }
+    },
+    {
+      "portal": "shared",
+      "route": "/app/ff/reports",
+      "alternateRoutes": ["/app/seller/reports"],
+      "component": "FfReportsPage",
+      "files": [
+        "src/App.tsx",
+        "src/layouts/AuthedAppLayout.tsx"
+      ],
+      "zones": [
+        "шапка",
+        "фильтры",
+        "таблица",
+        "панель действий"
+      ],
+      "id": "S-33"
     }
   ]
 }

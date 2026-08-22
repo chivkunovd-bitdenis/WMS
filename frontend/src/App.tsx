@@ -3070,7 +3070,7 @@ export default function App() {
           <Route
             path="ff/reports"
             element={
-              token && (isFulfillmentAdmin || canCellsOps) ? (
+              token && (isFulfillmentAdmin || canAccessFfBlock(me.role, me.permissions, 'inventory')) ? (
                 <FfReportsPage
                   token={token}
                   sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
