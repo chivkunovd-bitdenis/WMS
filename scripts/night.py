@@ -42,7 +42,7 @@ from pathlib import Path
     "analyst":            ("RAZBOR.md",        ["Дословно", "Что сейчас", "Что должно быть", "Тип"]),
     "requirement-critic": ("SVERKA.md",        ["Тип", "Расхождения"]),
     "solution-architect": ("ARCH.md",          ["Как это решают другие", "Решение", "Границы"]),
-    "ux-architect":       ("CONTRACT.md",      ["Контракт", "Канон"]),
+    "ux-architect":       ("CONTRACT.md",      ["Контракт", "Канон", "Макет", "Нехватка ui-kit"]),
     "ui-critic":          ("DESIGN-REVIEW.md", ["Находки"]),
     "tester":             ("CASES.md",         ["Назначенные кейсы"]),
     "breaker":            ("CASES.md",         ["Ломающие кейсы", "Смежные кейсы"]),
@@ -442,6 +442,34 @@ def артефакт_готов(папка: Path, роль: str) -> tuple[bool, 
             return False, "FEATURES.md: ФИЧ не совпадает с числом блоков `### N.`"
         if any(not dev_для_фичи(кусок) for кусок in куски):
             return False, "FEATURES.md: каждый блок должен содержать только backend/ или frontend/"
+        ui_решение = re.search(r"^UI-KIT:\s*(ХВАТАЕТ|НУЖНЫ\s+.+)\s*$",
+                               (папка / "CONTRACT.md").read_text(
+                                   encoding="utf-8", errors="replace")
+                               if (папка / "CONTRACT.md").exists() else "", re.M | re.I)
+        if ui_решение and ui_решение.group(1).upper().startswith("НУЖНЫ"):
+            фронтовые = [кусок for кусок in куски if dev_для_фичи(кусок) == "screen-dev"]
+            пути = re.findall(r"`([^`]*frontend/[^`]+)`", фронтовые[0]) if фронтовые else []
+            пути = ["frontend/" + путь.split("frontend/", 1)[1] for путь in пути]
+            if not пути or any(not путь.startswith("frontend/src/ui-kit/") for путь in пути):
+                return False, "FEATURES.md: первый frontend-атом должен отдельно создать ui-kit"
+    if роль == "ux-architect":
+        решение_макета = re.search(
+            r"^МАКЕТ:\s*(MOCKUP\.html|НЕ\s+НУЖЕН)\s*$", текст, re.M | re.I)
+        ui_решение = re.search(
+            r"^UI-KIT:\s*(ХВАТАЕТ|НУЖНЫ\s+.+)\s*$", текст, re.M | re.I)
+        if not решение_макета or not ui_решение:
+            return False, "CONTRACT.md: нужны машинные строки МАКЕТ и UI-KIT"
+        экраны = поле(папка, "RAZBOR.md", "Экраны")
+        макет_нужен = решение_макета.group(1).lower() == "mockup.html"
+        if экраны and not re.search(r"не\s+затраг", экраны, re.I) and not макет_нужен:
+            return False, "CONTRACT.md: карточке с экраном нельзя поставить МАКЕТ: НЕ НУЖЕН"
+        if макет_нужен:
+            макет = папка / "MOCKUP.html"
+            if not макет.exists():
+                return False, "нет обязательного визуального макета MOCKUP.html"
+            макет_текст = макет.read_text(encoding="utf-8", errors="replace")
+            if "<html" not in макет_текст.lower() or "UI-KIT:" not in макет_текст:
+                return False, "MOCKUP.html должен быть открываемым HTML и содержать маркер UI-KIT:"
     return True, ""
 
 
@@ -711,8 +739,8 @@ def фичи(папка: Path) -> list[str]:
         конец = начала[номер + 1].start() if номер + 1 < len(начала) else len(текст)
         блок = текст[начало.start():конец].strip()
         # Не затягиваем в последнюю фичу служебные секции splitter-а.
-        блок = re.split(r"^##\s+(?:Порядок|Что осталось за бортом)\s*$", блок, 1,
-                        flags=re.M)[0].strip()
+        блок = re.split(r"^##\s+(?:Порядок|Что осталось за бортом)\s*$", блок,
+                        maxsplit=1, flags=re.M)[0].strip()
         if блок:
             результат.append(блок)
     return результат
@@ -808,7 +836,7 @@ def _шаг(ид: str, роль: str, папка: Path, волна: Path,
 
 
 def сверить_архитектуру(волна: Path,
-                        рабочие: dict[str, РабочаяКарточка]) -> None:
+                        рабочие: dict[str, РабочаяКарточка]) -> bool:
     """Барьер после арх-решений: свести их между собой, пока не написан ни один контракт.
 
     Первый архитектор пишет решение по каждой карточке в своей параллельной полосе и не видит
@@ -820,11 +848,18 @@ def сверить_архитектуру(волна: Path,
     """
     файл = волна / "ARCH-CROSS.md"
     if файл.exists():
-        return
+        текст_сверки = файл.read_text(encoding="utf-8", errors="replace")
+        if not all(секция in текст_сверки for секция in (
+                "## Столкновения", "## Что переписал", "## Порядок")):
+            return False
+        for рабочая in рабочие.values():
+            рабочая.волна.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(файл, рабочая.волна / файл.name)
+        return True
     решения = [р.папка / "ARCH.md" for р in рабочие.values()
                if (р.папка / "ARCH.md").exists()]
     if len(решения) < 2:
-        return                       # сводить нечего
+        return True                  # сводить нечего
     журнал(волна, f"\n### перекрёстная сверка архитектуры ({len(решения)} решений)")
     код, хвост = запустить("arch-critic", (
         f"Твоя рабочая копия — `{КОРЕНЬ}`, все пути абсолютные.\n"
@@ -833,12 +868,18 @@ def сверить_архитектуру(волна: Path,
         f"Прочитай все решения разом, найди где они друг друга ломают и запиши единый итог "
         f"в `{файл}`. Секции: Столкновения, Что переписал, Порядок, "
         f"Что осталось за бортом. Первой строкой — ВЕРДИКТ: ЧИСТО или ВЕРДИКТ: НАХОДКИ N."))
-    if файл.exists():
+    готово = файл.exists()
+    if готово:
+        текст_сверки = файл.read_text(encoding="utf-8", errors="replace")
+        готово = all(секция in текст_сверки for секция in (
+            "## Столкновения", "## Что переписал", "## Порядок"))
+    if готово:
         for рабочая in рабочие.values():
             рабочая.волна.mkdir(parents=True, exist_ok=True)
             shutil.copy2(файл, рабочая.волна / файл.name)
-    журнал(волна, "перекрёстная сверка: " + ("готова" if файл.exists()
+    журнал(волна, "перекрёстная сверка: " + ("готова" if готово
                                              else f"НЕ СОЗДАНА (код {код}) {хвост.strip()[-200:]}"))
+    return готово
 
 
 def снять_устаревшую_парковку(папка: Path) -> bool:
@@ -1081,7 +1122,9 @@ def ночь(волна: Path, полос: int) -> int:
             list(пул_арх.map(
                 lambda и: шаг(и, "solution-architect", рабочие[и].папка, волна,
                               рабочие[и].корень, рабочие[и]), домены))
-        сверить_архитектуру(волна, {и: рабочие[и] for и in домены})
+        if not сверить_архитектуру(волна, {и: рабочие[и] for и in домены}):
+            журнал(волна, "ночь остановлена до product: единая ARCH-CROSS не готова")
+            return 2
 
     with futures.ThreadPoolExecutor(max_workers=полос) as пул:
         def безопасно(и: str) -> str:

@@ -57,11 +57,16 @@ def регрессии_r04(проверь) -> None:
 
     # 3. Контракты 07/08/09 сами себя остановили до утра.
     (t / "CONTRACT.md").write_text(
-        "## Контракт\nx\n## Канон\nR-01\n\n"
+        "МАКЕТ: НЕ НУЖЕН\nUI-KIT: ХВАТАЕТ\n\n"
+        "## Контракт\nx\n## Канон\nR-01\n## Макет\nне затрагивается\n"
+        "## Нехватка ui-kit\nнет\n\n"
         "Документ не разрешает разработку до подтверждения владельца.\n", encoding="utf-8")
     проверь("r04-3: контракт со стопом до владельца отклонён",
             n.артефакт_готов(t, "ux-architect")[0], False)
-    (t / "CONTRACT.md").write_text("## Контракт\nx\n## Канон\nR-01\n", encoding="utf-8")
+    (t / "CONTRACT.md").write_text(
+        "МАКЕТ: НЕ НУЖЕН\nUI-KIT: ХВАТАЕТ\n\n"
+        "## Контракт\nx\n## Канон\nR-01\n## Макет\nне затрагивается\n"
+        "## Нехватка ui-kit\nнет\n", encoding="utf-8")
     проверь("r04-3: чистый контракт принят", n.артефакт_готов(t, "ux-architect")[0], True)
 
     # 4. «Нет, тип неверный: ... это домен» рядом со словом «фича».
@@ -95,6 +100,65 @@ def регрессии_r04(проверь) -> None:
 
     # 7. Карточка обязана оставить коммит реализации.
     проверь("r04-7: проверка коммита существует", hasattr(n, "проверить_сохранение"), True)
+
+
+def регрессии_макета(проверь) -> None:
+    """Макет обязателен только для экрана; новый ui-kit идёт отдельным первым атомом."""
+    with tempfile.TemporaryDirectory(prefix="check-night-mockup-") as временный:
+        t = pathlib.Path(временный)
+        (t / "RAZBOR.md").write_text("## Экраны\n- S-nn новый экран\n", encoding="utf-8")
+        (t / "CONTRACT.md").write_text(
+            "МАКЕТ: MOCKUP.html\nUI-KIT: ХВАТАЕТ\n\n"
+            "## Контракт\nx\n## Канон\nR-01\n## Макет\nMOCKUP.html\n"
+            "## Нехватка ui-kit\nнет\n", encoding="utf-8")
+        проверь("макет: экран без MOCKUP отклонён",
+                n.артефакт_готов(t, "ux-architect")[0], False)
+        (t / "MOCKUP.html").write_text(
+            "<!-- UI-KIT: DataTable --><html><body>screen</body></html>", encoding="utf-8")
+        проверь("макет: открываемый MOCKUP принят",
+                n.артефакт_готов(t, "ux-architect")[0], True)
+
+        (t / "CONTRACT.md").write_text(
+            "МАКЕТ: НЕ НУЖЕН\nUI-KIT: ХВАТАЕТ\n\n"
+            "## Контракт\nx\n## Канон\nR-01\n## Макет\nнет\n"
+            "## Нехватка ui-kit\nнет\n", encoding="utf-8")
+        проверь("макет: S-nn не обходит обязательный макет",
+                n.артефакт_готов(t, "ux-architect")[0], False)
+
+        (t / "CONTRACT.md").write_text(
+            "МАКЕТ: MOCKUP.html\nUI-KIT: НУЖНЫ MoneyCell\n\n"
+            "## Контракт\nx\n## Канон\nR-01\n## Макет\nMOCKUP.html\n"
+            "## Нехватка ui-kit\nMoneyCell\n", encoding="utf-8")
+        (t / "FEATURES.md").write_text(
+            "ФИЧ: 1\n\n## Фичи\n### 1. screen\n"
+            "Файлы: `frontend/src/screens/Report.tsx`\nПроверка: browser\n\n"
+            "## Порядок\n1\n", encoding="utf-8")
+        проверь("ui-kit: экран до общего компонента отклонён",
+                n.артефакт_готов(t, "splitter")[0], False)
+        (t / "FEATURES.md").write_text(
+            "ФИЧ: 2\n\n## Фичи\n### 1. MoneyCell\n"
+            "Файлы: `/work/frontend/src/ui-kit/MoneyCell.tsx`, "
+            "`/work/frontend/src/ui-kit/MoneyCell.test.tsx`\nПроверка: unit\n\n"
+            "### 2. screen\nФайлы: `frontend/src/screens/Report.tsx`\n"
+            "Проверка: browser\n\n## Порядок\n1, затем 2\n", encoding="utf-8")
+        проверь("ui-kit: отдельный первый атом принят",
+                n.артефакт_готов(t, "splitter")[0], True)
+
+    with tempfile.TemporaryDirectory(prefix="check-night-cross-") as временный:
+        root = pathlib.Path(временный)
+        wave = root / "wave"
+        target = root / "lane" / "wave"
+        wave.mkdir()
+        cross = wave / "ARCH-CROSS.md"
+        cross.write_text("## Столкновения\nx\n", encoding="utf-8")
+        worker = type("Worker", (), {"волна": target})()
+        проверь("ARCH-CROSS: неполный файл не открывает product",
+                n.сверить_архитектуру(wave, {"x": worker}), False)
+        cross.write_text(
+            "## Столкновения\nx\n## Что переписал\ny\n## Порядок\nz\n", encoding="utf-8")
+        проверь("ARCH-CROSS: готовый файл синхронизирован",
+                n.сверить_архитектуру(wave, {"x": worker}), True)
+        проверь("ARCH-CROSS: копия дошла в lane", (target / "ARCH-CROSS.md").exists(), True)
 
 
 def fake_e2e_smoke(проверь) -> None:
@@ -524,6 +588,7 @@ def main() -> int:
     # откладывается, а повтор продолжает её. Все внешние границы подменены.
     fake_e2e_smoke(проверь)
     регрессии_r04(проверь)
+    регрессии_макета(проверь)
 
     if беды:
         print("ПРОВЕРКА ОРКЕСТРАТОРА КРАСНАЯ:", file=sys.stderr)
