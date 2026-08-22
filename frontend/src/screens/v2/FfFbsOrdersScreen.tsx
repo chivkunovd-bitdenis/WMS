@@ -239,8 +239,9 @@ const NewOrderRow = memo(function NewOrderRow({
         '& > td': { py: 0.9 },
         ...(highlighted
           ? {
-              bgcolor: 'rgba(255, 214, 102, 0.24)',
-              '&:hover': { bgcolor: 'rgba(255, 214, 102, 0.32)' },
+              outline: '2px solid',
+              outlineColor: 'divider',
+              outlineOffset: '-1px',
             }
           : {}),
       }}
@@ -1301,10 +1302,10 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               </TableCell>
               {statusGroup === 'new' ? (
                 <>
-                  <TableCell sx={{ minWidth: 210 }}>Товар</TableCell>
-                  <TableCell sx={{ minWidth: 135 }}>Селлер</TableCell>
-                  <TableCell sx={{ minWidth: 180 }}>Маршрут сдачи</TableCell>
-                  <TableCell sx={{ minWidth: 140 }}>Отгрузить до</TableCell>
+                  <TableCell sx={{ width: 210, whiteSpace: 'nowrap' }}>Товар</TableCell>
+                  <TableCell sx={{ width: 135, whiteSpace: 'nowrap' }}>Селлер</TableCell>
+                  <TableCell sx={{ width: 180, whiteSpace: 'nowrap' }}>Маршрут сдачи</TableCell>
+                  <TableCell sx={{ width: 140, whiteSpace: 'nowrap' }}>Отгрузить до</TableCell>
                 </>
               ) : (
                 <>

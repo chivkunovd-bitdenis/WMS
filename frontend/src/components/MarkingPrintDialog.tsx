@@ -125,7 +125,7 @@ function TapePreparationStatus({
   onClose: () => void
 }) {
   if (state === 'preparing') {
-    return <Box data-testid="marking-print-preparing"><Typography variant="subtitle1">Готовим ленту…</Typography><StatusChip label="Готовим к печати" tone="neutral" /><Typography variant="body2" color="text.secondary">Можно продолжать работу в WMS — лента собирается в фоне</Typography><ActionGroup><SecondaryAction onClick={onClose} data-testid="marking-print-close-preparing">Закрыть</SecondaryAction></ActionGroup></Box>
+    return <Box data-testid="marking-print-preparing"><Typography variant="subtitle1">Готовим ленту…</Typography><StatusChip label="Готовим к печати" tone="neutral" /><Typography variant="body2" color="text.secondary">Можно продолжать работу в WMS — лента собирается в фоне</Typography></Box>
   }
   if (state === 'ready') {
     return <Box data-testid="marking-print-ready"><StatusChip label="Готово" tone="ok" /><PrimaryAction onClick={onOpen} data-testid="marking-print-open-ready">Открыть для печати</PrimaryAction></Box>

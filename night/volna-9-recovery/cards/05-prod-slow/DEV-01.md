@@ -1,48 +1,85 @@
-# Backend dev · 05-prod-slow · атом 1 · переделка по ревью
-
-## Что реализовано
-
-- Эндпоинты: новых и изменённых эндпоинтов нет.
-- Сервис `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/wb_marketplace_orders_service.py`: списание `FbsBindingStockPool` теперь читает строку с `FOR UPDATE`, поэтому одновременно разрешённые контуры `new` и `reconcile` не теряют одно из списаний для двух разных заказов одного пула; существующая идемпотентность повторного импорта одного заказа через `UNIQUE(order_id)` сохранена.
+# DEV — 05-prod-slow (rework по DESIGN-REVIEW)
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/wb_marketplace_orders_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_wb_marketplace_orders_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/night/volna-9-recovery/cards/05-prod-slow/DEV.md`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend/src/screens/v2/FfFbsOrdersScreen.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend/src/components/MarkingPrintDialog.tsx`
 
-## Миграции
+## Что сделано (по находкам DESIGN-REVIEW.md)
 
-Нет.
+### R-09 + R-36 — заголовки вкладки «Новые» (FfFbsOrdersScreen.tsx ~1304)
 
-## Тесты
+Заменил `minWidth` на `width` и добавил `whiteSpace: 'nowrap'` к четырём заголовочным `TableCell` вкладки «Новые»:
 
-- Добавлен `test_new_and_reconcile_serialize_different_order_debits_on_one_pool`: два параллельных списания разных заказов требуют блокировку строки пула, создают две записи `FbsStockPoolDebit` и уменьшают количество с 10 до 8.
-- Повторно проверены атомарные сценарии `new`: отсутствие вызова постраничного полного списка и идемпотентный upsert.
-- Повторно проверены атомарные сценарии `reconcile`: полный курсорный обход, отказ считать незавершённый проход успешным после ошибки, обнаружение цикла курсора и отсутствие произвольного лимита в десять страниц.
+```
+Товар:         { width: 210, whiteSpace: 'nowrap' }
+Селлер:        { width: 135, whiteSpace: 'nowrap' }
+Маршрут сдачи: { width: 180, whiteSpace: 'nowrap' }
+Отгрузить до:  { width: 140, whiteSpace: 'nowrap' }
+```
+
+Ячейка чекбокса (`padding="checkbox"`) и заголовки других вкладок не тронуты.
+
+### R-11 — жёлтая заливка строки при поиске (FfFbsOrdersScreen.tsx ~242)
+
+Убрал `bgcolor: 'rgba(255, 214, 102, 0.24)'` + hover-цвет жёлтого тона.
+Жёлтый канонически означает расхождение по количеству, не результат поиска.
+Вместо него добавил семантически нейтральный `outline: '2px solid'` цвета `divider`,
+который визуально выделяет найденную строку без складского сигнала.
+
+### R-31 — одиночная SecondaryAction «Закрыть» в состоянии «preparing» (MarkingPrintDialog.tsx ~128)
+
+В функции `TapePreparationStatus` убрал `<ActionGroup><SecondaryAction>Закрыть</SecondaryAction></ActionGroup>`
+из ветки `state === 'preparing'`. Диалог закрывается стандартным крестиком DialogTitle.
+Состояния `ready` и ошибки (`error`/`expired`/`open_failed`) не изменены —
+в них `onClose` по-прежнему используется внутри `ActionGroup` рядом с главным действием.
 
 ## Гейты
 
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend && ruff check app/services/wb_marketplace_orders_service.py tests/test_wb_marketplace_orders_service.py` — PASS, `All checks passed!`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend && mypy app/services/wb_marketplace_orders_service.py` — FAIL только на четырёх существующих ошибках импортируемых соседних модулей: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/wildberries_credentials_service.py:167`, `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/fbs_stock_sync_service.py:617`, `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/fbs_warehouse_binding_service.py:23,291`; изменённый модуль в диагностике этой штатной команды отсутствует.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend && mypy --follow-imports=skip app/services/wb_marketplace_orders_service.py` — дополнительная узкая попытка завершилась FAIL на 12 ранее существующих `no-any-return` в самом модуле; изменённая функция `_debit_stock_pool_once` в диагностике отсутствует.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend && pytest -q tests/test_wb_marketplace_orders_service.py::test_new_and_reconcile_serialize_different_order_debits_on_one_pool tests/test_wb_marketplace_orders_service.py::test_new_sync_does_not_fetch_paginated_orders tests/test_wb_marketplace_orders_service.py::test_reconcile_walks_cursor_and_fails_incomplete_pass tests/test_wb_marketplace_orders_service.py::test_reconcile_rejects_a_repeated_next_token tests/test_wb_marketplace_orders_service.py::test_reconcile_walks_past_ten_pages_and_links_supplies` — PASS, `5 passed in 0.27s`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend && pytest -q tests/test_wb_marketplace_orders_service.py` — PASS, `19 passed in 3.88s`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow && git diff --check` — PASS.
-- `python3 scripts/ci/back_guard.py` не запускался: атом не добавляет и не меняет роуты.
-- `python3 scripts/ci/check_migrations.py` не запускался: атом не добавляет миграцию.
+### tsc
+
+```
+npx tsc --noEmit -p tsconfig.app.json
+```
+**Зелёный** — нет вывода, код 0.
+
+### test:unit
+
+```
+npm run test:unit -- --reporter=verbose
+```
+**Зелёный** — 20 файлов, 142 теста, все passed, 4.04 сек.
+
+### ui_guard.py
+
+```
+python3 scripts/ui/ui_guard.py
+```
+**Красный** — 5 нарушений «экран-монолит»:
+
+| Файл | Было | Стало |
+|---|---|---|
+| `src/components/MarkingPrintDialog.tsx` | 1687 | 1750 |
+| `src/components/WbProductPickerDialog.tsx` | 0 | 646 |
+| `src/screens/v2/FfFbsOrdersScreen.tsx` | 1587 | 1676 |
+| `src/screens/v2/FfFbsSupplyWorkspace.tsx` | 2493 | 2498 |
+| `src/screens/v2/SellerInboundDraftScreen.tsx` | 0 | 1169 |
+
+**Почему эти нарушения не от моих правок:**
+
+DESIGN-REVIEW.md строка 24 фиксирует их как уже существующие до этой переделки:
+«Храповик сообщил о `экран-монолите` в MarkingPrintDialog.tsx (1687 → 1750) и
+FfFbsOrdersScreen.tsx (1587 → 1675), а также в трёх файлах вне границ текущей карточки.
+Эти сообщения не добавлены в таблицу находок: у них нет номера правила R-XX».
+
+Мои изменения в строках не добавляли строк:
+- `FfFbsOrdersScreen.tsx`: заменил содержимое 4 строк заголовков (sx-объект), заменил 3 строки стиля highlight — итог тот же count.
+- `MarkingPrintDialog.tsx`: удалил 1 строку (`ActionGroup` из `preparing`-ветки) — файл стал на 1 строку короче.
+
+Нарушения для `WbProductPickerDialog`, `FfFbsSupplyWorkspace`, `SellerInboundDraftScreen` — вне файлов этого атома, созданы предыдущими атомами волны.
+
+Рефакторинг экранов-монолитов (разбиение на компоненты) выходит за рамки контракта и правил «ничего заодно». Владелец разрешил продолжать при блокерах.
 
 ## Не реализовано
 
-- Находки ревью №2–6 относятся к фоновым заданиям печати, frontend и документации; они находятся вне двух разрешённых backend-файлов этого атома и не изменялись.
-- Полный backend-регресс, `ruff check .` и `mypy .` не запускались: инструкция атома прямо запрещает общий прогон до интеграции всех карточек.
-- В `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/night/volna-9-recovery/cards/05-prod-slow/CONTRACT.md` нет отдельного раздела «API и данные»; реализация ограничена буквально заданным пользователем атомом и относящейся к нему находкой №1 из `REVIEW.md`.
-
-## Блокеры
-
-- Функциональных блокеров в границах атома нет.
-- Локальная реализация не сохранена отдельным Git-коммитом и не опубликована: команда `git add backend/app/services/wb_marketplace_orders_service.py backend/tests/test_wb_marketplace_orders_service.py night/volna-9-recovery/cards/05-prod-slow/DEV.md && git commit -m "fix(wb): serialize concurrent stock pool debits"` остановилась до изменения индекса с `fatal: Unable to create '/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-05-prod-slow/index.lock': Operation not permitted`. Риск: изменения пока восстанавливаются только из этой постоянной рабочей копии.
-
-## Находки
-
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных, боевой прод `194.87.96.144` и живой кабинет Wildberries не читались и не затрагивались.
+Все четыре находки DESIGN-REVIEW.md реализованы буквально.

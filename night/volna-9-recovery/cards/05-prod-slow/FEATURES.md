@@ -1,122 +1,127 @@
-ФИЧ: 7
+ФИЧ: 3
+
+# FEATURES · 05-prod-slow · screen-dev остаток
+
+Источник: четыре открытые находки из `DESIGN-REVIEW.md` (R-09, R-36, R-11,
+R-31). Вся backend-работа карточки (атомы 1–4) и frontend-пагинация (атомы
+5–7) реализованы предыдущими ролями и ждут только git-коммита. Этот файл
+покрывает только то, что ещё не сделано: три микроправки в двух файлах
+экранного слоя.
+
+---
 
 ## Фичи
 
-### 1. Разделить импорт новых заказов и часовую сверку WB
+### 1. Фиксированная ширина и запрет переноса заголовков таблицы «Новые»
 
-Операторские заказы продолжают появляться без изменения их статусов: частый контур читает только новые задания, а полный обход остаётся отдельной операцией, которую можно безопасно повторить после сбоя. У каждого контура есть самостоятельная проверка идемпотентного upsert, ошибки страницы и отсутствия удаления локальных данных при незавершённой сверке.
+**Что меняется.** В шапке вкладки «Новые» четыре заголовочных `TableCell`
+(«Товар», «Селлер», «Маршрут сдачи», «Отгрузить до») сейчас задают только
+`minWidth`. При длинном тексте из WB ширина колонок плывёт, при сжатии окна
+заголовок переносится на вторую строку и теряет визуальную связь с данными.
+Нужно: заменить `minWidth` на фиксированную `width` (согласованные значения из
+CONTRACT.md — 210 / 135 / 180 / 140) и добавить `whiteSpace: 'nowrap'` (или
+пропSX `noWrap`) к каждому из четырёх заголовков. Ячейка чекбокса (`padding="checkbox"`)
+и колонка «Статус» (отсутствует во вкладке «Новые» по эталону) не трогаются.
 
-Файлы:
+**Файлы:**
+- `frontend/src/screens/v2/FfFbsOrdersScreen.tsx` — строки ~1304, блок
+  заголовочных `TableCell` вкладки «Новые»
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/wb_marketplace_orders_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_wb_marketplace_orders_service.py`
+**Зависит от:** ничего (независима от фич 2 и 3)
 
-Зависимости: нет.
+**Проверка:** открыть вкладку «Новые», растянуть и сжать окно браузера.
+Колонки не расползаются и не сужаются относительно данных. Заголовки
+остаются однострочными при любой ширине окна. Чекбокс и четыре данных-колонки
+по-прежнему видны без горизонтальной прокрутки при стандартном разрешении.
 
-Проверка: unit-тест доказывает, что `new` не вызывает постраничный полный список, а `reconcile` проходит курсор до конца и при ошибке не помечает неполный проход успешным.
+---
 
-### 2. Запускать WB-контуры по отдельному расписанию без общего лока продавца
+### 2. Убрать жёлтую заливку строки при результате поиска
 
-Оператор не ждёт сетевую синхронизацию: Beat ставит независимые задания `new` раз в 180 секунд и `reconcile` раз в 60 минут по каждому продавцу; повтор того же вида для того же продавца не запускается одновременно, но ручные операции не удерживаются общим `wb_seller_lock` во время чтения.
+**Что меняется.** В компоненте `NewOrderRow` результат поиска сейчас выделяется
+жёлтой заливкой (`bgcolor: 'rgba(255, 214, 102, 0.24)'` и hover-вариант). Во
+всей системе такая заливка означает расхождение по количеству. Оператор может
+принять найденную строку за складскую проблему. Нужно: удалить ветку
+`highlighted`-заливки из стилей `NewOrderRow`, оставив `scrollMarginBottom: 220px`
+и механизм `registerRow` нетронутыми — позиционирование к найденной строке
+остаётся, цветового сигнала нет.
 
-Файлы:
+**Файлы:**
+- `frontend/src/screens/v2/FfFbsOrdersScreen.tsx` — строки ~240–245,
+  компонент `NewOrderRow`, CSS-ветка `highlighted`
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/fbs_autopoll_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/tasks/background_jobs.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/celery_app.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_wb_marketplace_orders_service.py`
+**Зависит от:** ничего (независима от фич 1 и 3; строки не пересекаются с
+правкой фичи 1)
 
-Зависимости: 1.
+**Проверка:** ввести что-либо в поле поиска. Найденная строка скроллируется
+в область просмотра. Фоновый цвет строки не отличается от остальных строк
+таблицы — никакой жёлтой заливки ни в обычном, ни в hover-состоянии.
+Строки с расхождением по количеству (если есть) по-прежнему окрашиваются
+в жёлтый — правило R-11 для количественных расхождений не трогается.
 
-Проверка: тесты вызывают оба задания отдельно, подтверждают период 180 секунд/60 минут и single-flight по `(seller_id, sync_kind)`; запуск одного вида не препятствует запуску другого и не берёт seller-wide lock на время HTTP-чтения.
+---
 
-### 3. Зафиксировать серверный контракт фоновой ленты ЧЗ
+### 3. Убрать одиночную контурную кнопку «Закрыть» в состоянии «Готовим ленту…»
 
-До нажатия печати ничего не меняется, а после запроса у WMS появляется одно переиспользуемое задание `marking_label_tape`: оно хранит только идентификатор готового артефакта, допускает повтор того же активного запроса без дубля и имеет срок доступности 12 часов для PDF-ленты `label_tape`.
+**Что меняется.** В модалке `MarkingPrintDialog` при `state === 'preparing'`
+выводится блок `<ActionGroup><SecondaryAction onClick={onClose}>Закрыть</SecondaryAction></ActionGroup>`.
+Контурная кнопка без главного действия рядом нарушает R-31 и визуально
+противоречит тексту «Можно продолжать работу в WMS». Нужно: удалить этот
+`ActionGroup` целиком (вместе с `data-testid="marking-print-close-preparing"`).
+Закрытие модалки остаётся доступным через клик по backdrop и Esc — `Dialog`
+уже принимает `onClose` на уровне строки 1088 модалки; новых элементов не
+добавляется. Состояния `ready`, `expired/open_failed/failed` — не трогаются:
+там `PrimaryAction "Повторить"` + `SecondaryAction "Закрыть"` — допустимая
+пара.
 
-Файлы:
+**Файлы:**
+- `frontend/src/components/MarkingPrintDialog.tsx` — строка ~128, функция
+  `TapePreparationStatus`, ветка `state === 'preparing'`
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/models/background_job.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/models/fbs_print_asset.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/alembic/versions/20260822_0050_marking_label_tape_jobs.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_background_jobs.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_fbs_print_assets.py`
+**Зависит от:** ничего (независима от фич 1 и 2)
 
-Зависимости: нет.
+**Проверка:** запустить сборку ленты ЧЗ. Пока отображается «Готовим ленту…»,
+в карточке состояния нет никакой кнопки — только `StatusChip "Готовим к
+печати"` и подпись «Можно продолжать работу в WMS». Модалка закрывается по
+Esc и по клику мимо неё. Состояние «Готово» — `PrimaryAction "Открыть для
+печати"` — без изменений.
 
-Проверка: тесты подтверждают создание одного job по ключу идемпотентности, состояния `pending/running/done/failed`, ссылку на `asset_id` вместо PDF в `result_json` и отказ в выдаче артефакта после 12 часов.
-
-### 4. Перевести API ленты ЧЗ в очередь печати
-
-После нажатия оператором сервер сразу возвращает `202` и идентификатор задания; один Celery worker очереди `print` последовательно собирает до 500 существующих этикеток, сохраняет готовый PDF как `label_tape` и публикует безопасный результат или ошибку. Существующая ручка получения статуса/артефакта используется для опроса, без передачи PDF через API-ответ задания.
-
-Файлы:
-
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/api/marking_codes.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/marking_code_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/marking_label_artifact_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/background_job_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/tasks/background_jobs.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/celery_app.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_marking_codes.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_marking_pdf_label_artifact.py`
-
-Зависимости: 3.
-
-Проверка: API-тест получает `202`, повторный запрос возвращает тот же активный job, а задача worker создаёт ровно один asset; при ошибке job становится `failed`, при истечении срока старый asset не выдаётся. Отдельный нагрузочный прогон на 155 и 500 кодов одновременно с `/health` фиксирует время job и отсутствие блокировки API.
-
-### 5. Добавить в ui-kit строку «Показать ещё» для таблиц
-
-Внизу существующей таблицы появляется переиспользуемый `TableLoadMore`: он скрыт без следующего курсора, показывает одну кнопку «Показать ещё», на время запроса — «Загружаем…» и спиннер без повторного клика, а после ошибки сохраняет доступное действие и выводит `ErrorNotice` над ним.
-
-Файлы:
-
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend/src/ui-kit/TableLoadMore.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend/src/ui-kit/index.ts`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend/src/ui-kit/UiKitShowcase.tsx`
-
-Зависимости: нет.
-
-Проверка: showcase вручную демонстрирует скрытое, доступное, загружаемое и ошибочное состояния; действие не вызывается повторно, пока идёт загрузка.
-
-### 6. Пагинировать вкладку «Новые» S-03 без потери подбора
-
-Оператор открывает `/app/ff/fbs` и получает 50 новых заказов в прежней таблице из четырёх информационных колонок. Следующая порция добавляется по `TableLoadMore`, выбор и позиция не сбрасываются; «Выбрать все» сохраняет семантику всех страниц. Видимый 30-секундный тик обновляет только первую порцию без скелета и без очистки уже догруженных строк, скрытая вкладка запросов не делает. Остальные рабочие вкладки получают максимум 100 строк без искусственной пагинации.
-
-Файлы:
-
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend/src/screens/v2/FfFbsOrdersScreen.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend/src/screens/v2/fbsApi.ts`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend/tests-e2e/ff-fbs-orders.spec.ts`
-
-Зависимости: 5.
-
-Проверка: Playwright-путь `S-03-TC-001`–`S-03-TC-007` и `S-03-TC-010`–`S-03-TC-012` проверяет скелет первой загрузки, пустой список, 50 строк, догрузку без дублей/потери выбранного, понятный повтор после ошибки и отсутствие опроса при скрытой вкладке.
-
-### 7. Показать фоновую подготовку ленты в существующем диалоге
-
-После запуска ленты существующий `MarkingPrintDialog` остаётся открытым и показывает «Готовим ленту…» с `StatusChip`; повторная печать блокируется. После `done` оператор сам выбирает «Открыть для печати», а после ошибки или истечения 12 часов видит понятные «Повторить» и «Закрыть» без кода задания или технических деталей. Повторное открытие тех же данных показывает состояние уже созданного job.
-
-Файлы:
-
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend/src/components/MarkingPrintDialog.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend/src/utils/printMarkingCodeLabel.ts`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend/tests-e2e/ff-marking-print-constructor.spec.ts`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend/tests-e2e/ff-separate-marking-print.spec.ts`
-
-Зависимости: 4.
-
-Проверка: Playwright-путь `S-03-TC-008`, `S-03-TC-009`, `S-03-TC-014` и `S-03-TC-015` проходит состояние ожидания, явное открытие готового PDF, безопасный повтор после ошибки/истечения и повторное открытие существующего активного задания.
+---
 
 ## Порядок
 
-Сначала независимо и параллельно выполняются 1, 3 и 5: они создают изолированные серверные и UI-фундаменты. Затем 2 зависит от 1, 4 — от 3, 6 — от 5, а 7 — от 4. Так фронтендовые пункты никогда не смешиваются с backend-пунктами в одном назначении, а каждая следующая задача получает уже проверенный контракт.
+Все три фичи **независимы** и могут выполняться параллельно: они касаются
+разных компонентов, строки не пересекаются, а обе правки в `FfFbsOrdersScreen.tsx`
+(фичи 1 и 2) находятся в разных функциях и разных зонах файла (~1304 и ~242).
 
-Обязательный порядок волны из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/night/volna-9-recovery/ARCH-CROSS.md`: карточка 05 выполняется после 02 и до 06; backend-пункт 4 выполняется также после интеграции семантики маркировки карточки 01, не меняя её `metaDetails` и не освобождая КИЗ автоматически.
+```
+[1] Fixed width + noWrap (FfFbsOrdersScreen.tsx ~1304)  ─┐
+[2] Убрать жёлтую заливку (FfFbsOrdersScreen.tsx ~242)  ─┤─ параллельно
+[3] Убрать одиночную «Закрыть» (MarkingPrintDialog.tsx ~128) ─┘
+```
+
+После реализации всех трёх: `npx tsc --noEmit -p tsconfig.app.json` из
+`frontend/` — должен быть зелёным. Playwright-сценарии
+`tests-e2e/ff-fbs-orders.spec.ts` и
+`tests-e2e/ff-marking-print-constructor.spec.ts` — запустить прогоном,
+если среда позволяет открыть порт 18000 (в предыдущих атомах порт не
+открывался: `operation not permitted`).
+
+---
 
 ## Что осталось за бортом
 
-- Выделение отдельной ноды минимум с 8 ГБ RAM, настройка production-лимитов контейнеров и стендовый замер до/после не имеют безопасного локального файла в этой карточке; боевой прод `194.87.96.144` контрактом запрещён к изменению.
-- Перенос `/fbs/supplies/{supply_id}/order-print-tape` в очередь не входит в карточку: для него нет подтверждённого нагрузочного замера.
-- `NotificationBell`, 15-секундный polling рабочего места поставки, WebSocket/SSE, Redis-кэш списков и пользовательские настройки частоты не входят в контракт.
-- Секреты, ключи, токены, `.env`, боевой прод и живой кабинет Wildberries не читались и не затрагивались.
+- `ui_guard.py` сообщает о превышении baseline в пяти файлах
+  (`MarkingPrintDialog.tsx` 1687→1750, `FfFbsOrdersScreen.tsx` 1587→1675,
+  `WbProductPickerDialog.tsx` 0→646, `FfFbsSupplyWorkspace.tsx` 2493→2498,
+  `SellerInboundDraftScreen.tsx` 1111→1169); у превышений нет R-номера
+  правила, split экрана-монолита — отдельная карточка, не часть этого ремонта.
+- Скрытие тика `NotificationBell` при `document.hidden` — идея аналитика
+  (SVERKA.md: «самостоятельная мелочь»), не требование владельца; замеров по
+  1 запросу/60 с нет.
+- Перенос `print_fbs_order_tape` в тредпул — RESHENIYA.md решение 9 прямо
+  исключает его «без отдельного замера»; без данных о блокировке включать
+  запрещено.
+- Git-коммиты для атомов 1–7 заблокированы ограничением среды
+  (`index.lock: Operation not permitted`); это инфра-задача, не часть
+  screen-dev остатка.

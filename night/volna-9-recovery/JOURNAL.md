@@ -110,3 +110,17 @@
 23:43   05-prod-slow · resume: поатомный rework Sol по сохранённым находкам
 23:48   05-prod-slow · backend-dev: готово
 23:48   05-prod-slow · dev: фича 4/7 сохранена fe123ec4ba12
+23:50   05-prod-slow · reviewer: готово
+23:53   05-prod-slow · ui-critic: готово
+23:53 05-prod-slow: отложено — ui-critic, эскалация не помогла
+00:10 05-prod-slow: отложено — финальная эскалация уже была
+00:15   05-prod-slow · repair-plan: сильный ремонт не помог — дорезаем находки
+00:19   05-prod-slow · ux-architect: CONTRACT.md: нужны машинные строки МАКЕТ и UI-KIT (код 0, попытка 1)
+00:21   05-prod-slow · ux-architect: CONTRACT.md: нужны машинные строки МАКЕТ и UI-KIT (код 0, попытка 2)
+00:21 05-prod-slow: отложено — не удалось перенарезать ремонт
+00:24   05-prod-slow · repair-plan: сильный ремонт не помог — дорезаем находки
+00:28   05-prod-slow · ux-architect: CONTRACT.md: нужны машинные строки МАКЕТ и UI-KIT (код 0, попытка 1)
+00:34   05-prod-slow · ux-architect: готово
+00:36   05-prod-slow · splitter: готово
+00:36   05-prod-slow · resume: поатомный rework Terra по сохранённым находкам
+00:40   05-prod-slow · screen-dev: готово
