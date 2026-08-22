@@ -18,6 +18,8 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
+import { DataTable, EmptyState, ErrorNotice, IconAction, PrimaryAction, SecondaryAction } from '../../ui-kit'
+import HistoryIcon from '@mui/icons-material/History'
 import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import {
@@ -54,6 +56,9 @@ type Props = {
   separateMarkingPrintEnabled?: boolean
   fbsShipmentCutoffTime?: string | null
 }
+
+type FfProfile = Record<'legal_name' | 'inn' | 'kpp' | 'bank_name' | 'bik' | 'settlement_account' | 'correspondent_account', string>
+type Tariff = { id: string; service_code: string; seller_id: string | null; unit: string; amount: string; valid_from: string }
 
 function humanStaffError(message: string): string {
   if (message.includes('email_taken')) return 'Этот сотрудник уже добавлен'
@@ -113,6 +118,10 @@ export function FfSettingsScreen({
   const [permSavedNotice, setPermSavedNotice] = useState<string | null>(null)
   const [rateSavedNotice, setRateSavedNotice] = useState<string | null>(null)
   const [highlightRowId, setHighlightRowId] = useState<string | null>(null)
+  const [section, setSection] = useState<'staff' | 'tariffs'>('staff')
+  const [profile, setProfile] = useState<FfProfile>({ legal_name: '', inn: '', kpp: '', bank_name: '', bik: '', settlement_account: '', correspondent_account: '' })
+  const [tariffs, setTariffs] = useState<Tariff[]>([]); const [tariffOpen, setTariffOpen] = useState(false)
+  const [tariffDraft, setTariffDraft] = useState({ service_code: 'inbound', unit: 'document', amount: '', valid_from: currentBillingMonth() + '-01' }); const [tariffError, setTariffError] = useState<string | null>(null)
 
   const loadRows = useCallback(async () => {
     if (!token || !canManageStaff) {
@@ -340,16 +349,53 @@ export function FfSettingsScreen({
     }
   }
 
+  async function saveProfile() {
+    setTariffError(null)
+    const res = await fetch(apiUrl('/billing/profiles/ff'), { method: 'PUT', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ ...profile, kpp: profile.kpp || null }) })
+    if (!res.ok) { setTariffError(await readApiErrorMessage(res)); return }
+    setSuccess('Реквизиты ФФ сохранены')
+  }
+
+  async function saveTariff() {
+    setTariffError(null)
+    const res = await fetch(apiUrl('/billing/tariffs'), { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ ...tariffDraft, seller_id: null, amount: Number(tariffDraft.amount) }) })
+    if (!res.ok) { setTariffError(await readApiErrorMessage(res)); return }
+    const created = (await res.json()) as Tariff
+    setTariffs((current) => [...current.filter((item) => item.id !== created.id && item.service_code !== created.service_code), created])
+    setTariffOpen(false)
+  }
+
   return (
     <Box data-testid="ff-settings-screen">
       <Typography variant="h5" gutterBottom>
         Настройки
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Склад, печать и сотрудники фулфилмента.
+        Склад, печать, сотрудники и тарифы фулфилмента.
       </Typography>
 
-      {isFulfillmentAdmin ? (
+      <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+        <SecondaryAction onClick={() => setSection('staff')} disabled={section === 'staff'} data-testid="ff-settings-staff-tab">Склад и сотрудники</SecondaryAction>
+        <SecondaryAction onClick={() => setSection('tariffs')} disabled={section === 'tariffs'} data-testid="ff-settings-tariffs-tab">Тарифы ФФ</SecondaryAction>
+      </Stack>
+
+      {section === 'tariffs' ? (
+        <Stack spacing={2} data-testid="ff-settings-tariffs-panel">
+          <Paper variant="outlined" sx={{ p: 2 }}>
+            <Typography variant="subtitle1" gutterBottom>Реквизиты ФФ</Typography>
+            <Stack spacing={1.5}>
+              {([['legal_name', 'Юридическое наименование'], ['inn', 'ИНН'], ['kpp', 'КПП'], ['bank_name', 'Название банка'], ['bik', 'БИК'], ['settlement_account', 'Расчётный счёт'], ['correspondent_account', 'Корреспондентский счёт']] as const).map(([key, label]) => <TextField key={key} label={label} value={profile[key]} required={key !== 'kpp'} size="small" onChange={(e) => setProfile((p) => ({ ...p, [key]: e.target.value }))} inputProps={{ 'data-testid': `ff-profile-${key}` }} />)}
+              <PrimaryAction onClick={() => void saveProfile()} data-testid="ff-profile-save">Сохранить реквизиты</PrimaryAction>
+            </Stack>
+          </Paper>
+          {tariffError ? <ErrorNotice>{tariffError}</ErrorNotice> : null}
+          <Stack direction="row" justifyContent="space-between" alignItems="center"><Typography variant="subtitle1">Действующие тарифы</Typography><PrimaryAction onClick={() => setTariffOpen(true)} data-testid="ff-tariff-new">Новая ставка</PrimaryAction></Stack>
+          <DataTable columns={[{ key: 'service', header: 'Услуга', width: 180, render: (r: Tariff) => ({ inbound: 'Приёмка', outbound: 'Отгрузка', storage_liter_day: 'Хранение' }[r.service_code] ?? r.service_code) }, { key: 'for', header: 'Для кого', width: 240, render: () => 'Все селлеры' }, { key: 'unit', header: 'Расчёт', width: 170, render: (r: Tariff) => ({ document: 'За документ', item: 'За штуку', liter_day: 'За литр-день' }[r.unit] ?? r.unit) }, { key: 'amount', header: 'Ставка', width: 150, align: 'right', render: (r: Tariff) => `${Number(r.amount).toLocaleString('ru-RU', { minimumFractionDigits: 2 })} ₽` }, { key: 'from', header: 'Действует с', width: 150, render: (r: Tariff) => r.valid_from }, { key: 'history', header: 'Действие', width: 64, align: 'center', render: () => <IconAction title="Открыть историю ставок"><HistoryIcon fontSize="small" /></IconAction> }]} rows={tariffs} getRowKey={(r) => r.id} testId="ff-tariffs-table" empty={{ title: 'Тарифы ещё не заданы', hint: 'Добавьте общие ставки, чтобы завершённые работы попадали в счета', action: <PrimaryAction onClick={() => setTariffOpen(true)}>Новая ставка</PrimaryAction> }} />
+          {tariffOpen ? <Paper variant="outlined" sx={{ p: 2 }}><Typography variant="subtitle1" gutterBottom>Новая ставка</Typography><Stack spacing={1.5}><TextField select label="Услуга" value={tariffDraft.service_code} onChange={(e) => setTariffDraft((d) => ({ ...d, service_code: e.target.value }))} SelectProps={{ native: true }}><option value="inbound">Приёмка</option><option value="outbound">Отгрузка</option><option value="storage_liter_day">Хранение</option></TextField><TextField label="Ставка, ₽" value={tariffDraft.amount} onChange={(e) => setTariffDraft((d) => ({ ...d, amount: e.target.value }))} /><TextField type="date" label="Действует с" value={tariffDraft.valid_from} onChange={(e) => setTariffDraft((d) => ({ ...d, valid_from: e.target.value }))} InputLabelProps={{ shrink: true }} /><Stack direction="row" spacing={1}><PrimaryAction onClick={() => void saveTariff()}>Сохранить ставку</PrimaryAction><SecondaryAction onClick={() => setTariffOpen(false)}>Отмена</SecondaryAction></Stack></Stack></Paper> : null}
+        </Stack>
+      ) : null}
+
+      {section === 'staff' && isFulfillmentAdmin ? (
         <Paper
           variant="outlined"
           sx={{ p: 2, mb: 3 }}
@@ -432,7 +478,7 @@ export function FfSettingsScreen({
         </Paper>
       ) : null}
 
-      {!canManageStaff ? (
+      {section === 'staff' && (!canManageStaff ? (
         <Alert severity="info" data-testid="ff-settings-users-admin-only">
           Нет доступа к сотрудникам.
         </Alert>
@@ -694,7 +740,7 @@ export function FfSettingsScreen({
             </Alert>
           </Snackbar>
         </Box>
-      )}
+      ))}
     </Box>
   )
 }
