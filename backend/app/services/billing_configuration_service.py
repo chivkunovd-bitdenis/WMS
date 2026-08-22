@@ -5,10 +5,12 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.billing import BillingProfile, BillingTariffVersion
 from app.models.seller import Seller
+from app.models.tenant import Tenant
 
 
 class BillingConfigurationError(ValueError):
@@ -61,17 +63,19 @@ async def save_profile(
     settlement_account: str | None = None,
     correspondent_account: str | None = None,
 ) -> BillingProfile:
-    if not legal_name.strip():
+    legal_name = legal_name.strip()
+    if not legal_name:
         raise BillingConfigurationError("Укажите юридическое наименование")
     validate_inn(inn)
     if seller_id is not None:
-        seller = await session.scalar(
-            select(Seller).where(Seller.id == seller_id, Seller.tenant_id == tenant_id)
-        )
-        if seller is None:
-            raise BillingConfigurationError("Селлер не найден в текущем tenant")
-    elif not all((bank_name, bik, settlement_account, correspondent_account)):
-        raise BillingConfigurationError("Для реквизитов ФФ заполните банковские поля")
+        await assert_seller_in_tenant(session, tenant_id=tenant_id, seller_id=seller_id)
+    else:
+        bank_name = _required_text(bank_name)
+        bik = _required_text(bik)
+        settlement_account = _required_text(settlement_account)
+        correspondent_account = _required_text(correspondent_account)
+        if not all((bank_name, bik, settlement_account, correspondent_account)):
+            raise BillingConfigurationError("Для реквизитов ФФ заполните банковские поля")
     profile = await session.scalar(
         select(BillingProfile).where(
             BillingProfile.tenant_id == tenant_id, BillingProfile.seller_id == seller_id
@@ -80,15 +84,30 @@ async def save_profile(
     if profile is None:
         profile = BillingProfile(tenant_id=tenant_id, seller_id=seller_id)
         session.add(profile)
-    profile.legal_name = legal_name.strip()
+    profile.legal_name = legal_name
     profile.inn = inn.strip()
     profile.kpp = kpp.strip() if kpp else None
-    profile.bank_name = bank_name.strip() if bank_name else None
-    profile.bik = bik.strip() if bik else None
-    profile.settlement_account = settlement_account.strip() if settlement_account else None
-    profile.correspondent_account = correspondent_account.strip() if correspondent_account else None
+    profile.bank_name = _required_text(bank_name)
+    profile.bik = _required_text(bik)
+    profile.settlement_account = _required_text(settlement_account)
+    profile.correspondent_account = _required_text(correspondent_account)
     await session.flush()
     return profile
+
+
+def _required_text(value: str | None) -> str | None:
+    return value.strip() if value and value.strip() else None
+
+
+async def assert_seller_in_tenant(
+    session: AsyncSession, *, tenant_id: uuid.UUID, seller_id: uuid.UUID
+) -> Seller:
+    seller = await session.scalar(
+        select(Seller).where(Seller.id == seller_id, Seller.tenant_id == tenant_id)
+    )
+    if seller is None:
+        raise BillingConfigurationError("Селлер не найден в текущем tenant")
+    return seller
 
 
 async def create_tariff(
@@ -113,11 +132,11 @@ async def create_tariff(
     if service_code == "storage_liter_day" and unit != "liter_day":
         raise BillingConfigurationError("Для хранения доступен только расчёт за литр-день")
     if seller_id is not None:
-        seller = await session.scalar(
-            select(Seller).where(Seller.id == seller_id, Seller.tenant_id == tenant_id)
-        )
-        if seller is None:
-            raise BillingConfigurationError("Селлер не найден в текущем tenant")
+        await assert_seller_in_tenant(session, tenant_id=tenant_id, seller_id=seller_id)
+    # A tenant row is present for every authenticated caller. Lock it to make an
+    # empty tariff stream serializable too; locking only existing versions leaves
+    # two first writes free to create overlapping open-ended periods.
+    await session.execute(select(Tenant.id).where(Tenant.id == tenant_id).with_for_update())
     query = (
         select(BillingTariffVersion)
         .where(
@@ -126,6 +145,7 @@ async def create_tariff(
             BillingTariffVersion.service_code == service_code,
         )
         .order_by(BillingTariffVersion.valid_from.desc())
+        .with_for_update()
     )
     previous = (await session.scalars(query)).first()
     if previous and valid_from <= previous.valid_from:
@@ -140,6 +160,13 @@ async def create_tariff(
         amount=amount,
         valid_from=valid_from,
     )
-    session.add(tariff)
-    await session.flush()
+    nested = await session.begin_nested()
+    try:
+        session.add(tariff)
+        await session.flush()
+    except IntegrityError as exc:
+        await nested.rollback()
+        raise BillingConfigurationError("Дата пересекает будущую версию ставки") from exc
+    else:
+        await nested.commit()
     return tariff

@@ -8,6 +8,7 @@ import pytest
 from app.services.billing_configuration_service import (
     BillingConfigurationError,
     create_tariff,
+    save_profile,
     validate_inn,
 )
 
@@ -74,4 +75,21 @@ async def test_tariff_rejects_unknown_service_and_invalid_unit_pair() -> None:
             unit="item",
             amount=Decimal("1.00"),
             valid_from=date(2026, 1, 1),
+        )
+
+
+@pytest.mark.asyncio
+async def test_ff_profile_rejects_whitespace_only_bank_details() -> None:
+    session = AsyncMock()
+    with pytest.raises(BillingConfigurationError, match="банковские поля"):
+        await save_profile(
+            session,
+            tenant_id=uuid4(),
+            seller_id=None,
+            legal_name="Фулфилмент",
+            inn="7707083893",
+            bank_name=" ",
+            bik="044525225",
+            settlement_account="40702810000000000001",
+            correspondent_account="30101810400000000225",
         )

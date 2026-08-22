@@ -8,6 +8,7 @@ from typing import Annotated, Any, cast
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_fulfillment_admin
@@ -21,6 +22,7 @@ from app.models.billing import (
 from app.models.user import User
 from app.services.billing_configuration_service import (
     BillingConfigurationError,
+    assert_seller_in_tenant,
     create_tariff,
     save_profile,
 )
@@ -125,6 +127,10 @@ async def get_seller_profile(
     user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> BillingProfile | None:
+    try:
+        await assert_seller_in_tenant(session, tenant_id=user.tenant_id, seller_id=seller_id)
+    except BillingConfigurationError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return cast(BillingProfile | None, await session.scalar(
         select(BillingProfile).where(
             BillingProfile.tenant_id == user.tenant_id,
@@ -146,6 +152,9 @@ async def post_tariff(
     except BillingConfigurationError as exc:
         await session.rollback()
         raise _error(exc) from exc
+    except IntegrityError as exc:
+        await session.rollback()
+        raise _error(BillingConfigurationError("Дата пересекает будущую версию ставки")) from exc
 
 
 @router.get("/tariffs", response_model=list[TariffOut])
