@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import time
 import uuid
-from datetime import date
+from datetime import date, datetime, timedelta
+from datetime import time as datetime_time
 from decimal import Decimal
 
 import pytest
@@ -18,8 +19,14 @@ from sqlalchemy import func, select
 
 from app.db.session import SessionLocal
 from app.models.billing import BillingTariffVersion
+from app.models.inventory_movement import InventoryMovement
+from app.models.product import Product
 from app.models.seller import Seller
+from app.models.storage_measurement import StorageMeasurement
+from app.models.storage_statement import StorageStatement
 from app.models.warehouse import Warehouse
+from app.services.sorting_location_service import get_or_create_sorting_location
+from app.services.storage_measurement_service import MOSCOW, month_bounds
 
 FF_PERMISSION_DEFAULTS = {
     "settings": False,
@@ -268,3 +275,226 @@ async def test_staff_inventory_cannot_set_tariff(async_client: AsyncClient) -> N
         },
     )
     assert resp.status_code == 403, resp.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("amount", ["0", "-0.01"])
+async def test_tariff_amount_must_be_positive(
+    async_client: AsyncClient, amount: str
+) -> None:
+    """The API rejects zero and negative rates before the database write."""
+    suffix = str(time.time_ns())
+    headers = await _register_admin(async_client, suffix)
+    warehouse_id = await _create_warehouse(async_client, headers, suffix, "amount")
+
+    response = await async_client.post(
+        "/operations/storage/tariffs",
+        headers=headers,
+        json={
+            "warehouse_id": str(warehouse_id),
+            "amount": amount,
+            "valid_from": datetime.now(MOSCOW).date().isoformat(),
+        },
+    )
+
+    assert response.status_code == 422, response.text
+    async with SessionLocal() as session:
+        count = await session.scalar(
+            select(func.count(BillingTariffVersion.id)).where(
+                BillingTariffVersion.warehouse_id == warehouse_id
+            )
+        )
+    assert count == 0
+
+
+@pytest.mark.asyncio
+async def test_tariff_valid_from_cannot_be_in_the_past(async_client: AsyncClient) -> None:
+    """A storage rate starts today or later in Moscow, never retroactively."""
+    suffix = str(time.time_ns())
+    headers = await _register_admin(async_client, suffix)
+    warehouse_id = await _create_warehouse(async_client, headers, suffix, "past")
+
+    response = await async_client.post(
+        "/operations/storage/tariffs",
+        headers=headers,
+        json={
+            "warehouse_id": str(warehouse_id),
+            "amount": "5.00",
+            "valid_from": (datetime.now(MOSCOW).date() - timedelta(days=1)).isoformat(),
+        },
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"] == "tariff_valid_from_in_past"
+
+
+@pytest.mark.asyncio
+async def test_tariff_scope_must_belong_to_tenant_and_operational_warehouse(
+    async_client: AsyncClient,
+) -> None:
+    """Foreign tenant ids and service warehouses cannot enter tariff rows."""
+    suffix = str(time.time_ns())
+    headers = await _register_admin(async_client, f"owner-{suffix}")
+    warehouse_id = await _create_warehouse(async_client, headers, suffix, "service")
+    foreign_headers = await _register_admin(async_client, f"foreign-{suffix}")
+    foreign_warehouse_id = await _create_warehouse(
+        async_client, foreign_headers, suffix, "foreign"
+    )
+    today = datetime.now(MOSCOW).date().isoformat()
+
+    foreign_warehouse = await async_client.post(
+        "/operations/storage/tariffs",
+        headers=headers,
+        json={"warehouse_id": str(foreign_warehouse_id), "amount": "5.00", "valid_from": today},
+    )
+    assert foreign_warehouse.status_code == 404, foreign_warehouse.text
+    assert foreign_warehouse.json()["detail"] == "warehouse_not_found"
+
+    async with SessionLocal() as session:
+        warehouse = await session.get(Warehouse, warehouse_id)
+        assert warehouse is not None
+        warehouse.is_operational = False
+        foreign_warehouse = await session.get(Warehouse, foreign_warehouse_id)
+        assert foreign_warehouse is not None
+        foreign_seller = Seller(tenant_id=foreign_warehouse.tenant_id, name="Foreign seller")
+        session.add(foreign_seller)
+        await session.commit()
+        foreign_seller_id = foreign_seller.id
+
+    service_warehouse = await async_client.post(
+        "/operations/storage/tariffs",
+        headers=headers,
+        json={"warehouse_id": str(warehouse_id), "amount": "5.00", "valid_from": today},
+    )
+    assert service_warehouse.status_code == 422, service_warehouse.text
+    assert service_warehouse.json()["detail"] == "warehouse_not_operational"
+
+    operational_warehouse_id = await _create_warehouse(
+        async_client, headers, suffix, "operational"
+    )
+    foreign_seller_response = await async_client.post(
+        "/operations/storage/tariffs",
+        headers=headers,
+        json={
+            "warehouse_id": str(operational_warehouse_id),
+            "amount": "5.00",
+            "valid_from": today,
+            "seller_exception": {
+                "seller_id": str(foreign_seller_id),
+                "amount": "3.00",
+                "valid_from": today,
+            },
+        },
+    )
+    assert foreign_seller_response.status_code == 404, foreign_seller_response.text
+    assert foreign_seller_response.json()["detail"] == "seller_not_found"
+
+    async with SessionLocal() as session:
+        count = await session.scalar(select(func.count(BillingTariffVersion.id)))
+    assert count == 0
+
+
+@pytest.mark.asyncio
+async def test_new_tariff_reprices_open_draft_on_reload(async_client: AsyncClient) -> None:
+    """Reloading statements after POST shows a preview calculated with the new dated rate."""
+    suffix = str(time.time_ns())
+    headers = await _register_admin(async_client, suffix)
+    warehouse_id = await _create_warehouse(async_client, headers, suffix, "preview")
+    today = datetime.now(MOSCOW).date()
+    period_start, period_end = month_bounds(today.year, today.month)
+
+    async with SessionLocal() as session:
+        warehouse = await session.get(Warehouse, warehouse_id)
+        assert warehouse is not None
+        seller = Seller(tenant_id=warehouse.tenant_id, name=f"Preview seller {suffix}")
+        session.add(seller)
+        await session.flush()
+        product = Product(
+            tenant_id=warehouse.tenant_id,
+            seller_id=seller.id,
+            name="Preview product",
+            sku_code=f"preview-{suffix}",
+            volume_liters=Decimal("1"),
+            dimensions_source="manual",
+        )
+        session.add(product)
+        await session.flush()
+        location = await get_or_create_sorting_location(
+            session, warehouse.tenant_id, warehouse.id
+        )
+        movement = InventoryMovement(
+            tenant_id=warehouse.tenant_id,
+            seller_id=seller.id,
+            warehouse_id=warehouse.id,
+            storage_location_id=location.id,
+            product_id=product.id,
+            quantity_delta=1,
+            movement_type="storage_tariff_preview_test",
+            created_at=datetime.combine(period_start, datetime_time.min, MOSCOW),
+        )
+        session.add(movement)
+        await session.flush()
+        session.add_all(
+            [
+                StorageStatement(
+                    tenant_id=warehouse.tenant_id,
+                    seller_id=seller.id,
+                    warehouse_id=warehouse.id,
+                    period_start=period_start,
+                    period_end=period_end,
+                    status="draft",
+                ),
+                StorageMeasurement(
+                    tenant_id=warehouse.tenant_id,
+                    seller_id=seller.id,
+                    warehouse_id=warehouse.id,
+                    product_id=product.id,
+                    movement_start_id=movement.id,
+                    movement_end_id=movement.id,
+                    period_start=period_start,
+                    period_end=period_end,
+                    quantity_days=Decimal("1"),
+                    liter_days=Decimal("1"),
+                    status="calculated",
+                ),
+                BillingTariffVersion(
+                    tenant_id=warehouse.tenant_id,
+                    seller_id=None,
+                    warehouse_id=warehouse.id,
+                    service_code="storage_liter_day",
+                    unit="liter_day",
+                    amount=Decimal("1.00"),
+                    valid_from=period_start,
+                ),
+            ]
+        )
+        await session.commit()
+
+    before = await async_client.get(
+        "/operations/storage/statements",
+        headers=headers,
+        params={"year": today.year, "month": today.month, "warehouse_id": str(warehouse_id)},
+    )
+    assert before.status_code == 200, before.text
+    before_amount = Decimal(before.json()["statements"][0]["total_amount"])
+
+    created = await async_client.post(
+        "/operations/storage/tariffs",
+        headers=headers,
+        json={
+            "warehouse_id": str(warehouse_id),
+            "amount": "10.00",
+            "valid_from": today.isoformat(),
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    after = await async_client.get(
+        "/operations/storage/statements",
+        headers=headers,
+        params={"year": today.year, "month": today.month, "warehouse_id": str(warehouse_id)},
+    )
+    assert after.status_code == 200, after.text
+    after_statement = after.json()["statements"][0]
+    assert Decimal(after_statement["total_amount"]) > before_amount
+    assert after_statement["measurements"][0]["rate_snapshot"] is not None

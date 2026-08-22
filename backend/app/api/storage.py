@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import Annotated, Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -33,6 +33,7 @@ from app.services.storage_statement_service import (
     create_storage_tariff,
     fix_storage_statement,
     get_fixed_storage_statement,
+    get_storage_draft_pricing,
     get_storage_ledger_rows,
 )
 
@@ -75,13 +76,13 @@ class StorageStatementsOut(BaseModel):
 
 class SellerExceptionBody(BaseModel):
     seller_id: uuid.UUID
-    amount: Decimal
+    amount: Decimal = Field(gt=0)
     valid_from: date
 
 
 class TariffCreateBody(BaseModel):
     warehouse_id: uuid.UUID
-    amount: Decimal
+    amount: Decimal = Field(gt=0)
     valid_from: date
     seller_exception: SellerExceptionBody | None = None
 
@@ -216,6 +217,29 @@ def _apply_ledger_snapshot(
     output.total_amount = str(sum((Decimal(str(entry.amount)) for entry in ledger), Decimal(0)))
 
 
+def _apply_draft_pricing(
+    output: StorageStatementOut,
+    rows: list[StorageMeasurement],
+    pricing: dict[uuid.UUID, tuple[Decimal, Decimal, BillingTariffVersion]],
+) -> None:
+    """Attach a freshly calculated tariff preview without publishing ledger rows."""
+    total_quantity = Decimal(0)
+    total_amount = Decimal(0)
+    for public_row, measurement in zip(output.measurements, rows, strict=True):
+        row_pricing = pricing.get(measurement.id)
+        if row_pricing is None:
+            continue
+        quantity, amount, _ = row_pricing
+        effective_rate = amount / quantity if quantity else Decimal(0)
+        public_row["liter_days"] = str(quantity)
+        public_row["rate_snapshot"] = _rate_snapshot(effective_rate)
+        public_row["amount"] = str(amount)
+        total_quantity += quantity
+        total_amount += amount
+    output.total_liter_days = str(total_quantity)
+    output.total_amount = str(total_amount)
+
+
 @router.get("/statements", response_model=StorageStatementsOut)
 async def list_statements(
     user: Annotated[User, Depends(require_storage_access)],
@@ -322,6 +346,14 @@ async def list_statements(
         if statement.status == "fixed":
             ledger = await get_storage_ledger_rows(session, user.tenant_id, statement.id)
             _apply_ledger_snapshot(output, rows, ledger)
+        elif priceable_rows := [row for row in rows if row.status == "calculated"]:
+            try:
+                pricing = await get_storage_draft_pricing(session, statement, priceable_rows)
+            except StorageStatementError as exc:
+                if str(exc) != "tariff_not_found":
+                    raise
+            else:
+                _apply_draft_pricing(output, rows, pricing)
         statement_outputs.append(output)
 
     return StorageStatementsOut(
@@ -363,7 +395,17 @@ async def create_tariff(
             seller_ex,
         )
     except StorageStatementError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        code = str(exc)
+        raise HTTPException(
+            status_code=(
+                422
+                if code in {"tariff_valid_from_in_past", "warehouse_not_operational"}
+                else 404
+                if code in {"warehouse_not_found", "seller_not_found"}
+                else 409
+            ),
+            detail=code,
+        ) from exc
 
     seller_exception_out: TariffVersionOut | None = None
     if sel_tariff is not None and body.seller_exception is not None:

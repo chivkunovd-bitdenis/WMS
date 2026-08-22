@@ -16,9 +16,16 @@ from app.models.billing import BillingLedgerEntry, BillingTariffVersion
 from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
 from app.models.product_dimension_event import ProductDimensionEvent
+from app.models.seller import Seller
 from app.models.storage_measurement import StorageMeasurement
 from app.models.storage_statement import StorageStatement
-from app.services.storage_measurement_service import MOSCOW, _seconds, _volume_segments
+from app.models.warehouse import Warehouse
+from app.services.storage_measurement_service import (
+    MOSCOW,
+    _seconds,
+    _volume_segments,
+    calculation_end_exclusive,
+)
 
 
 class StorageStatementError(ValueError):
@@ -114,7 +121,7 @@ async def _measurement_pricing(
 ) -> dict[uuid.UUID, tuple[Decimal, Decimal, BillingTariffVersion]]:
     product_ids = {measurement.product_id for measurement in measurements}
     period_start_at = datetime.combine(statement.period_start, time.min, MOSCOW)
-    period_end_at = datetime.combine(statement.period_end + timedelta(days=1), time.min, MOSCOW)
+    period_end_at = calculation_end_exclusive(statement.period_start, statement.period_end)
     products = {
         product.id: product
         for product in (
@@ -167,6 +174,38 @@ async def _measurement_pricing(
             raise StorageStatementError("tariff_not_found")
         result[measurement.id] = (charged_quantity, amount, last_tariff)
     return result
+
+
+async def get_storage_draft_pricing(
+    session: AsyncSession,
+    statement: StorageStatement,
+    measurements: list[StorageMeasurement],
+) -> dict[uuid.UUID, tuple[Decimal, Decimal, BillingTariffVersion]]:
+    """Calculate the current preview for an editable statement from dated tariffs."""
+    tariffs = list(
+        (
+            await session.scalars(
+                select(BillingTariffVersion).where(
+                    BillingTariffVersion.tenant_id == statement.tenant_id,
+                    BillingTariffVersion.service_code == "storage_liter_day",
+                    BillingTariffVersion.unit == "liter_day",
+                    BillingTariffVersion.warehouse_id == statement.warehouse_id,
+                    BillingTariffVersion.valid_from <= statement.period_end,
+                    or_(
+                        BillingTariffVersion.valid_to.is_(None),
+                        BillingTariffVersion.valid_to >= statement.period_start,
+                    ),
+                    or_(
+                        BillingTariffVersion.seller_id.is_(None),
+                        BillingTariffVersion.seller_id == statement.seller_id,
+                    ),
+                )
+            )
+        ).all()
+    )
+    if not tariffs:
+        raise StorageStatementError("tariff_not_found")
+    return await _measurement_pricing(session, statement, measurements, tariffs)
 
 
 async def fix_storage_statement(
@@ -381,6 +420,29 @@ async def create_storage_tariff(
     SQLAlchemy unit-of-work so that a unique-constraint violation on the second
     INSERT leaves no partial state: either both rows are committed or neither is.
     """
+    today_moscow = datetime.now(MOSCOW).date()
+    effective_dates = [valid_from]
+    if seller_exception is not None:
+        effective_dates.append(seller_exception[2])
+    if any(effective_date < today_moscow for effective_date in effective_dates):
+        raise StorageStatementError("tariff_valid_from_in_past")
+
+    warehouse = await session.scalar(
+        select(Warehouse).where(Warehouse.id == warehouse_id, Warehouse.tenant_id == tenant_id)
+    )
+    if warehouse is None:
+        raise StorageStatementError("warehouse_not_found")
+    if not warehouse.is_operational:
+        raise StorageStatementError("warehouse_not_operational")
+
+    if seller_exception is not None:
+        seller_id = seller_exception[0]
+        seller = await session.scalar(
+            select(Seller).where(Seller.id == seller_id, Seller.tenant_id == tenant_id)
+        )
+        if seller is None:
+            raise StorageStatementError("seller_not_found")
+
     warehouse_tariff = BillingTariffVersion(
         tenant_id=tenant_id,
         seller_id=None,
