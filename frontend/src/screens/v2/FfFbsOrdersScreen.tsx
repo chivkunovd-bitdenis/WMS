@@ -504,9 +504,12 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const goToStockSync = useCallback(() => navigate('/app/ff/fbs/stock-sync'), [navigate])
   const openedSupplyFromQuery = useRef<string | null>(null)
   const loadingRef = useRef(false)
+  const loadRequestRef = useRef(0)
   const loadMoreRef = useRef(false)
   const ordersLengthRef = useRef(0)
+  const ordersRef = useRef<FbsWorklistOrder[]>([])
   ordersLengthRef.current = orders.length
+  ordersRef.current = orders
   // Плавающая панель выбора (fbs-selection-bar) прибита к низу вьюпорта и накрывает
   // собой последние строки таблицы — оператор кликал по чекбоксу второго заказа и
   // попадал в панель (см. tests-e2e/ff-fbs-orders.spec.ts:277). Меряем реальную высоту
@@ -515,12 +518,14 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const selectionBarRef = useRef<HTMLDivElement | null>(null)
   const [selectionBarHeight, setSelectionBarHeight] = useState(0)
 
-  const load = useCallback(async () => {
+  const load = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
     // Задача 9 пула (HANDOFF-POLISH.md): поллинг не должен наслаиваться сам на себя —
     // если предыдущий запрос ещё летит, новый тик пропускаем.
-    if (loadingRef.current) return
+    if (background && loadingRef.current) return
+    const requestId = loadRequestRef.current + 1
+    loadRequestRef.current = requestId
     loadingRef.current = true
-    const backgroundRefresh = statusGroup === 'new' && ordersLengthRef.current > 0
+    const backgroundRefresh = background && statusGroup === 'new' && ordersLengthRef.current > 0
     if (!backgroundRefresh) setBusy(true)
     setError(null)
     try {
@@ -537,6 +542,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
           fetchFbsSupplyWorklist(token, authHeaders, params),
           fetchFbsWorklist(token, authHeaders, params),
         ])
+        if (requestId !== loadRequestRef.current) return
         setActiveSupplies(suppliesPage.items)
         setExternalActiveOrders(ordersPage.items.filter((order) => !order.supply_id))
         setOrders([])
@@ -551,9 +557,24 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         wb_warehouse_id: statusGroup === 'new' && wbWarehouseId !== '__all__' ? wbWarehouseId : null,
         limit: statusGroup === 'new' ? NEW_ORDERS_PAGE_LIMIT : 100,
       })
-      setOrders((current) => (backgroundRefresh && statusGroup === 'new'
-        ? [...page.items, ...current.filter((old) => !page.items.some((fresh) => fresh.id === old.id))]
-        : page.items))
+      if (requestId !== loadRequestRef.current) return
+      if (backgroundRefresh) {
+        // Тик заменяет только первую порцию. Хвост начинается ровно после неё:
+        // так исчезнувший из «Новых» заказ не остаётся в таблице, а догруженные
+        // страницы, прокрутка и их выбор не затрагиваются.
+        const oldFirstPageIds = new Set(ordersRef.current.slice(0, NEW_ORDERS_PAGE_LIMIT).map((item) => item.id))
+        const nextOrders = [
+          ...page.items,
+          ...ordersRef.current
+            .slice(NEW_ORDERS_PAGE_LIMIT)
+            .filter((old) => !page.items.some((fresh) => fresh.id === old.id)),
+        ]
+        const nextOrderIds = new Set(nextOrders.map((item) => item.id))
+        setOrders(nextOrders)
+        setSelected((current) => new Set([...current].filter((id) => !oldFirstPageIds.has(id) || nextOrderIds.has(id))))
+      } else {
+        setOrders(page.items)
+      }
       setActiveSupplies([])
       setExternalActiveOrders([])
       setSelectedCache((current) => {
@@ -576,8 +597,10 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     } catch (cause) {
       setError('Не удалось получить список заказов')
     } finally {
-      if (!backgroundRefresh) setBusy(false)
-      loadingRef.current = false
+      if (requestId === loadRequestRef.current) {
+        if (!backgroundRefresh) setBusy(false)
+        loadingRef.current = false
+      }
     }
   }, [token, authHeaders, sellerId, statusGroup, wbWarehouseId])
 
@@ -621,10 +644,10 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   useEffect(() => {
     const intervalId = window.setInterval(() => {
       if (document.hidden) return
-      void load()
+      void load({ background: true })
     }, 30000)
     const onVisibilityChange = () => {
-      if (!document.hidden) void load()
+      if (!document.hidden) void load({ background: true })
     }
     document.addEventListener('visibilitychange', onVisibilityChange)
     return () => {
@@ -1413,9 +1436,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               <TableRow>
                 <TableCell colSpan={5}>
                   <EmptyState
-                    title="Новых заказов пока нет"
-                    hint="Заказы появятся здесь автоматически после загрузки из Wildberries"
-                    testId="fbs-orders-empty"
+                    title={statusGroup === 'new' ? 'Новых заказов пока нет' : 'Заказов в этой группе нет'}
+                    hint={statusGroup === 'new'
+                      ? 'Заказы появятся здесь автоматически после загрузки из Wildberries'
+                      : 'Измените фильтры или обновите синхронизацию с WB.'}
+                    testId={statusGroup === 'new' ? 'fbs-orders-empty' : 'fbs-orders-group-empty'}
                   />
                 </TableCell>
               </TableRow>

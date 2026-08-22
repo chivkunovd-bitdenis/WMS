@@ -130,7 +130,7 @@ async function registerFf(page: import('@playwright/test').Page, tag: string) {
   await expect(page.getByTestId('dashboard')).toBeVisible()
 }
 
-// TC-S17-001 / TC-S17-006 — canonical worklist and selection-to-supply browser contract.
+// TC-S17-001 / TC-S17-006 / S-03-TC-007 — canonical worklist and 100-row working-tab cap.
 test('fbs orders: list, tabs and empty state', async ({ page }) => {
   await registerFf(page, 'list')
 
@@ -139,6 +139,7 @@ test('fbs orders: list, tabs and empty state', async ({ page }) => {
     const params = new URL(route.request().url()).searchParams
     const statusGroup = params.get('status_group')
     if (statusGroup === 'new') expect(params.get('limit')).toBe('50')
+    if (statusGroup === 'active') expect(params.get('limit')).toBe('100')
     const body = statusGroup === 'new'
       ? worklist([order('1'), order('2')])
       : statusGroup === 'cancelled'
@@ -175,7 +176,7 @@ test('fbs orders: list, tabs and empty state', async ({ page }) => {
   await expect(page.getByTestId('fbs-order-5')).toBeVisible()
 })
 
-// S-03-TC-001 / S-03-TC-002 / S-03-TC-003 / S-03-TC-004 / S-03-TC-005:
+// S-03-TC-001 / S-03-TC-002 / S-03-TC-010:
 // first page is 50 rows, continuation appends without duplicates and keeps selection.
 test('fbs orders: cursor pagination preserves rows and selection', async ({ page }) => {
   await registerFf(page, 'cursor-pagination')
@@ -202,13 +203,151 @@ test('fbs orders: cursor pagination preserves rows and selection', async ({ page
   await expect(page.getByTestId('fbs-order-51')).toHaveCount(0)
   await page.getByTestId('fbs-order-1').getByRole('checkbox').click()
   await expect(page.getByTestId('fbs-selection-bar')).toContainText('Выбрано заказов: 1')
-  await page.getByTestId('fbs-orders-load-more-action').click()
+  await Promise.all([
+    page.getByTestId('fbs-orders-load-more-action').dispatchEvent('click'),
+    page.getByTestId('fbs-orders-load-more-action').dispatchEvent('click'),
+  ])
   await expect(page.getByTestId('fbs-order-51')).toBeVisible()
   await expect(page.getByTestId('fbs-order-1').getByRole('checkbox')).toBeChecked()
   await expect(page.getByTestId('fbs-order-50')).toHaveCount(1)
   await expect(page.getByTestId('fbs-order-51')).toHaveCount(1)
   await expect(page.getByTestId('fbs-orders-load-more')).toHaveCount(0)
   expect(requests).toBe(2)
+})
+
+// S-03-TC-004 — the first request keeps the table frame and shows five skeleton rows.
+test('fbs orders: first page shows a table skeleton', async ({ page }) => {
+  await registerFf(page, 'pagination-skeleton')
+  let fulfill: (() => Promise<void>) | null = null
+  await page.route('**/operations/fbs-orders/worklist**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    await new Promise<void>((resolve) => {
+      fulfill = async () => {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(worklist([order('1')])) })
+        resolve()
+      }
+    })
+  })
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await expect(page.getByTestId('fbs-worklist-table')).toBeVisible()
+  await expect(page.getByTestId('fbs-worklist-table').locator('.MuiSkeleton-root')).toHaveCount(25)
+  if (!fulfill) throw new Error('The delayed worklist request did not start')
+  await fulfill()
+  await expect(page.getByTestId('fbs-order-1')).toBeVisible()
+})
+
+// S-03-TC-005 — an empty first page has the new-orders explanation and no manual action.
+test('fbs orders: empty new list explains automatic WB loading', async ({ page }) => {
+  await registerFf(page, 'pagination-empty')
+  await page.route('**/operations/fbs-orders/worklist**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(worklist([])) })
+  })
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await expect(page.getByTestId('fbs-orders-empty')).toContainText('Новых заказов пока нет')
+  await expect(page.getByTestId('fbs-orders-empty')).toContainText('Заказы появятся здесь автоматически после загрузки из Wildberries')
+  await expect(page.getByTestId('fbs-orders-load-more')).toHaveCount(0)
+})
+
+// S-03-TC-011 — a failed continuation preserves rows and can be retried.
+test('fbs orders: failed continuation preserves rows and retries', async ({ page }) => {
+  await registerFf(page, 'pagination-retry')
+  let continuationAttempts = 0
+  await page.route('**/operations/fbs-orders/worklist**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    const cursor = new URL(route.request().url()).searchParams.get('cursor')
+    if (cursor === 'page-2') {
+      continuationAttempts += 1
+      if (continuationAttempts === 1) return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ detail: 'temporary' }) })
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(worklist([order('51')])) })
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(worklist([order('1')], [], 'page-2')) })
+  })
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await page.getByTestId('fbs-orders-load-more-action').click()
+  await expect(page.getByTestId('fbs-order-1')).toBeVisible()
+  await expect(page.getByTestId('fbs-orders-load-more')).toContainText('Не удалось загрузить следующие заказы')
+  await page.getByTestId('fbs-orders-load-more-action').click()
+  await expect(page.getByTestId('fbs-order-51')).toBeVisible()
+  expect(continuationAttempts).toBe(2)
+})
+
+// Review regression: a filter change replaces the first page instead of merging its old orders.
+test('fbs orders: changing warehouse does not merge a previous page', async ({ page }) => {
+  await registerFf(page, 'pagination-filter')
+  const warehouseOptions = [
+    { id: '501001', name: 'WB Подольск', wb_warehouse: { id: 501001, name: 'WB Подольск' } },
+    { id: '501002', name: 'WB Казань', wb_warehouse: { id: 501002, name: 'WB Казань' } },
+  ]
+  await page.route('**/operations/fbs-orders/worklist**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    const warehouseId = new URL(route.request().url()).searchParams.get('wb_warehouse_id')
+    const items = warehouseId === '501002' ? [order('new-1')] : [order('old-1')]
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(worklist(items, warehouseOptions)) })
+  })
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await expect(page.getByTestId('fbs-order-old-1')).toBeVisible()
+  await page.getByRole('combobox', { name: 'Склад селлера / WB' }).click()
+  await page.getByRole('option', { name: 'WB Казань' }).click()
+  await expect(page.getByTestId('fbs-order-new-1')).toBeVisible()
+  await expect(page.getByTestId('fbs-order-old-1')).toHaveCount(0)
+})
+
+// S-03-TC-006 / S-03-TC-012 — a visible tick refreshes only the first portion; a hidden tab does not poll.
+test('fbs orders: polling preserves the loaded tail and pauses while hidden', async ({ page }) => {
+  await page.clock.install()
+  await registerFf(page, 'pagination-polling')
+  const firstPage = Array.from({ length: 50 }, (_, index) => order(String(index + 1)))
+  const refreshedFirstPage = [order('fresh-1'), ...firstPage.slice(1)]
+  const tail = [order('51')]
+  let firstPageRequests = 0
+  await page.route('**/operations/fbs-orders/worklist**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    const cursor = new URL(route.request().url()).searchParams.get('cursor')
+    if (cursor === 'page-2') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(worklist(tail, [], 'page-3')) })
+    }
+    firstPageRequests += 1
+    const body = firstPageRequests === 1 ? worklist(firstPage, [], 'page-2') : worklist(refreshedFirstPage, [], 'page-2')
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  })
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await page.getByTestId('fbs-orders-load-more-action').click()
+  await expect(page.getByTestId('fbs-order-51')).toBeVisible()
+  await page.clock.fastForward(30_000)
+  await expect(page.getByTestId('fbs-order-fresh-1')).toBeVisible()
+  await expect(page.getByTestId('fbs-order-51')).toBeVisible()
+  expect(firstPageRequests).toBe(2)
+
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true })
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await page.clock.fastForward(30_000)
+  expect(firstPageRequests).toBe(2)
+})
+
+// S-03-TC-003 — "Select all" follows cursor pages, not only the visible first 50 rows.
+test('fbs orders: select all includes every cursor page', async ({ page }) => {
+  await registerFf(page, 'pagination-select-all')
+  const firstPage = Array.from({ length: 50 }, (_, index) => order(String(index + 1)))
+  const secondPage = Array.from({ length: 50 }, (_, index) => order(String(index + 51)))
+  await page.route('**/operations/fbs-orders/worklist**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    const cursor = new URL(route.request().url()).searchParams.get('cursor')
+    const body = cursor === 'page-2' ? worklist(secondPage) : worklist(firstPage, [], 'page-2')
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  })
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await page.getByTestId('fbs-worklist-table').locator('thead input[type="checkbox"]').check()
+  await expect(page.getByTestId('fbs-selection-bar')).toContainText('Выбрано заказов: 100')
+  await expect(page.getByTestId('fbs-order-100')).toBeVisible()
 })
 
 // TC-FBS-FE-002 — seller_id передаётся в canonical worklist и меняет строки ответа.
