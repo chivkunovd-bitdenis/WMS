@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -12,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import require_ff_or_seller_with_permission
 from app.core.settings import settings
 from app.db.session import get_db
+from app.models.storage_measurement import StorageMeasurement
+from app.models.storage_statement import StorageStatement
 from app.models.user import User
 from app.services import background_job_service as job_svc
 from app.services.background_job_service import JOB_TYPE_STORAGE_MEASUREMENT_REBUILD
@@ -52,12 +54,16 @@ class StorageStatementOut(BaseModel):
     period_end: str
     seller_id: uuid.UUID
     warehouse_id: uuid.UUID
+    seller_name: str | None = None
+    warehouse_name: str | None = None
     measurements: list[dict[str, object]]
     total_liter_days: str
     total_amount: str
 
 
-def _statement_out(statement, rows) -> StorageStatementOut:
+def _statement_out(
+    statement: StorageStatement, rows: list[StorageMeasurement]
+) -> StorageStatementOut:
     total_liter_days = sum((Decimal(str(row.liter_days)) for row in rows), Decimal(0))
     return StorageStatementOut(
         id=statement.id,
@@ -67,6 +73,8 @@ def _statement_out(statement, rows) -> StorageStatementOut:
         period_end=statement.period_end.isoformat(),
         seller_id=statement.seller_id,
         warehouse_id=statement.warehouse_id,
+        seller_name=statement.seller.name,
+        warehouse_name=statement.warehouse.name,
         measurements=[
             {
                 "product_id": row.product_id,
@@ -78,6 +86,41 @@ def _statement_out(statement, rows) -> StorageStatementOut:
         total_liter_days=str(total_liter_days),
         total_amount="0",
     )
+
+
+def _print_measurements(
+    rows: list[StorageMeasurement], ledger: list[Any]
+) -> list[dict[str, object]]:
+    """Build printable SKU rows from the fixed document and its ledger snapshot."""
+    ledger_by_source_id = {entry.source_id: entry for entry in ledger}
+    return [
+        {
+            "product_id": row.product_id,
+            "sku": row.product.sku_code,
+            "seller_article": row.product.wb_vendor_code,
+            "volume_liters": str(
+                row.dimension_event.volume_liters
+                if row.dimension_event is not None
+                else row.product.volume_liters
+            )
+            if (row.dimension_event is not None and row.dimension_event.volume_liters is not None)
+            or row.product.volume_liters is not None
+            else None,
+            "dimensions_source": (
+                row.dimension_event.source
+                if row.dimension_event is not None
+                else row.product.dimensions_source
+            ),
+            "liter_days": str(row.liter_days),
+            "source_type": ledger_by_source_id[row.id].source_type,
+            "service_code": ledger_by_source_id[row.id].service_code,
+            "unit": ledger_by_source_id[row.id].unit,
+            "rate_snapshot": str(ledger_by_source_id[row.id].rate),
+            "amount": str(ledger_by_source_id[row.id].amount),
+        }
+        for row in rows
+        if row.id in ledger_by_source_id
+    ]
 
 
 @router.post(
@@ -143,18 +186,7 @@ async def fix_statement(
         ) from exc
     out = _statement_out(statement, rows)
     ledger = await get_storage_ledger_rows(session, user.tenant_id, statement.id)
-    out.measurements = [
-        {
-            "product_id": measurement.product_id,
-            "liter_days": str(measurement.liter_days),
-            "source_type": ledger_row.source_type,
-            "service_code": ledger_row.service_code,
-            "unit": ledger_row.unit,
-            "rate_snapshot": str(ledger_row.rate_snapshot),
-            "amount": str(ledger_row.amount),
-        }
-        for measurement, ledger_row in zip(rows, ledger, strict=True)
-    ]
+    out.measurements = _print_measurements(rows, ledger)
     out.total_amount = str(sum((Decimal(str(row.amount)) for row in ledger), Decimal(0)))
     return out
 
@@ -173,17 +205,6 @@ async def print_statement(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     out = _statement_out(statement, rows)
     ledger = await get_storage_ledger_rows(session, user.tenant_id, statement.id)
-    out.measurements = [
-        {
-            "product_id": measurement.product_id,
-            "liter_days": str(measurement.liter_days),
-            "source_type": ledger_row.source_type,
-            "service_code": ledger_row.service_code,
-            "unit": ledger_row.unit,
-            "rate_snapshot": str(ledger_row.rate_snapshot),
-            "amount": str(ledger_row.amount),
-        }
-        for measurement, ledger_row in zip(rows, ledger, strict=True)
-    ]
+    out.measurements = _print_measurements(rows, ledger)
     out.total_amount = str(sum((Decimal(str(row.amount)) for row in ledger), Decimal(0)))
     return out

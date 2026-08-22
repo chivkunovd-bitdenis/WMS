@@ -1,33 +1,22 @@
-# DEV · 08-storage · атом 6 · исправления ревью
+# DEV · 08-storage · атом 7
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/storage_measurement_service.py` — расчёт теперь режет положительный остаток также в момент смены версии габаритов; поздний обмер не применяется к более раннему остатку, а любой положительный интервал без объёма остаётся проблемой.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/api/storage.py` — запрос rebuild сразу отклоняет неполную пару года и месяца, несуществующий и будущий месяц; при отсутствии периода по-прежнему передаётся предыдущий календарный месяц МСК.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_storage_measurement_service.py` — добавлены проверки разбиения непрерывного остатка сменой габаритов и запрета ретроактивного применения позднего обмера.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/night/volna-9-recovery/cards/08-storage/DEV.md` — обязательный отчёт backend-dev по текущему атому.
-
-## Миграции
-
-Нет.
-
-## Тесты
-
-- `test_volume_segments_split_continuous_stock_at_dimension_change` — литро-дни используют прежний объём до даты новой версии и новый после неё.
-- `test_volume_segments_do_not_apply_later_measurement_to_earlier_stock` — отсутствие исторического объёма до первого обмера не подменяется текущим значением товара.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/storage_statement_service.py` — публикация использует контракт общего `BillingLedgerEntry` из 09-A (`tariff_version_id`, `rate`, `source`); нулевой statement получает единственный уникальный source id самого документа, а выборка ledger ограничена source ids именно этого statement.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/api/storage.py` — фиксированный и повторно печатаемый расчёт отдаёт имя селлера и склада, SKU, артикул, объём, источник габаритов, литро-дни, снимок ставки, сумму и дату фиксации; нулевой документ возвращает пустой состав SKU вместо ошибки `zip(..., strict=True)`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_storage_statement_service.py` — целевые проверки уникального source id нулевого statement, источников обычных строк и безопасной повторной печати нулевого документа.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/night/volna-9-recovery/cards/08-storage/DEV.md` — отчёт атома.
 
 ## Гейты
 
-- `cd backend && ruff check app/services/storage_measurement_service.py app/api/storage.py tests/test_storage_measurement_service.py` — `All checks passed!`.
-- `cd backend && pytest -q tests/test_storage_measurement_service.py` — `5 passed in 0.02s`.
-- `cd backend && mypy app/services/storage_measurement_service.py app/api/storage.py` — не прошёл из-за 48 уже существующих ошибок вне расчёта: отсутствует внешний `app.models.billing` (находка ревью о зависимости 09-A), а также существующие типовые ошибки `storage_statement_service` и его зависимостей.
-- `cd backend && mypy --follow-imports=skip app/services/storage_measurement_service.py app/api/storage.py` — не прошёл из-за 7 существующих типовых ошибок API-модуля: FastAPI/Pydantic импортируются как `Any` в этом режиме и у старого `_statement_out` нет полной аннотации.
-- `git diff --check` — пройден без вывода.
-- `python3 scripts/ci/back_guard.py` — неприменим: новый роут не добавлялся, исправлена валидация существующего `/operations/storage/measurements/rebuild`.
-- `python3 scripts/ci/check_migrations.py` — неприменим: миграции не добавлялись и не изменялись.
+- `ruff check backend/app/services/storage_statement_service.py backend/app/api/storage.py backend/tests/test_storage_statement_service.py` — успешно: `All checks passed!`.
+- `cd backend && pytest -q tests/test_storage_statement_service.py` — успешно: `3 passed in 0.01s`.
+- `cd backend && mypy app/services/storage_statement_service.py app/api/storage.py` — не пройден: в этой рабочей копии отсутствует обязательный внешний модуль `app.models.billing` из 09-A; также mypy сообщает три существующие ошибки вне атома в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py` и `fbs_warehouse_binding_service.py`.
+- `python3 scripts/ci/back_guard.py` — неприменимо: атом не добавляет новый маршрут; файла `scripts/ci/back_guard.py` в данной рабочей копии также нет.
+- `python3 scripts/ci/check_migrations.py` — неприменимо: атом не добавляет миграцию; файла `scripts/ci/check_migrations.py` в данной рабочей копии также нет.
+- `git diff --check` — успешно, пробеловых ошибок нет.
 
 ## Не реализовано
 
-- Находка ревью №3 о `InventoryMovement.seller_id/warehouse_id`, backfill и writer-контракте не изменялась: это внешний фундамент 07-A, прямо исключённый границей атома 6.
-- Находки №2 и №5–9 о фиксации, тарифах, ledger, печатном DTO и API габаритов относятся к другим атомам и финансовому фундаменту 09-A; в этом атоме деньги не создаются.
-- Находки по секретам, ключам, токенам, `.env` и кабинетам учётных данных отсутствуют: они не читались и не использовались.
+- Разбиение одного агрегированного `StorageMeasurement.liter_days` между несколькими тарифными интервалами внутри месяца: текущая модель измерения не хранит посуточное или интервальное распределение литро-дней, поэтому точный расчёт новой ставки с середины месяца невозможно получить из этого агрегата без изменения контракта измерений. Текущий сервис использует действующую на начало периода версию общего тарифа 09-A.
+- Полный интеграционный сценарий фиксации и конкурентных запросов не запускается до появления в этой ветке обязательных моделей 09-A `BillingTariffVersion` и `BillingLedgerEntry`. Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались и не использовались.
