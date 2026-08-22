@@ -157,8 +157,28 @@ test('admin creates seller user; seller sees filtered catalog and inbound', asyn
     waitForPostOk(page, baseIn, (u) => !u.includes('/lines') && !u.includes('/submit')),
     page.getByRole('option', { name: 'Юг' }).click(),
   ]);
-  expect(String(((await draftResponse.json()) as { warehouse_id: string }).warehouse_id)).toBe(southWarehouseId);
+  const createdDraft = (await draftResponse.json()) as { id: string; warehouse_id: string };
+  expect(String(createdDraft.warehouse_id)).toBe(southWarehouseId);
   await expect(page.getByTestId('seller-inbound-draft-form')).toBeVisible();
+  const draftWarehouseSelect = page.getByTestId('seller-inbound-warehouse-select');
+  await expect(draftWarehouseSelect).toContainText('Юг');
+  await draftWarehouseSelect.click();
+  const [warehousePatchResponse] = await Promise.all([
+    waitForPatchOk(page, `${baseIn}/${createdDraft.id}`),
+    page.getByRole('option', { name: 'WH' }).click(),
+  ]);
+  expect(
+    String(((await warehousePatchResponse.json()) as { warehouse_id: string }).warehouse_id),
+  ).toBe(wid);
+  await expect(page.getByTestId('seller-inbound-draft-ok')).toContainText('Склад заявки сохранён');
+  await expect(draftWarehouseSelect).toContainText('WH');
+
+  await Promise.all([
+    waitForGetOk(page, `${baseIn}/${createdDraft.id}`),
+    page.reload(),
+  ]);
+  await expect(page.getByTestId('seller-inbound-draft-form')).toBeVisible();
+  await expect(page.getByTestId('seller-inbound-warehouse-select')).toContainText('WH');
   await page.getByTestId('seller-inbound-add-products').click();
   await expect(page.getByTestId('seller-inbound-picker')).toBeVisible();
   await page.getByTestId('seller-inbound-picker-search').fill(skuA);
@@ -175,6 +195,9 @@ test('admin creates seller user; seller sees filtered catalog and inbound', asyn
   ]);
   await expect(page.getByTestId('seller-documents-row')).toHaveCount(1);
   await expect(page.getByTestId('warehouse-context-switch')).toHaveCount(0);
+  await page.getByTestId('seller-documents-row').click();
+  await expect(page.getByTestId('seller-inbound-warehouse-select')).toHaveCount(0);
+  await expect(page.getByTestId('seller-inbound-warehouse-label')).toContainText('Склад: WH');
 });
 
 // TC-NEW-SELLER-SCOPE-001 — shop manager sees only products of the active allowed seller.

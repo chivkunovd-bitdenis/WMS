@@ -1,40 +1,59 @@
-# DEV · 04-warehouse-switch · screen-dev · rework атома 12
-
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/FfFbsSupplyWorkspace.test.ts`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/tests-e2e/ff-fbs-supply.spec.ts`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/tests-e2e/seller-cabinet.spec.ts`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md`
 
-## Что проверено и закреплено
+Экранные файлы
+`/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/SellerDocumentsScreen.tsx`,
+`/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/SellerInboundDraftScreen.tsx`
+и профильный unit-тест были проверены, но в этом повторном проходе не менялись. В них уже есть
+требуемые экранные ограничения: S-26 не показывает глобальный складской контекст, список складов
+селлера отбрасывает служебные и неоперационные записи, поле склада показывается только для черновика
+при двух и более вариантах, а после передачи остаётся текст документа. Ответ PATCH считается успешной
+сменой только если вернул выбранный `warehouse_id`; ложный успех не показывается.
 
-- Успешный скан склада меняет склад консолидации и оставляет `ScannerLine` в состоянии ожидания склада или ячейки.
-- Скан ячейки другого склада выбирает фактическое место подбора, но не переписывает склад консолидации поставки.
-- Ошибочный скан сохраняет склад, ячейку и следующий ожидаемый шаг.
-- После первого успешного подбора скан другого склада показывает `Склад закреплён: подбор уже начат` и не сбрасывает ячейку.
-- Сетевой повтор той же операции сохраняет `order_id` и ключ идемпотентности; вторая физическая единица одинакового SKU выбирает следующий заказ и новый ключ.
-- Успешный pick показывает одну строку `Взято: Основной склад / ячейка A-01`, при этом склад консолидации остаётся `Склад Юг`.
-
-Экранная логика для находок ревью №2 и №3 уже присутствовала в текущем `HEAD` после rework предыдущего атома. В этом проходе усилены unit- и E2E-проверки находки №12, чтобы регрессия больше не оставалась зелёной.
+E2E-сценарий дополнен отсутствовавшей проверкой из находок 9 и 12: селлер создаёт черновик на «Юге»,
+меняет склад на `WH`, проверяет `warehouse_id` в ответе PATCH, перезагружает карточку и убеждается, что
+выбор сохранился. После передачи тест повторно открывает документ и проверяет отсутствие селектора и
+видимый текст `Склад: WH`. Технические коды складов по-прежнему проверяются как отсутствующие в списке,
+а на S-26 по-прежнему проверяется отсутствие глобального `warehouse-context-switch`.
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend` — красный до проверки изменённых сценариев: существующий `/frontend/src/ui-kit/WarehouseContextSwitch.test.tsx` не находит `@testing-library/react` и DOM-matchers. Изменённые файлы в ошибках не перечислены.
-- `python3 scripts/ui/ui_guard.py` из корня — красный на существующих отклонениях базовой линии: `WbProductPickerDialog.tsx`, `FfFbsOrdersScreen.tsx`, `FfFbsStockSyncScreen.tsx`, `FfFbsSupplyWorkspace.tsx` и `SellerInboundDraftScreen.tsx` отмечены как экраны-монолиты. Базовая линия не изменялась.
-- `npm run test:unit` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend` — зелёный: 22 файла, 157 тестов.
-- `npm run test:unit -- src/screens/v2/FfFbsSupplyWorkspace.test.ts` — зелёный: 1 файл, 5 тестов.
-- `npx eslint src/screens/v2/FfFbsSupplyWorkspace.test.ts tests-e2e/ff-fbs-supply.spec.ts` — зелёный.
-- `npx playwright test tests-e2e/ff-fbs-supply.spec.ts --grep "scan location then product"` — не запущен до браузерных шагов: sandbox запретил Playwright webServer привязать локальный API к `127.0.0.1:18000` (`operation not permitted`).
-- `git diff --check` — зелёный.
-- Git-коммит — не создан: среда запретила создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-04-warehouse-switch/index.lock` (`Operation not permitted`). Изменения локально реализованы, но не сохранены отдельным коммитом и не опубликованы.
+- `npx tsc --noEmit -p tsconfig.app.json` — красный до проверки затронутого сценария: существующий
+  `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/ui-kit/WarehouseContextSwitch.test.tsx`
+  не может импортировать отсутствующий `@testing-library/react`, после чего TypeScript также не знает
+  DOM-матчеры `toBeInTheDocument`, `toBeDisabled`, `toHaveTextContent` и связанные методы. Этот файл и
+  зависимости находятся вне разрешённых файлов атома.
+- `python3 scripts/ui/ui_guard.py` — красный на ранее накопленных нарушениях baseline:
+  `src/components/WbProductPickerDialog.tsx` (0 → 646),
+  `src/screens/v2/FfFbsOrdersScreen.tsx` (1587 → 1664),
+  `src/screens/v2/FfFbsStockSyncScreen.tsx` (1083 → 1121),
+  `src/screens/v2/FfFbsSupplyWorkspace.tsx` (2493 → 2619),
+  `src/screens/v2/SellerInboundDraftScreen.tsx` (1111 → 1267). Текущая правка меняет только E2E и не
+  добавляет экранной вёрстки; baseline флагом `--update` не двигался.
+- `npm run test:unit` — зелёный: 22 test files, 157 tests passed.
+- `npm run test:unit -- --run src/screens/v2/sellerInboundDocumentUi.test.ts` — зелёный:
+  1 test file, 9 tests passed.
+- `npx playwright test tests-e2e/seller-cabinet.spec.ts --grep 'admin creates seller user; seller sees filtered catalog and inbound'`
+  — красный до старта браузера: тестовый API не смог привязать `127.0.0.1:18000`, среда вернула
+  `[Errno 1] operation not permitted`. Пользовательские шаги в этом запуске не выполнялись.
 
 ## Не реализовано
 
-- Буквально не выполнен браузерный прогон целевого E2E-сценария: локальный порт запрещён средой выполнения. Сам сценарий прошёл TypeScript/ESLint-разбор в пределах доступных проверок, но это не заменяет запуск Playwright.
-- Результат не сохранён в Git из-за запрета записи в общий git-dir worktree; до коммита локальный diff можно потерять.
-- Красные `tsc` и `ui_guard.py` не исправлялись, потому что причины находятся в ранее изменённых общем ui-kit и соседних экранах либо требуют выноса более 126 строк из монолита; это выходит за разрешённые файлы и границы атома 12.
-- `frontend/src/screens/v2/fbsApi.ts`, `frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx` и `frontend/src/ui-kit/ScannerLine.tsx` не менялись: относящиеся к вердикту исправления в них уже есть, дополнительных расхождений с атомом 12 не найдено.
+- Смена склада сохранённого черновика не может быть подтверждена буквально на живом API в рамках
+  `screen-dev`: серверная схема
+  `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/api/inbound_intake.py`
+  всё ещё не принимает `warehouse_id` в `InboundIntakeRequestPlannedPatch`, а сервисный метод
+  `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/inbound_intake_service.py`
+  не меняет склад черновика. Эти backend-файлы не входят в реестр S-26/S-28/S-29 и не относятся к
+  слою роли `screen-dev`; они не изменялись. Добавленный E2E теперь фиксирует требуемое поведение и
+  станет зелёным только после исправления серверной зависимости.
+- Браузерная проверка одного операционного склада не запускалась отдельно. Условие отсутствия поля
+  покрыто зелёным unit-тестом `shouldShowSellerWarehouseSelector(1, 'draft') === false`; целевой E2E
+  с двумя складами не стартовал из-за запрета локального порта.
 
 ## Находки
 
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не читались и не изменялись.
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой production не читались и не
+  изменялись.
