@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-import uuid
 
 from alembic import op
 
 revision = "20260822_0095"
-down_revision: str | Sequence[str] | None = "20260821_0093"
+# Wave order is 0093 -> 0094 (card 03) -> 0095.  Keeping this linear avoids
+# creating an Alembic branch when the approved card-03 migration is integrated.
+down_revision: str | Sequence[str] | None = "20260821_0094"
 branch_labels = None
 depends_on = None
 
@@ -128,7 +130,13 @@ def upgrade() -> None:
         )
     ).mappings()
     for row in rows:
-        values = [row["length_mm"], row["width_mm"], row["height_mm"], row["weight_g"], row["volume_liters"]]
+        values = [
+            row["length_mm"],
+            row["width_mm"],
+            row["height_mm"],
+            row["weight_g"],
+            row["volume_liters"],
+        ]
         fingerprint = "legacy:" + ":".join("" if value is None else str(value) for value in values)
         bind.execute(sa.insert(events).values(
             id=uuid.uuid4(), tenant_id=row["tenant_id"], product_id=row["id"],

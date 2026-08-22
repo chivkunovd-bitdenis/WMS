@@ -1,37 +1,22 @@
-# Backend Dev · 08-storage · атом 2
+# DEV · 08-storage · атом 2
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/alembic/versions/20260822_0095_product_dimension_events.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/api/products.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/catalog_service.py`
-
-## Что реализовано
-
-- Миграция сохраняет прежние заполненные габариты товаров как первую действующую `legacy`-версию и заполняет быстрый снимок источника/времени.
-- Возврат к сохранённым данным WB создаёт отдельное действующее событие без конфликта с уникальным fingerprint; обычные повторы по-прежнему дедуплицируются.
-- Ручной PATCH габаритов доступен только администратору или сотруднику с правом `inventory` и записывает `author_user_id` текущего пользователя.
-
-## Миграции
-
-- `20260822_0095`: добавляет поля действующего источника на `products`, журнал `product_dimension_events` и backfill существующих снимков.
-
-## Тесты
-
-- `tests/test_storage_models.py`, `tests/test_products_api.py`, `tests/test_wb_import_dimensions.py`: модель журнала, права/автор ручного обмера и сохранение WB-наблюдений.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/alembic/versions/20260822_0095_product_dimension_events.py` — цепочка миграций продолжена от обязательной `20260821_0094`; журнал наблюдений и снимок действующего источника остаются добавляющей миграцией.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_wb_import_dimensions.py` — добавлена проверка совместного хранения ручной и WB-версий, единственной активной записи и их аудиторского контекста.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/night/volna-9-recovery/cards/08-storage/DEV.md` — отчёт атома.
 
 ## Гейты
 
-- `ruff`: полный прогон не проходит из-за 80 существующих ошибок в соседних файлах; изменённые три Python-файла проходят отдельный `ruff check`.
-- `mypy`: полный прогон не проходит из-за существующих ошибок в `storage_statement_service.py`, FBS и cleanup-скриптах; ошибок в изменённых файлах не сообщил.
-- `pytest`: целевые тесты `7 passed`; полный прогон запущен, на момент подготовки артефакта ещё выполнялся.
-- `back_guard.py`: файл отсутствует в этой рабочей копии (`python3: can't open file scripts/ci/back_guard.py`).
-- `check_migrations.py`: файл отсутствует в этой рабочей копии (`python3: can't open file scripts/ci/check_migrations.py`).
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && ruff check app/models/product.py app/models/product_dimension_event.py alembic/versions/20260822_0095_product_dimension_events.py tests/test_wb_import_dimensions.py` — успешно, `All checks passed!`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && mypy app/models/product.py app/models/product_dimension_event.py` — успешно, `Success: no issues found in 2 source files`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && pytest -q tests/test_wb_import_dimensions.py` — успешно, `5 passed in 3.99s`.
+- `back_guard.py` не применим: в атоме нет нового маршрута.
+- `check_migrations.py` не применим: атом исправляет существующую миграцию, но не добавляет новую.
+- `git commit -m "fix(storage): linearize dimensions migration"` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage` — не выполнен: Git не может создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-08-storage1/index.lock` (`Operation not permitted`).
 
 ## Не реализовано
 
-- Остальные находки ревью по расчёту хранения, биллингу, печати и UI не относятся к этому атомарному backend-слою и не изменялись.
-
-## Блокеры
-
-- Нет.
+- Находка ревью №9 о синхронизации `dimensions_updated_at` и `dimensions_updated_by_user_id` при WB-импорте и возврате к WB лежит в сервисах `catalog_service.py` и `wildberries_product_import_service.py`, которые буквально принадлежат следующему атому 3. В рамках атома 2 они не изменялись.
+- Находки ревью №1–8 и №11–12 относятся к UI, API, расчётам хранения, биллингу, движению и следующим атомам; этот атом их не затрагивает.
+- Изменения реализованы локально, но не сохранены Git-коммитом из-за запрета на создание Git lock-файла.
