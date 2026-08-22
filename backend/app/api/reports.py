@@ -30,12 +30,14 @@ async def get_inventory_report(user: Annotated[User, Depends(get_current_user)],
     seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
     date_from: Annotated[datetime, Query()], date_to: Annotated[datetime, Query()],
     group_by: Annotated[str, Query()] = "product", page: Annotated[int, Query(ge=1)] = 1,
+    seller_id: Annotated[uuid.UUID | None, Query()] = None,
     warehouse_id: Annotated[uuid.UUID | None, Query()] = None,
     search: Annotated[str | None, Query()] = None) -> dict[str, object]:
     await assert_inventory_read_access(session, user)
     try:
         return await build_inventory_report(session, user.tenant_id, date_from=date_from,
-            date_to=date_to, group_by=group_by, page=page, seller_id=seller_scope,
+            date_to=date_to, group_by=group_by, page=page,
+            seller_id=seller_scope if seller_scope is not None else seller_id,
             warehouse_id=warehouse_id, search=search)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -77,6 +79,7 @@ async def export_inventory_report(
     seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
     date_from: Annotated[datetime, Query()], date_to: Annotated[datetime, Query()],
     group_by: Annotated[str, Query()] = "product",
+    seller_id: Annotated[uuid.UUID | None, Query()] = None,
     warehouse_id: Annotated[uuid.UUID | None, Query()] = None,
     search: Annotated[str | None, Query()] = None,
 ) -> StreamingResponse:
@@ -84,7 +87,9 @@ async def export_inventory_report(
     try:
         content = await build_inventory_csv(
             session, user.tenant_id, date_from=date_from, date_to=date_to,
-            group_by=group_by, seller_id=seller_scope, warehouse_id=warehouse_id,
+            group_by=group_by,
+            seller_id=seller_scope if seller_scope is not None else seller_id,
+            warehouse_id=warehouse_id,
             search=search, include_seller=seller_scope is None,
         )
     except ValueError as exc:

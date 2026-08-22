@@ -56,7 +56,7 @@ async def build_inventory_report(
         stmt = select(Product.id, Product.name, Product.sku_code, Product.wb_vendor_code,
             Product.wb_barcode, Seller.name, in_qty, out_qty).select_from(InventoryMovement).join(
             Product, Product.id == InventoryMovement.product_id).outerjoin(Seller,
-            Seller.id == Product.seller_id).join(
+            Seller.id == InventoryMovement.seller_id).join(
             Warehouse, Warehouse.id == InventoryMovement.warehouse_id).where(
             *filters).group_by(Product.id, Product.name, Product.sku_code, Product.wb_vendor_code,
             Product.wb_barcode, Seller.name).order_by(Product.name, Product.sku_code)
@@ -69,20 +69,25 @@ async def build_inventory_report(
     rows = (await session.execute(stmt)).all()
     incomplete_transfer = False
     if warehouse_id is not None:
+        integrity_filters = [InventoryMovement.tenant_id == tenant_id,
+            InventoryMovement.created_at >= date_from, InventoryMovement.created_at < date_to,
+            ~Warehouse.name.startswith("FBS WB "), InventoryMovement.transfer_group_id.is_not(None)]
+        if seller_id is not None:
+            integrity_filters.append(InventoryMovement.seller_id == seller_id)
         transfer_rows = (await session.execute(select(InventoryMovement.transfer_group_id,
             func.count(InventoryMovement.id)).join(
             Product, Product.id == InventoryMovement.product_id).join(
-            Warehouse, Warehouse.id == InventoryMovement.warehouse_id).where(*filters,
-            InventoryMovement.transfer_group_id.is_not(None)).group_by(InventoryMovement.transfer_group_id))).all()
+            Warehouse, Warehouse.id == InventoryMovement.warehouse_id).where(*integrity_filters
+            ).group_by(InventoryMovement.transfer_group_id))).all()
         incomplete_transfer = any(count < 2 for _group_id, count in transfer_rows)
     start = (page - 1) * PAGE_SIZE
     result: list[dict[str, object]] = []
     for row in rows[start:start + PAGE_SIZE]:
         if group_by == "product":
             pid, name, sku, vendor, barcode, seller_name, incoming, outgoing = row
-            result.append({"product_id": str(pid), "name": name, "sku": sku,
-                "vendor_code": vendor, "barcode": barcode, "seller_name": seller_name,
-                "in_qty": int(incoming), "out_qty": int(outgoing),
+            result.append({"product_id": str(pid), "product_name": name, "sku_code": sku,
+                "wb_vendor_code": vendor, "wb_barcode": barcode, "seller_name": seller_name,
+                "total_in": int(incoming), "total_out": int(outgoing),
                 "net": int(incoming) - int(outgoing), "integrity_error": incomplete_transfer})
         else:
             movement_type, incoming, outgoing = row
@@ -125,17 +130,20 @@ async def build_inventory_csv(
     output = io.StringIO(newline="")
     writer = csv.writer(output, lineterminator="\n")
     if group_by == "product":
-        headers = ["Название", "Артикул продавца", "ШК"]
+        headers = ["Товар", "SKU", "Артикул продавца", "ШК"]
         if include_seller:
             headers.append("Селлер")
         headers.extend(["Приход", "Расход", "Нетто"])
         writer.writerow(headers)
         for report_page in pages:
             for row in cast(list[dict[str, Any]], report_page["rows"]):
-                values = [row["name"], row["vendor_code"], row["barcode"]]
+                values = [
+                    row["product_name"], row["sku_code"], row["wb_vendor_code"],
+                    row["wb_barcode"],
+                ]
                 if include_seller:
                     values.append(row["seller_name"])
-                values.extend([row["in_qty"], row["out_qty"], row["net"]])
+                values.extend([row["total_in"], row["total_out"], row["net"]])
                 writer.writerow(values)
     else:
         writer.writerow(["Операция", "Приход", "Расход", "Нетто"])
@@ -161,6 +169,7 @@ async def build_overview(
         InventoryMovement.created_at >= date_from,
         InventoryMovement.created_at < date_to,
         InventoryMovement.transfer_group_id.is_(None),
+        ~Warehouse.name.startswith("FBS WB "),
     ]
     if warehouse_id is not None:
         movement_filter.append(InventoryMovement.warehouse_id == warehouse_id)
@@ -203,6 +212,7 @@ async def build_overview(
             select(in_expr, out_expr)
             .select_from(InventoryMovement)
             .join(Product, Product.id == InventoryMovement.product_id)
+            .join(Warehouse, Warehouse.id == InventoryMovement.warehouse_id)
             .where(*movement_filter)
         )
     ).one()
@@ -214,6 +224,7 @@ async def build_overview(
         InventoryMovement.created_at >= previous_from,
         InventoryMovement.created_at < previous_to,
         InventoryMovement.transfer_group_id.is_(None),
+        ~Warehouse.name.startswith("FBS WB "),
     ]
     if seller_id is not None:
         previous_filter.append(InventoryMovement.seller_id == seller_id)
@@ -238,6 +249,7 @@ async def build_overview(
                 select(out_expr)
                 .select_from(InventoryMovement)
                 .join(Product, Product.id == InventoryMovement.product_id)
+                .join(Warehouse, Warehouse.id == InventoryMovement.warehouse_id)
                 .where(*previous_filter)
             )
         )
@@ -250,7 +262,7 @@ async def build_overview(
         .join(StorageLocation, StorageLocation.id == InventoryBalance.storage_location_id)
         .join(Warehouse, Warehouse.id == StorageLocation.warehouse_id)
         .join(Product, Product.id == InventoryBalance.product_id)
-        .where(InventoryBalance.tenant_id == tenant_id)
+        .where(InventoryBalance.tenant_id == tenant_id, ~Warehouse.name.startswith("FBS WB "))
     )
     if seller_id is not None:
         balance_stmt = balance_stmt.where(Product.seller_id == seller_id)
