@@ -33,3 +33,5 @@
 17:05   06-picking-list-order · reviewer: готово
 17:05   06-picking-list-order · reviewer: находки, круг 2 — назад к разработке
 17:06   06-picking-list-order · screen-dev: готово
+17:06   06-picking-list-order · dev: фича 1/6 сохранена c165065585a4
+17:08   06-picking-list-order · backend-dev: готово
