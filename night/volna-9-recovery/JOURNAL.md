@@ -69,3 +69,7 @@
 15:31   02-verdikt-screen · dev: фича 4/5 сохранена f6ae74371e64
 15:34   02-verdikt-screen · screen-dev: готово
 15:34   02-verdikt-screen · dev: фича 5/5 сохранена 438945b1fb67
+15:39   02-verdikt-screen · reviewer: готово
+15:39 02-verdikt-screen: отложено — reviewer, круги кончились
+19:54   02-verdikt-screen · resume: поатомный rework Terra по сохранённым находкам
+20:00   02-verdikt-screen · backend-dev: готово

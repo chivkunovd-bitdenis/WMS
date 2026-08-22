@@ -560,6 +560,33 @@ def test_compute_delivery_allowed_uses_reason_and_decision() -> None:
     assert compute_delivery_allowed(order, [marking]) is False
 
 
+def test_workspace_metadata_ready_uses_persisted_wb_rejection() -> None:
+    """S-03-TC-003: a WB reason blocks workspace progress despite accepted code."""
+    from types import SimpleNamespace
+
+    from app.services.fbs_workspace_service import _metadata_ready
+
+    rejected_by_wb = SimpleNamespace(
+        metadata_delivery_allowed=False,
+        required_meta_json=["sgtin"],
+        meta_details_json={
+            "sgtin": {
+                "status": META_STATUS_ACCEPTED,
+                "decision": "filled",
+                "reason": "uinBadStatus",
+            }
+        },
+    )
+    legacy_accepted = SimpleNamespace(
+        metadata_delivery_allowed=None,
+        required_meta_json=["sgtin"],
+        meta_details_json={"sgtin": {"status": META_STATUS_ACCEPTED}},
+    )
+
+    assert _metadata_ready(rejected_by_wb) is False
+    assert _metadata_ready(legacy_accepted) is True
+
+
 def test_wb_order_verdict_allows_order_without_metadata_requirements() -> None:
     from types import SimpleNamespace
 

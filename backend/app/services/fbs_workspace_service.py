@@ -1,4 +1,3 @@
-# ruff: noqa: RUF001
 """FBS supply workspace read model — stage, progress, blockers, cargo places."""
 
 from __future__ import annotations
@@ -337,8 +336,11 @@ def _compute_progress(orders: list[FbsOrder]) -> WorkspaceProgress:
 
 
 def _metadata_ready(order: FbsOrder) -> bool:
-    if order.metadata_delivery_allowed is True:
-        return True
+    # The persisted value is written by the single WB verdict rule.  Do not
+    # fall back to legacy per-code statuses when that rule explicitly blocked
+    # delivery: `accepted` may coexist with a WB rejection reason.
+    if order.metadata_delivery_allowed is not None:
+        return order.metadata_delivery_allowed
     required = order.required_meta_json or []
     if not required:
         return True
