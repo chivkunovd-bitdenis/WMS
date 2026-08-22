@@ -61,6 +61,8 @@ import { displayMetaToProductLabel } from '../../utils/productBarcodePrint'
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { printShipmentPackagingSheet } from '../../utils/printShipmentPackagingSheet'
 import { formatHumanDocumentNumber } from './documentDisplay'
+import { useWarehouseContext } from '../../contexts/WarehouseContext'
+import { WarehouseNoContextState } from '../../ui-kit'
 
 export type PackagingTaskLine = {
   id: string
@@ -1861,7 +1863,7 @@ export function FfPackagingPage({ token }: PageProps) {
   const [pendingMarkingCount, setPendingMarkingCount] = useState(0)
   const [statusFilter, setStatusFilter] = useState<PackagingTaskStatusFilter>('open')
   const [search, setSearch] = useState('')
-
+  const { selectedWarehouseId } = useWarehouseContext('fulfillment')
   const loadTaskById = useCallback(
     async (taskId: string) => {
       const res = await fetch(apiUrl(`/operations/packaging-tasks/${taskId}`), {
@@ -1875,13 +1877,11 @@ export function FfPackagingPage({ token }: PageProps) {
     },
     [token],
   )
-
   const load = useCallback(async () => {
-    const params = new URLSearchParams({ status: statusFilter })
+    if (!selectedWarehouseId) { setTasks([]); return }
+    const params = new URLSearchParams({ status: statusFilter, warehouse_id: selectedWarehouseId })
     const trimmedSearch = search.trim()
-    if (trimmedSearch) {
-      params.set('search', trimmedSearch)
-    }
+    if (trimmedSearch) params.set('search', trimmedSearch)
     const res = await fetch(apiUrl(`/operations/packaging-tasks?${params}`), {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -1896,7 +1896,7 @@ export function FfPackagingPage({ token }: PageProps) {
     } catch {
       setPendingMarkingCount(0)
     }
-  }, [search, statusFilter, token])
+  }, [search, selectedWarehouseId, statusFilter, token])
 
   useEffect(() => {
     void load()
@@ -1958,7 +1958,7 @@ export function FfPackagingPage({ token }: PageProps) {
             void load()
           }}
         />
-      ) : (
+      ) : !selectedWarehouseId ? <WarehouseNoContextState /> : (
         <Paper variant="outlined" data-testid="ff-packaging-queue" sx={{ overflowX: 'hidden' }}>
           <Stack spacing={1.5} sx={{ p: 2, pb: 1 }}>
             <Tabs

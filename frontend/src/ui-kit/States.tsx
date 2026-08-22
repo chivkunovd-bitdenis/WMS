@@ -69,3 +69,14 @@ export function ScreenHeader({ title, purpose }: { title: string; purpose?: stri
     </Box>
   )
 }
+
+// Канон R-21+: при нулевом складском контексте экран показывает эту заглушку,
+// а не молчаливо пустой список, который оператор читает как поломку.
+export function WarehouseNoContextState() {
+  return (
+    <EmptyState
+      title="Нет рабочего склада"
+      hint="Выберите склад в верхней части страницы."
+    />
+  )
+}
