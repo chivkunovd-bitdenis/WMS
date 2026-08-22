@@ -80,6 +80,29 @@ def _as_moscow(value: datetime) -> datetime:
     return value.replace(tzinfo=MOSCOW) if value.tzinfo is None else value.astimezone(MOSCOW)
 
 
+def _effective_dimension_events(
+    events: list[ProductDimensionEvent],
+) -> list[ProductDimensionEvent]:
+    """Return only observations that changed the effective storage volume.
+
+    ``applied`` identifies the version active now, not whether an older event was
+    active when it was recorded.  Manual and container events always represent an
+    intentional change.  A regular WB event recorded while either is effective is
+    observation-only; an explicit WB restore is stored with a suffixed fingerprint
+    and starts a new effective period.
+    """
+    effective: list[ProductDimensionEvent] = []
+    active_source: str | None = None
+    for event in events:
+        protected_manual = active_source in {"manual", "container_override", "container"}
+        is_wb_restore = event.source == "wb" and ":" in event.fingerprint
+        if event.source == "wb" and protected_manual and not event.applied and not is_wb_restore:
+            continue
+        effective.append(event)
+        active_source = event.source
+    return effective
+
+
 def _volume_segments(
     movements: list[InventoryMovement],
     events: list[ProductDimensionEvent],
@@ -94,6 +117,7 @@ def _volume_segments(
     events exist, time before the first event deliberately has no volume instead
     of applying a later measurement retroactively.
     """
+    events = _effective_dimension_events(events)
     boundaries = {start, end}
     boundaries.update(
         _as_moscow(movement.created_at)

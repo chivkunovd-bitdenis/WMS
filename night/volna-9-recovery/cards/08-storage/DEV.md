@@ -1,50 +1,47 @@
-# DEV · 08-storage · атом 2 · rework
+# DEV · 08-storage · атом 3 · переделка по ревью
 
 ## Что реализовано
 
-- Эндпоинты: нет, атом не добавляет и не меняет маршруты.
-- Сервис `catalog_service._record_dimension_event`: повторные WB-наблюдения по-прежнему дедуплицируются, а каждый ручной обмер `manual` / `container_override` создаёт новую неизменяемую версию и не переписывает дату или автора прежней записи.
-- Модель `ProductDimensionEvent`: уникальность fingerprint ограничена источником `wb`, поэтому одинаковые осознанные ручные обмеры в разные моменты сохраняются отдельными событиями.
+- Сервис расчёта хранения исключает WB-наблюдения, записанные поверх действующего ручного обмера или объёма тары, из временной шкалы применённых габаритов.
+- Явный возврат к WB остаётся новой действующей версией и меняет объём только с момента возврата; завершившийся ранее период сохраняет ручной объём.
+- Существующая реализация `catalog_service.py` проверена на находку ревью № 5: повторный осознанный ручной обмер создаёт новое неизменяемое событие и не переписывает автора старого события.
+- Новые эндпоинты не добавлялись.
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/models/product_dimension_event.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/catalog_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/alembic/versions/20260822_0095_product_dimension_events.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_product_dimension_history.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/storage_measurement_service.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_storage_measurement_service.py`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/night/volna-9-recovery/cards/08-storage/DEV.md`
 
 ## Миграции
 
-- `20260822_0095` — добавляет снимок действующего источника габаритов в `products` и журнал `product_dimension_events`; в rework уникальный индекс `(product_id, fingerprint)` сделан частичным для `source = 'wb'`, чтобы дедуплицировать импорт, но не терять повторные ручные обмеры.
+- Нет.
 
 ## Тесты
 
-- `test_repeated_manual_measurement_keeps_both_immutable_observations` — проверяет сценарий ревью: одинаковый ручной обмер после возврата к WB создаёт новую версию с новым автором, не меняет аудит первой версии и оставляет ровно одну действующую запись.
-- `tests/test_product_dimension_history.py` и `tests/test_wb_import_dimensions.py` — проверяют ручную и WB-историю, единственную действующую версию, сохранность ручного значения при импорте, возврат к WB и отсутствие дублей повторного WB-наблюдения.
+- Добавлен сценарий: новое WB-наблюдение после ручного обмера не меняет объём в расчёте хранения.
+- Добавлен сценарий: явный возврат к последней полной WB-версии меняет открытую временную шкалу с момента возврата и не меняет завершившийся ранее период.
+- Повторно проверены сценарии полного ручного обмера, объёма тары без основания и с основанием, одинакового повторного WB-импорта, WB-обновления после ручного обмера, возврата к WB и повторного ручного обмера тем же значением с сохранением старых даты и автора.
 
 ## Гейты
 
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && ruff check app/models/product.py app/models/product_dimension_event.py app/services/catalog_service.py alembic/versions/20260822_0095_product_dimension_events.py tests/test_product_dimension_history.py tests/test_wb_import_dimensions.py` — успешно, `All checks passed!`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && mypy app/models/product.py app/models/product_dimension_event.py` — успешно, `Success: no issues found in 2 source files`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && mypy --follow-imports=skip --disable-error-code=misc --disable-error-code=no-any-return app/services/catalog_service.py` — успешно, `Success: no issues found in 1 source file`. Обычный запуск `mypy app/models/product.py app/models/product_dimension_event.py app/services/catalog_service.py` рекурсивно остановился на четырёх ранее существовавших ошибках в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py` и `fbs_warehouse_binding_service.py`; эти файлы атом не меняет.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && pytest -q tests/test_product_dimension_history.py tests/test_wb_import_dimensions.py` — успешно, `8 passed in 8.64s`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage && python3 scripts/ci/check_migrations.py` — не запущен: файла `scripts/ci/check_migrations.py` в этой рабочей копии нет, команда завершилась с кодом 2.
-- `back_guard.py` не применим: новый маршрут не добавлялся.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage && git diff --check` — успешно, замечаний нет.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage && git add backend/alembic/versions/20260822_0095_product_dimension_events.py backend/app/models/product_dimension_event.py backend/app/services/catalog_service.py backend/tests/test_product_dimension_history.py night/volna-9-recovery/cards/08-storage/DEV.md && git diff --cached --check && git commit -m "fix(storage): preserve repeated manual measurements"` — не выполнено: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-08-storage1/index.lock` (`Operation not permitted`).
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && ruff check app/services/catalog_service.py app/services/wildberries_product_import_service.py app/services/storage_measurement_service.py tests/test_product_dimension_history.py tests/test_storage_measurement_service.py` — пройдено, `All checks passed!`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && mypy app/services/storage_measurement_service.py tests/test_storage_measurement_service.py` — пройдено, `Success: no issues found in 2 source files`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && mypy app/services/catalog_service.py app/services/wildberries_product_import_service.py app/services/storage_measurement_service.py tests/test_product_dimension_history.py tests/test_storage_measurement_service.py` — затронутые файлы очищены; общий граф импортов сообщает четыре ранее существовавшие ошибки вне атома: `app/services/wildberries_credentials_service.py:167`, `app/services/fbs_stock_sync_service.py:617`, `app/services/fbs_warehouse_binding_service.py:23,291`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && pytest -q tests/test_product_dimension_history.py tests/test_wb_import_dimensions.py tests/test_storage_measurement_service.py` — пройдено, `15 passed in 6.20s`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && git diff --check` — пройдено, замечаний нет.
+- `back_guard.py` и `check_migrations.py` не запускались: атом не добавляет маршрут или миграцию.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage && git add backend/app/services/storage_measurement_service.py backend/tests/test_storage_measurement_service.py night/volna-9-recovery/cards/08-storage/DEV.md && git diff --cached --check && git commit -m "fix(storage): preserve manual dimensions in calculations"` — не выполнено: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-08-storage1/index.lock`, `Operation not permitted`.
 
 ## Не реализовано
 
-- Находки ревью №1–4 и №6–10 относятся к API списка, биллингу, writer движения, расчёту хранения и frontend; они не входят в файлы и слой атома 2.
-- Миграция `0095` по обязательному порядку `ARCH-CROSS.md` продолжает внешнюю миграцию `0094` карточки 03. Файл `0094` в этой изолированной рабочей копии отсутствует, поэтому сквозной `alembic upgrade` здесь не выдаётся за выполненную проверку.
-- Сохранить rework отдельным Git-коммитом не удалось из-за запрета среды на запись в метаданные worktree; результат локально реализован, но не опубликован и не может считаться сохранённым по SHA.
-
-## Блокеры
-
-- Интеграционная проверка цепочки миграций требует предшествующую карточку 03 и отсутствующий в checkout скрипт `scripts/ci/check_migrations.py`.
-- Git-коммит заблокирован правами среды на общий каталог метаданных worktree.
+- Нет пунктов атома 3, которые не легли буквально. Находки ревью о list API, биллинге, складских движениях, тарифах, текущем месяце, DTO фронтенда, правах маршрута и Playwright относятся к другим атомам и их файлам; в этой переделке они не затрагивались.
+- Результат локально реализован, но не сохранён Git-коммитом и не опубликован: среда запрещает запись в общий каталог метаданных текущего worktree.
 
 ## Находки
 
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой production не читались и не затрагивались.
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой production не читались и не изменялись.
+
+## Блокеры
+
+- Сохранение отдельным коммитом заблокировано правами среды на `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-08-storage1`; код и `DEV.md` находятся только в рабочем дереве.
