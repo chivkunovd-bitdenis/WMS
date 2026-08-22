@@ -28,6 +28,7 @@ async def test_form_invoice_blocks_unpriced() -> None:
     )
     session.scalar = AsyncMock(
         side_effect=[
+            object(),
             None,
             BillingProfile(tenant_id=tenant_id, seller_id=None, legal_name="FF", inn="123"),
                 BillingProfile(
@@ -57,7 +58,7 @@ async def test_existing_invoice_is_returned_without_duplicate() -> None:
         seller_profile_snapshot={},
         lines=[],
     )
-    session.scalar = AsyncMock(return_value=invoice)
+    session.scalar = AsyncMock(side_effect=[object(), invoice])
     result = await form_invoice(
         session, tenant_id=invoice.tenant_id, seller_id=invoice.seller_id, period=invoice.period
     )

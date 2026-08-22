@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.billing import BillingProfile, BillingTariffVersion
+from app.models.billing import BillingLedgerEntry, BillingProfile, BillingTariffVersion
 from app.models.seller import Seller
 from app.models.tenant import Tenant
 
@@ -175,4 +175,30 @@ async def create_tariff(
         raise BillingConfigurationError("Дата пересекает будущую версию ставки") from exc
     else:
         await nested.commit()
+    # A missing rate is explicitly a recoverable configuration problem, not a
+    # historical price.  Once a covering version is entered, bind only those
+    # previously unpriced facts which match this exact tariff stream.
+    unpriced_query = select(BillingLedgerEntry).where(
+        BillingLedgerEntry.tenant_id == tenant_id,
+        BillingLedgerEntry.service_code == service_code,
+        BillingLedgerEntry.rate.is_(None),
+        BillingLedgerEntry.amount.is_(None),
+    )
+    if seller_id is not None:
+        unpriced_query = unpriced_query.where(BillingLedgerEntry.seller_id == seller_id)
+    unpriced = (await session.scalars(unpriced_query)).all()
+    for entry in unpriced:
+        fact_date = entry.occurred_at.date()
+        if entry.occurred_at.tzinfo is not None:
+            from zoneinfo import ZoneInfo
+
+            fact_date = entry.occurred_at.astimezone(ZoneInfo("Europe/Moscow")).date()
+        if fact_date < valid_from:
+            continue
+        entry.tariff_version_id = tariff.id
+        entry.unit = unit
+        entry.rate = amount
+        quantity = Decimal("1") if unit == "document" else entry.quantity
+        entry.quantity = quantity
+        entry.amount = (amount * quantity).quantize(Decimal("0.01"))
     return tariff

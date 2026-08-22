@@ -29,7 +29,11 @@ async def test_tariff_versions_cannot_overlap_by_unit() -> None:
     tenant_id = uuid4()
     start = date(2026, 1, 1)
     session.scalars = AsyncMock(
-        side_effect=[Mock(first=lambda: None), Mock(first=lambda: Mock(valid_from=start))]
+        side_effect=[
+            Mock(first=lambda: None, all=lambda: []),
+            Mock(all=lambda: []),
+            Mock(first=lambda: Mock(valid_from=start)),
+        ]
     )
     await create_tariff(
         session,
@@ -59,7 +63,7 @@ async def test_first_tariff_explicitly_activates_billing_from_its_start_date() -
     session.add = Mock()
     tenant = Mock(billing_enabled_from=None)
     session.scalar = AsyncMock(return_value=tenant)
-    session.scalars = AsyncMock(return_value=Mock(first=lambda: None))
+    session.scalars = AsyncMock(return_value=Mock(first=lambda: None, all=lambda: []))
     start = date(2026, 3, 1)
 
     await create_tariff(

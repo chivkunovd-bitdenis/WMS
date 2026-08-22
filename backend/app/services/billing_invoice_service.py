@@ -6,11 +6,12 @@ from decimal import Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.billing import BillingInvoice, BillingLedgerEntry, BillingProfile, BillingRunIssue
+from app.models.seller import Seller
 
 REASONS = {
     "unpriced": "Нет тарифа",
@@ -38,6 +39,11 @@ async def form_invoice(
     today_msk = datetime.now(MSK).date()
     if period >= date(today_msk.year, today_msk.month, 1):
         raise ValueError("Счёт можно формировать только за закрытый месяц")
+    seller_in_tenant = await session.scalar(
+        select(Seller.id).where(Seller.id == seller_id, Seller.tenant_id == tenant_id)
+    )
+    if seller_in_tenant is None:
+        raise ValueError("Селлер не найден в текущем tenant")
     existing = await session.scalar(
         select(BillingInvoice).where(
             BillingInvoice.tenant_id == tenant_id,
@@ -63,19 +69,14 @@ async def form_invoice(
     elif any(e.amount is None for e in entries):
         reason = "unpriced"
     storage_entries = [e for e in entries if e.service_code == "storage_liter_day"]
-    has_storage_statement = any(
-        e.source_type in {"storage_statement", "storage_statement_closed"} for e in entries
-    )
-    if storage_entries and not has_storage_statement:
-        reason = "storage_period_not_closed"
     if not storage_entries and reason is None:
         from app.models.billing import BillingTariffVersion
 
         storage_tariff = await session.scalar(select(BillingTariffVersion).where(
             BillingTariffVersion.tenant_id == tenant_id,
             BillingTariffVersion.service_code == "storage_liter_day",
-            BillingTariffVersion.valid_from <= period,
-            (BillingTariffVersion.valid_to.is_(None) | (BillingTariffVersion.valid_to >= period)),
+            BillingTariffVersion.valid_from < end.date(),
+            or_(BillingTariffVersion.valid_to.is_(None), BillingTariffVersion.valid_to >= period),
             (BillingTariffVersion.seller_id == seller_id)
             | BillingTariffVersion.seller_id.is_(None),
         ))
@@ -140,6 +141,9 @@ async def form_invoice(
             "id": str(entry.id), "source_type": entry.source_type,
             "source_id": str(entry.source_id), "quantity": str(entry.quantity),
             "amount": str(entry.amount), "occurred_at": entry.occurred_at.isoformat(),
+            # The source id remains available for audits; a displayable number is
+            # intentionally immutable even where old source tables have no number.
+            "number": str(entry.source_id), "date": entry.occurred_at.date().isoformat(),
             "performer_id": str(entry.performer_id) if entry.performer_id else None,
         })
     fields = (

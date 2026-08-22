@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Any, cast
 
@@ -17,8 +17,10 @@ from app.models.billing import (
     BillingInvoice,
     BillingLedgerEntry,
     BillingProfile,
+    BillingRunIssue,
     BillingTariffVersion,
 )
+from app.models.seller import Seller
 from app.models.user import User
 from app.services.billing_configuration_service import (
     BillingConfigurationError,
@@ -26,7 +28,7 @@ from app.services.billing_configuration_service import (
     create_tariff,
     save_profile,
 )
-from app.services.billing_invoice_service import cancel_invoice, form_invoice
+from app.services.billing_invoice_service import _month_bounds, cancel_invoice, form_invoice
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -71,6 +73,43 @@ class TariffOut(TariffBody):
 
 def _error(exc: BillingConfigurationError) -> HTTPException:
     return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+
+def _month_period(value: str) -> date:
+    try:
+        return datetime.strptime(value, "%Y-%m").date()
+    except ValueError:
+        try:
+            parsed = date.fromisoformat(value)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422, detail="Период должен быть в формате YYYY-MM"
+            ) from exc
+        return parsed.replace(day=1)
+
+
+def _seller_filter(value: str | None) -> uuid.UUID | None:
+    if value in (None, "", "all"):
+        return None
+    try:
+        return uuid.UUID(value)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Некорректный селлер") from exc
+
+
+def _invoice_out(
+    invoice: BillingInvoice,
+    seller_name: str,
+    issues: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    return {
+        "id": invoice.id, "number": invoice.number, "period": invoice.period,
+        "status": invoice.status, "issued_at": invoice.issued_at,
+        "total_amount": invoice.total_amount, "seller_id": invoice.seller_id,
+        "seller_name": seller_name, "ff_profile": invoice.ff_profile_snapshot,
+        "seller_profile": invoice.seller_profile_snapshot, "lines": invoice.lines,
+        "issues": issues or [],
+    }
 
 
 @router.put("/profiles/ff", response_model=ProfileOut)
@@ -173,44 +212,93 @@ async def get_tariffs(
 @router.get("/ledger")
 async def get_billing_ledger(
     *,
-    period: date,
-    seller_id: uuid.UUID | None = None,
+    period: str,
+    seller_id: str | None = None,
+    service_code: str | None = None,
+    mode: str | None = None,
+    document_number: str | None = None,
     user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
-) -> list[dict[str, Any]]:
-    start = period
-    next_period = date(period.year + (period.month == 12), period.month % 12 + 1, 1)
-    query = select(BillingLedgerEntry).where(
+) -> dict[str, list[dict[str, Any]]]:
+    del mode  # grouping is intentionally a presentation concern.
+    month = _month_period(period)
+    start, end = _month_bounds(month)
+    requested_seller = _seller_filter(seller_id)
+    query = select(BillingLedgerEntry, Seller.name, User.email).outerjoin(
+        Seller, BillingLedgerEntry.seller_id == Seller.id
+    ).outerjoin(User, BillingLedgerEntry.performer_id == User.id).where(
         BillingLedgerEntry.tenant_id == user.tenant_id,
         BillingLedgerEntry.occurred_at >= start,
-        BillingLedgerEntry.occurred_at < next_period,
+        BillingLedgerEntry.occurred_at < end,
     )
-    if seller_id is not None:
-        query = query.where(BillingLedgerEntry.seller_id == seller_id)
-    rows = (await session.scalars(query.order_by(BillingLedgerEntry.occurred_at))).all()
-    return [{
-        "id": row.id, "seller_id": row.seller_id, "service_code": row.service_code,
+    if requested_seller is not None:
+        query = query.where(BillingLedgerEntry.seller_id == requested_seller)
+    if service_code not in (None, "", "all"):
+        query = query.where(BillingLedgerEntry.service_code == service_code)
+    rows = (await session.execute(query.order_by(BillingLedgerEntry.occurred_at))).all()
+    entries = [{
+        "id": row.id, "seller_id": row.seller_id, "seller_name": seller_name or "Не указан",
+        "service_code": row.service_code,
         "source_type": row.source_type, "source_id": row.source_id,
         "quantity": row.quantity, "unit": row.unit, "rate": row.rate,
         "amount": row.amount, "occurred_at": row.occurred_at,
-        "performer_id": row.performer_id,
-    } for row in rows]
+        "performer_id": row.performer_id, "performer_name": performer_name,
+        "document_number": str(row.source_id),
+        "problem": "unpriced" if row.amount is None else None,
+    } for row, seller_name, performer_name in rows]
+    if document_number:
+        entries = [
+            entry
+            for entry in entries
+            if document_number.lower() in entry["document_number"].lower()
+        ]
+    return {"entries": entries}
 
 
 @router.get("/invoices", response_model=None)
 async def get_billing_invoices(
     *,
-    period: date | None = None,
-    seller_id: uuid.UUID | None = None,
+    period: str | None = None,
+    seller_id: str | None = None,
+    status: str | None = None,
+    number: str | None = None,
     user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
-) -> list[BillingInvoice]:
-    query = select(BillingInvoice).where(BillingInvoice.tenant_id == user.tenant_id)
+) -> dict[str, list[dict[str, Any]]]:
+    query = select(BillingInvoice, Seller.name).join(
+        Seller, BillingInvoice.seller_id == Seller.id
+    ).where(BillingInvoice.tenant_id == user.tenant_id)
     if period is not None:
-        query = query.where(BillingInvoice.period == period)
-    if seller_id is not None:
-        query = query.where(BillingInvoice.seller_id == seller_id)
-    return list((await session.scalars(query.order_by(BillingInvoice.period.desc()))).all())
+        query = query.where(BillingInvoice.period == _month_period(period))
+    requested_seller = _seller_filter(seller_id)
+    if requested_seller is not None:
+        query = query.where(BillingInvoice.seller_id == requested_seller)
+    if status not in (None, "", "all"):
+        query = query.where(BillingInvoice.status == status)
+    if number:
+        query = query.where(BillingInvoice.number.ilike(f"%{number}%"))
+    invoice_rows = (await session.execute(query.order_by(BillingInvoice.period.desc()))).all()
+    invoices = [_invoice_out(invoice, seller_name) for invoice, seller_name in invoice_rows]
+    issues_query = select(BillingRunIssue, Seller.name).join(
+        Seller, BillingRunIssue.seller_id == Seller.id
+    ).where(BillingRunIssue.tenant_id == user.tenant_id)
+    if period is not None:
+        issues_query = issues_query.where(BillingRunIssue.period == _month_period(period))
+    if requested_seller is not None:
+        issues_query = issues_query.where(BillingRunIssue.seller_id == requested_seller)
+    issue_rows = (await session.execute(issues_query)).all()
+    issues = [
+        {
+            "id": issue.id,
+            "seller_id": issue.seller_id,
+            "seller_name": seller_name,
+            "period": issue.period,
+            "reason": issue.reason,
+            "message": issue.message,
+        }
+        for issue, seller_name in issue_rows
+    ]
+    return {"invoices": invoices, "issues": issues}
 
 
 @router.get("/invoices/{invoice_id}", response_model=None)
@@ -218,25 +306,25 @@ async def get_billing_invoice(
     invoice_id: uuid.UUID,
     user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
-) -> BillingInvoice:
-    invoice = await session.scalar(select(BillingInvoice).where(
+) -> dict[str, Any]:
+    row = (await session.execute(select(BillingInvoice, Seller.name).join(Seller).where(
         BillingInvoice.id == invoice_id, BillingInvoice.tenant_id == user.tenant_id,
-    ))
-    if invoice is None:
+    ))).one_or_none()
+    if row is None:
         raise HTTPException(status_code=404, detail="Счёт не найден")
-    return invoice
+    return _invoice_out(*row)
 
 
 @router.post("/invoices/{seller_id}/{period}/form")
 async def form_billing_invoice(
     seller_id: uuid.UUID,
-    period: date,
+    period: str,
     user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
     try:
         result = await form_invoice(
-            session, tenant_id=user.tenant_id, seller_id=seller_id, period=period
+            session, tenant_id=user.tenant_id, seller_id=seller_id, period=_month_period(period)
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
