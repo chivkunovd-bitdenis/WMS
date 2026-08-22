@@ -75,3 +75,9 @@
 21:41   06-picking-list-order · dev: фича 5/6 сохранена e60b085d998a
 21:46   06-picking-list-order · screen-dev: готово
 21:46   06-picking-list-order · dev: фича 6/6 сохранена 994c9dd15c59
+21:52   06-picking-list-order · reviewer: готово
+21:52 06-picking-list-order: отложено — reviewer, эскалация не помогла
+22:12   06-picking-list-order · resume: поатомный rework Sol по сохранённым находкам
+22:13   06-picking-list-order · resume: поатомный rework Sol по сохранённым находкам
+22:14   06-picking-list-order · resume: поатомный rework Sol по сохранённым находкам
+22:16   06-picking-list-order · screen-dev: готово

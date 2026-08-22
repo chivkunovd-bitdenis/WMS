@@ -1,26 +1,28 @@
-# DEV · 06-picking-list-order · атом 1 · переделка
+# DEV · 06-picking-list-order · атом 1 · переделка по REVIEW
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/ui-kit/Actions.tsx` — вариант `PrintAction` со значением `стикеры заказов` теперь показывает контрактную подпись `Печать стикеров`, а не неграмматичное `Печать стикеры заказов`.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/ui-kit/PickingListPrimitives.test.ts` — добавлена изолированная проверка `ModalFrame`, `ChoiceFilter`, `CheckCell` и `PrintAction`: блокировка закрытия при `busy`, выбор фильтра, недоступные состояния с причиной и печать стикеров заказов.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/ui-kit/ModalFrame.tsx` — убран отсутствующий в установленной MUI 9 prop `disableEscapeKeyDown`; управляемая модалка по-прежнему игнорирует любой запрос закрытия, пока `busy=true`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/ui-kit/Cells.tsx` — aria-подпись `CheckCell` передаётся в нативный input через актуальный MUI API `slotProps.input`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/ui-kit/PickingListPrimitives.test.ts` — точечная проверка `ModalFrame` приведена к актуальному публичному контракту компонента и продолжает доказывать блокировку закрытия в состоянии `busy`.
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/night/volna-9-recovery/cards/06-picking-list-order/DEV.md` — записан отчёт переделки атома.
 
-Остальные разрешённые файлы атома уже содержат требуемые `ModalFrame`, `ChoiceFilter`, `CheckCell`, их экспорты и состояния в `UiKitShowcase`; повторных изменений им не потребовалось.
+Остальные разрешённые файлы атома уже содержат требуемые `ChoiceFilter`, `PrintAction` со значением `стикеры заказов`, экспорты и изолированную демонстрацию всех четырёх элементов в `UiKitShowcase`; находка ревью не потребовала их изменения.
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend` — красный из-за среды: локального `tsc` нет, а `npx` не смог обратиться к `registry.npmjs.org` (`ENOTFOUND`).
-- `python3 scripts/ui/ui_guard.py` из корня рабочей копии — красный только на двух существующих файлах вне атома: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/components/WbProductPickerDialog.tsx` (`экран-монолит 0 → 646`) и `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/screens/v2/SellerInboundDraftScreen.tsx` (`экран-монолит 1111 → 1169`). Для `FfFbsPickList.tsx` храповик сообщил три улучшения; новых нарушений в UI-kit нет. Базовая линия не менялась.
-- `npm run test:unit` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend` — красный из-за среды: локальный `vitest` отсутствует (`sh: vitest: command not found`). Тест добавлен, но выполнить его в этой рабочей копии невозможно без установленных зависимостей.
-- `git diff --check` для изменённых файлов атома — зелёный.
-- `git commit -m "fix(ui-kit): verify picking list primitives"` — красный из-за ограничений рабочей среды: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-06-picking-list-order/index.lock` (`Operation not permitted`). Изменения локально реализованы, но отдельный восстанавливаемый commit SHA не создан.
+- `npx tsc --noEmit -p tsconfig.app.json` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend` — **зелёный**, код завершения 0.
+- `npm run test:unit -- src/ui-kit/PickingListPrimitives.test.ts` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend` — **зелёный**, 1 файл и 4 теста пройдены.
+- `python3 scripts/ui/ui_guard.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order` — **красный только на двух существующих нарушениях вне файлов атома**: `frontend/src/components/WbProductPickerDialog.tsx` (`экран-монолит 0 → 646`) и `frontend/src/screens/v2/SellerInboundDraftScreen.tsx` (`экран-монолит 1111 → 1169`). Для карточки guard фиксирует улучшения в `FfFbsPickList.tsx` и `FfFbsSupplyWorkspace.tsx`; новых нарушений в UI-kit нет, базовая линия не менялась.
+- `git diff --check -- frontend/src/ui-kit/ModalFrame.tsx frontend/src/ui-kit/Cells.tsx frontend/src/ui-kit/PickingListPrimitives.test.ts night/volna-9-recovery/cards/06-picking-list-order/DEV.md` из корня рабочей копии — **зелёный**, код завершения 0.
+- `git add -- frontend/src/ui-kit/ModalFrame.tsx frontend/src/ui-kit/Cells.tsx frontend/src/ui-kit/PickingListPrimitives.test.ts night/volna-9-recovery/cards/06-picking-list-order/DEV.md && git diff --cached --check && git commit -m "fix(ui-kit): support MUI 9 picking primitives"` из корня рабочей копии — **красный из-за ограничения среды**: Git не может создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-06-picking-list-order/index.lock` (`Operation not permitted`). Несвязанные изменения оркестратора в коммит не добавлялись.
 
 ## Не реализовано
 
-- Находки 1–4 из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/night/volna-9-recovery/cards/06-picking-list-order/REVIEW.md` относятся к подключению продуктовой модалки, физической ленте с DataMatrix и тестам экрана в `FfFbsSupplyWorkspace.tsx`, `FfFbsPickList.tsx` и `FfFbsPickList.test.ts`. Эти файлы принадлежат последующим атомам и не входят в заданный слой переиспользуемых элементов, поэтому в атоме 1 они не менялись.
-- Буквально прогнать новый unit-тест не удалось только из-за отсутствующего локального `vitest`; результат теста не объявляется зелёным.
-- Сохранить переделку отдельным Git-коммитом не удалось из-за запрета записи в общие метаданные worktree; до коммита изменения остаются уязвимыми к потере.
+- Находки 1, 3–6 из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/night/volna-9-recovery/cards/06-picking-list-order/REVIEW.md` относятся к реестру экрана, продуктовой модалке, backend-сервису, общему предпросмотру печати и браузерным сценариям. Они не относятся к файлам и слою атома 1, поэтому в этой переделке не исправлялись.
+- Полностью зелёный `ui_guard.py` нельзя получить в границе атома: оба новых нарушения находятся в запрещённых для этой роли соседних экранах. Храповая базовая линия намеренно не обновлялась.
+- Отдельный восстанавливаемый commit SHA не создан: общая Git-метапапка worktree находится вне доступной для записи области. Исправление локально реализовано, но не сохранено в Git.
+- Следующие атомы из `FEATURES.md` не выполнялись.
 
 ## Находки
 

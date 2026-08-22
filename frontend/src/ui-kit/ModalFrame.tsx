@@ -29,8 +29,7 @@ export function ModalFrame({
       open={open}
       fullWidth
       maxWidth={maxWidth}
-      disableEscapeKeyDown={busy}
-      onClose={(_, reason) => {
+      onClose={() => {
         if (!busy) onClose()
       }}
       aria-busy={busy}

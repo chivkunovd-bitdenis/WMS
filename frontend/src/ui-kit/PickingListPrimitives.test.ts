@@ -7,9 +7,8 @@ import { ChoiceFilter } from './FilterBar'
 import { ModalFrame } from './ModalFrame'
 
 type DialogElementProps = {
-  disableEscapeKeyDown: boolean
   'aria-busy': boolean
-  onClose: (event: unknown, reason: unknown) => void
+  onClose: () => void
 }
 
 type TooltipElementProps = {
@@ -29,9 +28,8 @@ describe('picking list UI-kit primitives', () => {
       children: null,
     }) as ReactElement<DialogElementProps>
 
-    expect(busyFrame.props.disableEscapeKeyDown).toBe(true)
     expect(busyFrame.props['aria-busy']).toBe(true)
-    busyFrame.props.onClose({}, 'backdropClick')
+    busyFrame.props.onClose()
     expect(onClose).not.toHaveBeenCalled()
 
     const readyFrame = ModalFrame({
@@ -42,7 +40,7 @@ describe('picking list UI-kit primitives', () => {
       children: null,
     }) as ReactElement<DialogElementProps>
 
-    readyFrame.props.onClose({}, 'escapeKeyDown')
+    readyFrame.props.onClose()
     expect(onClose).toHaveBeenCalledOnce()
   })
 

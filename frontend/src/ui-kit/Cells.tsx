@@ -86,7 +86,7 @@ export function CheckCell({ checked, onChange, ariaLabel, disabledReason, testId
     <Checkbox
       checked={checked}
       onChange={(event) => onChange(event.target.checked)}
-      inputProps={{ 'aria-label': ariaLabel }}
+      slotProps={{ input: { 'aria-label': ariaLabel } }}
       disabled={Boolean(disabledReason)}
       data-testid={testId}
       size="small"
