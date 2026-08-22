@@ -511,13 +511,40 @@ async def _get_box(
 async def _boxes_by_creation_key(
     session: AsyncSession, tenant_id: uuid.UUID, supply_id: uuid.UUID, key: str
 ) -> list[FbsPackingBox]:
+    exact_boxes = await _boxes_by_stored_creation_keys(
+        session, tenant_id, supply_id, [key]
+    )
+    if exact_boxes:
+        return exact_boxes
+
+    max_legacy_raw_len = CREATION_IDEMPOTENCY_KEY_MAX_LENGTH - len(
+        WITHOUT_DISTRIBUTION_KEY_PREFIX
+    )
+    legacy_raw_key = key[:max_legacy_raw_len]
+    return await _boxes_by_stored_creation_keys(
+        session,
+        tenant_id,
+        supply_id,
+        [
+            f"{WITHOUT_DISTRIBUTION_KEY_PREFIX}{legacy_raw_key}",
+            f"{RETIRED_WITHOUT_DISTRIBUTION_KEY_PREFIX}{legacy_raw_key}",
+        ],
+    )
+
+
+async def _boxes_by_stored_creation_keys(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    keys: list[str],
+) -> list[FbsPackingBox]:
     result = await session.execute(
         select(FbsPackingBox)
         .options(selectinload(FbsPackingBox.warehouse_box), selectinload(FbsPackingBox.trbx))
         .where(
             FbsPackingBox.tenant_id == tenant_id,
             FbsPackingBox.supply_id == supply_id,
-            FbsPackingBox.creation_idempotency_key == key,
+            FbsPackingBox.creation_idempotency_key.in_(keys),
         )
         .order_by(FbsPackingBox.box_number)
     )

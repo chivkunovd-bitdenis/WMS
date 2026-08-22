@@ -292,6 +292,57 @@ async def test_legacy_without_distribution_marker_still_blocks_assignment(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "stored_prefix",
+    ["no-distribution:", "retired-no-dist:"],
+)
+async def test_legacy_without_distribution_create_retry_returns_existing_box(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    stored_prefix: str,
+) -> None:
+    """A retried pre-migration create never duplicates its physical box."""
+    headers, supply_id, _ = await _packed_supply(async_client)
+    boxes_url = f"/operations/fbs-supplies/{supply_id}/boxes"
+    idempotency_key = "legacy-compatible-box"
+    created = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={"count": 1, "idempotency_key": idempotency_key},
+    )
+    assert created.status_code == 201, created.text
+    created_box_id = created.json()["boxes"][0]["id"]
+
+    async with SessionLocal() as session:
+        box = await session.get(FbsPackingBox, uuid.UUID(created_box_id))
+        assert box is not None
+        box.creation_idempotency_key = f"{stored_prefix}{idempotency_key}"
+        await session.commit()
+
+    retried = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={
+            "count": 1,
+            "idempotency_key": idempotency_key,
+            "without_distribution": True,
+        },
+    )
+    assert retried.status_code == 201, retried.text
+    assert [box["id"] for box in retried.json()["boxes"]] == [created_box_id]
+
+    async with SessionLocal() as session:
+        stored_boxes = list(
+            (
+                await session.scalars(
+                    select(FbsPackingBox).where(FbsPackingBox.supply_id == supply_id)
+                )
+            ).all()
+        )
+        assert [str(box.id) for box in stored_boxes] == [created_box_id]
+
+
+@pytest.mark.asyncio
 async def test_without_distribution_mode_depends_on_assignments_not_box_count(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,

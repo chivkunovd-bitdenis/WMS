@@ -91,3 +91,7 @@
 22:30   03-no-distribution-mode · dev: фича 2/4 сохранена c1cb8e58489a
 22:35   03-no-distribution-mode · screen-dev: готово
 22:35   03-no-distribution-mode · dev: фича 4/4 сохранена addf5374adc7
+22:39   03-no-distribution-mode · reviewer: готово
+22:39 03-no-distribution-mode: отложено — reviewer, эскалация не помогла
+23:02   03-no-distribution-mode · resume: поатомный rework Sol по сохранённым находкам
+23:05   03-no-distribution-mode · backend-dev: готово
