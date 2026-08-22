@@ -130,3 +130,9 @@
 00:59   07-reporting · splitter: готово
 00:59   07-reporting · resume: поатомный rework Terra по сохранённым находкам
 01:01   07-reporting · screen-dev: готово
+01:01   07-reporting · dev: фича 1/2 сохранена d610b961165a
+01:01   07-reporting · screen-dev: нет файла DEV.md (код 1, попытка 1)
+01:01   07-reporting · screen-dev: нет файла DEV.md (код 1, попытка 2)
+01:01 07-reporting: отложено на шаге dev
+01:16   07-reporting · resume: поатомный rework Terra по сохранённым находкам
+01:17   07-reporting · screen-dev: готово
