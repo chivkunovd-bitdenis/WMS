@@ -72,3 +72,5 @@
 21:13   01-wb-marking · backend-dev: готово
 21:13   01-wb-marking · dev: фича 2/5 сохранена dcbbce95d201
 21:15   01-wb-marking · backend-dev: готово
+21:15   01-wb-marking · dev: фича 3/5 сохранена d5507d49e8f0
+21:20   01-wb-marking · backend-dev: готово

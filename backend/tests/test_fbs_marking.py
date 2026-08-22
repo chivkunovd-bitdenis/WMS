@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -457,8 +458,11 @@ async def test_fbs_marking_autopoll_batches_unique_ids_and_skips_partial_or_fail
         await session.commit()
 
     requested_batches: list[list[int]] = []
+    completed_batches: list[list[int]] = []
     synced_wb_order_ids: list[int] = []
     notified_order_ids: list[uuid.UUID] = []
+    active_batch_requests = 0
+    max_active_batch_requests = 0
 
     async def fake_fetch_batch(
         client: object,
@@ -467,14 +471,27 @@ async def test_fbs_marking_autopoll_batches_unique_ids_and_skips_partial_or_fail
         order_ids: list[int],
         marketplace_api_base: str | None = None,
     ) -> list[MarketplaceOrderMetaRow]:
+        nonlocal active_batch_requests, max_active_batch_requests
+        active_batch_requests += 1
+        max_active_batch_requests = max(max_active_batch_requests, active_batch_requests)
         requested_batches.append(order_ids)
-        if len(requested_batches) == 2:
-            raise WildberriesClientError("upstream_error")
-        # The first response deliberately omits an order and reverses the rest:
-        # matching must use order_id, not row position, and the omitted order is
-        # not allowed to look like a successful local update.
-        response_ids = order_ids[:-1] if len(requested_batches) == 1 else order_ids
-        return [MarketplaceOrderMetaRow(order_id=order_id) for order_id in reversed(response_ids)]
+        try:
+            # Yield control so this test observes overlap if batches are ever
+            # changed from sequential awaits to concurrently scheduled tasks.
+            await asyncio.sleep(0)
+            if len(requested_batches) == 2:
+                raise WildberriesClientError("upstream_error")
+            # The first response deliberately omits an order and reverses the rest:
+            # matching must use order_id, not row position, and the omitted order is
+            # not allowed to look like a successful local update.
+            response_ids = order_ids[:-1] if len(requested_batches) == 1 else order_ids
+            return [
+                MarketplaceOrderMetaRow(order_id=order_id)
+                for order_id in reversed(response_ids)
+            ]
+        finally:
+            completed_batches.append(order_ids)
+            active_batch_requests -= 1
 
     async def fake_sync(
         session: object,
@@ -521,7 +538,26 @@ async def test_fbs_marking_autopoll_batches_unique_ids_and_skips_partial_or_fail
     assert [len(batch) for batch in requested_batches] == [100, 100, 1]
     assert all(len(batch) <= 100 and len(batch) == len(set(batch)) for batch in requested_batches)
     assert requested_batches == [wb_order_ids[:100], wb_order_ids[100:200], wb_order_ids[200:]]
+    assert completed_batches == requested_batches
+    assert max_active_batch_requests == 1
     expected_synced = wb_order_ids[:99] + wb_order_ids[200:]
     assert synced == len(expected_synced)
     assert set(synced_wb_order_ids) == set(expected_synced)
     assert len(notified_order_ids) == len(expected_synced)
+
+    async with SessionLocal() as session:
+        failed_batch_markings = list(
+            (
+                await session.execute(
+                    select(FbsOrderMarking)
+                    .join(FbsOrder, FbsOrder.id == FbsOrderMarking.order_id)
+                    .where(FbsOrder.wb_order_id.in_(wb_order_ids[100:200]))
+                )
+            ).scalars()
+        )
+    assert len(failed_batch_markings) == 100
+    assert all(
+        marking.check_status == CHECK_STATUS_NEW
+        and marking.meta_status == META_STATUS_PENDING
+        for marking in failed_batch_markings
+    )
