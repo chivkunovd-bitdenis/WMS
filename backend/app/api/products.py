@@ -9,6 +9,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.box_import_api_shared import read_xlsx_upload
@@ -240,28 +241,40 @@ class ProductContainerDimensions(BaseModel):
 class ProductDimensionEventOut(BaseModel):
     id: str
     source: str
-    observed_at: datetime
-    author_user_id: str | None
+    created_at: datetime
+    author_name: str | None
     length_mm: int | None
     width_mm: int | None
     height_mm: int | None
     weight_g: int | None
     volume_liters: float | None
     container_basis: str | None
-    applied: bool
+    is_current: bool
 
 
-def _dimension_event_out(event: object) -> ProductDimensionEventOut:
+def _dimension_event_out(
+    event: object,
+    *,
+    author_name: str | None,
+) -> ProductDimensionEventOut:
     from app.models.product_dimension_event import ProductDimensionEvent
 
     assert isinstance(event, ProductDimensionEvent)
     return ProductDimensionEventOut(
-        id=str(event.id), source=event.source, observed_at=event.observed_at,
-        author_user_id=str(event.author_user_id) if event.author_user_id else None,
-        length_mm=event.length_mm, width_mm=event.width_mm, height_mm=event.height_mm,
+        id=str(event.id),
+        source={"wb": "wildberries", "container_override": "container"}.get(
+            event.source,
+            event.source,
+        ),
+        created_at=event.observed_at,
+        author_name=author_name,
+        length_mm=event.length_mm,
+        width_mm=event.width_mm,
+        height_mm=event.height_mm,
         weight_g=event.weight_g,
         volume_liters=float(event.volume_liters) if event.volume_liters is not None else None,
-        container_basis=event.container_basis, applied=event.applied,
+        container_basis=event.container_basis,
+        is_current=event.applied,
     )
 
 
@@ -812,7 +825,30 @@ async def get_product_dimension_history(
         )
     except CatalogError as exc:
         raise HTTPException(status_code=404, detail=exc.code) from None
-    return [_dimension_event_out(event) for event in events]
+    author_ids = {event.author_user_id for event in events if event.author_user_id is not None}
+    author_names: dict[uuid.UUID, str] = {}
+    if author_ids:
+        result = await session.execute(
+            select(User.id, User.email).where(
+                User.tenant_id == user.tenant_id,
+                User.id.in_(author_ids),
+            )
+        )
+        author_names = {
+            author_id: author_email
+            for author_id, author_email in result.tuples()
+        }
+    return [
+        _dimension_event_out(
+            event,
+            author_name=(
+                author_names.get(event.author_user_id)
+                if event.author_user_id is not None
+                else None
+            ),
+        )
+        for event in events
+    ]
 
 
 @router.post("/{product_id}/dimensions/container", response_model=ProductOut)
