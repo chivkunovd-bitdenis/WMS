@@ -275,6 +275,7 @@ export default function App() {
     warehouses,
     selectedWarehouseId,
     setWarehouses,
+    selectWarehouse,
     setSelectedWarehouseId,
     clearWarehouseContext,
   } =
@@ -612,7 +613,7 @@ export default function App() {
       setLocations([])
       setProducts([])
       setSellers([])
-      setSelectedWarehouseId(null)
+      clearWarehouseContext()
       setInboundSummaries([])
       setSelectedInboundId(null)
       setInboundDetail(null)
@@ -668,11 +669,11 @@ export default function App() {
           await refreshWarehouses(token)
         } else {
           setWarehouses([])
-          setSelectedWarehouseId(null)
+          clearWarehouseContext()
         }
         if (me.role !== 'fulfillment_admin' && !canLoadCells) {
           setLocations([])
-          setSelectedWarehouseId(null)
+          clearWarehouseContext()
         }
         if (canLoadProductCatalog) {
           await refreshProducts(token)
@@ -1364,7 +1365,7 @@ export default function App() {
       const warehouseId =
         whFromForm ||
         selectedWarehouseId ||
-        (warehouses.length === 1 ? warehouses[0]!.id : null)
+        selectedWarehouseId
       if (!warehouseId) {
         setOpsError(
           me.role === 'fulfillment_seller' && warehouses.length > 1
@@ -1895,7 +1896,7 @@ export default function App() {
     const warehouseId =
       whFromForm ||
       selectedWarehouseId ||
-      (warehouses.length === 1 ? warehouses[0]!.id : null)
+      selectedWarehouseId
     if (!warehouseId) {
       setOpsError(
         me.role === 'fulfillment_seller' && warehouses.length > 1
@@ -2527,7 +2528,7 @@ export default function App() {
       setOpsError('Выберите селлера (ИП) для отгрузки.')
       return null
     }
-    let wid: string | null = selectedWarehouseId ?? warehouses[0]?.id ?? null
+    let wid: string | null = selectedWarehouseId
     if (!wid) {
       try {
         const res = await fetch(apiUrl('/warehouses'), {
@@ -2628,7 +2629,7 @@ export default function App() {
     if (!token) {
       return null
     }
-    const wid = selectedWarehouseId ?? warehouses[0]?.id ?? null
+    const wid = selectedWarehouseId
     if (!wid) {
       setOpsError('Склад ФФ не найден.')
       return null
@@ -3262,6 +3263,7 @@ export default function App() {
                   canEditInboundDraft={canReceptionOps}
                   warehouses={warehouses}
                   selectedWarehouseId={selectedWarehouseId}
+                  onWarehouseChange={selectWarehouse}
                   products={products}
                   inboundSummaries={inboundSummaries}
                   selectedInboundId={selectedInboundId}
@@ -3301,6 +3303,7 @@ export default function App() {
                   canEditOutboundDraft={isFulfillmentAdmin}
                   warehouses={warehouses}
                   selectedWarehouseId={selectedWarehouseId}
+                  onWarehouseChange={selectWarehouse}
                   products={products}
                   outboundSummaries={outboundSummaries}
                   selectedOutboundId={selectedOutboundId}

@@ -348,7 +348,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                   error={opsError}
                   token={token}
                   authHeaders={authHeaders}
-                  warehouseId={selectedWarehouseId ?? warehouses[0]?.id ?? null}
+                  warehouseId={selectedWarehouseId}
                   inboundSummaries={inboundSummaries}
                   mpUnloadSummaries={mpUnloadSummaries}
                   onRefreshInboundList={async () => {
@@ -365,7 +365,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                     if (!token) {
                       return null
                     }
-                    const wid = selectedWarehouseId ?? warehouses[0]?.id
+                    const wid = selectedWarehouseId
                     if (!wid) {
                       setOpsError('Склад ФФ не найден.')
                       return null
@@ -419,7 +419,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                   key={catalogScopeKey}
                   token={token}
                   authHeaders={authHeaders}
-                  warehouseId={selectedWarehouseId ?? (warehouses[0]?.id ?? null)}
+                  warehouseId={selectedWarehouseId}
                   warehouses={warehouses}
                   onRefreshInboundList={() =>
                     token ? refreshInboundList(token) : undefined
@@ -438,7 +438,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                   key={catalogScopeKey}
                   token={token}
                   authHeaders={authHeaders}
-                  warehouseId={selectedWarehouseId ?? (warehouses[0]?.id ?? null)}
+                  warehouseId={selectedWarehouseId}
                   warehouses={warehouses}
                   onRefreshInboundList={() =>
                     token ? refreshInboundList(token) : undefined
