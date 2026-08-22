@@ -111,6 +111,14 @@ export function IconAction({
 // Список печатаемого закрыт типом, чтобы не разрастались девять разных подписей.
 export type Printable = 'ШК товара' | 'ЧЗ и ШК' | 'ШК короба' | 'ШК ячейки' | 'накладную'
 
+const PRINT_LABELS: Record<Printable, string> = {
+  'ШК товара': 'ШК товара',
+  'ЧЗ и ШК': 'ЧЗ и ШК',
+  'ШК короба': 'ШК короба',
+  'ШК ячейки': 'ШК ячейки',
+  накладную: 'накладную',
+}
+
 export function PrintAction({
   what,
   placement,
@@ -124,7 +132,7 @@ export function PrintAction({
   disabledReason?: string
   testId?: string
 }) {
-  const title = `Печать ${what}`
+  const title = `Печать ${PRINT_LABELS[what]}`
   if (placement === 'row') {
     return (
       <IconAction title={title} onClick={onClick} disabledReason={disabledReason} testId={testId}>

@@ -1,0 +1,237 @@
+<!-- UI-KIT: ScreenHeader, FilterBar, DataTable, ProductCell, TextCell, QtyCell, StatusChip, PrimaryAction, SecondaryAction, ActionGroup, IconAction, PrintAction, EmptyState, TableSkeletonBody, ErrorNotice -->
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>08-storage · Хранение</title>
+  <style>
+    :root { --primary:#5b21b6; --canvas:#e8ecf4; --paper:#fff; --text:#0f172a; --muted:#64748b; --line:#d8ddea; --head:#f3effb; --danger:#8f241b; --warn:#7a5000; --ok:#14603d; --radius:13px; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--canvas); color:var(--text); font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif; font-size:14px; }
+    button,input,select { font:inherit; }
+    button { white-space:nowrap; }
+    .demo-bar { position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:10px 18px; background:#202735; color:white; box-shadow:0 2px 8px #0003; }
+    .demo-bar strong { margin-right:6px; }
+    .demo-bar button { border:1px solid #ffffff55; background:#ffffff12; color:#fff; border-radius:8px; padding:7px 11px; cursor:pointer; }
+    .demo-bar button.active { background:#fff; color:#202735; }
+    .shell { max-width:1440px; margin:24px auto; padding:0 22px 50px; }
+    .paper { background:var(--paper); border:1px solid var(--line); border-radius:var(--radius); }
+    .screen { padding:24px; }
+    h1 { margin:0 0 6px; font-size:24px; line-height:1.3; font-weight:650; }
+    .purpose,.muted { color:var(--muted); }
+    .purpose { margin:0 0 20px; }
+    .filterbar { display:flex; gap:12px; align-items:center; flex-wrap:wrap; padding:16px; margin-bottom:16px; }
+    .field { position:relative; min-width:200px; }
+    .field.search { min-width:290px; flex:1; }
+    .field label { position:absolute; left:11px; top:-7px; padding:0 4px; background:#fff; color:var(--muted); font-size:11px; }
+    .field input,.field select,.dialog input,.dialog textarea { width:100%; min-height:40px; border:1px solid #bac2d2; border-radius:8px; background:#fff; padding:9px 11px; color:var(--text); }
+    .actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:0 0 16px; }
+    .btn { min-width:168px; min-height:34px; border-radius:7px; padding:7px 15px; border:1px solid var(--primary); cursor:pointer; font-weight:600; }
+    .btn.primary { background:var(--primary); color:#fff; }
+    .btn.secondary { background:#fff; color:var(--primary); }
+    .btn:disabled { background:#d6d9e1; border-color:#d6d9e1; color:#7a8190; cursor:not-allowed; }
+    .icon { width:34px; height:34px; min-width:34px; border:0; border-radius:50%; background:transparent; color:#3d4656; cursor:pointer; font-size:18px; }
+    .icon:hover { background:#ede8f8; }
+    .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:var(--radius); background:#fff; }
+    table { width:100%; border-collapse:separate; border-spacing:0; min-width:960px; }
+    th { position:sticky; top:0; z-index:1; background:var(--head); border-bottom:1px solid #cfc3e5; color:#334155; text-align:left; white-space:nowrap; font-size:12px; font-weight:700; }
+    th,td { height:46px; padding:9px 12px; border-bottom:1px solid #e7eaf1; vertical-align:middle; }
+    tr:last-child td { border-bottom:0; }
+    tbody tr.data-row:hover { background:#faf9fd; }
+    .num { text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
+    .center { text-align:center; }
+    .chip { display:inline-flex; align-items:center; min-height:24px; border-radius:13px; padding:3px 10px; font-size:12px; font-weight:700; white-space:nowrap; }
+    .chip.neutral { background:#5b21b61a; color:#4c1d95; }
+    .chip.stop { background:#a32a201f; color:var(--danger); }
+    .chip.ok { background:#1b6b451f; color:var(--ok); }
+    .chip.warn { background:#8a5a0024; color:var(--warn); }
+    .expand td { padding:0; background:#fafbfe; }
+    .detail { padding:18px 20px 20px; border-left:4px solid var(--primary); }
+    .detail-head { display:flex; justify-content:space-between; gap:20px; align-items:flex-start; margin-bottom:14px; }
+    .detail h2 { margin:0 0 5px; font-size:17px; }
+    .detail-meta { color:var(--muted); font-size:13px; }
+    .notice { border-radius:9px; padding:11px 13px; margin-bottom:14px; border:1px solid; }
+    .notice.error { background:#fff4f2; border-color:#e7afa8; color:#7f1d1d; }
+    .detail .table-wrap { border-radius:10px; }
+    .product { font-weight:700; white-space:nowrap; }
+    .row-action { min-width:128px; min-height:31px; padding:6px 10px; }
+    .detail-actions { margin:14px 0 0; }
+    .empty { padding:34px 24px; }
+    .empty h3 { margin:0 0 7px; font-size:15px; }
+    .empty p { margin:0 0 15px; color:var(--muted); }
+    .skeleton { display:block; width:100%; height:12px; border-radius:6px; background:linear-gradient(90deg,#e8eaf0 25%,#f5f6f8 50%,#e8eaf0 75%); background-size:200% 100%; animation:shine 1.4s infinite; }
+    @keyframes shine { to { background-position:-200% 0; } }
+    .state { display:none; }
+    .state.active { display:block; }
+    .overlay { display:none; position:fixed; inset:0; z-index:40; background:#0f172a99; align-items:center; justify-content:center; padding:24px; }
+    .overlay.open { display:flex; }
+    .dialog { width:min(620px,100%); max-height:90vh; overflow:auto; background:#fff; border-radius:14px; box-shadow:0 24px 70px #0005; padding:22px; }
+    .dialog.wide { width:min(900px,100%); }
+    .dialog h2 { margin:0 0 5px; font-size:20px; }
+    .dialog .sub { margin:0 0 18px; color:var(--muted); }
+    .dialog-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+    .dialog-grid.three { grid-template-columns:repeat(3,minmax(0,1fr)); }
+    .dialog .field { min-width:0; }
+    .dialog .field label { background:#fff; }
+    .radio-row { display:flex; gap:18px; padding:10px 0 16px; }
+    .radio-row label { display:flex; align-items:center; gap:7px; font-weight:600; }
+    .computed { margin:14px 0; padding:12px; border-radius:9px; background:#f4f1fb; }
+    .dialog-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:20px; }
+    .subsection { border:1px solid var(--line); border-radius:10px; padding:14px; margin-top:15px; }
+    .subsection summary { cursor:pointer; color:var(--primary); font-weight:700; }
+    .print-sheet { width:100%; background:#fff; border:1px solid #cad0dc; padding:28px; color:#111827; }
+    .print-sheet h3 { margin:0 0 5px; font-size:22px; }
+    .print-meta { display:grid; grid-template-columns:1fr 1fr; gap:5px 20px; margin:18px 0; }
+    .print-sheet table { min-width:0; }
+    .print-sheet th { position:static; background:#f0f1f4; }
+    .print-total { margin-top:16px; text-align:right; font-size:17px; font-weight:800; }
+    .caption { margin-top:10px; color:var(--muted); font-size:12px; }
+    @media (max-width:760px) { .shell{padding:0 10px 30px}.screen{padding:16px}.dialog-grid,.dialog-grid.three{grid-template-columns:1fr}.field.search{min-width:100%}.detail-head{display:block}.print-meta{grid-template-columns:1fr} }
+    @media print { body{background:#fff}.demo-bar,.shell,.dialog-actions{display:none!important}.overlay.open{position:static;display:block;background:#fff;padding:0}.dialog{box-shadow:none;max-height:none;width:100%;padding:0}.print-sheet{border:0} }
+  </style>
+</head>
+<body>
+  <nav class="demo-bar" aria-label="Состояния макета">
+    <strong>Состояния макета:</strong>
+    <button class="active" data-state="normal">Обычное + проблема</button>
+    <button data-state="loading">Загрузка</button>
+    <button data-state="empty">Пусто</button>
+    <button data-state="error">Ошибка</button>
+    <button data-modal="rate">Тариф</button>
+    <button data-modal="measure">Обмер</button>
+    <button data-modal="history">История</button>
+    <button data-modal="print">A4-печать</button>
+  </nav>
+
+  <main class="shell">
+    <section class="paper screen">
+      <header data-ui-kit="ScreenHeader">
+        <h1>Хранение</h1>
+        <p class="purpose">Рассчитайте фактическое хранение по селлерам и зафиксируйте месяц для начисления</p>
+      </header>
+
+      <div class="paper filterbar" data-ui-kit="FilterBar">
+        <div class="field search"><label for="search">Поиск</label><input id="search" placeholder="Селлер, SKU или артикул продавца"></div>
+        <div class="field"><label for="month">Месяц</label><input id="month" type="month" value="2026-07"></div>
+        <div class="field"><label for="warehouse">Склад</label><select id="warehouse"><option>Основной склад</option><option>Склад Север</option></select></div>
+      </div>
+
+      <section id="normal" class="state active">
+        <div class="actions" data-ui-kit="ActionGroup, PrimaryAction, SecondaryAction">
+          <button class="btn primary">Сформировать за месяц</button>
+          <button class="btn secondary" data-modal="rate">Изменить тариф</button>
+        </div>
+        <div class="table-wrap" data-ui-kit="DataTable, TextCell, QtyCell, StatusChip, IconAction, PrintAction">
+          <table aria-label="Расчёты хранения по селлерам">
+            <colgroup><col style="width:240px"><col style="width:180px"><col style="width:140px"><col style="width:140px"><col style="width:110px"><col style="width:120px"></colgroup>
+            <thead><tr><th>Селлер</th><th>Статус</th><th class="num">Литро-дни</th><th class="num">Сумма, ₽</th><th class="num">Проблемы</th><th class="center">Действия</th></tr></thead>
+            <tbody>
+              <tr class="data-row"><td><strong>Красотка</strong></td><td><span class="chip stop">Требует исправления</span></td><td class="num">12 840,50</td><td class="num">8 988,35</td><td class="num">1</td><td class="center"><button class="icon" title="Закрыть расчёт селлера" data-toggle-detail>⌃</button></td></tr>
+              <tr class="expand" id="detail-row"><td colspan="6">
+                <div class="detail">
+                  <div class="detail-head"><div><h2>Красотка · июль 2026</h2><div class="detail-meta">Основной склад · ставка 0,70 ₽/л·день</div></div><span class="chip stop">1 проблема</span></div>
+                  <div class="notice error" data-ui-kit="ErrorNotice">Расчёт нельзя зафиксировать: устраните проблемы в строках ниже</div>
+                  <div class="table-wrap" data-ui-kit="DataTable, ProductCell, TextCell, QtyCell, StatusChip, PrimaryAction, IconAction">
+                    <table aria-label="Детализация хранения по SKU">
+                      <colgroup><col style="width:150px"><col style="width:180px"><col style="width:110px"><col style="width:150px"><col style="width:130px"><col style="width:150px"><col style="width:120px"><col style="width:150px"><col style="width:160px"></colgroup>
+                      <thead><tr><th>Товар</th><th>Артикул продавца</th><th class="num">Объём, л</th><th>Источник</th><th class="num">Литро-дни</th><th class="num">Ставка, ₽/л·день</th><th class="num">Сумма, ₽</th><th>Статус</th><th>Действия</th></tr></thead>
+                      <tbody>
+                        <tr class="data-row"><td class="product">SKU-10432</td><td>KRS-44-BLK</td><td class="num">2,40</td><td>Ручной обмер</td><td class="num">8 928,00</td><td class="num">0,70</td><td class="num">6 249,60</td><td><span class="chip neutral">Рассчитано</span></td><td><button class="icon" title="История габаритов" data-modal="history">◷</button></td></tr>
+                        <tr class="data-row"><td class="product">SKU-10433</td><td>KRS-44-WHT</td><td class="num">1,18</td><td>Wildberries</td><td class="num">3 912,50</td><td class="num">0,70</td><td class="num">2 738,75</td><td><span class="chip neutral">Рассчитано</span></td><td><button class="icon" title="История габаритов" data-modal="history">◷</button></td></tr>
+                        <tr class="data-row"><td class="product">SKU-11890</td><td>NRD-2XL-LONG</td><td class="num">—</td><td>Неизвестно</td><td class="num">—</td><td class="num">0,70</td><td class="num">—</td><td><span class="chip stop">Нет габаритов</span></td><td><button class="btn primary row-action" data-modal="measure">Внести обмер</button></td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="actions detail-actions"><button class="btn primary" disabled title="Нет габаритов у 1 товара">Зафиксировать</button></div>
+                </div>
+              </td></tr>
+              <tr class="data-row"><td><strong>Норд</strong></td><td><span class="chip neutral">Черновик</span></td><td class="num">6 432,00</td><td class="num">4 502,40</td><td class="num">0</td><td class="center"><button class="icon" title="Открыть расчёт селлера">⌄</button></td></tr>
+              <tr class="data-row"><td><strong>Вектор</strong></td><td><span class="chip ok">Зафиксирован</span></td><td class="num">0</td><td class="num">0,00</td><td class="num">0</td><td class="center"><button class="icon" title="Открыть расчёт селлера">⌄</button><button class="icon" title="Печать накладной" data-modal="print">⎙</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="loading" class="state">
+        <div class="actions"><button class="btn primary" disabled>Формируем…</button><button class="btn secondary" disabled>Изменить тариф</button></div>
+        <div class="table-wrap" data-ui-kit="DataTable, TableSkeletonBody"><table><thead><tr><th>Селлер</th><th>Статус</th><th class="num">Литро-дни</th><th class="num">Сумма, ₽</th><th class="num">Проблемы</th><th>Действия</th></tr></thead><tbody>
+          <tr><td><i class="skeleton"></i></td><td><i class="skeleton"></i></td><td><i class="skeleton"></i></td><td><i class="skeleton"></i></td><td><i class="skeleton"></i></td><td><i class="skeleton"></i></td></tr>
+          <tr><td><i class="skeleton"></i></td><td><i class="skeleton"></i></td><td><i class="skeleton"></i></td><td><i class="skeleton"></i></td><td><i class="skeleton"></i></td><td><i class="skeleton"></i></td></tr>
+          <tr><td><i class="skeleton"></i></td><td><i class="skeleton"></i></td><td><i class="skeleton"></i></td><td><i class="skeleton"></i></td><td><i class="skeleton"></i></td><td><i class="skeleton"></i></td></tr>
+          <tr><td><i class="skeleton"></i></td><td><i class="skeleton"></i></td><td><i class="skeleton"></i></td><td><i class="skeleton"></i></td><td><i class="skeleton"></i></td><td><i class="skeleton"></i></td></tr>
+          <tr><td><i class="skeleton"></i></td><td><i class="skeleton"></i></td><td><i class="skeleton"></i></td><td><i class="skeleton"></i></td><td><i class="skeleton"></i></td><td><i class="skeleton"></i></td></tr>
+        </tbody></table></div>
+      </section>
+
+      <section id="empty" class="state">
+        <div class="table-wrap" data-ui-kit="DataTable, EmptyState, PrimaryAction"><div class="empty"><h3>Тариф хранения ещё не задан</h3><p>Задайте цену за литр-день и дату начала, чтобы сформировать первый расчёт</p><button class="btn primary" data-modal="rate">Задать тариф</button></div></div>
+      </section>
+
+      <section id="error" class="state">
+        <div class="notice error" data-ui-kit="ErrorNotice">Не удалось загрузить расчёты хранения. Повторите попытку</div>
+        <div class="actions" data-ui-kit="PrimaryAction"><button class="btn primary">Повторить</button></div>
+      </section>
+    </section>
+  </main>
+
+  <div class="overlay" id="rate" role="dialog" aria-modal="true" aria-labelledby="rate-title">
+    <section class="dialog"><h2 id="rate-title">Тариф хранения</h2><p class="sub">Основной склад · цена действует только вперёд</p>
+      <div class="dialog-grid"><div class="field"><label>Ставка, ₽/л·день</label><input value="0,70"></div><div class="field"><label>Дата начала</label><input type="date" value="2026-07-01"></div></div>
+      <details class="subsection"><summary>Индивидуальная ставка селлера</summary><div class="dialog-grid" style="margin-top:16px"><div class="field"><label>Селлер</label><select><option>Красотка</option><option>Норд</option></select></div><div class="field"><label>Ставка, ₽/л·день</label><input placeholder="Например, 0,65"></div><div class="field"><label>Дата начала</label><input type="date" value="2026-08-01"></div></div></details>
+      <div class="dialog-actions" data-ui-kit="ActionGroup, PrimaryAction, SecondaryAction"><button class="btn secondary" data-close>Отмена</button><button class="btn primary" data-close>Сохранить</button></div>
+    </section>
+  </div>
+
+  <div class="overlay" id="measure" role="dialog" aria-modal="true" aria-labelledby="measure-title">
+    <section class="dialog"><h2 id="measure-title">Внести габариты</h2><p class="sub">SKU-11890 · NRD-2XL-LONG</p>
+      <div class="radio-row"><label><input type="radio" name="kind" value="dims" checked> Габариты товара</label><label><input type="radio" name="kind" value="tare"> Объём тары</label></div>
+      <div id="dims-fields"><div class="dialog-grid three"><div class="field"><label>Длина, см</label><input value="40"></div><div class="field"><label>Ширина, см</label><input value="28"></div><div class="field"><label>Высота, см</label><input value="12"></div></div><div class="computed"><strong>Объём: 13,44 л</strong><div class="muted">Будет сохранён как ручной обмер и не затрётся импортом</div></div></div>
+      <div id="tare-fields" hidden><div class="field"><label>Объём тары, л</label><input placeholder="Например, 18,5"></div><div class="field" style="margin-top:14px"><label>Комментарий</label><textarea rows="3" placeholder="Почему используется объём тары"></textarea></div></div>
+      <div class="dialog-actions" data-ui-kit="ActionGroup, PrimaryAction, SecondaryAction"><button class="btn secondary" data-close>Отмена</button><button class="btn primary" data-close>Сохранить</button></div>
+    </section>
+  </div>
+
+  <div class="overlay" id="history" role="dialog" aria-modal="true" aria-labelledby="history-title">
+    <section class="dialog wide"><h2 id="history-title">История габаритов</h2><p class="sub">SKU-10432 · KRS-44-BLK</p>
+      <div class="table-wrap" data-ui-kit="DataTable, TextCell, StatusChip"><table><thead><tr><th>Дата</th><th>Источник</th><th>Габариты / объём</th><th>Автор</th><th>Применено</th></tr></thead><tbody>
+        <tr><td>18.07.2026, 10:42</td><td>Ручной обмер</td><td>40 × 25 × 24 см · 24,00 л</td><td>Анна Петрова</td><td><span class="chip ok">Действует</span></td></tr>
+        <tr><td>02.07.2026, 06:15</td><td>Wildberries</td><td>39 × 25 × 23 см · 22,43 л</td><td>Импорт</td><td><span class="chip neutral">История</span></td></tr>
+        <tr><td>01.06.2026, 09:08</td><td>Wildberries</td><td>38 × 25 × 23 см · 21,85 л</td><td>Импорт</td><td><span class="chip neutral">История</span></td></tr>
+      </tbody></table></div>
+      <div class="dialog-actions" data-ui-kit="ActionGroup, PrimaryAction, SecondaryAction"><button class="btn secondary" data-close>Закрыть</button><button class="btn primary" data-close>Вернуть данные WB</button></div>
+    </section>
+  </div>
+
+  <div class="overlay" id="print" role="dialog" aria-modal="true" aria-labelledby="print-title">
+    <section class="dialog wide"><div class="print-sheet"><h3 id="print-title">Расчёт хранения за июль 2026</h3><div class="muted">Зафиксирован 01.08.2026, 09:20 МСК</div>
+      <div class="print-meta"><div><strong>Селлер:</strong> Вектор</div><div><strong>Склад:</strong> Основной склад</div><div><strong>Период:</strong> 01.07–31.07.2026</div><div><strong>Ставка:</strong> 0,70 ₽/л·день</div></div>
+      <table><thead><tr><th>SKU</th><th>Артикул продавца</th><th class="num">Объём, л</th><th>Источник</th><th class="num">Литро-дни</th><th class="num">Сумма, ₽</th></tr></thead><tbody><tr><td colspan="6" class="center muted">В выбранном месяце хранения не было</td></tr></tbody></table>
+      <div class="print-total">Итого: 0,00 ₽</div><div class="caption">Документ подтверждает проверку периода и не является бухгалтерским актом или счётом.</div></div>
+      <div class="dialog-actions" data-ui-kit="PrintAction, SecondaryAction"><button class="btn secondary" data-close>Закрыть</button><button class="btn primary" onclick="window.print()">Печать накладной</button></div>
+    </section>
+  </div>
+
+  <script>
+    const states = [...document.querySelectorAll('.state')];
+    document.querySelectorAll('[data-state]').forEach(button => button.addEventListener('click', () => {
+      states.forEach(state => state.classList.toggle('active', state.id === button.dataset.state));
+      document.querySelectorAll('[data-state]').forEach(item => item.classList.toggle('active', item === button));
+    }));
+    document.querySelectorAll('[data-modal]').forEach(button => button.addEventListener('click', () => document.getElementById(button.dataset.modal).classList.add('open')));
+    document.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', () => button.closest('.overlay').classList.remove('open')));
+    document.querySelectorAll('.overlay').forEach(overlay => overlay.addEventListener('click', event => { if (event.target === overlay) overlay.classList.remove('open'); }));
+    document.querySelectorAll('input[name="kind"]').forEach(radio => radio.addEventListener('change', () => {
+      document.getElementById('dims-fields').hidden = radio.value !== 'dims';
+      document.getElementById('tare-fields').hidden = radio.value !== 'tare';
+    }));
+    document.querySelector('[data-toggle-detail]').addEventListener('click', event => {
+      const detail = document.getElementById('detail-row');
+      detail.hidden = !detail.hidden;
+      event.currentTarget.textContent = detail.hidden ? '⌄' : '⌃';
+      event.currentTarget.title = detail.hidden ? 'Открыть расчёт селлера' : 'Закрыть расчёт селлера';
+    });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape') document.querySelectorAll('.overlay.open').forEach(item => item.classList.remove('open')); });
+  </script>
+</body>
+</html>
