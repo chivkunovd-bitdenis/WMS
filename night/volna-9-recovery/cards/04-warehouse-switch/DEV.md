@@ -2,27 +2,37 @@
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_warehouse_binding_service.py` — активная WB→WMS-привязка теперь принимает только операционный склад.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_stock_availability_service.py` — остаток отсекает служебные склады на уровне запроса.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_supply_validator_service.py` — добавлен агрегированный stock preflight: суммарная проверка по операционным складам, рекомендация по покрытию и строки warning/blocking.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/models/warehouse.py` — добавлены `is_operational` и уникальный штрихкод склада.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/catalog_service.py` — список ограничен операционными складами; резолвер различает склад и ячейку, отклоняет коллизии и ограничивает tenant.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/api/warehouses.py` — API возвращает новые поля и тип результата `warehouse`/`location`, ошибки резолвера отдаются понятными кодами HTTP.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/alembic/versions/20260822_0094_warehouse_operational_barcode.py` — добавляет признаки, генерирует штрихкоды, помечает legacy `fbs-wb-*`/`FBS WB *` служебными и оставляет один основной склад операционным.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/tests/test_warehouses.py` — проверяет список, скан склада, скан ячейки и коллизию.
 
 ## Миграции
 
-Нет: необходимые `Warehouse.is_operational` и существующая схема уже доступны.
+- `20260822_0094` — добавляет `warehouses.is_operational` и `warehouses.barcode`, backfill-ит значения, помечает legacy-склады служебными и создаёт уникальный индекс штрихкода.
+
+## Тесты
+
+- `backend/tests/test_warehouses.py` — 1 тест прошёл: операционный список, типы `warehouse`/`location`, коллизия возвращает `409 barcode_ambiguous`.
 
 ## Гейты
 
-- ruff: PASS для изменённых файлов; полный backend `ruff check .` BLOCKED существующими ошибками в unrelated-файлах (80 ошибок).
-- mypy: BLOCKED существующими ошибками в unrelated-файлах; для изменённых сервисов новых ошибок кроме двух ранее существовавших `dict` в binding-файле не добавлено.
-- pytest: целевые тесты `21 passed, 1 skipped, 1 failed`; fail — календарный тест с фиксированной датой заказа 2026-08-15 при текущей дате 2026-08-22. Полный прогон продолжен отдельно.
-- back_guard.py: не запущен — `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/scripts/ci/back_guard.py` отсутствует в рабочей копии.
-- check_migrations.py: не запущен — `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/scripts/ci/check_migrations.py` отсутствует в рабочей копии.
+- ruff: PASS для изменённых backend-файлов; полный `ruff check .` — FAIL на 84 ранее существующих ошибках, включая unrelated-файлы.
+- mypy: FAIL на 25 ранее существующих ошибках в 7 файлах; в затронутых модель/API/catalog-файлах ошибок нет.
+- pytest: PASS для `tests/test_warehouses.py` (1 passed); полный прогон не запускался из-за baseline-ошибок quality gates.
+- back_guard.py: НЕ ЗАПУЩЕН — файл отсутствует в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/scripts/ci/`.
+- check_migrations.py: НЕ ЗАПУЩЕН — файл отсутствует в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/scripts/ci/`.
 
 ## Не реализовано
 
-- UI-вывод warning/error и выбор склада не реализованы: это frontend-часть следующих атомарных кусков, не входящая в роль backend-dev.
-- Новая отдельная API-ручка не добавлялась; preflight расширен в существующем ответе `POST /operations/fbs-supplies/preflight`.
+- Остальные атомарные куски карточки 04 не реализованы: изменён только операционный склад и разрешение складского штрихкода.
+- UI-переключатель, контекст сессии и интеграция с рабочими экранами не входят в роль backend-dev и не изменялись.
+
+## Находки
+
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не читались и не изменялись.
 
 ## Блокеры
 
-Технический: commit не создан — Git не может создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-04-warehouse-switch/index.lock` (`Operation not permitted`), так как служебный Git-каталог находится вне разрешённой области записи. Изменения остаются в рабочем diff и не могут быть объявлены готовыми до сохранения в commit.
+- Guard-скрипты отсутствуют в этой рабочей копии; это отмечено в гейтах. Код и целевой тест проверены локально.
