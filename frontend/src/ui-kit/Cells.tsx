@@ -92,5 +92,9 @@ export function CheckCell({ checked, onChange, ariaLabel, disabledReason, testId
       size="small"
     />
   )
-  return disabledReason ? <Tooltip title={disabledReason}>{checkbox}</Tooltip> : checkbox
+  return disabledReason ? (
+    <Tooltip title={disabledReason}>
+      <span style={{ display: 'inline-flex' }}>{checkbox}</span>
+    </Tooltip>
+  ) : checkbox
 }

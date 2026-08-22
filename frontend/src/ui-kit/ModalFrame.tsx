@@ -29,6 +29,7 @@ export function ModalFrame({
       open={open}
       fullWidth
       maxWidth={maxWidth}
+      disableEscapeKeyDown={busy}
       onClose={(_, reason) => {
         if (!busy) onClose()
       }}
@@ -43,7 +44,7 @@ export function ModalFrame({
           </Typography>
         ) : null}
       </DialogTitle>
-      <DialogContent dividers sx={{ overflowY: 'auto' }}>
+      <DialogContent dividers sx={{ maxHeight: 'min(65vh, 720px)', overflowY: 'auto' }}>
         {children}
       </DialogContent>
       <DialogActions>{actions}</DialogActions>

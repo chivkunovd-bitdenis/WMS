@@ -266,7 +266,12 @@ export function UiKitShowcase() {
           testId="ui-kit-picking-list-modal"
           actions={
             <ActionGroup>
-              <SecondaryAction onClick={() => setModalOpen(false)}>Закрыть</SecondaryAction>
+              <SecondaryAction
+                onClick={() => setModalOpen(false)}
+                disabledReason={modalBusy ? 'Документ готовится к печати' : undefined}
+              >
+                Закрыть
+              </SecondaryAction>
               <PrintAction what="стикеры заказов" placement="panel" busy={modalBusy} />
             </ActionGroup>
           }
@@ -278,6 +283,13 @@ export function UiKitShowcase() {
               onChange={setChoice}
               ariaLabel="Фильтр листа"
               testId="ui-kit-picking-list-filter"
+            />
+            <ChoiceFilter
+              value={choice}
+              options={[{ value: 'all', label: 'Все' }, { value: 'unpicked', label: 'Не собраны' }]}
+              onChange={setChoice}
+              ariaLabel="Недоступный фильтр листа"
+              disabledReason="Лист подбора ещё загружается"
             />
             <CheckCell checked={checked} onChange={setChecked} ariaLabel="Собрал Футболка базовая" testId="ui-kit-picking-list-check" />
             <CheckCell checked={false} onChange={() => undefined} ariaLabel="Упаковал Футболка базовая" disabledReason="Сначала отметьте сборку" />

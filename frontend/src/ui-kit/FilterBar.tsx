@@ -1,4 +1,4 @@
-import { Button, Paper, Stack, TextField } from '@mui/material'
+import { Button, Paper, Stack, TextField, Tooltip } from '@mui/material'
 import type { ReactNode } from 'react'
 
 // Канон R-03: поиск и фильтры всегда в своей «бумаге» над таблицей и всегда
@@ -43,6 +43,7 @@ export type ChoiceFilterProps<Value extends string> = {
   ariaLabel: string
   testId?: string
   disabled?: boolean
+  disabledReason?: string
 }
 
 export function ChoiceFilter<Value extends string>({
@@ -52,28 +53,36 @@ export function ChoiceFilter<Value extends string>({
   ariaLabel,
   testId,
   disabled = false,
+  disabledReason,
 }: ChoiceFilterProps<Value>) {
+  const isDisabled = disabled || Boolean(disabledReason)
+
   return (
-    <Stack
-      direction="row"
-      spacing={0.5}
-      role="group"
-      aria-label={ariaLabel}
-      data-testid={testId}
-      sx={{ p: 0.5, bgcolor: 'action.hover', borderRadius: 1, flexWrap: 'wrap' }}
-    >
-      {options.map((option) => (
-        <Button
-          key={option.value}
-          size="small"
-          variant={option.value === value ? 'contained' : 'text'}
-          onClick={() => onChange(option.value)}
-          disabled={disabled}
-          aria-pressed={option.value === value}
+    <Tooltip title={disabledReason ?? ''} disableHoverListener={!disabledReason}>
+      <span>
+        <Stack
+          direction="row"
+          spacing={0.5}
+          role="group"
+          aria-label={ariaLabel}
+          aria-disabled={isDisabled}
+          data-testid={testId}
+          sx={{ p: 0.5, bgcolor: 'action.hover', borderRadius: 1, flexWrap: 'wrap' }}
         >
-          {option.label}
-        </Button>
-      ))}
-    </Stack>
+          {options.map((option) => (
+            <Button
+              key={option.value}
+              size="small"
+              variant={option.value === value ? 'contained' : 'text'}
+              onClick={() => onChange(option.value)}
+              disabled={isDisabled}
+              aria-pressed={option.value === value}
+            >
+              {option.label}
+            </Button>
+          ))}
+        </Stack>
+      </span>
+    </Tooltip>
   )
 }

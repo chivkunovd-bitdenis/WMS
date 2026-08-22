@@ -44,3 +44,7 @@
 17:20   06-picking-list-order · dev: фича 5/6 сохранена 8a2d5d3c7582
 17:24   06-picking-list-order · screen-dev: готово
 17:24   06-picking-list-order · dev: фича 6/6 сохранена 106ee22a436c
+17:32   06-picking-list-order · reviewer: готово
+17:32 06-picking-list-order: отложено — reviewer, круги кончились
+19:54   06-picking-list-order · resume: поатомный rework Terra по сохранённым находкам
+19:58   06-picking-list-order · screen-dev: готово
