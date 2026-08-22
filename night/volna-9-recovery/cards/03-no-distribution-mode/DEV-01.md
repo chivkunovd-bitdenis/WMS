@@ -1,24 +1,23 @@
-# Backend-dev · 03-no-distribution-mode
-
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/services/fbs_packing_box_service.py` — сохранённый признак поставки стал источником истины для readiness и назначения; включение блокируется на строке поставки, повторное включение не меняет аудит.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/services/fbs_workspace_service.py` — workspace больше не восстанавливает режим из legacy-ключей коробов.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/api/fbs_errors.py` — добавлено понятное сообщение для конфликта назначенных заказов.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/night/volna-9-recovery/cards/03-no-distribution-mode/DEV.md` — этот отчёт.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/services/fbs_packing_box_service.py` — сохранена обратная совместимость с legacy-префиксом; старый POST создания коробов теперь проверяет назначения до включения режима.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/services/fbs_workspace_service.py` — workspace учитывает legacy-режим старых поставок.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/tests/test_fbs_packing_box.py` — добавлен регрессионный тест обхода охраны через старый POST.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/tasks/fbs-operator-flow/openapi/fbs-operations.openapi.json` — экспортирован новый маршрут.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/docs/blockers/S-03.md` — B-09 приведён к правилу «есть назначение», а не «есть короб».
 
 ## Гейты
 
-- ruff: `ruff check .` — FAIL: в репозитории 80 существующих ошибок; изменённые backend-файлы проходят целевую проверку.
-- mypy: FAIL на существующих ошибках вне изменённого слоя (`inventory_movement_report_service.py`, `wildberries_credentials_service.py`, `scripts/cleanup_fbs_stub_test_orders.py`, `fbs_stock_sync_service.py`, `fbs_warehouse_binding_service.py`, `wildberries_product_import_service.py`).
-- pytest: `backend/tests/test_fbs_packing_box.py` — PASS, 8 passed.
-- back_guard.py: NOT RUN: скрипт отсутствует в этой рабочей копии.
-- check_migrations.py: NOT RUN: скрипт отсутствует в этой рабочей копии.
+- ruff: целевые изменённые backend-файлы — PASS; полный `ruff check .` — FAIL на 80 существующих ошибках репозитория.
+- mypy: FAIL на 21 существующей ошибке в 6 несвязанных файлах; новых ошибок изменённого слоя не выявлено.
+- pytest: целевые `tests/test_fbs_packing_box.py` и `tests/test_fbs_openapi_contract.py` — PASS, 14 passed; полный прогон прерван после длительного выполнения без итогового результата.
+- back_guard.py: NOT RUN — `scripts/ci/back_guard.py` отсутствует в этой рабочей копии.
+- check_migrations.py: NOT RUN — `scripts/ci/check_migrations.py` отсутствует в этой рабочей копии.
 
 ## Не реализовано
 
-- Полный backend `mypy` не проходит из-за перечисленных ранее существовавших ошибок, не относящихся к карточке.
+- Фронтовой браузерный тест из находки 3 не менялся: это слой screen-dev, вне роли backend-dev.
 
 ## Находки
 
-- Legacy-префиксы в ключах коробов сохраняются для совместимости данных, но больше не влияют на режим поставки.
+- В рабочем дереве присутствовали несвязанные изменения ночного оркестратора (`JOURNAL.md`, `REVIEW.md`); они не включались в реализацию.

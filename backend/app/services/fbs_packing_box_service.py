@@ -60,7 +60,7 @@ async def get_delivery_box_readiness(
         ).all()
     )
     supply = await _get_supply(session, tenant_id, supply_id)
-    without_distribution = supply.boxes_without_distribution_at is not None
+    without_distribution = await _supply_without_distribution(session, supply)
     packed_order_ids = {order.id for order in orders if order.pack_status == PACK_STATUS_PACKED}
     if not packed_order_ids or without_distribution:
         return DeliveryBoxReadiness(bool(boxes), without_distribution, frozenset())
@@ -99,6 +99,16 @@ async def create_boxes(
         raise FbsPackingBoxError("missing_idempotency_key")
     supply = await _get_supply(session, tenant_id, supply_id, for_update=True)
     _assert_supply_mutable(supply)
+    assigned_count = await session.scalar(
+        select(func.count(FbsPackingBoxItem.id))
+        .join(FbsPackingBox, FbsPackingBox.id == FbsPackingBoxItem.box_id)
+        .where(
+            FbsPackingBoxItem.tenant_id == tenant_id,
+            FbsPackingBox.supply_id == supply_id,
+        )
+    )
+    if without_distribution and assigned_count:
+        raise FbsPackingBoxError("boxes_already_distributed")
     if without_distribution and supply.boxes_without_distribution_at is None:
         supply.boxes_without_distribution_at = datetime.now(UTC)
         supply.boxes_without_distribution_by_user_id = actor_user_id
@@ -342,7 +352,7 @@ async def get_boxes_for_workspace(
     supply_id: uuid.UUID,
 ) -> list[dict[str, object]]:
     supply = await _get_supply(session, tenant_id, supply_id)
-    supply_without_distribution = supply.boxes_without_distribution_at is not None
+    supply_without_distribution = await _supply_without_distribution(session, supply)
     boxes = await _load_boxes(session, tenant_id, supply_id)
     return [
         {
@@ -379,6 +389,34 @@ def _box_without_distribution(box: FbsPackingBox) -> bool:
 
 def _boxes_without_distribution(boxes: list[FbsPackingBox]) -> bool:
     return bool(boxes) and any(_box_without_distribution(box) for box in boxes)
+
+
+async def _has_legacy_without_distribution_marker(
+    session: AsyncSession, tenant_id: uuid.UUID, supply_id: uuid.UUID
+) -> bool:
+    return bool(
+        await session.scalar(
+            select(FbsPackingBox.id)
+            .where(
+                FbsPackingBox.tenant_id == tenant_id,
+                FbsPackingBox.supply_id == supply_id,
+                FbsPackingBox.creation_idempotency_key.startswith(
+                    WITHOUT_DISTRIBUTION_KEY_PREFIX
+                ),
+            )
+            .limit(1)
+        )
+    )
+
+
+async def _supply_without_distribution(
+    session: AsyncSession, supply: FbsSupply
+) -> bool:
+    if supply.boxes_without_distribution_at is not None:
+        return True
+    return await _has_legacy_without_distribution_marker(
+        session, supply.tenant_id, supply.id
+    )
 
 
 async def _link_or_create_cargo_places(

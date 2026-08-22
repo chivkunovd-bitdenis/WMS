@@ -219,6 +219,40 @@ async def test_without_distribution_boxes_do_not_accept_order_assignment(
 
 
 @pytest.mark.asyncio
+async def test_legacy_create_boxes_toggle_rejects_existing_assignment(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """TC-NEW-006: the legacy create endpoint cannot bypass assignment guard."""
+    headers, supply_id, order_ids = await _packed_supply(async_client)
+    boxes_url = f"/operations/fbs-supplies/{supply_id}/boxes"
+    created = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={"count": 1, "idempotency_key": "assigned-before-legacy-toggle"},
+    )
+    assert created.status_code == 201, created.text
+    box_id = created.json()["boxes"][0]["id"]
+    assigned = await async_client.post(
+        f"{boxes_url}/{box_id}/orders",
+        headers=headers,
+        json={"order_ids": [str(order_ids[0])]},
+    )
+    assert assigned.status_code == 200, assigned.text
+    legacy_toggle = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={
+            "count": 1,
+            "idempotency_key": "legacy-toggle-with-assignment",
+            "without_distribution": True,
+        },
+    )
+    assert legacy_toggle.status_code == 409, legacy_toggle.text
+    assert legacy_toggle.json()["detail"]["code"] == "boxes_already_distributed"
+
+
+@pytest.mark.asyncio
 async def test_without_distribution_mode_depends_on_assignments_not_box_count(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,

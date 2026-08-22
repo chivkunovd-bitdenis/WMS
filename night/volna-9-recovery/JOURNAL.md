@@ -45,3 +45,6 @@
 15:12   03-no-distribution-mode · dev: фича 3/4 сохранена f277b0a2ebf1
 15:14   03-no-distribution-mode · screen-dev: готово
 15:14   03-no-distribution-mode · dev: фича 4/4 сохранена 9a160e2d0cf8
+15:19   03-no-distribution-mode · reviewer: готово
+15:19   03-no-distribution-mode · reviewer: находки, круг 2 — назад к разработке
+15:25   03-no-distribution-mode · backend-dev: готово
