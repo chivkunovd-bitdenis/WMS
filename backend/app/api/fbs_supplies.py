@@ -161,6 +161,9 @@ class FbsPickingListItemOut(BaseModel):
     size: str | None
     product_name: str
     quantity: int
+    number_start: int
+    number_end: int
+    order_ids: list[uuid.UUID]
 
 
 class FbsPickingListOut(BaseModel):
@@ -1456,6 +1459,9 @@ async def get_fbs_supply_picking_list(
                 size=item.size,
                 product_name=item.product_name,
                 quantity=item.quantity,
+                number_start=item.number_start,
+                number_end=item.number_end,
+                order_ids=list(item.order_ids),
             )
             for item in items
         ]

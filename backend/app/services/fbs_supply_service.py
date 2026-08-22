@@ -133,6 +133,9 @@ class PickingListItem:
     size: str | None
     product_name: str
     quantity: int
+    number_start: int
+    number_end: int
+    order_ids: tuple[uuid.UUID, ...]
 
 
 @dataclass(frozen=True)
@@ -1580,7 +1583,7 @@ async def get_picking_list(
     if supply is None:
         raise FbsSupplyError("supply_not_found")
 
-    groups: dict[tuple[str, str | None, str | None, str], int] = defaultdict(int)
+    groups: dict[tuple[str, str | None, str | None, str], list[FbsOrder]] = defaultdict(list)
     for order in supply.orders:
         product = order.product
         article = order.wb_article or (product.sku_code if product is not None else "") or ""
@@ -1588,18 +1591,30 @@ async def get_picking_list(
         size = product.wb_size if product is not None and product.wb_size else None
         product_name = product.name if product is not None else (order.wb_article or "Unknown")
         key = (article, sku_code, size, product_name)
-        groups[key] += 1
+        groups[key].append(order)
 
-    items = [
-        PickingListItem(
-            article=article,
-            sku_code=sku_code,
-            size=size,
-            product_name=product_name,
-            quantity=qty,
+    items: list[PickingListItem] = []
+    next_number = 1
+    for (article, sku_code, size, product_name), orders in sorted(
+        groups.items(), key=lambda entry: tuple(value or "" for value in entry[0])
+    ):
+        orders.sort(key=lambda order: (int(order.wb_order_id), str(order.id)))
+        order_ids = tuple(order.id for order in orders)
+        number_start = next_number
+        number_end = next_number + len(order_ids) - 1
+        items.append(
+            PickingListItem(
+                article=article,
+                sku_code=sku_code,
+                size=size,
+                product_name=product_name,
+                quantity=len(order_ids),
+                number_start=number_start,
+                number_end=number_end,
+                order_ids=order_ids,
+            )
         )
-        for (article, sku_code, size, product_name), qty in sorted(groups.items())
-    ]
+        next_number = number_end + 1
     return items
 
 

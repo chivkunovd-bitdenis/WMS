@@ -621,6 +621,21 @@ async def test_fbs_supply_picking_list_grouping(
     assert leggings["quantity"] == 2
     assert leggings["article"] == "ART-A"
     assert leggings["size"] == "M"
+    assert (leggings["number_start"], leggings["number_end"]) == (1, 2)
+    assert [uuid.UUID(value) for value in leggings["order_ids"]] == order_ids[:2]
+    assert [(item["number_start"], item["number_end"]) for item in items] == [
+        (1, 2),
+        (3, 3),
+        (4, 4),
+        (5, 5),
+    ]
+
+    repeated = await async_client.get(
+        f"/operations/fbs-supplies/{supply['id']}/picking-list",
+        headers=headers,
+    )
+    assert repeated.status_code == 200
+    assert repeated.json() == picking.json()
 
     empty_supply = await _create_supply(
         async_client, headers, seller_id, warehouse_id, name="Empty"
