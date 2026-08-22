@@ -29,6 +29,10 @@ type Props = {
   sellers: SellerRow[]
   products: ProductRow[]
   onCreateProduct: FormEventHandler<HTMLFormElement>
+  /** R-06/S-01: сколько настоящих (не fbs-wb-*) складов у тенанта */
+  realWarehouseCount?: number
+  /** R-06/S-01: имя текущего склада контекста — показывается при 2+ складах */
+  selectedWarehouseName?: string | null
 }
 
 export function ProductsScreen({
@@ -38,6 +42,8 @@ export function ProductsScreen({
   sellers,
   products,
   onCreateProduct,
+  realWarehouseCount,
+  selectedWarehouseName,
 }: Props) {
   const [q, setQ] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -60,6 +66,16 @@ export function ProductsScreen({
 
   return (
     <Screen title="Товары (SKU)" subtitle="Таблица SKU, детали, создание и привязки">
+      {/* R-06/R-02: при 2+ настоящих складах показываем контекст текущего склада */}
+      {realWarehouseCount != null && realWarehouseCount > 1 && selectedWarehouseName ? (
+        <p
+          className="subtle"
+          data-testid="products-warehouse-subtitle"
+          style={{ margin: '0 0 12px 0' }}
+        >
+          Остатки на складе {selectedWarehouseName}
+        </p>
+      ) : null}
       {catalogError ? (
         <Card className="card">
           <p className="error" data-testid="catalog-error">

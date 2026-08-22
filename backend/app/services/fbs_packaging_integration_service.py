@@ -476,65 +476,6 @@ async def _insufficient_stock_message(
     )
 
 
-async def _try_deduct_from_alternative_sorting_location(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    product_id: uuid.UUID,
-    primary_location_id: uuid.UUID,
-) -> tuple[bool, str | None]:
-    """
-    Попытаться списать товар из другой ячейки сортировки этого же тенанта.
-
-    Возвращает (успешно, название_ячейки_если_успешно).
-    """
-    # Получить склад первичной ячейки
-    primary_loc = await session.get(StorageLocation, primary_location_id)
-    if primary_loc is None:
-        return False, None
-
-    # Ячейки сортировки других складов этого же тенанта, где остаток товара больше нуля
-    sorting_locs = await session.execute(
-        select(
-            StorageLocation.id,
-            StorageLocation.barcode,
-            InventoryBalance.quantity,
-        )
-        .join(
-            InventoryBalance,
-            InventoryBalance.storage_location_id == StorageLocation.id,
-        )
-        .where(
-            StorageLocation.tenant_id == tenant_id,
-            StorageLocation.warehouse_id != primary_loc.warehouse_id,
-            StorageLocation.code == sorting_loc_svc.SORTING_LOCATION_CODE,
-            InventoryBalance.tenant_id == tenant_id,
-            InventoryBalance.product_id == product_id,
-            InventoryBalance.quantity > 0,
-        )
-        .order_by(InventoryBalance.quantity.desc())
-    )
-
-    for alt_loc_id, alt_barcode, _ in sorting_locs.all():
-        # Попробовать списать из найденной ячейки
-        try:
-            await inv_svc.apply_packaging_convert(
-                session,
-                tenant_id=tenant_id,
-                product_id=product_id,
-                storage_location_id=alt_loc_id,
-                quantity=1,
-                require_unpacked=False,
-            )
-            return True, f"{alt_barcode}"
-        except ValueError as exc:
-            # Если оттуда тоже не вышло (может быть race condition), пробуем следующую
-            if str(exc) != "insufficient_stock":
-                raise
-            continue
-
-    return False, None
-
-
 async def record_fbs_pack_progress(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -602,45 +543,23 @@ async def record_fbs_pack_progress(
             )
         except ValueError as exc:
             if str(exc) == "insufficient_stock":
-                # Попробовать найти и списать из другой ячейки сортировки тенанта
-                success, alt_location_code = await _try_deduct_from_alternative_sorting_location(
-                    session,
+                # 04-warehouse-switch: костыль _try_deduct_from_alternative_sorting_location
+                # удалён. Если товара нет в ячейке — упаковка продолжается, остаток не
+                # списывается молча с другого склада. Товар уже мог уехать через
+                # кросс-складской подбор (fbs_picking_service), запись в movements есть.
+                insufficient_msg = await _insufficient_stock_message(
+                    session, tenant_id, line
+                )
+                warnings.append(
+                    "Упаковка продолжена, остаток не списан. " + insufficient_msg
+                )
+                logger.warning(
+                    "fbs packing without stock: tenant=%s product=%s location=%s order=%s",
                     tenant_id,
                     line.product_id,
                     line.storage_location_id,
+                    target_order.id,
                 )
-                if success:
-                    warnings.append(
-                        f"Товар списан из другой ячейки сортировки: {alt_location_code}"
-                    )
-                    # Остаток одного склада уменьшился, чтобы закрыть недостачу на
-                    # другом, физического перемещения не было. Без записи в журнал это
-                    # расхождение потом нечем объяснить: тост оператор увидит один раз.
-                    logger.warning(
-                        "fbs packing cross-location deduction: tenant=%s product=%s "
-                        "line_location=%s alt_location=%s order=%s",
-                        tenant_id,
-                        line.product_id,
-                        line.storage_location_id,
-                        alt_location_code,
-                        target_order.id,
-                    )
-                else:
-                    # Товара нет нигде, но упаковка продолжается
-                    insufficient_msg = await _insufficient_stock_message(
-                        session, tenant_id, line
-                    )
-                    warnings.append(
-                        "Упаковка продолжена, остаток не списан. " + insufficient_msg
-                    )
-                    # След в журнале: без него расхождение остатка потом не объяснить.
-                    logger.warning(
-                        "fbs packing without stock: tenant=%s product=%s location=%s order=%s",
-                        tenant_id,
-                        line.product_id,
-                        line.storage_location_id,
-                        target_order.id,
-                    )
             else:
                 raise
 

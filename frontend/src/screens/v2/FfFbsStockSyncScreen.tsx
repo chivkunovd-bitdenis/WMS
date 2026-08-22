@@ -31,6 +31,7 @@ import type { ChipProps } from '@mui/material'
 import MoreVertIcon from '@mui/icons-material/MoreVert'
 import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { isAutoFbsWarehouse } from '../../utils/fbsWarehouse'
 import { FbsStockAllocationDialog } from './FbsStockAllocationDialog'
 import { FfFbsSectionNav } from './FfFbsSectionNav'
 import {
@@ -94,9 +95,11 @@ function isSyncJob(
   return typeof body.id === 'string' && body.bindings_processed === undefined
 }
 
+// 04-warehouse-switch: используем общий утил isAutoFbsWarehouse из fbsWarehouse.ts
+// вместо инлайн-дубликата. Логика идентичная, но теперь единственный источник правды.
 function isTechnicalWmsWarehouse(row: WmsWarehouseRow | undefined): boolean {
   if (!row) return false
-  return row.code.startsWith('fbs-wb-') || row.name.startsWith('FBS WB ')
+  return isAutoFbsWarehouse(row)
 }
 
 function StockSyncStatusChip({ status }: { status: string | null }) {

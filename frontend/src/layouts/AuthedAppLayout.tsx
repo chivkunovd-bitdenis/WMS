@@ -18,6 +18,14 @@ import { WmsBrandMark } from '../components/WmsBrandMark'
 import { NotificationBell } from '../components/NotificationBell'
 import type { FfPermissions } from '../utils/ffPermissions'
 import { canAccessFfBlock, isFulfillmentAdminRole } from '../utils/ffPermissions'
+import { WarehouseSwitcher } from '../ui-kit/WarehouseSwitcher'
+
+export interface Warehouse {
+  id: string
+  name: string
+  code: string
+  is_auto_fbs?: boolean
+}
 
 type Props = {
   children: ReactNode
@@ -29,6 +37,10 @@ type Props = {
   portal: 'seller' | 'ff'
   meRole?: string
   ffPermissions?: FfPermissions | null
+  warehouses?: Warehouse[]
+  selectedWarehouseId?: string | null
+  onSelectWarehouse?: (warehouseId: string) => void
+  isWarehousesLoading?: boolean
 }
 
 export function AuthedAppLayout({
@@ -39,8 +51,14 @@ export function AuthedAppLayout({
   portal,
   meRole = '',
   ffPermissions = null,
+  warehouses = [],
+  selectedWarehouseId = null,
+  onSelectWarehouse,
+  isWarehousesLoading = false,
 }: Props) {
   const base = portal === 'seller' ? '/app/seller' : '/app/ff'
+  const currentWarehouse = warehouses.find((w) => w.id === selectedWarehouseId)
+
   if (portal === 'seller') {
     const drawerWidth = 240
     return (
@@ -161,6 +179,15 @@ export function AuthedAppLayout({
             <Typography variant="h5" noWrap sx={{ fontWeight: 900, letterSpacing: 0 }}>
               Короб ВМС
             </Typography>
+            {selectedWarehouseId && onSelectWarehouse ? (
+              <WarehouseSwitcher
+                currentWarehouseId={selectedWarehouseId}
+                currentWarehouseName={currentWarehouse?.name ?? null}
+                warehouses={warehouses}
+                onSelectWarehouse={onSelectWarehouse}
+                isLoading={isWarehousesLoading}
+              />
+            ) : null}
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             {userLabel ? (

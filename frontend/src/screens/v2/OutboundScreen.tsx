@@ -6,6 +6,7 @@ import { Select } from '../../ui/Select'
 import { Screen } from '../AppV2Screens'
 import { printOperationalOutboundWaybill } from '../../utils/printShipmentWaybill'
 import { movementTypeLabel } from '../../utils/movementTypeLabel'
+import { realWarehouses } from '../../utils/fbsWarehouse'
 
 type WarehouseRow = { id: string; name: string; code: string }
 type LocationRow = { id: string; code: string; warehouse_id: string }
@@ -119,27 +120,15 @@ export function OutboundScreen(props: Props) {
             </p>
 
             {canEditOutboundDraft ? (
-              <form data-testid="outbound-create-form" noValidate onSubmit={onCreateOutboundRequest}>
-                {isFulfillmentSeller && warehouses.length > 1 ? (
-                  <label>
-                    Склад для отгрузки
-                    <Select
-                      name="outbound_warehouse_id"
-                      data-testid="outbound-create-warehouse"
-                      required
-                      defaultValue=""
-                    >
-                      <option value="" disabled>
-                        Выберите склад
-                      </option>
-                      {warehouses.map((w) => (
-                        <option key={w.id} value={w.id}>
-                          {w.code} — {w.name}
-                        </option>
-                      ))}
-                    </Select>
-                  </label>
+              <>
+                {realWarehouses(warehouses).length === 0 ? (
+                  <div className="alert alert-warning" data-testid="outbound-no-warehouse-alert">
+                    ⚠️ Нет доступного склада для создания заявки. Обратитесь к фулфилменту.
+                  </div>
                 ) : null}
+                <form data-testid="outbound-create-form" noValidate onSubmit={onCreateOutboundRequest}>
+                  {/* Селект "Склад для отгрузки" удалён в пользу контекста warehouse_id в шапке */}
+                  {/* Склад для отгрузки берётся из selectedWarehouseId в контексте шапки приложения */}
                 <Button
                   type="submit"
                   data-testid="outbound-create-submit"
@@ -151,7 +140,8 @@ export function OutboundScreen(props: Props) {
                 >
                   {opsBusy ? '…' : 'Новая заявка на отгрузку'}
                 </Button>
-              </form>
+                </form>
+              </>
             ) : null}
 
             <div data-testid="outbound-requests-list">
@@ -182,7 +172,9 @@ export function OutboundScreen(props: Props) {
                 {outboundSummaries.length === 0 ? (
                   <tr>
                     <td colSpan={2}>
-                      <span className="subtle">Пока нет заявок.</span>
+                      <span className="subtle" data-testid="outbound-empty-state">
+                        Нет заявок на этом складе — создайте заявку кнопкой выше.
+                      </span>
                     </td>
                   </tr>
                 ) : null}

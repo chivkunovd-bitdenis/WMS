@@ -17,6 +17,7 @@ import { SellerHonestSignScreen } from '../../screens/v2/SellerHonestSignScreen'
 import { SellerSettingsScreen } from '../../screens/v2/SellerSettingsScreen'
 import { NotificationsPage } from '../../screens/shared/NotificationsPage'
 import { SellerLayout } from './SellerLayout'
+import { primaryWarehouseId } from '../../utils/fbsWarehouse'
 
 type InboundSummaryRow = {
   id: string
@@ -114,7 +115,9 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
       setSelectedWarehouseId((prev) => {
         if (rows.length === 0) return null
         if (prev && rows.some((w) => w.id === prev)) return prev
-        return rows[0]!.id
+        // Выбираем первый настоящий склад, не служебный fbs-wb-*
+        const primaryId = primaryWarehouseId(rows)
+        return primaryId || rows[0]!.id
       })
     },
     [authHeaders],
@@ -325,6 +328,9 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
         shopsBusy={shopsBusy}
         permissions={sellerPermissions}
         navigationBasePath={navigationBasePath}
+        warehouses={warehouses}
+        selectedWarehouseId={selectedWarehouseId}
+        onSelectWarehouse={setSelectedWarehouseId}
         {...(me.can_manage_seller_shops ||
         (me.switchable_shops?.length ?? 0) > 1
           ? {

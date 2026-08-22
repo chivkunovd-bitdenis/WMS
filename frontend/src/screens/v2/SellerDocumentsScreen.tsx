@@ -138,8 +138,16 @@ export function SellerDocumentsScreen({
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const rows = useMemo(() => {
+    // S-26: фильтруем по контексту склада, если задан (R-37 — контекст один, в шапке)
+    const inboundFiltered = warehouseId
+      ? inboundSummaries.filter((r) => r.warehouse_id === warehouseId)
+      : inboundSummaries
+    const mpUnloadFiltered = warehouseId
+      ? mpUnloadSummaries.filter((r) => !r.warehouse_id || r.warehouse_id === warehouseId)
+      : mpUnloadSummaries
+
     const all: DocumentRow[] = [
-      ...inboundSummaries.map((r) => ({
+      ...inboundFiltered.map((r) => ({
         type: 'inbound' as const,
         id: r.id,
         date: r.planned_delivery_date ?? r.created_at?.slice(0, 10) ?? null,
@@ -150,7 +158,7 @@ export function SellerDocumentsScreen({
         line_count: r.line_count,
         goods_qty_total: r.goods_qty_total ?? 0,
       })),
-      ...mpUnloadSummaries.map((r) => ({
+      ...mpUnloadFiltered.map((r) => ({
         type: 'mp_unload' as const,
         id: r.id,
         date: r.planned_shipment_date ?? r.created_at?.slice(0, 10) ?? null,
@@ -176,7 +184,7 @@ export function SellerDocumentsScreen({
       }
       return ad.localeCompare(bd) * sign
     })
-  }, [inboundSummaries, mpUnloadSummaries, sort, type])
+  }, [inboundSummaries, mpUnloadSummaries, sort, type, warehouseId])
 
   function openDocument(row: DocumentRow): void {
     if (row.type === 'inbound') {

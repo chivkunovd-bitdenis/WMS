@@ -17,6 +17,9 @@ import { WmsBrandMark } from '../../components/WmsBrandMark'
 import { NotificationBell } from '../../components/NotificationBell'
 import { SellerShopSidebar, type SellerShopRow } from '../../components/SellerShopSidebar'
 import { emptySellerPermissions, type SellerPermissions } from '../../utils/sellerPermissions'
+import { WarehouseSwitcher } from '../../ui-kit/WarehouseSwitcher'
+
+type WarehouseRow = { id: string; name: string; code: string; is_auto_fbs?: boolean }
 
 type Props = {
   children: ReactNode
@@ -34,6 +37,11 @@ type Props = {
   navigationBasePath?: string
   onToggleShop?: (sellerId: string, enabled: boolean) => void
   onSwitchShop?: (sellerId: string | null) => void
+  /** R-37: контекст склада в шапке портала селлера — скрыт при одном настоящем складе */
+  warehouses?: WarehouseRow[]
+  selectedWarehouseId?: string | null
+  onSelectWarehouse?: (warehouseId: string) => void
+  isWarehousesLoading?: boolean
 }
 
 export function SellerLayout({
@@ -52,7 +60,12 @@ export function SellerLayout({
   navigationBasePath = '',
   onToggleShop,
   onSwitchShop,
+  warehouses = [],
+  selectedWarehouseId = null,
+  onSelectWarehouse,
+  isWarehousesLoading = false,
 }: Props) {
+  const currentWarehouse = warehouses.find((w) => w.id === selectedWarehouseId)
   const drawerWidth = 240
   const base = navigationBasePath
   return (
@@ -83,6 +96,16 @@ export function SellerLayout({
             >
               {title}
             </Typography>
+            {/* R-37: переключатель склада в шапке — скрыт при одном настоящем складе (логика внутри WarehouseSwitcher) */}
+            {selectedWarehouseId && onSelectWarehouse ? (
+              <WarehouseSwitcher
+                currentWarehouseId={selectedWarehouseId}
+                currentWarehouseName={currentWarehouse?.name ?? null}
+                warehouses={warehouses}
+                onSelectWarehouse={onSelectWarehouse}
+                isLoading={isWarehousesLoading}
+              />
+            ) : null}
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             {userLabel ? (

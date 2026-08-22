@@ -274,6 +274,9 @@ export type FbsSupplyPreflight = {
     nearest_deadline_at: string
   }
   issues: Array<{ order_id: string; code: string; message: string }>
+  /** Предупреждения о нехватке остатков на складе поставки при наличии на другом складе.
+   *  Не блокируют создание поставки (R-38). */
+  notices?: Array<{ code: string; message: string }>
 }
 
 export type FbsSupplyCreateFromOrdersRequest = {

@@ -55,6 +55,7 @@ import {
 } from './utils/ffPermissions'
 import { setSeparateMarkingPrintEnabled } from './utils/separateMarkingPrint'
 import type { InboundOperationType } from './utils/inboundOperationType'
+import { primaryWarehouseId, realWarehouses } from './utils/fbsWarehouse'
 
 type WarehouseRow = { id: string; name: string; code: string }
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
@@ -414,7 +415,9 @@ export default function App() {
         if (prev && data.some((w) => w.id === prev)) {
           return prev
         }
-        return data[0]!.id
+        // Выбираем первый настоящий склад, не служебный fbs-wb-*
+        const primaryId = primaryWarehouseId(data)
+        return primaryId || data[0]!.id
       })
     },
     [authHeaders],
@@ -2776,6 +2779,10 @@ export default function App() {
         meRole={me.role}
         ffPermissions={ffPermissions}
         portal={portal}
+        warehouses={warehouses}
+        selectedWarehouseId={selectedWarehouseId}
+        onSelectWarehouse={setSelectedWarehouseId}
+        isWarehousesLoading={catalogBusy}
       >
         <>
         <Routes>
@@ -3241,6 +3248,8 @@ export default function App() {
                   sellers={sellers}
                   products={products}
                   onCreateProduct={(e) => void onCreateProduct(e)}
+                  realWarehouseCount={realWarehouses(warehouses).length}
+                  selectedWarehouseName={warehouses.find((w) => w.id === selectedWarehouseId)?.name ?? null}
                 />
               ) : (
                 ffAccessDenied

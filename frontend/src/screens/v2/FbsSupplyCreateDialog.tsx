@@ -234,6 +234,19 @@ export function FbsSupplyCreateDialog({
                 {deliveryType === 'pvz' && summary.pvz_blocked_count > 0 ? <SummaryItem label="Нельзя сдать через ПВЗ" value={String(summary.pvz_blocked_count)} /> : null}
               </Box>
 
+              {preflight?.notices?.length ? (
+                // R-38: предупреждаем словами, не блокируем — кнопка «Создать поставку» остаётся активной.
+                // Формулировка: «Товар нужен на складе N — X шт. На складе N — 0 шт., ещё X шт. на складе M.»
+                <Alert severity="warning" data-testid="fbs-supply-stock-notices">
+                  <Stack spacing={0.5}>
+                    {preflight.notices.map((notice) => (
+                      <Typography key={notice.code} variant="body2">
+                        {notice.message}
+                      </Typography>
+                    ))}
+                  </Stack>
+                </Alert>
+              ) : null}
               {preflight?.issues.length ? (
                 <Alert severity="error">
                   <Stack spacing={0.5}>

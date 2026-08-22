@@ -7,6 +7,7 @@ import { Input } from '../../ui/Input'
 import { Select } from '../../ui/Select'
 import { Screen } from '../AppV2Screens'
 import { movementTypeLabel } from '../../utils/movementTypeLabel'
+import { realWarehouses } from '../../utils/fbsWarehouse'
 
 type WarehouseRow = { id: string; name: string; code: string }
 type LocationRow = { id: string; code: string; warehouse_id: string }
@@ -193,7 +194,13 @@ export function InboundScreen(props: Props) {
             </p>
 
             {canEditInboundDraft ? (
-              <form data-testid="inbound-create-form" noValidate onSubmit={onCreateInboundRequest}>
+              <>
+                {realWarehouses(warehouses).length === 0 ? (
+                  <div className="alert alert-warning" data-testid="inbound-no-warehouse-alert">
+                    ⚠️ Нет доступного склада для создания заявки. Обратитесь к фулфилменту.
+                  </div>
+                ) : null}
+                <form data-testid="inbound-create-form" noValidate onSubmit={onCreateInboundRequest}>
                 <label>
                   Тип операции
                   <Select
@@ -215,26 +222,8 @@ export function InboundScreen(props: Props) {
                     defaultValue={todayIso}
                   />
                 </label>
-                {isFulfillmentSeller && warehouses.length > 1 ? (
-                  <label>
-                    Склад для заявки
-                    <Select
-                      name="inbound_warehouse_id"
-                      data-testid="inbound-create-warehouse"
-                      required
-                      defaultValue=""
-                    >
-                      <option value="" disabled>
-                        Выберите склад
-                      </option>
-                      {warehouses.map((w) => (
-                        <option key={w.id} value={w.id}>
-                          {w.code} — {w.name}
-                        </option>
-                      ))}
-                    </Select>
-                  </label>
-                ) : null}
+                {/* Селект "Склад для заявки" удалён в пользу контекста warehouse_id в шапке */}
+                {/* Склад для заявки берётся из selectedWarehouseId в контексте шапки приложения */}
                 <Button
                   type="submit"
                   data-testid="inbound-create-submit"
@@ -246,7 +235,8 @@ export function InboundScreen(props: Props) {
                 >
                   {opsBusy ? '…' : 'Новая заявка на приёмку'}
                 </Button>
-              </form>
+                </form>
+              </>
             ) : null}
 
             <div data-testid="inbound-requests-list">
@@ -283,7 +273,9 @@ export function InboundScreen(props: Props) {
                 {inboundSummaries.length === 0 ? (
                   <tr>
                     <td colSpan={3}>
-                      <span className="subtle">Пока нет заявок.</span>
+                      <span className="subtle" data-testid="inbound-empty-state">
+                        Нет заявок на этом складе — создайте заявку кнопкой выше.
+                      </span>
                     </td>
                   </tr>
                 ) : null}

@@ -512,6 +512,10 @@ export function FfFbsSupplyWorkspace({
   const scanProduct = async () => {
     if (!workspace || !pickLocation || !productBarcode.trim()) return
     const key = createFbsIdempotencyKey()
+    // S-03-TC-008: кросс-складской подбор — тост вместо ошибки (R-24, R-30).
+    const successMsg = pickLocation.warehouse_id !== workspace.supply.wms_warehouse.id
+      ? `Товар перенесён со склада ${pickLocation.warehouse_name}. Списание выполнено.`
+      : 'Товар подобран. Прогресс синхронизирован для всех операторов.'
     const next = await run(
       () =>
         scanFbsPickProduct(token, authHeaders, workspace.supply.id, {
@@ -519,7 +523,7 @@ export function FfFbsSupplyWorkspace({
           product_barcode: productBarcode.trim(),
           idempotency_key: key,
         }),
-      'Товар подобран. Прогресс синхронизирован для всех операторов.',
+      successMsg,
     )
     if (next) setProductBarcode('')
   }

@@ -38,3 +38,51 @@
 
 ### карта задевания
 20:51 вопросов после анализа: 45 — см. night/volna-9/VOPROSY.md
+21:03   04-warehouse-switch · solution-architect: готово
+21:03   04-warehouse-switch · ux-architect: нет файла CONTRACT.md (код 1, попытка 1)
+21:03   04-warehouse-switch · ux-architect: нет файла CONTRACT.md (код 1, попытка 2)
+21:03 04-warehouse-switch: отложено на шаге ux-architect
+00:21   04-warehouse-switch · solution-architect: уже сделано, пропускаю
+00:26   04-warehouse-switch · ux-architect: готово
+00:31   04-warehouse-switch · product: готово
+00:37   04-warehouse-switch · tester: готово
+00:46   04-warehouse-switch · breaker: готово
+00:52   04-warehouse-switch · screen-dev: готово
+00:58   04-warehouse-switch · reviewer: готово
+00:58   04-warehouse-switch · reviewer: находки, круг 1 — назад к разработке
+01:06   04-warehouse-switch · screen-dev: готово
+01:12   04-warehouse-switch · reviewer: готово
+01:12   04-warehouse-switch · reviewer: находки, круг 2 — назад к разработке
+01:17   04-warehouse-switch · screen-dev: готово
+01:20   04-warehouse-switch · reviewer: нет файла REVIEW.md (код 1, попытка 1)
+01:20   04-warehouse-switch · reviewer: нет файла REVIEW.md (код 1, попытка 2)
+01:20 04-warehouse-switch: отложено на шаге reviewer
+05:18   04-warehouse-switch · solution-architect: уже сделано, пропускаю
+05:18   04-warehouse-switch · ux-architect: уже сделано, пропускаю
+05:18   04-warehouse-switch · product: уже сделано, пропускаю
+05:18   04-warehouse-switch · tester: уже сделано, пропускаю
+05:18   04-warehouse-switch · breaker: уже сделано, пропускаю
+05:18   04-warehouse-switch · screen-dev: уже сделано, пропускаю
+05:25   04-warehouse-switch · reviewer: готово
+05:25   04-warehouse-switch · reviewer: находки, круг 1 — назад к разработке
+05:45   04-warehouse-switch · screen-dev: нет файла DEV.md (код 124, попытка 1)
+06:03   04-warehouse-switch · screen-dev: готово
+06:09   04-warehouse-switch · reviewer: готово
+06:09   04-warehouse-switch · reviewer: находки, круг 2 — назад к разработке
+06:15   04-warehouse-switch · screen-dev: нет файла DEV.md (код 1, попытка 1)
+06:15   04-warehouse-switch · screen-dev: нет файла DEV.md (код 1, попытка 2)
+06:15 04-warehouse-switch: отложено на шаге screen-dev
+10:16   04-warehouse-switch · solution-architect: уже сделано, пропускаю
+10:16   04-warehouse-switch · ux-architect: уже сделано, пропускаю
+10:16   04-warehouse-switch · product: уже сделано, пропускаю
+10:16   04-warehouse-switch · tester: уже сделано, пропускаю
+10:16   04-warehouse-switch · breaker: уже сделано, пропускаю
+10:22   04-warehouse-switch · screen-dev: готово
+10:28   04-warehouse-switch · reviewer: готово
+10:28   04-warehouse-switch · reviewer: находки, круг 1 — назад к разработке
+10:46   04-warehouse-switch · screen-dev: готово
+10:54   04-warehouse-switch · reviewer: готово
+10:54   04-warehouse-switch · reviewer: находки, круг 2 — назад к разработке
+11:03   04-warehouse-switch · screen-dev: нет файла DEV.md (код 1, попытка 1)
+11:03   04-warehouse-switch · screen-dev: нет файла DEV.md (код 1, попытка 2)
+11:03 04-warehouse-switch: отложено на шаге screen-dev

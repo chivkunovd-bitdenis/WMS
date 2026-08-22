@@ -1365,11 +1365,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                 <TableCell colSpan={6}>
                   <Box sx={{ py: 8, textAlign: 'center' }}>
                     <Inventory2OutlinedIcon sx={{ fontSize: 42, color: 'text.disabled' }} />
-                    <Typography variant="subtitle1" sx={{ mt: 1 }}>
-                      Заказов в этой группе нет
+                    <Typography variant="subtitle1" sx={{ mt: 1 }} data-testid="fbs-orders-empty-title">
+                      {statusGroup === 'new' ? 'Пока нет заказов на этом складе' : 'Заказов в этой группе нет'}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Измените фильтры или обновите синхронизацию с WB.
+                      {statusGroup === 'new' ? 'Переключите склад в шапке или подождите новых заказов от Wildberries.' : 'Измените фильтры или обновите синхронизацию с WB.'}
                     </Typography>
                   </Box>
                 </TableCell>
