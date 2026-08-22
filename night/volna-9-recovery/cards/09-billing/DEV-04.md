@@ -1,26 +1,43 @@
-# 09-billing — backend-dev, атом 4: API реквизитов и версионных тарифов
+# 09-billing — backend-dev · повторное ревью атома 4
+
+## Что реализовано
+
+- Эндпоинты: существующие `PUT/GET /billing/profiles/ff`, `PUT/GET /billing/profiles/sellers/{seller_id}` и `POST/GET /billing/tariffs` повторно проверены на валидацию реквизитов, tenant-границы и неизменность данных после отклонённого запроса.
+- Сервисы: существующие `save_profile`, `assert_seller_in_tenant` и `create_tariff` повторно проверены на ИНН, обязательные банковские поля, допустимые пары услуги/единицы, нулевую ставку и версионное закрытие периода.
+- Адресный HTTP-тест усилен: после попытки заменить профиль неверным ИНН сервер сохраняет прежние реквизиты; попытка вставить ставку между уже существующими сентябрьской и ноябрьской версиями возвращает понятный конфликт и не меняет историю или границы периодов.
+- Находок повторного `REVIEW.md`, относящихся к конфигурационным ручкам атома 4, нет: сам вердикт отдельно подтверждает tenant-фильтры профилей, покрывающую ставку, допустимые единицы, чужого селлера и пробельные банковские поля. Проблемные участки `ledger` и `invoices` появились в последующих атомах 8–10 и в этот шаг не включены.
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/services/billing_configuration_service.py` — нормализация обязательных банковских полей, единая tenant-проверка селлера и блокировка tenant/цепочки тарифов при создании новой версии; конфликт уникальности преобразуется в понятную доменную ошибку.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/api/billing.py` — чужой seller-profile не раскрывается, а конкурентный конфликт тарифа возвращает понятный HTTP 400 вместо 500.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/tests/test_billing_configuration_service.py` — проверка, что пробелы не проходят как обязательные банковские реквизиты.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/tests/test_billing_configuration_api.py` — HTTP-сценарий: валидный профиль и нулевая ставка, пробельные реквизиты, чужой селлер и конфликт версии.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/night/volna-9-recovery/cards/09-billing/DEV.md` — этот отчёт.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/tests/test_billing_configuration_api.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/night/volna-9-recovery/cards/09-billing/DEV.md`
+
+## Миграции
+
+Нет: атом не меняет схему базы данных.
+
+## Тесты
+
+- `backend/tests/test_billing_configuration_api.py` — дополнено доказательство атомарности ошибок: неверный ИНН не перезаписывает валидный профиль; конфликт с будущей версией не добавляет ставку и не меняет границы сохранённых версий.
+- `backend/tests/test_billing_configuration_service.py` — существующие адресные проверки ИНН, обязательных полей, допустимых услуг/единиц и даты активации повторно пройдены.
 
 ## Гейты
 
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && ruff check app/services/billing_configuration_service.py app/api/billing.py tests/test_billing_configuration_service.py tests/test_billing_configuration_api.py` — пройдено: `All checks passed!`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && mypy app/services/billing_configuration_service.py app/api/billing.py` — пройдено: `Success: no issues found in 2 source files`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && pytest -q tests/test_billing_configuration_service.py tests/test_billing_configuration_api.py` — пройдено: `6 passed`.
-- `git diff --check` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing` — пройдено, вывода нет.
-- `python3 scripts/ci/back_guard.py` — неприменим: в атоме не добавлялся новый маршрут; файла `scripts/ci/back_guard.py` в этой рабочей копии нет.
-- `python3 scripts/ci/check_migrations.py` — неприменим: миграция в атоме не добавлялась; файла `scripts/ci/check_migrations.py` в этой рабочей копии нет.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && ruff check app/services/billing_configuration_service.py app/api/billing.py tests/test_billing_configuration_service.py tests/test_billing_configuration_api.py` — PASS: `All checks passed!`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && mypy app/services/billing_configuration_service.py app/api/billing.py` — PASS: `Success: no issues found in 2 source files`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && pytest -q tests/test_billing_configuration_service.py tests/test_billing_configuration_api.py` — PASS: `7 passed in 1.34s`.
+- `python3 scripts/ci/back_guard.py` — не применим: атом не добавляет новый маршрут.
+- `python3 scripts/ci/check_migrations.py` — не применим: атом не добавляет миграцию.
+- Полный backend `pytest`, `ruff check .` и `mypy .` не запускались согласно ограничению атомарной проверки.
 
 ## Не реализовано
 
-- Находки ревью по read-model начислений и счетов, формированию/сторно счетов, storage-barrier, дате включения биллинга, миграционной линии, frontend e2e и `docs/blockers/S-31.md` не относятся к атомарному API-контуру реквизитов и версионных тарифов; этот атом их не изменяет.
-- Автоматическая переоценка уже записанных `BillingLedgerEntry` без ставки после добавления тарифа требует изменения ledger/invoice-контура и не выполнялась в этом атоме, чтобы не переписывать финансовую историю за пределами утверждённого шага.
+- Находки 1–6 и 8 повторного ревью относятся к read-model начислений, формированию и lifecycle счетов, storage-barrier, сторно и frontend. По истории строк `billing.py` эти участки добавлены атомами 8–10, поэтому в атоме 4 не менялись.
+- Новые эндпоинты, сервисы и миграции не добавлялись: контракт конфигурационного API уже реализован, а повторный проход закрыл недостающее тестовое доказательство неизменности данных при ошибке.
+
+## Блокеры
+
+Нет.
 
 ## Находки
 
