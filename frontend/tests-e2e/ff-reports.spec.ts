@@ -8,6 +8,30 @@ import {
   INBOUND_API,
 } from './inbound-boxes-helpers'
 
+const overviewFixture = (overrides: Record<string, unknown> = {}) => ({
+  current_balance: 12,
+  in_qty: 7,
+  out_qty: 4,
+  comparison: { previous_out_qty: 2, change_percent: 100, change: 2 },
+  daily: [
+    { date: '2026-08-01', in_qty: 7, out_qty: 1, previous_out_qty: 2 },
+    { date: '2026-08-02', in_qty: 0, out_qty: 3, previous_out_qty: 0 },
+  ],
+  generated_at: '2026-08-23T05:00:00+00:00',
+  source_freshness: null,
+  warnings: [],
+  ...overrides,
+})
+
+const productReportFixture = (name = 'Report product') => ({
+  group_by: 'product', page: 1, page_size: 50, total: 1,
+  rows: [{
+    product_id: 'report-product', sku_code: 'REPORT-SKU', product_name: name,
+    photo_url: null, wb_vendor_code: null, wb_barcode: null, seller_name: 'Box Seller',
+    current_balance: 12, total_in: 7, total_out: 4, net: 3, integrity_error: false,
+  }],
+})
+
 // S-33-TC-003 / S-33-TC-014 — a technical FBS warehouse must not turn a
 // single physical warehouse into a visible report scope selector.
 test('FF reports exclude service warehouses from the warehouse filter', async ({ page }) => {
@@ -35,6 +59,158 @@ test('FF reports exclude service warehouses from the warehouse filter', async ({
   await expect(page).toHaveURL('/app/ff/reports')
   await expect(page.getByTestId('ff-reports-page')).toBeVisible()
   await expect(page.getByTestId('ff-reports-warehouse')).toHaveCount(0)
+})
+
+// S-33-TC-003 / S-33-TC-007 / S-33-TC-012 / S-33-TC-013 / S-33-TC-014 —
+// filters replace the whole slice with skeletons, warnings are rendered from
+// the API envelope, and an overview retry preserves the usable table.
+test('FF report upper slice updates atomically and keeps table on overview retry', async ({ page }) => {
+  await seedFfSellerInbound(page, `ff-report-slice-${Date.now()}`)
+
+  let holdRequests = false
+  let releaseRequests: (() => void) | undefined
+  let held = Promise.resolve()
+  let overviewAttemptsAfterError = 0
+  let inventoryCalls = 0
+  const requestedOverviewUrls: URL[] = []
+
+  await page.route('**/api/reports/overview?**', async (route) => {
+    const url = new URL(route.request().url())
+    requestedOverviewUrls.push(url)
+    if (holdRequests) await held
+    const search = url.searchParams.get('search') ?? ''
+    if (search === 'summary-error') {
+      overviewAttemptsAfterError += 1
+      if (overviewAttemptsAfterError === 1) {
+        await route.fulfill({ status: 503, body: 'summary unavailable' })
+        return
+      }
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify(overviewFixture()) })
+      return
+    }
+    if (search === 'empty') {
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify(overviewFixture({
+        current_balance: 9, in_qty: 0, out_qty: 0,
+        comparison: { previous_out_qty: 0, change_percent: null, change: 0 }, daily: [],
+      })) })
+      return
+    }
+    if (search === 'no-base') {
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify(overviewFixture({
+        comparison: { previous_out_qty: 0, change_percent: null, change: 4 },
+      })) })
+      return
+    }
+    if (search === 'stale') {
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify(overviewFixture({
+        warnings: [
+          { code: 'wildberries_stale', source: 'wildberries', last_updated_at: '2026-08-22T16:12:00+00:00' },
+          { code: 'reporting_dimensions_legacy', count: 3 },
+        ],
+      })) })
+      return
+    }
+    const isSevenDays = url.searchParams.get('date_from') !== '2026-08-01T00:00:00+03:00'
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify(overviewFixture(isSevenDays ? {
+      current_balance: 70,
+      in_qty: 14,
+      out_qty: 8,
+      daily: [
+        { date: '2026-08-17', in_qty: 1, out_qty: 7, previous_out_qty: 0 },
+        { date: '2026-08-23', in_qty: 13, out_qty: 1, previous_out_qty: 2 },
+      ],
+    } : {})) })
+  })
+
+  await page.route('**/api/reports/inventory?**', async (route) => {
+    inventoryCalls += 1
+    if (holdRequests) await held
+    const url = new URL(route.request().url())
+    if (url.searchParams.get('group_by') === 'operation') {
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+        group_by: 'operation', page: 1, page_size: 50, total: 1,
+        rows: [{ operation: 'Перемещение: ушло', in_qty: 0, out_qty: 3, net: -3, integrity_error: true }],
+      }) })
+      return
+    }
+    const search = url.searchParams.get('search') ?? ''
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify(
+      search === 'empty' || search === 'no-base' || search === 'stale'
+        ? { group_by: 'product', page: 1, page_size: 50, total: 0, rows: [] }
+        : productReportFixture(search === 'summary-error' ? 'Table remains available' : undefined),
+    ) })
+  })
+
+  await page.getByTestId('nav-ff-reports').click()
+  await expect(page.getByTestId('ff-reports-metrics-balance')).toContainText('12')
+  const initialOutboundPoints = await page.getByTestId('ff-reports-chart').locator('polyline').nth(1).getAttribute('points')
+
+  holdRequests = true
+  held = new Promise<void>((resolve) => { releaseRequests = resolve })
+  await page.getByTestId('ff-reports-period').click()
+  await page.getByRole('option', { name: '7 дней' }).click()
+  await expect(page.getByTestId('ff-reports-metrics-balance-skeleton')).toBeVisible()
+  await expect(page.getByTestId('ff-reports-chart-skeleton')).toBeVisible()
+  await expect(page.getByTestId('ff-reports-table').locator('tbody .MuiSkeleton-root').first()).toBeVisible()
+  releaseRequests?.()
+  holdRequests = false
+  await expect(page.getByTestId('ff-reports-metrics-balance')).toContainText('70')
+  await expect.poll(async () => page.getByTestId('ff-reports-chart').locator('polyline').nth(1).getAttribute('points')).not.toBe(initialOutboundPoints)
+  const sevenDayRequest = requestedOverviewUrls.at(-1)
+  expect(sevenDayRequest?.searchParams.get('date_from')).toMatch(/T00:00:00\+03:00$/)
+  expect(sevenDayRequest?.searchParams.get('date_to')).toMatch(/T00:00:00\+03:00$/)
+
+  await page.getByTestId('filter-search').fill('empty')
+  await expect(page.getByTestId('ff-reports-metrics-balance')).toContainText('9')
+  await expect(page.getByTestId('ff-reports-chart')).toContainText('За выбранный период движений нет')
+
+  await page.getByTestId('filter-search').fill('no-base')
+  await expect(page.getByTestId('ff-reports-metrics-comparison')).toContainText('—')
+  await expect(page.getByTestId('ff-reports-metrics-comparison')).toContainText('В прошлом периоде расхода не было')
+
+  await page.getByTestId('filter-search').fill('stale')
+  await expect(page.getByTestId('ff-reports-warning')).toHaveCount(2)
+  await expect(page.getByTestId('ff-reports-warning').first()).toContainText('Данные Wildberries могут быть неполными')
+  await expect(page.getByTestId('ff-reports-warning').nth(1)).toContainText('3 исторических записей')
+
+  await page.getByTestId('filter-search').fill('summary-error')
+  await expect(page.getByTestId('ff-reports-summary-error')).toBeVisible()
+  await expect(page.getByTestId('ff-reports-table')).toContainText('Table remains available')
+  const callsBeforeRetry = inventoryCalls
+  await page.getByTestId('ff-reports-summary-error').getByRole('button', { name: 'Повторить' }).click()
+  await expect(page.getByTestId('ff-reports-metrics-balance')).toContainText('12')
+  await expect(page.getByTestId('ff-reports-table')).toContainText('Table remains available')
+  expect(inventoryCalls).toBe(callsBeforeRetry)
+
+  await page.getByTestId('ff-reports-grouping').click()
+  await page.getByRole('option', { name: 'По операциям' }).click()
+  await expect(page.getByTestId('ff-reports-integrity-error')).toContainText('отчёт ничего не достраивал')
+  const problemRow = page.getByTestId('ff-reports-table').locator('tbody tr').first()
+  await expect(problemRow).toContainText('Перемещение: ушло')
+  await expect(problemRow.getByTestId('ff-reports-row-integrity-error')).toHaveText('Ошибка')
+  await expect(problemRow.locator('td').nth(1)).toHaveText('—')
+  await expect(problemRow.locator('td').nth(2)).toHaveText('3')
+})
+
+// S-33-TC-001 — December's current-month preset ends at the exclusive first
+// day of the next year instead of producing a reversed interval.
+test('FF report current month crosses the December year boundary', async ({ page }) => {
+  await seedFfSellerInbound(page, `ff-report-december-${Date.now()}`)
+  await page.clock.setFixedTime(new Date('2026-12-15T09:00:00+03:00'))
+  let requestedUrl: URL | undefined
+  await page.route('**/api/reports/overview?**', async (route) => {
+    requestedUrl = new URL(route.request().url())
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify(overviewFixture()) })
+  })
+  await page.route('**/api/reports/inventory?**', async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify(productReportFixture()) })
+  })
+
+  await page.getByTestId('nav-ff-reports').click()
+  await expect(page.getByTestId('ff-reports-metrics')).toBeVisible()
+  expect(requestedUrl?.searchParams.get('date_from')).toBe('2026-12-01T00:00:00+03:00')
+  expect(requestedUrl?.searchParams.get('date_to')).toBe('2027-01-01T00:00:00+03:00')
+  await expect(page.getByTestId('ff-reports-period-error')).toHaveCount(0)
 })
 
 // Раздел «Отчёты» у ФФ: сводка приход/расход по товару за период (журнал inventory_movements).

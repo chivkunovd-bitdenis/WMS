@@ -1,32 +1,32 @@
-# DEV · 07-reporting · атом 9 · переделка по review
-
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/App.tsx` — в обеих совместимых точках маршрутизации S-33 в отчёт передаются только операционные склады. Явный `is_operational` имеет приоритет; до интеграции расширенного `/warehouses` служебные склады `FBS WB …` исключаются по тому же правилу, которым миграция заполняет этот флаг.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/apps/seller/SellerApp.tsx` — основной seller-маршрут использует ту же фильтрацию и не открывает селлеру ложную область служебного склада.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/apps/seller/SellerApp.test.tsx` — добавлены точечные unit-кейсы для явного `is_operational=false` и совместимости со старым ответом API без флага.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/tests-e2e/ff-reports.spec.ts` — добавлен `S-33-TC-003/S-33-TC-014`: один физический склад вместе с `FBS WB Архив` не создаёт селектор ложного склада в портале ФФ.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/tests-e2e/seller-reports.spec.ts` — seller-сценарий дополнен проверкой URL, отсутствия чужого селлера и отсутствия селектора при служебном складе с `is_operational=false`.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/DEV.md` — отчёт этого ремонтного прохода.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/screens/ff/FfReportsPage.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/tests-e2e/ff-reports.spec.ts`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/DEV.md`
 
-`/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/layouts/AuthedAppLayout.tsx` и `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/screens.registry.json` не менялись: пункт меню, ролевое условие ФФ и регистрация S-33 с двумя маршрутами уже присутствуют; относящихся к ним находок в текущем `REVIEW.md` нет.
+В верхней части отчёта московские границы периода теперь уходят в API с явным `+03:00`, а декабрьский текущий месяц заканчивается исключающей границей `1 января` следующего года. Объекты `warnings` из backend переводятся в текст двух `WarningNotice`, неполная transfer-пара получает общий `ErrorNotice`, `StatusChip` «Ошибка» и тире для отсутствующей стороны. Повтор после независимого сбоя сводки запрашивает только overview: уже загруженные строки, группировка и страница не очищаются и не запрашиваются повторно.
+
+В FF Playwright-spec добавлены сценарии атомарной загрузки со скелетами, синхронного обновления показателей и графика после смены периода, пустого периода, отсутствующей базы сравнения, объектных WB/legacy-предупреждений, независимого retry сводки, проблемной transfer-строки и декабрьской границы года. Существующий `/frontend/tests-e2e/seller-reports.spec.ts` уже проверяет отсутствие селлерского фильтра и технического предупреждения, поэтому файл не менялся.
 
 ## Гейты
 
-- В `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend`: `npm_config_offline=true npx tsc --noEmit -p tsconfig.app.json` — красный до компиляции: локального `tsc` и записи пакета в npm-кэше нет (`ENOTCACHED`).
-- В `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting`: `python3 scripts/ui/ui_guard.py` — красный по уже существующим превышениям baseline: `src/App.tsx`, `src/components/WbProductPickerDialog.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`. Ремонт уменьшил `App.tsx` относительно `HEAD` с 3512 до 3510 строк; baseline не менялась.
-- В `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend`: `npm run test:unit -- src/apps/seller/SellerApp.test.tsx` — красный до запуска кейсов: `vitest: command not found`.
-- В `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend`: `npm_config_offline=true npx playwright test tests-e2e/ff-reports.spec.ts tests-e2e/seller-reports.spec.ts` — красный до запуска браузера: локального Playwright и записи пакета в npm-кэше нет (`ENOTCACHED`).
-- В `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting`: `git diff --check` — зелёный.
-- В `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting`: `python3 -m json.tool frontend/screens.registry.json >/dev/null` — зелёный.
-- В `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting`: `git add -- frontend/src/App.tsx frontend/src/apps/seller/SellerApp.tsx frontend/src/apps/seller/SellerApp.test.tsx frontend/tests-e2e/ff-reports.spec.ts frontend/tests-e2e/seller-reports.spec.ts night/volna-9-recovery/cards/07-reporting/DEV.md && git diff --cached --check && git diff --cached --stat && git commit -m "fix(reports): hide service warehouse scopes"` — красный на `git add`: Git не может создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-07-reporting1/index.lock`, `Operation not permitted`. Чужой `JOURNAL.md` в индекс не добавлялся.
+- **КРАСНЫЙ вне разрешённых файлов:** `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npx tsc --noEmit -p tsconfig.app.json`. После устранения ошибок в `FfReportsPage.tsx` остались только три прежние TypeScript-ошибки в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/MovementFlowChart.tsx` на строках 39, 84 и 91: несовместимые с текущими MUI-типами props `alignItems`, `fontWeight` и `flexWrap`. Этот файл не входит в разрешённые файлы атома и прямо не назван ревьюером для правки.
+- **КРАСНЫЙ вне разрешённых файлов:** `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && python3 scripts/ui/ui_guard.py`. Храповик сообщает новые нарушения только в `frontend/src/App.tsx`, `frontend/src/components/WbProductPickerDialog.tsx`, `frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx` и `frontend/src/screens/v2/SellerInboundDraftScreen.tsx`; по `FfReportsPage.tsx` он отдельно сообщает улучшение «своя-кнопка 1 → 0» и «своя-таблица 1 → 0». Базовая линия не менялась.
+- **ЗЕЛЁНЫЙ:** `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npm run test:unit` — 19 файлов, 138 тестов пройдены.
+- **КРАСНЫЙ по ограничению песочницы:** `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npx playwright test tests-e2e/ff-reports.spec.ts tests-e2e/seller-reports.spec.ts --reporter=line` — webServer не смог привязаться к `127.0.0.1:18000`, ошибка ОС `operation not permitted`; тестовые действия не начались.
+- **ЗЕЛЁНЫЙ (разбор целевых тестов):** `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npx playwright test tests-e2e/ff-reports.spec.ts tests-e2e/seller-reports.spec.ts --list` — Playwright успешно разобрал 5 тестов в 2 разрешённых spec-файлах.
+- **ЗЕЛЁНЫЙ:** `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npx eslint src/screens/ff/FfReportsPage.tsx tests-e2e/ff-reports.spec.ts tests-e2e/seller-reports.spec.ts`.
+- **ЗЕЛЁНЫЙ:** `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && git diff --check`.
+
+Перед проверками зависимости восстановлены без сети командой `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npm ci --offline`: 285 пакетов установлены из локального кэша, аудит не нашёл уязвимостей.
 
 ## Не реализовано
 
-- Пункты контракта этого атома и относящаяся к его frontend-маршрутизации находка 1 из `REVIEW.md` реализованы буквально. Автоматическое подтверждение tsc/unit/Playwright отсутствует только из-за отсутствующих frontend-зависимостей и закрытого npm-кэша.
-- Находки 2–10 из `REVIEW.md` относятся к `FfReportsPage.tsx`, reporting backend и другим атомам. В рамках роли `screen-dev` и атома 9 эти файлы не менялись.
-- Результат локально реализован, но не сохранён отдельным Git-коммитом: sandbox запрещает запись в общий Git-каталог зарегистрированного worktree.
+- Находка review №1 не исправлена: фильтрация служебных складов должна быть сделана в `/frontend/src/App.tsx` и `/frontend/src/apps/seller/SellerApp.tsx`, но оба файла находятся вне трёх файлов текущего атома и вне разрешённой роли `screen-dev`. Сам экран по-прежнему может скрыть фильтр единственного склада только при условии, что родитель передал уже отфильтрованный список операционных складов.
+- Находки review №4, 6, 9 и 10 относятся к `/backend/app/services/reporting_service.py`; backend не изменялся. В текущей рабочей копии в сервисе уже видны отдельные ремонты календарных нулевых дней, входящей WB-свежести, целостности transfer-типов и человекопонятных названий операций, но роль `screen-dev` не имеет права объявлять их проверенными этим атомом.
+- Буквально подтвердить браузером целевые сценарии не удалось из-за системного запрета на локальный порт webServer. Spec-файлы синтаксически разобраны Playwright, но это не заменяет фактический прогон.
+- Обязательные `tsc` и `ui_guard.py` нельзя сделать зелёными, не меняя файлы вне разрешённой границы. Эти внешние нарушения не маскировались обновлением baseline.
 
 ## Находки
 
-- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались.
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных, production `194.87.96.144` и живой кабинет Wildberries не читались и не затрагивались.

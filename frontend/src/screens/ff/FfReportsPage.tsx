@@ -11,11 +11,15 @@ import {
   QtyCell,
   ReportMetricStrip,
   ScreenHeader,
+  StatusChip,
   TextCell,
   WarningNotice,
 } from '../../ui-kit'
 
 type Props = { token: string; sellers?: { id: string; name: string }[]; warehouses?: { id: string; name: string }[] }
+type ReportWarning =
+  | { code: 'wildberries_stale'; source: 'wildberries'; last_updated_at: string | null }
+  | { code: 'reporting_dimensions_legacy'; count: number }
 type Overview = {
   current_balance: number
   in_qty: number
@@ -23,8 +27,8 @@ type Overview = {
   comparison: { previous_out_qty: number; change_percent: number | null; change: number }
   daily: { date: string; in_qty: number; out_qty: number; previous_out_qty?: number }[]
   generated_at: string
-  source_freshness: string | null
-  warnings: string[]
+  source_freshness: { source: string; last_updated_at: string | null; is_stale: boolean } | null
+  warnings: ReportWarning[]
 }
 type Row = {
   product_id: string
@@ -47,6 +51,7 @@ type Row = {
   barcode?: string | null
   in_qty?: number
   out_qty?: number
+  integrity_error?: boolean
 }
 
 const normalizeRow = (row: Row): Row => ({
@@ -77,13 +82,24 @@ const addDays = (date: CalendarDate, days: number) => {
   return { year: result.getUTCFullYear(), month: result.getUTCMonth() + 1, day: result.getUTCDate() }
 }
 const monthStart = (date: CalendarDate) => dateString({ ...date, day: 1 })
-const monthEnd = (date: CalendarDate) => dateString(addDays({ year: date.year, month: date.month === 12 ? 1 : date.month + 1, day: 1 }, -1))
+const monthEnd = (date: CalendarDate) => dateString(addDays({
+  year: date.month === 12 ? date.year + 1 : date.year,
+  month: date.month === 12 ? 1 : date.month + 1,
+  day: 1,
+}, -1))
 const yearStart = (date: CalendarDate) => `${date.year}-01-01`
 const yearEnd = (date: CalendarDate) => `${date.year}-12-31`
 const nextDateString = (date: string) => {
   const [year, month, day] = date.split('-').map(Number)
   return dateString(addDays({ year, month, day }, 1))
 }
+const moscowApiBoundary = (date: string) => `${date}T00:00:00+03:00`
+const moscowTimestamp = (value: string | null) => value
+  ? `${new Date(value).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} МСК`
+  : 'нет данных об обновлении'
+const warningText = (warning: ReportWarning) => warning.code === 'wildberries_stale'
+  ? `Данные Wildberries могут быть неполными. Последнее обновление: ${moscowTimestamp(warning.last_updated_at)}.`
+  : `В отчёте есть legacy-данные: ${warning.count} исторических записей восстановлены по доступным связям.`
 
 export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
   const now = useMemo(() => moscowCalendarDate(new Date()), [])
@@ -101,6 +117,7 @@ export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
   const [total, setTotal] = useState(0)
   const groupingRef = useRef<'product' | 'operation'>('product')
   const [loading, setLoading] = useState(false)
+  const [summaryLoading, setSummaryLoading] = useState(false)
   const [tableLoading, setTableLoading] = useState(false)
   const [summaryError, setSummaryError] = useState(false)
   const [tableError, setTableError] = useState(false)
@@ -114,7 +131,10 @@ export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
   const params = useCallback((group?: string, requestedPage?: number) => {
     // The reporting API uses an exclusive end boundary. Sending the next Moscow
     // calendar day keeps every fractional second of the selected final day.
-    const query = new URLSearchParams({ date_from: `${dateFrom}T00:00:00`, date_to: `${nextDateString(dateTo)}T00:00:00` })
+    const query = new URLSearchParams({
+      date_from: moscowApiBoundary(dateFrom),
+      date_to: moscowApiBoundary(nextDateString(dateTo)),
+    })
     if (sellerId) query.set('seller_id', sellerId)
     if (effectiveWarehouseId) query.set('warehouse_id', effectiveWarehouseId)
     if (search.trim()) query.set('search', search.trim())
@@ -146,7 +166,7 @@ export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
     abortRef.current?.abort()
     const controller = new AbortController()
     abortRef.current = controller
-    setLoading(true); setSummaryError(false); setTableError(false)
+    setLoading(true); setSummaryLoading(false); setSummaryError(false); setTableError(false)
     // A changed filter must never leave values from the previous scope visible.
     setOverview(null); setRows([]); setTotal(0)
     try {
@@ -160,7 +180,22 @@ export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
     } finally {
       if (!controller.signal.aborted) setLoading(false)
     }
-  }, [loadOverview, loadTable, periodError, token])
+  }, [loadOverview, loadTable, periodError])
+
+  const retryOverview = useCallback(async () => {
+    if (periodError) return
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    setSummaryLoading(true); setSummaryError(false); setOverview(null)
+    try {
+      await loadOverview(controller.signal)
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) setSummaryError(true)
+    } finally {
+      if (abortRef.current === controller) setSummaryLoading(false)
+    }
+  }, [loadOverview, periodError])
 
   useEffect(() => { void load(); return () => abortRef.current?.abort() }, [load])
 
@@ -211,6 +246,7 @@ export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
     { key: 'outbound', label: 'Расход за период', value: overview?.out_qty ?? null },
     { key: 'comparison', label: 'Расход к прошлому периоду', value: overview?.comparison.change_percent == null ? null : overview.comparison.change, delta: overview?.comparison.change_percent == null ? undefined : { value: overview.comparison.change_percent, unit: 'percent' as const, direction: overview.comparison.change_percent >= 0 ? 'up' as const : 'down' as const, a11yLabel: 'Процент изменения расхода' }, nullValueLabel: 'В прошлом периоде расхода не было' },
   ]
+  const hasIntegrityError = rows.some((row) => row.integrity_error)
 
   return <Stack spacing={0} data-testid="ff-reports-page">
     <ScreenHeader title="Остатки и движения" purpose="Текущий остаток и складские движения за выбранный период." />
@@ -221,40 +257,41 @@ export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
       <TextField select size="small" label="Сравнение" value={comparison} onChange={event => setComparison(event.target.value)} data-testid="ff-reports-comparison"><MenuItem value="previous">Предыдущий период</MenuItem><MenuItem value="none">Не показывать</MenuItem></TextField>
       {period === 'custom' ? <><TextField size="small" label="С" type="date" value={dateFrom} onChange={event => { setDateFrom(event.target.value) }} data-testid="ff-reports-date-from" slotProps={{ inputLabel: { shrink: true } }} /><TextField size="small" label="По" type="date" value={dateTo} onChange={event => { setDateTo(event.target.value) }} data-testid="ff-reports-date-to" slotProps={{ inputLabel: { shrink: true } }} /></> : null}
     </FilterBar>
-    {overview?.warnings.map(warning => <WarningNotice key={warning} testId="ff-reports-warning">{warning}</WarningNotice>)}
+    {overview?.warnings.map((warning, index) => <WarningNotice key={`${warning.code}-${index}`} testId="ff-reports-warning">{warningText(warning)}</WarningNotice>)}
     {periodError ? <ErrorNotice testId="ff-reports-period-error">{periodError}</ErrorNotice> : null}
-    {summaryError ? <ErrorNotice testId="ff-reports-summary-error">Не удалось загрузить сводку. <PrimaryAction onClick={() => void load()}>Повторить</PrimaryAction></ErrorNotice> : <>
-      <ReportMetricStrip items={metrics} loading={loading} testId="ff-reports-metrics" />
-      <MovementFlowChart series={overview?.daily.map(day => ({ date: day.date, inbound: day.in_qty, outbound: day.out_qty, previousOutbound: day.previous_out_qty })) ?? []} showPrevious={comparison === 'previous'} loading={loading} ariaDescription="Дневной приход и расход" testId="ff-reports-chart" />
+    {summaryError ? <ErrorNotice testId="ff-reports-summary-error">Не удалось загрузить сводку. Повторите попытку. <PrimaryAction onClick={() => void retryOverview()}>Повторить</PrimaryAction></ErrorNotice> : <>
+      <ReportMetricStrip items={metrics} loading={loading || summaryLoading} testId="ff-reports-metrics" />
+      <MovementFlowChart series={overview?.daily.map(day => ({ date: day.date, inbound: day.in_qty, outbound: day.out_qty, previousOutbound: day.previous_out_qty })) ?? []} showPrevious={comparison === 'previous'} loading={loading || summaryLoading} ariaDescription="Дневной приход и расход" testId="ff-reports-chart" />
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }} data-testid="ff-reports-freshness">Данные на {overview ? new Date(overview.generated_at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' }) : '—'} МСК</Typography>
     </>}
     {tableError ? <ErrorNotice testId="ff-reports-table-error">Не удалось загрузить строки отчёта. Повторите попытку.</ErrorNotice> : null}
+    {hasIntegrityError ? <ErrorNotice testId="ff-reports-integrity-error">В истории есть неполное перемещение. Значения показаны как записаны; отчёт ничего не достраивал.</ErrorNotice> : null}
     {csvError ? <ErrorNotice testId="ff-reports-csv-error">Не удалось скачать CSV. Повторите попытку.</ErrorNotice> : null}
-    <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }} data-testid="ff-reports-table-controls">
+    <Stack direction="row" spacing={2} sx={{ mb: 2, alignItems: 'center' }} data-testid="ff-reports-table-controls">
       <TextField select size="small" label="Группировка" value={grouping} onChange={event => { const next = event.target.value as 'product' | 'operation'; groupingRef.current = next; setGrouping(next); void changeTable(next, 1) }} data-testid="ff-reports-grouping">
         <MenuItem value="product">По товарам</MenuItem><MenuItem value="operation">По операциям</MenuItem>
       </TextField>
       <PrimaryAction onClick={() => void downloadCsv()} disabledReason={periodError || csvLoading ? (csvLoading ? 'Файл формируется' : periodError) : (rows.length === 0 ? 'За выбранный период нечего выгружать' : undefined)} data-testid="ff-reports-download-csv">{csvLoading ? 'Формирование CSV…' : 'Скачать CSV'}</PrimaryAction>
     </Stack>
     <DataTable<Row> columns={grouping === 'product' ? [
-      { key: 'product', header: 'Товар', width: 150, render: row => <ProductCell sku={row.sku_code} photo={row.photo_url ? <img src={row.photo_url} alt="" width="32" height="32" /> : undefined} /> },
+      { key: 'product', header: 'Товар', width: 150, render: row => <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}><ProductCell sku={row.sku_code} photo={row.photo_url ? <img src={row.photo_url} alt="" width="32" height="32" /> : undefined} />{row.integrity_error ? <StatusChip label="Ошибка" tone="stop" testId="ff-reports-row-integrity-error" /> : null}</Stack> },
       { key: 'name', header: 'Название', width: 240, render: row => <TextCell value={row.product_name} /> },
       { key: 'vendor', header: 'Артикул продавца', width: 170, render: row => <TextCell value={row.wb_vendor_code ?? '—'} /> },
       { key: 'barcode', header: 'ШК', width: 150, render: row => <TextCell value={row.wb_barcode ?? '—'} /> },
-      ...(sellers.length > 0 ? [{ key: 'seller', header: 'Селлер', width: 150, render: row => <TextCell value={row.seller_name ?? '—'} /> }] : []),
+      ...(sellers.length > 0 ? [{ key: 'seller', header: 'Селлер', width: 150, render: (row: Row) => <TextCell value={row.seller_name ?? '—'} /> }] : []),
       { key: 'balance', header: 'Остаток сейчас', align: 'right', render: row => <QtyCell value={row.current_balance ?? 0} /> },
       { key: 'in', header: 'Приход', align: 'right', render: row => <QtyCell value={row.total_in} /> },
       { key: 'out', header: 'Расход', align: 'right', render: row => <QtyCell value={row.total_out} /> },
       { key: 'net', header: 'Нетто', align: 'right', render: row => <QtyCell value={row.net} /> },
     ] : [
-      { key: 'operation', header: 'Операция', width: 260, render: row => <TextCell value={(row as Row & { operation?: string }).operation ?? '—'} /> },
-      { key: 'in', header: 'Приход', width: 130, align: 'right', render: row => <QtyCell value={row.total_in ?? (row as Row & { in_qty?: number }).in_qty ?? 0} /> },
-      { key: 'out', header: 'Расход', width: 130, align: 'right', render: row => <QtyCell value={row.total_out ?? (row as Row & { out_qty?: number }).out_qty ?? 0} /> },
+      { key: 'operation', header: 'Операция', width: 260, render: row => <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}><TextCell value={(row as Row & { operation?: string }).operation ?? '—'} />{row.integrity_error ? <StatusChip label="Ошибка" tone="stop" testId="ff-reports-row-integrity-error" /> : null}</Stack> },
+      { key: 'in', header: 'Приход', width: 130, align: 'right', render: row => { const value = row.total_in ?? (row as Row & { in_qty?: number }).in_qty ?? 0; return <QtyCell value={row.integrity_error && value === 0 ? null : value} /> } },
+      { key: 'out', header: 'Расход', width: 130, align: 'right', render: row => { const value = row.total_out ?? (row as Row & { out_qty?: number }).out_qty ?? 0; return <QtyCell value={row.integrity_error && value === 0 ? null : value} /> } },
       { key: 'net', header: 'Нетто', width: 130, align: 'right', render: row => <QtyCell value={row.net} /> },
     ]} rows={rows} getRowKey={row => row.product_id ?? (row as Row & { operation?: string }).operation ?? 'report-row'} loading={loading || tableLoading} empty={{ title: 'За выбранный период движений нет', hint: 'Измените период или снимите фильтры.' }} testId="ff-reports-table" />
-    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ py: 2 }} data-testid="ff-reports-pagination">
+    <Stack direction="row" sx={{ py: 2, justifyContent: 'space-between', alignItems: 'center' }} data-testid="ff-reports-pagination">
       <Typography variant="body2" color="text.secondary">{total === 0 ? '0 из 0' : `${(page - 1) * 50 + 1}–${Math.min(page * 50, total)} из ${total}`}</Typography>
-      <Stack direction="row" spacing={1}><PrimaryAction testId="ff-reports-previous-page" disabledReason={page <= 1 ? 'Это первая страница' : undefined} onClick={() => void changeTable(grouping, page - 1)}>Назад</PrimaryAction><PrimaryAction testId="ff-reports-next-page" disabledReason={page * 50 >= total ? 'Это последняя страница' : undefined} onClick={() => void changeTable(grouping, page + 1)}>Вперёд</PrimaryAction></Stack>
+      <Stack direction="row" spacing={1}><PrimaryAction data-testid="ff-reports-previous-page" disabledReason={page <= 1 ? 'Это первая страница' : undefined} onClick={() => void changeTable(grouping, page - 1)}>Назад</PrimaryAction><PrimaryAction data-testid="ff-reports-next-page" disabledReason={page * 50 >= total ? 'Это последняя страница' : undefined} onClick={() => void changeTable(grouping, page + 1)}>Вперёд</PrimaryAction></Stack>
     </Stack>
   </Stack>
 }
