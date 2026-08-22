@@ -1,0 +1,215 @@
+<!-- UI-KIT: ScreenHeader, FilterBar, DataTable, TextCell, QtyCell, MoneyCell (needed), StatusChip, PrimaryAction, SecondaryAction, DangerAction, IconAction, PrintAction, EmptyState, TableSkeletonBody, ErrorNotice, PeriodPicker (needed) -->
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>09-billing — UX mockup</title>
+  <style>
+    :root { --primary:#5b21b6; --bg:#e8ecf4; --paper:#fff; --text:#0f172a; --muted:#64748b; --line:#d7dbea; --head:#f3effb; --ok:#14603d; --ok-bg:rgba(27,107,69,.12); --warn:#7a5000; --warn-bg:rgba(138,90,0,.14); --stop:#8f241b; --stop-bg:rgba(163,42,32,.12); --neutral:#4c1d95; --neutral-bg:rgba(91,33,182,.1); }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 Inter,system-ui,-apple-system,"Segoe UI",sans-serif; }
+    .top { position:sticky; top:0; z-index:20; background:#111827; color:#fff; padding:12px 22px; display:flex; gap:18px; align-items:center; box-shadow:0 4px 18px #0003; }
+    .top strong { margin-right:auto; }
+    .top a { color:#ddd6fe; text-decoration:none; white-space:nowrap; }
+    main { max-width:1500px; margin:0 auto; padding:28px; }
+    .note { background:#fff7ed; border:1px solid #fed7aa; border-radius:12px; padding:12px 16px; margin-bottom:24px; color:#7c2d12; }
+    .artboard { background:var(--paper); border:1px solid #cfd5e2; border-radius:14px; padding:24px; margin:0 0 30px; box-shadow:0 3px 12px #33415512; }
+    .artboard > h2 { font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--primary); margin:0 0 20px; }
+    h1 { font-size:24px; line-height:1.2; margin:0 0 5px; }
+    h3 { font-size:16px; margin:0 0 10px; }
+    p { margin:0; }
+    .purpose,.muted { color:var(--muted); }
+    .purpose { margin-bottom:18px; }
+    .tabs { display:flex; gap:2px; border-bottom:1px solid var(--line); margin-bottom:18px; }
+    .tab { padding:10px 16px; font-weight:600; color:var(--muted); border-bottom:3px solid transparent; }
+    .tab.active { color:var(--primary); border-color:var(--primary); }
+    .paper { border:1px solid var(--line); border-radius:12px; padding:16px; background:#fff; }
+    .filter { display:flex; gap:12px; align-items:end; flex-wrap:wrap; margin-bottom:16px; }
+    .field { min-width:170px; }
+    .field.wide { min-width:260px; }
+    .field label { display:block; color:#475569; font-size:12px; margin:0 0 5px; }
+    .input { height:38px; border:1px solid #b9c0cf; border-radius:8px; padding:9px 11px; background:#fff; min-width:100%; white-space:nowrap; }
+    .input.error { border-color:#a32a20; }
+    .helper { font-size:12px; color:var(--stop); margin-top:4px; }
+    .spacer { flex:1; }
+    button { height:34px; padding:0 15px; border-radius:7px; border:0; font:600 13px Inter,system-ui; white-space:nowrap; }
+    .primary { background:var(--primary); color:#fff; }
+    .secondary { background:#fff; color:var(--primary); border:1px solid var(--primary); }
+    .danger { background:#a32a20; color:#fff; }
+    .disabled { background:#cbd5e1; color:#64748b; }
+    .icon { width:32px; padding:0; background:transparent; color:var(--primary); font-size:17px; }
+    .actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    table { width:100%; border-collapse:separate; border-spacing:0; table-layout:fixed; }
+    .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:12px; }
+    th { position:sticky; top:0; background:var(--head); border-bottom:1px solid #c9bfdf; padding:10px 12px; font-size:12px; text-align:left; white-space:nowrap; }
+    td { border-bottom:1px solid #e7eaf0; padding:10px 12px; vertical-align:middle; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    tr:last-child td { border-bottom:0; }
+    td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+    td.center, th.center { text-align:center; }
+    .chip { display:inline-block; border-radius:999px; padding:4px 9px; font-size:12px; font-weight:700; }
+    .chip.ok { background:var(--ok-bg); color:var(--ok); }
+    .chip.stop { background:var(--stop-bg); color:var(--stop); }
+    .chip.neutral { background:var(--neutral-bg); color:var(--neutral); }
+    .alert { border-radius:10px; padding:12px 14px; margin-bottom:14px; border:1px solid; }
+    .alert.error { background:#fff1f0; border-color:#efb3ad; color:#812018; }
+    .alert.info { background:#f5f3ff; border-color:#c4b5fd; color:#4c1d95; }
+    .alert.warn { background:#fffbeb; border-color:#f3d38a; color:#7a5000; }
+    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+    .dialog-backdrop { background:#3341552b; border-radius:12px; padding:26px; }
+    .dialog { max-width:820px; margin:auto; background:#fff; border-radius:14px; border:1px solid var(--line); box-shadow:0 18px 50px #0f172a30; padding:20px; }
+    .dialog.wide { max-width:1160px; }
+    .dialog-head { display:flex; align-items:center; gap:10px; margin-bottom:16px; }
+    .dialog-head h3 { margin:0; }
+    .dialog-head .close { margin-left:auto; font-size:20px; color:var(--muted); }
+    .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .disclosure { border:1px solid var(--line); border-radius:10px; padding:13px; margin-bottom:16px; }
+    .disclosure summary { font-weight:700; cursor:default; }
+    .disclosure[open] summary { margin-bottom:14px; }
+    .state { border:1px dashed #aab3c3; border-radius:12px; padding:14px; min-height:145px; background:#fafbfc; }
+    .state h3 { font-size:13px; color:#475569; }
+    .empty { padding:28px 18px; }
+    .empty strong { display:block; margin-bottom:5px; }
+    .skeleton { height:12px; background:linear-gradient(90deg,#e5e7eb,#f4f5f7,#e5e7eb); border-radius:5px; margin:9px 0; }
+    .issue-row { display:grid; grid-template-columns:180px 140px 1fr 190px; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid #eadfbe; }
+    .issue-row:last-child { border:0; }
+    .invoice-parties { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+    .invoice-parties div { border:1px solid var(--line); border-radius:10px; padding:12px; }
+    .invoice-parties strong { display:block; margin-bottom:6px; }
+    .total { text-align:right; font-size:20px; font-weight:800; margin:16px 0; font-variant-numeric:tabular-nums; }
+    .subrow td { background:#faf8ff; white-space:normal; padding-left:30px; }
+    .caption { font-size:12px; color:var(--muted); margin-top:8px; }
+    @media (max-width:900px) { .grid2,.grid3,.form-grid,.invoice-parties { grid-template-columns:1fr; } .top { overflow:auto; } main { padding:14px; } }
+  </style>
+</head>
+<body>
+  <nav class="top"><strong>09-billing · UX-макет</strong><a href="#seller">S-18</a><a href="#tariffs">S-19</a><a href="#charges">Начисления</a><a href="#invoices">Счета</a><a href="#invoice">Счёт</a><a href="#states">Состояния</a></nav>
+  <main>
+    <div class="note">Статический контракт, не код продукта. Палитра, плотность, радиусы и композиция повторяют ui-kit v1. Все артборды показаны одновременно для проверки границ и состояний.</div>
+
+    <section class="artboard" id="seller">
+      <h2>S-18 · Селлеры · диалог существующего селлера</h2>
+      <h1>Селлеры</h1><p class="purpose">Клиенты фулфилмента и их доступ в кабинет.</p>
+      <div class="dialog-backdrop">
+        <div class="dialog">
+          <div class="dialog-head"><h3>Селлер: Луна</h3><span class="close">×</span></div>
+          <details class="disclosure" open>
+            <summary>Реквизиты для счетов</summary>
+            <div class="alert error">Проверьте ИНН: контрольное число не совпадает</div>
+            <div class="form-grid">
+              <div class="field"><label>Юридическое наименование *</label><div class="input">ООО «Луна Трейд»</div></div>
+              <div class="field"><label>ИНН *</label><div class="input error">7701234560</div><div class="helper">Введите корректный ИНН</div></div>
+              <div class="field"><label>КПП</label><div class="input">770101001</div></div>
+            </div>
+            <div class="actions" style="margin-top:16px"><button class="primary">Сохранить реквизиты</button></div>
+          </details>
+          <p class="caption">Адрес, банк селлера, договор и поиск по ИНН отсутствуют.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="artboard" id="tariffs">
+      <h2>S-19 · Настройки · вкладка тарифов</h2>
+      <h1>Настройки</h1><p class="purpose">Склад, печать, сотрудники и тарифы фулфилмента.</p>
+      <div class="tabs"><div class="tab">Склад и сотрудники</div><div class="tab active">Тарифы ФФ</div></div>
+      <details class="disclosure"><summary>Реквизиты ФФ · заполнены</summary></details>
+      <div class="filter paper"><strong>Действующие тарифы</strong><span class="spacer"></span><button class="primary">Новая ставка</button></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="width:180px">Услуга</th><th style="width:240px">Для кого</th><th style="width:170px">Расчёт</th><th class="num" style="width:150px">Ставка</th><th style="width:150px">Действует с</th><th class="center" style="width:70px">Действие</th></tr></thead>
+          <tbody>
+            <tr><td>Приёмка</td><td>Все селлеры</td><td>За штуку</td><td class="num">12,00 ₽</td><td>01.08.2026</td><td class="center"><button class="icon" title="Открыть историю ставок">↗</button></td></tr>
+            <tr><td>Отгрузка</td><td>Все селлеры</td><td>За документ</td><td class="num">450,00 ₽</td><td>01.08.2026</td><td class="center"><button class="icon" title="Открыть историю ставок">↗</button></td></tr>
+            <tr><td>Хранение</td><td>Все селлеры</td><td>За литр-день</td><td class="num">0,08 ₽</td><td>01.08.2026</td><td class="center"><button class="icon" title="Открыть историю ставок">↗</button></td></tr>
+            <tr><td>Приёмка</td><td>Луна</td><td>За документ</td><td class="num">600,00 ₽</td><td>15.08.2026</td><td class="center"><button class="icon" title="Открыть историю ставок">↗</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="dialog-backdrop" style="margin-top:18px">
+        <div class="dialog">
+          <div class="dialog-head"><h3>Новая ставка</h3><span class="close">×</span></div>
+          <div class="form-grid">
+            <div class="field"><label>Услуга</label><div class="input">Приёмка</div></div>
+            <div class="field"><label>Для кого</label><div class="input">Все селлеры</div></div>
+            <div class="field"><label>Расчёт</label><div class="input">За штуку</div></div>
+            <div class="field"><label>Ставка, ₽</label><div class="input">12,00</div></div>
+            <div class="field"><label>Действует с</label><div class="input">01.09.2026</div></div>
+          </div>
+          <p class="caption">Новая ставка изменит только будущие начисления. Нулевая ставка означает бесплатную работу.</p>
+          <div class="actions" style="margin-top:16px"><button class="primary">Сохранить ставку</button><button class="secondary">Отмена</button></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="artboard" id="charges">
+      <h2>/app/ff/billing · обычное состояние и проблемная строка</h2>
+      <h1>Расчёты</h1><p class="purpose">Начисления за работу склада и автоматически выставленные счета селлерам.</p>
+      <div class="tabs"><div class="tab active">Начисления</div><div class="tab">Счета</div></div>
+      <div class="filter paper">
+        <div class="field wide"><label>Поиск</label><div class="input">Номер документа</div></div>
+        <div class="field"><label>Месяц</label><div class="input">Август 2026</div></div>
+        <div class="field"><label>Селлер</label><div class="input">Все селлеры</div></div>
+        <div class="field"><label>Услуга</label><div class="input">Все услуги</div></div>
+        <div class="field"><label>Режим</label><div class="input">По операциям</div></div>
+      </div>
+      <div class="alert warn"><strong>1 начисление без тарифа.</strong> Работа склада сохранена, но в счёт пока не войдёт. <button class="primary" style="margin-left:14px">Открыть тарифы</button></div>
+      <div class="table-wrap">
+        <table style="min-width:1420px">
+          <thead><tr><th style="width:110px">Дата</th><th style="width:160px">Селлер</th><th style="width:130px">Услуга</th><th style="width:170px">Документ</th><th class="num" style="width:110px">Количество</th><th style="width:140px">Расчёт</th><th class="num" style="width:120px">Ставка</th><th class="num" style="width:130px">Сумма</th><th style="width:210px">Исполнитель</th><th style="width:160px">Проблема</th></tr></thead>
+          <tbody>
+            <tr><td>18.08.2026</td><td>Луна</td><td>Приёмка</td><td>ПР-000184</td><td class="num">38</td><td>За штуку</td><td class="num">12,00 ₽</td><td class="num">456,00 ₽</td><td>Анна К.</td><td>—</td></tr>
+            <tr><td>19.08.2026</td><td>Север</td><td>Отгрузка</td><td>ОТГ-000092</td><td class="num">1</td><td>За документ</td><td class="num">—</td><td class="num">—</td><td>Игорь М.</td><td><span class="chip stop">Нет тарифа</span></td></tr>
+            <tr><td>20.08.2026</td><td>Луна</td><td>Хранение</td><td>Расчёт за август</td><td class="num">84 200</td><td>За литр-день</td><td class="num">0,08 ₽</td><td class="num">6 736,00 ₽</td><td>—</td><td>—</td></tr>
+            <tr><td>21.08.2026</td><td>Луна</td><td>Приёмка</td><td>Сторно ПР-000172</td><td class="num">−1</td><td>За документ</td><td class="num">600,00 ₽</td><td class="num">−600,00 ₽</td><td>Анна К.</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="paper" style="margin-top:16px">
+        <h3>Режим «По исполнителям»</h3>
+        <p class="muted" style="margin-bottom:10px">Это объём завершённой работы, не заработок сотрудника.</p>
+        <div class="table-wrap"><table><thead><tr><th>Исполнитель</th><th>Услуга</th><th>Расчёт</th><th class="num">Количество</th><th class="num">Документов</th></tr></thead><tbody><tr><td>Анна К.</td><td>Приёмка</td><td>За штуку</td><td class="num">238</td><td class="num">7</td></tr><tr><td>Исполнитель не зафиксирован</td><td>Отгрузка</td><td>За документ</td><td class="num">3</td><td class="num">3</td></tr></tbody></table></div>
+      </div>
+    </section>
+
+    <section class="artboard" id="invoices">
+      <h2>/app/ff/billing · счета и блокирующие причины</h2>
+      <h1>Расчёты</h1><p class="purpose">Начисления за работу склада и автоматически выставленные счета селлерам.</p>
+      <div class="tabs"><div class="tab">Начисления</div><div class="tab active">Счета</div></div>
+      <div class="filter paper"><div class="field wide"><label>Поиск</label><div class="input">Номер счёта</div></div><div class="field"><label>Месяц</label><div class="input">Июль 2026</div></div><div class="field"><label>Селлер</label><div class="input">Все селлеры</div></div><div class="field"><label>Статус</label><div class="input">Все статусы</div></div></div>
+      <div class="paper" style="margin-bottom:16px;background:#fffbeb;border-color:#f3d38a">
+        <h3>Что мешает выставить счета</h3>
+        <div class="issue-row"><strong>Север</strong><span>Июль 2026</span><span class="chip stop">Нет реквизитов</span><button class="primary">Открыть селлера</button></div>
+        <div class="issue-row"><strong>Луна</strong><span>Июль 2026</span><span class="chip stop">Хранение не закрыто</span><button class="primary">Открыть хранение</button></div>
+        <div class="actions" style="margin-top:14px"><button class="disabled" title="Сначала устраните причины выше">Повторить формирование</button></div>
+      </div>
+      <div class="table-wrap"><table><thead><tr><th style="width:170px">Номер</th><th style="width:150px">Период</th><th style="width:220px">Селлер</th><th style="width:150px">Выставлен</th><th class="num" style="width:160px">Сумма</th><th style="width:140px">Статус</th><th class="center" style="width:70px">Действие</th></tr></thead><tbody><tr><td>СЧ-2026-00041</td><td>Июль 2026</td><td>Луна</td><td>01.08.2026</td><td class="num">48 392,00 ₽</td><td><span class="chip ok">Выставлен</span></td><td class="center"><button class="icon" title="Открыть счёт">↗</button></td></tr><tr><td>СЧ-2026-00037</td><td>Июнь 2026</td><td>Север</td><td>01.07.2026</td><td class="num">31 508,00 ₽</td><td><span class="chip neutral">Отменён</span></td><td class="center"><button class="icon" title="Открыть счёт">↗</button></td></tr></tbody></table></div>
+    </section>
+
+    <section class="artboard" id="invoice">
+      <h2>Диалог счёта · детализация и действия</h2>
+      <div class="dialog-backdrop"><div class="dialog wide">
+        <div class="dialog-head"><h3>Счёт СЧ-2026-00041</h3><span class="chip ok">Выставлен</span><span class="close">×</span></div>
+        <p class="muted" style="margin-bottom:14px">За июль 2026 · выставлен 01.08.2026</p>
+        <div class="invoice-parties"><div><strong>Получатель</strong>ООО «Фулфилмент Волна»<br>ИНН 7701234567 · КПП 770101001<br>АО «Банк» · БИК 044525000<br>р/с 40702810000000000001</div><div><strong>Плательщик</strong>ООО «Луна Трейд»<br>ИНН 7812345678 · КПП 781201001</div></div>
+        <div class="table-wrap"><table><thead><tr><th>Услуга</th><th>Расчёт</th><th class="num">Количество</th><th class="num">Ставка</th><th class="num">Сумма</th><th class="center">Детализация</th></tr></thead><tbody><tr><td>Приёмка</td><td>За штуку</td><td class="num">1 245</td><td class="num">12,00 ₽</td><td class="num">14 940,00 ₽</td><td class="center"><button class="icon" title="Показать документы">⌄</button></td></tr><tr class="subrow"><td colspan="6"><strong>18 документов:</strong> ПР-000141 · 84 шт. · 1 008,00 ₽; ПР-000146 · 120 шт. · 1 440,00 ₽; ПР-000151 · 65 шт. · 780,00 ₽ …</td></tr><tr><td>Отгрузка</td><td>За документ</td><td class="num">42</td><td class="num">450,00 ₽</td><td class="num">18 900,00 ₽</td><td class="center"><button class="icon" title="Показать документы">›</button></td></tr><tr><td>Хранение</td><td>За литр-день</td><td class="num">181 900</td><td class="num">0,08 ₽</td><td class="num">14 552,00 ₽</td><td class="center"><button class="icon" title="Показать документы">›</button></td></tr></tbody></table></div>
+        <div class="total">Итого: 48 392,00 ₽</div>
+        <div class="actions"><button class="primary">Печать счёта</button><button class="danger">Отменить счёт</button></div>
+        <div class="alert warn" style="margin-top:16px"><strong>Отменить счёт?</strong><br>Счёт останется в истории со статусом «Отменён». Это действие нельзя отменить.<div class="actions" style="margin-top:10px"><button class="danger">Отменить счёт</button><button class="secondary">Назад</button></div></div>
+      </div></div>
+    </section>
+
+    <section class="artboard" id="states">
+      <h2>Обязательные состояния</h2>
+      <div class="grid3">
+        <div class="state"><h3>Пусто · тарифы</h3><div class="empty"><strong>Тарифы ещё не заданы</strong><p class="muted">Добавьте общие ставки, чтобы завершённые работы попадали в счета.</p><button class="primary" style="margin-top:12px">Новая ставка</button></div></div>
+        <div class="state"><h3>Пусто · начисления</h3><div class="empty"><strong>За выбранный месяц начислений нет</strong><p class="muted">Начисления появятся после завершённой приёмки, отгрузки или фиксации хранения.</p></div></div>
+        <div class="state"><h3>Пусто · счета</h3><div class="empty"><strong>За этот месяц счета не выставлены</strong><p class="muted">Нет начислений для формирования.</p></div></div>
+        <div class="state"><h3>Загрузка таблицы</h3><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
+        <div class="state"><h3>Ошибка загрузки</h3><div class="alert error">Не удалось загрузить начисления. Повторите попытку.</div></div>
+        <div class="state"><h3>Причины устранены</h3><div class="alert info">Причины устранены — повторите формирование.</div><button class="primary">Повторить формирование</button></div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

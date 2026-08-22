@@ -19,6 +19,28 @@ export function QtyCell({ value, muted = false }: { value: number | null | undef
   )
 }
 
+// Денежные значения всегда показываются в RUB с двумя знаками и табличными цифрами.
+// Отрицательная сумма — обычное сторно, поэтому не получает сигнальную окраску.
+export function MoneyCell({ value }: { value: number | null | undefined }) {
+  return (
+    <Typography
+      component="span"
+      variant="body2"
+      sx={{
+        display: 'block',
+        textAlign: 'right',
+        fontVariantNumeric: 'tabular-nums',
+        color: 'text.primary',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {value === null || value === undefined
+        ? '—'
+        : `${value.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽`}
+    </Typography>
+  )
+}
+
 // Канон R-29: число читается как утверждение. Для превышения — отдельная формулировка,
 // а не «2 из 1 короба», которое выглядит как поломка при верных данных.
 export function PlanFactCell({ fact, plan }: { fact: number; plan: number }) {
