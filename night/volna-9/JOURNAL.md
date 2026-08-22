@@ -38,3 +38,20 @@
 
 ### карта задевания
 20:51 вопросов после анализа: 45 — см. night/volna-9/VOPROSY.md
+21:03   09-billing · solution-architect: нет файла ARCH.md (код 1, попытка 1)
+21:03   09-billing · solution-architect: нет файла ARCH.md (код 1, попытка 2)
+21:03 09-billing: отложено на шаге solution-architect
+01:23   09-billing · solution-architect: готово
+01:23   09-billing · ux-architect: нет файла CONTRACT.md (код 1, попытка 1)
+01:23   09-billing · ux-architect: нет файла CONTRACT.md (код 1, попытка 2)
+01:23 09-billing: отложено на шаге ux-architect
+06:08   09-billing · solution-architect: уже сделано, пропускаю
+06:14   09-billing · ux-architect: готово
+06:14   09-billing · product: нет файла RESHENIYA.md (код 1, попытка 1)
+06:14   09-billing · product: нет файла RESHENIYA.md (код 1, попытка 2)
+06:14 09-billing: отложено на шаге product
+11:03   09-billing · solution-architect: уже сделано, пропускаю
+11:03   09-billing · ux-architect: уже сделано, пропускаю
+11:03   09-billing · product: нет файла RESHENIYA.md (код 1, попытка 1)
+11:03   09-billing · product: нет файла RESHENIYA.md (код 1, попытка 2)
+11:03 09-billing: отложено на шаге product
