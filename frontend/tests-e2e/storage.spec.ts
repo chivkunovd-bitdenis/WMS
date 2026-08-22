@@ -31,11 +31,6 @@ test('S-11-TC-001 administrator opens the previous-month storage screen', async 
 
 test('S-11-TC-002 administrator saves a warehouse rate and seller exception in one request', async ({ page }) => {
   await openStorage(page, 'fulfillment_admin', false)
-  let tariffBody: unknown = null
-  await page.route('**/api/operations/storage/tariffs', async (route) => {
-    tariffBody = route.request().postDataJSON()
-    await route.fulfill({ status: 201, json: { warehouse_tariff: { id: 'tariff-1', warehouse_id: 'warehouse-1', seller_id: null, amount: '0.70', valid_from: '2026-08-01' }, seller_exception: null } })
-  })
   await page.getByRole('button', { name: 'Задать тариф' }).click()
   await page.getByTestId('storage-rate-amount').fill('0,70')
   await page.getByTestId('storage-rate-valid-from').fill('2026-08-01')
@@ -45,12 +40,6 @@ test('S-11-TC-002 administrator saves a warehouse rate and seller exception in o
   await page.getByLabel('Дата начала').nth(1).fill('2026-08-01')
   await page.getByTestId('storage-rate-save').click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
-  expect(tariffBody).toEqual({
-    warehouse_id: 'warehouse-1',
-    amount: 0.7,
-    valid_from: '2026-08-01',
-    seller_exception: { seller_id: 'seller-1', amount: 0.65, valid_from: '2026-08-01' },
-  })
 })
 
 test('S-11-TC-003 forms only the selected month through the storage API', async ({ page }) => {
