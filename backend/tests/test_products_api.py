@@ -37,7 +37,7 @@ async def test_product_dimension_history_and_container_measurement(async_client)
         f"/products/{product_id}/dimensions/history", headers=headers
     )
     assert history.status_code == 200, history.text
-    assert history.json()[0]["source"] == "container"
+    assert history.json()[0]["source"] == "container_override"
     assert history.json()[0]["applied"] is True
 
     invalid = await async_client.post(
@@ -47,3 +47,16 @@ async def test_product_dimension_history_and_container_measurement(async_client)
     )
     assert invalid.status_code == 422
 
+    partial = await async_client.patch(
+        f"/products/{product_id}/dimensions",
+        headers=headers,
+        json={"length_mm": 10},
+    )
+    assert partial.status_code == 422
+
+    zero = await async_client.patch(
+        f"/products/{product_id}/dimensions",
+        headers=headers,
+        json={"length_mm": 0, "width_mm": 10, "height_mm": 10},
+    )
+    assert zero.status_code == 422

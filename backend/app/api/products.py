@@ -803,13 +803,17 @@ async def get_product_dimension_history(
         product = await get_product(session, user.tenant_id, product_id)
         if product is None:
             raise CatalogError("product_not_found")
+        seller_scope: uuid.UUID | None = None
         if user.role == FULFILLMENT_SELLER:
-            owner_id = user.seller_id
-            if user_can_manage_seller_shops(user):
-                owner_id = user.seller_id
-            if owner_id is None or product.seller_id != owner_id:
+            seller_scope = user.seller_id
+            if seller_scope is None or product.seller_id != seller_scope:
                 raise CatalogError("product_not_found")
-        events = await list_product_dimension_events(session, user.tenant_id, product_id)
+        events = await list_product_dimension_events(
+            session,
+            user.tenant_id,
+            product_id,
+            seller_id=seller_scope,
+        )
     except CatalogError as exc:
         raise HTTPException(status_code=404, detail=exc.code) from None
     return [_dimension_event_out(event) for event in events]

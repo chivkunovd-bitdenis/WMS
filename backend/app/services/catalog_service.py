@@ -753,16 +753,22 @@ async def update_product_container_volume(
 
 
 async def list_product_dimension_events(
-    session: AsyncSession, tenant_id: uuid.UUID, product_id: uuid.UUID
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    *,
+    seller_id: uuid.UUID | None = None,
 ) -> list[ProductDimensionEvent]:
     p = await get_product(session, tenant_id, product_id)
     if p is None:
         raise CatalogError("product_not_found")
-    result = await session.execute(
-        select(ProductDimensionEvent)
-        .where(ProductDimensionEvent.product_id == product_id)
-        .order_by(ProductDimensionEvent.observed_at.desc())
+    query = select(ProductDimensionEvent).where(
+        ProductDimensionEvent.tenant_id == tenant_id,
+        ProductDimensionEvent.product_id == product_id,
     )
+    if seller_id is not None and p.seller_id != seller_id:
+        return []
+    result = await session.execute(query.order_by(ProductDimensionEvent.observed_at.desc()))
     return list(result.scalars().all())
 
 
