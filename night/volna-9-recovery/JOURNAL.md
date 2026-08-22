@@ -88,3 +88,21 @@
 22:24   01-wb-marking · dev: фича 3/5 сохранена ce46191f269a
 22:26   01-wb-marking · backend-dev: готово
 22:26   01-wb-marking · dev: фича 4/5 сохранена 49b64655bd93
+22:29   01-wb-marking · reviewer: готово
+22:31   01-wb-marking · ui-critic: готово
+22:32   01-wb-marking · clicker: готово
+22:33   01-wb-marking · ux-judge: готово
+22:33 01-wb-marking: отложено — ux-judge, эскалация не помогла
+23:02   01-wb-marking · solution-architect: уже сделано, пропускаю
+23:02   01-wb-marking · product: уже сделано, пропускаю
+23:02   01-wb-marking · ux-architect: уже сделано, пропускаю
+23:02   01-wb-marking · tester: уже сделано, пропускаю
+23:02   01-wb-marking · breaker: уже сделано, пропускаю
+23:02   01-wb-marking · splitter: уже сделано, пропускаю
+23:02   01-wb-marking · dev: уже сделано по 5 атомарным фичам
+23:02   01-wb-marking · reviewer: уже сделано, пропускаю
+23:02   01-wb-marking · ui-critic: уже сделано, пропускаю
+23:02   01-wb-marking · clicker: готово
+23:04   01-wb-marking · ux-judge: готово
+23:04   01-wb-marking · ux-judge: находки, круг 1 — назад к разработке
+23:06   01-wb-marking · backend-dev: готово
