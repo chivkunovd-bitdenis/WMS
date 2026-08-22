@@ -124,7 +124,7 @@ function TapePreparationStatus({
   onClose: () => void
 }) {
   if (state === 'preparing') {
-    return <Box data-testid="marking-print-preparing"><StatusChip label="Готовим к печати" tone="neutral" /><Typography variant="body2" color="text.secondary">Можно продолжать работу в WMS — лента собирается в фоне</Typography></Box>
+    return <Box data-testid="marking-print-preparing"><StatusChip label="Готовим ленту…" tone="neutral" /><Typography variant="body2" color="text.secondary">Можно продолжать работу в WMS — лента собирается в фоне</Typography></Box>
   }
   if (state === 'ready') {
     return <Box data-testid="marking-print-ready"><StatusChip label="Готово" tone="ok" /><PrimaryAction onClick={onOpen} data-testid="marking-print-open-ready">Открыть для печати</PrimaryAction></Box>
@@ -629,9 +629,14 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       const codeIds = resolveCzArtifactTapeCodeIds(tapeUnits, printLayout)
       if (codeIds) {
         setTapePreparation('preparing')
-        const pdf = await prepareCzArtifactTape(codeIds, ctx.token, size)
-        setPreparedTapePdf(pdf)
-        setTapePreparation('ready')
+        try {
+          const pdf = await prepareCzArtifactTape(codeIds, ctx.token, size)
+          setPreparedTapePdf(pdf)
+          setTapePreparation('ready')
+        } catch (error) {
+          setTapePreparation(error instanceof Error && error.message.includes('истёк') ? 'expired' : 'failed')
+          throw error
+        }
         return
       }
       printedNative = await printCzArtifactTape(tapeUnits, printLayout, ctx.token, size)
@@ -974,9 +979,6 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         })
       }
     } catch (e) {
-      if (tapePreparation === 'preparing') {
-        setTapePreparation(e instanceof Error && e.message.includes('истёк') ? 'expired' : 'failed')
-      }
       setError(
         e instanceof Error
           ? e.message
@@ -1710,12 +1712,6 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                 onRetry={() => { setTapePreparation('idle'); void handlePrint() }}
                 onClose={onClose}
               />
-            ) : null}
-            {tapePreparation === 'ready' ? (
-              <Box data-testid="marking-print-ready">
-                <StatusChip label="Готово" tone="ok" />
-                <PrimaryAction onClick={() => void openPreparedTape} data-testid="marking-print-open-ready">Открыть для печати</PrimaryAction>
-              </Box>
             ) : null}
           </Stack>
         </DialogContent>
