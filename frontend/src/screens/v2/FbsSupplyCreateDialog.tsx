@@ -40,6 +40,45 @@ type Props = {
 
 type InventoryLine = FbsSupplyPreflightInventoryLine
 
+function transferQuantity(line: InventoryLine) {
+  const deficit = Math.max(line.required - line.current, 0)
+  return Math.min(deficit, Math.max(line.source_warehouse?.available ?? 0, 0))
+}
+
+export function sourceBreakdown(line: InventoryLine) {
+  const deficit = Math.max(line.required - line.current, 0)
+  const knownQuantity = transferQuantity(line)
+  const remainder = deficit - knownQuantity
+  const parts: string[] = []
+
+  if (line.source_warehouse && knownQuantity > 0) {
+    parts.push(`${line.source_warehouse.name} · ${knownQuantity}`)
+  }
+  if (remainder > 0) parts.push(`другие склады · ${remainder}`)
+
+  return parts.join('; ') || '—'
+}
+
+export function aggregateSources(lines: InventoryLine[]) {
+  const quantities = new Map<string, number>()
+  let otherWarehouses = 0
+
+  for (const line of lines) {
+    const knownQuantity = transferQuantity(line)
+    if (line.source_warehouse && knownQuantity > 0) {
+      quantities.set(
+        line.source_warehouse.name,
+        (quantities.get(line.source_warehouse.name) ?? 0) + knownQuantity,
+      )
+    }
+    otherWarehouses += Math.max(line.required - line.current - knownQuantity, 0)
+  }
+
+  const parts = Array.from(quantities, ([name, quantity]) => `${name} — ${quantity} шт.`)
+  if (otherWarehouses > 0) parts.push(`другие склады — ${otherWarehouses} шт.`)
+  return parts.join(', ')
+}
+
 const inventoryColumns: Column<InventoryLine>[] = [
   { key: 'product', header: 'Товар', render: (line) => line.product_name },
   { key: 'required', header: 'Нужно', align: 'right', render: (line) => line.required },
@@ -48,9 +87,7 @@ const inventoryColumns: Column<InventoryLine>[] = [
     key: 'source',
     header: 'Взять со склада',
     align: 'right',
-    render: (line) => line.source_warehouse
-      ? `${line.source_warehouse.name} · ${line.required - line.current}`
-      : '—',
+    render: sourceBreakdown,
   },
 ]
 
@@ -180,12 +217,12 @@ export function FbsSupplyCreateDialog({
   }
 
   const summary = preflight?.summary
-  const inventory = preflight?.inventory ?? []
   const warehouseOptions = preflight?.warehouse_options ?? []
   const effectiveWarehouseId = selectedWarehouseId ?? preflight?.recommended_warehouse?.id ?? summary?.wms_warehouse.id ?? null
   const warningLines = preflight?.stock_preflight.warning_lines ?? []
   const blockingLines = preflight?.stock_preflight.blocking_lines ?? []
   const localShortage = warningLines.reduce((total, line) => total + line.required - line.current, 0)
+  const sourceSummary = aggregateSources(warningLines)
   const totalShortage = blockingLines.reduce((total, line) => total + line.shortage, 0)
   const shortageProducts = blockingLines.length
   const blockedByStock = totalShortage > 0
@@ -264,7 +301,7 @@ export function FbsSupplyCreateDialog({
                 <WarningNotice testId="fbs-preflight-warning">
                   <strong>На складе «{summary.wms_warehouse.name}» не хватает {localShortage} шт. по {warningLines.length} товарам.</strong>
                   <br />
-                  Нужно подобрать: {warningLines.map((line) => line.source_warehouse ? `${line.source_warehouse.name} — ${line.required - line.current} шт.` : 'другой склад').join(', ')}
+                  Нужно подобрать: {sourceSummary}
                   <DataTable columns={inventoryColumns} rows={warningLines} getRowKey={(line) => line.product_id} testId="fbs-preflight-warning-table" />
                 </WarningNotice>
               ) : null}

@@ -207,14 +207,16 @@ test('fbs orders: create supply from selected orders', async ({ page }) => {
   await mockWorklist(page, selectedOrders)
   let createBody: JsonObject | null = null
   let plannedDateBody: JsonObject | null = null
+  let releaseStalePreflight: (() => void) | undefined
 
-  await page.route('**/operations/fbs-supplies/preflight', (route) =>
-    json(route, {
+  const stockPreflight = (selectedWarehouseId?: string | null) => ({
       compatible: true,
       summary: {
         seller: { id: 's-1', name: 'Селлер Один' },
         wb_warehouse: { id: 501001, name: 'WB Подольск' },
-        wms_warehouse: { id: 'w-1', name: 'Основной склад' },
+        wms_warehouse: selectedWarehouseId === 'w-2'
+          ? { id: 'w-2', name: 'Склад Юг' }
+          : { id: 'w-1', name: 'Основной склад' },
         buyer_type: 'individual',
         cargo_type: 'mgt',
         orders_count: 2,
@@ -228,19 +230,27 @@ test('fbs orders: create supply from selected orders', async ({ page }) => {
         compatible: true,
         recommended_warehouse: { id: 'w-2', name: 'Склад Юг' },
         warning_lines: [{
-          product_id: 'p-1', product_name: 'Товар 1', required: 2, current: 0, total: 2, shortage: 0,
-          source_warehouse: { id: 'w-2', name: 'Склад Юг', available: 2 },
+          product_id: 'p-1', product_name: 'Товар 1', required: 10, current: 0, total: 10, shortage: 0,
+          source_warehouse: { id: 'w-2', name: 'Склад Юг', available: 6 },
         }],
         blocking_lines: [],
       },
       warehouse_options: [{ id: 'w-1', name: 'Основной склад' }, { id: 'w-2', name: 'Склад Юг' }],
       recommended_warehouse: { id: 'w-2', name: 'Склад Юг' },
       inventory: [{
-        product_id: 'p-1', product_name: 'Товар 1', required: 2, current: 0, total: 2, shortage: 0,
-        source_warehouse: { id: 'w-2', name: 'Склад Юг', available: 2 },
+        product_id: 'p-1', product_name: 'Товар 1', required: 10, current: 0, total: 10, shortage: 0,
+        source_warehouse: { id: 'w-2', name: 'Склад Юг', available: 6 },
       }],
-    }),
-  )
+    })
+  await page.route('**/operations/fbs-supplies/preflight', async (route) => {
+    const body = route.request().postDataJSON() as { selected_warehouse_id?: string | null }
+    if (body.selected_warehouse_id === 'w-1') {
+      await new Promise<void>((resolve) => {
+        releaseStalePreflight = resolve
+      })
+    }
+    await json(route, stockPreflight(body.selected_warehouse_id))
+  })
   await page.route('**/operations/fbs-supplies/from-orders', async (route) => {
     createBody = route.request().postDataJSON() as JsonObject
     await json(route, workspace({ orders: selectedOrders.map((item) => ({ ...item, supply_id: 'sup-1' })) }), 201)
@@ -259,8 +269,34 @@ test('fbs orders: create supply from selected orders', async ({ page }) => {
   await expect(page.getByTestId('fbs-selection-bar')).toBeVisible()
   await page.getByRole('button', { name: 'Сформировать поставку' }).click()
   await expect(page.getByTestId('fbs-preflight-warehouse')).toContainText('Склад Юг')
-  await expect(page.getByTestId('fbs-preflight-warning')).toContainText('На складе «Основной склад» не хватает 2 шт.')
+  await expect(page.getByTestId('fbs-preflight-warning')).toContainText('На складе «Основной склад» не хватает 10 шт.')
+  await expect(page.getByTestId('fbs-preflight-warning')).toContainText('Склад Юг — 6 шт., другие склады — 4 шт.')
+  await expect(page.getByTestId('fbs-preflight-warning-table')).toContainText('Склад Юг · 6; другие склады · 4')
   await expect(page.getByText('Можно создать поставку')).toBeVisible()
+  await expect(page.getByTestId('fbs-create-submit')).toBeEnabled()
+
+  // TC-S17-006 — an in-flight refresh preserves the visible explanation,
+  // blocks creation, and a stale response cannot replace the current choice.
+  await page.getByTestId('fbs-preflight-warehouse-button').click()
+  await page.getByTestId('fbs-preflight-warehouse-option-w-1').click()
+  await expect(page.getByTestId('fbs-preflight-skeleton')).toBeVisible()
+  await expect(page.getByTestId('fbs-preflight-warning')).toContainText('другие склады — 4 шт.')
+  await expect(page.getByTestId('fbs-create-submit')).toBeDisabled()
+  await expect(page.getByTestId('fbs-create-submit')).toHaveAttribute('title', 'Проверяем остатки')
+
+  await page.getByTestId('fbs-preflight-warehouse-button').click()
+  await page.getByTestId('fbs-preflight-warehouse-option-w-2').click()
+  await expect(page.getByTestId('fbs-create-submit')).toBeEnabled()
+  const staleResponse = page.waitForResponse((response) => {
+    if (!response.url().includes('/operations/fbs-supplies/preflight')) return false
+    const body = response.request().postDataJSON() as { selected_warehouse_id?: string | null }
+    return body.selected_warehouse_id === 'w-1'
+  })
+  releaseStalePreflight?.()
+  await staleResponse
+  await expect(page.getByTestId('fbs-preflight-warehouse')).toContainText('Склад Юг')
+  await expect(page.getByTestId('fbs-preflight-warning')).toContainText('На складе «Склад Юг»')
+  await expect(page.getByTestId('fbs-preflight-warning')).toContainText('другие склады — 4 шт.')
   await expect(page.getByTestId('fbs-create-submit')).toBeEnabled()
   await page.getByTestId('fbs-create-submit').click()
 
