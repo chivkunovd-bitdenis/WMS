@@ -24,7 +24,9 @@ def upgrade() -> None:
             "WHERE storage_locations.id = inventory_movements.storage_location_id)"
         )
     )
-    op.alter_column("inventory_movements", "seller_id", nullable=False)
+    # Products may legitimately have no seller (ordinary FF stock).  Keep those
+    # historical and new movements writable; FBS movements still carry seller_id.
+    op.alter_column("inventory_movements", "seller_id", nullable=True)
     op.alter_column("inventory_movements", "warehouse_id", nullable=False)
     op.create_index("ix_inventory_movements_seller_id", "inventory_movements", ["seller_id"])
     op.create_index("ix_inventory_movements_warehouse_id", "inventory_movements", ["warehouse_id"])

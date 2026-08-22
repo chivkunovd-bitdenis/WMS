@@ -559,8 +559,6 @@ async def record_movement_and_adjust_balance(
         raise ValueError(msg)
     warehouse_id = loc.warehouse_id
     seller_id = prod.seller_id
-    if seller_id is None:
-        raise ValueError("product seller not found")
 
     movement = InventoryMovement(
         tenant_id=tenant_id,
@@ -580,7 +578,8 @@ async def record_movement_and_adjust_balance(
     # Единственная точка, через которую меняется остаток, — значит и единственное место,
     # где надо поставить в очередь публикацию нового количества в кабинет WB.
     # Сама публикация уйдёт после коммита, снаружи этой транзакции.
-    schedule_seller_stock_publish(session, tenant_id, prod.seller_id)
+    if seller_id is not None:
+        schedule_seller_stock_publish(session, tenant_id, seller_id)
 
     if quantity_delta >= 0:
         bind = session.get_bind()
@@ -1169,6 +1168,7 @@ async def transfer_on_hand_between_locations(
     to_storage_location_id: uuid.UUID,
     product_id: uuid.UUID,
     quantity: int,
+    allow_cross_warehouse: bool = False,
 ) -> uuid.UUID:
     """Перемещение фактического on_hand между ячейками (DEC-019 migration).
 
@@ -1190,6 +1190,9 @@ async def transfer_on_hand_between_locations(
         or loc_to.tenant_id != tenant_id
     ):
         msg = "storage location not found"
+        raise ValueError(msg)
+    if loc_from.warehouse_id != loc_to.warehouse_id and not allow_cross_warehouse:
+        msg = "cross-warehouse transfer is not allowed"
         raise ValueError(msg)
     on_hand = await _physical_on_hand(session, tenant_id, product_id, from_storage_location_id)
     if on_hand < quantity:

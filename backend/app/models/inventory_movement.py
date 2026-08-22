@@ -48,8 +48,8 @@ class InventoryMovement(Base):
         ForeignKey("storage_locations.id", ondelete="CASCADE"),
         index=True,
     )
-    seller_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("sellers.id", ondelete="RESTRICT"), index=True
+    seller_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("sellers.id", ondelete="RESTRICT"), nullable=True, index=True
     )
     warehouse_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("warehouses.id", ondelete="RESTRICT"), index=True

@@ -331,6 +331,46 @@ async def test_fbs_pick_concurrent_scan_stock_one_one_success(
     assert ws2.json()["progress"] == ws.json()["progress"]
 
 
+@pytest.mark.asyncio
+async def test_generic_inventory_transfer_rejects_another_warehouse(
+    async_client: AsyncClient,
+) -> None:
+    headers, suffix, tenant_id = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, location_id = await _create_seller_and_warehouse(
+        async_client, headers, suffix
+    )
+    _other_seller_id, _other_warehouse_id, other_location_id = (
+        await _create_seller_and_warehouse(async_client, headers, f"{suffix}-other")
+    )
+    barcode = f"BAR-XFER-{suffix[-8:]}"
+    product_id = await _create_product(
+        async_client, headers, seller_id, sku=f"SKU-X-{suffix}", barcode=barcode
+    )
+    await _seed_pick_supply(
+        async_client,
+        headers,
+        tenant_id,
+        seller_id,
+        warehouse_id,
+        location_id,
+        product_id,
+        stock_qty=1,
+        order_specs=[(1, timedelta(hours=24))],
+        barcode=barcode,
+    )
+
+    async with SessionLocal() as session:
+        with pytest.raises(ValueError, match="cross-warehouse transfer is not allowed"):
+            await inventory_service.transfer_on_hand_between_locations(
+                session,
+                tenant_id,
+                from_storage_location_id=location_id,
+                to_storage_location_id=other_location_id,
+                product_id=product_id,
+                quantity=1,
+            )
+
+
 # TC-08 refresh keeps progress
 @pytest.mark.asyncio
 async def test_fbs_pick_refresh_keeps_progress(async_client: AsyncClient) -> None:

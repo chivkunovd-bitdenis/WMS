@@ -159,27 +159,35 @@ async def scan_pick_product(
     order_id: uuid.UUID | None = None,
     product_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
-    existing = await _find_pick_by_scan_idempotency(
-        session, tenant_id, supply_id, idempotency_key
+    existing_workspace = await _reuse_existing_scan_or_none(
+        session,
+        tenant_id,
+        supply_id,
+        location_id=location_id,
+        product_barcode=product_barcode,
+        idempotency_key=idempotency_key,
+        order_id=order_id,
+        product_id=product_id,
     )
-    if existing is not None:
-        if (
-            existing.source_storage_location_id != location_id
-            or (product_id is not None and existing.product_id != product_id)
-            or (order_id is not None and existing.fbs_order_id != order_id)
-            or (
-                product_id is None
-                and existing.scanned_product_barcode != product_barcode
-            )
-        ):
-            raise FbsPickingError(
-                "idempotency_key_reused",
-                "Ключ идемпотентности уже использован для другого подбора.",
-                context={"idempotency_key": idempotency_key},
-            )
-        return await get_supply_workspace(session, tenant_id, supply_id)
+    if existing_workspace is not None:
+        return existing_workspace
 
     supply = await _load_supply(session, tenant_id, supply_id, for_update=True)
+    # A concurrent request can pass the optimistic lookup above while it waits
+    # for this supply lock.  Check once more under the lock so the retry gets
+    # the original workspace rather than the unique-index error on the pick.
+    existing_workspace = await _reuse_existing_scan_or_none(
+        session,
+        tenant_id,
+        supply_id,
+        location_id=location_id,
+        product_barcode=product_barcode,
+        idempotency_key=idempotency_key,
+        order_id=order_id,
+        product_id=product_id,
+    )
+    if existing_workspace is not None:
+        return existing_workspace
     location = await session.scalar(
         select(StorageLocation)
         .options(selectinload(StorageLocation.warehouse))
@@ -276,6 +284,7 @@ async def scan_pick_product(
                 to_storage_location_id=sorting_location.id,
                 product_id=product.id,
                 quantity=1,
+                allow_cross_warehouse=True,
             )
         except ValueError as exc:
             if str(exc) == "insufficient stock":
@@ -299,6 +308,18 @@ async def scan_pick_product(
             session, tenant_id, transfer_group_id
         )
     elif available < 1:
+        existing_workspace = await _reuse_existing_scan_or_none(
+            session,
+            tenant_id,
+            supply_id,
+            location_id=location_id,
+            product_barcode=product_barcode,
+            idempotency_key=idempotency_key,
+            order_id=order_id,
+            product_id=product_id,
+        )
+        if existing_workspace is not None:
+            return existing_workspace
         raise FbsPickingError(
             "insufficient_unpacked",
             "Недостаточно неупакованного остатка в ячейке.",
@@ -457,6 +478,7 @@ async def undo_pick(
                 to_storage_location_id=pick.source_storage_location_id,
                 product_id=pick.product_id,
                 quantity=1,
+                allow_cross_warehouse=True,
             )
             movement_id = await inventory_service.transfer_out_movement_id(
                 session, tenant_id, transfer_group_id
@@ -654,6 +676,36 @@ async def _find_pick_by_scan_idempotency(
         FbsOrderPick.undone_at.is_(None),
     )
     return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def _reuse_existing_scan_or_none(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    *,
+    location_id: uuid.UUID,
+    product_barcode: str,
+    idempotency_key: str,
+    order_id: uuid.UUID | None,
+    product_id: uuid.UUID | None,
+) -> dict[str, Any] | None:
+    existing = await _find_pick_by_scan_idempotency(
+        session, tenant_id, supply_id, idempotency_key
+    )
+    if existing is None:
+        return None
+    if (
+        existing.source_storage_location_id != location_id
+        or (product_id is not None and existing.product_id != product_id)
+        or (order_id is not None and existing.fbs_order_id != order_id)
+        or (product_id is None and existing.scanned_product_barcode != product_barcode)
+    ):
+        raise FbsPickingError(
+            "idempotency_key_reused",
+            "Ключ идемпотентности уже использован для другого подбора.",
+            context={"idempotency_key": idempotency_key},
+        )
+    return await get_supply_workspace(session, tenant_id, supply_id)
 
 
 async def _load_active_pick_for_order(
