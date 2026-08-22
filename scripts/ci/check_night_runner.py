@@ -462,7 +462,10 @@ def main() -> int:
             (t / "OTLOZHENO.md").unlink()
 
             маркер = t / "escalation-state"
-            маркер.write_text("СТАТУС: ACTIVE\n", encoding="utf-8")
+            with mock.patch.object(n, "файл_эскалации", return_value=маркер):
+                n.активировать_эскалацию(t)
+                проверь("rework: переход Terra→Sol сразу сохраняет ACTIVE",
+                        n.круг_из_парковки(t), n.КРУГОВ + 1)
             (t / "OTLOZHENO.md").write_text("старая парковка\n", encoding="utf-8")
             (t / "DEV.md").write_text("## Изменённые файлы\nx\n## Гейты\npass\n", encoding="utf-8")
             os.utime(t / "OTLOZHENO.md", (1, 1))
