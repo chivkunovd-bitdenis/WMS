@@ -48,6 +48,12 @@ class InventoryMovement(Base):
         ForeignKey("storage_locations.id", ondelete="CASCADE"),
         index=True,
     )
+    seller_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("sellers.id", ondelete="RESTRICT"), index=True
+    )
+    warehouse_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("warehouses.id", ondelete="RESTRICT"), index=True
+    )
     quantity_delta: Mapped[int] = mapped_column(Integer, nullable=False)
     movement_type: Mapped[str] = mapped_column(String(64), nullable=False)
     inbound_intake_line_id: Mapped[uuid.UUID | None] = mapped_column(

@@ -1,38 +1,36 @@
-# DEV · 04-warehouse-switch · backend-dev
+# DEV · 04-warehouse-switch · атом 11
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_picking_service.py` — разрешён скан ячейки другого операционного склада; подтверждённый pick создаёт перенос в сортировку склада поставки, повтор ключа идемпотентен, undo использует обратную пару.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/inventory_service.py` — межскладской transfer сохраняет обе записи `stock_transfer_out`/`stock_transfer_in` с общим `transfer_group_id`.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_packaging_integration_service.py` — удалён упаковочный обход в чужую сортировку; без остатка в сортировке упаковка блокируется.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/tests/test_fbs_picking.py` — существующие проверки pick/undo использованы как регрессия атомарного движения.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/tests/test_fbs_packaging_integration.py` — проверки упаковки обновлены под запрет списания из чужой сортировки и без подтверждённого остатка.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/models/inventory_movement.py
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/inventory_service.py
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_picking_service.py
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/tests/test_fbs_picking.py
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/alembic/versions/20260822_0095_inventory_movement_dimensions.py
 
-## Миграции
+## Реализовано
 
-Нет. Использованы существующие поля `InventoryMovement.transfer_group_id` и складские модели.
+- Пустая исходная ячейка больше не создаёт фиктивный `fbs_order_pick`: pick отклоняется с `insufficient_unpacked`.
+- Каждая запись движения фиксирует `seller_id` и `warehouse_id`, а миграция добавляет и заполняет эти измерения для существующей истории.
+- Существующий идемпотентный transfer-путь и undo-пара сохранены; упаковка продолжает списывать только из `PackagingTaskLine.storage_location_id`.
 
 ## Тесты
 
-- `backend/tests/test_fbs_picking.py` и `backend/tests/test_fbs_packaging_integration.py` — 23 passed: pick, повтор idempotency key, undo и блокировка упаковочного обхода.
+- `test_fbs_pick_empty_location_is_rejected` проверяет отказ пустой ячейки и отсутствие записи pick.
+- Полный целевой набор `tests/test_fbs_picking.py tests/test_fbs_packaging_integration.py`: 23 passed.
 
 ## Гейты
 
-- ruff: PASS для всех изменённых backend-файлов и тестов; полный `ruff check .` — FAIL на 82 существующих ошибках вне этого куска.
-- mypy: FAIL на 21 существующей ошибке в 6 несвязанных файлах; новых ошибок в затронутых сервисах по целевой проверке не выявлено.
-- pytest: PASS, 23 passed для целевых тестов.
-- back_guard.py: НЕ ЗАПУЩЕН — `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/scripts/ci/back_guard.py` отсутствует.
-- check_migrations.py: НЕ ЗАПУЩЕН — `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/scripts/ci/check_migrations.py` отсутствует.
+- ruff: targeted files — passed; полный `ruff check .` — не пройден из-за 80 существующих ошибок вне изменённых файлов.
+- mypy: не пройден из-за 4 существующих ошибок в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py`, `fbs_warehouse_binding_service.py`; в изменённых файлах новых ошибок не показано.
+- pytest: targeted — passed, 23 passed.
+- back_guard.py: недоступен в этой рабочей копии (`scripts/ci/back_guard.py` отсутствует).
+- check_migrations.py: недоступен в этой рабочей копии (`scripts/ci/check_migrations.py` отсутствует).
 
 ## Не реализовано
 
-- Новые API-роуты не добавлялись: изменения встроены в существующие операции pick и упаковки.
-- UI и экранный контекст склада не изменялись: это вне роли backend-dev.
+- Полные repository-гейты `ruff`, `mypy`, `back_guard.py` и `check_migrations.py` нельзя подтвердить из-за существующих ошибок и отсутствующих скриптов.
 
 ## Находки
 
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не читались и не изменялись.
-
-## Блокеры
-
-- Полные quality gates ограничены baseline-ошибками и отсутствующими guard-скриптами; целевой backend-срез проверен.
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не открывались и не изменялись.

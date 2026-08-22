@@ -599,7 +599,7 @@ async def test_fbs_pick_idempotency_no_double_pick(async_client: AsyncClient) ->
 
 
 @pytest.mark.asyncio
-async def test_fbs_pick_sold_out_order_creates_sorting_stock(async_client: AsyncClient) -> None:
+async def test_fbs_pick_empty_location_is_rejected(async_client: AsyncClient) -> None:
     headers, suffix, tenant_id = await _register_ff_admin(async_client)
     seller_id, warehouse_id, location_id = await _create_seller_and_warehouse(
         async_client, headers, suffix
@@ -628,24 +628,11 @@ async def test_fbs_pick_sold_out_order_creates_sorting_stock(async_client: Async
         barcode=barcode,
         idempotency_key=str(uuid.uuid4()),
     )
-    assert resp.status_code == 200, resp.text
-    body = resp.json()
-    assert body["progress"]["picked"] == 1
-    order_row = next(o for o in body["orders"] if o["id"] == str(order_ids[0]))
-    assert order_row["pick"]["status"] == "picked"
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["detail"]["code"] == "insufficient_unpacked"
 
     async with SessionLocal() as session:
         pick = await session.scalar(
             select(FbsOrderPick).where(FbsOrderPick.fbs_order_id == order_ids[0])
         )
-        assert pick is not None
-        assert pick.inventory_movement_id is not None
-        sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
-        sorting_bal = await session.scalar(
-            select(InventoryBalance.quantity_unpacked).where(
-                InventoryBalance.tenant_id == tenant_id,
-                InventoryBalance.product_id == product_id,
-                InventoryBalance.storage_location_id == sorting.id,
-            )
-        )
-        assert int(sorting_bal or 0) == 1
+        assert pick is None

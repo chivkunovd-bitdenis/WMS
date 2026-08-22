@@ -557,11 +557,17 @@ async def record_movement_and_adjust_balance(
     if prod is None or prod.tenant_id != tenant_id:
         msg = "product not found"
         raise ValueError(msg)
+    warehouse_id = loc.warehouse_id
+    seller_id = prod.seller_id
+    if seller_id is None:
+        raise ValueError("product seller not found")
 
     movement = InventoryMovement(
         tenant_id=tenant_id,
         product_id=product_id,
         storage_location_id=storage_location_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
         quantity_delta=quantity_delta,
         movement_type=movement_type,
         inbound_intake_line_id=inbound_intake_line_id,

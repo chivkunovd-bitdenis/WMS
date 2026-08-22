@@ -284,18 +284,20 @@ async def scan_pick_product(
         movement_id = await inventory_service.transfer_out_movement_id(
             session, tenant_id, transfer_group_id
         )
-    elif available < 1:
-        movement = await inventory_service.record_movement_and_adjust_balance(
-            session,
-            tenant_id=tenant_id,
-            product_id=product.id,
-            storage_location_id=sorting_location.id,
-            quantity_delta=1,
-            movement_type="fbs_order_pick",
+    else:
+        raise FbsPickingError(
+            "insufficient_unpacked",
+            "Недостаточно неупакованного остатка в ячейке.",
+            context={
+                "order_id": str(target_order.id),
+                "product_id": str(product.id),
+                "location_id": str(location.id),
+                "location_code": location.code,
+                "requested": 1,
+                "available": 0,
+                "recommended_action": "Проверьте остаток в другой ячейке или пополните склад.",
+            },
         )
-        await _ensure_order_reservation(session, target_order, supply)
-        await session.flush()
-        movement_id = movement.id
     picked_at = datetime.now(tz=UTC)
     pick = FbsOrderPick(
         tenant_id=tenant_id,

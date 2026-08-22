@@ -1,19 +1,36 @@
+# DEV · 04-warehouse-switch · атом 11
+
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/FfFbsOrdersScreen.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx`
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/models/inventory_movement.py
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/inventory_service.py
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_picking_service.py
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/tests/test_fbs_picking.py
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/alembic/versions/20260822_0095_inventory_movement_dimensions.py
 
-S-03 теперь получает независимый список операционных складов, не строит варианты из текущих строк и сохраняет выбранный WMS-контекст в пределах сессии. Рабочее место показывает доступные операционные склады, меняет склад черновой поставки через существующий PATCH и блокирует смену после начала операции с объяснением.
+## Реализовано
+
+- Пустая исходная ячейка больше не создаёт фиктивный `fbs_order_pick`: pick отклоняется с `insufficient_unpacked`.
+- Каждая запись движения фиксирует `seller_id` и `warehouse_id`, а миграция добавляет и заполняет эти измерения для существующей истории.
+- Существующий идемпотентный transfer-путь и undo-пара сохранены; упаковка продолжает списывать только из `PackagingTaskLine.storage_location_id`.
+
+## Тесты
+
+- `test_fbs_pick_empty_location_is_rejected` проверяет отказ пустой ячейки и отсутствие записи pick.
+- Полный целевой набор `tests/test_fbs_picking.py tests/test_fbs_packaging_integration.py`: 23 passed.
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` — зелёный.
-- `python3 scripts/ui/ui_guard.py` — красный: храповик сообщил новые нарушения размера монолита в `FfFbsOrdersScreen.tsx` и `FfFbsSupplyWorkspace.tsx` (также сообщил нарушения в несвязанных экранах). Базовая линия не обновлялась.
-- `npm run test:unit -- --run src/screens/v2/FfFbsSupplyWorkspace.test.ts` — не запущен: в рабочей копии отсутствует исполняемый `vitest` (`vitest: command not found`).
-- `git diff --check` — зелёный.
+- ruff: targeted files — passed; полный `ruff check .` — не пройден из-за 80 существующих ошибок вне изменённых файлов.
+- mypy: не пройден из-за 4 существующих ошибок в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py`, `fbs_warehouse_binding_service.py`; в изменённых файлах новых ошибок не показано.
+- pytest: targeted — passed, 23 passed.
+- back_guard.py: недоступен в этой рабочей копии (`scripts/ci/back_guard.py` отсутствует).
+- check_migrations.py: недоступен в этой рабочей копии (`scripts/ci/check_migrations.py` отсутствует).
 
 ## Не реализовано
 
-- Тесты в `/frontend/src/screens/v2/FfFbsSupplyWorkspace.test.ts` и `/frontend/tests-e2e/ff-fbs-supply.spec.ts` не расширялись: локальный unit-runner отсутствует, а атомарная правка ограничена двумя экранами из слоя screen-dev.
-- Находка 13 (`docs/blockers/S-03.md`) не внесена: файл не входит в разрешённый список экранного атома и относится к документационному слою.
-- Бэкенд-находки 1–8 и 11–12 не входят в роль `screen-dev` и не изменялись.
+- Полные repository-гейты `ruff`, `mypy`, `back_guard.py` и `check_migrations.py` нельзя подтвердить из-за существующих ошибок и отсутствующих скриптов.
+
+## Находки
+
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не открывались и не изменялись.
