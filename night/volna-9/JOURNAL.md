@@ -38,3 +38,23 @@
 
 ### карта задевания
 20:51 вопросов после анализа: 45 — см. night/volna-9/VOPROSY.md
+21:03   08-storage · solution-architect: нет файла ARCH.md (код 1, попытка 1)
+21:03   08-storage · solution-architect: нет файла ARCH.md (код 1, попытка 2)
+21:03 08-storage: отложено на шаге solution-architect
+01:20   08-storage · solution-architect: готово
+01:20   08-storage · ux-architect: нет файла CONTRACT.md (код 1, попытка 1)
+01:20   08-storage · ux-architect: нет файла CONTRACT.md (код 1, попытка 2)
+01:20 08-storage: отложено на шаге ux-architect
+06:06   08-storage · solution-architect: уже сделано, пропускаю
+06:11   08-storage · ux-architect: готово
+06:14   08-storage · product: готово
+06:14   08-storage · tester: нет файла CASES.md (код 1, попытка 1)
+06:14   08-storage · tester: нет файла CASES.md (код 1, попытка 2)
+06:14 08-storage: отложено на шаге tester
+10:57   08-storage · solution-architect: уже сделано, пропускаю
+10:57   08-storage · ux-architect: уже сделано, пропускаю
+10:57   08-storage · product: уже сделано, пропускаю
+11:03   08-storage · tester: готово
+11:03   08-storage · breaker: в CASES.md нет секций: Ломающие кейсы, Смежные кейсы (код 1, попытка 1)
+11:03   08-storage · breaker: в CASES.md нет секций: Ломающие кейсы, Смежные кейсы (код 1, попытка 2)
+11:03 08-storage: отложено на шаге breaker
