@@ -49,6 +49,9 @@ async def get_reports_overview(
     seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
     date_from: Annotated[datetime, Query()],
     date_to: Annotated[datetime, Query()],
+    seller_id: Annotated[uuid.UUID | None, Query()] = None,
+    warehouse_id: Annotated[uuid.UUID | None, Query()] = None,
+    search: Annotated[str | None, Query()] = None,
 ) -> dict[str, object]:
     await assert_inventory_read_access(session, user)
     try:
@@ -57,7 +60,9 @@ async def get_reports_overview(
             user.tenant_id,
             date_from=date_from,
             date_to=date_to,
-            seller_id=seller_scope,
+            seller_id=seller_scope if seller_scope is not None else seller_id,
+            warehouse_id=warehouse_id,
+            search=search,
         )
     except ValueError as exc:
         raise HTTPException(

@@ -38,7 +38,10 @@ async def build_inventory_report(
     filters = [InventoryMovement.tenant_id == tenant_id, InventoryMovement.created_at >= date_from,
         InventoryMovement.created_at < date_to, ~Warehouse.name.startswith("FBS WB ")]
     if seller_id is not None:
-        filters.append(Product.seller_id == seller_id)
+        # The movement owns the seller at event time.  Filtering through the
+        # mutable product relation would move historical rows when a product
+        # is reassigned later.
+        filters.append(InventoryMovement.seller_id == seller_id)
     if warehouse_id is not None:
         filters.append(InventoryMovement.warehouse_id == warehouse_id)
     if search:
@@ -149,6 +152,8 @@ async def build_overview(
     date_from: datetime,
     date_to: datetime,
     seller_id: uuid.UUID | None,
+    warehouse_id: uuid.UUID | None = None,
+    search: str | None = None,
 ) -> dict[str, object]:
     validate_period(date_from, date_to)
     movement_filter = [
@@ -157,8 +162,23 @@ async def build_overview(
         InventoryMovement.created_at < date_to,
         InventoryMovement.transfer_group_id.is_(None),
     ]
+    if warehouse_id is not None:
+        movement_filter.append(InventoryMovement.warehouse_id == warehouse_id)
     if seller_id is not None:
         movement_filter.append(InventoryMovement.seller_id == seller_id)
+    if search:
+        pattern = f"%{search.strip()}%"
+        movement_filter.extend(
+            [
+                Product.id == InventoryMovement.product_id,
+                or_(
+                    Product.name.ilike(pattern),
+                    Product.sku_code.ilike(pattern),
+                    Product.wb_vendor_code.ilike(pattern),
+                    Product.wb_barcode.ilike(pattern),
+                ),
+            ]
+        )
 
     in_expr = func.coalesce(
         func.sum(
@@ -178,7 +198,14 @@ async def build_overview(
         ),
         0,
     )
-    totals = (await session.execute(select(in_expr, out_expr).where(*movement_filter))).one()
+    totals = (
+        await session.execute(
+            select(in_expr, out_expr)
+            .select_from(InventoryMovement)
+            .join(Product, Product.id == InventoryMovement.product_id)
+            .where(*movement_filter)
+        )
+    ).one()
 
     length = date_to - date_from
     previous_from, previous_to = date_from - length, date_from
@@ -190,7 +217,32 @@ async def build_overview(
     ]
     if seller_id is not None:
         previous_filter.append(InventoryMovement.seller_id == seller_id)
-    previous_out = int((await session.scalar(select(out_expr).where(*previous_filter))) or 0)
+    if warehouse_id is not None:
+        previous_filter.append(InventoryMovement.warehouse_id == warehouse_id)
+    if search:
+        pattern = f"%{search.strip()}%"
+        previous_filter.extend(
+            [
+                Product.id == InventoryMovement.product_id,
+                or_(
+                    Product.name.ilike(pattern),
+                    Product.sku_code.ilike(pattern),
+                    Product.wb_vendor_code.ilike(pattern),
+                    Product.wb_barcode.ilike(pattern),
+                ),
+            ]
+        )
+    previous_out = int(
+        (
+            await session.scalar(
+                select(out_expr)
+                .select_from(InventoryMovement)
+                .join(Product, Product.id == InventoryMovement.product_id)
+                .where(*previous_filter)
+            )
+        )
+        or 0
+    )
     current_out = int(totals[1] or 0)
 
     balance_stmt = (
@@ -202,6 +254,18 @@ async def build_overview(
     )
     if seller_id is not None:
         balance_stmt = balance_stmt.where(Product.seller_id == seller_id)
+    if warehouse_id is not None:
+        balance_stmt = balance_stmt.where(Warehouse.id == warehouse_id)
+    if search:
+        pattern = f"%{search.strip()}%"
+        balance_stmt = balance_stmt.where(
+            or_(
+                Product.name.ilike(pattern),
+                Product.sku_code.ilike(pattern),
+                Product.wb_vendor_code.ilike(pattern),
+                Product.wb_barcode.ilike(pattern),
+            )
+        )
     current_balance = int((await session.scalar(balance_stmt)) or 0)
 
     daily_stmt = (
@@ -226,6 +290,8 @@ async def build_overview(
                 0,
             ),
         )
+        .select_from(InventoryMovement)
+        .join(Product, Product.id == InventoryMovement.product_id)
         .where(*movement_filter)
         .group_by(func.date(InventoryMovement.created_at))
     )
