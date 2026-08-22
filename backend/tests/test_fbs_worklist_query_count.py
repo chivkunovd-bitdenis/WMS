@@ -22,6 +22,7 @@ from app.models.fbs_order import (
     MAPPING_STATUS_MAPPED,
     RESERVE_STATUS_RESERVED,
     FbsOrder,
+    FbsOrderMarking,
 )
 from app.models.product import Product
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
@@ -202,6 +203,45 @@ async def test_fbs_worklist_happy_path(async_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_fbs_worklist_exposes_server_wb_verdict(async_client: AsyncClient) -> None:
+    """S-03-TC-001: the real worklist response preserves the server verdict."""
+    headers, seller_id, _, _, _, order_ids = await _setup_ff_admin_with_stock(
+        async_client, order_count=1
+    )
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_ids[0])
+        assert order is not None
+        order.required_meta_json = ["sgtin"]
+        order.metadata_delivery_allowed = True
+        session.add(
+            FbsOrderMarking(
+                order_id=order.id,
+                tenant_id=order.tenant_id,
+                kind="sgtin",
+                value="010460123456789021SERIAL",
+                check_status="ok",
+                meta_status="accepted",
+                meta_details_json={"decision": "filled", "reason": None},
+            )
+        )
+        await session.commit()
+
+    response = await async_client.get(
+        "/operations/fbs-orders/worklist",
+        headers=headers,
+        params={"seller_id": str(seller_id), "status_group": "new", "limit": 10},
+    )
+    assert response.status_code == 200, response.text
+    metadata = response.json()["items"][0]["metadata"]
+    assert metadata["verdict"] == {
+        "signature": "WB: принято",
+        "tone": "ok",
+        "reason": None,
+        "delivery_allowed": True,
+    }
+
+
+@pytest.mark.asyncio
 async def test_fbs_worklist_searches_operator_identifiers(async_client: AsyncClient) -> None:
     """TC-NEW-FBS-SEARCH-001: backend search covers title, category, SKU, chrtId and WB ids."""
     headers, seller_id, _warehouse_id, _product_id, _location_id, order_ids = (
@@ -312,7 +352,9 @@ async def test_fbs_worklist_delivery_and_done_groups(async_client: AsyncClient) 
 
 
 @pytest.mark.asyncio
-async def test_fbs_worklist_new_and_expired_groups_split_by_deadline(async_client: AsyncClient) -> None:
+async def test_fbs_worklist_new_and_expired_groups_split_by_deadline(
+    async_client: AsyncClient,
+) -> None:
     """BL-3/FBS-03: заказ с истёкшим сроком сборки уходит из "new" в "expired",
     статус в БД (FBS_ORDER_STATUS_NEW) не меняется."""
     headers, seller_id, _, _, _, order_ids = await _setup_ff_admin_with_stock(

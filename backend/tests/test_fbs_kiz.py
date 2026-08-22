@@ -1345,6 +1345,8 @@ async def test_fbs_kiz_commit_success_creates_records_event_and_counter(
         if item["id"] == str(order.order_id)
     )
     assert workspace_order["metadata"]["states"][0]["source"] == "operator"
+    assert workspace_order["metadata"]["verdict"]["delivery_allowed"] is False
+    assert workspace_order["metadata"]["verdict"]["signature"] == "Нет ответа WB"
 
 
 @pytest.mark.asyncio

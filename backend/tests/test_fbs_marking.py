@@ -189,6 +189,88 @@ async def test_fbs_marking_sync_updates_check_status(
     assert rows[0]["check_status"] == CHECK_STATUS_CHECKING
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fresh_batch", [[], None], ids=["empty-batch", "wb-error"])
+async def test_fbs_marking_sync_clears_stale_filled_verdict(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    fresh_batch: list[object] | None,
+) -> None:
+    """S-03-TC-006/012: no fresh WB answer must replace a stale green verdict."""
+    from app.models.fbs_order import FbsOrder
+    from app.services.wildberries_client import WildberriesClientError
+
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    order_id = await _create_order(
+        tenant_id,
+        uuid.UUID(seller_id),
+        uuid.UUID(warehouse_id),
+        order_id=920002 if fresh_batch == [] else 920003,
+        status=FBS_ORDER_STATUS_PACKED,
+        wb_row_extra={"requiredMeta": ["sgtin"]},
+    )
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        order.required_meta_json = ["sgtin"]
+        order.metadata_delivery_allowed = True
+        session.add(
+            FbsOrderMarking(
+                order_id=order_id,
+                tenant_id=tenant_id,
+                kind="sgtin",
+                value="01CIS-STALE-FILLED",
+                check_status="ok",
+                meta_status=META_STATUS_ACCEPTED,
+                meta_details_json={"decision": "filled", "reason": None},
+            )
+        )
+        await session.commit()
+
+    async def fake_meta_batch(*args: object, **kwargs: object) -> list[object]:
+        del args, kwargs
+        if fresh_batch is None:
+            raise WildberriesClientError("transport_error")
+        return fresh_batch
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch",
+        fake_meta_batch,
+    )
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        markings = list(
+            (
+                await session.execute(
+                    select(FbsOrderMarking).where(FbsOrderMarking.order_id == order_id)
+                )
+            ).scalars()
+        )
+        from app.services.fbs_marking_service import _sync_order_meta_from_wb
+
+        if fresh_batch is None:
+            with pytest.raises(WildberriesClientError):
+                await _sync_order_meta_from_wb(
+                    session, order, async_client, "marketplace-token"
+                )
+        else:
+            await _sync_order_meta_from_wb(
+                session, order, async_client, "marketplace-token"
+            )
+        await session.flush()
+
+        assert order.metadata_delivery_allowed is False
+        assert isinstance(order.meta_details_json, dict)
+        assert order.meta_details_json["sgtin"]["decision"] is None
+        assert markings[0].meta_status == "unknown"
+        assert markings[0].reason is None
+
+
 # TC-NEW-FBS-MARK-004 — GET list all kinds; empty → []
 @pytest.mark.asyncio
 async def test_fbs_marking_get_list_all_kinds(

@@ -82,3 +82,7 @@
 20:12   02-verdikt-screen · dev: фича 4/5 сохранена a09e3906b016
 20:15   02-verdikt-screen · screen-dev: готово
 20:15   02-verdikt-screen · dev: фича 5/5 сохранена b7b1a21c2abf
+20:20   02-verdikt-screen · reviewer: готово
+20:20   02-verdikt-screen · reviewer: Terra-rework не закрыл вердикт — эскалация Sol
+20:20   02-verdikt-screen · reviewer: находки, круг 2 — назад к разработке
+20:54   02-verdikt-screen · backend-dev: готово

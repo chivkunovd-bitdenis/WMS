@@ -559,6 +559,28 @@ def _apply_meta_detail_to_marking(
     }
 
 
+def _reset_stale_wb_verdict(
+    order: FbsOrder,
+    markings: list[FbsOrderMarking],
+) -> None:
+    """Fail closed before applying a fresh WB metadata response."""
+    requested = set(order.required_meta_json or []) | set(order.optional_meta_json or [])
+    for kind in requested:
+        marking = current_order_marking(markings, kind, include_rejected=True)
+        if marking is None:
+            continue
+        marking.meta_status = META_STATUS_UNKNOWN
+        marking.reason = None
+        marking.meta_details_json = {
+            "decision": None,
+            "value": marking.value,
+            "reason": None,
+        }
+    order.meta_details_json = _meta_details_from_markings(markings)
+    order.metadata_delivery_allowed = compute_delivery_allowed(order, markings)
+    order.metadata_last_checked_at = datetime.now(tz=UTC)
+
+
 async def _sync_order_meta_from_wb(
     session: AsyncSession,
     order: FbsOrder,
@@ -566,11 +588,16 @@ async def _sync_order_meta_from_wb(
     token: str,
 ) -> list[FbsOrderMarking]:
     markings = await list_order_markings(session, order.tenant_id, order.id)
-    batch = await fetch_marketplace_orders_meta_batch(
-        http_client,
-        api_token=token,
-        order_ids=[int(order.wb_order_id)],
-    )
+    _reset_stale_wb_verdict(order, markings)
+    try:
+        batch = await fetch_marketplace_orders_meta_batch(
+            http_client,
+            api_token=token,
+            order_ids=[int(order.wb_order_id)],
+        )
+    except WildberriesClientError:
+        await session.flush()
+        raise
     details_by_kind: dict[str, MarketplaceMetaDetail] = {}
     status_map: dict[tuple[str, str], str] = {}
     for row in batch:

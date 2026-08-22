@@ -1,4 +1,3 @@
-# ruff: noqa: RUF003
 from __future__ import annotations
 
 import uuid
@@ -101,12 +100,20 @@ class FbsWorklistMetadataStateOut(BaseModel):
     value_tail: str | None = None
 
 
+class FbsWorklistMetadataVerdictOut(BaseModel):
+    signature: str
+    tone: str
+    reason: str | None
+    delivery_allowed: bool
+
+
 class FbsWorklistMetadataOut(BaseModel):
     required: list[str]
     optional: list[str]
     states: list[FbsWorklistMetadataStateOut]
     delivery_allowed: bool
     last_checked_at: str | None
+    verdict: FbsWorklistMetadataVerdictOut
 
 
 class FbsWorklistStickerOut(BaseModel):
