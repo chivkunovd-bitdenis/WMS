@@ -466,6 +466,7 @@ export type FbsWorkspace = {
     packaging_task_id: string | null
     barcode_asset: FbsPrintAsset | null
     honest_sign_skipped?: boolean
+    boxes_without_distribution: boolean
   }
   stage:
     | 'composition'
@@ -603,6 +604,10 @@ export async function fetchFbsWorkspace(
       headers: { ...ah(token) },
     }),
   )
+}
+
+export async function setFbsBoxesWithoutDistribution(token: string, ah: AuthHeaders, supplyId: string, enabled: boolean): Promise<FbsWorkspace> {
+  return jsonOrThrow<FbsWorkspace>(await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/boxes-without-distribution`), { method: 'POST', headers: jsonHeaders(token, ah), body: JSON.stringify({ enabled }) }))
 }
 
 export async function updateFbsSupplyPlannedShipmentDate(

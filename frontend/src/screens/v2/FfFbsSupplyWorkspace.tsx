@@ -71,6 +71,7 @@ import {
   scanFbsPickLocation,
   scanFbsPickProduct,
   selectFbsManualPickLocation,
+  setFbsBoxesWithoutDistribution,
   skipFbsSupplyHonestSign,
   startFbsSupplyWork,
   undoFbsPick,
@@ -353,7 +354,7 @@ export function FfFbsSupplyWorkspace({
     setPickLocation(null)
     setManualPickLocationRows({})
     setBoxCount('1')
-    setBoxesWithoutDistribution(false)
+    setBoxesWithoutDistribution(Boolean(initialWorkspace?.supply.boxes_without_distribution))
     setBoxAssignTarget(null)
     setBoxProductSearch('')
     setBoxProductQty({})
@@ -422,6 +423,7 @@ export function FfFbsSupplyWorkspace({
     try {
       const next = await operation()
       setWorkspace(next)
+      setBoxesWithoutDistribution(Boolean(next.supply.boxes_without_distribution))
       setStage(visualStage(next.stage))
       if (success) setNotice(success)
       return next
@@ -2026,13 +2028,16 @@ export function FfFbsSupplyWorkspace({
                         control={(
                           <Checkbox
                             checked={boxesWithoutDistribution}
-                            onChange={(event) => setBoxesWithoutDistribution(event.target.checked)}
-                            disabled={!stageIsCurrent || !packagingEditable || workspace.boxes.length > 0}
+                            onChange={(event) => void run(
+                              () => setFbsBoxesWithoutDistribution(token, authHeaders, workspace.supply.id, event.target.checked),
+                              '',
+                            )}
+                            disabled={!stageIsCurrent || !packagingEditable || assignedBoxOrderIds.size > 0}
                             data-testid="fbs-boxes-without-distribution"
                             data-task-id="FBS-12"
                           />
                         )}
-                        label="Без распределения"
+                        label={<Tooltip title="В короба уже разложены заказы. Чтобы изменить режим, сначала уберите их из коробов."><span>Без распределения</span></Tooltip>}
                         data-task-id="FBS-12"
                       />
                       <TextField label="Коробов" value={boxCount} size="small" type="number" disabled={!stageIsCurrent || !packagingEditable} onChange={(e) => setBoxCount(e.target.value)} slotProps={{ htmlInput: { min: 1, max: 100 } }} sx={{ width: 104 }} data-task-id="FBS-12" />
