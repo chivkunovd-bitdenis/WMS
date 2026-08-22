@@ -1,20 +1,25 @@
+# DEV · 06-picking-list-order · атом 3
+
 ## Изменённые файлы
 
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/tests/test_fbs_supply_assembly.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/night/volna-9-recovery/cards/06-picking-list-order/DEV.md
+В рамках переделки по REVIEW.md backend-файлы атома не изменялись: серверная реализация уже присутствует в рабочей копии и соответствует контракту.
 
-Модель `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/app/models/fbs_supply.py` уже содержит канонический `relationship.order_by`: `wb_order_id`, затем `order.id`; в этой переделке она не требовала изменения. Тест явно фиксирует обе части сортировки, включая развязку одинакового marketplace-номера внутренним ID.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/app/services/fbs_supply_service.py` — `get_picking_list` строит группы по `(article, sku_code, size, product_name)`, сортирует группы и заказы детерминированно, считает непрерывные номера и полный `order_ids`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/app/api/fbs_supplies.py` — endpoint `GET /operations/fbs-supplies/{supply_id}/picking-list` отдаёт `number_start`, `number_end` и `order_ids`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/tests/test_fbs_supply_assembly.py` — интеграционный сценарий проверяет несколько товарных групп, диапазоны, канонический состав и повторный идентичный запрос.
+
+Находки REVIEW.md 1–6 относятся к frontend и печати следующего атома; находка 7 требует проверки `order-print-tape` из атома 4, поэтому в этот backend-атом не включалась.
 
 ## Гейты
 
-- `ruff check .` — FAIL: 82 существующие ошибки в backend, включая `app/api/fbs_sellers.py`, `app/services/fbs_stock_sync_service.py` и другие файлы вне атома; ошибок в изменённом тесте не показано.
-- `mypy .` — FAIL: существующие ошибки типов в сервисах и скриптах вне атома (`inventory_movement_report_service.py`, `wildberries_credentials_service.py`, `fbs_stock_sync_service.py` и другие).
-- `pytest backend/tests/test_fbs_supply_assembly.py` — PASS: 17 passed, 1 skipped.
-- `python3 scripts/ci/back_guard.py` — BLOCKED: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/scripts/ci/back_guard.py` отсутствует.
-- `python3 scripts/ci/check_migrations.py` — BLOCKED: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/scripts/ci/check_migrations.py` отсутствует; миграций в атоме нет.
+- `ruff check .` — FAIL: 82 существующие ошибки в несвязанных файлах backend (в том числе `app/api/fbs_sellers.py`, `app/services/fbs_stock_sync_service.py`, scripts и других тестах); файлы атома не указаны в выводе.
+- `mypy .` — FAIL: 21 существующая ошибка в 6 несвязанных файлах (`inventory_movement_report_service.py`, `wildberries_credentials_service.py`, cleanup-скрипты, `fbs_stock_sync_service.py`, `fbs_warehouse_binding_service.py`, `wildberries_product_import_service.py`).
+- `pytest tests/test_fbs_supply_assembly.py` — PASS: `17 passed, 1 skipped`.
+- `python3 scripts/ci/back_guard.py` — NOT RUN: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/scripts/ci/back_guard.py` отсутствует.
+- `python3 scripts/ci/check_migrations.py` — NOT RUN: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/scripts/ci/check_migrations.py` отсутствует.
 
 ## Не реализовано
 
-- Находки 1–6 из `REVIEW.md` относятся к frontend и другим backend-сервисам печати, а не к атомарному куску 2 и его разрешённым файлам; они не менялись.
-- Для модели миграция не нужна.
-- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались.
+- Исправления frontend-печати, предпросмотра, состояний `shortage/order_errors` и browser/e2e-проверки не реализованы: они находятся за пределами backend-атома 3.
+- Новых миграций нет.
+- Новых backend-изменений не потребовалось: REVIEW.md подтверждает, что серверный порядок, диапазоны, tenant-фильтр и повторяемость уже работают.
