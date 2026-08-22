@@ -247,6 +247,11 @@ export function AuthedAppLayout({
               </ListItemButton>
             ) : null}
             {isAdmin ? (
+              <ListItemButton component={NavLink} to={`${base}/billing`} data-testid="nav-ff-billing" data-task-id="NAV-01">
+                <ListItemText primary="Расчёты" />
+              </ListItemButton>
+            ) : null}
+            {isAdmin ? (
               <ListItemButton
                 component={NavLink}
                 to={`${base}/honest-sign`}

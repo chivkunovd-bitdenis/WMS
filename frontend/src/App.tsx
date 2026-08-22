@@ -48,6 +48,7 @@ import { FfProductsCatalogScreen } from './screens/v2/FfProductsCatalogScreen'
 import { FfFbsOrdersScreen } from './screens/v2/FfFbsOrdersScreen'
 import { FfFbsStockSyncScreen } from './screens/v2/FfFbsStockSyncScreen'
 import { FfSettingsScreen } from './screens/ff/FfSettingsScreen'
+import { FfBillingScreen } from './screens/ff/FfBillingScreen'
 import {
   canAccessFfBlock,
   ffRoleLabel,
@@ -3075,6 +3076,16 @@ export default function App() {
                   token={token}
                   sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
                 />
+              ) : (
+                ffAccessDenied
+              )
+            }
+          />
+          <Route
+            path="ff/billing"
+            element={
+              token && isFulfillmentAdmin ? (
+                <FfBillingScreen sellers={sellers.map((seller) => ({ id: seller.id, name: seller.name }))} />
               ) : (
                 ffAccessDenied
               )
