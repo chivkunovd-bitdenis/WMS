@@ -41,3 +41,5 @@
 18:59   08-storage · reviewer: готово
 18:59   08-storage · reviewer: находки, круг 2 — назад к разработке
 19:01   08-storage · screen-dev: готово
+19:01   08-storage · dev: фича 1/8 сохранена 4f5948d7eb84
+19:05   08-storage · backend-dev: готово

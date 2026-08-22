@@ -796,8 +796,13 @@ async def _record_dimension_event(session: AsyncSession, product: Product, *, so
         ProductDimensionEvent.product_id == product.id,
         ProductDimensionEvent.fingerprint == fingerprint,
     ))
-    event = None if force_new else result.scalar_one_or_none()
+    existing_event = result.scalar_one_or_none()
+    event = None if force_new else existing_event
     if event is None:
+        if force_new and existing_event is not None:
+            # Restoring WB is an intentional new observation, while ordinary
+            # repeated imports remain deduplicated by the content fingerprint.
+            fingerprint = f"{fingerprint}:{uuid.uuid4().hex}"
         if apply:
             await session.execute(update(ProductDimensionEvent).where(
                 ProductDimensionEvent.product_id == product.id

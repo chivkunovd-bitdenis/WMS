@@ -1,26 +1,37 @@
-# DEV · 08-storage · backend-dev
+# Backend Dev · 08-storage · атом 2
 
 ## Изменённые файлы
 
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/alembic/versions/20260822_0095_product_dimension_events.py`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/api/products.py`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/catalog_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/wildberries_product_import_service.py`
 
-Исправлена атомарная часть хранения версий габаритов: fingerprint учитывает источник и объём, WB-наблюдение больше не перезаписывает действующий ручной обмер или объём тары, ручной автор сохраняется при активации версии, сотрудники с правом `inventory` могут вносить обмер, а история товара проверяет принадлежность селлеру.
+## Что реализовано
 
-Миграции: нет; миграция `20260822_0095_product_dimension_events.py` уже присутствует и не изменялась.
+- Миграция сохраняет прежние заполненные габариты товаров как первую действующую `legacy`-версию и заполняет быстрый снимок источника/времени.
+- Возврат к сохранённым данным WB создаёт отдельное действующее событие без конфликта с уникальным fingerprint; обычные повторы по-прежнему дедуплицируются.
+- Ручной PATCH габаритов доступен только администратору или сотруднику с правом `inventory` и записывает `author_user_id` текущего пользователя.
+
+## Миграции
+
+- `20260822_0095`: добавляет поля действующего источника на `products`, журнал `product_dimension_events` и backfill существующих снимков.
+
+## Тесты
+
+- `tests/test_storage_models.py`, `tests/test_products_api.py`, `tests/test_wb_import_dimensions.py`: модель журнала, права/автор ручного обмера и сохранение WB-наблюдений.
 
 ## Гейты
 
-- ruff: целевые файлы прошли; полный `ruff check .` заблокирован 23 существующими ошибками в несвязанных файлах.
-- mypy: полный и целевой запуск заблокирован 5 существующими ошибками в несвязанных местах; новых ошибок в изменённых строках не выявлено.
-- pytest: `tests/test_wb_import_dimensions.py tests/test_catalog.py` — 9 passed.
-- back_guard.py: не запущен — `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/scripts/ci/back_guard.py` отсутствует в этой рабочей копии.
-- check_migrations.py: не запущен — `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/scripts/ci/check_migrations.py` отсутствует в этой рабочей копии.
+- `ruff`: полный прогон не проходит из-за 80 существующих ошибок в соседних файлах; изменённые три Python-файла проходят отдельный `ruff check`.
+- `mypy`: полный прогон не проходит из-за существующих ошибок в `storage_statement_service.py`, FBS и cleanup-скриптах; ошибок в изменённых файлах не сообщил.
+- `pytest`: целевые тесты `7 passed`; полный прогон запущен, на момент подготовки артефакта ещё выполнялся.
+- `back_guard.py`: файл отсутствует в этой рабочей копии (`python3: can't open file scripts/ci/back_guard.py`).
+- `check_migrations.py`: файл отсутствует в этой рабочей копии (`python3: can't open file scripts/ci/check_migrations.py`).
 
 ## Не реализовано
 
-- Замечания ревью по расчёту хранения, биллингу, тарифам, печати и фронтенду не относятся к этому атомарному backend-слою и не изменялись.
-- `external_updated_at` не заполняется: текущий WB-клиент не передаёт дату обновления карточки; поле миграции сохранено для будущего значения.
+- Остальные находки ревью по расчёту хранения, биллингу, печати и UI не относятся к этому атомарному backend-слою и не изменялись.
 
-Блокеры: Git-коммит не создан: Git пытается создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-08-storage1/index.lock`, путь находится вне разрешённой рабочей копии и недоступен для записи. Изменения локальны и требуют сохранения/коммита владельцем или расширения прав.
+## Блокеры
+
+- Нет.

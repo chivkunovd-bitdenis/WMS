@@ -745,13 +745,7 @@ async def patch_product_dimensions(
     p = await get_product(session, user.tenant_id, product_id)
     if p is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="product_not_found")
-    if user.role == FULFILLMENT_SELLER:
-        owner_id = user.seller_id
-        if user_can_manage_seller_shops(user) and effective_seller_id is not None:
-            owner_id = effective_seller_id
-        if owner_id is None or p.seller_id != owner_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
-    elif user.role == FULFILLMENT_STAFF:
+    if user.role == FULFILLMENT_STAFF:
         perms = await get_staff_permissions(session, user)
         if not (
             perms.has(PERM_RECEPTION)
@@ -776,6 +770,7 @@ async def patch_product_dimensions(
             height_mm=patch_fields.get("height_mm") if touched_dimensions else p.height_mm,
             weight_g=patch_fields.get("weight_g"),
             weight_g_set="weight_g" in patch_fields,
+            author_user_id=user.id,
         )
     except CatalogError as exc:
         if exc.code in ("invalid_dimensions", "invalid_weight"):

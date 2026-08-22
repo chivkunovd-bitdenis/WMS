@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+import uuid
 
 from alembic import op
 
@@ -91,6 +92,53 @@ def upgrade() -> None:
     op.create_index(
         "ix_product_dimension_events_tenant_id", "product_dimension_events", ["tenant_id"]
     )
+
+    # Preserve the pre-history snapshot as the first immutable observation.
+    # This is deliberately done through the migration connection so upgrades
+    # do not depend on application models or a particular database session.
+    bind = op.get_bind()
+    products = sa.table(
+        "products",
+        sa.column("id"),
+        sa.column("tenant_id"),
+        sa.column("length_mm"),
+        sa.column("width_mm"),
+        sa.column("height_mm"),
+        sa.column("weight_g"),
+        sa.column("volume_liters"),
+        sa.column("created_at"),
+        sa.column("dimensions_source"),
+        sa.column("dimensions_updated_at"),
+    )
+    events = sa.table(
+        "product_dimension_events",
+        sa.column("id"), sa.column("tenant_id"), sa.column("product_id"),
+        sa.column("source"), sa.column("observed_at"), sa.column("length_mm"),
+        sa.column("width_mm"), sa.column("height_mm"), sa.column("weight_g"),
+        sa.column("volume_liters"), sa.column("applied"), sa.column("fingerprint"),
+    )
+    rows = bind.execute(
+        sa.select(products).where(
+            sa.or_(
+                products.c.length_mm.is_not(None),
+                products.c.width_mm.is_not(None),
+                products.c.height_mm.is_not(None),
+                products.c.volume_liters.is_not(None),
+            )
+        )
+    ).mappings()
+    for row in rows:
+        values = [row["length_mm"], row["width_mm"], row["height_mm"], row["weight_g"], row["volume_liters"]]
+        fingerprint = "legacy:" + ":".join("" if value is None else str(value) for value in values)
+        bind.execute(sa.insert(events).values(
+            id=uuid.uuid4(), tenant_id=row["tenant_id"], product_id=row["id"],
+            source="legacy", observed_at=row["created_at"], length_mm=row["length_mm"],
+            width_mm=row["width_mm"], height_mm=row["height_mm"], weight_g=row["weight_g"],
+            volume_liters=row["volume_liters"], applied=True, fingerprint=fingerprint,
+        ))
+        bind.execute(sa.update(products).where(products.c.id == row["id"]).values(
+            dimensions_source="legacy", dimensions_updated_at=row["created_at"]
+        ))
 
 
 def downgrade() -> None:
