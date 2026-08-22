@@ -23,7 +23,12 @@ def test_reporting_dimensions_migration_backfills_and_indexes() -> None:
 
     assert "product.seller_id" in source
     assert "location.warehouse_id" in source
-    assert "reporting_dimensions_legacy = product.seller_id IS NULL" in source
+    assert "SELECT product.seller_id" in source
+    assert "SELECT location.warehouse_id" in source
+    assert "reporting_dimensions_legacy = (" in source
+    assert "NOT EXISTS" in source
+    assert "FROM products AS product\n            JOIN storage_locations" not in source
+    assert "unresolved historical warehouse" in source
     assert "ix_inventory_movements_tenant_created_at" in source
     assert "ix_inventory_movements_tenant_seller_created_at" in source
     assert "ix_inventory_movements_tenant_warehouse_created_at" in source

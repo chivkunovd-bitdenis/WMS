@@ -48,19 +48,54 @@ def upgrade() -> None:
         ondelete="RESTRICT",
     )
 
-    # These joins use the immutable links available on the old fact.  A product
-    # without a seller remains visible to FF, and is explicitly marked legacy.
+    # Resolve dimensions through correlated subqueries. Referencing the target
+    # UPDATE alias from a JOIN in FROM is rejected by PostgreSQL.
     op.execute(
         sa.text(
             """
             UPDATE inventory_movements AS movement
-            SET seller_id = product.seller_id,
-                warehouse_id = location.warehouse_id,
-                reporting_dimensions_legacy = product.seller_id IS NULL
-            FROM products AS product
-            JOIN storage_locations AS location
-              ON location.id = movement.storage_location_id
-            WHERE product.id = movement.product_id
+            SET seller_id = (
+                    SELECT product.seller_id
+                    FROM products AS product
+                    WHERE product.id = movement.product_id
+                ),
+                warehouse_id = (
+                    SELECT location.warehouse_id
+                    FROM storage_locations AS location
+                    WHERE location.id = movement.storage_location_id
+                ),
+                reporting_dimensions_legacy = (
+                    NOT EXISTS (
+                        SELECT 1
+                        FROM products AS product
+                        WHERE product.id = movement.product_id
+                          AND product.seller_id IS NOT NULL
+                    )
+                    OR NOT EXISTS (
+                        SELECT 1
+                        FROM storage_locations AS location
+                        WHERE location.id = movement.storage_location_id
+                          AND location.warehouse_id IS NOT NULL
+                    )
+                )
+            """
+        )
+    )
+    # Do not invent a warehouse for an unresolved historical fact.
+    op.execute(
+        sa.text(
+            """
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1
+                    FROM inventory_movements
+                    WHERE warehouse_id IS NULL
+                ) THEN
+                    RAISE EXCEPTION
+                        'Cannot make inventory_movements.warehouse_id mandatory: unresolved historical warehouse';
+                END IF;
+            END $$;
             """
         )
     )
