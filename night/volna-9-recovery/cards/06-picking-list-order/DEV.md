@@ -1,25 +1,24 @@
-# DEV · 06-picking-list-order · атом 3
+# Backend development report · 06-picking-list-order
 
 ## Изменённые файлы
 
-В рамках переделки по REVIEW.md backend-файлы атома не изменялись: серверная реализация уже присутствует в рабочей копии и соответствует контракту.
-
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/app/services/fbs_supply_service.py` — `get_picking_list` строит группы по `(article, sku_code, size, product_name)`, сортирует группы и заказы детерминированно, считает непрерывные номера и полный `order_ids`.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/app/api/fbs_supplies.py` — endpoint `GET /operations/fbs-supplies/{supply_id}/picking-list` отдаёт `number_start`, `number_end` и `order_ids`.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/tests/test_fbs_supply_assembly.py` — интеграционный сценарий проверяет несколько товарных групп, диапазоны, канонический состав и повторный идентичный запрос.
-
-Находки REVIEW.md 1–6 относятся к frontend и печати следующего атома; находка 7 требует проверки `order-print-tape` из атома 4, поэтому в этот backend-атом не включалась.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/tests/test_fbs_packaging_integration.py` — добавлен endpoint-регресс: полный состав в перемешанном порядке возвращается канонически, повторная печать сохраняет порядок и номера.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/night/volna-9-recovery/cards/06-picking-list-order/DEV.md` — этот отчёт.
 
 ## Гейты
 
-- `ruff check .` — FAIL: 82 существующие ошибки в несвязанных файлах backend (в том числе `app/api/fbs_sellers.py`, `app/services/fbs_stock_sync_service.py`, scripts и других тестах); файлы атома не указаны в выводе.
-- `mypy .` — FAIL: 21 существующая ошибка в 6 несвязанных файлах (`inventory_movement_report_service.py`, `wildberries_credentials_service.py`, cleanup-скрипты, `fbs_stock_sync_service.py`, `fbs_warehouse_binding_service.py`, `wildberries_product_import_service.py`).
-- `pytest tests/test_fbs_supply_assembly.py` — PASS: `17 passed, 1 skipped`.
-- `python3 scripts/ci/back_guard.py` — NOT RUN: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/scripts/ci/back_guard.py` отсутствует.
-- `python3 scripts/ci/check_migrations.py` — NOT RUN: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/scripts/ci/check_migrations.py` отсутствует.
+- `ruff check .` — не пройден: 82 ранее существующие ошибки за пределами изменённого теста; новая проверка не добавила диагностик.
+- `mypy .` — не пройден: 21 ранее существующая ошибка в 6 файлах, изменённый тест и backend-атом в списке ошибок отсутствуют.
+- `pytest -q tests/test_fbs_packaging_integration.py -k tape_covers_every_order_and_matches_picking_list` — пройден, `1 passed`.
+- `pytest -q` — запущен полный набор; к моменту формирования отчёта процесс ещё выполнялся (дошёл минимум до 26% без падений).
+- `python3 scripts/ci/back_guard.py` — недоступен в этой рабочей копии: файл отсутствует.
+- `python3 scripts/ci/check_migrations.py` — недоступен в этой рабочей копии: файл отсутствует.
 
 ## Не реализовано
 
-- Исправления frontend-печати, предпросмотра, состояний `shortage/order_errors` и browser/e2e-проверки не реализованы: они находятся за пределами backend-атома 3.
-- Новых миграций нет.
-- Новых backend-изменений не потребовалось: REVIEW.md подтверждает, что серверный порядок, диапазоны, tenant-фильтр и повторяемость уже работают.
+- Новые backend-роуты, модели и миграции не требовались: endpoint `/operations/fbs-supplies/{supply_id}/order-print-tape` уже канонизирует полный входной набор и возвращает постоянные `order_number`, включая номера в `order_errors` для пропущенных WB-стикеров.
+- Живые WB-запросы не выполнялись; тест использует существующую изолированную заглушку.
+
+## Блокеры
+
+- Полные ruff/mypy-гейты заблокированы накопленными ошибками baseline; guard-скрипты отсутствуют в checkout.

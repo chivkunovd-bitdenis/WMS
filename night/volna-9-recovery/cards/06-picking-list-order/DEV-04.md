@@ -1,20 +1,24 @@
-# Backend-dev · 06-picking-list-order
+# Backend development report · 06-picking-list-order
 
 ## Изменённые файлы
 
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/app/services/fbs_order_tape_print_service.py — разрешён выбор подмножества заказов для существующей строковой печати; порядок и `order_number` вычисляются по полной канонической поставке.
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/tests/test_fbs_supply_assembly.py — тесты одиночной печати с сохранением полного номера и отказа для заказа вне поставки.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/tests/test_fbs_packaging_integration.py` — добавлен endpoint-регресс: полный состав в перемешанном порядке возвращается канонически, повторная печать сохраняет порядок и номера.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/night/volna-9-recovery/cards/06-picking-list-order/DEV.md` — этот отчёт.
 
 ## Гейты
 
-- ruff — целевые файлы: PASS (`ruff check app/services/fbs_order_tape_print_service.py tests/test_fbs_supply_assembly.py`); полный запуск репозитория: FAIL на существующих несвязанных нарушениях.
-- mypy — FAIL на существующих несвязанных ошибках в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py` и `fbs_warehouse_binding_service.py`; ошибок в изменённых файлах не показано.
-- pytest — PASS: `17 passed, 1 skipped` (`tests/test_fbs_supply_assembly.py`).
-- back_guard.py — не запущен: файл отсутствует в этой рабочей копии.
-- check_migrations.py — не запущен: файл отсутствует в этой рабочей копии.
-- git diff --check — PASS.
+- `ruff check .` — не пройден: 82 ранее существующие ошибки за пределами изменённого теста; новая проверка не добавила диагностик.
+- `mypy .` — не пройден: 21 ранее существующая ошибка в 6 файлах, изменённый тест и backend-атом в списке ошибок отсутствуют.
+- `pytest -q tests/test_fbs_packaging_integration.py -k tape_covers_every_order_and_matches_picking_list` — пройден, `1 passed`.
+- `pytest -q` — запущен полный набор; к моменту формирования отчёта процесс ещё выполнялся (дошёл минимум до 26% без падений).
+- `python3 scripts/ci/back_guard.py` — недоступен в этой рабочей копии: файл отсутствует.
+- `python3 scripts/ci/check_migrations.py` — недоступен в этой рабочей копии: файл отсутствует.
 
 ## Не реализовано
 
-- UI-находки ревью не реализовывались: они относятся к роли screen-dev и не входят в API и данные этого атома.
-- Генерация отдельной WMS-этикетки в физическом print-preview не изменялась: текущий backend-атом сохраняет серверные номера и обработку ошибок получения WB-стикеров.
+- Новые backend-роуты, модели и миграции не требовались: endpoint `/operations/fbs-supplies/{supply_id}/order-print-tape` уже канонизирует полный входной набор и возвращает постоянные `order_number`, включая номера в `order_errors` для пропущенных WB-стикеров.
+- Живые WB-запросы не выполнялись; тест использует существующую изолированную заглушку.
+
+## Блокеры
+
+- Полные ruff/mypy-гейты заблокированы накопленными ошибками baseline; guard-скрипты отсутствуют в checkout.

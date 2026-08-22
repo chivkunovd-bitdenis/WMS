@@ -1333,12 +1333,22 @@ async def test_tape_covers_every_order_and_matches_picking_list(
     assert picking.status_code == 200, picking.text
     picking_total = sum(int(item["quantity"]) for item in picking.json()["items"])
     assert picking_total == len(order_ids), "лист подбора обязан покрывать все заказы поставки"
+    picking_order_ids = [
+        uuid.UUID(order_id)
+        for item in picking.json()["items"]
+        for order_id in item["order_ids"]
+    ]
+
+    # The full-print endpoint receives the complete set, but the client order is
+    # not authoritative.  The response must follow the same server sequence as
+    # the picking list and retain stable numbers for a reprint.
+    shuffled_order_ids = list(reversed(order_ids))
 
     tape = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/order-print-tape",
         headers=headers,
         json={
-            "order_ids": [str(oid) for oid in order_ids],
+            "order_ids": [str(oid) for oid in shuffled_order_ids],
             "layout": None,
             "allow_partial": False,
             "include_order_qr": True,
@@ -1349,6 +1359,11 @@ async def test_tape_covers_every_order_and_matches_picking_list(
     tape_body = tape.json()
     assert len(tape_body["orders"]) == len(order_ids), tape_body.get("order_errors")
     assert not tape_body.get("order_errors")
+    response_order_ids = [uuid.UUID(row["order_id"]) for row in tape_body["orders"]]
+    assert response_order_ids == picking_order_ids
+    assert [row["order_number"] for row in tape_body["orders"]] == list(
+        range(1, len(order_ids) + 1)
+    )
 
     # Повторная печать не должна давать ленту короче: заказы уже помечены напечатанными,
     # но в ленту обязаны попасть все — иначе после зажёванной бумаги не перепечатать.
@@ -1356,7 +1371,7 @@ async def test_tape_covers_every_order_and_matches_picking_list(
         f"/operations/fbs-supplies/{supply_id}/order-print-tape",
         headers=headers,
         json={
-            "order_ids": [str(oid) for oid in order_ids],
+            "order_ids": [str(oid) for oid in shuffled_order_ids],
             "layout": None,
             "allow_partial": False,
             "include_order_qr": True,
@@ -1365,3 +1380,9 @@ async def test_tape_covers_every_order_and_matches_picking_list(
     )
     assert again.status_code == 200, again.text
     assert len(again.json()["orders"]) == len(order_ids)
+    assert [row["order_id"] for row in again.json()["orders"]] == [
+        str(oid) for oid in picking_order_ids
+    ]
+    assert [row["order_number"] for row in again.json()["orders"]] == list(
+        range(1, len(order_ids) + 1)
+    )
