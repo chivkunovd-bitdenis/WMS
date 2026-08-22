@@ -7,22 +7,27 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.fbs_order import FBS_ORDER_STATUS_IN_SUPPLY, FBS_ORDER_STATUS_NEW, FbsOrder
 from app.models.fbs_supply import FBS_SUPPLY_STATUS_DRAFT, FbsSupply
 from app.models.product import Product
+from app.services import fbs_order_tape_print_service as order_tape_svc
+from app.services import fbs_packaging_integration_service as pack_int_svc
 from app.services.fbs_order_tape_print_service import (
     _is_complete_supply_order_set,
     _orders_in_canonical_order,
     _select_requested_orders,
 )
+from app.services.fbs_print_asset_service import PrintBatchResult, PrintOrderError
 from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
 from app.services.wildberries_client import WildberriesClientError
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
@@ -220,6 +225,92 @@ def test_fbs_order_tape_full_set_check_requires_every_order_exactly_once() -> No
     assert _is_complete_supply_order_set([first, second], [second.id, first.id])
     assert not _is_complete_supply_order_set([first, second], [first.id])
     assert not _is_complete_supply_order_set([first, second], [first.id, first.id])
+
+
+# TC-NEW-FBS-SUPPLY-005 — one missing WB PNG keeps its immutable list number;
+# the following ready order is not compacted into the gap.
+@pytest.mark.asyncio
+async def test_fbs_order_tape_missing_png_preserves_following_order_number(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    order_ids = [uuid.UUID(int=value) for value in (1, 2, 3)]
+    orders = [
+        SimpleNamespace(
+            id=order_id,
+            wb_order_id=1000 + number,
+            wb_article=f"ART-{number}",
+            product=None,
+            product_id=None,
+            required_meta_json=[],
+        )
+        for number, order_id in enumerate(order_ids, start=1)
+    ]
+    supply = SimpleNamespace(orders=orders, honest_sign_skipped_at=None)
+    ready_assets = [
+        SimpleNamespace(id=uuid.uuid4(), fbs_order_id=orders[index].id, status="ready")
+        for index in (0, 2)
+    ]
+    batch = PrintBatchResult(
+        requested=3,
+        ready=2,
+        missing=1,
+        failed=0,
+        assets=cast(Any, ready_assets),
+        order_errors=[
+            PrintOrderError(
+                order_id=orders[1].id,
+                wb_order_id=orders[1].wb_order_id,
+                code="wb_sticker_missing",
+                message="Заказ WB: стикер не получен",
+            )
+        ],
+    )
+
+    async def load_supply(*args: object, **kwargs: object) -> object:
+        return supply
+
+    async def request_batch(*args: object, **kwargs: object) -> PrintBatchResult:
+        return batch
+
+    async def no_lines(*args: object, **kwargs: object) -> dict[uuid.UUID, object]:
+        return {}
+
+    async def no_promotion(*args: object, **kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(order_tape_svc, "_load_supply", load_supply)
+    monkeypatch.setattr(order_tape_svc, "request_supply_print_batch", request_batch)
+    monkeypatch.setattr(order_tape_svc, "_line_by_product", no_lines)
+    monkeypatch.setattr(
+        pack_int_svc,
+        "try_promote_fbs_supply_if_ready",
+        no_promotion,
+    )
+    session = cast(
+        AsyncSession,
+        SimpleNamespace(flush=AsyncMock(), rollback=AsyncMock()),
+    )
+
+    result = await order_tape_svc.print_fbs_order_tape(
+        session,
+        uuid.uuid4(),
+        uuid.uuid4(),
+        order_ids=list(reversed(order_ids)),
+        layout=None,
+        allow_partial=False,
+        include_order_qr=True,
+        reprint=False,
+        actor_user_id=uuid.uuid4(),
+        http_client=cast(Any, SimpleNamespace()),
+    )
+
+    assert [(row.order_id, row.order_number) for row in result.orders] == [
+        (orders[0].id, 1),
+        (orders[2].id, 3),
+    ]
+    missing_errors = [error for error in result.order_errors if error.order_id == orders[1].id]
+    assert missing_errors
+    assert {error.order_number for error in missing_errors} == {2}
 
 
 # TC-NEW-FBS-SUPPLY-ORDER-001 — supply.orders is stable by WB id, then UUID.

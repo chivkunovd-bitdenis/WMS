@@ -68,3 +68,5 @@
 21:18   06-picking-list-order · backend-dev: готово
 21:18   06-picking-list-order · dev: фича 2/6 сохранена 373ea249c0a5
 21:21   06-picking-list-order · backend-dev: готово
+21:21   06-picking-list-order · dev: фича 3/6 сохранена a62c8de8a358
+21:25   06-picking-list-order · backend-dev: готово
