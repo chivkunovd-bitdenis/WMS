@@ -56,7 +56,7 @@ import {
   type FbsWorklistWarehouseOption,
   type FbsWorkspace,
 } from './fbsApi'
-import { TableLoadMore } from '../../ui-kit'
+import { EmptyState, ErrorNotice, SecondaryAction, TableLoadMore, TableSkeletonBody } from '../../ui-kit'
 
 type SellerRow = { id: string; name: string }
 
@@ -287,25 +287,6 @@ const NewOrderRow = memo(function NewOrderRow({
         </Stack>
       </TableCell>
       <TableCell>
-        <Typography variant="body2" sx={{ fontWeight: 700 }}>
-          WB №{order.wb_order_id}
-        </Typography>
-        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
-          ШК: {order.product.barcode ?? '—'}
-        </Typography>
-        {order.product.sku ? (
-          <Tooltip title={order.product.sku}>
-            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
-              SKU {order.product.sku}
-            </Typography>
-          </Tooltip>
-        ) : order.product.seller_article ? (
-          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
-            Артикул: {order.product.seller_article}
-          </Typography>
-        ) : null}
-      </TableCell>
-      <TableCell>
         <Tooltip title={order.seller.name ?? '—'}>
           <Typography variant="body2" noWrap sx={{ maxWidth: 100 }}>{order.seller.name ?? '—'}</Typography>
         </Tooltip>
@@ -326,10 +307,7 @@ const NewOrderRow = memo(function NewOrderRow({
         </Typography>
       </TableCell>
       <TableCell>
-        <Typography variant="body2">{formatDateTime(order.created_at_wb)}</Typography>
-        <Typography variant="caption" color="text.secondary">
-          В сборке: {elapsedSince(order.created_at_wb, serverNow)}
-        </Typography>
+        <Typography variant="body2">{formatDateTime(order.deadline_at)}</Typography>
       </TableCell>
     </TableRow>
   )
@@ -553,7 +531,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         const params = {
           seller_id: sellerId === '__all__' ? null : sellerId,
           status_group: statusGroup,
-          limit: 500,
+          limit: 100,
         }
         const [suppliesPage, ordersPage] = await Promise.all([
           fetchFbsSupplyWorklist(token, authHeaders, params),
@@ -584,7 +562,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         return next
       })
       setWarehouseOptions(statusGroup === 'new' ? page.warehouse_options ?? [] : [])
-      setNextCursor(statusGroup === 'new' ? page.next_cursor : null)
+      if (statusGroup !== 'new' || !backgroundRefresh) setNextCursor(statusGroup === 'new' ? page.next_cursor : null)
       setLoadMoreError(null)
       if (
         statusGroup === 'new' &&
@@ -1114,9 +1092,16 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       </Paper>
 
       {error ? (
-        <Alert severity="error" sx={{ mt: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
+        <Box sx={{ mt: 2 }}>
+          <ErrorNotice testId="fbs-orders-error">
+            <Stack direction="row" spacing={2} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+              <Typography variant="body2">{error}</Typography>
+              <SecondaryAction size="small" onClick={() => void load()} disabled={busy}>
+                Повторить
+              </SecondaryAction>
+            </Stack>
+          </ErrorNotice>
+        </Box>
       ) : null}
 
       {syncNote ? (
@@ -1279,10 +1264,9 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               {statusGroup === 'new' ? (
                 <>
                   <TableCell sx={{ minWidth: 210 }}>Товар</TableCell>
-                  <TableCell sx={{ minWidth: 210 }}>Заказ и сканирование</TableCell>
                   <TableCell sx={{ minWidth: 135 }}>Селлер</TableCell>
-                  <TableCell sx={{ minWidth: 180 }}>Склад селлера / WB</TableCell>
-                  <TableCell sx={{ minWidth: 140 }}>Создан WB / в сборке</TableCell>
+                  <TableCell sx={{ minWidth: 180 }}>Маршрут сдачи</TableCell>
+                  <TableCell sx={{ minWidth: 140 }}>Отгрузить до</TableCell>
                 </>
               ) : (
                 <>
@@ -1295,7 +1279,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               )}
             </TableRow>
           </TableHead>
-          <TableBody>
+          {busy && orders.length === 0 ? <TableSkeletonBody columns={5} rows={5} /> : <TableBody>
             {orders.map((order) => {
               if (statusGroup === 'new') {
                 return (
@@ -1425,29 +1409,19 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                 ) : row
               )
             })}
-            {!busy && orders.length === 0 ? (
+            {!busy && !error && orders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6}>
-                  <Box sx={{ py: 8, textAlign: 'center' }}>
-                    <Inventory2OutlinedIcon sx={{ fontSize: 42, color: 'text.disabled' }} />
-                    <Typography variant="subtitle1" sx={{ mt: 1 }}>
-                      Заказов в этой группе нет
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Измените фильтры или обновите синхронизацию с WB.
-                    </Typography>
-                  </Box>
+                <TableCell colSpan={5}>
+                  <EmptyState
+                    title="Новых заказов нет"
+                    hint="Новые заказы загружаются автоматически из Wildberries."
+                    testId="fbs-orders-empty"
+                  />
                 </TableCell>
               </TableRow>
             ) : null}
-          </TableBody>
+          </TableBody>}
         </Table>
-        {busy ? (
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'center', py: 2 }}>
-            <CircularProgress size={20} />
-            <Typography variant="body2">Обновляем рабочий список…</Typography>
-          </Stack>
-        ) : null}
       </TableContainer>
       )}
 
