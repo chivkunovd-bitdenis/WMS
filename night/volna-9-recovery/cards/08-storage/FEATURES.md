@@ -1,127 +1,142 @@
-ФИЧ: 8
+ФИЧ: 4
+
+# FEATURES · 08-storage · перепланирование по REVIEW
+
+Источник: три незакрытые находки из `REVIEW.md`.
+Всё уже принятое (атомы 1–8: модели, миграции, сервисы расчёта и фиксации,
+UI-kit, экран S-11) не возвращается в разработку.
+
+---
 
 ## Фичи
 
-### 1. Расширить подпись PrintAction для расчёта хранения
+### 1. Серверная ручка создания тарифа хранения
 
-Оператор видит в строке зафиксированного расчёта хранения привычное действие «Печать накладной»; публичный интерфейс компонента не меняется, а новая подпись остаётся внутренним правилом `PrintAction`.
+**Что меняется словами оператора.** Администратор нажимает «Задать тариф» и
+сохраняет ставку. Сейчас браузер получает 404, потому что маршрут
+`POST /operations/storage/tariffs` в бэке не зарегистрирован — только
+`rebuild`, `fix` и `print` (строки 307–386 `storage.py`). После этой фичи
+сервер принимает ставку склада и, при заполненном исключении, ставку конкретного
+«селлер + склад» в одной транзакции. Частичного состояния (первый тариф записан,
+второй нет) быть не может, потому что оба создаются или откатываются вместе.
 
-Файлы:
+**Файлы:**
+- `backend/app/api/storage.py`
+- `backend/app/services/storage_statement_service.py`
+- `backend/tests/test_storage_tariff_api.py`
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend/src/ui-kit/Actions.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend/src/ui-kit/Actions.test.tsx`
+**Зависит от:** ничего (первая в очереди).
 
-Зависимости: нет. Это единственная необходимая работа UI-kit из раздела «Нехватка ui-kit» контракта.
+**Как проверить:**
+1. `pytest -q backend/tests/test_storage_tariff_api.py` — зелёный.
+2. Тест `test_admin_creates_warehouse_tariff`: POST с `{warehouse_id, amount,
+   valid_from}` → HTTP 201, в `billing_tariff_versions` одна строка без
+   `seller_id`.
+3. Тест `test_admin_creates_tariff_with_seller_exception`: POST с
+   `{warehouse_id, amount, valid_from, seller_exception:{seller_id, amount,
+   valid_from}}` → HTTP 201, две строки в одной транзакции; имитация сбоя
+   второй INSERT → ни одна строка не сохранена.
+4. Тест `test_staff_inventory_cannot_set_tariff`: тот же POST от пользователя
+   с правом `inventory` без роли `fulfillment_admin` → HTTP 403.
 
-Проверка: рендер `PrintAction` с `what="накладную"` в вариантах `row` и `panel` показывает «Печать накладной», а существующие варианты печати сохраняют свои подписи и disabled-подсказки.
+---
 
-### 2. Сохранить версии источника и габаритов товара
+### 2. Утилита московской даты
 
-Система хранит неизменяемую историю наблюдений WB и ручных обмеров вместе с действующей версией, автором, временем, объёмом и основанием для объёма тары; текущие поля товара остаются быстрым снимком действующего значения.
+**Что меняется словами оператора.** Пока не видно: это вспомогательный модуль.
+Нужен, чтобы экран (Фича 3) брал текущую московскую дату, а не UTC-дату, которая
+между 00:00 и 02:59 МСК показывает вчерашний день. Один новый файл; ни один
+существующий компонент пока его не импортирует, сборка фронта не затронута.
 
-Файлы:
+**Файлы:**
+- `frontend/src/utils/moscowDate.ts`
+- `frontend/src/utils/moscowDate.test.ts`
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/models/product.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/models/product_dimension_event.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/alembic/versions/20260822_0095_product_dimension_events.py`
+**Зависит от:** ничего (параллельна Фиче 1).
 
-Зависимости: нет.
+**Как проверить:**
+`npm run test:unit -- src/utils/moscowDate.test.ts` — зелёный.
+Тест `returns_tomorrow_moscow_when_it_is_23_utc_but_next_day_in_moscow`:
+при входных данных `2026-08-22T23:30:00Z` функция
+`getMoscowDateString(new Date('2026-08-22T23:30:00Z'))` возвращает `'2026-08-23'`.
 
-Проверка: миграция создаёт поля действующего источника на `products` и журнал событий; в тестовой БД можно записать ручную и WB-версии одного товара, при этом действующей остаётся ровно одна версия с полным аудиторским контекстом.
+---
 
-### 3. Не давать импорту WB затереть ручной обмер
+### 3. Исправление диалога тарифа в экране хранения
 
-При ручной правке оператор создаёт новую действующую версию `manual` либо `container_override`, а импорт WB сохраняет изменившееся наблюдение, но не меняет ручной действующий объём. Повтор одинакового наблюдения не создаёт дубль; возврат к последней полной версии WB создаёт новую действующую версию.
+**Что меняется словами оператора.** Два поведенческих дефекта в одной функции
+`saveRate()` и двух строках инициализации состояния — правятся вместе, потому что
+оба дефекта в одном блоке; оставить один починённым, а другой нет — значит отдать
+экран в нерабочем промежуточном состоянии:
 
-Файлы:
+- *Дата по умолчанию*: строки 41–42 и 71, 75 заменяют `new Date().toISOString()`
+  на `getMoscowDateString()` из Фичи 2. После исправления администратор,
+  открывший диалог в 01:00 МСК, видит сегодняшний московский день, а не вчерашний.
+- *Два последовательных запроса*: `saveRate()` строки 192–194 объединяют оба
+  POST-вызова в один. Если открыто исключение для селлера, тело запроса включает
+  поле `seller_exception`; иначе только складские данные. Сервер (Фича 1) пишет
+  обе версии в одной транзакции. Retry после сбоя больше не упирается в
+  уникальность уже сохранённой общей ставки.
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/catalog_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/wildberries_product_import_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_product_dimension_history.py`
+**Файлы:**
+- `frontend/src/screens/ff/FfStoragePage.tsx`
 
-Зависимости: 2.
+**Зависит от:** Фичи 1 (объединённый эндпоинт) и Фичи 2 (утилита даты).
 
-Проверка: тесты покрывают полный ручной обмер, объём тары без и с комментарием, повтор WB-импорта и WB-обновление после ручного обмера; после возврата к WB действующим становится последнее полное WB-наблюдение, а закрытые периоды не пересчитываются этим действием.
+**Как проверить:**
+1. `npx tsc --noEmit -p tsconfig.app.json` из `frontend/` — зелёный.
+2. В браузере (или через Playwright с моком сервера, пока Фича 4 не готова):
+   открыть диалог «Задать тариф» до ввода данных → поле «Дата начала» содержит
+   сегодняшний день по МСК.
+3. Раскрыть «Индивидуальная ставка», заполнить, нажать «Сохранить» → в DevTools
+   Network один `POST /operations/storage/tariffs` с телом
+   `{warehouse_id, amount, valid_from, seller_exception: {seller_id, amount, valid_from}}`.
 
-### 4. Открыть API обмера и истории габаритов товара
+---
 
-Сотрудник с правом `inventory` может через API сохранить допустимый обмер и прочитать историю товара, а только `FULFILLMENT_ADMIN` может вернуть последнюю WB-версию. Недопустимые габариты, тара без основания и доступ не своей организации получают понятную ошибку без частичной записи.
+### 4. Снятие мока с несуществующего эндпоинта в e2e-тесте
 
-Файлы:
+**Что меняется словами оператора.** Тест `S-11-TC-002` в строке 35
+`storage.spec.ts` перехватывает `POST /operations/storage/tariffs` и подставляет
+успешный ответ `{status: 201, json: {id: 'tariff-1'}}`, скрывая отсутствие
+реального роута. После Фичи 1 перехват больше не нужен: тест проверяет живой
+ответ сервера. Мок убирается; тест остаётся как есть, потому что его сценарий
+(администратор вводит ставку, нажимает «Сохранить», диалог закрывается) полностью
+описывает ожидаемое поведение.
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/api/products.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_products_api.py`
+**Файлы:**
+- `frontend/tests-e2e/storage.spec.ts`
 
-Зависимости: 3.
+**Зависит от:** Фичи 1 и Фичи 3.
 
-Проверка: API-тесты подтверждают чтение хронологии, сохранение каждого из двух способов обмера, запрет неполных/нулевых значений и разграничение прав для возврата WB-версии.
+**Как проверить:**
+`npx playwright test tests-e2e/storage.spec.ts --grep 'S-11-TC-002'` — зелёный
+без `page.route(...)`. Убедиться командой `grep -n 'route.*tariffs'
+tests-e2e/storage.spec.ts` → 0 совпадений.
 
-### 5. Завести неизменяемые измерения и документы хранения
-
-Система получает таблицы `StorageMeasurement` и `StorageStatement`: измерение связано с tenant, селлером, операционным складом, SKU, версией объёма и диапазоном движений; документ группирует один месяц и один склад. Денежных таблиц, локальных тарифов и отдельного счёта эта фича не создаёт.
-
-Файлы:
-
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/models/storage_measurement.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/models/storage_statement.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/alembic/versions/20260822_0096_storage_measurements_and_statements.py`
-
-Зависимости: внешний фундамент 07-A из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/night/volna-9-recovery/ARCH-CROSS.md`; фичи 2–3.
-
-Проверка: миграция запрещает дубли документа для одного tenant/селлера/операционного склада/месяца и сохраняет ссылку измерения только на зафиксированный `InventoryMovement.warehouse_id`; служебный склад не проходит в состав документа.
-
-### 6. Сформировать и показать черновик хранения за месяц
-
-По запросу оператора фоновая задача строит или безопасно пересчитывает только открытые черновики выбранного календарного месяца МСК. Она интегрирует положительный физический остаток по времени, применяет версию габаритов, показывает SKU без объёма как проблему, оставляет последний успешный черновик при ошибке и не создаёт денег.
-
-Файлы:
-
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/storage_measurement_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/api/storage.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/tasks/background_jobs.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_storage_measurement_service.py`
-
-Зависимости: 5 и внешний контракт 07-A.
-
-Проверка: сервисные и API-тесты проверяют формулу с долей суток, прошлый месяц по умолчанию, запрет будущего месяца, нулевой месяц, отсутствие габаритов, отрицательный восстановленный остаток, идемпотентный повтор задания и исключение неоперационных складов.
-
-### 7. Зафиксировать документ и опубликовать единственную ledger-строку
-
-Администратор фиксирует только черновик без проблем. В одной транзакции неизменяемый `StorageStatement` публикует строки общего биллинга `BillingLedgerEntry` с `service_code='storage_liter_day'`, `unit='liter_day'` и `source_type='storage_measurement'`, в том числе для нулевого документа; затем API отдаёт A4-представление только зафиксированного расчёта.
-
-Файлы:
-
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/storage_statement_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/api/storage.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_storage_statement_service.py`
-
-Зависимости: 6 и внешний 09-A — модели `BillingTariffVersion` / `BillingLedgerEntry` и единица `liter_day` должны уже существовать. Это обязательная граница `ARCH-CROSS.md`: свои `storage_tariffs`, `storage_charges` либо второй путь счёта не допускаются.
-
-Проверка: два одновременных запроса создают один statement и один набор ledger-строк; проблемный черновик не фиксируется, зафиксированный не меняется при новом обмере, а повторная печать возвращает тот же состав SKU, ставку-снимок, итог и дату фиксации.
-
-### 8. Заменить заглушку S-11 рабочим экраном «Хранение»
-
-Оператор на `/app/ff/inventory` видит только операционные склады, прошлый месяц, сводку по селлерам и раскрытие одного селлера до SKU. Экран даёт сформировать черновик, внести обмер и открыть историю; администратор также меняет тариф, фиксирует расчёт и печатает его. Состояния загрузки, пустого тарифа, ошибки, проблемных габаритов и нулевого месяца следуют контракту без новых страниц или изменения соседней навигации.
-
-Файлы:
-
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend/src/screens/ff/FfStoragePage.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend/src/App.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend/tests-e2e/storage.spec.ts`
-
-Зависимости: 1, 4, 6 и 7.
-
-Проверка: Playwright проходит UI-путь администратора «открыть прошлый месяц → сформировать → раскрыть селлера → внести обмер → зафиксировать → увидеть A4-предпросмотр», а отдельные сценарии подтверждают ограничение сотрудника без кнопок тарифа/фиксации, отсутствие габаритов с блокировкой, нулевой месяц, поиск только по видимым строкам и повторную печать. Тесты помечаются `S-11-TC-001`—`S-11-TC-020` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/night/volna-9-recovery/cards/08-storage/CASES.md`.
+---
 
 ## Порядок
 
-Сначала выполнить 1 и 2 параллельно: они не зависят друг от друга. Затем последовательно 3 → 4, чтобы пользовательский API опирался на версионирование, и 5 → 6, чтобы расчёт имел неизменяемое хранилище. Фича 5 начинается только после готовности 07-A, поскольку ей нужен фактический склад из `InventoryMovement.warehouse_id`.
+```
+Фича 1 (backend)  ──┐
+                     ├──► Фича 3 (frontend screen) ──► Фича 4 (e2e test)
+Фича 2 (frontend) ──┘
+```
 
-После 6 выполнить 7; она дополнительно ждёт 09-A и использует только его общий тарифно-биллинговый контракт. В завершение выполнить 8: экран опирается на готовый UI-kit, API габаритов, черновик и фиксацию. Независимая пара 1 и 2 может идти параллельно с внешними 07-A и 09-A, но не заменяет их.
+- **Фичи 1 и 2 независимы** — делаются параллельно.
+- **Фича 3 ждёт обе**: подключает утилиту (2) и посылает запрос на новый эндпоинт (1).
+- **Фича 4 ждёт Фичу 3**: убирает мок только когда экран и сервер уже работают вместе.
+
+---
 
 ## Что осталось за бортом
 
-- Паллето-дни, бесплатные периоды, минимальная сумма, сезонные коэффициенты и категории товара не входят в контракт первой версии.
-- Бухгалтерский акт, счёт-фактура, НДС, ЭДО, оплата и интеграция с 1С остаются задачей общего биллинга, а не хранения.
-- Онлайн-кабинет селлера, посуточная детализация, запись ручных габаритов в Wildberries и прогноз хранения не создаются этой карточкой.
-- Фича 7 блокируется только отсутствием внешнего 09-A; вместо собственной финансовой схемы 08 обязана ждать общий контракт.
+- Убрать мок `page.route` из `S-11-TC-012` не требуется: он перехватывает
+  `/statements`, которые уже реализованы; с тарифным эндпоинтом не связан.
+- Полный `mypy app` после Фичи 1 скорее всего вернёт четыре существовавших
+  ошибки в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py`
+  и `fbs_warehouse_binding_service.py` — они за пределами файлов этих фич.
+- Playwright-тест `S-11-TC-002` после снятия мока потребует запущенного
+  тестового бэка; инфраструктура sandbox (`operation not permitted` на bind
+  127.0.0.1:18000) остаётся внешним ограничением, не решаемым в этих фичах.

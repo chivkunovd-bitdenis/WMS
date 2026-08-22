@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Any
 
@@ -11,7 +11,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from app.api.deps import require_ff_or_seller_with_permission
+from app.api.deps import require_ff_or_seller_with_permission, require_fulfillment_admin
 from app.core.settings import settings
 from app.db.session import get_db
 from app.models.billing import BillingTariffVersion
@@ -30,6 +30,7 @@ from app.services.storage_measurement_service import (
 )
 from app.services.storage_statement_service import (
     StorageStatementError,
+    create_storage_tariff,
     fix_storage_statement,
     get_fixed_storage_statement,
     get_storage_ledger_rows,
@@ -70,6 +71,32 @@ class StorageStatementsOut(BaseModel):
     tariff_configured: bool
     warehouses: list[dict[str, object]]
     statements: list[StorageStatementOut]
+
+
+class SellerExceptionBody(BaseModel):
+    seller_id: uuid.UUID
+    amount: Decimal
+    valid_from: date
+
+
+class TariffCreateBody(BaseModel):
+    warehouse_id: uuid.UUID
+    amount: Decimal
+    valid_from: date
+    seller_exception: SellerExceptionBody | None = None
+
+
+class TariffVersionOut(BaseModel):
+    id: uuid.UUID
+    warehouse_id: uuid.UUID | None
+    seller_id: uuid.UUID | None
+    amount: str
+    valid_from: str
+
+
+class TariffCreateOut(BaseModel):
+    warehouse_tariff: TariffVersionOut
+    seller_exception: TariffVersionOut | None = None
 
 
 def _public_dimension_source(source: str | None) -> str | None:
@@ -301,6 +328,62 @@ async def list_statements(
         tariff_configured=tariff_configured,
         warehouses=[{"id": warehouse.id, "name": warehouse.name} for warehouse in warehouses],
         statements=statement_outputs,
+    )
+
+
+@router.post("/tariffs", response_model=TariffCreateOut, status_code=status.HTTP_201_CREATED)
+async def create_tariff(
+    body: TariffCreateBody,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> TariffCreateOut:
+    """Create a storage rate for a warehouse; optionally add a seller override atomically.
+
+    Only ``fulfillment_admin`` can configure tariffs.  If a seller exception is
+    supplied, both the common warehouse tariff and the seller override are
+    written in a single database transaction — a failure on either INSERT leaves
+    no partial state.
+    """
+    seller_ex = (
+        (
+            body.seller_exception.seller_id,
+            body.seller_exception.amount,
+            body.seller_exception.valid_from,
+        )
+        if body.seller_exception is not None
+        else None
+    )
+    try:
+        wh_tariff, sel_tariff = await create_storage_tariff(
+            session,
+            user.tenant_id,
+            body.warehouse_id,
+            body.amount,
+            body.valid_from,
+            seller_ex,
+        )
+    except StorageStatementError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    seller_exception_out: TariffVersionOut | None = None
+    if sel_tariff is not None and body.seller_exception is not None:
+        seller_exception_out = TariffVersionOut(
+            id=sel_tariff.id,
+            warehouse_id=body.warehouse_id,
+            seller_id=body.seller_exception.seller_id,
+            amount=str(sel_tariff.amount),
+            valid_from=sel_tariff.valid_from.isoformat(),
+        )
+
+    return TariffCreateOut(
+        warehouse_tariff=TariffVersionOut(
+            id=wh_tariff.id,
+            warehouse_id=body.warehouse_id,
+            seller_id=None,
+            amount=str(wh_tariff.amount),
+            valid_from=wh_tariff.valid_from.isoformat(),
+        ),
+        seller_exception=seller_exception_out,
     )
 
 

@@ -367,6 +367,58 @@ async def get_fixed_storage_statement(
     return statement, [by_id[row.source_id] for row in ledger_rows if row.source_id in by_id]
 
 
+async def create_storage_tariff(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    amount: Decimal,
+    valid_from: date,
+    seller_exception: tuple[uuid.UUID, Decimal, date] | None = None,
+) -> tuple[BillingTariffVersion, BillingTariffVersion | None]:
+    """Create a warehouse storage tariff and an optional seller override atomically.
+
+    Both the warehouse tariff and the seller exception are added inside the same
+    SQLAlchemy unit-of-work so that a unique-constraint violation on the second
+    INSERT leaves no partial state: either both rows are committed or neither is.
+    """
+    warehouse_tariff = BillingTariffVersion(
+        tenant_id=tenant_id,
+        seller_id=None,
+        warehouse_id=warehouse_id,
+        service_code="storage_liter_day",
+        unit="liter_day",
+        amount=amount,
+        valid_from=valid_from,
+    )
+    session.add(warehouse_tariff)
+
+    seller_tariff: BillingTariffVersion | None = None
+    if seller_exception is not None:
+        seller_id, seller_amount, seller_valid_from = seller_exception
+        seller_tariff = BillingTariffVersion(
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            warehouse_id=warehouse_id,
+            service_code="storage_liter_day",
+            unit="liter_day",
+            amount=seller_amount,
+            valid_from=seller_valid_from,
+        )
+        session.add(seller_tariff)
+
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise StorageStatementError("tariff_already_exists") from exc
+
+    await session.refresh(warehouse_tariff)
+    if seller_tariff is not None:
+        await session.refresh(seller_tariff)
+
+    return warehouse_tariff, seller_tariff
+
+
 async def get_storage_ledger_rows(
     session: AsyncSession, tenant_id: uuid.UUID, statement_id: uuid.UUID
 ) -> list[Any]:

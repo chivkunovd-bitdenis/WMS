@@ -1,23 +1,55 @@
-# DEV · 08-storage · атом 1 · rework
+# DEV · 08-storage · переделка по REVIEW.md (Finding 1 + Finding 2)
+
+## Что реализовано
+
+- **`POST /operations/storage/tariffs`** (HTTP 201) — принимает `{warehouse_id, amount, valid_from}` и опциональный `seller_exception: {seller_id, amount, valid_from}`; доступен только роли `fulfillment_admin`; оба INSERT выполняются в одной транзакции — сбой второго не оставляет частичного состояния.
+- **`create_storage_tariff()`** — новая функция сервисного слоя в `storage_statement_service.py`; атомарно создаёт строку общего склада и (при наличии) строку-исключение для пары «селлер + склад»; ловит `IntegrityError`, откатывает транзакцию и пробрасывает `StorageStatementError("tariff_already_exists")`.
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend/src/ui-kit/Actions.test.tsx` — проверки `PrintAction` переведены на фактический React-рендер для вариантов `row` и `panel`, прежних подписей и disabled-пояснений.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend/src/ui-kit/Actions.test.ts` — добавлена точка входа для теста, потому что текущий `vitest.config.ts` обнаруживает только файлы `*.test.ts` и пропускал контрактный `Actions.test.tsx`.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/night/volna-9-recovery/cards/08-storage/DEV.md` — записан отчёт роли `screen-dev`.
+- `backend/app/api/storage.py` — добавлены Pydantic-модели (`SellerExceptionBody`, `TariffCreateBody`, `TariffVersionOut`, `TariffCreateOut`), импорты `date`, `require_fulfillment_admin`, `create_storage_tariff`, маршрут `POST /tariffs`.
+- `backend/app/services/storage_statement_service.py` — добавлена функция `create_storage_tariff`.
+- `backend/tests/test_storage_tariff_api.py` — новый тестовый файл (3 теста).
 
-`/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend/src/ui-kit/Actions.tsx` в rework не менялся: внутреннее сопоставление `what="накладную"` → `Печать накладной` уже реализовано, публичный интерфейс компонента сохранён. В `REVIEW.md` нет находок, относящихся к `Actions.tsx`, `Actions.test.tsx` или слою этого атома.
+## Миграции
+
+Нет. Таблица `billing_tariff_versions` существует; новые строки в неё вставляет сервис через существующие модели SQLAlchemy без изменения схемы.
+
+## Тесты
+
+| Функция | Что проверяет |
+|---|---|
+| `test_admin_creates_warehouse_tariff` | POST с `{warehouse_id, amount, valid_from}` → 201; ровно одна строка в `billing_tariff_versions` с `seller_id IS NULL` |
+| `test_admin_creates_tariff_with_seller_exception` | Happy-path → 201, две строки; затем конфликт на втором INSERT (pre-seeded seller tariff) → 409, ноль строк у общего тарифа склада (атомарный откат) |
+| `test_staff_inventory_cannot_set_tariff` | `fulfillment_staff` с правом `inventory` без роли `fulfillment_admin` → 403 |
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` из `frontend/` — **красный**, код возврата 2. Все девять ошибок находятся вне разрешённых файлов атома, в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend/src/screens/ff/FfStoragePage.tsx`: две ошибки устаревшего `inputProps`, три вызова `TextCell` без `value`, два вызова `StatusChip` через неподдерживаемый `children`, один вызов `ProductCell` без `sku` и ещё один вызов `StatusChip` через `children` в диалоге истории.
-- `python3 scripts/ui/ui_guard.py` из корня — **красный**, код возврата 1. Храповик сообщает три новых нарушения вне разрешённых файлов атома: `src/components/WbProductPickerDialog.tsx` (646 строк), `src/screens/v2/FfFbsSupplyWorkspace.tsx` (2498 строк), `src/screens/v2/SellerInboundDraftScreen.tsx` (1169 строк). Базовая линия не обновлялась.
-- `npm run test:unit` из `frontend/` — **зелёный**: 20 файлов, 141 тест, включая 3 теста `PrintAction`.
-- Целевая проверка `npm run test:unit -- src/ui-kit/Actions.test.ts` — **зелёная**: 1 файл, 3 теста.
-- `git add … && git commit -m "test(storage): run PrintAction render coverage"` — **красный**: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-08-storage1/index.lock` (`Operation not permitted`). Результат остаётся в постоянном рабочем дереве, но не сохранён отдельным коммитом.
+Выполненные команды (из `backend/`):
+
+```
+python3 -m ruff check app/api/storage.py app/services/storage_statement_service.py tests/test_storage_tariff_api.py
+→ All checks passed!
+
+python3 -m mypy app/api/storage.py app/services/storage_statement_service.py tests/test_storage_tariff_api.py
+→ 4 errors in 3 pre-existing FBS/reporting files (wildberries_credentials_service.py, fbs_stock_sync_service.py, fbs_warehouse_binding_service.py) — совпадают с зафиксированными ревьюером до правки; изменённые файлы ошибок не дали.
+
+python3 -m pytest -q tests/test_storage_tariff_api.py
+→ 3 passed in 3.35s
+
+python3 -m pytest -q tests/test_storage_tariff_api.py tests/test_storage_statement_service.py tests/test_storage_models.py
+→ 17 passed in 6.02s
+
+python3 -m pytest -q tests/test_storage_statement_service.py tests/test_storage_models.py tests/test_storage_measurement_service.py tests/test_storage_movement_scope.py
+→ 28 passed in 5.22s
+```
+
+back_guard.py, check_migrations.py — в этом worktree не присутствуют; согласно инструкции полный регресс запускается после интеграции всех карточек волны.
 
 ## Не реализовано
 
-- Пунктов атома, которые не удалось реализовать буквально, нет: `what="накладную"` рендерит подпись «Печать накладной» в `row` и `panel`; четыре существующих варианта сохранили подписи; disabled-пояснение и блокировка сохранены.
-- Глобальные `tsc` и `ui_guard.py` не доведены до зелёного состояния, потому что их ошибки находятся в файлах других атомов и соседних задач, которые роль `screen-dev` для этого атома менять запрещает.
-- Сохранить rework отдельным Git-коммитом не удалось из-за запрета среды на запись в метаданные worktree; без коммита результат нельзя считать опубликованным или пригодным для передачи по SHA.
+- **Finding 3 (REVIEW.md)** — `frontend/src/screens/ff/FfStoragePage.tsx:42`: дата начала тарифа вычисляется через UTC (`toISOString()`), а контракт требует московского времени. Файл относится к фронтенд-слою, который в этом атоме не затрагивается. Записано в «Не реализовано» для передачи в следующую итерацию фронтенда.
+
+## Находки
+
+- Pre-existing mypy: 4 ошибки в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py`, `fbs_warehouse_binding_service.py` — совпадают с перечнем из REVIEW.md «пять ошибок в четырёх соседних FBS/reporting-файлах вне переданного списка реализации карточки». Не трогались.

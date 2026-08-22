@@ -103,3 +103,18 @@
 23:56   08-storage · dev: фича 7/8 сохранена 70fb95d03bfe
 00:02   08-storage · screen-dev: готово
 00:02   08-storage · dev: фича 8/8 сохранена 198b1e167a40
+00:07   08-storage · reviewer: готово
+00:07 08-storage: отложено — reviewer, эскалация не помогла
+00:10 08-storage: отложено — финальная эскалация уже была
+00:15   08-storage · repair-plan: сильный ремонт не помог — дорезаем находки
+00:19   08-storage · splitter: FEATURES.md: первый frontend-атом должен отдельно создать ui-kit (код 0, попытка 1)
+00:22   08-storage · splitter: FEATURES.md: первый frontend-атом должен отдельно создать ui-kit (код 0, попытка 2)
+00:22 08-storage: отложено — не удалось перенарезать ремонт
+00:24   08-storage · repair-plan: сильный ремонт не помог — дорезаем находки
+00:27   08-storage · splitter: FEATURES.md: первый frontend-атом должен отдельно создать ui-kit (код 0, попытка 1)
+00:29   08-storage · splitter: FEATURES.md: первый frontend-атом должен отдельно создать ui-kit (код 0, попытка 2)
+00:29 08-storage: отложено — не удалось перенарезать ремонт
+00:41   08-storage · repair-plan: сильный ремонт не помог — дорезаем находки
+00:45   08-storage · splitter: готово
+00:45   08-storage · resume: поатомный rework Terra по сохранённым находкам
+00:52   08-storage · backend-dev: готово
