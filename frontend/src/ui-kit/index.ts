@@ -10,3 +10,5 @@ export { EmptyState, TableSkeletonBody, ErrorNotice, ScreenHeader } from './Stat
 export { QtyCell, MoneyCell, PlanFactCell, TextCell, ProductCell } from './Cells'
 export { FilterBar } from './FilterBar'
 export { ScannerLine } from './ScannerLine'
+export { PeriodPicker } from './PeriodPicker'
+export type { PeriodPickerProps } from './PeriodPicker'
