@@ -143,3 +143,5 @@
 01:27   07-reporting · reviewer: Terra-rework не закрыл вердикт — эскалация Sol
 01:27   07-reporting · reviewer: находки, круг 2 — назад к разработке
 01:31   07-reporting · screen-dev: готово
+01:31   07-reporting · dev: фича 1/2 сохранена dafb2583da4a
+01:35   07-reporting · screen-dev: готово
