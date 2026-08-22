@@ -497,25 +497,30 @@ def _build_delivery_checks(
                     order_id=order.id,
                 )
             )
-        elif not marking_svc.compute_delivery_allowed(order, list(order.markings)):
+        elif order.required_meta_json or order.optional_meta_json:
+            verdict = marking_svc._wb_order_verdict(order, list(order.markings))
+            if verdict["delivery_allowed"]:
+                checks.append(
+                    DeliveryCheck(
+                        code="marking_allowed",
+                        message="Метаданные WB допускают передачу.",
+                        ok=True,
+                        order_id=order.id,
+                    )
+                )
+                continue
+            reason = verdict["reason"]
+            message = f"{verdict['signature']} по заказу {order.id}."
+            if reason:
+                message += f" Причина: {reason}"
             checks.append(
                 DeliveryCheck(
                     code="marking_not_allowed",
-                    message="Метаданные WB не допускают передачу.",
+                    message=message,
                     ok=False,
                     order_id=order.id,
                 )
             )
-        elif order.required_meta_json:
-            checks.append(
-                DeliveryCheck(
-                    code="marking_allowed",
-                    message="Метаданные WB допускают передачу.",
-                    ok=True,
-                    order_id=order.id,
-                )
-            )
-
     if supply.delivery_type == FBS_DELIVERY_TYPE_PVZ and has_physical_boxes:
         if not supply.trbxes:
             checks.append(

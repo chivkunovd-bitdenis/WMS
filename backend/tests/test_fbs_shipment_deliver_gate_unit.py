@@ -46,9 +46,58 @@ def _mock_order(status: str, *, order_id: uuid.UUID | None = None) -> SimpleName
         wb_status="new",
         metadata_delivery_allowed=True,
         required_meta_json=[],
+        optional_meta_json=[],
         product=None,
         markings=[],
     )
+
+
+def _mock_order_with_verdict(
+    decision: str, *, reason: str | None = None, order_id: uuid.UUID | None = None
+) -> SimpleNamespace:
+    order = _mock_order(FBS_ORDER_STATUS_PACKED, order_id=order_id)
+    order.required_meta_json = ["sgtin"]
+    order.markings = [
+        SimpleNamespace(
+            kind="sgtin",
+            meta_status="accepted" if decision == "filled" else "unknown",
+            reason=reason,
+            meta_details_json={"decision": decision},
+            value="0104601234567890",
+        )
+    ]
+    return order
+
+
+@pytest.mark.parametrize("decision", ["filled", "optional", "notRequired"])
+def test_delivery_uses_wb_verdict_for_allowed_decisions(decision: str) -> None:
+    checks = _build_delivery_checks(
+        _mock_supply(), [_mock_order_with_verdict(decision)], cargo_qr_ready=True
+    )
+    _validate_checks_pass(checks)
+
+
+@pytest.mark.parametrize(
+    ("decision", "reason"),
+    [("filled", "Код не прошёл проверку"), ("pending", None), ("required", None), ("new", None)],
+)
+def test_delivery_blocks_wb_verdict_and_attaches_order(
+    decision: str, reason: str | None
+) -> None:
+    order_id = uuid.uuid4()
+    checks = _build_delivery_checks(
+        _mock_supply(),
+        [_mock_order_with_verdict(decision, reason=reason, order_id=order_id)],
+        cargo_qr_ready=True,
+    )
+    failed = next(check for check in checks if check.code == "marking_not_allowed")
+    assert failed.ok is False
+    assert failed.order_id == order_id
+    assert str(order_id) in failed.message
+    if reason:
+        assert reason in failed.message
+    with pytest.raises(FbsShipmentError):
+        _validate_checks_pass(checks)
 
 
 def test_deliver_blocked_for_in_supply() -> None:
