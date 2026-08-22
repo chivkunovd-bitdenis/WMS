@@ -1,18 +1,22 @@
 ## Изменённые файлы
 
 - /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfSettingsScreen.tsx
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/tests-e2e/billing-tariffs.spec.ts
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/night/volna-9-recovery/cards/09-billing/DEV.md
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` — зелёный.
-- `python3 scripts/ui/ui_guard.py` — красный: существующие нарушения в нескольких экранах и новое превышение монолита `FfSettingsScreen.tsx` (701 → 747 строк); базовую линию не обновлял.
-- `npm run test:unit` — не запустился: в рабочем checkout отсутствует исполняемый `vitest` (`sh: vitest: command not found`).
+- `npx tsc --noEmit -p tsconfig.app.json` — не подтверждён: локального `tsc` нет, `npx` завис на попытке разрешить пакет и был остановлен.
+- `python3 scripts/ui/ui_guard.py` — красный: обнаружено новое нарушение монолитного экрана для `FfSettingsScreen.tsx` (701 → 778 строк); baseline не обновлялся.
+- `npm run test:unit` — красный: `vitest: command not found`, зависимости frontend не установлены.
+- `git diff --check` — зелёный.
+- Commit не создан: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-09-billing1/index.lock` (`Operation not permitted`); изменения остаются локальными и не опубликованы.
 
 ## Не реализовано
 
-- Полная загрузка уже сохранённых реквизитов и тарифов/истории не реализована буквально: доступный API-контракт в checkout содержит только сохранение профиля и создание тарифа, GET-методов для чтения нет.
-- E2E-файл `billing-tariffs.spec.ts` не добавлялся, потому что в checkout отсутствует готовый сценарий авторизации/фикстуры для этого экрана, а контракт ограничивает изменение экраном и указанным тестом; технический gate unit также заблокирован отсутствующим `vitest`.
+- Загрузка сохранённых реквизитов, действующих тарифов и полной серверной истории буквально невозможна в пределах этой карточки: `backend/app/api/billing.py` предоставляет для них только mutation-ручки (`PUT`/`POST`), без `GET`. История отображается для версий, созданных в текущем UI-сеансе.
+- Серверная проверка пересечения периодов и финальная атомарность сохранения остаются ответственностью backend и не менялись, так как файлы backend не входят в разрешённый список атома.
 
 ## Находки
 
-Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не читались и не затрагивались.
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не читались и не затрагивались.

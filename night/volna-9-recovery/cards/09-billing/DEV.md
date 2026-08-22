@@ -1,18 +1,22 @@
-# 09-billing · screen-dev · атом 5
-
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/tests-e2e/billing-seller-profile.spec.ts`
-
-Экран `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/v2/SellersScreen.tsx` не потребовал изменения: обязательный негативный путь реализован тестом на уже существующем UI.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfSettingsScreen.tsx
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/tests-e2e/billing-tariffs.spec.ts
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/night/volna-9-recovery/cards/09-billing/DEV.md
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` — не выполнен: в checkout отсутствует `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/node_modules/.bin/tsc`; запуск через `npx` завис без вывода и был остановлен.
-- `python3 scripts/ui/ui_guard.py` — красный из-за уже существующих нарушений вне затронутых файлов: `src/App.tsx`, `src/components/WbProductPickerDialog.tsx`, `src/screens/ff/FfSettingsScreen.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`.
-- `npm run test:unit` — не выполнен: `vitest: command not found`.
+- `npx tsc --noEmit -p tsconfig.app.json` — не подтверждён: локального `tsc` нет, `npx` завис на попытке разрешить пакет и был остановлен.
+- `python3 scripts/ui/ui_guard.py` — красный: обнаружено новое нарушение монолитного экрана для `FfSettingsScreen.tsx` (701 → 778 строк); baseline не обновлялся.
+- `npm run test:unit` — красный: `vitest: command not found`, зависимости frontend не установлены.
 - `git diff --check` — зелёный.
+- Commit не создан: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-09-billing1/index.lock` (`Operation not permitted`); изменения остаются локальными и не опубликованы.
 
 ## Не реализовано
 
-В пределах разрешённых файлов и данного атома пунктов контракта, которые не удалось реализовать буквально, нет. `S-31-TC-009` больше не пропускается: тест сохраняет корректные реквизиты, отправляет неверный ИНН, проверяет понятную ошибку и подтверждает, что сохранённые юридическое наименование и КПП не затёрты.
+- Загрузка сохранённых реквизитов, действующих тарифов и полной серверной истории буквально невозможна в пределах этой карточки: `backend/app/api/billing.py` предоставляет для них только mutation-ручки (`PUT`/`POST`), без `GET`. История отображается для версий, созданных в текущем UI-сеансе.
+- Серверная проверка пересечения периодов и финальная атомарность сохранения остаются ответственностью backend и не менялись, так как файлы backend не входят в разрешённый список атома.
+
+## Находки
+
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не читались и не затрагивались.

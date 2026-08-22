@@ -59,6 +59,7 @@ type Props = {
 
 type FfProfile = Record<'legal_name' | 'inn' | 'kpp' | 'bank_name' | 'bik' | 'settlement_account' | 'correspondent_account', string>
 type Tariff = { id: string; service_code: string; seller_id: string | null; unit: string; amount: string; valid_from: string }
+type Seller = { id: string; name: string }
 
 function humanStaffError(message: string): string {
   if (message.includes('email_taken')) return 'Этот сотрудник уже добавлен'
@@ -120,8 +121,21 @@ export function FfSettingsScreen({
   const [highlightRowId, setHighlightRowId] = useState<string | null>(null)
   const [section, setSection] = useState<'staff' | 'tariffs'>('staff')
   const [profile, setProfile] = useState<FfProfile>({ legal_name: '', inn: '', kpp: '', bank_name: '', bik: '', settlement_account: '', correspondent_account: '' })
-  const [tariffs, setTariffs] = useState<Tariff[]>([]); const [tariffOpen, setTariffOpen] = useState(false)
-  const [tariffDraft, setTariffDraft] = useState({ service_code: 'inbound', unit: 'document', amount: '', valid_from: currentBillingMonth() + '-01' }); const [tariffError, setTariffError] = useState<string | null>(null)
+  const [tariffs, setTariffs] = useState<Tariff[]>([])
+  const [sellers, setSellers] = useState<Seller[]>([])
+  const [tariffOpen, setTariffOpen] = useState(false)
+  const [historyTariff, setHistoryTariff] = useState<Tariff | null>(null)
+  const [profileBusy, setProfileBusy] = useState(false)
+  const [tariffBusy, setTariffBusy] = useState(false)
+  const [tariffDraft, setTariffDraft] = useState({ service_code: 'inbound', seller_id: '', unit: 'document', amount: '', valid_from: currentBillingMonth() + '-01' }); const [tariffError, setTariffError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!isFulfillmentAdmin || section !== 'tariffs') return
+    void fetch(apiUrl('/sellers'), { headers: authHeaders(token) })
+      .then((res) => res.ok ? res.json() as Promise<Seller[]> : Promise.reject(new Error('Не удалось загрузить селлеров.')))
+      .then(setSellers)
+      .catch((err: unknown) => setTariffError(err instanceof Error ? err.message : 'Не удалось загрузить селлеров.'))
+  }, [authHeaders, isFulfillmentAdmin, section, token])
 
   const loadRows = useCallback(async () => {
     if (!token || !canManageStaff) {
@@ -350,20 +364,36 @@ export function FfSettingsScreen({
   }
 
   async function saveProfile() {
+    if (!isFulfillmentAdmin || profileBusy) return
     setTariffError(null)
-    const res = await fetch(apiUrl('/billing/profiles/ff'), { method: 'PUT', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ ...profile, kpp: profile.kpp || null }) })
-    if (!res.ok) { setTariffError(await readApiErrorMessage(res)); return }
-    setSuccess('Реквизиты ФФ сохранены')
+    setProfileBusy(true)
+    try {
+      const res = await fetch(apiUrl('/billing/profiles/ff'), { method: 'PUT', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ ...profile, kpp: profile.kpp || null }) })
+      if (!res.ok) { setTariffError(await readApiErrorMessage(res)); return }
+      setSuccess('Реквизиты ФФ сохранены')
+    } finally { setProfileBusy(false) }
   }
 
   async function saveTariff() {
+    if (!isFulfillmentAdmin || tariffBusy) return
     setTariffError(null)
-    const res = await fetch(apiUrl('/billing/tariffs'), { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ ...tariffDraft, seller_id: null, amount: Number(tariffDraft.amount) }) })
-    if (!res.ok) { setTariffError(await readApiErrorMessage(res)); return }
-    const created = (await res.json()) as Tariff
-    setTariffs((current) => [...current.filter((item) => item.id !== created.id && item.service_code !== created.service_code), created])
-    setTariffOpen(false)
+    const amount = Number(tariffDraft.amount.replace(',', '.'))
+    if (!Number.isFinite(amount) || amount < 0) { setTariffError('Ставка должна быть неотрицательным числом.'); return }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(tariffDraft.valid_from)) { setTariffError('Укажите дату начала действия ставки.'); return }
+    if (tariffDraft.service_code === 'storage_liter_day' && tariffDraft.unit !== 'liter_day') { setTariffError('Для хранения доступен только расчёт «За литр-день».'); return }
+    setTariffBusy(true)
+    try {
+      const res = await fetch(apiUrl('/billing/tariffs'), { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ ...tariffDraft, seller_id: tariffDraft.seller_id || null, amount }) })
+      if (!res.ok) { setTariffError(await readApiErrorMessage(res)); return }
+      const created = (await res.json()) as Tariff
+      setTariffs((current) => [...current, created])
+      setTariffOpen(false)
+      setSuccess('Ставка сохранена новой версией')
+    } finally { setTariffBusy(false) }
   }
+
+  const activeTariffs = tariffs.filter((item) => !tariffs.some((candidate) => candidate.id !== item.id && candidate.service_code === item.service_code && candidate.seller_id === item.seller_id && candidate.valid_from > item.valid_from))
+  const sellerName = (sellerId: string | null) => sellerId ? sellers.find((seller) => seller.id === sellerId)?.name ?? 'Селлер' : 'Все селлеры'
 
   return (
     <Box data-testid="ff-settings-screen">
@@ -379,19 +409,20 @@ export function FfSettingsScreen({
         <SecondaryAction onClick={() => setSection('tariffs')} disabled={section === 'tariffs'} data-testid="ff-settings-tariffs-tab">Тарифы ФФ</SecondaryAction>
       </Stack>
 
-      {section === 'tariffs' ? (
+      {section === 'tariffs' && isFulfillmentAdmin ? (
         <Stack spacing={2} data-testid="ff-settings-tariffs-panel">
           <Paper variant="outlined" sx={{ p: 2 }}>
             <Typography variant="subtitle1" gutterBottom>Реквизиты ФФ</Typography>
             <Stack spacing={1.5}>
               {([['legal_name', 'Юридическое наименование'], ['inn', 'ИНН'], ['kpp', 'КПП'], ['bank_name', 'Название банка'], ['bik', 'БИК'], ['settlement_account', 'Расчётный счёт'], ['correspondent_account', 'Корреспондентский счёт']] as const).map(([key, label]) => <TextField key={key} label={label} value={profile[key]} required={key !== 'kpp'} size="small" onChange={(e) => setProfile((p) => ({ ...p, [key]: e.target.value }))} inputProps={{ 'data-testid': `ff-profile-${key}` }} />)}
-              <PrimaryAction onClick={() => void saveProfile()} data-testid="ff-profile-save">Сохранить реквизиты</PrimaryAction>
+              <PrimaryAction onClick={() => void saveProfile()} disabled={profileBusy} data-testid="ff-profile-save">{profileBusy ? 'Сохранение…' : 'Сохранить реквизиты'}</PrimaryAction>
             </Stack>
           </Paper>
           {tariffError ? <ErrorNotice>{tariffError}</ErrorNotice> : null}
           <Stack direction="row" justifyContent="space-between" alignItems="center"><Typography variant="subtitle1">Действующие тарифы</Typography><PrimaryAction onClick={() => setTariffOpen(true)} data-testid="ff-tariff-new">Новая ставка</PrimaryAction></Stack>
-          <DataTable columns={[{ key: 'service', header: 'Услуга', width: 180, render: (r: Tariff) => ({ inbound: 'Приёмка', outbound: 'Отгрузка', storage_liter_day: 'Хранение' }[r.service_code] ?? r.service_code) }, { key: 'for', header: 'Для кого', width: 240, render: () => 'Все селлеры' }, { key: 'unit', header: 'Расчёт', width: 170, render: (r: Tariff) => ({ document: 'За документ', item: 'За штуку', liter_day: 'За литр-день' }[r.unit] ?? r.unit) }, { key: 'amount', header: 'Ставка', width: 150, align: 'right', render: (r: Tariff) => `${Number(r.amount).toLocaleString('ru-RU', { minimumFractionDigits: 2 })} ₽` }, { key: 'from', header: 'Действует с', width: 150, render: (r: Tariff) => r.valid_from }, { key: 'history', header: 'Действие', width: 64, align: 'center', render: () => <IconAction title="Открыть историю ставок"><HistoryIcon fontSize="small" /></IconAction> }]} rows={tariffs} getRowKey={(r) => r.id} testId="ff-tariffs-table" empty={{ title: 'Тарифы ещё не заданы', hint: 'Добавьте общие ставки, чтобы завершённые работы попадали в счета', action: <PrimaryAction onClick={() => setTariffOpen(true)}>Новая ставка</PrimaryAction> }} />
-          {tariffOpen ? <Paper variant="outlined" sx={{ p: 2 }}><Typography variant="subtitle1" gutterBottom>Новая ставка</Typography><Stack spacing={1.5}><TextField select label="Услуга" value={tariffDraft.service_code} onChange={(e) => setTariffDraft((d) => ({ ...d, service_code: e.target.value }))} SelectProps={{ native: true }}><option value="inbound">Приёмка</option><option value="outbound">Отгрузка</option><option value="storage_liter_day">Хранение</option></TextField><TextField label="Ставка, ₽" value={tariffDraft.amount} onChange={(e) => setTariffDraft((d) => ({ ...d, amount: e.target.value }))} /><TextField type="date" label="Действует с" value={tariffDraft.valid_from} onChange={(e) => setTariffDraft((d) => ({ ...d, valid_from: e.target.value }))} InputLabelProps={{ shrink: true }} /><Stack direction="row" spacing={1}><PrimaryAction onClick={() => void saveTariff()}>Сохранить ставку</PrimaryAction><SecondaryAction onClick={() => setTariffOpen(false)}>Отмена</SecondaryAction></Stack></Stack></Paper> : null}
+          <DataTable columns={[{ key: 'service', header: 'Услуга', width: 180, render: (r: Tariff) => ({ inbound: 'Приёмка', outbound: 'Отгрузка', marketplace_outbound: 'Отгрузка', storage_liter_day: 'Хранение', storage: 'Хранение' }[r.service_code] ?? r.service_code) }, { key: 'for', header: 'Для кого', width: 240, render: (r: Tariff) => sellerName(r.seller_id) }, { key: 'unit', header: 'Расчёт', width: 170, render: (r: Tariff) => ({ document: 'За документ', item: 'За штуку', liter_day: 'За литр-день' }[r.unit] ?? r.unit) }, { key: 'amount', header: 'Ставка', width: 150, align: 'right', render: (r: Tariff) => `${Number(r.amount).toLocaleString('ru-RU', { minimumFractionDigits: 2 })} ₽` }, { key: 'from', header: 'Действует с', width: 150, render: (r: Tariff) => r.valid_from }, { key: 'history', header: 'Действие', width: 64, align: 'center', render: (r: Tariff) => <IconAction title="Открыть историю ставок" onClick={() => setHistoryTariff(r)}><HistoryIcon fontSize="small" /></IconAction> }]} rows={activeTariffs} getRowKey={(r) => r.id} testId="ff-tariffs-table" empty={{ title: 'Тарифы ещё не заданы', hint: 'Добавьте общие ставки, чтобы завершённые работы попадали в счета', action: <PrimaryAction onClick={() => setTariffOpen(true)}>Новая ставка</PrimaryAction> }} />
+          {tariffOpen ? <Paper variant="outlined" sx={{ p: 2 }}><Typography variant="subtitle1" gutterBottom>Новая ставка</Typography><Stack spacing={1.5}><TextField select label="Услуга" value={tariffDraft.service_code} onChange={(e) => setTariffDraft((d) => ({ ...d, service_code: e.target.value, unit: e.target.value === 'storage_liter_day' ? 'liter_day' : d.unit }))} SelectProps={{ native: true }}><option value="inbound">Приёмка</option><option value="outbound">Отгрузка</option><option value="storage_liter_day">Хранение</option></TextField><TextField select label="Для кого" value={tariffDraft.seller_id} onChange={(e) => setTariffDraft((d) => ({ ...d, seller_id: e.target.value }))} SelectProps={{ native: true }}><option value="">Все селлеры</option>{sellers.map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</TextField><TextField select label="Расчёт" value={tariffDraft.unit} onChange={(e) => setTariffDraft((d) => ({ ...d, unit: e.target.value }))} SelectProps={{ native: true }} disabled={tariffDraft.service_code === 'storage_liter_day'}><option value="document">За документ</option><option value="item">За штуку</option><option value="liter_day">За литр-день</option></TextField><TextField label="Ставка, ₽" value={tariffDraft.amount} onChange={(e) => setTariffDraft((d) => ({ ...d, amount: e.target.value }))} /><TextField type="date" label="Действует с" value={tariffDraft.valid_from} onChange={(e) => setTariffDraft((d) => ({ ...d, valid_from: e.target.value }))} InputLabelProps={{ shrink: true }} /><Stack direction="row" spacing={1}><PrimaryAction onClick={() => void saveTariff()} disabled={tariffBusy}>{tariffBusy ? 'Сохранение…' : 'Сохранить ставку'}</PrimaryAction><SecondaryAction onClick={() => setTariffOpen(false)}>Отмена</SecondaryAction></Stack></Stack></Paper> : null}
+          {historyTariff ? <Paper variant="outlined" sx={{ p: 2 }} data-testid="ff-tariff-history"><Typography variant="subtitle1">История ставок</Typography>{tariffs.filter((item) => item.service_code === historyTariff.service_code && item.seller_id === historyTariff.seller_id).sort((a, b) => b.valid_from.localeCompare(a.valid_from)).map((item) => <Typography key={item.id}>{item.valid_from} · {Number(item.amount).toLocaleString('ru-RU', { minimumFractionDigits: 2 })} ₽</Typography>)}<SecondaryAction onClick={() => setHistoryTariff(null)}>Закрыть</SecondaryAction></Paper> : null}
         </Stack>
       ) : null}
 
