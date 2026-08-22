@@ -119,3 +119,20 @@
 00:45   02-verdikt-screen · resume: поатомный rework Terra по сохранённым находкам
 00:47   02-verdikt-screen · screen-dev: готово
 00:47   02-verdikt-screen · dev: фича 1/1 сохранена 5470bbc9c5b5
+00:51   02-verdikt-screen · reviewer: готово
+00:57   02-verdikt-screen · ui-critic: готово
+01:00   02-verdikt-screen · clicker: нет файла CLICKS.md (код 0, попытка 1)
+01:01   02-verdikt-screen · clicker: готово
+01:02   02-verdikt-screen · ux-judge: нет файла JUDGE.md (код 1, попытка 1)
+01:02   02-verdikt-screen · ux-judge: нет файла JUDGE.md (код 1, попытка 2)
+01:02 02-verdikt-screen: отложено на шаге ux-judge
+01:04   02-verdikt-screen · resume: поатомный rework Terra по сохранённым находкам
+01:04   02-verdikt-screen · screen-dev: нет файла DEV.md (код 1, попытка 1)
+01:04   02-verdikt-screen · screen-dev: нет файла DEV.md (код 1, попытка 2)
+01:04 02-verdikt-screen: отложено на шаге dev
+01:16   02-verdikt-screen · product: уже сделано, пропускаю
+01:16   02-verdikt-screen · ux-architect: уже сделано, пропускаю
+01:17   02-verdikt-screen · tester: готово
+01:19   02-verdikt-screen · breaker: готово
+01:19   02-verdikt-screen · splitter: уже сделано, пропускаю
+01:20   02-verdikt-screen · screen-dev: готово

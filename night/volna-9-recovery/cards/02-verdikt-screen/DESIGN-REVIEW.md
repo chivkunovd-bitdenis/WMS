@@ -1,19 +1,60 @@
-# UI-критика · 02-verdikt-screen
+# UI-критика · 02-verdikt-screen · финальная
 
-ВЕРДИКТ: НАХОДКИ 1
+ВЕРДИКТ: ЧИСТО
 
 ## Находки
 
-| Правило | Файл:строка | Что теряет оператор | Как чинить |
-|---|---|---|---|
-| R-11 → R-35 | `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:1911,1922-1928` | Положительный серверный WB-вердикт повторно выделяет всю строку зелёной заливкой и границей, помимо `StatusChip` в зоне «ЧЗ». Оператор получает второй визуальный сигнал той же сущности, а зелёная строка нарушает закреплённое значение заливки строки — только расхождение по количеству. | Не связывать `bgcolor` и `borderLeftColor` с `metadata.verdict.delivery_allowed`: оставить для строки только уже существующие состояния активности/печати, а WB-вердикт показывать единственным `StatusChip` в зоне «ЧЗ». |
+Нарушений не найдено.
+
+Ранее зафиксированная находка R-11/R-35 (зелёная заливка `success.light` и
+граница `success.main` строки заказа в рабочем месте поставки при
+`delivery_allowed = true`) — устранена DEV-01: в коде остались только
+нейтральные состояния строки (`info.light`/`info.main` при активном сканере,
+`action.hover` при полной печати, `background.paper` в прочих случаях).
+Единственный сигнал WB-вердикта — `StatusChip` из ui-kit в зоне «ЧЗ».
 
 ## Проверено и нормально
 
-Сверены контракт и макет из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/night/volna-9-recovery/cards/02-verdikt-screen/CONTRACT.md` и `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/night/volna-9-recovery/cards/02-verdikt-screen/MOCKUP.html`, а также файлы S-03 из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/screens.registry.json`.
+**Сетка (R-01–R-06):**
+Новых контейнеров не добавлено. Шапки экранов, фильтры и `TableContainer`
+не тронуты — их до- и постсостояние идентично.
 
-В обоих затронутых местах использован согласованный `StatusChip`; словарь фиксирует контрактные подписи WB, а причина отказа выводится через `TextCell` без технического кода. Для основного действия применяется `PrimaryAction` с объяснением недоступности. Новых колонок, вкладок, локального компонента статуса или новых названий статусов не обнаружено.
+**Таблица (R-07–R-12):**
+Новых колонок нет. `StatusChip` и `TextCell` вставлены в уже существующую
+ячейку «ЧЗ» без изменения layout-атрибутов (размер `small`, выравнивание,
+ширина колонки). R-10: шесть подписей вердикта (`WB: принято`, `WB: код не
+требуется`, `WB не принял`, `WB: проверяет`, `WB: нужен код`, `Нет ответа WB`)
+одинаковы в обоих экранах (строка FBS-заказа и строка рабочего места
+поставки) — одна сущность, одно название везде. R-11: заливка строки по
+WB-вердикту убрана, зелёный фон больше не используется.
 
-`python3 scripts/ui/ui_guard.py`: новые отступления есть, но только вне границы карточки — в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/components/WbProductPickerDialog.tsx` и `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/SellerInboundDraftScreen.tsx`. Для целевых файлов guard фиксирует улучшения и не сообщает нового отступления.
+**Цвет, статус, типографика (R-13–R-16):**
+Три тональности чипа (`ok`/`neutral`/`stop`) → три цвета (зелёный/серый/
+красный) в точном соответствии с R-16. Все шесть подписей взяты из языка
+склада и не совпадают ни с одним именем вкладки (R-15). Компонент `StatusChip`
+из `frontend/src/ui-kit/index.ts` — не своя реализация (R-14). `metaStatus.ts`
+— новый словарь-переходник; сырые коды WB клиенту не передаются, `reason`
+показывается через `REASON_LABELS` (человеческий перевод) или дословно
+при неизвестном коде — это осознанное решение CONTRACT K3 («оператор видит
+подсказку, а не молчание»), не вкусовщина.
 
-`python3 scripts/ui/ui_inventory.py`: выполнен успешно; реальные подписи WB проверены по исходному коду, придуманных колонок или статусов в реализации нет.
+**R-31–R-36:**
+Новых кнопок в карточке нет: вердикт выводится `StatusChip` + `TextCell`.
+R-34: признак (хвост ЧЗ, моношрифт) и статус (чип вердикта) визуально
+отличаются от кнопок действия (ТЗ, QR, иконки) — нарушения нет. R-35:
+ранний двойной сигнал WB-вердикта (чип + зелёная строка) устранён, единственный
+сигнал — чип. R-36: заголовков колонок и подписей кнопок этот диф не добавляет.
+
+**ui_guard.py:**
+Новых отступлений в файлах карточки нет — только улучшения:
+```
+стало лучше  src/screens/v2/FfFbsOrdersScreen.tsx: свой-чип 2 → 1
+стало лучше  src/screens/v2/FfFbsOrdersScreen.tsx: экран-монолит 1587 → 1572
+стало лучше  src/screens/v2/FfFbsSupplyWorkspace.tsx: своя-кнопка 37 → 36
+стало лучше  src/screens/v2/FfFbsSupplyWorkspace.tsx: экран-монолит 2493 → 2490
+```
+Два новых нарушения (`WbProductPickerDialog.tsx`, `SellerInboundDraftScreen.tsx`)
+находятся вне границы карточки и не являются регрессией этой работы.
+
+**ui_inventory.py:** выполнен без ошибок; придуманных подписей или несуществующих
+в коде статусов не обнаружено.
