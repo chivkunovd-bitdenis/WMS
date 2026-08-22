@@ -451,6 +451,46 @@ test('fbs workspace: boxes without distribution follows assigned orders', async 
   await expect(page.getByTestId('fbs-boxes-without-distribution')).toBeEnabled()
 })
 
+// S-03-TC-001/S-03-TC-003 — a background workspace refresh keeps the checkbox
+// and header aligned when another operator changes the durable supply mode.
+test('fbs workspace: boxes without distribution follows background refresh', async ({ page }) => {
+  await page.addInitScript(() => {
+    const nativeSetInterval = window.setInterval.bind(window)
+    window.setInterval = ((handler: TimerHandler, timeout?: number) => (
+      nativeSetInterval(handler, timeout === 15_000 ? 50 : timeout)
+    )) as typeof window.setInterval
+  })
+  await registerFf(page, 'boxes-no-distribution-refresh')
+  const packedOrder = order('1', {
+    status: 'packed',
+    supply_id: 'sup-1',
+    pick: { status: 'picked', location_code: 'A-01', picked_at: new Date().toISOString() },
+    pack: { status: 'packed', packed_at: new Date().toISOString() },
+  })
+  await mockWorklist(page, [packedOrder])
+  let currentWorkspace = workspace({ stage: 'handoff_prep', status: 'packed', orders: [packedOrder] })
+
+  await page.route('**/operations/fbs-supplies/sup-1/workspace', (route) => json(route, currentWorkspace))
+  await page.getByTestId('nav-ff-fbs').click()
+  await page.getByTestId('fbs-order-1').click()
+  await expect(page.getByTestId('fbs-boxes')).toBeVisible()
+  await expect(page.getByTestId('fbs-boxes-without-distribution')).not.toBeChecked()
+
+  currentWorkspace = {
+    ...currentWorkspace,
+    supply: { ...(currentWorkspace.supply as JsonObject), boxes_without_distribution: true },
+  }
+  await expect(page.getByText('Без распределения · коробов 0')).toBeVisible()
+  await expect(page.getByTestId('fbs-boxes-without-distribution')).toBeChecked()
+
+  currentWorkspace = {
+    ...currentWorkspace,
+    supply: { ...(currentWorkspace.supply as JsonObject), boxes_without_distribution: false },
+  }
+  await expect(page.getByText('Распределено 0 из 1 шт · осталось 1')).toBeVisible()
+  await expect(page.getByTestId('fbs-boxes-without-distribution')).not.toBeChecked()
+})
+
 // TC-NEW-FBS-10/FBS-09 — one print preview shows the asset and copy count before printing.
 test('fbs workspace: supply QR preview has copies control', async ({ page }) => {
   await registerFf(page, 'qr-preview')

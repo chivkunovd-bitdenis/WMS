@@ -287,7 +287,6 @@ export function FfFbsSupplyWorkspace({
   const [packagingTask, setPackagingTask] = useState<PackagingTask | null>(null)
   const [manualPickLocationRows, setManualPickLocationRows] = useState<Record<string, string[]>>({})
   const [boxCount, setBoxCount] = useState('1')
-  const [boxesWithoutDistribution, setBoxesWithoutDistribution] = useState(false)
   const [boxAssignTarget, setBoxAssignTarget] = useState<string | null>(null)
   const [boxProductSearch, setBoxProductSearch] = useState('')
   const [boxProductQty, setBoxProductQty] = useState<Record<string, string>>({})
@@ -354,7 +353,6 @@ export function FfFbsSupplyWorkspace({
     setPickLocation(null)
     setManualPickLocationRows({})
     setBoxCount('1')
-    setBoxesWithoutDistribution(Boolean(initialWorkspace?.supply.boxes_without_distribution))
     setBoxAssignTarget(null)
     setBoxProductSearch('')
     setBoxProductQty({})
@@ -423,7 +421,6 @@ export function FfFbsSupplyWorkspace({
     try {
       const next = await operation()
       setWorkspace(next)
-      setBoxesWithoutDistribution(Boolean(next.supply.boxes_without_distribution))
       setStage(visualStage(next.stage))
       if (success) setNotice(success)
       return next
@@ -1278,6 +1275,7 @@ export function FfFbsSupplyWorkspace({
   const boxMenuAssignedCount = boxMenuBox?.assigned_order_ids.length ?? 0
   const boxRouteLabel = workspace?.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ'
   const hasNoDistributionBoxes = Boolean(workspace?.supply.boxes_without_distribution)
+  const boxesWithoutDistribution = hasNoDistributionBoxes
   const boxDistributedCount = assignedBoxOrderIds.size
   const boxTotalCount = workspace?.progress.total ?? 0
   const boxRemainingCount = Math.max(0, boxTotalCount - boxDistributedCount)
