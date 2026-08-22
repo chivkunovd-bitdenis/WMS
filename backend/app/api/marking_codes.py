@@ -6,9 +6,20 @@ import uuid
 from datetime import datetime
 from typing import Annotated, NoReturn
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
@@ -19,12 +30,15 @@ from app.api.deps import (
     require_shift_lead,
 )
 from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
+from app.core.settings import settings
 from app.db.session import get_db
 from app.models.print_template import USER_LAST_LAYOUT_NAME
 from app.models.product import Product
 from app.models.user import User
+from app.services import background_job_service as job_svc
 from app.services import marking_code_service as mc_svc
 from app.services import print_template_service as pt_svc
+from app.services.background_job_service import JOB_TYPE_MARKING_LABEL_TAPE
 from app.services.catalog_service import get_product
 from app.services.marking_label_artifact_service import pdf_bytes_to_png
 from app.services.seller_staff_permissions_service import PERM_HONEST_SIGN
@@ -1245,23 +1259,44 @@ class LabelArtifactTapeIn(BaseModel):
     page_height_mm: float | None = Field(default=None, gt=0, le=300)
 
 
-@router.post("/label-artifact-tape")
+@router.post("/label-artifact-tape", status_code=status.HTTP_202_ACCEPTED)
 async def post_label_artifact_tape_pdf(
     body: LabelArtifactTapeIn,
+    background_tasks: BackgroundTasks,
     user: Annotated[User, Depends(require_packaging_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
-) -> Response:
+) -> dict[str, str]:
     try:
-        pdf_bytes = await mc_svc.build_label_artifact_tape_pdf(
+        from app.models.marking_code import MarkingCode
+        result = await session.execute(select(MarkingCode).where(MarkingCode.id.in_(body.code_ids)))
+        rows = result.scalars().all()
+        if len(rows) != len(set(body.code_ids)) or any(
+            row.tenant_id != user.tenant_id for row in rows
+        ):
+            raise mc_svc.MarkingCodeServiceError("code_not_found")
+        seller_ids = {row.seller_id for row in rows}
+        if len(seller_ids) != 1:
+            raise mc_svc.MarkingCodeServiceError("seller_mismatch")
+        import hashlib
+        key = hashlib.sha256(
+            json.dumps(body.model_dump(mode="json"), sort_keys=True).encode()
+        ).hexdigest()
+        job = await job_svc.create_pending_job(
             session,
             user.tenant_id,
-            body.code_ids,
-            page_width_mm=body.page_width_mm,
-            page_height_mm=body.page_height_mm,
+            job_type=JOB_TYPE_MARKING_LABEL_TAPE,
+            idempotency_key=key,
+            payload_json=body.model_dump(mode="json"),
         )
+        if job.status == job_svc.JOB_STATUS_PENDING:
+            if settings.celery_broker_url:
+                from app.tasks.background_jobs import run_marking_label_tape_task
+                run_marking_label_tape_task.apply_async(args=[str(job.id)], queue="print")
+            else:
+                background_tasks.add_task(job_svc.run_marking_label_tape_job, job.id)
     except mc_svc.MarkingCodeServiceError as exc:
         raise _http_from_mc_error(exc) from exc
-    return Response(content=pdf_bytes, media_type="application/pdf")
+    return {"job_id": str(job.id), "status": job.status}
 
 
 @router.get("/print-templates/resolve", response_model=PrintTemplateOut)

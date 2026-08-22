@@ -353,3 +353,63 @@ async def run_fbs_stock_sync_job(job_id: uuid.UUID) -> None:
             job.error_message = str(exc)
         job.finished_at = datetime.now(UTC)
         await session.commit()
+
+
+async def run_marking_label_tape_job(job_id: uuid.UUID) -> None:
+    from datetime import timedelta
+
+    from app.models.fbs_print_asset import (
+        PRINT_ASSET_KIND_LABEL_TAPE,
+        PRINT_ASSET_STATUS_READY,
+        FbsPrintAsset,
+    )
+    from app.models.marking_code import MarkingCode
+    from app.services.fbs_print_asset_storage import (
+        label_tape_relative_path,
+        save_pdf,
+        sha256_checksum,
+    )
+    from app.services.marking_code_service import build_label_artifact_tape_pdf
+
+    async with SessionLocal() as session:
+        job = await session.get(BackgroundJob, job_id)
+        if job is None:
+            return
+        job.status = JOB_STATUS_RUNNING
+        job.started_at = datetime.now(UTC)
+        await session.commit()
+        try:
+            payload = job.payload_json or {}
+            ids = [uuid.UUID(str(value)) for value in payload.get("code_ids", [])]
+            pdf = await build_label_artifact_tape_pdf(
+                session,
+                job.tenant_id,
+                ids,
+                page_width_mm=payload.get("page_width_mm"),
+                page_height_mm=payload.get("page_height_mm"),
+            )
+            code = await session.get(MarkingCode, ids[0])
+            if code is None:
+                raise ValueError("seller_not_found")
+            asset = FbsPrintAsset(
+                tenant_id=job.tenant_id,
+                seller_id=code.seller_id,
+                kind=PRINT_ASSET_KIND_LABEL_TAPE,
+                status=PRINT_ASSET_STATUS_READY,
+                content_type="application/pdf",
+                expires_at=datetime.now(UTC) + timedelta(hours=12),
+            )
+            session.add(asset)
+            await session.flush()
+            asset.storage_path = save_pdf(label_tape_relative_path(asset.id), pdf)
+            asset.checksum = sha256_checksum(pdf)
+            job.result_json = {"asset_id": str(asset.id)}
+            job.status = JOB_STATUS_DONE
+            job.error_message = None
+        except Exception as exc:
+            logger.exception("marking label tape job failed: %s", job_id)
+            job.status = JOB_STATUS_FAILED
+            job.result_json = None
+            job.error_message = str(exc)
+        job.finished_at = datetime.now(UTC)
+        await session.commit()

@@ -18,12 +18,14 @@ ORDER_STICKER_CONTENT_TYPE = "image/png"
 PRINT_ASSET_SUBDIR_ORDER_STICKER = "fbs-print-assets/order-stickers"
 PRINT_ASSET_SUBDIR_CARGO_QR = "fbs-print-assets/cargo-place-qr"
 PRINT_ASSET_SUBDIR_SUPPLY_QR = "fbs-print-assets/supply-qr"
+PRINT_ASSET_SUBDIR_LABEL_TAPE = "fbs-print-assets/label-tapes"
 
 _ALLOWED_SUBDIRS = frozenset(
     {
         PRINT_ASSET_SUBDIR_ORDER_STICKER,
         PRINT_ASSET_SUBDIR_CARGO_QR,
         PRINT_ASSET_SUBDIR_SUPPLY_QR,
+        PRINT_ASSET_SUBDIR_LABEL_TAPE,
         "fbs-stickers",
         "fbs-trbx-stickers",
         "fbs-supply-barcodes",
@@ -88,6 +90,10 @@ def supply_qr_relative_path(supply_id: uuid.UUID) -> str:
     return f"{PRINT_ASSET_SUBDIR_SUPPLY_QR}/{supply_id}.png"
 
 
+def label_tape_relative_path(asset_id: uuid.UUID) -> str:
+    return f"{PRINT_ASSET_SUBDIR_LABEL_TAPE}/{asset_id}.pdf"
+
+
 def decode_png_payload(raw: object) -> bytes | None:
     """Decode WB sticker payload; never treat a filesystem path as base64."""
     if raw is None:
@@ -147,6 +153,19 @@ def save_png(relative_path: str, png_bytes: bytes) -> str:
     return relative_path.replace("\\", "/")
 
 
+def save_pdf(relative_path: str, pdf_bytes: bytes) -> str:
+    if not pdf_bytes or not pdf_bytes.startswith(b"%PDF"):
+        raise FbsPrintAssetStorageError("invalid_content_type")
+    normalized = relative_path.replace("\\", "/")
+    parts = normalized.split("/")
+    if len(parts) < 2:
+        raise FbsPrintAssetStorageError("invalid_storage_path")
+    target = validate_relative_storage_path(normalized, subdir="/".join(parts[:-1]))
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(pdf_bytes)
+    return normalized
+
+
 def read_png(relative_path: str, *, checksum: str | None = None) -> bytes:
     target = resolve_existing_storage_path(relative_path)
     if not target.is_file():
@@ -155,3 +174,15 @@ def read_png(relative_path: str, *, checksum: str | None = None) -> bytes:
     validate_png_bytes(png_bytes)
     verify_checksum(png_bytes, checksum)
     return png_bytes
+
+
+def read_pdf(relative_path: str, *, checksum: str | None = None) -> bytes:
+    target = resolve_existing_storage_path(relative_path)
+    if not target.is_file():
+        raise FbsPrintAssetStorageError("file_missing")
+    payload = target.read_bytes()
+    if not payload.startswith(b"%PDF"):
+        raise FbsPrintAssetStorageError("invalid_content_type")
+    if checksum and sha256_checksum(payload) != checksum:
+        raise FbsPrintAssetStorageError("checksum_mismatch")
+    return payload

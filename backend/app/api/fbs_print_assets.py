@@ -55,6 +55,7 @@ def _raise_from_print_asset_service(exc: FbsPrintAssetError) -> None:
     if exc.code in {
         "asset_not_found",
         "asset_not_ready",
+        "asset_expired",
         "supply_not_found",
         "order_not_in_supply",
     }:

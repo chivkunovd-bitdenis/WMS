@@ -8,11 +8,17 @@ import uuid
 from app.celery_app import celery_app
 from app.services.background_job_service import (
     run_fbs_stock_sync_job,
+    run_marking_label_tape_job,
     run_movements_digest_job,
     run_wildberries_cards_sync_job,
     run_wildberries_marketplace_orders_sync_job,
     run_wildberries_supplies_sync_job,
 )
+
+
+@celery_app.task(name="wms.marking_label_tape", queue="print")
+def run_marking_label_tape_task(job_id: str) -> None:
+    asyncio.run(run_marking_label_tape_job(uuid.UUID(job_id)))
 
 
 @celery_app.task(name="wms.movements_digest")
@@ -77,8 +83,8 @@ def run_wb_orders_reconcile_task(tenant_id: str, seller_id: str) -> None:
 
 @celery_app.task(name="wms.wb_orders_new_dispatch")
 def dispatch_wb_orders_new_task() -> None:
-    from app.services.fbs_autopoll_service import list_sellers_with_marketplace_token
     from app.db.session import SessionLocal
+    from app.services.fbs_autopoll_service import list_sellers_with_marketplace_token
 
     async def dispatch() -> None:
         async with SessionLocal() as session:
@@ -91,8 +97,8 @@ def dispatch_wb_orders_new_task() -> None:
 
 @celery_app.task(name="wms.wb_orders_reconcile_dispatch")
 def dispatch_wb_orders_reconcile_task() -> None:
-    from app.services.fbs_autopoll_service import list_sellers_with_marketplace_token
     from app.db.session import SessionLocal
+    from app.services.fbs_autopoll_service import list_sellers_with_marketplace_token
 
     async def dispatch() -> None:
         async with SessionLocal() as session:

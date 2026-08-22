@@ -1,4 +1,3 @@
-# ruff: noqa: RUF001
 """FBS print assets: batch fetch, binary content, applied confirmation."""
 
 from __future__ import annotations
@@ -41,6 +40,7 @@ from app.services.fbs_print_asset_storage import (
     cargo_qr_relative_path,
     decode_png_payload,
     order_sticker_relative_path,
+    read_pdf,
     read_png,
     save_png,
     sha256_checksum,
@@ -694,14 +694,21 @@ async def get_asset_binary_content(
             message="Печатный актив ещё не готов.",
             context={"asset_id": str(asset_id)},
         )
-    if asset.expires_at is not None and asset.expires_at <= datetime.now(tz=UTC):
+    expires_at = asset.expires_at
+    if expires_at is not None and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=UTC)
+    if expires_at is not None and expires_at <= datetime.now(tz=UTC):
         raise FbsPrintAssetError(
             "asset_expired",
             message="Срок хранения печатного актива истёк.",
             context={"asset_id": str(asset_id)},
         )
     try:
-        png_bytes = read_png(asset.storage_path, checksum=asset.checksum)
+        content = (
+            read_pdf(asset.storage_path, checksum=asset.checksum)
+            if asset.kind == "label_tape"
+            else read_png(asset.storage_path, checksum=asset.checksum)
+        )
     except FbsPrintAssetStorageError as exc:
         _mark_asset_error(asset, code=exc.code, message="Файл печати недоступен.")
         if asset.fbs_order_id is not None:
@@ -724,7 +731,7 @@ async def get_asset_binary_content(
     content_type = asset.content_type or ORDER_STICKER_CONTENT_TYPE
     _ = user_id
     await session.flush()
-    return png_bytes, content_type, asset
+    return content, content_type, asset
 
 
 async def confirm_asset_applied(

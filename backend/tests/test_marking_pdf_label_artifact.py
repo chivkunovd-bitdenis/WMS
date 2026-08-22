@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 
@@ -651,9 +652,21 @@ async def test_label_artifact_tape_merges_pdfs_in_order(async_client: AsyncClien
         headers=h,
         json={"code_ids": [id_a, id_a, id_b]},
     )
-    assert tape.status_code == 200, tape.text
-    assert tape.headers["content-type"] == "application/pdf"
-    merged = fitz.open(stream=tape.content, filetype="pdf")
+    assert tape.status_code == 202, tape.text
+    job_id = tape.json()["job_id"]
+    for _ in range(20):
+        job = await async_client.get(f"/operations/background-jobs/{job_id}", headers=h)
+        if job.json()["status"] in {"done", "failed"}:
+            break
+        await asyncio.sleep(0.05)
+    assert job.json()["status"] == "done", job.text
+    asset_id = job.json()["result_json"]["asset_id"]
+    content = await async_client.get(
+        f"/operations/fbs-print-assets/{asset_id}/content", headers=h
+    )
+    assert content.status_code == 200
+    assert content.headers["content-type"] == "application/pdf"
+    merged = fitz.open(stream=content.content, filetype="pdf")
     try:
         assert merged.page_count == 3
     finally:
