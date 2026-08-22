@@ -3118,7 +3118,7 @@ export default function App() {
 
           <Route
             path="ff/inventory"
-            element={token && canCellsOps ? <FfStoragePage isFulfillmentAdmin={isFulfillmentAdmin} /> : ffAccessDenied}
+            element={token && canCellsOps ? <FfStoragePage isFulfillmentAdmin={isFulfillmentAdmin} token={token} /> : ffAccessDenied}
           />
 
           <Route
