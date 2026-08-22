@@ -2,12 +2,12 @@
 
 ## Изменённые файлы
 
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_picking_service.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/inventory_service.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/models/inventory_movement.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/alembic/versions/20260822_0095_inventory_movement_dimensions.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/tests/test_fbs_picking.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_picking_service.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/inventory_service.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/models/inventory_movement.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/alembic/versions/20260822_0095_inventory_movement_dimensions.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/tests/test_fbs_picking.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md`
 
 ## Что реализовано
 
@@ -40,3 +40,28 @@
 ## Блокеры
 
 Нет. Секреты, токены, `.env` и кабинеты учётных данных не читались.
+
+# DEV · 04-warehouse-switch · screen-dev · атом 12
+
+## Изменённые файлы
+
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/tests-e2e/ff-fbs-supply.spec.ts`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md`
+
+## Гейты
+
+- `npx tsc --noEmit -p tsconfig.app.json` (каталог `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend`) — не выполнен: в рабочей копии отсутствует `node_modules/.bin/tsc`; `npx` ожидает внешнюю установку пакета.
+- `python3 scripts/ui/ui_guard.py` (корень рабочей копии) — красный. Храповик сообщает уже имеющиеся новые нарушения базовой линии, в том числе `frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx: экран-монолит 2493 → 2605`; базовую линию флагом `--update` не менял.
+- `npm run test:unit` (каталог `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend`) — не выполнен: в рабочей копии отсутствует `node_modules/.bin/vitest`.
+- Целевой Playwright-сценарий `ff-fbs-supply.spec.ts` — не выполнен по той же причине: отсутствует `node_modules/.bin/playwright`.
+- `git diff --check` — зелёный.
+- Отдельный Git-коммит не создан: Git не разрешил создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-04-warehouse-switch/index.lock` (`Operation not permitted`).
+
+## Не реализовано
+
+- Изменение экранной логики не потребовалось: в `FfFbsSupplyWorkspace.tsx` скан склада после начала подбора уже показывает `Склад закреплён: подбор уже начат` до любого сброса `pickLocation`. Исправлен пробел в проверке: E2E теперь сначала выбирает ячейку, затем сканирует другой склад и подтверждает, что следующий ожидаемый скан всё ещё товар, то есть выбранная ячейка сохранена.
+- Автоматический запуск сценария не подтверждён из-за отсутствующих зависимостей frontend в этой рабочей копии.
+
+## Находки
+
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не открывались и не изменялись.

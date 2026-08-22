@@ -360,12 +360,15 @@ test('fbs workspace: scan location then product', async ({ page }) => {
   await page.getByTestId('fbs-order-1').click()
   await expect(page.getByTestId('fbs-workspace')).toBeVisible()
   await expect(page.getByTestId('fbs-picking-scanner-line')).toContainText('пикните ШК склада или ячейки')
+  await page.getByLabel('Штрихкод ячейки').fill('CELL-A-01')
+  await page.getByRole('button', { name: 'Подтвердить ячейку' }).click()
+  await expect(page.getByTestId('fbs-picking-scanner-line')).toContainText('пикните ШК товара')
+
+  // TC-S03-TC-007 — a warehouse scan after picking has begun explains the
+  // lock and leaves the currently selected location intact.
   await page.getByLabel('Штрихкод ячейки').fill('WAREHOUSE-B')
   await page.getByRole('button', { name: 'Подтвердить ячейку' }).click()
   await expect(page.getByText('Склад закреплён: подбор уже начат')).toBeVisible()
-  await expect(page.getByTestId('fbs-picking-scanner-line')).toContainText('пикните ШК склада или ячейки')
-  await page.getByLabel('Штрихкод ячейки').fill('CELL-A-01')
-  await page.getByRole('button', { name: 'Подтвердить ячейку' }).click()
   await expect(page.getByTestId('fbs-picking-scanner-line')).toContainText('пикните ШК товара')
   await page.getByLabel('Штрихкод товара').fill('2000001')
   await page.getByRole('button', { name: 'Подобрать товар' }).click()
