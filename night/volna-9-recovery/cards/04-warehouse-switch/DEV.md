@@ -1,25 +1,45 @@
-# DEV · 04-warehouse-switch · backend-dev
+# DEV · 04-warehouse-switch · атом 2
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/catalog_service.py` — создание, генерация из стеллажа и переименование ячейки теперь отвергают совпадение с кодом или штрихкодом склада того же tenant.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/tests/test_warehouses.py` — добавлены проверки конфликтов при создании и переименовании ячейки; сохранена проверка типов warehouse/location.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md` — этот отчёт.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/api/fbs_supplies.py
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_supply_service.py
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_supply_validator_service.py
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/tests/test_fbs_stock_availability.py
+
+## Что реализовано
+
+- Привязка WB уже запрещает служебные склады; preflight считает только операционные склады tenant.
+- Выбранный склад теперь участвует в расчёте текущего остатка и агрегированных предупреждений/блокировок.
+- API-модель сохраняет `stock_preflight`, включая рекомендацию и строки дефицита.
+
+## Миграции
+
+Нет.
+
+## Тесты
+
+- Добавлен регрессионный тест `test_preflight_response_model_preserves_stock_details`.
+- Изменённые backend-файлы прошли targeted ruff; focused тест прошёл: 1 passed.
+- Целевой набор `test_fbs_stock_availability.py` + `test_fbs_supply_from_orders.py`: 25 passed, 1 skipped, 1 failed на календарном тесте с фиксированной датой `2026-08-15`, уже прошедшей в окружении.
 
 ## Гейты
 
-- `ruff check .` — FAIL: 80 ранее существовавших ошибок в несвязанных файлах backend/scripts; изменённые файлы в выводе не фигурируют.
-- `mypy .` — FAIL: 21 ранее существовавшая ошибка в 6 несвязанных файлах; изменённые файлы не фигурируют.
-- `pytest tests/test_warehouses.py` — PASS: 1 passed.
-- `pytest` — FAIL/остановлен после 50 passed: существующий `tests/test_document_number_service.py::test_inbound_and_unload_api_assign_document_number` падает с `ValueError: product seller not found`, затем полный прогон был прерван из-за длительного зависания.
-- `python3 scripts/ci/back_guard.py` — NOT RUN: файл отсутствует в этой рабочей копии.
-- `python3 scripts/ci/check_migrations.py` — NOT RUN: файл отсутствует в этой рабочей копии.
+- ruff: полный `ruff check .` не пройден из-за 80 предсуществующих ошибок вне этого diff; targeted ruff изменённых файлов — PASS.
+- mypy: не пройден из-за 4 предсуществующих ошибок в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py`, `fbs_warehouse_binding_service.py`; новых ошибок в изменённых строках не выявлено.
+- pytest: targeted набор — 25 passed, 1 skipped, 1 unrelated calendar failure; focused новый тест — PASS.
+- back_guard.py: файл отсутствует в этой рабочей копии, запуск невозможен.
+- check_migrations.py: файл отсутствует в этой рабочей копии, запуск невозможен.
 
 ## Не реализовано
 
-- Новая миграция не добавлялась: `backend/alembic/versions/20260822_0094_warehouse_operational_barcode.py` уже присутствует в рабочей копии и покрывает `is_operational`, `barcode` и legacy `fbs-wb-*` / `FBS WB *` backfill.
-- UI- и соседние backend-находки из ревью не входят в этот атом и не изменялись.
+- UI-находки ревью (переключатель, S-03/S-14/S-25 и E2E) не входят в backend-атом 2.
+- Остаточные находки по picking idempotency, блокировкам supply и transfer-парам не входят в этот атом.
 
 ## Находки
 
-- Полный backend-гейт блокирован несвязанными ошибками базовой ветки, перечисленными выше.
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не открывались и не изменялись.
+
+## Блокеры
+
+Нет блокеров для сохранения backend-правки; общие гейты требуют исправления предсуществующих ошибок и отсутствующих guard-скриптов.

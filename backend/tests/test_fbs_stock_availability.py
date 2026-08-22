@@ -9,6 +9,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import event
 
+from app.api.fbs_supplies import FbsSupplyPreflightOut
 from app.db.session import SessionLocal, engine
 from app.models.fbs_order import FbsOrder, FbsOrderReservation
 from app.models.inventory_reservation import InventoryReservation
@@ -24,6 +25,29 @@ from app.services.fbs_stock_availability_service import (
 )
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import available_qty_for_fbs_reserve
+
+
+# TC-NEW-FBS-STOCK-037 — API keeps aggregated stock preflight details.
+def test_preflight_response_model_preserves_stock_details() -> None:
+    payload = {
+        "compatible": True,
+        "summary": None,
+        "issues": [],
+        "server_now": "2026-08-22T00:00:00+00:00",
+        "stock_preflight": {
+            "compatible": True,
+            "recommended_warehouse": {"id": "warehouse-b", "name": "Юг"},
+            "warning_lines": [],
+            "blocking_lines": [],
+        },
+    }
+
+    response = FbsSupplyPreflightOut.model_validate(payload)
+
+    assert response.stock_preflight["recommended_warehouse"] == {
+        "id": "warehouse-b",
+        "name": "Юг",
+    }
 
 
 async def _setup_tenant_product(

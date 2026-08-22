@@ -87,6 +87,7 @@ class FbsSupplyPreflightOut(BaseModel):
     summary: FbsSupplyPreflightSummaryOut | None
     issues: list[FbsSupplyPreflightIssueOut]
     server_now: str
+    stock_preflight: dict[str, object]
 
 
 class FbsSupplyCreateBody(BaseModel):

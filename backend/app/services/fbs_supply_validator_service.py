@@ -169,7 +169,11 @@ async def _availability_by_order(
 
 
 async def _stock_preflight(
-    session: AsyncSession, tenant_id: uuid.UUID, orders: list[FbsOrder]
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    orders: list[FbsOrder],
+    *,
+    selected_warehouse_id: uuid.UUID | None = None,
 ) -> SupplyStockPreflight:
     required: dict[uuid.UUID, int] = {}
     products: dict[uuid.UUID, Any] = {}
@@ -198,7 +202,7 @@ async def _stock_preflight(
             list(required),
             exclude_fbs_order_ids=selected_order_ids or None,
         )
-    current_id = orders[0].warehouse_id if orders else None
+    current_id = selected_warehouse_id or (orders[0].warehouse_id if orders else None)
     def coverage(warehouse: Warehouse) -> int:
         return sum(availability[warehouse.id].get(pid, 0) >= qty for pid, qty in required.items())
     recommended = max(warehouses, key=lambda w: (coverage(w), w.id == current_id), default=None)
@@ -429,6 +433,7 @@ async def validate_supply_composition(
     planned_delivery_type: str,
     for_update: bool = False,
     server_now: datetime | None = None,
+    selected_warehouse_id: uuid.UUID | None = None,
 ) -> SupplyPreflightResult:
     if planned_delivery_type not in {"warehouse_sc", "pvz"}:
         raise FbsSupplyValidationError("invalid_delivery_type")
@@ -450,7 +455,12 @@ async def validate_supply_composition(
         ),
     ]
     summary = await _build_summary(session, tenant_id, orders)
-    stock = await _stock_preflight(session, tenant_id, orders)
+    stock = await _stock_preflight(
+        session,
+        tenant_id,
+        orders,
+        selected_warehouse_id=selected_warehouse_id,
+    )
     compatible = len(issues) == 0 and stock.compatible
     return SupplyPreflightResult(
         compatible=compatible,

@@ -351,6 +351,7 @@ async def preflight_supply_composition(
             tenant_id,
             order_ids,
             planned_delivery_type=planned_delivery_type,
+            selected_warehouse_id=selected_warehouse_id,
         )
     except FbsSupplyValidationError as exc:
         raise FbsSupplyError(exc.code) from exc
@@ -364,7 +365,10 @@ async def preflight_supply_composition(
         if warehouse is None:
             raise FbsSupplyError("warehouse_not_found")
         if payload.get("summary") is not None:
-            payload["summary"]["wms_warehouse"] = {"id": str(warehouse.id), "name": warehouse.name}
+            payload["summary"]["wms_warehouse"] = {
+                "id": str(warehouse.id),
+                "name": warehouse.name,
+            }
     return payload
 
 
