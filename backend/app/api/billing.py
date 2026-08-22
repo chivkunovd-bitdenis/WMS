@@ -12,7 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_fulfillment_admin
 from app.db.session import get_db
-from app.models.billing import BillingInvoice, BillingProfile, BillingTariffVersion
+from app.models.billing import (
+    BillingInvoice,
+    BillingLedgerEntry,
+    BillingProfile,
+    BillingTariffVersion,
+)
 from app.models.user import User
 from app.services.billing_configuration_service import (
     BillingConfigurationError,
@@ -154,6 +159,63 @@ async def get_tariffs(
         .order_by(BillingTariffVersion.valid_from.desc())
     )
     return [TariffOut.from_model(value) for value in result]
+
+
+@router.get("/ledger")
+async def get_billing_ledger(
+    *,
+    period: date,
+    seller_id: uuid.UUID | None = None,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[dict[str, Any]]:
+    start = period
+    next_period = date(period.year + (period.month == 12), period.month % 12 + 1, 1)
+    query = select(BillingLedgerEntry).where(
+        BillingLedgerEntry.tenant_id == user.tenant_id,
+        BillingLedgerEntry.occurred_at >= start,
+        BillingLedgerEntry.occurred_at < next_period,
+    )
+    if seller_id is not None:
+        query = query.where(BillingLedgerEntry.seller_id == seller_id)
+    rows = (await session.scalars(query.order_by(BillingLedgerEntry.occurred_at))).all()
+    return [{
+        "id": row.id, "seller_id": row.seller_id, "service_code": row.service_code,
+        "source_type": row.source_type, "source_id": row.source_id,
+        "quantity": row.quantity, "unit": row.unit, "rate": row.rate,
+        "amount": row.amount, "occurred_at": row.occurred_at,
+        "performer_id": row.performer_id,
+    } for row in rows]
+
+
+@router.get("/invoices", response_model=None)
+async def get_billing_invoices(
+    *,
+    period: date | None = None,
+    seller_id: uuid.UUID | None = None,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[BillingInvoice]:
+    query = select(BillingInvoice).where(BillingInvoice.tenant_id == user.tenant_id)
+    if period is not None:
+        query = query.where(BillingInvoice.period == period)
+    if seller_id is not None:
+        query = query.where(BillingInvoice.seller_id == seller_id)
+    return list((await session.scalars(query.order_by(BillingInvoice.period.desc()))).all())
+
+
+@router.get("/invoices/{invoice_id}", response_model=None)
+async def get_billing_invoice(
+    invoice_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> BillingInvoice:
+    invoice = await session.scalar(select(BillingInvoice).where(
+        BillingInvoice.id == invoice_id, BillingInvoice.tenant_id == user.tenant_id,
+    ))
+    if invoice is None:
+        raise HTTPException(status_code=404, detail="Счёт не найден")
+    return invoice
 
 
 @router.post("/invoices/{seller_id}/{period}/form")

@@ -16,6 +16,7 @@ REASONS = {
     "unpriced": "Нет тарифа",
     "missing_profile": "Нет реквизитов",
     "storage_period_not_closed": "Хранение не закрыто",
+    "no_entries": "Нет начислений для формирования",
 }
 MSK = ZoneInfo("Europe/Moscow")
 
@@ -57,7 +58,9 @@ async def form_invoice(
         )
     ).all()
     reason = None
-    if any(e.amount is None for e in entries):
+    if not entries:
+        reason = "no_entries"
+    elif any(e.amount is None for e in entries):
         reason = "unpriced"
     storage_entries = [e for e in entries if e.service_code == "storage_liter_day"]
     has_storage_statement = any(
@@ -65,6 +68,19 @@ async def form_invoice(
     )
     if storage_entries and not has_storage_statement:
         reason = "storage_period_not_closed"
+    if not storage_entries and reason is None:
+        from app.models.billing import BillingTariffVersion
+
+        storage_tariff = await session.scalar(select(BillingTariffVersion).where(
+            BillingTariffVersion.tenant_id == tenant_id,
+            BillingTariffVersion.service_code == "storage_liter_day",
+            BillingTariffVersion.valid_from <= period,
+            (BillingTariffVersion.valid_to.is_(None) | (BillingTariffVersion.valid_to >= period)),
+            (BillingTariffVersion.seller_id == seller_id)
+            | BillingTariffVersion.seller_id.is_(None),
+        ))
+        if storage_tariff is not None:
+            reason = "storage_period_not_closed"
     ff = await session.scalar(
         select(BillingProfile).where(
             BillingProfile.tenant_id == tenant_id, BillingProfile.seller_id.is_(None)
@@ -148,6 +164,7 @@ async def form_invoice(
         seller_profile_snapshot=snapshot(seller),
         lines=[
             {
+                "id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"{seller_id}:{period}:{k}")),
                 "service_code": k[0],
                 "unit": k[1],
                 "rate": str(k[2]),
