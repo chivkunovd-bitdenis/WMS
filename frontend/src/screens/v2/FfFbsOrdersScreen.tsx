@@ -36,6 +36,7 @@ import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined'
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined'
 import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined'
 import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined'
+import { apiUrl } from '../../api'
 import { FbsStatusChip } from '../../components/fbs/FbsChips'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { FbsSupplyCreateDialog } from './FbsSupplyCreateDialog'
@@ -57,6 +58,8 @@ import {
   type FbsWorkspace,
 } from './fbsApi'
 import { WarehouseContextSwitch, type WarehouseOption } from '../../ui-kit'
+
+const FBS_WMS_WAREHOUSE_SESSION_KEY = 'ff-fbs-wms-warehouse-id'
 
 type SellerRow = { id: string; name: string }
 
@@ -516,7 +519,13 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const [workspaceSeed, setWorkspaceSeed] = useState<FbsWorkspace | null>(null)
-  const [wmsWarehouseId, setWmsWarehouseId] = useState<string | null>(null)
+  const [wmsWarehouseId, setWmsWarehouseId] = useState<string | null>(() => {
+    try {
+      return window.sessionStorage.getItem(FBS_WMS_WAREHOUSE_SESSION_KEY)
+    } catch {
+      return null
+    }
+  })
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({})
   const registerRow = useCallback((id: string, node: HTMLTableRowElement | null) => {
     rowRefs.current[id] = node
@@ -531,11 +540,12 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   // панель — так нижние строки остаются кликабельными при любой высоте панели.
   const selectionBarRef = useRef<HTMLDivElement | null>(null)
   const [selectionBarHeight, setSelectionBarHeight] = useState(0)
-  const wmsWarehouseOptions = useMemo<WarehouseOption[]>(() => {
-    const values = new Map<string, string>()
-    for (const item of [...orders, ...activeSupplies]) values.set(item.wms_warehouse.id, item.wms_warehouse.name)
-    return [...values].map(([id, name]) => ({ id, name }))
-  }, [orders, activeSupplies])
+  const wmsWarehouseOptions = useMemo<WarehouseOption[]>(
+    () => warehouseOptions
+      .filter((warehouse) => warehouse.id && warehouse.name?.trim())
+      .map((warehouse) => ({ id: String(warehouse.id), name: warehouse.name.trim() })),
+    [warehouseOptions],
+  )
   const visibleOrders = useMemo(() => wmsWarehouseId ? orders.filter((item) => item.wms_warehouse.id === wmsWarehouseId) : orders, [orders, wmsWarehouseId])
   const visibleSupplies = useMemo(() => wmsWarehouseId ? activeSupplies.filter((item) => item.wms_warehouse.id === wmsWarehouseId) : activeSupplies, [activeSupplies, wmsWarehouseId])
   const visibleExternalOrders = useMemo(() => wmsWarehouseId ? externalActiveOrders.filter((item) => item.wms_warehouse.id === wmsWarehouseId) : externalActiveOrders, [externalActiveOrders, wmsWarehouseId])
@@ -543,6 +553,32 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     if (wmsWarehouseOptions.length === 1) setWmsWarehouseId(wmsWarehouseOptions[0].id)
     if (wmsWarehouseId && !wmsWarehouseOptions.some((option) => option.id === wmsWarehouseId)) setWmsWarehouseId(null)
   }, [wmsWarehouseOptions, wmsWarehouseId])
+
+  useEffect(() => {
+    try {
+      if (wmsWarehouseId) window.sessionStorage.setItem(FBS_WMS_WAREHOUSE_SESSION_KEY, wmsWarehouseId)
+      else window.sessionStorage.removeItem(FBS_WMS_WAREHOUSE_SESSION_KEY)
+    } catch {
+      // Session storage is optional; the screen still works for the current mount.
+    }
+  }, [wmsWarehouseId])
+
+  useEffect(() => {
+    let cancelled = false
+    void fetch(apiUrl('/warehouses'), { headers: authHeaders(token) })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Не удалось загрузить склады.')
+        return (await response.json()) as Array<{ id?: string; name?: string; is_operational?: boolean }>
+      })
+      .then((warehouses) => {
+        if (cancelled) return
+        setWarehouseOptions(warehouses.filter((warehouse) => warehouse.is_operational !== false) as FbsWorklistWarehouseOption[])
+      })
+      .catch(() => {
+        if (!cancelled) setWarehouseOptions([])
+      })
+    return () => { cancelled = true }
+  }, [authHeaders, token])
 
   const load = useCallback(async () => {
     // Задача 9 пула (HANDOFF-POLISH.md): поллинг не должен наслаиваться сам на себя —

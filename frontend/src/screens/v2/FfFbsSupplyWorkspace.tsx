@@ -277,6 +277,8 @@ export function FfFbsSupplyWorkspace({
 }: Props) {
   const [workspace, setWorkspace] = useState<FbsWorkspace | null>(initialWorkspace ?? null)
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(initialWorkspace?.supply.wms_warehouse.id ?? null)
+  const [warehouseOptions, setWarehouseOptions] = useState<WarehouseOption[]>([])
+  const [warehouseLoadError, setWarehouseLoadError] = useState<string | null>(null)
   const [stage, setStage] = useState<StageKey>('composition')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -344,6 +346,47 @@ export function FfFbsSupplyWorkspace({
     },
     [supplyId, token, authHeaders],
   )
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    void fetch(apiUrl('/warehouses'), { headers: authHeaders(token) })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Не удалось загрузить склады.')
+        return (await response.json()) as Array<{ id?: string; name?: string; is_operational?: boolean }>
+      })
+      .then((warehouses) => {
+        if (cancelled) return
+        setWarehouseOptions(warehouses
+          .filter((warehouse) => warehouse.is_operational !== false && warehouse.id && warehouse.name?.trim())
+          .map((warehouse) => ({ id: String(warehouse.id), name: warehouse.name!.trim() })))
+        setWarehouseLoadError(null)
+      })
+      .catch(() => {
+        if (!cancelled) setWarehouseLoadError('Не удалось загрузить склады. Обновите страницу.')
+      })
+    return () => { cancelled = true }
+  }, [authHeaders, open, token])
+
+  const changeWarehouse = useCallback(async (warehouseId: string) => {
+    if (!workspace || workspace.supply.status !== 'draft') return
+    setSelectedWarehouseId(warehouseId)
+    setBusy(true)
+    try {
+      const response = await fetch(apiUrl(`/operations/fbs-supplies/${workspace.supply.id}/warehouse`), {
+        method: 'PATCH',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ warehouse_id: warehouseId }),
+      })
+      if (!response.ok) throw new Error('Не удалось сменить склад поставки.')
+      setWorkspace((await response.json()) as FbsWorkspace)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось сменить склад поставки.')
+      setSelectedWarehouseId(workspace.supply.wms_warehouse.id)
+    } finally {
+      setBusy(false)
+    }
+  }, [authHeaders, token, workspace])
 
   useEffect(() => {
     if (!open || !supplyId) return
@@ -1537,8 +1580,11 @@ export function FfFbsSupplyWorkspace({
       </Box>
 
       {workspace ? <Box sx={{ px: 2.5, pt: 2, bgcolor: '#fff' }}><WarehouseContextSwitch
-        options={[{ id: workspace.supply.wms_warehouse.id, name: workspace.supply.wms_warehouse.name } satisfies WarehouseOption]}
-        value={selectedWarehouseId} onChange={setSelectedWarehouseId}
+        options={warehouseOptions}
+        value={selectedWarehouseId}
+        onChange={(warehouseId) => void changeWarehouse(warehouseId)}
+        loading={busy && warehouseOptions.length === 0}
+        error={warehouseLoadError ?? undefined}
         disabledReason={workspace.supply.status === 'draft' ? undefined : 'Склад закреплён: подбор уже начат'} testId="fbs-supply-wms-warehouse-context"
       /></Box> : null}
 
