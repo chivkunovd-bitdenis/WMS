@@ -5,6 +5,7 @@ import os
 import time
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -16,6 +17,7 @@ from app.db.session import SessionLocal
 from app.models.fbs_order import FBS_ORDER_STATUS_IN_SUPPLY, FBS_ORDER_STATUS_NEW, FbsOrder
 from app.models.fbs_supply import FBS_SUPPLY_STATUS_DRAFT, FbsSupply
 from app.models.product import Product
+from app.services.fbs_order_tape_print_service import _orders_in_canonical_order
 from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
 from app.services.wildberries_client import WildberriesClientError
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
@@ -161,6 +163,26 @@ async def test_fbs_supply_create_ok(
     assert body["wb_supply_id"].startswith("WB-GI-MOCK-")
     assert body["name"] == "Supply A"
     assert body["delivery_type"] == "warehouse_sc"
+
+
+# TC-NEW-FBS-SUPPLY-005 — full tape input is normalized to the picking-list order.
+def test_fbs_order_tape_canonical_order_is_independent_of_requested_order() -> None:
+    product_a = SimpleNamespace(sku_code="SKU-A", wb_size="M", name="Alpha")
+    product_b = SimpleNamespace(sku_code="SKU-B", wb_size="L", name="Beta")
+    first = SimpleNamespace(
+        id=uuid.UUID("00000000-0000-0000-0000-000000000002"),
+        wb_order_id=200,
+        wb_article="ART-B",
+        product=product_b,
+    )
+    second = SimpleNamespace(
+        id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+        wb_order_id=100,
+        wb_article="ART-A",
+        product=product_a,
+    )
+
+    assert _orders_in_canonical_order(SimpleNamespace(orders=[first, second])) == [second, first]
 
 
 # TC-NEW-FBS-SUPPLY-ORDER-001 — supply.orders is stable by WB id, then UUID.

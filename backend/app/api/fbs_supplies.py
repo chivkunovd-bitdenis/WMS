@@ -206,6 +206,7 @@ class FbsPrintOrderErrorOut(BaseModel):
     wb_order_id: int
     code: str
     message: str
+    order_number: int | None = None
 
 
 class FbsPrintBatchOut(BaseModel):
@@ -234,6 +235,7 @@ class FbsOrderTapePrintedCodeOut(BaseModel):
 class FbsOrderTapeOrderOut(BaseModel):
     order_id: str
     wb_order_id: int
+    order_number: int
     requires_honest_sign: bool
     qr_asset: FbsPrintAssetOut | None
     codes: list[str]
@@ -1583,6 +1585,7 @@ async def print_fbs_supply_order_tape(
             FbsOrderTapeOrderOut(
                 order_id=str(order.order_id),
                 wb_order_id=order.wb_order_id,
+                order_number=order.order_number,
                 requires_honest_sign=order.requires_honest_sign,
                 qr_asset=assets_by_id.get(order.qr_asset_id) if order.qr_asset_id else None,
                 codes=order.codes,
@@ -1608,6 +1611,7 @@ async def print_fbs_supply_order_tape(
                 wb_order_id=err.wb_order_id,
                 code=err.code,
                 message=err.message,
+                order_number=err.order_number,
             )
             for err in result.order_errors
         ],

@@ -51,6 +51,7 @@ class FbsOrderTapePrintedCode:
 class FbsOrderTapeOrder:
     order_id: uuid.UUID
     wb_order_id: int
+    order_number: int
     requires_honest_sign: bool
     qr_asset_id: uuid.UUID | None
     codes: list[str] = field(default_factory=list)
@@ -62,6 +63,7 @@ class FbsOrderTapeOrder:
 class FbsOrderTapeError:
     order_id: uuid.UUID
     wb_order_id: int
+    order_number: int
     code: str
     message: str
 
@@ -96,9 +98,12 @@ async def print_fbs_order_tape(
     supply = await _load_supply(session, tenant_id, supply_id)
     if supply is None:
         raise FbsOrderTapePrintError("supply_not_found")
-    ordered = _orders_in_requested_order(supply, order_ids)
-    if len(ordered) != len(dict.fromkeys(order_ids)):
+    ordered = _orders_in_canonical_order(supply)
+    requested_ids = list(dict.fromkeys(order_ids))
+    if len(requested_ids) != len(ordered) or set(requested_ids) != {order.id for order in ordered}:
         raise FbsOrderTapePrintError("order_not_in_supply")
+    order_number_by_id = {order.id: number for number, order in enumerate(ordered, start=1)}
+    canonical_order_ids = [order.id for order in ordered]
     line_by_product = await _line_by_product(session, tenant_id, supply)
     if not reprint and not allow_partial:
         preflight_shortage = await _preflight_new_code_shortage(session, tenant_id, ordered)
@@ -120,7 +125,7 @@ async def print_fbs_order_tape(
                 tenant_id,
                 supply_id,
                 kind="order_sticker",
-                order_ids=order_ids,
+                order_ids=canonical_order_ids,
                 # L8 (21.08.2026): лента печаталась короче листа подбора. Причина —
                 # False здесь означает «перезапросить у WB стикеры по ВСЕМ заказам
                 # заново». На полутора сотнях заказов любая осечка WB на одном куске
@@ -141,6 +146,7 @@ async def print_fbs_order_tape(
             FbsOrderTapeError(
                 order_id=err.order_id,
                 wb_order_id=err.wb_order_id,
+                order_number=order_number_by_id[err.order_id],
                 code=err.code,
                 message=err.message,
             )
@@ -156,6 +162,7 @@ async def print_fbs_order_tape(
                 FbsOrderTapeError(
                     order_id=order.id,
                     wb_order_id=int(order.wb_order_id),
+                    order_number=order_number_by_id[order.id],
                     code="order_qr_missing",
                     message="QR заказа WB не получен.",
                 )
@@ -171,6 +178,7 @@ async def print_fbs_order_tape(
                 FbsOrderTapeOrder(
                     order_id=order.id,
                     wb_order_id=int(order.wb_order_id),
+                    order_number=order_number_by_id[order.id],
                     requires_honest_sign=False,
                     qr_asset_id=qr_asset_id,
                 )
@@ -182,6 +190,7 @@ async def print_fbs_order_tape(
                 FbsOrderTapeError(
                     order_id=order.id,
                     wb_order_id=int(order.wb_order_id),
+                    order_number=order_number_by_id[order.id],
                     code="packaging_line_not_found",
                     message="Строка упаковки для товара не найдена.",
                 )
@@ -203,6 +212,7 @@ async def print_fbs_order_tape(
                 FbsOrderTapeError(
                     order_id=order.id,
                     wb_order_id=int(order.wb_order_id),
+                    order_number=order_number_by_id[order.id],
                     code=exc.code,
                     message=exc.code,
                 )
@@ -230,6 +240,7 @@ async def print_fbs_order_tape(
                     FbsOrderTapeError(
                         order_id=order.id,
                         wb_order_id=int(order.wb_order_id),
+                        order_number=order_number_by_id[order.id],
                         code=exc.code,
                         message=exc.code,
                     )
@@ -239,6 +250,7 @@ async def print_fbs_order_tape(
             FbsOrderTapeOrder(
                 order_id=order.id,
                 wb_order_id=int(order.wb_order_id),
+                order_number=order_number_by_id[order.id],
                 requires_honest_sign=True,
                 qr_asset_id=qr_asset_id,
                 codes=printed.codes,
@@ -291,21 +303,16 @@ async def _load_supply(
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
-def _orders_in_requested_order(
-    supply: FbsSupply,
-    order_ids: list[uuid.UUID],
-) -> list[FbsOrder]:
-    by_id = {order.id: order for order in supply.orders}
-    out: list[FbsOrder] = []
-    seen: set[uuid.UUID] = set()
-    for order_id in order_ids:
-        if order_id in seen:
-            continue
-        seen.add(order_id)
-        order = by_id.get(order_id)
-        if order is not None:
-            out.append(order)
-    return out
+def _orders_in_canonical_order(supply: FbsSupply) -> list[FbsOrder]:
+    def sort_key(order: FbsOrder) -> tuple[str, str, str, str, int, str]:
+        product = order.product
+        article = order.wb_article or (product.sku_code if product is not None else "") or ""
+        sku_code = product.sku_code if product is not None else ""
+        size = product.wb_size if product is not None and product.wb_size else ""
+        product_name = product.name if product is not None else (order.wb_article or "Unknown")
+        return (article, sku_code, size, product_name, int(order.wb_order_id), str(order.id))
+
+    return sorted(supply.orders, key=sort_key)
 
 
 async def _line_by_product(
