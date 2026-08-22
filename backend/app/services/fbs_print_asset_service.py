@@ -694,6 +694,12 @@ async def get_asset_binary_content(
             message="Печатный актив ещё не готов.",
             context={"asset_id": str(asset_id)},
         )
+    if asset.expires_at is not None and asset.expires_at <= datetime.now(tz=UTC):
+        raise FbsPrintAssetError(
+            "asset_expired",
+            message="Срок хранения печатного актива истёк.",
+            context={"asset_id": str(asset_id)},
+        )
     try:
         png_bytes = read_png(asset.storage_path, checksum=asset.checksum)
     except FbsPrintAssetStorageError as exc:

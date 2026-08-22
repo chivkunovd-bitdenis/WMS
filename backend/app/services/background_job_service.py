@@ -27,6 +27,7 @@ JOB_TYPE_WILDBERRIES_CARDS_SYNC = "wildberries_cards_sync"
 JOB_TYPE_WILDBERRIES_SUPPLIES_SYNC = "wildberries_supplies_sync"
 JOB_TYPE_WILDBERRIES_MARKETPLACE_ORDERS_SYNC = "wildberries_marketplace_orders_sync"
 JOB_TYPE_FBS_STOCK_SYNC = "fbs_stock_sync"
+JOB_TYPE_MARKING_LABEL_TAPE = "marking_label_tape"
 
 
 async def create_pending_job(
@@ -35,12 +36,25 @@ async def create_pending_job(
     *,
     job_type: str,
     payload_json: dict[str, Any] | None = None,
+    idempotency_key: str | None = None,
 ) -> BackgroundJob:
+    if idempotency_key:
+        existing = await session.scalar(
+            select(BackgroundJob).where(
+                BackgroundJob.tenant_id == tenant_id,
+                BackgroundJob.job_type == job_type,
+                BackgroundJob.idempotency_key == idempotency_key,
+                BackgroundJob.status.in_((JOB_STATUS_PENDING, JOB_STATUS_RUNNING)),
+            )
+        )
+        if existing is not None:
+            return existing
     job = BackgroundJob(
         tenant_id=tenant_id,
         job_type=job_type,
         status=JOB_STATUS_PENDING,
         payload_json=payload_json,
+        idempotency_key=idempotency_key,
     )
     session.add(job)
     await session.commit()

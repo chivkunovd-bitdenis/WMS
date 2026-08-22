@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 import uuid
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -12,8 +13,9 @@ from httpx import AsyncClient
 from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.fbs_order import STICKER_STATUS_APPLIED, STICKER_STATUS_PRINT_OPENED, FbsOrder
-from app.models.fbs_print_asset import FbsPrintAsset
+from app.models.fbs_print_asset import FbsPrintAsset, PRINT_ASSET_KIND_LABEL_TAPE
 from app.models.seller import Seller
+from app.services.fbs_print_asset_service import FbsPrintAssetError, get_asset_binary_content
 from app.services.fbs_print_asset_storage import (
     PNG_MAGIC,
     FbsPrintAssetStorageError,
@@ -138,6 +140,29 @@ async def test_tc15_missing_file_not_ready(
     assert content.status_code == 404
     detail = content.json()["detail"]
     assert detail["code"] == "asset_not_ready"
+
+
+@pytest.mark.asyncio
+async def test_label_tape_asset_expires_after_twelve_hours(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, _suffix = await _register_ff_admin(async_client)
+    supply, order_ids, tenant_id = await _seed_supply_with_orders(async_client, headers)
+    batch = await async_client.post(
+        f"/operations/fbs-supplies/{supply['id']}/print-assets",
+        headers=headers,
+        json={"kind": "order_sticker", "order_ids": [str(order_ids[0])], "retry_missing": False},
+    )
+    asset_id = uuid.UUID(batch.json()["assets"][0]["id"])
+    async with SessionLocal() as session:
+        asset = await session.get(FbsPrintAsset, asset_id)
+        assert asset is not None
+        asset.kind = PRINT_ASSET_KIND_LABEL_TAPE
+        asset.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        await session.commit()
+        with pytest.raises(FbsPrintAssetError, match="asset_expired"):
+            await get_asset_binary_content(session, tenant_id, asset_id, user_id=uuid.uuid4())
 
 
 # TC-16 — batch stickers: counts, partial failure, retry missing only

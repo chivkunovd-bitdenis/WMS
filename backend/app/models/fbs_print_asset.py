@@ -30,11 +30,13 @@ if TYPE_CHECKING:
 PRINT_ASSET_KIND_ORDER_STICKER = "order_sticker"
 PRINT_ASSET_KIND_CARGO_PLACE_QR = "cargo_place_qr"
 PRINT_ASSET_KIND_SUPPLY_QR = "supply_qr"
+PRINT_ASSET_KIND_LABEL_TAPE = "label_tape"
 FBS_PRINT_ASSET_KINDS = frozenset(
     {
         PRINT_ASSET_KIND_ORDER_STICKER,
         PRINT_ASSET_KIND_CARGO_PLACE_QR,
         PRINT_ASSET_KIND_SUPPLY_QR,
+        PRINT_ASSET_KIND_LABEL_TAPE,
     }
 )
 
@@ -155,6 +157,7 @@ class FbsPrintAsset(Base):
         onupdate=func.now(),
         nullable=False,
     )
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     tenant: Mapped[Tenant] = relationship("Tenant")
     seller: Mapped[Seller] = relationship("Seller")

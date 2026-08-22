@@ -2,11 +2,53 @@ from __future__ import annotations
 
 import asyncio
 import time
+import uuid
 
 import pytest
 from httpx import AsyncClient
 
-from app.services.background_job_service import JOB_TYPE_MOVEMENTS_DIGEST
+from app.db.session import SessionLocal
+from app.models.background_job import BackgroundJob
+from app.services.background_job_service import (
+    JOB_STATUS_PENDING,
+    JOB_TYPE_MARKING_LABEL_TAPE,
+    JOB_TYPE_MOVEMENTS_DIGEST,
+    create_pending_job,
+)
+from app.services.tokens import decode_access_token
+
+
+@pytest.mark.asyncio
+async def test_marking_label_tape_idempotency_and_result_contract(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post("/auth/register", json={
+        "organization_name": "Tape Co", "slug": f"tape-{suffix}",
+        "admin_email": f"tape-{suffix}@example.com", "password": "password123",
+    })
+    tenant_id = uuid.UUID(
+        str(decode_access_token(reg.json()["access_token"])["tenant_id"])
+    )
+    async with SessionLocal() as session:
+        first = await create_pending_job(
+            session, tenant_id, job_type=JOB_TYPE_MARKING_LABEL_TAPE,
+            idempotency_key="same-request", payload_json={"code_ids": ["1"]},
+        )
+        second = await create_pending_job(
+            session, tenant_id, job_type=JOB_TYPE_MARKING_LABEL_TAPE,
+            idempotency_key="same-request", payload_json={"code_ids": ["1"]},
+        )
+        assert first.id == second.id
+        assert first.status == JOB_STATUS_PENDING
+        first.result_json = {"asset_id": "asset-1"}
+        assert "pdf" not in first.result_json
+        await session.commit()
+        assert len((await session.execute(
+            __import__("sqlalchemy").select(BackgroundJob).where(
+                BackgroundJob.idempotency_key == "same-request"
+            )
+        )).scalars().all()) == 1
 
 
 @pytest.mark.asyncio
