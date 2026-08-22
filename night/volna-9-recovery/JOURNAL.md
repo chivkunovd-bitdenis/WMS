@@ -56,3 +56,7 @@
 19:22   08-storage · dev: фича 7/8 сохранена a8408c7e743f
 19:25   08-storage · screen-dev: готово
 19:25   08-storage · dev: фича 8/8 сохранена 33b8d52a962b
+19:29   08-storage · reviewer: готово
+19:29 08-storage: отложено — reviewer, круги кончились
+21:30   08-storage · resume: поатомный rework Terra по сохранённым находкам
+21:33   08-storage · screen-dev: готово
