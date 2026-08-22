@@ -1,16 +1,18 @@
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfBillingScreen.tsx` — реализована вкладка «Начисления»: период, селлер, услуга, поиск документа, режимы «По операциям»/«По исполнителям», таблица через `DataTable`, проблема «Нет тарифа», пустое/загрузочное/ошибочное состояния и сохранение контекста вкладок.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/tests-e2e/billing-ledger.spec.ts` — добавлены сценарии `S-31-TC-004`, `S-31-TC-005`, `S-31-TC-012` с мокированием чтения журнала.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfBillingScreen.tsx` — очищает текущие начисления и счета перед новым запросом, чтобы ошибка не показывала старые данные как актуальные.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/tests-e2e/billing-ledger.spec.ts` — усиливает `S-31-TC-004`, `S-31-TC-005`, `S-31-TC-012` и добавляет проверку очистки устаревшей строки при ошибке обновления.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/night/volna-9-recovery/cards/09-billing/DEV.md` — этот отчёт.
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` — PASS.
-- `python3 scripts/ui/ui_guard.py` — FAIL: храповик показывает пять ранее существовавших нарушений в `src/App.tsx`, `src/components/WbProductPickerDialog.tsx`, `src/screens/ff/FfSettingsScreen.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`; изменённый экран billing в списке новых нарушений отсутствует. Базовую линию не обновлял.
-- `npm run test:unit` — FAIL: в окружении отсутствует исполняемый `vitest` (`vitest: command not found`).
+- `npx tsc --noEmit -p tsconfig.app.json` — не подтверждён: в checkout отсутствует локальный `tsc`, а `npx` не завершил выполнение в доступное время.
+- `python3 scripts/ui/ui_guard.py` — FAIL из-за пяти новых/зафиксированных нарушений в чужих файлах: `src/App.tsx`, `src/components/WbProductPickerDialog.tsx`, `src/screens/ff/FfSettingsScreen.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`. Нарушений в изменённом billing-экране нет; базовую линию не обновлял.
+- `npm run test:unit` — FAIL: `vitest: command not found`.
+- `git diff --check` — PASS.
 
 ## Не реализовано
 
-- Вкладка «Счета» и детализация счёта не расширялись: этот атомарный кусок FEATURES.md ограничен реестром начислений.
-- В текущем checkout нет GET-ручки журнала в `backend/app/api/billing.py`; экран вызывает согласованный ресурс `/api/billing/ledger`, а E2E покрывает пользовательский результат через маршрутный mock. Добавление backend-файла запрещено списком файлов этой карточки.
+- GET-ручки `/api/billing/ledger` и `/api/billing/invoices` отсутствуют в `backend/app/api/billing.py`. Добавление backend-файла запрещено границами этого экранного атома; E2E сохраняет маршрутные моки, чтобы проверять пользовательские сценарии экрана.
+- Остальные находки REVIEW.md относятся к backend, `FfSettingsScreen.tsx`, моделям и сервисам, которые не входят в разрешённые файлы этого атома.
 - Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не читались и не затрагивались.

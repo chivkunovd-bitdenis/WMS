@@ -75,6 +75,7 @@ export function FfBillingScreen({ sellers = [], token }: Props) {
     const controller = new AbortController()
     setLoading(true)
     setError(false)
+    setRows([])
     const params = new URLSearchParams({ period: month, seller_id: sellerId, service_code: service, mode })
     if (search) params.set('document_number', search)
     fetch(`/api/billing/ledger?${params}`, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
@@ -92,6 +93,7 @@ export function FfBillingScreen({ sellers = [], token }: Props) {
     if (tab !== 1) return
     const controller = new AbortController()
     setInvoiceLoading(true); setInvoiceError(false)
+    setInvoices([])
     const params = new URLSearchParams({ period: month, seller_id: sellerId, status: invoiceStatus })
     if (invoiceSearch) params.set('number', invoiceSearch)
     fetch(`/api/billing/invoices?${params}`, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
