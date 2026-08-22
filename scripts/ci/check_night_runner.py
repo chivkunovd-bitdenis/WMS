@@ -18,11 +18,11 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 import night as n  # noqa: E402
 
 ОЖИДАЕМЫЕ_ЦЕПОЧКИ = {
-                    "баг": ["tester", "splitter", "dev", "reviewer", "ui-critic",
+                    "баг": ["product", "tester", "splitter", "dev", "reviewer", "ui-critic",
                             "clicker", "ux-judge"],
-                    "фича": ["ux-architect", "product", "tester", "breaker", "splitter",
+                    "фича": ["product", "ux-architect", "tester", "breaker", "splitter",
                              "dev", "reviewer", "ui-critic", "clicker", "ux-judge"],
-                    "домен": ["solution-architect", "ux-architect", "product", "tester",
+                    "домен": ["solution-architect", "product", "ux-architect", "tester",
                               "breaker", "splitter", "dev", "reviewer", "ui-critic",
                               "clicker", "ux-judge"],
                     "блокировки": ["blocker-collector", "blocker-skeptic"],
@@ -162,6 +162,11 @@ def fake_e2e_smoke(проверь) -> None:
             elif role == "requirement-critic":
                 (folder / "SVERKA.md").write_text(
                     "ВЕРДИКТ: ЧИСТО\nТИП: баг\n\n## Тип\nбаг\n## Расхождения\nнет\n", encoding="utf-8")
+            elif role == "product":
+                (folder / "RESHENIYA.md").write_text(
+                    "ВЕРДИКТ: РЕШЕНО\n\n## Решения\n- smoke\n"
+                    "## Открытых вопросов не осталось\nда\n## Что осталось за бортом\nнет\n",
+                    encoding="utf-8")
             elif role == "tester":
                 if card == "fail" and fail_card["enabled"]:
                     return 1, "fake timeout"
@@ -176,7 +181,9 @@ def fake_e2e_smoke(проверь) -> None:
                     "ВЕРДИКТ: ЧИСТО\n\n## Находки\nнет\n", encoding="utf-8")
             elif role == "splitter":
                 (folder / "FEATURES.md").write_text(
-                    "ФИЧ: 1\n\n## Фичи\n1. smoke\n\n## Порядок\n1\n", encoding="utf-8")
+                    "ФИЧ: 1\n\n## Фичи\n### 1. smoke backend\n"
+                    "Файлы: `backend/app/smoke.py`\nПроверка: smoke\n\n"
+                    "## Порядок\n1\n", encoding="utf-8")
             elif role == "ui-critic":
                 (folder / "DESIGN-REVIEW.md").write_text(
                     "ВЕРДИКТ: ЧИСТО\n\n## Находки\nнет\n", encoding="utf-8")
@@ -301,6 +308,48 @@ def main() -> int:
             (t / "RAZBOR.md").write_text("## Экраны\nэкран будет создан\n", encoding="utf-8")
             проверь("без экрана — бэкендер", n.выбрать_dev(t), "backend-dev")
 
+            (t / "FEATURES.md").write_text(
+                "ФИЧ: 2\n\n## Фичи\n### 1. backend atom\n"
+                "Файлы: `backend/app/a.py`\nПроверка: unit\n\n"
+                "### 2. frontend atom\nФайлы: `frontend/src/a.tsx`\nПроверка: browser\n\n"
+                "## Порядок\n1, затем 2\n", encoding="utf-8")
+            куски = n.фичи(t)
+            проверь("splitter: два атома прочитаны", len(куски), 2)
+            проверь("splitter: backend идёт backend-dev", n.dev_для_фичи(куски[0]), "backend-dev")
+            проверь("splitter: frontend идёт screen-dev", n.dev_для_фичи(куски[1]), "screen-dev")
+            проверь("splitter: валидный артефакт принят", n.артефакт_готов(t, "splitter")[0], True)
+            (t / "FEATURES.md").write_text(
+                "ФИЧ: 1\n\n## Фичи\n### 1. mixed atom\n"
+                "Файлы: `backend/app/a.py`, `frontend/src/a.tsx`\nПроверка: smoke\n\n"
+                "## Порядок\n1\n", encoding="utf-8")
+            проверь("splitter: смешанный атом отклонён", n.артефакт_готов(t, "splitter")[0], False)
+
+            (t / "FEATURES.md").write_text(
+                "ФИЧ: 2\n\n## Фичи\n### 1. backend atom\n"
+                "Файлы: `backend/app/a.py`\nПроверка: unit\n\n"
+                "### 2. frontend atom\nФайлы: `frontend/src/a.tsx`\nПроверка: browser\n\n"
+                "## Порядок\n1, затем 2\n", encoding="utf-8")
+            вызовы_dev = []
+
+            def fake_step(_ид, роль, папка, _волна, *_args, **kwargs):
+                вызовы_dev.append((роль, kwargs.get("дополнение", "")))
+                (папка / "DEV.md").write_text(
+                    "## Изменённые файлы\n- atom\n## Гейты\npass\n", encoding="utf-8")
+                return True, ""
+
+            рабочая = n.РабочаяКарточка("x", 1, t, t, t, "test", "base")
+            with mock.patch.object(n, "шаг", side_effect=fake_step), \
+                 mock.patch.object(n, "сохранить_checkpoint", return_value=(True, "sha")), \
+                 mock.patch.object(n, "журнал"):
+                проверь("dev: два атома выполнены", n.разработать_по_фичам(
+                    "x", t, t, рабочая, 0)[0], True)
+            проверь("dev: отдельные роли в порядке",
+                    [роль for роль, _ in вызовы_dev], ["backend-dev", "screen-dev"])
+            проверь("dev: первый промпт не содержит второй атом",
+                    "backend atom" in вызовы_dev[0][1] and "frontend atom" not in вызовы_dev[0][1], True)
+            проверь("dev: второй промпт не содержит первый атом",
+                    "frontend atom" in вызовы_dev[1][1] and "backend atom" not in вызовы_dev[1][1], True)
+
             (t / "RAZBOR.md").write_text("## Тип\nбаг\n## Экраны\n- S-03\n", encoding="utf-8")
             проверь("тип читается", n.поле(t, "RAZBOR.md", "Тип").strip(), "баг")
             проверь("машинный тип из разбора", n.тип_карточки(t), "баг")
@@ -315,6 +364,10 @@ def main() -> int:
         n.subprocess.run = настоящий_вызов
 
     проверь("цепочки не изменились при переносе", n.ЦЕПОЧКИ, ОЖИДАЕМЫЕ_ЦЕПОЧКИ)
+    проверь("product раньше UX в фиче",
+            n.ЦЕПОЧКИ["фича"].index("product") < n.ЦЕПОЧКИ["фича"].index("ux-architect"), True)
+    проверь("product раньше UX в домене",
+            n.ЦЕПОЧКИ["домен"].index("product") < n.ЦЕПОЧКИ["домен"].index("ux-architect"), True)
 
     # Карточный worktree не содержит gitignored snapshot. Разрешён только
     # существующий sanitized-latest.dump из главного checkout; raw dump не
