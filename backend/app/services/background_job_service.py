@@ -112,11 +112,14 @@ async def run_storage_measurement_rebuild_job(job_id: uuid.UUID) -> None:
             )
             raw_warehouse = payload.get("warehouse_id")
             warehouse_id = uuid.UUID(raw_warehouse) if isinstance(raw_warehouse, str) else None
+            raw_seller = payload.get("seller_id")
+            seller_id = uuid.UUID(raw_seller) if isinstance(raw_seller, str) else None
             result = await rebuild_storage_measurements(
                 session,
                 job.tenant_id,
                 period_start=period_start,
                 warehouse_id=warehouse_id,
+                seller_id=seller_id,
             )
             job.status = JOB_STATUS_DONE
             job.result_json = result

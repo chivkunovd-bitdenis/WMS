@@ -7,7 +7,8 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_ff_or_seller
+from app.api.deps import require_ff_or_seller, require_ff_or_seller_with_permission
+from app.services.staff_permissions_service import PERM_INVENTORY
 from app.core.settings import settings
 from app.db.session import get_db
 from app.models.user import User
@@ -20,6 +21,7 @@ from app.services.storage_statement_service import (
 )
 
 router = APIRouter(prefix="/operations/storage", tags=["storage"])
+require_storage_access = require_ff_or_seller_with_permission(PERM_INVENTORY)
 
 
 class StorageRebuildBody(BaseModel):
@@ -48,7 +50,7 @@ class StorageStatementOut(BaseModel):
 async def rebuild_storage(
     body: StorageRebuildBody,
     background_tasks: BackgroundTasks,
-    user: Annotated[User, Depends(require_ff_or_seller)],
+    user: Annotated[User, Depends(require_storage_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> StorageRebuildOut:
     payload = {
@@ -60,6 +62,8 @@ async def rebuild_storage(
         }.items()
         if v is not None
     }
+    if user.role == "fulfillment_seller":
+        payload["seller_id"] = str(user.seller_id)
     job = await job_svc.create_pending_job(
         session, user.tenant_id, job_type=JOB_TYPE_STORAGE_MEASUREMENT_REBUILD, payload_json=payload
     )

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import calendar
 import uuid
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
 from app.models.product_dimension_event import ProductDimensionEvent
+from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.storage_measurement import StorageMeasurement
 from app.models.storage_statement import StorageStatement
@@ -20,8 +22,11 @@ class StorageMeasurementError(ValueError):
     pass
 
 
+MOSCOW = ZoneInfo("Europe/Moscow")
+
+
 def previous_month(today: date | None = None) -> tuple[date, date]:
-    today = today or datetime.now(UTC).date()
+    today = today or datetime.now(MOSCOW).date()
     first = today.replace(day=1)
     end_month = first - timedelta(days=1)
     return end_month.replace(day=1), end_month
@@ -44,18 +49,18 @@ async def rebuild_storage_measurements(
     *,
     period_start: date | None = None,
     warehouse_id: uuid.UUID | None = None,
+    seller_id: uuid.UUID | None = None,
 ) -> dict[str, object]:
     """Rebuild open monthly drafts; no money is produced here."""
     if period_start is None:
         period_start, period_end = previous_month()
     else:
         period_start, period_end = month_bounds(period_start.year, period_start.month)
-    today = datetime.now(UTC).date()
+    today = datetime.now(MOSCOW).date()
     if period_start > today.replace(day=1):
         raise StorageMeasurementError("future_month")
-    period_end_exclusive = datetime.combine(
-        period_end + timedelta(days=1), datetime.min.time(), UTC
-    )
+    period_start_at = datetime.combine(period_start, time.min, MOSCOW)
+    period_end_exclusive = datetime.combine(period_end + timedelta(days=1), time.min, MOSCOW)
 
     locations = select(StorageLocation).where(
         StorageLocation.tenant_id == tenant_id,
@@ -65,26 +70,30 @@ async def rebuild_storage_measurements(
         locations = locations.where(StorageLocation.warehouse_id == warehouse_id)
     location_rows = list((await session.scalars(locations)).all())
     operational = {row.id: row.warehouse_id for row in location_rows}
-    if not operational:
-        return {
-            "period_start": period_start.isoformat(),
-            "period_end": period_end.isoformat(),
-            "measurements": 0,
-            "problems": 0,
-        }
-
     movements = list(
         (
             await session.scalars(
                 select(InventoryMovement)
                 .where(
                     InventoryMovement.tenant_id == tenant_id,
-                    InventoryMovement.storage_location_id.in_(operational),
+                    InventoryMovement.storage_location_id.in_(operational or {uuid.UUID(int=0)}),
                 )
                 .order_by(InventoryMovement.created_at, InventoryMovement.id)
             )
         ).all()
     )
+    if seller_id is not None:
+        seller_product_ids = set(
+            (
+                await session.scalars(
+                    select(Product.id).where(
+                        Product.tenant_id == tenant_id,
+                        Product.seller_id == seller_id,
+                    )
+                )
+            ).all()
+        )
+        movements = [m for m in movements if m.product_id in seller_product_ids]
     product_ids = {m.product_id for m in movements}
     products = {
         p.id: p
@@ -109,21 +118,21 @@ async def rebuild_storage_measurements(
         product = products.get(movement.product_id)
         if product is None or product.seller_id is None:
             continue
-        grouped.setdefault(
-            (product.seller_id, operational[movement.storage_location_id]), []
-        ).append(movement)
+        movement_warehouse_id = getattr(movement, "warehouse_id", None)
+        warehouse = movement_warehouse_id or operational.get(movement.storage_location_id)
+        if warehouse is not None:
+            grouped.setdefault((product.seller_id, warehouse), []).append(movement)
     for (seller_id, wh_id), group in grouped.items():
         by_product: dict[uuid.UUID, list[InventoryMovement]] = {}
         for movement in group:
             by_product.setdefault(movement.product_id, []).append(movement)
         for product_id, product_moves in by_product.items():
             quantity = 0
-            cursor = datetime.combine(period_start, datetime.min.time(), UTC)
+            cursor = period_start_at
             quantity_days = Decimal(0)
             for movement in product_moves:
                 at = movement.created_at
-                if at.tzinfo is None:
-                    at = at.replace(tzinfo=UTC)
+                at = at.replace(tzinfo=MOSCOW) if at.tzinfo is None else at.astimezone(MOSCOW)
                 if at <= cursor:
                     quantity += movement.quantity_delta
                     continue
@@ -168,7 +177,12 @@ async def rebuild_storage_measurements(
                     else "calculated",
                 )
             )
+    seller_ids = {seller_id} if seller_id is not None else set(
+        (await session.scalars(select(Seller.id).where(Seller.tenant_id == tenant_id))).all()
+    )
+    warehouse_ids = set(operational.values())
     scopes = {(r.seller_id, r.warehouse_id) for r in rows}
+    scopes |= {(seller_id, wh_id) for seller_id in seller_ids for wh_id in warehouse_ids}
     for seller_id, wh_id in scopes:
         statement = await session.scalar(
             select(StorageStatement).where(
@@ -201,7 +215,21 @@ async def rebuild_storage_measurements(
                     status="draft",
                 )
             )
-    session.add_all(rows)
+    open_scopes: set[tuple[uuid.UUID, uuid.UUID]] = set()
+    for seller_id, wh_id in scopes:
+        statement = await session.scalar(
+            select(StorageStatement).where(
+                StorageStatement.tenant_id == tenant_id,
+                StorageStatement.seller_id == seller_id,
+                StorageStatement.warehouse_id == wh_id,
+                StorageStatement.period_start == period_start,
+                StorageStatement.period_end == period_end,
+                StorageStatement.status == "draft",
+            )
+        )
+        if statement is not None:
+            open_scopes.add((seller_id, wh_id))
+    session.add_all([row for row in rows if (row.seller_id, row.warehouse_id) in open_scopes])
     await session.commit()
     return {
         "period_start": period_start.isoformat(),
