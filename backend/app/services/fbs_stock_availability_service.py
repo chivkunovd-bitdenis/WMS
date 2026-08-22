@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.fbs_order import FbsOrderReservation
 from app.models.inventory_balance import InventoryBalance
 from app.models.storage_location import StorageLocation
+from app.models.warehouse import Warehouse
 from app.services import stock_direction_service
 from app.services.sorting_location_service import SORTING_LOCATION_CODE
 
@@ -107,11 +108,13 @@ async def _storage_and_sorting_on_hand_by_product(
             sorting_qty,
         )
         .join(StorageLocation, StorageLocation.id == InventoryBalance.storage_location_id)
+        .join(Warehouse, Warehouse.id == StorageLocation.warehouse_id)
         .where(
             InventoryBalance.tenant_id == tenant_id,
             InventoryBalance.product_id.in_(product_ids),
             StorageLocation.tenant_id == tenant_id,
             StorageLocation.warehouse_id == warehouse_id,
+            Warehouse.is_operational.is_(True),
         )
         .group_by(InventoryBalance.product_id)
     )

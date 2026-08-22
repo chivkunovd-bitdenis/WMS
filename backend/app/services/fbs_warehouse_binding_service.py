@@ -130,8 +130,11 @@ async def upsert_binding(
         raise FbsWarehouseBindingError("seller_not_found")
     if wb_warehouse_id <= 0:
         raise FbsWarehouseBindingError("invalid_wb_warehouse_id")
-    if await get_warehouse(session, tenant_id, wms_warehouse_id) is None:
+    warehouse = await get_warehouse(session, tenant_id, wms_warehouse_id)
+    if warehouse is None:
         raise FbsWarehouseBindingError("warehouse_not_found")
+    if not warehouse.is_operational:
+        raise FbsWarehouseBindingError("warehouse_not_operational")
 
     existing = await _get_binding_row(
         session, tenant_id, seller_id, wb_warehouse_id, for_update=True

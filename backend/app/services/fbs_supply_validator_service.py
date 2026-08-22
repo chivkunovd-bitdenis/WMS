@@ -1,4 +1,3 @@
-# ruff: noqa: RUF001
 """Shared FBS supply composition validator for selection, preflight, and create-under-lock."""
 
 from __future__ import annotations
@@ -59,6 +58,28 @@ class SupplyPreflightResult:
     summary: SupplyPreflightSummary | None
     issues: tuple[SupplyValidationIssue, ...]
     orders: tuple[FbsOrder, ...]
+    stock: SupplyStockPreflight
+
+
+@dataclass(frozen=True)
+class SupplyStockLine:
+    product_id: uuid.UUID
+    product_name: str
+    required: int
+    current: int
+    total: int
+    shortage: int
+    source_warehouse_id: uuid.UUID | None = None
+    source_warehouse_name: str | None = None
+
+
+@dataclass(frozen=True)
+class SupplyStockPreflight:
+    compatible: bool
+    recommended_warehouse_id: uuid.UUID | None
+    recommended_warehouse_name: str | None
+    warning_lines: tuple[SupplyStockLine, ...]
+    blocking_lines: tuple[SupplyStockLine, ...]
 
 
 _BLOCKER_TO_ISSUE: dict[str, tuple[str, str]] = {
@@ -100,6 +121,7 @@ async def load_orders_for_validation(
             selectinload(FbsOrder.product),
             selectinload(FbsOrder.seller),
             selectinload(FbsOrder.warehouse),
+            selectinload(FbsOrder.reservation),
         )
     )
     if for_update:
@@ -144,6 +166,58 @@ async def _availability_by_order(
         for oid in order_ids:
             out[oid] = qty
     return out
+
+
+async def _stock_preflight(
+    session: AsyncSession, tenant_id: uuid.UUID, orders: list[FbsOrder]
+) -> SupplyStockPreflight:
+    required: dict[uuid.UUID, int] = {}
+    products: dict[uuid.UUID, Any] = {}
+    for order in orders:
+        if order.product_id is not None:
+            quantity = int(order.reservation.quantity) if order.reservation is not None else 1
+            required[order.product_id] = required.get(order.product_id, 0) + quantity
+            if order.product is not None:
+                products[order.product_id] = order.product
+    warehouses = list((await session.execute(
+        select(Warehouse).where(
+            Warehouse.tenant_id == tenant_id, Warehouse.is_operational.is_(True)
+        ).order_by(Warehouse.id)
+    )).scalars().all())
+    availability: dict[uuid.UUID, dict[uuid.UUID, int]] = {}
+    for warehouse in warehouses:
+        availability[warehouse.id] = await fbs_available_qty_by_product(
+            session, tenant_id, warehouse.id, list(required)
+        )
+    current_id = orders[0].warehouse_id if orders else None
+    def coverage(warehouse: Warehouse) -> int:
+        return sum(availability[warehouse.id].get(pid, 0) >= qty for pid, qty in required.items())
+    recommended = max(warehouses, key=lambda w: (coverage(w), w.id == current_id), default=None)
+    warning: list[SupplyStockLine] = []
+    blocking: list[SupplyStockLine] = []
+    for pid, qty in required.items():
+        current = availability.get(current_id, {}).get(pid, 0) if current_id else 0
+        total = sum(values.get(pid, 0) for values in availability.values())
+        shortage = max(qty - total, 0)
+        source = next(
+            (w for w in warehouses if w.id != current_id and availability[w.id].get(pid, 0) > 0),
+            None,
+        )
+        line = SupplyStockLine(
+            pid, getattr(products.get(pid), "name", "Товар"), qty, current, total, shortage,
+            source.id if source else None, source.name if source else None,
+        )
+        if shortage:
+            blocking.append(line)
+        elif current < qty:
+            warning.append(line)
+    return SupplyStockPreflight(
+        not blocking,
+        recommended.id if recommended else None,
+        recommended.name if recommended else None,
+        tuple(warning),
+        tuple(blocking),
+    )
 
 
 async def _wb_warehouse_name(
@@ -302,8 +376,17 @@ def preflight_to_dict(
             "pvz_blocked_count": s.pvz_blocked_count,
             "nearest_deadline_at": s.nearest_deadline_at.isoformat(),
         }
+    stock = result.stock
+    def stock_line(line: SupplyStockLine) -> dict[str, Any]:
+        return {"product_id": str(line.product_id), "product_name": line.product_name,
+                "required": line.required, "current": line.current, "total": line.total,
+                "shortage": line.shortage,
+                "source_warehouse": (
+                    {"id": str(line.source_warehouse_id), "name": line.source_warehouse_name}
+                    if line.source_warehouse_id else None
+                )}
     return {
-        "compatible": result.compatible,
+        "compatible": result.compatible and stock.compatible,
         "summary": summary_out,
         "issues": [
             {
@@ -314,6 +397,18 @@ def preflight_to_dict(
             for issue in result.issues
         ],
         "server_now": now.isoformat(),
+        "stock_preflight": {
+            "compatible": stock.compatible,
+            "recommended_warehouse": (
+                {
+                    "id": str(stock.recommended_warehouse_id),
+                    "name": stock.recommended_warehouse_name,
+                }
+                if stock.recommended_warehouse_id else None
+            ),
+            "warning_lines": [stock_line(line) for line in stock.warning_lines],
+            "blocking_lines": [stock_line(line) for line in stock.blocking_lines],
+        },
     }
 
 
@@ -346,10 +441,12 @@ async def validate_supply_composition(
         ),
     ]
     summary = await _build_summary(session, tenant_id, orders)
-    compatible = len(issues) == 0
+    stock = await _stock_preflight(session, tenant_id, orders)
+    compatible = len(issues) == 0 and stock.compatible
     return SupplyPreflightResult(
         compatible=compatible,
         summary=summary,
         issues=tuple(issues),
         orders=tuple(orders),
+        stock=stock,
     )
