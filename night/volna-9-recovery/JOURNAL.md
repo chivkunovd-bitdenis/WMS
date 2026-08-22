@@ -25,3 +25,4 @@
 18:25   09-billing · screen-dev: готово
 18:25   09-billing · dev: фича 10/11 сохранена 6b0df44cf23f
 18:30   09-billing · screen-dev: готово
+18:30   09-billing · dev: фича 11/11 сохранена 08dcedbe76b1
