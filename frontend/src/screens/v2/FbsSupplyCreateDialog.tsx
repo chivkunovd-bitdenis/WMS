@@ -40,41 +40,56 @@ type Props = {
 
 type InventoryLine = FbsSupplyPreflightInventoryLine
 
-function transferQuantity(line: InventoryLine) {
-  const deficit = Math.max(line.required - line.current, 0)
-  return Math.min(deficit, Math.max(line.source_warehouse?.available ?? 0, 0))
+type StockSource = { id: string; name: string; quantity: number }
+
+function transferSources(line: InventoryLine): StockSource[] {
+  let remaining = Math.max(line.required - line.current, 0)
+  const sources = line.source_warehouses.length > 0
+    ? line.source_warehouses.map(({ id, name, quantity }) => ({ id, name, quantity }))
+    : line.source_warehouse
+      ? [{
+          id: line.source_warehouse.id,
+          name: line.source_warehouse.name,
+          quantity: line.source_warehouse.available,
+        }]
+      : []
+
+  return sources.flatMap((source) => {
+    const quantity = Math.min(Math.max(source.quantity, 0), remaining)
+    remaining -= quantity
+    return quantity > 0 ? [{ ...source, quantity }] : []
+  })
 }
 
 export function sourceBreakdown(line: InventoryLine) {
   const deficit = Math.max(line.required - line.current, 0)
-  const knownQuantity = transferQuantity(line)
+  const sources = transferSources(line)
+  const knownQuantity = sources.reduce((total, source) => total + source.quantity, 0)
   const remainder = deficit - knownQuantity
-  const parts: string[] = []
-
-  if (line.source_warehouse && knownQuantity > 0) {
-    parts.push(`${line.source_warehouse.name} · ${knownQuantity}`)
-  }
+  const parts = sources.map((source) => `${source.name} · ${source.quantity}`)
   if (remainder > 0) parts.push(`другие склады · ${remainder}`)
 
   return parts.join('; ') || '—'
 }
 
 export function aggregateSources(lines: InventoryLine[]) {
-  const quantities = new Map<string, number>()
+  const quantities = new Map<string, { name: string; quantity: number }>()
   let otherWarehouses = 0
 
   for (const line of lines) {
-    const knownQuantity = transferQuantity(line)
-    if (line.source_warehouse && knownQuantity > 0) {
-      quantities.set(
-        line.source_warehouse.name,
-        (quantities.get(line.source_warehouse.name) ?? 0) + knownQuantity,
-      )
+    const sources = transferSources(line)
+    const knownQuantity = sources.reduce((total, source) => total + source.quantity, 0)
+    for (const source of sources) {
+      const current = quantities.get(source.id)
+      quantities.set(source.id, {
+        name: source.name,
+        quantity: (current?.quantity ?? 0) + source.quantity,
+      })
     }
     otherWarehouses += Math.max(line.required - line.current - knownQuantity, 0)
   }
 
-  const parts = Array.from(quantities, ([name, quantity]) => `${name} — ${quantity} шт.`)
+  const parts = Array.from(quantities.values(), ({ name, quantity }) => `${name} — ${quantity} шт.`)
   if (otherWarehouses > 0) parts.push(`другие склады — ${otherWarehouses} шт.`)
   return parts.join(', ')
 }

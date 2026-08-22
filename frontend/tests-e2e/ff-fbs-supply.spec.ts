@@ -233,7 +233,11 @@ test('fbs orders: create supply from selected orders', async ({ page }) => {
         recommended_warehouse: { id: 'w-2', name: 'Склад Юг' },
         warning_lines: [{
           product_id: 'p-1', product_name: 'Товар 1', required: 10, current: 0, total: 10, shortage: 0,
-          source_warehouse: { id: 'w-2', name: 'Склад Юг', available: 6 },
+          source_warehouse: null,
+          source_warehouses: [
+            { id: 'w-2', name: 'Склад Юг', quantity: 6, available: 6 },
+            { id: 'w-3', name: 'Склад Север', quantity: 4, available: 4 },
+          ],
         }],
         blocking_lines: [],
       },
@@ -241,7 +245,11 @@ test('fbs orders: create supply from selected orders', async ({ page }) => {
       recommended_warehouse: { id: 'w-2', name: 'Склад Юг' },
       inventory: [{
         product_id: 'p-1', product_name: 'Товар 1', required: 10, current: 0, total: 10, shortage: 0,
-        source_warehouse: { id: 'w-2', name: 'Склад Юг', available: 6 },
+        source_warehouse: null,
+        source_warehouses: [
+          { id: 'w-2', name: 'Склад Юг', quantity: 6, available: 6 },
+          { id: 'w-3', name: 'Склад Север', quantity: 4, available: 4 },
+        ],
       }],
     })
   await page.route('**/operations/fbs-supplies/preflight', async (route) => {
@@ -272,8 +280,8 @@ test('fbs orders: create supply from selected orders', async ({ page }) => {
   await page.getByRole('button', { name: 'Сформировать поставку' }).click()
   await expect(page.getByTestId('fbs-preflight-warehouse')).toContainText('Склад Юг')
   await expect(page.getByTestId('fbs-preflight-warning')).toContainText('На складе «Основной склад» не хватает 10 шт.')
-  await expect(page.getByTestId('fbs-preflight-warning')).toContainText('Склад Юг — 6 шт., другие склады — 4 шт.')
-  await expect(page.getByTestId('fbs-preflight-warning-table')).toContainText('Склад Юг · 6; другие склады · 4')
+  await expect(page.getByTestId('fbs-preflight-warning')).toContainText('Склад Юг — 6 шт., Склад Север — 4 шт.')
+  await expect(page.getByTestId('fbs-preflight-warning-table')).toContainText('Склад Юг · 6; Склад Север · 4')
   await expect(page.getByText('Можно создать поставку')).toBeVisible()
   await expect(page.getByTestId('fbs-create-submit')).toBeEnabled()
 
@@ -282,7 +290,7 @@ test('fbs orders: create supply from selected orders', async ({ page }) => {
   await page.getByTestId('fbs-preflight-warehouse-button').click()
   await page.getByTestId('fbs-preflight-warehouse-option-w-1').click()
   await expect(page.getByTestId('fbs-preflight-skeleton')).toBeVisible()
-  await expect(page.getByTestId('fbs-preflight-warning')).toContainText('другие склады — 4 шт.')
+  await expect(page.getByTestId('fbs-preflight-warning')).toContainText('Склад Север — 4 шт.')
   await expect(page.getByTestId('fbs-create-submit')).toBeDisabled()
   await expect(page.getByTestId('fbs-create-submit')).toHaveAttribute('title', 'Проверяем остатки')
 
@@ -298,7 +306,7 @@ test('fbs orders: create supply from selected orders', async ({ page }) => {
   await staleResponse
   await expect(page.getByTestId('fbs-preflight-warehouse')).toContainText('Склад Юг')
   await expect(page.getByTestId('fbs-preflight-warning')).toContainText('На складе «Склад Юг»')
-  await expect(page.getByTestId('fbs-preflight-warning')).toContainText('другие склады — 4 шт.')
+  await expect(page.getByTestId('fbs-preflight-warning')).toContainText('Склад Север — 4 шт.')
   await expect(page.getByTestId('fbs-create-submit')).toBeEnabled()
   await page.getByTestId('fbs-create-submit').click()
 

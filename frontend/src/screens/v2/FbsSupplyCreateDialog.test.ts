@@ -9,7 +9,11 @@ const line = {
   current: 0,
   total: 10,
   shortage: 0,
-  source_warehouse: { id: 'south', name: 'Склад Юг', available: 6 },
+  source_warehouse: null,
+  source_warehouses: [
+    { id: 'south', name: 'Склад Юг', quantity: 6, available: 6 },
+    { id: 'north', name: 'Склад Север', quantity: 4, available: 4 },
+  ],
 }
 
 describe('FBS supply creation copy', () => {
@@ -26,9 +30,9 @@ describe('FBS supply creation copy', () => {
     ])
   })
 
-  it('TC-S17-006 limits the named source by its available stock', () => {
-    expect(sourceBreakdown(line)).toBe('Склад Юг · 6; другие склады · 4')
-    expect(aggregateSources([line])).toBe('Склад Юг — 6 шт., другие склады — 4 шт.')
+  it('TC-S17-006 explains every exact source returned by the current preflight API', () => {
+    expect(sourceBreakdown(line)).toBe('Склад Юг · 6; Склад Север · 4')
+    expect(aggregateSources([line])).toBe('Склад Юг — 6 шт., Склад Север — 4 шт.')
   })
 
   it('TC-S17-006 aggregates repeated source warehouses without overstating them', () => {
@@ -39,8 +43,10 @@ describe('FBS supply creation copy', () => {
         product_id: 'product-2',
         required: 5,
         current: 1,
-        source_warehouse: { id: 'south', name: 'Склад Юг', available: 4 },
+        source_warehouses: [
+          { id: 'south', name: 'Склад Юг', quantity: 4, available: 4 },
+        ],
       },
-    ])).toBe('Склад Юг — 10 шт., другие склады — 4 шт.')
+    ])).toBe('Склад Юг — 10 шт., Склад Север — 4 шт.')
   })
 })

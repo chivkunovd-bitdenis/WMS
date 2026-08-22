@@ -294,6 +294,12 @@ export type FbsSupplyPreflightInventoryLine = {
   total: number
   shortage: number
   source_warehouse: { id: string; name: string; available: number } | null
+  source_warehouses: Array<{
+    id: string
+    name: string
+    quantity: number
+    available: number
+  }>
 }
 
 export type FbsSupplyCreateFromOrdersRequest = {
