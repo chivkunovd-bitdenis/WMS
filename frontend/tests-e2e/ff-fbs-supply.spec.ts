@@ -357,22 +357,42 @@ test('fbs workspace: partial rejection is visible outside composition stage', as
 // TC-S17-007 — location then product scan updates server-owned picking progress.
 test('fbs workspace: scan location then product', async ({ page }) => {
   await registerFf(page, 'pick')
-  const pendingOrder = order('1', { status: 'in_supply', supply_id: 'sup-1' })
-  await mockWorklist(page, [pendingOrder])
+  const sharedProduct = {
+    id: 'p-shared',
+    name: 'Одинаковый товар',
+    image_url: null,
+    seller_article: 'ART-SHARED',
+    wb_article: 1001,
+    barcode: '2000001',
+    sku: 'SKU-SHARED',
+    chrt_id: 7001,
+    category: 'Бомберы',
+    color: null,
+    size: null,
+  }
+  const pendingOrders = [
+    order('1', { status: 'in_supply', supply_id: 'sup-1', product: sharedProduct }),
+    order('2', { status: 'in_supply', supply_id: 'sup-1', product: sharedProduct }),
+  ]
+  await mockWorklist(page, pendingOrders)
+  await page.route('**/warehouses', (route) => json(route, [
+    { id: 'w-1', name: 'Основной склад', code: 'WAREHOUSE-A', is_operational: true },
+    { id: 'w-2', name: 'Склад Юг', code: 'WAREHOUSE-B', is_operational: true },
+  ]))
   await page.route('**/operations/fbs-supplies/sup-1/workspace', (route) =>
-    json(route, workspace({ stage: 'picking', status: 'assembling', orders: [pendingOrder] })),
+    json(route, workspace({ stage: 'picking', status: 'assembling', orders: pendingOrders })),
   )
   await page.route('**/warehouses/resolve?barcode=*', (route) =>
     route.request().url().includes('WAREHOUSE-B')
       ? json(route, { type: 'warehouse', id: 'w-2', warehouse_id: 'w-2', name: 'Склад Юг', code: 'WAREHOUSE-B' })
-      : json(route, { type: 'location', id: 'loc-1', warehouse_id: 'w-1', code: 'A-01' }),
+      : json(route, { type: 'location', id: 'loc-2', warehouse_id: 'w-2', code: 'B-02' }),
   )
   await page.route('**/operations/fbs-supplies/sup-1/pick/scan-location', (route) =>
     json(route, {
-      id: 'loc-1',
-      code: 'A-01',
-      warehouse_id: 'w-1',
-      warehouse_name: 'Основной склад',
+      id: 'loc-2',
+      code: 'B-02',
+      warehouse_id: 'w-2',
+      warehouse_name: 'Склад Юг',
       expected_products: [],
     }),
   )
@@ -381,14 +401,20 @@ test('fbs workspace: scan location then product', async ({ page }) => {
   await page.route('**/operations/fbs-supplies/sup-1/pick/scan-product', async (route) => {
     productScanRequests += 1
     productScanBodies.push(route.request().postDataJSON() as JsonObject)
+    if (productScanRequests === 1) {
+      await json(route, { detail: 'Временная ошибка сети.' }, 503)
+      return
+    }
+    const pickedCount = Math.min(productScanRequests - 1, 2)
     await json(route, workspace({
       stage: 'picking',
       status: 'assembling',
-      orders: [order('1', {
-        status: 'in_supply',
-        supply_id: 'sup-1',
-        pick: { status: 'picked', location_code: 'A-01', picked_at: new Date().toISOString() },
-      })],
+      orders: pendingOrders.map((item, index) => ({
+        ...item,
+        pick: index < pickedCount
+          ? { status: 'picked', location_code: 'B-02', picked_at: new Date().toISOString() }
+          : { status: 'pending', location_code: null, picked_at: null },
+      })),
     }))
   })
 
@@ -399,6 +425,7 @@ test('fbs workspace: scan location then product', async ({ page }) => {
   await page.getByLabel('Штрихкод ячейки').fill('CELL-A-01')
   await page.getByRole('button', { name: 'Подтвердить ячейку' }).click()
   await expect(page.getByTestId('fbs-picking-scanner-line')).toContainText('пикните ШК товара')
+  await expect(page.getByTestId('fbs-supply-wms-warehouse-context-button')).toContainText('Основной склад')
 
   // TC-S03-TC-007 — a warehouse scan after picking has begun explains the
   // lock and leaves the currently selected location intact.
@@ -409,22 +436,28 @@ test('fbs workspace: scan location then product', async ({ page }) => {
   await page.getByLabel('Штрихкод товара').fill('2000001')
   await page.getByRole('button', { name: 'Подобрать товар' }).click()
 
-  await expect(page.getByText('Товар подобран. Прогресс синхронизирован для всех операторов.')).toBeVisible()
-  await expect(page.getByTestId('fbs-pick-result')).toContainText('Взято: Основной склад / ячейка A-01')
   await expect.poll(() => productScanBodies).toHaveLength(1)
   expect(productScanRequests).toBe(1)
-  expect(productScanBodies[0]?.location_id).toBe('loc-1')
+  expect(productScanBodies[0]?.location_id).toBe('loc-2')
   expect(productScanBodies[0]?.product_barcode).toBe('2000001')
   expect(productScanBodies[0]?.order_id).toBe('1')
 
-  // Повтор того же скана возвращает тот же результат через тот же idempotency key.
-  await page.getByLabel('Штрихкод товара').fill('2000001')
+  // Сетевой повтор незавершённой операции сохраняет заказ и ключ.
   await page.getByRole('button', { name: 'Подобрать товар' }).click()
-  await expect(page.getByTestId('fbs-pick-result')).toContainText('Взято: Основной склад / ячейка A-01')
+  await expect(page.getByText('Товар подобран. Прогресс синхронизирован для всех операторов.')).toBeVisible()
+  await expect(page.getByTestId('fbs-pick-result')).toContainText('Взято: Склад Юг / ячейка B-02')
   await expect.poll(() => productScanBodies).toHaveLength(2)
   expect(productScanRequests).toBe(2)
   expect(productScanBodies[1]?.idempotency_key).toBe(productScanBodies[0]?.idempotency_key)
-  expect(productScanBodies[1]?.order_id).toBe(productScanBodies[0]?.order_id)
+  expect(productScanBodies[1]?.order_id).toBe('1')
+
+  // Вторая физическая единица того же SKU продвигает следующий заказ новым ключом.
+  await page.getByLabel('Штрихкод товара').fill('2000001')
+  await page.getByRole('button', { name: 'Подобрать товар' }).click()
+  await expect.poll(() => productScanBodies).toHaveLength(3)
+  expect(productScanBodies[2]?.idempotency_key).not.toBe(productScanBodies[1]?.idempotency_key)
+  expect(productScanBodies[2]?.order_id).toBe('2')
+  await expect(page.getByTestId('fbs-supply-wms-warehouse-context-button')).toContainText('Основной склад')
 })
 
 // TC-NEW-FBS-12 — boxes can be created in "without distribution" mode.

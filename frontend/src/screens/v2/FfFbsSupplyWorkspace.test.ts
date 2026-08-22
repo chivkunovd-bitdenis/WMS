@@ -1,5 +1,31 @@
 import { describe, expect, it } from 'vitest'
 import { buildFbsPickingListPrintHtml, normalizeMetadataKind } from './fbsUx'
+import { resolvePickScanAttempt } from './FfFbsSupplyWorkspace'
+
+describe('FBS scanner idempotency', () => {
+  it('TC-S17-007 advances identical SKU units and only reuses the latest order key for a retry', () => {
+    let sequence = 0
+    const createKey = () => `key-${++sequence}`
+    const first = resolvePickScanAttempt([
+      { id: 'order-1', pending: true, matches: true },
+      { id: 'order-2', pending: true, matches: true },
+    ], undefined, createKey)
+
+    expect(first).toEqual({ orderId: 'order-1', key: 'key-1' })
+
+    const second = resolvePickScanAttempt([
+      { id: 'order-1', pending: false, matches: true },
+      { id: 'order-2', pending: true, matches: true },
+    ], first ?? undefined, createKey)
+
+    expect(second).toEqual({ orderId: 'order-2', key: 'key-2' })
+    expect(resolvePickScanAttempt([
+      { id: 'order-1', pending: false, matches: true },
+      { id: 'order-2', pending: false, matches: true },
+    ], second ?? undefined, createKey)).toEqual(second)
+    expect(sequence).toBe(2)
+  })
+})
 
 describe('FBS required identifiers', () => {
   it('TC-FBS-UX-002 sends the API-supported kind when WB calls it KIZ', () => {

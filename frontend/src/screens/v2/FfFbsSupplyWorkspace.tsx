@@ -96,6 +96,22 @@ type Props = {
   onClose: () => void
 }
 
+type PickScanAttempt = { orderId: string; key: string }
+
+export function resolvePickScanAttempt(
+  orders: Array<{ id: string; pending: boolean; matches: boolean }>,
+  remembered: PickScanAttempt | undefined,
+  createKey: () => string,
+): PickScanAttempt | null {
+  const pendingOrder = orders.find((order) => order.pending && order.matches)
+  const matchingOrder = pendingOrder ?? (remembered
+    ? orders.find((order) => order.id === remembered.orderId && order.matches)
+    : undefined)
+  if (!matchingOrder) return null
+  if (remembered?.orderId === matchingOrder.id) return remembered
+  return { orderId: matchingOrder.id, key: createKey() }
+}
+
 const STAGES = [
   { key: 'composition', label: 'Состав' },
   { key: 'picking', label: 'Подбор' },
@@ -288,7 +304,7 @@ export function FfFbsSupplyWorkspace({
   const [pickLocation, setPickLocation] = useState<FbsPickLocation | null>(null)
   // Один и тот же физический скан должен повторять прежний результат, а не
   // создавать новый pick. Ключ живёт только в рамках открытой поставки.
-  const pickIdempotencyKeys = useRef(new Map<string, string>())
+  const pickIdempotencyKeys = useRef(new Map<string, PickScanAttempt>())
   const [printBatch, setPrintBatch] = useState<FbsPrintBatch | null>(null)
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false)
   const [packagingTask, setPackagingTask] = useState<PackagingTask | null>(null)
@@ -568,7 +584,6 @@ export function FfFbsSupplyWorkspace({
         return
       }
       const result = await scanFbsPickLocation(token, authHeaders, workspace.supply.id, locationBarcode.trim())
-      setSelectedWarehouseId(result.warehouse_id)
       setPickLocation(result)
       setProductBarcode('')
     } catch (cause) {
@@ -581,33 +596,32 @@ export function FfFbsSupplyWorkspace({
   const scanProduct = async () => {
     if (!workspace || !pickLocation || !productBarcode.trim()) return
     const barcode = productBarcode.trim()
-    const pendingOrder = workspace.orders.find((order) =>
-      order.pick.status !== 'picked' &&
-      (order.product.barcode === barcode || order.product.sku === barcode || String(order.product.wb_article ?? '') === barcode),
-    )
     const scanFingerprint = `${pickLocation.id}:${barcode}`
-    const rememberedKey = pickIdempotencyKeys.current.get(scanFingerprint)
-    const matchingOrder = pendingOrder ?? (rememberedKey
-      ? workspace.orders.find((order) =>
-        order.product.barcode === barcode || order.product.sku === barcode || String(order.product.wb_article ?? '') === barcode,
-      )
-      : undefined)
-    if (!matchingOrder) {
+    const attempt = resolvePickScanAttempt(
+      workspace.orders.map((order) => ({
+        id: order.id,
+        pending: order.pick.status !== 'picked',
+        matches: order.product.barcode === barcode
+          || order.product.sku === barcode
+          || String(order.product.wb_article ?? '') === barcode,
+      })),
+      pickIdempotencyKeys.current.get(scanFingerprint),
+      createFbsIdempotencyKey,
+    )
+    if (!attempt) {
       setError('Товар не входит в эту поставку или уже подобран.')
       return
     }
-    // Keep the key stable after workspace read-back: the successful order is
-    // no longer a pending match, but a repeated physical scan is still the
-    // same operation.
-    const key = rememberedKey ?? createFbsIdempotencyKey()
-    pickIdempotencyKeys.current.set(scanFingerprint, key)
+    // A retry of one order keeps its key, while the next unit of the same SKU
+    // gets a new key and advances to the next pending order.
+    pickIdempotencyKeys.current.set(scanFingerprint, attempt)
     const next = await run(
       () =>
         scanFbsPickProduct(token, authHeaders, workspace.supply.id, {
           location_id: pickLocation.id,
           product_barcode: barcode,
-          order_id: matchingOrder.id,
-          idempotency_key: key,
+          order_id: attempt.orderId,
+          idempotency_key: attempt.key,
         }),
       'Товар подобран. Прогресс синхронизирован для всех операторов.',
     )

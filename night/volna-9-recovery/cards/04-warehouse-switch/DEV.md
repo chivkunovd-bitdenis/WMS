@@ -1,31 +1,31 @@
-# DEV · 04-warehouse-switch · переделка атома 9
+# DEV · 04-warehouse-switch · атом 10
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/FbsSupplyCreateDialog.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/FbsSupplyCreateDialog.test.ts`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/FfFbsSupplyWorkspace.test.ts`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/tests-e2e/ff-fbs-supply.spec.ts`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md`
 
-Диалог больше не приписывает весь межскладской дефицит одному складу. Количество рядом с известным складом ограничено фактическим `source_warehouse.available`, а оставшаяся часть честно показана как количество из других складов. Агрегированное предупреждение суммирует одинаковые источники. Кнопка создания при локальной нехватке остаётся доступной после актуального preflight; во время повторной проверки она заблокирована с причиной, старое объяснение остаётся видимым, а запоздавший ответ отменённого запроса не заменяет актуальное состояние.
+В рабочем месте FBS ключ идемпотентности теперь хранится вместе с `order_id`: сетевой повтор незавершённого подбора использует ту же пару, а следующая физическая единица одинакового SKU выбирает следующий неподобранный заказ и получает новый ключ. Скан ячейки другого склада меняет только место фактического подбора и больше не подменяет показанный склад консолидации документа. Существующая реализация `FfFbsOrdersScreen.tsx` проверена: при нуле операционных складов она уже возвращает `EmptyState` «Нет рабочего склада», а строки без выбранного склада не показывает.
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend` — **красный вне файлов атома**. Единственная оставшаяся причина: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/ui-kit/WarehouseContextSwitch.test.tsx` импортирует отсутствующий в `package.json` пакет `@testing-library/react` и его DOM-matchers. Ошибок TypeScript в файлах атома 9 нет.
-- `python3 scripts/ui/ui_guard.py` из корня — **красный вне файлов атома**: новые нарушения остаются в `WbProductPickerDialog.tsx`, `FfFbsOrdersScreen.tsx`, `FfFbsStockSyncScreen.tsx`, `FfFbsSupplyWorkspace.tsx` и `SellerInboundDraftScreen.tsx`. Изменённый `FbsSupplyCreateDialog.tsx` отмечен guard-ом как улучшение (`своя-кнопка 3 → 2`); базовая линия не менялась.
-- `npm run test:unit -- src/screens/v2/FbsSupplyCreateDialog.test.ts` из frontend — **зелёный**, 3/3 теста.
-- `npx playwright test tests-e2e/ff-fbs-supply.spec.ts --grep "create supply from selected orders" --list` — **зелёный**, найден один целевой сценарий.
-- Живой запуск того же Playwright-сценария — **красный по ограничению среды**: webServer не получил разрешение открыть `127.0.0.1:18000` (`Errno 1 operation not permitted`).
+- `npx tsc --noEmit -p tsconfig.app.json` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend` — **красный вне файлов атома**. TypeScript не находит уже используемый соседним `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/ui-kit/WarehouseContextSwitch.test.tsx` пакет `@testing-library/react` и его DOM-матчеры. Ошибок в трёх изменённых frontend-файлах команда не показала.
+- `python3 scripts/ui/ui_guard.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch` — **красный на накопленном diff ветки**: guard считает новыми монолиты `WbProductPickerDialog.tsx`, `FfFbsOrdersScreen.tsx`, `FfFbsStockSyncScreen.tsx`, `FfFbsSupplyWorkspace.tsx` и `SellerInboundDraftScreen.tsx`. Baseline флагом `--update` не менялась.
+- `npm run test:unit` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend` — **зелёный**: 22 файла, 156 тестов. Новый `TC-S17-007` подтверждает отдельные ключи для двух одинаковых SKU и повтор последней незавершённой операции тем же ключом.
+- `npx playwright test tests-e2e/ff-fbs-supply.spec.ts --grep "scan location then product" --list` — **зелёный**, найден один целевой Chromium-сценарий.
+- Живой запуск этого Playwright-сценария — **красный из-за ограничения среды до выполнения теста**: webServer не получил право открыть `127.0.0.1:18000` (`Errno 1 operation not permitted`).
 - `git diff --check` — **зелёный**.
-- Отдельный commit — **красный по ограничению среды**: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-04-warehouse-switch/index.lock` (`Operation not permitted`). Изменения атома не проиндексированы, commit SHA отсутствует; чужой `JOURNAL.md` не захватывался.
+- Сохранение отдельным Git-коммитом — **заблокировано правами среды**: `git add` не может создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-04-warehouse-switch/index.lock` (`Operation not permitted`). Изменения остаются в рабочем дереве без нового commit SHA.
 
 ## Не реализовано
 
-- Backend preflight по-прежнему возвращает для товарной строки только один известный `source_warehouse`, хотя общий остаток может быть собран с нескольких складов. Фронтенд больше не показывает ложное количество для этого склада и явно обозначает остаток как `другие склады`, но назвать каждый дополнительный склад буквально невозможно без расширения backend-контракта вне разрешённого экранного слоя этого атома.
-- Живой E2E-прогон не завершён из-за системного запрета bind порта, описанного в гейтах; тест собран и обнаруживается Playwright.
-- Результат локально реализован, но не сохранён в Git: песочница запрещает запись в служебный каталог worktree, поэтому восстановимого commit SHA нет.
+- Общий сессионный контекст из находки ревью № 4 не менялся: его полное исправление требует `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/App.tsx`, `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/contexts/WarehouseContext.tsx` и S-04, которые не входят в разрешённые файлы атома 10. В текущей ветке S-03 уже использует `useWarehouseContext('fulfillment')`, но сквозную согласованность всех экранов этот проход не заявляет.
+- Полностью зелёные `tsc` и `ui_guard.py` не получены без выхода за границы атома: причины перечислены в разделе «Гейты».
+- Живое прохождение E2E невозможно в этой песочнице из-за запрета bind локального порта; сам сценарий собран Playwright и включает два одинаковых SKU, сетевой повтор, кросс-складскую ячейку и неизменный склад документа.
+- Публикация в Git не выполнена: общий Git-каталог зарегистрированного worktree доступен только для чтения. Временный клон и перенос в другую рабочую копию не использовались, поскольку роль требует оставаться в выданной копии.
 
 ## Находки
 
-- Исправлена относящаяся к атому 9 находка №1 из `REVIEW.md`: UI теперь использует фактическое доступное количество источника и не даёт невыполнимое указание забрать весь дефицит с одного склада.
-- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались и не изменялись.
+Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод `194.87.96.144` не открывались и не изменялись. Новых находок о данных или персональных данных в разрешённом слое нет.
