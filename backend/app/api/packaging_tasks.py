@@ -205,11 +205,13 @@ async def _task_out(
     task: PackagingTask,
     *,
     pick_resync_warning: bool = False,
+    reload: bool = True,
 ) -> PackagingTaskOut:
-    loaded = await pkg_svc.get_task(session, tenant_id, task.id)
-    if loaded is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
-    task = loaded
+    if reload:
+        loaded = await pkg_svc.get_task(session, tenant_id, task.id)
+        if loaded is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
+        task = loaded
     seller_ids = {ln.product.seller_id for ln in task.lines if ln.product.seller_id}
     seller_names: dict[uuid.UUID, str] = {}
     if seller_ids:
@@ -545,7 +547,9 @@ async def record_pack_scan(
     except pkg_svc.PackagingTaskServiceError as exc:
         raise _http_from_pkg_error(exc) from exc
     return PackProgressOut(
-        packaging_task=await _task_out(session, user.tenant_id, result.task),
+        packaging_task=await _task_out(
+            session, user.tenant_id, result.task, reload=False
+        ),
         fulfilled_order=None,
     )
 

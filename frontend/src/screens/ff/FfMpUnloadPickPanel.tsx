@@ -26,6 +26,7 @@ import { storageLocationLabel } from '../../utils/inboundQueues'
 import { productDisplayMetaFromCatalog } from '../../types/wbProductCatalog'
 import type { WbProductCatalogRow } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
 
 type PickOptionLocation = {
   storage_location_id: string
@@ -83,6 +84,7 @@ export function FfMpUnloadPickPanel({
   const [activeLocationId, setActiveLocationId] = useState<string | null>(null)
   const [activeLocationCode, setActiveLocationCode] = useState<string | null>(null)
   const [scanMessage, setScanMessage] = useState<string | null>(null)
+  const [lastScannedProductId, setLastScannedProductId] = useState<string | null>(null)
   const [manualQtyByProductLocation, setManualQtyByProductLocation] = useState<
     Record<string, string>
   >({})
@@ -166,11 +168,19 @@ export function FfMpUnloadPickPanel({
     try {
       const body: {
         barcode: string
+        product_id?: string
         storage_location_id?: string | null
       } = {
         barcode,
         storage_location_id: activeLocationId ?? null,
       }
+      const productId = resolveProductIdByBarcode(
+        pickOptions
+          .map((row) => catalogById.get(row.product_id))
+          .filter((row): row is WbProductCatalogRow => row != null),
+        barcode,
+      )
+      if (productId) body.product_id = productId
 
       const res = await fetch(
         apiUrl(`/operations/marketplace-unload-requests/${requestId}/pick/scan`),
@@ -195,6 +205,28 @@ export function FfMpUnloadPickPanel({
           `Активная ячейка: ${storageLocationLabel(scanRes.location_code ?? '')}`,
         )
       } else {
+        if (scanRes.product_id) {
+          setPickOptions((current) =>
+            current.map((product) =>
+              product.product_id === scanRes.product_id
+                ? {
+                    ...product,
+                    picked_qty: scanRes.picked_qty ?? product.picked_qty + 1,
+                    locations: product.locations.map((location) =>
+                      location.storage_location_id === scanRes.storage_location_id
+                        ? {
+                            ...location,
+                            picked: scanRes.allocation_quantity ?? location.picked + 1,
+                            available: Math.max(0, location.available - 1),
+                          }
+                        : location,
+                    ),
+                  }
+                : product,
+            ),
+          )
+          setLastScannedProductId(scanRes.product_id)
+        }
         setScanMessage(
           `Принято: ${scanRes.product_name} → ${
             scanRes.location_code ? storageLocationLabel(scanRes.location_code) : 'без ячейки'
@@ -204,14 +236,21 @@ export function FfMpUnloadPickPanel({
 
       setScanBarcode('')
       onChanged?.()
-      await loadPickOptions({ silent: true })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось выполнить скан.')
     } finally {
       setBusy(false)
       scanInputRef.current?.focus()
     }
-  }, [scanBarcode, activeLocationId, jsonHeaderMap, requestId, onChanged, loadPickOptions])
+  }, [
+    scanBarcode,
+    activeLocationId,
+    jsonHeaderMap,
+    requestId,
+    onChanged,
+    pickOptions,
+    catalogById,
+  ])
 
   const handleScanKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -373,6 +412,13 @@ export function FfMpUnloadPickPanel({
                 sx={{
                   minWidth: 0,
                   '&:before': { display: 'none' },
+                  ...(product.product_id === lastScannedProductId
+                    ? {
+                        bgcolor: (theme) => alpha(theme.palette.success.main, 0.16),
+                        boxShadow: (theme) =>
+                          `inset 0 0 0 1px ${theme.palette.success.main}`,
+                      }
+                    : null),
                   ...(done
                     ? { opacity: 0.85, bgcolor: (theme) => alpha(theme.palette.success.main, 0.06) }
                     : null),

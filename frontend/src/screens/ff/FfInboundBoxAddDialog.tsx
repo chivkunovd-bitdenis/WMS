@@ -34,6 +34,7 @@ import {
   boxFillTableScrollSx,
 } from './boxFillDialogLayout'
 import { scanErrorMessageRu } from './inboundReceivingHelpers'
+import { buildInboundScanProductMap, findInboundScanProductId } from './inboundScanLookup'
 
 type InboundBoxLine = {
   id: string
@@ -98,6 +99,11 @@ export function FfInboundBoxAddDialog({
     }
     return m
   }, [localBoxLines])
+
+  const scanProductByBarcode = useMemo(
+    () => buildInboundScanProductMap(requestLines, catalogById),
+    [catalogById, requestLines],
+  )
 
   useEffect(() => {
     setLocalBoxLines(boxLines)
@@ -191,15 +197,15 @@ export function FfInboundBoxAddDialog({
       setError('Введите штрихкод.')
       return
     }
-    setBusy(true)
     setError(null)
     try {
+      const productId = findInboundScanProductId(raw, scanProductByBarcode)
       const res = await fetch(
         apiUrl(`/operations/inbound-intake-requests/${requestId}/boxes/${boxId}/scan`),
         {
           method: 'POST',
           headers: authHeaders,
-          body: JSON.stringify({ barcode: raw }),
+          body: JSON.stringify({ barcode: raw, product_id: productId }),
         },
       )
       if (!res.ok) {
@@ -223,8 +229,6 @@ export function FfInboundBoxAddDialog({
       // document once when the operator presses "Готово", not after every barcode.
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось выполнить скан.')
-    } finally {
-      setBusy(false)
     }
   }
 
@@ -240,7 +244,6 @@ export function FfInboundBoxAddDialog({
   useBarcodeScanner({
     enabled: open && !readOnly,
     onScan: (code) => {
-      setScanBarcode(code)
       void enqueueScanIntoBox(code)
     },
   })

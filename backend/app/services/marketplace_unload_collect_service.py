@@ -76,6 +76,18 @@ async def picked_qty_by_product(
     return {row[0]: int(row[1]) for row in res.all()}
 
 
+async def picked_qty_for_product(
+    session: AsyncSession, request_id: uuid.UUID, product_id: uuid.UUID
+) -> int:
+    stmt = select(
+        func.coalesce(func.sum(MarketplaceUnloadPickAllocation.quantity), 0)
+    ).where(
+        MarketplaceUnloadPickAllocation.request_id == request_id,
+        MarketplaceUnloadPickAllocation.product_id == product_id,
+    )
+    return int((await session.execute(stmt)).scalar_one() or 0)
+
+
 async def get_open_box(
     session: AsyncSession, request_id: uuid.UUID
 ) -> MarketplaceUnloadBox | None:
@@ -129,6 +141,33 @@ async def _request_for_collect(
     if req.seller_id is None:
         raise MarketplaceUnloadPickError("seller_required")
     return req
+
+
+async def _request_and_plan_for_product(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    product_id: uuid.UUID,
+) -> tuple[MarketplaceUnloadRequest, int]:
+    stmt = select(MarketplaceUnloadRequest).where(
+        MarketplaceUnloadRequest.id == request_id,
+        MarketplaceUnloadRequest.tenant_id == tenant_id,
+    )
+    req = (await session.execute(stmt)).scalar_one_or_none()
+    if req is None:
+        raise MarketplaceUnloadPickError("not_found")
+    if req.status not in PICK_EDITABLE_STATUSES:
+        raise MarketplaceUnloadPickError("not_editable")
+    if req.seller_id is None:
+        raise MarketplaceUnloadPickError("seller_required")
+    plan_stmt = select(MarketplaceUnloadLine.quantity).where(
+        MarketplaceUnloadLine.request_id == request_id,
+        MarketplaceUnloadLine.product_id == product_id,
+    )
+    plan_qty = (await session.execute(plan_stmt)).scalar_one_or_none()
+    if plan_qty is None:
+        raise MarketplaceUnloadPickError("product_not_in_shipment")
+    return req, int(plan_qty)
 
 
 async def _product_in_shipment(
@@ -231,9 +270,9 @@ async def collect_into_box(
     if quantity < 1:
         raise MarketplaceUnloadPickError("invalid_quantity")
 
-    req = await _request_for_collect(session, tenant_id, request_id)
-    if not await _product_in_shipment(session, req.id, product_id):
-        raise MarketplaceUnloadPickError("product_not_in_shipment")
+    req, plan_qty = await _request_and_plan_for_product(
+        session, tenant_id, request_id, product_id
+    )
 
     box: MarketplaceUnloadBox | None
     if box_id is not None:
@@ -262,12 +301,8 @@ async def collect_into_box(
     )
     await session.execute(lock_stmt)
 
-    picked = await picked_qty_by_product(session, request_id)
-    plan_qty = next(
-        (int(ln.quantity) for ln in req.lines if ln.product_id == product_id),
-        0,
-    )
-    if not allow_over_plan and picked.get(product_id, 0) + quantity > plan_qty:
+    picked = await picked_qty_for_product(session, request_id, product_id)
+    if not allow_over_plan and picked + quantity > plan_qty:
         raise MarketplaceUnloadPickError("plan_limit_exceeded")
 
     effective_location_id = await resolve_collect_storage_location(
@@ -293,12 +328,6 @@ async def collect_into_box(
     alloc = alloc_res.scalar_one_or_none()
     current_pick = int(alloc.quantity) if alloc is not None else 0
     new_pick = current_pick + quantity
-
-    available = await inventory_service.available_at_location(
-        session, tenant_id, product_id, effective_location_id
-    )
-    if available < new_pick:
-        raise MarketplaceUnloadPickError("insufficient_available")
 
     available = await inventory_service.available_at_location(
         session, tenant_id, product_id, effective_location_id
@@ -354,7 +383,7 @@ async def collect_into_box(
     mu_svc.enter_collecting_if_needed(req)
     await session.commit()
 
-    picked = await picked_qty_by_product(session, request_id)
+    picked = await picked_qty_for_product(session, request_id, product_id)
     stmt_alloc = (
         select(MarketplaceUnloadPickAllocation)
         .where(MarketplaceUnloadPickAllocation.id == alloc.id)
@@ -377,12 +406,14 @@ async def collect_into_box(
 
     pkg_task = await pkg_svc.get_task_for_unload(session, tenant_id, request_id)
     if pkg_task is not None:
-        await pkg_svc.sync_lines_from_pick_allocations(session, tenant_id, pkg_task)
+        await pkg_svc.sync_lines_from_pick_allocations(
+            session, tenant_id, pkg_task, reload_result=False
+        )
 
     return CollectResult(
         box_line=line_loaded,
         allocation=alloc_loaded,
-        picked_qty=picked.get(product_id, 0),
+        picked_qty=picked,
     )
 
 

@@ -813,11 +813,49 @@ async def scan_barcode_to_loose_intake(
     request_id: uuid.UUID,
     *,
     barcode: str,
+    product_id_hint: uuid.UUID | None = None,
 ) -> InboundIntakeLine:
     """Scan product barcode into general (non-box) intake: +1 to loose actual_qty."""
     raw = barcode.strip()
     if not raw:
         raise InboundIntakeError("barcode_empty")
+    if product_id_hint is not None:
+        req_stmt = (
+            select(InboundIntakeRequest)
+            .where(
+                InboundIntakeRequest.id == request_id,
+                InboundIntakeRequest.tenant_id == tenant_id,
+            )
+            .with_for_update()
+        )
+        req = (await session.execute(req_stmt)).scalar_one_or_none()
+        if req is None:
+            raise InboundIntakeError("request_not_found")
+        if req.status == STATUS_SUBMITTED:
+            req.status = STATUS_RECEIVING
+            req.primary_accepted_at = datetime.now(UTC)
+        elif req.status not in RECEIVING_STATUSES:
+            raise InboundIntakeError("not_verifying")
+
+        line_stmt = (
+            select(InboundIntakeLine)
+            .where(
+                InboundIntakeLine.request_id == request_id,
+                InboundIntakeLine.product_id == product_id_hint,
+            )
+            .with_for_update()
+        )
+        line = (await session.execute(line_stmt)).scalar_one_or_none()
+        if line is None:
+            raise InboundIntakeError("product_not_on_request")
+        new_loose = _loose_qty(line) + 1
+        box_total = await _box_total_for_product(session, request_id, line.product_id)
+        if line.posted_qty > new_loose + box_total:
+            raise InboundIntakeError("actual_below_posted")
+        line.actual_qty = new_loose
+        await session.commit()
+        await session.refresh(line)
+        return line
     req = await get_request_for_receiving_scan(session, tenant_id, request_id)
     if req is None:
         raise InboundIntakeError("request_not_found")

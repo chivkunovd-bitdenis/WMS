@@ -110,7 +110,11 @@ async def _barcode_index_for_seller(
 async def _request_for_picking(
     session: AsyncSession, tenant_id: uuid.UUID, request_id: uuid.UUID
 ) -> MarketplaceUnloadRequest:
-    req = await mu_svc.get_request(session, tenant_id, request_id)
+    stmt = select(MarketplaceUnloadRequest).where(
+        MarketplaceUnloadRequest.id == request_id,
+        MarketplaceUnloadRequest.tenant_id == tenant_id,
+    )
+    req = (await session.execute(stmt)).scalar_one_or_none()
     if req is None:
         raise MarketplaceUnloadPickError("not_found")
     if req.status not in PICK_EDITABLE_STATUSES:
@@ -278,6 +282,7 @@ async def pick_scan(
     request_id: uuid.UUID,
     *,
     barcode: str,
+    product_id_hint: uuid.UUID | None = None,
     storage_location_id: uuid.UUID | None,
 ) -> PickScanResult:
     raw = barcode.strip()
@@ -301,10 +306,13 @@ async def pick_scan(
 
     if req.seller_id is None:
         raise MarketplaceUnloadPickError("seller_required")
-    idx = await _barcode_index_for_seller(session, tenant_id, req.seller_id)
-    product_id = idx.get(raw)
-    if product_id is None:
-        raise MarketplaceUnloadPickError("barcode_unknown")
+    if product_id_hint is None:
+        idx = await _barcode_index_for_seller(session, tenant_id, req.seller_id)
+        product_id = idx.get(raw)
+        if product_id is None:
+            raise MarketplaceUnloadPickError("barcode_unknown")
+    else:
+        product_id = product_id_hint
 
     # Подбор не трогает короба (решение заказчика 2026-08-16) — только storage →
     # pick allocation. Короб появляется отдельно и явно на упаковке.

@@ -125,10 +125,12 @@ class InboundBoxBarcodeBody(BaseModel):
 
 class InboundBoxScanBody(BaseModel):
     barcode: str = Field(min_length=1, max_length=128)
+    product_id: uuid.UUID | None = None
 
 
 class InboundReceivingScanBody(BaseModel):
     barcode: str = Field(min_length=1, max_length=128)
+    product_id: uuid.UUID | None = None
 
 
 class InboundDistributionScanBody(BaseModel):
@@ -950,6 +952,7 @@ async def scan_barcode_to_loose_intake(
             user.tenant_id,
             request_id,
             barcode=body.barcode,
+            product_id_hint=body.product_id,
         )
     except InboundIntakeError as exc:
         raise _map_inbound_svc_err(exc) from None
@@ -1127,12 +1130,6 @@ async def scan_product_into_inbound_box(
     user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeBoxLineOut:
-    bx = await session.get(InboundIntakeBox, box_id)
-    if bx is None or bx.request_id != request_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="box_not_found",
-        )
     try:
         ln = await inbound_box_svc.scan_product_into_box(
             session,
@@ -1140,6 +1137,7 @@ async def scan_product_into_inbound_box(
             request_id,
             box_id,
             barcode=body.barcode,
+            product_id_hint=body.product_id,
         )
     except InboundIntakeBoxError as exc:
         raise _map_inbound_box_err(exc) from None

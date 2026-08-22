@@ -534,6 +534,9 @@ export function FfPackagingTaskPanel({
       const changedLine = progress.packaging_task.lines.find(
         (ln) => ln.qty_packed_in_task > (packedBefore.get(ln.id) ?? 0),
       )
+      if (changedLine) {
+        setFocusedLineId(changedLine.id)
+      }
       setScannerFeedback(`+1 упаковано${changedLine ? `: ${changedLine.product_name}` : ''}`)
     } finally {
       setBusy(false)

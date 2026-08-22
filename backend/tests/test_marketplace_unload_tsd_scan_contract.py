@@ -116,8 +116,16 @@ async def test_tsd_box_scan_location_then_product_sequence(
 ) -> None:
     """TC-NEW-MP-009: box scan location then product — kind sequence."""
     h = await _register_headers(async_client, f"tsd-seq-{int(time.time())}")
-    mid, box_id, _pid, loc_id, wid = await _confirmed_unload_with_open_box(
+    mid, box_id, pid, loc_id, wid = await _confirmed_unload_with_open_box(
         async_client, h, monkeypatch, address_storage_enabled=True
+    )
+
+    async def catalog_must_not_be_loaded(*args: object, **kwargs: object) -> dict[str, object]:
+        raise AssertionError("product_id fast path must not rebuild the seller catalog")
+
+    monkeypatch.setattr(
+        "app.services.marketplace_unload_box_service._barcode_index_for_seller",
+        catalog_must_not_be_loaded,
     )
 
     loc = await async_client.get(f"/warehouses/{wid}/locations", headers=h)
@@ -136,7 +144,11 @@ async def test_tsd_box_scan_location_then_product_sequence(
     prod_scan = await async_client.post(
         f"{BASE}/{mid}/boxes/{box_id}/scan",
         headers=h,
-        json={"barcode": E2E_BARCODE, "storage_location_id": loc_id},
+        json={
+            "barcode": E2E_BARCODE,
+            "product_id": pid,
+            "storage_location_id": loc_id,
+        },
     )
     assert prod_scan.status_code == 200, prod_scan.text
     prod_body = prod_scan.json()
@@ -246,7 +258,7 @@ async def test_pick_scan_deprecated_still_works(
 ) -> None:
     """Backward compat: legacy pick/scan location step remains available."""
     h = await _register_headers(async_client, f"tsd-legacy-{int(time.time())}")
-    mid, _box_id, _pid, loc_id, wid = await _confirmed_unload_with_open_box(
+    mid, _box_id, pid, loc_id, wid = await _confirmed_unload_with_open_box(
         async_client, h, monkeypatch
     )
     loc = await async_client.get(f"/warehouses/{wid}/locations", headers=h)
@@ -259,6 +271,26 @@ async def test_pick_scan_deprecated_still_works(
     )
     assert legacy.status_code == 200, legacy.text
     assert legacy.json()["kind"] == "location"
+
+    async def catalog_must_not_be_loaded(*args: object, **kwargs: object) -> dict[str, object]:
+        raise AssertionError("product_id fast path must not rebuild the seller catalog")
+
+    monkeypatch.setattr(
+        "app.services.marketplace_unload_pick_service._barcode_index_for_seller",
+        catalog_must_not_be_loaded,
+    )
+    product = await async_client.post(
+        f"{BASE}/{mid}/pick/scan",
+        headers=h,
+        json={
+            "barcode": E2E_BARCODE,
+            "product_id": pid,
+            "storage_location_id": loc_id,
+        },
+    )
+    assert product.status_code == 200, product.text
+    assert product.json()["kind"] == "product"
+    assert product.json()["picked_qty"] == 1
 
 
 @pytest.mark.asyncio

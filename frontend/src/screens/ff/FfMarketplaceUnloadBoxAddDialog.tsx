@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
 import {
   Alert,
@@ -29,6 +29,7 @@ import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import type { WbProductPickerCatalogRow } from '../../components/WbProductPickerDialog'
 import { storageLocationLabel, SORTING_LOCATION_CODE } from '../../utils/inboundQueues'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
 import {
   boxFillDialogContentSx,
   boxFillDialogPaperSx,
@@ -72,6 +73,13 @@ type Props = {
   warehouseStockByProductId: Map<string, number>
   onUpdated: () => Promise<void>
   onAddSuccess?: (quantity: number) => void
+  onProductScanned?: (line: {
+    id: string
+    product_id: string
+    sku_code: string
+    product_name: string
+    quantity: number
+  }) => void
 }
 
 function physicalAvailable(
@@ -153,6 +161,7 @@ export function FfMarketplaceUnloadBoxAddDialog({
   warehouseStockByProductId,
   onUpdated,
   onAddSuccess,
+  onProductScanned,
 }: Props) {
   const authHeaders = useMemo(
     () => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }),
@@ -169,6 +178,17 @@ export function FfMarketplaceUnloadBoxAddDialog({
   const [readyBoxConfirmOpen, setReadyBoxConfirmOpen] = useState(false)
   const [readyBoxOverPlanOpen, setReadyBoxOverPlanOpen] = useState(false)
   const [pendingReadyBoxBarcode, setPendingReadyBoxBarcode] = useState<string | null>(null)
+  const [lastScannedProductId, setLastScannedProductId] = useState<string | null>(null)
+  const scanQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const scanChangedRef = useRef(false)
+
+  const catalogRows = useMemo(
+    () =>
+      pickOptions
+        .map((row) => catalogById.get(row.product_id))
+        .filter((row): row is WbProductPickerCatalogRow => row != null),
+    [catalogById, pickOptions],
+  )
 
   const locationOptions = useMemo(() => {
     const byId = new Map<string, LocationOption>()
@@ -258,10 +278,21 @@ export function FfMarketplaceUnloadBoxAddDialog({
       setReadyBoxConfirmOpen(false)
       setReadyBoxOverPlanOpen(false)
       setPendingReadyBoxBarcode(null)
+      setLastScannedProductId(null)
+      scanChangedRef.current = false
       return
     }
     void loadPickOptions()
   }, [open, loadPickOptions])
+
+  const closeDialog = () => {
+    const needsRefresh = scanChangedRef.current
+    scanChangedRef.current = false
+    onClose()
+    if (needsRefresh) {
+      void onUpdated()
+    }
+  }
 
   const selectLocation = (locationId: string) => {
     const loc = locationOptions.find((l) => l.id === locationId)
@@ -318,11 +349,13 @@ export function FfMarketplaceUnloadBoxAddDialog({
   }
 
   const runScan = async (barcode: string, allowOverPlan: boolean) => {
-    setBusy(true)
+    const readyBoxScan = looksLikeReadyBoxBarcode(barcode)
+    if (readyBoxScan) setBusy(true)
     setError(null)
     try {
       const scanBody: {
         barcode: string
+        product_id?: string
         quantity: number
         storage_location_id?: string
         allow_over_plan?: boolean
@@ -330,6 +363,10 @@ export function FfMarketplaceUnloadBoxAddDialog({
         barcode,
         quantity: 1,
         allow_over_plan: allowOverPlan,
+      }
+      const productId = resolveProductIdByBarcode(catalogRows, barcode)
+      if (productId) {
+        scanBody.product_id = productId
       }
       if (addressStorageEnabled && activeLocationId) {
         scanBody.storage_location_id = activeLocationId
@@ -351,6 +388,12 @@ export function FfMarketplaceUnloadBoxAddDialog({
           storage_location_id?: string | null
           location_code?: string | null
           total_qty?: number | null
+          product_id?: string | null
+          id?: string | null
+          sku_code?: string | null
+          product_name?: string | null
+          quantity?: number | null
+          picked_qty?: number | null
         }
         if (j.kind === 'location' && j.storage_location_id) {
           setActiveLocationId(j.storage_location_id)
@@ -361,14 +404,40 @@ export function FfMarketplaceUnloadBoxAddDialog({
         if (j.kind === 'ready_box') {
           setScanBarcode('')
           onAddSuccess?.(j.total_qty ?? 1)
+          scanChangedRef.current = true
           await onUpdated()
           await loadPickOptions({ silent: true })
           return
         }
         setScanBarcode('')
+        if (j.product_id) {
+          setPickOptions((current) =>
+            current.map((row) => {
+              if (row.product_id !== j.product_id) return row
+              return {
+                ...row,
+                picked_qty: j.picked_qty ?? row.picked_qty + 1,
+                locations: row.locations.map((location) =>
+                  location.storage_location_id === j.storage_location_id
+                    ? { ...location, available: Math.max(0, location.available - 1) }
+                    : location,
+                ),
+              }
+            }),
+          )
+          setLastScannedProductId(j.product_id)
+          if (j.id && j.sku_code && j.product_name && j.quantity != null) {
+            onProductScanned?.({
+              id: j.id,
+              product_id: j.product_id,
+              sku_code: j.sku_code,
+              product_name: j.product_name,
+              quantity: j.quantity,
+            })
+          }
+        }
+        scanChangedRef.current = true
         onAddSuccess?.(1)
-        await onUpdated()
-        await loadPickOptions({ silent: true })
         return
       }
       const errText = await scanRes.text()
@@ -398,8 +467,14 @@ export function FfMarketplaceUnloadBoxAddDialog({
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось выполнить скан.')
     } finally {
-      setBusy(false)
+      if (readyBoxScan) setBusy(false)
     }
+  }
+
+  const enqueueScan = (barcode: string, allowOverPlan: boolean) => {
+    const job = scanQueueRef.current.then(() => runScan(barcode, allowOverPlan))
+    scanQueueRef.current = job.catch(() => undefined)
+    return job
   }
 
   const doScan = (rawInput?: string) => {
@@ -416,15 +491,12 @@ export function FfMarketplaceUnloadBoxAddDialog({
       setReadyBoxConfirmOpen(true)
       return
     }
-    void runScan(raw, false)
+    void enqueueScan(raw, false)
   }
 
   useBarcodeScanner({
     enabled: open && !readOnly && !readyBoxConfirmOpen && !readyBoxOverPlanOpen,
-    onScan: (code) => {
-      setScanBarcode(code)
-      doScan(code)
-    },
+    onScan: doScan,
   })
 
   const confirmReadyBox = () => {
@@ -433,7 +505,7 @@ export function FfMarketplaceUnloadBoxAddDialog({
     if (!barcode) {
       return
     }
-    void runScan(barcode, false)
+    void enqueueScan(barcode, false)
   }
 
   const confirmReadyBoxOverPlan = () => {
@@ -442,7 +514,7 @@ export function FfMarketplaceUnloadBoxAddDialog({
     if (!barcode) {
       return
     }
-    void runScan(barcode, true)
+    void enqueueScan(barcode, true)
   }
 
   const gateBlocked = readOnly
@@ -451,7 +523,7 @@ export function FfMarketplaceUnloadBoxAddDialog({
     <>
       <Dialog
         open={open}
-        onClose={onClose}
+        onClose={closeDialog}
         maxWidth={false}
         fullWidth
         data-testid="ff-mp-box-add-dialog"
@@ -464,7 +536,7 @@ export function FfMarketplaceUnloadBoxAddDialog({
           </Typography>
           <IconButton
             aria-label="Закрыть"
-            onClick={onClose}
+            onClick={closeDialog}
             sx={{ position: 'absolute', right: 8, top: 8 }}
             data-testid="ff-mp-box-add-close"
           >
@@ -614,6 +686,16 @@ export function FfMarketplaceUnloadBoxAddDialog({
                           <TableRow
                             key={row.product_id}
                             data-testid={`ff-mp-box-add-row-${row.product_id}`}
+                            sx={
+                              row.product_id === lastScannedProductId
+                                ? {
+                                    bgcolor: 'success.main',
+                                    boxShadow: (theme) =>
+                                      `inset 0 0 0 1px ${theme.palette.success.main}`,
+                                    '& td': { bgcolor: 'success.light' },
+                                  }
+                                : undefined
+                            }
                           >
                             <TableCell>
                               <ProductPhotoThumb
