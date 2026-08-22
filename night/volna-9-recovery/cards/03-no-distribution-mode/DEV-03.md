@@ -1,36 +1,26 @@
-# Backend Dev — 03-no-distribution-mode — фича 3
+# Backend-dev: 03-no-distribution-mode
 
 ## Изменённые файлы
 
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/api/fbs_supplies.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/services/fbs_workspace_service.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/tests/test_fbs_packing_box.py
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/api/fbs_supplies.py` — POST `/operations/fbs-supplies/{supply_id}/boxes-without-distribution` принимает `enabled`, возвращает обновлённый workspace и переводит конфликт назначенных заказов в HTTP 409.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/services/fbs_workspace_service.py` — workspace отдаёт сохранённый признак поставки независимо от наличия коробов.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/tests/test_fbs_packing_box.py` — API-проверки сохранения режима без коробов и конфликтного ответа при назначенном заказе.
 
-Добавлен POST `/operations/fbs-supplies/{supply_id}/boxes-without-distribution`. Он вызывает существующий сервис переключения, возвращает обновлённый workspace и переводит `boxes_already_distributed` в HTTP 409. В workspace добавлено `supply.boxes_without_distribution`; признак читается из сохранённого поля поставки и не исчезает при пустом списке коробов.
-
-## Миграции
-
-Нет: поля поставки и миграция добавлены предыдущей фичей.
-
-## Тесты
-
-Добавлены API-тесты на включение режима без коробов, сохранение флага при повторном GET workspace и конфликт при назначенном заказе.
+Реализация этих файлов уже находилась в текущей рабочей копии; в рамках backend-dev она проверена без расширения объёма.
 
 ## Гейты
 
-- ruff: FAIL — существующий `RUF100` для `# ruff: noqa: RUF001` в `/backend/app/services/fbs_workspace_service.py`.
-- mypy: FAIL — 4 существующие ошибки в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py` и `fbs_warehouse_binding_service.py`; изменённые файлы новых ошибок не добавили.
-- pytest: PASS — целевые тесты `tests/test_fbs_packing_box.py -k boxes_without_distribution_api`: 2 passed.
-- back_guard.py: NOT RUN — файл отсутствует в рабочей копии.
-- check_migrations.py: NOT RUN — файл отсутствует в рабочей копии.
-- git diff --check: PASS.
+- `ruff check .` — FAIL: 82 pre-existing ошибок в несвязанных файлах backend и scripts; `fbs_workspace_service.py` отмечен только неиспользуемым `noqa`.
+- `mypy .` — FAIL: 21 pre-existing ошибок в 6 несвязанных файлах; ошибок в затронутом API/workspace коде нет.
+- `pytest` — INTERRUPTED after 5% (41 passed before stop); целевой `pytest -q tests/test_fbs_packing_box.py` — PASS, 8 passed.
+- `python3 scripts/ci/back_guard.py` — BLOCKED: файл отсутствует в текущем checkout.
+- `python3 scripts/ci/check_migrations.py` — BLOCKED: файл отсутствует в текущем checkout.
 
 ## Не реализовано
 
-- UI и OpenAPI-файл не изменялись: они относятся к фиче 4 и находятся вне backend-dev атомарного куска.
-- Массовая миграция legacy-ключей `no-distribution:` не выполнялась: контракт оставляет совместимость на чтение существующего формата.
+- Новых изменений сверх атомарной backend-фичи не добавлялось.
+- Product/browser gate и frontend не входят в роль backend-dev.
 
-## Находки
+## Блокеры
 
-- Секреты, ключи, токены и `.env` не читались.
-- В рабочем дереве до этой работы уже были изменения `night/volna-9-recovery/JOURNAL.md`; они не относятся к реализации и не включались в отчёт как изменённый backend-файл.
+- Полные lint/type-check и guard-гейты заблокированы существующими ошибками/отсутствующими скриптами, перечисленными выше; целевые тесты фичи проходят. Полный pytest не завершён из-за длительного прогона и остановлен после проверки первых 41 теста.
