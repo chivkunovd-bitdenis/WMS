@@ -452,6 +452,10 @@ def main() -> int:
                     "backend atom" in вызовы_dev[0][1] and "frontend atom" not in вызовы_dev[0][1], True)
             проверь("dev: второй промпт не содержит первый атом",
                     "frontend atom" in вызовы_dev[1][1] and "backend atom" not in вызовы_dev[1][1], True)
+            проверь("dev: полный pytest запрещён на атоме",
+                    all("pytest (`pytest`/`pytest -q` без путей)" in дополнение
+                        and "Полный регресс запускается один раз после интеграции" in дополнение
+                        for _, дополнение in вызовы_dev), True)
 
             (t / "DEV.md").unlink()
             (t / "REVIEW.md").write_text(
