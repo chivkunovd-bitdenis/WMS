@@ -25,6 +25,23 @@ from app.services.background_job_service import (
 from app.services.tokens import decode_access_token
 
 
+def test_marking_label_tape_enqueue_failure_keeps_request_retryable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.api.marking_codes import _enqueue_marking_label_tape_job
+
+    def broker_down(*args: object, **kwargs: object) -> None:
+        raise ConnectionError("broker_unavailable")
+
+    monkeypatch.setattr(
+        "app.tasks.background_jobs.run_marking_label_tape_task.apply_async", broker_down
+    )
+
+    # Publishing is deliberately best-effort: the active row remains pending
+    # and the next identical request safely republishes it.
+    _enqueue_marking_label_tape_job(uuid.uuid4())
+
+
 @pytest.mark.asyncio
 async def test_marking_label_tape_idempotency_and_result_contract(
     async_client: AsyncClient,

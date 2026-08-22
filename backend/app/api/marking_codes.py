@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import uuid
 from datetime import datetime
@@ -42,6 +43,8 @@ from app.services.background_job_service import JOB_TYPE_MARKING_LABEL_TAPE
 from app.services.catalog_service import get_product
 from app.services.marking_label_artifact_service import pdf_bytes_to_png
 from app.services.seller_staff_permissions_service import PERM_HONEST_SIGN
+
+logger = logging.getLogger(__name__)
 
 
 async def require_seller_honest_sign_if_seller(
@@ -1259,6 +1262,19 @@ class LabelArtifactTapeIn(BaseModel):
     page_height_mm: float | None = Field(default=None, gt=0, le=300)
 
 
+def _enqueue_marking_label_tape_job(job_id: uuid.UUID) -> None:
+    """Best-effort broker publish; the persisted job is retried idempotently."""
+    from app.tasks.background_jobs import run_marking_label_tape_task
+
+    try:
+        run_marking_label_tape_task.apply_async(args=[str(job_id)], queue="print")
+    except Exception:
+        # The durable pending job is returned to the caller. A repeat of the
+        # same request republishes this exact job without creating a duplicate,
+        # so a transient broker outage cannot lose the tape.
+        logger.exception("failed to enqueue marking label tape job: %s", job_id)
+
+
 @router.post("/label-artifact-tape", status_code=status.HTTP_202_ACCEPTED)
 async def post_label_artifact_tape_pdf(
     body: LabelArtifactTapeIn,
@@ -1290,8 +1306,7 @@ async def post_label_artifact_tape_pdf(
         )
         if job_svc.should_enqueue_marking_label_tape_job(job):
             if settings.celery_broker_url:
-                from app.tasks.background_jobs import run_marking_label_tape_task
-                run_marking_label_tape_task.apply_async(args=[str(job.id)], queue="print")
+                _enqueue_marking_label_tape_job(job.id)
             else:
                 background_tasks.add_task(job_svc.run_marking_label_tape_job, job.id)
     except mc_svc.MarkingCodeServiceError as exc:
