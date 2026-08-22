@@ -1,9 +1,12 @@
-# Backend dev · 05-prod-slow · атом 1 · переделка по ревью
+# Backend dev · 05-prod-slow · атом 2 · переделка по ревью
 
 ## Что реализовано
 
 - Эндпоинты: новых и изменённых эндпоинтов нет.
-- Сервис `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/wb_marketplace_orders_service.py`: списание `FbsBindingStockPool` теперь читает строку с `FOR UPDATE`, поэтому одновременно разрешённые контуры `new` и `reconcile` не теряют одно из списаний для двух разных заказов одного пула; существующая идемпотентность повторного импорта одного заказа через `UNIQUE(order_id)` сохранена.
+- Сервис `seller_sync_flight`: single-flight остаётся раздельным по `(seller_id, sync_kind)`, поэтому повтор одного вида блокируется, а `new` и `reconcile` одного продавца могут выполняться одновременно без общего `wb_seller_lock` во время HTTP-чтения.
+- Сервисы `sync_new_orders_for_seller_job` и `reconcile_orders_for_seller_job`: сохранены независимые задания продавца для лёгкого импорта новых заказов и полной сверки.
+- Сервис `_debit_stock_pool_once`: строка `FbsBindingStockPool` читается с `FOR UPDATE`, поэтому параллельные `new` и `reconcile` последовательно списывают два разных заказа из одного пула и не теряют изменение количества.
+- Celery Beat и фоновые задания: `new` запускается раз в 180 секунд, `reconcile` — раз в 3600 секунд; задания распределяются по продавцам внутри своего интервала и направляются в отдельную очередь `wb_sync`.
 
 ## Изменённые файлы
 
@@ -11,37 +14,39 @@
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_wb_marketplace_orders_service.py`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/night/volna-9-recovery/cards/05-prod-slow/DEV.md`
 
+Первые два файла уже сохранены в текущем `HEAD` коммитом `ab19c4844831dd968e484a09d73a9334300a189b`; этот проход повторно проверил реализацию и восстановил обязательный артефакт, удалённый оркестратором перед запуском роли.
+
 ## Миграции
 
 Нет.
 
 ## Тесты
 
-- Добавлен `test_new_and_reconcile_serialize_different_order_debits_on_one_pool`: два параллельных списания разных заказов требуют блокировку строки пула, создают две записи `FbsStockPoolDebit` и уменьшают количество с 10 до 8.
-- Повторно проверены атомарные сценарии `new`: отсутствие вызова постраничного полного списка и идемпотентный upsert.
-- Повторно проверены атомарные сценарии `reconcile`: полный курсорный обход, отказ считать незавершённый проход успешным после ошибки, обнаружение цикла курсора и отсутствие произвольного лимита в десять страниц.
+- `test_wb_order_schedule_and_single_flight_are_per_kind` — подтверждает периоды 180/3600 секунд и отдельную очередь обоих контуров.
+- `test_wb_order_tasks_invoke_new_and_reconcile_independently` — вызывает оба фоновых задания отдельно.
+- `test_wb_order_flights_allow_new_and_reconcile_together` и `test_wb_order_flight_uses_distinct_postgres_keys_per_kind` — подтверждают single-flight по `(seller_id, sync_kind)`: одинаковый вид не дублируется, разные виды не блокируют друг друга.
+- `test_wb_order_jobs_do_not_take_seller_wide_lock_during_http_read` — подтверждает отсутствие общего `wb_seller_lock` во время сетевого чтения.
+- `test_new_and_reconcile_serialize_different_order_debits_on_one_pool` — регрессия на находку ревью №1: два разных заказа из параллельных контуров создают две строки `FbsStockPoolDebit` и уменьшают общий пул с 10 до 8; тест отдельно требует наличие `FOR UPDATE`.
+- Весь профильный файл повторно проверяет лёгкий `new`, полный курсорный `reconcile`, идемпотентность импорта и связанные регрессии WB-заказов.
 
 ## Гейты
 
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend && ruff check app/services/wb_marketplace_orders_service.py tests/test_wb_marketplace_orders_service.py` — PASS, `All checks passed!`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend && mypy app/services/wb_marketplace_orders_service.py` — FAIL только на четырёх существующих ошибках импортируемых соседних модулей: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/wildberries_credentials_service.py:167`, `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/fbs_stock_sync_service.py:617`, `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/fbs_warehouse_binding_service.py:23,291`; изменённый модуль в диагностике этой штатной команды отсутствует.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend && mypy --follow-imports=skip app/services/wb_marketplace_orders_service.py` — дополнительная узкая попытка завершилась FAIL на 12 ранее существующих `no-any-return` в самом модуле; изменённая функция `_debit_stock_pool_once` в диагностике отсутствует.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend && pytest -q tests/test_wb_marketplace_orders_service.py::test_new_and_reconcile_serialize_different_order_debits_on_one_pool tests/test_wb_marketplace_orders_service.py::test_new_sync_does_not_fetch_paginated_orders tests/test_wb_marketplace_orders_service.py::test_reconcile_walks_cursor_and_fails_incomplete_pass tests/test_wb_marketplace_orders_service.py::test_reconcile_rejects_a_repeated_next_token tests/test_wb_marketplace_orders_service.py::test_reconcile_walks_past_ten_pages_and_links_supplies` — PASS, `5 passed in 0.27s`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend && pytest -q tests/test_wb_marketplace_orders_service.py` — PASS, `19 passed in 3.88s`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow && git diff --check` — PASS.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend && ruff check app/services/fbs_autopoll_service.py app/services/wb_marketplace_orders_service.py app/tasks/background_jobs.py app/celery_app.py tests/test_wb_marketplace_orders_service.py` — PASS, `All checks passed!`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend && mypy --follow-imports=skip app/services/fbs_autopoll_service.py app/services/wb_marketplace_orders_service.py app/tasks/background_jobs.py app/celery_app.py` — FAIL на 14 ранее существующих ошибках `no-any-return`: 12 в `wb_marketplace_orders_service.py` на строках 184, 186, 188, 190, 192, 193, 246, 318, 548, 1160, 1444, 1451 и 2 в `fbs_autopoll_service.py` на строках 55, 370; исправленная функция `_debit_stock_pool_once` и модули задач/расписания в диагностике отсутствуют.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend && pytest -q tests/test_wb_marketplace_orders_service.py` — PASS, `19 passed in 4.58s`.
 - `python3 scripts/ci/back_guard.py` не запускался: атом не добавляет и не меняет роуты.
 - `python3 scripts/ci/check_migrations.py` не запускался: атом не добавляет миграцию.
+- Полный `pytest`, `ruff check .` и `mypy .` не запускались: атомарная инструкция прямо запрещает общий backend-регресс на этом шаге.
 
 ## Не реализовано
 
-- Находки ревью №2–6 относятся к фоновым заданиям печати, frontend и документации; они находятся вне двух разрешённых backend-файлов этого атома и не изменялись.
-- Полный backend-регресс, `ruff check .` и `mypy .` не запускались: инструкция атома прямо запрещает общий прогон до интеграции всех карточек.
-- В `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/night/volna-9-recovery/cards/05-prod-slow/CONTRACT.md` нет отдельного раздела «API и данные»; реализация ограничена буквально заданным пользователем атомом и относящейся к нему находкой №1 из `REVIEW.md`.
+- Находки ревью №2–6 относятся к фоновой печати, frontend и документации, поэтому не входят в backend-слой этого атома и не изменялись.
+- Старые 14 ошибок `no-any-return` не исправлялись: они не относятся к конкурентному списанию, расписанию или single-flight этого атома.
+- В `CONTRACT.md` нет отдельного раздела «API и данные»; работа выполнена по явно заданному владельцем атому из `FEATURES.md` и относящейся к нему находке №1 из `REVIEW.md`, без расширения поведения.
 
 ## Блокеры
 
-- Функциональных блокеров в границах атома нет.
-- Локальная реализация не сохранена отдельным Git-коммитом и не опубликована: команда `git add backend/app/services/wb_marketplace_orders_service.py backend/tests/test_wb_marketplace_orders_service.py night/volna-9-recovery/cards/05-prod-slow/DEV.md && git commit -m "fix(wb): serialize concurrent stock pool debits"` остановилась до изменения индекса с `fatal: Unable to create '/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-05-prod-slow/index.lock': Operation not permitted`. Риск: изменения пока восстанавливаются только из этой постоянной рабочей копии.
+Нет функциональных блокеров в границах атома.
 
 ## Находки
 
