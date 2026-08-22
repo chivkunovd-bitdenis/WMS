@@ -121,3 +121,4 @@
 00:42   07-reporting · screen-dev: готово
 00:42   07-reporting · dev: фича 10/11 сохранена 804eea99a595
 00:46   07-reporting · screen-dev: готово
+00:46   07-reporting · dev: фича 11/11 сохранена 0becc1610517
