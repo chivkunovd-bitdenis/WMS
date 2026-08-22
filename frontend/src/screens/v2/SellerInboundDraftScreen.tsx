@@ -7,8 +7,12 @@ import {
   Button,
   Chip,
   CircularProgress,
+  FormControl,
   IconButton,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
   Stack,
   Table,
   TableBody,
@@ -171,6 +175,13 @@ export function shouldShowSellerInboundLoadError(
   return !hasDetail && localError !== null
 }
 
+export function shouldShowSellerWarehouseSelector(
+  warehouseCount: number,
+  status: string | null,
+): boolean {
+  return warehouseCount > 1 && status === 'draft'
+}
+
 export function sellerInboundPendingText(routeRequestId: string | null): string {
   return routeRequestId ? 'Загружаем карточку приёмки…' : 'Создаём черновик…'
 }
@@ -213,6 +224,9 @@ export function SellerInboundDraftScreen({
   const [plannedDateDraft, setPlannedDateDraft] = useState<string>('')
   const [plannedBoxCountDraft, setPlannedBoxCountDraft] = useState<string>('')
   const [localNotice, setLocalNotice] = useState<string | null>(null)
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(() =>
+    routeRequestId || warehouses.length <= 1 ? warehouseId : null,
+  )
 
   const loadDetail = useCallback(
     async (rid: string) => {
@@ -237,7 +251,8 @@ export function SellerInboundDraftScreen({
       void loadDetail(routeRequestId)
       return
     }
-    if (!warehouseId) {
+    const creationWarehouseId = selectedWarehouseId ?? (warehouses.length <= 1 ? warehouseId : null)
+    if (!creationWarehouseId) {
       return
     }
     if (!createOnceRef.current) {
@@ -250,7 +265,7 @@ export function SellerInboundDraftScreen({
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            warehouse_id: warehouseId,
+            warehouse_id: creationWarehouseId,
             planned_delivery_date: today,
             operation_type: requestedOperationType,
           }),
@@ -286,7 +301,16 @@ export function SellerInboundDraftScreen({
     return () => {
       cancelled = true
     }
-  }, [authHeaders, loadDetail, requestedOperationType, routeRequestId, token, warehouseId])
+  }, [
+    authHeaders,
+    loadDetail,
+    requestedOperationType,
+    routeRequestId,
+    selectedWarehouseId,
+    token,
+    warehouseId,
+    warehouses.length,
+  ])
 
   useEffect(() => {
     setPlannedDateDraft(detail?.planned_delivery_date ?? '')
@@ -536,6 +560,14 @@ export function SellerInboundDraftScreen({
     return ok
   }
 
+  const saveWarehouse = async (nextWarehouseId: string): Promise<void> => {
+    setSelectedWarehouseId(nextWarehouseId)
+    if (!detail || detail.status !== 'draft' || nextWarehouseId === detail.warehouse_id) {
+      return
+    }
+    await patchDraftField({ warehouse_id: nextWarehouseId })
+  }
+
   const patchLineQty = async (lineId: string, expectedQty: number) => {
     if (!requestId) {
       return
@@ -684,7 +716,7 @@ export function SellerInboundDraftScreen({
     }
     const matched = warehouses.find((w) => w.id === detail.warehouse_id)
     if (matched) {
-      return `${matched.name} (${matched.code})`
+      return matched.name
     }
     return 'Склад ФФ'
   }, [detail, warehouses])
@@ -731,7 +763,29 @@ export function SellerInboundDraftScreen({
       ) : null}
 
       {!requestId || !detail ? (
-        showLoadError ? (
+        !routeRequestId && warehouses.length > 1 && !selectedWarehouseId ? (
+          <Stack spacing={2} sx={{ maxWidth: 360, py: 2 }}>
+            <FormControl size="small" fullWidth>
+              <InputLabel id="seller-inbound-new-warehouse-label">Склад</InputLabel>
+              <Select
+                labelId="seller-inbound-new-warehouse-label"
+                label="Склад"
+                value=""
+                onChange={(event) => setSelectedWarehouseId(event.target.value)}
+                data-testid="seller-inbound-new-warehouse-select"
+              >
+                {warehouses.map((warehouse) => (
+                  <MenuItem key={warehouse.id} value={warehouse.id}>
+                    {warehouse.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Typography variant="body2" color="text.secondary">
+              Выберите склад для новой заявки.
+            </Typography>
+          </Stack>
+        ) : showLoadError ? (
           <Paper
             variant="outlined"
             sx={{ p: 2, minHeight: '24vh' }}
@@ -821,18 +875,38 @@ export function SellerInboundDraftScreen({
             <Typography variant="body2" color="text.secondary" data-testid="seller-inbound-operation-type">
               Тип: <strong>{operationTypeRu(detail.operation_type)}</strong>
             </Typography>
-            <Tooltip title={warehouseLabel}>
-              <Typography
+            {shouldShowSellerWarehouseSelector(warehouses.length, detail.status) ? (
+              <FormControl size="small" sx={{ minWidth: { xs: '100%', md: 220 } }}>
+                <InputLabel id="seller-inbound-warehouse-select-label">Склад</InputLabel>
+                <Select
+                  labelId="seller-inbound-warehouse-select-label"
+                  label="Склад"
+                  value={detail.warehouse_id}
+                  disabled={busy || !sellerCanEdit}
+                  onChange={(event) => void saveWarehouse(event.target.value)}
+                  data-testid="seller-inbound-warehouse-select"
+                >
+                  {warehouses.map((warehouse) => (
+                    <MenuItem key={warehouse.id} value={warehouse.id}>
+                      {warehouse.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            ) : (
+              <Tooltip title={warehouseLabel}>
+                <Typography
                 variant="body2"
                 color="text.secondary"
                 noWrap
                 data-testid="seller-inbound-warehouse-label"
                 data-task-id="BL-2"
                 sx={{ maxWidth: { xs: '100%', md: 260 }, minWidth: 0 }}
-              >
-                Склад: <strong>{warehouseLabel}</strong>
-              </Typography>
-            </Tooltip>
+                >
+                  Склад: <strong>{warehouseLabel}</strong>
+                </Typography>
+              </Tooltip>
+            )}
             <Box sx={{ flexGrow: 1 }} />
             {sellerCanEdit ? (
               <Button

@@ -6,6 +6,7 @@ import {
   sellerInboundPendingText,
   shouldShowSellerInboundLoadError,
   shouldShowSellerInboundNoWarehouse,
+  shouldShowSellerWarehouseSelector,
 } from './SellerInboundDraftScreen'
 
 describe('seller inbound document UI helpers', () => {
@@ -36,5 +37,11 @@ describe('seller inbound document UI helpers', () => {
     expect(shouldShowSellerInboundLoadError(false, 'Заявка не найдена')).toBe(true)
     expect(sellerInboundPendingText('request-1')).toBe('Загружаем карточку приёмки…')
     expect(sellerInboundPendingText(null)).toBe('Создаём черновик…')
+  })
+
+  it('shows warehouse choice only for a draft with multiple available warehouses', () => {
+    expect(shouldShowSellerWarehouseSelector(1, 'draft')).toBe(false)
+    expect(shouldShowSellerWarehouseSelector(2, 'draft')).toBe(true)
+    expect(shouldShowSellerWarehouseSelector(2, 'submitted')).toBe(false)
   })
 })
