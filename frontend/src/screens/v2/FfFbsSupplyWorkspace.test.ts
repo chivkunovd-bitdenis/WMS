@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildFbsPickingListPrintHtml, normalizeMetadataKind } from './fbsUx'
-import { resolvePickScanAttempt } from './FfFbsSupplyWorkspace'
+import { resolvePickScanAttempt } from './fbsApi'
 
 describe('FBS scanner idempotency', () => {
   it('TC-S17-007 reuses the same order and key while a failed scan is still pending', () => {

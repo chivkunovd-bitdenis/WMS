@@ -1,4 +1,9 @@
-import { Children, isValidElement, type ReactElement, type ReactNode } from 'react'
+import {
+  Children,
+  isValidElement,
+  type ReactElement,
+  type ReactNode,
+} from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   WarehouseContextSwitch,

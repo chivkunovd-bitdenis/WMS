@@ -70,6 +70,7 @@ import {
   retryFbsPackingBoxQr,
   retryFbsSupplyQr,
   resolveFbsWarehouseScan,
+  resolvePickScanAttempt,
   scanFbsPickLocation,
   scanFbsPickProduct,
   selectFbsManualPickLocation,
@@ -81,6 +82,7 @@ import {
   type FbsKizLookup,
   type FbsOrderPrintTapeRequest,
   type FbsPickLocation,
+  type PickScanAttempt,
   type FbsPrintAsset,
   type FbsPrintBatch,
   type FbsWorkspace,
@@ -94,22 +96,6 @@ type Props = {
   initialWorkspace?: FbsWorkspace | null
   open: boolean
   onClose: () => void
-}
-
-type PickScanAttempt = { orderId: string; key: string }
-
-export function resolvePickScanAttempt(
-  orders: Array<{ id: string; pending: boolean; matches: boolean }>,
-  remembered: PickScanAttempt | undefined,
-  createKey: () => string,
-): PickScanAttempt | null {
-  const pendingOrder = orders.find((order) => order.pending && order.matches)
-  const matchingOrder = pendingOrder ?? (remembered
-    ? orders.find((order) => order.id === remembered.orderId && order.matches)
-    : undefined)
-  if (!matchingOrder) return null
-  if (remembered?.orderId === matchingOrder.id) return remembered
-  return { orderId: matchingOrder.id, key: createKey() }
 }
 
 const STAGES = [

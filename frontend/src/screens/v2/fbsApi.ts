@@ -358,6 +358,22 @@ export type FbsWarehouseScan = {
   code: string
 }
 
+export type PickScanAttempt = { orderId: string; key: string }
+
+export function resolvePickScanAttempt(
+  orders: Array<{ id: string; pending: boolean; matches: boolean }>,
+  remembered: PickScanAttempt | undefined,
+  createKey: () => string,
+): PickScanAttempt | null {
+  const pendingOrder = orders.find((order) => order.pending && order.matches)
+  const matchingOrder = pendingOrder ?? (remembered
+    ? orders.find((order) => order.id === remembered.orderId && order.matches)
+    : undefined)
+  if (!matchingOrder) return null
+  if (remembered?.orderId === matchingOrder.id) return remembered
+  return { orderId: matchingOrder.id, key: createKey() }
+}
+
 export async function resolveFbsWarehouseScan(
   token: string,
   ah: AuthHeaders,
