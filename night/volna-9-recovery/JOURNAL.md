@@ -9,3 +9,6 @@
 13:12   03-no-distribution-mode · dev: фича 3/4 сохранена 9b491d7172e5
 13:15   03-no-distribution-mode · screen-dev: готово
 13:15   03-no-distribution-mode · dev: фича 4/4 сохранена 39e2bf879c8c
+13:20   03-no-distribution-mode · reviewer: готово
+13:20   03-no-distribution-mode · reviewer: находки, круг 1 — назад к разработке
+13:22   03-no-distribution-mode · backend-dev: готово
