@@ -101,14 +101,13 @@ async def create_boxes(
         raise FbsPackingBoxError("missing_idempotency_key")
     supply = await _get_supply(session, tenant_id, supply_id, for_update=True)
     _assert_supply_mutable(supply)
-    stored_key = _stored_creation_key(idempotency_key, without_distribution=without_distribution)
+    # The mode now belongs to the supply.  Keep the complete API idempotency
+    # key on every newly created box; legacy ``no-distribution:`` values are
+    # only consulted by _supply_without_distribution for existing supplies.
+    stored_key = idempotency_key.strip()
     boxes = await _boxes_by_creation_key(session, tenant_id, supply_id, stored_key)
     if boxes:
         if len(boxes) != count:
-            raise FbsPackingBoxError("idempotency_key_reused")
-        if not _creation_key_matches_without_distribution_request(
-            boxes, stored_key, without_distribution
-        ):
             raise FbsPackingBoxError("idempotency_key_reused")
     else:
         assigned_count = await session.scalar(
@@ -374,38 +373,6 @@ async def get_boxes_for_workspace(
     ]
 
 
-def _stored_creation_key(idempotency_key: str, *, without_distribution: bool) -> str:
-    key = idempotency_key.strip()
-    if not without_distribution:
-        return key
-    max_raw_len = CREATION_IDEMPOTENCY_KEY_MAX_LENGTH - len(
-        WITHOUT_DISTRIBUTION_KEY_PREFIX
-    )
-    return f"{WITHOUT_DISTRIBUTION_KEY_PREFIX}{key[:max_raw_len]}"
-
-
-def _box_without_distribution(box: FbsPackingBox) -> bool:
-    return bool(
-        box.creation_idempotency_key
-        and box.creation_idempotency_key.startswith(WITHOUT_DISTRIBUTION_KEY_PREFIX)
-    )
-
-
-def _boxes_without_distribution(boxes: list[FbsPackingBox]) -> bool:
-    return bool(boxes) and any(_box_without_distribution(box) for box in boxes)
-
-
-def _creation_key_matches_without_distribution_request(
-    boxes: list[FbsPackingBox], stored_key: str, without_distribution: bool
-) -> bool:
-    if _boxes_without_distribution(boxes) == without_distribution:
-        return True
-    return without_distribution and all(
-        box.creation_idempotency_key == _retired_legacy_creation_key(stored_key)
-        for box in boxes
-    )
-
-
 async def _has_legacy_without_distribution_marker(
     session: AsyncSession, tenant_id: uuid.UUID, supply_id: uuid.UUID
 ) -> bool:
@@ -544,17 +511,13 @@ async def _get_box(
 async def _boxes_by_creation_key(
     session: AsyncSession, tenant_id: uuid.UUID, supply_id: uuid.UUID, key: str
 ) -> list[FbsPackingBox]:
-    keys = [key]
-    retired_legacy_key = _retired_legacy_creation_key(key)
-    if retired_legacy_key != key:
-        keys.append(retired_legacy_key)
     result = await session.execute(
         select(FbsPackingBox)
         .options(selectinload(FbsPackingBox.warehouse_box), selectinload(FbsPackingBox.trbx))
         .where(
             FbsPackingBox.tenant_id == tenant_id,
             FbsPackingBox.supply_id == supply_id,
-            FbsPackingBox.creation_idempotency_key.in_(keys),
+            FbsPackingBox.creation_idempotency_key == key,
         )
         .order_by(FbsPackingBox.box_number)
     )

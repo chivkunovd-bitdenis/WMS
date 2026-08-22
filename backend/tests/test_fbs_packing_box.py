@@ -209,6 +209,14 @@ async def test_without_distribution_boxes_do_not_accept_order_assignment(
     assert box["without_distribution"] is True
     assert box["assigned_order_ids"] == []
 
+    async with SessionLocal() as session:
+        stored_box = await session.get(FbsPackingBox, uuid.UUID(box["id"]))
+        assert stored_box is not None
+        assert (
+            stored_box.creation_idempotency_key
+            == "boxes-without-distribution-1"
+        )
+
     assigned = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/boxes/{box['id']}/orders",
         headers=headers,
@@ -353,11 +361,11 @@ async def test_without_distribution_mode_depends_on_assignments_not_box_count(
 
 
 @pytest.mark.asyncio
-async def test_without_distribution_toggle_preserves_legacy_key_for_create_retry(
+async def test_without_distribution_toggle_preserves_full_key_for_create_retry(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
-    """TC-NEW-005: toggling never breaks an earlier create retry."""
+    """TC-NEW-005: toggling never breaks a new-format create retry."""
     headers, supply_id, _ = await _packed_supply(async_client)
     idempotency_key = "k" * 128
     created = await async_client.post(
@@ -407,11 +415,60 @@ async def test_without_distribution_toggle_preserves_legacy_key_for_create_retry
         box = await session.get(FbsPackingBox, box_id)
         assert box is not None
         assert box.creation_idempotency_key is not None
-        assert box.creation_idempotency_key == f"retired-no-dist:{'k' * 112}"
+        assert box.creation_idempotency_key == idempotency_key
         assert len(box.creation_idempotency_key) == 128
         supply = await session.get(FbsSupply, supply_id)
         assert supply is not None
         assert supply.boxes_without_distribution_at is None
+
+
+@pytest.mark.asyncio
+async def test_without_distribution_keeps_distinct_max_length_idempotency_keys(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """Two valid keys with the same first 112 characters never collide."""
+    headers, supply_id, _ = await _packed_supply(async_client)
+    boxes_url = f"/operations/fbs-supplies/{supply_id}/boxes"
+    first_key = f"{'x' * 112}{'A' * 16}"
+    second_key = f"{'x' * 112}{'B' * 16}"
+
+    first = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={
+            "count": 1,
+            "idempotency_key": first_key,
+            "without_distribution": True,
+        },
+    )
+    second = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={
+            "count": 1,
+            "idempotency_key": second_key,
+            "without_distribution": True,
+        },
+    )
+
+    assert first.status_code == 201, first.text
+    assert second.status_code == 201, second.text
+    assert len(first.json()["boxes"]) == 1
+    assert len(second.json()["boxes"]) == 2
+    assert second.json()["boxes"][1]["id"] != first.json()["boxes"][0]["id"]
+
+    async with SessionLocal() as session:
+        stored_keys = set(
+            (
+                await session.scalars(
+                    select(FbsPackingBox.creation_idempotency_key).where(
+                        FbsPackingBox.supply_id == supply_id
+                    )
+                )
+            ).all()
+        )
+        assert stored_keys == {first_key, second_key}
 
 
 @pytest.mark.asyncio
