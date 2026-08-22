@@ -10,9 +10,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import assert_inventory_read_access, get_current_user, seller_line_product_scope
 from app.db.session import get_db
 from app.models.user import User
-from app.services.reporting_service import build_overview
+from app.services.reporting_service import build_inventory_report, build_overview
 
 router = APIRouter(prefix="/reports", tags=["reports"])
+
+
+@router.get("/inventory")
+async def get_inventory_report(user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
+    date_from: Annotated[datetime, Query()], date_to: Annotated[datetime, Query()],
+    group_by: Annotated[str, Query()] = "product", page: Annotated[int, Query(ge=1)] = 1,
+    warehouse_id: Annotated[uuid.UUID | None, Query()] = None,
+    search: Annotated[str | None, Query()] = None) -> dict[str, object]:
+    await assert_inventory_read_access(session, user)
+    try:
+        return await build_inventory_report(session, user.tenant_id, date_from=date_from,
+            date_to=date_to, group_by=group_by, page=page, seller_id=seller_scope,
+            warehouse_id=warehouse_id, search=search)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc)) from exc
 
 
 @router.get("/overview")
