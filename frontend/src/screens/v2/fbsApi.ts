@@ -153,6 +153,8 @@ export type FbsOrderMetadata = {
   optional: string[]
   states: Array<{
     kind: string
+    // Значения meta_status, которые бэкенд фактически кладёт в states.
+    // 'filled' удалён: бэкенд нормализует filled → pending (map_wb_decision_to_meta_status).
     status:
       | 'missing'
       | 'assigned'

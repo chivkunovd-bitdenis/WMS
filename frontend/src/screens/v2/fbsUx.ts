@@ -1,3 +1,43 @@
+import { type StatusTone } from '../../ui-kit'
+import { translateMetaStatusReason } from '../../utils/metaStatus'
+
+// Минимальный контракт по метаданным, нужный для вычисления вердикта.
+// Совпадает с полями FbsOrderMetadata — импортировать весь тип не нужно.
+type MetaState = { kind: string; status: string; reason?: string | null }
+type OrderMetaLike = { required: string[]; optional: string[]; states: MetaState[] }
+
+export type VerdictChip = { kind: string; label: string; tone: StatusTone; hint?: string; reasonCaption?: string }
+
+/** Вердикт WB по каждому required kind маркировки.
+ *  Одна сущность — один чип (R-35). Подписи используются в двух экранах (R-10). */
+export function orderVerdictChips(order: { metadata: OrderMetaLike }): VerdictChip[] {
+  const chips: VerdictChip[] = []
+  for (const kind of order.metadata.required) {
+    const state = order.metadata.states.find((s) => s.kind === kind)
+    if (!state) {
+      chips.push({ kind, label: 'Статус уточняется', tone: 'neutral', hint: 'Ждём ответ Wildberries' })
+      continue
+    }
+    if (state.status === 'accepted' || state.status === 'allowed_without_check') {
+      chips.push({ kind, label: 'WB подтвердил', tone: 'ok' })
+    } else if (state.status === 'pending' && !state.reason) {
+      chips.push({ kind, label: 'WB проверяет', tone: 'warn', hint: 'WB получил код, ждём ответа' })
+    } else if (state.status === 'pending' || state.status === 'rejected' || state.status === 'replacement_required') {
+      chips.push({ kind, label: 'WB не принял', tone: 'stop', reasonCaption: translateMetaStatusReason(state.reason ?? null) ?? undefined })
+    } else if (state.status === 'missing') {
+      chips.push({ kind, label: 'Нужен ЧЗ', tone: 'stop', hint: 'WB ждёт код, отсканируйте стикер' })
+    } else {
+      chips.push({ kind, label: 'Статус уточняется', tone: 'neutral', hint: 'Ждём ответ Wildberries' })
+    }
+  }
+  for (const kind of order.metadata.optional) {
+    if (order.metadata.states.some((s) => s.kind === kind)) {
+      chips.push({ kind, label: 'ЧЗ не требуется', tone: 'neutral' })
+    }
+  }
+  return chips
+}
+
 export function ordersWord(count: number) {
   const lastTwo = Math.abs(count) % 100
   if (lastTwo >= 11 && lastTwo <= 14) return 'заказов'

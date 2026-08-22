@@ -136,18 +136,28 @@ def normalize_check_status(raw: Any) -> str | None:
 
 
 def map_wb_decision_to_meta_status(decision: str | None) -> str | None:
+    """Преобразует `decision` от WB в наш внутренний `meta_status`.
+    Ключевое изменение (relative to old code): `filled` НЕ переводится в ACCEPTED.
+    `filled` = "селлер заполнил значение", а не "WB подтвердил".
+    Подтверждение = только `accepted` или `allowedwithoutcheck` без reason."""
     if decision is None:
         return None
     key = decision.strip().lower().replace("-", "_").replace(" ", "_")
     mapping = {
         "accepted": META_STATUS_ACCEPTED,
-        "filled": META_STATUS_ACCEPTED,
+        # filled без reason = WB проверяет (pending)
+        # filled с reason = WB не принял (учитывается при проверке reason в compute_delivery_allowed)
+        "filled": META_STATUS_PENDING,
         "rejected": META_STATUS_REJECTED,
         "pending": META_STATUS_PENDING,
         "allowedwithoutcheck": META_STATUS_ALLOWED_WITHOUT_CHECK,
         "allowed_without_check": META_STATUS_ALLOWED_WITHOUT_CHECK,
         "replacementrequired": META_STATUS_REPLACEMENT_REQUIRED,
         "replacement_required": META_STATUS_REPLACEMENT_REQUIRED,
+        # Новые решения от WB о требуемости маркировки
+        "required": META_STATUS_MISSING,  # WB требует код, но мы его ещё не прислали
+        "optional": META_STATUS_ALLOWED_WITHOUT_CHECK,  # Маркировка необязательна
+        "notrequired": META_STATUS_ALLOWED_WITHOUT_CHECK,  # WB явно сказал, что код не нужен
     }
     return mapping.get(key)
 
@@ -287,6 +297,8 @@ def compute_delivery_allowed(
     order: FbsOrder,
     markings: list[FbsOrderMarking],
 ) -> bool:
+    """Сдача разрешена только когда все required kind закрыты вердиктом `accepted` или
+    `allowed_without_check` БЕЗ непустого `reason`. Любой другой статус блокирует сдачу."""
     required = list(order.required_meta_json or [])
     if not required:
         return True
@@ -297,6 +309,10 @@ def compute_delivery_allowed(
         if mark.meta_status in {META_STATUS_REJECTED, META_STATUS_REPLACEMENT_REQUIRED}:
             return False
         if mark.meta_status not in _META_DELIVERY_OK:
+            return False
+        # Новое: даже accepted/allowed_without_check с reason блокирует сдачу.
+        # reason наличествует = WB сказал "нет", пусть и не явным rejected.
+        if mark.reason:
             return False
     return True
 
@@ -316,7 +332,24 @@ def build_order_metadata(
     required = list(order.required_meta_json or [])
     optional = list(order.optional_meta_json or [])
     states: list[dict[str, Any]] = []
-    for kind in required + [k for k in optional if k not in required]:
+
+    # Динамически пересчитываем required и optional на основе решения WB.
+    # Если WB ответил decision=optional/notRequired для kind из required,
+    # этот kind не блокирует сдачу, и его чип будет "ЧЗ не требуется".
+    dynamic_required = []
+    dynamic_optional = list(optional)
+
+    for kind in required:
+        mark = current_order_marking(markings, kind, include_rejected=True)
+        # Если есть маркировка и статус optional/notRequired, перемещаем в optional
+        if mark is not None and mark.meta_status == META_STATUS_ALLOWED_WITHOUT_CHECK:
+            # Проверяем, что это пришло от WB, а не из исходного optional
+            if kind not in optional:
+                dynamic_optional.append(kind)
+            continue
+        dynamic_required.append(kind)
+
+    for kind in dynamic_required + [k for k in dynamic_optional if k not in dynamic_required]:
         mark = current_order_marking(markings, kind, include_rejected=True)
         if mark is not None:
             states.append(
@@ -347,8 +380,8 @@ def build_order_metadata(
         else compute_delivery_allowed(order, markings)
     )
     return {
-        "required": required,
-        "optional": optional,
+        "required": dynamic_required,
+        "optional": dynamic_optional,
         "states": states,
         "delivery_allowed": delivery_allowed,
         "last_checked_at": (

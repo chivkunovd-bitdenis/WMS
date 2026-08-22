@@ -38,3 +38,43 @@
 
 ### карта задевания
 20:51 вопросов после анализа: 45 — см. night/volna-9/VOPROSY.md
+21:00   02-verdikt-screen · ux-architect: готово
+21:03   02-verdikt-screen · product: готово
+21:03   02-verdikt-screen · tester: нет файла CASES.md (код 1, попытка 1)
+21:03   02-verdikt-screen · tester: нет файла CASES.md (код 1, попытка 2)
+21:03 02-verdikt-screen: отложено на шаге tester
+00:21   02-verdikt-screen · ux-architect: уже сделано, пропускаю
+00:21   02-verdikt-screen · product: уже сделано, пропускаю
+00:26   02-verdikt-screen · tester: готово
+00:33   02-verdikt-screen · breaker: готово
+00:41   02-verdikt-screen · screen-dev: готово
+00:48   02-verdikt-screen · reviewer: готово
+00:48   02-verdikt-screen · reviewer: находки, круг 1 — назад к разработке
+00:53   02-verdikt-screen · screen-dev: готово
+01:00   02-verdikt-screen · reviewer: готово
+01:00   02-verdikt-screen · reviewer: находки, круг 2 — назад к разработке
+01:07   02-verdikt-screen · screen-dev: готово
+01:16   02-verdikt-screen · reviewer: готово
+01:16 02-verdikt-screen: отложено — reviewer, круги кончились
+05:18   02-verdikt-screen · ux-architect: уже сделано, пропускаю
+05:18   02-verdikt-screen · product: уже сделано, пропускаю
+05:18   02-verdikt-screen · tester: уже сделано, пропускаю
+05:18   02-verdikt-screen · breaker: уже сделано, пропускаю
+05:18   02-verdikt-screen · screen-dev: уже сделано, пропускаю
+05:26   02-verdikt-screen · reviewer: готово
+05:26   02-verdikt-screen · reviewer: находки, круг 1 — назад к разработке
+05:46   02-verdikt-screen · screen-dev: нет файла DEV.md (код 124, попытка 1)
+06:06   02-verdikt-screen · screen-dev: нет файла DEV.md (код 124, попытка 2)
+06:06 02-verdikt-screen: отложено на шаге screen-dev
+10:16   02-verdikt-screen · ux-architect: уже сделано, пропускаю
+10:16   02-verdikt-screen · product: уже сделано, пропускаю
+10:16   02-verdikt-screen · tester: уже сделано, пропускаю
+10:16   02-verdikt-screen · breaker: уже сделано, пропускаю
+10:22   02-verdikt-screen · screen-dev: готово
+10:29   02-verdikt-screen · reviewer: готово
+10:29   02-verdikt-screen · reviewer: находки, круг 1 — назад к разработке
+10:49   02-verdikt-screen · screen-dev: нет файла DEV.md (код 124, попытка 1)
+11:03   02-verdikt-screen · screen-dev: готово
+11:03   02-verdikt-screen · reviewer: нет файла REVIEW.md (код 1, попытка 1)
+11:03   02-verdikt-screen · reviewer: нет файла REVIEW.md (код 1, попытка 2)
+11:03 02-verdikt-screen: отложено на шаге reviewer

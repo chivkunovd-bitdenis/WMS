@@ -501,7 +501,7 @@ def _build_delivery_checks(
             checks.append(
                 DeliveryCheck(
                     code="marking_not_allowed",
-                    message="Метаданные WB не допускают передачу.",
+                    message="Wildberries ещё не подтвердил код маркировки. Проверьте статус Честного знака.",
                     ok=False,
                     order_id=order.id,
                 )

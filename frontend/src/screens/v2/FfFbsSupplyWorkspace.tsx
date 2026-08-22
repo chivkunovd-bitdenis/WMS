@@ -39,6 +39,7 @@ import MoreVertOutlinedIcon from '@mui/icons-material/MoreVertOutlined'
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined'
 import QrCodeScannerOutlined from '@mui/icons-material/QrCodeScannerOutlined'
 import { apiUrl } from '../../api'
+import { StatusChip } from '../../ui-kit'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { DeadlinePill } from '../../components/fbs/FbsChips'
 import { type PackagingTask, type PackagingTaskLine } from '../ff/FfPackagingPage'
@@ -46,7 +47,7 @@ import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import type { ProductThermalLabelData } from '../../utils/printProductThermalLabel'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
-import { buildFbsPickingListPrintHtml, ordersWord } from './fbsUx'
+import { buildFbsPickingListPrintHtml, ordersWord, orderVerdictChips } from './fbsUx'
 import {
   confirmFbsPrintApplied,
   confirmFbsManualPick,
@@ -134,35 +135,28 @@ function visualStage(stage: FbsWorkspace['stage']): StageKey {
   return stage
 }
 
-const MARKING_ACCEPTED_STATUSES = ['accepted', 'assigned', 'pending', 'allowed_without_check', 'ok']
+// accepted/allowed_without_check без reason → готово к сдаче (R-24).
+const MARKING_ACCEPTED_STATUSES = ['accepted', 'allowed_without_check']
 const STICKER_PRINTED_STATUSES = ['print_opened', 'applied']
-
 function isOrderMarkingReady(order: FbsWorkspace['orders'][number]) {
   if (order.metadata.required.length === 0) return true
-  const accepted = order.metadata.states.filter((state) => MARKING_ACCEPTED_STATUSES.includes(state.status))
-  return accepted.length >= order.metadata.required.length
+  // R-24: считаем только required kinds; optional-states не должны сдвигать счётчик.
+  const req = new Set(order.metadata.required)
+  return order.metadata.states
+    .filter(s => req.has(s.kind) && MARKING_ACCEPTED_STATUSES.includes(s.status) && !s.reason)
+    .length >= order.metadata.required.length
 }
 
-// КИЗ, внесённый оператором со стикера, — в отличие от напечатанного нами из пула.
+// orderVerdictChips вынесена в fbsUx.ts (R-10: одна подпись в обоих экранах).
+
 /** Хвост внесённого Честного знака — пустой, значит заказ ещё не сканировали. */
 function kizTail(order: FbsWorkspace['orders'][number]): string | null {
-  const state = order.metadata.states.find(
-    (item) =>
-      item.kind === 'sgtin' &&
-      item.status !== 'missing' &&
-      item.status !== 'rejected',
-  )
+  const state = order.metadata.states.find(item => item.kind === 'sgtin' && item.status !== 'missing' && item.status !== 'rejected')
   return state?.value_tail ?? null
 }
 
 function hasOperatorKiz(order: FbsWorkspace['orders'][number]) {
-  return order.metadata.states.some(
-    (state) =>
-      state.kind === 'sgtin' &&
-      state.source === 'operator' &&
-      state.status !== 'missing' &&
-      state.status !== 'rejected',
-  )
+  return order.metadata.states.some(s => s.kind === 'sgtin' && s.source === 'operator' && s.status !== 'missing' && s.status !== 'rejected')
 }
 
 // KIZ-01: инлайновый скан «стикер заказа → Честный знак» прямо в списке упаковки,
@@ -1275,6 +1269,8 @@ export function FfFbsSupplyWorkspace({
   const boxMenuBox = workspace?.boxes.find((box) => box.id === boxMenu?.boxId) ?? null
   const boxMenuAssignedCount = boxMenuBox?.assigned_order_ids.length ?? 0
   const boxRouteLabel = workspace?.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ'
+  // Заказы с незакрытым вердиктом WB блокируют кнопку сдачи (R-20).
+  const notReadyOrdersCount = workspace?.orders.filter(o => o.metadata.required.length > 0 && !isOrderMarkingReady(o)).length ?? 0
   const hasNoDistributionBoxes = Boolean(workspace?.boxes.some((box) => box.without_distribution))
   const boxDistributedCount = assignedBoxOrderIds.size
   const boxTotalCount = workspace?.progress.total ?? 0
@@ -1921,6 +1917,7 @@ export function FfFbsSupplyWorkspace({
                       // красит строку зелёным, активную (только что отсканированный
                       // стикер) — голубым: оператор видит, куда сейчас ляжет код.
                       const tail = kizTail(order)
+                      const verdictChips = orderVerdictChips(order)
                       return (
                         <Stack
                           key={order.id}
@@ -1928,7 +1925,7 @@ export function FfFbsSupplyWorkspace({
                           direction="row"
                           spacing={1.5}
                           sx={{
-                            alignItems: 'center',
+                            alignItems: 'flex-start',
                             px: 2,
                             py: 1.25,
                             bgcolor: kizRowActive
@@ -1952,21 +1949,22 @@ export function FfFbsSupplyWorkspace({
                               {markingShortOrderIds.has(order.id) ? <Box component="span" sx={{ color: '#854f0b' }}> · ЧЗ не хватило</Box> : null}
                             </Typography>
                           </Box>
-                          <Box sx={{ width: 118, flexShrink: 0, textAlign: 'right' }}>
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1 }}>
-                              ЧЗ
-                            </Typography>
-                            {tail ? (
-                              <Typography
-                                sx={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 15, color: 'success.dark' }}
-                                data-testid="fbs-kiz-tail"
-                              >
-                                {tail}
-                              </Typography>
-                            ) : (
-                              <Typography sx={{ color: 'text.disabled', fontSize: 15 }}>—</Typography>
-                            )}
-                          </Box>
+                          <Stack spacing={0.75} sx={{ width: 'max-content', flexShrink: 0, textAlign: 'right' }}>
+                            {verdictChips.map((chip) => (
+                              <Box key={chip.kind}>
+                                <StatusChip label={chip.label} tone={chip.tone} hint={chip.hint} testId={`fbs-packing-order-${order.id}-verdict-${chip.kind}`} />
+                                {chip.reasonCaption ? <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.7rem' }}>{chip.reasonCaption}</Typography> : null}
+                              </Box>
+                            ))}
+                            <Box>
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1 }}>ЧЗ</Typography>
+                              {tail ? (
+                                <Typography sx={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 15, color: 'success.dark' }} data-testid="fbs-kiz-tail">{tail}</Typography>
+                              ) : (
+                                <Typography sx={{ color: 'text.disabled', fontSize: 15 }}>—</Typography>
+                              )}
+                            </Box>
+                          </Stack>
                           {printed ? <Typography sx={{ color: 'success.main', fontWeight: 700 }}>✓</Typography> : null}
                           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                             <Button size="small" variant="outlined" disabled={!line} onClick={() => line && setTzLine(line)}>
@@ -2153,15 +2151,13 @@ export function FfFbsSupplyWorkspace({
               </Paper>
               {!deliveryConfirmed ? (
                 <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
-                  <Button
-                    variant="contained"
-                    size="large"
-                    disabled={busy}
-                    onClick={() => setDeliverConfirmOpen(true)}
-                    data-testid="fbs-deliver-open"
-                  >
-                    Передать в WB
-                  </Button>
+                  {notReadyOrdersCount > 0 ? (
+                    <Tooltip title={`Wildberries ещё не подтвердил ${notReadyOrdersCount} заказ(ов). Проверьте столбец «Статус» — где красный или жёлтый чип, там ждём ответ WB`}>
+                      <span><Button variant="contained" size="large" disabled data-testid="fbs-deliver-open">Передать в WB</Button></span>
+                    </Tooltip>
+                  ) : (
+                    <Button variant="contained" size="large" disabled={busy} onClick={() => setDeliverConfirmOpen(true)} data-testid="fbs-deliver-open">Передать в WB</Button>
+                  )}
                 </Stack>
               ) : null}
               {deliveryConfirmed && needsSupplyQr && supplyQrAsset?.preview_url ? (

@@ -37,11 +37,12 @@ import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined'
 import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined'
 import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined'
 import { FbsStatusChip } from '../../components/fbs/FbsChips'
+import { StatusChip } from '../../ui-kit'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { FbsSupplyCreateDialog } from './FbsSupplyCreateDialog'
 import { FfFbsSectionNav } from './FfFbsSectionNav'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
-import { ordersWord } from './fbsUx'
+import { ordersWord, type VerdictChip, orderVerdictChips } from './fbsUx'
 import { plural } from '../../utils/plural'
 import {
   fetchFbsSellerWarehouses,
@@ -334,25 +335,8 @@ const NewOrderRow = memo(function NewOrderRow({
   )
 })
 
-// GLOBAL-02: единственное состояние строки, которое реально мешает оператору
-// отгрузить заказ, — незакрытая маркировка Честным знаком. «Не хватает: N» с прошлого
-// стейджа заказчик прочитал как нехватку товара на складе — на деле это нехватка кодов
-// маркировки (order.metadata), поэтому подпись теперь называет вещь напрямую и красный
-// цвет держится только за тем, что действительно блокирует работу.
-type MetadataProblem = { label: string; color: 'error' }
-
-function metadataProblem(order: FbsWorklistOrder): MetadataProblem | null {
-  if (order.metadata.required.length === 0) {
-    return null
-  }
-  const rejected = order.metadata.states.some((state) =>
-    ['rejected', 'replacement_required'].includes(state.status),
-  )
-  if (rejected) return { label: 'Отклонено WB', color: 'error' }
-  const missing = order.metadata.states.filter((state) => state.status === 'missing').length
-  if (missing > 0) return { label: `Не хватает честных знаков: ${missing}`, color: 'error' }
-  return null
-}
+// GLOBAL-02: вердикты WB по каждому required kind. Функция вынесена в fbsUx.ts
+// чтобы переиспользоваться в рабочем экране поставки (R-10: одна подпись на всех экранах).
 
 function warehouseOptionLabel(
   option: FbsWorklistWarehouseOption,
@@ -1249,7 +1233,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               }
 
               const localSupplyMissing = !order.supply_id
-              const metaFlag = metadataProblem(order)
+              const verdictChips = statusGroup !== 'cancelled' ? orderVerdictChips(order) : []
               const row = (
                 <TableRow
                   key={order.id}
@@ -1317,33 +1301,22 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        {/* GLOBAL-02: одно главное состояние на строку. На «Просрочены»
-                            статус всегда «Новый» (см. STATUS_GROUP_MAP на бэкенде) — сам
-                            факт просрочки уже виден по вкладке, повторять его чипом не
-                            нужно, поэтому базовый статус-чип там не рисуем вовсе. Если
-                            маркировка отклонена/не хватает — это и есть главное состояние,
-                            оно важнее декоративного статуса. Всё остальное — обычным
-                            текстом ниже, без цвета. */}
-                        {statusGroup === 'expired' && metaFlag ? (
-                          <Chip
-                            size="small"
-                            color={metaFlag.color}
-                            label={metaFlag.label}
-                            data-testid={`fbs-order-${order.id}-marking-issue`}
-                          />
-                        ) : statusGroup !== 'expired' ? (
-                          // «Отменённые»: заказ уже закрыт, состояние маркировки для решения
-                          // не нужно — главное здесь то, чем закончился заказ (Отменён/Дефект).
-                          <FbsStatusChip status={order.status} />
-                        ) : null}
+                        {/* Вердикты WB по required kinds, затем основной статус заказа.
+                            На «Отменённые» verdictChips = [], показывается только статус. */}
+                        <Stack spacing={0.5}>
+                          {verdictChips.map((chip) => (
+                            <Box key={chip.kind}>
+                              <StatusChip label={chip.label} tone={chip.tone} hint={chip.hint} testId={`fbs-order-${order.id}-verdict-${chip.kind}`} />
+                              {chip.reasonCaption ? <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }} data-testid={`fbs-order-${order.id}-reason-${chip.kind}`}>{chip.reasonCaption}</Typography> : null}
+                            </Box>
+                          ))}
+                          <Box sx={{ mt: verdictChips.length > 0 ? 0.5 : 0 }}>
+                            <FbsStatusChip status={order.status} />
+                          </Box>
+                        </Stack>
                         {localSupplyMissing ? (
                           <Tooltip title={EXTERNAL_WB_SUPPLY_HINT}>
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                              sx={{ display: 'block', mt: 0.75 }}
-                              data-testid={`fbs-order-${order.id}-external-supply`}
-                            >
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }} data-testid={`fbs-order-${order.id}-external-supply`}>
                               Поставка создана в WB, недоступна в WMS
                             </Typography>
                           </Tooltip>
