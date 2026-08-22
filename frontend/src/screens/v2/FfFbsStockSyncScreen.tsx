@@ -30,6 +30,7 @@ import {
 import type { ChipProps } from '@mui/material'
 import MoreVertIcon from '@mui/icons-material/MoreVert'
 import { apiUrl } from '../../api'
+import { useWarehouseContext } from '../../contexts/WarehouseContext'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { FbsStockAllocationDialog } from './FbsStockAllocationDialog'
 import { FfFbsSectionNav } from './FfFbsSectionNav'
@@ -240,8 +241,13 @@ function formatFbsStockTotal(value: number | null): string {
 }
 
 export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
+  const {
+    warehouses,
+    selectedWarehouseId: selectedOperationalWarehouseId,
+    setWarehouses: setContextWarehouses,
+    selectWarehouse,
+  } = useWarehouseContext('fulfillment')
   const [selectedSellerId, setSelectedSellerId] = useState('')
-  const [warehouses, setWarehouses] = useState<WmsWarehouseRow[]>([])
   const [sellerWarehouses, setSellerWarehouses] = useState<FbsSellerWarehouse[]>([])
   const [sellerOffices, setSellerOffices] = useState<FbsSellerOffice[]>([])
   const [bindings, setBindings] = useState<FbsWarehouseBinding[]>([])
@@ -252,9 +258,6 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
     Record<string, number>
   >({})
   const [savingWbId, setSavingWbId] = useState<number | null>(null)
-  const [selectedOperationalWarehouseId, setSelectedOperationalWarehouseId] = useState<string | null>(
-    () => sessionStorage.getItem('wms_operational_warehouse:fulfillment'),
-  )
 
   const [statusOpen, setStatusOpen] = useState(false)
   const [statusLoading, setStatusLoading] = useState(false)
@@ -291,16 +294,15 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
 
   useEffect(() => {
     if (physicalWarehouses.length === 0) {
-      setSelectedOperationalWarehouseId(null)
+      selectWarehouse(null)
       return
     }
     const current = physicalWarehouses.some((warehouse) => warehouse.id === selectedOperationalWarehouseId)
     if (!current) {
       const next = physicalWarehouses[0].id
-      setSelectedOperationalWarehouseId(next)
-      sessionStorage.setItem('wms_operational_warehouse:fulfillment', next)
+      selectWarehouse(next)
     }
-  }, [physicalWarehouses, selectedOperationalWarehouseId])
+  }, [physicalWarehouses, selectWarehouse, selectedOperationalWarehouseId])
 
   const officeCityById = useMemo(() => {
     const m = new Map<number, string>()
@@ -384,8 +386,8 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
   const loadWarehouses = useCallback(async () => {
     const res = await fetch(apiUrl('/warehouses'), { headers: { ...authHeaders(token) } })
     if (!res.ok) throw new Error(await readApiErrorMessage(res))
-    setWarehouses((await res.json()) as WmsWarehouseRow[])
-  }, [token, authHeaders])
+    setContextWarehouses((await res.json()) as WmsWarehouseRow[])
+  }, [authHeaders, setContextWarehouses, token])
 
   const loadSellerWarehouseData = useCallback(async () => {
     if (!selectedSellerId) {
@@ -732,10 +734,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
       <WarehouseContextSwitch
         options={operationalWarehouseOptions}
         value={selectedOperationalWarehouseId}
-        onChange={(warehouseId) => {
-          setSelectedOperationalWarehouseId(warehouseId)
-          sessionStorage.setItem('wms_operational_warehouse:fulfillment', warehouseId)
-        }}
+        onChange={selectWarehouse}
         loading={busy && physicalWarehouses.length === 0}
         testId="fbs-stock-warehouse-context"
       />
