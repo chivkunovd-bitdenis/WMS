@@ -74,3 +74,8 @@
 19:50   07-reporting · dev: фича 10/11 сохранена c3d063e9d3e5
 19:53   07-reporting · screen-dev: готово
 19:53   07-reporting · dev: фича 11/11 сохранена fc00b0433fe3
+20:03   07-reporting · reviewer: готово
+20:03 07-reporting: отложено — reviewer, круги кончились
+22:12   07-reporting · resume: поатомный rework Terra по сохранённым находкам
+23:02   07-reporting · resume: поатомный rework Terra по сохранённым находкам
+23:04   07-reporting · backend-dev: готово

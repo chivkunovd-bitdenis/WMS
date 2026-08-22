@@ -14,7 +14,7 @@ def test_inventory_movement_has_immutable_reporting_dimensions() -> None:
     assert columns.reporting_dimensions_legacy.server_default is not None
 
 
-def test_reporting_dimensions_migration_backfills_and_indexes() -> None:
+def test_reporting_dimensions_migration_backfills_as_legacy_and_creates_indexes() -> None:
     migration = (
         Path(__file__).parents[1]
         / "alembic/versions/20260822_0094_inventory_movement_reporting_dimensions.py"
@@ -25,8 +25,9 @@ def test_reporting_dimensions_migration_backfills_and_indexes() -> None:
     assert "location.warehouse_id" in source
     assert "SELECT product.seller_id" in source
     assert "SELECT location.warehouse_id" in source
-    assert "reporting_dimensions_legacy = (" in source
-    assert "NOT EXISTS" in source
+    assert "reporting_dimensions_legacy = TRUE" in source
+    assert "every reconstructed row as legacy" in source
+    assert "NOT EXISTS" not in source
     assert "FROM products AS product\n            JOIN storage_locations" not in source
     assert "unresolved historical warehouse" in source
     assert "ix_inventory_movements_tenant_created_at" in source

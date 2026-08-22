@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "20260822_0094"
@@ -48,8 +49,13 @@ def upgrade() -> None:
         ondelete="RESTRICT",
     )
 
-    # Resolve dimensions through correlated subqueries. Referencing the target
-    # UPDATE alias from a JOIN in FROM is rejected by PostgreSQL.
+    # Historical rows have no immutable seller/warehouse snapshot.  We retain
+    # the currently resolvable values to make the record queryable, but mark
+    # every reconstructed row as legacy: a later product or location rebinding
+    # must never be silently presented as a proven historical fact.
+    #
+    # Referencing the target UPDATE alias from a JOIN in FROM is rejected by
+    # PostgreSQL, hence the correlated subqueries.
     op.execute(
         sa.text(
             """
@@ -64,20 +70,7 @@ def upgrade() -> None:
                     FROM storage_locations AS location
                     WHERE location.id = movement.storage_location_id
                 ),
-                reporting_dimensions_legacy = (
-                    NOT EXISTS (
-                        SELECT 1
-                        FROM products AS product
-                        WHERE product.id = movement.product_id
-                          AND product.seller_id IS NOT NULL
-                    )
-                    OR NOT EXISTS (
-                        SELECT 1
-                        FROM storage_locations AS location
-                        WHERE location.id = movement.storage_location_id
-                          AND location.warehouse_id IS NOT NULL
-                    )
-                )
+                reporting_dimensions_legacy = TRUE
             """
         )
     )
@@ -92,8 +85,7 @@ def upgrade() -> None:
                     FROM inventory_movements
                     WHERE warehouse_id IS NULL
                 ) THEN
-                    RAISE EXCEPTION
-                        'Cannot make inventory_movements.warehouse_id mandatory: unresolved historical warehouse';
+                    RAISE EXCEPTION 'unresolved historical warehouse';
                 END IF;
             END $$;
             """
@@ -123,11 +115,25 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_inventory_movements_tenant_warehouse_created_at", table_name="inventory_movements")
-    op.drop_index("ix_inventory_movements_tenant_seller_created_at", table_name="inventory_movements")
+    op.drop_index(
+        "ix_inventory_movements_tenant_warehouse_created_at",
+        table_name="inventory_movements",
+    )
+    op.drop_index(
+        "ix_inventory_movements_tenant_seller_created_at",
+        table_name="inventory_movements",
+    )
     op.drop_index("ix_inventory_movements_tenant_created_at", table_name="inventory_movements")
-    op.drop_constraint("fk_inventory_movements_warehouse_id", "inventory_movements", type_="foreignkey")
-    op.drop_constraint("fk_inventory_movements_seller_id", "inventory_movements", type_="foreignkey")
+    op.drop_constraint(
+        "fk_inventory_movements_warehouse_id",
+        "inventory_movements",
+        type_="foreignkey",
+    )
+    op.drop_constraint(
+        "fk_inventory_movements_seller_id",
+        "inventory_movements",
+        type_="foreignkey",
+    )
     op.drop_column("inventory_movements", "reporting_dimensions_legacy")
     op.drop_column("inventory_movements", "warehouse_id")
     op.drop_column("inventory_movements", "seller_id")
