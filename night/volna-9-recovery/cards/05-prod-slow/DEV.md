@@ -1,32 +1,29 @@
-# Backend-dev отчёт · 05-prod-slow
+# DEV · 05-prod-slow · атом 2
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_wb_marketplace_orders_service.py` — усилен тест ошибки страницы: незавершённая `reconcile` делает rollback и не запускает связывание поставок.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/night/volna-9-recovery/cards/05-prod-slow/DEV.md` — отчёт этой роли.
+В рамках повторной проверки атома изменений в исходном коде не потребовалось: реализация уже содержит независимые задания `wms.wb_orders_new` и `wms.wb_orders_reconcile`, Beat-периоды 180 и 3600 секунд, а также single-flight по `(seller_id, sync_kind)` без `wb_seller_lock` на HTTP-чтении.
 
-Сервисный код `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/wb_marketplace_orders_service.py` проверен: `new` использует только `fetch_marketplace_orders_new`, а `reconcile` проходит курсор до пустой финальной страницы и вызывает связывание поставок только после успешного завершения.
-
-## Миграции
-
-Нет.
-
-## Тесты
-
-- `test_new_sync_does_not_fetch_paginated_orders` — `new` не вызывает полный постраничный список и выполняет idempotent upsert.
-- `test_reconcile_walks_cursor_and_fails_incomplete_pass` — ошибка страницы вызывает rollback, не считается успешной сверкой и не запускает связывание поставок.
-- `test_reconcile_walks_past_ten_pages_and_links_supplies` — `reconcile` проходит курсор после десятой страницы и связывает поставки после полного прохода.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/fbs_autopoll_service.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/tasks/background_jobs.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/celery_app.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_wb_marketplace_orders_service.py`
 
 ## Гейты
 
-- `ruff check backend/app/services/wb_marketplace_orders_service.py backend/tests/test_wb_marketplace_orders_service.py` — PASS.
-- `mypy .` из `backend/` — FAIL на 21 существующей ошибке в шести несвязанных файлах; изменённые файлы в выводе отсутствуют.
-- `pytest -q backend/tests/test_wb_marketplace_orders_service.py` — PASS, 12 тестов.
-- `python3 scripts/ci/back_guard.py` — NOT RUN: файл отсутствует в рабочей копии.
-- `python3 scripts/ci/check_migrations.py` — NOT RUN: файл отсутствует в рабочей копии; миграций нет.
-- `git diff --check` — PASS.
+- ruff: адресные файлы атома — PASS; полный `ruff check .` — FAIL на 80 pre-existing ошибках в несвязанных файлах.
+- mypy: FAIL на 4 pre-existing ошибках в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py` и `fbs_warehouse_binding_service.py`; в файлах атома ошибок нет.
+- pytest: адресный `tests/test_wb_marketplace_orders_service.py` — 12 passed; полный прогон остановлен вручную после 46% (до остановки были failures в pre-existing тестах `test_fbs_*`).
+- back_guard.py: не запущен — файл отсутствует в данной рабочей копии (`scripts/ci/back_guard.py` не найден).
+- check_migrations.py: не запущен — файл отсутствует в данной рабочей копии (`scripts/ci/check_migrations.py` не найден).
 
 ## Не реализовано
 
-- Находки ревью про print worker, `background_job`-уникальность, frontend и E2E относятся к другим слоям/атомам и не изменялись.
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных, боевой прод и живой кабинет Wildberries не читались и не затрагивались.
+- Находки ревью №1 и №2–11 относятся к Docker, print-job, UI, модели фоновых job и экранным тестам; они не входят в файлы и backend-слой атома 2 и здесь не менялись.
+- Backend-находок, требующих исправления в пределах атома 2, нет.
+
+## Блокеры
+
+Нет блокеров по реализации атома. Полные ruff/mypy имеют чужие pre-existing ошибки; обязательные CI-скрипты отсутствуют в рабочей копии.
+
+Сохранение commit невозможно из-за ограничения прав на общий git worktree: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-05-prod-slow/index.lock`.
