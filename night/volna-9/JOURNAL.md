@@ -38,3 +38,32 @@
 
 ### карта задевания
 20:51 вопросов после анализа: 45 — см. night/volna-9/VOPROSY.md
+21:03   07-reporting · solution-architect: нет файла ARCH.md (код 1, попытка 1)
+21:03   07-reporting · solution-architect: нет файла ARCH.md (код 1, попытка 2)
+21:03 07-reporting: отложено на шаге solution-architect
+01:10   07-reporting · solution-architect: готово
+01:17   07-reporting · ux-architect: готово
+01:20   07-reporting · product: готово
+01:20   07-reporting · tester: нет файла CASES.md (код 1, попытка 1)
+01:20   07-reporting · tester: нет файла CASES.md (код 1, попытка 2)
+01:20 07-reporting: отложено на шаге tester
+05:43   07-reporting · solution-architect: уже сделано, пропускаю
+05:43   07-reporting · ux-architect: уже сделано, пропускаю
+05:43   07-reporting · product: уже сделано, пропускаю
+05:49   07-reporting · tester: готово
+05:56   07-reporting · breaker: готово
+06:04   07-reporting · backend-dev: готово
+06:10   07-reporting · reviewer: готово
+06:10   07-reporting · reviewer: находки, круг 1 — назад к разработке
+06:14   07-reporting · backend-dev: нет файла DEV.md (код 1, попытка 1)
+06:14   07-reporting · backend-dev: нет файла DEV.md (код 1, попытка 2)
+06:14 07-reporting: отложено на шаге backend-dev
+10:56   07-reporting · solution-architect: уже сделано, пропускаю
+10:56   07-reporting · ux-architect: уже сделано, пропускаю
+10:56   07-reporting · product: уже сделано, пропускаю
+10:56   07-reporting · tester: уже сделано, пропускаю
+10:56   07-reporting · breaker: уже сделано, пропускаю
+11:00   07-reporting · backend-dev: готово
+11:04   07-reporting · reviewer: нет файла REVIEW.md (код 1, попытка 1)
+11:04   07-reporting · reviewer: нет файла REVIEW.md (код 1, попытка 2)
+11:04 07-reporting: отложено на шаге reviewer
