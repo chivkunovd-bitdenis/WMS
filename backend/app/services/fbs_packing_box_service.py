@@ -59,7 +59,8 @@ async def get_delivery_box_readiness(
             )
         ).all()
     )
-    without_distribution = _boxes_without_distribution(boxes)
+    supply = await _get_supply(session, tenant_id, supply_id)
+    without_distribution = supply.boxes_without_distribution_at is not None
     packed_order_ids = {order.id for order in orders if order.pack_status == PACK_STATUS_PACKED}
     if not packed_order_ids or without_distribution:
         return DeliveryBoxReadiness(bool(boxes), without_distribution, frozenset())
@@ -98,6 +99,9 @@ async def create_boxes(
         raise FbsPackingBoxError("missing_idempotency_key")
     supply = await _get_supply(session, tenant_id, supply_id)
     _assert_supply_mutable(supply)
+    if without_distribution and supply.boxes_without_distribution_at is None:
+        supply.boxes_without_distribution_at = datetime.now(UTC)
+        supply.boxes_without_distribution_by_user_id = actor_user_id
     stored_key = _stored_creation_key(idempotency_key, without_distribution=without_distribution)
     boxes = await _boxes_by_creation_key(session, tenant_id, supply_id, stored_key)
     if boxes:
@@ -155,7 +159,7 @@ async def set_boxes_without_distribution(
     actor_user_id: uuid.UUID | None,
 ) -> bool:
     """Change the supply mode while no order is assigned to its boxes."""
-    supply = await _get_supply(session, tenant_id, supply_id)
+    supply = await _get_supply(session, tenant_id, supply_id, for_update=True)
     _assert_supply_mutable(supply)
 
     assigned_count = await session.scalar(
@@ -169,10 +173,10 @@ async def set_boxes_without_distribution(
     if assigned_count:
         raise FbsPackingBoxError("boxes_already_distributed")
 
-    if enabled:
+    if enabled and supply.boxes_without_distribution_at is None:
         supply.boxes_without_distribution_at = datetime.now(UTC)
         supply.boxes_without_distribution_by_user_id = actor_user_id
-    else:
+    elif not enabled:
         supply.boxes_without_distribution_at = None
         supply.boxes_without_distribution_by_user_id = None
     await session.flush()
@@ -188,8 +192,9 @@ async def assign_orders(
     *,
     actor_user_id: uuid.UUID | None,
 ) -> None:
+    supply = await _get_supply(session, tenant_id, supply_id, for_update=True)
     box = await _get_box(session, tenant_id, supply_id, box_id)
-    if _box_without_distribution(box):
+    if supply.boxes_without_distribution_at is not None:
         raise FbsPackingBoxError("box_without_distribution")
     if not order_ids:
         raise FbsPackingBoxError("empty_order_set")
@@ -431,11 +436,18 @@ async def _link_existing_trbxes(
 
 
 async def _get_supply(
-    session: AsyncSession, tenant_id: uuid.UUID, supply_id: uuid.UUID
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    *,
+    for_update: bool = False,
 ) -> FbsSupply:
-    result = await session.execute(
-        select(FbsSupply).where(FbsSupply.id == supply_id, FbsSupply.tenant_id == tenant_id)
+    statement = select(FbsSupply).where(
+        FbsSupply.id == supply_id, FbsSupply.tenant_id == tenant_id
     )
+    if for_update:
+        statement = statement.with_for_update()
+    result = await session.execute(statement)
     supply = result.scalar_one_or_none()
     if supply is None:
         raise FbsPackingBoxError("supply_not_found")

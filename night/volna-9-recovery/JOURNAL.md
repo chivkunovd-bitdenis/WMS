@@ -29,3 +29,12 @@
 13:53   03-no-distribution-mode · dev: фича 3/4 сохранена 6e26ac1741bd
 13:56   03-no-distribution-mode · screen-dev: готово
 13:56   03-no-distribution-mode · dev: фича 4/4 сохранена fc3d800bdf26
+14:04   03-no-distribution-mode · reviewer: готово
+14:04 03-no-distribution-mode: отложено — reviewer, круги кончились
+14:42   03-no-distribution-mode · product: уже сделано, пропускаю
+14:42   03-no-distribution-mode · tester: уже сделано, пропускаю
+14:42   03-no-distribution-mode · splitter: уже сделано, пропускаю
+14:42   03-no-distribution-mode · dev: уже сделано по 4 атомарным фичам
+14:52   03-no-distribution-mode · reviewer: готово
+14:52   03-no-distribution-mode · reviewer: находки, круг 1 — назад к разработке
+14:55   03-no-distribution-mode · backend-dev: готово

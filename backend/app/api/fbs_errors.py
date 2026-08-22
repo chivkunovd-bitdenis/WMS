@@ -1,4 +1,3 @@
-# ruff: noqa: RUF001
 """Stable FBS HTTP error envelope for operator-facing contract endpoints.
 
 Wire shape (BACKEND_CONTRACT.md §1):
@@ -30,6 +29,7 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     "order_warehouse_unmapped": "Склад WB заказа не привязан к WMS.",
     "order_warehouse_mismatch": "Склад заказа не совпадает с поставкой.",
     "supply_not_editable": "Поставку нельзя изменить.",
+    "boxes_already_distributed": "Нельзя изменить режим: в короба уже назначены заказы.",
     "supply_not_found": "Поставка не найдена.",
     "order_incompatible": "Заказ нельзя добавить в выбранную поставку.",
     "idempotency_key_reused": "Ключ идемпотентности уже использован с другими параметрами.",
