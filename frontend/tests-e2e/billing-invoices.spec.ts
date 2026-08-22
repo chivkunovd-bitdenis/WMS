@@ -2,6 +2,23 @@ import { test, expect } from '@playwright/test'
 
 const invoice = { id: 'invoice-1', number: 'СЧ-2026-00041', period: '2026-07', seller_name: 'Луна', issued_at: '2026-08-01T00:00:00Z', total_amount: 48392, status: 'issued', lines: [{ id: 'line-1', service_code: 'inbound', unit: 'item', quantity: 1245, rate: 12, amount: 14940, documents: [{ date: '2026-07-20', number: 'ПР-000141', quantity: 84, amount: 1008 }] }] }
 
+// S-31-TC-013 — Given invoice formation is blocked, When the invoices endpoint returns its run issue, Then the admin sees the cause and its corrective action.
+test('billing invoices show server-side formation issues separate from invoices', async ({ page }) => {
+  await page.route('**/api/billing/invoices?**', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      invoices: [],
+      issues: [{ id: 'issue-1', seller_id: 'seller-1', seller_name: 'Луна', period: '2026-07', reason: 'missing_profile', message: 'Заполните реквизиты' }],
+    }),
+  }))
+  await page.goto('/app/ff/billing')
+  await page.getByTestId('billing-tab-invoices').click()
+  await expect(page.getByTestId('billing-invoice-issues')).toContainText('Луна')
+  await expect(page.getByTestId('billing-invoice-issues')).toContainText('Нет реквизитов')
+  await expect(page.getByRole('button', { name: 'Открыть селлера' })).toBeVisible()
+})
+
 // S-31-TC-007 — Given an issued invoice, When the admin opens it, expands documents and prints, Then details are visible and print is started.
 test('billing invoice opens, reveals documents and starts print', async ({ page }) => {
   await page.route('**/api/billing/invoices?**', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ invoices: [invoice] }) }))

@@ -38,7 +38,8 @@ type LedgerEntry = {
 type PerformerRow = { performer_name: string; service_code: string; unit: string; quantity: number; documents: number }
 type Invoice = { id: string; number: string; period: string; seller_name: string; issued_at: string; total_amount: number; status: 'issued' | 'cancelled'; issues?: { seller_name: string; period: string; reason: string }[]; lines?: InvoiceLine[]; ff_profile?: Record<string, string>; seller_profile?: Record<string, string> }
 type InvoiceLine = { id: string; service_code: string; unit: string; quantity: number; rate: number; amount: number; documents?: { date: string; number: string; quantity: number; amount: number }[] }
-type InvoiceIssue = { seller_name: string; period: string; reason: string }
+type InvoiceIssue = { id?: string; seller_id?: string; seller_name: string; period: string; reason: string; message?: string }
+type BillingListResponse<T> = { entries?: T[]; invoices?: T[]; rows?: T[]; issues?: InvoiceIssue[] }
 
 function currentMonth(): string {
   const now = new Date()
@@ -58,6 +59,11 @@ const serviceLabels: Record<string, string> = {
 const unitLabels: Record<string, string> = { document: 'За документ', item: 'За штуку', liter_day: 'За литр-день' }
 const problemLabels: Record<string, string> = { unpriced: 'Нет тарифа', storage_period_not_closed: 'Хранение не закрыто' }
 
+function responseRows<T>(payload: BillingListResponse<T> | T[], key: 'entries' | 'invoices'): T[] {
+  if (Array.isArray(payload)) return payload
+  return payload[key] ?? payload.rows ?? []
+}
+
 export function FfBillingScreen({ sellers = [], token }: Props) {
   const navigate = useNavigate()
   const [tab, setTab] = useState(0)
@@ -74,6 +80,8 @@ export function FfBillingScreen({ sellers = [], token }: Props) {
   const [invoiceError, setInvoiceError] = useState(false)
   const [invoiceSearch, setInvoiceSearch] = useState('')
   const [invoiceStatus, setInvoiceStatus] = useState('all')
+  const [invoiceIssues, setInvoiceIssues] = useState<InvoiceIssue[]>([])
+  const [invoiceRefresh, setInvoiceRefresh] = useState(0)
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
   const [expandedLine, setExpandedLine] = useState<string | null>(null)
   const [cancelConfirm, setCancelConfirm] = useState(false)
@@ -90,9 +98,9 @@ export function FfBillingScreen({ sellers = [], token }: Props) {
     fetch(`/api/billing/ledger?${params}`, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error('billing-ledger')
-        return response.json() as Promise<{ entries?: LedgerEntry[]; rows?: LedgerEntry[] }>
+        return response.json() as Promise<BillingListResponse<LedgerEntry> | LedgerEntry[]>
       })
-      .then((data) => setRows(data.entries ?? data.rows ?? []))
+      .then((data) => setRows(responseRows(data, 'entries')))
       .catch((reason: unknown) => { if ((reason as Error).name !== 'AbortError') setError(true) })
       .finally(() => setLoading(false))
     return () => controller.abort()
@@ -103,15 +111,19 @@ export function FfBillingScreen({ sellers = [], token }: Props) {
     const controller = new AbortController()
     setInvoiceLoading(true); setInvoiceError(false)
     setInvoices([])
+    setInvoiceIssues([])
     const params = new URLSearchParams({ period: month, seller_id: sellerId, status: invoiceStatus })
     if (invoiceSearch) params.set('number', invoiceSearch)
     fetch(`/api/billing/invoices?${params}`, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
-      .then((response) => { if (!response.ok) throw new Error('billing-invoices'); return response.json() as Promise<{ invoices?: Invoice[]; rows?: Invoice[] }> })
-      .then((data) => setInvoices(data.invoices ?? data.rows ?? []))
+      .then((response) => { if (!response.ok) throw new Error('billing-invoices'); return response.json() as Promise<BillingListResponse<Invoice> | Invoice[]> })
+      .then((data) => {
+        setInvoices(responseRows(data, 'invoices'))
+        setInvoiceIssues(Array.isArray(data) ? [] : data.issues ?? [])
+      })
       .catch((reason: unknown) => { if ((reason as Error).name !== 'AbortError') setInvoiceError(true) })
       .finally(() => setInvoiceLoading(false))
     return () => controller.abort()
-  }, [invoiceSearch, invoiceStatus, month, sellerId, tab, token])
+  }, [invoiceRefresh, invoiceSearch, invoiceStatus, month, sellerId, tab, token])
 
   const performerRows = useMemo<PerformerRow[]>(() => {
     const grouped = new Map<string, PerformerRow>()
@@ -156,7 +168,6 @@ export function FfBillingScreen({ sellers = [], token }: Props) {
     { key: 'status', header: 'Статус', width: 140, render: (row: Invoice) => <StatusChip label={row.status === 'issued' ? 'Выставлен' : 'Отменён'} tone={row.status === 'issued' ? 'ok' : 'neutral'} /> },
     { key: 'action', header: 'Действие', width: 70, render: (row: Invoice) => <IconAction title="Открыть счёт" testId={`billing-invoice-open-${row.id}`} onClick={() => { setSelectedInvoice(row); setExpandedLine(null) }}><ExpandMore fontSize="small" /></IconAction> },
   ]
-  const invoiceIssues = useMemo<InvoiceIssue[]>(() => invoices.flatMap((invoice) => invoice.issues ?? []), [invoices])
   const issueLabels: Record<string, string> = { unpriced: 'Нет тарифа', missing_profile: 'Нет реквизитов', storage_period_not_closed: 'Хранение не закрыто' }
   const issueActions: Record<string, string> = { unpriced: 'Открыть тарифы', missing_profile: 'Открыть селлера', storage_period_not_closed: 'Открыть хранение' }
   const openIssue = (reason: string) => {
@@ -170,8 +181,19 @@ export function FfBillingScreen({ sellers = [], token }: Props) {
     try {
       const response = await fetch(`/api/billing/invoices/${sellerId}/${month}/form`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
       if (!response.ok) throw new Error('billing-form')
+      const result = await response.json() as { status: string; reason?: string; message?: string }
       setInvoiceError(false)
-      setInvoices([])
+      if (result.status === 'blocked' && result.reason) {
+        setInvoiceIssues([{
+          seller_id: sellerId,
+          seller_name: sellers.find((seller) => seller.id === sellerId)?.name ?? 'Селлер',
+          period: month,
+          reason: result.reason,
+          message: result.message,
+        }])
+      } else {
+        setInvoiceRefresh((value) => value + 1)
+      }
       setTab(1)
     } catch {
       setInvoiceError(true)

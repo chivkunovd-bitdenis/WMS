@@ -1,23 +1,26 @@
+# 09-billing · screen-dev rework
+
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/api/billing.py` — GET начислений и счетов принимают период `YYYY-MM`, значение `seller_id=all`, фильтры, возвращают оболочки экрана и отдельные блокирующие причины; формирование проверяет tenant через сервис.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/services/billing_invoice_service.py` — проверена принадлежность селлера tenant, storage-barrier опирается на опубликованные `storage_measurement`, а строки счёта содержат неизменяемые дату и номер исходного факта.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/services/billing_configuration_service.py` — добавление покрывающей ставки ретарифицирует только ранее неоценённые подходящие записи ledger.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/tests/test_billing_invoice_service.py` — обновлены сценарии формирования с проверкой tenant-принадлежности до поиска счёта.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/tests/test_billing_configuration_service.py` — обновлены моки потока ретарификации.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/docs/blockers/S-31.md` — зафиксированы объяснения `unpriced`, `missing_profile` и `storage_period_not_closed`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfBillingScreen.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/tests-e2e/billing-invoices.spec.ts`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/night/volna-9-recovery/cards/09-billing/DEV.md`
+
+Экран берёт блокирующие причины из отдельного поля `issues` ответа списка счетов, а не из несуществующего поля счёта. После успешного повторного формирования он повторно запрашивает список. Добавлен e2e-сценарий `S-31-TC-013` для видимой причины и исправляющего действия.
 
 ## Гейты
 
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && ruff check app/services/billing_invoice_service.py app/services/billing_configuration_service.py app/api/billing.py tests/test_billing_invoice_service.py tests/test_billing_configuration_service.py` — зелёный, `All checks passed!`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && mypy app/services/billing_invoice_service.py app/services/billing_configuration_service.py app/api/billing.py` — зелёный, `Success: no issues found in 3 source files`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && pytest -q tests/test_billing_invoice_service.py tests/test_billing_configuration_service.py tests/test_billing_configuration_api.py tests/test_billing_ledger_service.py` — зелёный, `13 passed`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing && python3 scripts/ci/back_guard.py` — не выполнен: файла `scripts/ci/back_guard.py` в рабочей копии нет.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing && python3 scripts/ci/check_migrations.py` — не выполнен: файла `scripts/ci/check_migrations.py` в рабочей копии нет; миграции в этом rework не менялись.
-- `git diff --check` — зелёный.
+- Зелёный: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npx tsc --noEmit -p tsconfig.app.json`.
+- Красный, новых нарушений экран не добавил: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing && python3 scripts/ui/ui_guard.py`. Зафиксированы уже существующие нарушения в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/App.tsx`, `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/components/WbProductPickerDialog.tsx`, `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfSettingsScreen.tsx`, `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx` и `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/v2/SellerInboundDraftScreen.tsx`; `--update` не применялся.
+- Красный из-за неполных локальных зависимостей: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npm run test:unit -- --passWithNoTests FfBillingScreen` → `vitest: command not found`.
+- Красный из-за тех же неполных зависимостей: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npm run test:e2e -- billing-ledger.spec.ts billing-invoices.spec.ts` → `error: unknown command 'test'`; локального `node_modules/.bin/playwright` нет.
+- Зелёный: `git diff --check`.
 
 ## Не реализовано
 
-- Привязка `record_reversal` к конкретному пути отмены складского документа не внесена: в атоме не назван допустимый production-путь отмены, а новый маршрут создал бы неописанный контрактом способ менять финансовую историю.
-- API возвращает блокирующие причины отдельным массивом `issues`; текущий экран должен потребить этот массив. Его изменение вне роли `backend-dev`.
-- Миграция финансового ядра не менялась: обязательный предшественник 07-A отсутствует в этой рабочей копии, а изменение `down_revision` без него создало бы невалидную цепочку.
+- Backend-находки из `REVIEW.md` не изменялись: роль `screen-dev` ограничена экранным слоем.
+- Целевые unit/e2e не запущены до завершения из-за отсутствующих локальных зависимостей. В тестовом файле добавлен сценарий, но его выполнение требует восстановить зависимости этой рабочей копии.
+
+## Находки
+
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не открывались и не затрагивались.
