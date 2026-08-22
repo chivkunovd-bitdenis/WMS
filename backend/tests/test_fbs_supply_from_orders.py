@@ -18,6 +18,7 @@ from app.db.session import SessionLocal
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_IN_SUPPLY,
     FBS_ORDER_STATUS_NEW,
+    PICK_STATUS_PICKED,
     FbsOrder,
 )
 from app.models.fbs_supply import FbsSupply
@@ -251,6 +252,80 @@ async def test_tc01_from_orders_per_seller(
     assert create_b.status_code == 201, create_b.text
     assert create_b.json()["supply"]["seller"]["id"] == seller_b
     assert create_b.json()["supply"]["id"] != body_a["supply"]["id"]
+
+
+# TC-NEW-04-WH — an untouched supply can change consolidation warehouse, a picked one cannot
+@pytest.mark.asyncio
+async def test_fbs_supply_warehouse_switch_is_locked_after_pick(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    me = await async_client.get("/auth/me", headers=headers)
+    tenant_id = uuid.UUID(me.json()["tenant_id"])
+    seller_id, source_warehouse_id, location_id = await _setup_seller_with_token(
+        async_client, headers, f"warehouse-switch-{suffix}"
+    )
+    second_warehouse = await async_client.post(
+        "/warehouses",
+        headers=headers,
+        json={"name": "WH 2", "code": f"wh2-{uuid.uuid4().hex[:10]}"},
+    )
+    assert second_warehouse.status_code in (200, 201), second_warehouse.text
+    target_warehouse_id = second_warehouse.json()["id"]
+    product = await _create_product(
+        async_client, headers, seller_id, sku=f"switch-{suffix[-6:]}"
+    )
+    order_id = await _create_ready_order(
+        tenant_id,
+        uuid.UUID(seller_id),
+        uuid.UUID(source_warehouse_id),
+        uuid.UUID(location_id),
+        product,
+        order_id=851001,
+    )
+
+    created = await async_client.post(
+        "/operations/fbs-supplies/from-orders",
+        headers=headers,
+        json={
+            "name": "Switchable supply",
+            "order_ids": [str(order_id)],
+            "planned_delivery_type": "warehouse_sc",
+            "idempotency_key": str(uuid.uuid4()),
+        },
+    )
+    assert created.status_code == 201, created.text
+    supply_id = created.json()["supply"]["id"]
+    assert created.json()["supply"]["wms_warehouse"]["id"] == source_warehouse_id
+
+    switched = await async_client.patch(
+        f"/operations/fbs-supplies/{supply_id}/warehouse",
+        headers=headers,
+        json={"warehouse_id": target_warehouse_id},
+    )
+    assert switched.status_code == 200, switched.text
+    assert switched.json()["supply"]["wms_warehouse"]["id"] == target_warehouse_id
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        order.pick_status = PICK_STATUS_PICKED
+        await session.commit()
+
+    rejected = await async_client.patch(
+        f"/operations/fbs-supplies/{supply_id}/warehouse",
+        headers=headers,
+        json={"warehouse_id": source_warehouse_id},
+    )
+    assert rejected.status_code == 409, rejected.text
+    assert rejected.json()["detail"]["message"] == "Склад закреплён: подбор уже начат"
+
+    workspace = await async_client.get(
+        f"/operations/fbs-supplies/{supply_id}/workspace", headers=headers
+    )
+    assert workspace.status_code == 200, workspace.text
+    assert workspace.json()["supply"]["wms_warehouse"]["id"] == target_warehouse_id
 
 
 # TC-02 — different WB warehouses → preflight incompatible

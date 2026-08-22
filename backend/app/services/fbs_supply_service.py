@@ -49,6 +49,7 @@ from app.models.fbs_wb_operation import (
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.tenant import Tenant
 from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
+from app.models.warehouse import Warehouse
 from app.services import sorting_location_service as sorting_loc_svc
 from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.catalog_service import get_warehouse
