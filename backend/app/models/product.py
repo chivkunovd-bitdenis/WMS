@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from app.models.inventory_balance import InventoryBalance
     from app.models.inventory_movement import InventoryMovement
     from app.models.outbound_shipment import OutboundShipmentLine
+    from app.models.product_dimension_event import ProductDimensionEvent
     from app.models.seller import Seller
     from app.models.stock_direction import StockDirection
     from app.models.tenant import Tenant
@@ -62,6 +63,13 @@ class Product(Base):
     height_mm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     weight_g: Mapped[int | None] = mapped_column(Integer, nullable=True)
     volume_liters: Mapped[float | None] = mapped_column(Float, nullable=True)
+    dimensions_source: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    dimensions_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    dimensions_updated_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     packaging_instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
     requires_honest_sign: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
@@ -96,4 +104,10 @@ class Product(Base):
         "StockDirection",
         back_populates="product",
         cascade="all, delete-orphan",
+    )
+    dimension_events: Mapped[list[ProductDimensionEvent]] = relationship(
+        "ProductDimensionEvent",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        order_by="ProductDimensionEvent.observed_at",
     )

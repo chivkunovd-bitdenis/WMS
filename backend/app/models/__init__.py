@@ -49,6 +49,7 @@ from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentR
 from app.models.packaging_task import PackagingTask, PackagingTaskEvent, PackagingTaskLine
 from app.models.print_template import PrintTemplate
 from app.models.product import Product
+from app.models.product_dimension_event import ProductDimensionEvent
 from app.models.product_tz_import import ProductTzImport
 from app.models.seller import Seller
 from app.models.seller_marking_credentials import SellerMarkingCredentials
@@ -118,6 +119,7 @@ __all__ = [
     "PackagingTaskLine",
     "PrintTemplate",
     "Product",
+    "ProductDimensionEvent",
     "ProductTzImport",
     "Seller",
     "SellerMarkingCredentials",
