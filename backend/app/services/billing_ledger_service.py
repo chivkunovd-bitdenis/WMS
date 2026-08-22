@@ -104,3 +104,69 @@ async def record_operational_charge(
     else:
         await nested.commit()
         return entry
+
+
+async def record_operational_reversal(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    source_type: str,
+    source_id: uuid.UUID,
+    occurred_at: datetime,
+    performer_id: uuid.UUID | None,
+) -> BillingLedgerEntry | None:
+    """Reverse a recorded final fact once, preserving its immutable tariff snapshot."""
+    original = await session.scalar(
+        select(BillingLedgerEntry).where(
+            BillingLedgerEntry.tenant_id == tenant_id,
+            BillingLedgerEntry.source_type == source_type,
+            BillingLedgerEntry.source_id == source_id,
+            BillingLedgerEntry.entry_type == "charge",
+        )
+    )
+    if original is None:
+        # Billing may have been disabled when the warehouse fact was recorded.
+        return None
+
+    existing = await session.scalar(
+        select(BillingLedgerEntry).where(
+            BillingLedgerEntry.reversal_of_id == original.id,
+        )
+    )
+    if existing is not None:
+        return existing
+
+    reversal = BillingLedgerEntry(
+        tenant_id=original.tenant_id,
+        seller_id=original.seller_id,
+        tariff_version_id=original.tariff_version_id,
+        reversal_of_id=original.id,
+        performer_id=performer_id,
+        entry_type="reversal",
+        service_code=original.service_code,
+        source=original.source,
+        source_type="billing_reversal",
+        source_id=original.id,
+        unit=original.unit,
+        quantity=-original.quantity,
+        rate=original.rate,
+        amount=-original.amount if original.amount is not None else None,
+        occurred_at=occurred_at,
+    )
+    nested = await session.begin_nested()
+    try:
+        session.add(reversal)
+        await session.flush()
+    except IntegrityError:
+        await nested.rollback()
+        concurrent = await session.scalar(
+            select(BillingLedgerEntry).where(
+                BillingLedgerEntry.reversal_of_id == original.id,
+            )
+        )
+        if concurrent is None:
+            raise
+        return concurrent
+    else:
+        await nested.commit()
+        return reversal

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import time
 import uuid
+from datetime import date
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from test_marketplace_unload_and_discrepancy_acts import (
     E2E_BARCODE,
     _finish_unload_packaging,
@@ -19,6 +21,7 @@ from test_marketplace_unload_and_discrepancy_acts import (
 )
 
 from app.db.session import SessionLocal
+from app.models.billing import BillingLedgerEntry
 from app.services.marketplace_unload_service import (
     MarketplaceUnloadError,
     complete_unload,
@@ -163,6 +166,90 @@ async def test_ship_unload_without_discrepancy_http(
     assert line["picked_qty"] == 2
     assert line["quantity"] == 2
     assert line["has_discrepancy"] is False
+
+
+@pytest.mark.asyncio
+async def test_cancel_shipped_unload_records_one_reversal_http(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """S-31-TC-016: late operational cancellation adds one next-period reversal."""
+    h, mid, loc_id = await _confirmed_unload_with_stock(
+        async_client, monkeypatch, plan_qty=2
+    )
+    detail = await async_client.get(
+        f"/operations/marketplace-unload-requests/{mid}", headers=h
+    )
+    seller_id = uuid.UUID(detail.json()["seller_id"])
+    me = await async_client.get("/auth/me", headers=h)
+    tenant_id = uuid.UUID(me.json()["tenant_id"])
+    performer_id = uuid.UUID(me.json()["id"])
+    tariff = await async_client.post(
+        "/billing/tariffs",
+        headers=h,
+        json={
+            "seller_id": str(seller_id),
+            "service_code": "marketplace_outbound",
+            "unit": "item",
+            "amount": "12.50",
+            "valid_from": date.today().isoformat(),
+        },
+    )
+    assert tariff.status_code == 201, tariff.text
+    await _collect_qty_via_scan(async_client, h, mid, loc_id=loc_id, qty=2)
+
+    ship = await async_client.post(_ship_url(mid), headers=h)
+    assert ship.status_code == 200, ship.text
+
+    cancelled = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/cancel", headers=h
+    )
+    assert cancelled.status_code == 200, cancelled.text
+    assert cancelled.json()["status"] == "cancelled"
+
+    repeated = await async_client.post(
+        f"/operations/marketplace-unload-requests/{mid}/cancel", headers=h
+    )
+    assert repeated.status_code == 200, repeated.text
+    assert repeated.json()["status"] == "cancelled"
+
+    async with SessionLocal() as session:
+        entries = list(
+            (
+                await session.scalars(
+                    select(BillingLedgerEntry)
+                    .where(
+                        BillingLedgerEntry.tenant_id == tenant_id,
+                        BillingLedgerEntry.service_code == "marketplace_outbound",
+                    )
+                    .order_by(BillingLedgerEntry.entry_type)
+                )
+            ).all()
+        )
+        original = await session.scalar(
+            select(BillingLedgerEntry).where(
+                BillingLedgerEntry.tenant_id == tenant_id,
+                BillingLedgerEntry.source_type == "marketplace_unload",
+                BillingLedgerEntry.source_id == mid,
+            )
+        )
+        assert original is not None
+        reversal = await session.scalar(
+            select(BillingLedgerEntry).where(
+                BillingLedgerEntry.reversal_of_id == original.id,
+            )
+        )
+
+    assert len(entries) == 2
+    assert original.entry_type == "charge"
+    assert original.performer_id == performer_id
+    assert original.quantity == 2
+    assert original.amount == 25
+    assert reversal is not None
+    assert reversal.entry_type == "reversal"
+    assert reversal.performer_id == performer_id
+    assert reversal.quantity == -2
+    assert reversal.rate == original.rate
+    assert reversal.amount == -25
 
 
 @pytest.mark.asyncio

@@ -1,43 +1,52 @@
-# 09-billing — backend-dev, rework атома 7
+# 09-billing — backend-dev · ремонт атома 7
+
+## Что реализовано
+
+- Эндпоинт: существующий `POST /operations/marketplace-unload-requests/{request_id}/cancel` теперь передаёт исполнителя отмены и идемпотентно отменяет уже финальную marketplace-отгрузку.
+- Сервис: `record_operational_reversal` находит исходное начисление по tenant и складскому факту, сохраняет отдельную отрицательную строку с тем же снимком тарифа, единицей и количеством и защищён от дубля уникальностью `reversal_of_id` и savepoint (вложенной транзакцией).
+- Сервис: `cancel_request` разделяет предфинальную отмену и позднюю финансовую корректировку. Для `shipped` физически отгруженный товар не возвращается на склад; создаётся сторно и документ переходит в `cancelled`. Повторная отмена возвращает уже достигнутое состояние и не создаёт вторую строку.
 
 ## Изменённые файлы
 
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/models/tenant.py — добавлено nullable-поле `billing_enabled_from`; пустое значение оставляет биллинг выключенным для существующего tenant.
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/alembic/versions/20260822_0096_billing_activation_date.py — добавляющая миграция даты включения биллинга.
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/services/billing_configuration_service.py — первый явно сохранённый тариф фиксирует дату включения tenant равной `valid_from`.
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/services/billing_ledger_service.py — до даты включения не создаёт ни тарифицированную, ни `unpriced` строку; с даты включения сохраняет прежнее атомарное идемпотентное поведение.
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/tests/test_billing_ledger_service.py — покрыт пропуск финального факта до даты включения.
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/tests/test_billing_configuration_service.py — покрыта фиксация даты включения первым тарифом.
-
-## Эндпоинты и сервисы
-
-- Эндпоинты: нет; существующие финальные пути приёмки и ФФ→МП-отгрузки продолжают использовать `record_operational_charge`.
-- Сервисы: `billing_ledger_service.record_operational_charge` применяет границу `billing_enabled_from`; `billing_configuration_service.create_tariff` записывает явный старт из первого выбранного `valid_from`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/api/marketplace_unload_requests.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/services/billing_invoice_service.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/services/billing_ledger_service.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/services/marketplace_unload_service.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/services/marketplace_unload_status.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/tests/test_billing_ledger_service.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/tests/test_marketplace_unload_completion.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/night/volna-9-recovery/cards/09-billing/DEV.md`
 
 ## Миграции
 
-- `20260822_0096_billing_activation_date` — добавляет nullable-колонку `tenants.billing_enabled_from`, без удаления или изменения существующих данных.
+Нет: схема базы данных не менялась.
 
 ## Тесты
 
-- `test_operational_charge_before_billing_activation_is_not_recorded` — старый финальный факт не создаёт ledger-запись.
-- `test_first_tariff_explicitly_activates_billing_from_its_start_date` — первый тариф задаёт дату начала учёта.
+- `backend/tests/test_billing_ledger_service.py::test_operational_reversal_preserves_snapshot_and_is_idempotent` — отрицательная строка сохраняет снимок исходной ставки, количество и исполнителя; повтор возвращает существующее сторно.
+- `backend/tests/test_marketplace_unload_completion.py::test_cancel_shipped_unload_records_one_reversal_http` (`S-31-TC-016`) — живой HTTP-путь завершает отгрузку, отменяет её, повторяет отмену и подтверждает ровно одну положительную и одну отрицательную строку журнала с правильными суммами и исполнителем.
+- Повторно пройдены `test_ship_unload_without_discrepancy_http` и `test_marketplace_unload_cancel_partial_distribution_restores_inventory`: обычная финализация и прежняя предфинальная отмена не сломаны.
 
 ## Гейты
 
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && ruff check app/models/tenant.py app/services/billing_ledger_service.py app/services/billing_configuration_service.py tests/test_billing_ledger_service.py tests/test_billing_configuration_service.py alembic/versions/20260822_0096_billing_activation_date.py` — PASS.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && mypy app/models/tenant.py app/services/billing_ledger_service.py app/services/billing_configuration_service.py` — PASS, 3 source files.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && pytest -q tests/test_billing_ledger_service.py tests/test_billing_configuration_service.py` — PASS, 10 passed.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing && python3 scripts/ci/back_guard.py` — не выполнен: файла `scripts/ci/back_guard.py` в этой рабочей копии нет.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing && python3 scripts/ci/check_migrations.py` — не выполнен: файла `scripts/ci/check_migrations.py` в этой рабочей копии нет.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && alembic heads` — PASS, единственный head `20260822_0096`.
-- `git diff --check` — PASS.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && ruff check app/services/billing_ledger_service.py app/services/billing_invoice_service.py app/services/marketplace_unload_status.py app/services/marketplace_unload_service.py app/api/marketplace_unload_requests.py tests/test_billing_ledger_service.py tests/test_marketplace_unload_completion.py` — PASS: `All checks passed!`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && mypy app/services/billing_ledger_service.py app/services/billing_invoice_service.py app/services/marketplace_unload_status.py app/services/marketplace_unload_service.py app/api/marketplace_unload_requests.py` — внешний FAIL: четыре ранее существующие ошибки только в импортируемых соседних `wildberries_credentials_service.py`, `fbs_stock_sync_service.py` и `fbs_warehouse_binding_service.py`; изменённые файлы в выводе ошибок отсутствуют.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && mypy --follow-imports=skip app/services/billing_ledger_service.py app/services/billing_invoice_service.py app/services/marketplace_unload_status.py app/services/marketplace_unload_service.py` — PASS: `Success: no issues found in 4 source files`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && pytest -q tests/test_billing_ledger_service.py tests/test_marketplace_unload_completion.py::test_cancel_shipped_unload_records_one_reversal_http` — PASS: `6 passed in 2.41s`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && pytest -q tests/test_marketplace_unload_completion.py::test_ship_unload_without_discrepancy_http tests/test_marketplace_unload_and_discrepancy_acts.py::test_marketplace_unload_cancel_partial_distribution_restores_inventory` — PASS: `2 passed in 4.48s`.
+- `python3 scripts/ci/back_guard.py` — не применим: новый маршрут не добавлялся.
+- `python3 scripts/ci/check_migrations.py` — не применим: миграция не добавлялась.
+- Полный backend `pytest`, `ruff check .` и `mypy .` не запускались согласно ограничению атомарной проверки.
 
 ## Не реализовано
 
-- Находки ревью по read-model, счетам, поздней тарификации, storage-barrier, сторно, API и UI не относятся к атому 7 и его не меняли.
-- Перекрёстная корректировка базовой миграционной цепочки из находки 12 не относится к этому атому; новая миграция продолжает текущую единственную цепочку `20260822_0095 → 20260822_0096`.
+- Для завершённой приёмки в текущем backend нет рабочего перехода отмены из `done`; новый маршрут или новый складской процесс контракт атома не вводит. Начисление при первом `done` остаётся прежним и не дублируется. Универсальный сервис сторно готов к подключению, когда такой доменный переход появится отдельным контрактом.
+- Находки ревью 1–5, 7 и 8 относятся к read-model/API счетов, storage-barrier, миграционному графу и frontend; эти соседние атомы не менялись.
 
 ## Блокеры
 
-Git не позволяет создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-09-billing1/index.lock`: `Operation not permitted`. Поэтому commit и проверенный SHA не получены; изменения существуют только в рабочем дереве. Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой production не читались и не затрагивались.
+- Git-сохранение заблокировано правами среды: команда `git add ... && git commit -m "fix(billing): reverse cancelled final unload charges"` завершилась `fatal: Unable to create '/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-09-billing1/index.lock': Operation not permitted`. Код и артефакт находятся в постоянном зарегистрированном worktree, но не добавлены в индекс и не сохранены коммитом; проверенного SHA нет.
+
+## Находки
+
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не читались и не затрагивались.

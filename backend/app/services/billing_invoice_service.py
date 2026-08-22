@@ -195,40 +195,6 @@ async def form_invoice(
     return invoice
 
 
-async def record_reversal(
-    session: AsyncSession, *, original: BillingLedgerEntry, source_id: uuid.UUID,
-    occurred_at: datetime, performer_id: uuid.UUID | None = None,
-) -> BillingLedgerEntry:
-    existing = await session.scalar(select(BillingLedgerEntry).where(
-        BillingLedgerEntry.tenant_id == original.tenant_id,
-        BillingLedgerEntry.source_type == "reversal",
-        BillingLedgerEntry.source_id == source_id,
-    ))
-    if existing:
-        return existing
-    reversal = BillingLedgerEntry(
-        tenant_id=original.tenant_id, seller_id=original.seller_id,
-        tariff_version_id=original.tariff_version_id, reversal_of_id=original.id,
-        performer_id=performer_id, entry_type="reversal", service_code=original.service_code,
-        source=original.source, source_type="reversal", source_id=source_id,
-        unit=original.unit, quantity=-original.quantity,
-        rate=original.rate, amount=-original.amount if original.amount is not None else None,
-        occurred_at=occurred_at,
-    )
-    session.add(reversal)
-    try:
-        await session.flush()
-    except IntegrityError:
-        await session.rollback()
-        recovered = await session.scalar(select(BillingLedgerEntry).where(
-            BillingLedgerEntry.tenant_id == original.tenant_id,
-            BillingLedgerEntry.source_type == "reversal", BillingLedgerEntry.source_id == source_id,
-        ))
-        assert recovered is not None
-        return recovered
-    return reversal
-
-
 async def cancel_invoice(
     session: AsyncSession, *, tenant_id: uuid.UUID, invoice_id: uuid.UUID
 ) -> BillingInvoice:

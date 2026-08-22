@@ -6,7 +6,10 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from app.models.billing import BillingLedgerEntry
-from app.services.billing_ledger_service import record_operational_charge
+from app.services.billing_ledger_service import (
+    record_operational_charge,
+    record_operational_reversal,
+)
 
 
 def _savepoint_session() -> AsyncMock:
@@ -123,3 +126,59 @@ async def test_operational_charge_before_billing_activation_is_not_recorded() ->
 
     assert entry is None
     session.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_operational_reversal_preserves_snapshot_and_is_idempotent() -> None:
+    session = _savepoint_session()
+    session.add = Mock()
+    original = BillingLedgerEntry(
+        id=uuid.uuid4(),
+        tenant_id=uuid.uuid4(),
+        seller_id=uuid.uuid4(),
+        tariff_version_id=uuid.uuid4(),
+        performer_id=uuid.uuid4(),
+        source_type="marketplace_unload",
+        source_id=uuid.uuid4(),
+        source="marketplace_unload",
+        service_code="marketplace_outbound",
+        unit="item",
+        quantity=Decimal("4"),
+        rate=Decimal("12.50"),
+        amount=Decimal("50.00"),
+        occurred_at=datetime(2026, 8, 20, 10, tzinfo=UTC),
+    )
+    session.scalar = AsyncMock(side_effect=[original, None])
+    cancelled_by = uuid.uuid4()
+
+    reversal = await record_operational_reversal(
+        session,
+        tenant_id=original.tenant_id,
+        source_type=original.source_type,
+        source_id=original.source_id,
+        occurred_at=datetime(2026, 9, 2, 10, tzinfo=UTC),
+        performer_id=cancelled_by,
+    )
+
+    assert isinstance(reversal, BillingLedgerEntry)
+    assert reversal.entry_type == "reversal"
+    assert reversal.reversal_of_id == original.id
+    assert reversal.tariff_version_id == original.tariff_version_id
+    assert reversal.quantity == Decimal("-4")
+    assert reversal.rate == Decimal("12.50")
+    assert reversal.amount == Decimal("-50.00")
+    assert reversal.performer_id == cancelled_by
+    session.add.assert_called_once_with(reversal)
+
+    session.scalar = AsyncMock(side_effect=[original, reversal])
+    repeated = await record_operational_reversal(
+        session,
+        tenant_id=original.tenant_id,
+        source_type=original.source_type,
+        source_id=original.source_id,
+        occurred_at=datetime(2026, 9, 2, 11, tzinfo=UTC),
+        performer_id=uuid.uuid4(),
+    )
+
+    assert repeated is reversal
+    session.add.assert_called_once_with(reversal)
