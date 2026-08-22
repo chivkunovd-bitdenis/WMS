@@ -32,3 +32,5 @@
 14:10   02-verdikt-screen · backend-dev: готово
 14:10   02-verdikt-screen · dev: фича 2/5 сохранена f81a845d2205
 14:13   02-verdikt-screen · screen-dev: готово
+14:13   02-verdikt-screen · dev: фича 3/5 сохранена 28beced281f7
+14:15   02-verdikt-screen · screen-dev: готово
