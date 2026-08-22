@@ -26,3 +26,6 @@
 16:04   05-prod-slow · dev: фича 6/7 сохранена 84726f01df6b
 16:10   05-prod-slow · screen-dev: готово
 16:10   05-prod-slow · dev: фича 7/7 сохранена b9b50248385a
+16:18   05-prod-slow · reviewer: готово
+16:18   05-prod-slow · reviewer: находки, круг 1 — назад к разработке
+16:20   05-prod-slow · backend-dev: готово

@@ -101,6 +101,9 @@ async def test_reconcile_walks_cursor_and_fails_incomplete_pass(
     )
     monkeypatch.setattr(orders_service, "fetch_marketplace_orders_page", page_fetch)
     monkeypatch.setattr(orders_service, "upsert_order_from_wb_row", upsert)
+    monkeypatch.setattr(
+        orders_service, "link_confirmed_orders_to_wb_supplies", AsyncMock(return_value={})
+    )
 
     result = await orders_service.reconcile_orders_for_seller(
         session, uuid.uuid4(), uuid.uuid4(), object()  # type: ignore[arg-type]
@@ -117,6 +120,33 @@ async def test_reconcile_walks_cursor_and_fails_incomplete_pass(
             session, uuid.uuid4(), uuid.uuid4(), object()  # type: ignore[arg-type]
         )
     assert session.rollback.await_count == 1
+
+
+# TC-NEW-WB-SYNC-003: reconcile does not silently stop at an arbitrary page cap.
+@pytest.mark.asyncio
+async def test_reconcile_walks_past_ten_pages_and_links_supplies(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = _SyncSession()
+    pages = [([{"id": page}], page + 1) for page in range(11)] + [([], None)]
+    page_fetch = AsyncMock(side_effect=pages)
+    upsert = AsyncMock(return_value=(object(), False))
+    link_supplies = AsyncMock(return_value={"supply_linked_orders": 1})
+    monkeypatch.setattr(
+        orders_service, "_resolve_marketplace_api_token", AsyncMock(return_value="token")
+    )
+    monkeypatch.setattr(orders_service, "fetch_marketplace_orders_page", page_fetch)
+    monkeypatch.setattr(orders_service, "upsert_order_from_wb_row", upsert)
+    monkeypatch.setattr(orders_service, "link_confirmed_orders_to_wb_supplies", link_supplies)
+
+    result = await orders_service.reconcile_orders_for_seller(
+        session, uuid.uuid4(), uuid.uuid4(), object()  # type: ignore[arg-type]
+    )
+
+    assert result["orders_received"] == 11
+    assert page_fetch.await_count == 12
+    link_supplies.assert_awaited_once()
+    assert result["supply_linked_orders"] == 1
 
 
 async def _register_tenant_and_seller(

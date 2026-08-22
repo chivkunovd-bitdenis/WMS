@@ -72,7 +72,6 @@ from app.services.wildberries_fbs_client import (
 )
 
 FBS_DEADLINE_HOURS = 120
-MAX_ORDERS_PAGES = 10
 MAX_SUPPLIES_PAGES = 10
 
 RESERVE_STATUS_WAREHOUSE_REMAP_CONFLICT = "warehouse_remap_conflict"
@@ -1533,7 +1532,7 @@ async def reconcile_orders_for_seller(
     pool_debit_totals: dict[str, int] = {"debited": 0, "shortfall": 0}
     next_token: int | None = None
 
-    for _page in range(MAX_ORDERS_PAGES):
+    while True:
         try:
             page_rows, next_token = await fetch_marketplace_orders_page(
                 http_client,
@@ -1568,6 +1567,17 @@ async def reconcile_orders_for_seller(
         if next_token is None:
             break
 
+    # A complete order pass is also the safe point for adopting WB-confirmed
+    # supplies.  Keep this outside the page loop so a failed/incomplete pass
+    # cannot make a partial reconciliation look successful.
+    supply_link_result = await link_confirmed_orders_to_wb_supplies(
+        session,
+        tenant_id,
+        seller_id,
+        http_client,
+        api_token,
+    )
+
     result: dict[str, Any] = {
         "seller_id": str(seller_id),
         "orders_received": orders_received,
@@ -1576,6 +1586,7 @@ async def reconcile_orders_for_seller(
         "stock_pool_debited_units": pool_debit_totals["debited"],
         "stock_pool_debit_shortfall_units": pool_debit_totals["shortfall"],
     }
+    result.update(supply_link_result)
     return result
 
 
