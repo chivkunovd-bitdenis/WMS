@@ -1,25 +1,28 @@
-# DEV · 01-wb-marking · backend-dev
+# DEV · 01-wb-marking · backend-dev · feature 3
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/services/fbs_marking_service.py` — безопасное применение ответа WB: полный `reason` и сырой блок, отображения решений `filled`/`optional`/`pending`/`required`/`invalid`, `missing` для `required` без значения, `replacement_required` для отличающегося значения, `unknown` для неизвестных и неполных строк, дата проверки только при возвращённой строке, однократный `wb_orphaned`.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_fbs_kiz.py` — тестовая фиксация отображений решений, включая неизвестное решение.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/services/fbs_marking_service.py` — при наличии строки заказа WB, но отсутствии ожидаемого `kind`, применение ответа теперь немедленно фиксирует `unknown` и не позволяет несвязанному статусу значения обновить локальную жизненную ветку.
+
+## Миграции
+
+Нет.
+
+## Тесты
+
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_fbs_kiz.py` — существующие тесты отображения `filled`, `optional`, `pending`, `required`, `invalid` и неизвестного решения, а также применения batch-ответа; релевантный запуск прошёл: 6 passed.
 
 ## Гейты
 
-- `ruff check .` — не запускался для всего backend; точечные изменённые файлы PASS.
-- `mypy .` — FAIL на ранее существующих ошибках в несвязанных файлах; изменённые файлы в выводе отсутствуют.
-- `pytest` — `tests/test_fbs_kiz.py -k 'decision_mapping_covers_safe_sync_states or prefer_active_row_over_newer_rejected_row'` PASS, 7 passed; полный файл ранее остановился на одном найденном регрессе, который исправлен и повторно подтверждён целевым тестом.
-- `back_guard.py` — FAIL: `scripts/ci/back_guard.py` отсутствует в рабочей копии.
-- `check_migrations.py` — FAIL: `scripts/ci/check_migrations.py` отсутствует в рабочей копии.
-- Миграции — нет.
-- Commit — не создан: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-01-wb-marking1/index.lock` (`Operation not permitted`), поэтому проверенного SHA нет.
+- `ruff check app/services/fbs_marking_service.py tests/test_fbs_kiz.py` — PASS.
+- `mypy .` — FAIL: 21 ранее существующая ошибка в 6 несвязанных файлах; изменённый сервис в ошибках не указан.
+- `pytest` — прерван после частичного запуска полного набора (827 тестов); релевантный `tests/test_fbs_kiz.py -k 'wb_decision_mapping or readers_prefer_active'` — PASS, 6 passed.
+- `python3 scripts/ci/back_guard.py` — FAIL: файл отсутствует в рабочей копии.
+- `python3 scripts/ci/check_migrations.py` — FAIL: файл отсутствует в рабочей копии; миграций нет.
 
 ## Не реализовано
 
-- Полный backend-прогон `ruff check .` не выполнен; `mypy .` завершился с 17 ранее существующими ошибками в несвязанных файлах. Полный файл `test_fbs_kiz.py` ранее дошёл до 51 теста и выявил регресс исторической строки; после исправления целевой сценарий проходит.
-- UI, API-роуты и миграции не входят в этот атомарный кусок.
-- Изменения остаются в рабочей копии незакоммиченными до устранения ограничения прав Git.
+- Новых тестовых сценариев в `test_fbs_kiz.py` не добавлялось: требуемые базовые отображения и сценарии batch-применения уже были в рабочей копии; изменён только безопасный приоритет `unknown` для неполного `kind`.
 
 ## Находки
 

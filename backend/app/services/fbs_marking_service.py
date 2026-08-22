@@ -559,6 +559,13 @@ async def _sync_order_meta_from_wb(
             marking.check_status = wb_status
         meta_detail = details_by_kind.get(marking.kind)
         current = current_order_marking(markings, marking.kind, include_rejected=True)
+        # A returned row is successful only when WB returned the expected kind.
+        # A status entry for a value is not enough: treating it as fresh metadata
+        # would mask a partial response and could incorrectly advance the local
+        # lifecycle state.
+        if returned_row and marking.kind not in returned_kinds:
+            marking.meta_status = META_STATUS_UNKNOWN
+            continue
         detail_matches = meta_detail is not None and (
             meta_detail.value == marking.value
             or (meta_detail.value is None and current is marking)
@@ -594,8 +601,6 @@ async def _sync_order_meta_from_wb(
                 check_status=wb_status,
                 has_value=True,
             )
-        elif returned_row and marking.kind not in returned_kinds:
-            marking.meta_status = META_STATUS_UNKNOWN
 
     order.meta_details_json = _meta_details_from_markings(markings)
     order.metadata_delivery_allowed = compute_delivery_allowed(order, markings)
