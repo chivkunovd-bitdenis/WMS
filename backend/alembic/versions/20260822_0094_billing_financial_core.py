@@ -44,11 +44,12 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.CheckConstraint("unit IN ('document', 'item', 'liter_day')", name="ck_billing_tariff_unit"), sa.CheckConstraint("amount >= 0", name="ck_billing_tariff_amount_nonnegative"),
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"), sa.ForeignKeyConstraint(["seller_id"], ["sellers.id"], ondelete="CASCADE"), sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("tenant_id", "seller_id", "service_code", "unit", "valid_from", name="uq_billing_tariff_version"),
     )
     op.create_index("ix_billing_tariff_versions_tenant_id", "billing_tariff_versions", ["tenant_id"])
     op.create_index("ix_billing_tariff_versions_seller_id", "billing_tariff_versions", ["seller_id"])
     op.create_index("ix_billing_tariffs_tenant_service", "billing_tariff_versions", ["tenant_id", "service_code", "valid_from"])
+    op.create_index("uq_billing_tariff_version_seller", "billing_tariff_versions", ["tenant_id", "seller_id", "service_code", "unit", "valid_from"], unique=True, postgresql_where=sa.text("seller_id IS NOT NULL"), sqlite_where=sa.text("seller_id IS NOT NULL"))
+    op.create_index("uq_billing_tariff_version_common", "billing_tariff_versions", ["tenant_id", "service_code", "unit", "valid_from"], unique=True, postgresql_where=sa.text("seller_id IS NULL"), sqlite_where=sa.text("seller_id IS NULL"))
 
     op.create_table(
         "billing_ledger_entries",
@@ -63,6 +64,7 @@ def upgrade() -> None:
     )
     for name, column in (("tenant_id", "tenant_id"), ("seller_id", "seller_id"), ("reversal_of_id", "reversal_of_id"), ("performer_id", "performer_id")):
         op.create_index(f"ix_billing_ledger_entries_{name}", "billing_ledger_entries", [column])
+    op.create_index("uq_billing_ledger_reversal_of", "billing_ledger_entries", ["reversal_of_id"], unique=True, postgresql_where=sa.text("reversal_of_id IS NOT NULL"), sqlite_where=sa.text("reversal_of_id IS NOT NULL"))
     op.create_index("ix_billing_ledger_tenant_occurred", "billing_ledger_entries", ["tenant_id", "occurred_at"])
 
 

@@ -72,13 +72,19 @@ class BillingProfile(Base):
 class BillingTariffVersion(Base):
     __tablename__ = "billing_tariff_versions"
     __table_args__ = (
-        UniqueConstraint(
-            "tenant_id",
-            "seller_id",
-            "service_code",
-            "unit",
-            "valid_from",
-            name="uq_billing_tariff_version",
+        Index(
+            "uq_billing_tariff_version_seller",
+            "tenant_id", "seller_id", "service_code", "unit", "valid_from",
+            unique=True,
+            postgresql_where=text("seller_id IS NOT NULL"),
+            sqlite_where=text("seller_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_billing_tariff_version_common",
+            "tenant_id", "service_code", "unit", "valid_from",
+            unique=True,
+            postgresql_where=text("seller_id IS NULL"),
+            sqlite_where=text("seller_id IS NULL"),
         ),
         CheckConstraint("unit IN ('document', 'item', 'liter_day')", name="ck_billing_tariff_unit"),
         CheckConstraint("amount >= 0", name="ck_billing_tariff_amount_nonnegative"),
@@ -112,6 +118,13 @@ class BillingLedgerEntry(Base):
     __table_args__ = (
         UniqueConstraint(
             "tenant_id", "source_type", "source_id", name="uq_billing_ledger_source_event"
+        ),
+        Index(
+            "uq_billing_ledger_reversal_of",
+            "reversal_of_id",
+            unique=True,
+            postgresql_where=text("reversal_of_id IS NOT NULL"),
+            sqlite_where=text("reversal_of_id IS NOT NULL"),
         ),
         CheckConstraint(
             "entry_type IN ('charge', 'reversal')", name="ck_billing_ledger_entry_type"
