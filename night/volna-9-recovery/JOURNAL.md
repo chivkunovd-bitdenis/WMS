@@ -40,3 +40,5 @@
 14:55   03-no-distribution-mode · backend-dev: готово
 14:55   03-no-distribution-mode · dev: фича 1/4 сохранена b85d43ec6f45
 14:59   03-no-distribution-mode · backend-dev: готово
+14:59   03-no-distribution-mode · dev: фича 2/4 сохранена f82e9f6f4a10
+15:12   03-no-distribution-mode · backend-dev: готово

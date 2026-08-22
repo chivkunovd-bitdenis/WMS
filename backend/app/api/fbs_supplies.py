@@ -704,7 +704,16 @@ def _raise_from_packing_box_service(exc: packing_box_svc.FbsPackingBoxError) -> 
         "order_already_in_box",
         "boxes_already_distributed",
     }:
-        raise_fbs_http(status.HTTP_409_CONFLICT, exc.code)
+        messages = {
+            "boxes_already_distributed": (
+                "Нельзя изменить режим: сначала уберите все назначенные заказы из коробов."
+            ),
+        }
+        raise_fbs_http(
+            status.HTTP_409_CONFLICT,
+            exc.code,
+            message=messages.get(exc.code),
+        )
     if exc.code in {
         "order_not_packed",
         "order_not_in_supply",

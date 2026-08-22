@@ -97,7 +97,7 @@ async def create_boxes(
 ) -> list[FbsPackingBox]:
     if not idempotency_key.strip():
         raise FbsPackingBoxError("missing_idempotency_key")
-    supply = await _get_supply(session, tenant_id, supply_id)
+    supply = await _get_supply(session, tenant_id, supply_id, for_update=True)
     _assert_supply_mutable(supply)
     if without_distribution and supply.boxes_without_distribution_at is None:
         supply.boxes_without_distribution_at = datetime.now(UTC)
@@ -341,6 +341,8 @@ async def get_boxes_for_workspace(
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
 ) -> list[dict[str, object]]:
+    supply = await _get_supply(session, tenant_id, supply_id)
+    supply_without_distribution = supply.boxes_without_distribution_at is not None
     boxes = await _load_boxes(session, tenant_id, supply_id)
     return [
         {
@@ -351,7 +353,10 @@ async def get_boxes_for_workspace(
             "trbx_id": str(box.trbx_id) if box.trbx_id else None,
             "wb_trbx_id": box.trbx.wb_trbx_id if box.trbx else None,
             "qr_asset": None,
-            "without_distribution": _box_without_distribution(box),
+            # The supply flag is the sole current source of truth.  The
+            # creation-key prefix remains readable only for migration/cleanup
+            # compatibility and must not affect operator-visible state.
+            "without_distribution": supply_without_distribution,
         }
         for box in boxes
     ]

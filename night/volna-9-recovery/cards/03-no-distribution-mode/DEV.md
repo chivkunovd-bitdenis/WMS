@@ -1,33 +1,25 @@
-# Backend development report · 03-no-distribution-mode
+# DEV · 03-no-distribution-mode
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/services/fbs_packing_box_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/tests/test_fbs_packing_box.py`
-
-Режим переключается только после проверки назначений под блокировкой строки поставки. Повторное включение не перезаписывает аудит; явное выключение очищает legacy-префикс `no-distribution:` у коробов, после чего источником истины остаются поля поставки. Добавлен регрессионный тест идемпотентности и отключения legacy-поставки.
-
-## Миграции
-
-Нет: схема для этого атома уже добавлена предыдущей фичей.
-
-## Тесты
-
-- `pytest -q tests/test_fbs_packing_box.py` — 9 passed.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/api/fbs_supplies.py
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/services/fbs_packing_box_service.py
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/night/volna-9-recovery/cards/03-no-distribution-mode/DEV.md
 
 ## Гейты
 
-- `ruff check .` — не пройден: 80 существующих ошибок в несвязанных файлах; проверка изменённых файлов проходит.
-- `mypy .` — не пройден: существующие ошибки в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py`, `fbs_warehouse_binding_service.py` и тестах; после исправления nullable-проверки новых ошибок в добавленном тесте нет.
-- `pytest` — полный прогон запущен, остановлен во время длительного прогона после прохождения целевого набора; целевой набор зелёный.
-- `back_guard.py` — недоступен: файл отсутствует в этой рабочей копии.
-- `check_migrations.py` — недоступен: файл отсутствует в этой рабочей копии.
+- ruff: целевые файлы — PASS; полный `ruff check .` — FAIL на 80 ранее существовавших ошибках вне изменённых участков.
+- mypy: FAIL на 21 ранее существовавшей ошибке в 6 файлах; изменённые файлы в диагностике не указаны.
+- pytest: полный прогон — 813 passed, 5 skipped, 2 unrelated failed; целевой `pytest -q tests/test_fbs_packing_box.py` — PASS, 9 passed. Unrelated failures: exported OpenAPI snapshot and cutoff test with stale fixed date.
+- back_guard.py: FAIL — файл `scripts/ci/back_guard.py` отсутствует в этой рабочей копии.
+- check_migrations.py: FAIL — файл `scripts/ci/check_migrations.py` отсутствует в этой рабочей копии.
 
 ## Не реализовано
 
-- Находки, относящиеся к API, workspace и frontend, не входят в backend-атом 2 и не изменялись.
-- Полный репозиторный прогон невозможно объявить зелёным из-за предварительно существующих ошибок и отсутствующих CI-скриптов в этой копии.
+- Фронтендовые пункты REVIEW.md (E2E, подсказка и экран) не реализованы: они вне роли backend-dev и явно разрешённых backend-файлов.
+- Миграций нет: атом использует уже существующие поля поставки.
 
-## Блокеры
+## Находки
 
-Нет блокеров для реализации атома; ограничения проверок описаны выше.
+- Секреты, ключи, токены и `.env` не читались.
+- В рабочем дереве присутствует несвязанный `night/volna-9-recovery/JOURNAL.md`; его не изменял.
