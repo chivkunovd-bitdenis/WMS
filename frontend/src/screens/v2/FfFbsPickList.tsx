@@ -13,7 +13,7 @@ import {
   TextCell,
   type Column,
 } from '../../ui-kit'
-import { getFbsPickingList, printFbsOrderTape, resolveFbsAssetUrl, type FbsPickingItem } from './fbsApi'
+import { getFbsPickingList, printFbsOrderTape, resolveFbsAssetUrl, type FbsOrderPrintTapeOrder, type FbsPickingItem } from './fbsApi'
 
 type Props = { token: string; authHeaders: (t: string) => Record<string, string>; supplyId: string | null; open: boolean; onClose: () => void }
 type Mark = { collected: boolean; packed: boolean }
@@ -27,6 +27,29 @@ export function buildNumberedItems(items: FbsPickingItem[]): NumberedItem[] {
 
 export function markKey(item: Pick<FbsPickingItem, 'article' | 'sku_code' | 'size' | 'product_name'>): string {
   return [item.article, item.sku_code ?? '', item.size ?? '', item.product_name].join('::')
+}
+
+function escapePrintHtml(value: string | number): string {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
+}
+
+export function buildFbsOrderTapeHtml(orders: Array<FbsOrderPrintTapeOrder & { imageUrl: string }>): string {
+  return orders.flatMap((order, index) => {
+    const number = order.order_number ?? index + 1
+    const markingLabels = order.printed_codes.map((code) => (
+      `<section class="label marking"><strong>Честный знак</strong><span>${escapePrintHtml(code.cis_code)}</span></section>`
+    ))
+    return [
+      ...markingLabels,
+      `<section class="label"><img src="${escapePrintHtml(order.imageUrl)}" alt="Стикер WB №${escapePrintHtml(order.wb_order_id)}"></section>`,
+      `<section class="label service">№ ${escapePrintHtml(number)}<small>Заказ WB №${escapePrintHtml(order.wb_order_id)}</small></section>`,
+    ]
+  }).join('')
 }
 
 function loadMarks(supplyId: string): Marks {
@@ -73,6 +96,14 @@ export function FfFbsPickList({ token, authHeaders, supplyId, open, onClose }: P
 
   const printStickers = useCallback(async () => {
     if (!supplyId || !canPrint) return
+    // Окно резервируется в рамках жеста оператора: после POST сервер может
+    // необратимо назначить коды маркировки, поэтому молча потерять печать нельзя.
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) {
+      setError('Браузер заблокировал окно печати. Разрешите всплывающие окна для WMS.')
+      return
+    }
+    printWindow.opener = null
     setPrinting(true); setError(null)
     try {
       const freshItems = await getFbsPickingList(token, authHeaders, supplyId)
@@ -90,18 +121,16 @@ export function FfFbsPickList({ token, authHeaders, supplyId, open, onClose }: P
         setError(['Стикеры ещё не готовы или получены не все', ...tape.order_errors.map((item) => `Заказ WB №${item.wb_order_id}: стикер не получен (№ ${item.order_number ?? '—'})`)].join('\n'))
         return
       }
-      const w = window.open('', '_blank'); if (!w) return
-      const pages = await Promise.all(tape.orders.map(async (order, index) => {
+      const ordersWithImages = await Promise.all(tape.orders.map(async (order) => {
         if (!order.qr_asset?.preview_url) throw new Error(`Заказ WB №${order.wb_order_id}: стикер не получен`)
         const response = await fetch(resolveFbsAssetUrl(order.qr_asset.preview_url), { headers: { ...authHeaders(token) } })
         if (!response.ok) throw new Error(`Заказ WB №${order.wb_order_id}: стикер не получен`)
         const imageUrl = URL.createObjectURL(await response.blob())
-        const number = order.order_number ?? index + 1
-        return `<section class="label"><img src="${imageUrl}" alt="Стикер WB №${order.wb_order_id}"></section><section class="label service">№ ${number}<small>Заказ WB №${order.wb_order_id}</small></section>`
+        return { ...order, imageUrl }
       }))
-      const css = '@page{size:40mm 58mm;margin:0}html,body{margin:0;padding:0}.label{width:40mm;height:58mm;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;break-after:page;padding:1mm;font-family:Arial,sans-serif;text-align:center}.label img{max-width:100%;max-height:100%;object-fit:contain}.service{font-size:28pt;font-weight:900}.service small{display:block;font-size:8pt;font-weight:400;margin-top:4mm}'
-      w.document.write(`<title>Стикеры заказов FBS</title><style>${css}</style>${pages.join('')}<script>Promise.all(Array.from(document.images).map(function(i){return i.complete?Promise.resolve():new Promise(function(r){i.onload=r;i.onerror=r})})).then(function(){window.focus();window.print()})</script>`); w.document.close()
-    } catch (e) { setError(e instanceof Error ? e.message : 'Не удалось получить стикеры') }
+      const css = '@page{size:40mm 58mm;margin:0}html,body{margin:0;padding:0}.label{width:40mm;height:58mm;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;break-after:page;padding:1mm;font-family:Arial,sans-serif;text-align:center}.label img{max-width:100%;max-height:100%;object-fit:contain}.service{font-size:28pt;font-weight:900}.service small{display:block;font-size:8pt;font-weight:400;margin-top:4mm}.marking{gap:4mm;font-size:12pt;word-break:break-all}.marking span{font-size:8pt}'
+      printWindow.document.write(`<title>Стикеры заказов FBS</title><style>${css}</style>${buildFbsOrderTapeHtml(ordersWithImages)}<script>Promise.all(Array.from(document.images).map(function(i){return i.complete?Promise.resolve():new Promise(function(r){i.onload=r;i.onerror=r})})).then(function(){window.focus();window.print()})</script>`); printWindow.document.close()
+    } catch (e) { printWindow.close(); setError(e instanceof Error ? e.message : 'Не удалось получить стикеры') }
     finally { setPrinting(false) }
   }, [authHeaders, canPrint, supplyId, token])
 
