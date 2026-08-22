@@ -734,15 +734,16 @@ async def update_product_container_volume(
         raise CatalogError("product_not_found")
     p.length_mm = p.width_mm = p.height_mm = None
     p.volume_liters = volume_liters
-    p.dimensions_source = "container"
+    p.dimensions_source = "container_override"
     p.dimensions_updated_at = datetime.now(UTC)
     p.dimensions_updated_by_user_id = author_user_id
     await _record_dimension_event(
-        session, p, source="container", author_user_id=author_user_id,
+        session, p, source="container_override", author_user_id=author_user_id,
         length_mm=None, width_mm=None, height_mm=None, weight_g=p.weight_g,
         volume_liters=volume_liters, container_basis=container_basis.strip(),
         fingerprint=_dimension_fingerprint(
-            None, None, None, p.weight_g, volume_liters, "container", container_basis.strip()
+            None, None, None, p.weight_g, volume_liters,
+            "container_override", container_basis.strip(),
         ),
         apply=True,
     )
@@ -783,12 +784,13 @@ async def _record_dimension_event(session: AsyncSession, product: Product, *, so
                                   author_user_id: uuid.UUID | None, length_mm: int | None,
                                   width_mm: int | None, height_mm: int | None, weight_g: int | None,
                                   volume_liters: float | None, container_basis: str | None,
-                                  fingerprint: str, apply: bool) -> ProductDimensionEvent:
+                                  fingerprint: str, apply: bool,
+                                  force_new: bool = False) -> ProductDimensionEvent:
     result = await session.execute(select(ProductDimensionEvent).where(
         ProductDimensionEvent.product_id == product.id,
         ProductDimensionEvent.fingerprint == fingerprint,
     ))
-    event = result.scalar_one_or_none()
+    event = None if force_new else result.scalar_one_or_none()
     if event is None:
         if apply:
             await session.execute(update(ProductDimensionEvent).where(
@@ -835,7 +837,7 @@ async def restore_latest_wb_dimensions(session: AsyncSession, tenant_id: uuid.UU
         fingerprint=_dimension_fingerprint(
             p.length_mm, p.width_mm, p.height_mm, p.weight_g, p.volume_liters,
             "wb", event.container_basis
-        ), apply=True,
+        ), apply=True, force_new=True,
     )
     await session.commit()
     await session.refresh(p)

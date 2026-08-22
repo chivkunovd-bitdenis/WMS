@@ -334,9 +334,12 @@ async def upsert_products_from_wb_cards(
                     fingerprint=_dimension_fingerprint(
                         card_length_mm, card_width_mm, card_height_mm,
                         p.weight_g, wb_volume_liters, "wb", None,
-                    ), apply=p.dimensions_source not in {"manual", "container"},
+                    ),
+                    apply=p.dimensions_source not in {
+                        "manual", "container", "container_override"
+                    },
                 )
-                if p.dimensions_source not in {"manual", "container"}:
+                if p.dimensions_source not in {"manual", "container", "container_override"}:
                     p.volume_liters = wb_volume_liters
                     p.dimensions_source = "wb"
             # Same rule for country of origin / shelf life: WB card fills the gap,
