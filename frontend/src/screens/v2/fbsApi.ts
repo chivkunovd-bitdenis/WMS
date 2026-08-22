@@ -167,18 +167,29 @@ export type FbsOrderMetadata = {
     /** Последние символы кода маркировки — чтобы оператор сверил строку с этикеткой. */
     value_tail?: string | null
   }>
-  delivery_allowed: boolean
+  readonly delivery_allowed: boolean
   last_checked_at: string | null
   /** Единый серверный вердикт WB; экран не вычисляет его из локальных состояний. */
   readonly verdict: FbsOrderVerdict
 }
 
 export type FbsOrderVerdict = {
-  readonly signature: string
-  readonly tone: 'neutral' | 'ok' | 'warn' | 'stop'
+  readonly signature: FbsOrderVerdictSignature
+  readonly tone: FbsOrderVerdictTone
   readonly reason: string | null
   readonly delivery_allowed: boolean
 }
+
+/** Exact server vocabulary; the client must not infer a verdict from local fields. */
+export type FbsOrderVerdictSignature =
+  | 'WB: принято'
+  | 'WB: код не требуется'
+  | 'WB не принял'
+  | 'WB: проверяет'
+  | 'WB: нужен код'
+  | 'Нет ответа WB'
+
+export type FbsOrderVerdictTone = 'neutral' | 'ok' | 'warn' | 'stop'
 
 export type FbsWorklistWarehouseOption = {
   id: string

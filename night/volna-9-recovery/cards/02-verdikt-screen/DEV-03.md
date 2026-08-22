@@ -1,21 +1,14 @@
-# Screen Dev · 02-verdikt-screen · feature 3
-
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/fbsApi.ts`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/utils/metaStatus.ts`
-
-Клиентский API содержит неизменяемый серверный вердикт WB. Утилита `metaStatusView`
-использует только этот вердикт, выдаёт фиксированные подписи и тоны, переводит
-известные причины на русский, сохраняет неизвестную причину безопасным текстом и
-возвращает `disabledReason` для блокирующих состояний.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/fbsApi.ts
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/utils/metaStatus.ts
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` — не пройден: в рабочей копии нет локального `tsc`, а сетевое получение пакета недоступно.
-- `python3 scripts/ui/ui_guard.py` — не пройден: обнаружены нарушения baseline в чужих файлах `src/components/WbProductPickerDialog.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`; файлы этой правки не затрагивались, baseline не обновлялся.
-- `npm run test:unit` — не пройден: в рабочей копии отсутствует локальный `vitest`/зависимости frontend.
+- `npx tsc --noEmit -p tsconfig.app.json` — красный: локальный `tsc` отсутствует, `npx` не смог скачать пакет из-за `ENOTFOUND` (сеть недоступна).
+- `python3 scripts/ui/ui_guard.py` — красный: обнаружены новые нарушения в `WbProductPickerDialog.tsx`, `FfFbsSupplyWorkspace.tsx` и `SellerInboundDraftScreen.tsx`; эти файлы не изменялись в рамках карточки.
+- `npm run test:unit` — красный: `vitest: command not found`, зависимости фронтенда не установлены.
 
 ## Не реализовано
 
-- Компоненты экранов не подключались: это следующий атомарный кусок контракта; текущая фича ограничена типом API и словарём отображения.
+Пунктов контракта, относящихся к этому атомарному куску, не осталось. Тип вердикта ограничен серверным словарём, поля источника истины доступны только для чтения, а отображение всех контрактных состояний и неизвестных причин централизовано в `metaStatusView`.
