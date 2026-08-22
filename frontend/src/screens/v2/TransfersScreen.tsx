@@ -11,10 +11,25 @@ import {
   Typography,
 } from '@mui/material'
 import { Screen } from '../AppV2Screens'
+import {
+  DataTable,
+  SecondaryAction,
+  WarehouseContextSwitch,
+  type WarehouseOption,
+} from '../../ui-kit'
 
 type LocationRow = { id: string; code: string; warehouse_id: string }
 type ProductRow = { id: string; name: string; sku_code: string }
 type TransferSummary = { quantity: number; product: string; from: string; to: string }
+type TransferOperation = {
+  id: string
+  product: string
+  quantity: number
+  fromWarehouse: WarehouseOption
+  toWarehouse: WarehouseOption
+  fromLocation: string
+  toLocation: string
+}
 
 type Props = {
   opsError: string | null
@@ -23,6 +38,11 @@ type Props = {
   locations: LocationRow[]
   products: ProductRow[]
   onStockTransfer: FormEventHandler<HTMLFormElement>
+  warehouses?: WarehouseOption[]
+  selectedWarehouseId?: string | null
+  onWarehouseChange?: (warehouseId: string) => void
+  transferOperations?: TransferOperation[]
+  transferOperationsLoading?: boolean
 }
 
 export function TransfersScreen({
@@ -32,6 +52,11 @@ export function TransfersScreen({
   locations,
   products,
   onStockTransfer,
+  warehouses = [],
+  selectedWarehouseId = null,
+  onWarehouseChange,
+  transferOperations = [],
+  transferOperationsLoading = false,
 }: Props) {
   const [fromLoc, setFromLoc] = useState('')
   const [toLoc, setToLoc] = useState('')
@@ -39,6 +64,7 @@ export function TransfersScreen({
   const [quantity, setQuantity] = useState('')
   const [lastTransfer, setLastTransfer] = useState<TransferSummary | null>(null)
   const [pendingTransfer, setPendingTransfer] = useState<TransferSummary | null>(null)
+  const [expandedTransferIds, setExpandedTransferIds] = useState<Set<string>>(() => new Set())
 
   useEffect(() => {
     if (pendingTransfer && !opsBusy) {
@@ -69,6 +95,50 @@ export function TransfersScreen({
     Number.isInteger(quantityNumber) &&
     quantityNumber > 0 &&
     !sameLocation
+  const visibleTransferOperations = useMemo(
+    () => transferOperations.filter((operation) => {
+      if (!selectedWarehouseId) return true
+      return operation.fromWarehouse.id === selectedWarehouseId || operation.toWarehouse.id === selectedWarehouseId
+    }),
+    [selectedWarehouseId, transferOperations],
+  )
+  const transferColumns = [
+    {
+      key: 'operation',
+      header: 'Операция',
+      render: (operation: TransferOperation) => `${operation.fromWarehouse.name} / ${operation.toWarehouse.name}`,
+    },
+    { key: 'product', header: 'Товар', render: (operation: TransferOperation) => operation.product },
+    { key: 'quantity', header: 'Количество', align: 'right' as const, render: (operation: TransferOperation) => operation.quantity },
+    {
+      key: 'details',
+      header: 'Детали',
+      render: (operation: TransferOperation) => {
+        const expanded = expandedTransferIds.has(operation.id)
+        return (
+          <>
+            <SecondaryAction
+              type="button"
+              data-testid={`transfer-operation-toggle-${operation.id}`}
+              onClick={() => setExpandedTransferIds((current) => {
+                const next = new Set(current)
+                if (next.has(operation.id)) next.delete(operation.id)
+                else next.add(operation.id)
+                return next
+              })}
+            >
+              {expanded ? 'Скрыть' : 'Раскрыть'}
+            </SecondaryAction>
+            {expanded ? (
+              <div data-testid={`transfer-operation-details-${operation.id}`}>
+                {operation.fromWarehouse.name}: {operation.fromLocation} → {operation.toWarehouse.name}: {operation.toLocation}
+              </div>
+            ) : null}
+          </>
+        )
+      },
+    },
+  ]
   const fromSelectInputProps = {
     id: 'transfer-from-loc',
     name: 'transfer_from_loc',
@@ -107,7 +177,25 @@ export function TransfersScreen({
       {!isFulfillmentAdmin ? (
         <Alert severity="info">Доступно только для фулфилмента.</Alert>
       ) : (
-        <Paper variant="outlined" sx={{ p: 2 }} data-testid="stock-transfer-section">
+        <Stack spacing={2}>
+          <WarehouseContextSwitch
+            options={warehouses}
+            value={selectedWarehouseId}
+            onChange={(warehouseId) => onWarehouseChange?.(warehouseId)}
+            testId="transfers-warehouse-context"
+          />
+          <DataTable
+            columns={transferColumns}
+            rows={visibleTransferOperations}
+            getRowKey={(operation) => operation.id}
+            loading={transferOperationsLoading}
+            empty={{
+              title: selectedWarehouseId ? 'На выбранном складе пока нет перемещений.' : 'Перемещений пока нет.',
+              hint: selectedWarehouseId ? 'Выберите другой склад или дождитесь новой операции.' : undefined,
+            }}
+            testId="transfer-operations-list"
+          />
+          <Paper variant="outlined" sx={{ p: 2 }} data-testid="stock-transfer-section">
           <Stack spacing={2}>
             {lastTransfer ? (
               <Alert severity="success" data-testid="transfer-operation-row">
@@ -236,7 +324,8 @@ export function TransfersScreen({
               </Button>
             </Stack>
           </Stack>
-        </Paper>
+          </Paper>
+        </Stack>
       )}
     </Screen>
   )
