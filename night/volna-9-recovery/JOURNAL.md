@@ -136,3 +136,5 @@
 01:01 07-reporting: отложено на шаге dev
 01:16   07-reporting · resume: поатомный rework Terra по сохранённым находкам
 01:17   07-reporting · screen-dev: готово
+01:17   07-reporting · dev: фича 1/2 сохранена f4d65571b14f
+01:20   07-reporting · screen-dev: готово
