@@ -13,16 +13,21 @@ describe('Лист подбора: отметки «Собрал» и «Упак
   it('у одного артикула разные размеры — разные отметки', () => {
     // Артикул J308-6 приходит четырьмя строками: 38, 39, 40, 41. Раньше ключом был
     // только артикул, и галочка на 38-м вставала сразу на все четыре размера.
-    const sizes = ['38', '39', '40', '41'].map((size) => markKey({ article: 'J308-6', size }))
+    const sizes = ['38', '39', '40', '41'].map((size) => markKey({ article: 'J308-6', sku_code: 'SKU-1', product_name: 'Куртка', size }))
     expect(new Set(sizes).size).toBe(4)
   })
 
   it('товар без размера опирается на артикул', () => {
-    expect(markKey({ article: 'ART-1', size: null })).toBe('ART-1')
+    expect(markKey({ article: 'ART-1', sku_code: null, product_name: 'Товар', size: null })).toBe('ART-1::::Товар')
   })
 
   it('одинаковый размер у разных артикулов не смешивается', () => {
-    expect(markKey({ article: 'J308-6', size: '39' }))
-      .not.toBe(markKey({ article: 'J308-24', size: '39' }))
+    expect(markKey({ article: 'J308-6', sku_code: 'SKU-1', product_name: 'Товар', size: '39' }))
+      .not.toBe(markKey({ article: 'J308-24', sku_code: 'SKU-1', product_name: 'Товар', size: '39' }))
+  })
+
+  it('различает одинаковые артикул и размер при разном SKU или названии', () => {
+    expect(markKey({ article: 'A', sku_code: 'SKU-1', product_name: 'Один', size: 'M' }))
+      .not.toBe(markKey({ article: 'A', sku_code: 'SKU-2', product_name: 'Два', size: 'M' }))
   })
 })

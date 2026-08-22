@@ -13,7 +13,8 @@ import {
   TextCell,
   type Column,
 } from '../../ui-kit'
-import { generateFbsSupplyStickers, getFbsPickingList, type FbsPickingItem } from './fbsApi'
+import { apiUrl } from '../../api'
+import { getFbsPickingList, printFbsOrderTape, type FbsPickingItem } from './fbsApi'
 
 type Props = { token: string; authHeaders: (t: string) => Record<string, string>; supplyId: string | null; open: boolean; onClose: () => void }
 type Mark = { collected: boolean; packed: boolean }
@@ -26,8 +27,8 @@ export function buildNumberedItems(items: FbsPickingItem[]): NumberedItem[] {
   return items.map((item) => { const numberFrom = next; next += item.quantity; return { ...item, numberFrom, numberTo: next - 1 } })
 }
 
-export function markKey(item: Pick<FbsPickingItem, 'article' | 'size'>): string {
-  return item.size ? `${item.article}::${item.size}` : item.article
+export function markKey(item: Pick<FbsPickingItem, 'article' | 'sku_code' | 'size' | 'product_name'>): string {
+  return [item.article, item.sku_code ?? '', item.size ?? '', item.product_name].join('::')
 }
 
 function loadMarks(supplyId: string): Marks {
@@ -76,11 +77,22 @@ export function FfFbsPickList({ token, authHeaders, supplyId, open, onClose }: P
     if (!supplyId || !canPrint) return
     setPrinting(true); setError(null)
     try {
-      const stickers = await generateFbsSupplyStickers(token, authHeaders, supplyId)
-      if (!stickers.some((sticker) => sticker.sticker_file)) { setError('Стикеры ещё не готовы — попробуйте позже.'); return }
+      const workspaceResponse = await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/workspace`), { headers: { ...authHeaders(token) } })
+      if (!workspaceResponse.ok) throw new Error('Не удалось получить состав поставки для печати')
+      const workspace = await workspaceResponse.json() as { orders?: Array<{ id: string }> }
+      const orderIds = (workspace.orders ?? []).map((order) => order.id)
+      if (orderIds.length === 0) { setError('В поставке нет заказов для печати'); return }
+      const tape = await printFbsOrderTape(token, authHeaders, supplyId, {
+        order_ids: orderIds,
+        layout_json: null,
+        allow_partial: false,
+        include_order_qr: false,
+        reprint: false,
+      })
+      if (tape.missing > 0 || tape.failed > 0) { setError('Стикеры ещё не готовы или получены не все'); return }
       const w = window.open('', '_blank'); if (!w) return
-      const urls = stickers.flatMap((s) => s.sticker_file ? [s.sticker_file.startsWith('data:') ? s.sticker_file : `data:image/png;base64,${s.sticker_file}`] : [])
-      w.document.write(`<title>Стикеры заказов FBS</title>${urls.map((url) => `<img src="${url}" style="display:block;margin:0 auto 8px" />`).join('')}`); w.document.close(); w.print()
+      const labels = tape.orders.map((order, index) => `<section style="break-after:page"><div style="height:58mm;width:40mm;display:flex;align-items:center;justify-content:center;font:900 28px sans-serif">№ ${index + 1}</div><div>Заказ WB №${order.wb_order_id}</div></section>`).join('')
+      w.document.write(`<title>Стикеры заказов FBS</title>${labels}`); w.document.close(); w.print()
     } catch (e) { setError(e instanceof Error ? e.message : 'Не удалось получить стикеры') }
     finally { setPrinting(false) }
   }, [authHeaders, canPrint, supplyId, token])
@@ -94,7 +106,7 @@ export function FfFbsPickList({ token, authHeaders, supplyId, open, onClose }: P
     { key: 'packed', header: 'Упаковал', width: 90, align: 'center', render: (i) => <CheckCell checked={Boolean(marks[markKey(i)]?.packed)} onChange={(checked) => setMark(markKey(i), { packed: checked })} ariaLabel={`Упаковал ${i.product_name}`} testId="fbs-pick-packed" /> },
   ]
   const empty = items.length === 0 ? { title: 'В поставке нет позиций для подбора', hint: 'Закройте лист и проверьте состав поставки' } : { title: 'Нет позиций по фильтру', hint: 'Сбросьте поиск или выберите «Все»' }
-  return <ModalFrame open={open} title="Лист подбора" purpose={loading ? undefined : `Собрано ${collected}/${items.length} · Упаковано ${packed}/${items.length}`} busy={printing} onClose={onClose} testId="fbs-pick-list" actions={<><SecondaryAction onClick={onClose} disabled={printing}>Закрыть</SecondaryAction><PrintAction what="стикеры заказов" placement="panel" onClick={() => void printStickers()} disabledReason={!canPrint ? (printing ? undefined : loading ? 'Лист подбора ещё загружается' : error ? 'Сначала загрузите лист подбора' : 'В поставке нет заказов для печати') : undefined} testId="fbs-pick-print-stickers" /></>}>
+  return <ModalFrame open={open} title="Лист подбора" purpose={loading ? undefined : `Собрано ${collected}/${items.length} · Упаковано ${packed}/${items.length}`} busy={printing} onClose={onClose} testId="fbs-pick-list" actions={<><SecondaryAction onClick={onClose} disabled={printing}>Закрыть</SecondaryAction><PrintAction what="стикеры заказов" placement="panel" onClick={() => void printStickers()} disabledReason={!canPrint ? (printing ? 'Подготавливаем печать' : loading ? 'Лист подбора ещё загружается' : error ? 'Сначала загрузите лист подбора' : 'В поставке нет заказов для печати') : undefined} testId="fbs-pick-print-stickers" /></>}>
     {error ? <ErrorNotice>{error}</ErrorNotice> : null}
     <FilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Артикул или название" testId="fbs-pick-filters"><ChoiceFilter value={filter} options={[{ value: 'all', label: 'Все' }, { value: 'not_collected', label: 'Не собраны' }, { value: 'not_packed', label: 'Не упакованы' }]} onChange={setFilter} ariaLabel="Фильтр листа" testId="fbs-pick-filter-choice" /></FilterBar>
     <DataTable columns={columns} rows={visible} getRowKey={(i) => markKey(i)} loading={loading} empty={empty} testId="fbs-pick-table" />
