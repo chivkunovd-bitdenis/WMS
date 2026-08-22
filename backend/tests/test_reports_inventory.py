@@ -44,14 +44,16 @@ async def _seed_product_movement(
     *, tenant_id: uuid.UUID, seller_id: str, warehouse_id: str, location_id: str,
     number: int, quantity_delta: int = 1, movement_type: str = "inbound_intake",
     transfer_group_id: uuid.UUID | None = None,
+    product_id: uuid.UUID | None = None,
 ) -> str:
-    product_id = uuid.uuid4()
+    product_id = product_id or uuid.uuid4()
     async with SessionLocal() as session:
-        session.add(Product(
-            id=product_id, tenant_id=tenant_id, seller_id=uuid.UUID(seller_id),
-            name=f"Product {number:03}", sku_code=f"SKU-{number:03}",
-            wb_vendor_code=f"ARTICLE-{number:03}", wb_barcode=f"BARCODE-{number:03}",
-        ))
+        if await session.get(Product, product_id) is None:
+            session.add(Product(
+                id=product_id, tenant_id=tenant_id, seller_id=uuid.UUID(seller_id),
+                name=f"Product {number:03}", sku_code=f"SKU-{number:03}",
+                wb_vendor_code=f"ARTICLE-{number:03}", wb_barcode=f"BARCODE-{number:03}",
+            ))
         session.add(InventoryMovement(
             tenant_id=tenant_id, product_id=product_id, seller_id=uuid.UUID(seller_id),
             warehouse_id=uuid.UUID(warehouse_id), storage_location_id=uuid.UUID(location_id),
@@ -109,6 +111,7 @@ async def test_reports_inventory_uses_only_whitelisted_sorting_and_groupings(
     )
     assert operation.status_code == 200
     assert operation.json()["group_by"] == "operation"
+    assert operation.json()["rows"][0]["operation"] == "Приёмка"
     rejected = await async_client.get(
         "/reports/inventory", headers=headers, params={**params, "sort_by": "warehouse"}
     )
@@ -130,15 +133,16 @@ async def test_reports_inventory_hides_transfers_without_warehouse_and_flags_inc
         json={"code": "B-01"},
     )
     complete_group = uuid.uuid4()
-    await _seed_product_movement(
+    complete_product_id = uuid.UUID(await _seed_product_movement(
         tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id,
         location_id=location_id, number=1, quantity_delta=-5,
         movement_type="stock_transfer_out", transfer_group_id=complete_group,
-    )
+    ))
     await _seed_product_movement(
         tenant_id=tenant_id, seller_id=seller_id, warehouse_id=second_warehouse.json()["id"],
-        location_id=second_location.json()["id"], number=2, quantity_delta=5,
+        location_id=second_location.json()["id"], number=1, quantity_delta=5,
         movement_type="stock_transfer_in", transfer_group_id=complete_group,
+        product_id=complete_product_id,
     )
     incomplete_group = uuid.uuid4()
     await _seed_product_movement(
@@ -149,6 +153,18 @@ async def test_reports_inventory_hides_transfers_without_warehouse_and_flags_inc
     await _seed_product_movement(
         tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id,
         location_id=location_id, number=4, quantity_delta=3,
+    )
+    corrupt_group = uuid.uuid4()
+    corrupt_product_id = uuid.UUID(await _seed_product_movement(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id,
+        location_id=location_id, number=5, quantity_delta=-4,
+        movement_type="stock_transfer_out", transfer_group_id=corrupt_group,
+    ))
+    await _seed_product_movement(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=second_warehouse.json()["id"],
+        location_id=second_location.json()["id"], number=5, quantity_delta=4,
+        movement_type="stock_transfer_out", transfer_group_id=corrupt_group,
+        product_id=corrupt_product_id,
     )
     async with SessionLocal() as session:
         session.add(Warehouse(
@@ -166,7 +182,7 @@ async def test_reports_inventory_hides_transfers_without_warehouse_and_flags_inc
     assert all_warehouses.status_code == 200
     assert all_warehouses.json()["rows"] == [
         {
-            "operation": "inbound_intake", "in_qty": 3, "out_qty": 0,
+            "operation": "Приёмка", "in_qty": 3, "out_qty": 0,
             "net": 3, "integrity_error": False,
         }
     ]
@@ -176,7 +192,7 @@ async def test_reports_inventory_hides_transfers_without_warehouse_and_flags_inc
     )
     rows = {row["operation"]: row for row in selected_warehouse.json()["rows"]}
     assert rows["Перемещение: ушло"] == {
-        "operation": "Перемещение: ушло", "in_qty": 0, "out_qty": 7,
-        "net": -7, "integrity_error": True,
+        "operation": "Перемещение: ушло", "in_qty": 0, "out_qty": 11,
+        "net": -11, "integrity_error": True,
     }
-    assert rows["inbound_intake"]["integrity_error"] is False
+    assert rows["Приёмка"]["integrity_error"] is False

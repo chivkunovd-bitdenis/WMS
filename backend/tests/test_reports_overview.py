@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
 
 from app.db.session import SessionLocal
+from app.models.background_job import BackgroundJob
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import InventoryMovement
 from app.services.tokens import decode_access_token
@@ -67,7 +68,7 @@ async def test_reports_overview_requires_authentication(async_client: AsyncClien
 
 
 @pytest.mark.asyncio
-async def test_reports_overview_excludes_transfers_keeps_current_balance_and_aligns_daily_previous(
+async def test_reports_overview_uses_moscow_half_open_dates_and_fills_daily_gaps(
     async_client: AsyncClient,
 ) -> None:
     suffix = str(int(time.time() * 1000))
@@ -93,8 +94,6 @@ async def test_reports_overview_excludes_transfers_keeps_current_balance_and_ali
         "length_mm": 1, "width_mm": 1, "height_mm": 1,
     })
     product_id = product.json()["id"]
-    period_from = datetime(2026, 8, 1, tzinfo=UTC)
-    period_to = datetime(2026, 8, 3, tzinfo=UTC)
     await _seed_movement(
         tenant_id=tenant_id, product_id=product_id, seller_id=seller_id,
         warehouse_id=warehouse_id, storage_location_id=location_id, quantity_delta=7,
@@ -103,7 +102,12 @@ async def test_reports_overview_excludes_transfers_keeps_current_balance_and_ali
     await _seed_movement(
         tenant_id=tenant_id, product_id=product_id, seller_id=seller_id,
         warehouse_id=warehouse_id, storage_location_id=location_id, quantity_delta=-4,
-        created_at=datetime(2026, 8, 2, 20, 59, 59, 900000, tzinfo=UTC),
+        created_at=datetime(2026, 8, 4, 20, 59, 59, 900000, tzinfo=UTC),
+    )
+    await _seed_movement(
+        tenant_id=tenant_id, product_id=product_id, seller_id=seller_id,
+        warehouse_id=warehouse_id, storage_location_id=location_id, quantity_delta=-40,
+        created_at=datetime(2026, 8, 4, 21, 0, tzinfo=UTC),
     )
     transfer_group = uuid.uuid4()
     await _seed_movement(
@@ -116,10 +120,29 @@ async def test_reports_overview_excludes_transfers_keeps_current_balance_and_ali
             tenant_id=tenant_id, product_id=uuid.UUID(product_id),
             storage_location_id=uuid.UUID(location_id), quantity=23,
         ))
+        old_success = datetime.now(UTC) - timedelta(hours=2)
+        session.add_all(
+            [
+                BackgroundJob(
+                    tenant_id=tenant_id,
+                    job_type="wildberries_cards_sync",
+                    status="done",
+                    payload_json={"seller_id": seller_id},
+                    finished_at=old_success,
+                ),
+                BackgroundJob(
+                    tenant_id=tenant_id,
+                    job_type="wildberries_cards_sync",
+                    status="failed",
+                    payload_json={"seller_id": seller_id},
+                    finished_at=datetime.now(UTC),
+                ),
+            ]
+        )
         await session.commit()
 
     response = await async_client.get("/reports/overview", headers=headers, params={
-        "date_from": period_from.isoformat(), "date_to": period_to.isoformat(),
+        "date_from": "2026-08-02T00:00:00", "date_to": "2026-08-05T00:00:00",
     })
     assert response.status_code == 200
     body = response.json()
@@ -128,8 +151,15 @@ async def test_reports_overview_excludes_transfers_keeps_current_balance_and_ali
     assert body["out_qty"] == 4
     assert body["comparison"] == {"previous_out_qty": 0, "change_percent": None, "change": 4}
     assert body["daily"] == [
-        {"date": "2026-08-02", "in_qty": 7, "out_qty": 4, "previous_out_qty": 0},
+        {"date": "2026-08-02", "in_qty": 7, "out_qty": 0, "previous_out_qty": 0},
+        {"date": "2026-08-03", "in_qty": 0, "out_qty": 0, "previous_out_qty": 0},
+        {"date": "2026-08-04", "in_qty": 0, "out_qty": 4, "previous_out_qty": 0},
     ]
+    assert body["date_from"] == "2026-08-01T21:00:00+00:00"
+    assert body["date_to"] == "2026-08-04T21:00:00+00:00"
+    assert body["source_freshness"]["is_stale"] is True
+    assert datetime.fromisoformat(body["source_freshness"]["last_updated_at"]) == old_success
+    assert body["warnings"][0]["code"] == "wildberries_stale"
     assert body["generated_at"]
 
 

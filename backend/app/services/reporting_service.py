@@ -10,7 +10,9 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
+from sqlalchemy.sql.elements import ColumnElement
 
+from app.models.background_job import BackgroundJob
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import InventoryMovement
@@ -18,6 +20,10 @@ from app.models.product import Product
 from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
+from app.services.inventory_movement_report_service import (
+    REPORT_MOVEMENT_TYPE_GROUPS,
+    movement_group_label,
+)
 
 TRANSFER_TYPES = {"stock_transfer_in", "stock_transfer_out"}
 PAGE_SIZE = 50
@@ -25,6 +31,9 @@ GROUP_BY_VALUES = {"product", "operation"}
 PRODUCT_SORTS = {"name", "sku", "in_qty", "out_qty", "net"}
 OPERATION_SORTS = {"operation", "in_qty", "out_qty", "net"}
 MOSCOW_TZ = ZoneInfo("Europe/Moscow")
+WB_IMPORT_JOB_TYPES = frozenset(
+    {"wildberries_cards_sync", "wildberries_supplies_sync", "wildberries_marketplace_orders_sync"}
+)
 
 
 def validate_period(date_from: datetime, date_to: datetime) -> None:
@@ -34,13 +43,43 @@ def validate_period(date_from: datetime, date_to: datetime) -> None:
         raise ValueError("period cannot be longer than 366 days")
 
 
+def normalize_period(date_from: datetime, date_to: datetime) -> tuple[datetime, datetime]:
+    """Interpret offset-less calendar boundaries as Moscow time, then compare in UTC."""
+    if date_from.tzinfo is None:
+        date_from = date_from.replace(tzinfo=MOSCOW_TZ)
+    if date_to.tzinfo is None:
+        date_to = date_to.replace(tzinfo=MOSCOW_TZ)
+    date_from = date_from.astimezone(UTC)
+    date_to = date_to.astimezone(UTC)
+    validate_period(date_from, date_to)
+    return date_from, date_to
+
+
+def operation_label(movement_type: str) -> str:
+    if movement_type == "stock_transfer_in":
+        return "Перемещение: пришло"
+    if movement_type == "stock_transfer_out":
+        return "Перемещение: ушло"
+    return movement_group_label(movement_type)
+
+
+def operation_group_expr() -> ColumnElement[str]:
+    return case(
+        *(
+            (InventoryMovement.movement_type == movement_type, operation_label(movement_type))
+            for movement_type in REPORT_MOVEMENT_TYPE_GROUPS
+        ),
+        else_="Прочее",
+    )
+
+
 async def build_inventory_report(
     session: AsyncSession, tenant_id: uuid.UUID, *, date_from: datetime,
     date_to: datetime, group_by: str, page: int, seller_id: uuid.UUID | None = None,
     warehouse_id: uuid.UUID | None = None, search: str | None = None,
     sort_by: str | None = None, sort_order: str = "asc",
 ) -> dict[str, object]:
-    validate_period(date_from, date_to)
+    date_from, date_to = normalize_period(date_from, date_to)
     if group_by not in GROUP_BY_VALUES:
         raise ValueError("group_by must be product or operation")
     allowed_sorts = PRODUCT_SORTS if group_by == "product" else OPERATION_SORTS
@@ -91,19 +130,20 @@ async def build_inventory_report(
             Product.id,
         )
     else:
+        operation = operation_group_expr()
         grouped = select(
-            InventoryMovement.movement_type.label("movement_type"), in_qty, out_qty,
+            operation.label("operation"), in_qty, out_qty,
         ).select_from(InventoryMovement).join(
             Product, Product.id == InventoryMovement.product_id).join(Warehouse,
             Warehouse.id == InventoryMovement.warehouse_id).where(*filters).group_by(
-            InventoryMovement.movement_type)
+            operation)
         sort_columns = {
-            "operation": InventoryMovement.movement_type, "in_qty": in_qty,
+            "operation": operation, "in_qty": in_qty,
             "out_qty": out_qty, "net": in_qty - out_qty,
         }
         grouped = grouped.order_by(
             sort_columns[sort_by].desc() if sort_order == "desc" else sort_columns[sort_by].asc(),
-            InventoryMovement.movement_type,
+            operation,
         )
     count_stmt = select(func.count()).select_from(grouped.order_by(None).subquery())
     total = int((await session.scalar(count_stmt)) or 0)
@@ -136,7 +176,7 @@ async def build_inventory_report(
             for product_id, quantity in (await session.execute(balance_stmt)).all()
         }
     incomplete_transfer_product_ids: set[uuid.UUID] = set()
-    incomplete_transfer_types: set[str] = set()
+    incomplete_transfer_operations: set[str] = set()
     if warehouse_id is not None:
         visible_transfer_group_ids = select(InventoryMovement.transfer_group_id).where(
             InventoryMovement.tenant_id == tenant_id,
@@ -174,6 +214,7 @@ async def build_inventory_report(
                 and rows_for_group[0][0] == rows_for_group[1][0]
                 and rows_for_group[0][1] == rows_for_group[1][1]
                 and rows_for_group[0][2] != rows_for_group[1][2]
+                and {row[4] for row in rows_for_group} == TRANSFER_TYPES
                 and rows_for_group[0][3] != 0
                 and rows_for_group[1][3] != 0
                 and rows_for_group[0][3] * rows_for_group[1][3] < 0
@@ -181,7 +222,9 @@ async def build_inventory_report(
             )
             if not is_complete:
                 incomplete_transfer_product_ids.update(row[0] for row in rows_for_group)
-                incomplete_transfer_types.update(row[4] for row in rows_for_group)
+                incomplete_transfer_operations.update(
+                    operation_label(row[4]) for row in rows_for_group
+                )
     result: list[dict[str, object]] = []
     for row in rows:
         if group_by == "product":
@@ -193,12 +236,10 @@ async def build_inventory_report(
                 "net": int(incoming) - int(outgoing),
                 "integrity_error": pid in incomplete_transfer_product_ids})
         else:
-            movement_type, incoming, outgoing = row
-            operation = {"stock_transfer_in": "Перемещение: пришло",
-                "stock_transfer_out": "Перемещение: ушло"}.get(movement_type, movement_type)
+            operation, incoming, outgoing = row
             result.append({"operation": operation, "in_qty": int(incoming),
                 "out_qty": int(outgoing), "net": int(incoming) - int(outgoing),
-                "integrity_error": movement_type in incomplete_transfer_types})
+                "integrity_error": operation in incomplete_transfer_operations})
     return {"group_by": group_by, "page": page, "page_size": PAGE_SIZE,
         "total": total, "rows": result}
 
@@ -210,7 +251,7 @@ async def build_inventory_csv(
     include_seller: bool = True,
 ) -> AsyncIterator[bytes]:
     """Stream the complete, table-shaped export for the authorised slice."""
-    validate_period(date_from, date_to)
+    date_from, date_to = normalize_period(date_from, date_to)
     if group_by not in GROUP_BY_VALUES:
         raise ValueError("group_by must be product or operation")
 
@@ -275,13 +316,14 @@ async def build_inventory_csv(
             Product.wb_barcode, Seller.name,
         ).order_by(Product.name.asc(), Product.id)
     else:
+        operation = operation_group_expr()
         grouped = select(
-            InventoryMovement.movement_type.label("movement_type"), in_qty.label("in_qty"),
+            operation.label("operation"), in_qty.label("in_qty"),
             out_qty.label("out_qty"),
         ).select_from(InventoryMovement).join(
             Product, Product.id == InventoryMovement.product_id).join(
             Warehouse, Warehouse.id == InventoryMovement.warehouse_id).where(*filters).group_by(
-            InventoryMovement.movement_type).order_by(InventoryMovement.movement_type)
+            operation).order_by(operation)
 
     if (await session.execute(grouped.limit(1))).first() is None:
         raise ValueError("nothing to export for the selected period")
@@ -314,9 +356,7 @@ async def build_inventory_csv(
 
         yield b"\xef\xbb\xbf" + csv_line(["Операция", "Приход", "Расход", "Нетто"])
         result = await session.stream(grouped)
-        async for movement_type, incoming, outgoing in result:
-            operation = {"stock_transfer_in": "Перемещение: пришло",
-                "stock_transfer_out": "Перемещение: ушло"}.get(movement_type, movement_type)
+        async for operation, incoming, outgoing in result:
             yield csv_line([operation, int(incoming), int(outgoing), int(incoming) - int(outgoing)])
 
     return stream()
@@ -333,7 +373,7 @@ async def build_overview(
     search: str | None = None,
     include_technical_warnings: bool = True,
 ) -> dict[str, object]:
-    validate_period(date_from, date_to)
+    date_from, date_to = normalize_period(date_from, date_to)
     movement_filter = [
         InventoryMovement.tenant_id == tenant_id,
         InventoryMovement.created_at >= date_from,
@@ -492,8 +532,15 @@ async def build_overview(
         item = daily.setdefault(key, {"in_qty": 0, "out_qty": 0, "previous_out_qty": 0})
         item["previous_out_qty"] += -int(quantity_delta)
 
-    # An empty series is an explicit signal for the chart empty state.  Do not
-    # manufacture zero-valued points for every date in an otherwise empty slice.
+    # An entirely empty series is an explicit chart-empty signal.  Once either
+    # interval has a movement, preserve every calendar bucket so isolated facts
+    # do not look like a continuous daily flow.
+    if daily:
+        current_day = date_from.astimezone(MOSCOW_TZ).date()
+        day_count = length.days + (1 if length % timedelta(days=1) else 0)
+        for day_offset in range(day_count):
+            key = (current_day + timedelta(days=day_offset)).isoformat()
+            daily.setdefault(key, {"in_qty": 0, "out_qty": 0, "previous_out_qty": 0})
     days = [
         {"date": day, **values}
         for day, values in sorted(daily.items())
@@ -513,19 +560,45 @@ async def build_overview(
         freshness_filters.append(FbsWarehouseBinding.seller_id == seller_id)
     if warehouse_id is not None:
         freshness_filters.append(FbsWarehouseBinding.wms_warehouse_id == warehouse_id)
-    binding_count, oldest_sync = (
+    binding_count = int(
+        (await session.scalar(select(func.count()).where(*freshness_filters))) or 0
+    )
+    import_jobs = (
         await session.execute(
-            select(func.count(), func.min(FbsWarehouseBinding.last_sync_at)).where(
-                *freshness_filters
+            select(
+                BackgroundJob.job_type,
+                BackgroundJob.status,
+                BackgroundJob.payload_json,
+                BackgroundJob.finished_at,
+            ).where(
+                BackgroundJob.tenant_id == tenant_id,
+                BackgroundJob.job_type.in_(WB_IMPORT_JOB_TYPES),
             )
         )
-    ).one()
+    ).all()
+    attempted_streams: set[tuple[str | None, str]] = set()
+    successful_streams: dict[tuple[str | None, str], datetime] = {}
+    for job_type, job_status, payload, finished_at in import_jobs:
+        raw_seller_id = (payload or {}).get("seller_id")
+        if seller_id is not None and raw_seller_id != str(seller_id):
+            continue
+        stream = (raw_seller_id if isinstance(raw_seller_id, str) else None, job_type)
+        attempted_streams.add(stream)
+        if job_status != "done" or finished_at is None:
+            continue
+        if finished_at.tzinfo is None:
+            finished_at = finished_at.replace(tzinfo=UTC)
+        previous_success = successful_streams.get(stream)
+        if previous_success is None or finished_at > previous_success:
+            successful_streams[stream] = finished_at
     source_freshness: dict[str, object] | None = None
     warnings: list[dict[str, object]] = []
-    if binding_count:
-        sync_at = oldest_sync
-        if sync_at is not None and sync_at.tzinfo is None:
-            sync_at = sync_at.replace(tzinfo=UTC)
+    if binding_count or attempted_streams:
+        sync_at = (
+            min(successful_streams.values())
+            if attempted_streams and len(successful_streams) == len(attempted_streams)
+            else None
+        )
         # A missing timestamp is stale as well: it means that this enabled WB
         # feed has not yet supplied a confirmed freshness point.
         is_stale = sync_at is None or datetime.now(UTC) - sync_at > timedelta(hours=1)
