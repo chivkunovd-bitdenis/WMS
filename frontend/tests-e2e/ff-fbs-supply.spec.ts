@@ -292,8 +292,13 @@ test('fbs workspace: one blocked order prevents whole-supply delivery', async ({
   const blockedRow = page.getByTestId('fbs-kiz-row-2')
   const acceptedBg = await acceptedRow.evaluate((el) => window.getComputedStyle(el).backgroundColor)
   const blockedBg = await blockedRow.evaluate((el) => window.getComputedStyle(el).backgroundColor)
+  const acceptedBorder = await acceptedRow.evaluate((el) => window.getComputedStyle(el).borderLeftColor)
+  const blockedBorder = await blockedRow.evaluate((el) => window.getComputedStyle(el).borderLeftColor)
   // Оба ряда имеют одинаковый нейтральный фон (background.paper) — зелёного нет ни у одного.
   expect(acceptedBg).toBe(blockedBg)
+  expect(acceptedBg).toBe('rgb(255, 255, 255)')
+  expect(acceptedBorder).toBe('rgba(0, 0, 0, 0)')
+  expect(blockedBorder).toBe('rgba(0, 0, 0, 0)')
   const deliver = page.getByRole('button', { name: 'Передать в WB' })
   await expect(deliver).toBeDisabled()
   await deliver.hover()

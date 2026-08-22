@@ -137,3 +137,9 @@
 01:19   02-verdikt-screen · splitter: уже сделано, пропускаю
 01:20   02-verdikt-screen · screen-dev: готово
 01:20   02-verdikt-screen · dev: фича 1/1 сохранена 6e6a99569b84
+01:20   02-verdikt-screen · reviewer: уже сделано, пропускаю
+01:20   02-verdikt-screen · ui-critic: уже сделано, пропускаю
+01:21   02-verdikt-screen · clicker: готово
+01:23   02-verdikt-screen · ux-judge: готово
+01:23   02-verdikt-screen · ux-judge: находки, круг 1 — назад к разработке
+01:26   02-verdikt-screen · screen-dev: готово
