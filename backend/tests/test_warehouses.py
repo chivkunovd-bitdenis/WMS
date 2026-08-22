@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 import time
+import uuid
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
+
+from app.db.session import SessionLocal
+from app.models.storage_location import StorageLocation
+from app.models.warehouse import Warehouse
 
 
 @pytest.mark.asyncio
@@ -77,3 +83,43 @@ async def test_operational_warehouse_list_and_scan_resolver(async_client: AsyncC
     )
     assert rename_collision.status_code == 409, rename_collision.text
     assert rename_collision.json()["detail"] == "location_code_taken"
+
+    # Existing data can predate the cross-entity validation.  A scan must reject
+    # that corrupt legacy collision rather than selecting a result by priority.
+    async with SessionLocal() as session:
+        stored_warehouse = await session.scalar(
+            select(Warehouse).where(Warehouse.id == uuid.UUID(body["id"]))
+        )
+        assert stored_warehouse is not None
+        session.add(
+            StorageLocation(
+                tenant_id=stored_warehouse.tenant_id,
+                warehouse_id=stored_warehouse.id,
+                code="LEGACY-COLLISION",
+                barcode=stored_warehouse.barcode,
+            )
+        )
+        await session.commit()
+
+    ambiguous_scan = await async_client.get(
+        "/warehouses/resolve", headers=headers, params={"barcode": body["barcode"]}
+    )
+    assert ambiguous_scan.status_code == 409, ambiguous_scan.text
+    assert ambiguous_scan.json()["detail"] == "barcode_ambiguous"
+
+    foreign_registered = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Foreign Warehouse Scan Co",
+            "slug": f"foreign-warehouse-scan-{suffix}",
+            "admin_email": f"foreign-warehouse-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert foreign_registered.status_code == 200, foreign_registered.text
+    foreign_headers = {"Authorization": f"Bearer {foreign_registered.json()['access_token']}"}
+    foreign_scan = await async_client.get(
+        "/warehouses/resolve", headers=foreign_headers, params={"barcode": body["barcode"]}
+    )
+    assert foreign_scan.status_code == 404, foreign_scan.text
+    assert foreign_scan.json()["detail"] == "barcode_unknown"

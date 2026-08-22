@@ -96,3 +96,7 @@
 17:18   04-warehouse-switch · dev: фича 12/13 сохранена f5216679efce
 17:21   04-warehouse-switch · screen-dev: готово
 17:21   04-warehouse-switch · dev: фича 13/13 сохранена e465bdc61b2c
+17:31   04-warehouse-switch · reviewer: готово
+17:31 04-warehouse-switch: отложено — reviewer, круги кончились
+19:54   04-warehouse-switch · resume: поатомный rework Terra по сохранённым находкам
+20:03   04-warehouse-switch · backend-dev: готово
