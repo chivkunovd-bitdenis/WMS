@@ -360,6 +360,67 @@ def test_fbs_metadata_gate_pending_blocks_filled_allows() -> None:
     assert compute_delivery_allowed(order, [filled]) is True
 
 
+# S-03-TC-001…007 — one server verdict: reason and blocking WB decisions win.
+@pytest.mark.parametrize(
+    ("decision", "reason", "signature", "tone", "allowed"),
+    [
+        ("filled", None, "WB: принято", "ok", True),
+        ("optional", None, "WB: код не требуется", "neutral", True),
+        ("notRequired", None, "WB: код не требуется", "neutral", True),
+        ("filled", "invalid_kiz", "WB не принял", "stop", False),
+        ("pending", None, "WB: проверяет", "stop", False),
+        ("required", None, "WB: нужен код", "stop", False),
+        ("mystery", None, "Нет ответа WB", "stop", False),
+    ],
+)
+def test_wb_order_verdict_contract(
+    decision: str,
+    reason: str | None,
+    signature: str,
+    tone: str,
+    allowed: bool,
+) -> None:
+    from types import SimpleNamespace
+
+    from app.services.fbs_marking_service import _wb_order_verdict
+
+    order = SimpleNamespace(required_meta_json=["sgtin"], optional_meta_json=[])
+    marking = SimpleNamespace(
+        kind="sgtin",
+        meta_status="unknown",
+        reason=reason,
+        meta_details_json={"decision": decision},
+    )
+    verdict = _wb_order_verdict(order, [marking])
+    assert verdict == {
+        "signature": signature,
+        "tone": tone,
+        "reason": reason,
+        "delivery_allowed": allowed,
+    }
+
+
+def test_wb_order_verdict_aggregates_blocker_over_positive() -> None:
+    from types import SimpleNamespace
+
+    from app.services.fbs_marking_service import _wb_order_verdict
+
+    order = SimpleNamespace(required_meta_json=["sgtin", "imei"], optional_meta_json=[])
+    markings = [
+        SimpleNamespace(
+            kind="sgtin", meta_status="accepted", reason=None,
+            meta_details_json={"decision": "filled"},
+        ),
+        SimpleNamespace(
+            kind="imei", meta_status="pending", reason=None,
+            meta_details_json={"decision": "pending"},
+        ),
+    ]
+    verdict = _wb_order_verdict(order, markings)
+    assert verdict["signature"] == "WB: проверяет"
+    assert verdict["delivery_allowed"] is False
+
+
 @pytest.mark.asyncio
 async def test_fbs_intake_stores_required_optional_meta(
     async_client: AsyncClient,

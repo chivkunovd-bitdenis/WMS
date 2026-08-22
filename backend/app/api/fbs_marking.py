@@ -38,6 +38,7 @@ class FbsOrderMetadataOut(BaseModel):
     states: list[dict[str, Any]]
     delivery_allowed: bool
     last_checked_at: str | None
+    verdict: dict[str, Any]
 
 
 def _marking_out(row: FbsOrderMarking) -> FbsOrderMarkingOut:

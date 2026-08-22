@@ -144,6 +144,9 @@ def map_wb_decision_to_meta_status(decision: str | None) -> str | None:
         "filled": META_STATUS_ACCEPTED,
         "rejected": META_STATUS_REJECTED,
         "pending": META_STATUS_PENDING,
+        "required": META_STATUS_MISSING,
+        "optional": META_STATUS_ALLOWED_WITHOUT_CHECK,
+        "notrequired": META_STATUS_ALLOWED_WITHOUT_CHECK,
         "allowedwithoutcheck": META_STATUS_ALLOWED_WITHOUT_CHECK,
         "allowed_without_check": META_STATUS_ALLOWED_WITHOUT_CHECK,
         "replacementrequired": META_STATUS_REPLACEMENT_REQUIRED,
@@ -275,12 +278,89 @@ def _meta_details_from_markings(markings: list[FbsOrderMarking]) -> dict[str, An
         mark = current_order_marking(markings, kind, include_rejected=True)
         if mark is None:
             continue
+        details = mark.meta_details_json if isinstance(mark.meta_details_json, dict) else {}
         out[mark.kind] = {
             "status": mark.meta_status,
             "value": mark.value,
+            "decision": details.get("decision"),
             "reason": mark.reason,
         }
     return out
+
+
+def _wb_order_verdict(
+    order: FbsOrder, markings: list[FbsOrderMarking]
+) -> dict[str, Any]:
+    """Return the single operator-facing WB verdict and its delivery gate."""
+    required = list(order.required_meta_json or [])
+    optional = list(order.optional_meta_json or [])
+    requested = required + [kind for kind in optional if kind not in required]
+    states: list[dict[str, Any]] = []
+    for kind in requested:
+        mark = current_order_marking(markings, kind, include_rejected=True)
+        details = (
+            mark.meta_details_json
+            if mark and isinstance(mark.meta_details_json, dict)
+            else {}
+        )
+        states.append({
+            "decision": details.get("decision") if mark else None,
+            "reason": mark.reason if mark else None,
+            "status": mark.meta_status if mark else META_STATUS_MISSING,
+        })
+
+    if not states:
+        return {
+            "signature": "Нет ответа WB",
+            "tone": "stop",
+            "reason": None,
+            "delivery_allowed": False,
+        }
+    for state in states:
+        if state["reason"]:
+            return {
+                "signature": "WB не принял",
+                "tone": "stop",
+                "reason": state["reason"],
+                "delivery_allowed": False,
+            }
+    if any(state["decision"] is None for state in states):
+        return {
+            "signature": "Нет ответа WB",
+            "tone": "stop",
+            "reason": None,
+            "delivery_allowed": False,
+        }
+    decisions = {str(state["decision"]).strip().lower().replace("-", "_") for state in states}
+    if "required" in decisions or any(state["status"] == META_STATUS_MISSING for state in states):
+        return {
+            "signature": "WB: нужен код",
+            "tone": "stop",
+            "reason": None,
+            "delivery_allowed": False,
+        }
+    if "pending" in decisions:
+        return {
+            "signature": "WB: проверяет",
+            "tone": "stop",
+            "reason": None,
+            "delivery_allowed": False,
+        }
+    if not decisions.issubset({"filled", "optional", "notrequired", "not_required"}):
+        return {
+            "signature": "Нет ответа WB",
+            "tone": "stop",
+            "reason": None,
+            "delivery_allowed": False,
+        }
+    if decisions.issubset({"optional", "notrequired", "not_required"}):
+        return {
+            "signature": "WB: код не требуется",
+            "tone": "neutral",
+            "reason": None,
+            "delivery_allowed": True,
+        }
+    return {"signature": "WB: принято", "tone": "ok", "reason": None, "delivery_allowed": True}
 
 
 def compute_delivery_allowed(
@@ -351,6 +431,7 @@ def build_order_metadata(
         "optional": optional,
         "states": states,
         "delivery_allowed": delivery_allowed,
+        "verdict": _wb_order_verdict(order, markings),
         "last_checked_at": (
             order.metadata_last_checked_at.isoformat()
             if order.metadata_last_checked_at
