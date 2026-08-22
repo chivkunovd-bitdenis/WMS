@@ -139,3 +139,5 @@
 00:46   01-wb-marking · ux-judge: Terra-rework не закрыл вердикт — эскалация Sol
 00:46   01-wb-marking · ux-judge: находки, круг 3 — назад к разработке
 00:48   01-wb-marking · backend-dev: готово
+00:48   01-wb-marking · dev: фича 1/5 сохранена d80ab8cf6652
+00:51   01-wb-marking · backend-dev: готово
