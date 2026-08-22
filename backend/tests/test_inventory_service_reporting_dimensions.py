@@ -59,7 +59,9 @@ async def test_movement_keeps_seller_and_warehouse_at_write_time(
         product = await session.get(Product, product_id)
         assert product is not None
         seller = Seller(tenant_id=product.tenant_id, name="Original seller")
+        reassigned_seller = Seller(tenant_id=product.tenant_id, name="Reassigned seller")
         session.add(seller)
+        session.add(reassigned_seller)
         await session.flush()
         product.seller_id = seller.id
         location = await get_or_create_sorting_location(
@@ -78,7 +80,7 @@ async def test_movement_keeps_seller_and_warehouse_at_write_time(
         await session.flush()
         original_seller_id = seller.id
 
-        product.seller_id = None
+        product.seller_id = reassigned_seller.id
         location.code = f"moved-{suffix}"
         location.warehouse_id = warehouse_two_id
         await session.commit()
