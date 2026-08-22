@@ -1,23 +1,28 @@
-# Backend Dev · 06-picking-list-order · атом 2
+# DEV · 06-picking-list-order · атом 3
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/tests/test_fbs_supply_assembly.py` — расширена интеграционная проверка загрузки поставки: заказы с одинаковым `wb_order_id`, вставленные в обратном порядке, возвращаются по `order.id`.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/app/models/fbs_supply.py` — без изменений в этом проходе: relationship уже задан как `order_by="(FbsOrder.wb_order_id, FbsOrder.id)"`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/tests/test_fbs_supply_assembly.py` — расширен API-сценарий `S-03-TC-009`: две позиции без товарных признаков образуют одну каноническую строку `№ 1–2`, а полный `order_ids` отсортирован по `wb_order_id`; запрос повторяется с идентичным ответом.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/night/volna-9-recovery/cards/06-picking-list-order/DEV.md` — отчёт backend-разработки по атому 3.
+
+Существующая реализация в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/app/services/fbs_supply_service.py` и `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/app/api/fbs_supplies.py` уже возвращает канонический порядок `(article, sku_code, size, product_name)`, непрерывные диапазоны и полный `order_ids`; изменений в ней не потребовалось.
 
 ## Гейты
 
-- `ruff check .` (из `backend/`) — не пройден: 82 существующие ошибки вне изменённого атома; `ruff check tests/test_fbs_supply_assembly.py` — пройден.
-- `mypy .` (из `backend/`) — не пройден: 21 существующая ошибка в 6 посторонних файлах.
-- `pytest` (из `backend/`) — начат, собрано 821 тестов; среда вернула поток без финального итога. Целевой прогон `pytest tests/test_fbs_supply_assembly.py -k 'orders_are_returned_in_stable_order or relationship_orders_by_wb_id_then_internal_id'` — пройден, 2 passed.
-- `python3 scripts/ci/back_guard.py` — не запущен: файл отсутствует в этой рабочей копии.
-- `python3 scripts/ci/check_migrations.py` — не запущен: файл отсутствует в этой рабочей копии.
-- `git diff --check` — пройден.
+- `ruff check tests/test_fbs_supply_assembly.py` — PASS.
+- `ruff check .` — FAIL: 82 существующие несвязанные нарушения в backend; изменённый тест в них не указан.
+- `mypy .` — FAIL: 21 существующая ошибка в 6 несвязанных файлах; атом 3 их не меняет.
+- `pytest tests/test_fbs_supply_assembly.py` — PASS: `18 passed`.
+- `pytest` — не завершён: после `61 passed` за 178 секунд остановлен вручную; до остановки ошибок не было.
+- `python3 scripts/ci/back_guard.py` — NOT RUN: файл `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/scripts/ci/back_guard.py` отсутствует.
+- `python3 scripts/ci/check_migrations.py` — NOT RUN: файл `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/scripts/ci/check_migrations.py` отсутствует.
+- `git diff --check` — PASS.
 
 ## Не реализовано
 
-- Нет. Находки `REVIEW.md` относятся к печати, API-валидации и фронтенду следующих атомов; этот атом покрывает только стабильный порядок relationship поставки.
+- Миграций нет: атом 3 меняет вычисление и выдачу листа, не схему данных.
+- Находки `REVIEW.md` о физической печати, popup, Честном знаке и предпросмотре относятся к frontend и слою ленты, не к серверной выдаче листа этого атома.
 
 ## Находки
 
-- Для одного селлера одинаковый `wb_order_id` защищён производственным уникальным ограничением. Тест развязки использует двух селлеров одной организации, не отключая ограничение, и проверяет фактическую загрузку relationship через endpoint поставки.
+- Нет.
