@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { WarehouseContextSwitch } from './WarehouseContextSwitch'
+import { WarningNotice } from './WarningNotice'
 
 const options = [{ id: 'north', name: 'Склад Север' }, { id: 'south', name: 'Склад Юг' }]
 
@@ -15,6 +16,8 @@ describe('WarehouseContextSwitch', () => {
     render(<WarehouseContextSwitch options={options} value="north" onChange={onChange} testId="warehouse" />)
     fireEvent.click(screen.getByTestId('warehouse-button'))
     expect(screen.getByText('Склад Юг')).toBeInTheDocument()
+    expect(screen.queryByText('north')).toBeNull()
+    expect(screen.queryByText('south')).toBeNull()
     fireEvent.click(screen.getByTestId('warehouse-option-south'))
     expect(onChange).toHaveBeenCalledWith('south')
     expect(screen.queryByTestId('warehouse-option-south')).toBeNull()
@@ -55,5 +58,11 @@ describe('WarehouseContextSwitch', () => {
     )
     expect(screen.getByTestId('warehouse-error')).toHaveTextContent('Не удалось загрузить склады')
     expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  it('renders a non-blocking warning notice', () => {
+    render(<WarningNotice testId="warehouse-warning">Нужно подобрать товары с другого склада</WarningNotice>)
+    expect(screen.getByTestId('warehouse-warning')).toHaveTextContent('Нужно подобрать товары с другого склада')
+    expect(screen.getByRole('alert')).toHaveTextContent('Нужно подобрать товары с другого склада')
   })
 })

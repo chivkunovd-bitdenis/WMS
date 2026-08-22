@@ -1,27 +1,22 @@
-# DEV · 04-warehouse-switch · атом 3
+# 04-warehouse-switch · screen-dev
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/tests/test_fbs_supply_from_orders.py` — добавлен регрессионный API-сценарий: если старый клиент не передал `selected_warehouse_id`, создание использует рассчитанный рекомендуемый операционный склад, а не склад исходного заказа.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md` — отчёт backend-dev.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/ui-kit/WarehouseContextSwitch.test.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md`
 
 ## Гейты
 
-- `ruff check .` — не пройден: 80 ранее существовавших нарушений вне атома; изменённый тест проходит проверку стиля.
-- `mypy .` — не пройден: 21 ранее существовавшая ошибка в шести сторонних файлах; изменённый тест не добавил ошибок.
-- `pytest -q tests/test_fbs_supply_from_orders.py -k 'warehouse_switch or selected_operational or without_selection'` — пройдено, 3 passed, 17 deselected.
-- `pytest` — запуск начат, но среда завершила вывод до итогового результата после старта 823 тестов; финальный статус не получен.
-- `python3 scripts/ci/back_guard.py` — не запущен: файла `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/scripts/ci/back_guard.py` в рабочей копии нет.
-- `python3 scripts/ci/check_migrations.py` — не запущен: файла `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/scripts/ci/check_migrations.py` в рабочей копии нет.
-- `git diff --check` — пройден.
-- `git commit` — не выполнен: Git отказал в создании `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-04-warehouse-switch/index.lock` с ошибкой `Operation not permitted`; изменения остались в рабочем дереве.
+- `npx tsc --noEmit -p tsconfig.app.json` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend` — зелёный.
+- `npm run test:unit` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend` — зелёный. Добавлена проверка `WarningNotice` и подтверждено, что в раскрытом переключателе видны только имена складов, без их ID.
+- `python3 scripts/ui/ui_guard.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch` — красный из-за новых нарушений в неразрешённых этим атомом файлах: `frontend/src/components/WbProductPickerDialog.tsx`, `frontend/src/screens/v2/FfFbsOrdersScreen.tsx`, `frontend/src/screens/v2/FfFbsStockSyncScreen.tsx`, `frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx`, `frontend/src/screens/v2/SellerInboundDraftScreen.tsx`. Базовая линия не менялась.
 
 ## Не реализовано
 
-- Сервис и роут уже содержат нужный контракт этого атома: `selected_warehouse_id`, смену склада до первого действия, запрет после старта и выбор `recommended_warehouse_id` без явного поля. Изменения кода не потребовались; добавлена защита от регрессии замечания ревью №3.
-- Находка ревью №1 относится к frontend-совместимости формы ответа; она не изменялась в рамках роли backend-dev и заданного атомарного backend-слоя.
-- Находки ревью №2 и №4–15 относятся к другим атомам, файлам либо frontend-слою и не менялись.
+Все пункты атома реализованы буквально: `WarehouseContextSwitch` скрывается при 0–1 варианте, открывает список имён и закрывает его после выбора; loading, disabled и error состояния не позволяют совершить действие и показывают причину. `WarningNotice` показывает неблокирующее предупреждение.
 
-## Блокеры
+## Находки
 
-Полные repo-гейты зафиксировали существующие нарушения и отсутствующие CI-скрипты; целевой регрессионный набор пройден. Сохранение в Git не завершено из-за запрета записи lock-файла вне разрешённой рабочей копии.
+Ревью `REVIEW.md` содержит 15 замечаний к серверному коду и экранным срезам. Прямых замечаний к файлам этого ui-kit атома нет; их исправление выходит за разрешённые границы данного шага.
+
+Git-коммит не создан: среда запретила создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-04-warehouse-switch/index.lock` (`Operation not permitted`). Изменения остаются в рабочем дереве и требуют коммита из среды с доступом к Git metadata.
