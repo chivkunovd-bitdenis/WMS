@@ -81,3 +81,5 @@
 22:13   06-picking-list-order · resume: поатомный rework Sol по сохранённым находкам
 22:14   06-picking-list-order · resume: поатомный rework Sol по сохранённым находкам
 22:16   06-picking-list-order · screen-dev: готово
+22:16   06-picking-list-order · dev: фича 1/6 сохранена e52306516d56
+22:19   06-picking-list-order · backend-dev: готово

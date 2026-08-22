@@ -126,6 +126,7 @@ async def print_fbs_order_tape(
 
     batch: PrintBatchResult | None = None
     qr_asset_by_order: dict[uuid.UUID, uuid.UUID] = {}
+    qr_error_order_ids: set[uuid.UUID] = set()
     errors: list[FbsOrderTapeError] = []
     if include_order_qr:
         try:
@@ -161,12 +162,13 @@ async def print_fbs_order_tape(
             )
             for err in batch.order_errors
         )
+        qr_error_order_ids = {err.order_id for err in batch.order_errors}
 
     result_orders: list[FbsOrderTapeOrder] = []
     shortage_total = 0
     for order in selected_orders:
         qr_asset_id = qr_asset_by_order.get(order.id)
-        if include_order_qr and qr_asset_id is None:
+        if include_order_qr and qr_asset_id is None and order.id not in qr_error_order_ids:
             errors.append(
                 FbsOrderTapeError(
                     order_id=order.id,
@@ -176,6 +178,7 @@ async def print_fbs_order_tape(
                     message="QR заказа WB не получен.",
                 )
             )
+        if include_order_qr and qr_asset_id is None:
             continue
         requires_honest_sign = _order_requires_sgtin(order)
         # Поставка со снятым требованием Честного знака печатается как немаркированная:

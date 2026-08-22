@@ -1,29 +1,49 @@
-# DEV · 06-picking-list-order · атом 1 · переделка по REVIEW
+# Backend development report · 06-picking-list-order · атом 4 · переделка по REVIEW
+
+## Что реализовано
+
+- Эндпоинт `POST /operations/fbs-supplies/{supply_id}/order-print-tape` — контракт ответа сохранён; для отсутствующего WB PNG возвращается одна конкретная ошибка с постоянным `order_number`, без второго общего `order_qr_missing`.
+- Сервис `print_fbs_order_tape` — ошибка из `PrintBatchResult.order_errors` считается уже зарегистрированной ошибкой WB-стикера; отсутствие готового asset больше не дублирует её, а следующий заказ сохраняет исходный номер полного листа.
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/ui-kit/ModalFrame.tsx` — убран отсутствующий в установленной MUI 9 prop `disableEscapeKeyDown`; управляемая модалка по-прежнему игнорирует любой запрос закрытия, пока `busy=true`.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/ui-kit/Cells.tsx` — aria-подпись `CheckCell` передаётся в нативный input через актуальный MUI API `slotProps.input`.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/ui-kit/PickingListPrimitives.test.ts` — точечная проверка `ModalFrame` приведена к актуальному публичному контракту компонента и продолжает доказывать блокировку закрытия в состоянии `busy`.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/night/volna-9-recovery/cards/06-picking-list-order/DEV.md` — записан отчёт переделки атома.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/app/services/fbs_order_tape_print_service.py` — исключено повторное добавление общей ошибки для заказа, по которому batch уже вернул конкретную ошибку WB-стикера.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/tests/test_fbs_supply_assembly.py` — регрессионная проверка усилена до точного требования: у проблемного заказа одна ошибка `wb_sticker_missing` с номером `2`, следующий готовый заказ остаётся номером `3`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/night/volna-9-recovery/cards/06-picking-list-order/DEV.md` — отчёт текущей переделки.
 
-Остальные разрешённые файлы атома уже содержат требуемые `ChoiceFilter`, `PrintAction` со значением `стикеры заказов`, экспорты и изолированную демонстрацию всех четырёх элементов в `UiKitShowcase`; находка ревью не потребовала их изменения.
+## Миграции
+
+Нет.
+
+## Тесты
+
+- `test_fbs_order_tape_missing_png_preserves_following_order_number` — перемешанный полный набор нормализуется сервером; отсутствующий PNG даёт ровно одну исходную batch-ошибку с постоянным номером `2`; готовые заказы имеют номера `1` и `3`.
+- Существующие `test_fbs_order_tape_*` — полный состав, канонический порядок, стабильная нумерация и совместимость построчной перепечатки.
+- `test_tape_covers_every_order_and_matches_picking_list` — интеграционный endpoint-сценарий одинакового порядка листа и ленты при перемешанных ID и повторной печати.
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend` — **зелёный**, код завершения 0.
-- `npm run test:unit -- src/ui-kit/PickingListPrimitives.test.ts` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend` — **зелёный**, 1 файл и 4 теста пройдены.
-- `python3 scripts/ui/ui_guard.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order` — **красный только на двух существующих нарушениях вне файлов атома**: `frontend/src/components/WbProductPickerDialog.tsx` (`экран-монолит 0 → 646`) и `frontend/src/screens/v2/SellerInboundDraftScreen.tsx` (`экран-монолит 1111 → 1169`). Для карточки guard фиксирует улучшения в `FfFbsPickList.tsx` и `FfFbsSupplyWorkspace.tsx`; новых нарушений в UI-kit нет, базовая линия не менялась.
-- `git diff --check -- frontend/src/ui-kit/ModalFrame.tsx frontend/src/ui-kit/Cells.tsx frontend/src/ui-kit/PickingListPrimitives.test.ts night/volna-9-recovery/cards/06-picking-list-order/DEV.md` из корня рабочей копии — **зелёный**, код завершения 0.
-- `git add -- frontend/src/ui-kit/ModalFrame.tsx frontend/src/ui-kit/Cells.tsx frontend/src/ui-kit/PickingListPrimitives.test.ts night/volna-9-recovery/cards/06-picking-list-order/DEV.md && git diff --cached --check && git commit -m "fix(ui-kit): support MUI 9 picking primitives"` из корня рабочей копии — **красный из-за ограничения среды**: Git не может создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-06-picking-list-order/index.lock` (`Operation not permitted`). Несвязанные изменения оркестратора в коммит не добавлялись.
+- `ruff check app/services/fbs_order_tape_print_service.py app/api/fbs_supplies.py tests/test_fbs_supply_assembly.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend` — пройдено, `All checks passed!`, код 0.
+- `mypy app/services/fbs_order_tape_print_service.py app/api/fbs_supplies.py tests/test_fbs_supply_assembly.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend` — не пройдено: 21 существующая диагностика в 5 файлах, включая транзитивно проверенные `wildberries_credentials_service.py`, `fbs_stock_sync_service.py`, `fbs_warehouse_binding_service.py`, `test_fbs_shipment_warehouse_sc.py` и прежние строки `test_fbs_supply_assembly.py`; изменённые строки новой диагностики не добавили.
+- `pytest -q tests/test_fbs_supply_assembly.py -k 'fbs_order_tape'` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend` — пройдено: `5 passed, 15 deselected in 0.08s`, код 0.
+- `pytest -q tests/test_fbs_packaging_integration.py -k 'tape_covers_every_order_and_matches_picking_list'` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend` — пройдено: `1 passed, 14 deselected in 1.08s`, код 0.
+- `python3 scripts/ci/back_guard.py` — не применим: атом не добавляет и не меняет роут.
+- `python3 scripts/ci/check_migrations.py` — не применим: миграций нет.
+- `git diff --check -- backend/app/services/fbs_order_tape_print_service.py backend/tests/test_fbs_supply_assembly.py night/volna-9-recovery/cards/06-picking-list-order/DEV.md` из корня рабочей копии — пройдено, код 0.
+- `git add -- backend/app/services/fbs_order_tape_print_service.py backend/tests/test_fbs_supply_assembly.py night/volna-9-recovery/cards/06-picking-list-order/DEV.md && git diff --cached --check && git commit -m "fix(fbs): avoid duplicate tape sticker errors"` из корня рабочей копии — не выполнено: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-06-picking-list-order/index.lock`, `Operation not permitted`.
 
 ## Не реализовано
 
-- Находки 1, 3–6 из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/night/volna-9-recovery/cards/06-picking-list-order/REVIEW.md` относятся к реестру экрана, продуктовой модалке, backend-сервису, общему предпросмотру печати и браузерным сценариям. Они не относятся к файлам и слою атома 1, поэтому в этой переделке не исправлялись.
-- Полностью зелёный `ui_guard.py` нельзя получить в границе атома: оба новых нарушения находятся в запрещённых для этой роли соседних экранах. Храповая базовая линия намеренно не обновлялась.
-- Отдельный восстанавливаемый commit SHA не создан: общая Git-метапапка worktree находится вне доступной для записи области. Исправление локально реализовано, но не сохранено в Git.
+- Frontend-часть находки 4 (`FbsPrintPreviewDialog.tsx` показывает одинаковый текст для разных кодов ошибок) не относится к роли `backend-dev` и файлам атома.
+- Находки 1–3 и 5–6 из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/night/volna-9-recovery/cards/06-picking-list-order/REVIEW.md` относятся к frontend-реестру, UI-компонентам, маршруту модалки, режимам предпросмотра и браузерным тестам; они не исправлялись.
 - Следующие атомы из `FEATURES.md` не выполнялись.
 
 ## Находки
 
-- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались.
+- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались и не изменялись.
+- Несвязанное изменение `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/night/volna-9-recovery/JOURNAL.md` сохранено без изменений и в коммит атома не включается.
+
+## Блокеры
+
+- Реализация и целевые тесты выполнены локально, но отдельный восстанавливаемый коммит создать невозможно: общая Git-метапапка worktree недоступна среде для записи. Последний сохранённый `HEAD` — `e5230651`; он не содержит текущую переделку.
+- Узкий `mypy` имеет существующий технический долг, перечисленный в разделе «Гейты»; новых диагностик на изменённых строках нет.

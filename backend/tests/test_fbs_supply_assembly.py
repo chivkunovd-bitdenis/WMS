@@ -309,8 +309,9 @@ async def test_fbs_order_tape_missing_png_preserves_following_order_number(
         (orders[2].id, 3),
     ]
     missing_errors = [error for error in result.order_errors if error.order_id == orders[1].id]
-    assert missing_errors
-    assert {error.order_number for error in missing_errors} == {2}
+    assert [(error.code, error.order_number) for error in missing_errors] == [
+        ("wb_sticker_missing", 2)
+    ]
 
 
 # TC-NEW-FBS-SUPPLY-ORDER-001 — supply.orders is stable by WB id, then UUID.
