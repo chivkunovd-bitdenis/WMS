@@ -16,7 +16,8 @@ import {
   Stack,
   Typography,
 } from '@mui/material'
-import { ErrorNotice, PrimaryAction, TableSkeletonBody, WarningNotice } from '../../ui-kit'
+import { DataTable, ErrorNotice, PrimaryAction, TableSkeletonBody, WarningNotice, WarehouseContextSwitch } from '../../ui-kit'
+import type { Column } from '../../ui-kit'
 import {
   FbsApiError,
   createFbsIdempotencyKey,
@@ -35,6 +36,22 @@ type Props = {
   onClose: () => void
   onCreated: (workspace: FbsWorkspace) => void
 }
+
+type InventoryLine = NonNullable<NonNullable<FbsSupplyPreflight['summary']['inventory']>['lines']>[number]
+
+const inventoryColumns: Column<InventoryLine>[] = [
+  { key: 'product', header: 'Товар', render: (line) => line.name },
+  { key: 'required', header: 'Нужно', align: 'right', render: (line) => line.required },
+  { key: 'here', header: 'Здесь', align: 'right', render: (line) => line.here },
+  {
+    key: 'source',
+    header: 'Взять со склада',
+    align: 'right',
+    render: (line) => line.source_warehouse
+      ? `${line.source_warehouse.name} · ${line.required - line.here}`
+      : '—',
+  },
+]
 
 function SummaryItem({ label, value }: { label: string; value: string }) {
   return (
@@ -122,7 +139,7 @@ export function FbsSupplyCreateDialog({
         planned_delivery_type: deliveryType,
         planned_destination: null,
         idempotency_key: idempotencyKey,
-        selected_warehouse_id: selectedWarehouseId,
+        selected_warehouse_id: effectiveWarehouseId,
       })
       onCreated(workspace)
     } catch (cause) {
@@ -150,6 +167,7 @@ export function FbsSupplyCreateDialog({
   const summary = preflight?.summary
   const inventory = summary?.inventory
   const warehouseOptions = summary?.warehouse_options ?? []
+  const effectiveWarehouseId = selectedWarehouseId ?? summary?.recommended_warehouse?.id ?? summary?.wms_warehouse.id ?? null
   const blockedByStock = Boolean(inventory && inventory.total_shortage > 0)
   return (
     <Dialog open={open} onClose={creating ? undefined : onClose} fullWidth maxWidth="md">
@@ -215,9 +233,9 @@ export function FbsSupplyCreateDialog({
                 />
               </Stack>
 
-              {warehouseOptions.length > 0 ? <Box><Typography variant="subtitle2" gutterBottom>Склад WMS</Typography><select aria-label="Склад WMS" value={selectedWarehouseId ?? summary.wms_warehouse.id} onChange={(event) => setSelectedWarehouseId(event.target.value)}>{warehouseOptions.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}</select></Box> : null}
-              {inventory && inventory.local_shortage > 0 && inventory.total_shortage === 0 ? <WarningNotice testId="fbs-preflight-warning"><strong>На складе «{summary.wms_warehouse.name}» не хватает {inventory.local_shortage} шт. по {inventory.shortage_products} товарам.</strong><br />Нужно подобрать с другого склада.<Box component="table" sx={{ mt: 1, width: '100%' }}><tbody>{inventory.lines.filter((line) => line.here < line.required).map((line) => <tr key={line.product_id}><td>{line.name}</td><td align="right">{line.required}</td><td align="right">{line.here}</td><td align="right">{line.source_warehouse?.name ?? 'другой склад'} · {line.required - line.here}</td></tr>)}</tbody></Box></WarningNotice> : null}
-              {blockedByStock ? <ErrorNotice testId="fbs-preflight-stock-error">Не хватает {inventory?.total_shortage} шт. по {inventory?.shortage_products} товарам. Пополните остаток или уберите заказы из выборки.</ErrorNotice> : null}
+              {warehouseOptions.length > 1 ? <WarehouseContextSwitch options={warehouseOptions} value={effectiveWarehouseId} onChange={setSelectedWarehouseId} testId="fbs-preflight-warehouse" /> : null}
+              {inventory && inventory.local_shortage > 0 && inventory.total_shortage === 0 ? <WarningNotice testId="fbs-preflight-warning"><strong>На складе «{summary.wms_warehouse.name}» не хватает {inventory.local_shortage} шт. по {inventory.shortage_products} товарам.</strong><br />Нужно подобрать: {inventory.lines.filter((line) => line.here < line.required).map((line) => line.source_warehouse?.name ?? 'другой склад').filter((name, index, names) => names.indexOf(name) === index).join(', ')}.<DataTable columns={inventoryColumns} rows={inventory.lines.filter((line) => line.here < line.required)} getRowKey={(line) => line.product_id} testId="fbs-preflight-warning-table" /></WarningNotice> : null}
+              {blockedByStock ? <><ErrorNotice testId="fbs-preflight-stock-error">Не хватает {inventory?.total_shortage} шт. по {inventory?.shortage_products} товарам. Пополните остаток или уберите заказы из выборки.</ErrorNotice><DataTable columns={inventoryColumns} rows={inventory?.lines.filter((line) => line.shortage > 0) ?? []} getRowKey={(line) => line.product_id} testId="fbs-preflight-stock-table" /></> : null}
 
               <Box
                 sx={{
