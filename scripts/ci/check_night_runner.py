@@ -136,6 +136,9 @@ def регрессии_макета(проверь) -> None:
             "## Порядок\n1\n", encoding="utf-8")
         проверь("ui-kit: экран до общего компонента отклонён",
                 n.артефакт_готов(t, "splitter")[0], False)
+        with mock.patch.object(n, "круг_из_парковки", return_value=1):
+            проверь("ui-kit: repair не создаёт уже существующий компонент повторно",
+                    n.артефакт_готов(t, "splitter")[0], True)
         (t / "FEATURES.md").write_text(
             "ФИЧ: 2\n\n## Фичи\n### 1. MoneyCell\n"
             "Файлы: `/work/frontend/src/ui-kit/MoneyCell.tsx`, "

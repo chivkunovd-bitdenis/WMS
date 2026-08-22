@@ -459,7 +459,8 @@ def артефакт_готов(папка: Path, роль: str) -> tuple[bool, 
                                (папка / "CONTRACT.md").read_text(
                                    encoding="utf-8", errors="replace")
                                if (папка / "CONTRACT.md").exists() else "", re.M | re.I)
-        if ui_решение and ui_решение.group(1).upper().startswith("НУЖНЫ"):
+        if (ui_решение and ui_решение.group(1).upper().startswith("НУЖНЫ")
+                and круг_из_парковки(папка) == 0):
             фронтовые = [кусок for кусок in куски if dev_для_фичи(кусок) == "screen-dev"]
             пути = re.findall(r"`([^`]*frontend/[^`]+)`", фронтовые[0]) if фронтовые else []
             пути = ["frontend/" + путь.split("frontend/", 1)[1] for путь in пути]
