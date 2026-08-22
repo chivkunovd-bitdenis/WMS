@@ -55,3 +55,7 @@
 15:46   03-no-distribution-mode · dev: фича 3/4 сохранена 26f5432583bc
 15:49   03-no-distribution-mode · screen-dev: готово
 15:49   03-no-distribution-mode · dev: фича 4/4 сохранена 00abe2bbeb1d
+15:55   03-no-distribution-mode · reviewer: готово
+15:55 03-no-distribution-mode: отложено — reviewer, круги кончились
+19:54   03-no-distribution-mode · resume: поатомный rework Terra по сохранённым находкам
+19:57   03-no-distribution-mode · backend-dev: готово
