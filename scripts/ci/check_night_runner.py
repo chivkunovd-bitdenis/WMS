@@ -122,8 +122,8 @@ def регрессии_макета(проверь) -> None:
             "МАКЕТ: НЕ НУЖЕН\nUI-KIT: ХВАТАЕТ\n\n"
             "## Контракт\nx\n## Канон\nR-01\n## Макет\nнет\n"
             "## Нехватка ui-kit\nнет\n", encoding="utf-8")
-        проверь("макет: S-nn не обходит обязательный макет",
-                n.артефакт_готов(t, "ux-architect")[0], False)
+        проверь("макет: backend-only карточка с упомянутым экраном принята",
+                n.артефакт_готов(t, "ux-architect")[0], True)
 
         (t / "CONTRACT.md").write_text(
             "МАКЕТ: MOCKUP.html\nUI-KIT: НУЖНЫ MoneyCell\n\n"

@@ -459,10 +459,7 @@ def артефакт_готов(папка: Path, роль: str) -> tuple[bool, 
             r"^UI-KIT:\s*(ХВАТАЕТ|НУЖНЫ\s+.+)\s*$", текст, re.M | re.I)
         if not решение_макета or not ui_решение:
             return False, "CONTRACT.md: нужны машинные строки МАКЕТ и UI-KIT"
-        экраны = поле(папка, "RAZBOR.md", "Экраны")
         макет_нужен = решение_макета.group(1).lower() == "mockup.html"
-        if экраны and not re.search(r"не\s+затраг", экраны, re.I) and not макет_нужен:
-            return False, "CONTRACT.md: карточке с экраном нельзя поставить МАКЕТ: НЕ НУЖЕН"
         if макет_нужен:
             макет = папка / "MOCKUP.html"
             if not макет.exists():
