@@ -11,3 +11,5 @@
 18:12   07-reporting · screen-dev: готово
 18:12   07-reporting · dev: фича 3/11 сохранена 503f05133e02
 18:14   07-reporting · screen-dev: готово
+18:14   07-reporting · dev: фича 4/11 сохранена 8aa196b28671
+18:17   07-reporting · screen-dev: готово
