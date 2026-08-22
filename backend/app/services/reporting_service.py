@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import csv
+import io
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 
 from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -87,6 +90,56 @@ async def build_inventory_report(
                 "integrity_error": incomplete_transfer})
     return {"group_by": group_by, "page": page, "page_size": PAGE_SIZE,
         "total": len(rows), "rows": result}
+
+
+async def build_inventory_csv(
+    session: AsyncSession, tenant_id: uuid.UUID, *, date_from: datetime,
+    date_to: datetime, group_by: str, seller_id: uuid.UUID | None = None,
+    warehouse_id: uuid.UUID | None = None, search: str | None = None,
+    include_seller: bool = True,
+) -> bytes:
+    """Build the complete, table-shaped export for the current authorised slice."""
+    validate_period(date_from, date_to)
+    if group_by not in GROUP_BY_VALUES:
+        raise ValueError("group_by must be product or operation")
+
+    first_page = await build_inventory_report(
+        session, tenant_id, date_from=date_from, date_to=date_to,
+        group_by=group_by, page=1, seller_id=seller_id,
+        warehouse_id=warehouse_id, search=search,
+    )
+    total = cast(int, first_page["total"])
+    if total == 0:
+        raise ValueError("nothing to export for the selected period")
+    pages: list[dict[str, object]] = [first_page]
+    for page_number in range(2, (total + PAGE_SIZE - 1) // PAGE_SIZE + 1):
+        pages.append(await build_inventory_report(
+            session, tenant_id, date_from=date_from, date_to=date_to,
+            group_by=group_by, page=page_number, seller_id=seller_id,
+            warehouse_id=warehouse_id, search=search,
+        ))
+
+    output = io.StringIO(newline="")
+    writer = csv.writer(output, lineterminator="\n")
+    if group_by == "product":
+        headers = ["Название", "Артикул продавца", "ШК"]
+        if include_seller:
+            headers.append("Селлер")
+        headers.extend(["Приход", "Расход", "Нетто"])
+        writer.writerow(headers)
+        for report_page in pages:
+            for row in cast(list[dict[str, Any]], report_page["rows"]):
+                values = [row["name"], row["vendor_code"], row["barcode"]]
+                if include_seller:
+                    values.append(row["seller_name"])
+                values.extend([row["in_qty"], row["out_qty"], row["net"]])
+                writer.writerow(values)
+    else:
+        writer.writerow(["Операция", "Приход", "Расход", "Нетто"])
+        for report_page in pages:
+            for row in cast(list[dict[str, Any]], report_page["rows"]):
+                writer.writerow([row["operation"], row["in_qty"], row["out_qty"], row["net"]])
+    return output.getvalue().encode("utf-8-sig")
 
 
 async def build_overview(
