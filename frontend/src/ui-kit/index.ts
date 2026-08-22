@@ -10,3 +10,6 @@ export { EmptyState, TableSkeletonBody, ErrorNotice, ScreenHeader } from './Stat
 export { QtyCell, PlanFactCell, TextCell, ProductCell } from './Cells'
 export { FilterBar } from './FilterBar'
 export { ScannerLine } from './ScannerLine'
+export { WarehouseContextSwitch } from './WarehouseContextSwitch'
+export type { WarehouseContextSwitchProps, WarehouseOption } from './WarehouseContextSwitch'
+export { WarningNotice } from './WarningNotice'
