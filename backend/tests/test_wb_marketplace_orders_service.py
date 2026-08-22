@@ -28,6 +28,7 @@ from app.models.fbs_supply import (
 from app.models.product import Product
 from app.services import wb_marketplace_orders_service as orders_service
 from app.services.wb_marketplace_orders_service import link_confirmed_orders_to_wb_supplies
+from app.services import fbs_autopoll_service
 from app.services.wildberries_errors import WildberriesClientError
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 
@@ -36,6 +37,29 @@ class _SyncSession:
     def __init__(self) -> None:
         self.commit = AsyncMock()
         self.rollback = AsyncMock()
+
+
+# TC-NEW-WB-SCHEDULE-001: new/reconcile have independent periods and flights.
+def test_wb_order_schedule_and_single_flight_are_per_kind() -> None:
+    from app.celery_app import celery_app
+
+    schedule = celery_app.conf.beat_schedule
+    assert schedule["wb-orders-new"]["schedule"] == 180.0
+    assert schedule["wb-orders-reconcile"]["schedule"] == 3600.0
+    assert fbs_autopoll_service._sync_locks is not None
+
+
+@pytest.mark.asyncio
+async def test_wb_order_flights_allow_new_and_reconcile_together() -> None:
+    seller_id = uuid.uuid4()
+    async with fbs_autopoll_service.seller_sync_flight(seller_id, "new") as new_acquired:
+        async with fbs_autopoll_service.seller_sync_flight(
+            seller_id, "reconcile"
+        ) as reconcile_acquired:
+            assert new_acquired is True
+            assert reconcile_acquired is True
+        async with fbs_autopoll_service.seller_sync_flight(seller_id, "new") as duplicate:
+            assert duplicate is False
 
 
 # TC-NEW-WB-SYNC-001: new sync uses only /orders/new and performs an idempotent upsert.

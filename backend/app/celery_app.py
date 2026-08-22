@@ -27,6 +27,14 @@ celery_app.conf.beat_schedule = {
         "task": "wms.fbs_orders_autopoll",
         "schedule": float(settings.fbs_poll_interval_sec),
     },
+    "wb-orders-new": {
+        "task": "wms.wb_orders_new_dispatch",
+        "schedule": 180.0,
+    },
+    "wb-orders-reconcile": {
+        "task": "wms.wb_orders_reconcile_dispatch",
+        "schedule": 3600.0,
+    },
     "fbs-order-statuses-autopoll": {
         "task": "wms.fbs_order_statuses_autopoll",
         "schedule": float(settings.fbs_statuses_sync_interval_sec),

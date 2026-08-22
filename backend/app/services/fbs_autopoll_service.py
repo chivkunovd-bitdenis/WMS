@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
+from collections import defaultdict
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
 import httpx
@@ -27,8 +30,50 @@ from app.services.wb_marketplace_orders_service import (
     WbMarketplaceOrdersError,
     sync_seller_orders,
 )
+from app.services.wb_marketplace_orders_service import (
+    reconcile_orders_for_seller,
+    sync_new_orders_for_seller,
+)
 
 logger = logging.getLogger(__name__)
+
+_sync_locks: defaultdict[tuple[uuid.UUID, str], asyncio.Lock] = defaultdict(asyncio.Lock)
+
+
+@asynccontextmanager
+async def seller_sync_flight(seller_id: uuid.UUID, sync_kind: str):
+    """Prevent overlapping jobs of one kind without serializing the other kind."""
+    lock = _sync_locks[(seller_id, sync_kind)]
+    if lock.locked():
+        yield False
+        return
+    await lock.acquire()
+    try:
+        yield True
+    finally:
+        lock.release()
+
+
+async def sync_new_orders_for_seller_job(
+    tenant_id: uuid.UUID, seller_id: uuid.UUID
+) -> bool:
+    async with seller_sync_flight(seller_id, "new") as acquired:
+        if not acquired:
+            return False
+        async with SessionLocal() as session, httpx.AsyncClient() as http_client:
+            await sync_new_orders_for_seller(session, tenant_id, seller_id, http_client)
+    return True
+
+
+async def reconcile_orders_for_seller_job(
+    tenant_id: uuid.UUID, seller_id: uuid.UUID
+) -> bool:
+    async with seller_sync_flight(seller_id, "reconcile") as acquired:
+        if not acquired:
+            return False
+        async with SessionLocal() as session, httpx.AsyncClient() as http_client:
+            await reconcile_orders_for_seller(session, tenant_id, seller_id, http_client)
+    return True
 
 
 @dataclass(frozen=True)

@@ -61,6 +61,48 @@ def run_fbs_orders_autopoll_task() -> None:
     asyncio.run(poll_fbs_orders_all_sellers())
 
 
+@celery_app.task(name="wms.wb_orders_new")
+def run_wb_orders_new_task(tenant_id: str, seller_id: str) -> None:
+    from app.services.fbs_autopoll_service import sync_new_orders_for_seller_job
+
+    asyncio.run(sync_new_orders_for_seller_job(uuid.UUID(tenant_id), uuid.UUID(seller_id)))
+
+
+@celery_app.task(name="wms.wb_orders_reconcile")
+def run_wb_orders_reconcile_task(tenant_id: str, seller_id: str) -> None:
+    from app.services.fbs_autopoll_service import reconcile_orders_for_seller_job
+
+    asyncio.run(reconcile_orders_for_seller_job(uuid.UUID(tenant_id), uuid.UUID(seller_id)))
+
+
+@celery_app.task(name="wms.wb_orders_new_dispatch")
+def dispatch_wb_orders_new_task() -> None:
+    from app.services.fbs_autopoll_service import list_sellers_with_marketplace_token
+    from app.db.session import SessionLocal
+
+    async def dispatch() -> None:
+        async with SessionLocal() as session:
+            targets = await list_sellers_with_marketplace_token(session)
+        for target in targets:
+            run_wb_orders_new_task.delay(str(target.tenant_id), str(target.seller_id))
+
+    asyncio.run(dispatch())
+
+
+@celery_app.task(name="wms.wb_orders_reconcile_dispatch")
+def dispatch_wb_orders_reconcile_task() -> None:
+    from app.services.fbs_autopoll_service import list_sellers_with_marketplace_token
+    from app.db.session import SessionLocal
+
+    async def dispatch() -> None:
+        async with SessionLocal() as session:
+            targets = await list_sellers_with_marketplace_token(session)
+        for target in targets:
+            run_wb_orders_reconcile_task.delay(str(target.tenant_id), str(target.seller_id))
+
+    asyncio.run(dispatch())
+
+
 @celery_app.task(name="wms.fbs_order_statuses_autopoll")
 def run_fbs_order_statuses_autopoll_task() -> None:
     from app.services.fbs_autopoll_service import sync_fbs_order_statuses_all_sellers
