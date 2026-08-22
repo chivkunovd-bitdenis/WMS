@@ -6,6 +6,7 @@ import {
   DataTable,
   ErrorNotice,
   FilterBar,
+  formatMoney,
   MoneyCell,
   PeriodPicker,
   PrimaryAction,
@@ -35,7 +36,8 @@ type LedgerEntry = {
   problem: 'unpriced' | 'storage_period_not_closed' | null
 }
 type PerformerRow = { performer_name: string; service_code: string; unit: string; quantity: number; documents: number }
-type Invoice = { id: string; number: string; period: string; seller_name: string; issued_at: string; total_amount: number; status: 'issued' | 'cancelled'; issues?: { seller_name: string; period: string; reason: string }[]; lines?: InvoiceLine[]; ff_profile?: Record<string, string>; seller_profile?: Record<string, string> }
+type BillingProfileSnapshot = Record<string, string | null | undefined>
+type Invoice = { id: string; number: string; period: string; seller_name: string; issued_at: string; total_amount: number; status: 'issued' | 'cancelled'; issues?: { seller_name: string; period: string; reason: string }[]; lines?: InvoiceLine[]; ff_profile?: BillingProfileSnapshot; seller_profile?: BillingProfileSnapshot }
 type InvoiceLine = { id: string; service_code: string; unit: string; quantity: number; rate: number; amount: number; documents?: { date: string; number: string; quantity: number; amount: number }[] }
 type InvoiceIssue = { id?: string; seller_id?: string; seller_name: string; period: string; reason: string; message?: string }
 type BillingListResponse<T> = { entries?: T[]; invoices?: T[]; rows?: T[]; issues?: InvoiceIssue[] }
@@ -70,6 +72,30 @@ const serviceLabels: Record<string, string> = {
 }
 const unitLabels: Record<string, string> = { document: 'За документ', item: 'За штуку', liter_day: 'За литр-день' }
 const problemLabels: Record<string, string> = { unpriced: 'Нет тарифа', storage_period_not_closed: 'Хранение не закрыто' }
+const profileFieldLabels: Record<string, string> = {
+  legal_name: 'Юридическое наименование',
+  inn: 'ИНН',
+  kpp: 'КПП',
+  bank_name: 'Название банка',
+  bik: 'БИК',
+  settlement_account: 'Расчётный счёт',
+  correspondent_account: 'Корреспондентский счёт',
+}
+
+function profileRows(profile: BillingProfileSnapshot | undefined, fallback: string): [string, string][] {
+  const rows = Object.entries(profile ?? {})
+    .filter(([key, value]) => Boolean(profileFieldLabels[key] && value))
+    .map(([key, value]) => [profileFieldLabels[key], String(value)] as [string, string])
+  return rows.length ? rows : [['Наименование', fallback]]
+}
+
+export function buildInvoicePrintHtml(invoice: Invoice): string {
+  const profileHtml = (profile: BillingProfileSnapshot | undefined, fallback: string) => profileRows(profile, fallback)
+    .map(([label, value]) => `<div><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</div>`)
+    .join('')
+  const lineHtml = (invoice.lines ?? []).map((line) => `<tr><td>${escapeHtml(serviceLabels[line.service_code] ?? line.service_code)}</td><td>${escapeHtml(unitLabels[line.unit] ?? line.unit)}</td><td>${escapeHtml(line.quantity)}</td><td>${escapeHtml(formatMoney(Number(line.rate)))}</td><td>${escapeHtml(formatMoney(Number(line.amount)))}</td></tr>`).join('')
+  return `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Счёт ${escapeHtml(invoice.number)}</title></head><body><h1>Счёт ${escapeHtml(invoice.number)}</h1><p>${escapeHtml(formatPeriod(invoice.period))} · выставлен ${escapeHtml(new Date(invoice.issued_at).toLocaleDateString('ru-RU'))}</p><h3>Получатель</h3>${profileHtml(invoice.ff_profile, 'Реквизиты ФФ')}<h3>Плательщик</h3>${profileHtml(invoice.seller_profile, invoice.seller_name)}<table><thead><tr><th>Услуга</th><th>Расчёт</th><th>Количество</th><th>Ставка</th><th>Сумма</th></tr></thead><tbody>${lineHtml}</tbody></table><h2>Итого: ${escapeHtml(formatMoney(Number(invoice.total_amount)))}</h2></body></html>`
+}
 
 function responseRows<T>(payload: BillingListResponse<T> | T[], key: 'entries' | 'invoices'): T[] {
   if (Array.isArray(payload)) return payload
@@ -97,6 +123,7 @@ export function FfBillingScreen({ sellers = [], token }: Props) {
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
   const [expandedLine, setExpandedLine] = useState<string | null>(null)
   const [cancelConfirm, setCancelConfirm] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
   const [forming, setForming] = useState(false)
   const expandedInvoiceLine = selectedInvoice?.lines?.find((line) => line.id === expandedLine)
 
@@ -218,19 +245,22 @@ export function FfBillingScreen({ sellers = [], token }: Props) {
   }
   const printInvoice = () => {
     if (!selectedInvoice) return
-    const lines = selectedInvoice.lines ?? []
-    const profile = (value: Record<string, string> | undefined, fallback: string) => {
-      const fields = value ? Object.entries(value).filter(([, field]) => field).map(([key, field]) => `<div>${escapeHtml(key)}: ${escapeHtml(field)}</div>`).join('') : ''
-      return fields || `<div>${escapeHtml(fallback)}</div>`
-    }
-    const html = `<html><body><h1>Счёт ${escapeHtml(selectedInvoice.number)}</h1><p>${escapeHtml(formatPeriod(selectedInvoice.period))} · выставлен ${escapeHtml(new Date(selectedInvoice.issued_at).toLocaleDateString('ru-RU'))}</p><h3>Получатель</h3>${profile(selectedInvoice.ff_profile, 'Реквизиты ФФ')}<h3>Плательщик</h3>${profile(selectedInvoice.seller_profile, selectedInvoice.seller_name)}${lines.map((line) => `<p>${escapeHtml(serviceLabels[line.service_code] ?? line.service_code)} · ${escapeHtml(line.quantity)} · ${escapeHtml(line.rate)} · ${escapeHtml(line.amount)}</p>`).join('')}<h2>Итого: ${escapeHtml(selectedInvoice.total_amount)} ₽</h2></body></html>`
-    const printWindow = window.open('', '_blank'); printWindow?.document.write(html); printWindow?.document.close(); printWindow?.print()
+    const printWindow = window.open('', '_blank'); printWindow?.document.write(buildInvoicePrintHtml(selectedInvoice)); printWindow?.document.close(); printWindow?.print()
   }
-  const cancelInvoice = () => {
-    if (!selectedInvoice || selectedInvoice.status !== 'issued') return
-    fetch(`/api/billing/invoices/${selectedInvoice.id}/cancel`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
-      .then((response) => { if (!response.ok) throw new Error('cancel') ; return response.json() as Promise<{ status: Invoice['status'] }> })
-      .then((data) => { const updated = { ...selectedInvoice, status: data.status }; setSelectedInvoice(updated); setInvoices((items) => items.map((item) => item.id === updated.id ? updated : item)); setCancelConfirm(false) })
+  const cancelInvoice = async () => {
+    if (!selectedInvoice || selectedInvoice.status !== 'issued' || cancelling) return
+    setCancelling(true)
+    try {
+      const response = await fetch(`/api/billing/invoices/${selectedInvoice.id}/cancel`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
+      if (!response.ok) throw new Error('cancel')
+      const data = await response.json() as { status: Invoice['status'] }
+      const updated = { ...selectedInvoice, status: data.status }
+      setSelectedInvoice(updated)
+      setInvoices((items) => items.map((item) => item.id === updated.id ? updated : item))
+      setCancelConfirm(false)
+    } finally {
+      setCancelling(false)
+    }
   }
 
   return <Box data-testid="ff-billing-screen">
@@ -251,6 +281,6 @@ export function FfBillingScreen({ sellers = [], token }: Props) {
       </Select> : null}
     </FilterBar>
     {tab === 0 ? <><>{error ? <ErrorNotice testId="billing-error">Не удалось загрузить начисления. Повторите попытку</ErrorNotice> : null}</>{hasUnpriced && mode === 'operations' ? <Stack direction="row" sx={{ mb: 2 }}><PrimaryAction onClick={() => navigate('/app/ff/settings')}>Открыть тарифы</PrimaryAction></Stack> : null}<DataTable columns={mode === 'operations' ? operationColumns : performerColumns} rows={activeRows} loading={loading} getRowKey={(row) => ('id' in row ? row.id : `${row.performer_name}-${row.service_code}-${row.unit}`)} testId="billing-ledger-table" empty={{ title: mode === 'performers' ? 'За месяц нет завершённых операций с исполнителем' : hasFilters ? 'По выбранным условиям начислений нет — измените фильтры' : 'За выбранный месяц начислений нет', hint: mode === 'performers' ? undefined : 'Начисления появятся после завершённой приёмки, отгрузки или фиксации хранения' }} /></> : <><>{invoiceError ? <ErrorNotice testId="billing-invoices-error">Не удалось загрузить счета. Повторите попытку</ErrorNotice> : null}</>{invoiceIssues.length ? <Stack spacing={1} sx={{ mb: 2 }} data-testid="billing-invoice-issues">{invoiceIssues.map((issue, index) => <Stack key={`${issue.seller_name}-${issue.period}-${issue.reason}-${index}`} direction="row" spacing={1} alignItems="center"><Typography>{issue.seller_name} · {issue.period}</Typography><StatusChip label={issueLabels[issue.reason] ?? 'Требуется исправление'} tone="stop" /><PrimaryAction onClick={() => openIssue(issue.reason)}>{issueActions[issue.reason] ?? 'Исправить'}</PrimaryAction></Stack>)}<PrimaryAction disabledReason="Сначала устраните причины, перечисленные выше" onClick={retryFormation}>{'Повторить формирование'}</PrimaryAction></Stack> : sellerId !== 'all' && !invoiceLoading ? <Stack direction="row" sx={{ mb: 2 }}><PrimaryAction disabledReason={forming ? 'Формирование уже выполняется' : undefined} onClick={retryFormation}>Причины устранены — повторите формирование</PrimaryAction></Stack> : null}<DataTable columns={invoiceColumns} rows={invoices} loading={invoiceLoading} getRowKey={(row) => row.id} testId="billing-invoices-table" empty={{ title: 'За этот месяц счета не выставлены', hint: 'Нет начислений для формирования' }} /></>}
-    <Dialog open={Boolean(selectedInvoice)} onClose={() => setSelectedInvoice(null)} maxWidth="lg" fullWidth aria-labelledby="billing-invoice-dialog-title"><DialogTitle id="billing-invoice-dialog-title">Счёт {selectedInvoice?.number} {selectedInvoice ? <StatusChip label={selectedInvoice.status === 'issued' ? 'Выставлен' : 'Отменён'} tone={selectedInvoice.status === 'issued' ? 'ok' : 'neutral'} /> : null}</DialogTitle><DialogContent dividers>{selectedInvoice ? <Stack spacing={2}><Typography>Период: {formatPeriod(selectedInvoice.period)} · Выставлен: {new Date(selectedInvoice.issued_at).toLocaleDateString('ru-RU')}</Typography><Stack direction="row" spacing={2}><Box flex={1}><Typography fontWeight="bold">Получатель</Typography><Typography>{selectedInvoice.ff_profile?.legal_name ?? 'Реквизиты ФФ'}</Typography></Box><Box flex={1}><Typography fontWeight="bold">Плательщик</Typography><Typography>{selectedInvoice.seller_profile?.legal_name ?? selectedInvoice.seller_name}</Typography></Box></Stack><DataTable columns={[{ key: 'service', header: 'Услуга', render: (line: InvoiceLine) => serviceLabels[line.service_code] ?? line.service_code }, { key: 'unit', header: 'Расчёт', render: (line: InvoiceLine) => unitLabels[line.unit] ?? line.unit }, { key: 'qty', header: 'Количество', render: (line: InvoiceLine) => <QtyCell value={line.quantity} /> }, { key: 'rate', header: 'Ставка', render: (line: InvoiceLine) => <MoneyCell value={line.rate} /> }, { key: 'amount', header: 'Сумма', render: (line: InvoiceLine) => <MoneyCell value={line.amount} /> }, { key: 'details', header: 'Детализация', render: (line: InvoiceLine) => <IconAction title="Показать документы" onClick={() => setExpandedLine(expandedLine === line.id ? null : line.id)}><ExpandMore fontSize="small" /></IconAction> }]} rows={selectedInvoice.lines ?? []} loading={false} getRowKey={(line) => line.id} testId="billing-invoice-lines" empty={{ title: 'Строк счёта нет' }} />{expandedInvoiceLine ? <Stack data-testid="billing-invoice-documents">{(expandedInvoiceLine.documents ?? []).map((doc) => <Typography key={`${doc.date}-${doc.number}`}>Исходный документ: {doc.date} · {expandedInvoiceLine.service_code === STORAGE_SERVICE_CODE ? `Расчёт хранения за ${formatPeriod(selectedInvoice.period)}` : doc.number} · {doc.quantity} · {doc.amount}</Typography>)}</Stack> : null}<Typography textAlign="right" fontWeight="bold">Итого: <MoneyCell value={selectedInvoice.total_amount} /></Typography></Stack> : null}</DialogContent><DialogActions><PrintAction what="счёт" placement="panel" onClick={printInvoice} testId="billing-invoice-print" />{selectedInvoice?.status === 'issued' ? <DangerAction onClick={() => setCancelConfirm(true)} testId="billing-invoice-cancel">Отменить счёт</DangerAction> : null}<SecondaryAction onClick={() => setSelectedInvoice(null)}>Закрыть</SecondaryAction></DialogActions></Dialog><Dialog open={cancelConfirm} onClose={() => setCancelConfirm(false)}><DialogTitle>Отменить счёт?</DialogTitle><DialogContent>Счёт останется в истории со статусом «Отменён». Это действие нельзя отменить.</DialogContent><DialogActions><DangerAction onClick={cancelInvoice}>Отменить счёт</DangerAction><SecondaryAction onClick={() => setCancelConfirm(false)}>Назад</SecondaryAction></DialogActions></Dialog>
+    <Dialog open={Boolean(selectedInvoice)} onClose={() => setSelectedInvoice(null)} maxWidth="lg" fullWidth aria-labelledby="billing-invoice-dialog-title"><DialogTitle id="billing-invoice-dialog-title">Счёт {selectedInvoice?.number} {selectedInvoice ? <StatusChip label={selectedInvoice.status === 'issued' ? 'Выставлен' : 'Отменён'} tone={selectedInvoice.status === 'issued' ? 'ok' : 'neutral'} /> : null}</DialogTitle><DialogContent dividers>{selectedInvoice ? <Stack spacing={2}><Typography>Период: {formatPeriod(selectedInvoice.period)} · Выставлен: {new Date(selectedInvoice.issued_at).toLocaleDateString('ru-RU')}</Typography><Stack direction="row" spacing={2}>{([['Получатель', selectedInvoice.ff_profile, 'Реквизиты ФФ'], ['Плательщик', selectedInvoice.seller_profile, selectedInvoice.seller_name]] as const).map(([title, profile, fallback]) => <Box flex={1} key={title}><Typography fontWeight="bold">{title}</Typography>{profileRows(profile, fallback).map(([label, value]) => <Typography key={label}>{label}: {value}</Typography>)}</Box>)}</Stack><DataTable columns={[{ key: 'service', header: 'Услуга', render: (line: InvoiceLine) => serviceLabels[line.service_code] ?? line.service_code }, { key: 'unit', header: 'Расчёт', render: (line: InvoiceLine) => unitLabels[line.unit] ?? line.unit }, { key: 'qty', header: 'Количество', render: (line: InvoiceLine) => <QtyCell value={line.quantity} /> }, { key: 'rate', header: 'Ставка', render: (line: InvoiceLine) => <MoneyCell value={line.rate} /> }, { key: 'amount', header: 'Сумма', render: (line: InvoiceLine) => <MoneyCell value={line.amount} /> }, { key: 'details', header: 'Детализация', render: (line: InvoiceLine) => <IconAction title="Показать документы" onClick={() => setExpandedLine(expandedLine === line.id ? null : line.id)}><ExpandMore fontSize="small" /></IconAction> }]} rows={selectedInvoice.lines ?? []} loading={false} getRowKey={(line) => line.id} testId="billing-invoice-lines" empty={{ title: 'Строк счёта нет' }} />{expandedInvoiceLine ? <Stack data-testid="billing-invoice-documents">{(expandedInvoiceLine.documents ?? []).map((doc) => <Typography key={`${doc.date}-${doc.number}`}>Исходный документ: {doc.date} · {expandedInvoiceLine.service_code === STORAGE_SERVICE_CODE ? `Расчёт хранения за ${formatPeriod(selectedInvoice.period)}` : doc.number} · {doc.quantity} · {doc.amount}</Typography>)}</Stack> : null}<Typography textAlign="right" fontWeight="bold">Итого: <MoneyCell value={selectedInvoice.total_amount} /></Typography></Stack> : null}</DialogContent><DialogActions><PrintAction what="счёт" placement="panel" onClick={printInvoice} testId="billing-invoice-print" />{selectedInvoice?.status === 'issued' ? <DangerAction onClick={() => setCancelConfirm(true)} testId="billing-invoice-cancel">Отменить счёт</DangerAction> : null}<SecondaryAction onClick={() => setSelectedInvoice(null)}>Закрыть</SecondaryAction></DialogActions></Dialog><Dialog open={cancelConfirm} onClose={() => { if (!cancelling) setCancelConfirm(false) }}><DialogTitle>Отменить счёт?</DialogTitle><DialogContent>Счёт останется в истории со статусом «Отменён». Это действие нельзя отменить.</DialogContent><DialogActions><DangerAction onClick={cancelInvoice} disabledReason={cancelling ? 'Отмена уже выполняется' : undefined} data-testid="billing-invoice-cancel-confirm">Отменить счёт</DangerAction><SecondaryAction onClick={() => setCancelConfirm(false)} disabledReason={cancelling ? 'Дождитесь завершения отмены' : undefined}>Назад</SecondaryAction></DialogActions></Dialog>
   </Box>
 }

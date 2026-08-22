@@ -42,20 +42,28 @@ test('billing invoice opens, reveals documents and starts print', async ({ page 
   await expect(printed).toContainText('СЧ-2026-00041')
   await expect(printed).toContainText('ООО «Фулфилмент Волна»')
   await expect(printed).toContainText('ООО «Луна Трейд»')
+  await expect(printed).toContainText('48 392,00 ₽')
+  await expect(printed).not.toContainText('legal_name')
   await expect(printed.getByRole('button')).toHaveCount(0)
 })
 
 // S-31-TC-008 — Given an issued invoice, When cancellation is confirmed twice, Then history has one cancelled invoice and no second cancellation request.
 test('billing invoice cancellation is confirmed and idempotent in UI', async ({ page }) => {
   let cancellations = 0
+  let releaseCancellation: () => void = () => undefined
+  const cancellationGate = new Promise<void>((resolve) => { releaseCancellation = () => resolve() })
   await page.route('**/api/billing/invoices?**', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ invoices: [invoice] }) }))
-  await page.route('**/api/billing/invoices/invoice-1/cancel', async (route) => { cancellations += 1; await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'invoice-1', status: 'cancelled' }) }) })
+  await page.route('**/api/billing/invoices/invoice-1/cancel', async (route) => { cancellations += 1; await cancellationGate; await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'invoice-1', status: 'cancelled' }) }) })
   await page.goto('/app/ff/billing')
   await page.getByTestId('billing-tab-invoices').click()
   await page.getByTestId('billing-invoice-open-invoice-1').click()
   await page.getByTestId('billing-invoice-cancel').click()
   await expect(page.getByText('Счёт останется в истории со статусом «Отменён». Это действие нельзя отменить.')).toBeVisible()
-  await page.getByRole('button', { name: 'Отменить счёт' }).last().click()
+  const confirmCancellation = page.getByTestId('billing-invoice-cancel-confirm')
+  await confirmCancellation.click()
+  await expect(confirmCancellation).toBeDisabled()
+  await confirmCancellation.dispatchEvent('click')
+  releaseCancellation()
   await expect(page.getByText('Отменён')).toBeVisible()
   await expect(page.getByTestId('billing-invoice-cancel')).toHaveCount(0)
   expect(cancellations).toBe(1)
