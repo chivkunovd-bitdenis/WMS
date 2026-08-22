@@ -547,7 +547,7 @@ export function FfFbsSupplyWorkspace({
     try {
       const scan = await resolveFbsWarehouseScan(token, authHeaders, locationBarcode.trim())
       if (scan.type === 'warehouse') {
-        setSelectedWarehouseId(scan.warehouse_id)
+        await changeWarehouse(scan.warehouse_id)
         setPickLocation(null)
         setProductBarcode('')
         return

@@ -59,7 +59,7 @@ import {
 } from './fbsApi'
 import { WarehouseContextSwitch, type WarehouseOption } from '../../ui-kit'
 
-const FBS_WMS_WAREHOUSE_SESSION_KEY = 'ff-fbs-wms-warehouse-id'
+const FBS_WMS_WAREHOUSE_SESSION_KEY = 'wms_operational_warehouse:fulfillment'
 
 type SellerRow = { id: string; name: string }
 
@@ -499,6 +499,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [activeSupplies, setActiveSupplies] = useState<FbsSupplyWorklistItem[]>([])
   const [externalActiveOrders, setExternalActiveOrders] = useState<FbsWorklistOrder[]>([])
   const [warehouseOptions, setWarehouseOptions] = useState<FbsWorklistWarehouseOption[]>([])
+  const [wmsWarehouseOptions, setWmsWarehouseOptions] = useState<WarehouseOption[]>([])
   const [sellerWarehouseNames, setSellerWarehouseNames] = useState<Record<string, string>>({})
   const [serverNow, setServerNow] = useState<string | null>(null)
   const [lastLoadedAt, setLastLoadedAt] = useState<string | null>(null)
@@ -540,12 +541,6 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   // панель — так нижние строки остаются кликабельными при любой высоте панели.
   const selectionBarRef = useRef<HTMLDivElement | null>(null)
   const [selectionBarHeight, setSelectionBarHeight] = useState(0)
-  const wmsWarehouseOptions = useMemo<WarehouseOption[]>(
-    () => warehouseOptions
-      .filter((warehouse) => warehouse.id && warehouse.name?.trim())
-      .map((warehouse) => ({ id: String(warehouse.id), name: warehouse.name.trim() })),
-    [warehouseOptions],
-  )
   const visibleOrders = useMemo(() => wmsWarehouseId ? orders.filter((item) => item.wms_warehouse.id === wmsWarehouseId) : orders, [orders, wmsWarehouseId])
   const visibleSupplies = useMemo(() => wmsWarehouseId ? activeSupplies.filter((item) => item.wms_warehouse.id === wmsWarehouseId) : activeSupplies, [activeSupplies, wmsWarehouseId])
   const visibleExternalOrders = useMemo(() => wmsWarehouseId ? externalActiveOrders.filter((item) => item.wms_warehouse.id === wmsWarehouseId) : externalActiveOrders, [externalActiveOrders, wmsWarehouseId])
@@ -572,7 +567,9 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       })
       .then((warehouses) => {
         if (cancelled) return
-        setWarehouseOptions(warehouses.filter((warehouse) => warehouse.is_operational !== false) as FbsWorklistWarehouseOption[])
+        setWmsWarehouseOptions(warehouses
+          .filter((warehouse) => warehouse.is_operational !== false && warehouse.id && warehouse.name?.trim())
+          .map((warehouse) => ({ id: String(warehouse.id), name: warehouse.name!.trim() })))
       })
       .catch(() => {
         if (!cancelled) setWarehouseOptions([])
@@ -604,7 +601,6 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         setActiveSupplies(suppliesPage.items)
         setExternalActiveOrders(ordersPage.items.filter((order) => !order.supply_id))
         setOrders([])
-        setWarehouseOptions([])
         setServerNow(suppliesPage.server_now)
         setLastLoadedAt(new Date().toISOString())
         return
