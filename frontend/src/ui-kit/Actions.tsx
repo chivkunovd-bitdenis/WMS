@@ -1,4 +1,4 @@
-import { Button, IconButton, Stack, Tooltip } from '@mui/material'
+import { Button, CircularProgress, IconButton, Stack, Tooltip } from '@mui/material'
 import type { ButtonProps } from '@mui/material'
 import PrintOutlined from '@mui/icons-material/PrintOutlined'
 import type { ReactElement, ReactNode } from 'react'
@@ -116,25 +116,24 @@ export function PrintAction({
   placement,
   onClick,
   disabledReason,
+  busy = false,
   testId,
 }: {
   what: Printable
   placement: 'row' | 'panel'
   onClick?: () => void
   disabledReason?: string
+  busy?: boolean
   testId?: string
 }) {
   const title = `Печать ${what}`
+  const reason = busy ? 'Подготовка печати…' : disabledReason
   if (placement === 'row') {
-    return (
-      <IconAction title={title} onClick={onClick} disabledReason={disabledReason} testId={testId}>
-        <PrintOutlined fontSize="small" />
-      </IconAction>
-    )
+    return <IconAction title={reason ?? title} onClick={onClick} disabledReason={reason} testId={testId}>
+      {busy ? <CircularProgress size={18} /> : <PrintOutlined fontSize="small" />}
+    </IconAction>
   }
-  return (
-    <PrimaryAction onClick={onClick} disabledReason={disabledReason} data-testid={testId}>
-      {title}
-    </PrimaryAction>
-  )
+  return <PrimaryAction onClick={onClick} disabledReason={reason} data-testid={testId}>
+    {busy ? <><CircularProgress size={16} color="inherit" sx={{ mr: 1 }} />Подготовка…</> : title}
+  </PrimaryAction>
 }

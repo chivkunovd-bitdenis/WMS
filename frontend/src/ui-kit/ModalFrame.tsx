@@ -30,8 +30,9 @@ export function ModalFrame({
       fullWidth
       maxWidth={maxWidth}
       onClose={(_, reason) => {
-        if (!busy && reason !== 'backdropClick' && reason !== 'escapeKeyDown') onClose()
+        if (!busy) onClose()
       }}
+      aria-busy={busy}
       data-testid={testId}
     >
       <DialogTitle>

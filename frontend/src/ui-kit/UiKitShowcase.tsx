@@ -130,6 +130,7 @@ export function UiKitShowcase() {
   const [choice, setChoice] = useState<'all' | 'unpicked'>('all')
   const [checked, setChecked] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
+  const [modalBusy, setModalBusy] = useState(false)
 
   return (
     <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 1400, mx: 'auto' }}>
@@ -251,6 +252,9 @@ export function UiKitShowcase() {
       <Section title="Модальный лист подбора" note="Состояния каркаса, фильтра, отметки и печати заказов.">
         <ActionGroup>
           <PrimaryAction onClick={() => setModalOpen(true)}>Открыть лист</PrimaryAction>
+          <SecondaryAction onClick={() => setModalBusy((value) => !value)}>
+            {modalBusy ? 'Разблокировать' : 'Проверить busy'}
+          </SecondaryAction>
           <PrintAction what="стикеры заказов" placement="panel" disabledReason="В поставке нет заказов для печати" />
         </ActionGroup>
         <ModalFrame
@@ -258,11 +262,12 @@ export function UiKitShowcase() {
           title="Лист подбора"
           purpose="Собрано 1/3 · Упаковано 0/3"
           onClose={() => setModalOpen(false)}
+          busy={modalBusy}
           testId="ui-kit-picking-list-modal"
           actions={
             <ActionGroup>
               <SecondaryAction onClick={() => setModalOpen(false)}>Закрыть</SecondaryAction>
-              <PrintAction what="стикеры заказов" placement="panel" />
+              <PrintAction what="стикеры заказов" placement="panel" busy={modalBusy} />
             </ActionGroup>
           }
         >
