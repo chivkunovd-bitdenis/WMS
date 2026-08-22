@@ -2,13 +2,17 @@ import { test, expect } from '@playwright/test'
 
 // S-31-TC-004 — Given ledger rows, When the admin filters by document, Then the visible row keeps the month context.
 test('billing ledger preserves filters and month context', async ({ page }) => {
+  let lastLedgerUrl = ''
   await page.route('**/api/billing/ledger**', async (route) => {
-    expect(new URL(route.request().url()).searchParams.get('period')).toBeTruthy()
+    lastLedgerUrl = route.request().url()
+    expect(new URL(lastLedgerUrl).searchParams.get('period')).toBeTruthy()
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ entries: [{ id: 'entry-1', occurred_at: '2026-08-18T00:00:00Z', seller_name: 'Луна', service_code: 'inbound', document_number: 'ПР-000184', quantity: 38, unit: 'item', rate: 12, amount: 456, performer_name: 'Анна К.', problem: null }] }) })
   })
   await page.goto('/app/ff/billing')
   await expect(page.getByTestId('ff-billing-screen')).toBeVisible()
   await expect(page.getByText('ПР-000184')).toBeVisible()
+  await page.getByTestId('filter-search').fill('ПР-000184')
+  await expect.poll(() => new URL(lastLedgerUrl).searchParams.get('document_number')).toBe('ПР-000184')
   await page.getByTestId('billing-tab-invoices').click()
   await expect(page.getByTestId('billing-invoices-table')).toBeVisible()
   await page.getByTestId('billing-tab-charges').click()
