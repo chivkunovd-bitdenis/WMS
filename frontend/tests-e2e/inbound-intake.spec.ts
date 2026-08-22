@@ -51,6 +51,8 @@ test('create inbound request, add line, submit — UI and API', async ({ page })
 
   await page.goto('/app/ops/inbound');
   await expect(page.getByTestId('inbound-create-form')).toBeVisible();
+  // TC-NEW-04-001: при одном операционном складе контекстный переключатель не показывается.
+  await expect(page.getByTestId('inbound-warehouse-context')).toHaveCount(0);
   await expect(page.getByTestId('inbound-create-submit')).toBeEnabled();
 
   const [createRes] = await Promise.all([

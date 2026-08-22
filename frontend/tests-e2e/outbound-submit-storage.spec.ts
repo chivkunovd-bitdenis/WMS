@@ -132,6 +132,8 @@ test('outbound submit without cell reserves warehouse; post needs cell', async (
   expect(subRes.ok()).toBeTruthy();
 
   await page.goto('/app/ops/outbound');
+  // TC-NEW-04-002: при одном операционном складе отдельная строка выбора отсутствует.
+  await expect(page.getByTestId('outbound-warehouse-context')).toHaveCount(0);
   await page.getByTestId('outbound-request-item').first().click();
   await expect(page.getByTestId('outbound-detail-status')).toContainText('submitted');
 

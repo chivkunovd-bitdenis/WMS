@@ -7,6 +7,7 @@ import { Input } from '../../ui/Input'
 import { Select } from '../../ui/Select'
 import { Screen } from '../AppV2Screens'
 import { movementTypeLabel } from '../../utils/movementTypeLabel'
+import { WarehouseContextSwitch } from '../../ui-kit'
 
 type WarehouseRow = { id: string; name: string; code: string }
 type LocationRow = { id: string; code: string; warehouse_id: string }
@@ -90,6 +91,7 @@ type Props = {
 
   warehouses: WarehouseRow[]
   selectedWarehouseId: string | null
+  onWarehouseChange?: (warehouseId: string) => void
   products: ProductRow[]
 
   inboundSummaries: InboundSummaryRow[]
@@ -123,6 +125,7 @@ export function InboundScreen(props: Props) {
     canEditInboundDraft,
     warehouses,
     selectedWarehouseId,
+    onWarehouseChange,
     products,
     inboundSummaries,
     selectedInboundId,
@@ -186,6 +189,12 @@ export function InboundScreen(props: Props) {
 
       <div className="screen-grid">
         <div className="stack">
+          <WarehouseContextSwitch
+            options={warehouses.map((warehouse) => ({ id: warehouse.id, name: warehouse.name }))}
+            value={selectedWarehouseId}
+            onChange={(warehouseId) => onWarehouseChange?.(warehouseId)}
+            testId="inbound-warehouse-context"
+          />
           <Card className="card">
             <h3 style={{ margin: 0, fontSize: 16 }}>Заявки на приёмку</h3>
             <p className="subtle">
@@ -215,26 +224,6 @@ export function InboundScreen(props: Props) {
                     defaultValue={todayIso}
                   />
                 </label>
-                {isFulfillmentSeller && warehouses.length > 1 ? (
-                  <label>
-                    Склад для заявки
-                    <Select
-                      name="inbound_warehouse_id"
-                      data-testid="inbound-create-warehouse"
-                      required
-                      defaultValue=""
-                    >
-                      <option value="" disabled>
-                        Выберите склад
-                      </option>
-                      {warehouses.map((w) => (
-                        <option key={w.id} value={w.id}>
-                          {w.code} — {w.name}
-                        </option>
-                      ))}
-                    </Select>
-                  </label>
-                ) : null}
                 <Button
                   type="submit"
                   data-testid="inbound-create-submit"

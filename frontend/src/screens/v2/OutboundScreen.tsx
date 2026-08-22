@@ -6,6 +6,7 @@ import { Select } from '../../ui/Select'
 import { Screen } from '../AppV2Screens'
 import { printOperationalOutboundWaybill } from '../../utils/printShipmentWaybill'
 import { movementTypeLabel } from '../../utils/movementTypeLabel'
+import { WarehouseContextSwitch } from '../../ui-kit'
 
 type WarehouseRow = { id: string; name: string; code: string }
 type LocationRow = { id: string; code: string; warehouse_id: string }
@@ -56,6 +57,7 @@ type Props = {
 
   warehouses: WarehouseRow[]
   selectedWarehouseId: string | null
+  onWarehouseChange?: (warehouseId: string) => void
   products: ProductRow[]
 
   outboundSummaries: OutboundSummaryRow[]
@@ -83,6 +85,7 @@ export function OutboundScreen(props: Props) {
     canEditOutboundDraft,
     warehouses,
     selectedWarehouseId,
+    onWarehouseChange,
     products,
     outboundSummaries,
     selectedOutboundId,
@@ -111,6 +114,12 @@ export function OutboundScreen(props: Props) {
 
       <div className="screen-grid">
         <div className="stack">
+          <WarehouseContextSwitch
+            options={warehouses.map((warehouse) => ({ id: warehouse.id, name: warehouse.name }))}
+            value={selectedWarehouseId}
+            onChange={(warehouseId) => onWarehouseChange?.(warehouseId)}
+            testId="outbound-warehouse-context"
+          />
           <Card className="card" data-testid="outbound-section">
             <h3 style={{ margin: 0, fontSize: 16 }}>Заявки на отгрузку</h3>
             <p className="subtle">
@@ -120,26 +129,6 @@ export function OutboundScreen(props: Props) {
 
             {canEditOutboundDraft ? (
               <form data-testid="outbound-create-form" noValidate onSubmit={onCreateOutboundRequest}>
-                {isFulfillmentSeller && warehouses.length > 1 ? (
-                  <label>
-                    Склад для отгрузки
-                    <Select
-                      name="outbound_warehouse_id"
-                      data-testid="outbound-create-warehouse"
-                      required
-                      defaultValue=""
-                    >
-                      <option value="" disabled>
-                        Выберите склад
-                      </option>
-                      {warehouses.map((w) => (
-                        <option key={w.id} value={w.id}>
-                          {w.code} — {w.name}
-                        </option>
-                      ))}
-                    </Select>
-                  </label>
-                ) : null}
                 <Button
                   type="submit"
                   data-testid="outbound-create-submit"
