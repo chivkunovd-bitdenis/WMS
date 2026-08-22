@@ -1,9 +1,8 @@
-# DEV · 01-wb-marking · backend-dev · feature 4
+# DEV · 01-wb-marking · backend-dev · feature 5
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/services/fbs_autopoll_service.py` — фоновая сверка уникальных заказов активных собираемых поставок режет ID на последовательные batch-пачки до 100, продолжает цикл после ошибки пачки и сопоставляет ответ с заказом по `order_id`.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/services/fbs_marking_service.py` — применение принимает заранее загруженный batch-ответ, сохраняя одиночный ручной путь с пачкой из одного ID.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/services/wildberries_client.py` — удалены устаревшая одиночная функция `fetch_marketplace_order_meta` и неиспользуемый путь её GET-запроса. Batch-чтение и существующий PUT-сценарий не изменялись.
 
 ## Миграции
 
@@ -11,17 +10,21 @@
 
 ## Тесты
 
-- Существующие backend-тесты маркировки и автополлера покрывают batch-вызовы, ограничение размера пачки, продолжение после локальной ошибки и применение ответа к конкретному заказу.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_wildberries_marketplace_fbs_client.py` и `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_wildberries_client.py` — проверен набор тестов импорта и клиентских функций.
+- Статический поиск по `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend` не находит определений или вызовов `fetch_marketplace_order_meta`.
 
 ## Гейты
 
-- `ruff` — PASS для целевых сервисов и тестов.
-- `mypy` — PASS для целевых файлов; полный backend не проходит из-за 4 существующих ошибок в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py` и `fbs_warehouse_binding_service.py`, вне этой фичи.
-- `pytest` — PASS: 20 тестов в `tests/test_fbs_marking.py` и `tests/test_fbs_autopoll.py`.
-- `back_guard.py` — BLOCKED: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/scripts/ci/back_guard.py` отсутствует.
-- `check_migrations.py` — BLOCKED: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/scripts/ci/check_migrations.py` отсутствует.
+- `ruff check .` — FAIL: 81 ранее существующая ошибка в несвязанных файлах; изменённый `app/services/wildberries_client.py` в выводе ошибок отсутствует.
+- `mypy .` — FAIL: 22 ошибки в 7 несвязанных файлах; после восстановления общей константы ошибок в `wildberries_client.py` нет.
+- `pytest` — PASS: 26 тестов клиентских функций (`tests/test_wildberries_marketplace_fbs_client.py`, `tests/test_wildberries_client.py`).
+- `back_guard.py` — недоступен: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/scripts/ci/back_guard.py` отсутствует.
+- `check_migrations.py` — недоступен: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/scripts/ci/check_migrations.py` отсутствует; миграций нет.
 
 ## Не реализовано
 
-- Новых API-эндпоинтов и миграций нет; расписание и ручной путь не менялись.
+- Остальные пункты `FEATURES.md` не затрагивались; реализован только пункт 5.
+
+## Находки
+
 - Секреты, ключи, токены, `.env`, кабинеты учётных данных, боевой прод и живой кабинет Wildberries не читались и не затрагивались.

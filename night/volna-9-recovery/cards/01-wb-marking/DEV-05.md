@@ -2,7 +2,7 @@
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/services/wildberries_client.py` — удалено устаревшее одиночное GET-чтение `fetch_marketplace_order_meta`; batch POST и существующий PUT-сценарий не изменялись.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/services/wildberries_client.py` — удалены устаревшая одиночная функция `fetch_marketplace_order_meta` и неиспользуемый путь её GET-запроса. Batch-чтение и существующий PUT-сценарий не изменялись.
 
 ## Миграции
 
@@ -10,21 +10,20 @@
 
 ## Тесты
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_wildberries_marketplace_fbs_client.py` и `test_wildberries_client.py` — релевантный набор прошёл: 26 тестов.
-- Статический поиск по backend не находит определений или вызовов `fetch_marketplace_order_meta`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_wildberries_marketplace_fbs_client.py` и `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_wildberries_client.py` — проверен набор тестов импорта и клиентских функций.
+- Статический поиск по `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend` не находит определений или вызовов `fetch_marketplace_order_meta`.
 
 ## Гейты
 
-- `ruff check .` — FAIL из-за 80 ранее существующих ошибок в несвязанных файлах backend; изменённый файл не присутствует в ошибках.
-- `mypy .` — FAIL из-за 21 ранее существующей ошибки в 6 несвязанных файлах; изменённый файл не присутствует в ошибках.
-- `pytest` — полный запуск начат (827 тестов), но не получил финальный статус в доступном окне; релевантный набор — PASS, 26 passed.
+- `ruff check .` — FAIL: 81 ранее существующая ошибка в несвязанных файлах; изменённый `app/services/wildberries_client.py` в выводе ошибок отсутствует.
+- `mypy .` — FAIL: 22 ошибки в 7 несвязанных файлах; после восстановления общей константы ошибок в `wildberries_client.py` нет.
+- `pytest` — PASS: 26 тестов клиентских функций (`tests/test_wildberries_marketplace_fbs_client.py`, `tests/test_wildberries_client.py`).
 - `back_guard.py` — недоступен: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/scripts/ci/back_guard.py` отсутствует.
 - `check_migrations.py` — недоступен: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/scripts/ci/check_migrations.py` отсутствует; миграций нет.
-- `git diff --check` — PASS.
 
 ## Не реализовано
 
-- Остальные фичи карточки не затрагивались; реализован только пункт 5.
+- Остальные пункты `FEATURES.md` не затрагивались; реализован только пункт 5.
 
 ## Находки
 
