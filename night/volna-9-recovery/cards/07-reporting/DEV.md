@@ -1,23 +1,20 @@
-# Screen-dev report · 07-reporting
-
 ## Изменённые файлы
 
-Атом `WarningNotice` уже реализован в сохранённом состоянии рабочей копии; в рамках этой проверки новые изменения в исходных файлах не потребовались.
+Атом `ReportMetricStrip` и его экспорт уже присутствуют в рабочей копии и соответствуют разрешённому набору файлов:
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/States.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/ReportMetricStrip.tsx`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/index.ts`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/States.test.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/ReportMetricStrip.test.tsx`
+
+В рамках переделки по `REVIEW.md` относящихся к этому ui-kit-атому находок нет, поэтому исходный код этих файлов не изменялся.
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json`: не завершился; процесс остановлен после ожидания без вывода.
-- `python3 scripts/ui/ui_guard.py`: красный из-за ранее существующих нарушений в `src/App.tsx`, `src/components/WbProductPickerDialog.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx` и `src/screens/v2/SellerInboundDraftScreen.tsx`; базовая линия не изменялась. Для `FfReportsPage.tsx` зафиксировано улучшение.
-- `npm run test:unit -- --run src/ui-kit/States.test.tsx`: не запустился, локальный бинарник `vitest` отсутствует (`vitest: command not found`).
+- `npx tsc --noEmit -p tsconfig.app.json` — красный: локальный `tsc` отсутствует; `npx` попытался скачать пакет, но сеть недоступна (`ENOTFOUND registry.npmjs.org`).
+- `python3 scripts/ui/ui_guard.py` — красный из-за новых нарушений в чужих файлах: `frontend/src/App.tsx`, `frontend/src/components/WbProductPickerDialog.tsx`, `frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx`, `frontend/src/screens/v2/SellerInboundDraftScreen.tsx`. В разрешённых файлах атома нарушений не выявлено; базовую линию не обновлял.
+- `npm run test:unit -- src/ui-kit/ReportMetricStrip.test.tsx` — красный: локальный `vitest` отсутствует (`vitest: command not found`).
 
 ## Не реализовано
 
-Невыполненных пунктов контракта для атома `WarningNotice` нет. Реализация использует MUI `Alert severity="warning"`, общий с `ErrorNotice` отступ `mb: 2`, пробрасывает `testId`, экспортируется из `ui-kit/index.ts`, а тест проверяет `data-testid`, роль alert, warning-класс и доступный текст.
+Нет пунктов контракта, относящихся к `ReportMetricStrip`, которые не легли буквально. Находки `REVIEW.md` относятся к другим слоям и файлам карточки и не исправлялись в рамках этого атомарного куска.
 
-## Находки
-
-- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались.

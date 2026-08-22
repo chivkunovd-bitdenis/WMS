@@ -1,21 +1,20 @@
-# Screen Dev · 07-reporting · ReportMetricStrip
-
 ## Изменённые файлы
 
+Атом `ReportMetricStrip` и его экспорт уже присутствуют в рабочей копии и соответствуют разрешённому набору файлов:
+
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/ReportMetricStrip.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/index.ts`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/ReportMetricStrip.test.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/index.ts` — проверен, экспорт уже присутствует и не требовал правки.
+
+В рамках переделки по `REVIEW.md` относящихся к этому ui-kit-атому находок нет, поэтому исходный код этих файлов не изменялся.
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend` — НЕ ПРОВЕРЕН: в checkout отсутствует `frontend/node_modules/.bin/tsc`; offline-вызов `npx --no-install` не дал локального бинарника.
-- `python3 scripts/ui/ui_guard.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting` — НЕ ПРОВЕРЕН: команда в объединённом запуске не вернула диагностический вывод; базовую линию не изменял.
-- `npm run test:unit` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend` — НЕ ПРОВЕРЕН: отсутствует `frontend/node_modules/.bin/vitest`, а установка зависимостей не выполнялась.
+- `npx tsc --noEmit -p tsconfig.app.json` — красный: локальный `tsc` отсутствует; `npx` попытался скачать пакет, но сеть недоступна (`ENOTFOUND registry.npmjs.org`).
+- `python3 scripts/ui/ui_guard.py` — красный из-за новых нарушений в чужих файлах: `frontend/src/App.tsx`, `frontend/src/components/WbProductPickerDialog.tsx`, `frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx`, `frontend/src/screens/v2/SellerInboundDraftScreen.tsx`. В разрешённых файлах атома нарушений не выявлено; базовую линию не обновлял.
+- `npm run test:unit -- src/ui-kit/ReportMetricStrip.test.tsx` — красный: локальный `vitest` отсутствует (`vitest: command not found`).
 
 ## Не реализовано
 
-- Остальные части экрана отчётности, backend-находки из ревью и соседние экраны не изменялись: текущая работа ограничена атомом `ReportMetricStrip`.
+Нет пунктов контракта, относящихся к `ReportMetricStrip`, которые не легли буквально. Находки `REVIEW.md` относятся к другим слоям и файлам карточки и не исправлялись в рамках этого атомарного куска.
 
-## Находки
-
-- Исправлено замечание ревью к этому атому: процент изменения теперь выводится как `%`, а `null` может сопровождаться пояснением «В прошлом периоде расхода не было». Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались.
