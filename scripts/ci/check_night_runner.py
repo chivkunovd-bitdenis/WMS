@@ -574,6 +574,11 @@ def main() -> int:
             проверь("rework: reviewer сохраняет свой штатный профиль",
                     выбор_модели[3], (None, None))
 
+            инъекция = n.роль_с_инъекцией("backend-dev", "task", "sol")
+            проверь("prompt: явный Sol не получает противоречивый model: haiku",
+                    "Профиль исполнителя: Sol" in инъекция and "model: haiku" not in инъекция,
+                    True)
+
             (t / "OTLOZHENO.md").write_text(
                 "reviewer нашёл находки после 2 кругов правки\n", encoding="utf-8")
             проверь("resume: старая Luna-парковка сначала идёт Terra",
