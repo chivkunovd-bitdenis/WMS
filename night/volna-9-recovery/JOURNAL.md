@@ -9,3 +9,5 @@
 18:09   07-reporting · backend-dev: готово
 18:09   07-reporting · dev: фича 2/11 сохранена 9c36c5de9aaf
 18:12   07-reporting · screen-dev: готово
+18:12   07-reporting · dev: фича 3/11 сохранена 503f05133e02
+18:14   07-reporting · screen-dev: готово

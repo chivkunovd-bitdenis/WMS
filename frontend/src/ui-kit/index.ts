@@ -10,3 +10,5 @@ export { EmptyState, TableSkeletonBody, ErrorNotice, WarningNotice, ScreenHeader
 export { QtyCell, PlanFactCell, TextCell, ProductCell } from './Cells'
 export { FilterBar } from './FilterBar'
 export { ScannerLine } from './ScannerLine'
+export { ReportMetricStrip } from './ReportMetricStrip'
+export type { ReportMetricItem, ReportMetricStripProps } from './ReportMetricStrip'
