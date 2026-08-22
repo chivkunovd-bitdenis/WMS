@@ -19,6 +19,7 @@ from app.services.background_job_service import (
     JOB_TYPE_MOVEMENTS_DIGEST,
     MARKING_LABEL_TAPE_RUNNING_LEASE,
     create_pending_job,
+    purge_expired_label_tape_assets,
     run_marking_label_tape_job,
     should_enqueue_marking_label_tape_job,
 )
@@ -103,10 +104,8 @@ async def test_duplicate_pending_job_is_republished_without_creating_a_second_jo
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("finished_status", [JOB_STATUS_FAILED, JOB_STATUS_DONE])
-async def test_finished_marking_job_can_be_retried_with_same_idempotency_key(
+async def test_done_marking_job_is_reused_while_asset_is_available(
     async_client: AsyncClient,
-    finished_status: str,
 ) -> None:
     suffix = str(int(time.time() * 1000))
     reg = await async_client.post("/auth/register", json={
@@ -121,7 +120,28 @@ async def test_finished_marking_job_can_be_retried_with_same_idempotency_key(
             session, tenant_id, job_type=JOB_TYPE_MARKING_LABEL_TAPE,
             idempotency_key="retryable-request", payload_json={"code_ids": ["1"]},
         )
-        first.status = finished_status
+        from app.models.fbs_print_asset import (
+            PRINT_ASSET_KIND_LABEL_TAPE,
+            PRINT_ASSET_STATUS_READY,
+            FbsPrintAsset,
+        )
+        from app.models.seller import Seller
+
+        seller = Seller(tenant_id=tenant_id, name="Tape seller")
+        session.add(seller)
+        await session.flush()
+        asset = FbsPrintAsset(
+            tenant_id=tenant_id,
+            seller_id=seller.id,
+            kind=PRINT_ASSET_KIND_LABEL_TAPE,
+            status=PRINT_ASSET_STATUS_READY,
+            storage_path="fbs-print-assets/label-tapes/ready.pdf",
+            expires_at=datetime.now(UTC) + timedelta(hours=12),
+        )
+        session.add(asset)
+        await session.flush()
+        first.status = JOB_STATUS_DONE
+        first.result_json = {"asset_id": str(asset.id)}
         await session.commit()
 
         second = await create_pending_job(
@@ -129,9 +149,106 @@ async def test_finished_marking_job_can_be_retried_with_same_idempotency_key(
             idempotency_key="retryable-request", payload_json={"code_ids": ["1"]},
         )
 
+        assert second.id == first.id
+        assert second.status == JOB_STATUS_DONE
+        assert second.__dict__["created_by_call"] is False
+        assert should_enqueue_marking_label_tape_job(second) is False
+
+
+@pytest.mark.asyncio
+async def test_failed_marking_job_can_be_retried_with_same_idempotency_key(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post("/auth/register", json={
+        "organization_name": "Tape Failed Co", "slug": f"tape-failed-{suffix}",
+        "admin_email": f"tape-failed-{suffix}@example.com", "password": "password123",
+    })
+    tenant_id = uuid.UUID(str(decode_access_token(reg.json()["access_token"])["tenant_id"]))
+    async with SessionLocal() as session:
+        first = await create_pending_job(
+            session, tenant_id, job_type=JOB_TYPE_MARKING_LABEL_TAPE,
+            idempotency_key="failed-request", payload_json={"code_ids": ["1"]},
+        )
+        first.status = JOB_STATUS_FAILED
+        await session.commit()
+
+        second = await create_pending_job(
+            session, tenant_id, job_type=JOB_TYPE_MARKING_LABEL_TAPE,
+            idempotency_key="failed-request", payload_json={"code_ids": ["1"]},
+        )
+
         assert second.id != first.id
         assert second.status == JOB_STATUS_PENDING
         assert second.__dict__["created_by_call"] is True
+
+
+@pytest.mark.asyncio
+async def test_expired_tape_cleanup_retains_audit_row_and_releases_request_key(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.models.fbs_print_asset import (
+        PRINT_ASSET_KIND_LABEL_TAPE,
+        PRINT_ASSET_STATUS_READY,
+        FbsPrintAsset,
+    )
+    from app.models.seller import Seller
+
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post("/auth/register", json={
+        "organization_name": "Tape Audit Co", "slug": f"tape-audit-{suffix}",
+        "admin_email": f"tape-audit-{suffix}@example.com", "password": "password123",
+    })
+    tenant_id = uuid.UUID(str(decode_access_token(reg.json()["access_token"])["tenant_id"]))
+    deleted_paths: list[str] = []
+    monkeypatch.setattr(
+        "app.services.fbs_print_asset_storage.delete_stored_asset",
+        deleted_paths.append,
+    )
+
+    async with SessionLocal() as session:
+        seller = Seller(tenant_id=tenant_id, name="Tape audit seller")
+        session.add(seller)
+        await session.flush()
+        asset = FbsPrintAsset(
+            tenant_id=tenant_id,
+            seller_id=seller.id,
+            kind=PRINT_ASSET_KIND_LABEL_TAPE,
+            status=PRINT_ASSET_STATUS_READY,
+            storage_path="fbs-print-assets/label-tapes/expired.pdf",
+            expires_at=datetime.now(UTC) - timedelta(seconds=1),
+        )
+        session.add(asset)
+        await session.flush()
+        job = await create_pending_job(
+            session, tenant_id, job_type=JOB_TYPE_MARKING_LABEL_TAPE,
+            idempotency_key="expired-request", payload_json={"code_ids": ["1"]},
+        )
+        job.status = JOB_STATUS_DONE
+        job.result_json = {"asset_id": str(asset.id)}
+        asset_id = asset.id
+        job_id = job.id
+        await session.commit()
+
+    assert await purge_expired_label_tape_assets() == 1
+    assert await purge_expired_label_tape_assets() == 0
+    assert deleted_paths == ["fbs-print-assets/label-tapes/expired.pdf"]
+
+    async with SessionLocal() as session:
+        retained_asset = await session.get(FbsPrintAsset, asset_id)
+        retained_job = await session.get(BackgroundJob, job_id)
+        assert retained_asset is not None
+        assert retained_asset.storage_path is None
+        assert retained_job is not None
+        assert retained_job.result_json == {"asset_id": str(asset_id)}
+
+        retry = await create_pending_job(
+            session, tenant_id, job_type=JOB_TYPE_MARKING_LABEL_TAPE,
+            idempotency_key="expired-request", payload_json={"code_ids": ["1"]},
+        )
+        assert retry.id != job_id
+        assert retry.status == JOB_STATUS_PENDING
 
 
 @pytest.mark.asyncio

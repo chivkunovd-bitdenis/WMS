@@ -19,13 +19,19 @@ class BackgroundJob(Base):
     __tablename__ = "background_jobs"
     __table_args__ = (
         Index(
-            "uq_background_jobs_active_idempotency",
+            "uq_background_jobs_reusable_idempotency",
             "tenant_id",
             "job_type",
             "idempotency_key",
             unique=True,
-            postgresql_where=text("status IN ('pending', 'running')"),
-            sqlite_where=text("status IN ('pending', 'running')"),
+            postgresql_where=text(
+                "status IN ('pending', 'running') OR "
+                "(status = 'done' AND job_type = 'marking_label_tape')"
+            ),
+            sqlite_where=text(
+                "status IN ('pending', 'running') OR "
+                "(status = 'done' AND job_type = 'marking_label_tape')"
+            ),
         ),
     )
 

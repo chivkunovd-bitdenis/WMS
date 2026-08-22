@@ -15,12 +15,18 @@ depends_on = None
 def upgrade() -> None:
     op.add_column("background_jobs", sa.Column("idempotency_key", sa.String(128), nullable=True))
     op.create_index(
-        "uq_background_jobs_active_idempotency",
+        "uq_background_jobs_reusable_idempotency",
         "background_jobs",
         ["tenant_id", "job_type", "idempotency_key"],
         unique=True,
-        postgresql_where=sa.text("status IN ('pending', 'running')"),
-        sqlite_where=sa.text("status IN ('pending', 'running')"),
+        postgresql_where=sa.text(
+            "status IN ('pending', 'running') OR "
+            "(status = 'done' AND job_type = 'marking_label_tape')"
+        ),
+        sqlite_where=sa.text(
+            "status IN ('pending', 'running') OR "
+            "(status = 'done' AND job_type = 'marking_label_tape')"
+        ),
     )
     op.add_column(
         "fbs_print_assets",
@@ -30,5 +36,5 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_column("fbs_print_assets", "expires_at")
-    op.drop_index("uq_background_jobs_active_idempotency", table_name="background_jobs")
+    op.drop_index("uq_background_jobs_reusable_idempotency", table_name="background_jobs")
     op.drop_column("background_jobs", "idempotency_key")

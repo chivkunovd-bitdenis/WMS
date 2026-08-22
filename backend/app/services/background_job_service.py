@@ -4,7 +4,7 @@ import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Any, cast
+from typing import Any
 
 import httpx
 from sqlalchemy import and_, func, or_, select, update
@@ -37,6 +37,59 @@ JOB_TYPE_MARKING_LABEL_TAPE = "marking_label_tape"
 MARKING_LABEL_TAPE_RUNNING_LEASE = timedelta(minutes=15)
 
 
+async def _reusable_job(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    job_type: str,
+    idempotency_key: str,
+) -> BackgroundJob | None:
+    statuses = [JOB_STATUS_PENDING, JOB_STATUS_RUNNING]
+    if job_type == JOB_TYPE_MARKING_LABEL_TAPE:
+        statuses.append(JOB_STATUS_DONE)
+    existing = await session.scalar(
+        select(BackgroundJob)
+        .where(
+            BackgroundJob.tenant_id == tenant_id,
+            BackgroundJob.job_type == job_type,
+            BackgroundJob.idempotency_key == idempotency_key,
+            BackgroundJob.status.in_(statuses),
+        )
+        .with_for_update()
+    )
+    if existing is None or existing.status != JOB_STATUS_DONE:
+        return existing
+
+    from app.models.fbs_print_asset import (
+        PRINT_ASSET_KIND_LABEL_TAPE,
+        PRINT_ASSET_STATUS_READY,
+        FbsPrintAsset,
+    )
+
+    asset_id_raw = (existing.result_json or {}).get("asset_id")
+    try:
+        asset_id = uuid.UUID(str(asset_id_raw))
+    except (TypeError, ValueError):
+        asset_id = None
+    asset = await session.get(FbsPrintAsset, asset_id) if asset_id is not None else None
+    now = datetime.now(UTC)
+    if (
+        asset is not None
+        and asset.tenant_id == tenant_id
+        and asset.kind == PRINT_ASSET_KIND_LABEL_TAPE
+        and asset.status == PRINT_ASSET_STATUS_READY
+        and asset.storage_path is not None
+        and asset.expires_at is not None
+        and asset.expires_at > now
+    ):
+        return existing
+
+    # The completed job remains an audit record, but an expired or unavailable
+    # artifact must not reserve the deterministic request key forever.
+    existing.idempotency_key = None
+    await session.commit()
+    return None
+
+
 async def create_pending_job(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -46,14 +99,7 @@ async def create_pending_job(
     idempotency_key: str | None = None,
 ) -> BackgroundJob:
     if idempotency_key:
-        existing = await session.scalar(
-            select(BackgroundJob).where(
-                BackgroundJob.tenant_id == tenant_id,
-                BackgroundJob.job_type == job_type,
-                BackgroundJob.idempotency_key == idempotency_key,
-                BackgroundJob.status.in_((JOB_STATUS_PENDING, JOB_STATUS_RUNNING)),
-            )
-        )
+        existing = await _reusable_job(session, tenant_id, job_type, idempotency_key)
         if existing is not None:
             existing.__dict__["created_by_call"] = False
             return existing
@@ -71,17 +117,10 @@ async def create_pending_job(
     except IntegrityError:
         await session.rollback()
         if idempotency_key:
-            existing = await session.scalar(
-                select(BackgroundJob).where(
-                    BackgroundJob.tenant_id == tenant_id,
-                    BackgroundJob.job_type == job_type,
-                    BackgroundJob.idempotency_key == idempotency_key,
-                    BackgroundJob.status.in_((JOB_STATUS_PENDING, JOB_STATUS_RUNNING)),
-                )
-            )
+            existing = await _reusable_job(session, tenant_id, job_type, idempotency_key)
             if existing is not None:
                 existing.__dict__["created_by_call"] = False
-                return cast(BackgroundJob, existing)
+                return existing
         raise
     await session.refresh(job)
     return job
@@ -474,7 +513,7 @@ async def run_marking_label_tape_job(job_id: uuid.UUID) -> None:
 
 
 async def purge_expired_label_tape_assets() -> int:
-    """Remove expired label-tape rows and their validated files."""
+    """Remove expired label-tape files while retaining their audit rows."""
     from app.models.fbs_print_asset import PRINT_ASSET_KIND_LABEL_TAPE, FbsPrintAsset
     from app.services.fbs_print_asset_storage import delete_stored_asset
 
@@ -485,12 +524,13 @@ async def purge_expired_label_tape_assets() -> int:
                 FbsPrintAsset.kind == PRINT_ASSET_KIND_LABEL_TAPE,
                 FbsPrintAsset.expires_at.is_not(None),
                 FbsPrintAsset.expires_at <= datetime.now(UTC),
+                FbsPrintAsset.storage_path.is_not(None),
             )
         )
         for asset in result.scalars().all():
             if asset.storage_path:
                 delete_stored_asset(asset.storage_path)
-            await session.delete(asset)
+            asset.storage_path = None
             removed += 1
         await session.commit()
     return removed
