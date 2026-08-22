@@ -37,3 +37,28 @@ def test_storage_rows_reject_negative_accumulated_values() -> None:
         ).sqltext.text
         == "liter_days >= 0"
     )
+
+
+def test_measurement_keeps_immutable_movement_boundary_references() -> None:
+    foreign_keys = {
+        constraint.target_fullname
+        for column in (
+            StorageMeasurement.__table__.c.movement_start_id,
+            StorageMeasurement.__table__.c.movement_end_id,
+        )
+        for constraint in column.foreign_keys
+    }
+
+    assert foreign_keys == {
+        "inventory_movements.id",
+    }
+
+
+def test_storage_models_have_no_financial_columns() -> None:
+    assert not {
+        "tariff_id",
+        "rate",
+        "amount",
+        "currency",
+        "ledger_entry_id",
+    }.intersection(StorageStatement.__table__.columns.keys())
