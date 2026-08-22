@@ -31,6 +31,8 @@ type Props = {
 
 type Preview = { asset: FbsPrintAsset; objectUrl: string }
 
+type MissingSticker = { order_id: string; wb_order_id: number; order_number?: number | null }
+
 function assetLabel(asset: FbsPrintAsset): string {
   if (asset.kind === 'box_qr') return 'Печать QR короба WMS'
   if (asset.kind === 'cargo_place_qr') return 'Печать QR грузоместа WB'
@@ -53,13 +55,27 @@ export function FbsPrintPreviewDialog({
   const [copies, setCopies] = useState(1)
   const [labelSize, setLabelSize] = useState<LabelSize>(() => resolveLabelSize(loadLabelSizeId()))
 
+  const missingStickers = useMemo<MissingSticker[]>(
+    () => batch?.order_errors.map(({ order_id, wb_order_id, order_number }) => ({ order_id, wb_order_id, order_number })) ?? [],
+    [batch],
+  )
+
+  const orderedMissingStickers = useMemo(
+    () => [...missingStickers].sort((a, b) => (a.order_number ?? Number.MAX_SAFE_INTEGER) - (b.order_number ?? Number.MAX_SAFE_INTEGER)),
+    [missingStickers],
+  )
+
   const readyAssets = useMemo(
     () => batch?.assets.filter((asset) => asset.status === 'ready' && asset.preview_url) ?? [],
     [batch],
   )
+  const orderedReadyAssets = useMemo(
+    () => [...readyAssets].sort((a, b) => (a.order_number ?? Number.MAX_SAFE_INTEGER) - (b.order_number ?? Number.MAX_SAFE_INTEGER)),
+    [readyAssets],
+  )
 
   useEffect(() => {
-    if (!open || readyAssets.length === 0) {
+    if (!open || orderedReadyAssets.length === 0) {
       setPreviews([])
       return
     }
@@ -68,11 +84,11 @@ export function FbsPrintPreviewDialog({
     setLoading(true)
     setError(null)
     void Promise.all(
-      readyAssets.map(async (asset) => {
+      orderedReadyAssets.map(async (asset) => {
         const response = await fetch(resolveFbsAssetUrl(asset.preview_url!), {
           headers: { ...authHeaders(token) },
         })
-        if (!response.ok) throw new Error(`Предпросмотр ${asset.id} недоступен (${response.status}).`)
+        if (!response.ok) throw new Error('Не удалось загрузить предпросмотр стикеров.')
         const objectUrl = URL.createObjectURL(await response.blob())
         objectUrls.push(objectUrl)
         return { asset, objectUrl }
@@ -91,7 +107,7 @@ export function FbsPrintPreviewDialog({
       active = false
       objectUrls.forEach((url) => URL.revokeObjectURL(url))
     }
-  }, [open, readyAssets, token, authHeaders])
+  }, [open, orderedReadyAssets, token, authHeaders])
 
   useEffect(() => {
     if (open) {
@@ -179,7 +195,7 @@ export function FbsPrintPreviewDialog({
             />
           </Stack>
           {error ? <Alert severity="error">{error}</Alert> : null}
-          {batch?.order_errors.map((item) => (
+          {orderedMissingStickers.map((item) => (
             <ErrorNotice key={item.order_id}>
               Заказ WB №{item.wb_order_id}: стикер не получен
             </ErrorNotice>
