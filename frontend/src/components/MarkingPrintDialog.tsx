@@ -37,9 +37,13 @@ import {
   buildMarkingTapeSections,
   buildWbOrderQrLabelHtml,
   printCzArtifactTape,
+  prepareCzArtifactTape,
+  resolveCzArtifactTapeCodeIds,
+  printPdfBlob,
   printTapeSections,
   type MarkingTapeUnitInput,
 } from '../utils/printMarkingCodeLabel'
+import { PrimaryAction, SecondaryAction, StatusChip } from '../ui-kit'
 import { buildProductLabelSectionHtml, type ProductThermalLabelData } from '../utils/printProductThermalLabel'
 import { printProductThermalLabels } from '../utils/printProductThermalLabel'
 import { resolveManualWbLabelCount } from '../utils/productBarcodePrint'
@@ -106,6 +110,26 @@ type FbsTapeContext = {
 /** Fixed layout for non-ЧЗ: one WB barcode label per unit, no constructor. */
 const NON_HONEST_SIGN_LABEL_LAYOUT: PrintLayout = {
   units: [{ block: 'label', copies: 1 }],
+}
+
+function TapePreparationStatus({
+  state,
+  onOpen,
+  onRetry,
+  onClose,
+}: {
+  state: 'preparing' | 'ready' | 'failed' | 'expired'
+  onOpen: () => void
+  onRetry: () => void
+  onClose: () => void
+}) {
+  if (state === 'preparing') {
+    return <Box data-testid="marking-print-preparing"><StatusChip label="Готовим к печати" tone="neutral" /><Typography variant="body2" color="text.secondary">Можно продолжать работу в WMS — лента собирается в фоне</Typography></Box>
+  }
+  if (state === 'ready') {
+    return <Box data-testid="marking-print-ready"><StatusChip label="Готово" tone="ok" /><PrimaryAction onClick={onOpen} data-testid="marking-print-open-ready">Открыть для печати</PrimaryAction></Box>
+  }
+  return <Box data-testid="marking-print-preparation-error"><Alert severity="error">{state === 'expired' ? 'Срок хранения ленты истёк. Соберите её ещё раз' : 'Не удалось собрать ленту. Попробуйте ещё раз'}</Alert><Stack direction="row" spacing={1} sx={{ mt: 1 }}><PrimaryAction onClick={onRetry} data-testid="marking-print-retry">Повторить</PrimaryAction><SecondaryAction onClick={onClose} data-testid="marking-print-close-error">Закрыть</SecondaryAction></Stack></Box>
 }
 
 async function blobToDataUrl(blob: Blob): Promise<string> {
@@ -220,6 +244,8 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const [sepCzQty, setSepCzQty] = useState(2)
   const [sepWbQty, setSepWbQty] = useState(1)
   const [sepCzDone, setSepCzDone] = useState(false)
+  const [tapePreparation, setTapePreparation] = useState<'idle' | 'preparing' | 'ready' | 'failed' | 'expired'>('idle')
+  const [preparedTapePdf, setPreparedTapePdf] = useState<Blob | null>(null)
 
   const requiresHonestSign = ctx?.requiresHonestSign ?? true
   const fbsTapeMode = Boolean(ctx?.fbsTape)
@@ -343,6 +369,8 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       return
     }
     setError(null)
+    setTapePreparation('idle')
+    setPreparedTapePdf(null)
     setAllowPartial(false)
     setSeparateModeChoice(null)
     // Этикетка ШК ВБ клеится на единицу товара: разумное первое значение — сколько
@@ -598,6 +626,14 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     }
     let printedNative = false
     try {
+      const codeIds = resolveCzArtifactTapeCodeIds(tapeUnits, printLayout)
+      if (codeIds) {
+        setTapePreparation('preparing')
+        const pdf = await prepareCzArtifactTape(codeIds, ctx.token, size)
+        setPreparedTapePdf(pdf)
+        setTapePreparation('ready')
+        return
+      }
       printedNative = await printCzArtifactTape(tapeUnits, printLayout, ctx.token, size)
     } catch {
       // Native PDF иногда не стартует (viewer/блокировка) — ниже HTML fallback.
@@ -613,6 +649,17 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     ctx.onPrinted()
     if (closeAfter) {
       onClose()
+    }
+  }
+
+  const openPreparedTape = async () => {
+    if (!preparedTapePdf) return
+    try {
+      await printPdfBlob(preparedTapePdf)
+      ctx?.onPrinted()
+      onClose()
+    } catch {
+      setTapePreparation('failed')
     }
   }
 
@@ -927,6 +974,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         })
       }
     } catch (e) {
+      if (tapePreparation === 'preparing') {
+        setTapePreparation(e instanceof Error && e.message.includes('истёк') ? 'expired' : 'failed')
+      }
       setError(
         e instanceof Error
           ? e.message
@@ -1001,7 +1051,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   }
 
   const printDisabled =
-    busy ||
+    busy || tapePreparation === 'preparing' || tapePreparation === 'ready' ||
     (fbsTapeMode && fbsTapeOrders.length < 1) ||
     (effectiveReprint &&
       !fbsTapeMode &&
@@ -1653,6 +1703,20 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
                 {error}
               </Alert>
             ) : null}
+            {tapePreparation !== 'idle' ? (
+              <TapePreparationStatus
+                state={tapePreparation}
+                onOpen={() => void openPreparedTape()}
+                onRetry={() => { setTapePreparation('idle'); void handlePrint() }}
+                onClose={onClose}
+              />
+            ) : null}
+            {tapePreparation === 'ready' ? (
+              <Box data-testid="marking-print-ready">
+                <StatusChip label="Готово" tone="ok" />
+                <PrimaryAction onClick={() => void openPreparedTape} data-testid="marking-print-open-ready">Открыть для печати</PrimaryAction>
+              </Box>
+            ) : null}
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -1664,7 +1728,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
             <Button onClick={onClose} disabled={busy} data-testid="marking-print-separate-close">
               Закрыть
             </Button>
-          ) : (
+          ) : tapePreparation === 'ready' || tapePreparation === 'failed' || tapePreparation === 'expired' ? null : (
             <>
               <Button onClick={onClose} disabled={busy}>
                 Отмена

@@ -440,6 +440,54 @@ export async function fetchCzArtifactTapePdf(
   return res.blob()
 }
 
+export type CzArtifactTapeJobStatus = 'pending' | 'running' | 'done' | 'failed'
+
+export async function prepareCzArtifactTape(
+  codeIds: string[],
+  authToken: string,
+  pageSize: Pick<LabelSize, 'widthMm' | 'heightMm'>,
+  onStatus?: (status: Exclude<CzArtifactTapeJobStatus, 'done' | 'failed'>) => void,
+): Promise<Blob> {
+  const start = await fetch(apiUrl('/operations/marking-codes/label-artifact-tape'), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code_ids: codeIds, page_width_mm: pageSize.widthMm, page_height_mm: pageSize.heightMm }),
+  })
+  if (!start.ok) {
+    throw new Error('Не удалось собрать ленту. Попробуйте ещё раз')
+  }
+  const { job_id: jobId } = (await start.json()) as { job_id: string }
+  let status: CzArtifactTapeJobStatus = 'pending'
+  while (status === 'pending' || status === 'running') {
+    onStatus?.(status)
+    await new Promise((resolve) => window.setTimeout(resolve, 500))
+    const jobResponse = await fetch(apiUrl(`/operations/background-jobs/${jobId}`), {
+      headers: { Authorization: `Bearer ${authToken}` },
+    })
+    if (!jobResponse.ok) {
+      throw new Error('Не удалось собрать ленту. Попробуйте ещё раз')
+    }
+    const job = (await jobResponse.json()) as {
+      status: CzArtifactTapeJobStatus
+      result_json?: { asset_id?: string } | null
+    }
+    status = job.status
+    if (status === 'failed') {
+      throw new Error('Не удалось собрать ленту. Попробуйте ещё раз')
+    }
+    if (status === 'done' && job.result_json?.asset_id) {
+      const asset = await fetch(apiUrl(`/operations/fbs-print-assets/${job.result_json.asset_id}/content`), {
+        headers: { Authorization: `Bearer ${authToken}` },
+      })
+      if (!asset.ok) {
+        throw new Error('Срок хранения ленты истёк. Соберите её ещё раз')
+      }
+      return asset.blob()
+    }
+  }
+  throw new Error('Не удалось собрать ленту. Попробуйте ещё раз')
+}
+
 let printWindowFromUserGesture: Window | null = null
 
 /** Вызывать синхронно из обработчика клика «Печать», до любых await. */
