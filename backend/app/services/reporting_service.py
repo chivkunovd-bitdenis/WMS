@@ -77,6 +77,7 @@ async def build_inventory_report(
             )
             .join(StorageLocation, StorageLocation.id == InventoryBalance.storage_location_id)
             .join(Warehouse, Warehouse.id == StorageLocation.warehouse_id)
+            .join(Product, Product.id == InventoryBalance.product_id)
             .where(
                 InventoryBalance.tenant_id == tenant_id,
                 InventoryBalance.product_id.in_(product_ids),
@@ -86,6 +87,8 @@ async def build_inventory_report(
         )
         if warehouse_id is not None:
             balance_stmt = balance_stmt.where(Warehouse.id == warehouse_id)
+        if seller_id is not None:
+            balance_stmt = balance_stmt.where(Product.seller_id == seller_id)
         balances_by_product = {
             product_id: int(quantity)
             for product_id, quantity in (await session.execute(balance_stmt)).all()
@@ -98,11 +101,30 @@ async def build_inventory_report(
         if seller_id is not None:
             integrity_filters.append(InventoryMovement.seller_id == seller_id)
         transfer_rows = (await session.execute(select(InventoryMovement.transfer_group_id,
-            func.count(InventoryMovement.id)).join(
+            InventoryMovement.product_id, InventoryMovement.seller_id,
+            InventoryMovement.warehouse_id, InventoryMovement.quantity_delta).join(
             Product, Product.id == InventoryMovement.product_id).join(
             Warehouse, Warehouse.id == InventoryMovement.warehouse_id).where(*integrity_filters
-            ).group_by(InventoryMovement.transfer_group_id))).all()
-        incomplete_transfer = any(count < 2 for _group_id, count in transfer_rows)
+            ))).all()
+        transfer_groups: dict[uuid.UUID, list[tuple[uuid.UUID, uuid.UUID | None,
+            uuid.UUID, int]]] = {}
+        for (
+            group_id, product_id, movement_seller_id, movement_warehouse_id, quantity
+        ) in transfer_rows:
+            transfer_groups.setdefault(group_id, []).append(
+                (product_id, movement_seller_id, movement_warehouse_id, int(quantity))
+            )
+        incomplete_transfer = any(
+            len(rows_for_group) != 2
+            or rows_for_group[0][0] != rows_for_group[1][0]
+            or rows_for_group[0][1] != rows_for_group[1][1]
+            or rows_for_group[0][2] == rows_for_group[1][2]
+            or rows_for_group[0][3] == 0
+            or rows_for_group[1][3] == 0
+            or rows_for_group[0][3] * rows_for_group[1][3] >= 0
+            or abs(rows_for_group[0][3]) != abs(rows_for_group[1][3])
+            for rows_for_group in transfer_groups.values()
+        )
     start = (page - 1) * PAGE_SIZE
     result: list[dict[str, object]] = []
     for row in rows[start:start + PAGE_SIZE]:
@@ -330,6 +352,7 @@ async def build_overview(
         )
         .select_from(InventoryMovement)
         .join(Product, Product.id == InventoryMovement.product_id)
+        .join(Warehouse, Warehouse.id == InventoryMovement.warehouse_id)
         .where(*movement_filter)
         .group_by(func.date(InventoryMovement.created_at))
     )
@@ -339,7 +362,12 @@ async def build_overview(
     }
     days: list[dict[str, object]] = []
     cursor = date_from.date()
-    while cursor < date_to.date():
+    last_day = (
+        date_to.date()
+        if date_to.time() != datetime.min.time()
+        else date_to.date() - timedelta(days=1)
+    )
+    while cursor <= last_day:
         item = daily.get(cursor.isoformat(), {"in_qty": 0, "out_qty": 0})
         days.append({"date": cursor.isoformat(), **item})
         cursor += timedelta(days=1)
