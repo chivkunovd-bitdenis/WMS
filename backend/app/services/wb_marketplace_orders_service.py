@@ -1531,6 +1531,7 @@ async def reconcile_orders_for_seller(
     orders_received = 0
     pool_debit_totals: dict[str, int] = {"debited": 0, "shortfall": 0}
     next_token: int | None = None
+    seen_next_tokens: set[int] = set()
 
     while True:
         try:
@@ -1552,6 +1553,20 @@ async def reconcile_orders_for_seller(
             error = _wb_orders_error_from_client(exc, ref=ref)
             await session.rollback()
             raise error from exc
+
+        # A repeated cursor means WB returned a cycle rather than a complete
+        # list.  Stop before writing this duplicate page: otherwise the job
+        # would hold its per-kind flight forever and continuously hit WB.
+        if next_token is not None and next_token in seen_next_tokens:
+            await session.rollback()
+            raise WbMarketplaceOrdersError(
+                "cursor_cycle",
+                message="Wildberries returned a repeated orders cursor",
+                context={"next_token": next_token},
+                retryable=True,
+            )
+        if next_token is not None:
+            seen_next_tokens.add(next_token)
 
         if not page_rows:
             break

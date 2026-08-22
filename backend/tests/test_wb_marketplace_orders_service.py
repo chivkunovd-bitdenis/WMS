@@ -30,13 +30,21 @@ from app.services import fbs_autopoll_service
 from app.services import wb_marketplace_orders_service as orders_service
 from app.services.wb_marketplace_orders_service import link_confirmed_orders_to_wb_supplies
 from app.services.wildberries_errors import WildberriesClientError
+from app.tasks import background_jobs
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
+
+
+class _SqliteConnection:
+    dialect = type("Dialect", (), {"name": "sqlite"})()
 
 
 class _SyncSession:
     def __init__(self) -> None:
         self.commit = AsyncMock()
         self.rollback = AsyncMock()
+
+    async def connection(self) -> object:
+        return _SqliteConnection()
 
 
 # TC-NEW-WB-SCHEDULE-001: new/reconcile have independent periods and flights.
@@ -48,6 +56,25 @@ def test_wb_order_schedule_and_single_flight_are_per_kind() -> None:
     assert schedule["wb-orders-reconcile"]["schedule"] == 3600.0
     assert "fbs-orders-autopoll" not in schedule
     assert fbs_autopoll_service._sync_locks is not None
+
+
+def test_wb_order_tasks_invoke_new_and_reconcile_independently(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id = uuid.uuid4()
+    seller_id = uuid.uuid4()
+    new_job = AsyncMock(return_value=True)
+    reconcile_job = AsyncMock(return_value=True)
+    monkeypatch.setattr(fbs_autopoll_service, "sync_new_orders_for_seller_job", new_job)
+    monkeypatch.setattr(
+        fbs_autopoll_service, "reconcile_orders_for_seller_job", reconcile_job
+    )
+
+    background_jobs.run_wb_orders_new_task.run(str(tenant_id), str(seller_id))
+    background_jobs.run_wb_orders_reconcile_task.run(str(tenant_id), str(seller_id))
+
+    new_job.assert_awaited_once_with(tenant_id, seller_id)
+    reconcile_job.assert_awaited_once_with(tenant_id, seller_id)
 
 
 @pytest.mark.asyncio
@@ -96,12 +123,49 @@ async def test_wb_order_flight_uses_distinct_postgres_keys_per_kind(
     assert session.calls[0] != session.calls[2]
 
 
+@pytest.mark.asyncio
+async def test_wb_order_jobs_do_not_take_seller_wide_lock_during_http_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id = uuid.uuid4()
+    seller_id = uuid.uuid4()
+    new_sync = AsyncMock(return_value={})
+    reconcile_sync = AsyncMock(return_value={})
+
+    monkeypatch.setattr(
+        fbs_autopoll_service, "SessionLocal", lambda: _SessionContext(_SyncSession())
+    )
+    monkeypatch.setattr(httpx, "AsyncClient", lambda: _AsyncClientContext())
+    monkeypatch.setattr(fbs_autopoll_service, "sync_new_orders_for_seller", new_sync)
+    monkeypatch.setattr(
+        fbs_autopoll_service, "reconcile_orders_for_seller", reconcile_sync
+    )
+    monkeypatch.setattr(
+        fbs_autopoll_service,
+        "wb_seller_lock",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("seller-wide lock used")),
+    )
+
+    assert await fbs_autopoll_service.sync_new_orders_for_seller_job(tenant_id, seller_id)
+    assert await fbs_autopoll_service.reconcile_orders_for_seller_job(tenant_id, seller_id)
+    new_sync.assert_awaited_once()
+    reconcile_sync.assert_awaited_once()
+
+
 class _SessionContext:
     def __init__(self, session: object) -> None:
         self.session = session
 
     async def __aenter__(self) -> object:
         return self.session
+
+    async def __aexit__(self, *_args: object) -> None:
+        return None
+
+
+class _AsyncClientContext:
+    async def __aenter__(self) -> object:
+        return object()
 
     async def __aexit__(self, *_args: object) -> None:
         return None
@@ -146,9 +210,8 @@ async def test_reconcile_walks_cursor_and_fails_incomplete_pass(
     )
     monkeypatch.setattr(orders_service, "fetch_marketplace_orders_page", page_fetch)
     monkeypatch.setattr(orders_service, "upsert_order_from_wb_row", upsert)
-    monkeypatch.setattr(
-        orders_service, "link_confirmed_orders_to_wb_supplies", AsyncMock(return_value={})
-    )
+    link_supplies = AsyncMock(return_value={})
+    monkeypatch.setattr(orders_service, "link_confirmed_orders_to_wb_supplies", link_supplies)
 
     result = await orders_service.reconcile_orders_for_seller(
         session, uuid.uuid4(), uuid.uuid4(), object()  # type: ignore[arg-type]
@@ -168,7 +231,35 @@ async def test_reconcile_walks_cursor_and_fails_incomplete_pass(
     # An incomplete pass must not perform the post-reconciliation supply link.
     # The previous successful run already called it once; the failed run must
     # leave that count unchanged.
-    assert orders_service.link_confirmed_orders_to_wb_supplies.await_count == 1
+    assert link_supplies.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_reconcile_rejects_a_repeated_next_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = _SyncSession()
+    page_fetch = AsyncMock(side_effect=[([{"id": 1}], 10), ([{"id": 2}], 10)])
+    link_supplies = AsyncMock(return_value={})
+    monkeypatch.setattr(
+        orders_service, "_resolve_marketplace_api_token", AsyncMock(return_value="token")
+    )
+    monkeypatch.setattr(orders_service, "fetch_marketplace_orders_page", page_fetch)
+    monkeypatch.setattr(
+        orders_service, "upsert_order_from_wb_row", AsyncMock(return_value=(object(), False))
+    )
+    monkeypatch.setattr(orders_service, "link_confirmed_orders_to_wb_supplies", link_supplies)
+
+    with pytest.raises(orders_service.WbMarketplaceOrdersError) as exc_info:
+        await orders_service.reconcile_orders_for_seller(
+            session, uuid.uuid4(), uuid.uuid4(), object()  # type: ignore[arg-type]
+        )
+
+    assert exc_info.value.code == "cursor_cycle"
+    assert page_fetch.await_count == 2
+    assert session.commit.await_count == 1
+    assert session.rollback.await_count == 1
+    link_supplies.assert_not_awaited()
 
 
 # TC-NEW-WB-SYNC-003: reconcile does not silently stop at an arbitrary page cap.
@@ -177,7 +268,9 @@ async def test_reconcile_walks_past_ten_pages_and_links_supplies(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     session = _SyncSession()
-    pages = [([{"id": page}], page + 1) for page in range(11)] + [([], None)]
+    pages: list[tuple[list[dict[str, int]], int | None]] = [
+        ([{"id": page}], page + 1) for page in range(11)
+    ] + [([], None)]
     page_fetch = AsyncMock(side_effect=pages)
     upsert = AsyncMock(return_value=(object(), False))
     link_supplies = AsyncMock(return_value={"supply_linked_orders": 1})

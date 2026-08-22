@@ -1,29 +1,22 @@
-# DEV · 05-prod-slow · атом 2
+# Backend dev · 05-prod-slow · атом 2
 
 ## Изменённые файлы
 
-В рамках повторной проверки атома изменений в исходном коде не потребовалось: реализация уже содержит независимые задания `wms.wb_orders_new` и `wms.wb_orders_reconcile`, Beat-периоды 180 и 3600 секунд, а также single-flight по `(seller_id, sync_kind)` без `wb_seller_lock` на HTTP-чтении.
-
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/fbs_autopoll_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/tasks/background_jobs.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/celery_app.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_wb_marketplace_orders_service.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/wb_marketplace_orders_service.py` — часовая сверка WB прекращает обход с retryable-ошибкой `cursor_cycle`, если WB повторяет ранее выданный `next_token`; дублирующая страница не записывается и привязка поставок не выполняется.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_wb_marketplace_orders_service.py` — проверки раздельного запуска Celery-задач `new`/`reconcile`, single-flight по `(seller_id, sync_kind)`, отсутствия seller-wide lock в job-пути и повторного курсора.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/night/volna-9-recovery/cards/05-prod-slow/DEV.md` — этот отчёт.
 
 ## Гейты
 
-- ruff: адресные файлы атома — PASS; полный `ruff check .` — FAIL на 80 pre-existing ошибках в несвязанных файлах.
-- mypy: FAIL на 4 pre-existing ошибках в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py` и `fbs_warehouse_binding_service.py`; в файлах атома ошибок нет.
-- pytest: адресный `tests/test_wb_marketplace_orders_service.py` — 12 passed; полный прогон остановлен вручную после 46% (до остановки были failures в pre-existing тестах `test_fbs_*`).
-- back_guard.py: не запущен — файл отсутствует в данной рабочей копии (`scripts/ci/back_guard.py` не найден).
-- check_migrations.py: не запущен — файл отсутствует в данной рабочей копии (`scripts/ci/check_migrations.py` не найден).
+- ruff: адресно PASS (`ruff check app/services/wb_marketplace_orders_service.py tests/test_wb_marketplace_orders_service.py`); полный `ruff check .` FAIL — 79 существующих нарушений вне атома.
+- mypy: полный `mypy .` FAIL — 21 существующая ошибка в 6 несвязанных файлах; адресный запуск также получает 4 ошибки из импортируемых несвязанных сервисов, изменённые файлы ошибок не добавили.
+- pytest: адресно PASS — `tests/test_wb_marketplace_orders_service.py`, 15 passed. Полный `pytest -q` дважды прервался средой после 5–6 тестов без итогового статуса; лог `/private/tmp/volna-9-05-prod-slow-pytest.log` содержит только точки, поэтому полный результат не заявляется.
+- back_guard.py: не запущен — `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/scripts/ci/back_guard.py` отсутствует в рабочей копии.
+- check_migrations.py: не запущен — `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/scripts/ci/check_migrations.py` отсутствует в рабочей копии.
+- Миграции: нет.
 
 ## Не реализовано
 
-- Находки ревью №1 и №2–11 относятся к Docker, print-job, UI, модели фоновых job и экранным тестам; они не входят в файлы и backend-слой атома 2 и здесь не менялись.
-- Backend-находок, требующих исправления в пределах атома 2, нет.
-
-## Блокеры
-
-Нет блокеров по реализации атома. Полные ruff/mypy имеют чужие pre-existing ошибки; обязательные CI-скрипты отсутствуют в рабочей копии.
-
-Сохранение commit невозможно из-за ограничения прав на общий git worktree: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-05-prod-slow/index.lock`.
+- Backend-находки ревью №3 и все проверки атома 2 устранены. Фронтенд-находки №1, №4–10 относятся к другим разрешённым файлам и не менялись в роли backend-dev.
+- Git-коммит не создан: Git не может создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-05-prod-slow/index.lock` (`Operation not permitted`), поэтому изменения сохранены только в рабочем дереве.
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных, боевой прод и живой кабинет Wildberries не читались и не затрагивались.
