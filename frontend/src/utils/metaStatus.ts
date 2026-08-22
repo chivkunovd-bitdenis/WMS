@@ -20,7 +20,7 @@ export type MetaStatusView = {
 }
 
 function reasonLabel(reason: string | null): string | null {
-  if (!reason) return null
+  if (typeof reason !== 'string') return null
   const normalized = reason.trim()
   if (!normalized) return null
   return REASON_LABELS[normalized.toLowerCase()] ?? normalized
@@ -49,9 +49,19 @@ export function metaStatusView(verdict: FbsOrderVerdict | null | undefined): Met
 
   switch (verdict.signature) {
     case 'WB: принято':
-      return { label: 'WB: принято', tone: 'ok', reason: null, disabledReason: verdict.delivery_allowed ? null : BLOCKED_REASON }
+      return {
+        label: 'WB: принято',
+        tone: 'ok',
+        reason: null,
+        disabledReason: verdict.delivery_allowed ? null : BLOCKED_REASON,
+      }
     case 'WB: код не требуется':
-      return { label: 'WB: код не требуется', tone: 'neutral', reason: null, disabledReason: verdict.delivery_allowed ? null : BLOCKED_REASON }
+      return {
+        label: 'WB: код не требуется',
+        tone: 'neutral',
+        reason: null,
+        disabledReason: verdict.delivery_allowed ? null : BLOCKED_REASON,
+      }
     case 'WB: проверяет':
       return blockedView('WB: проверяет')
     case 'WB: нужен код':

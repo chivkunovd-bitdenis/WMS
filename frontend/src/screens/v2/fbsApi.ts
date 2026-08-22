@@ -180,6 +180,14 @@ export type FbsOrderVerdict = {
   readonly delivery_allowed: boolean
 }
 
+/** Missing verdicts are deliberately blocking; the client never infers readiness. */
+export const NO_WB_VERDICT: FbsOrderVerdict = {
+  signature: 'Нет ответа WB',
+  tone: 'stop',
+  reason: null,
+  delivery_allowed: false,
+}
+
 /** Exact server vocabulary; the client must not infer a verdict from local fields. */
 export type FbsOrderVerdictSignature =
   | 'WB: принято'
@@ -272,6 +280,24 @@ export type FbsWorklistPage = {
   next_cursor: string | null
   server_now: string
   warehouse_options: FbsWorklistWarehouseOption[]
+}
+
+function withSafeVerdict(order: FbsWorklistOrder): FbsWorklistOrder {
+  return {
+    ...order,
+    metadata: {
+      ...order.metadata,
+      verdict: order.metadata?.verdict ?? NO_WB_VERDICT,
+    },
+  }
+}
+
+function withSafeWorklistVerdicts(page: FbsWorklistPage): FbsWorklistPage {
+  return { ...page, items: page.items.map(withSafeVerdict) }
+}
+
+function withSafeWorkspaceVerdicts(workspace: FbsWorkspace): FbsWorkspace {
+  return { ...workspace, orders: workspace.orders.map(withSafeVerdict) }
 }
 
 export type FbsSupplyPreflightRequest = {
@@ -548,11 +574,12 @@ export async function fetchFbsWorklist(
   if (params.wb_warehouse_id) qs.set('wb_warehouse_id', params.wb_warehouse_id)
   if (params.search) qs.set('search', params.search)
   if (params.cursor) qs.set('cursor', params.cursor)
-  return jsonOrThrow<FbsWorklistPage>(
+  const page = await jsonOrThrow<FbsWorklistPage>(
     await fetch(apiUrl(`/operations/fbs-orders/worklist?${qs.toString()}`), {
       headers: { ...ah(token) },
     }),
   )
+  return withSafeWorklistVerdicts(page)
 }
 
 export async function preflightFbsSupply(
@@ -618,11 +645,12 @@ export async function fetchFbsWorkspace(
   ah: AuthHeaders,
   id: string,
 ): Promise<FbsWorkspace> {
-  return jsonOrThrow<FbsWorkspace>(
+  const workspace = await jsonOrThrow<FbsWorkspace>(
     await fetch(apiUrl(`/operations/fbs-supplies/${id}/workspace`), {
       headers: { ...ah(token) },
     }),
   )
+  return withSafeWorkspaceVerdicts(workspace)
 }
 
 export async function updateFbsSupplyPlannedShipmentDate(
