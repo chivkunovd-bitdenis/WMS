@@ -91,12 +91,15 @@ type InboundDetail = {
   lines: InboundLine[]
 }
 
-type WarehouseRow = { id: string; name: string; code: string }
+type WarehouseRow = { id: string; name: string; code: string; is_operational?: boolean }
 const UNKNOWN_INBOUND_STATUS_LABEL = 'Статус уточняется'
 
 export function sellerVisibleWarehouses(warehouses: WarehouseRow[]): WarehouseRow[] {
   return warehouses.filter(
-    (warehouse) => !/^FBS WB\s*/i.test(warehouse.code) && !/^FBS WB\s*/i.test(warehouse.name),
+    (warehouse) =>
+      warehouse.is_operational !== false &&
+      !/^FBS WB\s*/i.test(warehouse.code) &&
+      !/^FBS WB\s*/i.test(warehouse.name),
   )
 }
 
@@ -569,11 +572,15 @@ export function SellerInboundDraftScreen({
   }
 
   const saveWarehouse = async (nextWarehouseId: string): Promise<void> => {
+    const previousWarehouseId = detail?.warehouse_id ?? selectedWarehouseId
     setSelectedWarehouseId(nextWarehouseId)
     if (!detail || detail.status !== 'draft' || nextWarehouseId === detail.warehouse_id) {
       return
     }
-    await patchDraftField({ warehouse_id: nextWarehouseId })
+    const ok = await patchDraftField({ warehouse_id: nextWarehouseId })
+    if (!ok && previousWarehouseId) {
+      setSelectedWarehouseId(previousWarehouseId)
+    }
   }
 
   const patchLineQty = async (lineId: string, expectedQty: number) => {
@@ -697,10 +704,7 @@ export function SellerInboundDraftScreen({
   }
 
   const hasWarehouseContext = Boolean(warehouseId) || visibleWarehouses.length > 0
-  const sellerCanEdit =
-    detail != null &&
-    (detail.status === 'draft' ||
-      (detail.status === 'submitted' && hasWarehouseContext))
+  const sellerCanEdit = detail != null && detail.status === 'draft'
   const draftLocked = detail != null && !sellerCanEdit
   const readOnlyHint =
     detail?.status === 'submitted' && !hasWarehouseContext

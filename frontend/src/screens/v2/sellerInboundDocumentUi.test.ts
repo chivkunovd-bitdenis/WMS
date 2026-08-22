@@ -54,4 +54,17 @@ describe('seller inbound document UI helpers', () => {
       ]),
     ).toEqual([{ id: 'north', name: 'Север', code: 'north' }])
   })
+
+  it('does not expose non-operational warehouses to the seller', () => {
+    expect(
+      sellerVisibleWarehouses([
+        { id: 'north', name: 'Север', code: 'north', is_operational: true },
+        { id: 'service', name: 'Технический', code: 'service', is_operational: false },
+      ]),
+    ).toEqual([{ id: 'north', name: 'Север', code: 'north', is_operational: true }])
+  })
+
+  it('locks the seller inbound card after it is transferred', () => {
+    expect(shouldShowSellerWarehouseSelector(2, 'submitted')).toBe(false)
+  })
 })
