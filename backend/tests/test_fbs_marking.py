@@ -512,6 +512,38 @@ def test_wb_order_verdict_aggregates_blocker_over_positive() -> None:
     assert verdict["delivery_allowed"] is False
 
 
+def test_wb_order_verdict_does_not_block_absent_optional_requirement() -> None:
+    from types import SimpleNamespace
+
+    from app.services.fbs_marking_service import _wb_order_verdict
+
+    order = SimpleNamespace(required_meta_json=[], optional_meta_json=["imei"])
+    verdict = _wb_order_verdict(order, [])
+    assert verdict["signature"] == "WB: код не требуется"
+    assert verdict["delivery_allowed"] is True
+
+
+def test_wb_order_verdict_allows_order_without_metadata_requirements() -> None:
+    from types import SimpleNamespace
+
+    from app.services.fbs_marking_service import _wb_order_verdict
+
+    order = SimpleNamespace(required_meta_json=[], optional_meta_json=[])
+    verdict = _wb_order_verdict(order, [])
+    assert verdict["signature"] == "WB: код не требуется"
+    assert verdict["delivery_allowed"] is True
+
+
+def test_wb_meta_parser_preserves_reason_from_real_response() -> None:
+    from app.services.wildberries_fbs_client import _parse_meta_detail
+
+    detail = _parse_meta_detail(
+        {"key": "sgtin", "value": "123", "decision": "filled", "reason": "uinBadStatus"}
+    )
+    assert detail is not None
+    assert detail.reason == "uinBadStatus"
+
+
 @pytest.mark.asyncio
 async def test_fbs_intake_stores_required_optional_meta(
     async_client: AsyncClient,

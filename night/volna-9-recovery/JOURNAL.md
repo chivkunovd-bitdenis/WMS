@@ -37,3 +37,14 @@
 14:15   02-verdikt-screen · dev: фича 4/5 сохранена 20ea4c3c9e6c
 14:18   02-verdikt-screen · screen-dev: готово
 14:18   02-verdikt-screen · dev: фича 5/5 сохранена 0f6493be608e
+14:23   02-verdikt-screen · reviewer: готово
+14:23 02-verdikt-screen: отложено — reviewer, круги кончились
+14:42   02-verdikt-screen · product: уже сделано, пропускаю
+14:47   02-verdikt-screen · ux-architect: готово
+14:47   02-verdikt-screen · tester: уже сделано, пропускаю
+14:47   02-verdikt-screen · breaker: уже сделано, пропускаю
+14:47   02-verdikt-screen · splitter: уже сделано, пропускаю
+14:47   02-verdikt-screen · dev: уже сделано по 5 атомарным фичам
+14:51   02-verdikt-screen · reviewer: готово
+14:51   02-verdikt-screen · reviewer: находки, круг 1 — назад к разработке
+14:56   02-verdikt-screen · backend-dev: готово

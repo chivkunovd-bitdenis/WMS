@@ -36,6 +36,7 @@ class MarketplaceMetaDetail:
     key: str
     value: str | None
     decision: str
+    reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,7 +173,11 @@ def _parse_meta_detail(entry: dict[str, Any]) -> MarketplaceMetaDetail | None:
     value: str | None = None if value_raw is None else str(value_raw)
     decision_raw = entry.get("decision")
     decision = str(decision_raw) if decision_raw is not None else "unknown"
-    return MarketplaceMetaDetail(key=key, value=value, decision=decision)
+    reason_raw = entry.get("reason") or entry.get("message")
+    reason = str(reason_raw) if reason_raw is not None else None
+    return MarketplaceMetaDetail(
+        key=key, value=value, decision=decision, reason=reason
+    )
 
 
 def _extend_meta_validation_items(

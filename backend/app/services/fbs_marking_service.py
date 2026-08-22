@@ -266,7 +266,7 @@ def _meta_details_from_wb(details: tuple[MarketplaceMetaDetail, ...]) -> dict[st
             "status": status,
             "value": item.value,
             "decision": item.decision,
-            "reason": None,
+            "reason": item.reason,
         }
     return out
 
@@ -296,6 +296,7 @@ def _wb_order_verdict(
     requested = required + [kind for kind in optional if kind not in required]
     states: list[dict[str, Any]] = []
     for kind in requested:
+        is_required = kind in required
         mark = current_order_marking(markings, kind, include_rejected=True)
         details = (
             mark.meta_details_json
@@ -303,6 +304,8 @@ def _wb_order_verdict(
             else {}
         )
         states.append({
+            "kind": kind,
+            "required": is_required,
             "decision": details.get("decision") if mark else None,
             "reason": mark.reason if mark else None,
             "status": mark.meta_status if mark else META_STATUS_MISSING,
@@ -310,10 +313,10 @@ def _wb_order_verdict(
 
     if not states:
         return {
-            "signature": "Нет ответа WB",
-            "tone": "stop",
+            "signature": "WB: код не требуется",
+            "tone": "neutral",
             "reason": None,
-            "delivery_allowed": False,
+            "delivery_allowed": True,
         }
     for state in states:
         if isinstance(state["reason"], str) and state["reason"].strip():
@@ -329,7 +332,10 @@ def _wb_order_verdict(
         if state["decision"] is not None
     }
     statuses = {state["status"] for state in states}
-    if "required" in decisions or META_STATUS_MISSING in statuses:
+    if "required" in decisions or any(
+        state["required"] and state["status"] == META_STATUS_MISSING
+        for state in states
+    ):
         return {
             "signature": "WB: нужен код",
             "tone": "stop",
@@ -343,7 +349,7 @@ def _wb_order_verdict(
             "reason": None,
             "delivery_allowed": False,
         }
-    if any(state["decision"] is None for state in states):
+    if any(state["decision"] is None and state["required"] for state in states):
         return {
             "signature": "Нет ответа WB",
             "tone": "stop",
@@ -356,6 +362,15 @@ def _wb_order_verdict(
             "tone": "stop",
             "reason": None,
             "delivery_allowed": False,
+        }
+    if any(
+        not state["required"] and state["decision"] is None for state in states
+    ):
+        return {
+            "signature": "WB: код не требуется",
+            "tone": "neutral",
+            "reason": None,
+            "delivery_allowed": True,
         }
     if decisions.issubset({"optional", "notrequired", "not_required"}):
         return {
@@ -560,6 +575,7 @@ def _apply_meta_detail_to_marking(
     marking.meta_details_json = {
         "decision": detail.decision,
         "value": detail.value,
+        "reason": reason,
     }
 
 

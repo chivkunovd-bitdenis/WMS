@@ -1,0 +1,260 @@
+<!-- UI-KIT: ScreenHeader, FilterBar, DataTable, StatusChip, TextCell, EmptyState, TableSkeletonBody, ErrorNotice, PrimaryAction -->
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>02-verdikt-screen · контракт S-03</title>
+  <style>
+    :root {
+      --primary: #5b21b6;
+      --canvas: #e8ecf4;
+      --paper: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #d7dce5;
+      --head: rgba(91, 33, 182, 0.08);
+      --head-border: rgba(91, 33, 182, 0.18);
+      --stop-bg: rgba(163, 42, 32, 0.12);
+      --stop-fg: #8f241b;
+      --ok-bg: rgba(27, 107, 69, 0.12);
+      --ok-fg: #14603d;
+      --neutral-bg: rgba(91, 33, 182, 0.10);
+      --neutral-fg: #4c1d95;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background: var(--canvas);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 1040px; }
+    button { font: inherit; }
+    .mock-nav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 58px;
+      padding: 10px 22px;
+      background: #172033;
+      color: white;
+      box-shadow: 0 4px 16px rgba(15, 23, 42, .18);
+    }
+    .mock-nav strong { margin-right: 10px; font-size: 14px; }
+    .mock-nav button {
+      border: 1px solid rgba(255,255,255,.28);
+      border-radius: 8px;
+      padding: 7px 10px;
+      color: white;
+      background: transparent;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .mock-nav button.active { border-color: white; background: rgba(255,255,255,.16); }
+    .shell { display: grid; grid-template-columns: 210px 1fr; min-height: calc(100vh - 58px); }
+    aside { padding: 24px 16px; color: #334155; background: #f8fafc; border-right: 1px solid var(--border); }
+    .brand { margin: 0 10px 24px; color: var(--primary); font-size: 20px; font-weight: 800; }
+    .side-item { padding: 10px 12px; margin-bottom: 4px; border-radius: 10px; font-size: 14px; }
+    .side-item.active { color: var(--primary); background: rgba(91,33,182,.10); font-weight: 700; }
+    main { padding: 28px; }
+    .view { display: none; }
+    .view.active { display: block; }
+    .screen-header { margin-bottom: 16px; }
+    h1 { margin: 0 0 6px; font-size: 24px; line-height: 1.3; }
+    h2 { margin: 0; font-size: 18px; }
+    .purpose, .caption, .cell-sub { color: var(--muted); }
+    .purpose { margin: 0; font-size: 14px; }
+    .paper { background: var(--paper); border: 1px solid var(--border); border-radius: 13px; }
+    .filters { display: flex; align-items: center; gap: 12px; padding: 16px; margin-bottom: 16px; }
+    .input { min-width: 260px; padding: 10px 12px; border: 1px solid #b9c0cd; border-radius: 8px; color: var(--muted); background: white; }
+    .select { min-width: 154px; }
+    .tabs { display: flex; gap: 18px; margin-bottom: 14px; border-bottom: 1px solid var(--border); }
+    .tab { padding: 10px 2px; color: var(--muted); font-size: 14px; }
+    .tab.active { color: var(--primary); border-bottom: 2px solid var(--primary); font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 14px; }
+    th { padding: 10px 12px; text-align: left; white-space: nowrap; background: var(--head); border-bottom: 1px solid var(--head-border); }
+    td { padding: 10px 12px; vertical-align: top; border-bottom: 1px solid #e8ebf0; }
+    tr:last-child td { border-bottom: 0; }
+    .product { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .thumb { width: 38px; height: 38px; flex: 0 0 auto; border-radius: 8px; background: linear-gradient(135deg,#ede9fe,#c4b5fd); }
+    .cell-main { font-weight: 650; }
+    .cell-sub { display: block; margin-top: 3px; font-size: 12px; line-height: 1.35; }
+    .chip { display: inline-flex; align-items: center; max-width: 100%; padding: 4px 9px; border-radius: 999px; font-size: 12px; line-height: 1.2; font-weight: 650; white-space: nowrap; }
+    .chip.stop { color: var(--stop-fg); background: var(--stop-bg); }
+    .chip.ok { color: var(--ok-fg); background: var(--ok-bg); }
+    .chip.neutral { color: var(--neutral-fg); background: var(--neutral-bg); }
+    .reason { display: block; max-width: 190px; margin-top: 5px; overflow: hidden; color: #334155; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+    .problem-focus { outline: 2px solid rgba(163,42,32,.28); outline-offset: -2px; }
+    .annotation { margin: 12px 0 0; padding: 10px 12px; color: #713328; background: #fff8f6; border-left: 3px solid #a32a20; border-radius: 0 8px 8px 0; font-size: 13px; }
+    .mock-caption { margin: 24px 0 9px; color: #475569; font-size: 13px; font-weight: 750; letter-spacing: .02em; text-transform: uppercase; }
+    .workspace-head { display: flex; justify-content: space-between; align-items: start; padding: 16px 18px; border-bottom: 1px solid var(--border); }
+    .workspace-list { overflow: hidden; }
+    .work-row { display: grid; grid-template-columns: 48px minmax(280px,1fr) 190px 120px; align-items: center; gap: 14px; padding: 12px 16px; border-bottom: 1px solid #e8ebf0; }
+    .work-row:last-child { border-bottom: 0; }
+    .work-verdict { text-align: right; }
+    .work-verdict .reason { margin-left: auto; }
+    .kiz { color: #14603d; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; }
+    .icon-actions { color: #475569; font-size: 13px; text-align: right; }
+    .action-bar { display: flex; justify-content: flex-end; margin-top: 16px; }
+    .primary { min-width: 168px; padding: 8px 14px; border: 0; border-radius: 8px; color: white; background: var(--primary); font-size: 13px; font-weight: 650; white-space: nowrap; }
+    .primary[disabled] { color: #8b93a1; background: #d8dce3; cursor: not-allowed; }
+    .disabled-reason { margin: 7px 0 0; color: var(--stop-fg); font-size: 12px; text-align: right; }
+    .state-card { min-height: 340px; overflow: hidden; }
+    .empty { padding: 58px 24px; }
+    .empty strong { display: block; margin-bottom: 8px; }
+    .empty p { margin: 0; color: var(--muted); font-size: 14px; }
+    .skeleton { height: 12px; border-radius: 5px; background: linear-gradient(90deg,#eef1f5 25%,#dfe4eb 45%,#eef1f5 65%); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+    .error { margin-bottom: 16px; padding: 13px 15px; color: #76231c; background: #fff2f0; border: 1px solid #efb5ae; border-radius: 10px; }
+    .dialog-backdrop { display: grid; min-height: 520px; place-items: center; background: rgba(15,23,42,.34); border-radius: 13px; }
+    .dialog { width: 420px; padding: 22px; background: white; border-radius: 13px; box-shadow: 0 20px 50px rgba(15,23,42,.28); }
+    .dialog h2 { margin-bottom: 12px; }
+    .dialog p { margin: 0 0 22px; color: #475569; font-size: 14px; line-height: 1.5; }
+    .dialog-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
+    .text-action { padding: 8px 12px; border: 0; color: var(--primary); background: transparent; }
+    .legend { margin-top: 12px; color: var(--muted); font-size: 12px; }
+  </style>
+</head>
+<body>
+  <nav class="mock-nav" aria-label="Навигация макета">
+    <strong>Состояния макета · не часть UI</strong>
+    <button class="active" data-view="orders">Обычное</button>
+    <button data-view="problem">Проблема и действие</button>
+    <button data-view="empty">Пусто</button>
+    <button data-view="loading">Загрузка</button>
+    <button data-view="error">Ошибка</button>
+    <button data-view="dialog">Диалог</button>
+  </nav>
+
+  <div class="shell">
+    <aside>
+      <div class="brand">WMS</div>
+      <div class="side-item">Главная</div>
+      <div class="side-item active">FBS-заказы</div>
+      <div class="side-item">Остатки FBS</div>
+      <div class="side-item">Товары</div>
+    </aside>
+    <main>
+      <section class="view active" id="orders">
+        <header class="screen-header">
+          <h1>FBS-заказы</h1>
+          <p class="purpose">Собирайте заказы и передавайте готовые поставки в Wildberries.</p>
+        </header>
+        <div class="filters paper">
+          <div class="input">Поиск по заказу или товару</div>
+          <div class="input select">Все селлеры</div>
+        </div>
+        <div class="tabs"><div class="tab">Новые</div><div class="tab active">В работе</div><div class="tab">Просрочены</div><div class="tab">Отменённые</div></div>
+        <div class="paper">
+          <table aria-label="Заказы FBS — обычное состояние">
+            <colgroup><col style="width:31%"><col style="width:15%"><col style="width:21%"><col style="width:16%"><col style="width:17%"></colgroup>
+            <thead><tr><th>Товар</th><th>Селлер</th><th>Маршрут сдачи</th><th>Отгрузить до</th><th>Статус</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><div class="product"><div class="thumb"></div><div><span class="cell-main">Футболка базовая</span><span class="cell-sub">Заказ WB №4187260 · арт. FT-01</span></div></div></td>
+                <td>ИП Волкова</td><td><span class="cell-main">Коледино</span><span class="cell-sub">Основной склад → WB</span></td><td>22.08, 18:00</td>
+                <td><span class="chip ok">WB: принято</span></td>
+              </tr>
+              <tr>
+                <td><div class="product"><div class="thumb"></div><div><span class="cell-main">Ремень кожаный</span><span class="cell-sub">Заказ WB №4187288 · арт. RM-12</span></div></div></td>
+                <td>ООО Север</td><td><span class="cell-main">Электросталь</span><span class="cell-sub">Основной склад → WB</span></td><td>22.08, 19:00</td>
+                <td><span class="chip neutral">WB: код не требуется</span></td>
+              </tr>
+              <tr>
+                <td><div class="product"><div class="thumb"></div><div><span class="cell-main">Кроссовки детские</span><span class="cell-sub">Заказ WB №4187314 · арт. KD-07</span></div></div></td>
+                <td>ИП Волкова</td><td><span class="cell-main">Коледино</span><span class="cell-sub">Основной склад → WB</span></td><td>22.08, 19:30</td>
+                <td><span class="chip stop">WB: проверяет</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="legend">Вердикт занимает существующую зону «Статус». Новая колонка, фильтр или ручное действие не добавляются.</p>
+      </section>
+
+      <section class="view" id="problem">
+        <div class="mock-caption">Зона 1 из 2 · строка заказа в списке</div>
+        <header class="screen-header">
+          <h1>FBS-заказы</h1>
+          <p class="purpose">Собирайте заказы и передавайте готовые поставки в Wildberries.</p>
+        </header>
+        <div class="paper">
+          <table aria-label="Заказы FBS — проблемная строка">
+            <colgroup><col style="width:31%"><col style="width:15%"><col style="width:21%"><col style="width:16%"><col style="width:17%"></colgroup>
+            <thead><tr><th>Товар</th><th>Селлер</th><th>Маршрут сдачи</th><th>Отгрузить до</th><th>Статус</th></tr></thead>
+            <tbody><tr class="problem-focus">
+              <td><div class="product"><div class="thumb"></div><div><span class="cell-main">Кроссовки детские</span><span class="cell-sub">Заказ WB №4187314 · арт. KD-07</span></div></div></td>
+              <td>ИП Волкова</td><td><span class="cell-main">Коледино</span><span class="cell-sub">Основной склад → WB</span></td><td>22.08, 19:30</td>
+              <td><span class="chip stop">WB не принял</span><span class="reason" title="Код маркировки выбыл из оборота">Код маркировки выбыл из оборота</span></td>
+            </tr></tbody>
+          </table>
+        </div>
+
+        <div class="mock-caption">Зона 2 из 2 · тот же заказ в рабочем месте поставки</div>
+        <header class="screen-header">
+          <h1>Поставка WB-23841</h1>
+          <p class="purpose">Упаковка и маркировка заказов перед передачей в Wildberries.</p>
+        </header>
+        <div class="paper workspace-list">
+          <div class="workspace-head"><div><h2>Упаковка и маркировка</h2><span class="cell-sub">Напечатано 3 из 4 · упаковано 4 из 4</span></div></div>
+          <div class="work-row">
+            <div class="thumb"></div><div><span class="cell-main">Футболка базовая</span><span class="cell-sub">арт. FT-01 · заказ 4187260</span></div>
+            <div class="work-verdict"><span class="cell-sub">ЧЗ</span><span class="kiz">…771204</span><br><span class="chip ok">WB: принято</span></div><div class="icon-actions">ТЗ · QR · 🖨</div>
+          </div>
+          <div class="work-row problem-focus">
+            <div class="thumb"></div><div><span class="cell-main">Кроссовки детские</span><span class="cell-sub">арт. KD-07 · заказ 4187314</span></div>
+            <div class="work-verdict"><span class="cell-sub">ЧЗ</span><span class="kiz">…985011</span><br><span class="chip stop">WB не принял</span><span class="reason" title="Код маркировки выбыл из оборота">Код маркировки выбыл из оборота</span></div><div class="icon-actions">ТЗ · QR · 🖨</div>
+          </div>
+        </div>
+        <div class="action-bar"><div><button class="primary" disabled title="WB не принял код в заказе №4187314">Передать в WB</button><p class="disabled-reason">WB не принял код в заказе №4187314</p></div></div>
+        <p class="annotation">Один и тот же вердикт виден в строке списка и в зоне ЧЗ рабочей строки до сдачи. Внутри каждого места он не дублируется отдельной колонкой или общей плашкой; служебная причина под кнопкой здесь визуализирует обязательный disabledReason.</p>
+      </section>
+
+      <section class="view" id="empty">
+        <header class="screen-header"><h1>FBS-заказы</h1><p class="purpose">Собирайте заказы и передавайте готовые поставки в Wildberries.</p></header>
+        <div class="paper state-card">
+          <table><thead><tr><th>Товар</th><th>Селлер</th><th>Маршрут сдачи</th><th>Отгрузить до</th><th>Статус</th></tr></thead></table>
+          <div class="empty"><strong>Заказов в этой группе нет</strong><p>Измените фильтры или обновите синхронизацию с WB.</p></div>
+        </div>
+      </section>
+
+      <section class="view" id="loading">
+        <header class="screen-header"><h1>FBS-заказы</h1><p class="purpose">Собирайте заказы и передавайте готовые поставки в Wildberries.</p></header>
+        <div class="paper state-card"><table><thead><tr><th>Товар</th><th>Селлер</th><th>Маршрут сдачи</th><th>Отгрузить до</th><th>Статус</th></tr></thead><tbody>
+          <tr><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td></tr>
+          <tr><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td></tr>
+          <tr><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td></tr>
+        </tbody></table></div>
+        <p class="legend">Во время загрузки временного положительного вердикта нет.</p>
+      </section>
+
+      <section class="view" id="error">
+        <header class="screen-header"><h1>FBS-заказы</h1><p class="purpose">Собирайте заказы и передавайте готовые поставки в Wildberries.</p></header>
+        <div class="error" role="alert"><strong>Не удалось загрузить заказы.</strong> Обновите страницу и попробуйте ещё раз.</div>
+        <div class="paper state-card"><table><thead><tr><th>Товар</th><th>Селлер</th><th>Маршрут сдачи</th><th>Отгрузить до</th><th>Статус</th></tr></thead></table></div>
+      </section>
+
+      <section class="view" id="dialog">
+        <header class="screen-header"><h1>Поставка WB-23841</h1><p class="purpose">Все заказы получили проходной вердикт WB.</p></header>
+        <div class="dialog-backdrop">
+          <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+            <h2 id="dialog-title">Передать поставку в WB?</h2>
+            <p>После передачи поставку нельзя будет отменить или вернуть в работу. Убедитесь, что все короба готовы к отгрузке.</p>
+            <div class="dialog-actions"><button class="text-action">Не передавать</button><button class="primary">Передать в WB</button></div>
+          </div>
+        </div>
+        <p class="legend">Это существующий диалог. При блокирующем вердикте он не открывается: недоступность объясняет главное действие.</p>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const buttons = [...document.querySelectorAll('[data-view]')]
+    const views = [...document.querySelectorAll('.view')]
+    buttons.forEach((button) => button.addEventListener('click', () => {
+      buttons.forEach((item) => item.classList.toggle('active', item === button))
+      views.forEach((view) => view.classList.toggle('active', view.id === button.dataset.view))
+    }))
+  </script>
+</body>
+</html>
