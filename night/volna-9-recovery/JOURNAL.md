@@ -132,3 +132,10 @@
 00:05   01-wb-marking · dev: фича 4/5 сохранена 620169cad692
 00:45   01-wb-marking · backend-dev: готово
 00:45   01-wb-marking · dev: фича 5/5 сохранена ea2a52c4d437
+00:45   01-wb-marking · reviewer: уже сделано, пропускаю
+00:45   01-wb-marking · ui-critic: уже сделано, пропускаю
+00:45   01-wb-marking · clicker: уже сделано, пропускаю
+00:46   01-wb-marking · ux-judge: готово
+00:46   01-wb-marking · ux-judge: Terra-rework не закрыл вердикт — эскалация Sol
+00:46   01-wb-marking · ux-judge: находки, круг 3 — назад к разработке
+00:48   01-wb-marking · backend-dev: готово
