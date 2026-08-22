@@ -371,17 +371,23 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
   ])
 
   const syncableRows = useMemo(
-    () => rows.filter((row) => row.isMapped && row.stockSyncEnabled && row.selectedWmsId === selectedOperationalWarehouseId),
+    () =>
+      rows.filter(
+        (row) =>
+          row.isMapped &&
+          row.stockSyncEnabled &&
+          row.selectedWmsId === selectedOperationalWarehouseId,
+      ),
     [rows, selectedOperationalWarehouseId],
   )
 
   const visibleRows = useMemo(
     () =>
-      rows.filter(
-        (row) => !row.isMapped || row.selectedWmsId === selectedOperationalWarehouseId,
-      ),
+      rows.filter((row) => row.isMapped && row.selectedWmsId === selectedOperationalWarehouseId),
     [rows, selectedOperationalWarehouseId],
   )
+
+  const hasOperationalWarehouses = physicalWarehouses.length > 0
 
   const loadWarehouses = useCallback(async () => {
     const res = await fetch(apiUrl('/warehouses'), { headers: { ...authHeaders(token) } })
@@ -722,24 +728,25 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
         </Alert>
       ) : null}
 
-      {physicalWarehouses.length === 0 ? (
+      {!hasOperationalWarehouses ? (
         <Box sx={{ mb: 2 }} data-testid="fbs-stock-no-wms">
           <EmptyState
             title="Нет рабочего склада"
             hint="Попросите администратора добавить рабочий склад. Служебные склады Wildberries здесь не считаются."
           />
         </Box>
-      ) : null}
+      ) : (
+        <>
 
-      <WarehouseContextSwitch
-        options={operationalWarehouseOptions}
-        value={selectedOperationalWarehouseId}
-        onChange={selectWarehouse}
-        loading={busy && physicalWarehouses.length === 0}
-        testId="fbs-stock-warehouse-context"
-      />
+          <WarehouseContextSwitch
+            options={operationalWarehouseOptions}
+            value={selectedOperationalWarehouseId}
+            onChange={selectWarehouse}
+            loading={busy && physicalWarehouses.length === 0}
+            testId="fbs-stock-warehouse-context"
+          />
 
-      <Paper variant="outlined" sx={{ p: 2, mb: 2 }} data-testid="fbs-stock-filters">
+          <Paper variant="outlined" sx={{ p: 2, mb: 2 }} data-testid="fbs-stock-filters">
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           spacing={2}
@@ -779,9 +786,9 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
           </Button>
           {busy ? <CircularProgress size={20} data-testid="fbs-stock-loading" /> : null}
         </Stack>
-      </Paper>
+          </Paper>
 
-      <TableContainer
+          <TableContainer
         component={Paper}
         variant="outlined"
         data-testid="fbs-stock-bindings-list"
@@ -1007,7 +1014,9 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
             )}
           </TableBody>
         </Table>
-      </TableContainer>
+          </TableContainer>
+        </>
+      )}
 
       <Dialog
         open={pendingDisable !== null}
