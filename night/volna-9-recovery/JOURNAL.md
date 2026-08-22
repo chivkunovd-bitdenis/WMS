@@ -115,3 +115,5 @@
 01:19   09-billing · screen-dev: готово
 01:19   09-billing · dev: фича 9/11 сохранена 11cd945941aa
 01:21   09-billing · screen-dev: готово
+01:21   09-billing · dev: фича 10/11 сохранена fc205a21ff4f
+01:25   09-billing · screen-dev: готово
