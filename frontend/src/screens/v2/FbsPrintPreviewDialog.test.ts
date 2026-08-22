@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildFbsPrintPreviewSequence, buildFbsTapePairHtml, getFbsMarkingPrintSource } from './FbsPrintPreviewDialog'
-import { getFullFbsPickingOrderIds, type FbsPrintAsset } from './fbsApi'
+import { fbsTapeOrderErrorText, getFullFbsPickingOrderIds, type FbsPrintAsset } from './fbsApi'
 
 function asset(id: string, orderNumber: number, wbOrderId: number): FbsPrintAsset {
   return {
@@ -36,12 +36,12 @@ describe('Предпросмотр полной ленты FBS', () => {
         { asset: asset('third', 6, 845004), objectUrl: 'blob:third' },
         { asset: asset('first', 4, 845002), objectUrl: 'blob:first' },
       ],
-      [{ order_id: 'missing', wb_order_id: 845003, order_number: 5 }],
+      [{ order_id: 'missing', wb_order_id: 845003, order_number: 5, code: 'wb_sticker_missing' }],
     )
 
     expect(sequence.map((entry) => entry.kind === 'ready'
       ? `WMS № ${entry.preview.asset.order_number}`
-      : `Заказ WB №${entry.item.wb_order_id}: стикер не получен`))
+      : fbsTapeOrderErrorText(entry.item)))
       .toEqual([
         'WMS № 4',
         'Заказ WB №845003: стикер не получен',
@@ -52,13 +52,24 @@ describe('Предпросмотр полной ленты FBS', () => {
   it('TC-S03-007 не перенумеровывает готовую пару после отсутствующего стикера', () => {
     const sequence = buildFbsPrintPreviewSequence(
       [{ asset: asset('ready', 12, 900002), objectUrl: 'blob:ready' }],
-      [{ order_id: 'missing', wb_order_id: 900001, order_number: 11 }],
+      [{ order_id: 'missing', wb_order_id: 900001, order_number: 11, code: 'order_qr_missing' }],
     )
 
     expect(sequence[1]).toMatchObject({
       kind: 'ready',
       preview: { asset: { order_number: 12 } },
     })
+  })
+
+  it('S-03-TC-004 различает отсутствие WB-стикера и ошибки подготовки заказа', () => {
+    expect(fbsTapeOrderErrorText({ wb_order_id: 900001, code: 'wb_sticker_missing' }))
+      .toBe('Заказ WB №900001: стикер не получен')
+    expect(fbsTapeOrderErrorText({ wb_order_id: 900002, code: 'packaging_line_not_found' }))
+      .toBe('Заказ WB №900002: строка упаковки не найдена')
+    expect(fbsTapeOrderErrorText({ wb_order_id: 900003, code: 'meta_validation_fail' }))
+      .toBe('Заказ WB №900003: маркировка не передана в Wildberries')
+    expect(fbsTapeOrderErrorText({ wb_order_id: 900004, code: 'internal_code' }))
+      .toBe('Заказ WB №900004: заказ не подготовлен к печати')
   })
 
   it('TC-S03-006 печатает сохранённый макет Честного знака, не текст КИЗ', () => {

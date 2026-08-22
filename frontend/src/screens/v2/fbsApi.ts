@@ -383,6 +383,24 @@ export type FbsOrderPrintTape = {
   shortage: number
 }
 
+export function fbsTapeOrderErrorText(error: { wb_order_id: number; code: string }): string {
+  const prefix = `Заказ WB №${error.wb_order_id}: `
+  if (error.code === 'wb_sticker_missing' || error.code === 'order_qr_missing') {
+    return `${prefix}стикер не получен`
+  }
+  if (error.code === 'packaging_line_not_found') {
+    return `${prefix}строка упаковки не найдена`
+  }
+  if (
+    error.code === 'meta_validation_fail' ||
+    error.code === 'marking_not_allowed' ||
+    error.code === 'order_marking_not_found'
+  ) {
+    return `${prefix}маркировка не передана в Wildberries`
+  }
+  return `${prefix}заказ не подготовлен к печати`
+}
+
 export type FbsCargoPlace = {
   id: string
   wb_trbx_id: string

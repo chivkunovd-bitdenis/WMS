@@ -15,7 +15,7 @@ import {
   Typography,
 } from '@mui/material'
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined'
-import { resolveFbsAssetUrl, type FbsOrderPrintTape, type FbsPrintAsset, type FbsPrintBatch } from './fbsApi'
+import { fbsTapeOrderErrorText, resolveFbsAssetUrl, type FbsOrderPrintTape, type FbsPrintAsset, type FbsPrintBatch } from './fbsApi'
 import { ErrorNotice } from '../../ui-kit'
 import { loadLabelSizeId, resolveLabelSize, type LabelSize } from '../../utils/labelSize'
 import { LabelSizeSelect } from '../../components/LabelSizeSelect'
@@ -33,15 +33,20 @@ type Props = {
 
 type Preview = { asset: FbsPrintAsset; objectUrl: string }
 
-type MissingSticker = { order_id: string; wb_order_id: number; order_number?: number | null }
+type TapeOrderError = {
+  order_id: string
+  wb_order_id: number
+  order_number?: number | null
+  code: string
+}
 
 export type FbsPrintPreviewEntry =
   | { kind: 'ready'; preview: Preview }
-  | { kind: 'missing'; item: MissingSticker }
+  | { kind: 'error'; item: TapeOrderError }
 
 export function buildFbsPrintPreviewSequence(
   previews: Preview[],
-  missing: MissingSticker[],
+  orderErrors: TapeOrderError[],
 ): FbsPrintPreviewEntry[] {
   return [
     ...previews.map((preview, responseIndex) => ({
@@ -50,15 +55,17 @@ export function buildFbsPrintPreviewSequence(
       orderNumber: preview.asset.order_number ?? Number.MAX_SAFE_INTEGER,
       responseIndex,
     })),
-    ...missing.map((item, responseIndex) => ({
-      kind: 'missing' as const,
+    ...orderErrors.map((item, responseIndex) => ({
+      kind: 'error' as const,
       item,
       orderNumber: item.order_number ?? Number.MAX_SAFE_INTEGER,
       responseIndex: previews.length + responseIndex,
     })),
   ]
     .sort((left, right) => left.orderNumber - right.orderNumber || left.responseIndex - right.responseIndex)
-    .map(({ orderNumber: _orderNumber, responseIndex: _responseIndex, ...entry }) => entry)
+    .map((entry): FbsPrintPreviewEntry => entry.kind === 'ready'
+      ? { kind: 'ready', preview: entry.preview }
+      : { kind: 'error', item: entry.item })
 }
 
 export function getFbsMarkingPrintSource(code: {
@@ -107,8 +114,8 @@ export function FbsPrintPreviewDialog({
   const [copies, setCopies] = useState(1)
   const [labelSize, setLabelSize] = useState<LabelSize>(() => resolveLabelSize(loadLabelSizeId()))
 
-  const missingStickers = useMemo<MissingSticker[]>(
-    () => (tape?.order_errors ?? batch?.order_errors ?? []).map(({ order_id, wb_order_id, order_number }) => ({ order_id, wb_order_id, order_number })),
+  const orderErrors = useMemo<TapeOrderError[]>(
+    () => (tape?.order_errors ?? batch?.order_errors ?? []).map(({ order_id, wb_order_id, order_number, code }) => ({ order_id, wb_order_id, order_number, code })),
     [batch, tape],
   )
 
@@ -125,8 +132,8 @@ export function FbsPrintPreviewDialog({
     [readyAssets],
   )
   const previewSequence = useMemo(
-    () => buildFbsPrintPreviewSequence(previews, missingStickers),
-    [previews, missingStickers],
+    () => buildFbsPrintPreviewSequence(previews, orderErrors),
+    [previews, orderErrors],
   )
 
   useEffect(() => {
@@ -176,7 +183,7 @@ export function FbsPrintPreviewDialog({
       setError('Нет готовых изображений — окно печати не открыто.')
       return
     }
-    const safeCopies = Math.max(1, Math.min(99, copies))
+    const safeCopies = tape ? 1 : Math.max(1, Math.min(99, copies))
     const popup = window.open('', '_blank')
     if (!popup) {
       setError('Браузер заблокировал окно печати. Разрешите всплывающие окна для WMS.')
@@ -242,7 +249,7 @@ export function FbsPrintPreviewDialog({
             {batch?.failed ? <Chip label={`Ошибок ${batch.failed}`} color="error" /> : null}
           </Stack>
           <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap' }} useFlexGap data-task-id="FBS-10">
-            <TextField
+            {!tape ? <TextField
               size="small"
               type="number"
               label="Копий каждого макета"
@@ -252,7 +259,7 @@ export function FbsPrintPreviewDialog({
               sx={{ width: 220 }}
               data-testid="fbs-print-preview-copies"
               data-task-id="FBS-10"
-            />
+            /> : null}
             <LabelSizeSelect
               value={labelSize.id}
               onChange={setLabelSize}
@@ -270,11 +277,9 @@ export function FbsPrintPreviewDialog({
             <Alert severity="warning">Готовых изображений нет. Печать не будет открыта.</Alert>
           ) : null}
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 2 }}>
-            {previewSequence.map((entry) => entry.kind === 'missing' ? (
-              <Box key={entry.item.order_id} sx={{ gridColumn: '1 / -1' }}>
-                <ErrorNotice>
-                  Заказ WB №{entry.item.wb_order_id}: стикер не получен
-                </ErrorNotice>
+            {previewSequence.map((entry) => entry.kind === 'error' ? (
+              <Box key={`${entry.item.order_id}-${entry.item.code}`} sx={{ gridColumn: '1 / -1' }}>
+                <ErrorNotice>{fbsTapeOrderErrorText(entry.item)}</ErrorNotice>
               </Box>
             ) : (
               <Paper key={entry.preview.asset.id} variant="outlined" sx={{ p: 2 }}>
@@ -284,7 +289,7 @@ export function FbsPrintPreviewDialog({
                   {entry.preview.asset.kind === 'order_sticker' ? <Paper variant="outlined" sx={{ width: { xs: '100%', md: 180 }, minHeight: 120, p: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'grey.50' }}><Typography variant="h6" sx={{ textAlign: 'center' }}>Служебная этикетка WMS<br />№ {entry.preview.asset.order_number ?? '—'}</Typography></Paper> : null}
                 </Stack>
                 <Stack direction="row" spacing={1}>
-                  {previews.length > 1 ? <Button startIcon={<PrintOutlinedIcon />} onClick={() => void print([entry.preview])} data-task-id="FBS-10">Печать только этого</Button> : null}
+                  {!tape && previews.length > 1 ? <Button startIcon={<PrintOutlinedIcon />} onClick={() => void print([entry.preview])} data-task-id="FBS-10">Печать только этого</Button> : null}
                   {entry.preview.asset.kind !== 'box_qr' ? (
                     <Button disabled={Boolean(entry.preview.asset.applied_at) || applyingId === entry.preview.asset.id} onClick={() => void apply(entry.preview.asset)} data-task-id="FBS-09">
                       {entry.preview.asset.applied_at ? 'Уже нанесён' : 'Подтвердить нанесение'}

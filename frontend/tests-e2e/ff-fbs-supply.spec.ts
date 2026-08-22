@@ -302,6 +302,114 @@ test('S-03-TC-003: empty filter result still prints the full canonical supply', 
   expect(printBody?.include_order_qr).toBe(true)
 })
 
+// S-03-TC-004 / S-03-TC-005 — итоговая кнопка открывает полную физическую ленту
+// WB → WMS № K; повторный запуск сохраняет тот же серверный порядок и номера.
+test('S-03-TC-004 S-03-TC-005: full tape print window is complete and repeatable', async ({ page }) => {
+  const items = PICKING_ITEMS.slice(0, 2)
+  const canonicalOrderIds = items.flatMap((item) => item.order_ids)
+  await openPickingList(page, 'pick-list-physical-tape', items)
+  await mockStickerImages(page)
+  let printRequests = 0
+  await page.route('**/operations/fbs-supplies/sup-1/order-print-tape', async (route) => {
+    printRequests += 1
+    await json(route, readyTape(canonicalOrderIds))
+  })
+
+  const printAndReadTape = async () => {
+    await page.getByTestId('fbs-pick-print-stickers').click()
+    const preview = page.getByRole('dialog', { name: 'Проверка перед печатью' })
+    await expect(preview).toBeVisible()
+    await expect(preview.getByTestId('fbs-print-preview-copies')).toHaveCount(0)
+    await expect(preview.getByRole('button', { name: 'Печать только этого' })).toHaveCount(0)
+    await expect(preview.getByText('Стикер WB №', { exact: false })).toHaveCount(canonicalOrderIds.length)
+    await expect(preview.getByText('Служебная этикетка WMS', { exact: false })).toHaveCount(canonicalOrderIds.length)
+
+    const popupPromise = page.waitForEvent('popup')
+    await preview.getByRole('button', { name: 'Печать всех готовых' }).click()
+    const popup = await popupPromise
+    await expect(popup.locator('section.label')).toHaveCount(canonicalOrderIds.length * 2)
+    const labels = await popup.locator('section.label').evaluateAll((nodes) => nodes.map((node) => node.textContent?.trim() ?? ''))
+    const imageAlts = await popup.locator('section.label img').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('alt')))
+    await popup.close()
+    return { labels, imageAlts }
+  }
+
+  const firstTape = await printAndReadTape()
+  expect(firstTape.labels).toEqual([
+    '', 'Служебная этикетка WMS№ 1',
+    '', 'Служебная этикетка WMS№ 2',
+    '', 'Служебная этикетка WMS№ 3',
+    '', 'Служебная этикетка WMS№ 4',
+  ])
+  expect(firstTape.imageAlts).toEqual(Array(canonicalOrderIds.length).fill('Печать стикера заказа WB'))
+
+  await page.getByRole('dialog', { name: 'Проверка перед печатью' }).getByRole('button', { name: 'Закрыть' }).click()
+  await page.getByTestId('fbs-pick-list-print').click()
+  await expect(page.getByTestId('fbs-pick-list')).toBeVisible()
+  const secondTape = await printAndReadTape()
+
+  expect(secondTape).toEqual(firstTape)
+  expect(printRequests).toBe(2)
+})
+
+// S-03-TC-008 — открытый лист передаёт показанный снимок ID. Если состав уже
+// изменился, сервер отклоняет старый полный набор, а UI просит обновить лист.
+test('S-03-TC-008: stale picking list is rejected instead of printing fresh numbering', async ({ page }) => {
+  const visibleItems = PICKING_ITEMS.slice(0, 1)
+  const visibleOrderIds = visibleItems.flatMap((item) => item.order_ids)
+  const dialog = await openPickingList(page, 'pick-list-stale', visibleItems)
+  let unexpectedPickingReloads = 0
+  let printBody: JsonObject | null = null
+  await page.route('**/operations/fbs-supplies/sup-1/picking-list', async (route) => {
+    unexpectedPickingReloads += 1
+    await json(route, { items: PICKING_ITEMS })
+  })
+  await page.route('**/operations/fbs-supplies/sup-1/order-print-tape', async (route) => {
+    printBody = route.request().postDataJSON() as JsonObject
+    await json(route, {
+      detail: {
+        code: 'full_supply_order_set_required',
+        message: 'full_supply_order_set_required',
+        context: {},
+        retryable: false,
+      },
+    }, 409)
+  })
+
+  await dialog.getByTestId('fbs-pick-print-stickers').click()
+
+  expect(printBody?.order_ids).toEqual(visibleOrderIds)
+  expect(unexpectedPickingReloads).toBe(0)
+  await expect(dialog.getByText('Состав поставки изменился. Обновите лист подбора и повторите печать')).toBeVisible()
+  await expect(page.getByRole('dialog', { name: 'Проверка перед печатью' })).toHaveCount(0)
+})
+
+// S-03-TC-004 — причина ошибки остаётся складской: только отсутствие PNG
+// называется неполученным стикером, остальные сбои не маскируются под ошибку WB.
+test('S-03-TC-004: tape preview shows distinct operator-facing order errors', async ({ page }) => {
+  const items = PICKING_ITEMS.slice(0, 1)
+  const canonicalOrderIds = items.flatMap((item) => item.order_ids)
+  const dialog = await openPickingList(page, 'pick-list-errors', items)
+  await mockStickerImages(page)
+  const tape = readyTape(canonicalOrderIds) as Record<string, unknown>
+  tape.orders = (tape.orders as JsonObject[]).slice(0, 1)
+  tape.ready = 1
+  tape.missing = 2
+  tape.order_errors = [
+    { order_id: canonicalOrderIds[1], wb_order_id: 845001, order_number: 2, code: 'wb_sticker_missing', message: 'HTTP 502' },
+    { order_id: canonicalOrderIds[2], wb_order_id: 845002, order_number: 3, code: 'packaging_line_not_found', message: 'packaging_line_not_found' },
+  ]
+  await page.route('**/operations/fbs-supplies/sup-1/order-print-tape', (route) => json(route, tape))
+
+  await dialog.getByTestId('fbs-pick-print-stickers').click()
+  const preview = page.getByRole('dialog', { name: 'Проверка перед печатью' })
+
+  await expect(preview.getByText('Заказ WB №845001: стикер не получен')).toBeVisible()
+  await expect(preview.getByText('Заказ WB №845002: строка упаковки не найдена')).toBeVisible()
+  await expect(preview).not.toContainText('HTTP 502')
+  await expect(preview).not.toContainText('packaging_line_not_found')
+})
+
 // S-03-TC-006 — пустая поставка объяснена, печать недоступна с контрактной причиной.
 test('S-03-TC-006: empty supply explains why there is nothing to pick or print', async ({ page }) => {
   const dialog = await openPickingList(page, 'pick-list-empty', [])

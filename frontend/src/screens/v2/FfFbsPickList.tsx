@@ -13,7 +13,7 @@ import {
   TextCell,
   type Column,
 } from '../../ui-kit'
-import { getFbsPickingList, type FbsPickingItem } from './fbsApi'
+import { getFbsPickingList, getFullFbsPickingOrderIds, type FbsPickingItem } from './fbsApi'
 
 type Props = {
   token: string
@@ -21,7 +21,7 @@ type Props = {
   supplyId: string | null
   open: boolean
   onClose: () => void
-  onPrintStickers: () => Promise<void>
+  onPrintStickers: (orderIds: string[]) => Promise<void>
 }
 type Mark = { collected: boolean; packed: boolean }
 type Marks = Record<string, Mark>
@@ -82,10 +82,10 @@ export function FfFbsPickList({ token, authHeaders, supplyId, open, onClose, onP
     if (!supplyId || !canPrint) return
     setPrinting(true); setError(null)
     try {
-      await onPrintStickers()
+      await onPrintStickers(getFullFbsPickingOrderIds(items))
     } catch (e) { setError(e instanceof Error ? e.message : 'Не удалось получить стикеры') }
     finally { setPrinting(false) }
-  }, [canPrint, onPrintStickers, supplyId])
+  }, [canPrint, items, onPrintStickers, supplyId])
 
   const columns: Column<NumberedItem>[] = [
     { key: 'number', header: '№', width: 76, align: 'center', render: (i) => <Typography sx={{ fontWeight: 800 }}>{i.numberFrom === i.numberTo ? i.numberFrom : `${i.numberFrom}–${i.numberTo}`}</Typography> },

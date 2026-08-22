@@ -907,15 +907,17 @@ export function FfFbsSupplyWorkspace({
     return Boolean(line?.requires_honest_sign || order.metadata.required.includes('sgtin'))
   }
 
-  const prepareFullOrderTapePreview = async (reprint = false) => {
+  const prepareFullOrderTapePreview = async (reprint = false, pickingListOrderIds?: string[]) => {
     if (!workspace) return
     setBusy(true)
     setError(null)
     try {
-      // Состав и порядок всегда берём из свежего серверного листа. Порядок
-      // workspace.orders может быть любым и на физическую ленту не влияет.
-      const pickingItems = await getFbsPickingList(token, authHeaders, workspace.supply.id)
-      const canonicalOrderIds = getFullFbsPickingOrderIds(pickingItems)
+      // Кнопка внутри открытого листа передаёт именно показанный оператору
+      // серверный снимок. Остальные полные действия получают серверный список
+      // здесь; workspace.orders никогда не задаёт состав или порядок ленты.
+      const canonicalOrderIds = pickingListOrderIds ?? getFullFbsPickingOrderIds(
+        await getFbsPickingList(token, authHeaders, workspace.supply.id),
+      )
       if (canonicalOrderIds.length === 0) {
         throw new Error('В поставке нет заказов для печати')
       }
@@ -937,6 +939,9 @@ export function FfFbsSupplyWorkspace({
       setPickListOpen(false)
       setPrintPreviewOpen(true)
     } catch (cause) {
+      if (cause instanceof FbsApiError && cause.code === 'full_supply_order_set_required') {
+        throw new Error('Состав поставки изменился. Обновите лист подбора и повторите печать')
+      }
       const message = cause instanceof Error ? cause.message : ''
       if (
         message === 'В поставке нет заказов для печати' ||
@@ -2158,7 +2163,7 @@ export function FfFbsSupplyWorkspace({
         supplyId={workspace?.supply.id ?? null}
         open={pickListOpen}
         onClose={() => setPickListOpen(false)}
-        onPrintStickers={() => prepareFullOrderTapePreview(false)}
+        onPrintStickers={(orderIds) => prepareFullOrderTapePreview(false, orderIds)}
       />
       <FbsPrintPreviewDialog
         token={token}
