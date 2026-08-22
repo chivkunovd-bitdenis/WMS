@@ -118,3 +118,5 @@
 00:45   08-storage · splitter: готово
 00:45   08-storage · resume: поатомный rework Terra по сохранённым находкам
 00:52   08-storage · backend-dev: готово
+00:52   08-storage · dev: фича 1/4 сохранена cfc9a49ae826
+00:59   08-storage · screen-dev: готово

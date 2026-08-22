@@ -4,6 +4,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined'
 import { apiUrl } from '../../api'
 import { ActionGroup, DataTable, ErrorNotice, FilterBar, IconAction, PrimaryAction, PrintAction, ProductCell, ScreenHeader, SecondaryAction, StatusChip, TextCell } from '../../ui-kit'
+import { getMoscowDateString } from '../../utils/moscowDate'
 
 type Measurement = {
   product_id: string
@@ -39,7 +40,6 @@ const previousMonth = () => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 }
 const currentMonth = () => new Date().toISOString().slice(0, 7)
-const currentDate = () => new Date().toISOString().slice(0, 10)
 const authHeaders = (token: string) => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' })
 const statusLabel = (statement: Statement) => statement.status === 'fixed' ? 'Зафиксирован' : statement.problem_count ? 'Требует исправления' : 'Черновик'
 const statusTone = (statement: Statement) => statement.status === 'fixed' ? 'ok' as const : statement.problem_count ? 'stop' as const : 'neutral' as const
@@ -68,11 +68,11 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
   const [rateOpen, setRateOpen] = useState(false)
   const [rateWarehouseId, setRateWarehouseId] = useState('')
   const [rateAmount, setRateAmount] = useState('')
-  const [rateValidFrom, setRateValidFrom] = useState(currentDate())
+  const [rateValidFrom, setRateValidFrom] = useState(getMoscowDateString())
   const [sellerRateEnabled, setSellerRateEnabled] = useState(false)
   const [rateSellerId, setRateSellerId] = useState('')
   const [sellerRateAmount, setSellerRateAmount] = useState('')
-  const [sellerRateValidFrom, setSellerRateValidFrom] = useState(currentDate())
+  const [sellerRateValidFrom, setSellerRateValidFrom] = useState(getMoscowDateString())
   const [rateError, setRateError] = useState<string | null>(null)
   const [printStatement, setPrintStatement] = useState<Statement | null>(null)
 
@@ -189,10 +189,11 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
     if (rateDisabledReason) return
     setActionLoading(true); setRateError(null)
     try {
-      await request('/operations/storage/tariffs', { method: 'POST', body: JSON.stringify({ warehouse_id: rateWarehouseId, amount: parsedRate, valid_from: rateValidFrom }) })
+      const tariffBody: Record<string, unknown> = { warehouse_id: rateWarehouseId, amount: parsedRate, valid_from: rateValidFrom }
       if (sellerRateEnabled) {
-        await request('/operations/storage/tariffs', { method: 'POST', body: JSON.stringify({ warehouse_id: rateWarehouseId, seller_id: rateSellerId, amount: parsedSellerRate, valid_from: sellerRateValidFrom }) })
+        tariffBody.seller_exception = { seller_id: rateSellerId, amount: parsedSellerRate, valid_from: sellerRateValidFrom }
       }
+      await request('/operations/storage/tariffs', { method: 'POST', body: JSON.stringify(tariffBody) })
       setRateOpen(false)
       await load()
     } catch { setRateError('Не удалось сохранить тариф. Проверьте ставку и дату начала.') }

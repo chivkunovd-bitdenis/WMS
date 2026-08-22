@@ -34,7 +34,7 @@ test('S-11-TC-002 administrator saves a warehouse storage rate effective forward
   let tariffBody: unknown = null
   await page.route('**/api/operations/storage/tariffs', async (route) => {
     tariffBody = route.request().postDataJSON()
-    await route.fulfill({ status: 201, json: { id: 'tariff-1' } })
+    await route.fulfill({ status: 201, json: { warehouse_tariff: { id: 'tariff-1', warehouse_id: 'warehouse-1', seller_id: null, amount: '0.70', valid_from: '2026-08-01' }, seller_exception: null } })
   })
   await page.getByRole('button', { name: 'Задать тариф' }).click()
   await page.getByTestId('storage-rate-amount').fill('0,70')
