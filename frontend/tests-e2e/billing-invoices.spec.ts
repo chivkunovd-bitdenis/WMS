@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 
-const invoice = { id: 'invoice-1', number: 'СЧ-2026-00041', period: '2026-07', seller_name: 'Луна', issued_at: '2026-08-01T00:00:00Z', total_amount: 48392, status: 'issued', lines: [{ id: 'line-1', service_code: 'inbound', unit: 'item', quantity: 1245, rate: 12, amount: 14940, documents: [{ date: '2026-07-20', number: 'ПР-000141', quantity: 84, amount: 1008 }] }] }
+const invoice = { id: 'invoice-1', number: 'СЧ-2026-00041', period: '2026-07', seller_name: 'Луна', issued_at: '2026-08-01T00:00:00Z', total_amount: 48392, status: 'issued', ff_profile: { legal_name: 'ООО «Фулфилмент Волна»', inn: '7701234567' }, seller_profile: { legal_name: 'ООО «Луна Трейд»', inn: '7812345678' }, lines: [{ id: 'line-1', service_code: 'inbound', unit: 'item', quantity: 1245, rate: 12, amount: 14940, documents: [{ date: '2026-07-20', number: 'ПР-000141', quantity: 84, amount: 1008 }] }] }
 
 // S-31-TC-013 — Given invoice formation is blocked, When the invoices endpoint returns its run issue, Then the admin sees the cause and its corrective action.
 test('billing invoices show server-side formation issues separate from invoices', async ({ page }) => {
@@ -28,12 +28,17 @@ test('billing invoice opens, reveals documents and starts print', async ({ page 
   await expect(page.getByRole('dialog', { name: /Счёт СЧ-2026-00041/ })).toBeVisible()
   await page.getByRole('button', { name: 'Показать документы' }).click()
   await expect(page.getByTestId('billing-invoice-documents')).toContainText('ПР-000141')
+  await expect(page.getByTestId('billing-invoice-documents')).toContainText('84')
   const printWindow = page.waitForEvent('popup')
   await Promise.all([
     printWindow,
     page.getByTestId('billing-invoice-print').click(),
   ])
-  await expect((await printWindow).locator('body')).toContainText('СЧ-2026-00041')
+  const printed = (await printWindow).locator('body')
+  await expect(printed).toContainText('СЧ-2026-00041')
+  await expect(printed).toContainText('ООО «Фулфилмент Волна»')
+  await expect(printed).toContainText('ООО «Луна Трейд»')
+  await expect(printed.getByRole('button')).toHaveCount(0)
 })
 
 // S-31-TC-008 — Given an issued invoice, When cancellation is confirmed twice, Then history has one cancelled invoice and no second cancellation request.

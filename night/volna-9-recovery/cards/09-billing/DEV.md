@@ -1,20 +1,20 @@
+# 09-billing — screen-dev, атом 11
+
 ## Изменённые файлы
 
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfBillingScreen.tsx
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/tests-e2e/billing-ledger.spec.ts
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/night/volna-9-recovery/cards/09-billing/DEV.md
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfBillingScreen.tsx` — для списка счетов выбран последний закрытый месяц, календарный период показан в читаемом виде, а детализация хранения не показывает технический источник.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/tests-e2e/billing-invoices.spec.ts` — `S-31-TC-007` дополнительно проверяет снимки обеих сторон в HTML-печати и отсутствие управляющих кнопок.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/night/volna-9-recovery/cards/09-billing/DEV.md` — обязательный артефакт этапа.
 
 ## Гейты
 
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npx tsc --noEmit -p tsconfig.app.json` — зелёный.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npx playwright test tests-e2e/billing-ledger.spec.ts` — зелёный; выполнен только тестовый файл атома.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npm run test:unit -- --runInBand` — красный до запуска тестов: `sh: vitest: command not found`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing && python3 scripts/ui/ui_guard.py` — красный из-за уже имеющихся отклонений вне файлов атома: `src/App.tsx`, `src/components/WbProductPickerDialog.tsx`, `src/screens/ff/FfSettingsScreen.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`. Базовая линия не обновлялась.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing && git diff --check` — зелёный.
-- Сохранение отдельным Git-коммитом не выполнено: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-09-billing1/index.lock` из-за ограничения прав текущей среды. Чужой `night/volna-9-recovery/JOURNAL.md` в индекс не добавлялся.
+- Зелёный: `npx --no-install tsc --noEmit -p tsconfig.app.json` (запуск из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend`).
+- Красный, внешние для атома новые нарушения: `python3 ../scripts/ui/ui_guard.py` (запуск из `frontend/`) сообщает `src/App.tsx`, `src/components/WbProductPickerDialog.tsx`, `src/screens/ff/FfSettingsScreen.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`. Базовая линия не менялась.
+- Красный: `npm run test:unit -- --run src/screens/ff/FfBillingScreen.test.tsx` — в рабочей копии отсутствует `vitest` (`sh: vitest: command not found`); отдельного unit-теста экрана в `src/screens/ff/` нет.
+- Зелёный: `npx --no-install playwright test tests-e2e/billing-invoices.spec.ts` (запуск из `frontend/`), только назначенный e2e-файл атома.
+- Зелёный: `git diff --check`.
 
 ## Не реализовано
 
-- Для S-31-TC-004, S-31-TC-005 и S-31-TC-012 экран передаёт в живой ledger API начало выбранного месяца в `date=YYYY-MM-01`, не отправляет `seller_id=all` и принимает реальный массив строк. Поиск, фильтр услуги и данные полей строки требуют серверного read-model; это находка ревью №2 и находится за границей screen-dev.
-- Находки ревью №3–12 и №14 относятся к API, сервисам, миграциям и документации блокировок, поэтому в этот атомарный экранный проход не вносились. Находка №13 про `billing-invoices.spec.ts` также не относится к разрешённому тестовому файлу атома.
-- Контракт не удалось подтвердить полностью: `test:unit` не запускается из-за отсутствующего Vitest, а `ui_guard.py` блокируется нарушениями в чужих файлах.
+- Пункты контракта атома 11, относящиеся к экрану и e2e `S-31-TC-007`/`S-31-TC-008`, реализованы.
+- Находки REVIEW.md по API, сервисам, моделям, миграции, записи ledger и документу `docs/blockers/S-31.md` не относятся к разрешённым файлам фронтенд-экрана и e2e этого атома, поэтому не менялись.
