@@ -224,7 +224,8 @@ export function FbsSupplyCreateDialog({
 
           {preflightBusy ? (
             <Box data-testid="fbs-preflight-skeleton"><Typography variant="body2" sx={{ mb: 1.5 }}>Проверяем актуальный состав и остатки…</Typography><table style={{ width: '100%' }}><TableSkeletonBody columns={4} rows={2} /></table></Box>
-          ) : summary ? (
+          ) : null}
+          {summary ? (
             <Stack spacing={2}>
               <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                 <Chip

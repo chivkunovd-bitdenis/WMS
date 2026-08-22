@@ -322,8 +322,10 @@ test('fbs workspace: scan location then product', async ({ page }) => {
       expected_products: [],
     }),
   )
-  await page.route('**/operations/fbs-supplies/sup-1/pick/scan-product', (route) =>
-    json(route, workspace({
+  const productScanBodies: JsonObject[] = []
+  await page.route('**/operations/fbs-supplies/sup-1/pick/scan-product', async (route) => {
+    productScanBodies.push(route.request().postDataJSON() as JsonObject)
+    await json(route, workspace({
       stage: 'picking',
       status: 'assembling',
       orders: [order('1', {
@@ -331,8 +333,8 @@ test('fbs workspace: scan location then product', async ({ page }) => {
         supply_id: 'sup-1',
         pick: { status: 'picked', location_code: 'A-01', picked_at: new Date().toISOString() },
       })],
-    })),
-  )
+    }))
+  })
 
   await page.getByTestId('nav-ff-fbs').click()
   await page.getByTestId('fbs-order-1').click()
@@ -349,11 +351,15 @@ test('fbs workspace: scan location then product', async ({ page }) => {
 
   await expect(page.getByText('Товар подобран. Прогресс синхронизирован для всех операторов.')).toBeVisible()
   await expect(page.getByTestId('fbs-pick-result')).toContainText('Взято: Основной склад / ячейка A-01')
+  await expect.poll(() => productScanBodies).toHaveLength(1)
 
   // Повтор того же скана возвращает тот же результат через тот же idempotency key.
   await page.getByLabel('Штрихкод товара').fill('2000001')
   await page.getByRole('button', { name: 'Подобрать товар' }).click()
   await expect(page.getByTestId('fbs-pick-result')).toContainText('Взято: Основной склад / ячейка A-01')
+  await expect.poll(() => productScanBodies).toHaveLength(2)
+  expect(productScanBodies[1]?.idempotency_key).toBe(productScanBodies[0]?.idempotency_key)
+  expect(productScanBodies[1]?.order_id).toBe(productScanBodies[0]?.order_id)
 })
 
 // TC-NEW-FBS-12 — boxes can be created in "without distribution" mode.

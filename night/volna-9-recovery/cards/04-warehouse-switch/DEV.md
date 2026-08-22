@@ -1,20 +1,18 @@
-# 04-warehouse-switch · screen-dev
+# DEV · 04-warehouse-switch · atom 9
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/TransfersScreen.tsx`
-
-Экран S-25 больше не показывает успешное «Перемещение» до ответа операции: результат
-появляется только после окончания загрузки без ошибки. При серверном отказе строка
-успешной операции не создаётся.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/FbsSupplyCreateDialog.tsx
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/tests-e2e/ff-fbs-supply.spec.ts
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` — не завершился в доступное время через `npx`, вывода об ошибках нет; зелёным не считаю.
-- `python3 scripts/ui/ui_guard.py` — красный: обнаружены новые нарушения в чужих для этого атома файлах `WbProductPickerDialog.tsx`, `FfFbsOrdersScreen.tsx`, `FfFbsStockSyncScreen.tsx`, `FfFbsSupplyWorkspace.tsx`, `SellerInboundDraftScreen.tsx`. Базовую линию не обновлял.
-- `npm run test:unit` — не запущен: в окружении отсутствует исполняемый файл `vitest` (`vitest: command not found`).
+- tsc: не получил завершённый результат: `npx --no-install tsc --noEmit -p tsconfig.app.json` зависает в этой копии без вывода; попытка с `npx tsc` дала тот же эффект.
+- ui_guard.py: красный из-за новых нарушений в соседних файлах `src/components/WbProductPickerDialog.tsx`, `src/screens/v2/FfFbsOrdersScreen.tsx`, `src/screens/v2/FfFbsStockSyncScreen.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`; для `FbsSupplyCreateDialog.tsx` guard показал улучшение (своя-кнопка 3 → 2).
+- test:unit: красный до запуска теста: `vitest: command not found`.
 
 ## Не реализовано
 
-- Полная фильтрация S-25 по глобальному складскому контексту и объединение серверной пары `transfer_group_id` требуют входных props/API-данных, которых текущий разрешённый файл экрана не получает; изменение `App.tsx` и backend выходит за границы реестра этого атома.
-- Живой браузерный сценарий не запускался: локальные frontend-зависимости неполны (`vitest` отсутствует), а обязательные product-browser проверки выполняются отдельной ролью.
+- Backend-находки REVIEW.md находятся вне разрешённых файлов screen-dev атома и требуют отдельного backend-атома.
+- Полный browser E2E не запускался: обязательные локальные unit-гейты не прошли/зависли.
