@@ -1,22 +1,23 @@
-# 04-warehouse-switch · screen-dev
+# 04-warehouse-switch · screen-dev · атом 4
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/ui-kit/WarehouseContextSwitch.test.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/ui-kit/WarehouseContextSwitch.test.tsx` — закреплена граница находки ревью № 5: при пустом подготовленном списке переключатель не рендерится, чтобы экран показал собственный `EmptyState`; при ошибке без вариантов причина остаётся видна. Для `WarningNotice` добавлена проверка, что соседнее главное действие остаётся доступным.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md` — отчёт текущего screen-dev прохода.
+
+Файлы реализации `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/ui-kit/WarehouseContextSwitch.tsx`, `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/ui-kit/WarningNotice.tsx` и экспорт из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/ui-kit/index.ts` уже соответствовали контракту, поэтому в этом проходе не изменялись.
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend` — зелёный.
-- `npm run test:unit` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend` — зелёный. Добавлена проверка `WarningNotice` и подтверждено, что в раскрытом переключателе видны только имена складов, без их ID.
-- `python3 scripts/ui/ui_guard.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch` — красный из-за новых нарушений в неразрешённых этим атомом файлах: `frontend/src/components/WbProductPickerDialog.tsx`, `frontend/src/screens/v2/FfFbsOrdersScreen.tsx`, `frontend/src/screens/v2/FfFbsStockSyncScreen.tsx`, `frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx`, `frontend/src/screens/v2/SellerInboundDraftScreen.tsx`. Базовая линия не менялась.
+- `npx tsc --noEmit -p tsconfig.app.json` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend` — красный до проверки проекта: в рабочей копии нет локального `tsc`, а `npx` не смог получить пакет из закрытой сети (`ENOTFOUND registry.npmjs.org`).
+- `python3 scripts/ui/ui_guard.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch` — красный на ранее изменённых, запрещённых этому атому файлах: `frontend/src/components/WbProductPickerDialog.tsx`, `frontend/src/screens/v2/FfFbsOrdersScreen.tsx`, `frontend/src/screens/v2/FfFbsStockSyncScreen.tsx`, `frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx`, `frontend/src/screens/v2/SellerInboundDraftScreen.tsx`. В файлах атома нового нарушения нет; baseline не обновлялся.
+- `npm run test:unit -- --run src/ui-kit/WarehouseContextSwitch.test.tsx` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend` — красный до запуска тестов: `vitest: command not found`, потому что в рабочей копии отсутствует `frontend/node_modules/.bin/vitest`.
 
 ## Не реализовано
 
-Все пункты атома реализованы буквально: `WarehouseContextSwitch` скрывается при 0–1 варианте, открывает список имён и закрывает его после выбора; loading, disabled и error состояния не позволяют совершить действие и показывают причину. `WarningNotice` показывает неблокирующее предупреждение.
+- Находка ревью № 5 целиком не закрыта: при нуле операционных складов экран S-03 должен показать `EmptyState` и заблокировать складские действия. Это поведение относится к `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/FfFbsOrdersScreen.tsx`, который не входит в файлы атома 4. Сам `WarehouseContextSwitch` по контракту обязан скрываться при 0–1 варианте; это поведение сохранено и теперь явно защищено тестом.
+- Остальные находки `REVIEW.md` относятся к backend, контексту приложения или конкретным экранам и не затрагивают разрешённые файлы этого ui-kit атома.
 
 ## Находки
 
-Ревью `REVIEW.md` содержит 15 замечаний к серверному коду и экранным срезам. Прямых замечаний к файлам этого ui-kit атома нет; их исправление выходит за разрешённые границы данного шага.
-
-Git-коммит не создан: среда запретила создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-04-warehouse-switch/index.lock` (`Operation not permitted`). Изменения остаются в рабочем дереве и требуют коммита из среды с доступом к Git metadata.
+Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод `194.87.96.144` не открывались и не изменялись. Новых находок по данным или персональным данным в границах атома нет.
