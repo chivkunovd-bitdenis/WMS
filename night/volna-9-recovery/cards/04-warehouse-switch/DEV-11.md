@@ -1,42 +1,50 @@
-# DEV · 04-warehouse-switch · backend-dev
+# DEV · 04-warehouse-switch · backend-dev · rework атома 11
 
 ## Изменённые файлы
 
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_picking_service.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/inventory_service.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/models/inventory_movement.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/alembic/versions/20260822_0095_inventory_movement_dimensions.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/tests/test_fbs_picking.py
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/tests/test_inventory_movements_report.py
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/docs/blockers/S-03.md
 - /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md
 
 ## Что реализовано
 
-- `scan_pick_product` повторно проверяет ключ идемпотентности после блокировки поставки; кросс-складской FBS-pick и его undo явно разрешают только свой специализированный путь переноса.
-- `transfer_on_hand_between_locations` снова запрещает перемещение между разными складами по умолчанию; товар без `seller_id` можно принять и записать в журнал, без постановки задачи публикации WB.
+- Эндпоинты: новых нет; API атома 11 не расширялся.
+- Сервисы: существующая атомарная пара `stock_transfer_out` / `stock_transfer_in`, идемпотентный повтор, полный undo и запрет упаковочного обхода не менялись и повторно подтверждены целевыми тестами.
+- Writer теста отчётности приведён к обязательному контракту 07-A: каждое прямое создание `InventoryMovement` явно сохраняет фактические `seller_id` и `warehouse_id`, поэтому строгий `NOT NULL` для склада не ослаблен.
+- Реестр блокировок S-03 дополнен шестью обязательными полями для `insufficient_sorting_stock` и `foreign_sorting_location`.
 
 ## Миграции
 
-- `20260822_0095_inventory_movement_dimensions`: `seller_id` в движениях остаётся nullable, чтобы не ломать исторические и обычные FF-товары без селлера; `warehouse_id` остаётся обязательным.
+- Новых миграций в rework нет. Существующая `20260822_0095_inventory_movement_dimensions` не менялась: `warehouse_id` остаётся обязательным, `seller_id` nullable для обычного FF-товара без селлера.
 
 ## Тесты
 
-- `test_generic_inventory_transfer_rejects_another_warehouse`: общий writer отклоняет межскладской перенос.
-- `test_fbs_picking.py`: 9 passed, включая идемпотентность и undo полной пары.
-- `test_fbs_packaging_integration.py`: 15 passed, включая запрет списания из чужой сортировки и отсутствие обхода.
+- Обновлён `test_inventory_movements_summary_groups_and_period_filter`: его прямой writer теперь передаёт селлера и фактический склад для всех движений, включая второй склад.
+- Повторно прогнаны `test_fbs_picking.py` и `test_fbs_packaging_integration.py`: связанная пара создаётся один раз, повтор ключа не дублирует её, undo оставляет полную обратную пару, упаковка не списывает из чужой сортировки.
 
 ## Гейты
 
-- ruff: целевые изменённые файлы — `All checks passed`; полный `ruff check .` не прошёл из-за 80 существующих ошибок вне этого атома.
-- mypy: не прошёл из-за 4 существующих ошибок в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py` и `fbs_warehouse_binding_service.py`; изменённые файлы не перечислены среди ошибок.
-- pytest: целевые `test_fbs_picking.py` и `test_fbs_packaging_integration.py` — 24 passed (прогнаны отдельными группами).
-- back_guard.py: не запущен — файла `scripts/ci/back_guard.py` в этой рабочей копии нет.
-- check_migrations.py: не запущен — файла `scripts/ci/check_migrations.py` в этой рабочей копии нет.
-- git diff --check: пройден.
+- Воспроизведение находки: `pytest -q tests/test_inventory_movements_report.py::test_inventory_movements_summary_groups_and_period_filter` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend` — до исправления `1 failed`, `NOT NULL constraint failed: inventory_movements.warehouse_id`.
+- Целевой ruff: `ruff check tests/test_inventory_movements_report.py` — `All checks passed!`.
+- Целевой mypy: `mypy tests/test_inventory_movements_report.py` — `Success: no issues found in 1 source file`.
+- Целевой pytest: `pytest -q tests/test_fbs_picking.py tests/test_fbs_packaging_integration.py tests/test_inventory_movements_report.py::test_inventory_movements_summary_groups_and_period_filter` — `25 passed in 22.90s`.
+- `python3 scripts/ci/back_guard.py` не запускался: rework не добавляет роут.
+- `python3 scripts/ci/check_migrations.py` не запускался: rework не добавляет и не меняет миграцию.
+- `git diff --check` — пройден.
+- Git-сохранение: `git add backend/tests/test_inventory_movements_report.py docs/blockers/S-03.md night/volna-9-recovery/cards/04-warehouse-switch/DEV.md` — не выполнено, среда запретила создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-04-warehouse-switch/index.lock` (`Operation not permitted`).
 
 ## Не реализовано
 
-- Не добавлялись API и UI-пункты из соседних атомов. Файл `fbs_packaging_integration_service.py` не менялся: запрет списания из чужой сортировки уже реализован и покрыт тестом.
+- Находки ревью №1 и №9 относятся к другим backend-атомам (`preflight` и seller inbound), поэтому в атоме 11 не менялись.
+- Из находки №11 в реестр внесены две блокировки атома 11; `supply_warehouse_locked` и отсутствие операционного склада принадлежат атомам смены склада и списка, поэтому здесь не переопределялись.
+- Frontend-находки №2–8 и №12 не реализовывались: роль ограничена `backend-dev`, а пользователь потребовал только атом 11.
+- Строгий контракт `InventoryMovement.warehouse_id` не заменялся nullable/default: это нарушило бы обязательное решение `ARCH-CROSS.md` о неизменяемом фактическом складе движения.
+
+## Находки
+
+- В UI-словаре не найден отдельный человеко-понятный текст для `foreign_sorting_location`; факт записан в B-15 без изменения frontend в backend-атоме.
 
 ## Блокеры
 
-Нет. Секреты, токены, `.env` и кабинеты учётных данных не читались.
+- Локально реализовано и проверено, но не сохранено Git-коммитом: sandbox не разрешает запись в общий git-dir зарегистрированного worktree. Риск — изменения можно потерять до запуска с правом записи в `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-04-warehouse-switch`.
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не читались и не затрагивались.
