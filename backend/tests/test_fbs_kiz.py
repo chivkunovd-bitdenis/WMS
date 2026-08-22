@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from dataclasses import dataclass
@@ -2607,7 +2608,8 @@ async def test_fbs_marking_readers_prefer_active_row_over_newer_rejected_row(
                 ),
                 meta={
                     MARKING_KIND_SGTIN: [
-                        {"value": active_value, "checkStatus": "ok"}
+                        {"value": active_value, "checkStatus": "error"},
+                        {"value": rejected_value, "checkStatus": "ok"},
                     ]
                 },
             )
@@ -2642,6 +2644,7 @@ async def test_fbs_marking_readers_prefer_active_row_over_newer_rejected_row(
     assert worklist_metadata["states"][0]["status"] == META_STATUS_ACCEPTED
     assert current is not None
     assert current.value == active_value
+    # Deprecated row.meta must not override either the current or historical row.
     assert rejected.meta_status == META_STATUS_REJECTED
 
 
@@ -2652,10 +2655,10 @@ async def test_fbs_marking_readers_prefer_active_row_over_newer_rejected_row(
         ("filled", "same", META_STATUS_ACCEPTED, "ok"),
         ("optional", "same", META_STATUS_ALLOWED_WITHOUT_CHECK, "no_check"),
         ("pending", "same", META_STATUS_PENDING, CHECK_STATUS_CHECKING),
-        ("required", None, META_STATUS_MISSING, CHECK_STATUS_ERROR),
+        ("required", None, META_STATUS_MISSING, CHECK_STATUS_NEW),
         ("invalid", "same", META_STATUS_REJECTED, CHECK_STATUS_ERROR),
-        ("unrecognized", "same", META_STATUS_UNKNOWN, CHECK_STATUS_CHECKING),
-        ("required", "same", META_STATUS_UNKNOWN, CHECK_STATUS_CHECKING),
+        ("unrecognized", "same", META_STATUS_UNKNOWN, CHECK_STATUS_ERROR),
+        ("required", "same", META_STATUS_UNKNOWN, CHECK_STATUS_NEW),
         ("filled", "other", META_STATUS_REPLACEMENT_REQUIRED, CHECK_STATUS_ERROR),
         ("invalid", "other", META_STATUS_REJECTED, CHECK_STATUS_ERROR),
     ],
@@ -2715,6 +2718,7 @@ async def test_fbs_marking_wb_meta_decision_is_safe_and_preserves_raw_detail(
             session, db_order, async_client, "test-token", meta_batch=batch
         )
         await session.commit()
+        remote_summary = db_order.meta_details_json
 
     marking = markings[0]
     assert marking.meta_status == expected_status
@@ -2723,6 +2727,15 @@ async def test_fbs_marking_wb_meta_decision_is_safe_and_preserves_raw_detail(
     assert marking.meta_details_json == {
         "decision": decision,
         "value": remote_value,
+        "reason": "WB reason",
+    }
+    assert remote_summary[MARKING_KIND_SGTIN] == {
+        "status": (
+            fbs_marking_svc.map_wb_decision_to_meta_status(decision)
+            or META_STATUS_UNKNOWN
+        ),
+        "value": remote_value,
+        "decision": decision,
         "reason": "WB reason",
     }
 
@@ -2767,13 +2780,34 @@ async def test_fbs_marking_partial_wb_row_is_unknown_without_fresh_check_time(
             db_order,
             async_client,
             "test-token",
-            meta_batch=[MarketplaceOrderMetaRow(order_id=order.wb_order_id)],
+            meta_batch=[
+                MarketplaceOrderMetaRow(
+                    order_id=order.wb_order_id,
+                    meta_details=(
+                        MarketplaceMetaDetail(
+                            key="future_wb_key",
+                            value="remote-only-value",
+                            decision="future_decision",
+                            reason="future reason",
+                        ),
+                    ),
+                )
+            ],
         )
         await session.commit()
+        remote_summary = db_order.meta_details_json
 
     assert markings[0].meta_status == META_STATUS_UNKNOWN
     assert markings[0].meta_details_json == {"kept": True}
-    assert markings[0].check_status == CHECK_STATUS_CHECKING
+    assert markings[0].check_status == CHECK_STATUS_ERROR
+    assert remote_summary == {
+        "future_wb_key": {
+            "status": META_STATUS_UNKNOWN,
+            "value": "remote-only-value",
+            "decision": "future_decision",
+            "reason": "future reason",
+        }
+    }
     async with SessionLocal() as session:
         refreshed = await session.get(FbsOrder, order.order_id)
         assert refreshed is not None
@@ -2781,11 +2815,12 @@ async def test_fbs_marking_partial_wb_row_is_unknown_without_fresh_check_time(
 
 
 @pytest.mark.asyncio
-async def test_fbs_marking_orphaned_audit_is_created_once_for_repeated_missing(
+async def test_fbs_marking_orphaned_audit_is_created_once_for_concurrent_and_repeated_missing(
     async_client: AsyncClient,
 ) -> None:
     # TC-NEW-FBS-MARKING-001: Given WB repeatedly requires a missing KIZ, When
-    # sync runs again, Then the binding stays intact and there is one audit fact.
+    # two workers sync concurrently and one repeats, Then the binding stays intact
+    # and there is one audit fact.
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
         async_client, headers, suffix
@@ -2829,7 +2864,7 @@ async def test_fbs_marking_orphaned_audit_is_created_once_for_repeated_missing(
             ),
         )
     ]
-    for _ in range(2):
+    async def sync_once() -> None:
         async with SessionLocal() as session:
             db_order = await session.get(FbsOrder, order.order_id)
             assert db_order is not None
@@ -2837,6 +2872,9 @@ async def test_fbs_marking_orphaned_audit_is_created_once_for_repeated_missing(
                 session, db_order, async_client, "test-token", meta_batch=batch
             )
             await session.commit()
+
+    await asyncio.gather(sync_once(), sync_once())
+    await sync_once()
 
     async with SessionLocal() as session:
         marking = await session.scalar(

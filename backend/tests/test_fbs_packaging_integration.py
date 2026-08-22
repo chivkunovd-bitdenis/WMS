@@ -802,7 +802,10 @@ async def test_fbs_supply_promoted_after_marking_when_honest_sign_required(
         )
         await session.commit()
 
-    from app.services.wildberries_fbs_client import MarketplaceOrderMetaRow
+    from app.services.wildberries_fbs_client import (
+        MarketplaceMetaDetail,
+        MarketplaceOrderMetaRow,
+    )
 
     async def fake_meta_batch(
         client: object,
@@ -815,7 +818,13 @@ async def test_fbs_supply_promoted_after_marking_when_honest_sign_required(
         return [
             MarketplaceOrderMetaRow(
                 order_id=920001,
-                meta={"sgtins": [{"value": "01CIS-PACKINT-TEST", "checkStatus": "ok"}]},
+                meta_details=(
+                    MarketplaceMetaDetail(
+                        key="sgtin",
+                        value="01CIS-PACKINT-TEST",
+                        decision="filled",
+                    ),
+                ),
             )
         ]
 

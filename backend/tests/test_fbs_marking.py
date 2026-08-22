@@ -160,7 +160,10 @@ async def test_fbs_marking_sync_updates_check_status(
         )
         await session.commit()
 
-    from app.services.wildberries_fbs_client import MarketplaceOrderMetaRow
+    from app.services.wildberries_fbs_client import (
+        MarketplaceMetaDetail,
+        MarketplaceOrderMetaRow,
+    )
 
     async def fake_meta_batch(
         client: object,
@@ -173,7 +176,13 @@ async def test_fbs_marking_sync_updates_check_status(
         return [
             MarketplaceOrderMetaRow(
                 order_id=920001,
-                meta={"sgtins": [{"value": cis, "checkStatus": "checking"}]},
+                meta_details=(
+                    MarketplaceMetaDetail(
+                        key="sgtin",
+                        value=cis,
+                        decision="pending",
+                    ),
+                ),
             )
         ]
 

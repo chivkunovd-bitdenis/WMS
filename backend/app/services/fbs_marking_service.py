@@ -267,28 +267,12 @@ def _meta_details_from_wb(details: tuple[MarketplaceMetaDetail, ...]) -> dict[st
     out: dict[str, Any] = {}
     for item in details:
         kind = item.key.strip().lower()
-        if kind not in FBS_MARKING_KINDS:
-            continue
         status = map_wb_decision_to_meta_status(item.decision) or META_STATUS_UNKNOWN
         out[kind] = {
             "status": status,
             "value": item.value,
             "decision": item.decision,
-            "reason": None,
-        }
-    return out
-
-
-def _meta_details_from_markings(markings: list[FbsOrderMarking]) -> dict[str, Any]:
-    out: dict[str, Any] = {}
-    for kind in {marking.kind for marking in markings}:
-        mark = current_order_marking(markings, kind, include_rejected=True)
-        if mark is None:
-            continue
-        out[mark.kind] = {
-            "status": mark.meta_status,
-            "value": mark.value,
-            "reason": mark.reason,
+            "reason": item.reason,
         }
     return out
 
@@ -493,19 +477,30 @@ def _apply_meta_detail_to_marking(
     }
 
 
-def _check_status_for_meta_status(meta_status: str) -> str:
+def _check_status_for_meta_detail(
+    *,
+    decision: str,
+    meta_status: str,
+) -> str:
     """Keep the legacy status consistent with the authoritative WB decision."""
+    normalized_decision = (
+        decision.strip().lower().replace("-", "_").replace(" ", "_")
+    )
+    if normalized_decision == "required":
+        return CHECK_STATUS_NEW
     if meta_status == META_STATUS_ACCEPTED:
         return CHECK_STATUS_OK
     if meta_status == META_STATUS_ALLOWED_WITHOUT_CHECK:
         return CHECK_STATUS_NO_CHECK
     if meta_status in {
         META_STATUS_REJECTED,
-        META_STATUS_MISSING,
         META_STATUS_REPLACEMENT_REQUIRED,
+        META_STATUS_UNKNOWN,
     }:
         return CHECK_STATUS_ERROR
-    return CHECK_STATUS_CHECKING
+    if meta_status == META_STATUS_PENDING:
+        return CHECK_STATUS_CHECKING
+    return CHECK_STATUS_ERROR
 
 
 async def _record_wb_orphaned_once(
@@ -583,14 +578,13 @@ async def _sync_order_meta_from_wb(
     )
     details_by_kind: dict[str, MarketplaceMetaDetail] = {}
     returned_kinds: set[str] = set()
+    returned_details: tuple[MarketplaceMetaDetail, ...] = ()
     returned_row = False
-    status_map: dict[tuple[str, str], str] = {}
     for row in batch:
         if row.order_id != wb_order_id:
             continue
         returned_row = True
-        if row.meta is not None:
-            status_map.update(parse_wb_meta_statuses(row.meta))
+        returned_details = row.meta_details
         for detail in row.meta_details:
             kind = detail.key.strip().lower()
             if kind in FBS_MARKING_KINDS:
@@ -606,7 +600,7 @@ async def _sync_order_meta_from_wb(
         # lifecycle state.
         if returned_row and marking.kind not in returned_kinds:
             marking.meta_status = META_STATUS_UNKNOWN
-            marking.check_status = CHECK_STATUS_CHECKING
+            marking.check_status = CHECK_STATUS_ERROR
             continue
         if meta_detail is not None and current is marking:
             # Preserve every received WB detail, including unknown decisions, so a
@@ -626,18 +620,18 @@ async def _sync_order_meta_from_wb(
                 marking.meta_status = META_STATUS_REPLACEMENT_REQUIRED
             elif map_wb_decision_to_meta_status(meta_detail.decision) is None:
                 marking.meta_status = META_STATUS_UNKNOWN
-            marking.check_status = _check_status_for_meta_status(marking.meta_status)
+            marking.check_status = _check_status_for_meta_detail(
+                decision=meta_detail.decision,
+                meta_status=marking.meta_status,
+            )
             if marking.meta_status in {META_STATUS_MISSING, META_STATUS_REPLACEMENT_REQUIRED}:
                 await _record_wb_orphaned_once(session, marking, reason=marking.reason)
-        elif status_map.get((marking.kind, marking.value)) is not None:
-            wb_status = status_map[(marking.kind, marking.value)]
-            marking.check_status = wb_status
-            marking.meta_status = derive_meta_status(
-                check_status=wb_status,
-                has_value=True,
-            )
 
-    order.meta_details_json = _meta_details_from_markings(markings)
+    if returned_row:
+        # Keep the actual WB snapshot, including remote values and keys unknown to
+        # the current application.  Local marking rows remain the source for the
+        # physical binding, but must never be presented as the remote response.
+        order.meta_details_json = _meta_details_from_wb(returned_details)
     order.metadata_delivery_allowed = compute_delivery_allowed(order, markings)
     if returned_row and all(marking.kind in returned_kinds for marking in markings):
         order.metadata_last_checked_at = datetime.now(tz=UTC)
