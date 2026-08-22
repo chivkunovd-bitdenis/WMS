@@ -125,6 +125,20 @@ const LOWERCASE_CHIPS = INVENTORY.chips.filter((item) => /^[а-яёa-z]/.test(it
 
 export function UiKitShowcase() {
   const [search, setSearch] = useState('')
+  const [loadMoreLoading, setLoadMoreLoading] = useState(false)
+  const [loadMoreError, setLoadMoreError] = useState<string | undefined>()
+  const [loadMoreCalls, setLoadMoreCalls] = useState(0)
+
+  const demonstrateLoadMore = () => {
+    if (loadMoreLoading) return
+    setLoadMoreCalls((calls) => calls + 1)
+    setLoadMoreError(undefined)
+    setLoadMoreLoading(true)
+    window.setTimeout(() => {
+      setLoadMoreLoading(false)
+      setLoadMoreError('Не удалось загрузить следующие товары — действие доступно для повтора')
+    }, 500)
+  }
 
   return (
     <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 1400, mx: 'auto' }}>
@@ -217,13 +231,24 @@ export function UiKitShowcase() {
       <Section title="Таблица — показать ещё" note="Продолжение списка скрывается без следующего курсора и блокируется на время запроса.">
         <Stack spacing={2} sx={{ alignItems: 'flex-start' }}>
           <TableLoadMore hasNext={false} onLoadMore={() => undefined} testId="showcase-load-more-hidden" />
-          <TableLoadMore hasNext onLoadMore={() => undefined} testId="showcase-load-more-ready" />
+          <TableLoadMore hasNext onLoadMore={demonstrateLoadMore} testId="showcase-load-more-ready" />
           <TableLoadMore hasNext loading onLoadMore={() => undefined} testId="showcase-load-more-loading" />
           <TableLoadMore
             hasNext
             error="Не удалось загрузить следующие заказы"
             onLoadMore={() => undefined}
             testId="showcase-load-more-error"
+          />
+          <Typography variant="caption" color="text.secondary">
+            Интерактивный пример: вызовов загрузки — {loadMoreCalls}. Нажмите кнопку во время «Загружаем…»: повторный
+            вызов не произойдёт; после ошибки действие остаётся доступным.
+          </Typography>
+          <TableLoadMore
+            hasNext
+            loading={loadMoreLoading}
+            error={loadMoreError}
+            onLoadMore={demonstrateLoadMore}
+            testId="showcase-load-more-interactive"
           />
         </Stack>
       </Section>
