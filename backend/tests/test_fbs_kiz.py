@@ -19,6 +19,8 @@ from app.models.fbs_order import (
     MAPPING_STATUS_MAPPED,
     MARKING_KIND_SGTIN,
     META_STATUS_ACCEPTED,
+    META_STATUS_ALLOWED_WITHOUT_CHECK,
+    META_STATUS_PENDING,
     META_STATUS_REJECTED,
     META_STATUS_REPLACEMENT_REQUIRED,
     RESERVE_STATUS_RESERVED,
@@ -53,6 +55,26 @@ from app.services.wildberries_errors import (
     WildberriesClientError,
 )
 from app.services.wildberries_fbs_client import MarketplaceMetaDetail, MarketplaceOrderMetaRow
+
+
+@pytest.mark.parametrize(
+    ("decision", "expected"),
+    [
+        ("filled", META_STATUS_ACCEPTED),
+        ("optional", META_STATUS_ALLOWED_WITHOUT_CHECK),
+        ("pending", META_STATUS_PENDING),
+        ("required", META_STATUS_ACCEPTED),
+        ("invalid", META_STATUS_REJECTED),
+        ("something-new", None),
+    ],
+)
+def test_wb_decision_mapping_covers_safe_sync_states(
+    decision: str, expected: str | None
+) -> None:
+    # TC-NEW-FBS-MARKING-001: WB decisions map to stable local statuses;
+    # unknown decisions are fail-closed and do not become an acceptance.
+    assert fbs_marking_svc.map_wb_decision_to_meta_status(decision) == expected
+
 
 _GS = "\x1d"
 _CLEAN_CIS = f"010460043993125321AbCxyz{_GS}91K1aZ{_GS}92Crypto~|#<GS>tail"

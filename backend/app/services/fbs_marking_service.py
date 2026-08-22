@@ -1,4 +1,3 @@
-# ruff: noqa: RUF003
 """FBS order marking — WB metadata requirements, pool KIZ, and status sync."""
 
 from __future__ import annotations
@@ -33,8 +32,14 @@ from app.models.fbs_order import (
     FbsOrderMarking,
     current_order_marking,
 )
-from app.models.marking_code import STATUS_AVAILABLE, STATUS_RESERVED, MarkingCode
-from app.services.marking_code_service import normalize_cis
+from app.models.marking_code import (
+    EVENT_WB_ORPHANED,
+    STATUS_AVAILABLE,
+    STATUS_RESERVED,
+    MarkingCode,
+    MarkingCodeEvent,
+)
+from app.services.marking_code_service import normalize_cis, record_event
 from app.services.wildberries_client import (
     WildberriesClientError,
     put_marketplace_order_meta,
@@ -143,11 +148,16 @@ def map_wb_decision_to_meta_status(decision: str | None) -> str | None:
         "accepted": META_STATUS_ACCEPTED,
         "filled": META_STATUS_ACCEPTED,
         "rejected": META_STATUS_REJECTED,
+        "invalid": META_STATUS_REJECTED,
         "pending": META_STATUS_PENDING,
         "allowedwithoutcheck": META_STATUS_ALLOWED_WITHOUT_CHECK,
         "allowed_without_check": META_STATUS_ALLOWED_WITHOUT_CHECK,
         "replacementrequired": META_STATUS_REPLACEMENT_REQUIRED,
         "replacement_required": META_STATUS_REPLACEMENT_REQUIRED,
+        "optional": META_STATUS_ALLOWED_WITHOUT_CHECK,
+        "notrequired": META_STATUS_ALLOWED_WITHOUT_CHECK,
+        "not_required": META_STATUS_ALLOWED_WITHOUT_CHECK,
+        "required": META_STATUS_ACCEPTED,
     }
     return mapping.get(key)
 
@@ -479,7 +489,35 @@ def _apply_meta_detail_to_marking(
     marking.meta_details_json = {
         "decision": detail.decision,
         "value": detail.value,
+        "reason": reason,
     }
+
+
+async def _record_wb_orphaned_once(
+    session: AsyncSession,
+    marking: FbsOrderMarking,
+    *,
+    reason: str | None,
+) -> None:
+    if marking.marking_code_id is None:
+        return
+    existing = await session.scalar(
+        select(MarkingCodeEvent.id).where(
+            MarkingCodeEvent.code_id == marking.marking_code_id,
+            MarkingCodeEvent.event_type == EVENT_WB_ORPHANED,
+        )
+    )
+    if existing is not None:
+        return
+    code = await session.get(MarkingCode, marking.marking_code_id)
+    if code is not None:
+        await record_event(
+            session,
+            code=code,
+            event_type=EVENT_WB_ORPHANED,
+            actor=None,
+            reason=reason,
+        )
 
 
 async def _sync_order_meta_from_wb(
@@ -495,14 +533,20 @@ async def _sync_order_meta_from_wb(
         order_ids=[int(order.wb_order_id)],
     )
     details_by_kind: dict[str, MarketplaceMetaDetail] = {}
+    returned_kinds: set[str] = set()
+    returned_row = False
     status_map: dict[tuple[str, str], str] = {}
     for row in batch:
         if row.order_id != int(order.wb_order_id):
             continue
+        returned_row = True
         if row.meta is not None:
             status_map.update(parse_wb_meta_statuses(row.meta))
         for detail in row.meta_details:
-            details_by_kind[detail.key.strip().lower()] = detail
+            kind = detail.key.strip().lower()
+            if kind in FBS_MARKING_KINDS:
+                returned_kinds.add(kind)
+                details_by_kind[kind] = detail
 
     for marking in markings:
         wb_status = status_map.get((marking.kind, marking.value))
@@ -514,17 +558,44 @@ async def _sync_order_meta_from_wb(
             meta_detail.value == marking.value
             or (meta_detail.value is None and current is marking)
         )
-        if meta_detail is not None and detail_matches:
-            _apply_meta_detail_to_marking(marking, meta_detail, check_status=wb_status)
+        if (
+            meta_detail is not None
+            and current is marking
+            and meta_detail.value
+            and meta_detail.value != marking.value
+        ):
+            marking.meta_status = META_STATUS_REPLACEMENT_REQUIRED
+            marking.reason = meta_detail.reason
+            marking.meta_details_json = {
+                "decision": meta_detail.decision,
+                "value": meta_detail.value,
+                "reason": meta_detail.reason,
+            }
+            await _record_wb_orphaned_once(session, marking, reason=meta_detail.reason)
+        elif meta_detail is not None and detail_matches:
+            marking.reason = meta_detail.reason
+            if meta_detail.decision.strip().lower() == "required" and not meta_detail.value:
+                marking.meta_status = META_STATUS_MISSING
+            elif meta_detail.value and meta_detail.value != marking.value:
+                marking.meta_status = META_STATUS_REPLACEMENT_REQUIRED
+            elif map_wb_decision_to_meta_status(meta_detail.decision) is None:
+                marking.meta_status = META_STATUS_UNKNOWN
+            else:
+                _apply_meta_detail_to_marking(marking, meta_detail, check_status=wb_status)
+            if marking.meta_status in {META_STATUS_MISSING, META_STATUS_REPLACEMENT_REQUIRED}:
+                await _record_wb_orphaned_once(session, marking, reason=marking.reason)
         elif wb_status is not None:
             marking.meta_status = derive_meta_status(
                 check_status=wb_status,
                 has_value=True,
             )
+        elif returned_row and marking.kind not in returned_kinds:
+            marking.meta_status = META_STATUS_UNKNOWN
 
     order.meta_details_json = _meta_details_from_markings(markings)
     order.metadata_delivery_allowed = compute_delivery_allowed(order, markings)
-    order.metadata_last_checked_at = datetime.now(tz=UTC)
+    if returned_row:
+        order.metadata_last_checked_at = datetime.now(tz=UTC)
     await session.flush()
     return markings
 
