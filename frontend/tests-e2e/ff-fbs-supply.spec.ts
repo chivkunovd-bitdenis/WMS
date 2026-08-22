@@ -258,19 +258,23 @@ test('fbs workspace: one blocked order prevents whole-supply delivery', async ({
   const blocked = order('2', {
     supply_id: 'sup-1',
     metadata: {
-      required: ['sgtin'], optional: [], states: [], delivery_allowed: false,
-      verdict: { signature: 'WB не принял', tone: 'stop', reason: 'invalid_code', delivery_allowed: false },
+      required: ['sgtin'],
+      optional: [],
+      states: [{ kind: 'sgtin', status: 'accepted', value_tail: '…1234' }],
+      delivery_allowed: false,
+      verdict: { signature: 'WB не принял', tone: 'stop', reason: 'uinBadStatus', delivery_allowed: false },
       last_checked_at: new Date().toISOString(),
     },
   })
   await openVerdictWorkspace(page, 'verdict-aggregate', [accepted, blocked])
 
   await expect(page.getByTestId('fbs-wb-verdict-2')).toHaveText('WB не принял')
-  await expect(page.getByText('Код маркировки не принят')).toBeVisible()
+  await expect(page.getByText('неверный статус УИН')).toBeVisible()
+  await expect(page.getByTestId('fbs-order-print-done-2')).toHaveCount(0)
   const deliver = page.getByRole('button', { name: 'Передать в WB' })
   await expect(deliver).toBeDisabled()
   await deliver.hover()
-  await expect(page.getByRole('tooltip')).toContainText('Заказ №2: WB не принял: Код маркировки не принят')
+  await expect(page.getByRole('tooltip')).toContainText('Заказ №2: WB не принял: неверный статус УИН')
 })
 
 // TC-S17-006 — compatible selection creates one atomic supply and opens its workspace.

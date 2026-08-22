@@ -137,13 +137,10 @@ function visualStage(stage: FbsWorkspace['stage']): StageKey {
   return stage
 }
 
-const MARKING_ACCEPTED_STATUSES = ['accepted', 'allowed_without_check', 'ok']
 const STICKER_PRINTED_STATUSES = ['print_opened', 'applied']
 
 function isOrderMarkingReady(order: FbsWorkspace['orders'][number]) {
-  if (order.metadata.required.length === 0) return true
-  const accepted = order.metadata.states.filter((state) => MARKING_ACCEPTED_STATUSES.includes(state.status))
-  return accepted.length >= order.metadata.required.length
+  return order.metadata.verdict.delivery_allowed
 }
 
 function safeInitialWorkspace(workspace: FbsWorkspace | null | undefined): FbsWorkspace | null {
@@ -1962,7 +1959,14 @@ export function FfFbsSupplyWorkspace({
                               {metaStatus.label === 'Нет ответа WB' ? <TextCell value="Сдача пока недоступна" width={180} /> : null}
                             </Stack>
                           </Box>
-                          {printed ? <Typography sx={{ color: 'success.main', fontWeight: 700 }}>✓</Typography> : null}
+                          {printed ? (
+                            <Typography
+                              sx={{ color: 'success.main', fontWeight: 700 }}
+                              data-testid={`fbs-order-print-done-${order.id}`}
+                            >
+                              ✓
+                            </Typography>
+                          ) : null}
                           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                             <Button size="small" variant="outlined" disabled={!line} onClick={() => line && setTzLine(line)}>
                               ТЗ
