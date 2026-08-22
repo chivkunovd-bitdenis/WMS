@@ -1,0 +1,137 @@
+from __future__ import annotations
+
+import uuid
+from datetime import UTC, datetime, timedelta
+
+from sqlalchemy import case, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.inventory_balance import InventoryBalance
+from app.models.inventory_movement import InventoryMovement
+from app.models.product import Product
+from app.models.storage_location import StorageLocation
+from app.models.warehouse import Warehouse
+
+TRANSFER_TYPES = {"stock_transfer_in", "stock_transfer_out"}
+
+
+def validate_period(date_from: datetime, date_to: datetime) -> None:
+    if date_to <= date_from:
+        raise ValueError("date_to must be after date_from")
+    if date_to - date_from > timedelta(days=366):
+        raise ValueError("period cannot be longer than 366 days")
+
+
+async def build_overview(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    date_from: datetime,
+    date_to: datetime,
+    seller_id: uuid.UUID | None,
+) -> dict[str, object]:
+    validate_period(date_from, date_to)
+    movement_filter = [
+        InventoryMovement.tenant_id == tenant_id,
+        InventoryMovement.created_at >= date_from,
+        InventoryMovement.created_at < date_to,
+        InventoryMovement.transfer_group_id.is_(None),
+    ]
+    if seller_id is not None:
+        movement_filter.append(InventoryMovement.seller_id == seller_id)
+
+    in_expr = func.coalesce(
+        func.sum(
+            case(
+                (InventoryMovement.quantity_delta > 0, InventoryMovement.quantity_delta),
+                else_=0,
+            )
+        ),
+        0,
+    )
+    out_expr = func.coalesce(
+        func.sum(
+            case(
+                (InventoryMovement.quantity_delta < 0, -InventoryMovement.quantity_delta),
+                else_=0,
+            )
+        ),
+        0,
+    )
+    totals = (await session.execute(select(in_expr, out_expr).where(*movement_filter))).one()
+
+    length = date_to - date_from
+    previous_from, previous_to = date_from - length, date_from
+    previous_filter = [
+        InventoryMovement.tenant_id == tenant_id,
+        InventoryMovement.created_at >= previous_from,
+        InventoryMovement.created_at < previous_to,
+        InventoryMovement.transfer_group_id.is_(None),
+    ]
+    if seller_id is not None:
+        previous_filter.append(InventoryMovement.seller_id == seller_id)
+    previous_out = int((await session.scalar(select(out_expr).where(*previous_filter))) or 0)
+    current_out = int(totals[1] or 0)
+
+    balance_stmt = (
+        select(func.coalesce(func.sum(InventoryBalance.quantity), 0))
+        .join(StorageLocation, StorageLocation.id == InventoryBalance.storage_location_id)
+        .join(Warehouse, Warehouse.id == StorageLocation.warehouse_id)
+        .join(Product, Product.id == InventoryBalance.product_id)
+        .where(InventoryBalance.tenant_id == tenant_id)
+    )
+    if seller_id is not None:
+        balance_stmt = balance_stmt.where(Product.seller_id == seller_id)
+    current_balance = int((await session.scalar(balance_stmt)) or 0)
+
+    daily_stmt = (
+        select(
+            func.date(InventoryMovement.created_at),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (InventoryMovement.quantity_delta > 0, InventoryMovement.quantity_delta),
+                        else_=0,
+                    )
+                ),
+                0,
+            ),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (InventoryMovement.quantity_delta < 0, -InventoryMovement.quantity_delta),
+                        else_=0,
+                    )
+                ),
+                0,
+            ),
+        )
+        .where(*movement_filter)
+        .group_by(func.date(InventoryMovement.created_at))
+    )
+    daily = {
+        str(day): {"in_qty": int(in_qty), "out_qty": int(out_qty)}
+        for day, in_qty, out_qty in (await session.execute(daily_stmt)).all()
+    }
+    days: list[dict[str, object]] = []
+    cursor = date_from.date()
+    while cursor < date_to.date():
+        item = daily.get(cursor.isoformat(), {"in_qty": 0, "out_qty": 0})
+        days.append({"date": cursor.isoformat(), **item})
+        cursor += timedelta(days=1)
+
+    return {
+        "date_from": date_from.isoformat(), "date_to": date_to.isoformat(),
+        "current_balance": current_balance,
+        "in_qty": int(totals[0] or 0), "out_qty": current_out,
+        "comparison": {
+            "previous_out_qty": previous_out,
+            "change_percent": None if previous_out == 0 else round(
+                (current_out - previous_out) * 100 / previous_out, 2
+            ),
+            "change": current_out - previous_out,
+        },
+        "daily": days,
+        "generated_at": datetime.now(UTC).isoformat(),
+        "source_freshness": None, "warnings": [],
+    }
