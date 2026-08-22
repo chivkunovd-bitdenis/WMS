@@ -4,12 +4,14 @@
 
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/app/services/fbs_shipment_service.py`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/tests/test_fbs_shipment_deliver_gate_unit.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/night/volna-9-recovery/cards/02-verdikt-screen/DEV.md`
 
-Серверная передача поставки теперь использует единый WB-вердикт заказа из
-`fbs_marking_service`: `reason`, `pending`, `required`, неизвестное решение и
-отсутствующий ответ блокируют передачу. Разрешённые `filled`, `optional` и
-`notRequired` проходят. Блокирующая проверка содержит `order_id` и понятное
-сообщение с причиной, если она пришла от WB.
+Серверная проверка передачи поставки использует `_wb_order_verdict`, поэтому
+одного `check_status`, `assigned`, `pending` или устаревшего флага недостаточно.
+Разрешены только `filled`, `optional` и `notRequired` без причины. Причина,
+`pending`, `required`, неизвестное и отсутствующее решение блокируют передачу.
+Блокирующая проверка содержит UUID конкретного заказа и серверное сообщение с
+причиной, если она пришла от WB.
 
 ## Миграции
 
@@ -17,16 +19,18 @@
 
 ## Гейты
 
-- `ruff`: целевые файлы — PASS; полный `ruff check .` — FAIL на 82 ранее существующих ошибках в других файлах.
-- `mypy`: целевые файлы — PASS; полный `mypy .` — FAIL на 21 ранее существующей ошибке в 6 других файлах.
-- `pytest`: целевой `tests/test_fbs_shipment_deliver_gate_unit.py` — 16 passed; полный прогон остановлен после начала общего набора (в логе 3% без итогового результата).
-- `back_guard.py`: PASS, без вывода.
-- `check_migrations.py`: PASS, без вывода.
+- `ruff check .`: FAIL — 82 ошибки в ранее существующих несвязанных файлах; целевые файлы ошибок не добавили.
+- `mypy .`: FAIL — 21 ошибка в 6 ранее существующих несвязанных файлах; целевые файлы ошибок не добавили.
+- `pytest -q tests/test_fbs_shipment_deliver_gate_unit.py`: PASS — 16 passed.
+- `python3 scripts/ci/back_guard.py`: НЕ ЗАПУЩЕН — файл отсутствует в рабочей копии.
+- `python3 scripts/ci/check_migrations.py`: НЕ ЗАПУЩЕН — файл отсутствует в рабочей копии.
 
 ## Не реализовано
 
-- UI и API-контракт не изменялись: это следующий слой карточки и не входит в атомарную backend-фичу 2.
+- UI и API-контракт не изменялись: они относятся к следующим атомарным кускам.
+- Полные ruff/mypy не доведены до зелёного состояния из-за несвязанных ошибок репозитория.
 
 ## Блокеры
 
-Нет блокеров по реализации; полные ruff/mypy имеют только несвязанные ошибки репозитория, полный pytest не завершился в доступное время.
+Нет блокеров по реализации. В репозитории отсутствуют два CI-скрипта, а полные
+ruff/mypy содержат несвязанные ошибки; целевой тест передачи поставки проходит.

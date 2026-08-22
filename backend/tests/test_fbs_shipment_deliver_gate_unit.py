@@ -56,7 +56,10 @@ def _mock_order_with_verdict(
     decision: str, *, reason: str | None = None, order_id: uuid.UUID | None = None
 ) -> SimpleNamespace:
     order = _mock_order(FBS_ORDER_STATUS_PACKED, order_id=order_id)
-    order.required_meta_json = ["sgtin"]
+    if decision in {"optional", "notRequired"}:
+        order.optional_meta_json = ["sgtin"]
+    else:
+        order.required_meta_json = ["sgtin"]
     order.markings = [
         SimpleNamespace(
             kind="sgtin",
@@ -79,7 +82,12 @@ def test_delivery_uses_wb_verdict_for_allowed_decisions(decision: str) -> None:
 
 @pytest.mark.parametrize(
     ("decision", "reason"),
-    [("filled", "Код не прошёл проверку"), ("pending", None), ("required", None), ("new", None)],
+    [
+        ("filled", "Код не прошёл проверку"),
+        ("pending", None),
+        ("required", None),
+        ("unknown", None),
+    ],
 )
 def test_delivery_blocks_wb_verdict_and_attaches_order(
     decision: str, reason: str | None
