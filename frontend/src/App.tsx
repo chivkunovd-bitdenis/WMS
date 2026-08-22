@@ -41,7 +41,7 @@ import { FfHonestSignReprintsPage } from './screens/ff/FfHonestSignReprintsPage'
 import { NotificationsPage } from './screens/shared/NotificationsPage'
 import { HonestSignPoolPage } from './screens/shared/HonestSignPoolPage'
 import { HonestSignProductPage } from './screens/shared/HonestSignProductPage'
-import { FfPlaceholderPage } from './screens/ff/FfPlaceholderPage'
+import { FfPlaceholderPage } from './screens/ff/FfPlaceholderPage'; import { FfStoragePage } from './screens/ff/FfStoragePage'
 import { FfInboundRequestView, type InboundRequestWorkspace } from './screens/ff/FfInboundRequestView'
 import { FfInboundQueuePage } from './screens/ff/FfInboundQueuePage'
 import { FfProductsCatalogScreen } from './screens/v2/FfProductsCatalogScreen'
@@ -3118,7 +3118,7 @@ export default function App() {
 
           <Route
             path="ff/inventory"
-            element={token && canCellsOps ? <Navigate to={`${base}/products`} replace /> : ffAccessDenied}
+            element={token && canCellsOps ? <FfStoragePage isFulfillmentAdmin={isFulfillmentAdmin} /> : ffAccessDenied}
           />
 
           <Route
