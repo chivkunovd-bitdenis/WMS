@@ -7,13 +7,14 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.api.deps import require_ff_or_seller_with_permission
 from app.core.settings import settings
 from app.db.session import get_db
+from app.models.billing import BillingTariffVersion
 from app.models.storage_measurement import StorageMeasurement
 from app.models.storage_statement import StorageStatement
 from app.models.user import User
@@ -239,18 +240,39 @@ async def list_statements(
     for row in (await session.scalars(measurement_query)).all():
         rows_by_scope.setdefault((row.seller_id, row.warehouse_id), []).append(row)
 
-    return StorageStatementsOut(
-        # Tariffs belong to external contract 09-A. Atom 6 deliberately does
-        # not invent a parallel storage tariff or infer money from drafts.
-        tariff_configured=False,
-        warehouses=[{"id": warehouse.id, "name": warehouse.name} for warehouse in warehouses],
-        statements=[
-            _statement_out(
-                statement,
-                rows_by_scope.get((statement.seller_id, statement.warehouse_id), []),
+    tariff_configured = (
+        await session.scalar(
+            select(BillingTariffVersion.id)
+            .where(
+                BillingTariffVersion.tenant_id == user.tenant_id,
+                BillingTariffVersion.service_code == "storage_liter_day",
+                BillingTariffVersion.unit == "liter_day",
+                BillingTariffVersion.valid_from <= period_end,
+                or_(
+                    BillingTariffVersion.valid_to.is_(None),
+                    BillingTariffVersion.valid_to >= period_start,
+                ),
             )
-            for statement in statements
-        ],
+            .limit(1)
+        )
+        is not None
+    )
+    statement_outputs: list[StorageStatementOut] = []
+    for statement in statements:
+        rows = rows_by_scope.get((statement.seller_id, statement.warehouse_id), [])
+        output = _statement_out(statement, rows)
+        if statement.status == "fixed":
+            ledger = await get_storage_ledger_rows(session, user.tenant_id, statement.id)
+            output.measurements = _print_measurements(rows, ledger)
+            output.total_amount = str(
+                sum((Decimal(str(row.amount)) for row in ledger), Decimal(0))
+            )
+        statement_outputs.append(output)
+
+    return StorageStatementsOut(
+        tariff_configured=tariff_configured,
+        warehouses=[{"id": warehouse.id, "name": warehouse.name} for warehouse in warehouses],
+        statements=statement_outputs,
     )
 
 
@@ -306,17 +328,29 @@ async def fix_statement(
 ) -> StorageStatementOut:
     if user.role != "fulfillment_admin":
         raise HTTPException(status_code=403, detail="forbidden")
+    tenant_id = user.tenant_id
     try:
-        statement = await fix_storage_statement(session, user.tenant_id, statement_id)
-        statement, rows = await get_fixed_storage_statement(session, user.tenant_id, statement.id)
+        statement = await fix_storage_statement(session, tenant_id, statement_id)
+        statement, rows = await get_fixed_storage_statement(session, tenant_id, statement_id)
     except StorageStatementError as exc:
         code = str(exc)
         raise HTTPException(
-            status_code=409 if code in {"missing_dimensions", "not_editable"} else 404,
+            status_code=(
+                409
+                if code
+                in {
+                    "already_fixed",
+                    "missing_dimensions",
+                    "not_editable",
+                    "period_not_closed",
+                    "tariff_not_found",
+                }
+                else 404
+            ),
             detail=code,
         ) from exc
     out = _statement_out(statement, rows)
-    ledger = await get_storage_ledger_rows(session, user.tenant_id, statement.id)
+    ledger = await get_storage_ledger_rows(session, tenant_id, statement_id)
     out.measurements = _print_measurements(rows, ledger)
     out.total_amount = str(sum((Decimal(str(row.amount)) for row in ledger), Decimal(0)))
     return out

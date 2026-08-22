@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from collections.abc import Sequence
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
+from itertools import pairwise
 from typing import Any
 
 from sqlalchemy import or_, select
@@ -10,21 +12,17 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
+from app.models.billing import BillingLedgerEntry, BillingTariffVersion
+from app.models.inventory_movement import InventoryMovement
+from app.models.product import Product
+from app.models.product_dimension_event import ProductDimensionEvent
 from app.models.storage_measurement import StorageMeasurement
 from app.models.storage_statement import StorageStatement
+from app.services.storage_measurement_service import MOSCOW, _seconds, _volume_segments
 
 
 class StorageStatementError(ValueError):
     pass
-
-
-def _billing_models() -> tuple[Any, Any]:
-    """Load the shared billing models without inventing a storage ledger."""
-    try:
-        from app.models.billing import BillingLedgerEntry, BillingTariffVersion
-    except ImportError as exc:
-        raise StorageStatementError("billing_models_unavailable") from exc
-    return BillingTariffVersion, BillingLedgerEntry
 
 
 def _statement_source_ids(
@@ -38,6 +36,138 @@ def _statement_source_ids(
     storage-specific charge table or a nullable, ambiguous source id.
     """
     return {row.id for row in measurements} or {statement.id}
+
+
+def _tariff_for_day(
+    tariffs: list[BillingTariffVersion],
+    on_day: date,
+) -> BillingTariffVersion | None:
+    """Choose the seller override first, then the common rate effective that day."""
+    applicable = [
+        tariff
+        for tariff in tariffs
+        if tariff.valid_from <= on_day
+        and (tariff.valid_to is None or tariff.valid_to >= on_day)
+    ]
+    return max(
+        applicable,
+        key=lambda tariff: (
+            tariff.seller_id is not None,
+            tariff.valid_from,
+            str(tariff.id),
+        ),
+        default=None,
+    )
+
+
+def _pricing_boundaries(
+    start: datetime,
+    end: datetime,
+    tariffs: list[BillingTariffVersion],
+) -> list[datetime]:
+    boundaries = {start, end}
+    for tariff in tariffs:
+        valid_from = datetime.combine(tariff.valid_from, time.min, MOSCOW)
+        if start < valid_from < end:
+            boundaries.add(valid_from)
+        if tariff.valid_to is not None:
+            valid_to = datetime.combine(tariff.valid_to + timedelta(days=1), time.min, MOSCOW)
+            if start < valid_to < end:
+                boundaries.add(valid_to)
+    return sorted(boundaries)
+
+
+def _price_volume_segments(
+    segments: Sequence[
+        tuple[datetime, datetime, int, Decimal | None, ProductDimensionEvent | None]
+    ],
+    tariffs: list[BillingTariffVersion],
+) -> tuple[Decimal, Decimal, BillingTariffVersion | None]:
+    """Price actual liter-day intervals while keeping one ledger row per measurement.
+
+    The shared ledger permits one source row for a storage measurement.  If a rate
+    changes inside the month, ``amount`` is the exact sum of the dated intervals and
+    ``rate`` is their weighted snapshot for the single immutable ledger row.
+    """
+    charged_quantity = Decimal(0)
+    amount = Decimal(0)
+    last_tariff: BillingTariffVersion | None = None
+    for segment_start, segment_end, held, volume, _ in segments:
+        if held <= 0 or volume is None:
+            continue
+        boundaries = _pricing_boundaries(segment_start, segment_end, tariffs)
+        for left, right in pairwise(boundaries):
+            tariff = _tariff_for_day(tariffs, left.astimezone(MOSCOW).date())
+            if tariff is None:
+                continue
+            quantity = Decimal(held) * _seconds(left, right) * Decimal(volume)
+            charged_quantity += quantity
+            amount += quantity * Decimal(tariff.amount)
+            last_tariff = tariff
+    return charged_quantity, amount.quantize(Decimal("0.01")), last_tariff
+
+
+async def _measurement_pricing(
+    session: AsyncSession,
+    statement: StorageStatement,
+    measurements: list[StorageMeasurement],
+    tariffs: list[BillingTariffVersion],
+) -> dict[uuid.UUID, tuple[Decimal, Decimal, BillingTariffVersion]]:
+    product_ids = {measurement.product_id for measurement in measurements}
+    period_start_at = datetime.combine(statement.period_start, time.min, MOSCOW)
+    period_end_at = datetime.combine(statement.period_end + timedelta(days=1), time.min, MOSCOW)
+    products = {
+        product.id: product
+        for product in (
+            await session.scalars(select(Product).where(Product.id.in_(product_ids)))
+        ).all()
+    }
+    movements_by_product: dict[uuid.UUID, list[InventoryMovement]] = {}
+    movements = (
+        await session.scalars(
+            select(InventoryMovement)
+            .where(
+                InventoryMovement.tenant_id == statement.tenant_id,
+                InventoryMovement.seller_id == statement.seller_id,
+                InventoryMovement.warehouse_id == statement.warehouse_id,
+                InventoryMovement.product_id.in_(product_ids or {uuid.UUID(int=0)}),
+                InventoryMovement.created_at < period_end_at,
+            )
+            .order_by(InventoryMovement.created_at, InventoryMovement.id)
+        )
+    ).all()
+    for movement in movements:
+        movements_by_product.setdefault(movement.product_id, []).append(movement)
+    events_by_product: dict[uuid.UUID, list[ProductDimensionEvent]] = {}
+    events = (
+        await session.scalars(
+            select(ProductDimensionEvent)
+            .where(
+                ProductDimensionEvent.tenant_id == statement.tenant_id,
+                ProductDimensionEvent.product_id.in_(product_ids or {uuid.UUID(int=0)}),
+                ProductDimensionEvent.observed_at < period_end_at,
+            )
+            .order_by(ProductDimensionEvent.observed_at, ProductDimensionEvent.id)
+        )
+    ).all()
+    for event in events:
+        events_by_product.setdefault(event.product_id, []).append(event)
+
+    result: dict[uuid.UUID, tuple[Decimal, Decimal, BillingTariffVersion]] = {}
+    for measurement in measurements:
+        product = products[measurement.product_id]
+        segments = _volume_segments(
+            movements_by_product.get(measurement.product_id, []),
+            events_by_product.get(measurement.product_id, []),
+            period_start_at,
+            period_end_at,
+            legacy_volume_liters=product.volume_liters,
+        )
+        charged_quantity, amount, last_tariff = _price_volume_segments(segments, tariffs)
+        if last_tariff is None:
+            raise StorageStatementError("tariff_not_found")
+        result[measurement.id] = (charged_quantity, amount, last_tariff)
+    return result
 
 
 async def fix_storage_statement(
@@ -57,6 +187,9 @@ async def fix_storage_statement(
         return statement
     if statement.status != "draft":
         raise StorageStatementError("not_editable")
+    current_month = datetime.now(MOSCOW).date().replace(day=1)
+    if statement.period_start >= current_month:
+        raise StorageStatementError("period_not_closed")
 
     measurements = list(
         (
@@ -74,16 +207,14 @@ async def fix_storage_statement(
     if any(row.status != "calculated" for row in measurements):
         raise StorageStatementError("missing_dimensions")
 
-    BillingTariffVersion, BillingLedgerEntry = _billing_models()
-    # Prefer a seller-specific shared tariff to the tenant-wide one.  The
-    # billing model owns validity intervals; 08 must not introduce another
-    # tariff model or a storage-specific rate column.
-    tariff = await session.scalar(
+    # Load every shared tariff intersecting the month.  Pricing below applies
+    # each version only from its valid_from date and prefers seller overrides.
+    tariffs = list((await session.scalars(
         select(BillingTariffVersion)
         .where(BillingTariffVersion.tenant_id == tenant_id)
         .where(BillingTariffVersion.service_code == "storage_liter_day")
         .where(BillingTariffVersion.unit == "liter_day")
-        .where(BillingTariffVersion.valid_from <= statement.period_start)
+        .where(BillingTariffVersion.valid_from <= statement.period_end)
         .where(
             or_(
                 BillingTariffVersion.valid_to.is_(None),
@@ -96,14 +227,11 @@ async def fix_storage_statement(
                 BillingTariffVersion.seller_id == statement.seller_id,
             )
         )
-        .order_by(
-            BillingTariffVersion.seller_id.is_not(None).desc(),
-            BillingTariffVersion.valid_from.desc(),
-            BillingTariffVersion.id.desc(),
-        )
-    )
-    if tariff is None:
+        .order_by(BillingTariffVersion.valid_from, BillingTariffVersion.id)
+    )).all())
+    if not tariffs:
         raise StorageStatementError("tariff_not_found")
+    pricing = await _measurement_pricing(session, statement, measurements, tariffs)
 
     source_ids = _statement_source_ids(statement, measurements)
     existing_rows = list(
@@ -122,6 +250,12 @@ async def fix_storage_statement(
     for measurement in measurements:
         if measurement.id in existing_ids:
             continue
+        charged_quantity, amount, tariff = pricing[measurement.id]
+        effective_rate = (
+            (amount / charged_quantity).quantize(Decimal("0.01"))
+            if charged_quantity
+            else Decimal(0)
+        )
         session.add(
             BillingLedgerEntry(
                 tenant_id=tenant_id,
@@ -132,28 +266,30 @@ async def fix_storage_statement(
                 source="storage_statement",
                 source_type="storage_measurement",
                 source_id=measurement.id,
-                quantity=measurement.liter_days,
-                rate=tariff.amount,
-                amount=(Decimal(measurement.liter_days) * Decimal(tariff.amount)).quantize(
-                    Decimal("0.01")
-                ),
+                quantity=charged_quantity,
+                rate=effective_rate,
+                amount=amount,
                 occurred_at=datetime.now(UTC),
             )
         )
     if not measurements and statement.id not in existing_ids:
         # A zero statement still has one auditable ledger publication.
+        zero_tariff = _tariff_for_day(tariffs, statement.period_end) or max(
+            tariffs,
+            key=lambda item: (item.seller_id is not None, item.valid_from, str(item.id)),
+        )
         session.add(
             BillingLedgerEntry(
                 tenant_id=tenant_id,
                 seller_id=statement.seller_id,
-                tariff_version_id=tariff.id,
+                tariff_version_id=zero_tariff.id,
                 service_code="storage_liter_day",
                 unit="liter_day",
                 source="storage_statement",
                 source_type="storage_measurement",
                 source_id=statement.id,
                 quantity=Decimal(0),
-                rate=tariff.amount,
+                rate=zero_tariff.amount,
                 amount=Decimal(0),
                 occurred_at=datetime.now(UTC),
             )
@@ -190,7 +326,6 @@ async def get_fixed_storage_statement(
         raise StorageStatementError("not_found")
     # Reconstruct only this document's source measurements.  A seller may have
     # several fixed months, so a broad seller ledger query is incorrect.
-    _, BillingLedgerEntry = _billing_models()
     measurements = list(
         (
             await session.scalars(
@@ -233,7 +368,6 @@ async def get_storage_ledger_rows(
     )
     if statement is None:
         raise StorageStatementError("not_found")
-    _, BillingLedgerEntry = _billing_models()
     measurements = list((await session.scalars(select(StorageMeasurement.id).where(
         StorageMeasurement.tenant_id == tenant_id,
         StorageMeasurement.seller_id == statement.seller_id,
