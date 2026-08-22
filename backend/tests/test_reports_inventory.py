@@ -45,6 +45,7 @@ async def _seed_product_movement(
     number: int, quantity_delta: int = 1, movement_type: str = "inbound_intake",
     transfer_group_id: uuid.UUID | None = None,
     product_id: uuid.UUID | None = None,
+    created_at: datetime | None = None,
 ) -> str:
     product_id = product_id or uuid.uuid4()
     async with SessionLocal() as session:
@@ -58,7 +59,8 @@ async def _seed_product_movement(
             tenant_id=tenant_id, product_id=product_id, seller_id=uuid.UUID(seller_id),
             warehouse_id=uuid.UUID(warehouse_id), storage_location_id=uuid.UUID(location_id),
             quantity_delta=quantity_delta, movement_type=movement_type,
-            transfer_group_id=transfer_group_id, created_at=datetime(2026, 8, 1, 12, tzinfo=UTC),
+            transfer_group_id=transfer_group_id,
+            created_at=created_at or datetime(2026, 8, 1, 12, tzinfo=UTC),
         ))
         await session.commit()
     return str(product_id)
@@ -116,6 +118,33 @@ async def test_reports_inventory_uses_only_whitelisted_sorting_and_groupings(
         "/reports/inventory", headers=headers, params={**params, "sort_by": "warehouse"}
     )
     assert rejected.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_reports_inventory_interprets_offsetless_boundaries_as_moscow_time(
+    async_client: AsyncClient,
+) -> None:
+    headers, tenant_id, seller_id, warehouse_id, location_id = await _report_context(async_client)
+    await _seed_product_movement(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id,
+        location_id=location_id, number=1,
+        created_at=datetime(2026, 7, 31, 22, 30, tzinfo=UTC),
+    )
+    await _seed_product_movement(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id,
+        location_id=location_id, number=2,
+        created_at=datetime(2026, 8, 1, 21, 0, tzinfo=UTC),
+    )
+
+    response = await async_client.get(
+        "/reports/inventory",
+        headers=headers,
+        params={"date_from": "2026-08-01T00:00:00", "date_to": "2026-08-02T00:00:00"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["total"] == 1
+    assert [row["sku_code"] for row in response.json()["rows"]] == ["SKU-001"]
 
 
 @pytest.mark.asyncio

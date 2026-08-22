@@ -1,11 +1,9 @@
-# Backend Dev · 07-reporting · атом 6 · переделка по review
+# DEV · 07-reporting · атом 7 · переделка по review
 
 ## Что реализовано
 
-- `GET /reports/overview` — наивные границы периода теперь трактуются как московские календарные даты и переводятся в UTC; полуоткрытый интервал исключает движение ровно на верхней границе.
-- `reporting_service.build_overview` — дневной ряд содержит нулевые календарные дни между фактами, внутренние transfer-движения не попадают во внешние итоги, а пустой текущий и предыдущий поток по-прежнему возвращает пустую серию.
-- `reporting_service.build_overview` — свежесть Wildberries определяется по последнему успешно завершённому входящему import-job, а не по исходящей публикации остатков; более новая неуспешная попытка не выдаётся за свежие данные.
-- `reporting_service.build_inventory_report` и `build_inventory_csv` — человекопонятная классификация операций переиспользована из существующего сервиса отчёта; повреждённая пара обязана содержать ровно один `stock_transfer_out` и один `stock_transfer_in`.
+- `GET /reports/inventory` — подтверждена постраничная выдача по товарам и операциям с поиском, разрешёнными сортировками, исключением служебных складов и отдельными сторонами transfer при выборе склада.
+- `reporting_service.build_inventory_report` — подтверждены московские календарные границы для offset-less дат, человекопонятные названия операций и `integrity_error` для неполной либо повреждённой transfer-пары без эвристического достраивания.
 
 ## Миграции
 
@@ -13,36 +11,30 @@
 
 ## Тесты
 
-- `backend/tests/test_reports_overview.py` — проверяет московскую трактовку offset-less дат, полуоткрытую верхнюю границу, нулевой день внутри непустого ряда, исключение transfer из верхних итогов, отдельный текущий остаток, «—» через `change_percent=null` при нулевом расходе прошлого периода и свежесть только по успешному входящему импорту.
-- `backend/tests/test_reports_inventory.py` — проверяет русское название «Приёмка», корректную полную transfer-пару и `integrity_error` для пары с двумя сторонами `stock_transfer_out`.
+- В `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/tests/test_reports_inventory.py` добавлен API-сценарий московской границы суток: запись `2026-07-31 22:30 UTC` входит в локальный день 1 августа, а запись ровно `2026-08-01 21:00 UTC` исключается верхней границей.
+- Тем же файлом проверены обе группировки, русское название операции «Приёмка», страницы по 50 агрегатов, поиск по названию/артикулу/SKU/ШК, отсутствие служебных складов, отдельная transfer-строка и ошибка целостности для одиночной и повреждённой пары из двух `stock_transfer_out`.
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/app/services/reporting_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/app/services/inventory_movement_report_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/tests/test_reports_overview.py`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/tests/test_reports_inventory.py`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/DEV.md`
 
 ## Гейты
 
-- ЗЕЛЁНЫЙ: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && ruff check app/services/reporting_service.py app/services/inventory_movement_report_service.py tests/test_reports_overview.py tests/test_reports_inventory.py` — `All checks passed!`.
-- ЗЕЛЁНЫЙ: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && mypy app/services/reporting_service.py app/services/inventory_movement_report_service.py app/api/reports.py` — `Success: no issues found in 3 source files`.
-- ЗЕЛЁНЫЙ: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && pytest -q tests/test_reports_overview.py tests/test_reports_inventory.py` — `7 passed in 6.00s`.
-- ЗЕЛЁНЫЙ: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && git diff --check` — замечаний нет.
-- `back_guard.py` не применим: атом не добавляет новый роут; ранее созданный `GET /reports/overview` сохранён. В этой рабочей копии `scripts/ci/back_guard.py` отсутствует.
-- `check_migrations.py` не применим: миграций в атоме нет.
-- БЛОКИРОВКА СРЕДЫ: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && git add backend/app/services/reporting_service.py backend/app/services/inventory_movement_report_service.py backend/tests/test_reports_overview.py backend/tests/test_reports_inventory.py night/volna-9-recovery/cards/07-reporting/DEV.md && git commit -m "fix(reports): address backend review findings"` — Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-07-reporting1/index.lock`: `Operation not permitted`. Изменения локально реализованы, но commit SHA отсутствует.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && ruff check app/services/reporting_service.py app/api/reports.py tests/test_reports_inventory.py` — `All checks passed!`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && mypy app/services/reporting_service.py app/api/reports.py` — `Success: no issues found in 2 source files`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && pytest -q tests/test_reports_inventory.py` — `4 passed in 3.81s`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && git diff --check` — успешно, ошибок форматирования diff нет.
+- `python3 scripts/ci/back_guard.py` — не применим: переделка не добавляет роут; сам скрипт в рабочей копии отсутствует.
+- `python3 scripts/ci/check_migrations.py` — не применим: миграций нет; сам скрипт в рабочей копии отсутствует.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && git add -- backend/tests/test_reports_inventory.py night/volna-9-recovery/cards/07-reporting/DEV.md && git diff --cached --check && git diff --cached --stat && git commit -m "test(reports): cover Moscow inventory boundary"` — не выполнено: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-07-reporting1/index.lock`, ошибка `Operation not permitted`.
 
 ## Не реализовано
 
-- Frontend-находки 1, 3, 5, 7 и 8 из `REVIEW.md` не менялись: они относятся к роли `screen-dev`, а текущая роль ограничена backend.
-- Новые эндпоинты и миграции не добавлялись: переделка исправляет существующий read-only контракт и названные ревьюером backend-регрессии.
+- Находки review по списку складов, декабрьскому пресету, отображению warning и `integrity_error`, а также независимому retry относятся к frontend и не входят в роль `backend-dev` атома 7.
+- Находки по заполнению нулевых дней графика и свежести импорта относятся к сводке атома 6; в текущем атоме они не менялись.
+- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались.
 
 ## Блокеры
 
-- Git-метаданные зарегистрированного worktree находятся вне разрешённой на запись области сессии, поэтому отдельный коммит создать невозможно. Код и `DEV.md` остаются в рабочем дереве; чужие изменения `night/volna-9-recovery/JOURNAL.md` и `night/volna-9-recovery/cards/07-reporting/REVIEW.md` не добавлялись в индекс и не изменялись этой ролью.
-
-## Находки
-
-Нет.
+- Изменения локально реализованы и проверены, но не сохранены отдельным коммитом: политика файловой системы не разрешает запись в общий Git-каталог зарегистрированного worktree. Чужое изменение `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/JOURNAL.md` не изменялось и не добавлялось в индекс этой ролью.
