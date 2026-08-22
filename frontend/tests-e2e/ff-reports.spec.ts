@@ -72,6 +72,8 @@ test('FF report upper slice updates atomically and keeps table on overview retry
   let held = Promise.resolve()
   let overviewAttemptsAfterError = 0
   let inventoryCalls = 0
+  let releaseSlowTable: (() => void) | undefined
+  const slowTable = new Promise<void>((resolve) => { releaseSlowTable = resolve })
   const requestedOverviewUrls: URL[] = []
 
   await page.route('**/api/reports/overview?**', async (route) => {
@@ -134,6 +136,7 @@ test('FF report upper slice updates atomically and keeps table on overview retry
       return
     }
     const search = url.searchParams.get('search') ?? ''
+    if (search === 'summary-error') await slowTable
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify(
       search === 'empty' || search === 'no-base' || search === 'stale'
         ? { group_by: 'product', page: 1, page_size: 50, total: 0, rows: [] }
@@ -175,9 +178,13 @@ test('FF report upper slice updates atomically and keeps table on overview retry
 
   await page.getByTestId('filter-search').fill('summary-error')
   await expect(page.getByTestId('ff-reports-summary-error')).toBeVisible()
-  await expect(page.getByTestId('ff-reports-table')).toContainText('Table remains available')
+  await expect(page.getByTestId('ff-reports-table').locator('tbody .MuiSkeleton-root').first()).toBeVisible()
   const callsBeforeRetry = inventoryCalls
-  await page.getByTestId('ff-reports-summary-error').getByRole('button', { name: 'Повторить' }).click()
+  await Promise.all([
+    page.waitForResponse((response) => response.url().includes('/api/reports/overview?') && response.status() === 200),
+    page.getByTestId('ff-reports-summary-error').getByRole('button', { name: 'Повторить' }).click(),
+  ])
+  releaseSlowTable?.()
   await expect(page.getByTestId('ff-reports-metrics-balance')).toContainText('12')
   await expect(page.getByTestId('ff-reports-table')).toContainText('Table remains available')
   expect(inventoryCalls).toBe(callsBeforeRetry)

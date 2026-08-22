@@ -125,6 +125,7 @@ export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
   const [csvLoading, setCsvLoading] = useState(false)
   const [periodError, setPeriodError] = useState('')
   const abortRef = useRef<AbortController | null>(null)
+  const overviewRetryAbortRef = useRef<AbortController | null>(null)
   const tableAbortRef = useRef<AbortController | null>(null)
   const effectiveWarehouseId = warehouses.length === 1 ? warehouses[0].id : warehouseId
 
@@ -163,6 +164,7 @@ export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
 
   const load = useCallback(async () => {
     if (periodError) return
+    overviewRetryAbortRef.current?.abort()
     abortRef.current?.abort()
     const controller = new AbortController()
     abortRef.current = controller
@@ -184,20 +186,26 @@ export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
 
   const retryOverview = useCallback(async () => {
     if (periodError) return
-    abortRef.current?.abort()
+    overviewRetryAbortRef.current?.abort()
     const controller = new AbortController()
-    abortRef.current = controller
+    overviewRetryAbortRef.current = controller
     setSummaryLoading(true); setSummaryError(false); setOverview(null)
     try {
       await loadOverview(controller.signal)
     } catch (error) {
       if (!(error instanceof DOMException && error.name === 'AbortError')) setSummaryError(true)
     } finally {
-      if (abortRef.current === controller) setSummaryLoading(false)
+      if (overviewRetryAbortRef.current === controller) setSummaryLoading(false)
     }
   }, [loadOverview, periodError])
 
-  useEffect(() => { void load(); return () => abortRef.current?.abort() }, [load])
+  useEffect(() => {
+    void load()
+    return () => {
+      abortRef.current?.abort()
+      overviewRetryAbortRef.current?.abort()
+    }
+  }, [load])
 
   const changeTable = useCallback(async (nextGrouping: 'product' | 'operation', nextPage: number) => {
     tableAbortRef.current?.abort()

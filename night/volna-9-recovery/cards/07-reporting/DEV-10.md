@@ -1,31 +1,37 @@
+# DEV · 07-reporting · атом 10 · переделка по повторному review
+
+Исправлена гонка частичного отказа сводки: повторный запрос `/reports/overview` теперь использует собственный `AbortController` и не отменяет медленный запрос будущей таблицы, запущенный общей загрузкой фильтра. При смене фильтра старый retry по-прежнему отменяется, поэтому ответ от прежнего среза не может попасть в новый.
+
+Сценарий `S-33-TC-012` усилен: mock таблицы намеренно остаётся незавершённым после первого `503` сводки, оператор нажимает «Повторить», успешный повтор сводки завершается, затем отпускается исходный табличный запрос. Тест требует, чтобы таблица закончила загрузку без второго запроса.
+
+Две остальные находки повторного review уже находились в текущем `HEAD` до этого прохода и подтверждены гейтами: `MovementFlowChart` передаёт несовместимые с MUI свойства через `sx`, а `vitest.config.ts` включает `src/**/*.test.tsx`. Целевой unit-прогон действительно обнаружил четыре `.test.tsx`-файла и выполнил 9 тестов.
+
 ## Изменённые файлы
 
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/screens/ff/FfReportsPage.tsx`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/tests-e2e/ff-reports.spec.ts`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/DEV.md`
 
-В верхней части отчёта московские границы периода теперь уходят в API с явным `+03:00`, а декабрьский текущий месяц заканчивается исключающей границей `1 января` следующего года. Объекты `warnings` из backend переводятся в текст двух `WarningNotice`, неполная transfer-пара получает общий `ErrorNotice`, `StatusChip` «Ошибка» и тире для отсутствующей стороны. Повтор после независимого сбоя сводки запрашивает только overview: уже загруженные строки, группировка и страница не очищаются и не запрашиваются повторно.
-
-В FF Playwright-spec добавлены сценарии атомарной загрузки со скелетами, синхронного обновления показателей и графика после смены периода, пустого периода, отсутствующей базы сравнения, объектных WB/legacy-предупреждений, независимого retry сводки, проблемной transfer-строки и декабрьской границы года. Существующий `/frontend/tests-e2e/seller-reports.spec.ts` уже проверяет отсутствие селлерского фильтра и технического предупреждения, поэтому файл не менялся.
+`/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/tests-e2e/seller-reports.spec.ts` не менялся: требуемая seller-регрессия уже проверяет отсутствие фильтра селлера, служебного склада и технического предупреждения.
 
 ## Гейты
 
-- **КРАСНЫЙ вне разрешённых файлов:** `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npx tsc --noEmit -p tsconfig.app.json`. После устранения ошибок в `FfReportsPage.tsx` остались только три прежние TypeScript-ошибки в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/MovementFlowChart.tsx` на строках 39, 84 и 91: несовместимые с текущими MUI-типами props `alignItems`, `fontWeight` и `flexWrap`. Этот файл не входит в разрешённые файлы атома и прямо не назван ревьюером для правки.
-- **КРАСНЫЙ вне разрешённых файлов:** `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && python3 scripts/ui/ui_guard.py`. Храповик сообщает новые нарушения только в `frontend/src/App.tsx`, `frontend/src/components/WbProductPickerDialog.tsx`, `frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx` и `frontend/src/screens/v2/SellerInboundDraftScreen.tsx`; по `FfReportsPage.tsx` он отдельно сообщает улучшение «своя-кнопка 1 → 0» и «своя-таблица 1 → 0». Базовая линия не менялась.
-- **ЗЕЛЁНЫЙ:** `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npm run test:unit` — 19 файлов, 138 тестов пройдены.
-- **КРАСНЫЙ по ограничению песочницы:** `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npx playwright test tests-e2e/ff-reports.spec.ts tests-e2e/seller-reports.spec.ts --reporter=line` — webServer не смог привязаться к `127.0.0.1:18000`, ошибка ОС `operation not permitted`; тестовые действия не начались.
-- **ЗЕЛЁНЫЙ (разбор целевых тестов):** `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npx playwright test tests-e2e/ff-reports.spec.ts tests-e2e/seller-reports.spec.ts --list` — Playwright успешно разобрал 5 тестов в 2 разрешённых spec-файлах.
-- **ЗЕЛЁНЫЙ:** `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npx eslint src/screens/ff/FfReportsPage.tsx tests-e2e/ff-reports.spec.ts tests-e2e/seller-reports.spec.ts`.
+- **ЗЕЛЁНЫЙ:** `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npx tsc --noEmit -p tsconfig.app.json`.
+- **КРАСНЫЙ вне файлов атома:** `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && python3 scripts/ui/ui_guard.py`. Храповик сообщил прежние превышения baseline только в `frontend/src/App.tsx`, `frontend/src/components/WbProductPickerDialog.tsx`, `frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx` и `frontend/src/screens/v2/SellerInboundDraftScreen.tsx`; по `FfReportsPage.tsx` показаны улучшения «своя-кнопка 1 → 0» и «своя-таблица 1 → 0». Baseline не менялась.
+- **ЗЕЛЁНЫЙ:** `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npm run test:unit -- src/apps/seller/SellerApp.test.tsx src/ui-kit/MovementFlowChart.test.tsx src/ui-kit/ReportMetricStrip.test.tsx src/ui-kit/States.test.tsx` — 4 файла, 9 тестов пройдены.
+- **ЗЕЛЁНЫЙ:** `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npx eslint src/screens/ff/FfReportsPage.tsx tests-e2e/ff-reports.spec.ts tests-e2e/seller-reports.spec.ts src/ui-kit/MovementFlowChart.tsx src/apps/seller/SellerApp.test.tsx src/ui-kit/MovementFlowChart.test.tsx src/ui-kit/ReportMetricStrip.test.tsx src/ui-kit/States.test.tsx vitest.config.ts`.
+- **КРАСНЫЙ по ограничению среды до начала browser-кейсов:** `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npx playwright test tests-e2e/ff-reports.spec.ts tests-e2e/seller-reports.spec.ts --reporter=line` — API webServer не смог привязаться к `127.0.0.1:18000`, ОС вернула `operation not permitted`; production и живой кабинет Wildberries не затрагивались.
+- **ЗЕЛЁНЫЙ, разбор целевых spec:** `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npx playwright test tests-e2e/ff-reports.spec.ts tests-e2e/seller-reports.spec.ts --list` — Playwright обнаружил 5 тестов в 2 файлах, включая усиленный retry-кейс и seller-регрессию.
 - **ЗЕЛЁНЫЙ:** `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && git diff --check`.
+- **КРАСНЫЙ по ограничению Git-каталога:** `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && git add -- frontend/src/screens/ff/FfReportsPage.tsx frontend/tests-e2e/ff-reports.spec.ts night/volna-9-recovery/cards/07-reporting/DEV.md && git diff --cached --check && git diff --cached --stat && git commit -m "fix(reports): preserve table during summary retry"` — Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-07-reporting1/index.lock`: `Operation not permitted`. Чужой `night/volna-9-recovery/JOURNAL.md` не добавлялся.
 
-Перед проверками зависимости восстановлены без сети командой `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npm ci --offline`: 285 пакетов установлены из локального кэша, аудит не нашёл уязвимостей.
+Полные backend `pytest`, `ruff check .` и `mypy .` не запускались в соответствии с атомарной границей.
 
 ## Не реализовано
 
-- Находка review №1 не исправлена: фильтрация служебных складов должна быть сделана в `/frontend/src/App.tsx` и `/frontend/src/apps/seller/SellerApp.tsx`, но оба файла находятся вне трёх файлов текущего атома и вне разрешённой роли `screen-dev`. Сам экран по-прежнему может скрыть фильтр единственного склада только при условии, что родитель передал уже отфильтрованный список операционных складов.
-- Находки review №4, 6, 9 и 10 относятся к `/backend/app/services/reporting_service.py`; backend не изменялся. В текущей рабочей копии в сервисе уже видны отдельные ремонты календарных нулевых дней, входящей WB-свежести, целостности transfer-типов и человекопонятных названий операций, но роль `screen-dev` не имеет права объявлять их проверенными этим атомом.
-- Буквально подтвердить браузером целевые сценарии не удалось из-за системного запрета на локальный порт webServer. Spec-файлы синтаксически разобраны Playwright, но это не заменяет фактический прогон.
-- Обязательные `tsc` и `ui_guard.py` нельзя сделать зелёными, не меняя файлы вне разрешённой границы. Эти внешние нарушения не маскировались обновлением baseline.
+- Буквально подтвердить усиленный `S-33-TC-012` и seller-регрессию живым Playwright не удалось: локальный API запрещено поднимать системной политикой sandbox. Spec изменён, TypeScript и ESLint зелёные, но это не заменяет browser-прогон.
+- `ui_guard.py` нельзя сделать зелёным в границах атома: четыре превышения находятся в чужих файлах и не связаны с текущим diff. Базовая линия не обновлялась.
+- Ремонт локально реализован, но не сохранён отдельным Git-коммитом: sandbox разрешает запись в рабочую копию, но запрещает запись в общий Git-каталог зарегистрированного worktree. Проверенного commit SHA для этого прохода нет.
 
 ## Находки
 
