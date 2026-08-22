@@ -196,6 +196,38 @@ async def test_new_sync_does_not_fetch_paginated_orders(monkeypatch: pytest.Monk
     upsert.assert_awaited_once()
 
 
+# TC-NEW-WB-SYNC-004: the existing manual sync remains a full status/supply reconciliation.
+@pytest.mark.asyncio
+async def test_legacy_manual_sync_keeps_status_and_supply_reconciliation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = _SyncSession()
+    new_fetch = AsyncMock(return_value=[])
+    page_fetch = AsyncMock(return_value=([], None))
+    status_sync = AsyncMock(return_value=2)
+    supply_link = AsyncMock(return_value={"supply_link_candidates": 1})
+    monkeypatch.setattr(
+        orders_service, "_resolve_marketplace_api_token", AsyncMock(return_value="token")
+    )
+    monkeypatch.setattr(orders_service, "fetch_marketplace_orders_new", new_fetch)
+    monkeypatch.setattr(orders_service, "fetch_marketplace_orders_page", page_fetch)
+    monkeypatch.setattr(orders_service, "sync_order_statuses", status_sync)
+    monkeypatch.setattr(
+        orders_service, "link_confirmed_orders_to_wb_supplies", supply_link
+    )
+
+    result = await orders_service.sync_seller_orders(
+        session, uuid.uuid4(), uuid.uuid4(), object()  # type: ignore[arg-type]
+    )
+
+    new_fetch.assert_awaited_once()
+    page_fetch.assert_awaited_once()
+    status_sync.assert_awaited_once()
+    supply_link.assert_awaited_once()
+    assert result["statuses_updated"] == 2
+    assert result["supply_link_candidates"] == 1
+
+
 # TC-NEW-WB-SYNC-002: reconcile consumes all cursors and never reports success after a page error.
 @pytest.mark.asyncio
 async def test_reconcile_walks_cursor_and_fails_incomplete_pass(

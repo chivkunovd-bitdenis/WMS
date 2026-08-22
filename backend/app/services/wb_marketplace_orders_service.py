@@ -1453,14 +1453,142 @@ async def sync_seller_orders(
     *,
     warehouse_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
-    """Backward-compatible alias for the lightweight new-orders sync."""
-    return await sync_new_orders_for_seller(
-        session,
-        tenant_id,
-        seller_id,
-        http_client,
-        warehouse_id=warehouse_id,
-    )
+    """Run the legacy manual sync without changing its full reconciliation contract."""
+    _ = warehouse_id  # ignored: WMS warehouse resolved per order via WB binding
+    api_token = await _resolve_marketplace_api_token(session, tenant_id, seller_id)
+
+    try:
+        new_rows = await fetch_marketplace_orders_new(http_client, api_token=api_token)
+    except WildberriesClientError as exc:
+        ref = wb_error_ref()
+        log_wb_client_error(
+            logger,
+            "fbs orders WB new-orders failed",
+            exc,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            ref=ref,
+        )
+        raise _wb_orders_error_from_client(exc, ref=ref) from exc
+
+    created = 0
+    upserted = 0
+    orders_received = 0
+    orders_page_error: str | None = None
+    status_sync_error: str | None = None
+    supply_link_result: dict[str, Any] = {}
+    pool_debit_totals: dict[str, int] = {"debited": 0, "shortfall": 0}
+
+    for row in new_rows:
+        _order, was_created = await upsert_order_from_wb_row(
+            session, tenant_id, seller_id, row, pool_debit_totals=pool_debit_totals
+        )
+        upserted += 1
+        orders_received += 1
+        if was_created:
+            created += 1
+    if orders_received:
+        await session.commit()
+
+    next_token: int | None = None
+    seen_next_tokens: set[int] = set()
+    while True:
+        try:
+            page_rows, next_token = await fetch_marketplace_orders_page(
+                http_client,
+                api_token=api_token,
+                next_token=next_token,
+            )
+        except WildberriesClientError as exc:
+            ref = wb_error_ref()
+            log_wb_client_error(
+                logger,
+                "fbs orders WB page failed",
+                exc,
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                ref=ref,
+            )
+            error = _wb_orders_error_from_client(exc, ref=ref)
+            if orders_received:
+                orders_page_error = error.code
+                await session.rollback()
+                break
+            raise error from exc
+
+        if next_token is not None and next_token in seen_next_tokens:
+            error = WbMarketplaceOrdersError(
+                "cursor_cycle",
+                message="Wildberries returned a repeated orders cursor",
+                context={"next_token": next_token},
+                retryable=True,
+            )
+            await session.rollback()
+            if orders_received:
+                orders_page_error = error.code
+                break
+            raise error
+        if next_token is not None:
+            seen_next_tokens.add(next_token)
+
+        if not page_rows:
+            break
+        for row in page_rows:
+            _order, was_created = await upsert_order_from_wb_row(
+                session, tenant_id, seller_id, row, pool_debit_totals=pool_debit_totals
+            )
+            upserted += 1
+            orders_received += 1
+            if was_created:
+                created += 1
+        await session.commit()
+        if next_token is None:
+            break
+
+    statuses_updated = 0
+    if orders_page_error is None:
+        try:
+            statuses_updated = await sync_order_statuses(
+                session, tenant_id, seller_id, http_client, api_token
+            )
+            await session.commit()
+        except WbMarketplaceOrdersError as exc:
+            await session.rollback()
+            if not orders_received:
+                raise
+            status_sync_error = exc.code
+        if status_sync_error is None:
+            try:
+                supply_link_result = await link_confirmed_orders_to_wb_supplies(
+                    session, tenant_id, seller_id, http_client, api_token
+                )
+                await session.commit()
+            except Exception as exc:
+                await session.rollback()
+                logger.exception(
+                    "wb supply link failed: seller=%s step=local error=%s",
+                    seller_id,
+                    type(exc).__name__,
+                )
+                supply_link_result = _empty_supply_link_result(
+                    supply_link_error="local_exception",
+                )
+
+    result: dict[str, Any] = {
+        "seller_id": str(seller_id),
+        "orders_received": orders_received,
+        "orders_upserted": upserted,
+        "orders_created": created,
+        "statuses_updated": statuses_updated,
+        "stock_pool_debited_units": pool_debit_totals["debited"],
+        "stock_pool_debit_shortfall_units": pool_debit_totals["shortfall"],
+    }
+    result.update(supply_link_result)
+    if orders_page_error is not None:
+        result["orders_page_error"] = orders_page_error
+    if status_sync_error is not None:
+        result["status_sync_error"] = status_sync_error
+    return result
 
 
 async def sync_new_orders_for_seller(
