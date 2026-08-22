@@ -11,7 +11,12 @@ test('billing invoice opens, reveals documents and starts print', async ({ page 
   await expect(page.getByRole('dialog', { name: /Счёт СЧ-2026-00041/ })).toBeVisible()
   await page.getByRole('button', { name: 'Показать документы' }).click()
   await expect(page.getByTestId('billing-invoice-documents')).toContainText('ПР-000141')
-  await expect(page.getByTestId('billing-invoice-print')).toBeVisible()
+  const printWindow = page.waitForEvent('popup')
+  await Promise.all([
+    printWindow,
+    page.getByTestId('billing-invoice-print').click(),
+  ])
+  await expect((await printWindow).locator('body')).toContainText('СЧ-2026-00041')
 })
 
 // S-31-TC-008 — Given an issued invoice, When cancellation is confirmed twice, Then history has one cancelled invoice and no second cancellation request.
