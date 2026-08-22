@@ -66,3 +66,5 @@
 20:35   06-picking-list-order · dev: фича 1/6 сохранена 663db9e3466a
 21:15   06-picking-list-order · backend-dev: нет файла DEV.md (код 124, попытка 1)
 21:18   06-picking-list-order · backend-dev: готово
+21:18   06-picking-list-order · dev: фича 2/6 сохранена 373ea249c0a5
+21:21   06-picking-list-order · backend-dev: готово

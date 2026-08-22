@@ -770,6 +770,17 @@ async def test_fbs_supply_picking_list_grouping(
         (6, 6),
         (7, 7),
     ]
+    assert [
+        uuid.UUID(order_id)
+        for item in items
+        for order_id in item["order_ids"]
+    ] == canonical_order_ids
+    assert all(
+        item["number_end"] - item["number_start"] + 1
+        == item["quantity"]
+        == len(item["order_ids"])
+        for item in items
+    )
 
     repeated = await async_client.get(
         f"/operations/fbs-supplies/{supply['id']}/picking-list",
