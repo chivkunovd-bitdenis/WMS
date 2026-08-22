@@ -1287,6 +1287,7 @@ async def list_supply_worklist(
     tenant_id: uuid.UUID,
     *,
     seller_id: uuid.UUID | None = None,
+    warehouse_id: uuid.UUID | None = None,
     status_group: str = "active",
     limit: int = 100,
 ) -> dict[str, Any]:
@@ -1302,6 +1303,16 @@ async def list_supply_worklist(
     statuses = status_map.get(status_group)
     if statuses is None:
         raise FbsSupplyError("invalid_status_group", http_status=400)
+    if warehouse_id is not None:
+        operational_warehouse = await session.scalar(
+            select(Warehouse.id).where(
+                Warehouse.id == warehouse_id,
+                Warehouse.tenant_id == tenant_id,
+                Warehouse.is_operational.is_(True),
+            )
+        )
+        if operational_warehouse is None:
+            raise FbsSupplyError("warehouse_not_found", http_status=404)
     stmt = (
         select(FbsSupply)
         .options(
@@ -1315,6 +1326,8 @@ async def list_supply_worklist(
     )
     if seller_id is not None:
         stmt = stmt.where(FbsSupply.seller_id == seller_id)
+    if warehouse_id is not None:
+        stmt = stmt.where(FbsSupply.warehouse_id == warehouse_id)
     supplies = list((await session.execute(stmt)).scalars().all())
     if not supplies:
         return {"items": [], "server_now": datetime.now(tz=UTC).isoformat()}

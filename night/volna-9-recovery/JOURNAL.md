@@ -131,3 +131,5 @@
 21:17   04-warehouse-switch · backend-dev: готово
 21:17   04-warehouse-switch · dev: фича 1/13 сохранена 99bff3282c3e
 21:22   04-warehouse-switch · backend-dev: готово
+21:22   04-warehouse-switch · dev: фича 2/13 сохранена 6c3c57429688
+21:28   04-warehouse-switch · backend-dev: готово

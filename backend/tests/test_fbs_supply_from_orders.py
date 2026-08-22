@@ -1438,6 +1438,88 @@ async def test_supply_worklist_groups_active_orders_by_supply(
     assert rows[0]["planned_shipment_date"] is None
 
 
+# TC-NEW-04-WH-worklist — warehouse context filters without rewriting historical supplies.
+@pytest.mark.asyncio
+async def test_supply_worklist_filters_by_operational_warehouse(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    me = await async_client.get("/auth/me", headers=headers)
+    tenant_id = uuid.UUID(me.json()["tenant_id"])
+    seller_id, source_warehouse_id, location_id = await _setup_seller_with_token(
+        async_client, headers, f"worklist-warehouse-{suffix}"
+    )
+    target = await async_client.post(
+        "/warehouses",
+        headers=headers,
+        json={"name": "Consolidation B", "code": f"worklist-b-{uuid.uuid4().hex[:10]}"},
+    )
+    assert target.status_code in (200, 201), target.text
+    target_warehouse_id = target.json()["id"]
+    product = await _create_product(
+        async_client,
+        headers,
+        seller_id,
+        sku=f"worklist-warehouse-{suffix[-6:]}",
+    )
+    order_ids = [
+        await _create_ready_order(
+            tenant_id,
+            uuid.UUID(seller_id),
+            uuid.UUID(source_warehouse_id),
+            uuid.UUID(location_id),
+            product,
+            order_id=859310 + index,
+        )
+        for index in range(2)
+    ]
+    supply_names = ("Source warehouse supply", "Target warehouse supply")
+    for name, order_id, selected_warehouse_id in zip(
+        supply_names,
+        order_ids,
+        (source_warehouse_id, target_warehouse_id),
+        strict=True,
+    ):
+        created = await async_client.post(
+            "/operations/fbs-supplies/from-orders",
+            headers=headers,
+            json={
+                "name": name,
+                "order_ids": [str(order_id)],
+                "planned_delivery_type": "warehouse_sc",
+                "selected_warehouse_id": selected_warehouse_id,
+                "idempotency_key": str(uuid.uuid4()),
+            },
+        )
+        assert created.status_code == 201, created.text
+
+    filtered = await async_client.get(
+        "/operations/fbs-supplies/worklist",
+        headers=headers,
+        params={"status_group": "active", "warehouse_id": target_warehouse_id},
+    )
+    assert filtered.status_code == 200, filtered.text
+    assert [row["name"] for row in filtered.json()["items"]] == [supply_names[1]]
+    assert filtered.json()["items"][0]["wms_warehouse"]["id"] == target_warehouse_id
+
+    source_filtered = await async_client.get(
+        "/operations/fbs-supplies/worklist",
+        headers=headers,
+        params={"status_group": "active", "warehouse_id": source_warehouse_id},
+    )
+    assert source_filtered.status_code == 200, source_filtered.text
+    assert [row["name"] for row in source_filtered.json()["items"]] == [supply_names[0]]
+
+    target_again = await async_client.get(
+        "/operations/fbs-supplies/worklist",
+        headers=headers,
+        params={"status_group": "active", "warehouse_id": target_warehouse_id},
+    )
+    assert target_again.status_code == 200, target_again.text
+    assert target_again.json()["items"][0]["wms_warehouse"]["id"] == target_warehouse_id
+
+
 @pytest.mark.asyncio
 async def test_existing_supply_add_orders_partial_readback_binds_only_confirmed(
     async_client: AsyncClient,

@@ -1049,6 +1049,7 @@ async def get_fbs_supplies_worklist(
     user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
     seller_id: Annotated[uuid.UUID | None, Query()] = None,
+    warehouse_id: Annotated[uuid.UUID | None, Query()] = None,
     status_group: Annotated[str, Query()] = "active",
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> FbsSupplyWorklistOut:
@@ -1057,6 +1058,7 @@ async def get_fbs_supplies_worklist(
             session,
             user.tenant_id,
             seller_id=seller_id,
+            warehouse_id=warehouse_id,
             status_group=status_group,
             limit=limit,
         )
