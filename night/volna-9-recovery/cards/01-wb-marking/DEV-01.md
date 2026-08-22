@@ -2,8 +2,9 @@
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/services/wildberries_fbs_client.py` — batch DTO сохраняет `decision`, `value`, `reason`; первый ответ `429` ожидает числовой `Retry-After` и повторяет ту же пачку ровно один раз.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_wildberries_marketplace_fbs_client.py` — проверки полного `metaDetails`, единственного повтора `429`, ошибок `4xx/5xx` и неразбираемого ответа.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/services/wildberries_fbs_client.py` — batch DTO сохраняет `decision`, `value` и `reason`; первый ответ `429` ожидает числовой `Retry-After` и повторяет ту же пачку ровно один раз. Реализация уже находилась в текущем `HEAD`, дополнительный backend-дифф не потребовался.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_wildberries_marketplace_fbs_client.py` — тесты полного `metaDetails`, единственного повтора `429`, ошибок `4xx/5xx` и неразбираемого ответа уже находились в текущем `HEAD`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/night/volna-9-recovery/cards/01-wb-marking/DEV.md` — отчёт этого запуска.
 
 ## Миграции
 
@@ -11,22 +12,20 @@
 
 ## Тесты
 
-- `test_fetch_orders_meta_batch_exact_contract_and_parse` проверяет сохранение `decision`, `value`, `reason`.
-- `test_fetch_orders_meta_batch_retries_429_once_after_retry_after` проверяет ровно два запроса и ожидание `Retry-After`.
-- Проверки ошибок подтверждают, что неуспешный или неразбираемый ответ не превращается в DTO-успех.
+- `tests/test_wildberries_marketplace_fbs_client.py`: 17 тестов — сохранение `decision/value/reason`, повтор batch-запроса ровно один раз после `429`, отсутствие повторов для `4xx/5xx`, отказ на неразбираемом теле и ограничение пачки 100.
 
 ## Гейты
 
-- `ruff check .` — FAIL: в полном backend есть ранее существующие ошибки в несвязанных файлах; целевые файлы проходят (`All checks passed`).
-- `mypy .` — FAIL/не пройден в полном backend из-за ранее существующих ошибок; целевой `app/services/wildberries_fbs_client.py` проходит (`Success: no issues found`).
-- `pytest` — релевантный набор PASS: 17 passed; полный suite не запускался.
-- `python3 scripts/ci/back_guard.py` — недоступен: файл отсутствует в рабочей копии.
-- `python3 scripts/ci/check_migrations.py` — недоступен: файл отсутствует в рабочей копии; миграций нет.
+- `ruff check app/services/wildberries_fbs_client.py tests/test_wildberries_marketplace_fbs_client.py` — PASS.
+- `mypy app/services/wildberries_fbs_client.py` — PASS.
+- `pytest -q tests/test_wildberries_marketplace_fbs_client.py` — PASS: 17 passed.
+- `python3 scripts/ci/back_guard.py` — BLOCKED: файл отсутствует в рабочей копии, код завершения 2.
+- `python3 scripts/ci/check_migrations.py` — BLOCKED: файл отсутствует в рабочей копии, код завершения 2; миграций нет.
 
 ## Не реализовано
 
-- Остальные атомы карточки не затрагивались: `wb_orphaned`, применение ответа к локальной привязке, автополлер пачек и удаление устаревшего одиночного чтения.
+- Ничего из атома 1: требуемое поведение уже присутствует в `HEAD`; остальные атомы карточки не затрагивались.
 
 ## Находки
 
-- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались и не изменялись.
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных, боевой прод и живой кабинет Wildberries не читались и не изменялись.
