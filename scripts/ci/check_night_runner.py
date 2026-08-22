@@ -542,6 +542,18 @@ def main() -> int:
                         n.разработать_по_фичам("x", t, t, рабочая, 1)[0], True)
             проверь("rework: process-only находка не вызывает разработчика", вызовы_dev, [])
 
+            with mock.patch.object(n, "_git") as fake_git:
+                fake_git.side_effect = [
+                    mock.Mock(returncode=0, stdout=(
+                        "backend/app/a.py\n"
+                        "docs/arch-backup/08-storage--ARCH.md\n"
+                        ".claude/agents/reviewer.md\n"
+                        "scripts/night.py\n"), stderr=""),
+                    mock.Mock(returncode=0, stdout="", stderr=""),
+                ]
+                проверь("review: процессные и архивные файлы не попадают в product diff",
+                        n.дифф_реализации(t, "base"), ["backend/app/a.py"])
+
             выбор_модели = []
 
             def fake_rework_step(*_args, **kwargs):

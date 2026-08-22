@@ -402,8 +402,12 @@ def секции(текст: str) -> set[str]:
 # Что роли кладут по ходу работы. Это следы процесса, а не изменение продукта, и ревьюер
 # не должен считать их выходом за границы экрана: в волне r04 он именно так забраковал
 # карточки 01 и 02 за файлы `tests/cases/*.md`, которые писал тестировщик по своей роли.
-СТАДИЙНЫЕ = ("night/", "tasks/", "tests/cases/", "docs/evidence/", "docs/blockers/",
-             "docs/process/", "docs/product/ui-inventory.json")
+СТАДИЙНЫЕ = (
+    "night/", "tasks/", "tests/cases/", "docs/evidence/", "docs/blockers/",
+    "docs/process/", "docs/arch-backup/", "docs/product/ui-inventory.json",
+    ".claude/agents/", "scripts/night.py", "scripts/night_health.py",
+    "scripts/ci/check_night_runner.py", "scripts/stand/up.sh",
+)
 
 
 def дифф_реализации(корень: Path, base_sha: str = "") -> list[str]:
