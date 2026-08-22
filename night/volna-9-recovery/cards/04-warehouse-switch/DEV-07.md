@@ -1,22 +1,24 @@
-# DEV · 04-warehouse-switch · screen-dev
+# DEV · 04-warehouse-switch · атом 7
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/InboundScreen.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/OutboundScreen.tsx`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/tests-e2e/inbound-intake.spec.ts`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/tests-e2e/outbound-submit-storage.spec.ts`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md`
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` — не подтверждён: локальный `tsc` отсутствует, а `npx` не завершился в рабочей копии без локальных зависимостей.
-- `python3 scripts/ui/ui_guard.py` — красный из-за уже существующих нарушений в соседних экранах; новых нарушений в `InboundScreen.tsx` и `OutboundScreen.tsx` нет. Для `InboundScreen.tsx` guard показывает улучшение `691 → 681` строк.
-- `npm run test:unit` — красный технически: `vitest: command not found`.
-
-Проверены сценарии S-22/S-24: при одном операционном складе `WarehouseContextSwitch` не рендерится; при нескольких он расположен до списка и формы, а выбор передаётся через `onWarehouseChange`. При открытом документе значение берётся из `inboundDetail.warehouse_id`/`outboundDetail.warehouse_id`, переключатель блокируется, и отдельного поля «Склад для заявки/отгрузки» в формах нет.
+- `npx tsc --noEmit -p tsconfig.app.json` (каталог `frontend/`) — зелёный.
+- `python3 scripts/ui/ui_guard.py` (корень) — красный из-за пяти уже существующих отклонений вне разрешённых файлов атома: `src/components/WbProductPickerDialog.tsx`, `src/screens/v2/FfFbsOrdersScreen.tsx`, `src/screens/v2/FfFbsStockSyncScreen.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`. Базовую линию не обновлял.
+- `npm run test:unit -- --run` (каталог `frontend/`) — не запустился: `sh: vitest: command not found`.
+- `npx playwright test tests-e2e/inbound-intake.spec.ts tests-e2e/outbound-submit-storage.spec.ts --workers=1` (каталог `frontend/`) — зелёный.
+- `git diff --check` — зелёный.
+- Commit не создан: Git не разрешил создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-04-warehouse-switch/index.lock` (`Operation not permitted`). Результат остаётся локальным незакоммиченным diff.
 
 ## Не реализовано
 
-- Находки REVIEW.md по backend, `App.tsx`, FBS-подбору, упаковке, перемещениям и документации не относятся к разрешённым файлам этого screen-dev атома и не изменялись.
-- Полный E2E-прогон не выполнен из-за отсутствующих локальных frontend-зависимостей; это ограничение проверки, а не изменение контракта.
+- Нет. Экраны S-22 и S-24 уже получают склад нового документа из сессионного контекста и показывают ячейки открытого документа; ревью-пункт №15 закрыт проверками для двух складов. Остальные находки вердикта относятся к другим экранам либо серверному слою и не входят в этот атом.
+
+## Находки
+
+- В этой рабочей копии unit-зависимость `vitest` отсутствует, поэтому обязательный unit-гейт нельзя выполнить до восстановления зависимостей.

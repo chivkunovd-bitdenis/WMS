@@ -152,4 +152,32 @@ test('outbound submit without cell reserves warehouse; post needs cell', async (
     storageForm.getByTestId('outbound-line-storage-save').click(),
   ]);
   await expect(page.getByTestId('outbound-detail-status')).toContainText('submitted');
+
+  const southWarehouse = await page.request.post(`${e2eApi}/warehouses`, {
+    headers: auth,
+    data: JSON.stringify({ name: 'WH South', code: `wh-south-${Date.now()}` }),
+  });
+  expect(southWarehouse.ok()).toBeTruthy();
+  const southWarehouseId = String(((await southWarehouse.json()) as { id: string }).id);
+  const southLocation = await page.request.post(`${e2eApi}/warehouses/${southWarehouseId}/locations`, {
+    headers: auth,
+    data: JSON.stringify({ code: 'OSS-SOUTH' }),
+  });
+  expect(southLocation.ok()).toBeTruthy();
+
+  // TC-NEW-04-004: контекст отгрузки задаёт склад нового документа без второго поля формы.
+  await page.reload();
+  await page.getByTestId('outbound-warehouse-context-button').click();
+  await page.getByTestId(`outbound-warehouse-context-option-${southWarehouseId}`).click();
+  await expect(page.getByTestId('outbound-warehouse-context-button')).toContainText('WH South');
+  await expect(page.locator('[name="outbound_warehouse_id"]')).toHaveCount(0);
+  const [createdOutbound] = await Promise.all([
+    waitForPostOk(
+      page,
+      '/api/operations/outbound-shipment-requests',
+      (url) => !url.includes('/lines') && !url.includes('/submit'),
+    ),
+    page.getByTestId('outbound-create-submit').click(),
+  ]);
+  expect(((await createdOutbound.json()) as { warehouse_id: string }).warehouse_id).toBe(southWarehouseId);
 });

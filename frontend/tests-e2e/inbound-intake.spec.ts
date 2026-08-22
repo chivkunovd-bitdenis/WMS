@@ -55,6 +55,24 @@ test('create inbound request, add line, submit — UI and API', async ({ page })
   await expect(page.getByTestId('inbound-warehouse-context')).toHaveCount(0);
   await expect(page.getByTestId('inbound-create-submit')).toBeEnabled();
 
+  const southWarehouse = await page.request.post('/api/warehouses', {
+    headers: h,
+    data: { name: 'Склад Юг', code: `south-${Date.now()}` },
+  });
+  expect(southWarehouse.ok()).toBeTruthy();
+  const southWarehouseId = String(((await southWarehouse.json()) as { id: string }).id);
+  const southLocation = await page.request.post(`/api/warehouses/${southWarehouseId}/locations`, {
+    headers: h,
+    data: { code: 'RCV-SOUTH' },
+  });
+  expect(southLocation.ok()).toBeTruthy();
+
+  // TC-NEW-04-003: смена контекста до создания задаёт склад заявки и оставляет только его ячейки.
+  await page.reload();
+  await page.getByTestId('inbound-warehouse-context-button').click();
+  await page.getByTestId(`inbound-warehouse-context-option-${southWarehouseId}`).click();
+  await expect(page.getByTestId('inbound-warehouse-context-button')).toContainText('Склад Юг');
+
   const [createRes] = await Promise.all([
     waitForPostOk(
       page,
@@ -64,7 +82,9 @@ test('create inbound request, add line, submit — UI and API', async ({ page })
     page.getByTestId('inbound-create-submit').click(),
   ]);
   expect(createRes.ok()).toBeTruthy();
-  const requestId = String(((await createRes.json()) as { id: string }).id);
+  const createdRequest = (await createRes.json()) as { id: string; warehouse_id: string };
+  expect(createdRequest.warehouse_id).toBe(southWarehouseId);
+  const requestId = String(createdRequest.id);
   await setInboundPlannedBoxes(page.request, h, requestId, 1);
   await expect(page.getByTestId('operations-error')).toHaveCount(0);
   await expect(page.getByTestId('inbound-detail-status')).toContainText('draft');
@@ -77,7 +97,9 @@ test('create inbound request, add line, submit — UI and API', async ({ page })
   await page.getByTestId('inbound-line-qty').fill('4');
   await page
     .getByTestId('inbound-line-location')
-    .selectOption({ label: 'RCV-E2E' });
+    .selectOption({ label: 'RCV-SOUTH' });
+  await expect(page.getByTestId('inbound-line-location').locator('option')).toHaveCount(2);
+  await expect(page.getByTestId('inbound-line-location')).not.toContainText('RCV-E2E');
 
   const [lineRes] = await Promise.all([
     waitForPostOk(page, '/api/operations/inbound-intake-requests', (u) =>
