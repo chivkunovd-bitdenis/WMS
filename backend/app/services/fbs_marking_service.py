@@ -295,20 +295,39 @@ def _wb_order_verdict(
     optional = list(getattr(order, "optional_meta_json", None) or [])
     requested = required + [kind for kind in optional if kind not in required]
     states: list[dict[str, Any]] = []
+    raw_order_details = getattr(order, "meta_details_json", None)
+    order_details: dict[str, Any] = (
+        raw_order_details if isinstance(raw_order_details, dict) else {}
+    )
     for kind in requested:
         is_required = kind in required
         mark = current_order_marking(markings, kind, include_rejected=True)
-        details: dict[str, Any] = {}
+        stored_details = order_details.get(kind)
+        details: dict[str, Any] = (
+            dict(stored_details) if isinstance(stored_details, dict) else {}
+        )
         raw_details = getattr(mark, "meta_details_json", None) if mark else None
         if isinstance(raw_details, dict):
-            details = raw_details
-        states.append({
-            "kind": kind,
-            "required": is_required,
-            "decision": details.get("decision") if mark else None,
-            "reason": getattr(mark, "reason", None) if mark else None,
-            "status": mark.meta_status if mark else META_STATUS_MISSING,
-        })
+            for key, value in raw_details.items():
+                if details.get(key) is None and value is not None:
+                    details[key] = value
+        states.append(
+            {
+                "kind": kind,
+                "required": is_required,
+                # WB can return optional/notRequired without a local marking row.
+                "decision": details.get("decision"),
+                "reason": (
+                    details.get("reason")
+                    if "reason" in details
+                    else getattr(mark, "reason", None)
+                ),
+                "status": details.get(
+                    "status",
+                    mark.meta_status if mark else META_STATUS_MISSING,
+                ),
+            }
+        )
 
     if not states:
         return {
@@ -345,7 +364,15 @@ def _wb_order_verdict(
         state["decision"] is None and not state["required"]
         for state in states
     ) or not decisions.issubset(
-        {"filled", "optional", "notrequired", "not_required", "pending", "required"}
+        {
+            "accepted",
+            "filled",
+            "optional",
+            "notrequired",
+            "not_required",
+            "pending",
+            "required",
+        }
     ) or any(
         state["decision"] is None and state["status"] not in {META_STATUS_MISSING}
         for state in states
@@ -370,7 +397,12 @@ def _wb_order_verdict(
             "reason": None,
             "delivery_allowed": True,
         }
-    return {"signature": "WB: принято", "tone": "ok", "reason": None, "delivery_allowed": True}
+    return {
+        "signature": "WB: принято",
+        "tone": "ok",
+        "reason": None,
+        "delivery_allowed": True,
+    }
 
 
 def compute_delivery_allowed(
@@ -394,15 +426,21 @@ def build_order_metadata(
 ) -> dict[str, Any]:
     required = list(order.required_meta_json or [])
     optional = list(order.optional_meta_json or [])
+    raw_order_details = getattr(order, "meta_details_json", None)
+    order_details: dict[str, Any] = (
+        raw_order_details if isinstance(raw_order_details, dict) else {}
+    )
     states: list[dict[str, Any]] = []
     for kind in required + [k for k in optional if k not in required]:
         mark = current_order_marking(markings, kind, include_rejected=True)
+        stored_details = order_details.get(kind)
+        details = stored_details if isinstance(stored_details, dict) else {}
         if mark is not None:
             states.append(
                 {
                     "kind": kind,
-                    "status": mark.meta_status,
-                    "reason": mark.reason,
+                    "status": details.get("status", mark.meta_status),
+                    "reason": details.get("reason", mark.reason),
                     "source": mark.source,
                     # Хвост кода — чтобы оператор глазами сверил строку на экране
                     # с тем, что напечатано на этикетке. Весь код не отдаём: он
@@ -414,10 +452,10 @@ def build_order_metadata(
             states.append(
                 {
                     "kind": kind,
-                    "status": META_STATUS_MISSING,
-                    "reason": None,
-                    "source": None,
-                    "value_tail": None,
+                    "status": details.get("status", META_STATUS_MISSING),
+                    "reason": details.get("reason"),
+                    "source": "wb" if details else None,
+                    "value_tail": _marking_value_tail(details.get("value")),
                 }
             )
     verdict = _wb_order_verdict(order, markings)
@@ -565,9 +603,16 @@ def _reset_stale_wb_verdict(
 ) -> None:
     """Fail closed before applying a fresh WB metadata response."""
     requested = set(order.required_meta_json or []) | set(order.optional_meta_json or [])
+    stale_details: dict[str, Any] = {}
     for kind in requested:
         marking = current_order_marking(markings, kind, include_rejected=True)
         if marking is None:
+            stale_details[kind] = {
+                "status": META_STATUS_MISSING,
+                "value": None,
+                "decision": None,
+                "reason": None,
+            }
             continue
         marking.meta_status = META_STATUS_UNKNOWN
         marking.reason = None
@@ -576,7 +621,13 @@ def _reset_stale_wb_verdict(
             "value": marking.value,
             "reason": None,
         }
-    order.meta_details_json = _meta_details_from_markings(markings)
+        stale_details[kind] = {
+            "status": META_STATUS_UNKNOWN,
+            "value": marking.value,
+            "decision": None,
+            "reason": None,
+        }
+    order.meta_details_json = stale_details
     order.metadata_delivery_allowed = compute_delivery_allowed(order, markings)
     order.metadata_last_checked_at = datetime.now(tz=UTC)
 
@@ -626,7 +677,14 @@ async def _sync_order_meta_from_wb(
                 has_value=True,
             )
 
-    order.meta_details_json = _meta_details_from_markings(markings)
+    persisted_details = (
+        dict(order.meta_details_json)
+        if isinstance(order.meta_details_json, dict)
+        else {}
+    )
+    persisted_details.update(_meta_details_from_markings(markings))
+    persisted_details.update(_meta_details_from_wb(tuple(details_by_kind.values())))
+    order.meta_details_json = persisted_details
     order.metadata_delivery_allowed = compute_delivery_allowed(order, markings)
     order.metadata_last_checked_at = datetime.now(tz=UTC)
     await session.flush()
@@ -718,7 +776,8 @@ async def get_order_metadata(
     if order is None:
         raise FbsMarkingError("order_not_found")
     markings = await list_order_markings(session, tenant_id, order_id)
-    if sync_wb and markings:
+    requested = bool(order.required_meta_json or order.optional_meta_json)
+    if sync_wb and (markings or requested):
         token = await require_marketplace_token(session, tenant_id, order.seller_id)
         markings = await _sync_order_meta_from_wb(session, order, http_client, token)
         await _notify_supply_marking_update(session, tenant_id, order_id)
@@ -736,7 +795,8 @@ async def sync_order_marking_statuses(
         raise FbsMarkingError("order_not_found")
 
     markings = await list_order_markings(session, tenant_id, order_id)
-    if not markings:
+    requested = bool(order.required_meta_json or order.optional_meta_json)
+    if not markings and not requested:
         return markings
 
     token = await require_marketplace_token(session, tenant_id, order.seller_id)

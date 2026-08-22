@@ -271,6 +271,103 @@ async def test_fbs_marking_sync_clears_stale_filled_verdict(
         assert markings[0].reason is None
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("include_required_marking", [False, True])
+async def test_fbs_metadata_preserves_optional_wb_decision_without_local_marking(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    include_required_marking: bool,
+) -> None:
+    """S-03-TC-002: WB optional is passable without a local marking row."""
+    from app.models.fbs_order import FbsOrder
+    from app.services.wildberries_fbs_client import (
+        MarketplaceMetaDetail,
+        MarketplaceOrderMetaRow,
+    )
+
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    wb_order_id = 920010 if include_required_marking else 920011
+    required = ["sgtin"] if include_required_marking else []
+    order_id = await _create_order(
+        tenant_id,
+        uuid.UUID(seller_id),
+        uuid.UUID(warehouse_id),
+        order_id=wb_order_id,
+        status=FBS_ORDER_STATUS_PACKED,
+        wb_row_extra={"requiredMeta": required, "optionalMeta": ["imei"]},
+    )
+    if include_required_marking:
+        async with SessionLocal() as session:
+            session.add(
+                FbsOrderMarking(
+                    order_id=order_id,
+                    tenant_id=tenant_id,
+                    kind="sgtin",
+                    value="01CIS-REQUIRED-FILLED",
+                    check_status="new",
+                    meta_status=META_STATUS_PENDING,
+                )
+            )
+            await session.commit()
+
+    async def fake_meta_batch(*args: object, **kwargs: object) -> list[object]:
+        del args, kwargs
+        details = [
+            MarketplaceMetaDetail(
+                key="imei",
+                value=None,
+                decision="optional",
+            )
+        ]
+        if include_required_marking:
+            details.append(
+                MarketplaceMetaDetail(
+                    key="sgtin",
+                    value="01CIS-REQUIRED-FILLED",
+                    decision="filled",
+                )
+            )
+        return [
+            MarketplaceOrderMetaRow(
+                order_id=wb_order_id,
+                meta_details=tuple(details),
+            )
+        ]
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch",
+        fake_meta_batch,
+    )
+
+    response = await async_client.get(
+        f"/operations/fbs-orders/{order_id}/metadata",
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    metadata = response.json()
+    assert metadata["verdict"]["delivery_allowed"] is True
+    assert metadata["delivery_allowed"] is True
+    optional_state = next(
+        state for state in metadata["states"] if state["kind"] == "imei"
+    )
+    assert optional_state == {
+        "kind": "imei",
+        "status": META_STATUS_ALLOWED_WITHOUT_CHECK,
+        "reason": None,
+        "source": "wb",
+        "value_tail": None,
+    }
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        assert order.meta_details_json is not None
+        assert order.meta_details_json["imei"]["decision"] == "optional"
+
+
 # TC-NEW-FBS-MARK-004 — GET list all kinds; empty → []
 @pytest.mark.asyncio
 async def test_fbs_marking_get_list_all_kinds(

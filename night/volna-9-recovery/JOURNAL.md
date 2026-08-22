@@ -95,3 +95,7 @@
 21:37   02-verdikt-screen · dev: фича 4/5 сохранена 76f9dbd3fb89
 21:42   02-verdikt-screen · screen-dev: готово
 21:42   02-verdikt-screen · dev: фича 5/5 сохранена 31a0d3541351
+21:48   02-verdikt-screen · reviewer: готово
+21:48 02-verdikt-screen: отложено — reviewer, эскалация не помогла
+23:43   02-verdikt-screen · resume: поатомный rework Sol по сохранённым находкам
+23:49   02-verdikt-screen · backend-dev: готово
