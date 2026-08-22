@@ -503,6 +503,15 @@ async def record_fbs_pack_progress(
     if supply is None:
         raise FbsPackagingIntegrationError("supply_not_found")
 
+    line_location = await session.scalar(
+        select(StorageLocation).where(
+            StorageLocation.id == line.storage_location_id,
+            StorageLocation.tenant_id == tenant_id,
+        )
+    )
+    if line_location is None or line_location.warehouse_id != supply.warehouse_id:
+        raise FbsPackagingIntegrationError("foreign_sorting_location")
+
     units: list[FbsPackUnitResult] = []
     warnings: list[str] = []
     base_key = idempotency_key or str(uuid.uuid4())

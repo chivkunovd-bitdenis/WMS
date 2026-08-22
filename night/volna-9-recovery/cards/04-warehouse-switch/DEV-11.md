@@ -1,36 +1,38 @@
-# DEV · 04-warehouse-switch · атом 11
+# DEV · 04-warehouse-switch · backend-dev
 
 ## Изменённые файлы
 
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/models/inventory_movement.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/inventory_service.py
 - /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_picking_service.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/tests/test_fbs_picking.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/alembic/versions/20260822_0095_inventory_movement_dimensions.py
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_packaging_integration_service.py
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md
 
-## Реализовано
+Изменений в `inventory_service.py` и тестах нет: существующий transfer writer уже создаёт обе стороны пары в одной транзакции и заполняет `seller_id`/`warehouse_id` из товара и ячеек.
 
-- Пустая исходная ячейка больше не создаёт фиктивный `fbs_order_pick`: pick отклоняется с `insufficient_unpacked`.
-- Каждая запись движения фиксирует `seller_id` и `warehouse_id`, а миграция добавляет и заполняет эти измерения для существующей истории.
-- Существующий идемпотентный transfer-путь и undo-пара сохранены; упаковка продолжает списывать только из `PackagingTaskLine.storage_location_id`.
+## Что реализовано
 
-## Тесты
+- Подбор из собственной сортировочной ячейки больше не блокируется ложной ошибкой остатка; для межскладской ячейки сохраняется атомарная пара `stock_transfer_out`/`stock_transfer_in` с общим `transfer_group_id`.
+- Первый скан блокирует строку поставки `FOR UPDATE`, предотвращая гонку смены склада и подбора.
+- Повтор ключа скана проверяет ячейку, товар, заказ и штрихкод; несовпадающий повтор получает `idempotency_key_reused`.
+- Упаковка отклоняет строку, чья ячейка сортировки принадлежит другому складу поставки.
 
-- `test_fbs_pick_empty_location_is_rejected` проверяет отказ пустой ячейки и отсутствие записи pick.
-- Полный целевой набор `tests/test_fbs_picking.py tests/test_fbs_packaging_integration.py`: 23 passed.
+## Миграции
+
+Нет.
 
 ## Гейты
 
-- ruff: targeted files — passed; полный `ruff check .` — не пройден из-за 80 существующих ошибок вне изменённых файлов.
-- mypy: не пройден из-за 4 существующих ошибок в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py`, `fbs_warehouse_binding_service.py`; в изменённых файлах новых ошибок не показано.
-- pytest: targeted — passed, 23 passed.
-- back_guard.py: недоступен в этой рабочей копии (`scripts/ci/back_guard.py` отсутствует).
-- check_migrations.py: недоступен в этой рабочей копии (`scripts/ci/check_migrations.py` отсутствует).
+- ruff: целевые файлы — `All checks passed`; полный `ruff check .` — не пройден из-за 80 уже существующих ошибок в несвязанных файлах.
+- mypy: не пройден, 21 существующая ошибка в 6 несвязанных файлах; изменённые сервисы в списке ошибок отсутствуют.
+- pytest: целевые `tests/test_fbs_picking.py tests/test_fbs_packaging_integration.py` — `23 passed`; полный прогон остановлен после обнаружения несвязанных падений.
+- back_guard.py: не запущен после остановки полного прогона.
+- check_migrations.py: не запущен после остановки полного прогона.
+- diff --check: пройден.
 
 ## Не реализовано
 
-- Полные repository-гейты `ruff`, `mypy`, `back_guard.py` и `check_migrations.py` нельзя подтвердить из-за существующих ошибок и отсутствующих скриптов.
+- Добавление новых тестов не потребовалось: существующий backend-набор уже покрывает идемпотентность, undo, сортировочный остаток и запрет списания из чужой сортировки; целевой набор прошёл.
+- API preflight, frontend-контекст и UI-блокировки не входят в этот атом backend-dev и не изменялись.
 
-## Находки
+## Блокеры
 
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не открывались и не изменялись.
+Нет блокеров по реализации атома. Полные quality-гейты ограничены ранее существовавшими ошибками вне изменённых файлов; секреты, токены и `.env` не читались.

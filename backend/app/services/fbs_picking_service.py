@@ -163,9 +163,23 @@ async def scan_pick_product(
         session, tenant_id, supply_id, idempotency_key
     )
     if existing is not None:
+        if (
+            existing.source_storage_location_id != location_id
+            or (product_id is not None and existing.product_id != product_id)
+            or (order_id is not None and existing.fbs_order_id != order_id)
+            or (
+                product_id is None
+                and existing.scanned_product_barcode != product_barcode
+            )
+        ):
+            raise FbsPickingError(
+                "idempotency_key_reused",
+                "Ключ идемпотентности уже использован для другого подбора.",
+                context={"idempotency_key": idempotency_key},
+            )
         return await get_supply_workspace(session, tenant_id, supply_id)
 
-    supply = await _load_supply(session, tenant_id, supply_id)
+    supply = await _load_supply(session, tenant_id, supply_id, for_update=True)
     location = await session.scalar(
         select(StorageLocation)
         .options(selectinload(StorageLocation.warehouse))
@@ -284,7 +298,7 @@ async def scan_pick_product(
         movement_id = await inventory_service.transfer_out_movement_id(
             session, tenant_id, transfer_group_id
         )
-    else:
+    elif available < 1:
         raise FbsPickingError(
             "insufficient_unpacked",
             "Недостаточно неупакованного остатка в ячейке.",
@@ -294,7 +308,7 @@ async def scan_pick_product(
                 "location_id": str(location.id),
                 "location_code": location.code,
                 "requested": 1,
-                "available": 0,
+                "available": available,
                 "recommended_action": "Проверьте остаток в другой ячейке или пополните склад.",
             },
         )
@@ -501,6 +515,8 @@ async def _load_supply(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
+    *,
+    for_update: bool = False,
 ) -> FbsSupply:
     stmt = (
         select(FbsSupply)
@@ -510,6 +526,8 @@ async def _load_supply(
         )
         .where(FbsSupply.id == supply_id, FbsSupply.tenant_id == tenant_id)
     )
+    if for_update:
+        stmt = stmt.with_for_update()
     supply = (await session.execute(stmt)).scalar_one_or_none()
     if supply is None:
         raise FbsPickingError(
