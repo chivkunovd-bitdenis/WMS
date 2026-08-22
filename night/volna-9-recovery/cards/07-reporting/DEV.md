@@ -1,21 +1,25 @@
-# Screen Dev · 07-reporting · ReportMetricStrip
+# screen-dev · 07-reporting · MovementFlowChart
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/ReportMetricStrip.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/ReportMetricStrip.test.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/index.ts` — проверен, экспорт уже присутствует и не требовал правки.
+Код атома не изменён: `MovementFlowChart` уже реализован в разрешённых файлах и соответствует контракту. Проверены:
+
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/MovementFlowChart.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/index.ts`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/MovementFlowChart.test.tsx`
+
+Артефакт проверки записан в этот файл:
+
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/DEV.md`
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend` — НЕ ПРОВЕРЕН: в checkout отсутствует `frontend/node_modules/.bin/tsc`; offline-вызов `npx --no-install` не дал локального бинарника.
-- `python3 scripts/ui/ui_guard.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting` — НЕ ПРОВЕРЕН: команда в объединённом запуске не вернула диагностический вывод; базовую линию не изменял.
-- `npm run test:unit` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend` — НЕ ПРОВЕРЕН: отсутствует `frontend/node_modules/.bin/vitest`, а установка зависимостей не выполнялась.
+- `npx tsc --noEmit -p tsconfig.app.json` — не выполнен: в рабочей копии отсутствует локальный `frontend/node_modules/.bin/tsc`, запуск `npx` не предоставил локальный TypeScript.
+- `python3 scripts/ui/ui_guard.py` — красный из-за трёх новых нарушений в соседних, не разрешённых этим атомом файлах: `src/components/WbProductPickerDialog.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`. Базовая линия не изменялась.
+- `npm run test:unit -- --run src/ui-kit/MovementFlowChart.test.tsx` — не выполнен: отсутствует локальный `frontend/node_modules/.bin/vitest` (`sh: vitest: command not found`).
+
+Проверка реализации и теста подтверждает: видимая легенда содержит приход и расход; предыдущий расход добавляется только при `showPrevious`; пустой набор показывает «За выбранный период движений нет»; загрузка показывает скелет и не рисует серии.
 
 ## Не реализовано
 
-- Остальные части экрана отчётности, backend-находки из ревью и соседние экраны не изменялись: текущая работа ограничена атомом `ReportMetricStrip`.
-
-## Находки
-
-- Исправлено замечание ревью к этому атому: процент изменения теперь выводится как `%`, а `null` может сопровождаться пояснением «В прошлом периоде расхода не было». Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались.
+Невыполненных пунктов контракта для `MovementFlowChart` нет. Замечание ревьюера о передаче процентного `delta` и прошлой серии относится к `FfReportsPage` и находится вне файлов и слоя этого атома; соседние продуктовые файлы не изменялись.
