@@ -1,0 +1,77 @@
+<!doctype html>
+<!-- UI-KIT: ModalFrame, FilterBar, ChoiceFilter, DataTable, TextCell, QtyCell, CheckCell, EmptyState, TableSkeletonBody, ErrorNotice, ActionGroup, SecondaryAction, PrintAction -->
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>06 · Единый порядок листа подбора и ленты</title>
+  <style>
+    :root{--primary:#5b21b6;--bg:#e8ecf4;--paper:#fff;--text:#0f172a;--muted:#64748b;--line:#d7dce6;--head:#f3effb;--error:#8f241b;--error-bg:#f9e9e7;--radius:13px;--shadow:0 18px 48px rgba(15,23,42,.18)}
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px} button,input{font:inherit}
+    .page{max-width:1240px;margin:auto;padding:28px}.artifact-title{font-size:24px;margin:0 0 4px}.artifact-note{color:var(--muted);margin:0 0 18px}.state-nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px}.state-nav a{color:var(--primary);background:#fff;padding:7px 11px;border:1px solid #c8b8e9;border-radius:8px;text-decoration:none;font-weight:650}
+    .state{margin:0 0 34px}.state>h2{font-size:16px;margin:0 0 10px}.backdrop{padding:28px;background:rgba(15,23,42,.28);border-radius:14px}.modal{max-width:940px;margin:auto;background:var(--paper);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}.modal.lg{max-width:1080px}.modal-head{padding:18px 22px 14px}.modal-head h3{font-size:20px;margin:0 0 4px}.purpose{color:var(--muted);font-size:13px}.modal-body{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:18px 22px}.modal-actions{display:flex;justify-content:flex-end;gap:8px;padding:14px 22px}
+    .filterbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:12px;margin-bottom:14px}.choices{display:flex;gap:4px;background:#f3f4f7;border-radius:9px;padding:3px}.choice{border:0;background:transparent;color:#475569;border-radius:7px;padding:7px 10px;font-weight:650}.choice.active{background:var(--primary);color:#fff}.search{min-width:240px;flex:1;border:1px solid #bcc5d2;border-radius:8px;padding:9px 11px;color:var(--text)}
+    .table-wrap{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:#fff}.table-scroll{max-height:380px;overflow:auto}table{width:100%;border-collapse:collapse;table-layout:fixed}th{position:sticky;top:0;background:var(--head);border-bottom:1px solid #d8ccef;text-align:left;font-size:12px;padding:10px 9px;white-space:nowrap}td{border-bottom:1px solid #e6e9ef;padding:9px;vertical-align:middle}tbody tr:last-child td{border-bottom:0}.center{text-align:center}.right{text-align:right;font-variant-numeric:tabular-nums}.range{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}.product{font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.article{font-size:12px;color:var(--muted);margin-top:2px}.qty{font-weight:700}.check{width:19px;height:19px;accent-color:var(--primary)}
+    .btn{min-width:168px;height:34px;border-radius:8px;padding:0 14px;font-weight:700;white-space:nowrap}.btn.primary{border:1px solid var(--primary);background:var(--primary);color:#fff}.btn.secondary{border:1px solid var(--primary);background:#fff;color:var(--primary)}.btn:disabled{border-color:#cbd1dc;background:#edf0f4;color:#9199a6}.notice{border:1px solid #e6aaa2;background:var(--error-bg);color:var(--error);border-radius:10px;padding:11px 13px;margin-bottom:14px}.empty{padding:34px 18px}.empty strong{display:block;margin-bottom:5px}.empty span{color:var(--muted)}.skeleton{height:12px;border-radius:6px;background:linear-gradient(90deg,#e7eaf0 25%,#f4f5f8 37%,#e7eaf0 63%);background-size:400% 100%;animation:pulse 1.4s ease infinite}@keyframes pulse{0%{background-position:100% 0}100%{background-position:0 0}}
+    .hint{font-size:12px;color:var(--muted);margin-top:10px}.print-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.order-block{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fafbfc}.pair{display:grid;grid-template-columns:1fr 1fr;gap:7px}.label{aspect-ratio:58/40;border:1px solid #9ba3af;background:#fff;padding:8px;display:flex;flex-direction:column;justify-content:space-between;min-width:0}.label.wb{background:repeating-linear-gradient(0deg,#fff,#fff 8px,#f7f7f7 9px)}.wb-title{font-weight:800;font-size:10px}.barcode{height:24px;background:repeating-linear-gradient(90deg,#111 0 2px,#fff 2px 4px)}.qr{width:34px;height:34px;background:repeating-conic-gradient(#111 0 25%,#fff 0 50%) 50%/8px 8px}.wms{align-items:center;justify-content:center;text-align:center}.wms-no{font-size:28px;font-weight:900}.wms-meta{font-size:10px;color:var(--muted)}.order-caption{font-weight:700;margin-top:8px}.problem{border-color:#dc8f86;background:#fff8f7}.missing{aspect-ratio:58/40;border:1px dashed #c84b3c;color:var(--error);display:flex;align-items:center;justify-content:center;text-align:center;padding:8px;font-weight:700}.legend{display:flex;gap:18px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-bottom:14px}
+    @media(max-width:760px){.page{padding:16px}.backdrop{padding:12px}.modal-body{padding:14px}.print-grid{grid-template-columns:1fr}.modal-actions{flex-direction:column}.btn{width:100%}.hide-sm{display:none}}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <h1 class="artifact-title">Единый порядок листа подбора и ленты</h1>
+    <p class="artifact-note">Интерактивный визуальный контракт карточки 06. Ссылки переключают показанные состояния, данные демонстрационные.</p>
+    <nav class="state-nav" aria-label="Состояния макета">
+      <a href="#normal">Обычное</a><a href="#empty">Пусто</a><a href="#filtered">Фильтр пуст</a><a href="#loading">Загрузка</a><a href="#error">Ошибка</a><a href="#tape">Лента и проблема</a>
+    </nav>
+
+    <section class="state" id="normal">
+      <h2>Обычное состояние</h2>
+      <div class="backdrop"><div class="modal">
+        <header class="modal-head"><h3>Лист подбора</h3><div class="purpose">Собрано 1/3 · Упаковано 0/3</div></header>
+        <div class="modal-body">
+          <div class="filterbar"><div class="choices" aria-label="Фильтр листа"><button class="choice active">Все</button><button class="choice">Не собраны</button><button class="choice">Не упакованы</button></div><input class="search" aria-label="Поиск" placeholder="Артикул или название"></div>
+          <div class="table-wrap"><div class="table-scroll"><table>
+            <colgroup><col style="width:76px"><col><col style="width:92px"><col style="width:90px"><col style="width:90px"><col style="width:90px"></colgroup>
+            <thead><tr><th class="center">№</th><th>Товар</th><th class="center">Размер</th><th class="right">Кол-во</th><th class="center">Собрал</th><th class="center">Упаковал</th></tr></thead>
+            <tbody>
+              <tr><td class="center range">1–3</td><td><div class="product">Футболка базовая</div><div class="article">ART-001</div></td><td class="center">M</td><td class="right qty">3</td><td class="center"><input class="check" type="checkbox" checked aria-label="Собрал Футболка базовая"></td><td class="center"><input class="check" type="checkbox" aria-label="Упаковал Футболка базовая"></td></tr>
+              <tr><td class="center range">4</td><td><div class="product">Кепка хлопковая</div><div class="article">CAP-017</div></td><td class="center">—</td><td class="right qty">1</td><td class="center"><input class="check" type="checkbox" aria-label="Собрал Кепка хлопковая"></td><td class="center"><input class="check" type="checkbox" aria-label="Упаковал Кепка хлопковая"></td></tr>
+              <tr><td class="center range">5–6</td><td><div class="product">Худи утеплённое</div><div class="article">HD-402</div></td><td class="center">L</td><td class="right qty">2</td><td class="center"><input class="check" type="checkbox" aria-label="Собрал Худи утеплённое"></td><td class="center"><input class="check" type="checkbox" aria-label="Упаковал Худи утеплённое"></td></tr>
+            </tbody>
+          </table></div></div>
+          <div class="hint">Фильтр и отметки не меняют номера и состав полной печати.</div>
+        </div>
+        <footer class="modal-actions"><button class="btn secondary">Закрыть</button><button class="btn primary">Печать стикеров</button></footer>
+      </div></div>
+    </section>
+
+    <section class="state" id="empty"><h2>Пустая поставка</h2><div class="backdrop"><div class="modal"><header class="modal-head"><h3>Лист подбора</h3><div class="purpose">Собрано 0/0 · Упаковано 0/0</div></header><div class="modal-body"><div class="filterbar"><div class="choices"><button class="choice active">Все</button><button class="choice">Не собраны</button><button class="choice">Не упакованы</button></div><input class="search" placeholder="Артикул или название"></div><div class="table-wrap"><table><thead><tr><th>№</th><th>Товар</th><th>Размер</th><th>Кол-во</th><th>Собрал</th><th>Упаковал</th></tr></thead></table><div class="empty"><strong>В поставке нет позиций для подбора</strong><span>Закройте лист и проверьте состав поставки.</span></div></div></div><footer class="modal-actions"><button class="btn secondary">Закрыть</button><button class="btn primary" disabled title="В поставке нет заказов для печати">Печать стикеров</button></footer></div></div></section>
+
+    <section class="state" id="filtered"><h2>Фильтр ничего не нашёл — полная печать доступна</h2><div class="backdrop"><div class="modal"><header class="modal-head"><h3>Лист подбора</h3><div class="purpose">Собрано 3/3 · Упаковано 3/3</div></header><div class="modal-body"><div class="filterbar"><div class="choices"><button class="choice">Все</button><button class="choice active">Не собраны</button><button class="choice">Не упакованы</button></div><input class="search" placeholder="Артикул или название"></div><div class="table-wrap"><div class="empty"><strong>Нет позиций по фильтру</strong><span>Сбросьте поиск или выберите «Все».</span></div></div></div><footer class="modal-actions"><button class="btn secondary">Закрыть</button><button class="btn primary">Печать стикеров</button></footer></div></div></section>
+
+    <section class="state" id="loading"><h2>Загрузка</h2><div class="backdrop"><div class="modal"><header class="modal-head"><h3>Лист подбора</h3><div class="purpose"><span class="skeleton" style="display:inline-block;width:210px"></span></div></header><div class="modal-body"><div class="filterbar"><div class="choices"><button class="choice active">Все</button><button class="choice">Не собраны</button><button class="choice">Не упакованы</button></div><input class="search" placeholder="Артикул или название" disabled></div><div class="table-wrap"><table><thead><tr><th>№</th><th>Товар</th><th>Размер</th><th>Кол-во</th><th>Собрал</th><th>Упаковал</th></tr></thead><tbody>
+      <tr><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td></tr><tr><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td></tr><tr><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td></tr><tr><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td></tr><tr><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td></tr>
+      </tbody></table></div></div><footer class="modal-actions"><button class="btn secondary">Закрыть</button><button class="btn primary" disabled title="Лист подбора ещё загружается">Печать стикеров</button></footer></div></div></section>
+
+    <section class="state" id="error"><h2>Ошибка загрузки</h2><div class="backdrop"><div class="modal"><header class="modal-head"><h3>Лист подбора</h3><div class="purpose">Собрано — · Упаковано —</div></header><div class="modal-body"><div class="notice" role="alert">Не удалось загрузить лист подбора. Попробуйте ещё раз.</div><div class="filterbar"><div class="choices"><button class="choice active">Все</button><button class="choice">Не собраны</button><button class="choice">Не упакованы</button></div><input class="search" placeholder="Артикул или название" disabled></div><div class="table-wrap"><div class="empty"><strong>Данные листа недоступны</strong><span>Закройте и откройте лист ещё раз.</span></div></div></div><footer class="modal-actions"><button class="btn secondary">Закрыть</button><button class="btn primary" disabled title="Сначала загрузите лист подбора">Печать стикеров</button></footer></div></div></section>
+
+    <section class="state" id="tape">
+      <h2>Предпросмотр ленты: порядок и проблемный заказ</h2>
+      <div class="backdrop"><div class="modal lg">
+        <header class="modal-head"><h3>Проверка перед печатью</h3><div class="purpose">Каждый номер листа — пара из неизменённого стикера WB и служебной этикетки WMS</div></header>
+        <div class="modal-body">
+          <div class="notice" role="alert">Заказ WB №845003: стикер не получен. Номер 5 сохранён, следующие заказы не перенумерованы.</div>
+          <div class="legend"><span>Порядок: 4 → 5 → 6</span><span>Состав: полная поставка</span><span>PNG WB не изменяется</span></div>
+          <div class="print-grid">
+            <article class="order-block"><div class="pair"><div class="label wb"><span class="wb-title">WILDBERRIES</span><div class="barcode"></div><div class="qr"></div></div><div class="label wms"><div class="wms-no">№ 4</div><div class="wms-meta">Кепка · CAP-017</div></div></div><div class="order-caption">Заказ WB №845002</div></article>
+            <article class="order-block problem"><div class="pair"><div class="missing">Стикер WB<br>не получен</div><div class="label wms"><div class="wms-no">№ 5</div><div class="wms-meta">Худи · HD-402</div></div></div><div class="order-caption">Заказ WB №845003 · проблема</div></article>
+            <article class="order-block"><div class="pair"><div class="label wb"><span class="wb-title">WILDBERRIES</span><div class="barcode"></div><div class="qr"></div></div><div class="label wms"><div class="wms-no">№ 6</div><div class="wms-meta">Худи · HD-402</div></div></div><div class="order-caption">Заказ WB №845004</div></article>
+          </div>
+        </div>
+        <footer class="modal-actions"><button class="btn secondary">Закрыть</button><button class="btn primary" disabled title="Получены не все стикеры заказов">Печать стикеров</button></footer>
+      </div></div>
+    </section>
+  </main>
+</body>
+</html>

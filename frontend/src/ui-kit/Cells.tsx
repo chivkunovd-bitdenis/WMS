@@ -1,4 +1,4 @@
-import { Box, Stack, Tooltip, Typography } from '@mui/material'
+import { Box, Checkbox, Stack, Tooltip, Typography } from '@mui/material'
 import type { ReactNode } from 'react'
 
 // Канон R-08: числа выравниваются вправо и набираются табличными цифрами,
@@ -71,4 +71,26 @@ export function ProductCell({ photo, sku }: { photo?: ReactNode; sku: string }) 
       </Typography>
     </Stack>
   )
+}
+
+export type CheckCellProps = {
+  checked: boolean
+  onChange: (checked: boolean) => void
+  ariaLabel: string
+  disabledReason?: string
+  testId?: string
+}
+
+export function CheckCell({ checked, onChange, ariaLabel, disabledReason, testId }: CheckCellProps) {
+  const checkbox = (
+    <Checkbox
+      checked={checked}
+      onChange={(event) => onChange(event.target.checked)}
+      inputProps={{ 'aria-label': ariaLabel }}
+      disabled={Boolean(disabledReason)}
+      data-testid={testId}
+      size="small"
+    />
+  )
+  return disabledReason ? <Tooltip title={disabledReason}>{checkbox}</Tooltip> : checkbox
 }

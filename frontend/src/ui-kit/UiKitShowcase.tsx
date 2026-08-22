@@ -3,6 +3,8 @@ import { INVENTORY } from './inventory.generated'
 import type { InventoryItem } from './inventory.generated'
 import {
   ActionGroup,
+  CheckCell,
+  ChoiceFilter,
   DangerAction,
   DataTable,
   EmptyState,
@@ -17,6 +19,7 @@ import {
   ScreenHeader,
   SecondaryAction,
   TextCell,
+  ModalFrame,
 } from './index'
 import type { Column } from './index'
 import { useState } from 'react'
@@ -124,6 +127,9 @@ const LOWERCASE_CHIPS = INVENTORY.chips.filter((item) => /^[а-яёa-z]/.test(it
 
 export function UiKitShowcase() {
   const [search, setSearch] = useState('')
+  const [choice, setChoice] = useState<'all' | 'unpicked'>('all')
+  const [checked, setChecked] = useState(true)
+  const [modalOpen, setModalOpen] = useState(false)
 
   return (
     <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 1400, mx: 'auto' }}>
@@ -240,6 +246,38 @@ export function UiKitShowcase() {
           hint="Создайте короб, чтобы получить QR от Wildberries"
           action={<PrimaryAction>Создать короб</PrimaryAction>}
         />
+      </Section>
+
+      <Section title="Модальный лист подбора" note="Состояния каркаса, фильтра, отметки и печати заказов.">
+        <ActionGroup>
+          <PrimaryAction onClick={() => setModalOpen(true)}>Открыть лист</PrimaryAction>
+          <PrintAction what="стикеры заказов" placement="panel" disabledReason="В поставке нет заказов для печати" />
+        </ActionGroup>
+        <ModalFrame
+          open={modalOpen}
+          title="Лист подбора"
+          purpose="Собрано 1/3 · Упаковано 0/3"
+          onClose={() => setModalOpen(false)}
+          testId="ui-kit-picking-list-modal"
+          actions={
+            <ActionGroup>
+              <SecondaryAction onClick={() => setModalOpen(false)}>Закрыть</SecondaryAction>
+              <PrintAction what="стикеры заказов" placement="panel" />
+            </ActionGroup>
+          }
+        >
+          <Stack spacing={2}>
+            <ChoiceFilter
+              value={choice}
+              options={[{ value: 'all', label: 'Все' }, { value: 'unpicked', label: 'Не собраны' }]}
+              onChange={setChoice}
+              ariaLabel="Фильтр листа"
+              testId="ui-kit-picking-list-filter"
+            />
+            <CheckCell checked={checked} onChange={setChecked} ariaLabel="Собрал Футболка базовая" testId="ui-kit-picking-list-check" />
+            <CheckCell checked={false} onChange={() => undefined} ariaLabel="Упаковал Футболка базовая" disabledReason="Сначала отметьте сборку" />
+          </Stack>
+        </ModalFrame>
       </Section>
     </Box>
   )

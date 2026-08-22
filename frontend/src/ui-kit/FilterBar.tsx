@@ -1,4 +1,4 @@
-import { Paper, Stack, TextField } from '@mui/material'
+import { Button, Paper, Stack, TextField } from '@mui/material'
 import type { ReactNode } from 'react'
 
 // Канон R-03: поиск и фильтры всегда в своей «бумаге» над таблицей и всегда
@@ -33,5 +33,47 @@ export function FilterBar({
         {children}
       </Stack>
     </Paper>
+  )
+}
+
+export type ChoiceFilterProps<Value extends string> = {
+  value: Value
+  options: Array<{ value: Value; label: string }>
+  onChange: (value: Value) => void
+  ariaLabel: string
+  testId?: string
+  disabled?: boolean
+}
+
+export function ChoiceFilter<Value extends string>({
+  value,
+  options,
+  onChange,
+  ariaLabel,
+  testId,
+  disabled = false,
+}: ChoiceFilterProps<Value>) {
+  return (
+    <Stack
+      direction="row"
+      spacing={0.5}
+      role="group"
+      aria-label={ariaLabel}
+      data-testid={testId}
+      sx={{ p: 0.5, bgcolor: 'action.hover', borderRadius: 1, flexWrap: 'wrap' }}
+    >
+      {options.map((option) => (
+        <Button
+          key={option.value}
+          size="small"
+          variant={option.value === value ? 'contained' : 'text'}
+          onClick={() => onChange(option.value)}
+          disabled={disabled}
+          aria-pressed={option.value === value}
+        >
+          {option.label}
+        </Button>
+      ))}
+    </Stack>
   )
 }
