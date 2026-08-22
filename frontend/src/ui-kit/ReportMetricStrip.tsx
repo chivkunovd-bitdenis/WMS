@@ -9,7 +9,9 @@ export type ReportMetricItem = {
     value: number
     direction: 'up' | 'down' | 'flat'
     a11yLabel: string
+    unit?: 'percent' | 'quantity'
   }
+  nullValueLabel?: string
 }
 
 export type ReportMetricStripProps = {
@@ -26,7 +28,8 @@ function formatValue(value: number | null, unit: string) {
 
 function formatDelta(delta: NonNullable<ReportMetricItem['delta']>, unit: string) {
   const sign = delta.direction === 'up' ? '+' : delta.direction === 'down' ? '−' : ''
-  return `${sign}${numberFormatter.format(Math.abs(delta.value))} ${unit}`
+  const deltaUnit = delta.unit === 'quantity' ? unit : '%'
+  return `${sign}${numberFormatter.format(Math.abs(delta.value))} ${deltaUnit}`
 }
 
 export function ReportMetricStrip({ items, loading = false, testId }: ReportMetricStripProps) {
@@ -81,6 +84,11 @@ export function ReportMetricStrip({ items, loading = false, testId }: ReportMetr
                     sx={{ fontVariantNumeric: 'tabular-nums', textAlign: 'right' }}
                   >
                     {formatDelta(item.delta, unit)}
+                  </Typography>
+                ) : null}
+                {item.value === null && !item.delta ? (
+                  <Typography variant="caption" color="text.secondary">
+                    {item.nullValueLabel ?? 'Недоступно для сравнения'}
                   </Typography>
                 ) : null}
               </Stack>

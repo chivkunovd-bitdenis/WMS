@@ -23,17 +23,28 @@ describe('ReportMetricStrip', () => {
     expect(markup).toContain('12 480 шт.')
     expect(markup).toContain('0 шт.')
     expect(markup).toContain('Расход вырос на 6,7 процента')
+    expect(markup).toContain('+6,7 %')
+    expect(markup).not.toContain('+6,7 шт.')
     expect((markup.match(/data-testid="report-metrics-[^"]+"/g) ?? []).length).toBe(4)
   })
 
   it('renders an inapplicable value as a dash with its explanation', () => {
     const markup = renderToStaticMarkup(
       <ReportMetricStrip
-        items={[...items.slice(0, 3), { ...items[3], value: null, delta: undefined }]}
+        items={[
+          ...items.slice(0, 3),
+          {
+            ...items[3],
+            value: null,
+            delta: undefined,
+            nullValueLabel: 'В прошлом периоде расхода не было',
+          },
+        ]}
       />,
     )
 
     expect(markup).toContain('—')
+    expect(markup).toContain('В прошлом периоде расхода не было')
     expect(markup).not.toContain('184 шт.')
   })
 
