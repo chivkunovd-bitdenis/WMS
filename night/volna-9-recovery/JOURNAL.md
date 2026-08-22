@@ -144,3 +144,7 @@
 01:23   02-verdikt-screen · ux-judge: находки, круг 1 — назад к разработке
 01:26   02-verdikt-screen · screen-dev: готово
 01:26   02-verdikt-screen · dev: фича 1/1 сохранена a6992ba1ad80
+01:31   02-verdikt-screen · reviewer: готово
+01:31   02-verdikt-screen · reviewer: Terra-rework не закрыл вердикт — эскалация Sol
+01:31   02-verdikt-screen · reviewer: находки, круг 2 — назад к разработке
+01:36   02-verdikt-screen · screen-dev: готово

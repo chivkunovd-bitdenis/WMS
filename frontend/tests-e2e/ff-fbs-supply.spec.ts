@@ -62,10 +62,12 @@ function workspace({
   stage = 'composition',
   status = 'draft',
   orders = [order('1', { supply_id: 'sup-1' })],
+  packagingTaskId = null,
 }: {
   stage?: string
   status?: string
   orders?: JsonObject[]
+  packagingTaskId?: string | null
 } = {}): JsonObject {
   return {
     supply: {
@@ -80,7 +82,7 @@ function workspace({
       planned_destination: null,
       planned_shipment_date: null,
       nearest_deadline_at: new Date(Date.now() + 100 * 3600 * 1000).toISOString(),
-      packaging_task_id: null,
+      packaging_task_id: packagingTaskId,
       barcode_asset: null,
     },
     stage,
@@ -104,6 +106,42 @@ function workspace({
     tracking_summary: null,
     partial_rejection: null,
     wb_sync_stale: false,
+  }
+}
+
+function packagingTask(orders: JsonObject[]): JsonObject {
+  return {
+    id: 'task-verdict',
+    document_number: 'PACK-VERDICT',
+    warehouse_id: 'w-1',
+    status: 'in_progress',
+    marketplace_unload_request_id: null,
+    inbound_intake_request_id: null,
+    is_complete: false,
+    lines: orders.map((item, index) => {
+      const product = item.product as JsonObject
+      return {
+        id: `line-${index + 1}`,
+        product_id: product.id,
+        sku_code: product.sku,
+        product_name: product.name,
+        storage_location_id: 'loc-1',
+        storage_location_code: 'A-01',
+        packaging_instructions: null,
+        requires_honest_sign: true,
+        qty_total: 1,
+        qty_suggested_packed: 0,
+        qty_confirmed_packed: 0,
+        qty_need_pack: 1,
+        qty_packed_in_task: 0,
+        qty_done: 0,
+        qty_marking_printed: 0,
+        qty_marking_external: 0,
+        qty_product_label_printed: 0,
+        marking_available_count: 0,
+        is_complete: false,
+      }
+    }),
   }
 }
 
@@ -167,11 +205,15 @@ async function openVerdictWorkspace(page: Page, tag: string, orders: JsonObject[
   await registerFf(page, tag)
   await mockWorklist(page, orders)
   await page.route('**/operations/fbs-supplies/sup-1/workspace', (route) =>
-    json(route, workspace({ stage: 'boxes', status: 'packed', orders })),
+    json(route, workspace({ stage: 'packing', status: 'packed', orders, packagingTaskId: 'task-verdict' })),
+  )
+  await page.route('**/operations/packaging-tasks/task-verdict', (route) =>
+    json(route, packagingTask(orders)),
   )
   await page.getByTestId('nav-ff-fbs').click()
   await page.getByTestId('fbs-order-1').click()
   await expect(page.getByTestId('fbs-workspace')).toBeVisible()
+  await expect(page.getByTestId('fbs-kiz-scan-bar')).toBeVisible()
 }
 
 // TC-S17-019 / TC-S17-021 — fresh preflight and idempotent warehouse/SC delivery.
@@ -303,6 +345,85 @@ test('fbs workspace: one blocked order prevents whole-supply delivery', async ({
   await expect(deliver).toBeDisabled()
   await deliver.hover()
   await expect(page.getByRole('tooltip')).toContainText('Заказ №2: WB не принял: неверный статус УИН')
+})
+
+// S-03-TC-014 — an accepted WB verdict stays in the chip while row colors show only scanner/print state.
+test('fbs workspace: accepted verdict does not paint order rows green', async ({ page }) => {
+  const accepted = order('1', {
+    supply_id: 'sup-1',
+    sticker: { status: 'pending', asset_url: null, applied_at: null },
+    metadata: {
+      required: ['sgtin'],
+      optional: [],
+      states: [{ kind: 'sgtin', status: 'accepted', value_tail: '…5678' }],
+      delivery_allowed: true,
+      verdict: { signature: 'WB: принято', tone: 'ok', reason: null, delivery_allowed: true },
+      last_checked_at: new Date().toISOString(),
+    },
+  })
+  const printed = order('2', { supply_id: 'sup-1' })
+  const scannerActive = order('3', {
+    supply_id: 'sup-1',
+    sticker: { status: 'pending', asset_url: null, applied_at: null },
+  })
+  await openVerdictWorkspace(page, 'verdict-row-colors', [accepted, printed, scannerActive])
+  await page.route('**/operations/fbs-orders/kiz/lookup**', (route) =>
+    json(route, {
+      order_id: '3',
+      wb_order_id: 3,
+      product: {
+        name: 'Товар 3',
+        image_url: null,
+        barcode: '2000003',
+        seller_article: 'ART-3',
+      },
+      current_kiz: null,
+      needs_confirmation: false,
+      can_bind: true,
+      block_reason: null,
+    }),
+  )
+
+  const scanInput = page.getByTestId('fbs-kiz-scan-input')
+  await scanInput.fill('WB0000000003')
+  await scanInput.press('Enter')
+  await expect(page.getByTestId('fbs-kiz-row-active')).toContainText('заказ 3')
+
+  const acceptedChip = page.getByTestId('fbs-wb-verdict-1')
+  await expect(acceptedChip).toHaveText('WB: принято')
+  expect(await acceptedChip.evaluate((el) => window.getComputedStyle(el).backgroundColor))
+    .toBe('rgba(27, 107, 69, 0.12)')
+
+  const acceptedRow = page.getByTestId('fbs-kiz-row-1')
+  const printedRow = page.getByTestId('fbs-kiz-row-2')
+  const activeRow = page.getByTestId('fbs-kiz-row-active')
+  const acceptedStyle = await acceptedRow.evaluate((el) => {
+    const style = window.getComputedStyle(el)
+    return { backgroundColor: style.backgroundColor, borderLeftColor: style.borderLeftColor }
+  })
+  const printedStyle = await printedRow.evaluate((el) => {
+    const style = window.getComputedStyle(el)
+    return { backgroundColor: style.backgroundColor, borderLeftColor: style.borderLeftColor }
+  })
+  const activeStyle = await activeRow.evaluate((el) => {
+    const style = window.getComputedStyle(el)
+    return { backgroundColor: style.backgroundColor, borderLeftColor: style.borderLeftColor }
+  })
+
+  expect(acceptedStyle).toEqual({
+    backgroundColor: 'rgb(255, 255, 255)',
+    borderLeftColor: 'rgba(0, 0, 0, 0)',
+  })
+  expect(printedStyle).toEqual({
+    backgroundColor: 'rgba(0, 0, 0, 0.04)',
+    borderLeftColor: 'rgba(0, 0, 0, 0)',
+  })
+  expect(activeStyle).toEqual({
+    backgroundColor: 'rgb(3, 169, 244)',
+    borderLeftColor: 'rgb(2, 136, 209)',
+  })
+  expect(await page.getByTestId('fbs-kiz-tail').first().evaluate((el) => window.getComputedStyle(el).color))
+    .toBe('rgb(27, 94, 32)')
 })
 
 // TC-S17-006 — compatible selection creates one atomic supply and opens its workspace.
