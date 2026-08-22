@@ -155,6 +155,190 @@ async function mockSupplyWorklist(page: Page, items: JsonObject[]) {
   )
 }
 
+type PickingItem = {
+  article: string
+  sku_code: string | null
+  size: string | null
+  product_name: string
+  quantity: number
+  number_start: number
+  number_end: number
+  order_ids: string[]
+}
+
+const PICKING_ITEMS: PickingItem[] = [
+  { article: 'ART-001', sku_code: 'SKU-001', size: 'M', product_name: 'Футболка базовая', quantity: 3, number_start: 1, number_end: 3, order_ids: ['order-1', 'order-2', 'order-3'] },
+  { article: 'CAP-017', sku_code: 'SKU-017', size: null, product_name: 'Кепка хлопковая', quantity: 1, number_start: 4, number_end: 4, order_ids: ['order-4'] },
+  { article: 'HD-402', sku_code: 'SKU-402', size: 'L', product_name: 'Худи утеплённое', quantity: 2, number_start: 5, number_end: 6, order_ids: ['order-5', 'order-6'] },
+]
+
+async function openPickingList(page: Page, tag: string, items: PickingItem[]) {
+  await registerFf(page, tag)
+  const orderIds = items.flatMap((item) => item.order_ids)
+  const workspaceOrderIds = orderIds.length > 0 ? [...orderIds].reverse() : ['empty-anchor']
+  const suppliedOrders = workspaceOrderIds.map((id) => order(id, {
+    status: 'in_supply',
+    supply_id: 'sup-1',
+  }))
+
+  await mockWorklist(page, suppliedOrders)
+  await page.route('**/operations/fbs-supplies/sup-1/workspace', (route) =>
+    json(route, workspace({ stage: 'picking', status: 'assembling', orders: suppliedOrders })),
+  )
+  await page.route('**/operations/fbs-supplies/sup-1/picking-list', (route) =>
+    json(route, { items }),
+  )
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await page.getByTestId(`fbs-order-${workspaceOrderIds[0]}`).click()
+  await expect(page.getByTestId('fbs-workspace')).toBeVisible()
+  await page.getByTestId('fbs-pick-list-print').click()
+  await expect(page.getByTestId('fbs-pick-list')).toBeVisible()
+  return page.getByTestId('fbs-pick-list')
+}
+
+function readyTape(orderIds: string[]): JsonObject {
+  return {
+    requested: orderIds.length,
+    ready: orderIds.length,
+    missing: 0,
+    failed: 0,
+    shortage: 0,
+    order_errors: [],
+    orders: orderIds.map((orderId, index) => ({
+      order_id: orderId,
+      wb_order_id: 845000 + index,
+      order_number: index + 1,
+      requires_honest_sign: false,
+      qr_asset: {
+        id: `asset-${orderId}`,
+        kind: 'order_sticker',
+        status: 'ready',
+        content_type: 'image/png',
+        width_mm: 40,
+        height_mm: 58,
+        preview_url: `/operations/fbs-print-assets/asset-${orderId}/content`,
+        download_url: null,
+        checksum: `sha256:${orderId}`,
+        applied_at: null,
+        error: null,
+      },
+      codes: [],
+      printed_codes: [],
+      shortage: null,
+    })),
+  }
+}
+
+async function mockStickerImages(page: Page) {
+  await page.route('**/operations/fbs-print-assets/asset-*/content', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'image/png',
+      body: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/l9sZ3wAAAABJRU5ErkJggg==',
+        'base64',
+      ),
+    }),
+  )
+}
+
+// S-03-TC-001 — оператор открывает реальную модалку и видит серверный порядок с постоянными диапазонами.
+test('S-03-TC-001: picking list shows canonical ranges in server order', async ({ page }) => {
+  const dialog = await openPickingList(page, 'pick-list-order', PICKING_ITEMS)
+  const table = dialog.getByTestId('fbs-pick-table')
+  const rows = table.locator('tbody tr')
+
+  await expect(table.getByRole('columnheader')).toHaveText(['№', 'Товар', 'Размер', 'Кол-во', 'Собрал', 'Упаковал'])
+  await expect(rows).toHaveCount(3)
+  await expect(rows.nth(0)).toContainText('1–3')
+  await expect(rows.nth(0)).toContainText('Футболка базовая')
+  await expect(rows.nth(1)).toContainText('4')
+  await expect(rows.nth(1)).toContainText('Кепка хлопковая')
+  await expect(rows.nth(2)).toContainText('5–6')
+  await expect(rows.nth(2)).toContainText('Худи утеплённое')
+})
+
+// S-03-TC-002 — локальная отметка и фильтр скрывают строку, но не перенумеровывают оставшиеся.
+test('S-03-TC-002: local mark and filter preserve original ranges', async ({ page }) => {
+  const dialog = await openPickingList(page, 'pick-list-filter', PICKING_ITEMS)
+  const table = dialog.getByTestId('fbs-pick-table')
+  const originalRows = table.locator('tbody tr')
+
+  await originalRows.nth(1).getByTestId('fbs-pick-collected').locator('input').check()
+  await dialog.getByRole('button', { name: 'Не собраны' }).click()
+
+  const visibleRows = table.locator('tbody tr')
+  await expect(visibleRows).toHaveCount(2)
+  await expect(visibleRows.nth(0)).toContainText('1–3')
+  await expect(visibleRows.nth(1)).toContainText('5–6')
+  await expect(table).not.toContainText('Кепка хлопковая')
+
+  await dialog.getByTestId('filter-search').fill('Худи')
+  await expect(table.locator('tbody tr')).toHaveCount(1)
+  await expect(table.locator('tbody tr').first()).toContainText('5–6')
+})
+
+// S-03-TC-003 — пустой результат фильтра не превращает полную печать в выборочную.
+test('S-03-TC-003: empty filter result still prints the full canonical supply', async ({ page }) => {
+  const dialog = await openPickingList(page, 'pick-list-full-print', PICKING_ITEMS)
+  const canonicalOrderIds = PICKING_ITEMS.flatMap((item) => item.order_ids)
+  let printBody: JsonObject | null = null
+  await mockStickerImages(page)
+  await page.route('**/operations/fbs-supplies/sup-1/order-print-tape', async (route) => {
+    printBody = route.request().postDataJSON() as JsonObject
+    await json(route, readyTape(canonicalOrderIds))
+  })
+
+  for (const checkbox of await dialog.getByTestId('fbs-pick-collected').all()) {
+    await checkbox.locator('input').check()
+  }
+  await dialog.getByRole('button', { name: 'Не собраны' }).click()
+  await expect(dialog.getByText('Нет позиций по фильтру')).toBeVisible()
+
+  await dialog.getByTestId('fbs-pick-print-stickers').click()
+  await expect(page.getByRole('dialog', { name: 'Проверка перед печатью' })).toBeVisible()
+  expect(printBody?.order_ids).toEqual(canonicalOrderIds)
+  expect(printBody?.include_order_qr).toBe(true)
+})
+
+// S-03-TC-006 — пустая поставка объяснена, печать недоступна с контрактной причиной.
+test('S-03-TC-006: empty supply explains why there is nothing to pick or print', async ({ page }) => {
+  const dialog = await openPickingList(page, 'pick-list-empty', [])
+
+  await expect(dialog.getByText('В поставке нет позиций для подбора')).toBeVisible()
+  await expect(dialog.getByText('Закройте лист и проверьте состав поставки')).toBeVisible()
+  await expect(dialog.getByTestId('fbs-pick-print-stickers')).toBeDisabled()
+})
+
+// S-03-TC-007 — пока сервер готовит ленту, повторный запуск и закрытие модалки заблокированы.
+test('S-03-TC-007: print preparation blocks duplicate print and closing', async ({ page }) => {
+  const dialog = await openPickingList(page, 'pick-list-busy', PICKING_ITEMS.slice(0, 1))
+  const canonicalOrderIds = PICKING_ITEMS[0].order_ids
+  let releasePrint!: () => void
+  const printGate = new Promise<void>((resolve) => { releasePrint = resolve })
+  let printRequests = 0
+  await mockStickerImages(page)
+  await page.route('**/operations/fbs-supplies/sup-1/order-print-tape', async (route) => {
+    printRequests += 1
+    await printGate
+    await json(route, readyTape(canonicalOrderIds))
+  })
+
+  await dialog.getByTestId('fbs-pick-print-stickers').click()
+  await expect.poll(() => printRequests).toBe(1)
+  await expect(dialog.getByTestId('fbs-pick-print-stickers')).toBeDisabled()
+  await expect(dialog.getByRole('button', { name: 'Закрыть' })).toBeDisabled()
+  await dialog.getByTestId('fbs-pick-print-stickers').dispatchEvent('click')
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeVisible()
+  expect(printRequests).toBe(1)
+
+  releasePrint()
+  await expect(page.getByRole('dialog', { name: 'Проверка перед печатью' })).toBeVisible()
+  expect(printRequests).toBe(1)
+})
+
 // TC-S17-019 / TC-S17-021 — fresh preflight and idempotent warehouse/SC delivery.
 test('fbs workspace: preflight and deliver', async ({ page }) => {
   await registerFf(page, 'deliver')
