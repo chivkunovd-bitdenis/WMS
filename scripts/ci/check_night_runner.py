@@ -447,6 +447,13 @@ def main() -> int:
             проверь("браузерный BLOCKED не возвращает код в dev",
                     n.браузерный_блокер(t, "ux-judge"), True)
             (t / "JUDGE.md").write_text(
+                "ВЕРДИКТ: НАХОДКИ 1\nSCREEN VERDICT: `BLOCKED`\n\n"
+                "## Находки\nЖивой стенд не поднялся.\n",
+                encoding="utf-8",
+            )
+            проверь("браузерный BLOCKED с пробелом тоже не возвращает код в dev",
+                    n.браузерный_блокер(t, "ux-judge"), True)
+            (t / "JUDGE.md").write_text(
                 "ВЕРДИКТ: НАХОДКИ 1\nSCREEN_VERDICT: FAIL\n\n"
                 "## Находки\nКнопка теряет заказ.\n",
                 encoding="utf-8",
@@ -753,7 +760,7 @@ def main() -> int:
             args.index("--ignore-user-config") > args.index("exec")
             if "--ignore-user-config" in args and "exec" in args else False, True)
     проверь("Codex CLI: analyst opus → Sol", "gpt-5.6-sol" in args, True)
-    проверь("Codex CLI: Sol medium задан явно", "model_reasoning_effort=medium" in args, True)
+    проверь("Codex CLI: Sol xhigh задан явно", "model_reasoning_effort=xhigh" in args, True)
 
     вызов.clear()
     with mock.patch.object(n.shutil, "which", return_value="/usr/local/bin/codex"), \
@@ -772,7 +779,7 @@ def main() -> int:
         беды.append(f"Codex CLI: нет явного профиля для MAP-агрегации: {ошибка}")
     args = вызов.get("args", [])
     проверь("Codex CLI: MAP solution-architect → Sol", "gpt-5.6-sol" in args, True)
-    проверь("Codex CLI: MAP Sol medium", "model_reasoning_effort=medium" in args, True)
+    проверь("Codex CLI: MAP Sol xhigh", "model_reasoning_effort=xhigh" in args, True)
     проверь("Codex CLI: MAP override сохраняет search до exec",
             args.index("--search") < args.index("exec")
             if "--search" in args and "exec" in args else False, True)
@@ -803,7 +810,7 @@ def main() -> int:
         n._запустить_codex("product-acceptor", "marker")
     args = вызов.get("args", [])
     проверь("Codex CLI: product-acceptor opus → Sol", "gpt-5.6-sol" in args, True)
-    проверь("Codex CLI: product-acceptor Sol medium", "model_reasoning_effort=medium" in args, True)
+    проверь("Codex CLI: product-acceptor Sol xhigh", "model_reasoning_effort=xhigh" in args, True)
 
     вызов.clear()
     with mock.patch.object(n.shutil, "which", return_value="/usr/local/bin/codex"), \

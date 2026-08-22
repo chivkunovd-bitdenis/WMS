@@ -326,7 +326,7 @@ def _запустить_codex(роль: str, промпт: str, профиль: 
     try:
         профиль_cli = профиль_роли(роль, профиль)
         модель = f"gpt-5.6-{профиль_cli}"
-        effort = "low" if профиль_cli == "luna" else "medium"
+        effort = {"luna": "low", "terra": "high", "sol": "xhigh"}[профиль_cli]
         команда = [бинарник, "--ask-for-approval", "never", "--sandbox", "workspace-write",
                    "--model", модель, "--config", f"model_reasoning_effort={effort}",
                    ]
@@ -531,7 +531,9 @@ def браузерный_блокер(папка: Path, роль: str) -> bool:
     if not файл.exists():
         return False
     текст = файл.read_text(encoding="utf-8", errors="replace").lower()
-    заблокировано = "screen_verdict: blocked" in текст or "итог: blocked" in текст
+    заблокировано = bool(re.search(
+        r"screen[_\s-]*verdict:\s*`?blocked`?", текст,
+    )) or "итог: blocked" in текст
     нет_среды = any(причина in текст for причина in (
         "стенд не поднялся", "no browser is available", "браузер недоступен",
     ))
@@ -1339,6 +1341,11 @@ def провести(ид: str, волна: Path, рабочая: Рабочая
                 "ux-judge: браузерная среда недоступна; код на переделку не возвращался\n",
                 encoding="utf-8",
             )
+            # BLOCKED не является результатом приёмки. Не оставляем его артефакты как
+            # якобы готовые и не тащим уровень code-rework в следующий запуск.
+            (папка / "CLICKS.md").unlink(missing_ok=True)
+            (папка / "JUDGE.md").unlink(missing_ok=True)
+            файл_эскалации(папка).unlink(missing_ok=True)
             журнал(волна, f"{ид}: отложено — браузерная среда, не дефект кода")
             return "отложено"
         if роль in ВОЗВРАЩАЮТ_К_DEV and есть_находки(папка, роль):
