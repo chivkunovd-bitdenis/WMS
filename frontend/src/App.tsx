@@ -54,9 +54,10 @@ import {
   resolveFfPermissions,
 } from './utils/ffPermissions'
 import { setSeparateMarkingPrintEnabled } from './utils/separateMarkingPrint'
+import { useWarehouseContext } from './contexts/WarehouseContext'
 import type { InboundOperationType } from './utils/inboundOperationType'
 
-type WarehouseRow = { id: string; name: string; code: string }
+type WarehouseRow = { id: string; name: string; code: string; is_operational?: boolean }
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
 type ProductRow = {
   id: string
@@ -270,10 +271,14 @@ export default function App() {
   } = useAuth('fulfillment')
   const navigate = useNavigate()
   const [pendingMpUnloadId, setPendingMpUnloadId] = useState<string | null>(null)
-  const [warehouses, setWarehouses] = useState<WarehouseRow[]>([])
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(
-    null,
-  )
+  const {
+    warehouses,
+    selectedWarehouseId,
+    setWarehouses,
+    setSelectedWarehouseId,
+    clearWarehouseContext,
+  } =
+    useWarehouseContext('fulfillment')
   const [locations, setLocations] = useState<LocationRow[]>([])
   const [products, setProducts] = useState<ProductRow[]>([])
   const [sellers, setSellers] = useState<SellerRow[]>([])
@@ -407,15 +412,6 @@ export default function App() {
       }
       const data = (await res.json()) as WarehouseRow[]
       setWarehouses(data)
-      setSelectedWarehouseId((prev) => {
-        if (data.length === 0) {
-          return null
-        }
-        if (prev && data.some((w) => w.id === prev)) {
-          return prev
-        }
-        return data[0]!.id
-      })
     },
     [authHeaders],
   )
@@ -938,6 +934,7 @@ export default function App() {
 
   function onLogout() {
     logout()
+    clearWarehouseContext()
     setInboundSummaries([])
     setSelectedInboundId(null)
     setInboundDetail(null)

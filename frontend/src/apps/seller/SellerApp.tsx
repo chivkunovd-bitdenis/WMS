@@ -17,6 +17,7 @@ import { SellerHonestSignScreen } from '../../screens/v2/SellerHonestSignScreen'
 import { SellerSettingsScreen } from '../../screens/v2/SellerSettingsScreen'
 import { NotificationsPage } from '../../screens/shared/NotificationsPage'
 import { SellerLayout } from './SellerLayout'
+import { useWarehouseContext } from '../../contexts/WarehouseContext'
 
 type InboundSummaryRow = {
   id: string
@@ -34,7 +35,7 @@ type InboundSummaryRow = {
   created_at?: string
 }
 
-type WarehouseRow = { id: string; name: string; code: string }
+type WarehouseRow = { id: string; name: string; code: string; is_operational?: boolean }
 
 type SellerAppProps = {
   navigationBasePath?: string
@@ -61,10 +62,8 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
 
   const [shopsBusy, setShopsBusy] = useState(false)
 
-  const [warehouses, setWarehouses] = useState<WarehouseRow[]>([])
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(
-    null,
-  )
+  const { warehouses, selectedWarehouseId, setWarehouses, clearWarehouseContext } =
+    useWarehouseContext('seller')
 
   const [opsBusy, setOpsBusy] = useState(false)
   const [opsError, setOpsError] = useState<string | null>(null)
@@ -95,6 +94,11 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
     [navigationBasePath],
   )
 
+  const onLogout = useCallback(() => {
+    clearWarehouseContext()
+    logout()
+  }, [clearWarehouseContext, logout])
+
   useEffect(() => {
     const previousTitle = document.title
     document.title = 'WMS · Селлер'
@@ -111,11 +115,6 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
       }
       const rows = (await res.json()) as WarehouseRow[]
       setWarehouses(rows)
-      setSelectedWarehouseId((prev) => {
-        if (rows.length === 0) return null
-        if (prev && rows.some((w) => w.id === prev)) return prev
-        return rows[0]!.id
-      })
     },
     [authHeaders],
   )
@@ -237,8 +236,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
 
   useEffect(() => {
     if (!token || !me) {
-      setWarehouses([])
-      setSelectedWarehouseId(null)
+      clearWarehouseContext()
       setOpsBusy(false)
       setOpsError(null)
       setInboundSummaries([])
@@ -256,7 +254,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
         setOpsError(e instanceof Error ? e.message : 'Не удалось загрузить данные.')
       }
     })()
-  }, [me, refreshInboundList, refreshMpUnloadList, refreshWarehouses, token])
+  }, [clearWarehouseContext, me, refreshInboundList, refreshMpUnloadList, refreshWarehouses, token])
 
   const rootElement = (() => {
     if (!token) {
@@ -295,7 +293,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
       )
     }
     if (token && !me) {
-      return <ProfileLoadingScreen loading={loading} onLogout={() => logout()} />
+      return <ProfileLoadingScreen loading={loading} onLogout={onLogout} />
     }
     if (!me) {
       return null
@@ -309,7 +307,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
     )
     return (
       <SellerLayout
-        onLogout={() => logout()}
+        onLogout={onLogout}
         title="Портал селлера"
         userLabel={me.email}
         userRoleLabel={
