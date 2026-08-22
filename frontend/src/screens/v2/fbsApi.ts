@@ -335,6 +335,8 @@ export type FbsPrintAsset = {
   checksum: string | null
   applied_at: string | null
   error: { code: string; message: string } | null
+  order_number?: number | null
+  wb_order_id?: number | null
 }
 
 export type FbsPrintBatchRequest = {
@@ -349,7 +351,7 @@ export type FbsPrintBatch = {
   missing: number
   failed: number
   assets: FbsPrintAsset[]
-  order_errors: Array<{ order_id: string; wb_order_id: number; code: string; message: string }>
+  order_errors: Array<{ order_id: string; wb_order_id: number; code: string; message: string; order_number?: number | null }>
 }
 
 export type FbsOrderPrintTapeRequest = {

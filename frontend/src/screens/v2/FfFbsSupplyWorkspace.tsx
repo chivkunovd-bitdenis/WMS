@@ -644,23 +644,18 @@ export function FfFbsSupplyWorkspace({
       setBusy(false)
     }
   }
-
-  const requestPrintBatch = async (orderIds?: string[], retryMissing = false) => {
+  const requestPrintBatch = async (_orderIds?: string[], retryMissing = false) => {
     if (!workspace) return
-    setBusy(true)
-    setError(null)
+    setBusy(true); setError(null)
     try {
       const batch = await fetchFbsPrintBatch(token, authHeaders, workspace.supply.id, {
         kind: 'order_sticker',
-        order_ids: orderIds ?? workspace.orders.map((order) => order.id),
+        order_ids: workspace.orders.map((order) => order.id),
         retry_missing: retryMissing,
       })
-      setPrintBatch(batch)
-      if (batch.ready === 0) {
+      setPrintBatch(batch); if (batch.ready === 0) {
         setError('WB не вернул ни одного готового стикера. Печать не открыта.')
-      } else {
-        setPrintPreviewOpen(true)
-      }
+      } else setPrintPreviewOpen(true)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Стикеры не получены.')
     } finally {

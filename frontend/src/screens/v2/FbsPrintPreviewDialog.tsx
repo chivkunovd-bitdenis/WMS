@@ -179,7 +179,7 @@ export function FbsPrintPreviewDialog({
           {error ? <Alert severity="error">{error}</Alert> : null}
           {batch?.order_errors.map((item) => (
             <Alert key={item.order_id} severity="error">
-              Заказ WB №{item.wb_order_id}: {item.message}
+              Заказ WB №{item.wb_order_id}: стикер не получен
             </Alert>
           ))}
           {loading ? (
@@ -194,8 +194,11 @@ export function FbsPrintPreviewDialog({
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 2 }}>
             {previews.map(({ asset, objectUrl }) => (
               <Paper key={asset.id} variant="outlined" sx={{ p: 2 }}>
-                <Typography variant="subtitle2">{assetLabel(asset)}</Typography>
-                <Box component="img" src={objectUrl} alt={assetLabel(asset)} sx={{ width: '100%', aspectRatio: `${labelSize.widthMm} / ${labelSize.heightMm}`, objectFit: 'contain', bgcolor: '#fff', my: 1.5 }} />
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ alignItems: 'stretch' }}><Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="subtitle2">Стикер WB №{asset.wb_order_id ?? '—'}</Typography><Box component="img" src={objectUrl} alt={assetLabel(asset)} sx={{ width: '100%', aspectRatio: `${labelSize.widthMm} / ${labelSize.heightMm}`, objectFit: 'contain', bgcolor: '#fff', my: 1.5 }} />
+                  </Box>
+                  <Paper variant="outlined" sx={{ width: { xs: '100%', md: 180 }, minHeight: 120, p: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'grey.50' }}><Typography variant="h6" sx={{ textAlign: 'center' }}>Служебная этикетка WMS<br />№ {asset.order_number ?? '—'}</Typography></Paper>
+                </Stack>
                 <Stack direction="row" spacing={1}>
                   {previews.length > 1 ? <Button startIcon={<PrintOutlinedIcon />} onClick={() => print([{ asset, objectUrl }])} data-task-id="FBS-10">Печать только этого</Button> : null}
                   {asset.kind !== 'box_qr' ? (
