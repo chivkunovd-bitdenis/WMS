@@ -229,16 +229,31 @@ export function UiKitShowcase() {
       </Section>
 
       <Section title="Таблица — показать ещё" note="Продолжение списка скрывается без следующего курсора и блокируется на время запроса.">
-        <Stack spacing={2} sx={{ alignItems: 'flex-start' }}>
-          <TableLoadMore hasNext={false} onLoadMore={() => undefined} testId="showcase-load-more-hidden" />
-          <TableLoadMore hasNext onLoadMore={demonstrateLoadMore} testId="showcase-load-more-ready" />
-          <TableLoadMore hasNext loading onLoadMore={() => undefined} testId="showcase-load-more-loading" />
-          <TableLoadMore
-            hasNext
-            error="Не удалось загрузить следующие заказы"
-            onLoadMore={() => undefined}
-            testId="showcase-load-more-error"
-          />
+        <Stack spacing={2}>
+          <Box>
+            <Typography variant="subtitle2">Без следующего курсора</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Элемент скрыт, поэтому под этой подписью нет кнопки.
+            </Typography>
+            <TableLoadMore hasNext={false} onLoadMore={() => undefined} testId="showcase-load-more-hidden" />
+          </Box>
+          <Box>
+            <Typography variant="subtitle2">Доступно</Typography>
+            <TableLoadMore hasNext onLoadMore={demonstrateLoadMore} testId="showcase-load-more-ready" />
+          </Box>
+          <Box>
+            <Typography variant="subtitle2">Загрузка</Typography>
+            <TableLoadMore hasNext loading onLoadMore={() => undefined} testId="showcase-load-more-loading" />
+          </Box>
+          <Box>
+            <Typography variant="subtitle2">Ошибка</Typography>
+            <TableLoadMore
+              hasNext
+              error="Не удалось загрузить следующие заказы"
+              onLoadMore={() => undefined}
+              testId="showcase-load-more-error"
+            />
+          </Box>
           <Typography variant="caption" color="text.secondary">
             Интерактивный пример: вызовов загрузки — {loadMoreCalls}. Нажмите кнопку во время «Загружаем…»: повторный
             вызов не произойдёт; после ошибки действие остаётся доступным.
