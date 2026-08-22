@@ -80,6 +80,15 @@ def test_delivery_uses_wb_verdict_for_allowed_decisions(decision: str) -> None:
     _validate_checks_pass(checks)
 
 
+def test_delivery_allows_order_without_wb_metadata_requirements() -> None:
+    checks = _build_delivery_checks(
+        _mock_supply(), [_mock_order(FBS_ORDER_STATUS_PACKED)], cargo_qr_ready=True
+    )
+    allowed = next(check for check in checks if check.code == "marking_allowed")
+    assert allowed.ok is True
+    _validate_checks_pass(checks)
+
+
 @pytest.mark.parametrize(
     ("decision", "reason"),
     [

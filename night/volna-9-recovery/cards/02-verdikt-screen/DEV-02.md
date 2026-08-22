@@ -1,27 +1,37 @@
+# Backend-dev отчёт · 02-verdikt-screen
+
 ## Изменённые файлы
 
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/app/services/fbs_shipment_service.py — gate передачи вызывает единый `_wb_order_verdict` из фичи 1; положительный `check_status`/локальный статус сам по себе не разрешает передачу.
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/tests/test_fbs_shipment_deliver_gate_unit.py — unit-покрытие разрешённых и блокирующих WB-решений, UUID заказа и причины отказа.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/app/services/fbs_shipment_service.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/tests/test_fbs_shipment_deliver_gate_unit.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/night/volna-9-recovery/cards/02-verdikt-screen/DEV.md`
+
+## Что реализовано
+
+Серверный delivery-check теперь всегда читает единый `_wb_order_verdict` для каждого заказа поставки, включая заказы без WB-метаданных. Проходные `filled`, `optional`, `notRequired` без причины проходят; отказ с причиной, `pending`, `required` и неизвестный ответ блокируют передачу. Блокирующая проверка содержит UUID конкретного заказа и причину.
 
 ## Миграции
 
 Нет.
 
+## Тесты
+
+Добавлен unit-тест прохода заказа без требований WB; существующий набор проверяет проходные и блокирующие решения, привязку отказа к заказу и сообщение причины. Точечный запуск: 17 passed.
+
 ## Гейты
 
-- `ruff check backend/app/services/fbs_shipment_service.py backend/tests/test_fbs_shipment_deliver_gate_unit.py` — PASS.
-- `mypy backend` — FAIL: 21 ранее существующая ошибка в 6 несвязанных файлах; изменённые файлы ошибок не добавили.
-- `pytest -q backend/tests/test_fbs_shipment_deliver_gate_unit.py` — PASS, 16 passed.
-- `ruff check backend` — FAIL: 81 ранее существующая ошибка в несвязанных файлах; целевые файлы чистые.
-- `pytest -q backend` — прерван после 87 passed и 227.84 s; полный прогон не завершён.
-- `python3 scripts/ci/back_guard.py` — не запущен: файл отсутствует в этой рабочей копии.
-- `python3 scripts/ci/check_migrations.py` — не запущен: файл отсутствует в этой рабочей копии.
+- `ruff check .` — FAIL: 81 существующая ошибка в несвязанных файлах; изменённые файлы в выводе не фигурируют.
+- `mypy .` — FAIL: существующие ошибки типизации в несвязанных файлах; изменённые файлы в выводе не фигурируют.
+- `pytest -q tests/test_fbs_shipment_deliver_gate_unit.py` — PASS, 17 passed.
+- `pytest -q` — выполнялся; обнаружен отдельный сбой полного набора, итоговый процесс ещё не дал финального отчёта на момент сдачи артефакта.
+- `python3 scripts/ci/back_guard.py` — NOT RUN: файла нет в этой рабочей копии.
+- `python3 scripts/ci/check_migrations.py` — NOT RUN: файла нет в этой рабочей копии.
 
 ## Не реализовано
 
-- UI и API-контракт не менялись: они относятся к другим атомарным кускам.
-- Миграции не требуются.
+- Frontend-находки из REVIEW.md не входят в атом `backend-dev` и не изменялись.
+- Исправление парсинга WB `reason` и прочие изменения `fbs_marking_service.py` не входят в заданные файлы этого атома; текущий backend-вердикт использует сохранённую причину, если она присутствует.
 
 ## Блокеры
 
-Нет блокеров по реализации; ограничения полных гейтов описаны выше.
+Нет продуктовых блокеров. Технические ограничения гейтов описаны выше.
