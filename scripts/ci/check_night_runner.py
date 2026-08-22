@@ -590,6 +590,20 @@ def main() -> int:
             проверь("rework: отрицательный JUDGE остаётся входом ремонта",
                     (t / "JUDGE.md").exists(), True)
 
+            for имя in ("DEV.md", "REVIEW.md", "DESIGN-REVIEW.md", "CLICKS.md", "JUDGE.md",
+                        "CONTRACT.md", "CASES.md", "FEATURES.md", "MOCKUP.html"):
+                (t / имя).write_text("x\n", encoding="utf-8")
+            n.аннулировать_после_вердикта(t, "ui-critic")
+            проверь("rework: UI-находка сохраняет готовые contract/cases/features/mockup",
+                    [имя for имя in ("CONTRACT.md", "CASES.md", "FEATURES.md", "MOCKUP.html")
+                     if (t / имя).exists()],
+                    ["CONTRACT.md", "CASES.md", "FEATURES.md", "MOCKUP.html"])
+            проверь("rework: UI-находка аннулирует старый review и browser evidence",
+                    [имя for имя in ("DEV.md", "REVIEW.md", "CLICKS.md", "JUDGE.md")
+                     if (t / имя).exists()], [])
+            проверь("rework: отрицательный DESIGN остаётся входом screen-dev",
+                    (t / "DESIGN-REVIEW.md").exists(), True)
+
             repair = pathlib.Path(временный) / "repair-plan"
             repair.mkdir()
             (repair / "REVIEW.md").write_text(
