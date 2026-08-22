@@ -1,25 +1,24 @@
-# DEV · 03-no-distribution-mode
-
 ## Изменённые файлы
 
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/api/fbs_supplies.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/services/fbs_packing_box_service.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/night/volna-9-recovery/cards/03-no-distribution-mode/DEV.md
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx
+
+Исправлена находка REVIEW-8: объяснение блокировки переключателя показывается только когда в короба действительно назначены заказы. При пустых коробах галка остаётся доступной без ложной подсказки. Поле поставки и API-переключатель уже были реализованы предыдущими атомами и не изменялись.
+
+Указанный в карточке файл `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/frontend/openapi/fbs-operations.openapi.json` отсутствует в checkout, поэтому не создавался.
 
 ## Гейты
 
-- ruff: целевые файлы — PASS; полный `ruff check .` — FAIL на 80 ранее существовавших ошибках вне изменённых участков.
-- mypy: FAIL на 21 ранее существовавшей ошибке в 6 файлах; изменённые файлы в диагностике не указаны.
-- pytest: полный прогон — 813 passed, 5 skipped, 2 unrelated failed; целевой `pytest -q tests/test_fbs_packing_box.py` — PASS, 9 passed. Unrelated failures: exported OpenAPI snapshot and cutoff test with stale fixed date.
-- back_guard.py: FAIL — файл `scripts/ci/back_guard.py` отсутствует в этой рабочей копии.
-- check_migrations.py: FAIL — файл `scripts/ci/check_migrations.py` отсутствует в этой рабочей копии.
+- `npx tsc --noEmit -p tsconfig.app.json` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/frontend` — красный/не выполнен: локальный `node_modules/.bin/tsc` отсутствует, первый запуск `npx` завис без вывода и остановлен.
+- `python3 scripts/ui/ui_guard.py` — красный: зафиксированы нарушения `экран-монолит` в `src/components/WbProductPickerDialog.tsx` (0 → 646), `src/screens/v2/FfFbsSupplyWorkspace.tsx` (2493 → 2507) и `src/screens/v2/SellerInboundDraftScreen.tsx` (1111 → 1169). Базовая линия не обновлялась.
+- `npm run test:unit` — красный: `vitest: command not found` (код 127).
 
 ## Не реализовано
 
-- Фронтендовые пункты REVIEW.md (E2E, подсказка и экран) не реализованы: они вне роли backend-dev и явно разрешённых backend-файлов.
-- Миграций нет: атом использует уже существующие поля поставки.
+- Backend-находки REVIEW-1–5 и REVIEW-8 (единый источник истины, legacy-выключение, атомарность, идемпотентный аудит, текст 409 и реестр B-09) не изменялись: они находятся вне разрешённых файлов и роли `screen-dev`.
+- Обновление e2e-теста из REVIEW-6 не выполнялось: файл не входит в разрешённый список файлов экрана.
+- OpenAPI-файл из REVIEW-9 не найден в checkout; создание файла вне реестра запрещено.
 
 ## Находки
 
-- Секреты, ключи, токены и `.env` не читались.
-- В рабочем дереве присутствует несвязанный `night/volna-9-recovery/JOURNAL.md`; его не изменял.
+- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались.
+- Боевой прод и кабинет Wildberries не затрагивались.

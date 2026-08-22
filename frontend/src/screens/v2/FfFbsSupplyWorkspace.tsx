@@ -2037,7 +2037,11 @@ export function FfFbsSupplyWorkspace({
                             data-task-id="FBS-12"
                           />
                         )}
-                        label={<Tooltip title="В короба уже разложены заказы. Чтобы изменить режим, сначала уберите их из коробов."><span>Без распределения</span></Tooltip>}
+                        label={assignedBoxOrderIds.size > 0 ? (
+                          <Tooltip title="В короба уже разложены заказы. Чтобы изменить режим, сначала уберите их из коробов.">
+                            <span>Без распределения</span>
+                          </Tooltip>
+                        ) : <span>Без распределения</span>}
                         data-task-id="FBS-12"
                       />
                       <TextField label="Коробов" value={boxCount} size="small" type="number" disabled={!stageIsCurrent || !packagingEditable} onChange={(e) => setBoxCount(e.target.value)} slotProps={{ htmlInput: { min: 1, max: 100 } }} sx={{ width: 104 }} data-task-id="FBS-12" />
