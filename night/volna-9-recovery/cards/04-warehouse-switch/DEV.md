@@ -2,21 +2,17 @@
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/FfFbsStockSyncScreen.tsx` — непривязанные WB-склады остаются видимыми при выборе любого операционного склада, чтобы оператор мог создать первую привязку; привязанные строки по-прежнему фильтруются выбранным складом.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md` — обязательный отчёт screen-dev.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/InboundScreen.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/OutboundScreen.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md`
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend` — не подтверждён: команда не вывела результат в рабочей копии.
-- `python3 scripts/ui/ui_guard.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch` — не подтверждён: команда не вывела результат в рабочей копии.
-- `npm run test:unit` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend` — не подтверждён: команда не вывела результат в рабочей копии.
-- `git diff --check` — зелёный.
+- `npx tsc --noEmit -p tsconfig.app.json` — не подтверждён: `npx` не завершился в рабочей копии без доступного локального `tsc`, процесс остановлен.
+- `python3 scripts/ui/ui_guard.py` — красный из-за пяти существующих нарушений в соседних экранах: `WbProductPickerDialog.tsx`, `FfFbsOrdersScreen.tsx`, `FfFbsStockSyncScreen.tsx`, `FfFbsSupplyWorkspace.tsx`, `SellerInboundDraftScreen.tsx`. В изменённом `InboundScreen.tsx` нарушение стало меньше (`691 → 681` строк); новых нарушений в изменённых файлах guard не сообщил.
+- `npm run test:unit` — не запущен: `vitest: command not found`.
 
 ## Не реализовано
 
-- Остальные находки из `REVIEW.md` относятся к backend, другим экранам или документации и не входят в разрешённый слой этого атома.
-- Полный браузерный сценарий с двумя операционными складами не добавлялся: контракт разрешает только перечисленные файлы, а существующий e2e-файл не содержит готового сценария для настройки двух складов без изменений за пределами этого атома.
-
-## Находки
-
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не читались и не изменялись.
+- Backend-находки REVIEW.md не относятся к разрешённым файлам этого screen-dev атома и не изменялись.
+- Полный живой E2E-прогон не выполнен: локальные frontend-зависимости для unit/TypeScript отсутствуют.

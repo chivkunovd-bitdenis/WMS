@@ -116,8 +116,9 @@ export function OutboundScreen(props: Props) {
         <div className="stack">
           <WarehouseContextSwitch
             options={warehouses.map((warehouse) => ({ id: warehouse.id, name: warehouse.name }))}
-            value={selectedWarehouseId}
+            value={outboundDetail?.warehouse_id ?? selectedWarehouseId}
             onChange={(warehouseId) => onWarehouseChange?.(warehouseId)}
+            disabledReason={outboundDetail ? 'Склад закреплён: документ уже открыт' : undefined}
             testId="outbound-warehouse-context"
           />
           <Card className="card" data-testid="outbound-section">

@@ -191,8 +191,9 @@ export function InboundScreen(props: Props) {
         <div className="stack">
           <WarehouseContextSwitch
             options={warehouses.map((warehouse) => ({ id: warehouse.id, name: warehouse.name }))}
-            value={selectedWarehouseId}
+            value={inboundDetail?.warehouse_id ?? selectedWarehouseId}
             onChange={(warehouseId) => onWarehouseChange?.(warehouseId)}
+            disabledReason={inboundDetail ? 'Склад закреплён: документ уже открыт' : undefined}
             testId="inbound-warehouse-context"
           />
           <Card className="card">
