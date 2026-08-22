@@ -880,8 +880,26 @@ def _raise_from_packaging_integration(
         raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
     if exc.code in {"wrong_delivery_type", "invalid_status_transition"}:
         raise_fbs_http(status.HTTP_400_BAD_REQUEST, exc.code)
-    if exc.code == "packaging_box_already_bound":
-        raise_fbs_http(status.HTTP_409_CONFLICT, exc.code)
+    if exc.code in {
+        "packaging_box_already_bound",
+        "insufficient_sorting_stock",
+        "foreign_sorting_location",
+    }:
+        messages = {
+            "insufficient_sorting_stock": (
+                "Недостаточно остатка товара в сортировочной ячейке склада "
+                "консолидации. Сначала завершите подбор."
+            ),
+            "foreign_sorting_location": (
+                "Ячейка упаковки относится к другому складу. Используйте "
+                "сортировочную ячейку склада консолидации поставки."
+            ),
+        }
+        raise_fbs_http(
+            status.HTTP_409_CONFLICT,
+            exc.code,
+            message=exc.message or messages.get(exc.code),
+        )
     raise_fbs_http(status.HTTP_500_INTERNAL_SERVER_ERROR, exc.code)
 
 

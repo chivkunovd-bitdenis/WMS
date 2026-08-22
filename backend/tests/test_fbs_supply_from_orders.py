@@ -7,12 +7,14 @@ import os
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 import pytest
+from fastapi import HTTPException
 from httpx import AsyncClient
 from sqlalchemy import func, select
 
+from app.api import fbs_supplies as fbs_supplies_api
 from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.fbs_order import (
@@ -29,10 +31,50 @@ from app.models.fbs_wb_operation import (
     FbsWbOperation,
 )
 from app.models.product import Product
+from app.services import fbs_packaging_integration_service as packaging_int_svc
 from app.services import inventory_service
 from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
 from app.services.wildberries_client import WildberriesClientError
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
+
+
+@pytest.mark.parametrize(
+    ("code", "service_message", "expected_message"),
+    [
+        (
+            "insufficient_sorting_stock",
+            "В сортировке A-01 числится 0 шт., нужна 1 шт.",
+            "В сортировке A-01 числится 0 шт., нужна 1 шт.",
+        ),
+        (
+            "foreign_sorting_location",
+            None,
+            (
+                "Ячейка упаковки относится к другому складу. Используйте "
+                "сортировочную ячейку склада консолидации поставки."
+            ),
+        ),
+    ],
+)
+def test_packaging_warehouse_blocks_return_operator_message(
+    code: str,
+    service_message: str | None,
+    expected_message: str,
+) -> None:
+    """TC-NEW-04-WH-errors — warehouse packaging blocks are conflicts, not HTTP 500."""
+    error = packaging_int_svc.FbsPackagingIntegrationError(code, service_message)
+
+    with pytest.raises(HTTPException) as raised:
+        fbs_supplies_api._raise_from_packaging_integration(error)
+
+    assert raised.value.status_code == 409
+    detail = cast(dict[str, object], raised.value.detail)
+    assert detail == {
+        "code": code,
+        "message": expected_message,
+        "context": {},
+        "retryable": False,
+    }
 
 
 async def _register_ff_admin(async_client: AsyncClient) -> tuple[dict[str, str], str]:

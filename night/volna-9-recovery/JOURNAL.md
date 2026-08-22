@@ -158,3 +158,5 @@
 22:51 04-warehouse-switch: отложено — reviewer, эскалация не помогла
 23:02   04-warehouse-switch · resume: поатомный rework Sol по сохранённым находкам
 23:06   04-warehouse-switch · backend-dev: готово
+23:06   04-warehouse-switch · dev: фича 2/13 сохранена a4a7c324fd8f
+23:11   04-warehouse-switch · backend-dev: готово
