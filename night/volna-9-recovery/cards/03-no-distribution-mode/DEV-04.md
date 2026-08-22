@@ -1,24 +1,17 @@
+# DEV · 03-no-distribution-mode
+
 ## Изменённые файлы
 
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx
-
-Исправлена находка REVIEW-8: объяснение блокировки переключателя показывается только когда в короба действительно назначены заказы. При пустых коробах галка остаётся доступной без ложной подсказки. Поле поставки и API-переключатель уже были реализованы предыдущими атомами и не изменялись.
-
-Указанный в карточке файл `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/frontend/openapi/fbs-operations.openapi.json` отсутствует в checkout, поэтому не создавался.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/frontend/tests-e2e/ff-fbs-supply.spec.ts` — mock workspace теперь содержит `boxes_without_distribution`, а тест переключения моделирует отдельный toggle API и сохраняет включённый режим до создания коробов.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/docs/blockers/S-03.md` — B-09 описывает блокировку только при наличии назначений и показывает операторскую подсказку.
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/frontend` — красный/не выполнен: локальный `node_modules/.bin/tsc` отсутствует, первый запуск `npx` завис без вывода и остановлен.
-- `python3 scripts/ui/ui_guard.py` — красный: зафиксированы нарушения `экран-монолит` в `src/components/WbProductPickerDialog.tsx` (0 → 646), `src/screens/v2/FfFbsSupplyWorkspace.tsx` (2493 → 2507) и `src/screens/v2/SellerInboundDraftScreen.tsx` (1111 → 1169). Базовая линия не обновлялась.
-- `npm run test:unit` — красный: `vitest: command not found` (код 127).
+- `npx tsc --noEmit -p tsconfig.app.json` — красный: `npx` попытался скачать пакет `tsc` из npm, но сеть недоступна (`ENOTFOUND registry.npmjs.org`).
+- `python3 scripts/ui/ui_guard.py` — красный: guard сообщил новые относительно текущей базы нарушения в `src/components/WbProductPickerDialog.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx` и `src/screens/v2/SellerInboundDraftScreen.tsx`; базовую линию не обновлял.
+- `npm run test:unit` — красный: локальная зависимость `vitest` отсутствует (`vitest: command not found`).
 
 ## Не реализовано
 
-- Backend-находки REVIEW-1–5 и REVIEW-8 (единый источник истины, legacy-выключение, атомарность, идемпотентный аудит, текст 409 и реестр B-09) не изменялись: они находятся вне разрешённых файлов и роли `screen-dev`.
-- Обновление e2e-теста из REVIEW-6 не выполнялось: файл не входит в разрешённый список файлов экрана.
-- OpenAPI-файл из REVIEW-9 не найден в checkout; создание файла вне реестра запрещено.
-
-## Находки
-
-- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались.
-- Боевой прод и кабинет Wildberries не затрагивались.
+- Backend-находки 1–2 из `REVIEW.md` не менялись: они находятся вне роли screen-dev и вне разрешённого экранного слоя.
+- Каноническая OpenAPI-схема уже содержит маршрут `/operations/fbs-supplies/{supply_id}/boxes-without-distribution` и поле `boxes_without_distribution`, поэтому изменений в ней не потребовалось.

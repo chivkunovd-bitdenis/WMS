@@ -76,6 +76,7 @@ function workspace({
       nearest_deadline_at: new Date(Date.now() + 100 * 3600 * 1000).toISOString(),
       packaging_task_id: null,
       barcode_asset: null,
+      boxes_without_distribution: false,
     },
     stage,
     progress: {
@@ -355,6 +356,14 @@ test('fbs workspace: boxes without distribution sends durable mode', async ({ pa
   let createBody: JsonObject | null = null
 
   await page.route('**/operations/fbs-supplies/sup-1/workspace', (route) => json(route, currentWorkspace))
+  await page.route('**/operations/fbs-supplies/sup-1/boxes-without-distribution', async (route) => {
+    const body = route.request().postDataJSON() as { enabled?: boolean }
+    currentWorkspace = {
+      ...currentWorkspace,
+      supply: { ...(currentWorkspace.supply as JsonObject), boxes_without_distribution: body.enabled === true },
+    }
+    await json(route, currentWorkspace)
+  })
   await page.route('**/operations/fbs-supplies/sup-1/boxes', async (route) => {
     createBody = route.request().postDataJSON() as JsonObject
     currentWorkspace = {
