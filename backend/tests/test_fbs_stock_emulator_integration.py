@@ -44,7 +44,7 @@ from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.marketplace_unload import MarketplaceUnloadLine, MarketplaceUnloadRequest
 from app.models.marketplace_unload_reservation import MarketplaceUnloadReservation
 from app.models.product import Product
-from app.services import inventory_service, stock_direction_service
+from app.services import inventory_service
 from app.services.fbs_autopoll_service import SellerStockSyncResult, sync_seller_stocks
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import sync_seller_orders
@@ -267,6 +267,17 @@ def test_prod_compose_runs_migrations_once_before_workers() -> None:
     assert 'command: ["alembic", "upgrade", "head"]' in prod
     assert "service_completed_successfully" in prod
     assert "alembic upgrade head" not in worker_block
+
+
+def test_prod_compose_isolates_print_queue_in_single_worker() -> None:
+    prod = (REPO_ROOT / "docker-compose.prod.yml").read_text()
+    worker_block = prod.split("  celery_worker:", 1)[1].split("  print_worker:", 1)[0]
+    print_block = prod.split("  print_worker:", 1)[1].split("  celery_beat:", 1)[0]
+
+    assert "--queues=celery" in worker_block
+    assert "--queues=celery,print" not in worker_block
+    assert "--queues=print" in print_block
+    assert "--concurrency=1" in print_block
 
 
 # TC-NEW-FBS-STOCK-017

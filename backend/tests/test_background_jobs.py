@@ -80,8 +80,10 @@ async def test_duplicate_pending_job_is_not_republished(async_client: AsyncClien
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("finished_status", [JOB_STATUS_FAILED, JOB_STATUS_DONE])
 async def test_finished_marking_job_can_be_retried_with_same_idempotency_key(
     async_client: AsyncClient,
+    finished_status: str,
 ) -> None:
     suffix = str(int(time.time() * 1000))
     reg = await async_client.post("/auth/register", json={
@@ -96,7 +98,7 @@ async def test_finished_marking_job_can_be_retried_with_same_idempotency_key(
             session, tenant_id, job_type=JOB_TYPE_MARKING_LABEL_TAPE,
             idempotency_key="retryable-request", payload_json={"code_ids": ["1"]},
         )
-        first.status = JOB_STATUS_FAILED
+        first.status = finished_status
         await session.commit()
 
         second = await create_pending_job(

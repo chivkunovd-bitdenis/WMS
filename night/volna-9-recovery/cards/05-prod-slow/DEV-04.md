@@ -1,32 +1,35 @@
-# DEV · 05-prod-slow · backend-dev
+# Backend-dev отчёт · 05-prod-slow
 
 ## Изменённые файлы
 
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/api/marking_codes.py — повторный активный job больше не публикуется повторно.
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/background_job_service.py — атомарный захват pending-job и плановая очистка истёкших `label_tape` assets.
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/tasks/background_jobs.py — Celery-задача очистки.
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/celery_app.py — маршрут `marking_label_tape` в очередь `print` и hourly cleanup в beat.
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/docker-compose.prod.yml — production worker слушает `celery,print`.
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_background_jobs.py — регрессия идемпотентной публикации pending-job.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/docker-compose.prod.yml` — очередь `print` отделена от обычного Celery worker; добавлен отдельный `print_worker` с `--concurrency=1`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_background_jobs.py` — регрессия повторного запуска с тем же ключом после `failed` и `done`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_fbs_stock_emulator_integration.py` — проверка разделения очередей в production compose.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/night/volna-9-recovery/cards/05-prod-slow/DEV.md` — этот отчёт.
+
+## Что реализовано
+
+- Production запускает обычные задачи только в очереди `celery`, а печать лент — в отдельном worker очереди `print` с одним процессом; две тяжёлые ленты не собираются параллельно.
+- Условный уникальный индекс активных print-job уже поддерживает PostgreSQL и SQLite; тест теперь проверяет повтор после обоих финальных статусов (`failed` и `done`).
 
 ## Миграции
 
-нет — схема базы данных не менялась.
+- Нет новых миграций. Используется существующая `20260822_0050`, которая добавляет `idempotency_key`, частичный индекс активных job для PostgreSQL и SQLite и `fbs_print_assets.expires_at`.
 
 ## Гейты
 
-- ruff: targeted files — PASS; полный `ruff check .` — FAIL на существующих несвязанных нарушениях в рабочей копии.
-- mypy: FAIL на существующих несвязанных ошибках в `wildberries_credentials_service.py` и `fbs_stock_sync_service.py`; изменённые файлы не добавили диагностик.
-- pytest: `backend/tests/test_background_jobs.py` — 5 passed.
-- back_guard.py: не запущен — файл отсутствует в этой рабочей копии (`scripts/ci/back_guard.py` не найден).
-- check_migrations.py: не запущен — файл отсутствует в этой рабочей копии (`scripts/ci/check_migrations.py` не найден).
+- `ruff check .` — FAIL: 80 существующих нарушений в несвязанных файлах; изменённые backend-тесты проверены отдельно и ошибок не имеют.
+- `mypy .` — FAIL: 21 существующая ошибка в 6 несвязанных файлах; изменённые файлы не добавили ошибок.
+- `pytest` — целевые тесты фоновых print-job прошли; полный прогон в этой среде не завершил вывод после старта набора.
+- `python3 scripts/ci/back_guard.py` — не запущен: файл отсутствует в рабочей копии.
+- `python3 scripts/ci/check_migrations.py` — не запущен: файл отсутствует в рабочей копии.
+- `git diff --check` — PASS.
 
 ## Не реализовано
 
-- Frontend-состояния и Playwright-сценарии не менялись: они относятся к другой роли.
-- Находки ревью по WB-autopoll и frontend не относятся к этому backend-атому и не затрагивались.
-- Нагрузочный прогон 155/500 кодов с `/health` не выполнялся в рамках локального backend-теста.
+- Frontend polling, закрытие диалога, popup/fallback и E2E-сценарии не менялись: это не backend-dev слой данного атома.
+- Нагрузочный прогон на 155/500 кодов и `/health` не запускался: для него нужен стенд с брокером и worker; production не затрагивался.
 
-## Блокеры
+## Находки
 
-Нет блокеров по реализации. Полные общие ruff/mypy и два repository guard-скрипта ограничены состоянием/составом этой рабочей копии, указанным выше.
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных, боевой прод и живой кабинет Wildberries не читались и не затрагивались.
