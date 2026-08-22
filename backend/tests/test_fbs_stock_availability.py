@@ -263,6 +263,63 @@ async def test_fbo_reserve_does_not_reduce_fbs_publish(async_client: AsyncClient
     assert after_mp == 9
 
 
+# TC-NEW-FBS-STOCK-036 — выбранный заказ не блокирует собственный preflight.
+@pytest.mark.asyncio
+async def test_selected_fbs_order_reservation_can_be_excluded(
+    async_client: AsyncClient,
+) -> None:
+    """A selected order's existing reservation remains available to its supply."""
+    _headers, seller_id, warehouse_id, product_id, storage_loc_id = (
+        await _setup_tenant_product(async_client)
+    )
+
+    async with SessionLocal() as session:
+        product = await session.get(Product, product_id)
+        assert product is not None
+        tenant_id = product.tenant_id
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=product_id,
+            storage_location_id=storage_loc_id,
+            quantity_delta=1,
+            movement_type="inbound_intake",
+        )
+        order = FbsOrder(
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            warehouse_id=warehouse_id,
+            product_id=product_id,
+            wb_order_id=900_036,
+            created_at_wb=product.created_at,
+            deadline_at=product.created_at,
+            mapping_status="mapped",
+            reserve_status="reserved",
+        )
+        session.add(order)
+        await session.flush()
+        session.add(
+            FbsOrderReservation(
+                tenant_id=tenant_id,
+                fbs_order_id=order.id,
+                product_id=product_id,
+                warehouse_id=warehouse_id,
+                quantity=1,
+            )
+        )
+        await session.commit()
+
+        available = await fbs_available_qty_by_product(
+            session,
+            tenant_id,
+            warehouse_id,
+            [product_id],
+            exclude_fbs_order_ids=frozenset({order.id}),
+        )
+
+    assert available[product_id] == 1
+
+
 # TC-NEW-FBS-STOCK-007
 @pytest.mark.asyncio
 async def test_inventory_summary_includes_fbs_reserve(async_client: AsyncClient) -> None:

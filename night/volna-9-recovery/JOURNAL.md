@@ -43,3 +43,5 @@
 15:44   04-warehouse-switch · reviewer: готово
 15:44   04-warehouse-switch · reviewer: находки, круг 1 — назад к разработке
 15:46   04-warehouse-switch · backend-dev: готово
+15:46   04-warehouse-switch · dev: фича 1/13 сохранена 57d73f5b2981
+15:54   04-warehouse-switch · backend-dev: готово

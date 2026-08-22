@@ -186,8 +186,17 @@ async def _stock_preflight(
     )).scalars().all())
     availability: dict[uuid.UUID, dict[uuid.UUID, int]] = {}
     for warehouse in warehouses:
+        # Selected orders already consume their own reservations. Exclude
+        # those reservations so preflight does not subtract them twice.
+        selected_order_ids = frozenset(
+            order.id for order in orders if order.warehouse_id == warehouse.id
+        )
         availability[warehouse.id] = await fbs_available_qty_by_product(
-            session, tenant_id, warehouse.id, list(required)
+            session,
+            tenant_id,
+            warehouse.id,
+            list(required),
+            exclude_fbs_order_ids=selected_order_ids or None,
         )
     current_id = orders[0].warehouse_id if orders else None
     def coverage(warehouse: Warehouse) -> int:
