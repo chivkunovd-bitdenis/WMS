@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { PrintAction } from './Actions'
 
 describe('PrintAction', () => {
   it('uses the storage invoice label in row and panel placements', () => {
-    const row = PrintAction({ what: 'накладную', placement: 'row' })
-    const panel = PrintAction({ what: 'накладную', placement: 'panel' })
+    const row = renderToStaticMarkup(<PrintAction what="накладную" placement="row" />)
+    const panel = renderToStaticMarkup(<PrintAction what="накладную" placement="panel" />)
 
-    expect(row.props.title).toBe('Печать накладной')
-    expect(panel.props.children).toBe('Печать накладной')
+    expect(row).toContain('aria-label="Печать накладной"')
+    expect(panel).toContain('Печать накладной')
   })
 
   it('keeps existing labels in row and panel placements', () => {
@@ -19,30 +20,26 @@ describe('PrintAction', () => {
     ] as const
 
     for (const [what, label] of labels) {
-      const row = PrintAction({ what, placement: 'row' })
-      const panel = PrintAction({ what, placement: 'panel' })
+      const row = renderToStaticMarkup(<PrintAction what={what} placement="row" />)
+      const panel = renderToStaticMarkup(<PrintAction what={what} placement="panel" />)
 
-      expect(row.props.title).toBe(label)
-      expect(panel.props.children).toBe(label)
+      expect(row).toContain(`aria-label="${label}"`)
+      expect(panel).toContain(label)
     }
   })
 
   it('preserves disabled explanations in row and panel placements', () => {
     const reason = 'Расчёт ещё не зафиксирован'
-    const disabledPanel = PrintAction({
-      what: 'накладную',
-      placement: 'panel',
-      disabledReason: reason,
-    })
-    const disabledRow = PrintAction({
-      what: 'накладную',
-      placement: 'row',
-      disabledReason: reason,
-    })
+    const disabledPanel = renderToStaticMarkup(
+      <PrintAction what="накладную" placement="panel" disabledReason={reason} />,
+    )
+    const disabledRow = renderToStaticMarkup(
+      <PrintAction what="накладную" placement="row" disabledReason={reason} />,
+    )
 
-    expect(disabledPanel.props.title).toBe(reason)
-    expect(disabledPanel.props.children.props.disabled).toBe(true)
-    expect(disabledRow.props.title).toBe(reason)
-    expect(disabledRow.props.children.props.children.props.disabled).toBe(true)
+    expect(disabledPanel).toContain(`aria-label="${reason}"`)
+    expect(disabledPanel).toContain('disabled=""')
+    expect(disabledRow).toContain(`aria-label="${reason}"`)
+    expect(disabledRow).toContain('disabled=""')
   })
 })
