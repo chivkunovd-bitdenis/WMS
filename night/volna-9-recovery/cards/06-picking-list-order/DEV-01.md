@@ -1,19 +1,16 @@
 ## Изменённые файлы
 
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/ui-kit/ModalFrame.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/ui-kit/FilterBar.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/ui-kit/Cells.tsx`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/ui-kit/Actions.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/ui-kit/index.ts`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/ui-kit/UiKitShowcase.tsx`
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` — зелёный.
-- `python3 scripts/ui/ui_guard.py` — красный: обнаружены нарушения в чужих файлах `src/components/WbProductPickerDialog.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx` и `src/screens/v2/SellerInboundDraftScreen.tsx`; файлы этого атома в выводе отсутствуют.
-- `npm run test:unit` — красный до запуска тестов: окружение не содержит команду `vitest` (`vitest: command not found`).
+- `npx tsc --noEmit -p tsconfig.app.json` — не пройдено: локальный TypeScript не установлен, `npx` не смог скачать пакет из-за `ENOTFOUND registry.npmjs.org`.
+- `python3 scripts/ui/ui_guard.py` — не пройдено: обнаружены новые нарушения в несвязанных и не изменённых файлах `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/components/WbProductPickerDialog.tsx` и `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/screens/v2/SellerInboundDraftScreen.tsx`. Базовая линия не изменялась.
+- `npm run test:unit` — не пройдено: `vitest: command not found`.
 
 ## Не реализовано
 
-- Полная модалка «Лист подбора» с таблицей и всеми состояниями экрана не реализована: это следующая фича контракта, текущий атом добавляет только переиспользуемые ui-kit-элементы и showcase.
-- Из-за отсутствующего `vitest` и чужих нарушений `ui_guard.py` полная зелёная проверка окружения недоступна; зависимости и базовую линию не изменял.
+- Находки 1–7 из `REVIEW.md` относятся к backend и экрану S-03, а не к разрешённому атомарному UI-kit куску; эти файлы не изменялись.
+- В пределах UI-kit исправлены состояния `busy`: системное закрытие `ModalFrame` блокируется, а `PrintAction` показывает индикатор и понятную причину недоступности.
