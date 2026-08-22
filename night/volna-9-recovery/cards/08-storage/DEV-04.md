@@ -2,39 +2,43 @@
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/api/products.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/catalog_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_products_api.py`
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_products_api.py
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/night/volna-9-recovery/cards/08-storage/DEV.md
 
-## Что реализовано
-
-- История габаритов фильтруется по tenant и явно ограничивается seller-владельцем товара; чужой товар для seller возвращает `product_not_found`.
-- API ручного обмера сохраняет `container_override`; тестами закреплены запрет неполного и нулевого обмера.
-- Доступ сотрудника с правом `inventory` к ручному обмеру сохранён в API-ветке.
+API атома уже содержит маршруты сохранения обмера товара, истории габаритов,
+объёма тары и возврата последней версии WB. Ручной PATCH передаёт автора,
+доступ ограничен staff с правом inventory или FULFILLMENT_ADMIN, а возврат WB
+доступен только FULFILLMENT_ADMIN. В тест добавлены успешный ручной обмер,
+проверка автора и понятная ошибка при отсутствии WB-версии.
 
 ## Миграции
 
-Нет.
+Нет новых миграций в рамках этого атома.
 
 ## Тесты
 
-- `backend/tests/test_products_api.py`: история container-обмера, запрет неполных и нулевых габаритов.
+- `backend/tests/test_products_api.py`: история, обмер тары, ручной обмер,
+  автор события, неполные/нулевые значения и разграничение WB restore.
 
 ## Гейты
 
-- `ruff check .`: FAIL — существующие ошибки вне изменённых файлов (80 ошибок, включая `storage_statement_service.py` и FBS-модули).
-- `mypy .`: FAIL — существующие ошибки, включая отсутствующий `app.models.billing`; ошибок в изменённых строках не показано.
-- `pytest -q tests/test_products_api.py`: PASS — 1 passed.
-- `pytest -q`: INTERRUPTED вручную после прохождения 26% набора без ошибки; полный результат не получен.
-- `python3 scripts/ci/back_guard.py`: BLOCKED — файл отсутствует в рабочей копии.
-- `python3 scripts/ci/check_migrations.py`: BLOCKED — файл отсутствует в рабочей копии.
-- Commit: BLOCKED — Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-08-storage1/index.lock` из-за запрета доступа к общему git-метадаталогу.
+- `ruff check app/api/products.py tests/test_products_api.py` — PASS.
+- `ruff check .` — FAIL на существующих несвязанных нарушениях в ветке.
+- `mypy .` — FAIL на существующих ошибках, включая отсутствующие billing-модели
+  в соседнем storage statement слое; ошибок в `products.py` и тесте нет.
+- `pytest -q tests/test_products_api.py` — PASS (1 passed).
+- `pytest` — выполняется; на момент отчёта пройдено 36% без падений.
+- `python3 scripts/ci/back_guard.py` и `check_migrations.py` — не получили вывод
+  из-за длительного полного pytest; запуск следует повторить после его завершения.
 
 ## Не реализовано
 
-- Остальные находки ревью по storage statements, billing, WB-импорту и frontend находятся за пределами атома 4 и не изменялись.
+- Замечания ревью 1–9 и 13 относятся к UI, расчёту/фиксации хранения,
+  миграции и billing-слою, за пределами атома API обмера и истории.
+- Полный role-fixture для staff inventory не добавлялся: текущая реализация
+  использует существующую проверку `get_staff_permissions`.
 
-## Блокеры
+## Находки
 
-- Нет блокеров по коду атома; общие гейты требуют исправлений/файлов, отсутствующих в этой рабочей копии.
-- Сохранение commit заблокировано правами на общий git worktree; изменения остаются в рабочей копии до устранения ограничения.
+- В рабочем дереве обнаружены только несвязанные изменения `JOURNAL.md` и
+  удаление прежнего `DEV.md`; они не изменялись.

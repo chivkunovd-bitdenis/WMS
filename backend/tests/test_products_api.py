@@ -60,3 +60,25 @@ async def test_product_dimension_history_and_container_measurement(async_client)
         json={"length_mm": 0, "width_mm": 10, "height_mm": 10},
     )
     assert zero.status_code == 422
+
+    manual = await async_client.patch(
+        f"/products/{product_id}/dimensions",
+        headers=headers,
+        json={"length_mm": 100, "width_mm": 200, "height_mm": 300},
+    )
+    assert manual.status_code == 200, manual.text
+    assert manual.json()["volume_liters"] == pytest.approx(6.0)
+
+    history = await async_client.get(
+        f"/products/{product_id}/dimensions/history", headers=headers
+    )
+    assert history.status_code == 200, history.text
+    assert history.json()[0]["source"] == "manual"
+    assert history.json()[0]["author_user_id"] is not None
+    assert history.json()[0]["applied"] is True
+
+    restore = await async_client.post(
+        f"/products/{product_id}/dimensions/restore-wb", headers=headers
+    )
+    assert restore.status_code == 422
+    assert restore.json()["detail"] == "wb_dimensions_not_found"

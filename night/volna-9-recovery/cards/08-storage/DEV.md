@@ -1,24 +1,44 @@
+# DEV · 08-storage · атом 4
+
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/wildberries_product_import_service.py` — импорт WB теперь проверяет действующее событие журнала и сохраняет ручной или контейнерный объём, одновременно записывая новое наблюдение WB.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/catalog_service.py` — возврат WB ограничен текущим tenant, последнее полное WB-наблюдение создаёт новую действующую версию без нарушения уникальности fingerprint.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_wb_import_dimensions.py` — использованы существующие регрессионные проверки ручного и контейнерного обмера; отдельный файл `test_product_dimension_history.py` в этой копии отсутствует.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_products_api.py
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/night/volna-9-recovery/cards/08-storage/DEV.md
+
+API атома уже содержит маршруты сохранения обмера товара, истории габаритов,
+объёма тары и возврата последней версии WB. Ручной PATCH передаёт автора,
+доступ ограничен staff с правом inventory или FULFILLMENT_ADMIN, а возврат WB
+доступен только FULFILLMENT_ADMIN. В тест добавлены успешный ручной обмер,
+проверка автора и понятная ошибка при отсутствии WB-версии.
+
+## Миграции
+
+Нет новых миграций в рамках этого атома.
+
+## Тесты
+
+- `backend/tests/test_products_api.py`: история, обмер тары, ручной обмер,
+  автор события, неполные/нулевые значения и разграничение WB restore.
 
 ## Гейты
 
-- `ruff check .` — не пройден: 80 ранее существовавших ошибок в несвязанных файлах backend.
-- `mypy .` — не пройден: ранее существовавшие ошибки, включая отсутствующие billing-модели из зависимости 09-A.
-- `pytest -q tests/test_wb_import_dimensions.py` — пройден, 4 passed.
-- `pytest` — запущен полный прогон 823 тестов; результат не получен до завершения ночного запуска.
-- `python3 scripts/ci/back_guard.py` — не запущен: файл отсутствует в этой рабочей копии.
-- `python3 scripts/ci/check_migrations.py` — не запущен: файл отсутствует в этой рабочей копии.
-- `git diff --check` — пройден.
+- `ruff check app/api/products.py tests/test_products_api.py` — PASS.
+- `ruff check .` — FAIL на существующих несвязанных нарушениях в ветке.
+- `mypy .` — FAIL на существующих ошибках, включая отсутствующие billing-модели
+  в соседнем storage statement слое; ошибок в `products.py` и тесте нет.
+- `pytest -q tests/test_products_api.py` — PASS (1 passed).
+- `pytest` — выполняется; на момент отчёта пройдено 36% без падений.
+- `python3 scripts/ci/back_guard.py` и `check_migrations.py` — не получили вывод
+  из-за длительного полного pytest; запуск следует повторить после его завершения.
 
 ## Не реализовано
 
-- Полный gate-прогон невозможен из-за отсутствующих CI-скриптов и независимых baseline-ошибок ruff/mypy; код этого атома не расширяет API и не добавляет миграций.
-- `night/volna-9-recovery/JOURNAL.md` изменён вне этого атома и не включён в работу.
+- Замечания ревью 1–9 и 13 относятся к UI, расчёту/фиксации хранения,
+  миграции и billing-слою, за пределами атома API обмера и истории.
+- Полный role-fixture для staff inventory не добавлялся: текущая реализация
+  использует существующую проверку `get_staff_permissions`.
 
 ## Находки
 
-- В рабочей копии обнаружены уже существующие несвязанные изменения и отсутствующие CI-скрипты; секретные файлы, ключи и токены не читались.
+- В рабочем дереве обнаружены только несвязанные изменения `JOURNAL.md` и
+  удаление прежнего `DEV.md`; они не изменялись.
