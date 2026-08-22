@@ -105,3 +105,7 @@
 22:33   05-prod-slow · dev: фича 6/7 сохранена 72665d8f94c7
 22:40   05-prod-slow · screen-dev: готово
 22:40   05-prod-slow · dev: фича 7/7 сохранена 02b98e2a3b19
+22:45   05-prod-slow · reviewer: готово
+22:45 05-prod-slow: отложено — reviewer, эскалация не помогла
+23:43   05-prod-slow · resume: поатомный rework Sol по сохранённым находкам
+23:48   05-prod-slow · backend-dev: готово

@@ -201,7 +201,7 @@ async def _maintain_marking_label_tape_lease(
     claimed_at: datetime,
     stop: asyncio.Event,
     lease_lost: asyncio.Event,
-) -> None:
+) -> datetime | None:
     """Keep a long PDF build from looking abandoned to duplicate deliveries."""
     current_heartbeat = claimed_at
     while not stop.is_set():
@@ -219,12 +219,13 @@ async def _maintain_marking_label_tape_lease(
             except Exception:
                 logger.exception("marking label tape heartbeat failed: %s", job_id)
                 lease_lost.set()
-                return
+                return None
             if refreshed_at is None:
                 logger.error("marking label tape lease lost: %s", job_id)
                 lease_lost.set()
-                return
+                return None
             current_heartbeat = refreshed_at
+    return current_heartbeat
 
 
 async def run_movements_digest_job(job_id: uuid.UUID) -> None:
@@ -519,6 +520,7 @@ async def run_marking_label_tape_job(job_id: uuid.UUID) -> None:
     )
     from app.models.marking_code import MarkingCode
     from app.services.fbs_print_asset_storage import (
+        delete_stored_asset,
         label_tape_relative_path,
         save_pdf,
         sha256_checksum,
@@ -543,6 +545,10 @@ async def run_marking_label_tape_job(job_id: uuid.UUID) -> None:
                 lease_lost,
             )
         )
+        stored_path: str | None = None
+        final_status = JOB_STATUS_FAILED
+        final_result: dict[str, str] | None = None
+        final_error: str | None = None
         try:
             payload = job.payload_json or {}
             ids = [uuid.UUID(str(value)) for value in payload.get("code_ids", [])]
@@ -554,9 +560,10 @@ async def run_marking_label_tape_job(job_id: uuid.UUID) -> None:
                 page_height_mm=payload.get("page_height_mm"),
             )
             heartbeat_stop.set()
-            await heartbeat_task
-            if lease_lost.is_set():
-                raise RuntimeError("marking_label_tape_lease_lost")
+            owned_started_at = await heartbeat_task
+            if lease_lost.is_set() or owned_started_at is None:
+                await session.rollback()
+                return
             code = await session.get(MarkingCode, ids[0])
             if code is None:
                 raise ValueError("seller_not_found")
@@ -570,20 +577,44 @@ async def run_marking_label_tape_job(job_id: uuid.UUID) -> None:
             )
             session.add(asset)
             await session.flush()
-            asset.storage_path = save_pdf(label_tape_relative_path(asset.id), pdf)
+            stored_path = save_pdf(label_tape_relative_path(asset.id), pdf)
+            asset.storage_path = stored_path
             asset.checksum = sha256_checksum(pdf)
-            job.result_json = {"asset_id": str(asset.id)}
-            job.status = JOB_STATUS_DONE
-            job.error_message = None
+            final_status = JOB_STATUS_DONE
+            final_result = {"asset_id": str(asset.id)}
         except Exception as exc:
             logger.exception("marking label tape job failed: %s", job_id)
-            job.status = JOB_STATUS_FAILED
-            job.result_json = None
-            job.error_message = str(exc)
+            final_error = str(exc)
         finally:
             heartbeat_stop.set()
-            await heartbeat_task
-        job.finished_at = datetime.now(UTC)
+            owned_started_at = await heartbeat_task
+
+        if lease_lost.is_set() or owned_started_at is None:
+            await session.rollback()
+            if stored_path is not None:
+                delete_stored_asset(stored_path)
+            return
+
+        finished = await session.execute(
+            update(BackgroundJob)
+            .where(
+                BackgroundJob.id == job_id,
+                BackgroundJob.status == JOB_STATUS_RUNNING,
+                BackgroundJob.started_at == owned_started_at,
+            )
+            .values(
+                status=final_status,
+                result_json=final_result,
+                error_message=final_error,
+                finished_at=datetime.now(UTC),
+            )
+            .execution_options(synchronize_session=False)
+        )
+        if not isinstance(finished, CursorResult) or finished.rowcount != 1:
+            await session.rollback()
+            if stored_path is not None:
+                delete_stored_asset(stored_path)
+            return
         await session.commit()
 
 
