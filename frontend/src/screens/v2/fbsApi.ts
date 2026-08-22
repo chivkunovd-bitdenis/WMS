@@ -169,6 +169,15 @@ export type FbsOrderMetadata = {
   }>
   delivery_allowed: boolean
   last_checked_at: string | null
+  /** Единый серверный вердикт WB; экран не вычисляет его из локальных состояний. */
+  readonly verdict: FbsOrderVerdict
+}
+
+export type FbsOrderVerdict = {
+  readonly signature: string
+  readonly tone: 'neutral' | 'ok' | 'warn' | 'stop'
+  readonly reason: string | null
+  readonly delivery_allowed: boolean
 }
 
 export type FbsWorklistWarehouseOption = {
