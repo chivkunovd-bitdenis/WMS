@@ -56,7 +56,11 @@ import {
 import { setSeparateMarkingPrintEnabled } from './utils/separateMarkingPrint'
 import type { InboundOperationType } from './utils/inboundOperationType'
 
-type WarehouseRow = { id: string; name: string; code: string }
+type WarehouseRow = { id: string; name: string; code: string; is_operational?: boolean }
+const reportWarehouseOptions = (warehouses: WarehouseRow[]) =>
+  warehouses
+    .filter((warehouse) => warehouse.is_operational ?? !warehouse.name.startsWith('FBS WB '))
+    .map((warehouse) => ({ id: warehouse.id, name: warehouse.name }))
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
 type ProductRow = {
   id: string
@@ -3074,10 +3078,7 @@ export default function App() {
                 <FfReportsPage
                   token={token}
                   sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
-                  warehouses={warehouses.map((warehouse) => ({
-                    id: warehouse.id,
-                    name: warehouse.name,
-                  }))}
+                  warehouses={reportWarehouseOptions(warehouses)}
                 />
               ) : (
                 ffAccessDenied
@@ -3091,10 +3092,7 @@ export default function App() {
                 <FfReportsPage
                   token={token}
                   sellers={[]}
-                  warehouses={warehouses.map((warehouse) => ({
-                    id: warehouse.id,
-                    name: warehouse.name,
-                  }))}
+                  warehouses={reportWarehouseOptions(warehouses)}
                 />
               ) : (
                 ffAccessDenied

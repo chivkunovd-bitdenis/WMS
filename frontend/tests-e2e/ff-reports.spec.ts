@@ -8,6 +8,35 @@ import {
   INBOUND_API,
 } from './inbound-boxes-helpers'
 
+// S-33-TC-003 / S-33-TC-014 — a technical FBS warehouse must not turn a
+// single physical warehouse into a visible report scope selector.
+test('FF reports exclude service warehouses from the warehouse filter', async ({ page }) => {
+  await seedFfSellerInbound(page, `ff-reports-warehouse-${Date.now()}`)
+  await page.route('**/api/warehouses', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.continue()
+      return
+    }
+    const response = await route.fetch()
+    const rows = (await response.json()) as { id: string; name: string; code: string }[]
+    await route.fulfill({
+      response,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        ...rows,
+        { id: 'service-fbs-archive', name: 'FBS WB Архив', code: 'fbs-wb-archive' },
+      ]),
+    })
+  })
+
+  await page.reload()
+  await page.getByTestId('nav-ff-reports').click()
+
+  await expect(page).toHaveURL('/app/ff/reports')
+  await expect(page.getByTestId('ff-reports-page')).toBeVisible()
+  await expect(page.getByTestId('ff-reports-warehouse')).toHaveCount(0)
+})
+
 // Раздел «Отчёты» у ФФ: сводка приход/расход по товару за период (журнал inventory_movements).
 // Проверяем, что раздел открывается, таблица рисуется с реальными данными по товару и
 // что поиск по товару фильтрует строки — а не только что страница не падает.
