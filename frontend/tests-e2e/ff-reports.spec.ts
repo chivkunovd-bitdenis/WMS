@@ -65,18 +65,86 @@ test('FF reports: section opens and shows movement summary for a product with in
   await page.getByTestId('ff-reports-download-csv').hover()
   await expect(page.getByText('За выбранный период нечего выгружать')).toBeVisible()
   await page.getByTestId('filter-search').fill('Box Product')
+  await expect(page.getByTestId('ff-reports-table').locator('tbody tr').first()).toBeVisible()
   const metrics = await page.getByTestId('ff-reports-metrics').innerText()
+
+  // The server owns the page slice. This response fixture gives the screen a
+  // 51-row result, so the browser path can exercise page two without relying
+  // on an implementation detail of the reporting database seed.
+  await page.route('**/api/reports/inventory?**', async (route) => {
+    const requestUrl = new URL(route.request().url())
+    const pageNumber = Number(requestUrl.searchParams.get('page') ?? '1')
+    const grouping = requestUrl.searchParams.get('group_by') ?? 'product'
+    if (grouping === 'operation') {
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          group_by: 'operation', page: pageNumber, page_size: 50, total: 1,
+          rows: [{ operation: 'Приёмка', in_qty: 6, out_qty: 0, net: 6 }],
+        }),
+      })
+      return
+    }
+    const rows = Array.from({ length: pageNumber === 2 ? 1 : 50 }, (_, index) => {
+      const number = pageNumber === 2 ? 50 : index
+      return {
+        product_id: `report-product-${number}`,
+        sku_code: `REPORT-SKU-${String(number).padStart(3, '0')}`,
+        product_name: `Report product ${number}`,
+        photo_url: null,
+        wb_vendor_code: null,
+        wb_barcode: null,
+        seller_name: 'Box Seller',
+        current_balance: 1,
+        total_in: 1,
+        total_out: 0,
+        net: 1,
+      }
+    })
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ group_by: 'product', page: pageNumber, page_size: 50, total: 51, rows }),
+    })
+  })
+
   await page.getByTestId('ff-reports-grouping').click()
-  await page.getByRole('option', { name: 'По операциям' }).click()
+  await Promise.all([
+    page.waitForResponse((response) => response.url().includes('/api/reports/inventory?') && new URL(response.url()).searchParams.get('group_by') === 'operation'),
+    page.getByRole('option', { name: 'По операциям' }).click(),
+  ])
   await expect(page.getByTestId('ff-reports-table')).toContainText('Операция')
   await expect(page.getByTestId('ff-reports-metrics')).toHaveText(metrics)
   await page.getByTestId('ff-reports-grouping').click()
-  await page.getByRole('option', { name: 'По товарам' }).click()
+  await Promise.all([
+    page.waitForResponse((response) => response.url().includes('/api/reports/inventory?') && new URL(response.url()).searchParams.get('group_by') === 'product'),
+    page.getByRole('option', { name: 'По товарам' }).click(),
+  ])
+  await expect(page.getByTestId('ff-reports-pagination')).toContainText('1–50 из 51')
+  await expect(page.getByTestId('ff-reports-next-page')).toBeEnabled()
+  await Promise.all([
+    page.waitForResponse((response) => response.url().includes('/api/reports/inventory?') && new URL(response.url()).searchParams.get('page') === '2'),
+    page.getByTestId('ff-reports-next-page').click(),
+  ])
+  await expect(page.getByTestId('ff-reports-pagination')).toContainText('51–51 из 51')
+  await expect(page.getByTestId('ff-reports-table')).toContainText('REPORT-SKU-050')
+  await expect(page.getByTestId('ff-reports-metrics')).toHaveText(metrics)
 
   // TC-NEW-F07-012 — export is a server CSV, not an HTML/XLS download.
-  const downloadPromise = page.waitForEvent('download')
-  await page.getByTestId('ff-reports-download-csv').click()
-  const download = await downloadPromise
+  await page.route('**/api/reports/inventory/export.csv?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      headers: {
+        'content-disposition': 'attachment; filename="inventory-report.csv"',
+        'content-type': 'text/csv; charset=utf-8',
+      },
+      body: 'Товар,Название\nREPORT-SKU-050,Report product 50\n',
+    })
+  })
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.waitForResponse((response) => response.url().includes('/api/reports/inventory/export.csv') && response.headers()['content-type'].startsWith('text/csv')),
+    page.getByTestId('ff-reports-download-csv').click(),
+  ])
   expect(download.suggestedFilename()).toBe('inventory-report.csv')
   expect(await download.createReadStream()).not.toBeNull()
 })
