@@ -663,6 +663,13 @@ def main() -> int:
                     "ПЕРЕПЛАН: DONE" in repair_marker.read_text(encoding="utf-8"), True)
             проверь("rework: перенарезка сохраняет текущий круг",
                     "КРУГ: 3" in repair_marker.read_text(encoding="utf-8"), True)
+            os.utime(repair / "FEATURES.md", (1, 1))
+            os.utime(repair / "REVIEW.md", (2, 2))
+            проверь("resume: новый review делает старый repair-plan устаревшим",
+                    n.ремонтный_план_устарел(repair), True)
+            os.utime(repair / "FEATURES.md", (3, 3))
+            проверь("resume: FEATURES новее review не перенарезается повторно",
+                    n.ремонтный_план_устарел(repair), False)
 
             проверь("resume: фильтр сохраняет порядок",
                     n.выбрать_карточки(["01", "02", "03"], "03,01"), ["01", "03"])
