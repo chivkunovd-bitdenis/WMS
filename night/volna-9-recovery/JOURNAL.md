@@ -63,3 +63,6 @@
 20:29   06-picking-list-order · reviewer: Terra-rework не закрыл вердикт — эскалация Sol
 20:29   06-picking-list-order · reviewer: находки, круг 2 — назад к разработке
 20:35   06-picking-list-order · screen-dev: готово
+20:35   06-picking-list-order · dev: фича 1/6 сохранена 663db9e3466a
+21:15   06-picking-list-order · backend-dev: нет файла DEV.md (код 124, попытка 1)
+21:18   06-picking-list-order · backend-dev: готово
