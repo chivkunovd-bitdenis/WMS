@@ -202,11 +202,12 @@ def _создать_рабочую_карточку(ид: str, волна: Path,
     исходная_папка = волна / "cards" / ид
     if исходная_папка.exists():
         shutil.copytree(исходная_папка, рабочая_папка, dirs_exist_ok=True)
-    for имя in ("MAP.md", "QUEUE.md"):
+    for имя in ("MAP.md", "QUEUE.md", "OTVETY.md"):
         источник = волна / имя
-        if источник.exists() and not (рабочая_волна / имя).exists():
+        назначение = рабочая_волна / имя
+        if источник.exists() and (имя == "OTVETY.md" or not назначение.exists()):
             рабочая_волна.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(источник, рабочая_волна / имя)
+            shutil.copy2(источник, назначение)
     база = _git("rev-parse", "HEAD", cwd=КОРЕНЬ).stdout.strip()
     return РабочаяКарточка(ид, полоса, путь, рабочая_волна, рабочая_папка, ветка, база)
 
