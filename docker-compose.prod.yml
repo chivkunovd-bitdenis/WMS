@@ -77,6 +77,23 @@ services:
       migrations:
         condition: service_completed_successfully
 
+  wb_sync_worker:
+    build:
+      context: ./backend
+    command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=info", "--queues=wb_sync", "--concurrency=2"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg_async://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-wms}}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set in .env}
+      WMS_SECRETS_FERNET_KEY: ${WMS_SECRETS_FERNET_KEY:?set in .env}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+
   print_worker:
     build:
       context: ./backend

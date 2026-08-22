@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from collections.abc import Sequence
+from typing import Protocol
 
 from app.celery_app import celery_app
 from app.services.background_job_service import (
@@ -15,6 +17,40 @@ from app.services.background_job_service import (
     run_wildberries_marketplace_orders_sync_job,
     run_wildberries_supplies_sync_job,
 )
+
+
+class _SellerSyncTask(Protocol):
+    def apply_async(
+        self,
+        args: tuple[str, str],
+        *,
+        countdown: float,
+    ) -> object: ...
+
+
+class _SellerSyncTarget(Protocol):
+    @property
+    def tenant_id(self) -> uuid.UUID: ...
+
+    @property
+    def seller_id(self) -> uuid.UUID: ...
+
+
+def _dispatch_seller_syncs_evenly(
+    task: _SellerSyncTask,
+    targets: Sequence[_SellerSyncTarget],
+    *,
+    interval_seconds: float,
+) -> None:
+    """Spread one cycle across its interval instead of sending a WB request burst."""
+    if not targets:
+        return
+    spacing = interval_seconds / len(targets)
+    for index, target in enumerate(targets):
+        task.apply_async(
+            args=(str(target.tenant_id), str(target.seller_id)),
+            countdown=index * spacing,
+        )
 
 
 @celery_app.task(name="wms.marking_label_tape", queue="print")
@@ -95,8 +131,11 @@ def dispatch_wb_orders_new_task() -> None:
     async def dispatch() -> None:
         async with SessionLocal() as session:
             targets = await list_sellers_with_marketplace_token(session)
-        for target in targets:
-            run_wb_orders_new_task.delay(str(target.tenant_id), str(target.seller_id))
+        _dispatch_seller_syncs_evenly(
+            run_wb_orders_new_task,
+            targets,
+            interval_seconds=180.0,
+        )
 
     asyncio.run(dispatch())
 
@@ -109,8 +148,11 @@ def dispatch_wb_orders_reconcile_task() -> None:
     async def dispatch() -> None:
         async with SessionLocal() as session:
             targets = await list_sellers_with_marketplace_token(session)
-        for target in targets:
-            run_wb_orders_reconcile_task.delay(str(target.tenant_id), str(target.seller_id))
+        _dispatch_seller_syncs_evenly(
+            run_wb_orders_reconcile_task,
+            targets,
+            interval_seconds=3600.0,
+        )
 
     asyncio.run(dispatch())
 

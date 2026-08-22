@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import time
 import uuid
-from unittest.mock import AsyncMock
+from pathlib import Path
+from unittest.mock import AsyncMock, Mock, call
 
 import httpx
 import pytest
@@ -56,6 +57,53 @@ def test_wb_order_schedule_and_single_flight_are_per_kind() -> None:
     assert schedule["wb-orders-reconcile"]["schedule"] == 3600.0
     assert "fbs-orders-autopoll" not in schedule
     assert fbs_autopoll_service._sync_locks is not None
+    assert celery_app.conf.task_routes["wms.wb_orders_new"]["queue"] == "wb_sync"
+    assert celery_app.conf.task_routes["wms.wb_orders_reconcile"]["queue"] == "wb_sync"
+
+
+def test_wb_order_dispatch_spreads_each_kind_across_its_interval() -> None:
+    targets = [
+        fbs_autopoll_service.SellerPollTarget(uuid.uuid4(), uuid.uuid4())
+        for _ in range(3)
+    ]
+    task = Mock()
+
+    background_jobs._dispatch_seller_syncs_evenly(
+        task,
+        targets,
+        interval_seconds=180.0,
+    )
+
+    assert task.apply_async.call_args_list == [
+        call(
+            args=(str(target.tenant_id), str(target.seller_id)),
+            countdown=index * 60.0,
+        )
+        for index, target in enumerate(targets)
+    ]
+
+    task.reset_mock()
+    background_jobs._dispatch_seller_syncs_evenly(
+        task,
+        targets,
+        interval_seconds=3600.0,
+    )
+    assert [item.kwargs["countdown"] for item in task.apply_async.call_args_list] == [
+        0.0,
+        1200.0,
+        2400.0,
+    ]
+
+
+def test_wb_order_sync_queue_has_two_worker_slots_in_production() -> None:
+    compose_path = Path(__file__).resolve().parents[2] / "docker-compose.prod.yml"
+    compose = compose_path.read_text(encoding="utf-8")
+    worker_block = compose.split("\n  wb_sync_worker:", maxsplit=1)[1].split(
+        "\n  print_worker:", maxsplit=1
+    )[0]
+
+    assert '"--queues=wb_sync"' in worker_block
+    assert '"--concurrency=2"' in worker_block
 
 
 def test_wb_order_tasks_invoke_new_and_reconcile_independently(
