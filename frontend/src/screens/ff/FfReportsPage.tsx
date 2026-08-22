@@ -7,6 +7,7 @@ import {
   FilterBar,
   MovementFlowChart,
   PrimaryAction,
+  SecondaryAction,
   ProductCell,
   QtyCell,
   ReportMetricStrip,
@@ -287,10 +288,10 @@ export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
       { key: 'vendor', header: 'Артикул продавца', width: 170, render: row => <TextCell value={row.wb_vendor_code ?? '—'} /> },
       { key: 'barcode', header: 'ШК', width: 150, render: row => <TextCell value={row.wb_barcode ?? '—'} /> },
       ...(sellers.length > 0 ? [{ key: 'seller', header: 'Селлер', width: 150, render: (row: Row) => <TextCell value={row.seller_name ?? '—'} /> }] : []),
-      { key: 'balance', header: 'Остаток сейчас', align: 'right', render: row => <QtyCell value={row.current_balance ?? 0} /> },
-      { key: 'in', header: 'Приход', align: 'right', render: row => <QtyCell value={row.total_in} /> },
-      { key: 'out', header: 'Расход', align: 'right', render: row => <QtyCell value={row.total_out} /> },
-      { key: 'net', header: 'Нетто', align: 'right', render: row => <QtyCell value={row.net} /> },
+      { key: 'balance', header: 'Остаток сейчас', align: 'right', width: 130, render: row => <QtyCell value={row.current_balance ?? 0} /> },
+      { key: 'in', header: 'Приход', align: 'right', width: 110, render: row => <QtyCell value={row.total_in} /> },
+      { key: 'out', header: 'Расход', align: 'right', width: 110, render: row => <QtyCell value={row.total_out} /> },
+      { key: 'net', header: 'Нетто', align: 'right', width: 100, render: row => <QtyCell value={row.net} /> },
     ] : [
       { key: 'operation', header: 'Операция', width: 260, render: row => <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}><TextCell value={(row as Row & { operation?: string }).operation ?? '—'} />{row.integrity_error ? <StatusChip label="Ошибка" tone="stop" testId="ff-reports-row-integrity-error" /> : null}</Stack> },
       { key: 'in', header: 'Приход', width: 130, align: 'right', render: row => { const value = row.total_in ?? (row as Row & { in_qty?: number }).in_qty ?? 0; return <QtyCell value={row.integrity_error && value === 0 ? null : value} /> } },
@@ -299,7 +300,7 @@ export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
     ]} rows={rows} getRowKey={row => row.product_id ?? (row as Row & { operation?: string }).operation ?? 'report-row'} loading={loading || tableLoading} empty={{ title: 'За выбранный период движений нет', hint: 'Измените период или снимите фильтры.' }} testId="ff-reports-table" />
     <Stack direction="row" sx={{ py: 2, justifyContent: 'space-between', alignItems: 'center' }} data-testid="ff-reports-pagination">
       <Typography variant="body2" color="text.secondary">{total === 0 ? '0 из 0' : `${(page - 1) * 50 + 1}–${Math.min(page * 50, total)} из ${total}`}</Typography>
-      <Stack direction="row" spacing={1}><PrimaryAction data-testid="ff-reports-previous-page" disabledReason={page <= 1 ? 'Это первая страница' : undefined} onClick={() => void changeTable(grouping, page - 1)}>Назад</PrimaryAction><PrimaryAction data-testid="ff-reports-next-page" disabledReason={page * 50 >= total ? 'Это последняя страница' : undefined} onClick={() => void changeTable(grouping, page + 1)}>Вперёд</PrimaryAction></Stack>
+      <Stack direction="row" spacing={1}><SecondaryAction data-testid="ff-reports-previous-page" disabledReason={page <= 1 ? 'Это первая страница' : undefined} onClick={() => void changeTable(grouping, page - 1)}>Назад</SecondaryAction><SecondaryAction data-testid="ff-reports-next-page" disabledReason={page * 50 >= total ? 'Это последняя страница' : undefined} onClick={() => void changeTable(grouping, page + 1)}>Вперёд</SecondaryAction></Stack>
     </Stack>
   </Stack>
 }

@@ -122,3 +122,11 @@
 00:42   07-reporting · dev: фича 10/11 сохранена 804eea99a595
 00:46   07-reporting · screen-dev: готово
 00:46   07-reporting · dev: фича 11/11 сохранена 0becc1610517
+00:49   07-reporting · reviewer: готово
+00:50   07-reporting · ui-critic: готово
+00:50 07-reporting: отложено — ui-critic, эскалация не помогла
+00:52   07-reporting · repair-plan: сильный ремонт не помог — дорезаем находки
+00:56   07-reporting · repair-plan: сильный ремонт не помог — дорезаем находки
+00:59   07-reporting · splitter: готово
+00:59   07-reporting · resume: поатомный rework Terra по сохранённым находкам
+01:01   07-reporting · screen-dev: готово

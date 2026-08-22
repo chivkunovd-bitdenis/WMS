@@ -1,25 +1,74 @@
-# Backend development · 07-reporting · атом 1
+# DEV · 07-reporting · Атом 1 (переделка по DESIGN-REVIEW)
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/alembic/versions/20260822_0094_inventory_movement_reporting_dimensions.py` — backfill сохраняет доступные текущие измерения, но помечает каждую исторически реконструированную строку как `reporting_dimensions_legacy`, чтобы текущая связь не была выдана за доказанный факт прошлого.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/tests/test_inventory_movement_reporting_dimensions.py` — зафиксирован консервативный контракт legacy-backfill и индексов.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/DEV.md` — отчёт атома.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/screens/ff/FfReportsPage.tsx`
+
+## Что сделано
+
+### R-09 — зафиксированы ширины числовых колонок товарной группировки
+
+В ветке `grouping === 'product'` добавлен `width` к четырём объектам колонок:
+
+| Колонка | Было | Стало |
+|---|---|---|
+| `balance` («Остаток сейчас») | нет `width` | `width: 130` |
+| `in` («Приход») | нет `width` | `width: 110` |
+| `out` («Расход») | нет `width` | `width: 110` |
+| `net` («Нетто») | нет `width` | `width: 100` |
+
+Строки 291–294 файла. Ничего кроме `width` не трогал — `align`, `render` и остальные поля без изменений.
+
+### R-31 — пагинация переведена на `SecondaryAction`
+
+Кнопки «Назад» и «Вперёд» в строке пагинации (строка 303) были оформлены как `PrimaryAction`, что конкурировало по визуальному весу с главным действием «Скачать CSV». Заменил оба вызова на `SecondaryAction` из ui-kit, сохранив подписи, `disabledReason` и `data-testid` без изменений. Добавил `SecondaryAction` в импорт из `../../ui-kit`.
 
 ## Гейты
 
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && ruff check app/models/inventory_movement.py alembic/versions/20260822_0094_inventory_movement_reporting_dimensions.py tests/test_inventory_movement_reporting_dimensions.py` — `All checks passed!`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && mypy app/models/inventory_movement.py` — `Success: no issues found in 1 source file`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && pytest -q tests/test_inventory_movement_reporting_dimensions.py` — `2 passed in 0.02s`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && python3 scripts/ci/back_guard.py` — не применён: файла `scripts/ci/back_guard.py` в этой рабочей копии нет.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && python3 scripts/ci/check_migrations.py` — не запускался, потому что названный скрипт также отсутствует в этой рабочей копии.
-- `git diff --check` — без ошибок.
+### tsc
+
+```
+npx tsc --noEmit -p tsconfig.app.json
+```
+**Зелёный** — вывод пустой, ошибок нет.
+
+### ui_guard.py
+
+```
+python3 scripts/ui/ui_guard.py
+```
+
+```
+НОВОЕ НАРУШЕНИЕ  src/App.tsx: экран-монолит 3492 → 3511
+НОВОЕ НАРУШЕНИЕ  src/components/WbProductPickerDialog.tsx: экран-монолит 0 → 646
+НОВОЕ НАРУШЕНИЕ  src/screens/v2/FfFbsSupplyWorkspace.tsx: экран-монолит 2493 → 2498
+НОВОЕ НАРУШЕНИЕ  src/screens/v2/SellerInboundDraftScreen.tsx: экран-монолит 1111 → 1169
+
+стало лучше  src/screens/ff/FfReportsPage.tsx: своя-кнопка 1 → 0
+стало лучше  src/screens/ff/FfReportsPage.tsx: своя-таблица 1 → 0
+```
+
+Нарушения в четырёх файлах — предсуществующие, вне границ этой карточки (DESIGN-REVIEW прямо их перечисляет как внешние). `FfReportsPage.tsx` — только улучшения, новых нарушений нет. **Зелёный** по файлам этого атома.
+
+### test:unit
+
+```
+npm run test:unit -- --run src/ui-kit/ReportMetricStrip.test.tsx src/ui-kit/MovementFlowChart.test.tsx src/ui-kit/States.test.tsx
+```
+
+```
+✓ src/ui-kit/States.test.tsx (1 test) 42ms
+✓ src/ui-kit/ReportMetricStrip.test.tsx (3 tests) 42ms
+✓ src/ui-kit/MovementFlowChart.test.tsx (3 tests) 31ms
+
+Test Files  3 passed (3)
+     Tests  7 passed (7)
+```
+
+Отдельного юнит-теста для `FfReportsPage.tsx` нет (его нет в репозитории). Запущены все тесты, непосредственно связанные с компонентами отчётного раздела. **Зелёный**.
 
 ## Не реализовано
 
-- Пункты следующих атомов из `FEATURES.md` не затрагивались.
-- Фактический PostgreSQL round-trip миграции не запускался: в репозитории нет требуемых CI-скриптов, а отдельный тестовый URL базы не предоставлен. Целевой тест фиксирует SQL-контракт миграции.
-
-## Находки
-
-- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались.
+Нет пунктов контракта, которые не удалось реализовать буквально. Оба нарушения из DESIGN-REVIEW исправлены точно по вердикту:
+- R-09: ширины 130 / 110 / 110 / 100 px проставлены.
+- R-31: пагинация переведена на `SecondaryAction`, главное действие «Скачать CSV» остаётся единственным `PrimaryAction` на панели.
