@@ -429,6 +429,34 @@ def main() -> int:
                         for _, дополнение in вызовы_dev), True)
             проверь("rework: вердикт не удалён до исправления", (t / "REVIEW.md").exists(), True)
 
+            выбор_модели = []
+
+            def fake_rework_step(*_args, **kwargs):
+                выбор_модели.append((kwargs.get("модель"), kwargs.get("профиль")))
+                return True, ""
+
+            with mock.patch.object(n, "_шаг", side_effect=fake_rework_step):
+                n.шаг("x", "backend-dev", t, t, круг=0)
+                n.шаг("x", "backend-dev", t, t, круг=1)
+                n.шаг("x", "backend-dev", t, t, круг=n.КРУГОВ + 1)
+            проверь("rework: первичный dev остаётся дешёвым",
+                    выбор_модели[0], (None, None))
+            проверь("rework: обычная переделка идёт Sonnet/Terra",
+                    выбор_модели[1], ("sonnet", "terra"))
+            проверь("rework: финальная эскалация идёт Opus/Sol",
+                    выбор_модели[2], ("opus", "sol"))
+
+            (t / "OTLOZHENO.md").write_text(
+                "reviewer нашёл находки после 2 кругов правки\n", encoding="utf-8")
+            проверь("resume: парковка возобновляется с эскалации",
+                    n.круг_из_парковки(t), n.КРУГОВ + 1)
+            (t / "OTLOZHENO.md").write_text(
+                "reviewer снова нашёл находки и после финальной эскалации\n", encoding="utf-8")
+            проверь("resume: вторая эскалация не запускается",
+                    n.круг_из_парковки(t),
+                    n.КРУГОВ + n.ЭСКАЛАЦИОННЫХ_КРУГОВ + 1)
+            (t / "OTLOZHENO.md").unlink()
+
             (t / "RAZBOR.md").write_text("## Тип\nбаг\n## Экраны\n- S-03\n", encoding="utf-8")
             проверь("тип читается", n.поле(t, "RAZBOR.md", "Тип").strip(), "баг")
             проверь("машинный тип из разбора", n.тип_карточки(t), "баг")
