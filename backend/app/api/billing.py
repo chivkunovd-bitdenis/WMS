@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import date
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -11,13 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_fulfillment_admin
 from app.db.session import get_db
-from app.models.billing import BillingProfile, BillingTariffVersion
+from app.models.billing import BillingInvoice, BillingProfile, BillingTariffVersion
 from app.models.user import User
 from app.services.billing_configuration_service import (
     BillingConfigurationError,
     create_tariff,
     save_profile,
 )
+from app.services.billing_invoice_service import cancel_invoice, form_invoice
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -112,3 +113,38 @@ async def post_tariff(
     except BillingConfigurationError as exc:
         await session.rollback()
         raise _error(exc) from exc
+
+
+@router.post("/invoices/{seller_id}/{period}/form")
+async def form_billing_invoice(
+    seller_id: uuid.UUID,
+    period: date,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    result = await form_invoice(
+        session, tenant_id=user.tenant_id, seller_id=seller_id, period=period
+    )
+    await session.commit()
+    if isinstance(result, BillingInvoice):
+        return {
+            "status": result.status,
+            "id": result.id,
+            "number": result.number,
+            "total_amount": result.total_amount,
+        }
+    return {"status": "blocked", "reason": result.reason, "message": result.message}
+
+
+@router.post("/invoices/{invoice_id}/cancel")
+async def cancel_billing_invoice(
+    invoice_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    try:
+        invoice = await cancel_invoice(session, tenant_id=user.tenant_id, invoice_id=invoice_id)
+        await session.commit()
+        return {"id": invoice.id, "status": invoice.status}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
