@@ -130,3 +130,4 @@
 01:20   08-storage · screen-dev: готово
 01:20   08-storage · dev: фича 3/4 сохранена 95ab7333aad5
 01:22   08-storage · screen-dev: готово
+01:22   08-storage · dev: фича 4/4 сохранена f087d121df3b
