@@ -1,20 +1,24 @@
 ## Изменённые файлы
 
-Атом `ReportMetricStrip` и его экспорт уже присутствуют в рабочей копии и соответствуют разрешённому набору файлов:
+Изменений в исходных файлах атома нет: `MovementFlowChart` уже реализован в соответствии с контрактом, экспортирован через ui-kit и покрыт требуемыми unit-сценариями.
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/ReportMetricStrip.tsx`
+Проверенные файлы:
+
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/MovementFlowChart.tsx`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/index.ts`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/ReportMetricStrip.test.tsx`
-
-В рамках переделки по `REVIEW.md` относящихся к этому ui-kit-атому находок нет, поэтому исходный код этих файлов не изменялся.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/MovementFlowChart.test.tsx`
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` — красный: локальный `tsc` отсутствует; `npx` попытался скачать пакет, но сеть недоступна (`ENOTFOUND registry.npmjs.org`).
-- `python3 scripts/ui/ui_guard.py` — красный из-за новых нарушений в чужих файлах: `frontend/src/App.tsx`, `frontend/src/components/WbProductPickerDialog.tsx`, `frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx`, `frontend/src/screens/v2/SellerInboundDraftScreen.tsx`. В разрешённых файлах атома нарушений не выявлено; базовую линию не обновлял.
-- `npm run test:unit -- src/ui-kit/ReportMetricStrip.test.tsx` — красный: локальный `vitest` отсутствует (`vitest: command not found`).
+- `npx tsc --noEmit -p tsconfig.app.json` — зелёный.
+- `python3 scripts/ui/ui_guard.py` — красный из-за четырёх новых нарушений в несвязанных файлах: `frontend/src/App.tsx`, `frontend/src/components/WbProductPickerDialog.tsx`, `frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx`, `frontend/src/screens/v2/SellerInboundDraftScreen.tsx`. Базовую линию не обновлял.
+- `npm run test:unit -- --run frontend/src/ui-kit/MovementFlowChart.test.tsx` — не запущен: в `frontend` отсутствует локальный исполняемый `vitest` (`node_modules` не установлен).
+
+Проверены сценарии контракта: видимая легенда и доступное описание серий, отсутствие пунктирной серии при выключенном сравнении, сообщение «За выбранный период движений нет» и отдельный скелет при загрузке.
 
 ## Не реализовано
 
-Нет пунктов контракта, относящихся к `ReportMetricStrip`, которые не легли буквально. Находки `REVIEW.md` относятся к другим слоям и файлам карточки и не исправлялись в рамках этого атомарного куска.
+- Замечание ревью о том, что экран/API не передают предыдущую дневную серию, не исправлялось: оно относится к `FfReportsPage` и backend, а не к разрешённым файлам атома `MovementFlowChart`.
+- Полный зелёный `ui_guard.py` невозможен без правок четырёх чужих экранов или обновления базовой линии; оба действия выходят за границы атома.
+- Unit-тест не подтверждён запуском из-за отсутствующего `vitest`; установка зависимостей не выполнялась.
 
