@@ -54,18 +54,42 @@ export function FfReportsPage({ token, sellers = [] }: Props) {
   const [comparison, setComparison] = useState('previous')
   const [overview, setOverview] = useState<Overview | null>(null)
   const [rows, setRows] = useState<Row[]>([])
+  const [grouping, setGrouping] = useState<'product' | 'operation'>('product')
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const groupingRef = useRef<'product' | 'operation'>('product')
   const [loading, setLoading] = useState(false)
   const [summaryError, setSummaryError] = useState(false)
   const [tableError, setTableError] = useState(false)
+  const [csvError, setCsvError] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
 
-  const params = useCallback((group?: string) => {
+  const params = useCallback((group?: string, requestedPage?: number) => {
     const query = new URLSearchParams({ date_from: `${dateFrom}T00:00:00`, date_to: `${dateTo}T23:59:59` })
     if (sellerId) query.set('seller_id', sellerId)
     if (search.trim()) query.set('search', search.trim())
     if (group) query.set('group_by', group)
+    if (requestedPage) query.set('page', String(requestedPage))
     return query
   }, [dateFrom, dateTo, sellerId, search])
+
+  const loadOverview = useCallback(async (signal: AbortSignal) => {
+    const response = await fetch(apiUrl(`/reports/overview?${params().toString()}`), {
+      headers: { Authorization: `Bearer ${token}` }, signal,
+    })
+    if (!response.ok) throw new Error('summary')
+    setOverview((await response.json()) as Overview)
+  }, [params, token])
+
+  const loadTable = useCallback(async (signal: AbortSignal, requestedPage: number, requestedGrouping: 'product' | 'operation') => {
+    const response = await fetch(apiUrl(`/reports/inventory?${params(requestedGrouping, requestedPage).toString()}`), {
+      headers: { Authorization: `Bearer ${token}` }, signal,
+    })
+    if (!response.ok) throw new Error('table')
+    const result = (await response.json()) as { rows?: Row[]; total?: number }
+    setRows(result.rows ?? [])
+    setTotal(result.total ?? 0)
+  }, [params, token])
 
   const load = useCallback(async () => {
     abortRef.current?.abort()
@@ -74,23 +98,38 @@ export function FfReportsPage({ token, sellers = [] }: Props) {
     setLoading(true); setSummaryError(false); setTableError(false)
     try {
       const headers = { Authorization: `Bearer ${token}` }
-      const query = params('product').toString()
-      const [summaryResponse, tableResponse] = await Promise.all([
-        fetch(apiUrl(`/reports/overview?${query}`), { headers, signal: controller.signal }),
-        fetch(apiUrl(`/reports/inventory?${query}`), { headers, signal: controller.signal }),
+      await Promise.all([
+        loadOverview(controller.signal).catch(() => setSummaryError(true)),
+        loadTable(controller.signal, 1, groupingRef.current).catch(() => setTableError(true)),
       ])
-      if (!summaryResponse.ok) setSummaryError(true)
-      else setOverview((await summaryResponse.json()) as Overview)
-      if (!tableResponse.ok) setTableError(true)
-      else setRows(((await tableResponse.json()) as { rows?: Row[] }).rows ?? [])
+      setPage(1)
     } catch (error) {
       if (!(error instanceof DOMException && error.name === 'AbortError')) setSummaryError(true)
     } finally {
       if (!controller.signal.aborted) setLoading(false)
     }
-  }, [params, token])
+  }, [loadOverview, loadTable, token])
 
   useEffect(() => { void load(); return () => abortRef.current?.abort() }, [load])
+
+  const changeTable = useCallback(async (nextGrouping: 'product' | 'operation', nextPage: number) => {
+    const controller = new AbortController()
+    setLoading(true); setTableError(false)
+    try { await loadTable(controller.signal, nextPage, nextGrouping); setPage(nextPage) }
+    catch { setTableError(true) }
+    finally { setLoading(false) }
+  }, [loadTable])
+
+  const downloadCsv = async () => {
+    setCsvError(false)
+    try {
+      const response = await fetch(apiUrl(`/reports/inventory/export.csv?${params(grouping).toString()}`), { headers: { Authorization: `Bearer ${token}` } })
+      if (!response.ok) throw new Error('csv')
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a'); link.href = url; link.download = 'inventory-report.csv'; link.click(); URL.revokeObjectURL(url)
+    } catch { setCsvError(true) }
+  }
 
   const choosePeriod = (value: string) => {
     setPeriod(value)
@@ -122,7 +161,14 @@ export function FfReportsPage({ token, sellers = [] }: Props) {
     <MovementFlowChart series={overview?.daily.map(day => ({ date: day.date, inbound: day.in_qty, outbound: day.out_qty })) ?? []} showPrevious={comparison === 'previous'} loading={loading} ariaDescription="Дневной приход и расход" testId="ff-reports-chart" />
     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }} data-testid="ff-reports-freshness">Данные на {overview ? new Date(overview.generated_at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' }) : '—'} МСК</Typography>
     {tableError ? <ErrorNotice testId="ff-reports-table-error">Не удалось загрузить строки отчёта. Повторите попытку.</ErrorNotice> : null}
-    <DataTable<Row> columns={[
+    {csvError ? <ErrorNotice testId="ff-reports-csv-error">Не удалось скачать CSV. Повторите попытку.</ErrorNotice> : null}
+    <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }} data-testid="ff-reports-table-controls">
+      <TextField select size="small" label="Группировка" value={grouping} onChange={event => { const next = event.target.value as 'product' | 'operation'; groupingRef.current = next; setGrouping(next); void changeTable(next, 1) }} data-testid="ff-reports-grouping">
+        <MenuItem value="product">По товарам</MenuItem><MenuItem value="operation">По операциям</MenuItem>
+      </TextField>
+      <PrimaryAction onClick={() => void downloadCsv()} disabledReason={rows.length === 0 ? 'За выбранный период нечего выгружать' : undefined} data-testid="ff-reports-download-csv">Скачать CSV</PrimaryAction>
+    </Stack>
+    <DataTable<Row> columns={grouping === 'product' ? [
       { key: 'product', header: 'Товар', width: 150, render: row => <ProductCell sku={row.sku_code} photo={row.photo_url ? <img src={row.photo_url} alt="" width="32" height="32" /> : undefined} /> },
       { key: 'name', header: 'Название', width: 240, render: row => <TextCell value={row.product_name} /> },
       { key: 'vendor', header: 'Артикул продавца', width: 170, render: row => <TextCell value={row.wb_vendor_code ?? '—'} /> },
@@ -132,6 +178,15 @@ export function FfReportsPage({ token, sellers = [] }: Props) {
       { key: 'in', header: 'Приход', align: 'right', render: row => <QtyCell value={row.total_in} /> },
       { key: 'out', header: 'Расход', align: 'right', render: row => <QtyCell value={row.total_out} /> },
       { key: 'net', header: 'Нетто', align: 'right', render: row => <QtyCell value={row.net} /> },
-    ]} rows={rows} getRowKey={row => row.product_id} loading={loading} empty={{ title: 'За выбранный период движений нет', hint: 'Измените период или снимите фильтры.' }} testId="ff-reports-table" />
+    ] : [
+      { key: 'operation', header: 'Операция', width: 260, render: row => <TextCell value={(row as Row & { operation?: string }).operation ?? '—'} /> },
+      { key: 'in', header: 'Приход', width: 130, align: 'right', render: row => <QtyCell value={row.total_in ?? (row as Row & { in_qty?: number }).in_qty ?? 0} /> },
+      { key: 'out', header: 'Расход', width: 130, align: 'right', render: row => <QtyCell value={row.total_out ?? (row as Row & { out_qty?: number }).out_qty ?? 0} /> },
+      { key: 'net', header: 'Нетто', width: 130, align: 'right', render: row => <QtyCell value={row.net} /> },
+    ]} rows={rows} getRowKey={row => row.product_id ?? (row as Row & { operation?: string }).operation ?? 'report-row'} loading={loading} empty={{ title: 'За выбранный период движений нет', hint: 'Измените период или снимите фильтры.' }} testId="ff-reports-table" />
+    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ py: 2 }} data-testid="ff-reports-pagination">
+      <Typography variant="body2" color="text.secondary">{total === 0 ? '0 из 0' : `${(page - 1) * 50 + 1}–${Math.min(page * 50, total)} из ${total}`}</Typography>
+      <Stack direction="row" spacing={1}><PrimaryAction disabledReason={page <= 1 ? 'Это первая страница' : undefined} onClick={() => void changeTable(grouping, page - 1)}>Назад</PrimaryAction><PrimaryAction disabledReason={page * 50 >= total ? 'Это последняя страница' : undefined} onClick={() => void changeTable(grouping, page + 1)}>Вперёд</PrimaryAction></Stack>
+    </Stack>
   </Stack>
 }
