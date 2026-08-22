@@ -24,6 +24,7 @@ from app.models.fbs_supply import (
 from app.models.fbs_trbx import FbsTrbx
 from app.models.warehouse_box import WarehouseBox
 from app.services import fbs_shipment_pvz_service as pvz_svc
+from app.services.fbs_supply_reconcile_service import get_cargo_operation_by_idempotency
 
 
 class FbsPackingBoxError(Exception):
@@ -105,7 +106,13 @@ async def create_boxes(
     # key on every newly created box; legacy ``no-distribution:`` values are
     # only consulted by _supply_without_distribution for existing supplies.
     stored_key = idempotency_key.strip()
-    boxes = await _boxes_by_creation_key(session, tenant_id, supply_id, stored_key)
+    boxes = await _boxes_by_creation_key(
+        session,
+        tenant_id,
+        supply_id,
+        supply.seller_id,
+        stored_key,
+    )
     if boxes:
         if len(boxes) != count:
             raise FbsPackingBoxError("idempotency_key_reused")
@@ -509,7 +516,11 @@ async def _get_box(
 
 
 async def _boxes_by_creation_key(
-    session: AsyncSession, tenant_id: uuid.UUID, supply_id: uuid.UUID, key: str
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    key: str,
 ) -> list[FbsPackingBox]:
     exact_boxes = await _boxes_by_stored_creation_keys(
         session, tenant_id, supply_id, [key]
@@ -521,11 +532,25 @@ async def _boxes_by_creation_key(
         WITHOUT_DISTRIBUTION_KEY_PREFIX
     )
     # The legacy prefix consumed part of the 128-character column and old
-    # writes therefore truncated longer raw keys.  Such a value cannot be
-    # matched safely: different valid API keys may share the stored prefix.
-    # Keep the fallback only where the legacy representation was lossless.
+    # writes therefore truncated longer raw keys.  The durable WB operation
+    # journal kept the complete API key, so use it to distinguish a retry of
+    # that old request from a different key with the same stored prefix.
     if len(key) > max_legacy_raw_len:
-        return []
+        legacy_boxes = await _boxes_by_stored_creation_keys(
+            session,
+            tenant_id,
+            supply_id,
+            [
+                f"{WITHOUT_DISTRIBUTION_KEY_PREFIX}{key[:max_legacy_raw_len]}",
+                f"{RETIRED_WITHOUT_DISTRIBUTION_KEY_PREFIX}{key[:max_legacy_raw_len]}",
+            ],
+        )
+        if not legacy_boxes:
+            return []
+        operation = await get_cargo_operation_by_idempotency(session, seller_id, key)
+        if operation is None or operation.local_entity_id != supply_id:
+            return []
+        return legacy_boxes
     return await _boxes_by_stored_creation_keys(
         session,
         tenant_id,
