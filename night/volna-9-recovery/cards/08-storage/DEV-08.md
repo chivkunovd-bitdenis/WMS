@@ -1,55 +1,44 @@
-# 08-storage · screen-dev rework
+# 08-storage · screen-dev rework по повторному ревью
 
 ## Изменённые файлы
 
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend/src/screens/ff/FfStoragePage.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend/src/App.tsx`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend/tests-e2e/storage.spec.ts`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/night/volna-9-recovery/cards/08-storage/DEV.md`
 
-Экран S-11 теперь допускает только пользователя с правом `inventory`, а отдельное право
-`cells` больше не открывает «Хранение». После запуска месячного расчёта экран опрашивает
-`/operations/background-jobs/{id}` до статуса `done` и лишь затем перечитывает сводку;
-`failed` и тайм-аут сохраняют последний успешный расчёт и показывают предусмотренную
-контрактом ошибку. Вызовы `TextCell`, `ProductCell`, `StatusChip` и MUI-полей приведены к
-фактическому API текущего UI-kit. Источники истории понимают как публичные значения API,
-так и внутренние алиасы `wb` и `container_override`.
+В экран S-11 вместо тупикового сообщения добавлен диалог тарифа по макету и контракту:
+операционный склад, обязательные ставка и дата начала, раскрываемая индивидуальная ставка
+селлера, `PrimaryAction` «Сохранить» и `SecondaryAction` «Отмена». Ввод проверяется до
+отправки; ошибка сервера остаётся в диалоге и показывается через `ErrorNotice`. Сохранение
+отправляет общий тариф и, если раскрыто исключение, отдельную версию для пары
+«селлер + склад» в `/operations/storage/tariffs`, после чего перечитывает экран.
 
-Playwright-проверка формирования теперь утверждает тело запроса с выбранными годом,
-месяцем и складом, переход фоновой задачи `running` → `done` и загрузку изменившейся
-сводки. Восстановлен буквальный `S-11-TC-008`: чистый черновик фиксируется и открывает
-A4-предпросмотр с селлером, SKU и итогом. Добавлена проверка, что право `cells` без
-`inventory` приводит на штатный экран «Нет доступа».
+В `S-11-TC-002` зафиксированы ввод ставки и даты и точное тело запроса. Для
+`S-11-TC-012` восстановлен непустой сценарий сотрудника: он раскрывает SKU при настроенном
+тарифе, но не видит ни изменение тарифа, ни фиксацию.
 
 ## Гейты
 
 - `npx tsc --noEmit -p tsconfig.app.json` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend` — зелёный.
+- `python3 scripts/ui/ui_guard.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage` — красный только на существующих нарушениях вне файлов атома: `frontend/src/components/WbProductPickerDialog.tsx` (`0 → 646`), `frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx` (`2493 → 2498`) и `frontend/src/screens/v2/SellerInboundDraftScreen.tsx` (`1111 → 1169`). В файлах S-11 нового нарушения нет; базовая линия не обновлялась. Скрипт также сообщает улучшение `frontend/src/App.tsx` (`3492 → 3491`), этот файл в текущем rework не менялся.
 - `npm run test:unit` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend` — зелёный: 20 файлов, 141 тест.
-- `python3 scripts/ui/ui_guard.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage` — красный только на существующих нарушениях вне файлов атома: `frontend/src/components/WbProductPickerDialog.tsx`, `frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx`, `frontend/src/screens/v2/SellerInboundDraftScreen.tsx`. Для `frontend/src/App.tsx` результат улучшен с 3492 до 3491 строки; новых нарушений S-11 нет. Базовая линия не обновлялась.
-- `npx playwright test tests-e2e/storage.spec.ts --list` — зелёный: файл компилируется, найдено 17 тестов.
-- `npx playwright test tests-e2e/storage.spec.ts --reporter=line` — инфраструктурно красный до запуска тестов: песочница запретила Playwright открыть локальный API-порт `127.0.0.1:18000` (`operation not permitted`), поэтому web-server завершился до старта браузерных сценариев.
-- `git diff --check` — зелёный.
+- `npx playwright test tests-e2e/storage.spec.ts --grep 'S-11-TC-002|S-11-TC-012' --reporter=line` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend` — инфраструктурно красный до запуска тестов: Playwright web-server не смог открыть `127.0.0.1:18000`, `operation not permitted`.
+- `npx playwright test tests-e2e/storage.spec.ts --grep 'S-11-TC-002|S-11-TC-012' --list` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend` — зелёный: найдены четыре целевых теста в одном файле, тестовый файл компилируется.
+- `git diff --check` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage` — зелёный.
 
 ## Не реализовано
 
-- Настройка тарифа буквально не реализована: в опубликованном API этой рабочей копии нет
-  маршрута записи `BillingTariffVersion`. По обязательной границе `ARCH-CROSS.md` тарифом
-  владеет финансовое ядро карточки 09; экран не создаёт второй контур и не изображает
-  успешное сохранение локальным состоянием.
-- Полный Playwright-прогон нельзя подтвердить в этой песочнице из-за запрета локального
-  bind. Компиляция тестового файла подтверждена, но его 17 сценариев должны быть повторно
-  запущены в CI или окружении, где разрешены локальные web-server порты.
-- `S-11-TC-016`, `S-11-TC-018` и `S-11-TC-019` проверяют соответственно приоритет
-  применённого события габаритов, целостность восстановленного остатка и идемпотентность
-  финансовой фиксации. Это backend-конкурентные сценарии, которые нельзя доказать
-  мокированным экранным Playwright без ложноположительного результата; в атоме
-  `screen-dev` они не добавлялись.
-- Сохранить изменения коммитом не удалось: Git не может создать
-  `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-08-storage1/index.lock` из-за
-  ограничений файловой песочницы (`Operation not permitted`). Изменения остаются только в
-  постоянной рабочей копии и ещё не восстановимы по новому commit SHA.
+- В backend этой рабочей копии отсутствует маршрут записи тарифа. Экран теперь отправляет
+  `POST /operations/storage/tariffs` с `warehouse_id`, `amount`, `valid_from` и
+  необязательным `seller_id`, но реальное сохранение получит 404, пока владелец backend-слоя
+  не опубликует этот endpoint. Добавлять backend-файл роли `screen-dev` и списку файлов
+  атома не разрешено; ложный успех через локальное состояние не создавался.
+- Полный браузерный результат `S-11-TC-002` и `S-11-TC-012` не подтверждён из-за запрета
+  песочницы на локальный bind. Компиляция и обнаружение целевых тестов подтверждены.
+- Находки 2–6 повторного `REVIEW.md` относятся к backend-моделям, API, миграции и backend-
+  тестам. Они не исправлялись ролью `screen-dev`; соседние продуктовые файлы не затрагивались.
 
 ## Находки
 
-Секреты, ключи, токены, `.env`, персональные данные и кабинеты учётных данных не
-открывались и не использовались.
+Секреты, ключи, токены, `.env`, персональные кабинеты и боевой production не открывались
+и не использовались.
