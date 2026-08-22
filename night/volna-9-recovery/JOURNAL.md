@@ -38,3 +38,20 @@
 14:28   01-wb-marking · dev: фича 4/5 сохранена bdf8d0f43ed4
 14:30   01-wb-marking · backend-dev: готово
 14:30   01-wb-marking · dev: фича 5/5 сохранена 3bd89f42e995
+14:34   01-wb-marking · reviewer: готово
+14:34 01-wb-marking: отложено — reviewer, круги кончились
+14:42   01-wb-marking · solution-architect: уже сделано, пропускаю
+14:42   01-wb-marking · product: уже сделано, пропускаю
+14:47   01-wb-marking · ux-architect: CONTRACT.md: карточке с экраном нельзя поставить МАКЕТ: НЕ НУЖЕН (код 0, попытка 1)
+14:49   01-wb-marking · ux-architect: CONTRACT.md: карточке с экраном нельзя поставить МАКЕТ: НЕ НУЖЕН (код 0, попытка 2)
+14:49 01-wb-marking: отложено на шаге ux-architect
+19:54   01-wb-marking · solution-architect: уже сделано, пропускаю
+19:54   01-wb-marking · product: уже сделано, пропускаю
+19:54   01-wb-marking · ux-architect: уже сделано, пропускаю
+19:54   01-wb-marking · tester: уже сделано, пропускаю
+19:54   01-wb-marking · breaker: уже сделано, пропускаю
+19:54   01-wb-marking · splitter: уже сделано, пропускаю
+19:54   01-wb-marking · dev: уже сделано по 5 атомарным фичам
+20:01   01-wb-marking · reviewer: готово
+20:01   01-wb-marking · reviewer: находки, круг 1 — назад к разработке
+20:04   01-wb-marking · backend-dev: готово

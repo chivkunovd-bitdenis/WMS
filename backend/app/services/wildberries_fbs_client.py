@@ -19,6 +19,9 @@ from app.services.wildberries_errors import (
 )
 
 MAX_MARKETPLACE_FBS_BATCH = 100
+# A seller poll must not be held by an arbitrary upstream Retry-After value.
+# The marking contract permits one short retry only; the next poll handles the rest.
+MAX_MARKETPLACE_META_RETRY_AFTER_SECONDS = 1.0
 
 MARKETPLACE_SUPPLIES_BATCH_ORDERS_PATH = "/api/marketplace/v3/supplies/{supply_id}/orders"
 MARKETPLACE_SUPPLY_ORDER_IDS_PATH = "/api/marketplace/v3/supplies/{supply_id}/order-ids"
@@ -652,7 +655,10 @@ async def fetch_marketplace_orders_meta_batch(
     if response.status_code == 429:
         retry_after_raw = response.headers.get("Retry-After")
         try:
-            retry_after = max(0.0, float(retry_after_raw or "0"))
+            retry_after = min(
+                MAX_MARKETPLACE_META_RETRY_AFTER_SECONDS,
+                max(0.0, float(retry_after_raw or "0")),
+            )
         except ValueError:
             retry_after = 0.0
         await asyncio.sleep(retry_after)

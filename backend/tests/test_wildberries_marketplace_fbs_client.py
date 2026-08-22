@@ -21,6 +21,7 @@ from app.services.wildberries_errors import (
 )
 from app.services.wildberries_fbs_client import (
     MAX_MARKETPLACE_FBS_BATCH,
+    MAX_MARKETPLACE_META_RETRY_AFTER_SECONDS,
     WB_FBS_OPENAPI_VERIFIED_DATE,
     add_orders_to_marketplace_supply_batch,
     delete_marketplace_order_meta,
@@ -145,7 +146,7 @@ async def test_fetch_orders_meta_batch_retries_429_once_after_retry_after() -> N
         nonlocal calls
         calls += 1
         if calls == 1:
-            return httpx.Response(429, headers={"Retry-After": "1.5"})
+            return httpx.Response(429, headers={"Retry-After": "3600"})
         return httpx.Response(200, json={"orders": [{"id": 123456, "metaDetails": []}]})
 
     transport = httpx.MockTransport(handler)
@@ -156,7 +157,7 @@ async def test_fetch_orders_meta_batch_retries_429_once_after_retry_after() -> N
             )
 
     assert calls == 2
-    sleep.assert_awaited_once_with(1.5)
+    sleep.assert_awaited_once_with(MAX_MARKETPLACE_META_RETRY_AFTER_SECONDS)
     assert rows[0].order_id == 123456
 
 
