@@ -909,7 +909,7 @@ def mock_order_meta_snapshot(order_id: int) -> dict[str, Any]:
     """Снимок mock-меты заказа для batch-клиента (e2e_mock_wb_marketplace_marking).
 
     Batch-роут POST /api/marketplace/v3/orders/meta живёт в wildberries_fbs_client,
-    но обязан читать тот же mock-стор, что и одиночные PUT/GET здесь, иначе под
+    но обязан читать тот же mock-стор, что и одиночные PUT здесь, иначе под
     моком метаданные расходятся.
     """
     return _mock_order_meta_response(order_id)

@@ -1,15 +1,11 @@
-# DEV · 01-wb-marking · атом 4 · rework
+# DEV · 01-wb-marking · атом 5 · rework
 
 ## Что реализовано
 
-- Эндпоинты: нет.
-- Сервис `sync_marking_statuses_for_assembling_supplies`: подтверждена существующая последовательная обработка уникальных `wb_order_id` пачками `100/100/1`, применение ответа по `order_id` и продолжение после локализованной ошибки пачки.
-- Сервис `_sync_order_meta_from_wb`: адресными тестами подтверждены исправления четырёх находок ревью — сохранение полного удалённого снимка, контрактное отображение `check_status`, отказ от legacy `row.meta` и однократный аудит при конкурентном запуске.
-
-## Изменённые файлы
-
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_fbs_marking.py` — batch-тест дополнен явной проверкой последовательности запросов и сохранности локальных данных ошибочной пачки.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/night/volna-9-recovery/cards/01-wb-marking/DEV.md` — отчёт текущего backend-атома.
+- Эндпоинты: новых и изменённых эндпоинтов нет; устаревший одиночный `GET /api/v3/orders/{orderId}/meta` отсутствует.
+- Сервис `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/services/wildberries_client.py`: удалённая ранее функция `fetch_marketplace_order_meta` и её вызовы отсутствуют; комментарий mock-хранилища очищен от упоминания удалённого одиночного `GET`.
+- Сервис `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/services/wildberries_fbs_client.py`: batch `POST /api/marketplace/v3/orders/meta` подтверждён как единственный путь чтения метаданных.
+- Находки `REVIEW.md`: четыре исправления соседних атомов присутствуют в текущей ветке и повторно подтверждены названными ревью-сценариями; дополнительного изменения их файлов в атоме 5 не потребовалось.
 
 ## Миграции
 
@@ -17,29 +13,35 @@
 
 ## Тесты
 
-- Усилен `test_fbs_marking_autopoll_batches_unique_ids_and_skips_partial_or_failed_batches`: 201 заказ разбивается на последовательные уникальные пачки `100/100/1`; первая пачка возвращается в обратном порядке и без одной строки, средняя падает, последняя всё равно выполняется; максимум одновременно активен один batch-запрос; 100 локальных маркировок ошибочной пачки остаются в прежних статусах.
-- Повторно проверены параметризованные решения WB, неизвестный ключ `metaDetails`, отсутствие ожидаемого `kind`, полный удалённый снимок и конкурентный плюс повторный запуск `wb_orphaned`.
-- Проверен существующий ручной путь одного заказа через `test_fbs_marking_sync_updates_check_status`: один ID остаётся допустимой пачкой.
+- Новые тесты не добавлялись: атом удаляет мёртвое чтение, а существующие клиентские тесты полностью покрывают разрешённые операции записи/удаления и batch-чтение.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_wildberries_client.py` и `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_wildberries_marketplace_fbs_client.py`: подтверждены клиентские контракты, включая batch-чтение `metaDetails`.
+- Адресные тесты из `REVIEW.md`: подтверждены полный сырой снимок, контрактный `check_status`, отсутствие legacy fallback и конкурентная однократность `wb_orphaned`.
+
+## Изменённые файлы
+
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/services/wildberries_client.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/night/volna-9-recovery/cards/01-wb-marking/DEV.md`
 
 ## Гейты
 
-- `ruff check tests/test_fbs_marking.py app/services/fbs_marking_service.py app/services/fbs_autopoll_service.py tests/test_fbs_kiz.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend` — пройдено: `All checks passed!`.
-- `mypy app/services/fbs_marking_service.py app/services/fbs_autopoll_service.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend` — целевые модули проверены, общий код возврата 1 из-за четырёх уже существующих ошибок в импортируемых соседних файлах `wildberries_credentials_service.py`, `fbs_stock_sync_service.py` и `fbs_warehouse_binding_service.py`; ошибок в двух названных целевых модулях вывод не содержит.
-- `pytest -q tests/test_fbs_marking.py::test_fbs_marking_autopoll_batches_unique_ids_and_skips_partial_or_failed_batches tests/test_fbs_marking.py::test_fbs_marking_sync_updates_check_status tests/test_fbs_kiz.py::test_fbs_marking_wb_meta_decision_is_safe_and_preserves_raw_detail tests/test_fbs_kiz.py::test_fbs_marking_partial_wb_row_is_unknown_without_fresh_check_time tests/test_fbs_kiz.py::test_fbs_marking_orphaned_audit_is_created_once_for_concurrent_and_repeated_missing` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend` — пройдено: `13 passed in 49.31s`.
+- `ruff check app/services/wildberries_client.py tests/test_wildberries_client.py tests/test_wildberries_marketplace_fbs_client.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend` — пройдено: `All checks passed!`.
+- `mypy app/services/wildberries_client.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend` — пройдено: `Success: no issues found in 1 source file`.
+- `pytest -q tests/test_wildberries_client.py tests/test_wildberries_marketplace_fbs_client.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend` — пройдено: `26 passed in 0.24s`.
+- `pytest -q tests/test_fbs_marking.py::test_fbs_marking_autopoll_batches_unique_ids_and_skips_partial_or_failed_batches tests/test_fbs_marking.py::test_fbs_marking_sync_updates_check_status tests/test_fbs_kiz.py::test_fbs_marking_wb_meta_decision_is_safe_and_preserves_raw_detail tests/test_fbs_kiz.py::test_fbs_marking_partial_wb_row_is_unknown_without_fresh_check_time tests/test_fbs_kiz.py::test_fbs_marking_orphaned_audit_is_created_once_for_concurrent_and_repeated_missing` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend` — пройдено: `13 passed in 22.69s`.
+- `if rg -n 'fetch_marketplace_order_meta' backend/app backend/tests; then exit 1; else printf '%s\\n' 'PASS: fetch_marketplace_order_meta отсутствует в backend/app и backend/tests'; fi` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking` — пройдено: определений и вызовов нет.
+- `rg -n 'fetch_marketplace_orders_meta_batch|MARKETPLACE_ORDERS_META_BULK_PATH' backend/app/services backend/tests/test_wildberries_marketplace_fbs_client.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking` — пройдено: batch-функция определена, вызывается сервисами и покрыта тестами.
 - `python3 scripts/ci/back_guard.py` — неприменим: новый роут не добавлялся.
 - `python3 scripts/ci/check_migrations.py` — неприменим: миграция не добавлялась.
-- `git diff --check` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking` — пройдено.
-- `git add -- backend/tests/test_fbs_marking.py night/volna-9-recovery/cards/01-wb-marking/DEV.md && git commit -m "test(wb-marking): prove sequential batch recovery"` — не выполнено ограниченной средой: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-01-wb-marking1/index.lock` (`Operation not permitted`).
 
 ## Не реализовано
 
-- Нет. Рабочая логика атома и исправления находок ревью уже присутствовали в ветке; текущий rework усилил недостающие доказательства последовательности и сохранности данных на ошибке пачки.
+- Нет: атом 5 выполнен буквально; новый fallback и новое пользовательское действие не добавлялись.
 
 ## Находки
 
-- Формального раздела «API и данные» в `CONTRACT.md` нет; реализация продолжена по отдельному разрешению владельца ночной волны и однозначным backend-правилам в `FEATURES.md`, `ARCH.md` и `REVIEW.md`.
+- В `CONTRACT.md` нет отдельного раздела `API и данные`; для rework использованы однозначные backend-границы атома 5 из `FEATURES.md`, решения `ARCH.md` и проверяемые требования `REVIEW.md`.
 - Секреты, ключи, токены, `.env`, кабинеты учётных данных, боевой прод и живой кабинет Wildberries не читались и не затрагивались.
 
 ## Блокеры
 
-- Изменения локально реализованы и проверены, но не сохранены коммитом: служебный Git-каталог зарегистрированного worktree доступен этой среде только для чтения. Для сохранения нужен повтор `git add` и `git commit` процессом с правом записи в `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-01-wb-marking1/`.
+- Нет.
