@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildInvoicePrintHtml, buildLedgerSearchParams, STORAGE_SERVICE_CODE } from './FfBillingScreen'
+import { buildInvoicePrintHtml, buildLedgerSearchParams, ledgerDocumentTarget, STORAGE_SERVICE_CODE } from './FfBillingScreen'
 
 describe('FfBillingScreen billing contract', () => {
   it('requests the selected month through the period parameter', () => {
@@ -12,6 +12,15 @@ describe('FfBillingScreen billing contract', () => {
 
   it('uses the shared storage ledger service code', () => {
     expect(STORAGE_SERVICE_CODE).toBe('storage_liter_day')
+  })
+
+  it('routes supported ledger sources to their existing documents', () => {
+    expect(ledgerDocumentTarget({ source_type: 'inbound_intake', source_id: 'inbound-1' }))
+      .toEqual({ kind: 'inbound', sourceId: 'inbound-1' })
+    expect(ledgerDocumentTarget({ source_type: 'marketplace_unload', source_id: 'unload/1' }))
+      .toEqual({ kind: 'route', to: '/app/ff/mp-shipments?open_mp=unload%2F1' })
+    expect(ledgerDocumentTarget({ source_type: 'storage_measurement', source_id: 'storage-1' }))
+      .toBeNull()
   })
 
   it('builds a printable invoice without technical profile keys or controls', () => {

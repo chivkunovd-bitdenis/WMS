@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Box, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Select, Stack, Tab, Tabs, Typography } from '@mui/material'
+import { Link as RouterLink, useNavigate } from 'react-router-dom'
+import { Box, Dialog, DialogActions, DialogContent, DialogTitle, Link, MenuItem, Select, Stack, Tab, Tabs, Typography } from '@mui/material'
 import ExpandMore from '@mui/icons-material/ExpandMore'
 import {
   DataTable,
@@ -21,12 +21,14 @@ import {
 } from '../../ui-kit'
 
 type Seller = { id: string; name: string }
-type Props = { sellers?: Seller[]; token: string }
+type Props = { sellers?: Seller[]; token: string; onOpenInbound: (id: string) => void }
 type LedgerEntry = {
   id: string
   occurred_at: string
   seller_name: string
   service_code: 'inbound' | 'marketplace_outbound' | 'storage_liter_day' | string
+  source_type: string
+  source_id: string
   document_number: string
   quantity: number
   unit: 'document' | 'item' | 'liter_day' | string
@@ -46,6 +48,18 @@ export const STORAGE_SERVICE_CODE = 'storage_liter_day'
 
 export function buildLedgerSearchParams(month: string): URLSearchParams {
   return new URLSearchParams({ period: month })
+}
+
+type LedgerDocumentTarget = { kind: 'inbound'; sourceId: string } | { kind: 'route'; to: string }
+
+export function ledgerDocumentTarget(entry: Pick<LedgerEntry, 'source_type' | 'source_id'>): LedgerDocumentTarget | null {
+  if (entry.source_type === 'inbound_intake') {
+    return { kind: 'inbound', sourceId: entry.source_id }
+  }
+  if (entry.source_type === 'marketplace_unload') {
+    return { kind: 'route', to: `/app/ff/mp-shipments?open_mp=${encodeURIComponent(entry.source_id)}` }
+  }
+  return null
 }
 
 function currentMonth(): string {
@@ -102,7 +116,7 @@ function responseRows<T>(payload: BillingListResponse<T> | T[], key: 'entries' |
   return payload[key] ?? payload.rows ?? []
 }
 
-export function FfBillingScreen({ sellers = [], token }: Props) {
+export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
   const navigate = useNavigate()
   const [tab, setTab] = useState(0)
   const [month, setMonth] = useState(currentMonth)
@@ -183,7 +197,20 @@ export function FfBillingScreen({ sellers = [], token }: Props) {
     { key: 'date', header: 'Дата', width: 120, render: (row: LedgerEntry) => <TextCell value={new Date(row.occurred_at).toLocaleDateString('ru-RU')} /> },
     { key: 'seller', header: 'Селлер', width: 190, render: (row: LedgerEntry) => <TextCell value={row.seller_name} /> },
     { key: 'service', header: 'Услуга', width: 150, render: (row: LedgerEntry) => serviceLabels[row.service_code] ?? row.service_code },
-    { key: 'document', header: 'Документ', width: 190, render: (row: LedgerEntry) => <TextCell value={row.document_number} /> },
+    { key: 'document', header: 'Документ', width: 190, render: (row: LedgerEntry) => {
+      const target = ledgerDocumentTarget(row)
+      return target ? (
+        target.kind === 'inbound' ? (
+          <Link component="button" type="button" variant="body2" onClick={() => onOpenInbound(target.sourceId)} data-testid={`billing-document-${row.id}`}>
+            <TextCell value={row.document_number} />
+          </Link>
+        ) : (
+          <Link component={RouterLink} to={target.to} variant="body2" data-testid={`billing-document-${row.id}`}>
+            <TextCell value={row.document_number} />
+          </Link>
+        )
+      ) : <TextCell value={row.document_number} />
+    } },
     { key: 'quantity', header: 'Количество', width: 120, align: 'right' as const, render: (row: LedgerEntry) => <QtyCell value={row.quantity} /> },
     { key: 'unit', header: 'Расчёт', width: 150, render: (row: LedgerEntry) => unitLabels[row.unit] ?? row.unit },
     { key: 'rate', header: 'Ставка', width: 130, align: 'right' as const, render: (row: LedgerEntry) => <MoneyCell value={row.rate} /> },

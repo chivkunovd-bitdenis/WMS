@@ -309,16 +309,13 @@ export default function App() {
   const [outboundSummaries, setOutboundSummaries] = useState<
     OutboundSummaryRow[]
   >([])
-  const [selectedOutboundId, setSelectedOutboundId] = useState<string | null>(
-    null,
-  )
+  const [selectedOutboundId, setSelectedOutboundId] = useState<string | null>(null)
   const [outboundDetail, setOutboundDetail] = useState<OutboundDetailRow | null>(
     null,
   )
   const [ffDocModal, setFfDocModal] = useState<null | 'inbound' | 'outbound'>(null)
   const [ffDocDirty, setFfDocDirty] = useState(false)
-  const [ffInboundWorkspace, setFfInboundWorkspace] =
-    useState<InboundRequestWorkspace>('full')
+  const [ffInboundWorkspace, setFfInboundWorkspace] = useState<InboundRequestWorkspace>('full')
   const [marketplaceUnloadSummaries, setMarketplaceUnloadSummaries] = useState<
     FfMarketplaceUnloadSummary[]
   >([])
@@ -3081,16 +3078,7 @@ export default function App() {
               )
             }
           />
-          <Route
-            path="ff/billing"
-            element={
-              token && isFulfillmentAdmin ? (
-                <FfBillingScreen token={token} sellers={sellers.map((seller) => ({ id: seller.id, name: seller.name }))} />
-              ) : (
-                ffAccessDenied
-              )
-            }
-          />
+          <Route path="ff/billing" element={token && isFulfillmentAdmin ? <FfBillingScreen token={token} sellers={sellers.map((seller) => ({ id: seller.id, name: seller.name }))} onOpenInbound={(id) => { setSelectedOutboundId(null); setSelectedInboundId(id); setFfInboundWorkspace('reception'); setFfDocModal('inbound') }} /> : ffAccessDenied} />
           <Route
             path="ff/honest-sign/reprints"
             element={

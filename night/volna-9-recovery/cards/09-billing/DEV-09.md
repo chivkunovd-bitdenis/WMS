@@ -1,35 +1,30 @@
-# 09-billing · screen-dev · rework атома 9
+# 09-billing — screen-dev, повторный ремонт атома 9
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfBillingScreen.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfBillingScreen.test.ts`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/tests-e2e/billing-ledger.spec.ts`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/tests-e2e/billing-invoices.spec.ts`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/night/volna-9-recovery/cards/09-billing/DEV.md`
-
-В `FfBillingScreen` журнал начислений теперь запрашивает выбранный месяц через `period=YYYY-MM`, совпадающий с живым API. Хранение во всех трёх местах экрана — метка, фильтр и детализация счёта — использует единый межкарточный код `storage_liter_day`. Технический UUID расчёта хранения в детализации заменяется на «Расчёт хранения за {месяц}».
-
-`AuthedAppLayout.tsx` и `App.tsx` проверены без правок: пунк «Расчёты» и маршрут `/app/ff/billing` уже ограничены `isFulfillmentAdmin`; селлер и складской сотрудник не видят пунк, а прямой маршрут возвращает экран отказа без финансовых данных. Общие UI-примитивы не добавлялись.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfBillingScreen.tsx` — номер приёмки или MP-отгрузки в журнале начислений стал ссылкой на существующий документ; технические источники без доступного документа остаются обычным текстом.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/App.tsx` — штатный callback открытия приёмки передан экрану расчётов; billing-маршрут уплотнён, поэтому размер монолита по `ui_guard` уменьшился с базовых 3492 до 3491 строки.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfBillingScreen.test.ts` — добавлена адресная проверка маршрутов исходных документов.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/tests-e2e/billing-ledger.spec.ts` — сценарий `S-31-TC-004` дополнен кликом по номеру приёмки и проверкой открытия штатного диалога документа с сохранением маршрута `/app/ff/billing`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/night/volna-9-recovery/cards/09-billing/DEV.md` — этот отчёт.
 
 ## Гейты
 
-- Красный: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npx tsc --noEmit -p tsconfig.app.json` — локального `typescript` нет, `npx` попытался обратиться к `https://registry.npmjs.org/tsc` и завершился `ENOTFOUND`.
-- Красный, но новых нарушений текущего атома нет: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing && python3 scripts/ui/ui_guard.py`. Храповик указал на уже существующий рост файлов `src/App.tsx` (3492 → 3503), `src/components/WbProductPickerDialog.tsx` (0 → 646), `src/screens/ff/FfSettingsScreen.tsx` (701 → 795), `src/screens/v2/FfFbsSupplyWorkspace.tsx` (2493 → 2498), `src/screens/v2/SellerInboundDraftScreen.tsx` (1111 → 1169). Базовая линия не обновлялась.
-- Красный: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npm run test:unit -- src/screens/ff/FfBillingScreen.test.ts` — `vitest: command not found`, потому что в рабочей копии нет `node_modules`.
-- Красный: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npm run test:e2e -- billing-ledger.spec.ts billing-invoices.spec.ts` — npm не нашёл локальный Playwright и вызвал одноимённый Python CLI, который завершился `error: unknown command 'test'`.
-- Зелёный: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing && git diff --check`.
-- Красный: `git add <файлы атома> && git commit -m "night(09-billing): rework billing screen contract"` — Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-09-billing1/index.lock`: `Operation not permitted`. Изменения остались только в рабочем дереве и не сохранены в новом commit.
-
-Полные backend `pytest`, `ruff check .` и `mypy .` не запускались: они прямо запрещены для этого атома.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npm_config_offline=true npx tsc --noEmit -p tsconfig.app.json` — **красный до запуска TypeScript**: в рабочей копии отсутствует `frontend/node_modules`, а локального кэшированного пакета `tsc` нет (`ENOTCACHED`). Сеть и другой checkout не использовались.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing && python3 scripts/ui/ui_guard.py` — **красный в целом, но зелёный для файлов атома**: `src/App.tsx` стало лучше, `3492 → 3491`; новых нарушений в `FfBillingScreen.tsx` нет. Остались четыре ранее существующих нарушения вне разрешённого слоя: `src/components/WbProductPickerDialog.tsx`, `src/screens/ff/FfSettingsScreen.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`. Базовая линия не менялась.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npm run test:unit -- src/screens/ff/FfBillingScreen.test.ts` — **красный до запуска тестов**: `vitest: command not found`, потому что `frontend/node_modules` отсутствует.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npm_config_offline=true npx playwright test tests-e2e/billing-ledger.spec.ts -g "billing ledger preserves filters and month context"` — **красный до запуска сценария**: пакет Playwright отсутствует в локальном npm-кэше (`ENOTCACHED`).
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing && git diff --check` — **зелёный**.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing && git add -- frontend/src/App.tsx frontend/src/screens/ff/FfBillingScreen.tsx frontend/src/screens/ff/FfBillingScreen.test.ts frontend/tests-e2e/billing-ledger.spec.ts night/volna-9-recovery/cards/09-billing/DEV.md && git diff --cached --check && git status --short && git commit -m 'night(09-billing): open ledger source documents'` — **красный до индексации**: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-09-billing1/index.lock` (`Operation not permitted`). Несвязанные `JOURNAL.md` и `REVIEW.md` не индексировались.
 
 ## Не реализовано
 
-- Backend-находки 2, 4, 5, 6 и 7 из `REVIEW.md` не изменялись: роль `screen-dev` и границы этого атома запрещают править API, сервисы биллинга и миграции.
-- Живой frontend e2e с настоящим billing read-model из находки 8 не добавлялся: это интеграционная backend-проверка за границами экранного слоя. Фронтендные моки приведены к реальной форме `{ entries: [...] }` и параметру `period`.
-- Предписанные frontend-гейты не подтверждены зелёными из-за отсутствующих локальных npm-зависимостей и недоступного npm registry.
-- Результат локально реализован, но не сохранён в Git: служебный Git-каталог worktree недоступен для записи в этой среде.
+- В разрешённых файлах экрана находка 1 из `REVIEW.md` реализована буквально для двух production-источников, у которых существуют пользовательские документы: `inbound_intake` и `marketplace_unload`.
+- Находки 2 и 3 из `REVIEW.md` относятся к backend-сервису и backend-тесту. По заданной роли `screen-dev` и границам этого атома они не изменялись.
+- Для `storage_measurement` и `billing_reversal` ссылка не рисуется: текущий read-model не отдаёт доступный пользовательский маршрут исходного документа для этих типов. Технический UUID пользователю не показывается.
+- Изменения локально реализованы, но не сохранены в новом Git-коммите: служебный каталог зарегистрированного worktree недоступен для записи, поэтому восстанавливаемого SHA у этого ремонта нет.
 
 ## Находки
 
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не открывались и не затрагивались.
+- Локальные npm-зависимости отсутствуют, поэтому `tsc`, Vitest и адресный Playwright-кейс необходимо повторить после штатной установки зависимостей интеграционным шагом.
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных, живой Wildberries и боевой прод не читались и не затрагивались.

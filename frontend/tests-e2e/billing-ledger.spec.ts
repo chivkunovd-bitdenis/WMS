@@ -5,7 +5,7 @@ test('billing ledger preserves filters and month context', async ({ page }) => {
   let lastLedgerUrl = ''
   await page.route('**/api/billing/ledger**', async (route) => {
     lastLedgerUrl = route.request().url()
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ entries: [{ id: 'entry-1', occurred_at: '2026-08-18T00:00:00Z', seller_name: 'Луна', service_code: 'inbound', document_number: 'ПР-000184', quantity: 38, unit: 'item', rate: 12, amount: 456, performer_name: 'Анна К.', problem: null }] }) })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ entries: [{ id: 'entry-1', occurred_at: '2026-08-18T00:00:00Z', seller_name: 'Луна', service_code: 'inbound', source_type: 'inbound_intake', source_id: 'inbound-1', document_number: 'ПР-000184', quantity: 38, unit: 'item', rate: 12, amount: 456, performer_name: 'Анна К.', problem: null }] }) })
   })
   await page.goto('/app/ff/billing')
   await expect(page.getByTestId('ff-billing-screen')).toBeVisible()
@@ -19,6 +19,9 @@ test('billing ledger preserves filters and month context', async ({ page }) => {
   await expect(page.getByTestId('billing-invoices-table')).toBeVisible()
   await page.getByTestId('billing-tab-charges').click()
   await expect(page.getByText('ПР-000184')).toBeVisible()
+  await page.getByTestId('billing-document-entry-1').click()
+  await expect(page).toHaveURL('/app/ff/billing')
+  await expect(page.getByTestId('ff-doc-dialog')).toBeVisible()
 })
 
 // S-31-TC-005 — Given completed work, When switching to performers, Then money columns are absent.
