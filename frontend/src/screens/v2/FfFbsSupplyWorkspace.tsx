@@ -85,6 +85,7 @@ import {
   type FbsPrintBatch,
   type FbsWorkspace,
   type FbsWorklistOrder,
+  NO_WB_VERDICT,
 } from './fbsApi'
 
 type Props = {
@@ -136,13 +137,17 @@ function visualStage(stage: FbsWorkspace['stage']): StageKey {
   return stage
 }
 
-const MARKING_ACCEPTED_STATUSES = ['accepted', 'assigned', 'pending', 'allowed_without_check', 'ok']
+const MARKING_ACCEPTED_STATUSES = ['accepted', 'allowed_without_check', 'ok']
 const STICKER_PRINTED_STATUSES = ['print_opened', 'applied']
 
 function isOrderMarkingReady(order: FbsWorkspace['orders'][number]) {
   if (order.metadata.required.length === 0) return true
   const accepted = order.metadata.states.filter((state) => MARKING_ACCEPTED_STATUSES.includes(state.status))
   return accepted.length >= order.metadata.required.length
+}
+
+function safeInitialWorkspace(workspace: FbsWorkspace | null | undefined): FbsWorkspace | null {
+  return workspace ? { ...workspace, orders: workspace.orders.map((order) => ({ ...order, metadata: { ...order.metadata, verdict: order.metadata?.verdict ?? NO_WB_VERDICT } })) } : null
 }
 
 // КИЗ, внесённый оператором со стикера, — в отличие от напечатанного нами из пула.
@@ -275,7 +280,7 @@ export function FfFbsSupplyWorkspace({
   open,
   onClose,
 }: Props) {
-  const [workspace, setWorkspace] = useState<FbsWorkspace | null>(initialWorkspace ?? null)
+  const [workspace, setWorkspace] = useState<FbsWorkspace | null>(() => safeInitialWorkspace(initialWorkspace))
   const [stage, setStage] = useState<StageKey>('composition')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -304,8 +309,6 @@ export function FfFbsSupplyWorkspace({
   const [kizUndoOrderId, setKizUndoOrderId] = useState<string | null>(null)
   const [kizScanActive, setKizScanActive] = useState<FbsKizLookup | null>(null)
   const [kizScanValue, setKizScanValue] = useState('')
-  // Ссылки на строки заказов: после скана стикера подкручиваем список к нужной,
-  // иначе в поставке на 26 позиций оператор не понимает, какая строка ожила.
   const kizRowRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
   useEffect(() => {
@@ -348,7 +351,7 @@ export function FfFbsSupplyWorkspace({
     if (!open || !supplyId) return
     setError(null)
     setNotice(null)
-    setWorkspace(initialWorkspace ?? null)
+    setWorkspace(safeInitialWorkspace(initialWorkspace))
     setStage(initialWorkspace ? visualStage(initialWorkspace.stage) : 'composition')
     setDeliveryKey(persistentOperationKey(supplyId, 'delivery'))
     setPrintBatch(null)
@@ -526,9 +529,6 @@ export function FfFbsSupplyWorkspace({
     if (next) setProductBarcode('')
   }
 
-  // KIZ-01: сканер стреляет в активное поле; пока запрос идёт, поле disabled и фокус
-  // теряется — без возврата фокуса следующий скан уходит в никуда. Тот же приём,
-  // что и в FbsKizScanDialog.tsx (см. его refocus()).
   const refocusKizInput = useCallback(() => {
     let attempts = 0
     const focus = () => {
@@ -1242,11 +1242,6 @@ export function FfFbsSupplyWorkspace({
   const printedOrdersCount = packingOrders.filter(orderPrintDone).length
   const unprintedPackingOrders = packingOrders.filter((order) => !orderPrintDone(order))
   const markingShortOrderIds = new Set(workspace?.marking_pool?.orders_without_code ?? [])
-  // Строка скана КИЗ доступна на любой поставке и любом товаре, без оглядки на
-  // признак маркировки в карточке и на requiredMeta от WB. Если Честный знак
-  // физически наклеен на товаре — значит товар маркированный, и спрашивать об
-  // этом систему незачем: раньше признак не доезжал (он читается из строки
-  // задания упаковки), строка скана не появлялась и КИЗ не уходили в WB вовсе.
   const anyOrderNeedsHonestSign = packingOrders.length > 0
 
   const stageBlockers = useMemo(() => {
@@ -1289,9 +1284,6 @@ export function FfFbsSupplyWorkspace({
   const boxRemainingCount = Math.max(0, boxTotalCount - boxDistributedCount)
   const supplyQrAsset = workspace?.supply.barcode_asset ?? null
   const needsSupplyQr = Boolean(workspace?.supply)
-  // A cargo-place QR is available per-box whenever WB registered a cargo
-  // place for that box — this is no longer PVZ-only (warehouse/SC boxes get
-  // one too), so branch on the box's own wb_trbx_id, not delivery_type.
   const hasCargoPlaceBoxes = Boolean(workspace?.boxes.some((box) => box.wb_trbx_id))
   const boxAssignRows = useMemo(() => {
     const grouped = new Map<string, {
@@ -1782,11 +1774,6 @@ export function FfFbsSupplyWorkspace({
                         <Button
                           disabled={!packagingEditable || busy || packingOrders.length === 0}
                           onClick={() => openBulkOrderMarkingPrint(
-                            // L8 (21.08.2026): в ленту идут ВСЕ заказы поставки, а не только
-                            // ненапечатанные. Иначе после первой печати (или после зажёванной
-                            // бумаги) лента выходила короче листа подбора, и оператор об этом
-                            // не знал. Коды Честного знака от этого не жгутся: у заказа, где
-                            // код уже выпущен, сервер переиспользует его, а не берёт новый.
                             packingOrders,
                             unprintedPackingOrders.length === 0,
                           )}
@@ -1818,9 +1805,6 @@ export function FfFbsSupplyWorkspace({
                     </Box>
                   ) : null}
                   {anyOrderNeedsHonestSign ? (
-                    // KIZ-01: скан живёт прямо на вкладке — стикер заказа подсвечивает
-                    // строку активной, следующий скан (Честный знак) привязывает код к
-                    // ней и сразу уходит в WB. Окно «Внести КИЗ» для этого больше не нужно.
                     <Box
                       sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'action.hover' }}
                       data-testid="fbs-kiz-scan-bar"
@@ -1925,9 +1909,6 @@ export function FfFbsSupplyWorkspace({
                         order.product.barcode,
                         `заказ ${order.wb_order_id}`,
                       ].filter(Boolean).join(' · ')
-                      // Пустая колонка ЧЗ = заказ ещё не сканировали. Внесённый код
-                      // красит строку зелёным, активную (только что отсканированный
-                      // стикер) — голубым: оператор видит, куда сейчас ляжет код.
                       const tail = kizTail(order)
                       const metaStatus = metaStatusView(order.metadata.verdict)
                       return (
