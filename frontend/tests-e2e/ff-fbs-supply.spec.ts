@@ -342,8 +342,9 @@ test('fbs workspace: scan location then product', async ({ page }) => {
   await expect(page.getByText('Товар подобран. Прогресс синхронизирован для всех операторов.')).toBeVisible()
 })
 
-// TC-NEW-FBS-12 — boxes can be created in "without distribution" mode.
-test('fbs workspace: boxes without distribution sends durable mode', async ({ page }) => {
+// S-03-TC-001/S-03-TC-002/S-03-TC-003 — the durable supply mode stays available
+// for empty boxes, survives deleting/reopening, and is blocked only by assignments.
+test('fbs workspace: boxes without distribution follows assigned orders', async ({ page }) => {
   await registerFf(page, 'boxes-no-distribution')
   const packedOrder = order('1', {
     status: 'packed',
@@ -368,7 +369,6 @@ test('fbs workspace: boxes without distribution sends durable mode', async ({ pa
     createBody = route.request().postDataJSON() as JsonObject
     currentWorkspace = {
       ...currentWorkspace,
-      stage: 'delivery',
       boxes: [{
         id: 'box-1',
         box_number: 1,
@@ -377,27 +377,78 @@ test('fbs workspace: boxes without distribution sends durable mode', async ({ pa
         trbx_id: null,
         wb_trbx_id: null,
         qr_asset: null,
-        without_distribution: true,
+        without_distribution: (currentWorkspace.supply as JsonObject).boxes_without_distribution === true,
       }],
     }
     await json(route, currentWorkspace, 201)
+  })
+  await page.route('**/operations/fbs-supplies/sup-1/boxes/box-1', async (route) => {
+    currentWorkspace = { ...currentWorkspace, boxes: [] }
+    await json(route, currentWorkspace)
+  })
+  await page.route('**/operations/fbs-supplies/sup-1/boxes/box-1/orders', async (route) => {
+    currentWorkspace = {
+      ...currentWorkspace,
+      boxes: [{
+        ...(currentWorkspace.boxes as JsonObject[])[0],
+        assigned_order_ids: ['1'],
+      }],
+    }
+    await json(route, currentWorkspace)
+  })
+  await page.route('**/operations/fbs-supplies/sup-1/boxes/box-1/clear', async (route) => {
+    currentWorkspace = {
+      ...currentWorkspace,
+      boxes: [{
+        ...(currentWorkspace.boxes as JsonObject[])[0],
+        assigned_order_ids: [],
+      }],
+    }
+    await json(route, currentWorkspace)
   })
 
   await page.getByTestId('nav-ff-fbs').click()
   await page.getByTestId('fbs-order-1').click()
   await expect(page.getByTestId('fbs-boxes')).toBeVisible()
+  await page.getByRole('button', { name: 'Добавить короба' }).click()
+  await expect(page.getByTestId('fbs-boxes-without-distribution')).toBeEnabled()
   await page.getByTestId('fbs-boxes-without-distribution').check()
-  await page.getByLabel('Коробов').fill('2')
+
+  // Given an empty box, when the mode is enabled, then the neutral header replaces
+  // the misleading "Распределено 0 из N" progress.
   await page.getByRole('button', { name: 'Добавить короба' }).click()
 
   expect(createBody?.without_distribution).toBe(true)
-  expect(createBody?.count).toBe(2)
   await expect(page.getByText('Без распределения · коробов 1')).toBeVisible()
+  await expect(page.getByText(/Распределено 0 из 1/)).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Добавить товары' })).toBeDisabled()
-  await page.getByRole('button', { name: 'QR' }).click()
-  const preview = page.getByRole('dialog', { name: 'Проверка перед печатью' })
-  await expect(preview).toContainText('Печать QR короба WMS')
-  await expect(preview.getByTestId('fbs-print-preview-copies')).toBeVisible()
+
+  // Given the enabled mode, when all empty boxes are deleted and the workspace is
+  // reopened, then the supply-level mode is still enabled after boxes are recreated.
+  await page.getByLabel('Действия короба 1').click()
+  await page.getByRole('menuitem', { name: 'Удалить' }).click()
+  await expect(page.getByText('Без распределения · коробов 0')).toBeVisible()
+  await page.getByLabel('Закрыть').click()
+  await page.getByTestId('fbs-order-1').click()
+  await expect(page.getByTestId('fbs-boxes-without-distribution')).toBeChecked()
+  await page.getByRole('button', { name: 'Добавить короба' }).click()
+  await expect(page.getByText('Без распределения · коробов 1')).toBeVisible()
+
+  // Given a recreated empty box, when the mode is disabled and an order is assigned,
+  // then changing the mode is unavailable with its explanation; after clearing the
+  // assignment it is available again.
+  await page.getByTestId('fbs-boxes-without-distribution').uncheck()
+  await expect(page.getByText('Распределено 0 из 1 шт · осталось 1')).toBeVisible()
+  await page.getByRole('button', { name: 'Добавить товары' }).click()
+  const assignDialog = page.getByRole('dialog', { name: 'Добавить товары в короб 1' })
+  await assignDialog.getByRole('spinbutton').fill('1')
+  await assignDialog.getByRole('button', { name: 'Добавить' }).click()
+  await expect(page.getByTestId('fbs-boxes-without-distribution')).toBeDisabled()
+  await page.getByText('Без распределения').hover()
+  await expect(page.getByRole('tooltip')).toContainText('сначала уберите их из коробов')
+  await page.getByLabel('Действия короба 1').click()
+  await page.getByRole('menuitem', { name: 'Очистить' }).click()
+  await expect(page.getByTestId('fbs-boxes-without-distribution')).toBeEnabled()
 })
 
 // TC-NEW-FBS-10/FBS-09 — one print preview shows the asset and copy count before printing.

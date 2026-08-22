@@ -1,35 +1,23 @@
-# DEV · 03-no-distribution-mode · атом 3
+# DEV · 03-no-distribution-mode · экран S-03
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/api/fbs_supplies.py` — `POST /operations/fbs-supplies/{supply_id}/boxes-without-distribution` принимает `enabled`, вызывает сервис и возвращает обновлённый workspace; доменный конфликт назначенных заказов отображается как `409 boxes_already_distributed`.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/services/fbs_workspace_service.py` — workspace получает `supply.boxes_without_distribution` из сохраняемого состояния поставки, в том числе без коробов.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/services/fbs_packing_box_service.py` — исправлена серверная находка ревью: выключение режима сохраняет адресуемость legacy-ключа для повторного `POST /boxes`, поэтому повтор возвращает исходный короб и не создаёт дубль.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/tests/test_fbs_packing_box.py` — покрыты API-возврат workspace, сохранение флага после повторного чтения, конфликт при назначенном заказе и регрессия идемпотентного повтора после выключения режима.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/night/volna-9-recovery/cards/03-no-distribution-mode/DEV.md` — отчёт backend-разработки.
-
-## Миграции
-
-- Нет: атом 3 использует добавляющие поля из атома 1 и не меняет схему.
-
-## Тесты
-
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/tests/test_fbs_packing_box.py` — API-переключение на пустой поставке, устойчивость флага при пустом списке коробов, `409` при назначении и безопасный повтор создания после выключения режима.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/tests/test_fbs_openapi_contract.py` — контракт OpenAPI для FBS API.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/frontend/tests-e2e/ff-fbs-supply.spec.ts`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/night/volna-9-recovery/cards/03-no-distribution-mode/DEV.md`
 
 ## Гейты
 
-- `ruff check .` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend` — FAIL: 80 существующих ошибок в несвязанных файлах; файлов этого атома в диагностике нет.
-- `mypy .` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend` — FAIL: 21 существующая ошибка в 6 несвязанных файлах; файлов этого атома в диагностике нет.
-- `pytest -q tests/test_fbs_packing_box.py tests/test_fbs_openapi_contract.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend` — PASS: целевой запуск завершился без ошибок.
-- `pytest` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend` — запуск начат, собраны 822 теста; исполнитель прекратил передачу вывода во время прогона, итоговая строка не получена.
-- `python3 scripts/ci/back_guard.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode` — NOT RUN: файла `scripts/ci/back_guard.py` в этой рабочей копии нет.
-- `python3 scripts/ci/check_migrations.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode` — NOT RUN: файла `scripts/ci/check_migrations.py` в этой рабочей копии нет.
+- `npx tsc --noEmit -p tsconfig.app.json` — не запущен: локальный `typescript` отсутствует, а `npx` не смог загрузить его из-за `ENOTFOUND registry.npmjs.org`.
+- `python3 scripts/ui/ui_guard.py` — красный. Базовая линия уже превышена: `src/components/WbProductPickerDialog.tsx` (0 → 646), `src/screens/v2/FfFbsSupplyWorkspace.tsx` (2493 → 2507), `src/screens/v2/SellerInboundDraftScreen.tsx` (1111 → 1169). Базовая линия не обновлялась.
+- `npm run test:unit` — не запущен: `vitest: command not found`.
+- `npx playwright test tests-e2e/ff-fbs-supply.spec.ts --grep 'boxes without distribution follows assigned orders'` — не запущен: локальный `playwright` отсутствует, а `npx` не смог загрузить его из-за `ENOTFOUND registry.npmjs.org`.
+- `git commit` — не выполнен: среда запретила создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-03-no-distribution-mode1/index.lock` (`Operation not permitted`). Изменения остаются незакоммиченными в этой рабочей копии.
 
 ## Не реализовано
 
-- Находка `REVIEW.md` о browser E2E относится к `frontend/tests-e2e/ff-fbs-supply.spec.ts` и экрану S-03; она вне разрешённой backend-роли и этого атома.
+- Находка 1 из `REVIEW.md` относится к `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/services/fbs_packing_box_service.py`; это бэкенд-слой другого атома и не менялся ролью `screen-dev`.
+- Буквальный контракт `tasks/<slug>/CONTRACT.md` в рабочей копии отсутствует. Для переделки использованы заданный атом 4 из `FEATURES.md` и относящаяся к экрану находка 2 из `REVIEW.md`.
 
 ## Находки
 
-- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались.
+- Усиленный E2E покрывает S-03-TC-001, S-03-TC-002 и S-03-TC-003: доступность после пустого короба, сохранение режима после удаления/повторного открытия, а также блокировку по назначению и повторную доступность после очистки.
