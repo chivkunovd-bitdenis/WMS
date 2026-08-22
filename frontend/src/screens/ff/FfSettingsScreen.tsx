@@ -131,6 +131,23 @@ export function FfSettingsScreen({
 
   useEffect(() => {
     if (!isFulfillmentAdmin || section !== 'tariffs') return
+    void Promise.all([
+      fetch(apiUrl('/billing/profiles/ff'), { headers: authHeaders(token) }),
+      fetch(apiUrl('/billing/tariffs'), { headers: authHeaders(token) }),
+    ]).then(async ([profileRes, tariffsRes]) => {
+      if (!profileRes.ok || !tariffsRes.ok) throw new Error('Не удалось загрузить тарифы ФФ.')
+      const savedProfile = (await profileRes.json()) as Partial<FfProfile> | null
+      setProfile((current) => ({ ...current, ...savedProfile }))
+      setTariffs((await tariffsRes.json()) as Tariff[])
+    }).catch((err: unknown) => setTariffError(err instanceof Error ? err.message : 'Не удалось загрузить тарифы ФФ.'))
+  }, [authHeaders, isFulfillmentAdmin, section, token])
+
+  useEffect(() => {
+    if (!isFulfillmentAdmin) setSection('staff')
+  }, [isFulfillmentAdmin])
+
+  useEffect(() => {
+    if (!isFulfillmentAdmin || section !== 'tariffs') return
     void fetch(apiUrl('/sellers'), { headers: authHeaders(token) })
       .then((res) => res.ok ? res.json() as Promise<Seller[]> : Promise.reject(new Error('Не удалось загрузить селлеров.')))
       .then(setSellers)
@@ -383,7 +400,7 @@ export function FfSettingsScreen({
     if (tariffDraft.service_code === 'storage_liter_day' && tariffDraft.unit !== 'liter_day') { setTariffError('Для хранения доступен только расчёт «За литр-день».'); return }
     setTariffBusy(true)
     try {
-      const res = await fetch(apiUrl('/billing/tariffs'), { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ ...tariffDraft, seller_id: tariffDraft.seller_id || null, amount }) })
+      const res = await fetch(apiUrl('/billing/tariffs'), { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ ...tariffDraft, service_code: tariffDraft.service_code === 'outbound' ? 'marketplace_outbound' : tariffDraft.service_code, seller_id: tariffDraft.seller_id || null, amount }) })
       if (!res.ok) { setTariffError(await readApiErrorMessage(res)); return }
       const created = (await res.json()) as Tariff
       setTariffs((current) => [...current, created])
@@ -406,7 +423,7 @@ export function FfSettingsScreen({
 
       <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
         <SecondaryAction onClick={() => setSection('staff')} disabled={section === 'staff'} data-testid="ff-settings-staff-tab">Склад и сотрудники</SecondaryAction>
-        <SecondaryAction onClick={() => setSection('tariffs')} disabled={section === 'tariffs'} data-testid="ff-settings-tariffs-tab">Тарифы ФФ</SecondaryAction>
+        {isFulfillmentAdmin ? <SecondaryAction onClick={() => setSection('tariffs')} disabled={section === 'tariffs'} data-testid="ff-settings-tariffs-tab">Тарифы ФФ</SecondaryAction> : null}
       </Stack>
 
       {section === 'tariffs' && isFulfillmentAdmin ? (
