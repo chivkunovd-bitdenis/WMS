@@ -584,7 +584,7 @@ async def test_fbs_supply_picking_list_grouping(
         prod_b = await session.get(Product, uuid.UUID(product_b.json()["id"]))
         assert prod_a is not None and prod_b is not None
 
-    order_ids = [
+    canonical_order_ids = [
         await _create_order(
             tenant_id,
             seller_uuid,
@@ -629,6 +629,15 @@ async def test_fbs_supply_picking_list_grouping(
             barcode="BAR-D",
         ),
     ]
+    # The supply is deliberately assembled in a different order.  The API must
+    # return the product-group order, not relationship/insertion order.
+    order_ids = [
+        canonical_order_ids[3],
+        canonical_order_ids[1],
+        canonical_order_ids[4],
+        canonical_order_ids[0],
+        canonical_order_ids[2],
+    ]
 
     supply = await _create_supply(async_client, headers, seller_id, warehouse_id)
     for oid in order_ids:
@@ -651,7 +660,17 @@ async def test_fbs_supply_picking_list_grouping(
     assert leggings["article"] == "ART-A"
     assert leggings["size"] == "M"
     assert (leggings["number_start"], leggings["number_end"]) == (1, 2)
-    assert [uuid.UUID(value) for value in leggings["order_ids"]] == order_ids[:2]
+    assert [uuid.UUID(value) for value in leggings["order_ids"]] == canonical_order_ids[:2]
+    actual_keys = [
+        (item["article"], item["sku_code"], item["size"], item["product_name"])
+        for item in items
+    ]
+    assert actual_keys == [
+        ("ART-A", prod_a.sku_code, prod_a.wb_size, prod_a.name),
+        ("ART-B", prod_b.sku_code, prod_b.wb_size, prod_b.name),
+        ("ART-C", None, None, "ART-C"),
+        ("ART-D", None, None, "ART-D"),
+    ]
     assert [(item["number_start"], item["number_end"]) for item in items] == [
         (1, 2),
         (3, 3),

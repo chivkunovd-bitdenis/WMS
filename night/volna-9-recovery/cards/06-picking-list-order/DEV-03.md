@@ -1,24 +1,20 @@
-# Backend development · 06-picking-list-order
+# DEV · 06-picking-list-order · backend-dev
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/app/services/fbs_supply_service.py` — серверная канонизация товарных групп, порядок заказов и вычисление диапазонов.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/app/api/fbs_supplies.py` — поля `number_start`, `number_end`, `order_ids` в ответе существующего API листа.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/tests/test_fbs_supply_assembly.py` — проверки диапазонов, полного состава и повторяемости ответа.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/tests/test_fbs_supply_assembly.py` — усилен реальный API-тест `GET /operations/fbs-supplies/{supply_id}/picking-list`: поставка собирается в перемешанном порядке, проверяются канонические товарные группы, полный `order_ids`, непрерывные диапазоны и повторяемость ответа.
 
 ## Гейты
 
-- `ruff`: PASS для изменённых backend-файлов; полный `ruff check .` BLOCKED существующими ошибками в несвязанных файлах.
-- `mypy`: BLOCKED существующими 4 ошибками в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py`, `fbs_warehouse_binding_service.py`; изменённые файлы не добавили ошибок.
-- `pytest`: целевой `-k picking_list`: PASS, 1 passed; полный набор запущен и прерван после 29% без ошибки в выполненных тестах.
-- `back_guard.py`: BLOCKED — файл `scripts/ci/back_guard.py` отсутствует в этой рабочей копии.
-- `check_migrations.py`: BLOCKED — файл `scripts/ci/check_migrations.py` отсутствует в этой рабочей копии; миграций нет.
+- `ruff check .` — FAIL: 83 существующие ошибки backend; одна ошибка в изменённом тесте исправлена, после этого целевой тестовый файл без новых замечаний.
+- `mypy .` — FAIL: 21 существующая ошибка в 6 других файлах; изменённые файлы в выводе отсутствуют.
+- `pytest -q tests/test_fbs_supply_assembly.py` — PASS: 15 passed, 1 skipped.
+- `pytest -q` — RUNNING при формировании артефакта; целевой набор прошёл.
+- `python3 scripts/ci/back_guard.py` — BLOCKED: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/scripts/ci/back_guard.py` отсутствует.
+- `python3 scripts/ci/check_migrations.py` — BLOCKED: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/scripts/ci/check_migrations.py` отсутствует.
 
 ## Не реализовано
 
-- Ничего из API и данных этой атомарной карточки не оставлено без реализации.
-- UI листа и серверная лента относятся к другим атомарным кускам и не изменялись.
-
-## Блокеры
-
-- Commit не создан: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-06-picking-list-order/index.lock` из-за ограничения прав общей мета-папки worktree. Изменения остаются в рабочем diff до восстановления права на запись владельцем окружения.
+- Находки ревью про `order-print-tape` относятся к атомам 4–6 и не изменялись в рамках атомарного backend-куска 3.
+- Миграции не нужны: изменены только тесты, схема базы не менялась.
+- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались.
