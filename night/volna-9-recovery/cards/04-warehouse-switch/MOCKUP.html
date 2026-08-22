@@ -1,0 +1,142 @@
+<!-- UI-KIT: ScreenHeader, WarehouseContextSwitch, FilterBar, DataTable, TableSkeletonBody, EmptyState, ScannerLine, StatusChip, ErrorNotice, WarningNotice, PrimaryAction, SecondaryAction, ActionGroup -->
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>04-warehouse-switch · UX-макет</title>
+  <style>
+    :root {
+      --primary:#5b21b6; --primary-dark:#4c1d95; --bg:#e8ecf4; --paper:#fff;
+      --text:#0f172a; --muted:#64748b; --line:#d8deea; --head:#f3effb;
+      --stop-bg:rgba(163,42,32,.10); --stop:#8f241b;
+      --warn-bg:rgba(138,90,0,.12); --warn:#7a5000;
+      --ok-bg:rgba(27,107,69,.10); --ok:#14603d;
+      --radius:13px; --shadow:0 14px 36px rgba(15,23,42,.10);
+    }
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 Inter,Arial,sans-serif}
+    button,input{font:inherit} button{cursor:pointer}
+    .shell{max-width:1380px;margin:auto;padding:28px}.specbar{position:sticky;top:0;z-index:20;background:rgba(232,236,244,.96);backdrop-filter:blur(10px);padding:10px 0 14px}
+    .specbar h1{font-size:14px;margin:0 0 8px;color:var(--muted);font-weight:700}.tabs{display:flex;gap:8px;flex-wrap:wrap}
+    .tabs button{border:1px solid #cbd3e1;background:#fff;color:#334155;border-radius:10px;padding:8px 12px;font-weight:700}
+    .tabs button.active{background:var(--primary);border-color:var(--primary);color:#fff}
+    .frame{display:none;background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow);min-height:720px}.frame.active{display:block}
+    .eyebrow{color:var(--primary);font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}
+    .screen-header h2{font-size:24px;line-height:1.2;margin:0 0 5px}.screen-header p{margin:0 0 18px;color:var(--muted)}
+    .warehouse-row{position:relative;display:flex;align-items:center;gap:12px;margin-bottom:16px;min-height:42px}
+    .warehouse-label{font-weight:700;color:#475569}.warehouse-switch{min-width:270px;border:1px solid #b8c2d2;border-radius:10px;background:#fff;color:var(--text);padding:9px 38px 9px 12px;text-align:left;font-weight:700;position:relative}
+    .warehouse-switch:after{content:'⌄';position:absolute;right:13px;color:var(--muted)}.warehouse-switch[disabled]{cursor:not-allowed;color:#64748b;background:#f1f5f9}
+    .menu{position:absolute;left:66px;top:44px;width:270px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:6px;box-shadow:var(--shadow);z-index:5}
+    .menu button{border:0;background:#fff;border-radius:7px;width:100%;padding:10px;text-align:left}.menu button:hover,.menu .selected{background:var(--head);color:var(--primary-dark);font-weight:750}
+    .filterbar{border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    .field{border:1px solid #b8c2d2;border-radius:9px;background:#fff;padding:10px 12px;min-width:250px;color:#475569}.field.small{min-width:190px}
+    .scanner{display:inline-flex;align-items:center;border-radius:10px;background:var(--ok-bg);color:var(--ok);font-weight:750;padding:8px 12px;margin-bottom:16px}.scanner.off{background:#f1f5f9;color:var(--muted)}
+    .table-wrap{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:#fff}table{border-collapse:collapse;width:100%;table-layout:fixed}th,td{border-bottom:1px solid #e5eaf2;padding:10px 12px;text-align:left;vertical-align:middle}th{background:var(--head);border-bottom-color:#d8cdee;font-size:12px;white-space:nowrap}td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}.product{font-weight:750}.sub{font-size:12px;color:var(--muted);margin-top:2px}
+    .chip{display:inline-flex;border-radius:999px;padding:4px 9px;background:rgba(91,33,182,.10);color:var(--primary-dark);font-size:12px;font-weight:750;white-space:nowrap}.chip.ok{background:var(--ok-bg);color:var(--ok)}.chip.warn{background:var(--warn-bg);color:var(--warn)}
+    .notice{display:flex;gap:10px;border-radius:10px;padding:11px 13px;margin:0 0 14px;border:1px solid}.notice strong{display:block}.notice.error{background:#fff5f4;border-color:#efc0bc;color:var(--stop)}.notice.warn{background:#fffaf0;border-color:#e9d49d;color:var(--warn)}.notice.ok{background:#f2fbf6;border-color:#b9dfc8;color:var(--ok)}
+    .empty{padding:48px 24px;text-align:left}.empty strong{display:block;margin-bottom:6px}.empty p{color:var(--muted);margin:0;max-width:620px}
+    .skeleton{height:12px;border-radius:6px;background:linear-gradient(90deg,#eef1f6 25%,#f8fafc 50%,#eef1f6 75%);background-size:200% 100%;animation:pulse 1.4s infinite}@keyframes pulse{to{background-position:-200% 0}}
+    .actions{display:flex;gap:10px;justify-content:flex-end;align-items:center;margin-top:18px}.primary,.secondary{border-radius:8px;min-width:168px;padding:8px 13px;font-weight:750;white-space:nowrap}.primary{border:1px solid var(--primary);background:var(--primary);color:#fff}.primary[disabled]{background:#d7dbe4;border-color:#d7dbe4;color:#798293;cursor:not-allowed}.secondary{border:1px solid var(--primary);background:#fff;color:var(--primary)}
+    .dialog-backdrop{background:#cfd5df;padding:42px 12px;min-height:650px;display:flex;align-items:flex-start;justify-content:center;border-radius:11px}.dialog{width:min(760px,100%);background:#fff;border-radius:14px;box-shadow:var(--shadow);overflow:hidden}.dialog header,.dialog .body,.dialog footer{padding:18px 22px}.dialog header{border-bottom:1px solid var(--line)}.dialog header h2{margin:0;font-size:20px}.dialog .body{max-height:520px;overflow:auto}.dialog footer{border-top:1px solid var(--line)}
+    .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:14px 0}.metric{border:1px solid var(--line);border-radius:10px;padding:10px}.metric span{display:block;color:var(--muted);font-size:12px}.metric strong{display:block;margin-top:3px}
+    .problem-row td{background:var(--stop-bg)}.steps{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}.card{border:1px solid var(--line);border-radius:var(--radius);padding:16px}.card h3{font-size:15px;margin:0 0 10px}.card p{margin:6px 0;color:var(--muted)}
+    .seller-form{max-width:720px}.label{font-weight:700;margin-bottom:6px}.selectbox{border:1px solid #b8c2d2;border-radius:9px;padding:10px 12px;margin-bottom:16px;display:flex;justify-content:space-between}.hint{font-size:12px;color:var(--muted);margin-top:-10px;margin-bottom:18px}
+    .annotation{border-left:3px solid var(--primary);padding-left:10px;color:#475569;margin:16px 0;font-size:12px}.state-switch{display:flex;gap:7px;flex-wrap:wrap;margin:0 0 14px}.state-switch button{border:1px solid #cbd3e1;background:#fff;border-radius:8px;padding:6px 9px}.state-switch button.on{background:#ede9fe;color:var(--primary-dark);border-color:#c4b5fd}
+    @media(max-width:780px){.shell{padding:14px}.frame{padding:16px}.summary,.steps{grid-template-columns:1fr}.menu{left:0}.warehouse-row{align-items:flex-start;flex-direction:column}.warehouse-switch{width:100%}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="specbar">
+      <h1>Макет контракта · переключайте затронутые состояния</h1>
+      <nav class="tabs" aria-label="Состояния макета">
+        <button class="active" data-show="normal">S-03 · обычное</button>
+        <button data-show="single">Один склад</button>
+        <button data-show="states">Загрузка / пусто / ошибка</button>
+        <button data-show="scanner">Сканер и подбор</button>
+        <button data-show="dialog">Создание поставки</button>
+        <button data-show="seller">Селлер</button>
+      </nav>
+    </div>
+
+    <section id="normal" class="frame active">
+      <div class="eyebrow">S-03 · FBS</div>
+      <div class="screen-header"><h2>FBS-заказы</h2><p>Собирайте заказы и готовьте поставки для Wildberries.</p></div>
+      <div class="warehouse-row">
+        <span class="warehouse-label">Склад</span>
+        <button class="warehouse-switch" id="warehouseButton" aria-expanded="false">Склад Север</button>
+        <div class="menu" id="warehouseMenu" hidden>
+          <button class="selected">Склад Север</button><button>Склад Юг</button>
+        </div>
+      </div>
+      <div class="filterbar"><div class="field">Поиск по товару или заказу</div><div class="field small">Склад селлера / WB: все</div></div>
+      <div class="table-wrap"><table><thead><tr><th style="width:34%">Товар</th><th style="width:22%">Селлер</th><th style="width:24%">Маршрут сдачи</th><th style="width:20%">Отгрузить до</th></tr></thead>
+        <tbody><tr><td><div class="product">Худи утеплённое</div><div class="sub">SKU-10432 · 44</div></td><td>Красотка</td><td>СЦ Коледино</td><td>22 авг, 18:00</td></tr>
+        <tr><td><div class="product">Футболка базовая</div><div class="sub">SKU-11890 · 2XL</div></td><td>Норд</td><td>ПВЗ Котельники</td><td>22 авг, 20:00</td></tr></tbody></table></div>
+      <p class="annotation">Контекст WMS-склада не смешан с фильтром «Склад селлера / WB». Вкладка «Новые» сохраняет эталонные четыре колонки.</p>
+    </section>
+
+    <section id="single" class="frame">
+      <div class="eyebrow">S-03 · один операционный склад</div>
+      <div class="screen-header"><h2>FBS-заказы</h2><p>Собирайте заказы и готовьте поставки для Wildberries.</p></div>
+      <div class="filterbar"><div class="field">Поиск по товару или заказу</div><div class="field small">Склад селлера / WB: все</div></div>
+      <div class="table-wrap"><table><thead><tr><th style="width:34%">Товар</th><th style="width:22%">Селлер</th><th style="width:24%">Маршрут сдачи</th><th style="width:20%">Отгрузить до</th></tr></thead><tbody><tr><td><div class="product">Худи утеплённое</div><div class="sub">SKU-10432 · 44</div></td><td>Красотка</td><td>СЦ Коледино</td><td>22 авг, 18:00</td></tr></tbody></table></div>
+      <p class="annotation">Между шапкой и фильтрами нет ни поля, ни текста «Склад». Единственный склад подставлен без решения оператора.</p>
+    </section>
+
+    <section id="states" class="frame">
+      <div class="eyebrow">S-03 · системные состояния</div>
+      <div class="screen-header"><h2>FBS-заказы</h2><p>Собирайте заказы и готовьте поставки для Wildberries.</p></div>
+      <div class="state-switch"><button class="on" data-state="loading">Загрузка</button><button data-state="error">Ошибка</button><button data-state="zero">0 складов</button><button data-state="empty">Пусто на складе</button></div>
+      <div id="state-loading" class="state-panel"><div class="warehouse-row"><span class="warehouse-label">Склад</span><button disabled class="warehouse-switch">Загружаем склады</button></div><div class="table-wrap"><table><thead><tr><th>Товар</th><th>Селлер</th><th>Маршрут сдачи</th><th>Отгрузить до</th></tr></thead><tbody>
+        <tr><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td></tr><tr><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td></tr><tr><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td></tr></tbody></table></div></div>
+      <div id="state-error" class="state-panel" hidden><div class="notice error"><span>⚠</span><div><strong>Не удалось загрузить склады</strong>Обновите страницу.</div></div><div class="empty"><strong>Складские операции временно недоступны</strong><p>Данные не подставляются из «первого» склада.</p></div></div>
+      <div id="state-zero" class="state-panel" hidden><div class="table-wrap"><div class="empty"><strong>Нет рабочего склада</strong><p>Попросите администратора добавить рабочий склад. Служебные склады Wildberries здесь не считаются.</p></div></div></div>
+      <div id="state-empty" class="state-panel" hidden><div class="warehouse-row"><span class="warehouse-label">Склад</span><button class="warehouse-switch">Склад Север</button></div><div class="table-wrap"><table><thead><tr><th>Товар</th><th>Селлер</th><th>Маршрут сдачи</th><th>Отгрузить до</th></tr></thead></table><div class="empty"><strong>На складе «Север» пока нет заказов</strong><p>Выберите другой склад или дождитесь новых заказов.</p></div></div></div>
+    </section>
+
+    <section id="scanner" class="frame">
+      <div class="eyebrow">S-03 · рабочее место поставки</div>
+      <div class="screen-header"><h2>Поставка FBS-240822-17</h2><p>Подберите товары и передайте их на упаковку.</p></div>
+      <div class="warehouse-row"><span class="warehouse-label">Склад</span><button disabled class="warehouse-switch" title="Склад закреплён: подбор уже начат">Склад Север</button><span class="sub">Склад закреплён: подбор уже начат</span></div>
+      <div class="steps">
+        <div class="card"><h3>1. Снача место</h3><div class="scanner">Сканер активен — пикните ШК склада или ячейки</div><p>Скан ячейки B-02-04 одним шагом выберет «Склад Юг».</p></div>
+        <div class="card"><h3>2. Затем товар</h3><div class="scanner">Сканер активен — пикните ШК товара</div><p><strong>Выбрано:</strong> Склад Юг / ячейка B-02-04</p></div>
+        <div class="card"><h3>Успешный подбор</h3><div class="notice ok"><span>✓</span><div><strong>Взято</strong>Склад Юг / ячейка B-02-04</div></div><p>Отдельного диалога переноса нет.</p></div>
+        <div class="card"><h3>Проблемный скан</h3><div class="notice error"><span>⚠</span><div><strong>В ячейке B-02-04 нет этого товара</strong>Пикните другую ячейку или проверьте товар.</div></div><p>Остаток и подбор не меняются.</p></div>
+      </div>
+    </section>
+
+    <section id="dialog" class="frame">
+      <div class="state-switch"><button class="on" data-dialog="warning">Можно создать</button><button data-dialog="blocked">Не хватает</button><button data-dialog="checking">Проверка</button></div>
+      <div class="dialog-backdrop"><article class="dialog"><header><h2>Создать FBS-поставку</h2></header><div class="body">
+        <div class="summary"><div class="metric"><span>Заказы</span><strong>155</strong></div><div class="metric"><span>Склад WMS</span><strong>Склад Север</strong></div><div class="metric"><span>Маршрут</span><strong>СЦ Коледино</strong></div></div>
+        <div id="dialog-warning" class="dialog-panel"><span class="chip warn">Можно создать поставку</span><div class="notice warn" style="margin-top:12px"><span>▲</span><div><strong>На складе «Север» не хватает 24 шт. по 2 товарам</strong>Нужно подобрать: «Склад Юг» — 24 шт.</div></div>
+          <div class="table-wrap"><table><thead><tr><th>Товар</th><th class="num">Нужно</th><th class="num">Здесь</th><th class="num">Взять со склада</th></tr></thead><tbody><tr class="problem-row"><td>SKU-10432</td><td class="num">18</td><td class="num">10</td><td class="num">Юг · 8</td></tr><tr class="problem-row"><td>SKU-11890</td><td class="num">24</td><td class="num">8</td><td class="num">Юг · 16</td></tr></tbody></table></div></div>
+        <div id="dialog-blocked" class="dialog-panel" hidden><div class="notice error"><span>⚠</span><div><strong>Не хватает 11 шт. по 1 товару</strong>Пополните остаток или уберите заказы из выборки.</div></div><div class="table-wrap"><table><thead><tr><th>Товар</th><th class="num">Нужно</th><th class="num">Всего</th><th class="num">Не хватает</th></tr></thead><tbody><tr class="problem-row"><td>SKU-10433</td><td class="num">20</td><td class="num">9</td><td class="num">11</td></tr></tbody></table></div></div>
+        <div id="dialog-checking" class="dialog-panel" hidden><div class="table-wrap"><table><thead><tr><th>Товар</th><th>Нужно</th><th>Остаток</th></tr></thead><tbody><tr><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td></tr><tr><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td><td><div class="skeleton"></div></td></tr></tbody></table></div></div>
+      </div><footer><div class="actions"><button class="secondary">Отмена</button><button id="createSupply" class="primary">Создать поставку</button></div></footer></article></div>
+    </section>
+
+    <section id="seller" class="frame">
+      <div class="eyebrow">S-29 · портал селлера</div>
+      <div class="screen-header"><h2>Новая приёмка</h2><p>Укажите товары и передайте заявку на склад.</p></div>
+      <div class="seller-form"><div class="label">Склад</div><div class="selectbox"><strong>Склад Север</strong><span>⌄</span></div><p class="hint">Выберите, куда привезёте товар. При одном доступном складе этого поля нет.</p>
+        <div class="table-wrap"><table><thead><tr><th>Товар</th><th class="num">Количество</th></tr></thead><tbody><tr><td><div class="product">Худи утеплённое</div><div class="sub">SKU-10432 · 44</div></td><td class="num">24</td></tr></tbody></table></div><div class="actions"><button class="primary">Передать на склад</button></div></div>
+      <p class="annotation">Селлер видит место своей заявки, но не видит остатки по другим складам, служебные склады и внутреннюю разбивку.</p>
+    </section>
+  </main>
+  <script>
+    document.querySelectorAll('.tabs button').forEach((button) => button.addEventListener('click', () => {
+      document.querySelectorAll('.tabs button').forEach((item) => item.classList.remove('active'));
+      document.querySelectorAll('.frame').forEach((item) => item.classList.remove('active'));
+      button.classList.add('active'); document.getElementById(button.dataset.show).classList.add('active');
+    }));
+    const warehouseButton = document.getElementById('warehouseButton'); const warehouseMenu = document.getElementById('warehouseMenu');
+    warehouseButton.addEventListener('click', () => { const open = warehouseMenu.hidden; warehouseMenu.hidden = !open; warehouseButton.setAttribute('aria-expanded', String(open)); });
+    warehouseMenu.querySelectorAll('button').forEach((option) => option.addEventListener('click', () => { warehouseMenu.querySelectorAll('button').forEach((item) => item.classList.remove('selected')); option.classList.add('selected'); warehouseButton.textContent = option.textContent; warehouseMenu.hidden = true; warehouseButton.setAttribute('aria-expanded','false'); }));
+    document.querySelectorAll('[data-state]').forEach((button) => button.addEventListener('click', () => { document.querySelectorAll('[data-state]').forEach((item) => item.classList.remove('on')); document.querySelectorAll('.state-panel').forEach((item) => item.hidden = true); button.classList.add('on'); document.getElementById('state-' + button.dataset.state).hidden = false; }));
+    document.querySelectorAll('[data-dialog]').forEach((button) => button.addEventListener('click', () => { document.querySelectorAll('[data-dialog]').forEach((item) => item.classList.remove('on')); document.querySelectorAll('.dialog-panel').forEach((item) => item.hidden = true); button.classList.add('on'); document.getElementById('dialog-' + button.dataset.dialog).hidden = false; const blocked = button.dataset.dialog !== 'warning'; const create = document.getElementById('createSupply'); create.disabled = blocked; create.title = button.dataset.dialog === 'blocked' ? 'Не хватает общего остатка' : button.dataset.dialog === 'checking' ? 'Проверяем остатки' : ''; }));
+  </script>
+</body>
+</html>
