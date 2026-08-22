@@ -11,15 +11,15 @@
 ## Тесты
 
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_wildberries_marketplace_fbs_client.py` и `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_wildberries_client.py` — проверен набор тестов импорта и клиентских функций.
-- Статический поиск по `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend` не находит определений или вызовов `fetch_marketplace_order_meta`.
+- Статический поиск по backend не находит определений или вызовов `fetch_marketplace_order_meta`; batch-чтение остаётся единственным путём чтения метаданных.
 
 ## Гейты
 
-- `ruff check .` — FAIL: 81 ранее существующая ошибка в несвязанных файлах; изменённый `app/services/wildberries_client.py` в выводе ошибок отсутствует.
-- `mypy .` — FAIL: 22 ошибки в 7 несвязанных файлах; после восстановления общей константы ошибок в `wildberries_client.py` нет.
-- `pytest` — PASS: 26 тестов клиентских функций (`tests/test_wildberries_marketplace_fbs_client.py`, `tests/test_wildberries_client.py`).
-- `back_guard.py` — недоступен: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/scripts/ci/back_guard.py` отсутствует.
-- `check_migrations.py` — недоступен: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/scripts/ci/check_migrations.py` отсутствует; миграций нет.
+- `ruff check .` — FAIL: ранее существующие ошибки в несвязанных файлах; `wildberries_client.py` в выводе ошибок отсутствует.
+- `mypy .` — FAIL: ранее существующие ошибки в несвязанных файлах; ошибок в `wildberries_client.py` нет.
+- `pytest` — PASS: целевые тесты клиентских функций.
+- `python3 scripts/ci/back_guard.py` — BLOCKED: файл отсутствует в рабочей копии.
+- `python3 scripts/ci/check_migrations.py` — BLOCKED: файл отсутствует в рабочей копии; миграций нет.
 
 ## Не реализовано
 
