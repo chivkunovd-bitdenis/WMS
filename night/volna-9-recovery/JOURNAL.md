@@ -12,3 +12,5 @@
 13:20   03-no-distribution-mode · reviewer: готово
 13:20   03-no-distribution-mode · reviewer: находки, круг 1 — назад к разработке
 13:22   03-no-distribution-mode · backend-dev: готово
+13:22   03-no-distribution-mode · dev: фича 1/4 сохранена aa2583b6316d
+13:25   03-no-distribution-mode · backend-dev: готово

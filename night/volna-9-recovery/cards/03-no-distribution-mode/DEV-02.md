@@ -1,31 +1,34 @@
-# Backend Dev — 03-no-distribution-mode — фича 2
+# Backend Dev — 03-no-distribution-mode — атом 2
 
 ## Изменённые файлы
 
 - /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/services/fbs_packing_box_service.py
 - /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/tests/test_fbs_packing_box.py
 
-## Реализовано
+Сервис `set_boxes_without_distribution` теперь разрешает включать и выключать режим при любом количестве пустых коробов. Изменение блокируется только при наличии хотя бы одного `FbsPackingBoxItem` в коробах этой поставки; после удаления назначения переключение снова разрешено. Новое состояние записывается в поля поставки, а legacy-приписка `no-distribution:` остаётся только совместимым чтением существующего поведения.
 
-- Добавлен сервис `set_boxes_without_distribution`: режим меняется при пустых коробах независимо от их количества.
-- При наличии хотя бы одного `FbsPackingBoxItem` переключение отклоняется доменной ошибкой `boxes_already_distributed`; после удаления назначения снова разрешается.
-- Новое состояние записывается в поля поставки, а legacy-приписка `no-distribution:` не изменялась и продолжает читаться существующими путями совместимости.
-- Добавлен интеграционный тест полного сценария: пустой короб → включение → удаление и пересоздание → выключение → назначение/запрет → удаление назначения/повторное включение.
+## Миграции
+
+Нет: поля поставки и миграция добавлены атомом 1.
+
+## Тесты
+
+- `backend/tests/test_fbs_packing_box.py::test_without_distribution_mode_depends_on_assignments_not_box_count` — пустой короб, удаление и пересоздание, выключение режима, запрет при назначении и повторное включение после удаления назначения.
 
 ## Гейты
 
-- ruff: PASS для изменённых файлов; полный `ruff check .` — FAIL на 82 существующих ошибках вне этого изменения.
-- mypy: FAIL на 19 существующих ошибках вне изменённых файлов; ошибок в изменённых файлах нет.
-- pytest: целевой тест PASS; полный прогон остановлен после 152 PASS и 3 skipped из 817 за 4:57 (KeyboardInterrupt, итоговый код неуспешный).
+- ruff: PASS — изменённые backend-файлы.
+- mypy: FAIL — существующая ошибка в `backend/app/services/wildberries_credentials_service.py:167`, вне изменённых файлов.
+- pytest: PASS — `backend/tests/test_fbs_packing_box.py`, 8 passed.
 - back_guard.py: NOT RUN — `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/scripts/ci/back_guard.py` отсутствует.
 - check_migrations.py: NOT RUN — `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/scripts/ci/check_migrations.py` отсутствует.
-- git commit: BLOCKED — Git не может создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-03-no-distribution-mode1/index.lock` из-за ограничений sandbox.
 
 ## Не реализовано
 
-- API и workspace не менялись: они относятся к следующей атомарной фиче 3.
-- Миграции не менялись: поля поставки уже добавлены предыдущей фичей 1.
+- API, workspace и UI не входят в этот атом и не изменялись.
+- Массовая миграция legacy-прицепок `no-distribution:` не входит в контракт; совместимое чтение сохранено.
 
 ## Находки
 
-- В рабочем дереве до начала работы уже были изменения `night/volna-9-recovery/JOURNAL.md` и удалённый прежний `DEV.md`; они не относятся к этой реализации и не включались в изменения backend.
+- Секреты, ключи, токены и `.env` не читались.
+- Боевой прод и живой кабинет Wildberries не затрагивались.
