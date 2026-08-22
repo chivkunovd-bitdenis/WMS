@@ -353,11 +353,11 @@ async def test_without_distribution_mode_depends_on_assignments_not_box_count(
 
 
 @pytest.mark.asyncio
-async def test_without_distribution_toggle_is_idempotent_and_retires_legacy_marker(
+async def test_without_distribution_toggle_preserves_legacy_key_for_create_retry(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
-    """TC-NEW-005: explicit supply toggles supersede the legacy box marker."""
+    """TC-NEW-005: toggling never breaks an earlier create retry."""
     headers, supply_id, _ = await _packed_supply(async_client)
     created = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/boxes",
@@ -386,12 +386,30 @@ async def test_without_distribution_toggle_is_idempotent_and_retires_legacy_mark
         )
         await session.commit()
 
+    retried = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes",
+        headers=headers,
+        json={
+            "count": 1,
+            "idempotency_key": "legacy-mode-box",
+            "without_distribution": True,
+        },
+    )
+    assert retried.status_code == 201, retried.text
+    assert [box["id"] for box in retried.json()["boxes"]] == [
+        created.json()["boxes"][0]["id"]
+    ]
+    assert retried.json()["boxes"][0]["without_distribution"] is False
+
     async with SessionLocal() as session:
         box_id = uuid.UUID(created.json()["boxes"][0]["id"])
         box = await session.get(FbsPackingBox, box_id)
         assert box is not None
         assert box.creation_idempotency_key is not None
-        assert not box.creation_idempotency_key.startswith("no-distribution:")
+        assert box.creation_idempotency_key == "disabled-no-distribution:legacy-mode-box"
+        supply = await session.get(FbsSupply, supply_id)
+        assert supply is not None
+        assert supply.boxes_without_distribution_at is None
 
 
 @pytest.mark.asyncio

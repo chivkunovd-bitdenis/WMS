@@ -40,6 +40,7 @@ class DeliveryBoxReadiness:
 
 
 WITHOUT_DISTRIBUTION_KEY_PREFIX = "no-distribution:"
+RETIRED_WITHOUT_DISTRIBUTION_KEY_PREFIX = "disabled-no-distribution:"
 
 
 async def get_delivery_box_readiness(
@@ -99,27 +100,29 @@ async def create_boxes(
         raise FbsPackingBoxError("missing_idempotency_key")
     supply = await _get_supply(session, tenant_id, supply_id, for_update=True)
     _assert_supply_mutable(supply)
-    assigned_count = await session.scalar(
-        select(func.count(FbsPackingBoxItem.id))
-        .join(FbsPackingBox, FbsPackingBox.id == FbsPackingBoxItem.box_id)
-        .where(
-            FbsPackingBoxItem.tenant_id == tenant_id,
-            FbsPackingBox.supply_id == supply_id,
-        )
-    )
-    if without_distribution and assigned_count:
-        raise FbsPackingBoxError("boxes_already_distributed")
-    if without_distribution and supply.boxes_without_distribution_at is None:
-        supply.boxes_without_distribution_at = datetime.now(UTC)
-        supply.boxes_without_distribution_by_user_id = actor_user_id
     stored_key = _stored_creation_key(idempotency_key, without_distribution=without_distribution)
     boxes = await _boxes_by_creation_key(session, tenant_id, supply_id, stored_key)
     if boxes:
         if len(boxes) != count:
             raise FbsPackingBoxError("idempotency_key_reused")
-        if _boxes_without_distribution(boxes) != without_distribution:
+        if not _creation_key_matches_without_distribution_request(
+            boxes, stored_key, without_distribution
+        ):
             raise FbsPackingBoxError("idempotency_key_reused")
     else:
+        assigned_count = await session.scalar(
+            select(func.count(FbsPackingBoxItem.id))
+            .join(FbsPackingBox, FbsPackingBox.id == FbsPackingBoxItem.box_id)
+            .where(
+                FbsPackingBoxItem.tenant_id == tenant_id,
+                FbsPackingBox.supply_id == supply_id,
+            )
+        )
+        if without_distribution and assigned_count:
+            raise FbsPackingBoxError("boxes_already_distributed")
+        if without_distribution and supply.boxes_without_distribution_at is None:
+            supply.boxes_without_distribution_at = datetime.now(UTC)
+            supply.boxes_without_distribution_by_user_id = actor_user_id
         max_number = await session.scalar(
             select(func.max(FbsPackingBox.box_number)).where(
                 FbsPackingBox.tenant_id == tenant_id,
@@ -193,9 +196,7 @@ async def set_boxes_without_distribution(
     elif not enabled:
         supply.boxes_without_distribution_at = None
         supply.boxes_without_distribution_by_user_id = None
-        await _remove_legacy_without_distribution_markers(
-            session, tenant_id, supply_id
-        )
+        await _retire_legacy_without_distribution_markers(session, tenant_id, supply_id)
     await session.flush()
     return enabled
 
@@ -391,6 +392,17 @@ def _boxes_without_distribution(boxes: list[FbsPackingBox]) -> bool:
     return bool(boxes) and any(_box_without_distribution(box) for box in boxes)
 
 
+def _creation_key_matches_without_distribution_request(
+    boxes: list[FbsPackingBox], stored_key: str, without_distribution: bool
+) -> bool:
+    if _boxes_without_distribution(boxes) == without_distribution:
+        return True
+    return without_distribution and all(
+        box.creation_idempotency_key == _retired_legacy_creation_key(stored_key)
+        for box in boxes
+    )
+
+
 async def _has_legacy_without_distribution_marker(
     session: AsyncSession, tenant_id: uuid.UUID, supply_id: uuid.UUID
 ) -> bool:
@@ -529,23 +541,36 @@ async def _get_box(
 async def _boxes_by_creation_key(
     session: AsyncSession, tenant_id: uuid.UUID, supply_id: uuid.UUID, key: str
 ) -> list[FbsPackingBox]:
+    keys = [key]
+    retired_legacy_key = _retired_legacy_creation_key(key)
+    if retired_legacy_key != key:
+        keys.append(retired_legacy_key)
     result = await session.execute(
         select(FbsPackingBox)
         .options(selectinload(FbsPackingBox.warehouse_box), selectinload(FbsPackingBox.trbx))
         .where(
             FbsPackingBox.tenant_id == tenant_id,
             FbsPackingBox.supply_id == supply_id,
-            FbsPackingBox.creation_idempotency_key == key,
+            FbsPackingBox.creation_idempotency_key.in_(keys),
         )
         .order_by(FbsPackingBox.box_number)
     )
     return list(result.scalars().all())
 
 
-async def _remove_legacy_without_distribution_markers(
+def _retired_legacy_creation_key(key: str) -> str:
+    if not key.startswith(WITHOUT_DISTRIBUTION_KEY_PREFIX):
+        return key
+    return (
+        f"{RETIRED_WITHOUT_DISTRIBUTION_KEY_PREFIX}"
+        f"{key.removeprefix(WITHOUT_DISTRIBUTION_KEY_PREFIX)}"
+    )
+
+
+async def _retire_legacy_without_distribution_markers(
     session: AsyncSession, tenant_id: uuid.UUID, supply_id: uuid.UUID
 ) -> None:
-    """Retire the old per-box marker after an explicit supply-level disable."""
+    """Keep legacy create retries addressable without retaining their old mode."""
     boxes = list(
         (
             await session.scalars(
@@ -559,10 +584,11 @@ async def _remove_legacy_without_distribution_markers(
             )
         ).all()
     )
-    prefix_length = len(WITHOUT_DISTRIBUTION_KEY_PREFIX)
     for box in boxes:
         assert box.creation_idempotency_key is not None
-        box.creation_idempotency_key = box.creation_idempotency_key[prefix_length:]
+        box.creation_idempotency_key = _retired_legacy_creation_key(
+            box.creation_idempotency_key
+        )
 
 
 async def _load_boxes(
