@@ -1,17 +1,22 @@
+# DEV · 07-reporting · атом 7
+
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/app/services/reporting_service.py` — исправлена проверка целостности transfer-пар при фильтре склада: для проверки читаются обе стороны пары, но в выдачу по-прежнему попадают только строки выбранного среза.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/DEV.md` — этот отчёт.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/app/services/reporting_service.py` — серверная пагинация по 50 строк, белый список сортировок, исключение внутренних transfer без фильтра склада и точечный `integrity_error` для неполных transfer-пар.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/app/api/reports.py` — параметры разрешённой сортировки для `GET /reports/inventory`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/tests/test_reports_inventory.py` — API-покрытие страниц, обеих группировок, поиска по четырём полям, служебного склада, transfer и неполной пары.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/DEV.md` — отчёт атома.
 
 ## Гейты
 
-- `ruff`: FAIL на существующих несвязанных нарушениях в backend (82 ошибки; reporting_service.py в списке нарушений отсутствует).
-- `mypy`: FAIL на существующих несвязанных ошибках в 6 файлах; reporting_service.py и reports.py в списке нарушений отсутствуют.
-- `pytest`: целевой `tests/test_reports_inventory.py` — `2 passed`; полный `pytest` запущен, итог ожидается из процесса.
-- `back_guard.py`: не запущен — в этой рабочей копии отсутствует `scripts/ci/back_guard.py`.
-- `check_migrations.py`: не запущен — в этой рабочей копии отсутствует `scripts/ci/check_migrations.py`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && ruff check app/services/reporting_service.py app/api/reports.py tests/test_reports_inventory.py` — `All checks passed!`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && mypy app/services/reporting_service.py app/api/reports.py` — `Success: no issues found in 2 source files`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && pytest -q tests/test_reports_inventory.py` — `3 passed`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && python3 scripts/ci/back_guard.py` — не выполнен: файла `scripts/ci/back_guard.py` в этой рабочей копии нет.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && python3 scripts/ci/check_migrations.py` — не выполнен: файла `scripts/ci/check_migrations.py` в этой рабочей копии нет; миграций атом не добавляет.
+- `git diff --check` — будет проверен перед коммитом.
 
 ## Не реализовано
 
-- Использование `Warehouse.is_operational` из ARCH-CROSS не легло буквально: в текущей рабочей копии у модели `Warehouse` и в миграциях нет такого поля. Существующий код сохраняет legacy-ограничение по префиксу `FBS WB `; добавление новой колонки и миграции выходит за перечисленные файлы атома.
-- Остальные frontend-находки из REVIEW.md не относятся к роли backend-dev и не изменялись.
+- Находки review по экрану, сводке и CSV не входят в атом 7 и не менялись: это соседние frontend-атомы, атом 6 и атом 8 соответственно.
+- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались.

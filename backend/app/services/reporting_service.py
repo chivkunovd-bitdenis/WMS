@@ -21,6 +21,8 @@ from app.models.warehouse import Warehouse
 TRANSFER_TYPES = {"stock_transfer_in", "stock_transfer_out"}
 PAGE_SIZE = 50
 GROUP_BY_VALUES = {"product", "operation"}
+PRODUCT_SORTS = {"name", "sku", "in_qty", "out_qty", "net"}
+OPERATION_SORTS = {"operation", "in_qty", "out_qty", "net"}
 MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 
 
@@ -34,12 +36,25 @@ def validate_period(date_from: datetime, date_to: datetime) -> None:
 async def build_inventory_report(
     session: AsyncSession, tenant_id: uuid.UUID, *, date_from: datetime,
     date_to: datetime, group_by: str, page: int, seller_id: uuid.UUID | None = None,
-    warehouse_id: uuid.UUID | None = None, search: str | None = None) -> dict[str, object]:
+    warehouse_id: uuid.UUID | None = None, search: str | None = None,
+    sort_by: str | None = None, sort_order: str = "asc",
+) -> dict[str, object]:
     validate_period(date_from, date_to)
     if group_by not in GROUP_BY_VALUES:
         raise ValueError("group_by must be product or operation")
+    allowed_sorts = PRODUCT_SORTS if group_by == "product" else OPERATION_SORTS
+    default_sort = "name" if group_by == "product" else "operation"
+    sort_by = sort_by or default_sort
+    if sort_by not in allowed_sorts:
+        raise ValueError("unsupported sort_by")
+    if sort_order not in {"asc", "desc"}:
+        raise ValueError("sort_order must be asc or desc")
     filters = [InventoryMovement.tenant_id == tenant_id, InventoryMovement.created_at >= date_from,
         InventoryMovement.created_at < date_to, Warehouse.is_operational.is_(True)]
+    # Transfers are an internal flow.  They are useful only when an operator
+    # narrows the report to one warehouse, where each side is meaningful.
+    if warehouse_id is None:
+        filters.append(InventoryMovement.transfer_group_id.is_(None))
     if seller_id is not None:
         # The movement owns the seller at event time.  Filtering through the
         # mutable product relation would move historical rows when a product
@@ -56,20 +71,43 @@ async def build_inventory_report(
     out_qty = func.coalesce(func.sum(case((InventoryMovement.quantity_delta < 0,
         -InventoryMovement.quantity_delta), else_=0)), 0)
     if group_by == "product":
-        stmt = select(Product.id, Product.name, Product.sku_code, Product.wb_vendor_code,
-            Product.wb_barcode, Seller.name, in_qty, out_qty).select_from(InventoryMovement).join(
+        grouped = select(
+            Product.id.label("product_id"), Product.name.label("product_name"),
+            Product.sku_code.label("sku_code"), Product.wb_vendor_code.label("wb_vendor_code"),
+            Product.wb_barcode, Seller.name, in_qty, out_qty,
+        ).select_from(InventoryMovement).join(
             Product, Product.id == InventoryMovement.product_id).outerjoin(Seller,
             Seller.id == InventoryMovement.seller_id).join(
             Warehouse, Warehouse.id == InventoryMovement.warehouse_id).where(
             *filters).group_by(Product.id, Product.name, Product.sku_code, Product.wb_vendor_code,
-            Product.wb_barcode, Seller.name).order_by(Product.name, Product.sku_code)
+            Product.wb_barcode, Seller.name)
+        sort_columns = {
+            "name": Product.name, "sku": Product.sku_code, "in_qty": in_qty,
+            "out_qty": out_qty, "net": in_qty - out_qty,
+        }
+        grouped = grouped.order_by(
+            sort_columns[sort_by].desc() if sort_order == "desc" else sort_columns[sort_by].asc(),
+            Product.id,
+        )
     else:
-        stmt = select(InventoryMovement.movement_type, in_qty, out_qty).select_from(
-            InventoryMovement).join(
+        grouped = select(
+            InventoryMovement.movement_type.label("movement_type"), in_qty, out_qty,
+        ).select_from(InventoryMovement).join(
             Product, Product.id == InventoryMovement.product_id).join(Warehouse,
             Warehouse.id == InventoryMovement.warehouse_id).where(*filters).group_by(
-            InventoryMovement.movement_type).order_by(InventoryMovement.movement_type)
-    rows = (await session.execute(stmt)).all()
+            InventoryMovement.movement_type)
+        sort_columns = {
+            "operation": InventoryMovement.movement_type, "in_qty": in_qty,
+            "out_qty": out_qty, "net": in_qty - out_qty,
+        }
+        grouped = grouped.order_by(
+            sort_columns[sort_by].desc() if sort_order == "desc" else sort_columns[sort_by].asc(),
+            InventoryMovement.movement_type,
+        )
+    count_stmt = select(func.count()).select_from(grouped.order_by(None).subquery())
+    total = int((await session.scalar(count_stmt)) or 0)
+    start = (page - 1) * PAGE_SIZE
+    rows = (await session.execute(grouped.limit(PAGE_SIZE).offset(start))).all()
     balances_by_product: dict[uuid.UUID, int] = {}
     if group_by == "product" and rows:
         product_ids = [row[0] for row in rows]
@@ -96,11 +134,18 @@ async def build_inventory_report(
             product_id: int(quantity)
             for product_id, quantity in (await session.execute(balance_stmt)).all()
         }
-    incomplete_transfer = False
+    incomplete_transfer_product_ids: set[uuid.UUID] = set()
+    incomplete_transfer_types: set[str] = set()
     if warehouse_id is not None:
+        visible_transfer_group_ids = select(InventoryMovement.transfer_group_id).where(
+            InventoryMovement.tenant_id == tenant_id,
+            InventoryMovement.created_at >= date_from,
+            InventoryMovement.created_at < date_to,
+            InventoryMovement.warehouse_id == warehouse_id,
+            InventoryMovement.transfer_group_id.is_not(None),
+        )
         integrity_filters = [InventoryMovement.tenant_id == tenant_id,
-            InventoryMovement.created_at >= date_from, InventoryMovement.created_at < date_to,
-            Warehouse.is_operational.is_(True), InventoryMovement.transfer_group_id.is_not(None)]
+            InventoryMovement.transfer_group_id.in_(visible_transfer_group_ids)]
         if seller_id is not None:
             integrity_filters.append(InventoryMovement.seller_id == seller_id)
         # Inspect both sides of every pair, even when the report is filtered to
@@ -109,48 +154,52 @@ async def build_inventory_report(
         # intentionally outside the selected slice.
         transfer_rows = (await session.execute(select(InventoryMovement.transfer_group_id,
             InventoryMovement.product_id, InventoryMovement.seller_id,
-            InventoryMovement.warehouse_id, InventoryMovement.quantity_delta).join(
-            Product, Product.id == InventoryMovement.product_id).join(
-            Warehouse, Warehouse.id == InventoryMovement.warehouse_id).where(*integrity_filters
-            ))).all()
+            InventoryMovement.warehouse_id, InventoryMovement.quantity_delta,
+            InventoryMovement.movement_type).where(*integrity_filters))).all()
         transfer_groups: dict[uuid.UUID, list[tuple[uuid.UUID, uuid.UUID | None,
-            uuid.UUID, int]]] = {}
+            uuid.UUID, int, str]]] = {}
         for (
-            group_id, product_id, movement_seller_id, movement_warehouse_id, quantity
+            group_id, product_id, movement_seller_id, movement_warehouse_id, quantity, movement_type
         ) in transfer_rows:
             transfer_groups.setdefault(group_id, []).append(
-                (product_id, movement_seller_id, movement_warehouse_id, int(quantity))
+                (
+                    product_id, movement_seller_id, movement_warehouse_id,
+                    int(quantity), movement_type,
+                )
             )
-        incomplete_transfer = any(
-            len(rows_for_group) != 2
-            or rows_for_group[0][0] != rows_for_group[1][0]
-            or rows_for_group[0][1] != rows_for_group[1][1]
-            or rows_for_group[0][2] == rows_for_group[1][2]
-            or rows_for_group[0][3] == 0
-            or rows_for_group[1][3] == 0
-            or rows_for_group[0][3] * rows_for_group[1][3] >= 0
-            or abs(rows_for_group[0][3]) != abs(rows_for_group[1][3])
-            for rows_for_group in transfer_groups.values()
-        )
-    start = (page - 1) * PAGE_SIZE
+        for rows_for_group in transfer_groups.values():
+            is_complete = (
+                len(rows_for_group) == 2
+                and rows_for_group[0][0] == rows_for_group[1][0]
+                and rows_for_group[0][1] == rows_for_group[1][1]
+                and rows_for_group[0][2] != rows_for_group[1][2]
+                and rows_for_group[0][3] != 0
+                and rows_for_group[1][3] != 0
+                and rows_for_group[0][3] * rows_for_group[1][3] < 0
+                and abs(rows_for_group[0][3]) == abs(rows_for_group[1][3])
+            )
+            if not is_complete:
+                incomplete_transfer_product_ids.update(row[0] for row in rows_for_group)
+                incomplete_transfer_types.update(row[4] for row in rows_for_group)
     result: list[dict[str, object]] = []
-    for row in rows[start:start + PAGE_SIZE]:
+    for row in rows:
         if group_by == "product":
             pid, name, sku, vendor, barcode, seller_name, incoming, outgoing = row
             result.append({"product_id": str(pid), "product_name": name, "sku_code": sku,
                 "wb_vendor_code": vendor, "wb_barcode": barcode, "seller_name": seller_name,
                 "current_balance": balances_by_product.get(pid, 0),
                 "total_in": int(incoming), "total_out": int(outgoing),
-                "net": int(incoming) - int(outgoing), "integrity_error": incomplete_transfer})
+                "net": int(incoming) - int(outgoing),
+                "integrity_error": pid in incomplete_transfer_product_ids})
         else:
             movement_type, incoming, outgoing = row
             operation = {"stock_transfer_in": "Перемещение: пришло",
                 "stock_transfer_out": "Перемещение: ушло"}.get(movement_type, movement_type)
             result.append({"operation": operation, "in_qty": int(incoming),
                 "out_qty": int(outgoing), "net": int(incoming) - int(outgoing),
-                "integrity_error": incomplete_transfer})
+                "integrity_error": movement_type in incomplete_transfer_types})
     return {"group_by": group_by, "page": page, "page_size": PAGE_SIZE,
-        "total": len(rows), "rows": result}
+        "total": total, "rows": result}
 
 
 async def build_inventory_csv(

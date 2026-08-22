@@ -33,13 +33,17 @@ async def get_inventory_report(user: Annotated[User, Depends(get_current_user)],
     group_by: Annotated[str, Query()] = "product", page: Annotated[int, Query(ge=1)] = 1,
     seller_id: Annotated[uuid.UUID | None, Query()] = None,
     warehouse_id: Annotated[uuid.UUID | None, Query()] = None,
-    search: Annotated[str | None, Query()] = None) -> dict[str, object]:
+    search: Annotated[str | None, Query()] = None,
+    sort_by: Annotated[str | None, Query()] = None,
+    sort_order: Annotated[str, Query()] = "asc",
+) -> dict[str, object]:
     await assert_inventory_read_access(session, user)
     try:
         return await build_inventory_report(session, user.tenant_id, date_from=date_from,
             date_to=date_to, group_by=group_by, page=page,
             seller_id=seller_scope if seller_scope is not None else seller_id,
-            warehouse_id=warehouse_id, search=search)
+            warehouse_id=warehouse_id, search=search, sort_by=sort_by,
+            sort_order=sort_order)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc)) from exc
