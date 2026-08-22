@@ -59,6 +59,18 @@ async def test_billing_configuration_api_validates_profiles_tariffs_and_tenant_b
     assert saved_ff.status_code == 200, saved_ff.text
     assert saved_ff.json()["bank_name"] == "Банк"
 
+    invalid_inn = await async_client.put(
+        "/billing/profiles/ff",
+        headers=owner_headers,
+        json={**_ff_profile(), "legal_name": "Не должно сохраниться", "inn": "7707083894"},
+    )
+    assert invalid_inn.status_code == 400
+    assert invalid_inn.json()["detail"] == "Проверьте ИНН: контрольное число не совпадает"
+    unchanged_ff = await async_client.get("/billing/profiles/ff", headers=owner_headers)
+    assert unchanged_ff.status_code == 200
+    assert unchanged_ff.json()["legal_name"] == "Фулфилмент"
+    assert unchanged_ff.json()["inn"] == "7707083893"
+
     foreign_profile = await async_client.put(
         f"/billing/profiles/sellers/{foreign_seller_id}",
         headers=owner_headers,
@@ -77,10 +89,23 @@ async def test_billing_configuration_api_validates_profiles_tariffs_and_tenant_b
     assert created.status_code == 201, created.text
     assert created.json()["amount"] == "0.00"
 
-    conflicting = await async_client.post("/billing/tariffs", headers=owner_headers, json=tariff)
+    future_tariff = await async_client.post(
+        "/billing/tariffs",
+        headers=owner_headers,
+        json={**tariff, "amount": "15.00", "valid_from": "2026-11-01"},
+    )
+    assert future_tariff.status_code == 201, future_tariff.text
+
+    conflicting = await async_client.post(
+        "/billing/tariffs",
+        headers=owner_headers,
+        json={**tariff, "amount": "10.00", "valid_from": "2026-10-01"},
+    )
     assert conflicting.status_code == 400
     assert conflicting.json()["detail"] == "Дата пересекает будущую версию ставки"
 
     tariffs = await async_client.get("/billing/tariffs", headers=owner_headers)
     assert tariffs.status_code == 200
-    assert len(tariffs.json()) == 1
+    assert [item["valid_from"] for item in tariffs.json()] == ["2026-11-01", "2026-09-01"]
+    assert [item["valid_to"] for item in tariffs.json()] == [None, "2026-10-31"]
+    assert [item["amount"] for item in tariffs.json()] == ["15.00", "0.00"]

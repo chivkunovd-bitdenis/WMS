@@ -1,58 +1,43 @@
-# 09-billing — backend-dev · rework атома 3 / 09-A
+# 09-billing — backend-dev · повторное ревью атома 4
 
 ## Что реализовано
 
-- Эндпоинты: нет; атом финансового фундамента не добавляет HTTP-маршруты.
-- Сервисы: нет; атом закрепляет модели и миграционную цепочку общего финансового ядра.
-- Миграционные идентификаторы billing-цепочки заменены на уникальные для карточки 09: `20260822_09a → 20260822_09b → 20260822_09c`. Это устраняет коллизии с ревизиями `0094` и `0096` соседних карточек при интеграции волны.
-- Адресный тест миграции теперь проверяет единственную вершину, порядок всей billing-цепочки и то, что 09-A создаёт только `billing_profiles`, `billing_tariff_versions` и `billing_ledger_entries`.
-- Тест неизменяемого журнала подтверждает, что второе начисление одного исходного события и второе сторно отклоняются базой, а запись исходного начисления после сторно остаётся неизменной.
+- Эндпоинты: существующие `PUT/GET /billing/profiles/ff`, `PUT/GET /billing/profiles/sellers/{seller_id}` и `POST/GET /billing/tariffs` повторно проверены на валидацию реквизитов, tenant-границы и неизменность данных после отклонённого запроса.
+- Сервисы: существующие `save_profile`, `assert_seller_in_tenant` и `create_tariff` повторно проверены на ИНН, обязательные банковские поля, допустимые пары услуги/единицы, нулевую ставку и версионное закрытие периода.
+- Адресный HTTP-тест усилен: после попытки заменить профиль неверным ИНН сервер сохраняет прежние реквизиты; попытка вставить ставку между уже существующими сентябрьской и ноябрьской версиями возвращает понятный конфликт и не меняет историю или границы периодов.
+- Находок повторного `REVIEW.md`, относящихся к конфигурационным ручкам атома 4, нет: сам вердикт отдельно подтверждает tenant-фильтры профилей, покрывающую ставку, допустимые единицы, чужого селлера и пробельные банковские поля. Проблемные участки `ledger` и `invoices` появились в последующих атомах 8–10 и в этот шаг не включены.
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/alembic/versions/20260822_09a_billing_financial_core.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/alembic/versions/20260822_09b_billing_invoices.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/alembic/versions/20260822_09c_billing_activation_date.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/tests/test_billing_models.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/tests/test_billing_financial_core_migration.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/tests/test_billing_configuration_api.py`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/night/volna-9-recovery/cards/09-billing/DEV.md`
-
-Удалённые прежние имена тех же миграций:
-
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/alembic/versions/20260822_0094_billing_financial_core.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/alembic/versions/20260822_0095_billing_invoices.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/alembic/versions/20260822_0096_billing_activation_date.py`
 
 ## Миграции
 
-- `20260822_09a_billing_financial_core.py` (`revision = 20260822_09a`) — добавляет единый набор таблиц профилей, версионных тарифов и неизменяемого журнала начислений/сторно; поддерживает `document`, `item`, `liter_day`, `storage_liter_day` и `storage_measurement` на уровне модели данных без параллельных финансовых таблиц.
-- `20260822_09b_billing_invoices.py` (`revision = 20260822_09b`) — существующая добавляющая миграция счетов и проблем запуска; в этом атоме изменены только её идентификатор и ссылка на предыдущую ревизию.
-- `20260822_09c_billing_activation_date.py` (`revision = 20260822_09c`) — существующая добавляющая миграция даты включения биллинга; в этом атоме изменены только её идентификатор и ссылка на предыдущую ревизию.
+Нет: атом не меняет схему базы данных.
 
 ## Тесты
 
-- `backend/tests/test_billing_models.py` — проверяет частичные уникальные индексы, запрет второго начисления для одного source event, запрет второго сторно и неизменность исходного charge после сторно.
-- `backend/tests/test_billing_financial_core_migration.py` — проверяет единственный Alembic head, непрерывный порядок `09a → 09b → 09c`, ровно три таблицы финансового ядра в 09-A, уникальность исходного события и внешний ключ сторно с `ON DELETE RESTRICT`.
+- `backend/tests/test_billing_configuration_api.py` — дополнено доказательство атомарности ошибок: неверный ИНН не перезаписывает валидный профиль; конфликт с будущей версией не добавляет ставку и не меняет границы сохранённых версий.
+- `backend/tests/test_billing_configuration_service.py` — существующие адресные проверки ИНН, обязательных полей, допустимых услуг/единиц и даты активации повторно пройдены.
 
 ## Гейты
 
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && ruff check app/models/billing.py alembic/versions/20260822_09a_billing_financial_core.py alembic/versions/20260822_09b_billing_invoices.py alembic/versions/20260822_09c_billing_activation_date.py tests/test_billing_models.py tests/test_billing_financial_core_migration.py` — PASS: `All checks passed!`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && mypy app/models/billing.py` — PASS: `Success: no issues found in 1 source file`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && pytest -q tests/test_billing_models.py tests/test_billing_financial_core_migration.py` — PASS: `5 passed, 2 warnings in 0.33s`; оба предупреждения относятся к устаревающей настройке Alembic `path_separator`, не к поведению атома.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && alembic heads` — PASS: `20260822_09c (head)`.
-- `python3 scripts/ci/back_guard.py` — не применим: новый роут не добавлялся.
-- `python3 scripts/ci/check_migrations.py` — не запускался: атом не добавляет миграцию, а исправляет идентификаторы существующей добавляющей цепочки; кроме того, этого файла в рабочей копии нет.
-
-Полный `pytest`, `ruff check .` и `mypy .` не запускались согласно ограничению атомарной проверки.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && ruff check app/services/billing_configuration_service.py app/api/billing.py tests/test_billing_configuration_service.py tests/test_billing_configuration_api.py` — PASS: `All checks passed!`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && mypy app/services/billing_configuration_service.py app/api/billing.py` — PASS: `Success: no issues found in 2 source files`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && pytest -q tests/test_billing_configuration_service.py tests/test_billing_configuration_api.py` — PASS: `7 passed in 1.34s`.
+- `python3 scripts/ci/back_guard.py` — не применим: атом не добавляет новый маршрут.
+- `python3 scripts/ci/check_migrations.py` — не применим: атом не добавляет миграцию.
+- Полный backend `pytest`, `ruff check .` и `mypy .` не запускались согласно ограничению атомарной проверки.
 
 ## Не реализовано
 
-- Находки 1–6 и 8 из `REVIEW.md` относятся к API, invoice/ledger-сервисам и frontend, а не к моделям и миграции атома 09-A; эти слои не изменялись.
-- Схема таблиц миграций 09-B и даты активации не менялась: для устранения коллизий достаточно уникальных Alembic revision ID и непрерывных `down_revision` внутри billing-ветки.
+- Находки 1–6 и 8 повторного ревью относятся к read-model начислений, формированию и lifecycle счетов, storage-barrier, сторно и frontend. По истории строк `billing.py` эти участки добавлены атомами 8–10, поэтому в атоме 4 не менялись.
+- Новые эндпоинты, сервисы и миграции не добавлялись: контракт конфигурационного API уже реализован, а повторный проход закрыл недостающее тестовое доказательство неизменности данных при ошибке.
 
 ## Блокеры
 
-- Сохранение отдельным Git-коммитом невозможно в текущей среде: `git add` завершился с `fatal: Unable to create '/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-09-billing1/index.lock': Operation not permitted`. Исходники и этот артефакт записаны в разрешённую рабочую копию, но Git index и SHA не созданы.
+Нет.
 
 ## Находки
 
