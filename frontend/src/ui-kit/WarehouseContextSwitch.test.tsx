@@ -6,6 +6,11 @@ import { WarningNotice } from './WarningNotice'
 const options = [{ id: 'north', name: 'Склад Север' }, { id: 'south', name: 'Склад Юг' }]
 
 describe('WarehouseContextSwitch', () => {
+  it('does not render for an empty warehouse list so the screen can show its empty state', () => {
+    const { container } = render(<WarehouseContextSwitch options={[]} value={null} onChange={vi.fn()} />)
+    expect(container).toBeEmptyDOMElement()
+  })
+
   it('does not render for one warehouse', () => {
     render(<WarehouseContextSwitch options={[options[0]]} value="north" onChange={vi.fn()} />)
     expect(screen.queryByText('Склад')).toBeNull()
@@ -49,8 +54,8 @@ describe('WarehouseContextSwitch', () => {
   it('shows an operator-facing error without exposing a selectable action', () => {
     render(
       <WarehouseContextSwitch
-        options={options}
-        value="north"
+        options={[]}
+        value={null}
         onChange={vi.fn()}
         error="Не удалось загрузить склады. Обновите страницу."
         testId="warehouse-error"
@@ -61,8 +66,14 @@ describe('WarehouseContextSwitch', () => {
   })
 
   it('renders a non-blocking warning notice', () => {
-    render(<WarningNotice testId="warehouse-warning">Нужно подобрать товары с другого склада</WarningNotice>)
+    render(
+      <>
+        <WarningNotice testId="warehouse-warning">Нужно подобрать товары с другого склада</WarningNotice>
+        <button type="button">Создать поставку</button>
+      </>,
+    )
     expect(screen.getByTestId('warehouse-warning')).toHaveTextContent('Нужно подобрать товары с другого склада')
     expect(screen.getByRole('alert')).toHaveTextContent('Нужно подобрать товары с другого склада')
+    expect(screen.getByRole('button', { name: 'Создать поставку' })).toBeEnabled()
   })
 })
