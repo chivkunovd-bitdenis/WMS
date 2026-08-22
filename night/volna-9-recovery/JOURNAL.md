@@ -113,3 +113,5 @@
 01:11   09-billing · reviewer: Terra-rework не закрыл вердикт — эскалация Sol
 01:11   09-billing · reviewer: находки, круг 3 — назад к разработке
 01:19   09-billing · screen-dev: готово
+01:19   09-billing · dev: фича 9/11 сохранена 11cd945941aa
+01:21   09-billing · screen-dev: готово
