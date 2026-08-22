@@ -122,9 +122,12 @@ async def form_billing_invoice(
     user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
-    result = await form_invoice(
-        session, tenant_id=user.tenant_id, seller_id=seller_id, period=period
-    )
+    try:
+        result = await form_invoice(
+            session, tenant_id=user.tenant_id, seller_id=seller_id, period=period
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     await session.commit()
     if isinstance(result, BillingInvoice):
         return {

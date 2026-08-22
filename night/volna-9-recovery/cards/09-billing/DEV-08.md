@@ -1,26 +1,34 @@
-# DEV — 09-billing, backend-dev
+# 09-billing — backend-dev · атом 8 после ревью
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/models/billing.py` — модели неизменяемого счёта и блокирующей причины.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/models/__init__.py` — регистрация моделей.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/services/billing_invoice_service.py` — единый алгоритм формирования и идемпотентной отмены.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/tasks/billing_tasks.py` — задача ежедневного запуска.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/celery_app.py` — подключение задачи и расписание 02:30.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/api/billing.py` — ручки формирования и отмены счёта.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/alembic/versions/20260822_0095_billing_invoices.py` — добавляющая миграция.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/tests/test_billing_invoice_service.py` — тест блокировки `unpriced` и идемпотентного повтора.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/services/billing_invoice_service.py` — единый алгоритм закрытого месяца по календарю МСК, блокировка незакрытого хранения, атомарное разрешение гонки, детализация ledger-источниками и идемпотентное сторно.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/tasks/billing_tasks.py` — ежедневный Celery-запуск: перебор tenant/селлеров и формирование предыдущего месяца.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/api/billing.py` — понятный HTTP 400 для незакрытого/некорректного периода.
 
 ## Гейты
 
-- `ruff`: PASS для изменённых backend-файлов; полный `ruff check .` в репозитории уже содержит 137 исходных нарушений вне этой карточки.
-- `mypy`: PASS для изменённых модулей.
-- `pytest`: PASS, `2 passed` для `tests/test_billing_invoice_service.py`.
-- `back_guard.py`: НЕ ЗАПУЩЕН — файла `scripts/ci/back_guard.py` в этой рабочей копии нет.
-- `check_migrations.py`: НЕ ЗАПУЩЕН — файла `scripts/ci/check_migrations.py` в этой рабочей копии нет.
+- `ruff check app/services/billing_invoice_service.py app/tasks/billing_tasks.py app/api/billing.py` — PASS.
+- `mypy app/services/billing_invoice_service.py app/tasks/billing_tasks.py app/api/billing.py` — PASS.
+- `pytest -q tests/test_billing_invoice_service.py tests/test_billing_ledger_service.py` — PASS, 4 passed.
+- `pytest -q` — полный прогон запущен, но итоговый вывод не получен в доступное время; адресные тесты зелёные.
+- `ruff check .` — FAIL на 83 существующих ошибках вне изменённых billing-файлов, включая FBS/WB/scripts.
+- `mypy .` — FAIL на существующих ошибках в 7 файлах вне изменённого слоя; изменённые файлы проверены отдельно и проходят.
+- `python3 scripts/ci/back_guard.py` — НЕ ДОСТУПЕН: файла нет в checkout.
+- `python3 scripts/ci/check_migrations.py` — НЕ ДОСТУПЕН: файла нет в checkout.
+- `git diff --check` — PASS.
+
+## Миграции
+
+Нет: схема существующих моделей не менялась.
 
 ## Не реализовано
 
-- Полный обход всех tenant/seller в Celery-задаче оставлен за существующим runner-контуром: в текущем backend нет готового безопасного tenant-итератора для фоновой сессии. API и сервис используют один и тот же алгоритм.
-- Проверка закрытия хранения реализована через опубликованный ledger-маркер `storage_period_open`; фактическая публикация `StorageStatement` остаётся в межкарточной реализации 08-B.
-- Секреты, токены, `.env` и кабинеты учётных данных не читались.
+- Полный runtime-тест с реальным `StorageStatement` невозможен в этой копии: модель/таблица `StorageStatement` отсутствует. Сервис использует опубликованный межкарточный маркер `storage_statement` или `storage_statement_closed` в общем ledger.
+- Полный интеграционный тест двух настоящих параллельных транзакций и Celery-брокера не добавлен; защита реализована на уникальном ограничении и обработке `IntegrityError`.
+- GET-реестр счетов и UI-находки ревью не реализованы: они относятся к frontend/другим атомам.
+
+## Находки
+
+- В рабочем дереве уже было несвязанное изменение `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/night/volna-9-recovery/JOURNAL.md`; файл не изменялся этим атомом.
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не читались и не затрагивались.
