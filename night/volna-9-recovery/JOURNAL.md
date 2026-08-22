@@ -145,3 +145,4 @@
 01:31   07-reporting · screen-dev: готово
 01:31   07-reporting · dev: фича 1/2 сохранена dafb2583da4a
 01:35   07-reporting · screen-dev: готово
+01:35   07-reporting · dev: фича 2/2 сохранена e773e45061ec
