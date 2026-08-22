@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import logging
 import uuid
-from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -353,10 +352,17 @@ async def _sync_supply_orders_from_wb(
                 )
 
     for order in orders:
-        with suppress(marking_svc.FbsMarkingError):
+        try:
             await marking_svc.sync_order_marking_statuses(
                 session, tenant_id, order.id, http_client
             )
+        except marking_svc.FbsMarkingError:
+            # Delivery must fail closed on every marking-sync failure, including
+            # failures raised before the marking service reaches WB.  Otherwise a
+            # previously accepted decision could survive and let a direct deliver
+            # request bypass the operator-facing verdict.
+            marking_svc._reset_stale_wb_verdict(order, list(order.markings))
+            await session.flush()
 
     supply.last_wb_sync_at = datetime.now(UTC)
     await session.flush()

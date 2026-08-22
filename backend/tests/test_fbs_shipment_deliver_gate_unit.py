@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -15,9 +16,11 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_PACKED,
 )
 from app.models.fbs_supply import FBS_DELIVERY_TYPE_WAREHOUSE_SC, FBS_SUPPLY_STATUS_PACKED
+from app.services import fbs_marking_service as marking_svc
 from app.services.fbs_shipment_service import (
     FbsShipmentError,
     _build_delivery_checks,
+    _sync_supply_orders_from_wb,
     _validate_checks_pass,
 )
 
@@ -125,6 +128,54 @@ def test_delivery_blocks_wb_verdict_and_attaches_order(
         }
     }
     assert exc.value.http_status == 400
+
+
+@pytest.mark.asyncio
+async def test_delivery_sync_error_invalidates_stale_filled_verdict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """S-03-TC-006/012: a direct deliver fails closed after a fresh WB error."""
+    tenant_id = uuid.uuid4()
+    order = _mock_order_with_verdict("filled")
+    order.tenant_id = tenant_id
+    order.wb_order_id = 912345
+    supply = _mock_supply()
+    supply.seller_id = uuid.uuid4()
+    supply.wb_supply_id = "WB-SUPPLY-1"
+    session = SimpleNamespace(flush=AsyncMock(), refresh=AsyncMock())
+
+    async def load_orders(*args: object, **kwargs: object) -> list[SimpleNamespace]:
+        del args, kwargs
+        return [order]
+
+    async def fetch_statuses(*args: object, **kwargs: object) -> list[dict[str, object]]:
+        del args, kwargs
+        return []
+
+    async def fail_marking_sync(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        raise marking_svc.FbsMarkingError("wb_transport_error")
+
+    from app.services import fbs_shipment_service as shipment_svc
+
+    monkeypatch.setattr(shipment_svc, "_load_supply_orders_read", load_orders)
+    monkeypatch.setattr(shipment_svc, "fetch_marketplace_orders_status", fetch_statuses)
+    monkeypatch.setattr(marking_svc, "sync_order_marking_statuses", fail_marking_sync)
+
+    refreshed = await _sync_supply_orders_from_wb(
+        session, tenant_id, supply, AsyncMock(), "marketplace-token"
+    )
+
+    assert refreshed == [order]
+    assert order.metadata_delivery_allowed is False
+    assert order.markings[0].meta_details_json["decision"] is None
+    checks = _build_delivery_checks(supply, refreshed, cargo_qr_ready=True)
+    failed = next(check for check in checks if check.code == "marking_not_allowed")
+    assert failed.order_id == order.id
+    assert failed.message == f"Нет ответа WB по заказу {order.id}."
+    with pytest.raises(FbsShipmentError) as exc:
+        _validate_checks_pass(checks)
+    assert exc.value.context["delivery_check"]["order_id"] == str(order.id)
 
 
 def test_deliver_blocked_for_in_supply() -> None:
