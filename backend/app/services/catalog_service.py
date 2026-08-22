@@ -301,6 +301,15 @@ async def create_location_from_rack(
     else:
         code = _format_location_code(rack.name, side, position)
 
+    warehouse_collision = await session.execute(
+        select(Warehouse.id).where(
+            Warehouse.tenant_id == tenant_id,
+            (func.lower(Warehouse.code) == code.lower()) | (Warehouse.barcode == code),
+        ).limit(1)
+    )
+    if warehouse_collision.scalar_one_or_none() is not None:
+        raise CatalogError("location_code_taken")
+
     # CODE128 supports alphanumeric; keep it short and unique.
     # Persisted in DB and used for printing the barcode label.
     for _ in range(5):
@@ -429,6 +438,15 @@ async def rename_location(
     trimmed = code.strip()
     if not trimmed:
         raise CatalogError("invalid_location_code")
+    warehouse_collision = await session.execute(
+        select(Warehouse.id).where(
+            Warehouse.tenant_id == tenant_id,
+            (func.lower(Warehouse.code) == trimmed.lower())
+            | (Warehouse.barcode == trimmed),
+        ).limit(1)
+    )
+    if warehouse_collision.scalar_one_or_none() is not None:
+        raise CatalogError("location_code_taken")
     loc.code = trimmed
     try:
         await session.commit()
@@ -502,13 +520,23 @@ async def create_location(
     wh = await get_warehouse(session, tenant_id, warehouse_id)
     if wh is None:
         raise CatalogError("warehouse_not_found")
+    trimmed_code = code.strip()
+    warehouse_collision = await session.execute(
+        select(Warehouse.id).where(
+            Warehouse.tenant_id == tenant_id,
+            (func.lower(Warehouse.code) == trimmed_code.lower())
+            | (Warehouse.barcode == trimmed_code),
+        ).limit(1)
+    )
+    if warehouse_collision.scalar_one_or_none() is not None:
+        raise CatalogError("location_code_taken")
     # CODE128 supports alphanumeric; keep it short and unique.
     # Persisted in DB and used for printing the barcode label.
     for _ in range(5):
         loc = StorageLocation(
             tenant_id=tenant_id,
             warehouse_id=warehouse_id,
-            code=code.strip(),
+            code=trimmed_code,
             barcode=f"LOC-{uuid.uuid4().hex[:12].upper()}",
         )
         session.add(loc)

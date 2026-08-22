@@ -61,3 +61,19 @@ async def test_operational_warehouse_list_and_scan_resolver(async_client: AsyncC
     )
     assert collision.status_code == 200, collision.text
     assert collision.json()["type"] == "location"
+
+    warehouse_code_location = await async_client.post(
+        f"/warehouses/{body['id']}/locations",
+        headers=headers,
+        json={"code": "main"},
+    )
+    assert warehouse_code_location.status_code == 409, warehouse_code_location.text
+    assert warehouse_code_location.json()["detail"] == "location_code_taken"
+
+    rename_collision = await async_client.patch(
+        f"/warehouses/{body['id']}/locations/{location.json()['id']}",
+        headers=headers,
+        json={"code": body["barcode"]},
+    )
+    assert rename_collision.status_code == 409, rename_collision.text
+    assert rename_collision.json()["detail"] == "location_code_taken"
