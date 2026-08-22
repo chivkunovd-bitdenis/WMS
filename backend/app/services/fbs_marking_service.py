@@ -51,6 +51,7 @@ from app.services.wildberries_credentials_service import (
 from app.services.wildberries_errors import WildberriesBusinessError
 from app.services.wildberries_fbs_client import (
     MarketplaceMetaDetail,
+    MarketplaceOrderMetaRow,
     fetch_marketplace_orders_meta_batch,
 )
 
@@ -525,13 +526,17 @@ async def _sync_order_meta_from_wb(
     order: FbsOrder,
     http_client: httpx.AsyncClient,
     token: str,
+    *,
+    meta_batch: list[MarketplaceOrderMetaRow] | None = None,
 ) -> list[FbsOrderMarking]:
     markings = await list_order_markings(session, order.tenant_id, order.id)
-    batch = await fetch_marketplace_orders_meta_batch(
-        http_client,
-        api_token=token,
-        order_ids=[int(order.wb_order_id)],
-    )
+    batch = meta_batch
+    if batch is None:
+        batch = await fetch_marketplace_orders_meta_batch(
+            http_client,
+            api_token=token,
+            order_ids=[int(order.wb_order_id)],
+        )
     details_by_kind: dict[str, MarketplaceMetaDetail] = {}
     returned_kinds: set[str] = set()
     returned_row = False
