@@ -154,3 +154,7 @@
 22:36   04-warehouse-switch · dev: фича 12/13 сохранена 82ffe3e1f3b1
 22:42   04-warehouse-switch · screen-dev: готово
 22:42   04-warehouse-switch · dev: фича 13/13 сохранена 71f693f934d2
+22:51   04-warehouse-switch · reviewer: готово
+22:51 04-warehouse-switch: отложено — reviewer, эскалация не помогла
+23:02   04-warehouse-switch · resume: поатомный rework Sol по сохранённым находкам
+23:06   04-warehouse-switch · backend-dev: готово

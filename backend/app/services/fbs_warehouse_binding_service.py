@@ -20,7 +20,12 @@ AUTO_FBS_WAREHOUSE_CODE_PREFIX = "fbs-wb"
 
 
 class FbsWarehouseBindingError(Exception):
-    def __init__(self, code: str, context: dict | None = None, message: str | None = None) -> None:
+    def __init__(
+        self,
+        code: str,
+        context: dict[str, object] | None = None,
+        message: str | None = None,
+    ) -> None:
         self.code = code
         self.context = context
         self.message = message
@@ -28,8 +33,9 @@ class FbsWarehouseBindingError(Exception):
 
 
 def is_auto_fbs_wms_warehouse(warehouse: Warehouse) -> bool:
-    return warehouse.code.startswith(f"{AUTO_FBS_WAREHOUSE_CODE_PREFIX}-") or (
-        warehouse.name.startswith("FBS WB ")
+    return bool(
+        warehouse.code.startswith(f"{AUTO_FBS_WAREHOUSE_CODE_PREFIX}-")
+        or warehouse.name.startswith("FBS WB ")
     )
 
 
@@ -291,7 +297,7 @@ async def get_binding_stock_pool_summary(
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
     product_id: uuid.UUID,
-) -> dict:
+) -> dict[str, object]:
     """Get FBS stock pool summary: limit, total allocated, available, and per-binding breakdown.
 
     Returns a dictionary with:

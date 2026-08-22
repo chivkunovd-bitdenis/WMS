@@ -66,7 +66,7 @@ async def test_preflight_aggregates_operational_stock_and_exposes_source_capacit
     A service warehouse intentionally has a large balance: it must not affect
     either the total or the recommendation.
     """
-    headers, seller_id, current_warehouse_id, product_id, _current_location_id = (
+    headers, seller_id, current_warehouse_id, product_id, current_location_id = (
         await _setup_tenant_product(async_client)
     )
 
@@ -150,6 +150,22 @@ async def test_preflight_aggregates_operational_stock_and_exposes_source_capacit
                 stock=preflight,
             )
         )
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=product.tenant_id,
+            product_id=product_id,
+            storage_location_id=current_location_id,
+            quantity_delta=6,
+            movement_type="inbound_intake",
+        )
+        reservation.quantity = 20
+        await session.flush()
+        shortage_preflight = await _stock_preflight(
+            session,
+            product.tenant_id,
+            [order],
+            selected_warehouse_id=current_warehouse_id,
+        )
 
     assert preflight.compatible is True
     assert preflight.recommended_warehouse_id == south_id
@@ -172,6 +188,17 @@ async def test_preflight_aggregates_operational_stock_and_exposes_source_capacit
         {"id": str(north_id), "name": "Север", "quantity": 4, "available": 4},
     ]
     assert preflight.blocking_lines == ()
+
+    assert shortage_preflight.compatible is False
+    assert shortage_preflight.recommended_warehouse_id == current_warehouse_id
+    assert shortage_preflight.warning_lines == ()
+    assert len(shortage_preflight.blocking_lines) == 1
+    blocking_line = shortage_preflight.blocking_lines[0]
+    assert (blocking_line.current, blocking_line.total, blocking_line.shortage) == (
+        6,
+        16,
+        4,
+    )
 
 
 async def _setup_tenant_product(
