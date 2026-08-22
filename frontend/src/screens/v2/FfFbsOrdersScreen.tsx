@@ -43,6 +43,8 @@ import { FfFbsSectionNav } from './FfFbsSectionNav'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import { ordersWord } from './fbsUx'
 import { plural } from '../../utils/plural'
+import { StatusChip, TextCell } from '../../ui-kit'
+import { metaStatusView } from '../../utils/metaStatus'
 import {
   fetchFbsSellerWarehouses,
   fetchFbsSupplyWorklist,
@@ -334,26 +336,8 @@ const NewOrderRow = memo(function NewOrderRow({
   )
 })
 
-// GLOBAL-02: единственное состояние строки, которое реально мешает оператору
-// отгрузить заказ, — незакрытая маркировка Честным знаком. «Не хватает: N» с прошлого
-// стейджа заказчик прочитал как нехватку товара на складе — на деле это нехватка кодов
-// маркировки (order.metadata), поэтому подпись теперь называет вещь напрямую и красный
-// цвет держится только за тем, что действительно блокирует работу.
-type MetadataProblem = { label: string; color: 'error' }
-
-function metadataProblem(order: FbsWorklistOrder): MetadataProblem | null {
-  if (order.metadata.required.length === 0) {
-    return null
-  }
-  const rejected = order.metadata.states.some((state) =>
-    ['rejected', 'replacement_required'].includes(state.status),
-  )
-  if (rejected) return { label: 'Отклонено WB', color: 'error' }
-  const missing = order.metadata.states.filter((state) => state.status === 'missing').length
-  if (missing > 0) return { label: `Не хватает честных знаков: ${missing}`, color: 'error' }
-  return null
-}
-
+// GLOBAL-02: внешний вердикт WB приходит готовым с сервера и является единственным
+// состоянием строки, которое объясняет оператору возможность дальнейшей сдачи.
 function warehouseOptionLabel(
   option: FbsWorklistWarehouseOption,
   sellerWarehouseNames: Record<string, string>,
@@ -1249,7 +1233,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               }
 
               const localSupplyMissing = !order.supply_id
-              const metaFlag = metadataProblem(order)
+              const metaStatus = metaStatusView(order.metadata.verdict)
               const row = (
                 <TableRow
                   key={order.id}
@@ -1324,13 +1308,16 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                             маркировка отклонена/не хватает — это и есть главное состояние,
                             оно важнее декоративного статуса. Всё остальное — обычным
                             текстом ниже, без цвета. */}
-                        {statusGroup === 'expired' && metaFlag ? (
-                          <Chip
-                            size="small"
-                            color={metaFlag.color}
-                            label={metaFlag.label}
-                            data-testid={`fbs-order-${order.id}-marking-issue`}
-                          />
+                        {statusGroup === 'expired' ? (
+                          <Stack spacing={0.25}>
+                            <StatusChip
+                              label={metaStatus.label}
+                              tone={metaStatus.tone}
+                              testId={`fbs-order-${order.id}-wb-verdict`}
+                            />
+                            {metaStatus.reason ? <TextCell value={metaStatus.reason} width={180} /> : null}
+                            {metaStatus.label === 'Нет ответа WB' ? <TextCell value="Сдача пока недоступна" width={180} /> : null}
+                          </Stack>
                         ) : statusGroup !== 'expired' ? (
                           // «Отменённые»: заказ уже закрыт, состояние маркировки для решения
                           // не нужно — главное здесь то, чем закончился заказ (Отменён/Дефект).

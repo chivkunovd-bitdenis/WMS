@@ -55,6 +55,17 @@ function worklist(items: FbsWorklistFixture[], warehouseOptions: FbsWorklistFixt
   }
 }
 
+function wbVerdict(signature: string, over: Record<string, unknown> = {}) {
+  return {
+    required: [],
+    optional: [],
+    states: [],
+    delivery_allowed: signature === 'WB: принято' || signature === 'WB: код не требуется',
+    last_checked_at: new Date().toISOString(),
+    verdict: { signature, tone: 'stop', reason: null, delivery_allowed: false, ...over },
+  }
+}
+
 function supplyRow(id: string, over: Partial<FbsWorklistFixture> = {}): FbsWorklistFixture {
   return {
     id,
@@ -173,6 +184,44 @@ test('fbs orders: list, tabs and empty state', async ({ page }) => {
 
   await page.getByRole('tab', { name: 'Отменённые' }).click()
   await expect(page.getByTestId('fbs-order-5')).toBeVisible()
+})
+
+// S-03-TC-001, S-03-TC-002, S-03-TC-003, S-03-TC-006 — WB verdicts stay in the existing status cell.
+test('fbs orders: shows the server WB verdict and safe operator reason', async ({ page }) => {
+  await registerFf(page, 'wb-verdict')
+  const items = [
+    order('1', { metadata: wbVerdict('WB: принято', { tone: 'ok', delivery_allowed: true }) }),
+    order('2', { metadata: wbVerdict('WB: код не требуется', { tone: 'neutral', delivery_allowed: true }) }),
+    order('3', {
+      metadata: wbVerdict('WB не принял', {
+        tone: 'stop',
+        reason: 'invalid_code',
+        delivery_allowed: false,
+      }),
+    }),
+    order('4', { metadata: { ...wbVerdict('unknown'), verdict: null } }),
+  ]
+
+  await page.route('**/operations/fbs-orders/worklist**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    const statusGroup = new URL(route.request().url()).searchParams.get('status_group')
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(statusGroup === 'expired' ? worklist(items) : worklist([])),
+    })
+  })
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await page.getByRole('tab', { name: 'Просрочены' }).click()
+
+  await expect(page.getByTestId('fbs-order-1-wb-verdict')).toHaveText('WB: принято')
+  await expect(page.getByTestId('fbs-order-2-wb-verdict')).toHaveText('WB: код не требуется')
+  await expect(page.getByTestId('fbs-order-3-wb-verdict')).toHaveText('WB не принял')
+  await expect(page.getByTestId('fbs-order-3')).toContainText('Код маркировки не принят')
+  await expect(page.getByTestId('fbs-order-4-wb-verdict')).toHaveText('Нет ответа WB')
+  await expect(page.getByTestId('fbs-order-4')).toContainText('Сдача пока недоступна')
+  await expect(page.getByTestId('fbs-order-3')).not.toContainText('invalid_code')
 })
 
 // HOTFIX 20.08.2026: оператор видит полный список и может отметить любые отдельные
