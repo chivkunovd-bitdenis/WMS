@@ -1,36 +1,21 @@
-# Backend DEV · 02-verdikt-screen · feature 2
+# Screen Dev · 02-verdikt-screen · feature 3
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/app/services/fbs_shipment_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/tests/test_fbs_shipment_deliver_gate_unit.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/night/volna-9-recovery/cards/02-verdikt-screen/DEV.md`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/fbsApi.ts`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/utils/metaStatus.ts`
 
-Серверная проверка передачи поставки использует `_wb_order_verdict`, поэтому
-одного `check_status`, `assigned`, `pending` или устаревшего флага недостаточно.
-Разрешены только `filled`, `optional` и `notRequired` без причины. Причина,
-`pending`, `required`, неизвестное и отсутствующее решение блокируют передачу.
-Блокирующая проверка содержит UUID конкретного заказа и серверное сообщение с
-причиной, если она пришла от WB.
-
-## Миграции
-
-Нет.
+Клиентский API содержит неизменяемый серверный вердикт WB. Утилита `metaStatusView`
+использует только этот вердикт, выдаёт фиксированные подписи и тоны, переводит
+известные причины на русский, сохраняет неизвестную причину безопасным текстом и
+возвращает `disabledReason` для блокирующих состояний.
 
 ## Гейты
 
-- `ruff check .`: FAIL — 82 ошибки в ранее существующих несвязанных файлах; целевые файлы ошибок не добавили.
-- `mypy .`: FAIL — 21 ошибка в 6 ранее существующих несвязанных файлах; целевые файлы ошибок не добавили.
-- `pytest -q tests/test_fbs_shipment_deliver_gate_unit.py`: PASS — 16 passed.
-- `python3 scripts/ci/back_guard.py`: НЕ ЗАПУЩЕН — файл отсутствует в рабочей копии.
-- `python3 scripts/ci/check_migrations.py`: НЕ ЗАПУЩЕН — файл отсутствует в рабочей копии.
+- `npx tsc --noEmit -p tsconfig.app.json` — не пройден: в рабочей копии нет локального `tsc`, а сетевое получение пакета недоступно.
+- `python3 scripts/ui/ui_guard.py` — не пройден: обнаружены нарушения baseline в чужих файлах `src/components/WbProductPickerDialog.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`; файлы этой правки не затрагивались, baseline не обновлялся.
+- `npm run test:unit` — не пройден: в рабочей копии отсутствует локальный `vitest`/зависимости frontend.
 
 ## Не реализовано
 
-- UI и API-контракт не изменялись: они относятся к следующим атомарным кускам.
-- Полные ruff/mypy не доведены до зелёного состояния из-за несвязанных ошибок репозитория.
-
-## Блокеры
-
-Нет блокеров по реализации. В репозитории отсутствуют два CI-скрипта, а полные
-ruff/mypy содержат несвязанные ошибки; целевой тест передачи поставки проходит.
+- Компоненты экранов не подключались: это следующий атомарный кусок контракта; текущая фича ограничена типом API и словарём отображения.
