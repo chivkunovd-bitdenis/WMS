@@ -102,6 +102,6 @@ async def export_inventory_report(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc)) from exc
     return StreamingResponse(
-        iter([content]), media_type="text/csv; charset=utf-8",
+        content, media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": "attachment; filename=inventory-report.csv"},
     )

@@ -3,12 +3,13 @@ from __future__ import annotations
 import csv
 import io
 import uuid
+from collections.abc import AsyncIterator, Sequence
 from datetime import UTC, datetime, timedelta
-from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.inventory_balance import InventoryBalance
@@ -207,54 +208,118 @@ async def build_inventory_csv(
     date_to: datetime, group_by: str, seller_id: uuid.UUID | None = None,
     warehouse_id: uuid.UUID | None = None, search: str | None = None,
     include_seller: bool = True,
-) -> bytes:
-    """Build the complete, table-shaped export for the current authorised slice."""
+) -> AsyncIterator[bytes]:
+    """Stream the complete, table-shaped export for the authorised slice."""
     validate_period(date_from, date_to)
     if group_by not in GROUP_BY_VALUES:
         raise ValueError("group_by must be product or operation")
 
-    first_page = await build_inventory_report(
-        session, tenant_id, date_from=date_from, date_to=date_to,
-        group_by=group_by, page=1, seller_id=seller_id,
-        warehouse_id=warehouse_id, search=search,
-    )
-    total = cast(int, first_page["total"])
-    if total == 0:
-        raise ValueError("nothing to export for the selected period")
-    pages: list[dict[str, object]] = [first_page]
-    for page_number in range(2, (total + PAGE_SIZE - 1) // PAGE_SIZE + 1):
-        pages.append(await build_inventory_report(
-            session, tenant_id, date_from=date_from, date_to=date_to,
-            group_by=group_by, page=page_number, seller_id=seller_id,
-            warehouse_id=warehouse_id, search=search,
-        ))
+    # The export deliberately does not page through ``build_inventory_report``:
+    # doing so used to rerun the complete GROUP BY for every 50 rows and built
+    # the whole file in memory before returning its first byte.
+    filters = [
+        InventoryMovement.tenant_id == tenant_id,
+        InventoryMovement.created_at >= date_from,
+        InventoryMovement.created_at < date_to,
+        Warehouse.is_operational.is_(True),
+    ]
+    if warehouse_id is None:
+        filters.append(InventoryMovement.transfer_group_id.is_(None))
+    if seller_id is not None:
+        filters.append(InventoryMovement.seller_id == seller_id)
+    if warehouse_id is not None:
+        filters.append(InventoryMovement.warehouse_id == warehouse_id)
+    if search:
+        pattern = f"%{search.strip()}%"
+        filters.append(
+            or_(
+                Product.name.ilike(pattern), Product.sku_code.ilike(pattern),
+                Product.wb_vendor_code.ilike(pattern), Product.wb_barcode.ilike(pattern),
+            )
+        )
 
-    output = io.StringIO(newline="")
-    writer = csv.writer(output, lineterminator="\n")
+    in_qty = func.coalesce(func.sum(case((InventoryMovement.quantity_delta > 0,
+        InventoryMovement.quantity_delta), else_=0)), 0)
+    out_qty = func.coalesce(func.sum(case((InventoryMovement.quantity_delta < 0,
+        -InventoryMovement.quantity_delta), else_=0)), 0)
     if group_by == "product":
-        headers = ["Товар", "SKU", "Артикул продавца", "ШК"]
-        if include_seller:
-            headers.append("Селлер")
-        headers.extend(["Остаток сейчас", "Приход", "Расход", "Нетто"])
-        writer.writerow(headers)
-        for report_page in pages:
-            for row in cast(list[dict[str, Any]], report_page["rows"]):
-                values = [
-                    row["product_name"], row["sku_code"], row["wb_vendor_code"],
-                    row["wb_barcode"],
-                ]
-                if include_seller:
-                    values.append(row["seller_name"])
-                values.extend([
-                    row["current_balance"], row["total_in"], row["total_out"], row["net"]
-                ])
-                writer.writerow(values)
+        balance_location = aliased(StorageLocation)
+        balance_warehouse = aliased(Warehouse)
+        balance_filters = [
+            InventoryBalance.tenant_id == tenant_id,
+            InventoryBalance.product_id == Product.id,
+            balance_warehouse.is_operational.is_(True),
+        ]
+        if warehouse_id is not None:
+            balance_filters.append(balance_warehouse.id == warehouse_id)
+        if seller_id is not None:
+            balance_filters.append(Product.seller_id == seller_id)
+        current_balance = (
+            select(func.coalesce(func.sum(InventoryBalance.quantity), 0))
+            .join(balance_location, balance_location.id == InventoryBalance.storage_location_id)
+            .join(balance_warehouse, balance_warehouse.id == balance_location.warehouse_id)
+            .where(*balance_filters)
+            .correlate(Product)
+            .scalar_subquery()
+        )
+        grouped = select(
+            Product.id.label("product_id"), Product.name.label("product_name"),
+            Product.sku_code.label("sku_code"), Product.wb_vendor_code.label("wb_vendor_code"),
+            Product.wb_barcode, Seller.name.label("seller_name"), in_qty.label("in_qty"),
+            out_qty.label("out_qty"), current_balance.label("current_balance"),
+        ).select_from(InventoryMovement).join(
+            Product, Product.id == InventoryMovement.product_id).outerjoin(
+            Seller, Seller.id == InventoryMovement.seller_id).join(
+            Warehouse, Warehouse.id == InventoryMovement.warehouse_id).where(*filters).group_by(
+            Product.id, Product.name, Product.sku_code, Product.wb_vendor_code,
+            Product.wb_barcode, Seller.name,
+        ).order_by(Product.name.asc(), Product.id)
     else:
-        writer.writerow(["Операция", "Приход", "Расход", "Нетто"])
-        for report_page in pages:
-            for row in cast(list[dict[str, Any]], report_page["rows"]):
-                writer.writerow([row["operation"], row["in_qty"], row["out_qty"], row["net"]])
-    return output.getvalue().encode("utf-8-sig")
+        grouped = select(
+            InventoryMovement.movement_type.label("movement_type"), in_qty.label("in_qty"),
+            out_qty.label("out_qty"),
+        ).select_from(InventoryMovement).join(
+            Product, Product.id == InventoryMovement.product_id).join(
+            Warehouse, Warehouse.id == InventoryMovement.warehouse_id).where(*filters).group_by(
+            InventoryMovement.movement_type).order_by(InventoryMovement.movement_type)
+
+    if (await session.execute(grouped.limit(1))).first() is None:
+        raise ValueError("nothing to export for the selected period")
+
+    def csv_line(values: Sequence[object]) -> bytes:
+        output = io.StringIO(newline="")
+        csv.writer(output, lineterminator="\n").writerow(values)
+        return output.getvalue().encode("utf-8")
+
+    async def stream() -> AsyncIterator[bytes]:
+        if group_by == "product":
+            headers = ["Товар", "Название", "Артикул продавца", "ШК"]
+            if include_seller:
+                headers.append("Селлер")
+            headers.extend(["Остаток сейчас", "Приход", "Расход", "Нетто"])
+            yield b"\xef\xbb\xbf" + csv_line(headers)
+
+            result = await session.stream(grouped)
+            async for (
+                _product_id, name, sku, vendor, barcode, seller_name, incoming, outgoing, balance
+            ) in result:
+                values: list[object] = [sku, name, vendor, barcode]
+                if include_seller:
+                    values.append(seller_name)
+                values.extend(
+                    [int(balance), int(incoming), int(outgoing), int(incoming) - int(outgoing)]
+                )
+                yield csv_line(values)
+            return
+
+        yield b"\xef\xbb\xbf" + csv_line(["Операция", "Приход", "Расход", "Нетто"])
+        result = await session.stream(grouped)
+        async for movement_type, incoming, outgoing in result:
+            operation = {"stock_transfer_in": "Перемещение: пришло",
+                "stock_transfer_out": "Перемещение: ушло"}.get(movement_type, movement_type)
+            yield csv_line([operation, int(incoming), int(outgoing), int(incoming) - int(outgoing)])
+
+    return stream()
 
 
 async def build_overview(
