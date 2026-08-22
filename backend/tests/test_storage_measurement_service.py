@@ -1,14 +1,28 @@
-from datetime import date, datetime
+import time
+import uuid
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 from typing import cast
 
+import pytest
+from httpx import AsyncClient
+from sqlalchemy import func, select
+
+from app.db.session import SessionLocal
 from app.models.inventory_movement import InventoryMovement
+from app.models.product import Product
 from app.models.product_dimension_event import ProductDimensionEvent
+from app.models.seller import Seller
+from app.models.storage_measurement import StorageMeasurement
+from app.models.storage_statement import StorageStatement
+from app.models.warehouse import Warehouse
+from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.storage_measurement_service import (
     MOSCOW,
     _stock_segments,
     _volume_segments,
+    calculation_end_exclusive,
     month_bounds,
     previous_month,
 )
@@ -48,6 +62,33 @@ def test_stock_segments_keep_fractional_day_boundaries() -> None:
         (datetime(2026, 7, 1, 12, tzinfo=MOSCOW), datetime(2026, 7, 2, 12, tzinfo=MOSCOW), 2),
         (datetime(2026, 7, 2, 12, tzinfo=MOSCOW), end, 1),
     ]
+
+
+def test_stock_segments_reject_negative_reconstructed_stock() -> None:
+    start = datetime(2026, 7, 1, tzinfo=MOSCOW)
+    end = datetime(2026, 7, 2, tzinfo=MOSCOW)
+
+    with pytest.raises(ValueError, match="negative_reconstructed_stock"):
+        _stock_segments(
+            [_movement(created_at=start, quantity_delta=-1)],
+            start,
+            end,
+        )
+
+
+def test_current_month_stops_at_current_moscow_instant() -> None:
+    now = datetime(2026, 8, 22, 15, 30, tzinfo=MOSCOW)
+
+    assert calculation_end_exclusive(
+        date(2026, 8, 1),
+        date(2026, 8, 31),
+        now=now,
+    ) == now
+    assert calculation_end_exclusive(
+        date(2026, 7, 1),
+        date(2026, 7, 31),
+        now=now,
+    ) == datetime(2026, 8, 1, tzinfo=MOSCOW)
 
 
 def test_volume_segments_split_continuous_stock_at_dimension_change() -> None:
@@ -187,3 +228,196 @@ def test_wb_restore_changes_open_timeline_without_recalculating_closed_period() 
         (closed_start, restored_at, Decimal("1")),
         (restored_at, open_end, Decimal("6")),
     ]
+
+
+@pytest.mark.asyncio
+async def test_rebuild_and_list_cover_fractional_missing_zero_idempotency_and_scope(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(time.time_ns())
+    registered = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Storage calculation",
+            "slug": f"storage-calculation-{suffix}",
+            "admin_email": f"storage-calculation-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert registered.status_code == 200, registered.text
+    headers = {"Authorization": f"Bearer {registered.json()['access_token']}"}
+    warehouse_response = await async_client.post(
+        "/warehouses",
+        headers=headers,
+        json={"name": "Operational storage", "code": f"storage-{suffix}"},
+    )
+    assert warehouse_response.status_code == 200, warehouse_response.text
+    operational_id = uuid.UUID(str(warehouse_response.json()["id"]))
+    period_start, _ = previous_month()
+    first_inbound = datetime.combine(
+        period_start, datetime.min.time(), MOSCOW
+    ) + timedelta(hours=12)
+    first_outbound = first_inbound + timedelta(days=1)
+
+    async with SessionLocal() as session:
+        operational = await session.get(Warehouse, operational_id)
+        assert operational is not None
+        tenant_id = operational.tenant_id
+        technical = Warehouse(
+            tenant_id=tenant_id,
+            name="FBS WB technical",
+            code=f"fbs-wb-{suffix}",
+            is_operational=False,
+        )
+        calculated_seller = Seller(tenant_id=tenant_id, name="Calculated seller")
+        zero_seller = Seller(tenant_id=tenant_id, name="Zero seller")
+        session.add_all([technical, calculated_seller, zero_seller])
+        await session.flush()
+        calculated = Product(
+            tenant_id=tenant_id,
+            seller_id=calculated_seller.id,
+            name="Measured product",
+            sku_code=f"MEASURED-{suffix}",
+            volume_liters=Decimal("2"),
+            dimensions_source="manual",
+        )
+        missing = Product(
+            tenant_id=tenant_id,
+            seller_id=calculated_seller.id,
+            name="Missing dimensions",
+            sku_code=f"MISSING-{suffix}",
+        )
+        technical_product = Product(
+            tenant_id=tenant_id,
+            seller_id=calculated_seller.id,
+            name="Technical stock",
+            sku_code=f"TECHNICAL-{suffix}",
+            volume_liters=Decimal("10"),
+        )
+        session.add_all([calculated, missing, technical_product])
+        await session.flush()
+        operational_location = await get_or_create_sorting_location(
+            session, tenant_id, operational.id
+        )
+        technical_location = await get_or_create_sorting_location(session, tenant_id, technical.id)
+        session.add_all(
+            [
+                InventoryMovement(
+                    tenant_id=tenant_id,
+                    product_id=calculated.id,
+                    seller_id=calculated_seller.id,
+                    storage_location_id=operational_location.id,
+                    warehouse_id=operational.id,
+                    quantity_delta=3,
+                    movement_type="storage_test",
+                    created_at=first_inbound,
+                ),
+                InventoryMovement(
+                    tenant_id=tenant_id,
+                    product_id=calculated.id,
+                    seller_id=calculated_seller.id,
+                    storage_location_id=operational_location.id,
+                    warehouse_id=operational.id,
+                    quantity_delta=-3,
+                    movement_type="storage_test",
+                    created_at=first_outbound,
+                ),
+                InventoryMovement(
+                    tenant_id=tenant_id,
+                    product_id=missing.id,
+                    seller_id=calculated_seller.id,
+                    storage_location_id=operational_location.id,
+                    warehouse_id=operational.id,
+                    quantity_delta=1,
+                    movement_type="storage_test",
+                    created_at=first_inbound,
+                ),
+                InventoryMovement(
+                    tenant_id=tenant_id,
+                    product_id=technical_product.id,
+                    seller_id=calculated_seller.id,
+                    storage_location_id=technical_location.id,
+                    warehouse_id=technical.id,
+                    quantity_delta=100,
+                    movement_type="storage_test",
+                    created_at=first_inbound,
+                ),
+            ]
+        )
+        await session.commit()
+        technical_id = technical.id
+
+    body = {"year": period_start.year, "month": period_start.month}
+    first_job = await async_client.post(
+        "/operations/storage/measurements/rebuild",
+        headers=headers,
+        json=body,
+    )
+    second_job = await async_client.post(
+        "/operations/storage/measurements/rebuild",
+        headers=headers,
+        json=body,
+    )
+    assert first_job.status_code == 202, first_job.text
+    assert second_job.status_code == 202, second_job.text
+
+    for job_id in (first_job.json()["id"], second_job.json()["id"]):
+        job = await async_client.get(
+            f"/operations/background-jobs/{job_id}", headers=headers
+        )
+        assert job.status_code == 200, job.text
+        assert job.json()["status"] == "done", job.text
+
+    listed = await async_client.get(
+        "/operations/storage/statements",
+        headers=headers,
+        params={"year": period_start.year, "month": period_start.month},
+    )
+    assert listed.status_code == 200, listed.text
+    payload = listed.json()
+    assert payload["tariff_configured"] is False
+    assert {row["id"] for row in payload["warehouses"]} == {str(operational_id)}
+    by_seller = {row["seller_name"]: row for row in payload["statements"]}
+    assert set(by_seller) == {"Calculated seller", "Zero seller"}
+    assert by_seller["Zero seller"]["measurements"] == []
+    assert by_seller["Zero seller"]["total_liter_days"] == "0"
+    calculated_rows = {
+        row["sku"]: row for row in by_seller["Calculated seller"]["measurements"]
+    }
+    assert calculated_rows[f"MEASURED-{suffix}"]["liter_days"] == "6.000000"
+    assert calculated_rows[f"MISSING-{suffix}"]["status"] == "missing_dimensions"
+    assert by_seller["Calculated seller"]["problem_count"] == 1
+
+    async with SessionLocal() as session:
+        assert await session.scalar(select(func.count(StorageStatement.id))) == 2
+        assert await session.scalar(select(func.count(StorageMeasurement.id))) == 2
+        assert await session.scalar(
+            select(func.count(StorageStatement.id)).where(
+                StorageStatement.warehouse_id == technical_id
+            )
+        ) == 0
+
+
+@pytest.mark.asyncio
+async def test_storage_api_rejects_future_month(async_client: AsyncClient) -> None:
+    suffix = str(time.time_ns())
+    registered = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Future storage",
+            "slug": f"future-storage-{suffix}",
+            "admin_email": f"future-storage-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    headers = {"Authorization": f"Bearer {registered.json()['access_token']}"}
+    future = datetime.now(MOSCOW).date().replace(day=1) + timedelta(days=370)
+
+    response = await async_client.get(
+        "/operations/storage/statements",
+        headers=headers,
+        params={"year": future.year, "month": future.month},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "future_month"

@@ -7,7 +7,9 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.api.deps import require_ff_or_seller_with_permission
 from app.core.settings import settings
@@ -15,6 +17,7 @@ from app.db.session import get_db
 from app.models.storage_measurement import StorageMeasurement
 from app.models.storage_statement import StorageStatement
 from app.models.user import User
+from app.models.warehouse import Warehouse
 from app.services import background_job_service as job_svc
 from app.services.background_job_service import JOB_TYPE_STORAGE_MEASUREMENT_REBUILD
 from app.services.staff_permissions_service import PERM_INVENTORY
@@ -59,12 +62,31 @@ class StorageStatementOut(BaseModel):
     measurements: list[dict[str, object]]
     total_liter_days: str
     total_amount: str
+    problem_count: int
+
+
+class StorageStatementsOut(BaseModel):
+    tariff_configured: bool
+    warehouses: list[dict[str, object]]
+    statements: list[StorageStatementOut]
+
+
+def _public_dimension_source(source: str | None) -> str | None:
+    if source is None:
+        return None
+    aliases: dict[str, str] = {
+        "wb": "wildberries",
+        "container_override": "container",
+        "container": "container",
+    }
+    return aliases.get(source, source)
 
 
 def _statement_out(
     statement: StorageStatement, rows: list[StorageMeasurement]
 ) -> StorageStatementOut:
     total_liter_days = sum((Decimal(str(row.liter_days)) for row in rows), Decimal(0))
+    problem_count = sum(row.status == "missing_dimensions" for row in rows)
     return StorageStatementOut(
         id=statement.id,
         status=statement.status,
@@ -78,13 +100,32 @@ def _statement_out(
         measurements=[
             {
                 "product_id": row.product_id,
+                "sku": row.product.sku_code,
+                "seller_article": row.product.wb_vendor_code,
+                "volume_liters": (
+                    str(row.dimension_event.volume_liters)
+                    if row.dimension_event is not None
+                    and row.dimension_event.volume_liters is not None
+                    else str(row.product.volume_liters)
+                    if row.product.volume_liters is not None
+                    else None
+                ),
+                "dimensions_source": _public_dimension_source(
+                    row.dimension_event.source
+                    if row.dimension_event is not None
+                    else row.product.dimensions_source
+                ),
                 "liter_days": str(row.liter_days),
+                "rate_snapshot": None,
+                "amount": None,
+                "status": row.status,
                 "source_type": "storage_measurement",
             }
             for row in rows
         ],
         total_liter_days=str(total_liter_days),
         total_amount="0",
+        problem_count=problem_count,
     )
 
 
@@ -121,6 +162,96 @@ def _print_measurements(
         for row in rows
         if row.id in ledger_by_source_id
     ]
+
+
+@router.get("/statements", response_model=StorageStatementsOut)
+async def list_statements(
+    user: Annotated[User, Depends(require_storage_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    year: int | None = None,
+    month: int | None = None,
+    warehouse_id: uuid.UUID | None = None,
+) -> StorageStatementsOut:
+    """Show one calendar month's storage drafts without producing money."""
+    if (year is None) != (month is None):
+        raise HTTPException(status_code=422, detail="year_and_month_required_together")
+    try:
+        period_start, period_end = (
+            month_bounds(year, month)
+            if year is not None and month is not None
+            else previous_month()
+        )
+    except StorageMeasurementError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if period_start > datetime.now(MOSCOW).date().replace(day=1):
+        raise HTTPException(status_code=422, detail="future_month")
+
+    warehouse_query = (
+        select(Warehouse)
+        .where(
+            Warehouse.tenant_id == user.tenant_id,
+            Warehouse.is_operational.is_(True),
+        )
+        .order_by(Warehouse.name, Warehouse.id)
+    )
+    if warehouse_id is not None:
+        warehouse_query = warehouse_query.where(Warehouse.id == warehouse_id)
+    warehouses = list((await session.scalars(warehouse_query)).all())
+    operational_ids = {warehouse.id for warehouse in warehouses}
+
+    statement_query = (
+        select(StorageStatement)
+        .options(
+            joinedload(StorageStatement.seller),
+            joinedload(StorageStatement.warehouse),
+        )
+        .where(
+            StorageStatement.tenant_id == user.tenant_id,
+            StorageStatement.period_start == period_start,
+            StorageStatement.period_end == period_end,
+            StorageStatement.warehouse_id.in_(operational_ids or {uuid.UUID(int=0)}),
+        )
+        .order_by(StorageStatement.created_at, StorageStatement.id)
+    )
+    if user.role == "fulfillment_seller":
+        statement_query = statement_query.where(StorageStatement.seller_id == user.seller_id)
+    statements = list((await session.scalars(statement_query)).unique().all())
+
+    measurement_query = (
+        select(StorageMeasurement)
+        .options(
+            joinedload(StorageMeasurement.product),
+            joinedload(StorageMeasurement.dimension_event),
+        )
+        .where(
+            StorageMeasurement.tenant_id == user.tenant_id,
+            StorageMeasurement.period_start == period_start,
+            StorageMeasurement.period_end == period_end,
+            StorageMeasurement.warehouse_id.in_(operational_ids or {uuid.UUID(int=0)}),
+        )
+        .order_by(StorageMeasurement.product_id)
+    )
+    if user.role == "fulfillment_seller":
+        measurement_query = measurement_query.where(
+            StorageMeasurement.seller_id == user.seller_id
+        )
+    rows_by_scope: dict[tuple[uuid.UUID, uuid.UUID], list[StorageMeasurement]] = {}
+    for row in (await session.scalars(measurement_query)).all():
+        rows_by_scope.setdefault((row.seller_id, row.warehouse_id), []).append(row)
+
+    return StorageStatementsOut(
+        # Tariffs belong to external contract 09-A. Atom 6 deliberately does
+        # not invent a parallel storage tariff or infer money from drafts.
+        tariff_configured=False,
+        warehouses=[{"id": warehouse.id, "name": warehouse.name} for warehouse in warehouses],
+        statements=[
+            _statement_out(
+                statement,
+                rows_by_scope.get((statement.seller_id, statement.warehouse_id), []),
+            )
+            for statement in statements
+        ],
+    )
 
 
 @router.post(

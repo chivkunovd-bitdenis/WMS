@@ -40,6 +40,25 @@ def month_bounds(year: int, month: int) -> tuple[date, date]:
     return date(year, month, 1), date(year, month, last)
 
 
+def calculation_end_exclusive(
+    period_start: date,
+    period_end: date,
+    *,
+    now: datetime | None = None,
+) -> datetime:
+    """Return the real upper boundary for an open monthly measurement.
+
+    Completed months end at the next calendar-month boundary.  The current
+    month ends at the current Moscow instant, so a draft never includes storage
+    time that has not happened yet.
+    """
+    now_moscow = _as_moscow(now or datetime.now(MOSCOW))
+    calendar_end = datetime.combine(period_end + timedelta(days=1), time.min, MOSCOW)
+    if period_start == now_moscow.date().replace(day=1):
+        return min(calendar_end, now_moscow)
+    return calendar_end
+
+
 def _seconds(a: datetime, b: datetime) -> Decimal:
     return Decimal(str(max(0, (b - a).total_seconds()))) / Decimal(86400)
 
@@ -164,7 +183,7 @@ async def rebuild_storage_measurements(
     if period_start > today.replace(day=1):
         raise StorageMeasurementError("future_month")
     period_start_at = datetime.combine(period_start, time.min, MOSCOW)
-    period_end_exclusive = datetime.combine(period_end + timedelta(days=1), time.min, MOSCOW)
+    period_end_exclusive = calculation_end_exclusive(period_start, period_end)
 
     warehouses = select(Warehouse.id).where(
         Warehouse.tenant_id == tenant_id, Warehouse.is_operational.is_(True)
@@ -181,23 +200,14 @@ async def rebuild_storage_measurements(
                     InventoryMovement.warehouse_id.in_(
                         operational_warehouse_ids or {uuid.UUID(int=0)}
                     ),
+                    InventoryMovement.created_at < period_end_exclusive,
                 )
                 .order_by(InventoryMovement.created_at, InventoryMovement.id)
             )
         ).all()
     )
     if seller_id is not None:
-        seller_product_ids = set(
-            (
-                await session.scalars(
-                    select(Product.id).where(
-                        Product.tenant_id == tenant_id,
-                        Product.seller_id == seller_id,
-                    )
-                )
-            ).all()
-        )
-        movements = [m for m in movements if m.product_id in seller_product_ids]
+        movements = [movement for movement in movements if movement.seller_id == seller_id]
     product_ids = {m.product_id for m in movements}
     products = {
         p.id: p
@@ -215,12 +225,12 @@ async def rebuild_storage_measurements(
     grouped: dict[tuple[uuid.UUID, uuid.UUID], list[InventoryMovement]] = {}
     for movement in movements:
         product = products.get(movement.product_id)
-        if product is None or product.seller_id is None:
+        if product is None or movement.seller_id is None:
             continue
         warehouse = movement.warehouse_id
         if warehouse is not None:
-            grouped.setdefault((product.seller_id, warehouse), []).append(movement)
-    for (seller_id, wh_id), group in grouped.items():
+            grouped.setdefault((movement.seller_id, warehouse), []).append(movement)
+    for (scope_seller_id, wh_id), group in grouped.items():
         by_product: dict[uuid.UUID, list[InventoryMovement]] = {}
         for movement in group:
             by_product.setdefault(movement.product_id, []).append(movement)
@@ -275,7 +285,7 @@ async def rebuild_storage_measurements(
             rows.append(
                 StorageMeasurement(
                     tenant_id=tenant_id,
-                    seller_id=seller_id,
+                    seller_id=scope_seller_id,
                     warehouse_id=wh_id,
                     product_id=product_id,
                     dimension_event_id=(
