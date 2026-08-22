@@ -42,6 +42,16 @@ export function metaStatusView(verdict: FbsOrderVerdict | null | undefined): Met
     return blockedView('Нет ответа WB')
   }
 
+  const knownSignatures: FbsOrderVerdictSignature[] = [
+    'WB: принято',
+    'WB: код не требуется',
+    'WB не принял',
+    'WB: проверяет',
+    'WB: нужен код',
+    'Нет ответа WB',
+  ]
+  if (!knownSignatures.includes(verdict.signature)) return blockedView('Нет ответа WB')
+
   const reason = reasonLabel(verdict.reason)
   if (reason) {
     return blockedView('WB не принял', reason, `WB не принял: ${reason}`)

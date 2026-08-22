@@ -282,12 +282,32 @@ export type FbsWorklistPage = {
   warehouse_options: FbsWorklistWarehouseOption[]
 }
 
+function normalizeVerdict(verdict: FbsOrderVerdict | null | undefined): FbsOrderVerdict {
+  if (!verdict || typeof verdict !== 'object') return NO_WB_VERDICT
+  const signatures: FbsOrderVerdictSignature[] = [
+    'WB: принято',
+    'WB: код не требуется',
+    'WB не принял',
+    'WB: проверяет',
+    'WB: нужен код',
+    'Нет ответа WB',
+  ]
+  if (!signatures.includes(verdict.signature)) return NO_WB_VERDICT
+  if (typeof verdict.delivery_allowed !== 'boolean') return NO_WB_VERDICT
+  return {
+    signature: verdict.signature,
+    tone: verdict.tone,
+    reason: typeof verdict.reason === 'string' ? verdict.reason : null,
+    delivery_allowed: verdict.delivery_allowed,
+  }
+}
+
 function withSafeVerdict(order: FbsWorklistOrder): FbsWorklistOrder {
   return {
     ...order,
     metadata: {
       ...order.metadata,
-      verdict: order.metadata?.verdict ?? NO_WB_VERDICT,
+      verdict: normalizeVerdict(order.metadata?.verdict),
     },
   }
 }
@@ -601,13 +621,14 @@ export async function createFbsSupplyFromOrders(
   ah: AuthHeaders,
   body: FbsSupplyCreateFromOrdersRequest,
 ): Promise<FbsWorkspace> {
-  return jsonOrThrow<FbsWorkspace>(
+  const workspace = await jsonOrThrow<FbsWorkspace>(
     await fetch(apiUrl('/operations/fbs-supplies/from-orders'), {
       method: 'POST',
       headers: jsonHeaders(token, ah),
       body: JSON.stringify(body),
     }),
   )
+  return withSafeWorkspaceVerdicts(workspace)
 }
 
 export async function fetchFbsSupplyWorklist(
@@ -631,13 +652,14 @@ export async function addFbsOrdersToSupply(
   supplyId: string,
   body: FbsSupplyAddOrdersRequest,
 ): Promise<FbsWorkspace> {
-  return jsonOrThrow<FbsWorkspace>(
+  const workspace = await jsonOrThrow<FbsWorkspace>(
     await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/orders/batch`), {
       method: 'POST',
       headers: jsonHeaders(token, ah),
       body: JSON.stringify(body),
     }),
   )
+  return withSafeWorkspaceVerdicts(workspace)
 }
 
 export async function fetchFbsWorkspace(

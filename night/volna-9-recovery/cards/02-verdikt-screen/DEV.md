@@ -1,22 +1,27 @@
-# Backend-dev · 02-verdikt-screen
-
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/app/services/fbs_shipment_service.py` — передача проверяет единый `_wb_order_verdict`, а отказ содержит подпись, причину и UUID заказа.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/tests/test_fbs_shipment_deliver_gate_unit.py` — unit-сценарии разрешённых и блокирующих WB-вердиктов.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/fbsApi.ts`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/utils/metaStatus.ts`
+
+В `fbsApi.ts` добавлена безопасная проверка серверного вердикта и нормализация
+workspace после создания поставки и добавления заказов. Поэтому эти ответы больше
+не обходят общий блокирующий fallback `Нет ответа WB`. В `metaStatus.ts`
+неизвестная подпись также отображается только как блокирующее `Нет ответа WB`;
+локальные поля заказа не используются для вывода разрешения.
 
 ## Гейты
 
-- ruff: FAIL — 82 существующие ошибки в несвязанных backend-файлах.
-- mypy: FAIL — существующие ошибки в `inventory_movement_report_service.py`, `wildberries_credentials_service.py`, служебных скриптах и stock/warehouse services; ошибок в изменяемом атоме нет.
-- pytest: целевые тесты `43 passed`; полный прогон остановлен после `367 passed, 5 skipped` и показал 3 несвязанных падения (`test_fbs_kiz`, `test_fbs_stock_emulator_integration`, `test_fbs_supply_from_orders`).
-- back_guard.py: BLOCKED — `scripts/ci/back_guard.py` отсутствует в этой рабочей копии.
-- check_migrations.py: BLOCKED — `scripts/ci/check_migrations.py` отсутствует в этой рабочей копии.
+- `npx tsc --noEmit -p tsconfig.app.json` — без диагностик; оболочка не вернула
+  код завершения, поэтому числовой exit-код подтвердить не удалось.
+- `python3 scripts/ui/ui_guard.py` — красный: новые нарушения обнаружены в
+  несвязанных файлах `frontend/src/components/WbProductPickerDialog.tsx` и
+  `frontend/src/screens/v2/SellerInboundDraftScreen.tsx`. Базовую линию не
+  изменял.
+- `npm run test:unit` — красный до запуска тестов: `vitest: command not found`
+  (в рабочей копии отсутствует `frontend/node_modules`).
 
 ## Не реализовано
 
-- Нет: в рамках атома реализована только серверная проверка передачи поставки. Изменения списка и workspace относятся к другим атомам и не затрагивались.
-
-## Блокеры
-
-- Нет.
+- Находки REVIEW, относящиеся к backend и экранным компонентам
+  `FfFbsOrdersScreen.tsx`/`FfFbsSupplyWorkspace.tsx`, не исправлялись: они не
+  входят в разрешённые файлы атома 3.
