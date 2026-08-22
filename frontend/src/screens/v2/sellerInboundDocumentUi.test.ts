@@ -7,6 +7,7 @@ import {
   shouldShowSellerInboundLoadError,
   shouldShowSellerInboundNoWarehouse,
   shouldShowSellerWarehouseSelector,
+  sellerVisibleWarehouses,
 } from './SellerInboundDraftScreen'
 
 describe('seller inbound document UI helpers', () => {
@@ -43,5 +44,14 @@ describe('seller inbound document UI helpers', () => {
     expect(shouldShowSellerWarehouseSelector(1, 'draft')).toBe(false)
     expect(shouldShowSellerWarehouseSelector(2, 'draft')).toBe(true)
     expect(shouldShowSellerWarehouseSelector(2, 'submitted')).toBe(false)
+  })
+
+  it('does not expose service FBS warehouses to the seller', () => {
+    expect(
+      sellerVisibleWarehouses([
+        { id: 'north', name: 'Север', code: 'north' },
+        { id: 'wb', name: 'FBS WB Москва', code: 'fbs-wb-moscow' },
+      ]),
+    ).toEqual([{ id: 'north', name: 'Север', code: 'north' }])
   })
 })

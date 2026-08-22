@@ -94,6 +94,12 @@ type InboundDetail = {
 type WarehouseRow = { id: string; name: string; code: string }
 const UNKNOWN_INBOUND_STATUS_LABEL = 'Статус уточняется'
 
+export function sellerVisibleWarehouses(warehouses: WarehouseRow[]): WarehouseRow[] {
+  return warehouses.filter(
+    (warehouse) => !/^FBS WB\s*/i.test(warehouse.code) && !/^FBS WB\s*/i.test(warehouse.name),
+  )
+}
+
 type Props = {
   token: string
   authHeaders: (t: string) => Record<string, string>
@@ -225,8 +231,9 @@ export function SellerInboundDraftScreen({
   const [plannedBoxCountDraft, setPlannedBoxCountDraft] = useState<string>('')
   const [localNotice, setLocalNotice] = useState<string | null>(null)
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(() =>
-    routeRequestId || warehouses.length <= 1 ? warehouseId : null,
+    routeRequestId || sellerVisibleWarehouses(warehouses).length <= 1 ? warehouseId : null,
   )
+  const visibleWarehouses = useMemo(() => sellerVisibleWarehouses(warehouses), [warehouses])
 
   const loadDetail = useCallback(
     async (rid: string) => {
@@ -251,7 +258,8 @@ export function SellerInboundDraftScreen({
       void loadDetail(routeRequestId)
       return
     }
-    const creationWarehouseId = selectedWarehouseId ?? (warehouses.length <= 1 ? warehouseId : null)
+    const creationWarehouseId =
+      selectedWarehouseId ?? (visibleWarehouses.length <= 1 ? warehouseId : null)
     if (!creationWarehouseId) {
       return
     }
@@ -309,7 +317,7 @@ export function SellerInboundDraftScreen({
     selectedWarehouseId,
     token,
     warehouseId,
-    warehouses.length,
+    visibleWarehouses.length,
   ])
 
   useEffect(() => {
@@ -688,7 +696,7 @@ export function SellerInboundDraftScreen({
     }
   }
 
-  const hasWarehouseContext = Boolean(warehouseId) || warehouses.length > 0
+  const hasWarehouseContext = Boolean(warehouseId) || visibleWarehouses.length > 0
   const sellerCanEdit =
     detail != null &&
     (detail.status === 'draft' ||
@@ -714,12 +722,12 @@ export function SellerInboundDraftScreen({
     if (!detail) {
       return '—'
     }
-    const matched = warehouses.find((w) => w.id === detail.warehouse_id)
+    const matched = visibleWarehouses.find((w) => w.id === detail.warehouse_id)
     if (matched) {
       return matched.name
     }
     return 'Склад ФФ'
-  }, [detail, warehouses])
+  }, [detail, visibleWarehouses])
 
   const showLoadError = routeRequestId
     ? shouldShowSellerInboundLoadError(detail !== null, localError)
@@ -763,7 +771,7 @@ export function SellerInboundDraftScreen({
       ) : null}
 
       {!requestId || !detail ? (
-        !routeRequestId && warehouses.length > 1 && !selectedWarehouseId ? (
+        !routeRequestId && visibleWarehouses.length > 1 && !selectedWarehouseId ? (
           <Stack spacing={2} sx={{ maxWidth: 360, py: 2 }}>
             <FormControl size="small" fullWidth>
               <InputLabel id="seller-inbound-new-warehouse-label">Склад</InputLabel>
@@ -774,7 +782,7 @@ export function SellerInboundDraftScreen({
                 onChange={(event) => setSelectedWarehouseId(event.target.value)}
                 data-testid="seller-inbound-new-warehouse-select"
               >
-                {warehouses.map((warehouse) => (
+                {visibleWarehouses.map((warehouse) => (
                   <MenuItem key={warehouse.id} value={warehouse.id}>
                     {warehouse.name}
                   </MenuItem>
@@ -875,7 +883,7 @@ export function SellerInboundDraftScreen({
             <Typography variant="body2" color="text.secondary" data-testid="seller-inbound-operation-type">
               Тип: <strong>{operationTypeRu(detail.operation_type)}</strong>
             </Typography>
-            {shouldShowSellerWarehouseSelector(warehouses.length, detail.status) ? (
+            {shouldShowSellerWarehouseSelector(visibleWarehouses.length, detail.status) ? (
               <FormControl size="small" sx={{ minWidth: { xs: '100%', md: 220 } }}>
                 <InputLabel id="seller-inbound-warehouse-select-label">Склад</InputLabel>
                 <Select
@@ -886,7 +894,7 @@ export function SellerInboundDraftScreen({
                   onChange={(event) => void saveWarehouse(event.target.value)}
                   data-testid="seller-inbound-warehouse-select"
                 >
-                  {warehouses.map((warehouse) => (
+                  {visibleWarehouses.map((warehouse) => (
                     <MenuItem key={warehouse.id} value={warehouse.id}>
                       {warehouse.name}
                     </MenuItem>

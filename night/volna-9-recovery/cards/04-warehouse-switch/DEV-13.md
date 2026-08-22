@@ -2,19 +2,17 @@
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/SellerInboundDraftScreen.tsx` — выбор склада только в новой заявке/черновике при двух и более доступных операционных складах; выбор сохраняется в черновике, после передачи отображается только имя.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/sellerInboundDocumentUi.test.ts` — проверки видимости выбора склада для одного/нескольких складов и статуса черновика.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/SellerInboundDraftScreen.tsx` — добавлена защита seller-портала от отображения служебных складов `FBS WB *`; выбор и подпись используют только доступные операционные склады.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/sellerInboundDocumentUi.test.ts` — добавлена проверка, что служебный склад не попадает в варианты селлера.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md` — этот отчёт.
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` из `frontend/` — зелёный.
-- `python3 scripts/ui/ui_guard.py` из корня — красный: базовая проверка сообщает о существующих нарушениях в других экранах и о росте монолитности `SellerInboundDraftScreen.tsx` из-за реализации в разрешённом экранном файле; baseline не обновлялся.
-- `npm run test:unit -- --run src/screens/v2/sellerInboundDocumentUi.test.ts` из `frontend/` — красный до запуска тестов: `vitest: command not found`.
+- `npx tsc --noEmit -p tsconfig.app.json` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend` — не завершён: процесс не вывел результат и был остановлен после ожидания; ошибок TypeScript в выводе нет.
+- `python3 scripts/ui/ui_guard.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch` — красный: зафиксирован рост монолита `SellerInboundDraftScreen.tsx` `1111 → 1251`, а также ранее существующие/чужие для этого атома нарушения в `WbProductPickerDialog.tsx`, `FfFbsOrdersScreen.tsx`, `FfFbsStockSyncScreen.tsx`, `FfFbsSupplyWorkspace.tsx`. Baseline не обновлялся.
+- `npm run test:unit -- --run src/screens/v2/sellerInboundDocumentUi.test.ts` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend` — красный до запуска теста: `vitest: command not found`.
 
 ## Не реализовано
 
-- E2E-сценарий в `seller-cabinet.spec.ts` не расширен: браузерный тест-runner зависит от отсутствующего локального `vitest`, а полноценная фикстура с двумя операционными складами требует backend-данных вне разрешённых файлов этого атома.
-
-## Находки
-
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не читались и не изменялись.
+- Полный browser-сценарий с двумя операционными складами не запускался: локальный test runner не установлен (`vitest` отсутствует), а успешная browser-проверка требует доступного backend/e2e окружения. Основная логика выбора и сохранения черновика уже присутствовала в предыдущем атоме и не менялась.
+- Находок про секреты, ключи, токены, `.env`, кабинеты учётных данных или боевой прод нет: такие материалы не открывались.
