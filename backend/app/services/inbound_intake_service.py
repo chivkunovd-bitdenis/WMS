@@ -1143,6 +1143,7 @@ async def apply_box_putaway(
     *,
     storage_location_id: uuid.UUID,
     line_items: list[tuple[uuid.UUID, int]] | None = None,
+    performer_id: uuid.UUID | None = None,
 ) -> InboundIntakeRequest:
     """
     Разложить принятый по заявке товар из короба в ячейку хранения.
@@ -1228,6 +1229,19 @@ async def apply_box_putaway(
 
     _maybe_set_distribution_completed(req)
     _maybe_complete_request(req)
+    if req.status == STATUS_DONE:
+        await record_operational_charge(
+            session,
+            tenant_id=tenant_id,
+            seller_id=req.seller_id,
+            source_type="inbound_intake",
+            source_id=req.id,
+            source="inbound",
+            service_code="inbound",
+            quantity=Decimal(sum(ln.posted_qty for ln in req.lines)),
+            occurred_at=req.posted_at or datetime.now(UTC),
+            performer_id=performer_id,
+        )
     await session.commit()
     reloaded = await get_request(session, tenant_id, request_id)
     if reloaded is None:
@@ -1534,6 +1548,8 @@ async def complete_distribution(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
+    *,
+    performer_id: uuid.UUID | None = None,
 ) -> InboundIntakeRequest:
     req = await get_request(session, tenant_id, request_id)
     if req is None:
@@ -1642,6 +1658,19 @@ async def complete_distribution(
 
     _maybe_set_distribution_completed(req)
     _maybe_complete_request(req)
+    if req.status == STATUS_DONE:
+        await record_operational_charge(
+            session,
+            tenant_id=tenant_id,
+            seller_id=req.seller_id,
+            source_type="inbound_intake",
+            source_id=req.id,
+            source="inbound",
+            service_code="inbound",
+            quantity=Decimal(sum(ln.posted_qty for ln in req.lines)),
+            occurred_at=req.posted_at or datetime.now(UTC),
+            performer_id=performer_id,
+        )
     await session.commit()
     await session.refresh(req)
     return req

@@ -1258,6 +1258,7 @@ async def putaway_inbound_box(
             box_id,
             storage_location_id=body.storage_location_id,
             line_items=line_items,
+            performer_id=user.id,
         )
     except InboundIntakeError as exc:
         if exc.code == "request_not_found":
@@ -1989,7 +1990,9 @@ async def complete_distribution(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeRequestOut:
     try:
-        await svc.complete_distribution(session, user.tenant_id, request_id)
+        await svc.complete_distribution(
+            session, user.tenant_id, request_id, performer_id=user.id
+        )
     except InboundIntakeError as exc:
         if exc.code == "request_not_found":
             raise HTTPException(

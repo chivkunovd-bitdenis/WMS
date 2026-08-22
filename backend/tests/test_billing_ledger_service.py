@@ -76,3 +76,27 @@ async def test_repeated_operational_charge_returns_existing_entry() -> None:
 
     assert result is existing
     session.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_tariff_period_uses_moscow_calendar_date() -> None:
+    session = _savepoint_session()
+    session.add = Mock()
+    tariff = Mock(id=uuid.uuid4(), amount=Decimal("10.00"), unit="item")
+    session.scalar = AsyncMock(side_effect=[None, tariff])
+
+    entry = await record_operational_charge(
+        session,
+        tenant_id=uuid.uuid4(),
+        seller_id=None,
+        source_type="inbound_intake",
+        source_id=uuid.uuid4(),
+        source="inbound",
+        service_code="inbound",
+        quantity=Decimal("2"),
+        occurred_at=datetime(2026, 2, 28, 21, 30, tzinfo=UTC),
+        performer_id=None,
+    )
+
+    assert entry.tariff_version_id == tariff.id
+    assert session.add.call_args.args[0] is entry

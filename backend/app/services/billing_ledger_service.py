@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.billing import BillingLedgerEntry, BillingTariffVersion
+
+MOSCOW = ZoneInfo("Europe/Moscow")
 
 
 async def record_operational_charge(
@@ -36,7 +39,7 @@ async def record_operational_charge(
     if existing is not None:
         return existing
 
-    fact_date = occurred_at.astimezone(UTC).date()
+    fact_date = occurred_at.astimezone(MOSCOW).date()
     tariff = await session.scalar(
         select(BillingTariffVersion)
         .where(
@@ -70,13 +73,13 @@ async def record_operational_charge(
         amount=amount,
         occurred_at=occurred_at,
     )
-    session.add(entry)
     # The unique source-event constraint is the concurrency guard.  Flush in a
     # savepoint so a concurrent finalisation can safely turn its constraint
     # error into the already committed ledger row without aborting the caller's
     # warehouse transaction.
     nested = await session.begin_nested()
     try:
+        session.add(entry)
         await session.flush()
     except IntegrityError:
         await nested.rollback()
