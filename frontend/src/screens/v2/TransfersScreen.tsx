@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEventHandler } from 'react'
+import { useEffect, useMemo, useState, type FormEventHandler } from 'react'
 import {
   Alert,
   Button,
@@ -38,6 +38,14 @@ export function TransfersScreen({
   const [productId, setProductId] = useState('')
   const [quantity, setQuantity] = useState('')
   const [lastTransfer, setLastTransfer] = useState<TransferSummary | null>(null)
+  const [pendingTransfer, setPendingTransfer] = useState<TransferSummary | null>(null)
+
+  useEffect(() => {
+    if (pendingTransfer && !opsBusy) {
+      if (!opsError) setLastTransfer(pendingTransfer)
+      setPendingTransfer(null)
+    }
+  }, [opsBusy, opsError, pendingTransfer])
 
   const fromLabel = useMemo(
     () => locations.find((loc) => loc.id === fromLoc)?.code ?? '',
@@ -85,7 +93,7 @@ export function TransfersScreen({
       event.preventDefault()
       return
     }
-    setLastTransfer({ quantity: quantityNumber, product: productLabel, from: fromLabel, to: toLabel })
+    setPendingTransfer({ quantity: quantityNumber, product: productLabel, from: fromLabel, to: toLabel })
     onStockTransfer(event)
   }
 
