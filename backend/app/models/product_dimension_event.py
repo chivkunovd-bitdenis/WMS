@@ -16,6 +16,7 @@ from sqlalchemy import (
     Text,
     Uuid,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -44,7 +45,7 @@ class ProductDimensionEvent(Base):
             "product_id",
             unique=True,
             postgresql_where="applied = true",
-            sqlite_where="applied = 1",
+            sqlite_where=text("applied = 1"),
         ),
     )
 
