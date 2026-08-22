@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -117,7 +118,7 @@ def _parse_title(card: dict[str, Any]) -> str | None:
     return None
 
 
-def _parse_dimensions_mm(item: dict) -> tuple[int | None, int | None, int | None]:
+def _parse_dimensions_mm(item: dict[str, Any]) -> tuple[int | None, int | None, int | None]:
     """Габариты из карточки WB. WB отдаёт сантиметры, храним миллиметры.
 
     Возвращает (length_mm, width_mm, height_mm); None там, где WB не дал значения.
@@ -271,6 +272,8 @@ async def upsert_products_from_wb_cards(
                             card_length_mm, card_width_mm, card_height_mm
                         )
                         p.dimensions_source = "wb"
+                        p.dimensions_updated_at = datetime.now(UTC)
+                        p.dimensions_updated_by_user_id = None
                         await _record_dimension_event(
                             session,
                             p,
@@ -350,6 +353,8 @@ async def upsert_products_from_wb_cards(
                 if not protected_manual_measurement:
                     p.volume_liters = wb_volume_liters
                     p.dimensions_source = "wb"
+                    p.dimensions_updated_at = datetime.now(UTC)
+                    p.dimensions_updated_by_user_id = None
             # Same rule for country of origin / shelf life: WB card fills the gap,
             # never overwrites a value already present (e.g. entered by hand).
             if p.wb_country_of_origin is None and card_country is not None:

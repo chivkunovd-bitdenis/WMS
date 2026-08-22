@@ -842,6 +842,8 @@ async def restore_latest_wb_dimensions(session: AsyncSession, tenant_id: uuid.UU
     p.length_mm, p.width_mm, p.height_mm = event.length_mm, event.width_mm, event.height_mm
     p.volume_liters = volume_liters_from_mm(p.length_mm, p.width_mm, p.height_mm)
     p.dimensions_source = "wb"
+    p.dimensions_updated_at = datetime.now(UTC)
+    p.dimensions_updated_by_user_id = None
     await _record_dimension_event(
         session, p, source="wb", author_user_id=None, length_mm=p.length_mm,
         width_mm=p.width_mm, height_mm=p.height_mm, weight_g=p.weight_g,
