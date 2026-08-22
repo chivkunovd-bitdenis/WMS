@@ -1,16 +1,23 @@
 ## Изменённые файлы
 
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/App.tsx
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/layouts/AuthedAppLayout.tsx
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/screens.registry.json
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/apps/seller/SellerApp.tsx` — добавлен защищённый маршрут `/app/seller/reports` для селлера с `can_products`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/apps/seller/SellerLayout.tsx` — пункт «Отчёты» показывается только при праве `products`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/screens/ff/FfReportsPage.tsx` — колонка «Селлер» скрыта в seller-портале, где список селлеров пуст.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/screens.registry.json` — `S-33` дополнен фактически изменяемым экранным файлом.
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` — не завершён: локальный `npx` завис на запуске TypeScript и был остановлен без диагностического вывода.
-- `python3 scripts/ui/ui_guard.py` — красный из-за новых/существующих нарушений экран-монолита в `src/App.tsx` и других ранее изменённых экранах; базовая линия не обновлялась.
-- `npm run test:unit` — не запущен: `vitest: command not found`.
+- `python3 -m json.tool frontend/screens.registry.json` — зелёный.
+- `git diff --check` — зелёный.
+- `npx tsc --noEmit -p tsconfig.app.json` — не подтверждён: локальный бинарник `tsc` отсутствует, загрузка через `npx` недоступна.
+- `npm run test:unit` — не подтверждён: локальный бинарник `vitest` отсутствует.
+- `python3 scripts/ui/ui_guard.py` — красный из-за нарушений в несвязанных `src/App.tsx`, `src/components/WbProductPickerDialog.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx` и `src/screens/v2/SellerInboundDraftScreen.tsx`; для `FfReportsPage.tsx` guard зафиксировал улучшение (`своя-кнопка` и `своя-таблица`: 1 → 0). Базовая линия не изменялась.
 
 ## Не реализовано
 
-- Буквальное добавление пункта меню и маршрута в фактические `SellerApp`/`SellerLayout` не выполнено: эти файлы не входят в исходное поле `files` атома; реестр теперь явно фиксирует их как слой S-33 для следующего разрешённого прохода.
-- Ревью-находки по backend и экрану отчёта не относятся к разрешённым файлам этого атома и здесь не изменялись.
+- Полный Playwright-прогон не выполнен: в окружении отсутствуют локальные frontend-зависимости; маршруты и условия доступа проверены по коду.
+- Остальные находки `REVIEW.md` относятся к backend/API или другим атомам и в этот screen-dev проход не входят.
+
+## Находки
+
+- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались.

@@ -206,7 +206,7 @@ export function FfReportsPage({ token, sellers = [] }: Props) {
       { key: 'name', header: 'Название', width: 240, render: row => <TextCell value={row.product_name} /> },
       { key: 'vendor', header: 'Артикул продавца', width: 170, render: row => <TextCell value={row.wb_vendor_code ?? '—'} /> },
       { key: 'barcode', header: 'ШК', width: 150, render: row => <TextCell value={row.wb_barcode ?? '—'} /> },
-      { key: 'seller', header: 'Селлер', width: 150, render: row => <TextCell value={row.seller_name ?? '—'} /> },
+      ...(sellers.length > 0 ? [{ key: 'seller', header: 'Селлер', width: 150, render: row => <TextCell value={row.seller_name ?? '—'} /> }] : []),
       { key: 'balance', header: 'Остаток сейчас', align: 'right', render: row => <QtyCell value={row.current_balance ?? 0} /> },
       { key: 'in', header: 'Приход', align: 'right', render: row => <QtyCell value={row.total_in} /> },
       { key: 'out', header: 'Расход', align: 'right', render: row => <QtyCell value={row.total_out} /> },

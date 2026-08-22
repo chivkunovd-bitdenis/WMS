@@ -2666,7 +2666,8 @@
         "src/App.tsx",
         "src/layouts/AuthedAppLayout.tsx",
         "src/apps/seller/SellerApp.tsx",
-        "src/apps/seller/SellerLayout.tsx"
+        "src/apps/seller/SellerLayout.tsx",
+        "src/screens/ff/FfReportsPage.tsx"
       ],
       "zones": [
         "шапка",

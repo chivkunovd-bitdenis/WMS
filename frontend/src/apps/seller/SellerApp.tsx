@@ -16,6 +16,7 @@ import { SellerProductsStockScreen } from '../../screens/v2/SellerProductsStockS
 import { SellerHonestSignScreen } from '../../screens/v2/SellerHonestSignScreen'
 import { SellerSettingsScreen } from '../../screens/v2/SellerSettingsScreen'
 import { NotificationsPage } from '../../screens/shared/NotificationsPage'
+import { FfReportsPage } from '../../screens/ff/FfReportsPage'
 import { SellerLayout } from './SellerLayout'
 
 type InboundSummaryRow = {
@@ -460,6 +461,16 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                   token={token}
                   authHeaders={authHeaders}
                 />
+              ) : (
+                accessDenied
+              )
+            }
+          />
+          <Route
+            path="/reports"
+            element={
+              token && sellerPermissions.products ? (
+                <FfReportsPage key={catalogScopeKey} token={token} sellers={[]} />
               ) : (
                 accessDenied
               )

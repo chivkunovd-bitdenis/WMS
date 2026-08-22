@@ -1,26 +1,23 @@
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/app/models/warehouse.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/app/services/reporting_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/alembic/versions/20260822_0095_warehouse_operational_flag.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/tests/test_reports_csv_export.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/apps/seller/SellerApp.tsx` — добавлен защищённый маршрут `/app/seller/reports` для селлера с `can_products`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/apps/seller/SellerLayout.tsx` — пункт «Отчёты» показывается только при праве `products`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/screens/ff/FfReportsPage.tsx` — колонка «Селлер» скрыта в seller-портале, где список селлеров пуст.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/screens.registry.json` — `S-33` дополнен фактически изменяемым экранным файлом.
 
 ## Гейты
 
-- `ruff check` по изменённым backend-файлам — пройден после форматирования.
-- `mypy` по изменённым model/service/api — пройден.
-- `pytest -q backend/tests/test_reports_csv_export.py` — пройдено, 2 passed.
-- `python3 scripts/ci/back_guard.py` — не запущен: скрипт отсутствует в этой рабочей копии.
-- `python3 scripts/ci/check_migrations.py` — не запущен: скрипт отсутствует в этой рабочей копии.
-- Полный `ruff check .` — не пройден из-за 83 ранее существующих нарушений вне изменённых файлов.
+- `python3 -m json.tool frontend/screens.registry.json` — зелёный.
+- `git diff --check` — зелёный.
+- `npx tsc --noEmit -p tsconfig.app.json` — не подтверждён: локальный бинарник `tsc` отсутствует, загрузка через `npx` недоступна.
+- `npm run test:unit` — не подтверждён: локальный бинарник `vitest` отсутствует.
+- `python3 scripts/ui/ui_guard.py` — красный из-за нарушений в несвязанных `src/App.tsx`, `src/components/WbProductPickerDialog.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx` и `src/screens/v2/SellerInboundDraftScreen.tsx`; для `FfReportsPage.tsx` guard зафиксировал улучшение (`своя-кнопка` и `своя-таблица`: 1 → 0). Базовая линия не изменялась.
 
 ## Не реализовано
 
-- API-эндпоинт CSV уже был добавлен предыдущим атомом; в этом проходе исправлены общие backend-фильтры, от которых зависит его честное совпадение с таблицей.
-- Дополнительная seeded-проверка строк CSV с непустым срезом не добавлялась: текущие API-тесты создают только организацию без складских движений.
-- Обнаруженные в окружении отсутствующие guard-скрипты не восстанавливались, чтобы не расширять атом.
-- Коммит невозможен в текущем sandbox: Git не может создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-07-reporting1/index.lock` (`Operation not permitted`). Изменения остаются в этой рабочей копии и требуют коммита владельцем окружения.
+- Полный Playwright-прогон не выполнен: в окружении отсутствуют локальные frontend-зависимости; маршруты и условия доступа проверены по коду.
+- Остальные находки `REVIEW.md` относятся к backend/API или другим атомам и в этот screen-dev проход не входят.
 
 ## Находки
 
-- Секреты, токены, `.env` и кабинеты учётных данных не читались.
+- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались.
