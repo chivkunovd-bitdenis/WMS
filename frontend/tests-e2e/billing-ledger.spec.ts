@@ -5,12 +5,13 @@ test('billing ledger preserves filters and month context', async ({ page }) => {
   let lastLedgerUrl = ''
   await page.route('**/api/billing/ledger**', async (route) => {
     lastLedgerUrl = route.request().url()
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 'entry-1', occurred_at: '2026-08-18T00:00:00Z', seller_name: 'Луна', service_code: 'inbound', document_number: 'ПР-000184', quantity: 38, unit: 'item', rate: 12, amount: 456, performer_name: 'Анна К.', problem: null }]) })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ entries: [{ id: 'entry-1', occurred_at: '2026-08-18T00:00:00Z', seller_name: 'Луна', service_code: 'inbound', document_number: 'ПР-000184', quantity: 38, unit: 'item', rate: 12, amount: 456, performer_name: 'Анна К.', problem: null }] }) })
   })
   await page.goto('/app/ff/billing')
   await expect(page.getByTestId('ff-billing-screen')).toBeVisible()
   await expect(page.getByText('ПР-000184')).toBeVisible()
-  await expect.poll(() => new URL(lastLedgerUrl).searchParams.get('date')).toMatch(/^\d{4}-\d{2}-01$/)
+  await expect.poll(() => new URL(lastLedgerUrl).searchParams.get('period')).toMatch(/^\d{4}-\d{2}$/)
+  await expect.poll(() => new URL(lastLedgerUrl).searchParams.has('date')).toBe(false)
   await expect.poll(() => new URL(lastLedgerUrl).searchParams.has('seller_id')).toBe(false)
   await page.getByTestId('filter-search').fill('ПР-000184')
   await expect.poll(() => new URL(lastLedgerUrl).searchParams.get('document_number')).toBe('ПР-000184')
@@ -22,7 +23,7 @@ test('billing ledger preserves filters and month context', async ({ page }) => {
 
 // S-31-TC-005 — Given completed work, When switching to performers, Then money columns are absent.
 test('billing ledger performer mode hides money columns', async ({ page }) => {
-  await page.route('**/api/billing/ledger**', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 'entry-2', occurred_at: '2026-08-18T00:00:00Z', seller_name: 'Луна', service_code: 'inbound', document_number: 'ПР-000184', quantity: 2, unit: 'item', rate: 12, amount: 24, performer_name: 'Анна К.', problem: null }]) }))
+  await page.route('**/api/billing/ledger**', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ entries: [{ id: 'entry-2', occurred_at: '2026-08-18T00:00:00Z', seller_name: 'Луна', service_code: 'inbound', document_number: 'ПР-000184', quantity: 2, unit: 'item', rate: 12, amount: 24, performer_name: 'Анна К.', problem: null }] }) }))
   await page.goto('/app/ff/billing')
   await page.getByTestId('billing-mode').click()
   await page.getByRole('option', { name: 'По исполнителям' }).click()
@@ -33,7 +34,7 @@ test('billing ledger performer mode hides money columns', async ({ page }) => {
 
 // S-31-TC-012 — Given a completed operation without a tariff, Then it remains visible and is marked as actionable.
 test('billing ledger shows unpriced operation without blocking it', async ({ page }) => {
-  await page.route('**/api/billing/ledger**', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 'entry-3', occurred_at: '2026-08-19T00:00:00Z', seller_name: 'Север', service_code: 'marketplace_outbound', document_number: 'ОТГ-000092', quantity: 1, unit: 'document', rate: null, amount: null, performer_name: 'Игорь М.', problem: 'unpriced' }]) }))
+  await page.route('**/api/billing/ledger**', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ entries: [{ id: 'entry-3', occurred_at: '2026-08-19T00:00:00Z', seller_name: 'Север', service_code: 'marketplace_outbound', document_number: 'ОТГ-000092', quantity: 1, unit: 'document', rate: null, amount: null, performer_name: 'Игорь М.', problem: 'unpriced' }] }) }))
   await page.goto('/app/ff/billing')
   await expect(page.getByText('Нет тарифа')).toBeVisible()
   await expect(page.getByText('ОТГ-000092')).toBeVisible()
@@ -46,7 +47,7 @@ test('billing ledger clears stale rows on load error', async ({ page }) => {
   await page.route('**/api/billing/ledger**', async (route) => {
     requestCount += 1
     if (requestCount === 1) {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 'entry-stale', occurred_at: '2026-08-18T00:00:00Z', seller_name: 'Луна', service_code: 'inbound', document_number: 'ПР-000184', quantity: 1, unit: 'document', rate: 12, amount: 12, performer_name: 'Анна К.', problem: null }]) })
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ entries: [{ id: 'entry-stale', occurred_at: '2026-08-18T00:00:00Z', seller_name: 'Луна', service_code: 'inbound', document_number: 'ПР-000184', quantity: 1, unit: 'document', rate: 12, amount: 12, performer_name: 'Анна К.', problem: null }] }) })
       return
     }
     await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })
@@ -56,4 +57,20 @@ test('billing ledger clears stale rows on load error', async ({ page }) => {
   await page.getByTestId('billing-period').locator('input').fill('2026-07')
   await expect(page.getByTestId('billing-error')).toBeVisible()
   await expect(page.getByText('ПР-000184')).toHaveCount(0)
+})
+
+// S-31-TC-006 — Given a fixed storage charge, When the admin filters storage, Then the canonical service code is sent and no technical code is shown.
+test('billing ledger uses the canonical storage service code', async ({ page }) => {
+  let lastLedgerUrl = ''
+  await page.route('**/api/billing/ledger**', async (route) => {
+    lastLedgerUrl = route.request().url()
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ entries: [{ id: 'entry-storage', occurred_at: '2026-08-20T00:00:00Z', seller_name: 'Луна', service_code: 'storage_liter_day', document_number: 'Расчёт хранения за август', quantity: 84200, unit: 'liter_day', rate: 0.08, amount: 6736, performer_name: null, problem: null }] }) })
+  })
+
+  await page.goto('/app/ff/billing')
+  await expect(page.getByText('Хранение', { exact: true })).toBeVisible()
+  await expect(page.getByText('storage_liter_day')).toHaveCount(0)
+  await page.getByTestId('billing-service').click()
+  await page.getByRole('option', { name: 'Хранение' }).click()
+  await expect.poll(() => new URL(lastLedgerUrl).searchParams.get('service_code')).toBe('storage_liter_day')
 })

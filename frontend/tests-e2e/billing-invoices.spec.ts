@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 
-const invoice = { id: 'invoice-1', number: 'СЧ-2026-00041', period: '2026-07', seller_name: 'Луна', issued_at: '2026-08-01T00:00:00Z', total_amount: 48392, status: 'issued', ff_profile: { legal_name: 'ООО «Фулфилмент Волна»', inn: '7701234567' }, seller_profile: { legal_name: 'ООО «Луна Трейд»', inn: '7812345678' }, lines: [{ id: 'line-1', service_code: 'inbound', unit: 'item', quantity: 1245, rate: 12, amount: 14940, documents: [{ date: '2026-07-20', number: 'ПР-000141', quantity: 84, amount: 1008 }] }] }
+const invoice = { id: 'invoice-1', number: 'СЧ-2026-00041', period: '2026-07', seller_name: 'Луна', issued_at: '2026-08-01T00:00:00Z', total_amount: 48392, status: 'issued', ff_profile: { legal_name: 'ООО «Фулфилмент Волна»', inn: '7701234567' }, seller_profile: { legal_name: 'ООО «Луна Трейд»', inn: '7812345678' }, lines: [{ id: 'line-1', service_code: 'inbound', unit: 'item', quantity: 1245, rate: 12, amount: 14940, documents: [{ date: '2026-07-20', number: 'ПР-000141', quantity: 84, amount: 1008 }] }, { id: 'line-storage', service_code: 'storage_liter_day', unit: 'liter_day', quantity: 181900, rate: 0.08, amount: 14552, documents: [{ date: '2026-07-31', number: 'technical-storage-uuid', quantity: 181900, amount: 14552 }] }] }
 
 // S-31-TC-013 — Given invoice formation is blocked, When the invoices endpoint returns its run issue, Then the admin sees the cause and its corrective action.
 test('billing invoices show server-side formation issues separate from invoices', async ({ page }) => {
@@ -29,6 +29,10 @@ test('billing invoice opens, reveals documents and starts print', async ({ page 
   await page.getByRole('button', { name: 'Показать документы' }).click()
   await expect(page.getByTestId('billing-invoice-documents')).toContainText('ПР-000141')
   await expect(page.getByTestId('billing-invoice-documents')).toContainText('84')
+  await page.getByRole('button', { name: 'Показать документы' }).nth(1).click()
+  await expect(page.getByTestId('billing-invoice-documents')).toContainText('Расчёт хранения за июль 2026 г.')
+  await expect(page.getByTestId('billing-invoice-documents')).not.toContainText('technical-storage-uuid')
+  await expect(page.getByRole('dialog', { name: /Счёт СЧ-2026-00041/ })).not.toContainText('storage_liter_day')
   const printWindow = page.waitForEvent('popup')
   await Promise.all([
     printWindow,
