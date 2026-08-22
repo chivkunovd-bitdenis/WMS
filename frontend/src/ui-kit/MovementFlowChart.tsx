@@ -36,7 +36,7 @@ function pointsFor(values: number[], maximum: number) {
 
 function LegendItem({ label, tone, dashed = false }: { label: string; tone: 'inbound' | 'outbound' | 'previous'; dashed?: boolean }) {
   return (
-    <Stack direction="row" spacing={0.75} alignItems="center" component="span">
+    <Stack direction="row" spacing={0.75} component="span" sx={{ alignItems: 'center' }}>
       <Box
         component="span"
         aria-hidden="true"
@@ -81,14 +81,14 @@ export function MovementFlowChart({
         <Skeleton variant="rounded" height={180} sx={{ mt: 1 }} data-testid={testId ? `${testId}-skeleton` : undefined} />
       ) : !hasMovement ? (
         <Box sx={{ py: 5, textAlign: 'center' }}>
-          <Typography fontWeight={600}>{empty.title}</Typography>
+          <Typography sx={{ fontWeight: 600 }}>{empty.title}</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             {empty.hint}
           </Typography>
         </Box>
       ) : (
         <>
-          <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap sx={{ mt: 1 }} aria-label="Легенда графика">
+          <Stack direction="row" spacing={2} sx={{ mt: 1, flexWrap: 'wrap', gap: 2 }} aria-label="Легенда графика">
             <LegendItem label="Приход" tone="inbound" />
             <LegendItem label="Расход" tone="outbound" />
             {hasPrevious ? <LegendItem label="Расход, прошлый период" tone="previous" dashed /> : null}
