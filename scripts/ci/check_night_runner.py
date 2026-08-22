@@ -414,6 +414,21 @@ def main() -> int:
             проверь("dev: второй промпт не содержит первый атом",
                     "frontend atom" in вызовы_dev[1][1] and "backend atom" not in вызовы_dev[1][1], True)
 
+            (t / "DEV.md").unlink()
+            (t / "REVIEW.md").write_text(
+                "ВЕРДИКТ: НАХОДКИ 1\n\n## Находки\nbackend/app/a.py:1 — broken\n",
+                encoding="utf-8")
+            вызовы_dev.clear()
+            with mock.patch.object(n, "шаг", side_effect=fake_step), \
+                 mock.patch.object(n, "сохранить_checkpoint", return_value=(True, "sha")), \
+                 mock.patch.object(n, "журнал"):
+                проверь("rework: атомы получили находки reviewer", n.разработать_по_фичам(
+                    "x", t, t, рабочая, 1)[0], True)
+            проверь("rework: REVIEW.md передан разработчику",
+                    all("REVIEW.md" in дополнение and "ПЕРЕДЕЛКА ПО НАХОДКАМ" in дополнение
+                        for _, дополнение in вызовы_dev), True)
+            проверь("rework: вердикт не удалён до исправления", (t / "REVIEW.md").exists(), True)
+
             (t / "RAZBOR.md").write_text("## Тип\nбаг\n## Экраны\n- S-03\n", encoding="utf-8")
             проверь("тип читается", n.поле(t, "RAZBOR.md", "Тип").strip(), "баг")
             проверь("машинный тип из разбора", n.тип_карточки(t), "баг")
