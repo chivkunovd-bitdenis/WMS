@@ -1,27 +1,35 @@
-# DEV · 03-no-distribution-mode · атом 2
+# DEV · 03-no-distribution-mode · атом 3
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/services/fbs_packing_box_service.py` — при явном выключении режима legacy-ключ переведён в нейтральный ключ совместимости; отложенный повтор исходного `create_boxes(..., without_distribution=true)` по прежнему ключу находит тот же короб, не создаёт дубль и не включает режим повторно.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/tests/test_fbs_packing_box.py` — регрессия последовательности «создать короб без распределения → выключить режим → повторить исходное создание»: проверяет один и тот же короб, выключенный режим и сохранённую возможность идемпотентного поиска.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/night/volna-9-recovery/cards/03-no-distribution-mode/DEV.md` — этот отчёт.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/api/fbs_supplies.py` — `POST /operations/fbs-supplies/{supply_id}/boxes-without-distribution` принимает `enabled`, вызывает сервис и возвращает обновлённый workspace; доменный конфликт назначенных заказов отображается как `409 boxes_already_distributed`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/services/fbs_workspace_service.py` — workspace получает `supply.boxes_without_distribution` из сохраняемого состояния поставки, в том числе без коробов.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/app/services/fbs_packing_box_service.py` — исправлена серверная находка ревью: выключение режима сохраняет адресуемость legacy-ключа для повторного `POST /boxes`, поэтому повтор возвращает исходный короб и не создаёт дубль.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/tests/test_fbs_packing_box.py` — покрыты API-возврат workspace, сохранение флага после повторного чтения, конфликт при назначенном заказе и регрессия идемпотентного повтора после выключения режима.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/night/volna-9-recovery/cards/03-no-distribution-mode/DEV.md` — отчёт backend-разработки.
+
+## Миграции
+
+- Нет: атом 3 использует добавляющие поля из атома 1 и не меняет схему.
+
+## Тесты
+
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/tests/test_fbs_packing_box.py` — API-переключение на пустой поставке, устойчивость флага при пустом списке коробов, `409` при назначении и безопасный повтор создания после выключения режима.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend/tests/test_fbs_openapi_contract.py` — контракт OpenAPI для FBS API.
 
 ## Гейты
 
-- `ruff check app/services/fbs_packing_box_service.py tests/test_fbs_packing_box.py` — PASS.
-- `ruff check .` — FAIL: 80 ранее существовавших ошибок в несвязанных файлах; изменённые файлы в выводе отсутствуют.
-- `mypy .` — FAIL: 21 ранее существовавшая ошибка в 6 несвязанных файлах; изменённые файлы атома в выводе отсутствуют.
-- `pytest -q tests/test_fbs_packing_box.py -k 'toggle_preserves_legacy_key_for_create_retry'` — PASS: `1 passed, 10 deselected`.
-- `pytest` — запущен: собрал 822 теста, но исполнитель завершил вывод без итоговой строки после начала прогона; результат полного прогона не подтверждён. Целевой регрессионный тест завершился успешно.
-- `python3 scripts/ci/back_guard.py` — NOT RUN: файла `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/scripts/ci/back_guard.py` нет.
-- `python3 scripts/ci/check_migrations.py` — NOT RUN: файла `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/scripts/ci/check_migrations.py` нет.
+- `ruff check .` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend` — FAIL: 80 существующих ошибок в несвязанных файлах; файлов этого атома в диагностике нет.
+- `mypy .` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend` — FAIL: 21 существующая ошибка в 6 несвязанных файлах; файлов этого атома в диагностике нет.
+- `pytest -q tests/test_fbs_packing_box.py tests/test_fbs_openapi_contract.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend` — PASS: целевой запуск завершился без ошибок.
+- `pytest` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode/backend` — запуск начат, собраны 822 теста; исполнитель прекратил передачу вывода во время прогона, итоговая строка не получена.
+- `python3 scripts/ci/back_guard.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode` — NOT RUN: файла `scripts/ci/back_guard.py` в этой рабочей копии нет.
+- `python3 scripts/ci/check_migrations.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-03-no-distribution-mode` — NOT RUN: файла `scripts/ci/check_migrations.py` в этой рабочей копии нет.
 
 ## Не реализовано
 
-- Находка `REVIEW.md` о browser E2E относится к фронтенд-слою и этому backend-атому не принадлежит.
-- Миграций нет: изменение использует существующее поле поставки и только сохраняет идемпотентность legacy-ключа.
+- Находка `REVIEW.md` о browser E2E относится к `frontend/tests-e2e/ff-fbs-supply.spec.ts` и экрану S-03; она вне разрешённой backend-роли и этого атома.
 
 ## Находки
 
-- Секреты, ключи, токены и `.env` не читались.
-- Git commit не создан: Git не смог открыть lock-файл `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-03-no-distribution-mode1/index.lock` (`Operation not permitted`). Изменения существуют только в локальном незакоммиченном рабочем дереве.
+- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались.
