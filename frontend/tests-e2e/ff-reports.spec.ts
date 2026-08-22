@@ -58,4 +58,24 @@ test('FF reports: section opens and shows movement summary for a product with in
   await expect(page.getByTestId(`ff-reports-row-${seed.productId}`)).toBeVisible()
   await page.getByTestId('ff-reports-search').fill('нет-такого-товара-xyz')
   await expect(page.getByTestId('ff-reports-table')).toContainText('движений не найдено')
+
+  // TC-NEW-F07-011 — grouping changes only the server table query; the summary stays visible.
+  await expect(page.getByTestId('ff-reports-download-csv')).toBeDisabled()
+  await page.getByTestId('ff-reports-download-csv').hover()
+  await expect(page.getByText('За выбранный период нечего выгружать')).toBeVisible()
+  await page.getByTestId('ff-reports-search').fill('Box Product')
+  const metrics = await page.getByTestId('ff-reports-metrics').innerText()
+  await page.getByTestId('ff-reports-grouping').click()
+  await page.getByRole('option', { name: 'По операциям' }).click()
+  await expect(page.getByTestId('ff-reports-table')).toContainText('Приёмка')
+  await expect(page.getByTestId('ff-reports-metrics')).toHaveText(metrics)
+  await page.getByTestId('ff-reports-grouping').click()
+  await page.getByRole('option', { name: 'По товарам' }).click()
+
+  // TC-NEW-F07-012 — export is a server CSV, not an HTML/XLS download.
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByTestId('ff-reports-download-csv').click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toBe('inventory-report.csv')
+  expect(await download.createReadStream()).not.toBeNull()
 })

@@ -38,7 +38,27 @@ type Row = {
   total_in: number
   total_out: number
   net: number
+  // The first reporting API revision used the shorter names below. Keep the
+  // screen tolerant while the deployed backend rolls forward; rendering still
+  // uses one canonical shape.
+  sku?: string
+  name?: string
+  vendor_code?: string | null
+  barcode?: string | null
+  in_qty?: number
+  out_qty?: number
 }
+
+const normalizeRow = (row: Row): Row => ({
+  ...row,
+  sku_code: row.sku_code ?? row.sku ?? '—',
+  product_name: row.product_name ?? row.name ?? '—',
+  wb_vendor_code: row.wb_vendor_code ?? row.vendor_code ?? null,
+  wb_barcode: row.wb_barcode ?? row.barcode ?? null,
+  total_in: row.total_in ?? row.in_qty ?? 0,
+  total_out: row.total_out ?? row.out_qty ?? 0,
+  net: row.net ?? (row.in_qty ?? 0) - (row.out_qty ?? 0),
+})
 
 const dateString = (date: Date) => date.toISOString().slice(0, 10)
 const monthStart = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`
@@ -90,7 +110,7 @@ export function FfReportsPage({ token, sellers = [] }: Props) {
     })
     if (!response.ok) throw new Error('table')
     const result = (await response.json()) as { rows?: Row[]; total?: number }
-    setRows(result.rows ?? [])
+    setRows((result.rows ?? []).map(normalizeRow))
     setTotal(result.total ?? 0)
   }, [params, token])
 

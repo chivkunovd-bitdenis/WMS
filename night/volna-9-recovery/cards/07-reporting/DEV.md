@@ -1,16 +1,17 @@
 ## Изменённые файлы
 
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/screens/ff/FfReportsPage.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/DEV.md`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/tests-e2e/ff-reports.spec.ts`
+
+Экран атома 11 сохраняет серверную пагинацию по 50 строк, переключает группировку без перезагрузки верхней сводки и скачивает серверный CSV. Добавлена нормализация коротких имён полей старого ответа API, чтобы таблица не показывала пустые SKU и количества при переходном backend-контракте. E2E-сценарий проверяет пустой период, обе группировки, неизменность показателей и имя CSV-файла.
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` — не подтверждён: локальный `tsc` отсутствует, `npx` завис на разрешении инструмента и был остановлен без вывода ошибки.
-- `python3 scripts/ui/ui_guard.py` — красный из-за четырёх ранее существовавших нарушений в чужих файлах (`src/App.tsx`, `src/components/WbProductPickerDialog.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`). Для `FfReportsPage.tsx` guard показал улучшение: собственная кнопка `1 → 0`, собственная таблица `1 → 0`. Baseline не изменялся.
-- `npm run test:unit` — не запущен: в окружении отсутствует команда `vitest` (`vitest: command not found`).
+- `npx tsc --noEmit -p tsconfig.app.json` — команда не завершилась в доступном окружении и не вывела ошибок; итоговый зелёный статус не подтверждён.
+- `python3 scripts/ui/ui_guard.py` — красный из-за новых/существующих нарушений в `src/App.tsx`, `src/components/WbProductPickerDialog.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`; в изменённом `FfReportsPage.tsx` нарушений стало меньше (`своя-кнопка` и `своя-таблица`: 1 → 0).
+- `npm run test:unit` — не запустился: `vitest: command not found`.
 
 ## Не реализовано
 
-- Прошлая линия графика не подключена буквально: текущий API-ответ экрана не содержит дневную серию предыдущего периода, а backend-файлы находятся вне разрешённых файлов этого screen-dev атома.
-- Backend-находки ревьюера (seller/warehouse/search scope, схема ответа, CSV, миграция, API-тесты), seller-маршрут и исправление `screens.registry.json` не менялись: они находятся за пределами разрешённых файлов этого атома.
-- Полная проверка Playwright не выполнялась: задача ограничена экранным исправлением, а обязательные локальные зависимости для unit/TypeScript отсутствуют.
+- Полный E2E-прогон и проверка второй страницы не подтверждены: в локальном окружении отсутствуют зависимости для unit-тестов, а текущая seeded-сценарная выборка содержит меньше 50 строк.
+- Находки ревью по backend, маршрутизации SellerApp, миграции и сводке не менялись: они находятся вне файлов и границ атома 11.
