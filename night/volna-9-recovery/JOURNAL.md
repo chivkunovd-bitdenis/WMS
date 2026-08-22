@@ -74,3 +74,8 @@
 20:28   05-prod-slow · dev: фича 6/7 сохранена 2378125f3405
 20:33   05-prod-slow · screen-dev: готово
 20:33   05-prod-slow · dev: фича 7/7 сохранена d6b517d10121
+20:41   05-prod-slow · reviewer: готово
+20:41   05-prod-slow · reviewer: Terra-rework не закрыл вердикт — эскалация Sol
+20:41   05-prod-slow · reviewer: находки, круг 2 — назад к разработке
+21:21   05-prod-slow · backend-dev: нет файла DEV.md (код 124, попытка 1)
+21:25   05-prod-slow · backend-dev: готово
