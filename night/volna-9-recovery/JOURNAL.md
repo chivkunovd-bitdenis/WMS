@@ -144,3 +144,5 @@
 00:51   01-wb-marking · dev: фича 2/5 сохранена 78c984989170
 01:26   01-wb-marking · resume: поатомный rework Sol по сохранённым находкам
 01:28   01-wb-marking · backend-dev: готово
+01:28   01-wb-marking · dev: фича 1/5 сохранена fa4bf5bf4503
+01:31   01-wb-marking · backend-dev: готово
