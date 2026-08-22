@@ -54,6 +54,14 @@ export function ErrorNotice({ children, testId }: { children: ReactNode; testId?
   )
 }
 
+export function WarningNotice({ children, testId }: { children: ReactNode; testId?: string }) {
+  return (
+    <Alert severity="warning" sx={{ mb: 2 }} data-testid={testId}>
+      {children}
+    </Alert>
+  )
+}
+
 // Канон R-01/R-02: шапка экрана — название и одна строка о назначении. Больше в ней ничего.
 export function ScreenHeader({ title, purpose }: { title: string; purpose?: string }) {
   return (

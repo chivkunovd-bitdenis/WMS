@@ -6,7 +6,7 @@ export { PrimaryAction, SecondaryAction, DangerAction, IconAction, ActionGroup, 
 export type { Printable } from './Actions'
 export { DataTable } from './DataTable'
 export type { Column } from './DataTable'
-export { EmptyState, TableSkeletonBody, ErrorNotice, ScreenHeader } from './States'
+export { EmptyState, TableSkeletonBody, ErrorNotice, WarningNotice, ScreenHeader } from './States'
 export { QtyCell, PlanFactCell, TextCell, ProductCell } from './Cells'
 export { FilterBar } from './FilterBar'
 export { ScannerLine } from './ScannerLine'
