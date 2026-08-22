@@ -48,3 +48,5 @@
 15:19   03-no-distribution-mode · reviewer: готово
 15:19   03-no-distribution-mode · reviewer: находки, круг 2 — назад к разработке
 15:25   03-no-distribution-mode · backend-dev: готово
+15:25   03-no-distribution-mode · dev: фича 1/4 сохранена b66e70570bdd
+15:38   03-no-distribution-mode · backend-dev: готово

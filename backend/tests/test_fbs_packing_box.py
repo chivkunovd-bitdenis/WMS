@@ -253,6 +253,37 @@ async def test_legacy_create_boxes_toggle_rejects_existing_assignment(
 
 
 @pytest.mark.asyncio
+async def test_legacy_without_distribution_marker_still_blocks_assignment(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """TC-NEW-007: pre-migration mode remains effective after deployment."""
+    headers, supply_id, order_ids = await _packed_supply(async_client)
+    boxes_url = f"/operations/fbs-supplies/{supply_id}/boxes"
+    created = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={"count": 1, "idempotency_key": "legacy-compatible-box"},
+    )
+    assert created.status_code == 201, created.text
+    box_id = uuid.UUID(created.json()["boxes"][0]["id"])
+
+    async with SessionLocal() as session:
+        box = await session.get(FbsPackingBox, box_id)
+        assert box is not None
+        box.creation_idempotency_key = "no-distribution:legacy-compatible-box"
+        await session.commit()
+
+    assigned = await async_client.post(
+        f"{boxes_url}/{box_id}/orders",
+        headers=headers,
+        json={"order_ids": [str(order_ids[0])]},
+    )
+    assert assigned.status_code == 400, assigned.text
+    assert assigned.json()["detail"]["code"] == "box_without_distribution"
+
+
+@pytest.mark.asyncio
 async def test_without_distribution_mode_depends_on_assignments_not_box_count(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,

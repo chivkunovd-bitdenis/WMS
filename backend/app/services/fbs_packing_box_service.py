@@ -211,7 +211,7 @@ async def assign_orders(
 ) -> None:
     supply = await _get_supply(session, tenant_id, supply_id, for_update=True)
     box = await _get_box(session, tenant_id, supply_id, box_id)
-    if supply.boxes_without_distribution_at is not None:
+    if await _supply_without_distribution(session, supply):
         raise FbsPackingBoxError("box_without_distribution")
     if not order_ids:
         raise FbsPackingBoxError("empty_order_set")
