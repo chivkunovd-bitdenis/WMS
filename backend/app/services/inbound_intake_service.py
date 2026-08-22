@@ -433,6 +433,8 @@ async def patch_request_draft(
     planned_box_count_set: bool = False,
     waybill_number: str | None = None,
     waybill_number_set: bool = False,
+    warehouse_id: uuid.UUID | None = None,
+    warehouse_id_set: bool = False,
     seller_product_owner_id: uuid.UUID | None = None,
 ) -> InboundIntakeRequest:
     req = await get_request(
@@ -453,6 +455,13 @@ async def patch_request_draft(
         req.planned_box_count = planned_box_count
     if waybill_number_set:
         req.waybill_number = normalize_waybill_number(waybill_number)
+    if warehouse_id_set and warehouse_id is not None:
+        wh = await get_warehouse(session, tenant_id, warehouse_id)
+        if wh is None:
+            raise InboundIntakeError("warehouse_not_found")
+        if not wh.is_operational:
+            raise InboundIntakeError("invalid_warehouse")
+        req.warehouse_id = warehouse_id
     await session.commit()
     await session.refresh(req)
     return req

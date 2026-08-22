@@ -10,6 +10,7 @@ from inbound_box_intake_helpers import fulfill_inbound_via_box_scans, post_prima
 
 from app.db.session import SessionLocal
 from app.models.product import Product
+from app.models.warehouse import Warehouse
 
 
 async def _create_seller_headers(
@@ -1445,3 +1446,163 @@ async def test_inbound_receiving_lines_rejects_foreign_seller_product(
     )
     assert rejected.status_code == 422, rejected.text
     assert rejected.json()["detail"] == "product_seller_mismatch"
+
+
+# ---------------------------------------------------------------------------
+# S-28-TC-001: warehouse_id в PATCH черновика приёмки
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_patch_warehouse_id_saves_on_draft(async_client: AsyncClient) -> None:
+    """PATCH с warehouse_id=<второй операционный склад> на черновике → 200, поле обновлено."""
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": f"WH Switch Co {suffix}",
+            "slug": f"whswitch-{suffix}",
+            "admin_email": f"whswitch-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+
+    wh1 = await async_client.post(
+        "/warehouses", headers=ah, json={"name": "Север", "code": f"north-{suffix}"}
+    )
+    assert wh1.status_code == 200, wh1.text
+    wid1 = wh1.json()["id"]
+
+    wh2 = await async_client.post(
+        "/warehouses", headers=ah, json={"name": "Юг", "code": f"south-{suffix}"}
+    )
+    assert wh2.status_code == 200, wh2.text
+    wid2 = wh2.json()["id"]
+
+    base = "/operations/inbound-intake-requests"
+    cr = await async_client.post(base, headers=ah, json={"warehouse_id": wid1})
+    assert cr.status_code == 201, cr.text
+    rid = cr.json()["id"]
+    assert cr.json()["warehouse_id"] == wid1
+
+    patch = await async_client.patch(f"{base}/{rid}", headers=ah, json={"warehouse_id": wid2})
+    assert patch.status_code == 200, patch.text
+    assert patch.json()["warehouse_id"] == wid2
+
+
+@pytest.mark.asyncio
+async def test_patch_warehouse_id_rejected_after_submission(async_client: AsyncClient) -> None:
+    """PATCH с warehouse_id после передачи заявки (status != draft) → 409 not_draft."""
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": f"WH Switch Sub {suffix}",
+            "slug": f"whsub-{suffix}",
+            "admin_email": f"whsub-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+
+    seller = await async_client.post("/sellers", headers=ah, json={"name": "S"})
+    assert seller.status_code in (200, 201), seller.text
+    sid = seller.json()["id"]
+
+    wh1 = await async_client.post(
+        "/warehouses", headers=ah, json={"name": "Склад1", "code": f"sub-w1-{suffix}"}
+    )
+    assert wh1.status_code == 200, wh1.text
+    wid1 = wh1.json()["id"]
+
+    wh2 = await async_client.post(
+        "/warehouses", headers=ah, json={"name": "Склад2", "code": f"sub-w2-{suffix}"}
+    )
+    assert wh2.status_code == 200, wh2.text
+    wid2 = wh2.json()["id"]
+
+    # Создаём продукт и строку заявки, чтобы можно было отправить
+    pr = await async_client.post(
+        "/products",
+        headers=ah,
+        json={"name": "Товар", "sku_code": f"SKU-SUB-{suffix}", "seller_id": sid},
+    )
+    assert pr.status_code == 200, pr.text
+    pid = pr.json()["id"]
+
+    loc = await async_client.post(
+        f"/warehouses/{wid1}/locations",
+        headers=ah,
+        json={"code": f"LOC-SUB-{suffix}"},
+    )
+    assert loc.status_code == 200, loc.text
+    lid = loc.json()["id"]
+
+    base = "/operations/inbound-intake-requests"
+    cr = await async_client.post(base, headers=ah, json={"warehouse_id": wid1, "seller_id": sid})
+    assert cr.status_code == 201, cr.text
+    rid = cr.json()["id"]
+
+    await async_client.post(
+        f"{base}/{rid}/lines",
+        headers=ah,
+        json={"product_id": pid, "expected_qty": 1, "storage_location_id": lid},
+    )
+    await _set_planned_boxes(async_client, base, rid, ah)
+
+    sub = await async_client.post(f"{base}/{rid}/submit", headers=ah)
+    assert sub.status_code == 200, sub.text
+    assert sub.json()["status"] == "submitted"
+
+    # Теперь пытаемся сменить склад — должен вернуть 409
+    patch = await async_client.patch(f"{base}/{rid}", headers=ah, json={"warehouse_id": wid2})
+    assert patch.status_code == 409, patch.text
+    assert patch.json()["detail"] == "not_draft"
+
+
+@pytest.mark.asyncio
+async def test_patch_warehouse_id_non_operational_rejected(async_client: AsyncClient) -> None:
+    """PATCH с warehouse_id неоперационного склада → 422 invalid_warehouse."""
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": f"WH NonOp {suffix}",
+            "slug": f"whnop-{suffix}",
+            "admin_email": f"whnop-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+
+    wh1 = await async_client.post(
+        "/warehouses", headers=ah, json={"name": "Рабочий", "code": f"op-{suffix}"}
+    )
+    assert wh1.status_code == 200, wh1.text
+    wid1 = wh1.json()["id"]
+
+    wh2 = await async_client.post(
+        "/warehouses", headers=ah, json={"name": "Нерабочий", "code": f"nop-{suffix}"}
+    )
+    assert wh2.status_code == 200, wh2.text
+    wid2 = wh2.json()["id"]
+
+    # Выставляем второй склад неоперационным напрямую через БД
+    async with SessionLocal() as session:
+        wh_obj = await session.get(Warehouse, uuid.UUID(wid2))
+        assert wh_obj is not None
+        wh_obj.is_operational = False
+        await session.commit()
+
+    base = "/operations/inbound-intake-requests"
+    cr = await async_client.post(base, headers=ah, json={"warehouse_id": wid1})
+    assert cr.status_code == 201, cr.text
+    rid = cr.json()["id"]
+
+    patch = await async_client.patch(f"{base}/{rid}", headers=ah, json={"warehouse_id": wid2})
+    assert patch.status_code == 422, patch.text
+    assert patch.json()["detail"] == "invalid_warehouse"

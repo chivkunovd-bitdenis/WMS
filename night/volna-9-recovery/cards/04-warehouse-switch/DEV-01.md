@@ -1,50 +1,60 @@
-# DEV · 04-warehouse-switch · повторная проверка атома 1
-
-## Изменённые файлы
-
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md` — записан результат повторной проверки после `REVIEW.md`.
-
-Backend-код атома не менялся: `REVIEW.md` не содержит находок в
-`backend/app/models/warehouse.py`,
-`backend/alembic/versions/20260822_0094_warehouse_operational_barcode.py`,
-`backend/app/api/warehouses.py` или `backend/tests/test_warehouses.py` и отдельно
-подтверждает корректность разделения операционных складов, tenant-проверок resolver-а и
-отказа при неоднозначном скане.
+# DEV · 04-warehouse-switch · Атом Ф-1: PATCH inbound warehouse_id
 
 ## Что реализовано
 
-- `GET /warehouses` — ранее реализованный эндпоинт возвращает только операционные склады tenant; служебные `fbs-wb-*` / `FBS WB *` исключаются сервисом списка.
-- `GET /warehouses/resolve` — ранее реализованный resolver возвращает `warehouse` для склада и `location` для ячейки, отклоняет неоднозначное значение как `barcode_ambiguous` и не раскрывает объект другого tenant (`barcode_unknown`).
-- `catalog_service.resolve_warehouse_scan` — ранее реализованное разрешение проверяет коды и штрихкоды складов и ячеек в одном tenant без выбора по приоритету.
+- **PATCH /operations/inbound-intake-requests/{id}** — принимает опциональное поле `warehouse_id: UUID`.
+  Роутер извлекает его через `model_dump(exclude_unset=True)` и передаёт в сервис с флагом `warehouse_id_set`.
+- **`InboundIntakeRequestPlannedPatch`** — добавлено поле `warehouse_id: uuid.UUID | None = None`.
+- **`svc.patch_request_draft`** — принимает `warehouse_id` и `warehouse_id_set`. Если флаг установлен и UUID не None:
+  1. Ищет склад через `get_warehouse(session, tenant_id, warehouse_id)`.
+  2. Если не найден — `InboundIntakeError("warehouse_not_found")` → HTTP 404.
+  3. Если `not wh.is_operational` — `InboundIntakeError("invalid_warehouse")` → HTTP 422.
+  4. Иначе `req.warehouse_id = warehouse_id`.
+  Статусная охрана `_request_plan_editable` уже поднимала `not_draft` (409) при `status != draft` — она остаётся
+  первой по порядку выполнения и покрывает случай «после передачи».
+- Роутер `patch_inbound_request_planned` дополнен двумя новыми ветками `except`:
+  `warehouse_not_found` → 404, `invalid_warehouse` → 422.
+
+## Изменённые файлы
+
+- `backend/app/api/inbound_intake.py` — схема `InboundIntakeRequestPlannedPatch` + два аргумента в вызов сервиса + две ветки обработки ошибок
+- `backend/app/services/inbound_intake_service.py` — сигнатура `patch_request_draft` + блок проверки склада
+- `backend/tests/test_inbound_intake.py` — добавлен `import Warehouse`; три новых теста (TC-S28-001-a/b/c)
 
 ## Миграции
 
-- Новых миграций нет. Существующая `20260822_0094_warehouse_operational_barcode.py` добавляет `warehouses.is_operational` и `warehouses.barcode`, заполняет уникальные складские штрихкоды и помечает legacy `fbs-wb-*` / `FBS WB *` неоперационными.
+Нет. Атом не добавляет таблиц и колонок — поле `warehouses.is_operational` уже существует
+(миграция `20260822_0094_warehouse_operational_barcode.py`).
 
 ## Тесты
 
-- Новых тестов в повторном проходе нет: `backend/tests/test_warehouses.py` уже покрывает список операционных складов, типы `warehouse` / `location`, межсущностную legacy-коллизию и изоляцию чужого tenant.
+Добавлены в `backend/tests/test_inbound_intake.py`:
+
+| Имя теста | Что проверяет | Ожидаемый ответ |
+|---|---|---|
+| `test_patch_warehouse_id_saves_on_draft` | PATCH с `warehouse_id` второго операционного склада на черновике | 200, `warehouse_id` в теле обновлён |
+| `test_patch_warehouse_id_rejected_after_submission` | PATCH с `warehouse_id` после `submit` (статус `submitted`) | 409 `not_draft` |
+| `test_patch_warehouse_id_non_operational_rejected` | PATCH с `warehouse_id` склада, у которого `is_operational=False` | 422 `invalid_warehouse` |
 
 ## Гейты
 
-- `ruff check app/models/warehouse.py app/api/warehouses.py app/services/catalog_service.py alembic/versions/20260822_0094_warehouse_operational_barcode.py tests/test_warehouses.py` (из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend`) — пройдено: `All checks passed!`.
-- `mypy app/models/warehouse.py app/api/warehouses.py app/services/catalog_service.py` (из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend`) — целевые модули проверены, но команда завершилась с кодом 1 из-за четырёх существующих ошибок в импортируемых соседних файлах: `wildberries_credentials_service.py:167`, `fbs_stock_sync_service.py:617`, `fbs_warehouse_binding_service.py:23` и `fbs_warehouse_binding_service.py:294`.
-- `pytest -q tests/test_warehouses.py` (из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend`) — пройдено: `1 passed in 3.81s`.
-- `python3 scripts/ci/back_guard.py` — не применим: повторный проход не добавляет роут; самого файла в рабочей копии также нет.
-- `python3 scripts/ci/check_migrations.py` — не применим: повторный проход не добавляет миграцию; самого файла в рабочей копии также нет.
+| Гейт | Результат |
+|---|---|
+| `ruff check` (изменённые файлы) | ✅ All checks passed |
+| `mypy` (изменённые файлы) | ✅ Ошибки только в нетронутых файлах (pre-existing: `wildberries_credentials_service.py`, `fbs_stock_sync_service.py`, `box_import_service.py`) |
+| `pytest tests/test_inbound_intake.py` | ✅ 21 passed (0 failed) |
+| `pytest tests/test_inbound_intake.py -k warehouse` | ✅ 5 passed (3 новых + 2 ранее существовавших) |
+| `back_guard.py` | ⚠️ Файл отсутствует в worktree (`scripts/ci/back_guard.py` не найден). Новых роутов не добавлялось — только расширена схема существующего `PATCH /{request_id}`. |
+| `check_migrations.py` | ⚠️ Файл отсутствует в worktree. Миграций не добавлялось. |
 
 ## Не реализовано
 
-- Находки 1–12 из `REVIEW.md` не относятся одновременно к файлам и границам атома 1. Они затрагивают следующие атомы (`preflight`, FBS workspace, общий frontend-контекст, S-01, S-14, S-25, seller draft, движения и blocker registry), поэтому в этом проходе не изменялись.
-- В `CONTRACT.md` нет отдельного раздела `API и данные`; точный backend-контракт атома взят из прямо назначенного пользователем пункта 1 `FEATURES.md`. Дополнительное поведение сверх него не добавлялось.
-
-## Блокеры
-
-- Сохранение отчёта отдельным Git-коммитом заблокировано правами среды: команда
-  `git add -- night/volna-9-recovery/cards/04-warehouse-switch/DEV.md` завершилась с
-  `fatal: Unable to create '/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-04-warehouse-switch/index.lock': Operation not permitted`.
-  Backend-код не менялся; отчёт записан в рабочую копию, но не сохранён в новом commit SHA.
+Все три пункта находки 2 из REVIEW.md закрыты этим атомом:
+- `InboundIntakeRequestPlannedPatch` теперь принимает `warehouse_id` ✅
+- Сервис применяет склад только в статусе `draft` и при `is_operational=True` ✅
+- Три теста проходят через реальный API ✅
 
 ## Находки
 
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не открывались и не изменялись.
+- Три pre-existing ошибки mypy в не-правленных файлах (`wildberries_credentials_service.py`, `fbs_stock_sync_service.py`, `box_import_service.py`) — зафиксировано, работа продолжена согласно разрешению владельца.
+- В worktree отсутствуют `scripts/ci/back_guard.py` и `scripts/ci/check_migrations.py`. Новых роутов не создавалось (только расширена схема PATCH), так что back_guard не заблокировал бы.

@@ -171,3 +171,13 @@
 23:36   04-warehouse-switch · dev: фича 12/13 сохранена 1319cc4da052
 23:38   04-warehouse-switch · screen-dev: готово
 23:38   04-warehouse-switch · dev: фича 13/13 сохранена 73f1c3e40ec3
+23:42   04-warehouse-switch · reviewer: готово
+23:42 04-warehouse-switch: отложено — reviewer, эскалация не помогла
+00:10 04-warehouse-switch: отложено — финальная эскалация уже была
+00:15   04-warehouse-switch · repair-plan: сильный ремонт не помог — дорезаем находки
+00:18   04-warehouse-switch · splitter: FEATURES.md: первый frontend-атом должен отдельно создать ui-kit (код 0, попытка 1)
+00:24   04-warehouse-switch · repair-plan: сильный ремонт не помог — дорезаем находки
+00:28   04-warehouse-switch · splitter: FEATURES.md: первый frontend-атом должен отдельно создать ui-kit (код 0, попытка 1)
+00:31   04-warehouse-switch · splitter: готово
+00:31   04-warehouse-switch · resume: поатомный rework Terra по сохранённым находкам
+00:37   04-warehouse-switch · backend-dev: готово

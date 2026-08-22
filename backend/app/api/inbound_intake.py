@@ -65,6 +65,7 @@ class InboundIntakeRequestPlannedPatch(BaseModel):
     planned_delivery_date: date | None = None
     planned_box_count: int | None = Field(default=None, ge=1, le=100_000)
     waybill_number: str | None = Field(default=None, max_length=128)
+    warehouse_id: uuid.UUID | None = None
 
 
 class InboundIntakeLineCreate(BaseModel):
@@ -764,6 +765,8 @@ async def patch_inbound_request_planned(
             planned_box_count_set="planned_box_count" in patch_fields,
             waybill_number=patch_fields.get("waybill_number"),
             waybill_number_set="waybill_number" in patch_fields,
+            warehouse_id=patch_fields.get("warehouse_id"),
+            warehouse_id_set="warehouse_id" in patch_fields,
             seller_product_owner_id=line_seller_scope,
         )
     except InboundIntakeError as exc:
@@ -771,6 +774,11 @@ async def patch_inbound_request_planned(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="request_not_found",
+            ) from None
+        if exc.code == "warehouse_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="warehouse_not_found",
             ) from None
         if exc.code == "not_draft":
             raise HTTPException(
@@ -781,6 +789,11 @@ async def patch_inbound_request_planned(
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="invalid_planned_box_count",
+            ) from None
+        if exc.code == "invalid_warehouse":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="invalid_warehouse",
             ) from None
         raise
     r2 = await svc.get_request(session, user.tenant_id, r.id)
