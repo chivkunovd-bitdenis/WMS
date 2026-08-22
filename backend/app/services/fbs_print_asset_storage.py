@@ -186,3 +186,12 @@ def read_pdf(relative_path: str, *, checksum: str | None = None) -> bytes:
     if checksum and sha256_checksum(payload) != checksum:
         raise FbsPrintAssetStorageError("checksum_mismatch")
     return payload
+
+
+def delete_stored_asset(relative_path: str) -> None:
+    """Remove one validated print asset after its retention window."""
+    target = resolve_existing_storage_path(relative_path)
+    try:
+        target.unlink()
+    except FileNotFoundError:
+        return

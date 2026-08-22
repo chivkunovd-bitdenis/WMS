@@ -23,6 +23,7 @@ from app.models.fbs_order import (
 from app.models.fbs_print_asset import (
     FBS_PRINT_ASSET_KINDS,
     PRINT_ASSET_KIND_CARGO_PLACE_QR,
+    PRINT_ASSET_KIND_LABEL_TAPE,
     PRINT_ASSET_KIND_ORDER_STICKER,
     PRINT_ASSET_KIND_SUPPLY_QR,
     PRINT_ASSET_STATUS_ERROR,
@@ -698,6 +699,10 @@ async def get_asset_binary_content(
     if expires_at is not None and expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=UTC)
     if expires_at is not None and expires_at <= datetime.now(tz=UTC):
+        if asset.kind == PRINT_ASSET_KIND_LABEL_TAPE and asset.storage_path:
+            from app.services.fbs_print_asset_storage import delete_stored_asset
+
+            delete_stored_asset(asset.storage_path)
         raise FbsPrintAssetError(
             "asset_expired",
             message="Срок хранения печатного актива истёк.",

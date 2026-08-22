@@ -4,10 +4,12 @@ import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 import httpx
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
+from sqlalchemy.engine import CursorResult
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
@@ -57,7 +59,22 @@ async def create_pending_job(
         idempotency_key=idempotency_key,
     )
     session.add(job)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        if idempotency_key:
+            existing = await session.scalar(
+                select(BackgroundJob).where(
+                    BackgroundJob.tenant_id == tenant_id,
+                    BackgroundJob.job_type == job_type,
+                    BackgroundJob.idempotency_key == idempotency_key,
+                    BackgroundJob.status.in_((JOB_STATUS_PENDING, JOB_STATUS_RUNNING)),
+                )
+            )
+            if existing is not None:
+                return cast(BackgroundJob, existing)
+        raise
     await session.refresh(job)
     return job
 
@@ -375,9 +392,15 @@ async def run_marking_label_tape_job(job_id: uuid.UUID) -> None:
         job = await session.get(BackgroundJob, job_id)
         if job is None:
             return
-        job.status = JOB_STATUS_RUNNING
-        job.started_at = datetime.now(UTC)
+        claimed = await session.execute(
+            update(BackgroundJob)
+            .where(BackgroundJob.id == job_id, BackgroundJob.status == JOB_STATUS_PENDING)
+            .values(status=JOB_STATUS_RUNNING, started_at=datetime.now(UTC))
+        )
         await session.commit()
+        if not isinstance(claimed, CursorResult) or claimed.rowcount != 1:
+            return
+        await session.refresh(job)
         try:
             payload = job.payload_json or {}
             ids = [uuid.UUID(str(value)) for value in payload.get("code_ids", [])]

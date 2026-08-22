@@ -13,7 +13,7 @@ from httpx import AsyncClient
 from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.fbs_order import STICKER_STATUS_APPLIED, STICKER_STATUS_PRINT_OPENED, FbsOrder
-from app.models.fbs_print_asset import FbsPrintAsset, PRINT_ASSET_KIND_LABEL_TAPE
+from app.models.fbs_print_asset import PRINT_ASSET_KIND_LABEL_TAPE, FbsPrintAsset
 from app.models.seller import Seller
 from app.services.fbs_print_asset_service import FbsPrintAssetError, get_asset_binary_content
 from app.services.fbs_print_asset_storage import (

@@ -10,10 +10,14 @@ from httpx import AsyncClient
 from app.db.session import SessionLocal
 from app.models.background_job import BackgroundJob
 from app.services.background_job_service import (
+    JOB_STATUS_DONE,
+    JOB_STATUS_FAILED,
     JOB_STATUS_PENDING,
+    JOB_STATUS_RUNNING,
     JOB_TYPE_MARKING_LABEL_TAPE,
     JOB_TYPE_MOVEMENTS_DIGEST,
     create_pending_job,
+    run_marking_label_tape_job,
 )
 from app.services.tokens import decode_access_token
 
@@ -49,6 +53,40 @@ async def test_marking_label_tape_idempotency_and_result_contract(
                 BackgroundJob.idempotency_key == "same-request"
             )
         )).scalars().all()) == 1
+
+
+@pytest.mark.asyncio
+async def test_marking_label_tape_worker_does_not_reclaim_running_job(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post("/auth/register", json={
+        "organization_name": "Tape Worker Co", "slug": f"tape-worker-{suffix}",
+        "admin_email": f"tape-worker-{suffix}@example.com", "password": "password123",
+    })
+    tenant_id = uuid.UUID(str(decode_access_token(reg.json()["access_token"])["tenant_id"]))
+    async with SessionLocal() as session:
+        job = await create_pending_job(
+            session, tenant_id, job_type=JOB_TYPE_MARKING_LABEL_TAPE,
+            idempotency_key="worker-request", payload_json={"code_ids": []},
+        )
+        job.status = JOB_STATUS_RUNNING
+        await session.commit()
+        monkeypatch.setattr(
+            "app.services.marking_code_service.build_label_artifact_tape_pdf",
+            lambda *args, **kwargs: pytest.fail("running job was reclaimed"),
+        )
+        await run_marking_label_tape_job(job.id)
+        await session.refresh(job)
+        assert job.status == JOB_STATUS_RUNNING
+        assert job.result_json is None
+
+
+def test_marking_job_status_contract() -> None:
+    assert {JOB_STATUS_PENDING, JOB_STATUS_RUNNING, JOB_STATUS_DONE, JOB_STATUS_FAILED} == {
+        "pending", "running", "done", "failed"
+    }
 
 
 @pytest.mark.asyncio
