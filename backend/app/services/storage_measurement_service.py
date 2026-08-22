@@ -353,7 +353,10 @@ async def rebuild_storage_measurements(
         if statement is not None:
             open_scopes.add((seller_id, wh_id))
     session.add_all([row for row in rows if (row.seller_id, row.warehouse_id) in open_scopes])
-    await session.commit()
+    # The background job owns the transaction: it must be able to roll back the
+    # replacement together with a later job failure and preserve the last
+    # successful draft.
+    await session.flush()
     return {
         "period_start": period_start.isoformat(),
         "period_end": period_end.isoformat(),

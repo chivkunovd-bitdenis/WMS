@@ -25,6 +25,7 @@ from app.services.storage_measurement_service import (
     calculation_end_exclusive,
     month_bounds,
     previous_month,
+    rebuild_storage_measurements,
 )
 
 
@@ -396,6 +397,49 @@ async def test_rebuild_and_list_cover_fractional_missing_zero_idempotency_and_sc
                 StorageStatement.warehouse_id == technical_id
             )
         ) == 0
+
+    # A rebuild is part of the background job transaction. If anything after
+    # the calculation fails, rolling the job back must retain the last draft.
+    extra_movement_at = first_outbound + timedelta(days=1)
+    async with SessionLocal() as session:
+        operational_location = await get_or_create_sorting_location(
+            session, tenant_id, operational_id
+        )
+        session.add(
+            InventoryMovement(
+                tenant_id=tenant_id,
+                product_id=calculated.id,
+                seller_id=calculated_seller.id,
+                storage_location_id=operational_location.id,
+                warehouse_id=operational_id,
+                quantity_delta=1,
+                movement_type="storage_test_after_success",
+                created_at=extra_movement_at,
+            )
+        )
+        await session.commit()
+
+    async with SessionLocal() as session:
+        await rebuild_storage_measurements(
+            session,
+            tenant_id,
+            period_start=period_start,
+        )
+        changed_liter_days = await session.scalar(
+            select(StorageMeasurement.liter_days).where(
+                StorageMeasurement.product_id == calculated.id
+            )
+        )
+        assert changed_liter_days != Decimal("6.000000")
+        await session.rollback()
+
+    async with SessionLocal() as session:
+        preserved_liter_days = await session.scalar(
+            select(StorageMeasurement.liter_days).where(
+                StorageMeasurement.product_id == calculated.id
+            )
+        )
+        assert preserved_liter_days == Decimal("6.000000")
 
 
 @pytest.mark.asyncio

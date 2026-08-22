@@ -34,7 +34,7 @@ def test_migrations_backfill_movements_and_exclude_technical_warehouses() -> Non
 
     assert "SELECT product.seller_id" in movement_source
     assert "SELECT location.warehouse_id" in movement_source
-    assert 'down_revision: str | Sequence[str] | None = "20260821_0094"' in movement_source
+    assert 'down_revision: str | Sequence[str] | None = "20260821_0093"' in movement_source
     assert "Unresolved historical warehouse" in movement_source
     assert 'op.alter_column("inventory_movements", "warehouse_id", nullable=False)' in (
         movement_source
