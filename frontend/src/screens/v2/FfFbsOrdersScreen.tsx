@@ -208,7 +208,6 @@ function LazyProductPhotoThumb({
 type NewOrderRowProps = {
   order: FbsWorklistOrder
   selected: boolean
-  highlighted: boolean
   registerRow: (id: string, node: HTMLTableRowElement | null) => void
   onToggle: (order: FbsWorklistOrder) => void
   onOpenWorkspace: (supplyId: string) => void
@@ -220,7 +219,6 @@ type NewOrderRowProps = {
 const NewOrderRow = memo(function NewOrderRow({
   order,
   selected,
-  highlighted,
   registerRow,
   onToggle,
   onOpenWorkspace,
@@ -237,13 +235,6 @@ const NewOrderRow = memo(function NewOrderRow({
         cursor: order.supply_id ? 'pointer' : 'default',
         scrollMarginBottom: '220px',
         '& > td': { py: 0.9 },
-        ...(highlighted
-          ? {
-              outline: '2px solid',
-              outlineColor: 'divider',
-              outlineOffset: '-1px',
-            }
-          : {}),
       }}
       onClick={() => order.supply_id && onOpenWorkspace(order.supply_id)}
       data-testid={`fbs-order-${order.id}`}
@@ -796,10 +787,6 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     () => (searchTerm ? orders.filter((order) => orderSearchText(order).includes(searchTerm)) : []),
     [orders, searchTerm],
   )
-  const matchingIds = useMemo(
-    () => new Set(matchingOrders.map((order) => order.id)),
-    [matchingOrders],
-  )
   const exportRows = selected.size > 0 ? selectedOrders : searchTerm ? matchingOrders : orders
 
   const addSelectedToExistingSupply = async () => {
@@ -1326,7 +1313,6 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                     key={order.id}
                     order={order}
                     selected={selected.has(order.id)}
-                    highlighted={Boolean(searchTerm && matchingIds.has(order.id))}
                     registerRow={registerRow}
                     onToggle={toggle}
                     onOpenWorkspace={openWorkspace}
