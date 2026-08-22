@@ -69,31 +69,34 @@ for SVC in api celery_worker web; do
   fi
 done
 
-echo "1/4 поднимаю стек полосы $LANE (порты 3xx$LANE)"
-"${COMPOSE[@]}" up -d --wait db redis >/dev/null 2>&1
-"${COMPOSE[@]}" up -d wb-guard >/dev/null 2>&1
-"${COMPOSE[@]}" run --rm migrations >/dev/null 2>&1 || true
-"${COMPOSE[@]}" up -d --no-deps api celery_worker web >/dev/null 2>&1
+# Разметить образ мало: compose считает контекст сборки, а у каждой карточной копии он
+# свой, и она пересобирает всё заново — пятнадцать минут на карточку и таймаут. Раз образы
+# уже есть, сборку запрещаем явно.
+NOBUILD=""
+if docker image inspect "${PROJECT}-api:latest" >/dev/null 2>&1 \
+   && docker image inspect "${PROJECT}-web:latest" >/dev/null 2>&1; then
+  NOBUILD="--no-build"
+  echo "    образы на месте, сборка отключена"
+fi
 
-echo "2/4 жду, пока API ответит"
-for i in $(seq 1 60); do
-  if curl -sf -m 3 "http://localhost:$WMS_API_PORT/health" >/dev/null 2>&1; then break; fi
-  [[ $i -eq 60 ]] && { echo "    API не поднялся за 60 секунд" >&2; "${COMPOSE[@]}" logs --tail 30 api >&2; exit 1; }
+echo "1/5 поднимаю базу полосы $LANE (порты 3xx$LANE)"
+"${COMPOSE[@]}" up -d --wait db redis >/dev/null 2>&1
+"${COMPOSE[@]}" up -d $NOBUILD wb-guard >/dev/null 2>&1
+
+echo "2/5 разворачиваю боевой снимок"
+# Снимок несёт и схему, и данные, поэтому разворачивается ДО подъёма приложения.
+# Раньше API стартовал первым, натыкался на пустую базу («relation tenants does not
+# exist») и падал, а миграции приходилось собирать на каждой полосе по пятнадцать минут.
+"$ROOT/scripts/stand/restore.sh" "$LANE"
+
+echo "3/5 поднимаю приложение"
+"${COMPOSE[@]}" up -d --no-deps $NOBUILD api celery_worker web >/dev/null 2>&1
+for i in $(seq 1 90); do
+  curl -sf -m 3 "http://localhost:$WMS_API_PORT/health" >/dev/null 2>&1 && break
+  [[ $i -eq 90 ]] && { echo "    API не поднялся" >&2; "${COMPOSE[@]}" logs --tail 20 api >&2; exit 1; }
   sleep 1
 done
 echo "    API отвечает"
-
-echo "3/4 разворачиваю боевой снимок"
-# Гасим приложение на время подмены базы: пока api и celery подключены, DROP DATABASE
-# не пройдёт. Поднимаем обратно здесь же — только у этого скрипта есть порты полосы.
-"${COMPOSE[@]}" stop api celery_worker celery_beat >/dev/null 2>&1 || true
-"$ROOT/scripts/stand/restore.sh" "$LANE"
-"${COMPOSE[@]}" up -d --no-deps api celery_worker >/dev/null 2>&1
-for i in $(seq 1 60); do
-  curl -sf -m 3 "http://localhost:$WMS_API_PORT/health" >/dev/null 2>&1 && break
-  [[ $i -eq 60 ]] && { echo "    API не вернулся на порт $WMS_API_PORT" >&2; exit 1; }
-  sleep 1
-done
 
 echo "4/5 ставлю пароль стендовому админу"
 # Хэш считает сам бэкенд своей же функцией — стенд не разойдётся с приложением, если

@@ -1,31 +1,31 @@
 # Волна volna-9
 
 ## Понимание
-00:15 карточки уже нарезаны (9), нарезку пропускаю
-00:15 нарезано карточек: 9
+05:12 карточки уже нарезаны (9), нарезку пропускаю
+05:12 нарезано карточек: 9
 
 ### разбор
-00:15   02-verdikt-screen · analyst: уже сделано, пропускаю
-00:15   01-wb-marking · analyst: уже сделано, пропускаю
-00:15   06-picking-list-order · analyst: уже сделано, пропускаю
-00:15   05-prod-slow · analyst: уже сделано, пропускаю
-00:15   03-no-distribution-mode · analyst: уже сделано, пропускаю
-00:15   04-warehouse-switch · analyst: уже сделано, пропускаю
-00:15   08-storage · analyst: уже сделано, пропускаю
-00:15   09-billing · analyst: уже сделано, пропускаю
-00:15   07-reporting · analyst: уже сделано, пропускаю
+05:12   03-no-distribution-mode · analyst: уже сделано, пропускаю
+05:12   02-verdikt-screen · analyst: уже сделано, пропускаю
+05:12   04-warehouse-switch · analyst: уже сделано, пропускаю
+05:12   06-picking-list-order · analyst: уже сделано, пропускаю
+05:12   01-wb-marking · analyst: уже сделано, пропускаю
+05:12   05-prod-slow · analyst: уже сделано, пропускаю
+05:12   09-billing · analyst: уже сделано, пропускаю
+05:12   07-reporting · analyst: уже сделано, пропускаю
+05:12   08-storage · analyst: уже сделано, пропускаю
 
 ### сверка
-00:15   02-verdikt-screen · requirement-critic: уже сделано, пропускаю
-00:15   01-wb-marking · requirement-critic: уже сделано, пропускаю
-00:15   04-warehouse-switch · requirement-critic: уже сделано, пропускаю
-00:15   03-no-distribution-mode · requirement-critic: уже сделано, пропускаю
-00:15   05-prod-slow · requirement-critic: уже сделано, пропускаю
-00:15   06-picking-list-order · requirement-critic: уже сделано, пропускаю
-00:15   07-reporting · requirement-critic: уже сделано, пропускаю
-00:15   09-billing · requirement-critic: уже сделано, пропускаю
-00:15   08-storage · requirement-critic: уже сделано, пропускаю
-00:15 вопросов после анализа: 45 — см. /Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-etalon/night/volna-9/VOPROSY.md
+05:12   01-wb-marking · requirement-critic: уже сделано, пропускаю
+05:12   03-no-distribution-mode · requirement-critic: уже сделано, пропускаю
+05:12   04-warehouse-switch · requirement-critic: уже сделано, пропускаю
+05:12   02-verdikt-screen · requirement-critic: уже сделано, пропускаю
+05:12   06-picking-list-order · requirement-critic: уже сделано, пропускаю
+05:12   05-prod-slow · requirement-critic: уже сделано, пропускаю
+05:12   07-reporting · requirement-critic: уже сделано, пропускаю
+05:12   08-storage · requirement-critic: уже сделано, пропускаю
+05:12   09-billing · requirement-critic: уже сделано, пропускаю
+05:12 вопросов после анализа: 45 — см. /Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-etalon/night/volna-9/VOPROSY.md
 
 ──────────────────────────────────────────────────────────────────────
 ВОПРОСЫ ПОСЛЕ АНАЛИЗА (45). Работа продолжается, ответ не обязателен.
@@ -80,115 +80,90 @@
 
 
 ### карта задевания
-00:21 карта: готова
-00:21 
+05:18 карта: готова
+05:18 
 Понимание собрано, перехожу к исполнению без остановки.
 
 ## Ночь · карточек 9 · полос 6
 
 ### арх-решения по доменам (6)
-00:21   01-wb-marking · solution-architect: нет файла ARCH.md (код 1, попытка 1)
-00:21   04-warehouse-switch · solution-architect: нет файла ARCH.md (код 1, попытка 1)
-00:21   07-reporting · solution-architect: нет файла ARCH.md (код 1, попытка 1)
-00:21   05-prod-slow · solution-architect: нет файла ARCH.md (код 1, попытка 1)
-00:21   08-storage · solution-architect: нет файла ARCH.md (код 1, попытка 1)
-00:21   04-warehouse-switch · solution-architect: нет файла ARCH.md (код 1, попытка 2)
-00:21   01-wb-marking · solution-architect: нет файла ARCH.md (код 1, попытка 2)
-00:21   09-billing · solution-architect: нет файла ARCH.md (код 1, попытка 1)
-00:21   07-reporting · solution-architect: нет файла ARCH.md (код 1, попытка 2)
-00:21   08-storage · solution-architect: нет файла ARCH.md (код 1, попытка 2)
-00:21   05-prod-slow · solution-architect: нет файла ARCH.md (код 1, попытка 2)
-00:21   09-billing · solution-architect: нет файла ARCH.md (код 1, попытка 2)
-00:21   01-wb-marking · solution-architect: уже сделано, пропускаю
-00:21   02-verdikt-screen · ux-architect: уже сделано, пропускаю
-00:21   04-warehouse-switch · solution-architect: уже сделано, пропускаю
-00:21   03-no-distribution-mode · tester: уже сделано, пропускаю
-00:21   06-picking-list-order · ux-architect: уже сделано, пропускаю
-00:21   05-prod-slow · solution-architect: уже сделано, пропускаю
-00:21   02-verdikt-screen · product: уже сделано, пропускаю
-00:21   06-picking-list-order · product: уже сделано, пропускаю
-00:21   03-no-distribution-mode · screen-dev: уже сделано, пропускаю
-00:22   03-no-distribution-mode · reviewer: готово
-00:25   06-picking-list-order · tester: готово
-00:25   01-wb-marking · ux-architect: готово
-00:25   05-prod-slow · ux-architect: готово
-00:26   02-verdikt-screen · tester: готово
-00:26   04-warehouse-switch · ux-architect: готово
-00:28   01-wb-marking · product: готово
-00:29   05-prod-slow · product: готово
-00:31   04-warehouse-switch · product: готово
-00:32   01-wb-marking · tester: готово
-00:33   02-verdikt-screen · breaker: готово
-00:34   05-prod-slow · tester: готово
-00:35   06-picking-list-order · breaker: готово
-00:37   04-warehouse-switch · tester: готово
-00:39   01-wb-marking · breaker: готово
-00:41   02-verdikt-screen · screen-dev: готово
-00:41   06-picking-list-order · screen-dev: готово
-00:42   03-no-distribution-mode · ui-critic: в DESIGN-REVIEW.md нет машинной строки «ВЕРДИКТ: ...» (код 124, попытка 1)
-00:43   05-prod-slow · breaker: готово
-00:45   01-wb-marking · screen-dev: готово
-00:46   04-warehouse-switch · breaker: готово
-00:48   02-verdikt-screen · reviewer: готово
-00:48   02-verdikt-screen · reviewer: находки, круг 1 — назад к разработке
-00:48   03-no-distribution-mode · ui-critic: готово
-00:49   06-picking-list-order · reviewer: готово
-00:49   06-picking-list-order · reviewer: находки, круг 1 — назад к разработке
-00:49   05-prod-slow · screen-dev: готово
-00:52   04-warehouse-switch · screen-dev: готово
-00:53   02-verdikt-screen · screen-dev: готово
-00:53   05-prod-slow · reviewer: готово
-00:53   05-prod-slow · reviewer: находки, круг 1 — назад к разработке
-00:55   06-picking-list-order · screen-dev: готово
-00:58   05-prod-slow · screen-dev: готово
-00:58   04-warehouse-switch · reviewer: готово
-00:58   04-warehouse-switch · reviewer: находки, круг 1 — назад к разработке
-01:00   02-verdikt-screen · reviewer: готово
-01:00   02-verdikt-screen · reviewer: находки, круг 2 — назад к разработке
-01:01   01-wb-marking · reviewer: готово
-01:01   01-wb-marking · reviewer: находки, круг 1 — назад к разработке
-01:02   06-picking-list-order · reviewer: готово
-01:02   06-picking-list-order · reviewer: находки, круг 2 — назад к разработке
-01:03 03-no-distribution-mode: отложено — исключение Command '['docker', 'compose', '-p', 'wms-lane-3', '-f', '/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9/lane-3-03-no-distribution-mode/docker-compose.yml', '-f', '/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9/lane-3-03-no-distribution-mode/docker-compose.lane.yml', 'build']' timed out after 900 seconds
-01:05   01-wb-marking · screen-dev: готово
-01:06   04-warehouse-switch · screen-dev: готово
-01:06   06-picking-list-order · screen-dev: готово
-01:07   02-verdikt-screen · screen-dev: готово
-01:07   05-prod-slow · reviewer: готово
-01:07   05-prod-slow · reviewer: находки, круг 2 — назад к разработке
-01:10   07-reporting · solution-architect: готово
-01:12   04-warehouse-switch · reviewer: готово
-01:12   04-warehouse-switch · reviewer: находки, круг 2 — назад к разработке
-01:13   05-prod-slow · screen-dev: готово
-01:13   06-picking-list-order · reviewer: готово
-01:13 06-picking-list-order: отложено — reviewer, круги кончились
-01:13   01-wb-marking · reviewer: готово
-01:13   01-wb-marking · reviewer: находки, круг 2 — назад к разработке
-01:16   01-wb-marking · screen-dev: готово
-01:16   02-verdikt-screen · reviewer: готово
-01:16 02-verdikt-screen: отложено — reviewer, круги кончились
-01:17   07-reporting · ux-architect: готово
-01:17   04-warehouse-switch · screen-dev: готово
-01:19   05-prod-slow · reviewer: готово
-01:19 05-prod-slow: отложено — reviewer, круги кончились
-01:20   08-storage · solution-architect: готово
-01:20   08-storage · ux-architect: нет файла CONTRACT.md (код 1, попытка 1)
-01:20   01-wb-marking · reviewer: нет файла REVIEW.md (код 1, попытка 1)
-01:20   08-storage · ux-architect: нет файла CONTRACT.md (код 1, попытка 2)
-01:20 08-storage: отложено на шаге ux-architect
-01:20   04-warehouse-switch · reviewer: нет файла REVIEW.md (код 1, попытка 1)
-01:20   01-wb-marking · reviewer: нет файла REVIEW.md (код 1, попытка 2)
-01:20 01-wb-marking: отложено на шаге reviewer
-01:20   04-warehouse-switch · reviewer: нет файла REVIEW.md (код 1, попытка 2)
-01:20 04-warehouse-switch: отложено на шаге reviewer
-01:20   07-reporting · product: готово
-01:20   07-reporting · tester: нет файла CASES.md (код 1, попытка 1)
-01:20   07-reporting · tester: нет файла CASES.md (код 1, попытка 2)
-01:20 07-reporting: отложено на шаге tester
-01:23   09-billing · solution-architect: готово
-01:23   09-billing · ux-architect: нет файла CONTRACT.md (код 1, попытка 1)
-01:23   09-billing · ux-architect: нет файла CONTRACT.md (код 1, попытка 2)
-01:23 09-billing: отложено на шаге ux-architect
-
-## Итог: сделано 0, отложено 9
-01:23 отчёт: НЕ СОЗДАН/НЕПОЛОН: нет файла OTCHET.md
+05:18   05-prod-slow · solution-architect: нет файла ARCH.md (код 1, попытка 1)
+05:18   01-wb-marking · solution-architect: нет файла ARCH.md (код 1, попытка 1)
+05:18   07-reporting · solution-architect: нет файла ARCH.md (код 1, попытка 1)
+05:18   01-wb-marking · solution-architect: нет файла ARCH.md (код 1, попытка 2)
+05:18   04-warehouse-switch · solution-architect: нет файла ARCH.md (код 1, попытка 1)
+05:18   08-storage · solution-architect: нет файла ARCH.md (код 1, попытка 1)
+05:18   09-billing · solution-architect: нет файла ARCH.md (код 1, попытка 1)
+05:18   05-prod-slow · solution-architect: нет файла ARCH.md (код 1, попытка 2)
+05:18   07-reporting · solution-architect: нет файла ARCH.md (код 1, попытка 2)
+05:18   04-warehouse-switch · solution-architect: нет файла ARCH.md (код 1, попытка 2)
+05:18   08-storage · solution-architect: нет файла ARCH.md (код 1, попытка 2)
+05:18   09-billing · solution-architect: нет файла ARCH.md (код 1, попытка 2)
+05:18   03-no-distribution-mode · tester: уже сделано, пропускаю
+05:18   01-wb-marking · solution-architect: уже сделано, пропускаю
+05:18   04-warehouse-switch · solution-architect: уже сделано, пропускаю
+05:18   06-picking-list-order · ux-architect: уже сделано, пропускаю
+05:18   02-verdikt-screen · ux-architect: уже сделано, пропускаю
+05:18   05-prod-slow · solution-architect: уже сделано, пропускаю
+05:18   01-wb-marking · ux-architect: уже сделано, пропускаю
+05:18   04-warehouse-switch · ux-architect: уже сделано, пропускаю
+05:18   06-picking-list-order · product: уже сделано, пропускаю
+05:18   02-verdikt-screen · product: уже сделано, пропускаю
+05:18   03-no-distribution-mode · screen-dev: уже сделано, пропускаю
+05:18   01-wb-marking · product: уже сделано, пропускаю
+05:18   05-prod-slow · ux-architect: уже сделано, пропускаю
+05:18   04-warehouse-switch · product: уже сделано, пропускаю
+05:18   06-picking-list-order · tester: уже сделано, пропускаю
+05:18   01-wb-marking · tester: уже сделано, пропускаю
+05:18   03-no-distribution-mode · reviewer: уже сделано, пропускаю
+05:18   02-verdikt-screen · tester: уже сделано, пропускаю
+05:18   05-prod-slow · product: уже сделано, пропускаю
+05:18   06-picking-list-order · breaker: уже сделано, пропускаю
+05:18   01-wb-marking · breaker: уже сделано, пропускаю
+05:18   04-warehouse-switch · tester: уже сделано, пропускаю
+05:18   02-verdikt-screen · breaker: уже сделано, пропускаю
+05:18   05-prod-slow · tester: уже сделано, пропускаю
+05:18   03-no-distribution-mode · ui-critic: уже сделано, пропускаю
+05:18   04-warehouse-switch · breaker: уже сделано, пропускаю
+05:18   01-wb-marking · screen-dev: уже сделано, пропускаю
+05:18   05-prod-slow · breaker: уже сделано, пропускаю
+05:18   06-picking-list-order · screen-dev: уже сделано, пропускаю
+05:18   02-verdikt-screen · screen-dev: уже сделано, пропускаю
+05:18   05-prod-slow · screen-dev: уже сделано, пропускаю
+05:18   04-warehouse-switch · screen-dev: уже сделано, пропускаю
+05:22   06-picking-list-order · reviewer: готово
+05:22   06-picking-list-order · reviewer: находки, круг 1 — назад к разработке
+05:25   04-warehouse-switch · reviewer: готово
+05:25   04-warehouse-switch · reviewer: находки, круг 1 — назад к разработке
+05:26   02-verdikt-screen · reviewer: готово
+05:26   02-verdikt-screen · reviewer: находки, круг 1 — назад к разработке
+05:26   01-wb-marking · reviewer: готово
+05:26   01-wb-marking · reviewer: находки, круг 1 — назад к разработке
+05:27   05-prod-slow · reviewer: готово
+05:27   05-prod-slow · reviewer: находки, круг 1 — назад к разработке
+05:32   06-picking-list-order · screen-dev: готово
+05:37   06-picking-list-order · reviewer: готово
+05:37   06-picking-list-order · reviewer: находки, круг 2 — назад к разработке
+05:40   01-wb-marking · screen-dev: готово
+05:43 03-no-distribution-mode: отложено — исключение Command '['docker', 'compose', '-p', 'wms-lane-3', '-f', '/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9/lane-3-03-no-distribution-mode/docker-compose.yml', '-f', '/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9/lane-3-03-no-distribution-mode/docker-compose.lane.yml', 'build']' timed out after 1500 seconds
+05:43   07-reporting · solution-architect: уже сделано, пропускаю
+05:43   07-reporting · ux-architect: уже сделано, пропускаю
+05:43   07-reporting · product: уже сделано, пропускаю
+05:45   04-warehouse-switch · screen-dev: нет файла DEV.md (код 124, попытка 1)
+05:46   02-verdikt-screen · screen-dev: нет файла DEV.md (код 124, попытка 1)
+05:47   01-wb-marking · reviewer: готово
+05:47   01-wb-marking · reviewer: находки, круг 2 — назад к разработке
+05:47   05-prod-slow · screen-dev: нет файла DEV.md (код 124, попытка 1)
+05:49   07-reporting · tester: готово
+05:56   05-prod-slow · screen-dev: готово
+05:56   01-wb-marking · screen-dev: готово
+05:56   07-reporting · breaker: готово
+05:57   06-picking-list-order · screen-dev: нет файла DEV.md (код 124, попытка 1)
+06:03   04-warehouse-switch · screen-dev: готово
+06:04   05-prod-slow · reviewer: готово
+06:04   05-prod-slow · reviewer: находки, круг 2 — назад к разработке
+06:04   07-reporting · backend-dev: готово
+06:05   06-picking-list-order · screen-dev: готово
+06:06   02-verdikt-screen · screen-dev: нет файла DEV.md (код 124, попытка 2)
+06:06 02-verdikt-screen: отложено на шаге screen-dev
+06:06   08-storage · solution-architect: уже сделано, пропускаю
