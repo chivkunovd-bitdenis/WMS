@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  beginPrintUserGesture,
   Alert,
   Box,
   Button,
@@ -34,17 +33,19 @@ import {
 import { resolvePrintTemplate, type PrintLayout } from '../utils/printTemplate'
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
 import {
+  beginPrintUserGesture,
   buildMarkingTapeSections,
   buildWbOrderQrLabelHtml,
+  CzArtifactTapePreparationTracker,
   printCzArtifactTape,
-  prepareCzArtifactTape,
   fetchPreparedCzArtifactTapePdf,
   resolveCzArtifactTapeCodeIds,
   printPdfBlob,
   printTapeSections,
+  type CzArtifactTapePreparationState,
   type MarkingTapeUnitInput,
 } from '../utils/printMarkingCodeLabel'
-import { PrimaryAction, SecondaryAction, StatusChip } from '../ui-kit'
+import { ActionGroup, ErrorNotice, PrimaryAction, SecondaryAction, StatusChip } from '../ui-kit'
 import { buildProductLabelSectionHtml, type ProductThermalLabelData } from '../utils/printProductThermalLabel'
 import { printProductThermalLabels } from '../utils/printProductThermalLabel'
 import { resolveManualWbLabelCount } from '../utils/productBarcodePrint'
@@ -119,18 +120,18 @@ function TapePreparationStatus({
   onRetry,
   onClose,
 }: {
-  state: 'preparing' | 'ready' | 'failed' | 'expired'
+  state: Exclude<CzArtifactTapePreparationState, 'idle'>
   onOpen: () => void
   onRetry: () => void
   onClose: () => void
 }) {
   if (state === 'preparing') {
-    return <Box data-testid="marking-print-preparing"><StatusChip label="Готовим к печати" tone="neutral" /><Typography variant="body2" color="text.secondary">Можно продолжать работу в WMS — лента собирается в фоне</Typography></Box>
+    return <Box data-testid="marking-print-preparing"><Typography variant="subtitle1">Готовим ленту…</Typography><StatusChip label="Готовим к печати" tone="neutral" /><Typography variant="body2" color="text.secondary">Можно продолжать работу в WMS — лента собирается в фоне</Typography><ActionGroup><SecondaryAction onClick={onClose} data-testid="marking-print-close-preparing">Закрыть</SecondaryAction></ActionGroup></Box>
   }
   if (state === 'ready') {
     return <Box data-testid="marking-print-ready"><StatusChip label="Готово" tone="ok" /><PrimaryAction onClick={onOpen} data-testid="marking-print-open-ready">Открыть для печати</PrimaryAction></Box>
   }
-  return <Box data-testid="marking-print-preparation-error"><Alert severity="error">{state === 'expired' ? 'Срок хранения ленты истёк. Соберите её ещё раз' : 'Не удалось собрать ленту. Попробуйте ещё раз'}</Alert><Stack direction="row" spacing={1} sx={{ mt: 1 }}><PrimaryAction onClick={onRetry} data-testid="marking-print-retry">Повторить</PrimaryAction><SecondaryAction onClick={onClose} data-testid="marking-print-close-error">Закрыть</SecondaryAction></Stack></Box>
+  return <Box data-testid="marking-print-preparation-error"><ErrorNotice>{state === 'expired' ? 'Срок хранения ленты истёк. Соберите её ещё раз' : 'Не удалось собрать ленту. Попробуйте ещё раз'}</ErrorNotice><ActionGroup><PrimaryAction onClick={onRetry} data-testid="marking-print-retry">Повторить</PrimaryAction><SecondaryAction onClick={onClose} data-testid="marking-print-close-error">Закрыть</SecondaryAction></ActionGroup></Box>
 }
 
 async function blobToDataUrl(blob: Blob): Promise<string> {
@@ -247,9 +248,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const [sepCzDone, setSepCzDone] = useState(false)
   const [tapePreparation, setTapePreparation] = useState<'idle' | 'preparing' | 'ready' | 'failed' | 'expired'>('idle')
   const [preparedTapeAssetId, setPreparedTapeAssetId] = useState<string | null>(null)
-  // The dialog stays mounted while its context changes. A generation makes a
-  // delayed job response from a closed dialog harmless for the next context.
-  const tapePreparationGeneration = useRef(0)
+  const tapePreparationTracker = useRef(new CzArtifactTapePreparationTracker()).current
 
   const requiresHonestSign = ctx?.requiresHonestSign ?? true
   const fbsTapeMode = Boolean(ctx?.fbsTape)
@@ -274,6 +273,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
    * NON_HONEST_SIGN_LABEL_LAYOUT выше.
    */
   const effectiveReprint = (reprint || inlineReprint) && requiresHonestSign
+  const tapePreparationContextKey = ctx
+    ? `${ctx.source ?? 'packaging'}:${ctx.lineId ?? ctx.productId}:${effectiveReprint ? 'reprint' : 'print'}`
+    : null
   const markingAlreadyPrinted = (ctx?.qtyMarkingPrinted ?? 0) > 0
   const canOpenInlineReprint = Boolean(
     ctx?.lineId && markingAlreadyPrinted && !fbsTapeMode && requiresHonestSign,
@@ -295,6 +297,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     () => resolvePrintPageSize(czLabelSize, czPrintOrientation),
     [czLabelSize, czPrintOrientation],
   )
+
   /** Физический размер страницы ЧЗ для native PDF (все режимы + ориентация). */
   const czTapePrintSize = useMemo(
     () =>
@@ -369,13 +372,17 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
    * смену lineId при том же товаре).
    */
   useEffect(() => {
-    tapePreparationGeneration.current += 1
     if (!open || !ctx) {
       return
     }
     setError(null)
-    setTapePreparation('idle')
-    setPreparedTapeAssetId(null)
+    const stopObservingTape = tapePreparationTracker.subscribe(
+      tapePreparationContextKey ?? '',
+      ({ state, assetId }) => {
+        setTapePreparation(state)
+        setPreparedTapeAssetId(assetId)
+      },
+    )
     setAllowPartial(false)
     setSeparateModeChoice(null)
     // Этикетка ШК ВБ клеится на единицу товара: разумное первое значение — сколько
@@ -397,7 +404,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     setWbLabelSize(resolveLabelSize(loadLabelSizeId('label')))
     if (!requiresHonestSign) {
       setLayout(cloneLayout(NON_HONEST_SIGN_LABEL_LAYOUT))
-      return
+      return stopObservingTape
     }
     const defaultPresetId = 'pairs' as const
     const defaultPreset =
@@ -436,7 +443,8 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         setLayout(cloneLayout(defaultPreset.layout))
       }
     })()
-  }, [open, ctx, requiresHonestSign])
+    return stopObservingTape
+  }, [open, ctx, requiresHonestSign, tapePreparationContextKey, tapePreparationTracker])
 
   const reprintLineId = fbsTapeMode ? undefined : ctx?.lineId
   const reprintToken = ctx?.token
@@ -633,21 +641,8 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     const codeIds = resolveCzArtifactTapeCodeIds(tapeUnits, printLayout)
     try {
       if (codeIds) {
-        const generation = tapePreparationGeneration.current
-        setTapePreparation('preparing')
-        try {
-          const prepared = await prepareCzArtifactTape(codeIds, ctx.token, size)
-          if (generation !== tapePreparationGeneration.current) {
-            return
-          }
-          setPreparedTapeAssetId(prepared.assetId)
-          setTapePreparation('ready')
-        } catch (error) {
-          if (generation !== tapePreparationGeneration.current) {
-            return
-          }
-          setTapePreparation(error instanceof Error && error.message.includes('истёк') ? 'expired' : 'failed')
-          throw error
+        if (tapePreparationContextKey) {
+          tapePreparationTracker.start(tapePreparationContextKey, codeIds, ctx.token, size)
         }
         return
       }
@@ -1715,7 +1710,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
               <TapePreparationStatus
                 state={tapePreparation}
                 onOpen={() => { beginPrintUserGesture(); void openPreparedTape() }}
-                onRetry={() => { setTapePreparation('idle'); void handlePrint() }}
+                onRetry={() => {
+                  if (tapePreparationContextKey) tapePreparationTracker.retry(tapePreparationContextKey)
+                }}
                 onClose={onClose}
               />
             ) : null}
@@ -1730,7 +1727,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
             <Button onClick={onClose} disabled={busy} data-testid="marking-print-separate-close">
               Закрыть
             </Button>
-          ) : tapePreparation === 'ready' || tapePreparation === 'failed' || tapePreparation === 'expired' ? null : (
+          ) : tapePreparation !== 'idle' ? null : (
             <>
               <Button onClick={onClose}>
                 Отмена

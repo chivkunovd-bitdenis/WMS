@@ -441,6 +441,7 @@ export async function fetchCzArtifactTapePdf(
 }
 
 export type CzArtifactTapeJobStatus = 'pending' | 'running' | 'done' | 'failed' | 'expired'
+export type CzArtifactTapePreparationState = 'idle' | 'preparing' | 'ready' | 'failed' | 'expired'
 
 export type PreparedCzArtifactTape = { assetId: string }
 
@@ -486,13 +487,97 @@ export async function prepareCzArtifactTape(
     }
     status = job.status
     if (status === 'failed' || status === 'expired') {
-      throw new Error('Не удалось собрать ленту. Попробуйте ещё раз')
+      throw new Error(
+        status === 'expired'
+          ? 'Срок хранения ленты истёк. Соберите её ещё раз'
+          : 'Не удалось собрать ленту. Попробуйте ещё раз',
+      )
     }
     if (status === 'done' && job.result_json?.asset_id) {
       return { assetId: job.result_json.asset_id }
     }
   }
   throw new Error(status === 'done' ? 'Срок хранения ленты истёк. Соберите её ещё раз' : 'Не удалось собрать ленту. Попробуйте ещё раз')
+}
+
+type CzArtifactTapePreparationSession = {
+  contextKey: string
+  codeIds: string[]
+  authToken: string
+  pageSize: Pick<LabelSize, 'widthMm' | 'heightMm'>
+  state: Exclude<CzArtifactTapePreparationState, 'idle'>
+  assetId: string | null
+}
+
+type CzArtifactTapePreparationSnapshot = {
+  state: CzArtifactTapePreparationState
+  assetId: string | null
+}
+
+/** Keeps only the latest dialog preparation alive while the mounted dialog is closed. */
+export class CzArtifactTapePreparationTracker {
+  private session: CzArtifactTapePreparationSession | null = null
+  private listeners = new Set<{
+    contextKey: string
+    listener: (snapshot: CzArtifactTapePreparationSnapshot) => void
+  }>()
+
+  subscribe(contextKey: string, listener: (snapshot: CzArtifactTapePreparationSnapshot) => void): () => void {
+    const subscription = { contextKey, listener }
+    this.listeners.add(subscription)
+    listener(this.snapshot(contextKey))
+    return () => this.listeners.delete(subscription)
+  }
+
+  start(
+    contextKey: string,
+    codeIds: string[],
+    authToken: string,
+    pageSize: Pick<LabelSize, 'widthMm' | 'heightMm'>,
+  ): void {
+    const session: CzArtifactTapePreparationSession = {
+      contextKey,
+      codeIds: [...codeIds],
+      authToken,
+      pageSize: { widthMm: pageSize.widthMm, heightMm: pageSize.heightMm },
+      state: 'preparing',
+      assetId: null,
+    }
+    this.session = session
+    this.emit()
+    void prepareCzArtifactTape(codeIds, authToken, pageSize).then(
+      ({ assetId }) => {
+        if (this.session !== session) return
+        session.state = 'ready'
+        session.assetId = assetId
+        this.emit()
+      },
+      (error: unknown) => {
+        if (this.session !== session) return
+        session.state = error instanceof Error && error.message.includes('истёк') ? 'expired' : 'failed'
+        this.emit()
+      },
+    )
+  }
+
+  retry(contextKey: string): void {
+    const session = this.session
+    if (!session || session.contextKey !== contextKey) return
+    this.start(contextKey, session.codeIds, session.authToken, session.pageSize)
+  }
+
+  private snapshot(contextKey: string): CzArtifactTapePreparationSnapshot {
+    if (!this.session || this.session.contextKey !== contextKey) return { state: 'idle', assetId: null }
+    return { state: this.session.state, assetId: this.session.assetId }
+  }
+
+  private emit(): void {
+    if (!this.session) return
+    const snapshot = this.snapshot(this.session.contextKey)
+    this.listeners.forEach((subscription) => {
+      if (subscription.contextKey === this.session?.contextKey) subscription.listener(snapshot)
+    })
+  }
 }
 
 let printWindowFromUserGesture: Window | null = null

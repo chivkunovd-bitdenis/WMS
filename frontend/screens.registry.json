@@ -134,6 +134,11 @@
       ],
       "id": "S-03",
       "shared": {
+        "src/components/MarkingPrintDialog.tsx": [
+          "S-03",
+          "S-14",
+          "S-15"
+        ],
         "src/api.ts": [
           "S-03",
           "S-04",
@@ -186,6 +191,10 @@
           "S-03",
           "S-09",
           "S-14"
+        ],
+        "src/utils/printMarkingCodeLabel.ts": [
+          "S-03",
+          "S-09"
         ],
         "src/utils/readApiErrorMessage.ts": [
           "S-03",

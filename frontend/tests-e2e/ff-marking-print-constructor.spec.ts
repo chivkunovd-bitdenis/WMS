@@ -1,8 +1,131 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 import { waitForGetOk, waitForPostOk } from './api-waits'
 import {beginInboundReceivingWithBoxes,  fulfillInboundViaBoxScans } from './inbound-boxes-helpers'
 import { openFulfillmentRegistration } from './auth-flow'
+import { seedHonestSignProductFirstInventory, selectHonestSignSeller } from './ff-honest-sign-helpers'
+
+async function openCatalogArtifactTapeDialog(page: Page) {
+  const suffix = Date.now()
+  const email = `e2e-bg-tape-${suffix}@example.com`
+  const password = 'password123'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+
+  await page.goto('/')
+  await openFulfillmentRegistration(page)
+  await page.getByTestId('register-form').getByLabel('Организация').fill('E2E Background Tape')
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email)
+  await page.getByTestId('register-form').getByLabel('Пароль').fill(password)
+  const [registration] = await Promise.all([
+    waitForPostOk(page, '/api/auth/register'),
+    waitForGetOk(page, '/api/auth/me'),
+    page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
+  ])
+  const token = String(((await registration.json()) as { access_token: string }).access_token)
+  const auth = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+  const sellerResponse = await page.request.post(`${e2eApi}/sellers`, {
+    headers: auth,
+    data: JSON.stringify({ name: 'E2E Background Tape Seller' }),
+  })
+  const sellerId = String(((await sellerResponse.json()) as { id: string }).id)
+  const { productX } = await seedHonestSignProductFirstInventory(
+    page,
+    e2eApi,
+    auth,
+    { Authorization: `Bearer ${token}` },
+    sellerId,
+    `BG-TAPE-${suffix}`,
+  )
+  await page.request.patch(`${e2eApi}/products/${productX.id}/packaging-instructions`, {
+    headers: auth,
+    data: JSON.stringify({ requires_honest_sign: true, packaging_instructions: 'ЧЗ' }),
+  })
+
+  await page.getByTestId('nav-ff-honest-sign').click()
+  await selectHonestSignSeller(page, sellerId)
+  const printAction = page.getByTestId(`ff-honest-sign-product-print-${productX.id}`)
+  await printAction.click()
+  await expect(page.getByTestId('marking-print-dialog')).toBeVisible()
+  return { printAction }
+}
+
+// S-03-TC-008 — ожидание подготовки и только явное открытие готового PDF.
+// S-03-TC-009 — повторное открытие тех же данных показывает существующее активное задание.
+test('S-03 marking tape keeps one background job across dialog reopen and opens PDF explicitly', async ({ page }) => {
+  test.setTimeout(180_000)
+  const { printAction } = await openCatalogArtifactTapeDialog(page)
+  let tapeStarts = 0
+  let contentRequests = 0
+  let releaseJob = false
+
+  await page.route('**/operations/marking-codes/products/*/print', async (route) => {
+    const request = route.request()
+    const body = request.postDataJSON() as { layout_json: unknown }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        codes: ['010460000000000121BACKGROUND0001'],
+        duplicate_copies: 1,
+        quantity: 1,
+        shortage: 0,
+        layout: body.layout_json,
+        printed_codes: [{
+          id: 'code-background-1',
+          cis_code: '010460000000000121BACKGROUND0001',
+          has_label_artifact: true,
+        }],
+      }),
+    })
+  })
+  await page.route('**/operations/marking-codes/label-artifact-tape', async (route) => {
+    tapeStarts += 1
+    await route.fulfill({
+      status: 202,
+      contentType: 'application/json',
+      body: JSON.stringify({ job_id: 'job-background-1' }),
+    })
+  })
+  await page.route('**/operations/background-jobs/job-background-1', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(releaseJob
+        ? { status: 'done', result_json: { asset_id: 'asset-background-1' } }
+        : { status: 'running', result_json: null }),
+    })
+  })
+  await page.route('**/operations/fbs-print-assets/asset-background-1/content', async (route) => {
+    contentRequests += 1
+    await route.fulfill({ status: 200, contentType: 'application/pdf', body: '%PDF-1.4\n%%EOF' })
+  })
+
+  await page.getByTestId('marking-print-confirm').click()
+  await expect(page.getByTestId('marking-print-preparing')).toContainText('Готовим ленту…')
+  await expect(page.getByTestId('marking-print-preparing')).toContainText('Готовим к печати')
+  await expect(page.getByTestId('marking-print-preparing')).toContainText('лента собирается в фоне')
+  await expect(page.getByTestId('marking-print-confirm')).toHaveCount(0)
+  expect(contentRequests).toBe(0)
+
+  await page.getByTestId('marking-print-close-preparing').click()
+  await expect(page.getByTestId('marking-print-dialog')).toBeHidden()
+  await printAction.click()
+  await expect(page.getByTestId('marking-print-preparing')).toBeVisible()
+  expect(tapeStarts).toBe(1)
+
+  releaseJob = true
+  await expect(page.getByTestId('marking-print-ready')).toContainText('Готово')
+  await expect(page.getByTestId('marking-print-open-ready')).toBeVisible()
+  expect(contentRequests).toBe(0)
+
+  const [popup] = await Promise.all([
+    page.waitForEvent('popup'),
+    page.getByTestId('marking-print-open-ready').click(),
+  ])
+  await expect.poll(() => contentRequests).toBe(1)
+  expect(popup).toBeTruthy()
+  expect(tapeStarts).toBe(1)
+})
 
 // TC-NEW-002 — ЧЗ T1.3: конструктор печати — баннер нехватки, пресет «Парами», частичная печать.
 // TC-NEW-CZ-PRINT-01 — ЧЗ этикетка 58×40: DataMatrix слева + служебный блок справа.
