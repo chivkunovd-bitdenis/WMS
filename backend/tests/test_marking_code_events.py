@@ -144,6 +144,8 @@ async def test_wb_orphaned_event_is_recorded_without_releasing_code(
             )
         ).scalar_one()
         await session.refresh(code)
+        assert event.event_type == EVENT_WB_ORPHANED
+        assert event.code_id == code.id
         assert event.pool_id == original_pool_id
         assert code.status == original_status
         assert code.pool_id == original_pool_id

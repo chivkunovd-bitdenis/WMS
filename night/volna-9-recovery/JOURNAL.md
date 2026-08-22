@@ -55,3 +55,5 @@
 20:01   01-wb-marking · reviewer: готово
 20:01   01-wb-marking · reviewer: находки, круг 1 — назад к разработке
 20:04   01-wb-marking · backend-dev: готово
+20:04   01-wb-marking · dev: фича 1/5 сохранена 8b2a1b0af746
+20:07   01-wb-marking · backend-dev: готово

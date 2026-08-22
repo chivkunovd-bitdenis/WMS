@@ -1,36 +1,27 @@
-# DEV · 01-wb-marking · backend-dev · атом 2
+# DEV · 01-wb-marking · backend-dev · атом 2 (rework)
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/models/marking_code.py` — проверено: `EVENT_WB_ORPHANED` объявлен и входит в `MARKING_CODE_EVENT_TYPES`; код, статус и пул при записи события не изменяются.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_marking_code_events.py` — проверено: тест создаёт `wb_orphaned` через существующий журнал и подтверждает сохранность статуса, пула и товарной привязки.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/night/volna-9-recovery/cards/01-wb-marking/DEV.md` — отчёт этого запуска.
-
-Реализационный код и тест уже были в текущем `HEAD` (`5ae86fe`); дополнительный diff в backend для этого атома не потребовался.
-
-## Миграции
-
-Нет: используется существующий журнал событий, схема не меняется.
-
-## Тесты
-
-- `backend/tests/test_marking_code_events.py::test_wb_orphaned_event_is_recorded_without_releasing_code` — запись допустимого события и проверка неизменности статуса, `pool_id` и `product_id`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_marking_code_events.py` — усилена проверка записи `wb_orphaned`: аудит-событие сохраняет допустимый тип и ссылку на исходный КИЗ, не меняя статус, пул или товар КИЗ.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/models/marking_code.py` — в базовом коммите этого атома уже определены `EVENT_WB_ORPHANED` и его допустимость в `MARKING_CODE_EVENT_TYPES`; повторная правка модели не потребовалась.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/night/volna-9-recovery/cards/01-wb-marking/DEV.md` — отчёт rework-прохода.
 
 ## Гейты
 
 - `ruff check backend/app/models/marking_code.py backend/tests/test_marking_code_events.py` — PASS.
-- `mypy backend/app/models/marking_code.py` — PASS.
-- `pytest -q backend/tests/test_marking_code_events.py` — PASS: 3 passed.
-- `ruff check .` из `backend/` — FAIL: 80 ранее существующих ошибок в несвязанных файлах.
-- `mypy .` из `backend/` — FAIL: 21 ранее существующая ошибка в 6 несвязанных файлах.
-- `pytest -q` из `backend/` — запущен; полный прогон длительный, на момент оформления артефакта продолжался, целевой тест зелёный.
-- `python3 scripts/ci/back_guard.py` — BLOCKED: файл отсутствует в рабочей копии.
-- `python3 scripts/ci/check_migrations.py` — BLOCKED: файл отсутствует в рабочей копии.
+- `mypy backend/app/models/marking_code.py backend/tests/test_marking_code_events.py` — PASS.
+- `pytest -q backend/tests/test_marking_code_events.py` — PASS.
+- `ruff check .` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend` — FAIL: 80 уже существующих ошибок вне изменённых файлов.
+- `mypy .` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend` — FAIL: 21 уже существующая ошибка в шести посторонних файлах.
+- `pytest` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend` — итог не получен: запуск собрал 827 тестов и начал выполнение, но среда прекратила возврат вывода до финального статуса; целевой набор прошёл.
+- `python3 scripts/ci/back_guard.py` — не запущен: файла `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/scripts/ci/back_guard.py` в рабочей копии нет.
+- `python3 scripts/ci/check_migrations.py` — не запущен: файла `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/scripts/ci/check_migrations.py` в рабочей копии нет; миграции не добавлялись.
 
 ## Не реализовано
 
-- Ничего из контракта атома 2: `wb_orphaned` уже поддерживался существующей моделью и тестом; новые таблицы и миграции не нужны.
+- Замечание review №7 о проверке вызова `wb_orphaned` из сервисной сверки не менялось: этот вызов и сценарии `missing`/`replacement_required` принадлежат следующему атому 3 в `backend/app/services/fbs_marking_service.py`. В границе атома 2 покрыта допустимость и сохранение самого события в существующем журнале.
+- Прочие замечания `REVIEW.md` относятся к атомам 1, 3 и 4; этот проход не затрагивает соседние сервисы.
 
 ## Находки
 
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных, боевой прод и живой кабинет Wildberries не читались и не изменялись.
+- Секреты, токены, `.env`, кабинеты учётных данных, боевой прод и живой кабинет Wildberries не читались и не изменялись.
