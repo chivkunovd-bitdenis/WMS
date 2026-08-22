@@ -1308,21 +1308,16 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                             маркировка отклонена/не хватает — это и есть главное состояние,
                             оно важнее декоративного статуса. Всё остальное — обычным
                             текстом ниже, без цвета. */}
-                        {statusGroup === 'expired' ? (
-                          <Stack spacing={0.25}>
-                            <StatusChip
-                              label={metaStatus.label}
-                              tone={metaStatus.tone}
-                              testId={`fbs-order-${order.id}-wb-verdict`}
-                            />
-                            {metaStatus.reason ? <TextCell value={metaStatus.reason} width={180} /> : null}
-                            {metaStatus.label === 'Нет ответа WB' ? <TextCell value="Сдача пока недоступна" width={180} /> : null}
-                          </Stack>
-                        ) : statusGroup !== 'expired' ? (
-                          // «Отменённые»: заказ уже закрыт, состояние маркировки для решения
-                          // не нужно — главное здесь то, чем закончился заказ (Отменён/Дефект).
-                          <FbsStatusChip status={order.status} />
-                        ) : null}
+                        <Stack spacing={0.25}>
+                          <StatusChip
+                            label={metaStatus.label}
+                            tone={metaStatus.tone}
+                            testId={`fbs-order-${order.id}-wb-verdict`}
+                          />
+                          {metaStatus.reason ? <TextCell value={metaStatus.reason} width={180} /> : null}
+                          {metaStatus.label === 'Нет ответа WB' ? <TextCell value="Сдача пока недоступна" width={180} /> : null}
+                          {statusGroup === 'cancelled' ? <FbsStatusChip status={order.status} /> : null}
+                        </Stack>
                         {localSupplyMissing ? (
                           <Tooltip title={EXTERNAL_WB_SUPPLY_HINT}>
                             <Typography
