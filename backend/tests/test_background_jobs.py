@@ -80,6 +80,36 @@ async def test_duplicate_pending_job_is_not_republished(async_client: AsyncClien
 
 
 @pytest.mark.asyncio
+async def test_finished_marking_job_can_be_retried_with_same_idempotency_key(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post("/auth/register", json={
+        "organization_name": "Tape Retry Co", "slug": f"tape-retry-{suffix}",
+        "admin_email": f"tape-retry-{suffix}@example.com", "password": "password123",
+    })
+    tenant_id = uuid.UUID(
+        str(decode_access_token(reg.json()["access_token"])["tenant_id"])
+    )
+    async with SessionLocal() as session:
+        first = await create_pending_job(
+            session, tenant_id, job_type=JOB_TYPE_MARKING_LABEL_TAPE,
+            idempotency_key="retryable-request", payload_json={"code_ids": ["1"]},
+        )
+        first.status = JOB_STATUS_FAILED
+        await session.commit()
+
+        second = await create_pending_job(
+            session, tenant_id, job_type=JOB_TYPE_MARKING_LABEL_TAPE,
+            idempotency_key="retryable-request", payload_json={"code_ids": ["1"]},
+        )
+
+        assert second.id != first.id
+        assert second.status == JOB_STATUS_PENDING
+        assert second.__dict__["created_by_call"] is True
+
+
+@pytest.mark.asyncio
 async def test_marking_label_tape_worker_does_not_reclaim_running_job(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,

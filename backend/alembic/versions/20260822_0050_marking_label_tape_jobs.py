@@ -19,6 +19,7 @@ def upgrade() -> None:
         ["tenant_id", "job_type", "idempotency_key"],
         unique=True,
         postgresql_where=sa.text("status IN ('pending', 'running')"),
+        sqlite_where=sa.text("status IN ('pending', 'running')"),
     )
     op.add_column("fbs_print_assets", sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True))
 

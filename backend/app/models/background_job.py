@@ -25,6 +25,7 @@ class BackgroundJob(Base):
             "idempotency_key",
             unique=True,
             postgresql_where=text("status IN ('pending', 'running')"),
+            sqlite_where=text("status IN ('pending', 'running')"),
         ),
     )
 

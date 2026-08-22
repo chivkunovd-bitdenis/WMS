@@ -1,29 +1,35 @@
-# DEV · 05-prod-slow · атом 2
+# Backend-dev отчёт · 05-prod-slow
 
 ## Изменённые файлы
 
-В рамках повторной проверки атома изменений в исходном коде не потребовалось: реализация уже содержит независимые задания `wms.wb_orders_new` и `wms.wb_orders_reconcile`, Beat-периоды 180 и 3600 секунд, а также single-flight по `(seller_id, sync_kind)` без `wb_seller_lock` на HTTP-чтении.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/models/background_job.py` — активный уникальный индекс идемпотентности теперь условный и для PostgreSQL, и для SQLite.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/alembic/versions/20260822_0050_marking_label_tape_jobs.py` — миграция создаёт такой же частичный индекс в SQLite.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_background_jobs.py` — добавлен регрессионный тест повторного запуска после `failed` с тем же ключом.
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/fbs_autopoll_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/tasks/background_jobs.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/celery_app.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_wb_marketplace_orders_service.py`
+## Что реализовано
+
+- Существующий сервис `create_pending_job` сохраняет одну активную (`pending`/`running`) задачу `marking_label_tape` по ключу идемпотентности; завершённые задачи больше не блокируют повтор.
+- Существующий worker сохраняет в `result_json` только `asset_id`, а PDF остаётся в print asset с 12-часовым сроком выдачи.
+
+## Миграции
+
+- `20260822_0050` — добавляет `background_jobs.idempotency_key`, частичный уникальный индекс активных задач (PostgreSQL и SQLite), `fbs_print_assets.expires_at`.
 
 ## Гейты
 
-- ruff: адресные файлы атома — PASS; полный `ruff check .` — FAIL на 80 pre-existing ошибках в несвязанных файлах.
-- mypy: FAIL на 4 pre-existing ошибках в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py` и `fbs_warehouse_binding_service.py`; в файлах атома ошибок нет.
-- pytest: адресный `tests/test_wb_marketplace_orders_service.py` — 12 passed; полный прогон остановлен вручную после 46% (до остановки были failures в pre-existing тестах `test_fbs_*`).
-- back_guard.py: не запущен — файл отсутствует в данной рабочей копии (`scripts/ci/back_guard.py` не найден).
-- check_migrations.py: не запущен — файл отсутствует в данной рабочей копии (`scripts/ci/check_migrations.py` не найден).
+- `ruff check .` — FAIL: 80 уже существующих нарушений в несвязанных файлах; в изменённых backend-файлах ошибок нет.
+- `mypy .` — FAIL: 21 уже существующая ошибка в 6 несвязанных файлах; изменённые файлы в выводе отсутствуют.
+- `pytest` из `backend/` — полный прогон начат, выявлены падения в несвязанных существующих сценариях; целевые `tests/test_background_jobs.py tests/test_fbs_print_assets.py`: PASS, 14 passed.
+- `python3 scripts/ci/back_guard.py` — не запущен: файл отсутствует в этой рабочей копии (`scripts/ci/back_guard.py` не найден).
+- `python3 scripts/ci/check_migrations.py` — не запущен: файл отсутствует в этой рабочей копии (`scripts/ci/check_migrations.py` не найден).
+- `git diff --check` — PASS.
 
 ## Не реализовано
 
-- Находки ревью №1 и №2–11 относятся к Docker, print-job, UI, модели фоновых job и экранным тестам; они не входят в файлы и backend-слой атома 2 и здесь не менялись.
-- Backend-находок, требующих исправления в пределах атома 2, нет.
+- Frontend polling, закрытие диалога, popup/fallback и E2E-сценарии не менялись: это не backend-слой данного атома.
+- Отдельный Celery worker очереди `print` не менялся: это инфраструктурный файл, не входящий в разрешённый backend-атом.
+- Новых эндпоинтов нет, поэтому отдельный роут-тест не требуется.
 
-## Блокеры
+## Находки
 
-Нет блокеров по реализации атома. Полные ruff/mypy имеют чужие pre-existing ошибки; обязательные CI-скрипты отсутствуют в рабочей копии.
-
-Сохранение commit невозможно из-за ограничения прав на общий git worktree: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-05-prod-slow/index.lock`.
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных, боевой прод и живой кабинет Wildberries не читались и не затрагивались.
