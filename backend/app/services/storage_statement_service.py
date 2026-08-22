@@ -4,7 +4,7 @@ import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -67,6 +67,12 @@ async def fix_storage_statement(
         .where(BillingTariffVersion.service_code == "storage_liter_day")
         .where(BillingTariffVersion.unit == "liter_day")
         .where(BillingTariffVersion.effective_from <= statement.period_end)
+        .where(
+            or_(
+                BillingTariffVersion.seller_id.is_(None),
+                BillingTariffVersion.seller_id == statement.seller_id,
+            )
+        )
         .order_by(BillingTariffVersion.effective_from.desc())
     )
     if tariff is None:
@@ -115,11 +121,19 @@ async def get_fixed_storage_statement(
     )
     if statement is None:
         raise StorageStatementError("not_found")
+    # Measurements are immutable input, but a fixed document is reconstructed
+    # from its ledger rows so a later rebuild can never change the printout.
+    _, BillingLedgerEntry = _billing_models()
+    ledger_rows = list((await session.scalars(select(BillingLedgerEntry).where(
+        BillingLedgerEntry.tenant_id == tenant_id,
+        BillingLedgerEntry.seller_id == statement.seller_id,
+        BillingLedgerEntry.source_type == "storage_measurement",
+        BillingLedgerEntry.service_code == "storage_liter_day",
+        BillingLedgerEntry.source_id.is_not(None),
+    ).order_by(BillingLedgerEntry.id))).all())
+    ids = [row.source_id for row in ledger_rows]
     rows = list((await session.scalars(select(StorageMeasurement).where(
         StorageMeasurement.tenant_id == tenant_id,
-        StorageMeasurement.seller_id == statement.seller_id,
-        StorageMeasurement.warehouse_id == statement.warehouse_id,
-        StorageMeasurement.period_start == statement.period_start,
-        StorageMeasurement.period_end == statement.period_end,
+        StorageMeasurement.id.in_(ids) if ids else False,
     ).order_by(StorageMeasurement.id))).all())
     return statement, rows

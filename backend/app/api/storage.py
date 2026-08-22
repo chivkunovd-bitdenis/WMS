@@ -1,19 +1,20 @@
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_ff_or_seller, require_ff_or_seller_with_permission
-from app.services.staff_permissions_service import PERM_INVENTORY
+from app.api.deps import require_ff_or_seller_with_permission
 from app.core.settings import settings
 from app.db.session import get_db
 from app.models.user import User
 from app.services import background_job_service as job_svc
 from app.services.background_job_service import JOB_TYPE_STORAGE_MEASUREMENT_REBUILD
+from app.services.staff_permissions_service import PERM_INVENTORY
 from app.services.storage_statement_service import (
     StorageStatementError,
     fix_storage_statement,
@@ -42,6 +43,24 @@ class StorageStatementOut(BaseModel):
     period_start: str
     period_end: str
     measurements: list[dict[str, object]]
+    total_liter_days: str
+    total_amount: str
+
+
+def _statement_out(statement, rows) -> StorageStatementOut:
+    total_liter_days = sum((Decimal(str(row.liter_days)) for row in rows), Decimal(0))
+    return StorageStatementOut(
+        id=statement.id,
+        status=statement.status,
+        fixed_at=statement.fixed_at.isoformat() if statement.fixed_at else None,
+        period_start=statement.period_start.isoformat(),
+        period_end=statement.period_end.isoformat(),
+        measurements=[
+            {"product_id": row.product_id, "liter_days": str(row.liter_days)} for row in rows
+        ],
+        total_liter_days=str(total_liter_days),
+        total_amount="0",
+    )
 
 
 @router.post(
@@ -79,7 +98,7 @@ async def rebuild_storage(
 @router.post("/statements/{statement_id}/fix", response_model=StorageStatementOut)
 async def fix_statement(
     statement_id: uuid.UUID,
-    user: Annotated[User, Depends(require_ff_or_seller)],
+    user: Annotated[User, Depends(require_storage_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> StorageStatementOut:
     if user.role != "fulfillment_admin":
@@ -93,34 +112,19 @@ async def fix_statement(
             status_code=409 if code in {"missing_dimensions", "not_editable"} else 404,
             detail=code,
         ) from exc
-    return StorageStatementOut(
-        id=statement.id,
-        status=statement.status,
-        fixed_at=statement.fixed_at.isoformat() if statement.fixed_at else None,
-        period_start=statement.period_start.isoformat(),
-        period_end=statement.period_end.isoformat(),
-        measurements=[
-            {"product_id": row.product_id, "liter_days": str(row.liter_days)} for row in rows
-        ],
-    )
+    return _statement_out(statement, rows)
 
 
 @router.get("/statements/{statement_id}/print", response_model=StorageStatementOut)
 async def print_statement(
     statement_id: uuid.UUID,
-    user: Annotated[User, Depends(require_ff_or_seller)],
+    user: Annotated[User, Depends(require_storage_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> StorageStatementOut:
     try:
         statement, rows = await get_fixed_storage_statement(session, user.tenant_id, statement_id)
+        if user.role == "fulfillment_seller" and user.seller_id != statement.seller_id:
+            raise StorageStatementError("not_found")
     except StorageStatementError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return StorageStatementOut(
-        id=statement.id, status=statement.status,
-        fixed_at=statement.fixed_at.isoformat() if statement.fixed_at else None,
-        period_start=statement.period_start.isoformat(),
-        period_end=statement.period_end.isoformat(),
-        measurements=[
-            {"product_id": row.product_id, "liter_days": str(row.liter_days)} for row in rows
-        ],
-    )
+    return _statement_out(statement, rows)
