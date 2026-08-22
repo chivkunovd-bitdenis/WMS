@@ -74,3 +74,8 @@
 19:52   09-billing · dev: фича 10/11 сохранена e266071f3f89
 19:54   09-billing · screen-dev: готово
 19:54   09-billing · dev: фича 11/11 сохранена 3bc6692bc9a7
+20:02   09-billing · reviewer: готово
+20:02 09-billing: отложено — reviewer, круги кончились
+22:12   09-billing · resume: поатомный rework Terra по сохранённым находкам
+23:43   09-billing · resume: поатомный rework Terra по сохранённым находкам
+23:47   09-billing · backend-dev: готово
