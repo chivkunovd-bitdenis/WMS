@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Box, Button, MenuItem, Select, Stack, Tab, Tabs } from '@mui/material'
+import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Select, Stack, Tab, Tabs, Typography } from '@mui/material'
+import ExpandMore from '@mui/icons-material/ExpandMore'
 import {
   DataTable,
   EmptyState,
@@ -12,6 +13,10 @@ import {
   ScreenHeader,
   StatusChip,
   TextCell,
+  DangerAction,
+  IconAction,
+  PrintAction,
+  SecondaryAction,
 } from '../../ui-kit'
 
 type Seller = { id: string; name: string }
@@ -30,6 +35,8 @@ type LedgerEntry = {
   problem: 'unpriced' | 'storage_period_not_closed' | null
 }
 type PerformerRow = { performer_name: string; service_code: string; unit: string; quantity: number; documents: number }
+type Invoice = { id: string; number: string; period: string; seller_name: string; issued_at: string; total_amount: number; status: 'issued' | 'cancelled'; issues?: { seller_name: string; period: string; reason: string }[]; lines?: InvoiceLine[]; ff_profile?: Record<string, string>; seller_profile?: Record<string, string> }
+type InvoiceLine = { id: string; service_code: string; unit: string; quantity: number; rate: number; amount: number; documents?: { date: string; number: string; quantity: number; amount: number }[] }
 
 function currentMonth(): string {
   const now = new Date()
@@ -54,6 +61,14 @@ export function FfBillingScreen({ sellers = [] }: Props) {
   const [rows, setRows] = useState<LedgerEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [invoiceLoading, setInvoiceLoading] = useState(false)
+  const [invoiceError, setInvoiceError] = useState(false)
+  const [invoiceSearch, setInvoiceSearch] = useState('')
+  const [invoiceStatus, setInvoiceStatus] = useState('all')
+  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
+  const [expandedLine, setExpandedLine] = useState<string | null>(null)
+  const [cancelConfirm, setCancelConfirm] = useState(false)
 
   useEffect(() => {
     if (tab !== 0) return
@@ -72,6 +87,20 @@ export function FfBillingScreen({ sellers = [] }: Props) {
       .finally(() => setLoading(false))
     return () => controller.abort()
   }, [month, mode, search, service, sellerId, tab])
+
+  useEffect(() => {
+    if (tab !== 1) return
+    const controller = new AbortController()
+    setInvoiceLoading(true); setInvoiceError(false)
+    const params = new URLSearchParams({ period: month, seller_id: sellerId, status: invoiceStatus })
+    if (invoiceSearch) params.set('number', invoiceSearch)
+    fetch(`/api/billing/invoices?${params}`, { signal: controller.signal })
+      .then((response) => { if (!response.ok) throw new Error('billing-invoices'); return response.json() as Promise<{ invoices?: Invoice[]; rows?: Invoice[] }> })
+      .then((data) => setInvoices(data.invoices ?? data.rows ?? []))
+      .catch((reason: unknown) => { if ((reason as Error).name !== 'AbortError') setInvoiceError(true) })
+      .finally(() => setInvoiceLoading(false))
+    return () => controller.abort()
+  }, [invoiceSearch, invoiceStatus, month, sellerId, tab])
 
   const performerRows = useMemo<PerformerRow[]>(() => {
     const grouped = new Map<string, PerformerRow>()
@@ -107,26 +136,46 @@ export function FfBillingScreen({ sellers = [] }: Props) {
   const activeRows = mode === 'operations' ? rows : performerRows
   const hasFilters = Boolean(search || sellerId !== 'all' || service !== 'all')
   const hasUnpriced = rows.some((row) => row.problem === 'unpriced')
+  const invoiceColumns = [
+    { key: 'number', header: 'Номер', width: 170, render: (row: Invoice) => <TextCell value={row.number} /> },
+    { key: 'period', header: 'Период', width: 150, render: (row: Invoice) => <TextCell value={row.period} /> },
+    { key: 'seller', header: 'Селлер', width: 220, render: (row: Invoice) => <TextCell value={row.seller_name} /> },
+    { key: 'issued', header: 'Выставлен', width: 150, render: (row: Invoice) => <TextCell value={new Date(row.issued_at).toLocaleDateString('ru-RU')} /> },
+    { key: 'amount', header: 'Сумма', width: 160, align: 'right' as const, render: (row: Invoice) => <MoneyCell value={row.total_amount} /> },
+    { key: 'status', header: 'Статус', width: 140, render: (row: Invoice) => <StatusChip label={row.status === 'issued' ? 'Выставлен' : 'Отменён'} tone={row.status === 'issued' ? 'ok' : 'neutral'} /> },
+    { key: 'action', header: 'Действие', width: 70, render: (row: Invoice) => <IconAction title="Открыть счёт" testId={`billing-invoice-open-${row.id}`} onClick={() => { setSelectedInvoice(row); setExpandedLine(null) }}><ExpandMore fontSize="small" /></IconAction> },
+  ]
+  const printInvoice = () => {
+    if (!selectedInvoice) return
+    const lines = selectedInvoice.lines ?? []
+    const html = `<html><body><h1>Счёт ${selectedInvoice.number}</h1><p>${selectedInvoice.period} · ${selectedInvoice.seller_name}</p>${lines.map((line) => `<p>${serviceLabels[line.service_code] ?? line.service_code} · ${line.quantity} · ${line.amount}</p>`).join('')}<h2>Итого: ${selectedInvoice.total_amount}</h2></body></html>`
+    const printWindow = window.open('', '_blank'); printWindow?.document.write(html); printWindow?.document.close(); printWindow?.print()
+  }
+  const cancelInvoice = () => {
+    if (!selectedInvoice || selectedInvoice.status !== 'issued') return
+    fetch(`/api/billing/invoices/${selectedInvoice.id}/cancel`, { method: 'POST' })
+      .then((response) => { if (!response.ok) throw new Error('cancel') ; return response.json() as Promise<{ status: Invoice['status'] }> })
+      .then((data) => { const updated = { ...selectedInvoice, status: data.status }; setSelectedInvoice(updated); setInvoices((items) => items.map((item) => item.id === updated.id ? updated : item)); setCancelConfirm(false) })
+  }
 
   return <Box data-testid="ff-billing-screen">
     <ScreenHeader title="Расчёты" purpose="Начисления за работу склада и автоматически выставленные счета селлерам." />
     <Tabs value={tab} onChange={(_, value: number) => setTab(value)} aria-label="Расчёты">
       <Tab label="Начисления" data-testid="billing-tab-charges" /><Tab label="Счета" data-testid="billing-tab-invoices" />
     </Tabs>
-    <FilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Номер документа" testId="billing-filter-bar">
+    <FilterBar search={tab === 0 ? search : invoiceSearch} onSearchChange={tab === 0 ? setSearch : setInvoiceSearch} searchPlaceholder={tab === 0 ? 'Номер документа' : 'Номер счёта'} testId="billing-filter-bar">
       <PeriodPicker value={month} onChange={setMonth} testId="billing-period" />
       <Select size="small" value={sellerId} onChange={(event) => setSellerId(event.target.value)} inputProps={{ 'data-testid': 'billing-seller' }} sx={{ minWidth: 190 }} aria-label="Селлер">
         <MenuItem value="all">Все селлеры</MenuItem>{sellers.map((seller) => <MenuItem key={seller.id} value={seller.id}>{seller.name}</MenuItem>)}
       </Select>
-      <Select size="small" value={service} onChange={(event) => setService(event.target.value)} inputProps={{ 'data-testid': 'billing-service' }} sx={{ minWidth: 160 }} aria-label="Услуга">
+      {tab === 0 ? <Select size="small" value={service} onChange={(event) => setService(event.target.value)} inputProps={{ 'data-testid': 'billing-service' }} sx={{ minWidth: 160 }} aria-label="Услуга">
         <MenuItem value="all">Все услуги</MenuItem><MenuItem value="inbound">Приёмка</MenuItem><MenuItem value="marketplace_outbound">Отгрузка</MenuItem><MenuItem value="storage">Хранение</MenuItem>
-      </Select>
-      <Select size="small" value={mode} onChange={(event) => setMode(event.target.value as typeof mode)} inputProps={{ 'data-testid': 'billing-mode' }} sx={{ minWidth: 190 }} aria-label="Режим">
+      </Select> : <Select size="small" value={invoiceStatus} onChange={(event) => setInvoiceStatus(event.target.value)} inputProps={{ 'data-testid': 'billing-status' }} sx={{ minWidth: 160 }} aria-label="Статус"><MenuItem value="all">Все статусы</MenuItem><MenuItem value="issued">Выставлен</MenuItem><MenuItem value="cancelled">Отменён</MenuItem></Select>}
+      {tab === 0 ? <Select size="small" value={mode} onChange={(event) => setMode(event.target.value as typeof mode)} inputProps={{ 'data-testid': 'billing-mode' }} sx={{ minWidth: 190 }} aria-label="Режим">
         <MenuItem value="operations">По операциям</MenuItem><MenuItem value="performers">По исполнителям</MenuItem>
-      </Select>
+      </Select> : null}
     </FilterBar>
-    {error ? <ErrorNotice testId="billing-error">Не удалось загрузить начисления. Повторите попытку</ErrorNotice> : null}
-    {hasUnpriced && mode === 'operations' ? <Stack direction="row" sx={{ mb: 2 }}><PrimaryAction onClick={() => undefined}>Открыть тарифы</PrimaryAction></Stack> : null}
-    <DataTable columns={mode === 'operations' ? operationColumns : performerColumns} rows={activeRows} loading={loading} getRowKey={(row) => ('id' in row ? row.id : `${row.performer_name}-${row.service_code}-${row.unit}`)} testId="billing-ledger-table" empty={{ title: mode === 'performers' ? 'За месяц нет завершённых операций с исполнителем' : hasFilters ? 'По выбранным условиям начислений нет — измените фильтры' : 'За выбранный месяц начислений нет', hint: mode === 'performers' ? undefined : 'Начисления появятся после завершённой приёмки, отгрузки или фиксации хранения' }} />
+    {tab === 0 ? <><>{error ? <ErrorNotice testId="billing-error">Не удалось загрузить начисления. Повторите попытку</ErrorNotice> : null}</>{hasUnpriced && mode === 'operations' ? <Stack direction="row" sx={{ mb: 2 }}><PrimaryAction onClick={() => undefined}>Открыть тарифы</PrimaryAction></Stack> : null}<DataTable columns={mode === 'operations' ? operationColumns : performerColumns} rows={activeRows} loading={loading} getRowKey={(row) => ('id' in row ? row.id : `${row.performer_name}-${row.service_code}-${row.unit}`)} testId="billing-ledger-table" empty={{ title: mode === 'performers' ? 'За месяц нет завершённых операций с исполнителем' : hasFilters ? 'По выбранным условияиям начислений нет — измените фильтры' : 'За выбранный месяц начислений нет', hint: mode === 'performers' ? undefined : 'Начисления появятся после завершённой приёмки, отгрузки или фиксации хранения' }} /></> : <><>{invoiceError ? <ErrorNotice testId="billing-invoices-error">Не удалось загрузить счета. Повторите попытку</ErrorNotice> : null}</><DataTable columns={invoiceColumns} rows={invoices} loading={invoiceLoading} getRowKey={(row) => row.id} testId="billing-invoices-table" empty={{ title: 'За этот месяц счета не выставлены', hint: 'Нет начислений для формирования' }} /></>}
+    <Dialog open={Boolean(selectedInvoice)} onClose={() => setSelectedInvoice(null)} maxWidth="lg" fullWidth aria-labelledby="billing-invoice-dialog-title"><DialogTitle id="billing-invoice-dialog-title">Счёт {selectedInvoice?.number} {selectedInvoice ? <StatusChip label={selectedInvoice.status === 'issued' ? 'Выставлен' : 'Отменён'} tone={selectedInvoice.status === 'issued' ? 'ok' : 'neutral'} /> : null}</DialogTitle><DialogContent dividers>{selectedInvoice ? <Stack spacing={2}><Typography>Период: {selectedInvoice.period} · Выставлен: {new Date(selectedInvoice.issued_at).toLocaleDateString('ru-RU')}</Typography><Stack direction="row" spacing={2}><Box flex={1}><Typography fontWeight="bold">Получатель</Typography><Typography>{selectedInvoice.ff_profile?.legal_name ?? 'Реквизиты ФФ'}</Typography></Box><Box flex={1}><Typography fontWeight="bold">Плательщик</Typography><Typography>{selectedInvoice.seller_profile?.legal_name ?? selectedInvoice.seller_name}</Typography></Box></Stack><DataTable columns={[{ key: 'service', header: 'Услуга', render: (line: InvoiceLine) => serviceLabels[line.service_code] ?? line.service_code }, { key: 'unit', header: 'Расчёт', render: (line: InvoiceLine) => unitLabels[line.unit] ?? line.unit }, { key: 'qty', header: 'Количество', render: (line: InvoiceLine) => <QtyCell value={line.quantity} /> }, { key: 'rate', header: 'Ставка', render: (line: InvoiceLine) => <MoneyCell value={line.rate} /> }, { key: 'amount', header: 'Сумма', render: (line: InvoiceLine) => <MoneyCell value={line.amount} /> }, { key: 'details', header: 'Детализация', render: (line: InvoiceLine) => <IconAction title="Показать документы" onClick={() => setExpandedLine(expandedLine === line.id ? null : line.id)}><ExpandMore fontSize="small" /></IconAction> }]} rows={selectedInvoice.lines ?? []} loading={false} getRowKey={(line) => line.id} testId="billing-invoice-lines" empty={{ title: 'Строк счёта нет' }} />{expandedLine ? <Typography data-testid="billing-invoice-documents">Исходные документы: {(selectedInvoice.lines?.find((line) => line.id === expandedLine)?.documents ?? []).map((doc) => `${doc.date} · ${doc.number} · ${doc.quantity} · ${doc.amount}`).join('; ') || 'Документы не переданы'}</Typography> : null}<Typography textAlign="right" fontWeight="bold">Итого: <MoneyCell value={selectedInvoice.total_amount} /></Typography></Stack> : null}</DialogContent><DialogActions><PrintAction what="счёт" placement="panel" onClick={printInvoice} testId="billing-invoice-print" />{selectedInvoice?.status === 'issued' ? <DangerAction onClick={() => setCancelConfirm(true)} testId="billing-invoice-cancel">Отменить счёт</DangerAction> : null}<SecondaryAction onClick={() => setSelectedInvoice(null)}>Закрыть</SecondaryAction></DialogActions></Dialog><Dialog open={cancelConfirm} onClose={() => setCancelConfirm(false)}><DialogTitle>Отменить счёт?</DialogTitle><DialogContent>Счёт останется в истории со статусом «Отменён». Это действие нельзя отменить.</DialogContent><DialogActions><DangerAction onClick={cancelInvoice}>Отменить счёт</DangerAction><SecondaryAction onClick={() => setCancelConfirm(false)}>Назад</SecondaryAction></DialogActions></Dialog>
   </Box>
 }

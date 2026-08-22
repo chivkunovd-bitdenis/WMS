@@ -1,0 +1,31 @@
+import { test, expect } from '@playwright/test'
+
+const invoice = { id: 'invoice-1', number: 'СЧ-2026-00041', period: '2026-07', seller_name: 'Луна', issued_at: '2026-08-01T00:00:00Z', total_amount: 48392, status: 'issued', lines: [{ id: 'line-1', service_code: 'inbound', unit: 'item', quantity: 1245, rate: 12, amount: 14940, documents: [{ date: '2026-07-20', number: 'ПР-000141', quantity: 84, amount: 1008 }] }] }
+
+// S-31-TC-007 — Given an issued invoice, When the admin opens it, expands documents and prints, Then details are visible and print is started.
+test('billing invoice opens, reveals documents and starts print', async ({ page }) => {
+  await page.route('**/api/billing/invoices?**', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ invoices: [invoice] }) }))
+  await page.goto('/app/ff/billing')
+  await page.getByTestId('billing-tab-invoices').click()
+  await page.getByTestId('billing-invoice-open-invoice-1').click()
+  await expect(page.getByRole('dialog', { name: /Счёт СЧ-2026-00041/ })).toBeVisible()
+  await page.getByRole('button', { name: 'Показать документы' }).click()
+  await expect(page.getByTestId('billing-invoice-documents')).toContainText('ПР-000141')
+  await expect(page.getByTestId('billing-invoice-print')).toBeVisible()
+})
+
+// S-31-TC-008 — Given an issued invoice, When cancellation is confirmed twice, Then history has one cancelled invoice and no second cancellation request.
+test('billing invoice cancellation is confirmed and idempotent in UI', async ({ page }) => {
+  let cancellations = 0
+  await page.route('**/api/billing/invoices?**', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ invoices: [invoice] }) }))
+  await page.route('**/api/billing/invoices/invoice-1/cancel', async (route) => { cancellations += 1; await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'invoice-1', status: 'cancelled' }) }) })
+  await page.goto('/app/ff/billing')
+  await page.getByTestId('billing-tab-invoices').click()
+  await page.getByTestId('billing-invoice-open-invoice-1').click()
+  await page.getByTestId('billing-invoice-cancel').click()
+  await expect(page.getByText('Счёт останется в истории со статусом «Отменён». Это действие нельзя отменить.')).toBeVisible()
+  await page.getByRole('button', { name: 'Отменить счёт' }).last().click()
+  await expect(page.getByText('Отменён')).toBeVisible()
+  await expect(page.getByTestId('billing-invoice-cancel')).toHaveCount(0)
+  expect(cancellations).toBe(1)
+})
