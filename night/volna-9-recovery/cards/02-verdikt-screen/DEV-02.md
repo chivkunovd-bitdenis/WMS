@@ -1,37 +1,22 @@
-# Backend-dev отчёт · 02-verdikt-screen
+# Backend-dev · 02-verdikt-screen
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/app/services/fbs_shipment_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/tests/test_fbs_shipment_deliver_gate_unit.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/night/volna-9-recovery/cards/02-verdikt-screen/DEV.md`
-
-## Что реализовано
-
-Серверный delivery-check теперь всегда читает единый `_wb_order_verdict` для каждого заказа поставки, включая заказы без WB-метаданных. Проходные `filled`, `optional`, `notRequired` без причины проходят; отказ с причиной, `pending`, `required` и неизвестный ответ блокируют передачу. Блокирующая проверка содержит UUID конкретного заказа и причину.
-
-## Миграции
-
-Нет.
-
-## Тесты
-
-Добавлен unit-тест прохода заказа без требований WB; существующий набор проверяет проходные и блокирующие решения, привязку отказа к заказу и сообщение причины. Точечный запуск: 17 passed.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/app/services/fbs_shipment_service.py` — передача проверяет единый `_wb_order_verdict`, а отказ содержит подпись, причину и UUID заказа.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/tests/test_fbs_shipment_deliver_gate_unit.py` — unit-сценарии разрешённых и блокирующих WB-вердиктов.
 
 ## Гейты
 
-- `ruff check .` — FAIL: 81 существующая ошибка в несвязанных файлах; изменённые файлы в выводе не фигурируют.
-- `mypy .` — FAIL: существующие ошибки типизации в несвязанных файлах; изменённые файлы в выводе не фигурируют.
-- `pytest -q tests/test_fbs_shipment_deliver_gate_unit.py` — PASS, 17 passed.
-- `pytest -q` — выполнялся; обнаружен отдельный сбой полного набора, итоговый процесс ещё не дал финального отчёта на момент сдачи артефакта.
-- `python3 scripts/ci/back_guard.py` — NOT RUN: файла нет в этой рабочей копии.
-- `python3 scripts/ci/check_migrations.py` — NOT RUN: файла нет в этой рабочей копии.
+- ruff: FAIL — 82 существующие ошибки в несвязанных backend-файлах.
+- mypy: FAIL — существующие ошибки в `inventory_movement_report_service.py`, `wildberries_credentials_service.py`, служебных скриптах и stock/warehouse services; ошибок в изменяемом атоме нет.
+- pytest: целевые тесты `43 passed`; полный прогон остановлен после `367 passed, 5 skipped` и показал 3 несвязанных падения (`test_fbs_kiz`, `test_fbs_stock_emulator_integration`, `test_fbs_supply_from_orders`).
+- back_guard.py: BLOCKED — `scripts/ci/back_guard.py` отсутствует в этой рабочей копии.
+- check_migrations.py: BLOCKED — `scripts/ci/check_migrations.py` отсутствует в этой рабочей копии.
 
 ## Не реализовано
 
-- Frontend-находки из REVIEW.md не входят в атом `backend-dev` и не изменялись.
-- Исправление парсинга WB `reason` и прочие изменения `fbs_marking_service.py` не входят в заданные файлы этого атома; текущий backend-вердикт использует сохранённую причину, если она присутствует.
+- Нет: в рамках атома реализована только серверная проверка передачи поставки. Изменения списка и workspace относятся к другим атомам и не затрагивались.
 
 ## Блокеры
 
-Нет продуктовых блокеров. Технические ограничения гейтов описаны выше.
+- Нет.
