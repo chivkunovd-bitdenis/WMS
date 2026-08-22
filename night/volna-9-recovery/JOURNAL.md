@@ -83,3 +83,5 @@
 22:13   01-wb-marking · resume: поатомный rework Sol по сохранённым находкам
 22:14   01-wb-marking · resume: поатомный rework Sol по сохранённым находкам
 22:17   01-wb-marking · backend-dev: готово
+22:17   01-wb-marking · dev: фича 1/5 сохранена 8e8f2a3e9908
+22:24   01-wb-marking · backend-dev: готово

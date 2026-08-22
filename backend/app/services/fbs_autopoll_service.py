@@ -270,17 +270,18 @@ async def sync_marking_statuses_for_assembling_supplies(
                 continue
             if not await list_order_markings(session, target.tenant_id, order.id):
                 continue
-            # A partial WB batch must not look like a successful local sync.  In
-            # particular, do not update derived packaging state or the counter for
-            # an order whose row WB did not return at all.
-            if int(order.wb_order_id) not in rows_by_wb_order_id:
-                logger.warning("fbs autopoll marking response missed order %s", order.id)
-                continue
+            returned_rows = rows_by_wb_order_id.get(int(order.wb_order_id), [])
             try:
                 await _sync_order_meta_from_wb(
                     session, order, http_client, token,
-                    meta_batch=rows_by_wb_order_id.get(int(order.wb_order_id), []),
+                    meta_batch=returned_rows,
                 )
+                # A partial WB batch must clear a stale positive verdict, but it
+                # must not look like a successful local sync: there is no fresh
+                # timestamp, derived packaging update, or success counter.
+                if not returned_rows:
+                    logger.warning("fbs autopoll marking response missed order %s", order.id)
+                    continue
                 await _notify_supply_marking_update(session, target.tenant_id, order.id)
                 synced += 1
             except (FbsMarkingError, WildberriesClientError) as exc:

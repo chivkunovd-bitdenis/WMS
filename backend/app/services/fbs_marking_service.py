@@ -598,7 +598,7 @@ async def _sync_order_meta_from_wb(
         # A status entry for a value is not enough: treating it as fresh metadata
         # would mask a partial response and could incorrectly advance the local
         # lifecycle state.
-        if returned_row and marking.kind not in returned_kinds:
+        if not returned_row or marking.kind not in returned_kinds:
             marking.meta_status = META_STATUS_UNKNOWN
             marking.check_status = CHECK_STATUS_ERROR
             continue
@@ -608,13 +608,10 @@ async def _sync_order_meta_from_wb(
             # inferred local state.
             _apply_meta_detail_to_marking(marking, meta_detail)
             decision = meta_detail.decision.strip().lower()
-            if decision == "required":
-                marking.meta_status = (
-                    META_STATUS_MISSING if not meta_detail.value else META_STATUS_UNKNOWN
-                )
+            if decision == "required" and not meta_detail.value:
+                marking.meta_status = META_STATUS_MISSING
             elif (
-                decision in {"accepted", "filled"}
-                and meta_detail.value
+                meta_detail.value
                 and meta_detail.value != marking.value
             ):
                 marking.meta_status = META_STATUS_REPLACEMENT_REQUIRED

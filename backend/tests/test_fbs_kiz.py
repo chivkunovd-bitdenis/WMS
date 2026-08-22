@@ -17,6 +17,7 @@ from app.models.fbs_order import (
     CHECK_STATUS_CHECKING,
     CHECK_STATUS_ERROR,
     CHECK_STATUS_NEW,
+    CHECK_STATUS_OK,
     FBS_ORDER_STATUS_IN_DELIVERY,
     FBS_ORDER_STATUS_PACKED,
     MAPPING_STATUS_MAPPED,
@@ -2660,7 +2661,7 @@ async def test_fbs_marking_readers_prefer_active_row_over_newer_rejected_row(
         ("unrecognized", "same", META_STATUS_UNKNOWN, CHECK_STATUS_ERROR),
         ("required", "same", META_STATUS_UNKNOWN, CHECK_STATUS_NEW),
         ("filled", "other", META_STATUS_REPLACEMENT_REQUIRED, CHECK_STATUS_ERROR),
-        ("invalid", "other", META_STATUS_REJECTED, CHECK_STATUS_ERROR),
+        ("invalid", "other", META_STATUS_REPLACEMENT_REQUIRED, CHECK_STATUS_ERROR),
     ],
 )
 async def test_fbs_marking_wb_meta_decision_is_safe_and_preserves_raw_detail(
@@ -2815,12 +2816,97 @@ async def test_fbs_marking_partial_wb_row_is_unknown_without_fresh_check_time(
 
 
 @pytest.mark.asyncio
-async def test_fbs_marking_orphaned_audit_is_created_once_for_concurrent_and_repeated_missing(
+async def test_fbs_marking_omitted_wb_row_clears_stale_verdict_only(
     async_client: AsyncClient,
 ) -> None:
-    # TC-NEW-FBS-MARKING-001: Given WB repeatedly requires a missing KIZ, When
-    # two workers sync concurrently and one repeats, Then the binding stays intact
-    # and there is one audit fact.
+    # TC-NEW-FBS-MARKING-001: negative — an order omitted from a successful
+    # batch becomes unknown without erasing its KIZ binding, lifecycle, raw
+    # detail, reason, or last successful check time.
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
+        async_client, headers, suffix
+    )
+    supply_id = await _create_supply(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id, suffix=suffix
+    )
+    order = await _create_order(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        supply_id=supply_id,
+        suffix=suffix,
+        wb_order_id=951100,
+        sticker_code="WB-META-OMITTED",
+        wb_barcode="WB-META-OMITTED-BAR",
+        with_packaging=True,
+    )
+    value = _cis("OMITTED")
+    code_id = await _seed_active_marking(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        order=order,
+        value=value,
+        code_source="pool",
+        marking_source="pool",
+        code_status=STATUS_RESERVED,
+        qty_marking_printed=1,
+        qty_marking_external=0,
+    )
+    previous_check = datetime.now(tz=UTC) - timedelta(hours=1)
+    async with SessionLocal() as session:
+        db_order = await session.get(FbsOrder, order.order_id)
+        marking = await session.scalar(
+            select(FbsOrderMarking).where(FbsOrderMarking.order_id == order.order_id)
+        )
+        assert db_order is not None
+        assert marking is not None
+        db_order.metadata_last_checked_at = previous_check
+        marking.meta_status = META_STATUS_ACCEPTED
+        marking.check_status = CHECK_STATUS_OK
+        marking.reason = "previous WB reason"
+        marking.meta_details_json = {"decision": "filled", "value": value}
+        await session.commit()
+
+    async with SessionLocal() as session:
+        db_order = await session.get(FbsOrder, order.order_id)
+        assert db_order is not None
+        markings = await fbs_marking_svc._sync_order_meta_from_wb(
+            session, db_order, async_client, "test-token", meta_batch=[]
+        )
+        await session.commit()
+
+    marking = markings[0]
+    assert marking.meta_status == META_STATUS_UNKNOWN
+    assert marking.check_status == CHECK_STATUS_ERROR
+    assert marking.marking_code_id == code_id
+    assert marking.reason == "previous WB reason"
+    assert marking.meta_details_json == {"decision": "filled", "value": value}
+    async with SessionLocal() as session:
+        refreshed_order = await session.get(FbsOrder, order.order_id)
+        refreshed_code = await session.get(MarkingCode, code_id)
+        assert refreshed_order is not None
+        assert refreshed_order.metadata_last_checked_at == previous_check.replace(tzinfo=None)
+        assert refreshed_code is not None
+        assert refreshed_code.status == STATUS_RESERVED
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("decision", "remote_value", "expected_status"),
+    [
+        ("required", None, META_STATUS_MISSING),
+        ("invalid", "other", META_STATUS_REPLACEMENT_REQUIRED),
+    ],
+)
+async def test_fbs_marking_orphaned_audit_is_created_once_for_concurrent_and_repeated_mismatch(
+    async_client: AsyncClient,
+    decision: str,
+    remote_value: str | None,
+    expected_status: str,
+) -> None:
+    # TC-NEW-FBS-MARKING-001: Given WB repeatedly reports a missing or different
+    # KIZ, When two workers sync concurrently and one repeats, Then the binding
+    # stays intact and there is one audit fact.
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
         async_client, headers, suffix
@@ -2840,6 +2926,7 @@ async def test_fbs_marking_orphaned_audit_is_created_once_for_concurrent_and_rep
         with_packaging=True,
     )
     value = _cis("AUDIT")
+    wb_value = _cis("AUDIT-OTHER") if remote_value == "other" else None
     code_id = await _seed_active_marking(
         tenant_id=tenant_id,
         seller_id=seller_id,
@@ -2857,9 +2944,9 @@ async def test_fbs_marking_orphaned_audit_is_created_once_for_concurrent_and_rep
             meta_details=(
                 MarketplaceMetaDetail(
                     key=MARKING_KIND_SGTIN,
-                    value=None,
-                    decision="required",
-                    reason="missing at WB",
+                    value=wb_value,
+                    decision=decision,
+                    reason="mismatch at WB",
                 ),
             ),
         )
@@ -2888,7 +2975,7 @@ async def test_fbs_marking_orphaned_audit_is_created_once_for_concurrent_and_rep
             )
         )
     assert marking is not None
-    assert marking.meta_status == META_STATUS_MISSING
+    assert marking.meta_status == expected_status
     assert marking.marking_code_id == code_id
     assert code is not None
     assert code.status == STATUS_RESERVED
