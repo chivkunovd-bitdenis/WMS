@@ -394,6 +394,23 @@ def main() -> int:
             (t / "REVIEW.md").write_text("## Находки\nчто-то\n", encoding="utf-8")
             проверь("нет машинной строки — шаг не пройден", n.артефакт_готов(t, "reviewer")[0], False)
 
+            retry_prompts = []
+
+            def fake_retry_launch(_роль, текст, **_kwargs):
+                retry_prompts.append(текст)
+                if len(retry_prompts) == 2:
+                    (t / "REVIEW.md").write_text(
+                        "ВЕРДИКТ: ЧИСТО\n\n## Находки\nнет\n", encoding="utf-8")
+                return 0, ""
+
+            with mock.patch.object(n, "запустить", side_effect=fake_retry_launch), \
+                 mock.patch.object(n, "журнал"):
+                проверь("retry: второй машинный проход принят",
+                        n._шаг("x", "reviewer", t, t, t)[0], True)
+            проверь("retry: агент видит точную ошибку первого артефакта",
+                    "нет машинной строки" in retry_prompts[1] and
+                    "ПРЕДЫДУЩАЯ ПОПЫТКА ОТКЛОНЕНА" in retry_prompts[1], True)
+
             (t / "REVIEW.md").write_text(
                 "ВЕРДИКТ: НАХОДКИ 1\n\n## Находки\n- fbs.py:81 упадёт на статусе sorted\n\n"
                 "## Проверено и нормально\nда\n",
