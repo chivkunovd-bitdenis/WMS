@@ -16,7 +16,15 @@ from sqlalchemy import select
 from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.fbs_order import PACK_STATUS_PACKED, FbsOrder
-from app.models.fbs_supply import FBS_DELIVERY_TYPE_WAREHOUSE_SC, FBS_SUPPLY_STATUS_PACKED
+from app.models.fbs_supply import (
+    FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+    FBS_SUPPLY_STATUS_PACKED,
+    FbsSupply,
+)
+from app.services.fbs_packing_box_service import (
+    FbsPackingBoxError,
+    set_boxes_without_distribution,
+)
 from app.services.fbs_workspace_service import (
     WorkspaceProgress,
     _compute_stage,
@@ -207,6 +215,75 @@ async def test_without_distribution_boxes_do_not_accept_order_assignment(
     )
     assert assigned.status_code == 400, assigned.text
     assert assigned.json()["detail"]["code"] == "box_without_distribution"
+
+
+@pytest.mark.asyncio
+async def test_without_distribution_mode_depends_on_assignments_not_box_count(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, supply_id, order_ids = await _packed_supply(async_client)
+    boxes_url = f"/operations/fbs-supplies/{supply_id}/boxes"
+
+    created = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={"count": 1, "idempotency_key": "mode-empty-1"},
+    )
+    assert created.status_code == 201, created.text
+
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, supply_id)
+        assert supply is not None
+        tenant_id = supply.tenant_id
+        await set_boxes_without_distribution(
+            session, tenant_id, supply_id, True, actor_user_id=None
+        )
+        await session.commit()
+
+    deleted = await async_client.request(
+        "DELETE",
+        f"{boxes_url}/" + created.json()["boxes"][0]["id"],
+        headers=headers,
+        json={"idempotency_key": "mode-empty-delete-1"},
+    )
+    assert deleted.status_code == 200, deleted.text
+    recreated = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={"count": 1, "idempotency_key": "mode-empty-2"},
+    )
+    assert recreated.status_code == 201, recreated.text
+
+    async with SessionLocal() as session:
+        await set_boxes_without_distribution(
+            session, tenant_id, supply_id, False, actor_user_id=None
+        )
+        await session.commit()
+
+    box_id = recreated.json()["boxes"][0]["id"]
+    assigned = await async_client.post(
+        f"{boxes_url}/{box_id}/orders",
+        headers=headers,
+        json={"order_ids": [str(order_ids[0])]},
+    )
+    assert assigned.status_code == 200, assigned.text
+
+    async with SessionLocal() as session:
+        with pytest.raises(FbsPackingBoxError, match="boxes_already_distributed"):
+            await set_boxes_without_distribution(
+                session, tenant_id, supply_id, True, actor_user_id=None
+            )
+        await session.rollback()
+
+    removed = await async_client.delete(
+        f"{boxes_url}/{box_id}/orders/{order_ids[0]}", headers=headers
+    )
+    assert removed.status_code == 200, removed.text
+    async with SessionLocal() as session:
+        assert await set_boxes_without_distribution(
+            session, tenant_id, supply_id, True, actor_user_id=None
+        )
 
 
 def test_workspace_handoff_requires_boxes_and_every_packed_order_assignment() -> None:

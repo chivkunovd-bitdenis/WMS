@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import httpx
 from sqlalchemy import delete, func, select
@@ -143,6 +144,39 @@ async def create_boxes(
         actor_user_id=actor_user_id,
     )
     return await _load_boxes(session, tenant_id, supply_id)
+
+
+async def set_boxes_without_distribution(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    enabled: bool,
+    *,
+    actor_user_id: uuid.UUID | None,
+) -> bool:
+    """Change the supply mode while no order is assigned to its boxes."""
+    supply = await _get_supply(session, tenant_id, supply_id)
+    _assert_supply_mutable(supply)
+
+    assigned_count = await session.scalar(
+        select(func.count(FbsPackingBoxItem.id))
+        .join(FbsPackingBox, FbsPackingBox.id == FbsPackingBoxItem.box_id)
+        .where(
+            FbsPackingBoxItem.tenant_id == tenant_id,
+            FbsPackingBox.supply_id == supply_id,
+        )
+    )
+    if assigned_count:
+        raise FbsPackingBoxError("boxes_already_distributed")
+
+    if enabled:
+        supply.boxes_without_distribution_at = datetime.now(UTC)
+        supply.boxes_without_distribution_by_user_id = actor_user_id
+    else:
+        supply.boxes_without_distribution_at = None
+        supply.boxes_without_distribution_by_user_id = None
+    await session.flush()
+    return enabled
 
 
 async def assign_orders(
