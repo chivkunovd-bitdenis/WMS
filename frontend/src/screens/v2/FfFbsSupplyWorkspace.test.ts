@@ -3,6 +3,21 @@ import { buildFbsPickingListPrintHtml, normalizeMetadataKind } from './fbsUx'
 import { resolvePickScanAttempt } from './FfFbsSupplyWorkspace'
 
 describe('FBS scanner idempotency', () => {
+  it('TC-S17-007 reuses the same order and key while a failed scan is still pending', () => {
+    let sequence = 0
+    const createKey = () => `key-${++sequence}`
+    const orders = [
+      { id: 'order-1', pending: true, matches: true },
+      { id: 'order-2', pending: true, matches: true },
+    ]
+
+    const first = resolvePickScanAttempt(orders, undefined, createKey)
+    const retry = resolvePickScanAttempt(orders, first ?? undefined, createKey)
+
+    expect(retry).toEqual(first)
+    expect(sequence).toBe(1)
+  })
+
   it('TC-S17-007 advances identical SKU units and only reuses the latest order key for a retry', () => {
     let sequence = 0
     const createKey = () => `key-${++sequence}`
