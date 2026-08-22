@@ -27,6 +27,7 @@ JOB_TYPE_WILDBERRIES_CARDS_SYNC = "wildberries_cards_sync"
 JOB_TYPE_WILDBERRIES_SUPPLIES_SYNC = "wildberries_supplies_sync"
 JOB_TYPE_WILDBERRIES_MARKETPLACE_ORDERS_SYNC = "wildberries_marketplace_orders_sync"
 JOB_TYPE_FBS_STOCK_SYNC = "fbs_stock_sync"
+JOB_TYPE_STORAGE_MEASUREMENT_REBUILD = "storage_measurement_rebuild"
 
 
 async def create_pending_job(
@@ -71,24 +72,61 @@ async def run_movements_digest_job(job_id: uuid.UUID) -> None:
         await session.commit()
         try:
             await asyncio.sleep(0.35)
-            stmt = (
-                select(InventoryMovement.movement_type, func.count(InventoryMovement.id))
-                .where(InventoryMovement.tenant_id == job.tenant_id)
-                .group_by(InventoryMovement.movement_type)
-            )
+            stmt = select(InventoryMovement.movement_type, func.count(InventoryMovement.id)).where(
+                InventoryMovement.tenant_id == job.tenant_id
+            ).group_by(InventoryMovement.movement_type)
             res = await session.execute(stmt)
-            rows = list(res.all())
-            by_type: dict[str, int] = {str(mt): int(c) for mt, c in rows}
-            total = sum(by_type.values())
-            result: dict[str, Any] = {
+            by_type = {str(mt): int(count) for mt, count in res.all()}
+            job.status = JOB_STATUS_DONE
+            job.result_json = {
                 "movement_counts_by_type": by_type,
-                "total_movements": total,
+                "total_movements": sum(by_type.values()),
             }
+            job.error_message = None
+        except Exception as exc:
+            logger.exception("background job failed: %s", job_id)
+            job.status = JOB_STATUS_FAILED
+            job.error_message = str(exc)
+        job.finished_at = datetime.now(UTC)
+        await session.commit()
+
+
+async def run_storage_measurement_rebuild_job(job_id: uuid.UUID) -> None:
+    from datetime import date
+
+    from app.services.storage_measurement_service import rebuild_storage_measurements
+    async with SessionLocal() as session:
+        job = await session.get(BackgroundJob, job_id)
+        if job is None:
+            return
+        job.status = JOB_STATUS_RUNNING
+        job.started_at = datetime.now(UTC)
+        await session.commit()
+        try:
+            payload = job.payload_json or {}
+            year, month = payload.get("year"), payload.get("month")
+            period_start = (
+                date(year, month, 1)
+                if isinstance(year, int) and isinstance(month, int)
+                else None
+            )
+            raw_warehouse = payload.get("warehouse_id")
+            warehouse_id = uuid.UUID(raw_warehouse) if isinstance(raw_warehouse, str) else None
+            result = await rebuild_storage_measurements(
+                session,
+                job.tenant_id,
+                period_start=period_start,
+                warehouse_id=warehouse_id,
+            )
             job.status = JOB_STATUS_DONE
             job.result_json = result
             job.error_message = None
         except Exception as exc:
-            logger.exception("background job failed: %s", exc)
+            logger.exception("storage measurement rebuild failed: %s", job_id)
+            await session.rollback()
+            job = await session.get(BackgroundJob, job_id)
+            if job is None:
+                return
             job.status = JOB_STATUS_FAILED
             job.error_message = str(exc)
         job.finished_at = datetime.now(UTC)
