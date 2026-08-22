@@ -219,8 +219,8 @@ export function FfInboundBoxAddDialog({
       }))
       setLastScannedProductId(scannedLine.product_id)
       setScanBarcode('')
-      // Keep the parent document coherent, but do not make the next scan wait for it.
-      void onUpdated().catch(() => undefined)
+      // The POST response is authoritative for this box. Refresh the heavy parent
+      // document once when the operator presses "Готово", not after every barcode.
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось выполнить скан.')
     } finally {
