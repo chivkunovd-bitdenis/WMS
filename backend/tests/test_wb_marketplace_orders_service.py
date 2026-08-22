@@ -165,6 +165,10 @@ async def test_reconcile_walks_cursor_and_fails_incomplete_pass(
             session, uuid.uuid4(), uuid.uuid4(), object()  # type: ignore[arg-type]
         )
     assert session.rollback.await_count == 1
+    # An incomplete pass must not perform the post-reconciliation supply link.
+    # The previous successful run already called it once; the failed run must
+    # leave that count unchanged.
+    assert orders_service.link_confirmed_orders_to_wb_supplies.await_count == 1
 
 
 # TC-NEW-WB-SYNC-003: reconcile does not silently stop at an arbitrary page cap.
