@@ -13,7 +13,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import func, select
 
-from app.api.storage import _print_measurements
+from app.api.storage import _print_measurements, _rate_snapshot
 from app.db.session import SessionLocal
 from app.models.billing import BillingLedgerEntry, BillingTariffVersion
 from app.models.inventory_movement import InventoryMovement
@@ -38,6 +38,7 @@ def _tariff(
     *,
     valid_to: date | None = None,
     seller_id: uuid.UUID | None = None,
+    warehouse_id: uuid.UUID | None = None,
 ) -> BillingTariffVersion:
     return cast(
         BillingTariffVersion,
@@ -47,6 +48,7 @@ def _tariff(
             valid_from=valid_from,
             valid_to=valid_to,
             seller_id=seller_id,
+            warehouse_id=warehouse_id,
         ),
     )
 
@@ -71,6 +73,39 @@ def test_print_rows_do_not_pair_a_zero_ledger_entry_with_a_missing_sku() -> None
     zero_ledger = SimpleNamespace(source_id=uuid.uuid4())
 
     assert _print_measurements([], [zero_ledger]) == []
+
+
+def test_print_row_uses_charged_ledger_quantity_instead_of_full_month_measurement() -> None:
+    """A4 arithmetic stays consistent when a tariff starts after month start."""
+    measurement_id = uuid.uuid4()
+    product_id = uuid.uuid4()
+    measurement = SimpleNamespace(
+        id=measurement_id,
+        product_id=product_id,
+        product=SimpleNamespace(
+            sku_code="MID-MONTH",
+            wb_vendor_code="ARTICLE",
+            volume_liters=Decimal("1"),
+            dimensions_source="manual",
+        ),
+        dimension_event=None,
+        liter_days=Decimal("31"),
+    )
+    ledger = SimpleNamespace(
+        source_id=measurement_id,
+        source_type="storage_measurement",
+        service_code="storage_liter_day",
+        unit="liter_day",
+        quantity=Decimal("22"),
+        rate=Decimal("2.00"),
+        amount=Decimal("44.00"),
+    )
+
+    [printed] = _print_measurements([measurement], [ledger])
+
+    assert printed["liter_days"] == "22"
+    assert printed["rate_snapshot"] == "2.00"
+    assert printed["amount"] == "44.00"
 
 
 def test_tariff_starting_mid_month_prices_only_forward() -> None:
@@ -110,6 +145,10 @@ def test_tariff_change_inside_month_uses_both_dated_rates() -> None:
     assert quantity == Decimal("31")
     assert amount == Decimal("43.00")
     assert snapshot is new
+    effective_rate = Decimal(
+        _rate_snapshot((amount / quantity).quantize(Decimal("0.000000000001")))
+    )
+    assert (effective_rate * quantity).quantize(Decimal("0.01")) == amount
 
 
 def test_seller_tariff_overrides_common_tariff_only_while_effective() -> None:
@@ -183,14 +222,17 @@ async def _seed_storage_statement(
         )
         session.add(statement)
         if with_tariff:
-            session.add(BillingTariffVersion(
-                tenant_id=warehouse.tenant_id,
-                seller_id=None,
-                service_code="storage_liter_day",
-                unit="liter_day",
-                amount=Decimal("2.00"),
-                valid_from=period_start,
-            ))
+            session.add(
+                BillingTariffVersion(
+                    tenant_id=warehouse.tenant_id,
+                    seller_id=None,
+                    warehouse_id=warehouse.id,
+                    service_code="storage_liter_day",
+                    unit="liter_day",
+                    amount=Decimal("2.00"),
+                    valid_from=period_start,
+                )
+            )
         if not zero:
             product = Product(
                 tenant_id=warehouse.tenant_id,
@@ -258,12 +300,8 @@ async def test_concurrent_fix_publishes_one_immutable_ledger_and_repeatable_prin
     assert measurement_id is not None
 
     first, second = await asyncio.gather(
-        async_client.post(
-            f"/operations/storage/statements/{statement_id}/fix", headers=headers
-        ),
-        async_client.post(
-            f"/operations/storage/statements/{statement_id}/fix", headers=headers
-        ),
+        async_client.post(f"/operations/storage/statements/{statement_id}/fix", headers=headers),
+        async_client.post(f"/operations/storage/statements/{statement_id}/fix", headers=headers),
     )
 
     assert {first.status_code, second.status_code} == {200}, (first.text, second.text)
@@ -308,6 +346,7 @@ async def test_concurrent_fix_publishes_one_immutable_ledger_and_repeatable_prin
     assert payload["status"] == "fixed"
     assert payload["fixed_at"]
     assert payload["measurements"][0]["rate_snapshot"] == "2.00"
+    assert payload["measurements"][0]["liter_days"] == payload["total_liter_days"]
     assert payload["measurements"][0]["service_code"] == "storage_liter_day"
     assert payload["measurements"][0]["unit"] == "liter_day"
     period_start = date.fromisoformat(payload["period_start"])
@@ -324,6 +363,52 @@ async def test_concurrent_fix_publishes_one_immutable_ledger_and_repeatable_prin
     assert listed_statement["total_amount"] == payload["total_amount"]
     assert listed_statement["measurements"] == payload["measurements"]
 
+    second_warehouse = await async_client.post(
+        "/warehouses",
+        headers=headers,
+        json={"name": "Storage without common tariff", "code": f"storage-2-{time.time_ns()}"},
+    )
+    assert second_warehouse.status_code == 200, second_warehouse.text
+    second_warehouse_id = uuid.UUID(second_warehouse.json()["id"])
+    without_tariff = await async_client.get(
+        "/operations/storage/statements",
+        headers=headers,
+        params={
+            "year": period_start.year,
+            "month": period_start.month,
+            "warehouse_id": second_warehouse_id,
+        },
+    )
+    assert without_tariff.status_code == 200
+    assert without_tariff.json()["tariff_configured"] is False
+
+    async with SessionLocal() as session:
+        statement = await session.get(StorageStatement, statement_id)
+        assert statement is not None
+        session.add(
+            BillingTariffVersion(
+                tenant_id=statement.tenant_id,
+                seller_id=statement.seller_id,
+                warehouse_id=second_warehouse_id,
+                service_code="storage_liter_day",
+                unit="liter_day",
+                amount=Decimal("7.00"),
+                valid_from=period_start,
+            )
+        )
+        await session.commit()
+    personal_only = await async_client.get(
+        "/operations/storage/statements",
+        headers=headers,
+        params={
+            "year": period_start.year,
+            "month": period_start.month,
+            "warehouse_id": second_warehouse_id,
+        },
+    )
+    assert personal_only.status_code == 200
+    assert personal_only.json()["tariff_configured"] is False
+
 
 @pytest.mark.asyncio
 async def test_problem_current_month_and_zero_statement_fix_rules(
@@ -338,9 +423,7 @@ async def test_problem_current_month_and_zero_statement_fix_rules(
     assert problem.status_code == 409
     assert problem.json()["detail"] == "missing_dimensions"
 
-    current_headers, current_id, _ = await _seed_storage_statement(
-        async_client, current_month=True
-    )
+    current_headers, current_id, _ = await _seed_storage_statement(async_client, current_month=True)
     current = await async_client.post(
         f"/operations/storage/statements/{current_id}/fix", headers=current_headers
     )
@@ -365,6 +448,27 @@ async def test_problem_current_month_and_zero_statement_fix_rules(
     no_tariff_headers, no_tariff_id, _ = await _seed_storage_statement(
         async_client, with_tariff=False
     )
+    unrelated_warehouse = await async_client.post(
+        "/warehouses",
+        headers=no_tariff_headers,
+        json={"name": "Unrelated storage", "code": f"unrelated-{time.time_ns()}"},
+    )
+    assert unrelated_warehouse.status_code == 200, unrelated_warehouse.text
+    async with SessionLocal() as session:
+        statement = await session.get(StorageStatement, no_tariff_id)
+        assert statement is not None
+        session.add(
+            BillingTariffVersion(
+                tenant_id=statement.tenant_id,
+                seller_id=None,
+                warehouse_id=uuid.UUID(unrelated_warehouse.json()["id"]),
+                service_code="storage_liter_day",
+                unit="liter_day",
+                amount=Decimal("9.00"),
+                valid_from=statement.period_start,
+            )
+        )
+        await session.commit()
     no_tariff = await async_client.post(
         f"/operations/storage/statements/{no_tariff_id}/fix", headers=no_tariff_headers
     )

@@ -98,3 +98,5 @@
 23:07 08-storage: отложено — reviewer, эскалация не помогла
 23:43   08-storage · resume: поатомный rework Sol по сохранённым находкам
 23:47   08-storage · backend-dev: готово
+23:47   08-storage · dev: фича 6/8 сохранена 161ae3566924
+23:56   08-storage · backend-dev: готово

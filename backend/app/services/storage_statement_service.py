@@ -46,8 +46,7 @@ def _tariff_for_day(
     applicable = [
         tariff
         for tariff in tariffs
-        if tariff.valid_from <= on_day
-        and (tariff.valid_to is None or tariff.valid_to >= on_day)
+        if tariff.valid_from <= on_day and (tariff.valid_to is None or tariff.valid_to >= on_day)
     ]
     return max(
         applicable,
@@ -209,26 +208,31 @@ async def fix_storage_statement(
 
     # Load every shared tariff intersecting the month.  Pricing below applies
     # each version only from its valid_from date and prefers seller overrides.
-    tariffs = list((await session.scalars(
-        select(BillingTariffVersion)
-        .where(BillingTariffVersion.tenant_id == tenant_id)
-        .where(BillingTariffVersion.service_code == "storage_liter_day")
-        .where(BillingTariffVersion.unit == "liter_day")
-        .where(BillingTariffVersion.valid_from <= statement.period_end)
-        .where(
-            or_(
-                BillingTariffVersion.valid_to.is_(None),
-                BillingTariffVersion.valid_to >= statement.period_start,
+    tariffs = list(
+        (
+            await session.scalars(
+                select(BillingTariffVersion)
+                .where(BillingTariffVersion.tenant_id == tenant_id)
+                .where(BillingTariffVersion.service_code == "storage_liter_day")
+                .where(BillingTariffVersion.unit == "liter_day")
+                .where(BillingTariffVersion.warehouse_id == statement.warehouse_id)
+                .where(BillingTariffVersion.valid_from <= statement.period_end)
+                .where(
+                    or_(
+                        BillingTariffVersion.valid_to.is_(None),
+                        BillingTariffVersion.valid_to >= statement.period_start,
+                    )
+                )
+                .where(
+                    or_(
+                        BillingTariffVersion.seller_id.is_(None),
+                        BillingTariffVersion.seller_id == statement.seller_id,
+                    )
+                )
+                .order_by(BillingTariffVersion.valid_from, BillingTariffVersion.id)
             )
-        )
-        .where(
-            or_(
-                BillingTariffVersion.seller_id.is_(None),
-                BillingTariffVersion.seller_id == statement.seller_id,
-            )
-        )
-        .order_by(BillingTariffVersion.valid_from, BillingTariffVersion.id)
-    )).all())
+        ).all()
+    )
     if not tariffs:
         raise StorageStatementError("tariff_not_found")
     pricing = await _measurement_pricing(session, statement, measurements, tariffs)
@@ -252,7 +256,7 @@ async def fix_storage_statement(
             continue
         charged_quantity, amount, tariff = pricing[measurement.id]
         effective_rate = (
-            (amount / charged_quantity).quantize(Decimal("0.01"))
+            (amount / charged_quantity).quantize(Decimal("0.000000000001"))
             if charged_quantity
             else Decimal(0)
         )
@@ -344,13 +348,21 @@ async def get_fixed_storage_statement(
         ).all()
     )
     source_ids = _statement_source_ids(statement, measurements)
-    ledger_rows = list((await session.scalars(select(BillingLedgerEntry).where(
-        BillingLedgerEntry.tenant_id == tenant_id,
-        BillingLedgerEntry.seller_id == statement.seller_id,
-        BillingLedgerEntry.source_type == "storage_measurement",
-        BillingLedgerEntry.service_code == "storage_liter_day",
-        BillingLedgerEntry.source_id.in_(source_ids),
-    ).order_by(BillingLedgerEntry.id))).all())
+    ledger_rows = list(
+        (
+            await session.scalars(
+                select(BillingLedgerEntry)
+                .where(
+                    BillingLedgerEntry.tenant_id == tenant_id,
+                    BillingLedgerEntry.seller_id == statement.seller_id,
+                    BillingLedgerEntry.source_type == "storage_measurement",
+                    BillingLedgerEntry.service_code == "storage_liter_day",
+                    BillingLedgerEntry.source_id.in_(source_ids),
+                )
+                .order_by(BillingLedgerEntry.id)
+            )
+        ).all()
+    )
     by_id = {row.id: row for row in measurements}
     return statement, [by_id[row.source_id] for row in ledger_rows if row.source_id in by_id]
 
@@ -368,17 +380,31 @@ async def get_storage_ledger_rows(
     )
     if statement is None:
         raise StorageStatementError("not_found")
-    measurements = list((await session.scalars(select(StorageMeasurement.id).where(
-        StorageMeasurement.tenant_id == tenant_id,
-        StorageMeasurement.seller_id == statement.seller_id,
-        StorageMeasurement.warehouse_id == statement.warehouse_id,
-        StorageMeasurement.period_start == statement.period_start,
-        StorageMeasurement.period_end == statement.period_end,
-    ))).all())
-    return list((await session.scalars(select(BillingLedgerEntry).where(
-        BillingLedgerEntry.tenant_id == tenant_id,
-        BillingLedgerEntry.seller_id == statement.seller_id,
-        BillingLedgerEntry.source_type == "storage_measurement",
-        BillingLedgerEntry.service_code == "storage_liter_day",
-        BillingLedgerEntry.source_id.in_(set(measurements) or {statement.id}),
-    ).order_by(BillingLedgerEntry.id))).all())
+    measurements = list(
+        (
+            await session.scalars(
+                select(StorageMeasurement.id).where(
+                    StorageMeasurement.tenant_id == tenant_id,
+                    StorageMeasurement.seller_id == statement.seller_id,
+                    StorageMeasurement.warehouse_id == statement.warehouse_id,
+                    StorageMeasurement.period_start == statement.period_start,
+                    StorageMeasurement.period_end == statement.period_end,
+                )
+            )
+        ).all()
+    )
+    return list(
+        (
+            await session.scalars(
+                select(BillingLedgerEntry)
+                .where(
+                    BillingLedgerEntry.tenant_id == tenant_id,
+                    BillingLedgerEntry.seller_id == statement.seller_id,
+                    BillingLedgerEntry.source_type == "storage_measurement",
+                    BillingLedgerEntry.service_code == "storage_liter_day",
+                    BillingLedgerEntry.source_id.in_(set(measurements) or {statement.id}),
+                )
+                .order_by(BillingLedgerEntry.id)
+            )
+        ).all()
+    )

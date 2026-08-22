@@ -83,6 +83,15 @@ def _public_dimension_source(source: str | None) -> str | None:
     return aliases.get(source, source)
 
 
+def _rate_snapshot(value: object) -> str:
+    """Keep meaningful precision while displaying ordinary rates as money."""
+    rendered = format(Decimal(str(value)), "f").rstrip("0").rstrip(".")
+    if "." not in rendered:
+        return f"{rendered}.00"
+    whole, fraction = rendered.split(".", 1)
+    return f"{whole}.{fraction.ljust(2, '0')}"
+
+
 def _statement_out(
     statement: StorageStatement, rows: list[StorageMeasurement]
 ) -> StorageStatementOut:
@@ -153,16 +162,31 @@ def _print_measurements(
                 if row.dimension_event is not None
                 else row.product.dimensions_source
             ),
-            "liter_days": str(row.liter_days),
+            # The printable document mirrors the immutable financial event.
+            # A tariff that starts mid-month can charge fewer liter-days than
+            # the operational measurement calculated for the whole month.
+            "liter_days": str(ledger_by_source_id[row.id].quantity),
             "source_type": ledger_by_source_id[row.id].source_type,
             "service_code": ledger_by_source_id[row.id].service_code,
             "unit": ledger_by_source_id[row.id].unit,
-            "rate_snapshot": str(ledger_by_source_id[row.id].rate),
+            "rate_snapshot": _rate_snapshot(ledger_by_source_id[row.id].rate),
             "amount": str(ledger_by_source_id[row.id].amount),
         }
         for row in rows
         if row.id in ledger_by_source_id
     ]
+
+
+def _apply_ledger_snapshot(
+    output: StorageStatementOut,
+    rows: list[StorageMeasurement],
+    ledger: list[Any],
+) -> None:
+    output.measurements = _print_measurements(rows, ledger)
+    output.total_liter_days = str(
+        sum((Decimal(str(entry.quantity)) for entry in ledger), Decimal(0))
+    )
+    output.total_amount = str(sum((Decimal(str(entry.amount)) for entry in ledger), Decimal(0)))
 
 
 @router.get("/statements", response_model=StorageStatementsOut)
@@ -233,40 +257,44 @@ async def list_statements(
         .order_by(StorageMeasurement.product_id)
     )
     if user.role == "fulfillment_seller":
-        measurement_query = measurement_query.where(
-            StorageMeasurement.seller_id == user.seller_id
-        )
+        measurement_query = measurement_query.where(StorageMeasurement.seller_id == user.seller_id)
     rows_by_scope: dict[tuple[uuid.UUID, uuid.UUID], list[StorageMeasurement]] = {}
     for row in (await session.scalars(measurement_query)).all():
         rows_by_scope.setdefault((row.seller_id, row.warehouse_id), []).append(row)
 
-    tariff_configured = (
-        await session.scalar(
-            select(BillingTariffVersion.id)
-            .where(
-                BillingTariffVersion.tenant_id == user.tenant_id,
-                BillingTariffVersion.service_code == "storage_liter_day",
-                BillingTariffVersion.unit == "liter_day",
-                BillingTariffVersion.valid_from <= period_end,
-                or_(
-                    BillingTariffVersion.valid_to.is_(None),
-                    BillingTariffVersion.valid_to >= period_start,
-                ),
+    tariff_warehouse_ids = set(
+        (
+            await session.scalars(
+                select(BillingTariffVersion.warehouse_id).where(
+                    BillingTariffVersion.tenant_id == user.tenant_id,
+                    BillingTariffVersion.warehouse_id.in_(operational_ids or {uuid.UUID(int=0)}),
+                    BillingTariffVersion.service_code == "storage_liter_day",
+                    BillingTariffVersion.unit == "liter_day",
+                    BillingTariffVersion.valid_from <= period_end,
+                    or_(
+                        BillingTariffVersion.valid_to.is_(None),
+                        BillingTariffVersion.valid_to >= period_start,
+                    ),
+                    (
+                        or_(
+                            BillingTariffVersion.seller_id.is_(None),
+                            BillingTariffVersion.seller_id == user.seller_id,
+                        )
+                        if user.role == "fulfillment_seller"
+                        else BillingTariffVersion.seller_id.is_(None)
+                    ),
+                )
             )
-            .limit(1)
-        )
-        is not None
+        ).all()
     )
+    tariff_configured = bool(operational_ids) and tariff_warehouse_ids == operational_ids
     statement_outputs: list[StorageStatementOut] = []
     for statement in statements:
         rows = rows_by_scope.get((statement.seller_id, statement.warehouse_id), [])
         output = _statement_out(statement, rows)
         if statement.status == "fixed":
             ledger = await get_storage_ledger_rows(session, user.tenant_id, statement.id)
-            output.measurements = _print_measurements(rows, ledger)
-            output.total_amount = str(
-                sum((Decimal(str(row.amount)) for row in ledger), Decimal(0))
-            )
+            _apply_ledger_snapshot(output, rows, ledger)
         statement_outputs.append(output)
 
     return StorageStatementsOut(
@@ -351,8 +379,7 @@ async def fix_statement(
         ) from exc
     out = _statement_out(statement, rows)
     ledger = await get_storage_ledger_rows(session, tenant_id, statement_id)
-    out.measurements = _print_measurements(rows, ledger)
-    out.total_amount = str(sum((Decimal(str(row.amount)) for row in ledger), Decimal(0)))
+    _apply_ledger_snapshot(out, rows, ledger)
     return out
 
 
@@ -370,6 +397,5 @@ async def print_statement(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     out = _statement_out(statement, rows)
     ledger = await get_storage_ledger_rows(session, user.tenant_id, statement.id)
-    out.measurements = _print_measurements(rows, ledger)
-    out.total_amount = str(sum((Decimal(str(row.amount)) for row in ledger), Decimal(0)))
+    _apply_ledger_snapshot(out, rows, ledger)
     return out

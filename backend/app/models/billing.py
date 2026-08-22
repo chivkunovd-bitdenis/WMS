@@ -3,10 +3,9 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
-    JSON,
     CheckConstraint,
     Date,
     DateTime,
@@ -27,6 +26,7 @@ if TYPE_CHECKING:
     from app.models.seller import Seller
     from app.models.tenant import Tenant
     from app.models.user import User
+    from app.models.warehouse import Warehouse
 
 
 class BillingProfile(Base):
@@ -74,19 +74,53 @@ class BillingTariffVersion(Base):
     __table_args__ = (
         Index(
             "uq_billing_tariff_version_seller",
-            "tenant_id", "seller_id", "service_code", "unit", "valid_from",
+            "tenant_id",
+            "warehouse_id",
+            "seller_id",
+            "service_code",
+            "unit",
+            "valid_from",
             unique=True,
-            postgresql_where=text("seller_id IS NOT NULL"),
-            sqlite_where=text("seller_id IS NOT NULL"),
+            postgresql_where=text("seller_id IS NOT NULL AND warehouse_id IS NOT NULL"),
+            sqlite_where=text("seller_id IS NOT NULL AND warehouse_id IS NOT NULL"),
         ),
         Index(
             "uq_billing_tariff_version_common",
-            "tenant_id", "service_code", "unit", "valid_from",
+            "tenant_id",
+            "warehouse_id",
+            "service_code",
+            "unit",
+            "valid_from",
             unique=True,
-            postgresql_where=text("seller_id IS NULL"),
-            sqlite_where=text("seller_id IS NULL"),
+            postgresql_where=text("seller_id IS NULL AND warehouse_id IS NOT NULL"),
+            sqlite_where=text("seller_id IS NULL AND warehouse_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_billing_tariff_version_global_seller",
+            "tenant_id",
+            "seller_id",
+            "service_code",
+            "unit",
+            "valid_from",
+            unique=True,
+            postgresql_where=text("seller_id IS NOT NULL AND warehouse_id IS NULL"),
+            sqlite_where=text("seller_id IS NOT NULL AND warehouse_id IS NULL"),
+        ),
+        Index(
+            "uq_billing_tariff_version_global_common",
+            "tenant_id",
+            "service_code",
+            "unit",
+            "valid_from",
+            unique=True,
+            postgresql_where=text("seller_id IS NULL AND warehouse_id IS NULL"),
+            sqlite_where=text("seller_id IS NULL AND warehouse_id IS NULL"),
         ),
         CheckConstraint("unit IN ('document', 'item', 'liter_day')", name="ck_billing_tariff_unit"),
+        CheckConstraint(
+            "service_code <> 'storage_liter_day' OR warehouse_id IS NOT NULL",
+            name="ck_billing_storage_tariff_warehouse",
+        ),
         CheckConstraint("amount >= 0", name="ck_billing_tariff_amount_nonnegative"),
         Index("ix_billing_tariffs_tenant_service", "tenant_id", "service_code", "valid_from"),
     )
@@ -97,6 +131,12 @@ class BillingTariffVersion(Base):
     )
     seller_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("sellers.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    warehouse_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("warehouses.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
     )
     service_code: Mapped[str] = mapped_column(String(64), nullable=False)
     unit: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -109,6 +149,7 @@ class BillingTariffVersion(Base):
 
     tenant: Mapped[Tenant] = relationship("Tenant")
     seller: Mapped[Seller | None] = relationship("Seller")
+    warehouse: Mapped[Warehouse | None] = relationship("Warehouse")
 
 
 class BillingLedgerEntry(Base):
@@ -162,7 +203,7 @@ class BillingLedgerEntry(Base):
     source_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     unit: Mapped[str] = mapped_column(String(16), nullable=False)
     quantity: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
-    rate: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    rate: Mapped[Decimal | None] = mapped_column(Numeric(28, 12), nullable=True)
     amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -176,51 +217,3 @@ class BillingLedgerEntry(Base):
         "BillingLedgerEntry", remote_side=[id]
     )
     performer: Mapped[User | None] = relationship("User")
-
-
-class BillingInvoice(Base):
-    __tablename__ = "billing_invoices"
-    __table_args__ = (
-        UniqueConstraint("tenant_id", "seller_id", "period", name="uq_billing_invoice_period"),
-    )
-    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    seller_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True),
-        ForeignKey("sellers.id", ondelete="RESTRICT"),
-        nullable=False,
-        index=True,
-    )
-    number: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
-    period: Mapped[date] = mapped_column(Date, nullable=False)
-    status: Mapped[str] = mapped_column(String(16), nullable=False, default="issued")
-    issued_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    total_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
-    ff_profile_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
-    seller_profile_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
-    lines: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
-
-
-class BillingRunIssue(Base):
-    __tablename__ = "billing_run_issues"
-    __table_args__ = (
-        UniqueConstraint("tenant_id", "seller_id", "period", "reason", name="uq_billing_run_issue"),
-    )
-    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    seller_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("sellers.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    period: Mapped[date] = mapped_column(Date, nullable=False)
-    reason: Mapped[str] = mapped_column(String(64), nullable=False)
-    message: Mapped[str] = mapped_column(String(255), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-
