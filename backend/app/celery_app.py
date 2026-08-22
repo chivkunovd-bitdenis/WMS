@@ -23,10 +23,6 @@ celery_app.conf.beat_schedule = {
         "task": "wms.marking_low_stock",
         "schedule": crontab(hour="*/6", minute=15),
     },
-    "fbs-orders-autopoll": {
-        "task": "wms.fbs_orders_autopoll",
-        "schedule": float(settings.fbs_poll_interval_sec),
-    },
     "wb-orders-new": {
         "task": "wms.wb_orders_new_dispatch",
         "schedule": 180.0,

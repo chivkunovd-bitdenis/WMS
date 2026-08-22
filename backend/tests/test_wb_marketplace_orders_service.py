@@ -46,6 +46,7 @@ def test_wb_order_schedule_and_single_flight_are_per_kind() -> None:
     schedule = celery_app.conf.beat_schedule
     assert schedule["wb-orders-new"]["schedule"] == 180.0
     assert schedule["wb-orders-reconcile"]["schedule"] == 3600.0
+    assert "fbs-orders-autopoll" not in schedule
     assert fbs_autopoll_service._sync_locks is not None
 
 
@@ -60,6 +61,50 @@ async def test_wb_order_flights_allow_new_and_reconcile_together() -> None:
             assert reconcile_acquired is True
         async with fbs_autopoll_service.seller_sync_flight(seller_id, "new") as duplicate:
             assert duplicate is False
+
+
+@pytest.mark.asyncio
+async def test_wb_order_flight_uses_distinct_postgres_keys_per_kind(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _Connection:
+        dialect = type("Dialect", (), {"name": "postgresql"})()
+
+    class _Session:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        async def connection(self) -> _Connection:
+            return _Connection()
+
+        async def scalar(self, statement: object, params: dict[str, object]) -> bool:
+            self.calls.append(str(params["lock_key"]))
+            return True
+
+    session = _Session()
+    monkeypatch.setattr(
+        fbs_autopoll_service, "SessionLocal", lambda: _SessionContext(session)
+    )
+    seller_id = uuid.uuid4()
+    async with (
+        fbs_autopoll_service.seller_sync_flight(seller_id, "new") as new_acquired,
+        fbs_autopoll_service.seller_sync_flight(
+            seller_id, "reconcile"
+        ) as reconcile_acquired,
+    ):
+        assert new_acquired and reconcile_acquired
+    assert session.calls[0] != session.calls[2]
+
+
+class _SessionContext:
+    def __init__(self, session: object) -> None:
+        self.session = session
+
+    async def __aenter__(self) -> object:
+        return self.session
+
+    async def __aexit__(self, *_args: object) -> None:
+        return None
 
 
 # TC-NEW-WB-SYNC-001: new sync uses only /orders/new and performs an idempotent upsert.

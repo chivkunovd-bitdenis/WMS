@@ -1,36 +1,20 @@
-# Backend-dev отчёт · 05-prod-slow · атом 2
-
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/fbs_autopoll_service.py` — добавлены отдельные job-обёртки `new` и `reconcile` с single-flight по `(seller_id, sync_kind)`; во время сетевого чтения они не используют общий `wb_seller_lock`.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/tasks/background_jobs.py` — добавлены Celery-задачи и dispatch-задачи, создающие независимый запуск для каждого продавца.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/celery_app.py` — Beat запускает `new` каждые 180 секунд и `reconcile` каждые 3600 секунд.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_wb_marketplace_orders_service.py` — проверки периодов и независимого single-flight для обоих контуров.
-
-## Миграции
-
-Нет.
-
-## Тесты
-
-- `test_wb_order_schedule_and_single_flight_are_per_kind` — проверяет интервалы 180 секунд и 60 минут.
-- `test_wb_order_flights_allow_new_and_reconcile_together` — проверяет параллельность разных видов и отказ повторного запуска того же вида.
-- Существующие тесты сервиса подтверждают, что `new` не выполняет полный обход, а `reconcile` проходит курсоры и откатывает незавершённый проход.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/fbs_autopoll_service.py — single-flight теперь использует отдельный PostgreSQL advisory lock для пары `(seller_id, sync_kind)`; `new` и `reconcile` не блокируют друг друга.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/celery_app.py — удалено старое дублирующее расписание `fbs-orders-autopoll`; оставлены независимые интервалы 180 секунд и 3600 секунд.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_wb_marketplace_orders_service.py — добавлены проверки отсутствия старого beat-контурa и различия межпроцессных lock-ключей для двух видов синхронизации.
 
 ## Гейты
 
-- `ruff check .` — BLOCKED: 85 предсуществующих ошибок в полном backend-проходе; `ruff check` затронутых файлов — PASS.
-- `mypy .` — BLOCKED: 20 предсуществующих ошибок типизации в соседних backend-модулях; после исправления аннотации этого атома ошибок в `fbs_autopoll_service.py` нет.
-- `pytest` — PASS: целевой файл `backend/tests/test_wb_marketplace_orders_service.py`.
-- `python3 scripts/ci/back_guard.py` — NOT RUN: файл отсутствует в этой рабочей копии.
-- `python3 scripts/ci/check_migrations.py` — NOT RUN: файл отсутствует в этой рабочей копии.
+- `ruff check .` — FAIL на существующих нарушениях в несвязанных файлах; изменённый тест после исправления `SIM117` не добавляет замечаний.
+- `mypy .` — FAIL на существующих ошибках в `inventory_movement_report_service.py`, `wildberries_credentials_service.py`, cleanup-скриптах и `fbs_stock_sync_service.py`; изменённые файлы в выводе отсутствуют.
+- `pytest -q` — выполняется/результат будет дополнен после завершения полного прогона; целевые `tests/test_wb_marketplace_orders_service.py tests/test_fbs_autopoll.py` проходят.
+- `python3 scripts/ci/back_guard.py` — BLOCKED: файл отсутствует в рабочей копии (`file not found`).
+- `python3 scripts/ci/check_migrations.py` — BLOCKED: файл отсутствует в рабочей копии (`file not found`); миграций в атоме нет.
+- Commit — BLOCKED: Git не разрешил создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-05-prod-slow/index.lock` (`Operation not permitted`); изменения сохранены в рабочем дереве и перечислены ниже.
 
 ## Не реализовано
 
-- Внешние API, модели, миграции и UI не менялись: они не входят в атом 2.
-- Старый агрегированный `fbs_orders_autopoll` не переписывался; новые независимые Beat-контуры работают через отдельные задания по продавцу.
-
-## Находки
-
-- Вне кода backend присутствует несвязанное изменение `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/night/volna-9-recovery/JOURNAL.md`; в работу атома не включалось.
-- Commit не создан: Git не может записать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-05-prod-slow/index.lock` из-за ограничений доступа рабочей среды.
+- Пункты ревью 1–2 и 7–15 относятся к печатной фоновой ленте или frontend-экранам и не входят в этот backend-атом.
+- Миграции — нет.
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных, боевой прод и живой кабинет Wildberries не читались и не затрагивались.

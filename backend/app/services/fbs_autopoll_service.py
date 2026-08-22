@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import uuid
 from collections import defaultdict
@@ -11,7 +12,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
 import httpx
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
@@ -37,20 +38,57 @@ from app.services.wb_marketplace_orders_service import (
 logger = logging.getLogger(__name__)
 
 _sync_locks: defaultdict[tuple[uuid.UUID, str], asyncio.Lock] = defaultdict(asyncio.Lock)
+_SYNC_LOCK_NAMESPACE = b"wms:fbs:wb:sync:"
+
+
+def _sync_lock_key(seller_id: uuid.UUID, sync_kind: str) -> int:
+    digest = hashlib.blake2b(
+        _SYNC_LOCK_NAMESPACE + seller_id.bytes + sync_kind.encode("utf-8"),
+        digest_size=8,
+    ).digest()
+    raw = int.from_bytes(digest, "big", signed=False)
+    return raw - (1 << 64) if raw >= 1 << 63 else raw
+
+
+async def _session_uses_postgresql(session: AsyncSession) -> bool:
+    connection = await session.connection()
+    return connection.dialect.name == "postgresql"
 
 
 @asynccontextmanager
 async def seller_sync_flight(
     seller_id: uuid.UUID, sync_kind: str
 ) -> AsyncIterator[bool]:
-    """Prevent overlapping jobs of one kind without serializing the other kind."""
+    """Prevent duplicate jobs per seller/kind across workers and processes."""
     lock = _sync_locks[(seller_id, sync_kind)]
     if lock.locked():
         yield False
         return
     await lock.acquire()
     try:
-        yield True
+        # The in-process lock above covers SQLite/local execution.  Celery
+        # workers may be separate processes, so PostgreSQL needs a scoped
+        # advisory lock as well.  This key includes sync_kind deliberately:
+        # new and reconcile are allowed to run independently.
+        async with SessionLocal() as session:
+            if await _session_uses_postgresql(session):
+                lock_key = _sync_lock_key(seller_id, sync_kind)
+                acquired = await session.scalar(
+                    text("select pg_try_advisory_lock(:lock_key)"),
+                    {"lock_key": lock_key},
+                )
+                if not acquired:
+                    yield False
+                    return
+                try:
+                    yield True
+                finally:
+                    await session.scalar(
+                        text("select pg_advisory_unlock(:lock_key)"),
+                        {"lock_key": lock_key},
+                    )
+            else:
+                yield True
     finally:
         lock.release()
 
