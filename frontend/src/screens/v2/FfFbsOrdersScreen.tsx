@@ -209,7 +209,6 @@ type NewOrderRowProps = {
   order: FbsWorklistOrder
   selected: boolean
   highlighted: boolean
-  serverNow: string | null
   registerRow: (id: string, node: HTMLTableRowElement | null) => void
   onToggle: (order: FbsWorklistOrder) => void
   onOpenWorkspace: (supplyId: string) => void
@@ -222,7 +221,6 @@ const NewOrderRow = memo(function NewOrderRow({
   order,
   selected,
   highlighted,
-  serverNow,
   registerRow,
   onToggle,
   onOpenWorkspace,
@@ -508,8 +506,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const loadMoreRef = useRef(false)
   const ordersLengthRef = useRef(0)
   const ordersRef = useRef<FbsWorklistOrder[]>([])
+  const worklistQueryKey = `${statusGroup}\u0000${sellerId}\u0000${wbWarehouseId}`
+  const worklistQueryKeyRef = useRef(worklistQueryKey)
   ordersLengthRef.current = orders.length
   ordersRef.current = orders
+  worklistQueryKeyRef.current = worklistQueryKey
   // Плавающая панель выбора (fbs-selection-bar) прибита к низу вьюпорта и накрывает
   // собой последние строки таблицы — оператор кликал по чекбоксу второго заказа и
   // попадал в панель (см. tests-e2e/ff-fbs-orders.spec.ts:277). Меряем реальную высоту
@@ -561,17 +562,15 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       if (backgroundRefresh) {
         // Тик заменяет только первую порцию. Хвост начинается ровно после неё:
         // так исчезнувший из «Новых» заказ не остаётся в таблице, а догруженные
-        // страницы, прокрутка и их выбор не затрагиваются.
-        const oldFirstPageIds = new Set(ordersRef.current.slice(0, NEW_ORDERS_PAGE_LIMIT).map((item) => item.id))
+        // страницы, прокрутка и их выбор не затрагиваются. Выбор сохраняем даже
+        // для строки, которая из-за вставки сверху временно ушла за границу порции.
         const nextOrders = [
           ...page.items,
           ...ordersRef.current
             .slice(NEW_ORDERS_PAGE_LIMIT)
             .filter((old) => !page.items.some((fresh) => fresh.id === old.id)),
         ]
-        const nextOrderIds = new Set(nextOrders.map((item) => item.id))
         setOrders(nextOrders)
-        setSelected((current) => new Set([...current].filter((id) => !oldFirstPageIds.has(id) || nextOrderIds.has(id))))
       } else {
         setOrders(page.items)
       }
@@ -583,7 +582,10 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         return next
       })
       setWarehouseOptions(statusGroup === 'new' ? page.warehouse_options ?? [] : [])
-      if (statusGroup !== 'new' || !backgroundRefresh) setNextCursor(statusGroup === 'new' ? page.next_cursor : null)
+      // После фонового обновления курсор обязан соответствовать новой первой
+      // порции. Иначе вставка заказа сверху оставит старую границу и потеряет
+      // сместившуюся пятидесятую строку при следующей догрузке.
+      setNextCursor(statusGroup === 'new' ? page.next_cursor : null)
       setLoadMoreError(null)
       if (
         statusGroup === 'new' &&
@@ -606,6 +608,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
 
   const loadMore = useCallback(async () => {
     if (statusGroup !== 'new' || !nextCursor || loadMoreRef.current) return
+    const requestId = loadRequestRef.current
+    const queryKey = worklistQueryKeyRef.current
     loadMoreRef.current = true
     setLoadingMore(true)
     setLoadMoreError(null)
@@ -617,6 +621,9 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         limit: NEW_ORDERS_PAGE_LIMIT,
         cursor: nextCursor,
       })
+      // Пока догрузка летела, оператор мог сменить селлера, склад или вкладку.
+      // Ответ старого фильтра нельзя примешивать к уже загруженной новой выдаче.
+      if (requestId !== loadRequestRef.current || queryKey !== worklistQueryKeyRef.current) return
       setOrders((current) => [...current, ...page.items.filter((item) => !current.some((old) => old.id === item.id))])
       setSelectedCache((current) => {
         const next = new Map(current)
@@ -626,6 +633,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       setNextCursor(page.next_cursor)
       setServerNow(page.server_now)
     } catch (cause) {
+      if (requestId !== loadRequestRef.current || queryKey !== worklistQueryKeyRef.current) return
       setLoadMoreError('Не удалось загрузить следующие заказы')
     } finally {
       setLoadingMore(false)
@@ -863,7 +871,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
 
   const toggleVisibleSelectable = async (checked: boolean) => {
     if (checked && statusGroup === 'new' && nextCursor) {
-      let cursor = nextCursor
+      let cursor: string | null = nextCursor
       const pages: FbsWorklistOrder[] = []
       try {
         while (cursor) {
@@ -1119,7 +1127,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
           <ErrorNotice testId="fbs-orders-error">
             <Stack direction="row" spacing={2} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
               <Typography variant="body2">{error}</Typography>
-              <SecondaryAction size="small" onClick={() => void load()} disabled={busy}>
+              <SecondaryAction onClick={() => void load()} disabled={busy}>
                 Повторить
               </SecondaryAction>
             </Stack>
@@ -1311,7 +1319,6 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                     order={order}
                     selected={selected.has(order.id)}
                     highlighted={Boolean(searchTerm && matchingIds.has(order.id))}
-                    serverNow={serverNow}
                     registerRow={registerRow}
                     onToggle={toggle}
                     onOpenWorkspace={openWorkspace}

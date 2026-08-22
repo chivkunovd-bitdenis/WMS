@@ -275,7 +275,7 @@ test('fbs orders: failed continuation preserves rows and retries', async ({ page
   expect(continuationAttempts).toBe(2)
 })
 
-// Review regression: a filter change replaces the first page instead of merging its old orders.
+// S-03-TC-002 / S-03-TC-010 — a filter change replaces the first page instead of merging its old orders.
 test('fbs orders: changing warehouse does not merge a previous page', async ({ page }) => {
   await registerFf(page, 'pagination-filter')
   const warehouseOptions = [
@@ -297,31 +297,92 @@ test('fbs orders: changing warehouse does not merge a previous page', async ({ p
   await expect(page.getByTestId('fbs-order-old-1')).toHaveCount(0)
 })
 
+// S-03-TC-002 / S-03-TC-010 — an in-flight continuation from the old filter is discarded.
+test('fbs orders: changing warehouse discards an in-flight old continuation', async ({ page }) => {
+  await registerFf(page, 'pagination-filter-race')
+  const warehouseOptions = [
+    { id: '501001', name: 'WB Подольск', wb_warehouse: { id: 501001, name: 'WB Подольск' } },
+    { id: '501002', name: 'WB Казань', wb_warehouse: { id: 501002, name: 'WB Казань' } },
+  ]
+  let releaseOldContinuation: (() => void) | null = null
+  const oldContinuationReleased = new Promise<void>((resolve) => {
+    releaseOldContinuation = resolve
+  })
+
+  await page.route('**/operations/fbs-orders/worklist**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    const params = new URL(route.request().url()).searchParams
+    if (params.get('cursor') === 'old-page-2') {
+      await oldContinuationReleased
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(worklist([order('old-continuation')], warehouseOptions)),
+      })
+    }
+    const filtered = params.get('wb_warehouse_id') === '501002'
+    const body = filtered
+      ? worklist([order('new-filter')], warehouseOptions)
+      : worklist([order('old-first')], warehouseOptions, 'old-page-2')
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
+  })
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await expect(page.getByTestId('fbs-order-old-first')).toBeVisible()
+  await Promise.all([
+    page.waitForRequest((request) => new URL(request.url()).searchParams.get('cursor') === 'old-page-2'),
+    page.getByTestId('fbs-orders-load-more-action').click(),
+  ])
+
+  await page.getByRole('combobox', { name: 'Склад селлера / WB' }).click()
+  await page.getByRole('option', { name: 'WB Казань' }).click()
+  await expect(page.getByTestId('fbs-order-new-filter')).toBeVisible()
+  releaseOldContinuation?.()
+
+  await expect(page.getByTestId('fbs-order-old-continuation')).toHaveCount(0)
+  await expect(page.getByTestId('fbs-order-old-first')).toHaveCount(0)
+  await expect(page.getByTestId('fbs-order-new-filter')).toBeVisible()
+})
+
 // S-03-TC-006 / S-03-TC-012 — a visible tick refreshes only the first portion; a hidden tab does not poll.
 test('fbs orders: polling preserves the loaded tail and pauses while hidden', async ({ page }) => {
   await page.clock.install()
   await registerFf(page, 'pagination-polling')
   const firstPage = Array.from({ length: 50 }, (_, index) => order(String(index + 1)))
-  const refreshedFirstPage = [order('fresh-1'), ...firstPage.slice(1)]
+  const refreshedFirstPage = [order('fresh-1'), ...firstPage.slice(0, 49)]
   const tail = [order('51')]
   let firstPageRequests = 0
+  let shiftedCursorRequests = 0
   await page.route('**/operations/fbs-orders/worklist**', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback()
     const cursor = new URL(route.request().url()).searchParams.get('cursor')
     if (cursor === 'page-2') {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(worklist(tail, [], 'page-3')) })
     }
+    if (cursor === 'shifted-page-2') {
+      shiftedCursorRequests += 1
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(worklist([order('50'), order('51')])) })
+    }
     firstPageRequests += 1
-    const body = firstPageRequests === 1 ? worklist(firstPage, [], 'page-2') : worklist(refreshedFirstPage, [], 'page-2')
+    const body = firstPageRequests === 1
+      ? worklist(firstPage, [], 'page-2')
+      : worklist(refreshedFirstPage, [], 'shifted-page-2')
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
   })
 
   await page.getByTestId('nav-ff-fbs').click()
+  await page.getByTestId('fbs-order-50').getByRole('checkbox').click()
   await page.getByTestId('fbs-orders-load-more-action').click()
   await expect(page.getByTestId('fbs-order-51')).toBeVisible()
   await page.clock.fastForward(30_000)
   await expect(page.getByTestId('fbs-order-fresh-1')).toBeVisible()
   await expect(page.getByTestId('fbs-order-51')).toBeVisible()
+  await expect(page.getByTestId('fbs-selection-bar')).toContainText('Выбрано заказов: 1')
+  await page.getByTestId('fbs-orders-load-more-action').click()
+  await expect(page.getByTestId('fbs-order-50')).toBeVisible()
+  await expect(page.getByTestId('fbs-order-50').getByRole('checkbox')).toBeChecked()
+  await expect(page.getByTestId('fbs-order-51')).toHaveCount(1)
+  expect(shiftedCursorRequests).toBe(1)
   expect(firstPageRequests).toBe(2)
 
   await page.evaluate(() => {

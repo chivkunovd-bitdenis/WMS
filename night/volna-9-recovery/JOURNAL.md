@@ -87,3 +87,5 @@
 21:43   05-prod-slow · backend-dev: готово
 21:43   05-prod-slow · dev: фича 4/7 сохранена 099602e22d0d
 21:49   05-prod-slow · screen-dev: готово
+21:49   05-prod-slow · dev: фича 5/7 сохранена f0407f0660f6
+21:55   05-prod-slow · screen-dev: готово
