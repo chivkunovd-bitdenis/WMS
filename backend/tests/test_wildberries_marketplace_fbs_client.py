@@ -5,6 +5,8 @@ OpenAPI reference: dev.wildberries.ru/docs/openapi/orders-fbs (verified 2026-08-
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import httpx
 import pytest
 
@@ -103,7 +105,12 @@ async def test_fetch_orders_meta_batch_exact_contract_and_parse() -> None:
                     {
                         "id": 123456,
                         "metaDetails": [
-                            {"key": "sgtin", "value": "010460...", "decision": "filled"},
+                            {
+                                "key": "sgtin",
+                                "value": "010460...",
+                                "decision": "filled",
+                                "reason": "confirmed by WB",
+                            },
                         ],
                     }
                 ]
@@ -125,7 +132,75 @@ async def test_fetch_orders_meta_batch_exact_contract_and_parse() -> None:
     assert len(rows) == 1
     assert rows[0].order_id == 123456
     assert rows[0].meta_details[0].key == "sgtin"
+    assert rows[0].meta_details[0].value == "010460..."
     assert rows[0].meta_details[0].decision == "filled"
+    assert rows[0].meta_details[0].reason == "confirmed by WB"
+
+
+@pytest.mark.asyncio
+async def test_fetch_orders_meta_batch_retries_429_once_after_retry_after() -> None:
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(429, headers={"Retry-After": "1.5"})
+        return httpx.Response(200, json={"orders": [{"id": 123456, "metaDetails": []}]})
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport, base_url="https://wb-mock.test") as client:
+        with patch("app.services.wildberries_fbs_client.asyncio.sleep") as sleep:
+            rows = await fetch_marketplace_orders_meta_batch(
+                client, api_token="wb-token", order_ids=[123456], marketplace_api_base="https://wb-mock.test"
+            )
+
+    assert calls == 2
+    sleep.assert_awaited_once_with(1.5)
+    assert rows[0].order_id == 123456
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status_code", [400, 500])
+async def test_fetch_orders_meta_batch_does_not_retry_other_errors(status_code: int) -> None:
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(status_code, json={"orders": []})
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport, base_url="https://wb-mock.test") as client:
+        with pytest.raises(WildberriesClientError):
+            await fetch_marketplace_orders_meta_batch(
+                client, api_token="wb-token", order_ids=[123456], marketplace_api_base="https://wb-mock.test"
+            )
+
+    assert calls == 1
+
+
+@pytest.mark.asyncio
+async def test_fetch_orders_meta_batch_rejects_malformed_response_after_single_429_retry() -> None:
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(429, headers={"Retry-After": "0"})
+        return httpx.Response(200, content=b"not-json")
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport, base_url="https://wb-mock.test") as client:
+        with patch("app.services.wildberries_fbs_client.asyncio.sleep"):
+            with pytest.raises(WildberriesClientError) as excinfo:
+                await fetch_marketplace_orders_meta_batch(
+                    client, api_token="wb-token", order_ids=[123456], marketplace_api_base="https://wb-mock.test"
+                )
+
+    assert calls == 2
+    assert excinfo.value.code == "invalid_response"
 
 
 @pytest.mark.asyncio

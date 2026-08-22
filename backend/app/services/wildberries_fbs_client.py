@@ -5,6 +5,7 @@ OpenAPI reference: dev.wildberries.ru/docs/openapi/orders-fbs (verified 2026-08-
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -36,6 +37,7 @@ class MarketplaceMetaDetail:
     key: str
     value: str | None
     decision: str
+    reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,7 +174,11 @@ def _parse_meta_detail(entry: dict[str, Any]) -> MarketplaceMetaDetail | None:
     value: str | None = None if value_raw is None else str(value_raw)
     decision_raw = entry.get("decision")
     decision = str(decision_raw) if decision_raw is not None else "unknown"
-    return MarketplaceMetaDetail(key=key, value=value, decision=decision)
+    reason_raw = entry.get("reason")
+    reason = str(reason_raw) if reason_raw is not None else None
+    return MarketplaceMetaDetail(
+        key=key, value=value, decision=decision, reason=reason
+    )
 
 
 def _extend_meta_validation_items(
@@ -572,7 +578,7 @@ async def fetch_marketplace_supplies_page(
     )
     # WB требует ОБА параметра. Без `next` ручка отвечает
     # 400 {"code":"IncorrectParameter"} — проверено живым запросом на боевом токене
-    # 19.08.2026. Первая страница запрашивается с next=0.  # noqa: RUF003
+    # 19.08.2026. Первая страница запрашивается с next=0.
     params: dict[str, str | int] = {"limit": 1000, "next": next_cursor or 0}
     response = await marketplace_request(
         client,
@@ -643,6 +649,20 @@ async def fetch_marketplace_orders_meta_batch(
         api_token=api_token,
         json_body={"orders": order_ids},
     )
+    if response.status_code == 429:
+        retry_after_raw = response.headers.get("Retry-After")
+        try:
+            retry_after = max(0.0, float(retry_after_raw or "0"))
+        except ValueError:
+            retry_after = 0.0
+        await asyncio.sleep(retry_after)
+        response = await marketplace_request(
+            client,
+            "POST",
+            url,
+            api_token=api_token,
+            json_body={"orders": order_ids},
+        )
     if response.status_code >= 400:
         raise map_upstream_error(response)
     try:
