@@ -1,4 +1,3 @@
-# ruff: noqa: RUF003
 """FBS order marking — WB metadata requirements, pool KIZ, and status sync."""
 
 from __future__ import annotations
@@ -317,31 +316,36 @@ def _wb_order_verdict(
             "delivery_allowed": False,
         }
     for state in states:
-        if state["reason"]:
+        if isinstance(state["reason"], str) and state["reason"].strip():
             return {
                 "signature": "WB не принял",
                 "tone": "stop",
                 "reason": state["reason"],
                 "delivery_allowed": False,
             }
-    if any(state["decision"] is None for state in states):
-        return {
-            "signature": "Нет ответа WB",
-            "tone": "stop",
-            "reason": None,
-            "delivery_allowed": False,
-        }
-    decisions = {str(state["decision"]).strip().lower().replace("-", "_") for state in states}
-    if "required" in decisions or any(state["status"] == META_STATUS_MISSING for state in states):
+    decisions = {
+        str(state["decision"]).strip().lower().replace("-", "_")
+        for state in states
+        if state["decision"] is not None
+    }
+    statuses = {state["status"] for state in states}
+    if "required" in decisions or META_STATUS_MISSING in statuses:
         return {
             "signature": "WB: нужен код",
             "tone": "stop",
             "reason": None,
             "delivery_allowed": False,
         }
-    if "pending" in decisions:
+    if "pending" in decisions or META_STATUS_PENDING in statuses:
         return {
             "signature": "WB: проверяет",
+            "tone": "stop",
+            "reason": None,
+            "delivery_allowed": False,
+        }
+    if any(state["decision"] is None for state in states):
+        return {
+            "signature": "Нет ответа WB",
             "tone": "stop",
             "reason": None,
             "delivery_allowed": False,
@@ -421,17 +425,13 @@ def build_order_metadata(
                     "value_tail": None,
                 }
             )
-    delivery_allowed = (
-        bool(order.metadata_delivery_allowed)
-        if order.metadata_delivery_allowed is not None
-        else compute_delivery_allowed(order, markings)
-    )
+    verdict = _wb_order_verdict(order, markings)
     return {
         "required": required,
         "optional": optional,
         "states": states,
-        "delivery_allowed": delivery_allowed,
-        "verdict": _wb_order_verdict(order, markings),
+        "delivery_allowed": verdict["delivery_allowed"],
+        "verdict": verdict,
         "last_checked_at": (
             order.metadata_last_checked_at.isoformat()
             if order.metadata_last_checked_at

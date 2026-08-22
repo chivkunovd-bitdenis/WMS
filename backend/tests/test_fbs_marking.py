@@ -360,6 +360,97 @@ def test_fbs_metadata_gate_pending_blocks_filled_allows() -> None:
     assert compute_delivery_allowed(order, [filled]) is True
 
 
+# S-03-TC-001…007 — one server verdict covers every WB response state.
+@pytest.mark.parametrize(
+    ("decision", "status", "reason", "signature", "tone", "allowed"),
+    [
+        ("filled", META_STATUS_ACCEPTED, None, "WB: принято", "ok", True),
+        (
+            "optional",
+            META_STATUS_ALLOWED_WITHOUT_CHECK,
+            None,
+            "WB: код не требуется",
+            "neutral",
+            True,
+        ),
+        (
+            "notRequired",
+            META_STATUS_ALLOWED_WITHOUT_CHECK,
+            None,
+            "WB: код не требуется",
+            "neutral",
+            True,
+        ),
+        ("filled", META_STATUS_ACCEPTED, "invalid_kiz", "WB не принял", "stop", False),
+        ("pending", META_STATUS_PENDING, None, "WB: проверяет", "stop", False),
+        ("required", "missing", None, "WB: нужен код", "stop", False),
+        ("unknown", "unknown", None, "Нет ответа WB", "stop", False),
+    ],
+)
+def test_wb_order_verdict_maps_operator_states(
+    decision: str,
+    status: str,
+    reason: str | None,
+    signature: str,
+    tone: str,
+    allowed: bool,
+) -> None:
+    from types import SimpleNamespace
+
+    from app.services.fbs_marking_service import _wb_order_verdict
+
+    order = SimpleNamespace(required_meta_json=["sgtin"], optional_meta_json=[])
+    marking = SimpleNamespace(
+        kind="sgtin",
+        value="01CIS-VERDICT",
+        meta_status=status,
+        reason=reason,
+        meta_details_json={"decision": decision},
+    )
+    verdict = _wb_order_verdict(order, [marking])
+    assert verdict == {
+        "signature": signature,
+        "tone": tone,
+        "reason": reason,
+        "delivery_allowed": allowed,
+    }
+
+
+def test_wb_order_verdict_any_blocker_wins_and_metadata_uses_it() -> None:
+    from types import SimpleNamespace
+
+    from app.services.fbs_marking_service import build_order_metadata
+
+    order = SimpleNamespace(
+        required_meta_json=["sgtin", "imei"],
+        optional_meta_json=[],
+        metadata_delivery_allowed=True,
+        metadata_last_checked_at=None,
+    )
+    markings = [
+        SimpleNamespace(
+            kind="sgtin",
+            value="01CIS-OK",
+            meta_status=META_STATUS_ACCEPTED,
+            reason=None,
+            source="wb",
+        ),
+        SimpleNamespace(
+            kind="imei",
+            value="356938035643809",
+            meta_status=META_STATUS_PENDING,
+            reason=None,
+            source="wb",
+        ),
+    ]
+    for marking in markings:
+        marking.meta_details_json = {"decision": "filled" if marking.kind == "sgtin" else "pending"}
+    payload = build_order_metadata(order, markings)
+    assert payload["verdict"]["signature"] == "WB: проверяет"
+    assert payload["delivery_allowed"] is False
+    assert payload["verdict"]["delivery_allowed"] is False
+
+
 # S-03-TC-001…007 — one server verdict: reason and blocking WB decisions win.
 @pytest.mark.parametrize(
     ("decision", "reason", "signature", "tone", "allowed"),
