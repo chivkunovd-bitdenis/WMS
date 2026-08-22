@@ -20,8 +20,13 @@ describe('ReportMetricStrip', () => {
 
     expect(markup).toContain('data-testid="report-metrics"')
     expect(markup).toContain('Остаток сейчас')
+    expect(markup).toContain('Приход за период')
+    expect(markup).toContain('Расход за период')
+    expect(markup).toContain('Расход к прошлому периоду')
     expect(markup).toContain('12 480 шт.')
     expect(markup).toContain('0 шт.')
+    expect(markup).toContain('2 918 шт.')
+    expect(markup).toContain('184 шт.')
     expect(markup).toContain('Расход вырос на 6,7 процента')
     expect(markup).toContain('+6,7 %')
     expect(markup).not.toContain('+6,7 шт.')
@@ -51,8 +56,11 @@ describe('ReportMetricStrip', () => {
   it('replaces all values with loading skeletons', () => {
     const markup = renderToStaticMarkup(<ReportMetricStrip items={items} loading testId="report-metrics" />)
 
-    expect(markup).toContain('MuiSkeleton-root')
+    expect((markup.match(/data-testid="report-metrics-[^"]+-skeleton"/g) ?? []).length).toBe(4)
     expect(markup).not.toContain('12 480 шт.')
+    expect(markup).not.toContain('0 шт.')
     expect(markup).not.toContain('2 918 шт.')
+    expect(markup).not.toContain('184 шт.')
+    expect(markup).not.toContain('+6,7 %')
   })
 })
