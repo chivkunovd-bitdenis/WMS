@@ -38,3 +38,50 @@
 
 ### карта задевания
 20:51 вопросов после анализа: 45 — см. night/volna-9/VOPROSY.md
+21:02   01-wb-marking · solution-architect: готово
+21:03   01-wb-marking · ux-architect: нет файла CONTRACT.md (код 1, попытка 1)
+21:03   01-wb-marking · ux-architect: нет файла CONTRACT.md (код 1, попытка 2)
+21:03 01-wb-marking: отложено на шаге ux-architect
+00:21   01-wb-marking · solution-architect: уже сделано, пропускаю
+00:25   01-wb-marking · ux-architect: готово
+00:28   01-wb-marking · product: готово
+00:32   01-wb-marking · tester: готово
+00:39   01-wb-marking · breaker: готово
+00:45   01-wb-marking · screen-dev: готово
+01:01   01-wb-marking · reviewer: готово
+01:01   01-wb-marking · reviewer: находки, круг 1 — назад к разработке
+01:05   01-wb-marking · screen-dev: готово
+01:13   01-wb-marking · reviewer: готово
+01:13   01-wb-marking · reviewer: находки, круг 2 — назад к разработке
+01:16   01-wb-marking · screen-dev: готово
+01:20   01-wb-marking · reviewer: нет файла REVIEW.md (код 1, попытка 1)
+01:20   01-wb-marking · reviewer: нет файла REVIEW.md (код 1, попытка 2)
+01:20 01-wb-marking: отложено на шаге reviewer
+05:18   01-wb-marking · solution-architect: уже сделано, пропускаю
+05:18   01-wb-marking · ux-architect: уже сделано, пропускаю
+05:18   01-wb-marking · product: уже сделано, пропускаю
+05:18   01-wb-marking · tester: уже сделано, пропускаю
+05:18   01-wb-marking · breaker: уже сделано, пропускаю
+05:18   01-wb-marking · screen-dev: уже сделано, пропускаю
+05:26   01-wb-marking · reviewer: готово
+05:26   01-wb-marking · reviewer: находки, круг 1 — назад к разработке
+05:40   01-wb-marking · screen-dev: готово
+05:47   01-wb-marking · reviewer: готово
+05:47   01-wb-marking · reviewer: находки, круг 2 — назад к разработке
+05:56   01-wb-marking · screen-dev: готово
+06:08   01-wb-marking · reviewer: готово
+06:08 01-wb-marking: отложено — reviewer, круги кончились
+10:16   01-wb-marking · solution-architect: уже сделано, пропускаю
+10:16   01-wb-marking · ux-architect: уже сделано, пропускаю
+10:16   01-wb-marking · product: уже сделано, пропускаю
+10:16   01-wb-marking · tester: уже сделано, пропускаю
+10:16   01-wb-marking · breaker: уже сделано, пропускаю
+10:16   01-wb-marking · screen-dev: уже сделано, пропускаю
+10:21   01-wb-marking · reviewer: готово
+10:21   01-wb-marking · reviewer: находки, круг 1 — назад к разработке
+10:28   01-wb-marking · screen-dev: готово
+10:44   01-wb-marking · reviewer: готово
+10:44   01-wb-marking · reviewer: находки, круг 2 — назад к разработке
+10:54   01-wb-marking · screen-dev: готово
+11:03   01-wb-marking · reviewer: готово
+11:03 01-wb-marking: отложено — reviewer, круги кончились

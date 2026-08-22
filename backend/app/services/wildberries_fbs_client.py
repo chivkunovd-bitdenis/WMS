@@ -5,6 +5,7 @@ OpenAPI reference: dev.wildberries.ru/docs/openapi/orders-fbs (verified 2026-08-
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -18,6 +19,8 @@ from app.services.wildberries_errors import (
 )
 
 MAX_MARKETPLACE_FBS_BATCH = 100
+MAX_META_429_RETRIES = 2
+META_429_BACKOFF_SECONDS = 0.05
 
 MARKETPLACE_SUPPLIES_BATCH_ORDERS_PATH = "/api/marketplace/v3/supplies/{supply_id}/orders"
 MARKETPLACE_SUPPLY_ORDER_IDS_PATH = "/api/marketplace/v3/supplies/{supply_id}/order-ids"
@@ -36,6 +39,7 @@ class MarketplaceMetaDetail:
     key: str
     value: str | None
     decision: str
+    reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,7 +176,9 @@ def _parse_meta_detail(entry: dict[str, Any]) -> MarketplaceMetaDetail | None:
     value: str | None = None if value_raw is None else str(value_raw)
     decision_raw = entry.get("decision")
     decision = str(decision_raw) if decision_raw is not None else "unknown"
-    return MarketplaceMetaDetail(key=key, value=value, decision=decision)
+    reason_raw = entry.get("reason") or entry.get("message")
+    reason = str(reason_raw) if reason_raw is not None else None
+    return MarketplaceMetaDetail(key=key, value=value, decision=decision, reason=reason)
 
 
 def _extend_meta_validation_items(
@@ -636,13 +642,24 @@ async def fetch_marketplace_orders_meta_batch(
         MARKETPLACE_ORDERS_META_BULK_PATH,
         marketplace_api_base=marketplace_api_base,
     )
-    response = await marketplace_request(
-        client,
-        "POST",
-        url,
-        api_token=api_token,
-        json_body={"orders": order_ids},
-    )
+    response: httpx.Response | None = None
+    for attempt in range(MAX_META_429_RETRIES + 1):
+        response = await marketplace_request(
+            client,
+            "POST",
+            url,
+            api_token=api_token,
+            json_body={"orders": order_ids},
+        )
+        if response.status_code != 429 or attempt == MAX_META_429_RETRIES:
+            break
+        retry_after = response.headers.get("Retry-After")
+        try:
+            delay = min(float(retry_after), 1.0) if retry_after else META_429_BACKOFF_SECONDS
+        except ValueError:
+            delay = META_429_BACKOFF_SECONDS
+        await asyncio.sleep(max(0.0, delay))
+    assert response is not None
     if response.status_code >= 400:
         raise map_upstream_error(response)
     try:

@@ -1,8 +1,8 @@
-# ruff: noqa: RUF003
 """FBS order marking — WB metadata requirements, pool KIZ, and status sync."""
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -33,7 +33,15 @@ from app.models.fbs_order import (
     FbsOrderMarking,
     current_order_marking,
 )
-from app.models.marking_code import STATUS_AVAILABLE, STATUS_RESERVED, MarkingCode
+from app.models.marking_code import (
+    EVENT_WB_ORPHANED,
+    STATUS_APPLIED,
+    STATUS_AVAILABLE,
+    STATUS_PRINTED,
+    STATUS_RESERVED,
+    MarkingCode,
+    MarkingCodeEvent,
+)
 from app.services.marking_code_service import normalize_cis
 from app.services.wildberries_client import (
     WildberriesClientError,
@@ -46,6 +54,7 @@ from app.services.wildberries_credentials_service import (
 from app.services.wildberries_errors import WildberriesBusinessError
 from app.services.wildberries_fbs_client import (
     MarketplaceMetaDetail,
+    MarketplaceOrderMetaRow,
     fetch_marketplace_orders_meta_batch,
 )
 
@@ -468,18 +477,148 @@ def _apply_meta_detail_to_marking(
     *,
     check_status: str | None = None,
 ) -> None:
-    reason_raw = getattr(detail, "reason", None)
-    reason = str(reason_raw) if reason_raw is not None else None
     marking.meta_status = derive_meta_status(
         check_status=check_status,
         decision=detail.decision,
         has_value=bool(marking.value),
     )
-    marking.reason = reason
+    marking.reason = detail.reason
     marking.meta_details_json = {
         "decision": detail.decision,
         "value": detail.value,
+        "reason": detail.reason,
     }
+
+
+_ORPHAN_CANDIDATE_STATUSES = frozenset(
+    {
+        META_STATUS_ASSIGNED,
+        META_STATUS_SENDING,
+        META_STATUS_PENDING,
+        META_STATUS_ACCEPTED,
+        META_STATUS_ALLOWED_WITHOUT_CHECK,
+    }
+)
+
+
+async def _reconcile_orphans_after_sync(
+    session: AsyncSession,
+    order: FbsOrder,
+    markings: list[FbsOrderMarking],
+    details_by_kind: dict[str, MarketplaceMetaDetail],
+    status_map: dict[tuple[str, str], str],
+) -> None:
+    """
+    Orphan reconciliation: two-tick confirmation before returning codes to pool.
+
+    After a successful 2xx response from WB, if a marking's (kind, value) pair is
+    absent from WB's response, it's either a transient issue or the code is truly
+    orphaned. Only markings in "good" statuses are checked; rejected/replacement_required
+    are already considered problematic and are left as-is.
+    - Tick 1: Set internal flag wb_orphan_candidate_at, no user-visible change.
+    - Tick 2: If flag already exists, transition to missing and release/preserve code.
+    """
+    # Build the set of (kind, value) pairs WB acknowledged in this response.
+    # A pair is "seen" if it appeared in status_map (meta.<plural>) or in
+    # metaDetails with a non-null value.
+    wb_seen_values: set[tuple[str, str]] = set(status_map.keys())
+    for detail in details_by_kind.values():
+        if detail.value is not None:
+            wb_seen_values.add((detail.key.strip().lower(), detail.value))
+
+    for marking in markings:
+        # Only reconcile markings in "good" statuses; skip rejected/replacement_required.
+        if marking.meta_status not in _ORPHAN_CANDIDATE_STATUSES:
+            continue
+        if (marking.kind, marking.value) not in wb_seen_values:
+            # Marking (kind, value) not found in WB response
+            meta_json = marking.meta_details_json or {}
+            wb_orphan_candidate_at = meta_json.get("wb_orphan_candidate_at")
+
+            if wb_orphan_candidate_at is None:
+                # Tick 1: Mark as orphan candidate (internal only, no UI change)
+                meta_json["wb_orphan_candidate_at"] = datetime.now(tz=UTC).isoformat()
+                marking.meta_details_json = meta_json
+            else:
+                # Tick 2: Confirmed orphan — release/preserve code and transition to missing
+                previous_meta_status = marking.meta_status
+                previous_check_status = marking.check_status
+
+                await _release_orphan_code(session, order, marking)
+                marking.meta_status = META_STATUS_MISSING
+                marking.check_status = CHECK_STATUS_NEW
+                marking.reason = "Код отсутствует у WB"
+
+                # Audit trail in meta_details_json
+                meta_json["wb_orphan_at"] = datetime.now(tz=UTC).isoformat()
+                meta_json["previous_meta_status"] = previous_meta_status
+                meta_json["previous_check_status"] = previous_check_status
+                marking.meta_details_json = meta_json
+        else:
+            # WB acknowledged this (kind, value) — clear orphan candidate flag if set
+            meta_json = marking.meta_details_json
+            if meta_json and "wb_orphan_candidate_at" in meta_json:
+                del meta_json["wb_orphan_candidate_at"]
+                marking.meta_details_json = meta_json
+
+
+async def _release_orphan_code(
+    session: AsyncSession,
+    order: FbsOrder,
+    marking: FbsOrderMarking,
+) -> None:
+    """Release code to pool or preserve it based on its current status.
+
+    No-op if marking has no attached code.
+    When a code is attached:
+    - reserved  → returned to pool (status = available, reference cleared)
+    - printed / applied → conserved (physical status unchanged, reference cleared)
+    - any other terminal status → reference cleared only
+    A wb_orphaned event is recorded whenever a code is attached.
+    """
+    if marking.marking_code_id is None:
+        return
+
+    # Lock the code
+    stmt = (
+        select(MarkingCode)
+        .where(MarkingCode.id == marking.marking_code_id)
+        .with_for_update()
+    )
+    code = (await session.execute(stmt)).scalar_one_or_none()
+    if code is None:
+        return
+
+    previous_status = code.status
+
+    if code.status == STATUS_RESERVED:
+        # Return to pool
+        code.status = STATUS_AVAILABLE
+        marking.marking_code_id = None
+    elif code.status in (STATUS_PRINTED, STATUS_APPLIED):
+        # Preserve physical status, only remove reference
+        marking.marking_code_id = None
+    else:
+        # For terminal statuses, just remove reference
+        marking.marking_code_id = None
+
+    await session.flush()
+
+    # Record event
+    event = MarkingCodeEvent(
+        tenant_id=order.tenant_id,
+        seller_id=order.seller_id,
+        code_id=code.id,
+        event_type=EVENT_WB_ORPHANED,
+        meta_json=json.dumps({
+            "previous_status": previous_status,
+            "previous_meta_status": marking.meta_status,
+            "wb_order_id": int(order.wb_order_id),
+            "kind": marking.kind,
+        }),
+    )
+    session.add(event)
+    await session.flush()
 
 
 async def _sync_order_meta_from_wb(
@@ -487,13 +626,15 @@ async def _sync_order_meta_from_wb(
     order: FbsOrder,
     http_client: httpx.AsyncClient,
     token: str,
+    batch: list[MarketplaceOrderMetaRow] | None = None,
 ) -> list[FbsOrderMarking]:
     markings = await list_order_markings(session, order.tenant_id, order.id)
-    batch = await fetch_marketplace_orders_meta_batch(
-        http_client,
-        api_token=token,
-        order_ids=[int(order.wb_order_id)],
-    )
+    if batch is None:
+        batch = await fetch_marketplace_orders_meta_batch(
+            http_client,
+            api_token=token,
+            order_ids=[int(order.wb_order_id)],
+        )
     details_by_kind: dict[str, MarketplaceMetaDetail] = {}
     status_map: dict[tuple[str, str], str] = {}
     for row in batch:
@@ -521,6 +662,9 @@ async def _sync_order_meta_from_wb(
                 check_status=wb_status,
                 has_value=True,
             )
+
+    # Run orphan reconciliation after applying metadata
+    await _reconcile_orphans_after_sync(session, order, markings, details_by_kind, status_map)
 
     order.meta_details_json = _meta_details_from_markings(markings)
     order.metadata_delivery_allowed = compute_delivery_allowed(order, markings)

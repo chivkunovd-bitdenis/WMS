@@ -16,9 +16,18 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_PACKED,
     META_STATUS_ACCEPTED,
     META_STATUS_ALLOWED_WITHOUT_CHECK,
+    META_STATUS_ASSIGNED,
+    META_STATUS_MISSING,
     META_STATUS_PENDING,
     META_STATUS_REJECTED,
     FbsOrderMarking,
+)
+from app.models.marking_code import (
+    STATUS_AVAILABLE,
+    STATUS_RESERVED,
+    MarkingCode,
+    MarkingCodeEvent,
+    EVENT_WB_ORPHANED,
 )
 from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
 from app.services.wildberries_client import reset_mock_marketplace_order_meta
@@ -382,3 +391,267 @@ async def test_fbs_intake_stores_required_optional_meta(
         assert order is not None
         assert order.required_meta_json == ["sgtin"]
         assert order.optional_meta_json == ["imei"]
+
+
+# TC-NEW-WB-ORPHAN-001 — tick 1: marking absent from WB response sets candidate flag
+@pytest.mark.asyncio
+async def test_wb_orphan_tick1_sets_candidate_flag(
+    async_client: AsyncClient,
+    enable_wb_marketplace_marking_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Given: marking with meta_status=assigned exists, WB returns empty batch.
+    When: sync runs once.
+    Then: meta_details_json has wb_orphan_candidate_at, meta_status unchanged (assigned).
+    """
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    order_id = await _create_order(
+        tenant_id,
+        uuid.UUID(seller_id),
+        uuid.UUID(warehouse_id),
+        order_id=970001,
+        status=FBS_ORDER_STATUS_PACKED,
+    )
+    cis = "01ORPHAN-TICK1-001"
+    async with SessionLocal() as session:
+        session.add(
+            FbsOrderMarking(
+                order_id=order_id,
+                tenant_id=tenant_id,
+                kind="sgtin",
+                value=cis,
+                check_status=CHECK_STATUS_NEW,
+                meta_status=META_STATUS_ASSIGNED,
+            )
+        )
+        await session.commit()
+
+    from app.services.wildberries_fbs_client import MarketplaceOrderMetaRow
+
+    async def fake_meta_empty(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[MarketplaceOrderMetaRow]:
+        # WB returns batch with no data for this order (orphan scenario)
+        return []
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch",
+        fake_meta_empty,
+    )
+
+    sync = await async_client.post(
+        f"/operations/fbs-orders/{order_id}/markings/sync",
+        headers=headers,
+    )
+    assert sync.status_code == 200, sync.text
+
+    async with SessionLocal() as session:
+        marking = (
+            await session.execute(
+                select(FbsOrderMarking).where(FbsOrderMarking.order_id == order_id)
+            )
+        ).scalar_one()
+    # Tick 1: flag is set but status is NOT yet changed
+    assert marking.meta_details_json is not None
+    assert "wb_orphan_candidate_at" in marking.meta_details_json
+    assert marking.meta_status == META_STATUS_ASSIGNED
+
+
+# TC-NEW-WB-ORPHAN-002 — tick 2: confirmed orphan transitions to missing
+@pytest.mark.asyncio
+async def test_wb_orphan_tick2_transitions_to_missing(
+    async_client: AsyncClient,
+    enable_wb_marketplace_marking_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Given: marking with wb_orphan_candidate_at already set (tick 1 already happened).
+    When: sync runs again with still-empty WB batch.
+    Then: meta_status=missing, check_status=new, reason set, code released.
+    """
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    order_id = await _create_order(
+        tenant_id,
+        uuid.UUID(seller_id),
+        uuid.UUID(warehouse_id),
+        order_id=970101,
+        status=FBS_ORDER_STATUS_PACKED,
+    )
+    cis = "01ORPHAN-TICK2-001"
+    async with SessionLocal() as session:
+        session.add(
+            FbsOrderMarking(
+                order_id=order_id,
+                tenant_id=tenant_id,
+                kind="sgtin",
+                value=cis,
+                check_status=CHECK_STATUS_NEW,
+                meta_status=META_STATUS_ASSIGNED,
+                # Pre-set the tick-1 flag to simulate second cycle
+                meta_details_json={"wb_orphan_candidate_at": "2026-08-22T00:00:00+00:00"},
+            )
+        )
+        await session.commit()
+
+    from app.services.wildberries_fbs_client import MarketplaceOrderMetaRow
+
+    async def fake_meta_empty(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[MarketplaceOrderMetaRow]:
+        return []
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch",
+        fake_meta_empty,
+    )
+
+    sync = await async_client.post(
+        f"/operations/fbs-orders/{order_id}/markings/sync",
+        headers=headers,
+    )
+    assert sync.status_code == 200, sync.text
+
+    async with SessionLocal() as session:
+        marking = (
+            await session.execute(
+                select(FbsOrderMarking).where(FbsOrderMarking.order_id == order_id)
+            )
+        ).scalar_one()
+    # Tick 2: status must be missing
+    assert marking.meta_status == META_STATUS_MISSING
+    assert marking.check_status == CHECK_STATUS_NEW
+    assert marking.reason == "Код отсутствует у WB"
+    assert marking.meta_details_json is not None
+    assert "wb_orphan_at" in marking.meta_details_json
+    assert marking.meta_details_json.get("previous_meta_status") == META_STATUS_ASSIGNED
+
+
+# TC-NEW-WB-ORPHAN-003 — rejected marking is not processed as orphan
+def test_wb_orphan_skips_rejected_markings() -> None:
+    """Given: marking with meta_status=rejected.
+    When: WB response is empty (kind not found).
+    Then: orphan logic does NOT apply (rejected is already a bad status, not touched).
+    """
+    from types import SimpleNamespace
+    from app.services.fbs_marking_service import _ORPHAN_CANDIDATE_STATUSES
+    from app.models.fbs_order import META_STATUS_REJECTED, META_STATUS_REPLACEMENT_REQUIRED
+
+    # These statuses must NOT appear in the candidate set
+    assert META_STATUS_REJECTED not in _ORPHAN_CANDIDATE_STATUSES
+    assert META_STATUS_REPLACEMENT_REQUIRED not in _ORPHAN_CANDIDATE_STATUSES
+
+    # And the missing status itself should not be a candidate (already resolved)
+    assert META_STATUS_MISSING not in _ORPHAN_CANDIDATE_STATUSES
+
+
+# TC-NEW-WB-ORPHAN-004 — orphan tick 2 with reserved code returns code to pool
+@pytest.mark.asyncio
+async def test_wb_orphan_tick2_returns_reserved_code_to_pool(
+    async_client: AsyncClient,
+    enable_wb_marketplace_marking_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Given: marking with reserved MarkingCode and tick-1 flag set.
+    When: sync runs (tick 2).
+    Then: MarkingCode.status = available, marking_code_id = None, wb_orphaned event written.
+    """
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    order_id = await _create_order(
+        tenant_id,
+        uuid.UUID(seller_id),
+        uuid.UUID(warehouse_id),
+        order_id=970201,
+        status=FBS_ORDER_STATUS_PACKED,
+    )
+    cis = "01ORPHAN-POOL-001"
+
+    # Create a MarkingCode in reserved status and attach it to the marking
+    code_id = uuid.uuid4()
+    async with SessionLocal() as session:
+        session.add(
+            MarkingCode(
+                id=code_id,
+                tenant_id=tenant_id,
+                seller_id=uuid.UUID(seller_id),
+                cis_code=cis,
+                status=STATUS_RESERVED,
+            )
+        )
+        session.add(
+            FbsOrderMarking(
+                order_id=order_id,
+                tenant_id=tenant_id,
+                kind="sgtin",
+                value=cis,
+                check_status=CHECK_STATUS_NEW,
+                meta_status=META_STATUS_ASSIGNED,
+                marking_code_id=code_id,
+                # Pre-set tick-1 flag
+                meta_details_json={"wb_orphan_candidate_at": "2026-08-22T00:00:00+00:00"},
+            )
+        )
+        await session.commit()
+
+    from app.services.wildberries_fbs_client import MarketplaceOrderMetaRow
+
+    async def fake_meta_empty(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[MarketplaceOrderMetaRow]:
+        return []
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch",
+        fake_meta_empty,
+    )
+
+    sync = await async_client.post(
+        f"/operations/fbs-orders/{order_id}/markings/sync",
+        headers=headers,
+    )
+    assert sync.status_code == 200, sync.text
+
+    async with SessionLocal() as session:
+        # Code must be returned to pool
+        code = await session.get(MarkingCode, code_id)
+        assert code is not None
+        assert code.status == STATUS_AVAILABLE
+
+        # Reference on marking must be cleared
+        marking = (
+            await session.execute(
+                select(FbsOrderMarking).where(FbsOrderMarking.order_id == order_id)
+            )
+        ).scalar_one()
+        assert marking.marking_code_id is None
+        assert marking.meta_status == META_STATUS_MISSING
+
+        # Event must be written
+        event = (
+            await session.execute(
+                select(MarkingCodeEvent).where(
+                    MarkingCodeEvent.code_id == code_id,
+                    MarkingCodeEvent.event_type == EVENT_WB_ORPHANED,
+                )
+            )
+        ).scalar_one_or_none()
+        assert event is not None

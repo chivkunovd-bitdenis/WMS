@@ -950,34 +950,6 @@ async def put_marketplace_order_meta(
         )
 
 
-async def fetch_marketplace_order_meta(
-    client: httpx.AsyncClient,
-    *,
-    api_token: str,
-    order_id: int,
-    marketplace_api_base: str | None = None,
-) -> dict[str, Any]:
-    """GET /api/v3/orders/{order_id}/meta — marking identifiers and check statuses."""
-    if settings.e2e_mock_wb_marketplace_marking:
-        return _mock_order_meta_response(order_id)
-    base = (marketplace_api_base or settings.wildberries_marketplace_api_base).rstrip("/")
-    url = f"{base}{MARKETPLACE_ORDER_META_PATH.format(order_id=order_id)}"
-    headers = {"Authorization": api_token}
-    try:
-        response = await client.get(url, headers=headers, timeout=60.0)
-    except httpx.HTTPError as exc:
-        raise WildberriesClientError("transport_error") from exc
-    if response.status_code >= 400:
-        raise WildberriesClientError(
-            "upstream_error",
-            status_code=response.status_code,
-        )
-    data = response.json()
-    if isinstance(data, dict):
-        return cast(dict[str, Any], data)
-    return {}
-
-
 _mock_trbx_counter = 0
 _mock_trbx_by_supply: dict[str, list[str]] = {}
 _mock_supply_counter = 0
