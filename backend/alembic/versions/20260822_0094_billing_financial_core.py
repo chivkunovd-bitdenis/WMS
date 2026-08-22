@@ -27,7 +27,14 @@ def upgrade() -> None:
     )
     op.create_index("ix_billing_profiles_tenant_id", "billing_profiles", ["tenant_id"])
     op.create_index("ix_billing_profiles_seller_id", "billing_profiles", ["seller_id"])
-    op.create_index("uq_billing_profiles_tenant_ff", "billing_profiles", ["tenant_id"], unique=True, postgresql_where=sa.text("seller_id IS NULL"))
+    op.create_index(
+        "uq_billing_profiles_tenant_ff",
+        "billing_profiles",
+        ["tenant_id"],
+        unique=True,
+        postgresql_where=sa.text("seller_id IS NULL"),
+        sqlite_where=sa.text("seller_id IS NULL"),
+    )
 
     op.create_table(
         "billing_tariff_versions",

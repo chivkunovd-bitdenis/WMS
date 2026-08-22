@@ -1,31 +1,20 @@
-# 09-billing — backend-dev 09-A
+# 09-A backend-dev
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/models/billing.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/models/__init__.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/alembic/versions/20260822_0094_billing_financial_core.py`
-
-Добавлены `BillingProfile`, `BillingTariffVersion` и `BillingLedgerEntry`. Профили и тарифы
-tenant-изолированы, тарифы поддерживают `document`, `item`, `liter_day`; для хранения сохраняются
-контрактные `service_code='storage_liter_day'` и `source='storage_measurement'`. Ledger запрещает
-повторное начисление одного исходного события уникальностью `(tenant_id, source_type, source_id)`;
-сторно хранит `reversal_of_id` и не имеет операции изменения исходной строки.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/models/billing.py` — частичный уникальный индекс профиля ФФ теперь явно ограничен `seller_id IS NULL` и для SQLite.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/alembic/versions/20260822_0094_billing_financial_core.py` — то же условие добавлено в DDL миграции.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/tests/test_billing_models.py` — тест проверяет частичный индекс в SQLite.
 
 ## Гейты
 
-- `ruff`: PASS для изменённого `backend/app/models/billing.py`; полный запуск репозитория BLOCKED существующими ошибками вне карточки.
-- `mypy`: PASS для `backend/app/models/billing.py` (`Success: no issues found in 1 source file`).
-- `pytest`: запущен, но остановлен после частичного выполнения из-за длительности полного набора; итоговый PASS не подтверждён.
-- `back_guard.py`: BLOCKED — файл `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/scripts/ci/back_guard.py` отсутствует.
-- `check_migrations.py`: BLOCKED — файл `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/scripts/ci/check_migrations.py` отсутствует.
-- `compileall`: PASS для новой модели.
+- `ruff check .` — FAIL: 83 существующие ошибки вне этого атома; изменённые модель и тест проходят ruff, миграция содержит ранее существовавшие нарушения форматирования.
+- `mypy .` — FAIL: 21 существующая ошибка в 6 файлах вне этого атома.
+- `pytest` — адресные billing-тесты PASS: `3 passed`; полный прогон не даёт отдельного результата из-за остановки обязательной цепочки на baseline-ruff.
+- `python3 scripts/ci/back_guard.py` — BLOCKED: файл отсутствует в этой рабочей копии.
+- `python3 scripts/ci/check_migrations.py` — BLOCKED: файл отсутствует в этой рабочей копии.
 
 ## Не реализовано
 
-- API, сервисы, обработчики операционных начислений и счета не реализованы: они относятся к следующим атомарным кускам 09-billing и не входят в 09-A.
-- Автоматическая запретительная защита UPDATE/DELETE ledger на уровне БД не добавлялась: текущий контракт фиксирует неизменяемость через модель данных и ссылку сторно; отдельный writer/сервис будет добавлен в следующем backend-атоме.
-
-## Находки
-
-Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались и не затрагивались. Боевой прод не трогался.
+- Находки ревьюера по задачам Celery, API, сервисам, frontend и e2e не относятся к 09-A и намеренно не изменялись.
+- Секреты, `.env`, кабинеты учётных данных и боевой прод не читались и не затрагивались.

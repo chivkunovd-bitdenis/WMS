@@ -40,6 +40,7 @@ class BillingProfile(Base):
             "tenant_id",
             unique=True,
             postgresql_where=text("seller_id IS NULL"),
+            sqlite_where=text("seller_id IS NULL"),
         ),
     )
 

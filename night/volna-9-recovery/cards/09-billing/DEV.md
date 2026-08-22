@@ -1,20 +1,20 @@
+# 09-A backend-dev
+
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/ui-kit/PeriodPicker.tsx` — проверен контрактный переиспользуемый выбор месяца: controlled `YYYY-MM`, label «Месяц», границы `min`/`max`, ошибка, disabled и сохранение значения при загрузке родителя.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/ui-kit/index.ts` — проверен экспорт `PeriodPicker` и `PeriodPickerProps`.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/night/volna-9-recovery/cards/09-billing/DEV.md` — отчёт screen-dev.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/models/billing.py` — частичный уникальный индекс профиля ФФ теперь явно ограничен `seller_id IS NULL` и для SQLite.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/alembic/versions/20260822_0094_billing_financial_core.py` — то же условие добавлено в DDL миграции.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/tests/test_billing_models.py` — тест проверяет частичный индекс в SQLite.
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` — не выполнен: в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend` отсутствует `node_modules/.bin/tsc`; `npx --no-install` также не может использовать локальный компилятор.
-- `python3 scripts/ui/ui_guard.py` — красный (`GUARD_STATUS=1`): обнаружены пять новых нарушений в чужих файлах (`src/App.tsx`, `src/components/WbProductPickerDialog.tsx`, `src/screens/ff/FfSettingsScreen.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`); `PeriodPicker.tsx` и `index.ts` в нарушениях отсутствуют, baseline не обновлялся.
-- `npm run test:unit` — не выполнен: в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend` отсутствует `node_modules/.bin/vitest`.
+- `ruff check .` — FAIL: 83 существующие ошибки вне этого атома; изменённые модель и тест проходят ruff, миграция содержит ранее существовавшие нарушения форматирования.
+- `mypy .` — FAIL: 21 существующая ошибка в 6 файлах вне этого атома.
+- `pytest` — адресные billing-тесты PASS: `3 passed`; полный прогон не даёт отдельного результата из-за остановки обязательной цепочки на baseline-ruff.
+- `python3 scripts/ci/back_guard.py` — BLOCKED: файл отсутствует в этой рабочей копии.
+- `python3 scripts/ci/check_migrations.py` — BLOCKED: файл отсутствует в этой рабочей копии.
 
 ## Не реализовано
 
-- Находок из `REVIEW.md`, относящихся к `PeriodPicker.tsx` или `index.ts`, нет. Находки ревью по backend, экрану биллинга, настройкам и e2e-тестам не относятся к разрешённому слою этого атома и не изменялись.
-- Исходный атом уже был в HEAD и буквально соответствует контракту, поэтому дополнительная правка исходников не потребовалась.
-
-## Находки
-
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не читались и не затрагивались.
+- Находки ревьюера по задачам Celery, API, сервисам, frontend и e2e не относятся к 09-A и намеренно не изменялись.
+- Секреты, `.env`, кабинеты учётных данных и боевой прод не читались и не затрагивались.
