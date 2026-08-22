@@ -549,6 +549,47 @@ def main() -> int:
                 проверь("resume: второй Sol-ремонт не зацикливается",
                         n.круг_из_парковки(t), 4)
 
+            for имя in ("DEV.md", "REVIEW.md", "DESIGN-REVIEW.md", "CLICKS.md", "JUDGE.md"):
+                (t / имя).write_text("x\n", encoding="utf-8")
+            n.аннулировать_после_вердикта(t, "ux-judge")
+            проверь("rework: judge аннулирует старые review/ui/click доказательства",
+                    [имя for имя in ("DEV.md", "REVIEW.md", "DESIGN-REVIEW.md", "CLICKS.md")
+                     if (t / имя).exists()], [])
+            проверь("rework: отрицательный JUDGE остаётся входом ремонта",
+                    (t / "JUDGE.md").exists(), True)
+
+            repair = pathlib.Path(временный) / "repair-plan"
+            repair.mkdir()
+            (repair / "REVIEW.md").write_text(
+                "ВЕРДИКТ: НАХОДКИ 1\n\n## Находки\nbackend/app/x.py — сломано\n",
+                encoding="utf-8")
+            (repair / "FEATURES.md").write_text("старый план\n", encoding="utf-8")
+            (repair / "DEV-01.md").write_text("старый отчёт\n", encoding="utf-8")
+            repair_marker = repair / "marker"
+            repair_calls = []
+
+            def fake_repair_step(_ид, роль, *_args, **_kwargs):
+                repair_calls.append(роль)
+                if роль == "splitter":
+                    (repair / "FEATURES.md").write_text(
+                        "ФИЧ: 1\n\n## Фичи\n\n### 1. Fix\n"
+                        "`backend/app/x.py`\n\n## Порядок\n1\n\n"
+                        "## Что осталось за бортом\nнет\n", encoding="utf-8")
+                return True, ""
+
+            repair_work = n.РабочаяКарточка("x", 1, repair, repair, repair, "branch")
+            with mock.patch.object(n, "файл_эскалации", return_value=repair_marker), \
+                 mock.patch.object(n, "шаг", side_effect=fake_repair_step):
+                проверь("rework: исчерпанный backend-ремонт перенарезается",
+                        n.перепланировать_ремонт(
+                            "x", repair, repair, repair_work)[0], True)
+            проверь("rework: backend-перенарезка не зовёт product/UX",
+                    repair_calls, ["splitter"])
+            проверь("rework: после перенарезки старые DEV-атомы сняты",
+                    (repair / "DEV-01.md").exists(), False)
+            проверь("rework: перенарезка фиксируется один раз",
+                    "ПЕРЕПЛАН: DONE" in repair_marker.read_text(encoding="utf-8"), True)
+
             проверь("resume: фильтр сохраняет порядок",
                     n.выбрать_карточки(["01", "02", "03"], "03,01"), ["01", "03"])
             try:
