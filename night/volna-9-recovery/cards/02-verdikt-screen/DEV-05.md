@@ -1,4 +1,4 @@
-# DEV · 02-verdikt-screen
+# DEV · 02-verdikt-screen · переделка атома 5
 
 ## Изменённые файлы
 
@@ -6,41 +6,52 @@
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/tests-e2e/ff-fbs-supply.spec.ts`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/night/volna-9-recovery/cards/02-verdikt-screen/DEV.md`
 
-Рабочая строка теперь считает отметку о напечатанном ЧЗ только по серверному
-`verdict.delivery_allowed`. Поэтому ответ WB `filled + reason=uinBadStatus` не
-даёт одновременно зелёную галочку и блокирующий вердикт. Сценарий S-03-TC-007
-воспроизводит именно этот ответ WB и проверяет отсутствие галочки, понятную
-причину и блокировку передачи всей поставки.
+Рабочее место уже читало готовность строки и доступность действия только из
+серверного `metadata.verdict.delivery_allowed`. В переделке сохранено это
+поведение и убрано новое превышение храповика размера целевого экрана без
+изменения разметки или интерфейса.
+
+Тестовый ответ workspace теперь считает серверный `progress.metadata_ready`
+по тому же `verdict.delivery_allowed`, а сценарии S-03-TC-004, S-03-TC-005 и
+S-03-TC-007 дополнительно проверяют, что `pending`, `required` и один
+отклонённый заказ не сосуществуют с оптимистичным полным прогрессом готовности.
+S-03-TC-007 по-прежнему проверяет видимую русскую причину, отсутствие зелёной
+галочки для заблокированного заказа и `disabledReason` с номером заказа.
+
+Обе находки `REVIEW.md` уже исправлены в зависимом серверном слое текущего
+`HEAD`: реальный API сохраняет `metadata.verdict`, а свежий пустой или ошибочный
+ответ WB сбрасывает прежний зелёный вердикт. Их регрессии повторно проверены.
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` — не запущен: локального `tsc` нет,
-  а `npx` не смог скачать пакет из-за недоступности `registry.npmjs.org`
-  (`ENOTFOUND`).
-- `python3 scripts/ui/ui_guard.py` — красный только из-за новых нарушений в
-  чужих файлах
-  `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/components/WbProductPickerDialog.tsx`
-  и
-  `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/SellerInboundDraftScreen.tsx`.
-  Изменённый S-03 улучшил свои счётчики, новых отступлений в нём нет.
-- `npm run test:unit` — не запущен: отсутствует `vitest` в
-  `frontend/node_modules` (`sh: vitest: command not found`).
-- Целевые Playwright S-03-TC-004, S-03-TC-005 и S-03-TC-007 — не запущены:
-  `frontend/node_modules/.bin/playwright` отсутствует. Сценарий S-03-TC-007
-  обновлён статически для реального блокирующего ответа WB.
+- `npx tsc --noEmit -p tsconfig.app.json` из `frontend/` — зелёный.
+- `npm run test:unit` из `frontend/` — зелёный: 20 файлов, 149 тестов прошли.
+- `python3 scripts/ui/ui_guard.py` из корня — общий гейт красный только на
+  соседних файлах `frontend/src/components/WbProductPickerDialog.tsx` и
+  `frontend/src/screens/v2/SellerInboundDraftScreen.tsx`. Целевой
+  `frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx` больше не нарушает
+  храповик и улучшил счётчики: `экран-монолит 2493 → 2492`, `своя-кнопка 37 → 36`.
+  Базовая линия не обновлялась.
+- Playwright S-03-TC-004, S-03-TC-005 и S-03-TC-007 — исполнение заблокировано
+  до браузерного шага: webServer не может занять `127.0.0.1:18000`, среда
+  возвращает `[Errno 1] operation not permitted`. `playwright --list` зелёный и
+  обнаруживает все три целевых теста.
+- Серверные регрессии находок ревью — зелёные: 4 теста прошли, 6 отфильтрованы.
 - `git diff --check` — зелёный.
 
 ## Не реализовано
 
-- Находка ревью №2 в
-  `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/app/services/fbs_workspace_service.py`
-  не менялась: это серверный сервис вне разрешённых файлов роли `screen-dev`.
-  Она требует отдельной атомарной backend-правки, чтобы серверный
-  `progress.metadata_ready` также не принимал `filled + reason`.
+- Буквально не выполнен живой прогон трёх Playwright-сценариев: запуск
+  останавливает запрет среды на локальный HTTP-порт до открытия браузера.
+- Общий `ui_guard.py` нельзя сделать зелёным в границах атома: два оставшихся
+  нарушения находятся в соседних файлах, которые роль `screen-dev` и контракт
+  запрещают менять.
+- Результат локально реализован, но не сохранён Git-коммитом: песочница не даёт
+  создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-02-verdikt-screen1/index.lock`
+  (`Operation not permitted`). Оркестратору с доступом на запись к общему
+  git-dir нужно закоммитить три файла из секции «Изменённые файлы».
 
 ## Находки
 
-- В текущей копии
-  `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/utils/metaStatus.ts`
-  уже содержит перевод `uinBadStatus` в «неверный статус УИН»; новый S-03-TC-007
-  закрепляет реальный код в проверке рабочего места.
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных, живой Wildberries и
+  production `194.87.96.144` не читались и не затрагивались.

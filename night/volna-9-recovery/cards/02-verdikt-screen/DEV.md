@@ -1,55 +1,57 @@
-# DEV · 02-verdikt-screen · атом 4
+# DEV · 02-verdikt-screen · переделка атома 5
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/night/volna-9-recovery/cards/02-verdikt-screen/DEV.md` — записан итог повторной проверки атома после `REVIEW.md`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/tests-e2e/ff-fbs-supply.spec.ts`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/night/volna-9-recovery/cards/02-verdikt-screen/DEV.md`
 
-Исходники атома повторно не менялись: требуемый вывод одного `StatusChip` и
-`TextCell` уже находится в текущей ветке, а обе находки ревью исправлены до этого
-прохода в коммитах `32c38f9e50ddf7703cc3b70fa619c30b4835bac6` и
-`dade3f19431846e6717749969355c317f5527a60`. Первый сохраняет серверный
-`metadata.verdict` в реальном API-ответе и сбрасывает устаревший зелёный вердикт
-при пустом или ошибочном свежем ответе WB. Второй закрывает тот же fail-closed
-путь (безопасный запрет при ошибке) для прямой передачи поставки.
+Рабочее место уже читало готовность строки и доступность действия только из
+серверного `metadata.verdict.delivery_allowed`. В переделке сохранено это
+поведение и убрано новое превышение храповика размера целевого экрана без
+изменения разметки или интерфейса.
+
+Тестовый ответ workspace теперь считает серверный `progress.metadata_ready`
+по тому же `verdict.delivery_allowed`, а сценарии S-03-TC-004, S-03-TC-005 и
+S-03-TC-007 дополнительно проверяют, что `pending`, `required` и один
+отклонённый заказ не сосуществуют с оптимистичным полным прогрессом готовности.
+S-03-TC-007 по-прежнему проверяет видимую русскую причину, отсутствие зелёной
+галочки для заблокированного заказа и `disabledReason` с номером заказа.
+
+Обе находки `REVIEW.md` уже исправлены в зависимом серверном слое текущего
+`HEAD`: реальный API сохраняет `metadata.verdict`, а свежий пустой или ошибочный
+ответ WB сбрасывает прежний зелёный вердикт. Их регрессии повторно проверены.
 
 ## Гейты
 
 - `npx tsc --noEmit -p tsconfig.app.json` из `frontend/` — зелёный.
-- `python3 scripts/ui/ui_guard.py` из корня — красный на общем состоянии ветки:
-  новые превышения базовой линии найдены в
-  `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/components/WbProductPickerDialog.tsx`,
-  `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx` и
-  `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/SellerInboundDraftScreen.tsx`.
-  Для целевого
-  `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/FfFbsOrdersScreen.tsx`
-  guard сообщает улучшение: `свой-чип 2 → 1`, `экран-монолит 1587 → 1572`.
-  Базовая линия не обновлялась; чужие и соседние файлы в этом атоме не правились.
-- `npm run test:unit` из `frontend/` — зелёный: 20 файлов, 149 тестов.
-- Узкие unit-тесты `fbsApi.test.ts` и `metaStatus.test.ts` — зелёные: 16 тестов.
-- Backend-регрессии реального API и сброса устаревшего вердикта — зелёные:
-  4 теста в `test_fbs_marking.py`, `test_fbs_shipment_deliver_gate_unit.py` и
-  `test_fbs_worklist_query_count.py`.
-- Playwright для S-03-TC-001, S-03-TC-002, S-03-TC-003 и S-03-TC-006 — не
-  запущен до сценария: webServer не смог занять `127.0.0.1:18000`, среда вернула
-  `[Errno 1] operation not permitted`. Сам сценарий остался без изменений и
-  проверяет открытие списка через UI, четыре видимых вердикта, русскую причину,
-  отсутствие `uinBadStatus` и текст `Сдача пока недоступна`.
-- `git diff --check 31cd2f5f..HEAD` — зелёный.
-- Новый коммит этого отчёта создать не удалось: Git попытался создать
-  `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-02-verdikt-screen1/index.lock`,
-  но файловая песочница разрешает этому пути только чтение и вернула
-  `Operation not permitted`. Артефакт существует в рабочем дереве, однако его
-  ещё должен сохранить в Git оркестратор с доступом к общему git-dir.
+- `npm run test:unit` из `frontend/` — зелёный: 20 файлов, 149 тестов прошли.
+- `python3 scripts/ui/ui_guard.py` из корня — общий гейт красный только на
+  соседних файлах `frontend/src/components/WbProductPickerDialog.tsx` и
+  `frontend/src/screens/v2/SellerInboundDraftScreen.tsx`. Целевой
+  `frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx` больше не нарушает
+  храповик и улучшил счётчики: `экран-монолит 2493 → 2492`, `своя-кнопка 37 → 36`.
+  Базовая линия не обновлялась.
+- Playwright S-03-TC-004, S-03-TC-005 и S-03-TC-007 — исполнение заблокировано
+  до браузерного шага: webServer не может занять `127.0.0.1:18000`, среда
+  возвращает `[Errno 1] operation not permitted`. `playwright --list` зелёный и
+  обнаруживает все три целевых теста.
+- Серверные регрессии находок ревью — зелёные: 4 теста прошли, 6 отфильтрованы.
+- `git diff --check` — зелёный.
 
 ## Не реализовано
 
-- Буквально не выполнен только живой Playwright-прогон названных сценариев:
-  локальный HTTP-порт запрещён средой до запуска браузерного шага. Пункты
-  контракта в коде и тесте реализованы; технические поля WB на странице не
-  выводятся.
-- Отчёт `DEV.md` локально записан, но не закоммичен из-за read-only доступа к
-  общему git-dir этой зарегистрированной рабочей копии.
+- Буквально не выполнен живой прогон трёх Playwright-сценариев: запуск
+  останавливает запрет среды на локальный HTTP-порт до открытия браузера.
+- Общий `ui_guard.py` нельзя сделать зелёным в границах атома: два оставшихся
+  нарушения находятся в соседних файлах, которые роль `screen-dev` и контракт
+  запрещают менять.
+- Результат локально реализован, но не сохранён Git-коммитом: песочница не даёт
+  создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-02-verdikt-screen1/index.lock`
+  (`Operation not permitted`). Оркестратору с доступом на запись к общему
+  git-dir нужно закоммитить три файла из секции «Изменённые файлы».
 
 ## Находки
 
-- Новых продуктовых находок в файлах атома нет.
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных, живой Wildberries и
+  production `194.87.96.144` не читались и не затрагивались.

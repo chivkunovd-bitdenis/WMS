@@ -87,7 +87,9 @@ function workspace({
     progress: {
       picked: orders.filter((item) => (item.pick as JsonObject).status === 'picked').length,
       packed: orders.filter((item) => (item.pack as JsonObject).status === 'packed').length,
-      metadata_ready: orders.length,
+      metadata_ready: orders.filter((item) =>
+        (((item.metadata as JsonObject).verdict as JsonObject).delivery_allowed === true),
+      ).length,
       stickers_ready: orders.length,
       total: orders.length,
     },
@@ -230,6 +232,7 @@ test('fbs workspace: pending WB verdict blocks delivery', async ({ page }) => {
   await openVerdictWorkspace(page, 'verdict-pending', [pending])
 
   await expect(page.getByTestId('fbs-wb-verdict-1')).toHaveText('WB: проверяет')
+  await expect(page.getByText('0 из 1 подготовлено к отгрузке')).toBeVisible()
   const deliver = page.getByRole('button', { name: 'Передать в WB' })
   await expect(deliver).toBeDisabled()
   await deliver.hover()
@@ -249,6 +252,7 @@ test('fbs workspace: required WB verdict explains missing code', async ({ page }
   await openVerdictWorkspace(page, 'verdict-required', [required])
 
   await expect(page.getByTestId('fbs-wb-verdict-1')).toHaveText('WB: нужен код')
+  await expect(page.getByText('0 из 1 подготовлено к отгрузке')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Передать в WB' })).toBeDisabled()
 })
 
@@ -270,6 +274,8 @@ test('fbs workspace: one blocked order prevents whole-supply delivery', async ({
 
   await expect(page.getByTestId('fbs-wb-verdict-2')).toHaveText('WB не принял')
   await expect(page.getByText('неверный статус УИН')).toBeVisible()
+  await expect(page.getByText('1 из 2 подготовлено к отгрузке')).toBeVisible()
+  await expect(page.getByText('2 из 2 подготовлено к отгрузке')).toHaveCount(0)
   await expect(page.getByTestId('fbs-order-print-done-2')).toHaveCount(0)
   const deliver = page.getByRole('button', { name: 'Передать в WB' })
   await expect(deliver).toBeDisabled()

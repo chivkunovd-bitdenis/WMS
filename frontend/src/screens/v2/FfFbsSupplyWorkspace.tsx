@@ -1960,12 +1960,7 @@ export function FfFbsSupplyWorkspace({
                             </Stack>
                           </Box>
                           {printed ? (
-                            <Typography
-                              sx={{ color: 'success.main', fontWeight: 700 }}
-                              data-testid={`fbs-order-print-done-${order.id}`}
-                            >
-                              ✓
-                            </Typography>
+                            <Typography sx={{ color: 'success.main', fontWeight: 700 }} data-testid={`fbs-order-print-done-${order.id}`}>✓</Typography>
                           ) : null}
                           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                             <Button size="small" variant="outlined" disabled={!line} onClick={() => line && setTzLine(line)}>
