@@ -88,3 +88,8 @@
 22:28   06-picking-list-order · dev: фича 5/6 сохранена 4e98a155db61
 22:31   06-picking-list-order · screen-dev: готово
 22:31   06-picking-list-order · dev: фича 6/6 сохранена 5bbb56fc563a
+22:38   06-picking-list-order · reviewer: готово
+22:40   06-picking-list-order · ui-critic: готово
+22:40 06-picking-list-order: отложено — ui-critic, эскалация не помогла
+23:02   06-picking-list-order · resume: поатомный rework Sol по сохранённым находкам
+23:05   06-picking-list-order · screen-dev: готово

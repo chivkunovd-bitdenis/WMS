@@ -325,7 +325,7 @@ test('S-03-TC-004 S-03-TC-005: full tape print window is complete and repeatable
     await expect(preview.getByText('Служебная этикетка WMS', { exact: false })).toHaveCount(canonicalOrderIds.length)
 
     const popupPromise = page.waitForEvent('popup')
-    await preview.getByRole('button', { name: 'Печать всех готовых' }).click()
+    await preview.getByTestId('fbs-print-preview-print-stickers').click()
     const popup = await popupPromise
     await expect(popup.locator('section.label')).toHaveCount(canonicalOrderIds.length * 2)
     const labels = await popup.locator('section.label').evaluateAll((nodes) => nodes.map((node) => node.textContent?.trim() ?? ''))

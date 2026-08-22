@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Stack, Typography } from '@mui/material'
 import {
+  ActionGroup,
   CheckCell,
   ChoiceFilter,
   DataTable,
@@ -96,7 +97,7 @@ export function FfFbsPickList({ token, authHeaders, supplyId, open, onClose, onP
     { key: 'packed', header: 'Упаковал', width: 90, align: 'center', render: (i) => <CheckCell checked={Boolean(marks[markKey(i)]?.packed)} onChange={(checked) => setMark(markKey(i), { packed: checked })} ariaLabel={`Упаковал ${i.product_name}`} testId="fbs-pick-packed" /> },
   ]
   const empty = items.length === 0 ? { title: 'В поставке нет позиций для подбора', hint: 'Закройте лист и проверьте состав поставки' } : { title: 'Нет позиций по фильтру', hint: 'Сбросьте поиск или выберите «Все»' }
-  return <ModalFrame open={open} title="Лист подбора" purpose={loading ? undefined : `Собрано ${collected}/${items.length} · Упаковано ${packed}/${items.length}`} busy={printing} onClose={onClose} testId="fbs-pick-list" actions={<><SecondaryAction onClick={onClose} disabled={printing}>Закрыть</SecondaryAction><PrintAction what="стикеры заказов" placement="panel" busy={printing} onClick={() => void printStickers()} disabledReason={!canPrint ? (printing ? 'Подготавливаем печать' : loading ? 'Лист подбора ещё загружается' : error ? 'Сначала загрузите лист подбора' : 'В поставке нет заказов для печати') : undefined} testId="fbs-pick-print-stickers" /></>}>
+  return <ModalFrame open={open} title="Лист подбора" purpose={loading ? undefined : `Собрано ${collected}/${items.length} · Упаковано ${packed}/${items.length}`} busy={printing} onClose={onClose} testId="fbs-pick-list" actions={<ActionGroup><SecondaryAction onClick={onClose} disabled={printing}>Закрыть</SecondaryAction><PrintAction what="стикеры заказов" placement="panel" busy={printing} onClick={() => void printStickers()} disabledReason={!canPrint ? (printing ? 'Подготавливаем печать' : loading ? 'Лист подбора ещё загружается' : error ? 'Сначала загрузите лист подбора' : 'В поставке нет заказов для печати') : undefined} testId="fbs-pick-print-stickers" /></ActionGroup>}>
     {error ? <ErrorNotice>{error}</ErrorNotice> : null}
     <FilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Артикул или название" testId="fbs-pick-filters"><ChoiceFilter value={filter} options={[{ value: 'all', label: 'Все' }, { value: 'not_collected', label: 'Не собраны' }, { value: 'not_packed', label: 'Не упакованы' }]} onChange={setFilter} ariaLabel="Фильтр листа" testId="fbs-pick-filter-choice" /></FilterBar>
     <DataTable columns={columns} rows={visible} getRowKey={(i) => markKey(i)} loading={loading} empty={empty} testId="fbs-pick-table" />

@@ -11,9 +11,9 @@ export type InventoryItem = {
 export const INVENTORY = {
   "chips": [
     {
-      "label": "Заполнено",
+      "label": "ЧЗ",
       "tones": [
-        "default"
+        "info"
       ],
       "variants": [],
       "files": [
@@ -21,52 +21,6 @@ export const INVENTORY = {
         "src/screens/v2/SellerProductsStockScreen.tsx"
       ],
       "usages": 2
-    },
-    {
-      "label": "Нет ТЗ",
-      "tones": [
-        "default"
-      ],
-      "variants": [],
-      "files": [
-        "src/screens/v2/FfProductsCatalogScreen.tsx",
-        "src/screens/v2/SellerProductsStockScreen.tsx"
-      ],
-      "usages": 2
-    },
-    {
-      "label": "—",
-      "tones": [
-        "default"
-      ],
-      "variants": [],
-      "files": [
-        "src/components/fbs/FbsChips.tsx",
-        "src/screens/v2/FfFbsStockSyncScreen.tsx"
-      ],
-      "usages": 2
-    },
-    {
-      "label": "Вручную",
-      "tones": [
-        "default"
-      ],
-      "variants": [],
-      "files": [
-        "src/screens/v2/FfProductsCatalogScreen.tsx"
-      ],
-      "usages": 1
-    },
-    {
-      "label": "Готово",
-      "tones": [
-        "default"
-      ],
-      "variants": [],
-      "files": [
-        "src/screens/v2/FfFbsOrdersScreen.tsx"
-      ],
-      "usages": 1
     },
     {
       "label": "Есть причины, которые нужно исправить",
@@ -124,46 +78,24 @@ export const INVENTORY = {
       "usages": 1
     },
     {
-      "label": "Отклонено WB",
+      "label": "Сводка не запускалась",
       "tones": [
         "default"
       ],
       "variants": [],
       "files": [
-        "src/screens/v2/FfFbsOrdersScreen.tsx"
+        "src/screens/v2/MovementsScreen.tsx"
       ],
       "usages": 1
     },
     {
-      "label": "ПВЗ",
-      "tones": [
-        "default"
-      ],
-      "variants": [],
-      "files": [
-        "src/screens/v2/FfFbsOrdersScreen.tsx"
-      ],
-      "usages": 1
-    },
-    {
-      "label": "Поставка создана в WB",
+      "label": "Сдаём без Честного знака",
       "tones": [
         "warning"
       ],
       "variants": [],
       "files": [
-        "src/screens/v2/FfFbsOrdersScreen.tsx"
-      ],
-      "usages": 1
-    },
-    {
-      "label": "Склад / СЦ",
-      "tones": [
-        "default"
-      ],
-      "variants": [],
-      "files": [
-        "src/screens/v2/FfFbsOrdersScreen.tsx"
+        "src/screens/v2/FfFbsSupplyWorkspace.tsx"
       ],
       "usages": 1
     },
@@ -179,7 +111,40 @@ export const INVENTORY = {
       "usages": 1
     },
     {
-      "label": "ЧЗ не требуется",
+      "label": "Этикетка напечатана",
+      "tones": [
+        "success"
+      ],
+      "variants": [],
+      "files": [
+        "src/screens/ff/FfInboundRequestView.tsx"
+      ],
+      "usages": 1
+    },
+    {
+      "label": "Ячейка не выбрана",
+      "tones": [
+        "default"
+      ],
+      "variants": [],
+      "files": [
+        "src/screens/ff/FfMpUnloadPickPanel.tsx"
+      ],
+      "usages": 1
+    },
+    {
+      "label": "не запускалась",
+      "tones": [
+        "default"
+      ],
+      "variants": [],
+      "files": [
+        "src/screens/v2/FfFbsStockSyncScreen.tsx"
+      ],
+      "usages": 1
+    },
+    {
+      "label": "не требуется",
       "tones": [
         "default"
       ],
@@ -190,24 +155,24 @@ export const INVENTORY = {
       "usages": 1
     },
     {
-      "label": "есть",
-      "tones": [
-        "success"
-      ],
-      "variants": [],
-      "files": [
-        "src/screens/v2/FfFbsSupplyDrawer.tsx"
-      ],
-      "usages": 1
-    },
-    {
-      "label": "нет",
+      "label": "требует проверки",
       "tones": [
         "default"
       ],
       "variants": [],
       "files": [
-        "src/screens/v2/FfFbsSupplyDrawer.tsx"
+        "src/screens/v2/FfFbsStockSyncScreen.tsx"
+      ],
+      "usages": 1
+    },
+    {
+      "label": "—",
+      "tones": [
+        "default"
+      ],
+      "variants": [],
+      "files": [
+        "src/components/fbs/FbsChips.tsx"
       ],
       "usages": 1
     }
@@ -336,6 +301,17 @@ export const INVENTORY = {
       "usages": 1
     },
     {
+      "label": "Отклонено WB",
+      "tones": [
+        "error"
+      ],
+      "variants": [],
+      "files": [
+        "src/screens/v2/FfFbsOrdersScreen.tsx"
+      ],
+      "usages": 1
+    },
+    {
       "label": "Отменён",
       "tones": [
         "default"
@@ -444,6 +420,63 @@ export const INVENTORY = {
         "src/components/fbs/FbsChips.tsx"
       ],
       "usages": 1
+    },
+    {
+      "label": "нечего публиковать",
+      "tones": [
+        "warning"
+      ],
+      "variants": [],
+      "files": [
+        "src/screens/v2/FfFbsStockSyncScreen.tsx"
+      ],
+      "usages": 1
+    },
+    {
+      "label": "ошибка публикации",
+      "tones": [
+        "error"
+      ],
+      "variants": [],
+      "files": [
+        "src/screens/v2/FfFbsStockSyncScreen.tsx"
+      ],
+      "usages": 1
+    },
+    {
+      "label": "публикация включена",
+      "tones": [
+        "default",
+        "success",
+        "warning"
+      ],
+      "variants": [],
+      "files": [
+        "src/screens/v2/FfFbsStockSyncScreen.tsx"
+      ],
+      "usages": 1
+    },
+    {
+      "label": "публикация выключена",
+      "tones": [
+        "default"
+      ],
+      "variants": [],
+      "files": [
+        "src/screens/v2/FfFbsStockSyncScreen.tsx"
+      ],
+      "usages": 1
+    },
+    {
+      "label": "склад не сопоставлен",
+      "tones": [
+        "warning"
+      ],
+      "variants": [],
+      "files": [
+        "src/screens/v2/FfFbsStockSyncScreen.tsx"
+      ],
+      "usages": 1
     }
   ],
   "buttons": [
@@ -455,25 +488,27 @@ export const INVENTORY = {
       ],
       "files": [
         "src/components/BoxImportDialog.tsx",
+        "src/components/BoxLabelPrintDialog.tsx",
         "src/components/MarkingPrintDialog.tsx",
         "src/components/ProductBarcodePrintDialog.tsx",
         "src/components/WbProductPickerDialog.tsx",
         "src/screens/ff/FfHonestSignReprintsPage.tsx",
+        "src/screens/ff/FfInboundQueuePage.tsx",
         "src/screens/ff/FfManualProductCreateDialog.tsx",
         "src/screens/ff/FfPackagingPage.tsx",
         "src/screens/ff/FfProductTzImportDialog.tsx",
         "src/screens/ff/FfSellerCreateDialog.tsx",
         "src/screens/shared/MarkingImportDialog.tsx",
         "src/screens/shared/MarkingPoolProductsDialog.tsx",
-        "src/screens/v2/FbsSupplyCreateDialog.tsx"
+        "src/screens/v2/FbsSupplyCreateDialog.tsx",
+        "src/screens/v2/FfProductsCatalogScreen.tsx"
       ],
-      "usages": 12
+      "usages": 15
     },
     {
       "label": "Закрыть",
       "tones": [],
       "variants": [
-        "contained/primary",
         "outlined/primary",
         "text/primary"
       ],
@@ -485,10 +520,12 @@ export const INVENTORY = {
         "src/screens/ff/FfSuppliesShipmentsPage.tsx",
         "src/screens/shared/MarkingProductCodesDialog.tsx",
         "src/screens/v2/FbsPrintPreviewDialog.tsx",
-        "src/screens/v2/FfFbsPickList.tsx",
-        "src/screens/v2/FfFbsSupplyDrawer.tsx"
+        "src/screens/v2/FbsStockAllocationDialog.tsx",
+        "src/screens/v2/FfProductsCatalogScreen.tsx",
+        "src/screens/v2/SellerInboundDraftScreen.tsx",
+        "src/screens/v2/SellerProductsStockScreen.tsx"
       ],
-      "usages": 9
+      "usages": 11
     },
     {
       "label": "Печать",
@@ -508,6 +545,7 @@ export const INVENTORY = {
       "label": "Обновить",
       "tones": [],
       "variants": [
+        "outlined/primary",
         "text/primary"
       ],
       "files": [
@@ -551,17 +589,6 @@ export const INVENTORY = {
       "usages": 1
     },
     {
-      "label": "Вся лента товара",
-      "tones": [],
-      "variants": [
-        "outlined/primary"
-      ],
-      "files": [
-        "src/screens/shared/HonestSignProductPage.tsx"
-      ],
-      "usages": 1
-    },
-    {
       "label": "Выйти",
       "tones": [],
       "variants": [
@@ -591,6 +618,17 @@ export const INVENTORY = {
       ],
       "files": [
         "src/screens/ff/FfMarketplaceUnloadBoxAddDialog.tsx"
+      ],
+      "usages": 1
+    },
+    {
+      "label": "К документам",
+      "tones": [],
+      "variants": [
+        "outlined/primary"
+      ],
+      "files": [
+        "src/screens/v2/SellerInboundDraftScreen.tsx"
       ],
       "usages": 1
     },
@@ -628,24 +666,35 @@ export const INVENTORY = {
       "usages": 1
     },
     {
-      "label": "Печать ТЗ",
+      "label": "Печать грузомест",
       "tones": [],
       "variants": [
         "outlined/primary"
       ],
       "files": [
-        "src/screens/ff/FfSuppliesShipmentsPage.tsx"
+        "src/screens/ff/FfInboundRequestView.tsx"
       ],
       "usages": 1
     },
     {
-      "label": "Создать",
+      "label": "Печать коробов",
       "tones": [],
       "variants": [
-        "contained/primary"
+        "outlined/primary"
       ],
       "files": [
-        "src/screens/ff/FfManualProductCreateDialog.tsx"
+        "src/screens/ff/FfInboundRequestView.tsx"
+      ],
+      "usages": 1
+    },
+    {
+      "label": "Проставить",
+      "tones": [],
+      "variants": [
+        "outlined/primary"
+      ],
+      "files": [
+        "src/components/WbProductPickerDialog.tsx"
       ],
       "usages": 1
     },
@@ -653,7 +702,7 @@ export const INVENTORY = {
       "label": "Создать акт расхождений",
       "tones": [],
       "variants": [
-        "outlined/secondary"
+        "text/inherit"
       ],
       "files": [
         "src/screens/v2/SellerDocumentsScreen.tsx"
@@ -681,6 +730,24 @@ export const INVENTORY = {
       "usages": 1
     },
     {
+      "label": "info: Доступно только для фулфилмента.",
+      "tones": [],
+      "variants": [],
+      "files": [
+        "src/screens/v2/TransfersScreen.tsx"
+      ],
+      "usages": 1
+    },
+    {
+      "label": "info: Нет доступа к сотрудникам.",
+      "tones": [],
+      "variants": [],
+      "files": [
+        "src/screens/ff/FfSettingsScreen.tsx"
+      ],
+      "usages": 1
+    },
+    {
       "label": "info: Нет принятого товара для раскладки. Завершите приёмку в разделе «Приёмка».",
       "tones": [],
       "variants": [],
@@ -690,7 +757,25 @@ export const INVENTORY = {
       "usages": 1
     },
     {
+      "label": "info: Нет товаров в плане отгрузки.",
+      "tones": [],
+      "variants": [],
+      "files": [
+        "src/screens/ff/FfMpUnloadPickPanel.tsx"
+      ],
+      "usages": 1
+    },
+    {
       "label": "info: Нет товаров, ожидающих ручного подбора из ячеек.",
+      "tones": [],
+      "variants": [],
+      "files": [
+        "src/screens/v2/FfFbsSupplyWorkspace.tsx"
+      ],
+      "usages": 1
+    },
+    {
+      "label": "info: Новых заказов того же селлера и WB-склада нет.",
       "tones": [],
       "variants": [],
       "files": [
@@ -722,15 +807,6 @@ export const INVENTORY = {
       "variants": [],
       "files": [
         "src/screens/ff/FfInboundBoxAddDialog.tsx"
-      ],
-      "usages": 1
-    },
-    {
-      "label": "info: Управление пользователями доступно только администратору фулфилмента.",
-      "tones": [],
-      "variants": [],
-      "files": [
-        "src/screens/ff/FfSettingsScreen.tsx"
       ],
       "usages": 1
     },
@@ -798,11 +874,11 @@ export const INVENTORY = {
       "usages": 1
     },
     {
-      "label": "warning: На складе нет ячеек хранения — создайте их в разделе «Ячейки».",
+      "label": "warning: Нет доступа к этому разделу. Обратитесь к администратору селлера.",
       "tones": [],
       "variants": [],
       "files": [
-        "src/screens/ff/FfInboundSortingPanel.tsx"
+        "src/apps/seller/SellerApp.tsx"
       ],
       "usages": 1
     },
@@ -821,6 +897,15 @@ export const INVENTORY = {
       "variants": [],
       "files": [
         "src/components/MarkingPrintDialog.tsx"
+      ],
+      "usages": 1
+    },
+    {
+      "label": "warning: Создайте WMS-склад перед сопоставлением складов WB.",
+      "tones": [],
+      "variants": [],
+      "files": [
+        "src/screens/v2/FfFbsStockSyncScreen.tsx"
       ],
       "usages": 1
     },

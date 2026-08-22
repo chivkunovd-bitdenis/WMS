@@ -16,7 +16,7 @@ import {
 } from '@mui/material'
 import PrintOutlinedIcon from '@mui/icons-material/PrintOutlined'
 import { fbsTapeOrderErrorText, resolveFbsAssetUrl, type FbsOrderPrintTape, type FbsPrintAsset, type FbsPrintBatch } from './fbsApi'
-import { ErrorNotice } from '../../ui-kit'
+import { ActionGroup, ErrorNotice, PrintAction, SecondaryAction } from '../../ui-kit'
 import { loadLabelSizeId, resolveLabelSize, type LabelSize } from '../../utils/labelSize'
 import { LabelSizeSelect } from '../../components/LabelSizeSelect'
 import { fetchLabelArtifactDataUrl, renderDataMatrixDataUrl } from '../../utils/printMarkingCodeLabel'
@@ -302,10 +302,16 @@ export function FbsPrintPreviewDialog({
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={loading || Boolean(applyingId)}>Закрыть</Button>
-        <Button variant="contained" startIcon={<PrintOutlinedIcon />} disabled={previews.length === 0 || loading} onClick={() => void print(previews)} data-task-id="FBS-10">
-          {previews.length === 1 ? 'Печать' : 'Печать всех готовых'}
-        </Button>
+        <ActionGroup>
+          <SecondaryAction onClick={onClose} disabled={loading || Boolean(applyingId)}>Закрыть</SecondaryAction>
+          <PrintAction
+            what="стикеры заказов"
+            placement="panel"
+            onClick={() => void print(previews)}
+            disabledReason={loading ? 'Предпросмотр ещё загружается' : previews.length === 0 ? 'Нет готовых стикеров для печати' : undefined}
+            testId="fbs-print-preview-print-stickers"
+          />
+        </ActionGroup>
       </DialogActions>
     </Dialog>
   )
