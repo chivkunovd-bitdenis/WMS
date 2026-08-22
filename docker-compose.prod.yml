@@ -63,7 +63,7 @@ services:
   celery_worker:
     build:
       context: ./backend
-    command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=info"]
+    command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=info", "--queues=celery,print"]
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg_async://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-wms}}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}

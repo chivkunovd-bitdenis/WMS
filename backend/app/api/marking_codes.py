@@ -1288,7 +1288,10 @@ async def post_label_artifact_tape_pdf(
             idempotency_key=key,
             payload_json=body.model_dump(mode="json"),
         )
-        if job.status == job_svc.JOB_STATUS_PENDING:
+        if (
+            job.status == job_svc.JOB_STATUS_PENDING
+            and job.__dict__.get("created_by_call", False)
+        ):
             if settings.celery_broker_url:
                 from app.tasks.background_jobs import run_marking_label_tape_task
                 run_marking_label_tape_task.apply_async(args=[str(job.id)], queue="print")

@@ -14,6 +14,9 @@ celery_app = Celery(
     include=["app.tasks.background_jobs"],
 )
 celery_app.conf.task_ignore_result = True
+celery_app.conf.task_routes = {
+    "wms.marking_label_tape": {"queue": "print"},
+}
 celery_app.conf.beat_schedule = {
     "wb-mp-warehouses-daily": {
         "task": "wms.wb_mp_warehouses_daily_sync",
@@ -22,6 +25,10 @@ celery_app.conf.beat_schedule = {
     "marking-low-stock": {
         "task": "wms.marking_low_stock",
         "schedule": crontab(hour="*/6", minute=15),
+    },
+    "purge-expired-label-tape-assets": {
+        "task": "wms.purge_expired_label_tape_assets",
+        "schedule": 3600.0,
     },
     "wb-orders-new": {
         "task": "wms.wb_orders_new_dispatch",

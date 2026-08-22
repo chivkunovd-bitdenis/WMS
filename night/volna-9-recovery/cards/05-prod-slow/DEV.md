@@ -1,31 +1,32 @@
+# DEV · 05-prod-slow · backend-dev
+
 ## Изменённые файлы
 
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/background_job_service.py — конкурентно безопасное создание активной job по ключу идемпотентности и атомарный захват `marking_label_tape`.
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/fbs_print_asset_storage.py — удаление одного валидированного файла после истечения срока.
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/fbs_print_asset_service.py — удаление PDF ленты при отказе после 12 часов.
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_background_jobs.py — проверки состояний job, результата только с `asset_id` и повторной доставки running job.
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_fbs_print_assets.py — ruff-форматирование импортов существующих тестов истечения срока.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/api/marking_codes.py — повторный активный job больше не публикуется повторно.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/background_job_service.py — атомарный захват pending-job и плановая очистка истёкших `label_tape` assets.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/tasks/background_jobs.py — Celery-задача очистки.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/celery_app.py — маршрут `marking_label_tape` в очередь `print` и hourly cleanup в beat.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/docker-compose.prod.yml — production worker слушает `celery,print`.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_background_jobs.py — регрессия идемпотентной публикации pending-job.
 
 ## Миграции
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/alembic/versions/20260822_0050_marking_label_tape_jobs.py` уже содержит добавляющую миграцию `idempotency_key`, активный уникальный индекс и `expires_at`; новая миграция не добавлялась.
-
-## Тесты
-
-- Целевой прогон `tests/test_background_jobs.py tests/test_fbs_print_assets.py`: 12 passed.
-- Полный `pytest`: остановлен после зависания прогона примерно на 38%; до остановки обнаружены падения в существующих сценариях `test_fbs_orders_intake.py` и `test_fbs_stock_emulator_integration.py`, не связанных с этим атомом.
+нет — схема базы данных не менялась.
 
 ## Гейты
 
-- `ruff check .` — FAIL: 80 существующих нарушений в несвязанных файлах; целевые изменённые файлы проходят.
-- `mypy .` — FAIL: существующие ошибки в 7 файлах; после исправления типы изменённых файлов проходят, остаются ошибки соседних модулей и старых тестов.
-- `pytest` — STOPPED после зависания полного прогона; целевые тесты зелёные, полный прогон выявил несвязанные падения.
-- `python3 scripts/ci/back_guard.py` — BLOCKED: файл отсутствует в рабочей копии.
-- `python3 scripts/ci/check_migrations.py` — BLOCKED: файл отсутствует в рабочей копии.
+- ruff: targeted files — PASS; полный `ruff check .` — FAIL на существующих несвязанных нарушениях в рабочей копии.
+- mypy: FAIL на существующих несвязанных ошибках в `wildberries_credentials_service.py` и `fbs_stock_sync_service.py`; изменённые файлы не добавили диагностик.
+- pytest: `backend/tests/test_background_jobs.py` — 5 passed.
+- back_guard.py: не запущен — файл отсутствует в этой рабочей копии (`scripts/ci/back_guard.py` не найден).
+- check_migrations.py: не запущен — файл отсутствует в этой рабочей копии (`scripts/ci/check_migrations.py` не найден).
 
 ## Не реализовано
 
-- Очередь Celery и production-worker из находки 1 не менялись: это инфраструктурная граница данного backend-атома.
-- Периодическая уборка всех истёкших файлов не добавлялась; реализована безопасная уборка конкретного PDF при попытке выдачи после истечения срока.
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных, боевой прод `194.87.96.144` и живой кабинет Wildberries не читались и не затрагивались.
-- Commit — BLOCKED: Git не может создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-05-prod-slow/index.lock` (`Operation not permitted`); изменения не сохранены в commit.
+- Frontend-состояния и Playwright-сценарии не менялись: они относятся к другой роли.
+- Находки ревью по WB-autopoll и frontend не относятся к этому backend-атому и не затрагивались.
+- Нагрузочный прогон 155/500 кодов с `/health` не выполнялся в рамках локального backend-теста.
+
+## Блокеры
+
+Нет блокеров по реализации. Полные общие ruff/mypy и два repository guard-скрипта ограничены состоянием/составом этой рабочей копии, указанным выше.

@@ -7,6 +7,7 @@ import uuid
 
 from app.celery_app import celery_app
 from app.services.background_job_service import (
+    purge_expired_label_tape_assets,
     run_fbs_stock_sync_job,
     run_marking_label_tape_job,
     run_movements_digest_job,
@@ -19,6 +20,11 @@ from app.services.background_job_service import (
 @celery_app.task(name="wms.marking_label_tape", queue="print")
 def run_marking_label_tape_task(job_id: str) -> None:
     asyncio.run(run_marking_label_tape_job(uuid.UUID(job_id)))
+
+
+@celery_app.task(name="wms.purge_expired_label_tape_assets")
+def purge_expired_label_tape_assets_task() -> None:
+    asyncio.run(purge_expired_label_tape_assets())
 
 
 @celery_app.task(name="wms.movements_digest")

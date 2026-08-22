@@ -1,27 +1,32 @@
+# DEV · 05-prod-slow · backend-dev
+
 ## Изменённые файлы
 
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/api/marking_codes.py — `POST /operations/marking-codes/label-artifact-tape` теперь возвращает `202` и `job_id`, с идемпотентной постановкой.
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/api/fbs_print_assets.py — истёкший актив отдаёт безопасный `404`.
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/background_job_service.py — worker последовательно собирает ленту, сохраняет один `label_tape` PDF-asset и переводит job в `done`/`failed`.
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/fbs_print_asset_service.py — выдача PDF-актива и проверка срока хранения.
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/fbs_print_asset_storage.py — безопасное PDF-хранилище для лент.
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/tasks/background_jobs.py — Celery-задача в очереди `print`.
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_marking_pdf_label_artifact.py — тест асинхронного job/polling и PDF-актива.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/api/marking_codes.py — повторный активный job больше не публикуется повторно.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/background_job_service.py — атомарный захват pending-job и плановая очистка истёкших `label_tape` assets.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/tasks/background_jobs.py — Celery-задача очистки.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/celery_app.py — маршрут `marking_label_tape` в очередь `print` и hourly cleanup в beat.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/docker-compose.prod.yml — production worker слушает `celery,print`.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_background_jobs.py — регрессия идемпотентной публикации pending-job.
+
+## Миграции
+
+нет — схема базы данных не менялась.
 
 ## Гейты
 
-- ruff — targeted изменённые backend-файлы: PASS; полный `ruff check .`: FAIL, 81 ранее существующих ошибок вне атомарного изменения.
-- mypy — FAIL на 3 существующих ошибках в `inventory_movement_report_service.py`, `wildberries_credentials_service.py`, `fbs_stock_sync_service.py`; новые файлы не указаны в диагностике.
-- pytest — PASS: 17 тестов в `tests/test_marking_pdf_label_artifact.py`; профильный `tests/test_marking_codes.py` также проходил до изменения теста ленты.
-- back_guard.py — BLOCKED: `scripts/ci/back_guard.py` отсутствует в этой рабочей копии.
-- check_migrations.py — BLOCKED: `scripts/ci/check_migrations.py` отсутствует в этой рабочей копии.
+- ruff: targeted files — PASS; полный `ruff check .` — FAIL на существующих несвязанных нарушениях в рабочей копии.
+- mypy: FAIL на существующих несвязанных ошибках в `wildberries_credentials_service.py` и `fbs_stock_sync_service.py`; изменённые файлы не добавили диагностик.
+- pytest: `backend/tests/test_background_jobs.py` — 5 passed.
+- back_guard.py: не запущен — файл отсутствует в этой рабочей копии (`scripts/ci/back_guard.py` не найден).
+- check_migrations.py: не запущен — файл отсутствует в этой рабочей копии (`scripts/ci/check_migrations.py` не найден).
 
 ## Не реализовано
 
-- Отдельный нагрузочный прогон на 155/500 кодов и параллельная проверка `/health` не выполнены: в контракте нет локального стендового harness, а боевой прод запрещён к затрагиванию.
-- Перенос `/fbs/supplies/{supply_id}/order-print-tape` не выполнялся: он явно исключён из этого атомарного куска.
-- Миграция не добавлялась: требуемые поля уже присутствуют в миграции `20260822_0050_marking_label_tape_jobs.py` из предыдущего backend-шага.
+- Frontend-состояния и Playwright-сценарии не менялись: они относятся к другой роли.
+- Находки ревью по WB-autopoll и frontend не относятся к этому backend-атому и не затрагивались.
+- Нагрузочный прогон 155/500 кодов с `/health` не выполнялся в рамках локального backend-теста.
 
-## Находки
+## Блокеры
 
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не читались и не затрагивались.
+Нет блокеров по реализации. Полные общие ruff/mypy и два repository guard-скрипта ограничены состоянием/составом этой рабочей копии, указанным выше.

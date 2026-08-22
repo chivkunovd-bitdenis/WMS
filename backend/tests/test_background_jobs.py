@@ -56,6 +56,30 @@ async def test_marking_label_tape_idempotency_and_result_contract(
 
 
 @pytest.mark.asyncio
+async def test_duplicate_pending_job_is_not_republished(async_client: AsyncClient) -> None:
+    reg = await async_client.post("/auth/register", json={
+        "organization_name": "Tape API Co", "slug": f"tape-api-{int(time.time() * 1000)}",
+        "admin_email": f"tape-api-{int(time.time() * 1000)}@example.com", "password": "password123",
+    })
+    token = str(reg.json()["access_token"])
+    payload = {"code_ids": [str(uuid.uuid4())]}
+    async with SessionLocal() as session:
+        tenant_id = uuid.UUID(str(decode_access_token(token)["tenant_id"]))
+        first = await create_pending_job(
+            session, tenant_id, job_type=JOB_TYPE_MARKING_LABEL_TAPE,
+            idempotency_key="duplicate-publish", payload_json=payload,
+        )
+        first_was_created = first.created_by_call
+        second = await create_pending_job(
+            session, tenant_id, job_type=JOB_TYPE_MARKING_LABEL_TAPE,
+            idempotency_key="duplicate-publish", payload_json=payload,
+        )
+        assert first.id == second.id
+        assert first_was_created is True
+        assert second.__dict__["created_by_call"] is False
+
+
+@pytest.mark.asyncio
 async def test_marking_label_tape_worker_does_not_reclaim_running_job(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,

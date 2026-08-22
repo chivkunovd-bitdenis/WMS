@@ -50,6 +50,7 @@ async def create_pending_job(
             )
         )
         if existing is not None:
+            existing.__dict__["created_by_call"] = False
             return existing
     job = BackgroundJob(
         tenant_id=tenant_id,
@@ -59,6 +60,7 @@ async def create_pending_job(
         idempotency_key=idempotency_key,
     )
     session.add(job)
+    job.__dict__["created_by_call"] = True
     try:
         await session.commit()
     except IntegrityError:
@@ -73,6 +75,7 @@ async def create_pending_job(
                 )
             )
             if existing is not None:
+                existing.__dict__["created_by_call"] = False
                 return cast(BackgroundJob, existing)
         raise
     await session.refresh(job)
@@ -436,3 +439,26 @@ async def run_marking_label_tape_job(job_id: uuid.UUID) -> None:
             job.error_message = str(exc)
         job.finished_at = datetime.now(UTC)
         await session.commit()
+
+
+async def purge_expired_label_tape_assets() -> int:
+    """Remove expired label-tape rows and their validated files."""
+    from app.models.fbs_print_asset import PRINT_ASSET_KIND_LABEL_TAPE, FbsPrintAsset
+    from app.services.fbs_print_asset_storage import delete_stored_asset
+
+    removed = 0
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(FbsPrintAsset).where(
+                FbsPrintAsset.kind == PRINT_ASSET_KIND_LABEL_TAPE,
+                FbsPrintAsset.expires_at.is_not(None),
+                FbsPrintAsset.expires_at <= datetime.now(UTC),
+            )
+        )
+        for asset in result.scalars().all():
+            if asset.storage_path:
+                delete_stored_asset(asset.storage_path)
+            await session.delete(asset)
+            removed += 1
+        await session.commit()
+    return removed
