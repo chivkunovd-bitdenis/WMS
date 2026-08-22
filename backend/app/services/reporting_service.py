@@ -36,7 +36,7 @@ async def build_inventory_report(
     if group_by not in GROUP_BY_VALUES:
         raise ValueError("group_by must be product or operation")
     filters = [InventoryMovement.tenant_id == tenant_id, InventoryMovement.created_at >= date_from,
-        InventoryMovement.created_at < date_to, ~Warehouse.name.startswith("FBS WB ")]
+        InventoryMovement.created_at < date_to, Warehouse.is_operational.is_(True)]
     if seller_id is not None:
         # The movement owns the seller at event time.  Filtering through the
         # mutable product relation would move historical rows when a product
@@ -81,7 +81,7 @@ async def build_inventory_report(
             .where(
                 InventoryBalance.tenant_id == tenant_id,
                 InventoryBalance.product_id.in_(product_ids),
-                ~Warehouse.name.startswith("FBS WB "),
+                Warehouse.is_operational.is_(True),
             )
             .group_by(InventoryBalance.product_id)
         )
@@ -97,7 +97,7 @@ async def build_inventory_report(
     if warehouse_id is not None:
         integrity_filters = [InventoryMovement.tenant_id == tenant_id,
             InventoryMovement.created_at >= date_from, InventoryMovement.created_at < date_to,
-            ~Warehouse.name.startswith("FBS WB "), InventoryMovement.transfer_group_id.is_not(None)]
+            Warehouse.is_operational.is_(True), InventoryMovement.transfer_group_id.is_not(None)]
         if seller_id is not None:
             integrity_filters.append(InventoryMovement.seller_id == seller_id)
         # Inspect both sides of every pair, even when the report is filtered to
@@ -221,7 +221,7 @@ async def build_overview(
         InventoryMovement.created_at >= date_from,
         InventoryMovement.created_at < date_to,
         InventoryMovement.transfer_group_id.is_(None),
-        ~Warehouse.name.startswith("FBS WB "),
+        Warehouse.is_operational.is_(True),
     ]
     if warehouse_id is not None:
         movement_filter.append(InventoryMovement.warehouse_id == warehouse_id)
@@ -276,7 +276,7 @@ async def build_overview(
         InventoryMovement.created_at >= previous_from,
         InventoryMovement.created_at < previous_to,
         InventoryMovement.transfer_group_id.is_(None),
-        ~Warehouse.name.startswith("FBS WB "),
+        Warehouse.is_operational.is_(True),
     ]
     if seller_id is not None:
         previous_filter.append(InventoryMovement.seller_id == seller_id)
@@ -314,7 +314,7 @@ async def build_overview(
         .join(StorageLocation, StorageLocation.id == InventoryBalance.storage_location_id)
         .join(Warehouse, Warehouse.id == StorageLocation.warehouse_id)
         .join(Product, Product.id == InventoryBalance.product_id)
-        .where(InventoryBalance.tenant_id == tenant_id, ~Warehouse.name.startswith("FBS WB "))
+        .where(InventoryBalance.tenant_id == tenant_id, Warehouse.is_operational.is_(True))
     )
     if seller_id is not None:
         balance_stmt = balance_stmt.where(Product.seller_id == seller_id)
