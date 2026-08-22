@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  beginPrintUserGesture,
   Alert,
   Box,
   Button,
@@ -33,11 +34,11 @@ import {
 import { resolvePrintTemplate, type PrintLayout } from '../utils/printTemplate'
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
 import {
-  beginPrintUserGesture,
   buildMarkingTapeSections,
   buildWbOrderQrLabelHtml,
   printCzArtifactTape,
   prepareCzArtifactTape,
+  fetchPreparedCzArtifactTapePdf,
   resolveCzArtifactTapeCodeIds,
   printPdfBlob,
   printTapeSections,
@@ -245,7 +246,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   const [sepWbQty, setSepWbQty] = useState(1)
   const [sepCzDone, setSepCzDone] = useState(false)
   const [tapePreparation, setTapePreparation] = useState<'idle' | 'preparing' | 'ready' | 'failed' | 'expired'>('idle')
-  const [preparedTapePdf, setPreparedTapePdf] = useState<Blob | null>(null)
+  const [preparedTapeAssetId, setPreparedTapeAssetId] = useState<string | null>(null)
 
   const requiresHonestSign = ctx?.requiresHonestSign ?? true
   const fbsTapeMode = Boolean(ctx?.fbsTape)
@@ -625,13 +626,13 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       return
     }
     let printedNative = false
+    const codeIds = resolveCzArtifactTapeCodeIds(tapeUnits, printLayout)
     try {
-      const codeIds = resolveCzArtifactTapeCodeIds(tapeUnits, printLayout)
       if (codeIds) {
         setTapePreparation('preparing')
         try {
-          const pdf = await prepareCzArtifactTape(codeIds, ctx.token, size)
-          setPreparedTapePdf(pdf)
+          const prepared = await prepareCzArtifactTape(codeIds, ctx.token, size)
+          setPreparedTapeAssetId(prepared.assetId)
           setTapePreparation('ready')
         } catch (error) {
           setTapePreparation(error instanceof Error && error.message.includes('истёк') ? 'expired' : 'failed')
@@ -640,8 +641,8 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
         return
       }
       printedNative = await printCzArtifactTape(tapeUnits, printLayout, ctx.token, size)
-    } catch {
-      // Native PDF иногда не стартует (viewer/блокировка) — ниже HTML fallback.
+    } catch (error) {
+      if (codeIds) throw error
       printedNative = false
     }
     if (!printedNative) {
@@ -658,9 +659,9 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
   }
 
   const openPreparedTape = async () => {
-    if (!preparedTapePdf) return
+    if (!preparedTapeAssetId || !ctx) return
     try {
-      await printPdfBlob(preparedTapePdf)
+      await printPdfBlob(await fetchPreparedCzArtifactTapePdf(preparedTapeAssetId, ctx.token))
       ctx?.onPrinted()
       onClose()
     } catch {
@@ -938,9 +939,6 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       return
     }
     const forceReprint = opts?.forceReprint ?? false
-    if (requiresHonestSign) {
-      beginPrintUserGesture()
-    }
     onBusyChange(true)
     setError(null)
     try {
@@ -1009,7 +1007,6 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     if (canPrintCount < 1) {
       return
     }
-    beginPrintUserGesture()
     onBusyChange(true)
     setError(null)
     try {
@@ -1084,9 +1081,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
       <Dialog
         open={open}
         onClose={() => {
-          if (!busy) {
-            onClose()
-          }
+          onClose()
         }}
         maxWidth="md"
         fullWidth
@@ -1708,7 +1703,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
             {tapePreparation !== 'idle' ? (
               <TapePreparationStatus
                 state={tapePreparation}
-                onOpen={() => void openPreparedTape()}
+                onOpen={() => { beginPrintUserGesture(); void openPreparedTape() }}
                 onRetry={() => { setTapePreparation('idle'); void handlePrint() }}
                 onClose={onClose}
               />
@@ -1726,7 +1721,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
             </Button>
           ) : tapePreparation === 'ready' || tapePreparation === 'failed' || tapePreparation === 'expired' ? null : (
             <>
-              <Button onClick={onClose} disabled={busy}>
+              <Button onClick={onClose}>
                 Отмена
               </Button>
               <Button

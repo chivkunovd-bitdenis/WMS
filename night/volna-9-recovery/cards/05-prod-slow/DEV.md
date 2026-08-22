@@ -1,21 +1,21 @@
-# DEV · 05-prod-slow
+# DEV · 05-prod-slow · атом 7
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend/src/screens/v2/FfFbsOrdersScreen.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend/tests-e2e/ff-fbs-orders.spec.ts`
-
-`/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend/src/screens/v2/fbsApi.ts` не изменялся: курсор и лимит 50 уже поддерживались его контрактом.
-
-Исправлены контрактные тексты ошибки первой загрузки и пустого списка. E2E-сценарий теперь моделирует две страницы по 50 заказов, проверяет догрузку по `next_cursor`, сохранение выбранного заказа, отсутствие дублей и скрытие кнопки после последней страницы.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend/src/components/MarkingPrintDialog.tsx
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/frontend/src/utils/printMarkingCodeLabel.ts
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` — не подтверждён: локальный TypeScript-бинарник отсутствует, `npx` завис на попытке запуска/разрешения команды и был остановлен.
-- `python3 scripts/ui/ui_guard.py` — красный: скрипт сообщил о нарушениях монолитности в `src/components/MarkingPrintDialog.tsx`, `src/components/WbProductPickerDialog.tsx`, `src/screens/v2/FfFbsOrdersScreen.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`. Базовую линию через `--update` не менял.
-- `npm run test:unit` — красный до запуска тестов: `sh: vitest: command not found`.
+- `npx tsc --noEmit -p tsconfig.app.json` — не подтверждён: локальный `frontend/node_modules/.bin/tsc` отсутствует, запуск `npx` завис без результата и был остановлен.
+- `python3 scripts/ui/ui_guard.py` — красный из-за уже существующих/вне атома нарушений: `MarkingPrintDialog.tsx:1687–1741`, а также `WbProductPickerDialog.tsx`, `FfFbsOrdersScreen.tsx`, `FfFbsSupplyWorkspace.tsx`, `SellerInboundDraftScreen.tsx`. Базовая линия не обновлялась.
+- `npm run test:unit` — не запущен: `vitest: command not found`.
+- `git diff --check` — зелёный.
+
+Изменения проверены после финальной правки: popup создаётся только обработчиком явного открытия готовой ленты.
 
 ## Не реализовано
 
-- Полный набор браузерных сценариев `S-03-TC-001`–`S-03-TC-007` и `S-03-TC-010`–`S-03-TC-012` в рамках этого прохода не запускался: в окружении отсутствуют frontend-зависимости для запуска тестов.
-- `fbsApi.ts` не потребовал правки, так как `fetchFbsWorklist` уже передаёт `limit` и `cursor`.
+- Полный Playwright-путь `S-03-TC-008`, `S-03-TC-009`, `S-03-TC-014`, `S-03-TC-015` локально не подтверждён: зависимости фронтенда отсутствуют.
+- Серверная дедупликация активного задания, SQLite-индекс и очереди Celery не изменялись: они относятся к backend/infra-слою и не входят в разрешённые файлы атома.
+- UI-guard не исправлялся через `--update`, поскольку найденные нарушения не созданы этим атомом полностью и обновление базовой линии запрещено ролью.

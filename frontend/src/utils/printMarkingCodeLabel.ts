@@ -440,14 +440,26 @@ export async function fetchCzArtifactTapePdf(
   return res.blob()
 }
 
-export type CzArtifactTapeJobStatus = 'pending' | 'running' | 'done' | 'failed'
+export type CzArtifactTapeJobStatus = 'pending' | 'running' | 'done' | 'failed' | 'expired'
+
+export type PreparedCzArtifactTape = { assetId: string }
+
+export async function fetchPreparedCzArtifactTapePdf(assetId: string, authToken: string): Promise<Blob> {
+  const asset = await fetch(apiUrl(`/operations/fbs-print-assets/${assetId}/content`), {
+    headers: { Authorization: `Bearer ${authToken}` },
+  })
+  if (!asset.ok) {
+    throw new Error('Срок хранения ленты истёк. Соберите её ещё раз')
+  }
+  return asset.blob()
+}
 
 export async function prepareCzArtifactTape(
   codeIds: string[],
   authToken: string,
   pageSize: Pick<LabelSize, 'widthMm' | 'heightMm'>,
   onStatus?: (status: Exclude<CzArtifactTapeJobStatus, 'done' | 'failed'>) => void,
-): Promise<Blob> {
+): Promise<PreparedCzArtifactTape> {
   const start = await fetch(apiUrl('/operations/marking-codes/label-artifact-tape'), {
     method: 'POST',
     headers: { Authorization: `Bearer ${authToken}`, 'Content-Type': 'application/json' },
@@ -458,7 +470,8 @@ export async function prepareCzArtifactTape(
   }
   const { job_id: jobId } = (await start.json()) as { job_id: string }
   let status: CzArtifactTapeJobStatus = 'pending'
-  while (status === 'pending' || status === 'running') {
+  const deadline = Date.now() + 12 * 60 * 1000
+  while ((status === 'pending' || status === 'running') && Date.now() < deadline) {
     onStatus?.(status)
     await new Promise((resolve) => window.setTimeout(resolve, 500))
     const jobResponse = await fetch(apiUrl(`/operations/background-jobs/${jobId}`), {
@@ -472,34 +485,25 @@ export async function prepareCzArtifactTape(
       result_json?: { asset_id?: string } | null
     }
     status = job.status
-    if (status === 'failed') {
+    if (status === 'failed' || status === 'expired') {
       throw new Error('Не удалось собрать ленту. Попробуйте ещё раз')
     }
     if (status === 'done' && job.result_json?.asset_id) {
-      const asset = await fetch(apiUrl(`/operations/fbs-print-assets/${job.result_json.asset_id}/content`), {
-        headers: { Authorization: `Bearer ${authToken}` },
-      })
-      if (!asset.ok) {
-        throw new Error('Срок хранения ленты истёк. Соберите её ещё раз')
-      }
-      return asset.blob()
+      return { assetId: job.result_json.asset_id }
     }
   }
-  throw new Error('Не удалось собрать ленту. Попробуйте ещё раз')
+  throw new Error(status === 'done' ? 'Срок хранения ленты истёк. Соберите её ещё раз' : 'Не удалось собрать ленту. Попробуйте ещё раз')
 }
 
 let printWindowFromUserGesture: Window | null = null
 
-/** Вызывать синхронно из обработчика клика «Печать», до любых await. */
+/** Вызывается только из явного действия «Открыть для печати». */
 export function beginPrintUserGesture(): void {
-  if (typeof window === 'undefined') {
-    return
-  }
+  if (typeof window === 'undefined') return
   printWindowFromUserGesture = window.open('', '_blank')
   if (printWindowFromUserGesture) {
     printWindowFromUserGesture.document.title = 'Печать'
-    printWindowFromUserGesture.document.body.innerHTML =
-      '<p style="font-family:sans-serif;padding:16px">Загрузка PDF…</p>'
+    printWindowFromUserGesture.document.body.innerHTML = '<p style="font-family:sans-serif;padding:16px">Загрузка PDF…</p>'
   }
 }
 
