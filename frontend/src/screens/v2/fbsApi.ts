@@ -466,6 +466,10 @@ export type FbsWorkspace = {
     packaging_task_id: string | null
     barcode_asset: FbsPrintAsset | null
     honest_sign_skipped?: boolean
+    // Режим «без распределения» для всей поставки — источник истины для
+    // заголовка вкладки коробов и для состояния переключателя, не только
+    // производная от отдельных коробов (см. setFbsBoxesWithoutDistribution).
+    boxes_without_distribution?: boolean
   }
   stage:
     | 'composition'
@@ -752,6 +756,23 @@ export async function createFbsPackingBoxes(
   return jsonOrThrow<FbsWorkspace>(
     await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/boxes`), {
       method: 'POST', headers: jsonHeaders(token, ah), body: JSON.stringify(body),
+    }),
+  )
+}
+
+export async function setFbsBoxesWithoutDistribution(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  enabled: boolean,
+): Promise<FbsWorkspace> {
+  // Переключатель режима «без распределения» после того, как короба уже
+  // созданы (дефект I15) — идемпотентный роут, отдельный от createFbsPackingBoxes.
+  return jsonOrThrow<FbsWorkspace>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/boxes-without-distribution`), {
+      method: 'POST',
+      headers: jsonHeaders(token, ah),
+      body: JSON.stringify({ enabled }),
     }),
   )
 }

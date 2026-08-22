@@ -38,3 +38,36 @@
 
 ### карта задевания
 20:51 вопросов после анализа: 45 — см. night/volna-9/VOPROSY.md
+21:00   03-no-distribution-mode · tester: готово
+21:03   03-no-distribution-mode · screen-dev: готово
+21:04   03-no-distribution-mode · reviewer: нет файла REVIEW.md (код 1, попытка 1)
+21:04   03-no-distribution-mode · reviewer: нет файла REVIEW.md (код 1, попытка 2)
+21:04 03-no-distribution-mode: отложено на шаге reviewer
+00:21   03-no-distribution-mode · tester: уже сделано, пропускаю
+00:21   03-no-distribution-mode · screen-dev: уже сделано, пропускаю
+00:22   03-no-distribution-mode · reviewer: готово
+00:42   03-no-distribution-mode · ui-critic: в DESIGN-REVIEW.md нет машинной строки «ВЕРДИКТ: ...» (код 124, попытка 1)
+00:48   03-no-distribution-mode · ui-critic: готово
+05:18   03-no-distribution-mode · tester: уже сделано, пропускаю
+05:18   03-no-distribution-mode · screen-dev: уже сделано, пропускаю
+05:18   03-no-distribution-mode · reviewer: уже сделано, пропускаю
+05:18   03-no-distribution-mode · ui-critic: уже сделано, пропускаю
+10:16   03-no-distribution-mode · tester: уже сделано, пропускаю
+10:16   03-no-distribution-mode · screen-dev: уже сделано, пропускаю
+10:16   03-no-distribution-mode · reviewer: уже сделано, пропускаю
+10:16   03-no-distribution-mode · ui-critic: уже сделано, пропускаю
+10:19   03-no-distribution-mode · clicker: готово
+10:22   03-no-distribution-mode · ux-judge: готово
+10:22   03-no-distribution-mode · ux-judge: находки, круг 1 — назад к разработке
+10:37   03-no-distribution-mode · screen-dev: готово
+10:37   03-no-distribution-mode · reviewer: уже сделано, пропускаю
+10:37   03-no-distribution-mode · ui-critic: уже сделано, пропускаю
+10:37   03-no-distribution-mode · clicker: уже сделано, пропускаю
+10:40   03-no-distribution-mode · ux-judge: готово
+10:40   03-no-distribution-mode · ux-judge: находки, круг 2 — назад к разработке
+10:53   03-no-distribution-mode · screen-dev: готово
+10:53   03-no-distribution-mode · reviewer: уже сделано, пропускаю
+10:53   03-no-distribution-mode · ui-critic: уже сделано, пропускаю
+10:53   03-no-distribution-mode · clicker: уже сделано, пропускаю
+10:56   03-no-distribution-mode · ux-judge: готово
+10:56 03-no-distribution-mode: отложено — ux-judge, круги кончились
