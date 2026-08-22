@@ -24,7 +24,11 @@ from app.services.fbs_stock_availability_service import (
     fbs_available_qty_by_product,
     fbs_available_qty_for_product,
 )
-from app.services.fbs_supply_validator_service import _stock_preflight
+from app.services.fbs_supply_validator_service import (
+    SupplyPreflightResult,
+    _stock_preflight,
+    preflight_to_dict,
+)
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import available_qty_for_fbs_reserve
 
@@ -82,7 +86,7 @@ async def test_preflight_aggregates_operational_stock_and_exposes_source_capacit
 
     suffix = str(time.time_ns())[-8:]
     south_id, south_location_id = await create_warehouse_with_location("Юг", f"south-{suffix}")
-    _north_id, north_location_id = await create_warehouse_with_location(
+    north_id, north_location_id = await create_warehouse_with_location(
         "Север", f"north-{suffix}"
     )
     service_id, service_location_id = await create_warehouse_with_location(
@@ -137,13 +141,36 @@ async def test_preflight_aggregates_operational_stock_and_exposes_source_capacit
         preflight = await _stock_preflight(
             session, product.tenant_id, [order], selected_warehouse_id=current_warehouse_id
         )
+        payload = preflight_to_dict(
+            SupplyPreflightResult(
+                compatible=True,
+                summary=None,
+                issues=(),
+                orders=(order,),
+                stock=preflight,
+            )
+        )
 
     assert preflight.compatible is True
     assert preflight.recommended_warehouse_id == south_id
     assert len(preflight.warning_lines) == 1
     line = preflight.warning_lines[0]
     assert (line.current, line.total, line.shortage) == (0, 10, 0)
-    assert (line.source_warehouse_id, line.source_available) == (south_id, 6)
+    assert line.source_warehouse_id is None
+    assert line.source_available == 0
+    assert [
+        (source.warehouse_id, source.quantity, source.available)
+        for source in line.source_warehouses
+    ] == [
+        (south_id, 6, 6),
+        (north_id, 4, 4),
+    ]
+    serialized = payload["stock_preflight"]["warning_lines"][0]
+    assert serialized["source_warehouse"] is None
+    assert serialized["source_warehouses"] == [
+        {"id": str(south_id), "name": "Юг", "quantity": 6, "available": 6},
+        {"id": str(north_id), "name": "Север", "quantity": 4, "available": 4},
+    ]
     assert preflight.blocking_lines == ()
 
 

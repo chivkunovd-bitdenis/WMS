@@ -62,6 +62,14 @@ class SupplyPreflightResult:
 
 
 @dataclass(frozen=True)
+class SupplyStockSource:
+    warehouse_id: uuid.UUID
+    warehouse_name: str
+    quantity: int
+    available: int
+
+
+@dataclass(frozen=True)
 class SupplyStockLine:
     product_id: uuid.UUID
     product_name: str
@@ -72,6 +80,7 @@ class SupplyStockLine:
     source_warehouse_id: uuid.UUID | None = None
     source_warehouse_name: str | None = None
     source_available: int = 0
+    source_warehouses: tuple[SupplyStockSource, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -227,19 +236,46 @@ async def _stock_preflight(
         current = availability.get(current_id, {}).get(pid, 0) if current_id else 0
         total = sum(values.get(pid, 0) for values in availability.values())
         shortage = max(qty - total, 0)
-        source = max(
+        remaining = max(qty - current, 0)
+        source_warehouses: list[SupplyStockSource] = []
+        sources = sorted(
             (
-                w for w in warehouses
-                if w.id != current_id and availability[w.id].get(pid, 0) > 0
+                warehouse
+                for warehouse in warehouses
+                if warehouse.id != current_id
+                and availability[warehouse.id].get(pid, 0) > 0
             ),
-            key=lambda w: availability[w.id].get(pid, 0),
-            default=None,
+            key=lambda warehouse: (
+                -availability[warehouse.id].get(pid, 0),
+                warehouse.name,
+                str(warehouse.id),
+            ),
         )
+        for warehouse in sources:
+            if remaining <= 0:
+                break
+            available = availability[warehouse.id].get(pid, 0)
+            allocated = min(available, remaining)
+            source_warehouses.append(
+                SupplyStockSource(
+                    warehouse_id=warehouse.id,
+                    warehouse_name=warehouse.name,
+                    quantity=allocated,
+                    available=available,
+                )
+            )
+            remaining -= allocated
+
+        # Keep the legacy singular field only when one source can satisfy the
+        # whole local deficit.  Returning the largest partial source here made
+        # clients tell the operator to take more stock than that warehouse has.
+        source = source_warehouses[0] if len(source_warehouses) == 1 else None
         line = SupplyStockLine(
             pid, getattr(products.get(pid), "name", "Товар"), qty, current, total, shortage,
-            source.id if source else None,
-            source.name if source else None,
-            availability[source.id].get(pid, 0) if source else 0,
+            source.warehouse_id if source else None,
+            source.warehouse_name if source else None,
+            source.available if source else 0,
+            tuple(source_warehouses),
         )
         if shortage:
             blocking.append(line)
@@ -422,7 +458,17 @@ def preflight_to_dict(
                         "available": line.source_available,
                     }
                     if line.source_warehouse_id else None
-                )}
+                ),
+                "source_warehouses": [
+                    {
+                        "id": str(source.warehouse_id),
+                        "name": source.warehouse_name,
+                        "quantity": source.quantity,
+                        "available": source.available,
+                    }
+                    for source in line.source_warehouses
+                ],
+                }
     return {
         "compatible": result.compatible and stock.compatible,
         "summary": summary_out,

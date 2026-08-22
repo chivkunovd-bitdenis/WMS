@@ -1,50 +1,45 @@
-# DEV · 04-warehouse-switch · повторная проверка атома 1
-
-## Изменённые файлы
-
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md` — записан результат повторной проверки после `REVIEW.md`.
-
-Backend-код атома не менялся: `REVIEW.md` не содержит находок в
-`backend/app/models/warehouse.py`,
-`backend/alembic/versions/20260822_0094_warehouse_operational_barcode.py`,
-`backend/app/api/warehouses.py` или `backend/tests/test_warehouses.py` и отдельно
-подтверждает корректность разделения операционных складов, tenant-проверок resolver-а и
-отказа при неоднозначном скане.
+# Backend dev · 04-warehouse-switch · атом 2 · rework
 
 ## Что реализовано
 
-- `GET /warehouses` — ранее реализованный эндпоинт возвращает только операционные склады tenant; служебные `fbs-wb-*` / `FBS WB *` исключаются сервисом списка.
-- `GET /warehouses/resolve` — ранее реализованный resolver возвращает `warehouse` для склада и `location` для ячейки, отклоняет неоднозначное значение как `barcode_ambiguous` и не раскрывает объект другого tenant (`barcode_unknown`).
-- `catalog_service.resolve_warehouse_scan` — ранее реализованное разрешение проверяет коды и штрихкоды складов и ячеек в одном tenant без выбора по приоритету.
+- Эндпоинты: новых эндпоинтов нет; существующий FBS-preflight получает расширенный `stock_preflight.warning_lines[].source_warehouses`.
+- Сервис `fbs_supply_validator_service._stock_preflight`: распределяет локальный дефицит товара по нескольким операционным складам в порядке доступного покрытия и возвращает точное количество к подбору с каждого склада.
+- Сервис `fbs_supply_validator_service.preflight_to_dict`: сериализует агрегированную разбивку источников; legacy-поле `source_warehouse` заполняется только тогда, когда один склад целиком покрывает локальный дефицит.
+
+## Изменённые файлы
+
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_supply_validator_service.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/tests/test_fbs_stock_availability.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md`
 
 ## Миграции
 
-- Новых миграций нет. Существующая `20260822_0094_warehouse_operational_barcode.py` добавляет `warehouses.is_operational` и `warehouses.barcode`, заполняет уникальные складские штрихкоды и помечает legacy `fbs-wb-*` / `FBS WB *` неоперационными.
+Нет: атом не меняет схему данных.
 
 ## Тесты
 
-- Новых тестов в повторном проходе нет: `backend/tests/test_warehouses.py` уже покрывает список операционных складов, типы `warehouse` / `location`, межсущностную legacy-коллизию и изоляцию чужого tenant.
+- Усилен `test_preflight_aggregates_operational_stock_and_exposes_source_capacity`: потребность 10 единиц при остатках «Юг» 6 и «Север» 4 даёт одну товарную warning-строку и точную разбивку 6+4.
+- Тот же тест подтверждает, что 100 единиц служебного склада не входят в общий остаток, рекомендацию или источники подбора.
+- Добавлена проверка сериализованного preflight-ответа: при нескольких источниках ложное одиночное указание отсутствует, а `source_warehouses` содержит оба операционных склада и количества.
 
 ## Гейты
 
-- `ruff check app/models/warehouse.py app/api/warehouses.py app/services/catalog_service.py alembic/versions/20260822_0094_warehouse_operational_barcode.py tests/test_warehouses.py` (из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend`) — пройдено: `All checks passed!`.
-- `mypy app/models/warehouse.py app/api/warehouses.py app/services/catalog_service.py` (из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend`) — целевые модули проверены, но команда завершилась с кодом 1 из-за четырёх существующих ошибок в импортируемых соседних файлах: `wildberries_credentials_service.py:167`, `fbs_stock_sync_service.py:617`, `fbs_warehouse_binding_service.py:23` и `fbs_warehouse_binding_service.py:294`.
-- `pytest -q tests/test_warehouses.py` (из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend`) — пройдено: `1 passed in 3.81s`.
-- `python3 scripts/ci/back_guard.py` — не применим: повторный проход не добавляет роут; самого файла в рабочей копии также нет.
-- `python3 scripts/ci/check_migrations.py` — не применим: повторный проход не добавляет миграцию; самого файла в рабочей копии также нет.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend && ruff check app/services/fbs_supply_validator_service.py tests/test_fbs_stock_availability.py` — пройдено, `All checks passed!`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend && mypy --follow-imports=skip app/services/fbs_supply_validator_service.py` — пройдено, `Success: no issues found in 1 source file`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend && pytest -q tests/test_fbs_stock_availability.py` — пройдено, `9 passed in 36.32s`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch && git diff --check` — пройдено.
+- `back_guard.py` не запускался: новый роут не добавлялся.
+- `check_migrations.py` не запускался: миграция не добавлялась.
 
 ## Не реализовано
 
-- Находки 1–12 из `REVIEW.md` не относятся одновременно к файлам и границам атома 1. Они затрагивают следующие атомы (`preflight`, FBS workspace, общий frontend-контекст, S-01, S-14, S-25, seller draft, движения и blocker registry), поэтому в этом проходе не изменялись.
-- В `CONTRACT.md` нет отдельного раздела `API и данные`; точный backend-контракт атома взят из прямо назначенного пользователем пункта 1 `FEATURES.md`. Дополнительное поведение сверх него не добавлялось.
+- Frontend-потребление нового списка `source_warehouses` не менялось: роль `backend-dev` запрещает правки UI. Backend больше не возвращает ложный одиночный склад при распределённом покрытии; отображение полной разбивки должен выполнить frontend-атом.
+- Остальные находки `REVIEW.md` относятся к frontend, сканеру, отчётности и соседним атомам; этот backend-атом их не затрагивает.
 
 ## Блокеры
 
-- Сохранение отчёта отдельным Git-коммитом заблокировано правами среды: команда
-  `git add -- night/volna-9-recovery/cards/04-warehouse-switch/DEV.md` завершилась с
-  `fatal: Unable to create '/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-04-warehouse-switch/index.lock': Operation not permitted`.
-  Backend-код не менялся; отчёт записан в рабочую копию, но не сохранён в новом commit SHA.
+- Код и отчёт локально реализованы, но отдельный Git-коммит создать невозможно из-за прав среды: `git add -- backend/app/services/fbs_supply_validator_service.py backend/tests/test_fbs_stock_availability.py night/volna-9-recovery/cards/04-warehouse-switch/DEV.md` завершился ошибкой `Unable to create '/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-04-warehouse-switch/index.lock': Operation not permitted`. Изменения остаются в рабочей копии и пока не имеют восстанавливаемого commit SHA.
 
 ## Находки
 
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не открывались и не изменялись.
+Нет.
