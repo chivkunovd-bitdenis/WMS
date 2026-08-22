@@ -1,26 +1,20 @@
-# 09-billing · screen-dev rework
-
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfBillingScreen.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/tests-e2e/billing-invoices.spec.ts`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/night/volna-9-recovery/cards/09-billing/DEV.md`
-
-Экран берёт блокирующие причины из отдельного поля `issues` ответа списка счетов, а не из несуществующего поля счёта. После успешного повторного формирования он повторно запрашивает список. Добавлен e2e-сценарий `S-31-TC-013` для видимой причины и исправляющего действия.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfBillingScreen.tsx
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/tests-e2e/billing-ledger.spec.ts
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/night/volna-9-recovery/cards/09-billing/DEV.md
 
 ## Гейты
 
-- Зелёный: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npx tsc --noEmit -p tsconfig.app.json`.
-- Красный, новых нарушений экран не добавил: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing && python3 scripts/ui/ui_guard.py`. Зафиксированы уже существующие нарушения в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/App.tsx`, `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/components/WbProductPickerDialog.tsx`, `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfSettingsScreen.tsx`, `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx` и `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/v2/SellerInboundDraftScreen.tsx`; `--update` не применялся.
-- Красный из-за неполных локальных зависимостей: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npm run test:unit -- --passWithNoTests FfBillingScreen` → `vitest: command not found`.
-- Красный из-за тех же неполных зависимостей: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npm run test:e2e -- billing-ledger.spec.ts billing-invoices.spec.ts` → `error: unknown command 'test'`; локального `node_modules/.bin/playwright` нет.
-- Зелёный: `git diff --check`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npx tsc --noEmit -p tsconfig.app.json` — зелёный.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npx playwright test tests-e2e/billing-ledger.spec.ts` — зелёный; выполнен только тестовый файл атома.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npm run test:unit -- --runInBand` — красный до запуска тестов: `sh: vitest: command not found`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing && python3 scripts/ui/ui_guard.py` — красный из-за уже имеющихся отклонений вне файлов атома: `src/App.tsx`, `src/components/WbProductPickerDialog.tsx`, `src/screens/ff/FfSettingsScreen.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`. Базовая линия не обновлялась.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing && git diff --check` — зелёный.
+- Сохранение отдельным Git-коммитом не выполнено: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-09-billing1/index.lock` из-за ограничения прав текущей среды. Чужой `night/volna-9-recovery/JOURNAL.md` в индекс не добавлялся.
 
 ## Не реализовано
 
-- Backend-находки из `REVIEW.md` не изменялись: роль `screen-dev` ограничена экранным слоем.
-- Целевые unit/e2e не запущены до завершения из-за отсутствующих локальных зависимостей. В тестовом файле добавлен сценарий, но его выполнение требует восстановить зависимости этой рабочей копии.
-
-## Находки
-
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не открывались и не затрагивались.
+- Для S-31-TC-004, S-31-TC-005 и S-31-TC-012 экран передаёт в живой ledger API начало выбранного месяца в `date=YYYY-MM-01`, не отправляет `seller_id=all` и принимает реальный массив строк. Поиск, фильтр услуги и данные полей строки требуют серверного read-model; это находка ревью №2 и находится за границей screen-dev.
+- Находки ревью №3–12 и №14 относятся к API, сервисам, миграциям и документации блокировок, поэтому в этот атомарный экранный проход не вносились. Находка №13 про `billing-invoices.spec.ts` также не относится к разрешённому тестовому файлу атома.
+- Контракт не удалось подтвердить полностью: `test:unit` не запускается из-за отсутствующего Vitest, а `ui_guard.py` блокируется нарушениями в чужих файлах.

@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Select, Stack, Tab, Tabs, Typography } from '@mui/material'
+import { Box, Dialog, DialogActions, DialogContent, DialogTitle, MenuItem, Select, Stack, Tab, Tabs, Typography } from '@mui/material'
 import ExpandMore from '@mui/icons-material/ExpandMore'
 import {
   DataTable,
-  EmptyState,
   ErrorNotice,
   FilterBar,
   MoneyCell,
@@ -44,6 +43,10 @@ type BillingListResponse<T> = { entries?: T[]; invoices?: T[]; rows?: T[]; issue
 function currentMonth(): string {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
+function monthStart(month: string): string {
+  return `${month}-01`
 }
 
 function escapeHtml(value: unknown): string {
@@ -93,7 +96,9 @@ export function FfBillingScreen({ sellers = [], token }: Props) {
     setLoading(true)
     setError(false)
     setRows([])
-    const params = new URLSearchParams({ period: month, seller_id: sellerId, service_code: service, mode })
+    const params = new URLSearchParams({ date: monthStart(month) })
+    if (sellerId !== 'all') params.set('seller_id', sellerId)
+    if (service !== 'all') params.set('service_code', service)
     if (search) params.set('document_number', search)
     fetch(`/api/billing/ledger?${params}`, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
       .then((response) => {
