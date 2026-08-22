@@ -636,13 +636,15 @@ def main() -> int:
                  mock.patch.object(n, "шаг", side_effect=fake_repair_step):
                 проверь("rework: исчерпанный backend-ремонт перенарезается",
                         n.перепланировать_ремонт(
-                            "x", repair, repair, repair_work)[0], True)
+                            "x", repair, repair, repair_work, 3)[0], True)
             проверь("rework: backend-перенарезка не зовёт product/UX",
                     repair_calls, ["splitter"])
             проверь("rework: после перенарезки старые DEV-атомы сняты",
                     (repair / "DEV-01.md").exists(), False)
             проверь("rework: перенарезка фиксируется один раз",
                     "ПЕРЕПЛАН: DONE" in repair_marker.read_text(encoding="utf-8"), True)
+            проверь("rework: перенарезка сохраняет текущий круг",
+                    "КРУГ: 3" in repair_marker.read_text(encoding="utf-8"), True)
 
             проверь("resume: фильтр сохраняет порядок",
                     n.выбрать_карточки(["01", "02", "03"], "03,01"), ["01", "03"])
