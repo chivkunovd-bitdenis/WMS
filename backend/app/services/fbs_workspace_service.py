@@ -103,7 +103,10 @@ async def get_supply_workspace(
     await _inject_order_pick_fallback(session, tenant_id, supply, worklist_items)
     cargo_places = await _build_cargo_places(session, tenant_id, supply)
     boxes = await _build_boxes(session, tenant_id, supply_id)
-    boxes_without_distribution = _boxes_without_distribution(boxes)
+    boxes_without_distribution = (
+        supply.boxes_without_distribution_at is not None
+        or _boxes_without_distribution(boxes)
+    )
     marking_pool = await _build_marking_pool(session, tenant_id, orders)
     progress = _compute_progress(orders)
     picking_auto_passed_reason = await _picking_auto_passed_reason(
@@ -170,6 +173,7 @@ async def get_supply_workspace(
             ),
             "barcode_asset": barcode_asset,
             "honest_sign_skipped": supply.honest_sign_skipped_at is not None,
+            "boxes_without_distribution": boxes_without_distribution,
         },
         "stage": stage,
         "progress": {

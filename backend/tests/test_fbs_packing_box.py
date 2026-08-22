@@ -286,6 +286,66 @@ async def test_without_distribution_mode_depends_on_assignments_not_box_count(
         )
 
 
+@pytest.mark.asyncio
+async def test_boxes_without_distribution_api_returns_persisted_workspace_flag(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """TC-NEW-003: the API flag survives a workspace rebuild with no boxes."""
+    headers, supply_id, _ = await _packed_supply(async_client)
+
+    enabled = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes-without-distribution",
+        headers=headers,
+        json={"enabled": True},
+    )
+    assert enabled.status_code == 200, enabled.text
+    assert enabled.json()["supply"]["boxes_without_distribution"] is True
+
+    workspace = await async_client.get(
+        f"/operations/fbs-supplies/{supply_id}/workspace", headers=headers
+    )
+    assert workspace.status_code == 200, workspace.text
+    assert workspace.json()["supply"]["boxes_without_distribution"] is True
+
+
+@pytest.mark.asyncio
+async def test_boxes_without_distribution_api_conflicts_when_order_is_assigned(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """TC-NEW-004: assigned orders prevent changing the persisted mode."""
+    headers, supply_id, order_ids = await _packed_supply(async_client)
+    boxes_url = f"/operations/fbs-supplies/{supply_id}/boxes"
+    created = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={"count": 1, "idempotency_key": "api-mode-conflict"},
+    )
+    assert created.status_code == 201, created.text
+    box_id = created.json()["boxes"][0]["id"]
+    assigned = await async_client.post(
+        f"{boxes_url}/{box_id}/orders",
+        headers=headers,
+        json={"order_ids": [str(order_ids[0])]},
+    )
+    assert assigned.status_code == 200, assigned.text
+
+    conflict = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes-without-distribution",
+        headers=headers,
+        json={"enabled": True},
+    )
+    assert conflict.status_code == 409, conflict.text
+    assert conflict.json()["detail"]["code"] == "boxes_already_distributed"
+
+    workspace = await async_client.get(
+        f"/operations/fbs-supplies/{supply_id}/workspace", headers=headers
+    )
+    assert workspace.status_code == 200, workspace.text
+    assert workspace.json()["supply"]["boxes_without_distribution"] is False
+
+
 def test_workspace_handoff_requires_boxes_and_every_packed_order_assignment() -> None:
     order_id = uuid.uuid4()
     supply = SimpleNamespace(
