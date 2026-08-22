@@ -68,3 +68,5 @@
 20:30   01-wb-marking · reviewer: Terra-rework не закрыл вердикт — эскалация Sol
 20:30   01-wb-marking · reviewer: находки, круг 2 — назад к разработке
 21:10   01-wb-marking · backend-dev: готово
+21:10   01-wb-marking · dev: фича 1/5 сохранена 5d49c69915e8
+21:13   01-wb-marking · backend-dev: готово
