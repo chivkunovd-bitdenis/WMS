@@ -500,6 +500,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [externalActiveOrders, setExternalActiveOrders] = useState<FbsWorklistOrder[]>([])
   const [warehouseOptions, setWarehouseOptions] = useState<FbsWorklistWarehouseOption[]>([])
   const [wmsWarehouseOptions, setWmsWarehouseOptions] = useState<WarehouseOption[]>([])
+  const [wmsWarehouseLoadError, setWmsWarehouseLoadError] = useState<string | null>(null)
   const [sellerWarehouseNames, setSellerWarehouseNames] = useState<Record<string, string>>({})
   const [serverNow, setServerNow] = useState<string | null>(null)
   const [lastLoadedAt, setLastLoadedAt] = useState<string | null>(null)
@@ -570,9 +571,13 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         setWmsWarehouseOptions(warehouses
           .filter((warehouse) => warehouse.is_operational !== false && warehouse.id && warehouse.name?.trim())
           .map((warehouse) => ({ id: String(warehouse.id), name: warehouse.name!.trim() })))
+        setWmsWarehouseLoadError(null)
       })
       .catch(() => {
-        if (!cancelled) setWarehouseOptions([])
+        if (!cancelled) {
+          setWmsWarehouseOptions([])
+          setWmsWarehouseLoadError('Не удалось загрузить склады. Обновите страницу.')
+        }
       })
     return () => { cancelled = true }
   }, [authHeaders, token])
@@ -605,12 +610,24 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         setLastLoadedAt(new Date().toISOString())
         return
       }
-      const page = await fetchFbsWorklist(token, authHeaders, {
+      const params = {
         seller_id: sellerId === '__all__' ? null : sellerId,
         status_group: statusGroup,
         wb_warehouse_id: statusGroup === 'new' && wbWarehouseId !== '__all__' ? wbWarehouseId : null,
         limit: statusGroup === 'new' ? NEW_ORDERS_PAGE_LIMIT : 500,
-      })
+      }
+      const firstPage = await fetchFbsWorklist(token, authHeaders, params)
+      // API worklist пока не принимает WMS-склад отдельным параметром. Чтобы контекст
+      // не скрывал заказы за первой страницей, дочитываем курсор только при активном
+      // складском фильтре и затем отсекаем строки по их физическому складу.
+      const items = [...firstPage.items]
+      let nextCursor = firstPage.next_cursor
+      while (wmsWarehouseId && nextCursor) {
+        const nextPage = await fetchFbsWorklist(token, authHeaders, { ...params, cursor: nextCursor })
+        items.push(...nextPage.items)
+        nextCursor = nextPage.next_cursor
+      }
+      const page = { ...firstPage, items }
       setOrders(page.items)
       setActiveSupplies([])
       setExternalActiveOrders([])
@@ -635,7 +652,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       setBusy(false)
       loadingRef.current = false
     }
-  }, [token, authHeaders, sellerId, statusGroup, wbWarehouseId])
+  }, [token, authHeaders, sellerId, statusGroup, wbWarehouseId, wmsWarehouseId])
 
   useEffect(() => {
     void load()
@@ -989,8 +1006,15 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         value={wmsWarehouseId}
         onChange={setWmsWarehouseId}
         loading={busy && wmsWarehouseOptions.length === 0}
+        error={wmsWarehouseLoadError ?? undefined}
         testId="fbs-wms-warehouse-context"
       />
+
+      {wmsWarehouseLoadError ? (
+        <Alert severity="error" sx={{ mt: 2 }} data-testid="fbs-wms-warehouse-context-error">
+          {wmsWarehouseLoadError}
+        </Alert>
+      ) : null}
 
       <Paper variant="outlined" sx={{ overflow: 'hidden', mt: 2 }}>
         <Tabs

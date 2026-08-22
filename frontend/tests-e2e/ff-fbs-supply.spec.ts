@@ -362,6 +362,7 @@ test('fbs workspace: scan location then product', async ({ page }) => {
   await expect(page.getByTestId('fbs-picking-scanner-line')).toContainText('пикните ШК склада или ячейки')
   await page.getByLabel('Штрихкод ячейки').fill('WAREHOUSE-B')
   await page.getByRole('button', { name: 'Подтвердить ячейку' }).click()
+  await expect(page.getByText('Склад закреплён: подбор уже начат')).toBeVisible()
   await expect(page.getByTestId('fbs-picking-scanner-line')).toContainText('пикните ШК склада или ячейки')
   await page.getByLabel('Штрихкод ячейки').fill('CELL-A-01')
   await page.getByRole('button', { name: 'Подтвердить ячейку' }).click()

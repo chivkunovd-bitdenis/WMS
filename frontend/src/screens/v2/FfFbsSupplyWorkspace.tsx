@@ -332,6 +332,11 @@ export function FfFbsSupplyWorkspace({
   const [skipHonestSignOpen, setSkipHonestSignOpen] = useState(false)
   const [skipHonestSignBusy, setSkipHonestSignBusy] = useState(false)
   const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
+  const warehouseChangeLocked = workspace != null && (
+    workspace.supply.status !== 'draft'
+    || workspace.orders.some((order) => order.pick.status === 'picked' || order.pack.status === 'packed')
+    || workspace.boxes.length > 0
+  )
 
   const load = useCallback(
     async (silent = false) => {
@@ -372,7 +377,10 @@ export function FfFbsSupplyWorkspace({
   }, [authHeaders, open, token])
 
   const changeWarehouse = useCallback(async (warehouseId: string) => {
-    if (!workspace || workspace.supply.status !== 'draft') return
+    if (!workspace || warehouseChangeLocked) {
+      setError('Склад закреплён: подбор уже начат')
+      return false
+    }
     setSelectedWarehouseId(warehouseId)
     setBusy(true)
     try {
@@ -383,13 +391,15 @@ export function FfFbsSupplyWorkspace({
       })
       if (!response.ok) throw new Error('Не удалось сменить склад поставки.')
       setWorkspace((await response.json()) as FbsWorkspace)
+      return true
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Не удалось сменить склад поставки.')
       setSelectedWarehouseId(workspace.supply.wms_warehouse.id)
+      return false
     } finally {
       setBusy(false)
     }
-  }, [authHeaders, token, workspace])
+  }, [authHeaders, token, warehouseChangeLocked, workspace])
 
   useEffect(() => {
     if (!open || !supplyId) return
@@ -547,7 +557,12 @@ export function FfFbsSupplyWorkspace({
     try {
       const scan = await resolveFbsWarehouseScan(token, authHeaders, locationBarcode.trim())
       if (scan.type === 'warehouse') {
-        await changeWarehouse(scan.warehouse_id)
+        if (warehouseChangeLocked) {
+          setError('Склад закреплён: подбор уже начат')
+          return
+        }
+        const changed = await changeWarehouse(scan.warehouse_id)
+        if (!changed) return
         setPickLocation(null)
         setProductBarcode('')
         return
@@ -1610,7 +1625,7 @@ export function FfFbsSupplyWorkspace({
         onChange={(warehouseId) => void changeWarehouse(warehouseId)}
         loading={busy && warehouseOptions.length === 0}
         error={warehouseLoadError ?? undefined}
-        disabledReason={workspace.supply.status === 'draft' ? undefined : 'Склад закреплён: подбор уже начат'} testId="fbs-supply-wms-warehouse-context"
+        disabledReason={warehouseChangeLocked ? 'Склад закреплён: подбор уже начат' : undefined} testId="fbs-supply-wms-warehouse-context"
       /></Box> : null}
 
       <Tabs
