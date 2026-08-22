@@ -1,17 +1,18 @@
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_fbs_marking.py` — добавлен сценарий batch-сверки 201 активного заказа: последовательные пачки 100/100/1, ответ в обратном порядке, частичный ответ, ошибка средней пачки и продолжение последней.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/night/volna-9-recovery/cards/01-wb-marking/DEV.md` — отчёт backend-разработки.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/services/wildberries_client.py` — устаревшие одиночные `GET /api/v3/orders/{orderId}/meta` и `fetch_marketplace_order_meta` отсутствуют; для чтения метаданных остаётся batch POST из `wildberries_fbs_client.py`. В этом rework код не менялся: состояние уже сохранено коммитом `db550384`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/night/volna-9-recovery/cards/01-wb-marking/DEV.md` — отчёт повторной проверки атома 5.
 
 ## Гейты
 
-- `ruff check .` из `backend/` — не пройден: 82 существующие ошибки в несвязанных файлах; добавленный `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_fbs_marking.py` проходит `ruff check`.
-- `mypy .` из `backend/` — не пройден: 21 существующая ошибка в шести несвязанных файлах (`inventory_movement_report_service.py`, `wildberries_credentials_service.py`, `fbs_stock_sync_service.py`, `fbs_warehouse_binding_service.py`, `wildberries_product_import_service.py`, служебный cleanup-скрипт).
-- `pytest` из `backend/` — полный запуск стартовал (839 тестов), но среда оборвала поток до итогового кода; целевой `pytest tests/test_fbs_marking.py -q` пройден: 6 passed.
-- `python3 scripts/ci/back_guard.py` из корня — не запущен: файла `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/scripts/ci/back_guard.py` в этой рабочей копии нет.
-- `python3 scripts/ci/check_migrations.py` из корня — не запущен по той же причине: каталога `scripts/ci/` в этой рабочей копии нет.
+- `ruff check .` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend` — не пройден: 80 существующих нарушений в несвязанных файлах; `ruff check app/services/wildberries_client.py tests/test_wildberries_client.py` — пройден.
+- `mypy .` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend` — не пройден: 21 существующая ошибка в шести несвязанных файлах; `mypy app/services/wildberries_client.py` — пройден.
+- `pytest tests/test_wildberries_client.py tests/test_wildberries_marketplace_fbs_client.py -q` — пройден: 26 passed. Полный `pytest -q` был запущен, но не завершился: после 18 тестов среда прекратила выдавать результат без кода завершения.
+- `python3 scripts/ci/back_guard.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking` — не запущен: файл отсутствует в этой рабочей копии.
+- `python3 scripts/ci/check_migrations.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking` — не запущен: файл отсутствует в этой рабочей копии.
+- Статический поиск `fetch_marketplace_order_meta` в `backend/app` и `backend/tests` — совпадений нет.
 - `git diff --check` — пройден.
 
 ## Не реализовано
 
-- Изменений сервисов не потребовалось: текущая реализация `sync_marking_statuses_for_assembling_supplies` уже последовательно режет уникальные `wb_order_id` на пачки до 100, пропускает локальную обработку отсутствующих строк частичного ответа и продолжает после ошибки пачки. Добавлен регрессионный тест, который закрепляет эти требования и находку ревью №3.
+- Нет: атом 5 уже буквально реализован в сохранённом коде. Находки `REVIEW.md` №1–9 относятся к соседним сервисам, моделям и тестам фич 1–4; они не затрагивают единственный разрешённый слой атома 5 — удаление мёртвого одиночного чтения.
