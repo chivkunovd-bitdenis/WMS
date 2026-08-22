@@ -16,6 +16,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material'
+import { ErrorNotice, PrimaryAction, TableSkeletonBody, WarningNotice } from '../../ui-kit'
 import {
   FbsApiError,
   createFbsIdempotencyKey,
@@ -63,6 +64,7 @@ export function FbsSupplyCreateDialog({
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState<string | null>(null)
   const [idempotencyKey, setIdempotencyKey] = useState(createFbsIdempotencyKey)
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(null)
 
   const orderKey = useMemo(() => orderIds.join(','), [orderIds])
 
@@ -74,6 +76,7 @@ export function FbsSupplyCreateDialog({
     setIdempotencyKey(createFbsIdempotencyKey())
     setError(null)
     setPending(null)
+    setSelectedWarehouseId(null)
   }, [open, orderKey, deliveryType])
 
   useEffect(() => {
@@ -88,6 +91,7 @@ export function FbsSupplyCreateDialog({
     void preflightFbsSupply(token, authHeaders, {
       order_ids: orderIds,
       planned_delivery_type: deliveryType,
+      selected_warehouse_id: selectedWarehouseId,
     })
       .then((result) => {
         if (active) setPreflight(result)
@@ -103,7 +107,7 @@ export function FbsSupplyCreateDialog({
     return () => {
       active = false
     }
-  }, [open, orderKey, orderIds, deliveryType, token, authHeaders])
+  }, [open, orderKey, orderIds, deliveryType, selectedWarehouseId, token, authHeaders])
 
   const create = async () => {
     if (!preflight?.compatible || creating) return
@@ -118,6 +122,7 @@ export function FbsSupplyCreateDialog({
         planned_delivery_type: deliveryType,
         planned_destination: null,
         idempotency_key: idempotencyKey,
+        selected_warehouse_id: selectedWarehouseId,
       })
       onCreated(workspace)
     } catch (cause) {
@@ -143,6 +148,9 @@ export function FbsSupplyCreateDialog({
   }
 
   const summary = preflight?.summary
+  const inventory = summary?.inventory
+  const warehouseOptions = summary?.warehouse_options ?? []
+  const blockedByStock = Boolean(inventory && inventory.total_shortage > 0)
   return (
     <Dialog open={open} onClose={creating ? undefined : onClose} fullWidth maxWidth="md">
       <DialogTitle component="div" sx={{ pb: 1 }}>
@@ -153,7 +161,7 @@ export function FbsSupplyCreateDialog({
       </DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2.5}>
-          {error ? <Alert severity="error">{error}</Alert> : null}
+          {error ? <ErrorNotice>{error}</ErrorNotice> : null}
           {pending ? (
             <Alert
               severity="warning"
@@ -197,10 +205,7 @@ export function FbsSupplyCreateDialog({
           <Divider />
 
           {preflightBusy ? (
-            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', py: 3 }}>
-              <CircularProgress size={22} />
-              <Typography variant="body2">Проверяем актуальный состав и остатки…</Typography>
-            </Stack>
+            <Box data-testid="fbs-preflight-skeleton"><Typography variant="body2" sx={{ mb: 1.5 }}>Проверяем актуальный состав и остатки…</Typography><table style={{ width: '100%' }}><TableSkeletonBody columns={4} rows={2} /></table></Box>
           ) : summary ? (
             <Stack spacing={2}>
               <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
@@ -209,6 +214,10 @@ export function FbsSupplyCreateDialog({
                   label={preflight?.compatible ? 'Можно создать поставку' : 'Есть причины, которые нужно исправить'}
                 />
               </Stack>
+
+              {warehouseOptions.length > 0 ? <Box><Typography variant="subtitle2" gutterBottom>Склад WMS</Typography><select aria-label="Склад WMS" value={selectedWarehouseId ?? summary.wms_warehouse.id} onChange={(event) => setSelectedWarehouseId(event.target.value)}>{warehouseOptions.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}</select></Box> : null}
+              {inventory && inventory.local_shortage > 0 && inventory.total_shortage === 0 ? <WarningNotice testId="fbs-preflight-warning"><strong>На складе «{summary.wms_warehouse.name}» не хватает {inventory.local_shortage} шт. по {inventory.shortage_products} товарам.</strong><br />Нужно подобрать с другого склада.<Box component="table" sx={{ mt: 1, width: '100%' }}><tbody>{inventory.lines.filter((line) => line.here < line.required).map((line) => <tr key={line.product_id}><td>{line.name}</td><td align="right">{line.required}</td><td align="right">{line.here}</td><td align="right">{line.source_warehouse?.name ?? 'другой склад'} · {line.required - line.here}</td></tr>)}</tbody></Box></WarningNotice> : null}
+              {blockedByStock ? <ErrorNotice testId="fbs-preflight-stock-error">Не хватает {inventory?.total_shortage} шт. по {inventory?.shortage_products} товарам. Пополните остаток или уберите заказы из выборки.</ErrorNotice> : null}
 
               <Box
                 sx={{
@@ -253,16 +262,15 @@ export function FbsSupplyCreateDialog({
         <Button onClick={onClose} disabled={creating}>
           Отмена
         </Button>
-        <Button
-          variant="contained"
-          size="large"
+        <PrimaryAction
           onClick={() => void create()}
-          disabled={!preflight?.compatible || preflightBusy || creating}
+          disabled={!preflight?.compatible || blockedByStock || preflightBusy || creating}
+          disabledReason={preflightBusy ? 'Проверяем остатки' : blockedByStock ? 'Не хватает общего остатка' : undefined}
           startIcon={creating ? <CircularProgress size={18} color="inherit" /> : undefined}
           data-testid="fbs-create-submit"
         >
           Создать поставку
-        </Button>
+        </PrimaryAction>
       </DialogActions>
     </Dialog>
   )

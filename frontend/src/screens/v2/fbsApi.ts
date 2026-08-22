@@ -257,6 +257,7 @@ export type FbsWorklistPage = {
 export type FbsSupplyPreflightRequest = {
   order_ids: string[]
   planned_delivery_type: 'warehouse_sc' | 'pvz'
+  selected_warehouse_id?: string | null
 }
 
 export type FbsSupplyPreflight = {
@@ -272,6 +273,9 @@ export type FbsSupplyPreflight = {
     pvz_allowed_count: number
     pvz_blocked_count: number
     nearest_deadline_at: string
+    recommended_warehouse?: { id: string; name: string } | null
+    warehouse_options?: Array<{ id: string; name: string }>
+    inventory?: { total_shortage: number; local_shortage: number; shortage_products: number; lines: Array<{ product_id: string; name: string; required: number; here: number; total: number; shortage: number; source_warehouse?: { id: string; name: string; quantity: number } | null }> }
   }
   issues: Array<{ order_id: string; code: string; message: string }>
 }
@@ -282,6 +286,7 @@ export type FbsSupplyCreateFromOrdersRequest = {
   planned_delivery_type: 'warehouse_sc' | 'pvz'
   planned_destination?: { office_id: number; name: string; zone: string } | null
   idempotency_key: string
+  selected_warehouse_id?: string | null
 }
 
 export type FbsSupplyAddOrdersRequest = {
