@@ -2664,7 +2664,9 @@
       "component": "FfReportsPage",
       "files": [
         "src/App.tsx",
-        "src/layouts/AuthedAppLayout.tsx"
+        "src/layouts/AuthedAppLayout.tsx",
+        "src/apps/seller/SellerApp.tsx",
+        "src/apps/seller/SellerLayout.tsx"
       ],
       "zones": [
         "шапка",

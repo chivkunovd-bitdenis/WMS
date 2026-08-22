@@ -3081,6 +3081,16 @@ export default function App() {
             }
           />
           <Route
+            path="seller/reports"
+            element={
+              token && me.seller_permissions?.products ? (
+                <FfReportsPage token={token} sellers={[]} />
+              ) : (
+                ffAccessDenied
+              )
+            }
+          />
+          <Route
             path="ff/honest-sign/reprints"
             element={
               token && canShiftLeadOps ? (

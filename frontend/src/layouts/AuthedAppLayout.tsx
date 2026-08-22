@@ -119,6 +119,13 @@ export function AuthedAppLayout({
               </ListItemButton>
               <ListItemButton
                 component={NavLink}
+                to={`${base}/reports`}
+                data-testid="nav-seller-reports"
+              >
+                <ListItemText primary="Отчёты" />
+              </ListItemButton>
+              <ListItemButton
+                component={NavLink}
                 to={`${base}/settings`}
                 data-testid="nav-seller-settings"
               >
