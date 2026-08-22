@@ -2756,9 +2756,8 @@ export default function App() {
       isFulfillmentAdmin || canAccessFfBlock(me.role, me.permissions, 'packaging')
     const canShiftLeadOps = canAccessFfBlock(me.role, me.permissions, 'shift_lead')
     const canReceptionOps = canAccessFfBlock(me.role, me.permissions, 'reception')
-    const canCellsOps =
-      canAccessFfBlock(me.role, me.permissions, 'cells') ||
-      canAccessFfBlock(me.role, me.permissions, 'inventory')
+    const canInventoryOps = canAccessFfBlock(me.role, me.permissions, 'inventory')
+    const canCellsOps = canAccessFfBlock(me.role, me.permissions, 'cells') || canInventoryOps
     const canSettingsOps = isFulfillmentAdmin || canAccessFfBlock(me.role, me.permissions, 'settings')
     const portal: 'seller' | 'ff' = 'ff'
     const base = '/app/ff'
@@ -3118,7 +3117,7 @@ export default function App() {
 
           <Route
             path="ff/inventory"
-            element={token && canCellsOps ? <FfStoragePage isFulfillmentAdmin={isFulfillmentAdmin} token={token} /> : ffAccessDenied}
+            element={token && canInventoryOps ? <FfStoragePage isFulfillmentAdmin={isFulfillmentAdmin} token={token} /> : ffAccessDenied}
           />
 
           <Route

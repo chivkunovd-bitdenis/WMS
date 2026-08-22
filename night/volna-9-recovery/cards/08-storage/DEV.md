@@ -1,63 +1,55 @@
-# DEV · 08-storage · атом 7
-
-## Что реализовано
-
-- `GET /operations/storage/statements` теперь видит общий тариф `storage_liter_day`, а для зафиксированных документов возвращает неизменяемые суммы и строки из `BillingLedgerEntry`.
-- `POST /operations/storage/statements/{statement_id}/fix` атомарно фиксирует только чистый завершённый месяц, публикует один общий ledger-набор и идемпотентно отвечает на конкурентный повтор.
-- `GET /operations/storage/statements/{statement_id}/print` повторно отдаёт тот же состав SKU, снимок ставки, сумму и дату фиксации после последующих обмеров.
-- `storage_statement_service` применяет общую или персональную версию тарифа только в её календарном интервале; ставка, начавшаяся или сменившаяся внутри месяца, не применяется задним числом.
-- Подключён опубликованный фундамент 09-A: `BillingTariffVersion` и `BillingLedgerEntry` с `service_code='storage_liter_day'`, `unit='liter_day'`, `source_type='storage_measurement'`; отдельные storage-тарифы и storage-начисления не создавались.
+# 08-storage · screen-dev rework
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/storage_statement_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/api/storage.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_storage_statement_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/models/billing.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/models/__init__.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_billing_models.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/alembic/versions/20260822_0094_billing_financial_core.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/alembic/versions/20260822_0094_inventory_movement_reporting_dimensions.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend/src/screens/ff/FfStoragePage.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend/src/App.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend/tests-e2e/storage.spec.ts`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/night/volna-9-recovery/cards/08-storage/DEV.md`
 
-## Миграции
+Экран S-11 теперь допускает только пользователя с правом `inventory`, а отдельное право
+`cells` больше не открывает «Хранение». После запуска месячного расчёта экран опрашивает
+`/operations/background-jobs/{id}` до статуса `done` и лишь затем перечитывает сводку;
+`failed` и тайм-аут сохраняют последний успешный расчёт и показывают предусмотренную
+контрактом ошибку. Вызовы `TextCell`, `ProductCell`, `StatusChip` и MUI-полей приведены к
+фактическому API текущего UI-kit. Источники истории понимают как публичные значения API,
+так и внутренние алиасы `wb` и `container_override`.
 
-- `20260821_0094` — существующей добавляющей миграции измерений движения возвращён уникальный revision и корректный родитель `20260821_0093`; DDL не менялся.
-- `20260822_0094` — добавляет общий финансовый фундамент 09-A: профили, версии тарифов и неизменяемый billing ledger. Единица `liter_day` включена в общие ограничения.
-- Цепочка линейна и заканчивается единственной головой `20260822_0097`.
-
-## Тесты
-
-- Добавлена проверка тарифа, начавшегося внутри месяца: оплачивается только период после `valid_from`.
-- Добавлена проверка смены ставки внутри месяца и приоритета персональной ставки селлера над общей.
-- Добавлен API-тест двух одновременных фиксаций: оба запроса успешны, ledger-строка исходного измерения одна.
-- Добавлена проверка неизменяемой повторной печати после нового ручного обмера.
-- Добавлены проверки запрета проблемного и текущего черновика, нулевого документа с одной нулевой ledger-строкой и понятного `tariff_not_found`.
-- Подключены тесты ограничений общих billing-моделей 09-A.
+Playwright-проверка формирования теперь утверждает тело запроса с выбранными годом,
+месяцем и складом, переход фоновой задачи `running` → `done` и загрузку изменившейся
+сводки. Восстановлен буквальный `S-11-TC-008`: чистый черновик фиксируется и открывает
+A4-предпросмотр с селлером, SKU и итогом. Добавлена проверка, что право `cells` без
+`inventory` приводит на штатный экран «Нет доступа».
 
 ## Гейты
 
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && ruff check app/services/storage_statement_service.py app/api/storage.py app/models/billing.py app/models/__init__.py tests/test_storage_statement_service.py tests/test_storage_measurement_service.py tests/test_billing_models.py` — успешно, `All checks passed!`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && mypy app/services/storage_statement_service.py app/models/billing.py` — успешно, `Success: no issues found in 2 source files`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && mypy --follow-imports=skip --allow-subclassing-any --allow-untyped-decorators app/api/storage.py` — успешно, `Success: no issues found in 1 source file`; ограничение импортов изолирует ранее существующие ошибки соседних модулей.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && pytest -q tests/test_storage_statement_service.py tests/test_storage_measurement_service.py tests/test_billing_models.py` — успешно, `21 passed in 4.37s`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && alembic heads` — успешно, единственная голова `20260822_0097 (head)`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage && python3 scripts/ci/check_migrations.py` — не запущен: файла `scripts/ci/check_migrations.py` в этой рабочей копии нет. Миграционная цепочка дополнительно проверена командой `alembic heads` и компиляцией изменённых миграций.
-- `back_guard.py` неприменим: новый маршрут в атоме не добавлялся.
-- `git diff --check` — успешно, ошибок пробелов нет.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage && git add backend/alembic/versions/20260822_0094_inventory_movement_reporting_dimensions.py backend/alembic/versions/20260822_0094_billing_financial_core.py backend/app/api/storage.py backend/app/models/__init__.py backend/app/models/billing.py backend/app/services/storage_statement_service.py backend/tests/test_billing_models.py backend/tests/test_storage_statement_service.py night/volna-9-recovery/cards/08-storage/DEV.md && git diff --cached --check && git commit -m 'night(08-storage): repair atom 7 statement fixation'` — не выполнено: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-08-storage1/index.lock`, `Operation not permitted`.
+- `npx tsc --noEmit -p tsconfig.app.json` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend` — зелёный.
+- `npm run test:unit` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend` — зелёный: 20 файлов, 141 тест.
+- `python3 scripts/ui/ui_guard.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage` — красный только на существующих нарушениях вне файлов атома: `frontend/src/components/WbProductPickerDialog.tsx`, `frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx`, `frontend/src/screens/v2/SellerInboundDraftScreen.tsx`. Для `frontend/src/App.tsx` результат улучшен с 3492 до 3491 строки; новых нарушений S-11 нет. Базовая линия не обновлялась.
+- `npx playwright test tests-e2e/storage.spec.ts --list` — зелёный: файл компилируется, найдено 17 тестов.
+- `npx playwright test tests-e2e/storage.spec.ts --reporter=line` — инфраструктурно красный до запуска тестов: песочница запретила Playwright открыть локальный API-порт `127.0.0.1:18000` (`operation not permitted`), поэтому web-server завершился до старта браузерных сценариев.
+- `git diff --check` — зелёный.
 
 ## Не реализовано
 
-- API создания и версионирования тарифа не дублировался в storage: он принадлежит отдельному атому 09-billing/4. Этот атом использует его опубликованные модели и читает сохранённые версии.
-- UI диалога тарифа и A4-вёрстка не менялись: это не роль `backend-dev` и не файлы атома 7; API возвращает зафиксированное представление для существующего предпросмотра.
-- Находки ревью по writer движений, фильтрации WB-наблюдений, дедупликации ручного обмера и frontend-файлам относятся к другим атомам и в этом атоме не менялись.
+- Настройка тарифа буквально не реализована: в опубликованном API этой рабочей копии нет
+  маршрута записи `BillingTariffVersion`. По обязательной границе `ARCH-CROSS.md` тарифом
+  владеет финансовое ядро карточки 09; экран не создаёт второй контур и не изображает
+  успешное сохранение локальным состоянием.
+- Полный Playwright-прогон нельзя подтвердить в этой песочнице из-за запрета локального
+  bind. Компиляция тестового файла подтверждена, но его 17 сценариев должны быть повторно
+  запущены в CI или окружении, где разрешены локальные web-server порты.
+- `S-11-TC-016`, `S-11-TC-018` и `S-11-TC-019` проверяют соответственно приоритет
+  применённого события габаритов, целостность восстановленного остатка и идемпотентность
+  финансовой фиксации. Это backend-конкурентные сценарии, которые нельзя доказать
+  мокированным экранным Playwright без ложноположительного результата; в атоме
+  `screen-dev` они не добавлялись.
+- Сохранить изменения коммитом не удалось: Git не может создать
+  `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-08-storage1/index.lock` из-за
+  ограничений файловой песочницы (`Operation not permitted`). Изменения остаются только в
+  постоянной рабочей копии и ещё не восстановимы по новому commit SHA.
 
 ## Находки
 
-- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались и не использовались.
-- Штатные CI-скрипты `scripts/ci/check_migrations.py` и `scripts/ci/back_guard.py` отсутствуют в текущем checkout; для добавленной миграции выполнены доступные локальные проверки Alembic.
-
-## Блокеры
-
-- Реализация и целевые проверки завершены локально, но результат не сохранён Git-коммитом: sandbox разрешает запись в рабочую копию, но запрещает запись в служебный каталог зарегистрированного worktree. До коммита атом нельзя считать опубликованным или восстановимым по SHA.
+Секреты, ключи, токены, `.env`, персональные данные и кабинеты учётных данных не
+открывались и не использовались.
