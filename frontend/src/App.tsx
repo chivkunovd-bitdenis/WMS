@@ -3085,7 +3085,7 @@ export default function App() {
             path="ff/billing"
             element={
               token && isFulfillmentAdmin ? (
-                <FfBillingScreen sellers={sellers.map((seller) => ({ id: seller.id, name: seller.name }))} />
+                <FfBillingScreen token={token} sellers={sellers.map((seller) => ({ id: seller.id, name: seller.name }))} />
               ) : (
                 ffAccessDenied
               )

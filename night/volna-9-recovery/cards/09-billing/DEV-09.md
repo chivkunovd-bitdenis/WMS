@@ -1,17 +1,17 @@
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/layouts/AuthedAppLayout.tsx` — добавлен пункт «Расчёты» только для администратора ФФ.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/App.tsx` — добавлен защищённый маршрут `/app/ff/billing`.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfBillingScreen.tsx` — создан общий каркас экрана с вкладками «Начисления» и «Счета», общими фильтрами месяца и селлера.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/App.tsx — передан Bearer-токен в экран расчётов.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfBillingScreen.tsx — запросы начислений, счетов и отмены счета авторизованы; исправлена подпись пустого состояния.
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` — НЕ ПРОЙДЕН: локальный `tsc` отсутствует, `npx` попытался скачать пакет, но сеть недоступна (`ENOTFOUND registry.npmjs.org`).
-- `python3 scripts/ui/ui_guard.py` — НЕ ПРОЙДЕН: обнаружены пять новых относительно базовой линии нарушений в чужих/несвязанных файлах (`src/App.tsx`, `src/components/WbProductPickerDialog.tsx`, `src/screens/ff/FfSettingsScreen.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`). Базовая линия не изменялась.
-- `npm run test:unit` — НЕ ПРОЙДЕН: в `frontend` отсутствует команда `vitest` (`vitest: command not found`).
+- `npx tsc --noEmit -p tsconfig.app.json` — не завершён: в checkout отсутствует локальный `tsc`, а `npx` ожидал установку пакета и был остановлен без сетевой установки.
+- `python3 scripts/ui/ui_guard.py` — красный из-за пяти нарушений, не созданных этой правкой: `src/App.tsx`, `src/components/WbProductPickerDialog.tsx`, `src/screens/ff/FfSettingsScreen.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`.
+- `npm run test:unit` — не запущен: `vitest: command not found`.
+- `git diff --check` — зелёный.
 
 ## Не реализовано
 
-- Таблицы начислений и счетов, их API, детализация и печать не реализованы: текущий атомарный кусок FEATURES.md ограничен маршрутом, доступом и общим каркасом.
-- `screens.registry.json` не изменялся, поскольку он не входит в разрешённый список файлов карточки.
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не читались и не затрагивались.
+- Полный живой API-контракт `/billing/ledger` и `/billing/invoices` не расширялся: это backend-атомы, не входящие в разрешённые файлы этого экрана.
+- Остальные находки ревью относятся к backend, настройкам тарифов, seller-профилю или e2e-тестам других атомов и здесь не исправлялись.
+
