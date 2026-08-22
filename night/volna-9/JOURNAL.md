@@ -151,3 +151,55 @@
 05:18   08-storage · solution-architect: нет файла ARCH.md (код 1, попытка 2)
 05:18   09-billing · solution-architect: нет файла ARCH.md (код 1, попытка 2)
 05:43 03-no-distribution-mode: отложено — исключение Command '['docker', 'compose', '-p', 'wms-lane-3', '-f', '/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9/lane-3-03-no-distribution-mode/docker-compose.yml', '-f', '/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9/lane-3-03-no-distribution-mode/docker-compose.lane.yml', 'build']' timed out after 1500 seconds
+
+## Итог: сделано 0, отложено 9
+06:16 отчёт: НЕ СОЗДАН/НЕПОЛОН: нет файла OTCHET.md
+# Волна volna-9
+
+## Понимание
+10:12 карточки уже нарезаны (9), нарезку пропускаю
+10:12 нарезано карточек: 9
+
+### разбор
+10:12   01-wb-marking · analyst: уже сделано, пропускаю
+10:12   02-verdikt-screen · analyst: уже сделано, пропускаю
+10:12   04-warehouse-switch · analyst: уже сделано, пропускаю
+10:12   03-no-distribution-mode · analyst: уже сделано, пропускаю
+10:12   06-picking-list-order · analyst: уже сделано, пропускаю
+10:12   05-prod-slow · analyst: уже сделано, пропускаю
+10:12   07-reporting · analyst: уже сделано, пропускаю
+10:12   09-billing · analyst: уже сделано, пропускаю
+10:12   08-storage · analyst: уже сделано, пропускаю
+
+### сверка
+10:12   01-wb-marking · requirement-critic: уже сделано, пропускаю
+10:12   02-verdikt-screen · requirement-critic: уже сделано, пропускаю
+10:12   03-no-distribution-mode · requirement-critic: уже сделано, пропускаю
+10:12   04-warehouse-switch · requirement-critic: уже сделано, пропускаю
+10:12   05-prod-slow · requirement-critic: уже сделано, пропускаю
+10:12   06-picking-list-order · requirement-critic: уже сделано, пропускаю
+10:12   07-reporting · requirement-critic: уже сделано, пропускаю
+10:12   08-storage · requirement-critic: уже сделано, пропускаю
+10:12   09-billing · requirement-critic: уже сделано, пропускаю
+10:12 вопросов после анализа: 45 — см. /Users/deniscivkunov/Projects/WMS/.worktrees/pipeline-etalon/night/volna-9/VOPROSY.md
+
+### карта задевания
+10:16 карта: готова
+10:16 
+Понимание собрано, перехожу к исполнению без остановки.
+
+## Ночь · карточек 9 · полос 6
+
+### арх-решения по доменам (6)
+10:16   01-wb-marking · solution-architect: нет файла ARCH.md (код 1, попытка 1)
+10:16   04-warehouse-switch · solution-architect: нет файла ARCH.md (код 1, попытка 1)
+10:16   05-prod-slow · solution-architect: нет файла ARCH.md (код 1, попытка 1)
+10:16   08-storage · solution-architect: нет файла ARCH.md (код 1, попытка 1)
+10:16   07-reporting · solution-architect: нет файла ARCH.md (код 1, попытка 1)
+10:16   09-billing · solution-architect: нет файла ARCH.md (код 1, попытка 1)
+10:16   01-wb-marking · solution-architect: нет файла ARCH.md (код 1, попытка 2)
+10:16   05-prod-slow · solution-architect: нет файла ARCH.md (код 1, попытка 2)
+10:16   04-warehouse-switch · solution-architect: нет файла ARCH.md (код 1, попытка 2)
+10:16   07-reporting · solution-architect: нет файла ARCH.md (код 1, попытка 2)
+10:16   09-billing · solution-architect: нет файла ARCH.md (код 1, попытка 2)
+10:16   08-storage · solution-architect: нет файла ARCH.md (код 1, попытка 2)
