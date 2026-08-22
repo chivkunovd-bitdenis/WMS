@@ -374,7 +374,10 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
   )
 
   const visibleRows = useMemo(
-    () => rows.filter((row) => row.selectedWmsId === selectedOperationalWarehouseId),
+    () =>
+      rows.filter(
+        (row) => !row.isMapped || row.selectedWmsId === selectedOperationalWarehouseId,
+      ),
     [rows, selectedOperationalWarehouseId],
   )
 
