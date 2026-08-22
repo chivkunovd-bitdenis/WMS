@@ -1,18 +1,16 @@
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfBillingScreen.tsx` — очищает текущие начисления и счета перед новым запросом, чтобы ошибка не показывала старые данные как актуальные.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/tests-e2e/billing-ledger.spec.ts` — усиливает `S-31-TC-004`, `S-31-TC-005`, `S-31-TC-012` и добавляет проверку очистки устаревшей строки при ошибке обновления.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/night/volna-9-recovery/cards/09-billing/DEV.md` — этот отчёт.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfBillingScreen.tsx — добавлен вывод блокирующих причин выпуска счёта с единственным исправляющим действием; раскрытие детализации показывает исходные документы отдельными строками.
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/tests-e2e/billing-invoices.spec.ts — существующие сценарии S-31-TC-007 и S-31-TC-008 проверены; изменений тестового файла не потребовалось.
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` — не подтверждён: в checkout отсутствует локальный `tsc`, а `npx` не завершил выполнение в доступное время.
-- `python3 scripts/ui/ui_guard.py` — FAIL из-за пяти новых/зафиксированных нарушений в чужих файлах: `src/App.tsx`, `src/components/WbProductPickerDialog.tsx`, `src/screens/ff/FfSettingsScreen.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`. Нарушений в изменённом billing-экране нет; базовую линию не обновлял.
-- `npm run test:unit` — FAIL: `vitest: command not found`.
-- `git diff --check` — PASS.
+- `npx tsc --noEmit -p tsconfig.app.json` — зелёный.
+- `python3 scripts/ui/ui_guard.py` — красный из-за пяти уже существующих нарушений в несвязанных файлах: `src/App.tsx`, `src/components/WbProductPickerDialog.tsx`, `src/screens/ff/FfSettingsScreen.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`. Базовую линию не обновлял.
+- `npm run test:unit` — не запустился: в рабочей копии отсутствует команда `vitest` (`vitest: command not found`).
 
 ## Не реализовано
 
-- GET-ручки `/api/billing/ledger` и `/api/billing/invoices` отсутствуют в `backend/app/api/billing.py`. Добавление backend-файла запрещено границами этого экранного атома; E2E сохраняет маршрутные моки, чтобы проверять пользовательские сценарии экрана.
-- Остальные находки REVIEW.md относятся к backend, `FfSettingsScreen.tsx`, моделям и сервисам, которые не входят в разрешённые файлы этого атома.
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не читались и не затрагивались.
+- REVIEW находки по backend API, автоматическому выставлению, моделям и сервисам не менялись: контракт этого атома разрешает только экран `FfBillingScreen.tsx` и `billing-invoices.spec.ts`.
+- Кнопки исправления блокирующих причин оставлены без навигации, поскольку контракт не указывает маршруты для тарифов, селлера и хранения, а соседние экраны запрещены к изменению.
+- E2E-сценарии S-31-TC-007 и S-31-TC-008 не запускались отдельно: в рабочей копии отсутствуют зависимости frontend для unit-запуска, а обязательный `ui_guard.py` уже сообщает несвязанные нарушения.
