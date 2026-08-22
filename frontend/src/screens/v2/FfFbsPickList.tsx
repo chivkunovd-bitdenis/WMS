@@ -1,277 +1,103 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Alert, Stack, Typography } from '@mui/material'
 import {
-  Alert,
-  Box,
-  Button,
-  Checkbox,
-  Chip,
-  CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField,
-  Typography,
-} from '@mui/material'
-import {
-  generateFbsSupplyStickers,
-  getFbsPickingList,
-  type FbsPickingItem,
-} from './fbsApi'
+  CheckCell,
+  ChoiceFilter,
+  DataTable,
+  ErrorNotice,
+  FilterBar,
+  ModalFrame,
+  PrintAction,
+  QtyCell,
+  SecondaryAction,
+  TextCell,
+  type Column,
+} from '../../ui-kit'
+import { generateFbsSupplyStickers, getFbsPickingList, type FbsPickingItem } from './fbsApi'
 
-type Props = {
-  token: string
-  authHeaders: (t: string) => Record<string, string>
-  supplyId: string | null
-  open: boolean
-  onClose: () => void
-}
-
+type Props = { token: string; authHeaders: (t: string) => Record<string, string>; supplyId: string | null; open: boolean; onClose: () => void }
 type Mark = { collected: boolean; packed: boolean }
 type Marks = Record<string, Mark>
 type PickFilter = 'all' | 'not_collected' | 'not_packed'
+type NumberedItem = FbsPickingItem & { numberFrom: number; numberTo: number }
 
-// Отметки Собрал/Упаковал в v1 живут локально (localStorage) — серверного персиста пока нет.
-/** Ключ отметки — артикул вместе с размером: у одного артикула строк столько,
- *  сколько размеров, и отметка «Собрал» должна принадлежать своей строке. */
+export function buildNumberedItems(items: FbsPickingItem[]): NumberedItem[] {
+  let next = 1
+  return items.map((item) => { const numberFrom = next; next += item.quantity; return { ...item, numberFrom, numberTo: next - 1 } })
+}
+
 export function markKey(item: Pick<FbsPickingItem, 'article' | 'size'>): string {
   return item.size ? `${item.article}::${item.size}` : item.article
 }
 
 function loadMarks(supplyId: string): Marks {
-  try {
-    return JSON.parse(localStorage.getItem(`fbs-picklist-${supplyId}`) ?? '{}') as Marks
-  } catch {
-    return {}
-  }
+  try { return JSON.parse(localStorage.getItem(`fbs-picklist-${supplyId}`) ?? '{}') as Marks } catch { return {} }
 }
-function saveMarks(supplyId: string, marks: Marks): void {
-  localStorage.setItem(`fbs-picklist-${supplyId}`, JSON.stringify(marks))
-}
-
-function printImages(title: string, dataUrls: string[]): void {
-  const w = window.open('', '_blank')
-  if (!w) return
-  const imgs = dataUrls.map((s) => `<img src="${s}" style="display:block;margin:0 auto 8px" />`).join('')
-  w.document.write(`<title>${title}</title><body onload="window.print()">${imgs}</body>`)
-  w.document.close()
-}
+function saveMarks(supplyId: string, marks: Marks): void { localStorage.setItem(`fbs-picklist-${supplyId}`, JSON.stringify(marks)) }
 
 export function FfFbsPickList({ token, authHeaders, supplyId, open, onClose }: Props) {
   const [items, setItems] = useState<FbsPickingItem[]>([])
   const [marks, setMarks] = useState<Marks>({})
-  const [busy, setBusy] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [printing, setPrinting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<PickFilter>('all')
   const [search, setSearch] = useState('')
 
   const load = useCallback(async () => {
     if (!supplyId) return
-    setError(null)
-    setBusy(true)
-    try {
-      setItems(await getFbsPickingList(token, authHeaders, supplyId))
-      setMarks(loadMarks(supplyId))
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось загрузить лист подбора')
-      setItems([])
-    } finally {
-      setBusy(false)
-    }
+    setLoading(true); setError(null)
+    try { setItems(await getFbsPickingList(token, authHeaders, supplyId)); setMarks(loadMarks(supplyId)) }
+    catch (e) { setItems([]); setError(e instanceof Error ? e.message : 'Не удалось загрузить лист подбора. Попробуйте ещё раз') }
+    finally { setLoading(false) }
   }, [token, authHeaders, supplyId])
 
-  useEffect(() => {
-    if (open && supplyId) void load()
-  }, [open, supplyId, load])
+  useEffect(() => { if (open && supplyId) void load() }, [open, supplyId, load])
 
-  const setMark = useCallback(
-    (key: string, patch: Partial<Mark>) => {
-      if (!supplyId) return
-      setMarks((prev) => {
-        const cur = prev[key] ?? { collected: false, packed: false }
-        const next = { ...prev, [key]: { ...cur, ...patch } }
-        saveMarks(supplyId, next)
-        return next
-      })
-    },
-    [supplyId],
-  )
-
-  const collectedCount = useMemo(
-    () => items.filter((i) => marks[markKey(i)]?.collected).length,
-    [items, marks],
-  )
-  const packedCount = useMemo(
-    () => items.filter((i) => marks[markKey(i)]?.packed).length,
-    [items, marks],
-  )
-
+  const numbered = useMemo(() => buildNumberedItems(items), [items])
+  const setMark = useCallback((key: string, patch: Partial<Mark>) => {
+    if (!supplyId) return
+    setMarks((prev) => { const next = { ...prev, [key]: { ...(prev[key] ?? { collected: false, packed: false }), ...patch } }; saveMarks(supplyId, next); return next })
+  }, [supplyId])
   const visible = useMemo(() => {
     const needle = search.trim().toLowerCase()
-    return items.filter((i) => {
-      const m = marks[markKey(i)] ?? { collected: false, packed: false }
-      if (filter === 'not_collected' && m.collected) return false
-      if (filter === 'not_packed' && m.packed) return false
-      if (needle) {
-        return (
-          i.article.toLowerCase().includes(needle) ||
-          i.product_name.toLowerCase().includes(needle) ||
-          (i.size?.toLowerCase().includes(needle) ?? false)
-        )
-      }
-      return true
+    return numbered.filter((item) => {
+      const mark = marks[markKey(item)] ?? { collected: false, packed: false }
+      if (filter === 'not_collected' && mark.collected) return false
+      if (filter === 'not_packed' && mark.packed) return false
+      return !needle || item.article.toLowerCase().includes(needle) || item.product_name.toLowerCase().includes(needle) || (item.size?.toLowerCase().includes(needle) ?? false)
     })
-  }, [items, marks, filter, search])
+  }, [numbered, marks, filter, search])
+  const collected = items.filter((i) => marks[markKey(i)]?.collected).length
+  const packed = items.filter((i) => marks[markKey(i)]?.packed).length
+  const canPrint = !loading && !error && items.length > 0 && !printing
 
   const printStickers = useCallback(async () => {
-    if (!supplyId) return
-    setBusy(true)
-    setError(null)
+    if (!supplyId || !canPrint) return
+    setPrinting(true); setError(null)
     try {
       const stickers = await generateFbsSupplyStickers(token, authHeaders, supplyId)
-      const urls = stickers
-        .map((s) => s.sticker_file)
-        .filter((f): f is string => !!f)
-        .map((f) => (f.startsWith('data:') ? f : `data:image/png;base64,${f}`))
-      if (urls.length === 0) setError('Стикеры ещё не готовы — попробуйте позже.')
-      else printImages('Стикеры заказов FBS', urls)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось получить стикеры')
-    } finally {
-      setBusy(false)
-    }
-  }, [token, authHeaders, supplyId])
+      if (!stickers.some((sticker) => sticker.sticker_file)) { setError('Стикеры ещё не готовы — попробуйте позже.'); return }
+      const w = window.open('', '_blank'); if (!w) return
+      const urls = stickers.flatMap((s) => s.sticker_file ? [s.sticker_file.startsWith('data:') ? s.sticker_file : `data:image/png;base64,${s.sticker_file}`] : [])
+      w.document.write(`<title>Стикеры заказов FBS</title>${urls.map((url) => `<img src="${url}" style="display:block;margin:0 auto 8px" />`).join('')}`); w.document.close(); w.print()
+    } catch (e) { setError(e instanceof Error ? e.message : 'Не удалось получить стикеры') }
+    finally { setPrinting(false) }
+  }, [authHeaders, canPrint, supplyId, token])
 
-  const filters: { key: PickFilter; label: string }[] = [
-    { key: 'all', label: 'Все' },
-    { key: 'not_collected', label: 'Не собраны' },
-    { key: 'not_packed', label: 'Не упакованы' },
+  const columns: Column<NumberedItem>[] = [
+    { key: 'number', header: '№', width: 76, align: 'center', render: (i) => <Typography fontWeight={800}>{i.numberFrom === i.numberTo ? i.numberFrom : `${i.numberFrom}–${i.numberTo}`}</Typography> },
+    { key: 'product', header: 'Товар', render: (i) => <Stack><TextCell value={i.product_name} /><Typography variant="caption" color="text.secondary">{i.article}</Typography></Stack> },
+    { key: 'size', header: 'Размер', width: 92, align: 'center', render: (i) => i.size || '—' },
+    { key: 'quantity', header: 'Кол-во', width: 90, align: 'right', render: (i) => <QtyCell value={i.quantity} /> },
+    { key: 'collected', header: 'Собрал', width: 90, align: 'center', render: (i) => <CheckCell checked={Boolean(marks[markKey(i)]?.collected)} onChange={(checked) => setMark(markKey(i), { collected: checked })} ariaLabel={`Собрал ${i.product_name}`} testId="fbs-pick-collected" /> },
+    { key: 'packed', header: 'Упаковал', width: 90, align: 'center', render: (i) => <CheckCell checked={Boolean(marks[markKey(i)]?.packed)} onChange={(checked) => setMark(markKey(i), { packed: checked })} ariaLabel={`Упаковал ${i.product_name}`} testId="fbs-pick-packed" /> },
   ]
-
-  return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" data-testid="fbs-pick-list">
-      <DialogTitle>
-        Лист подбора
-        <Typography variant="body2" color="text.secondary">
-          Собрано {collectedCount}/{items.length} · Упаковано {packedCount}/{items.length}
-        </Typography>
-      </DialogTitle>
-      <DialogContent dividers>
-        {error ? (
-          <Alert severity="error" sx={{ mb: 2 }} data-testid="fbs-pick-error">
-            {error}
-          </Alert>
-        ) : null}
-
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 2, alignItems: 'center' }}>
-          <Stack direction="row" spacing={1} data-testid="fbs-pick-filters">
-            {filters.map((f) => (
-              <Chip
-                key={f.key}
-                label={f.label}
-                color={filter === f.key ? 'primary' : 'default'}
-                variant={filter === f.key ? 'filled' : 'outlined'}
-                onClick={() => setFilter(f.key)}
-                data-testid={`fbs-pick-filter-${f.key}`}
-              />
-            ))}
-          </Stack>
-          <TextField
-            size="small"
-            label="Поиск"
-            placeholder="Артикул или название"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            sx={{ minWidth: 240, flexGrow: 1 }}
-            slotProps={{ htmlInput: { 'data-testid': 'fbs-pick-search' } }}
-          />
-          {busy ? <CircularProgress size={18} data-testid="fbs-pick-loading" /> : null}
-        </Stack>
-
-        <TableContainer sx={{ maxHeight: '60vh' }}>
-          <Table stickyHeader size="small" data-testid="fbs-pick-table">
-            <TableHead>
-              <TableRow>
-                <TableCell>Товар</TableCell>
-                <TableCell width={92} align="center">
-                  Размер
-                </TableCell>
-                <TableCell width={90} align="right">
-                  Кол-во
-                </TableCell>
-                <TableCell width={90} align="center">
-                  Собрал
-                </TableCell>
-                <TableCell width={90} align="center">
-                  Упаковал
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {visible.map((i) => {
-                const key = markKey(i)
-                const m = marks[key] ?? { collected: false, packed: false }
-                return (
-                  <TableRow key={key} data-testid="fbs-pick-row" data-article={i.article} data-size={i.size ?? ''}>
-                    <TableCell>
-                      <Typography variant="body2">{i.product_name}</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {i.article}
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="center">
-                      <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }} data-testid="fbs-pick-size">
-                        {i.size || '—'}
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="right">{i.quantity}</TableCell>
-                    <TableCell align="center">
-                      <Checkbox
-                        checked={m.collected}
-                        onChange={(e) => setMark(key, { collected: e.target.checked })}
-                        data-testid="fbs-pick-collected"
-                      />
-                    </TableCell>
-                    <TableCell align="center">
-                      <Checkbox
-                        checked={m.packed}
-                        onChange={(e) => setMark(key, { packed: e.target.checked })}
-                        data-testid="fbs-pick-packed"
-                      />
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-              {!busy && visible.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5}>
-                    <Box sx={{ py: 3, textAlign: 'center' }} data-testid="fbs-pick-empty">
-                      <Typography variant="body2" color="text.secondary">
-                        Нет позиций по фильтру.
-                      </Typography>
-                    </Box>
-                  </TableCell>
-                </TableRow>
-              ) : null}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={() => void printStickers()} disabled={busy} data-testid="fbs-pick-print-stickers">
-          Печать стикеров
-        </Button>
-        <Button variant="contained" onClick={onClose}>
-          Закрыть
-        </Button>
-      </DialogActions>
-    </Dialog>
-  )
+  const empty = items.length === 0 ? { title: 'В поставке нет позиций для подбора', hint: 'Закройте лист и проверьте состав поставки' } : { title: 'Нет позиций по фильтру', hint: 'Сбросьте поиск или выберите «Все»' }
+  return <ModalFrame open={open} title="Лист подбора" purpose={loading ? undefined : `Собрано ${collected}/${items.length} · Упаковано ${packed}/${items.length}`} busy={printing} onClose={onClose} testId="fbs-pick-list" actions={<><SecondaryAction onClick={onClose} disabled={printing}>Закрыть</SecondaryAction><PrintAction what="стикеры заказов" placement="panel" onClick={() => void printStickers()} disabledReason={!canPrint ? (printing ? undefined : loading ? 'Лист подбора ещё загружается' : error ? 'Сначала загрузите лист подбора' : 'В поставке нет заказов для печати') : undefined} testId="fbs-pick-print-stickers" /></>}>
+    {error ? <ErrorNotice>{error}</ErrorNotice> : null}
+    <FilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Артикул или название" testId="fbs-pick-filters"><ChoiceFilter value={filter} options={[{ value: 'all', label: 'Все' }, { value: 'not_collected', label: 'Не собраны' }, { value: 'not_packed', label: 'Не упакованы' }]} onChange={setFilter} ariaLabel="Фильтр листа" testId="fbs-pick-filter-choice" /></FilterBar>
+    <DataTable columns={columns} rows={visible} getRowKey={(i) => markKey(i)} loading={loading} empty={empty} testId="fbs-pick-table" />
+    {!loading && visible.length === 0 && items.length > 0 ? <Alert severity="info" sx={{ mt: 1 }}>Фильтр скрывает строки, но печать охватывает всю поставку.</Alert> : null}
+  </ModalFrame>
 }

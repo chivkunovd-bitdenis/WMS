@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { markKey } from './FfFbsPickList'
+import { buildNumberedItems, markKey } from './FfFbsPickList'
 
 describe('Лист подбора: отметки «Собрал» и «Упаковал»', () => {
+  it('сохраняет сквозные диапазоны при скрытии строк представления', () => {
+    const rows = buildNumberedItems([
+      { article: 'A', sku_code: null, size: 'M', product_name: 'A', quantity: 3 },
+      { article: 'B', sku_code: null, size: null, product_name: 'B', quantity: 1 },
+      { article: 'C', sku_code: null, size: 'L', product_name: 'C', quantity: 2 },
+    ])
+    expect(rows.map(({ numberFrom, numberTo }) => [numberFrom, numberTo])).toEqual([[1, 3], [4, 4], [5, 6]])
+  })
   it('у одного артикула разные размеры — разные отметки', () => {
     // Артикул J308-6 приходит четырьмя строками: 38, 39, 40, 41. Раньше ключом был
     // только артикул, и галочка на 38-м вставала сразу на все четыре размера.
