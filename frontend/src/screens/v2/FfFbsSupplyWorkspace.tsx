@@ -63,6 +63,7 @@ import {
   fetchFbsPrintBatch,
   fetchFbsWorklist,
   fetchFbsWorkspace,
+  getFbsPickingList,
   lookupFbsOrderBySticker,
   printFbsOrderTape,
   removeFbsPackingBoxOrder,
@@ -901,51 +902,50 @@ export function FfFbsSupplyWorkspace({
     return total
   }
 
-  const openBulkOrderMarkingPrint = (orders: Array<FbsWorkspace['orders'][number]>, reprint = false) => {
-    if (!workspace || orders.length === 0) return
-    const firstOrder = orders[0]
-    const firstLine = firstOrder?.product.id ? packLineByProduct.get(firstOrder.product.id) : undefined
-    if (!firstOrder || !firstOrder.product.id) return
-    const anyHonestSign = orders.some(requiresOrderHonestSign)
-    const tapeOrders = orders.map((order) => ({
-      orderId: order.id,
-      wbOrderId: order.wb_order_id,
-      requiresHonestSign: requiresOrderHonestSign(order),
-      productLabel: productLabelFromOrder(order),
-    }))
-    openPrint(
-      {
-        token,
-        productId: firstOrder.product.id,
-        documentNumber: workspace.supply.name,
-        qtyNeedPack: anyHonestSign ? tapeOrders.filter((order) => order.requiresHonestSign).length : tapeOrders.length,
-        markingAvailable: markingAvailableForOrders(orders),
-        qtyMarkingPrinted: orders.filter(orderPrintDone).length,
-        requiresHonestSign: anyHonestSign,
-        skuCode: firstLine?.sku_code ?? firstOrder.product.seller_article ?? `WB-${firstOrder.wb_order_id}`,
-        productName: workspace.supply.name,
-        productLabel: productLabelFromOrder(firstOrder),
-        fbsTape: {
-          orders: tapeOrders,
-          includeOrderQr: true,
-          print: ({ layout, allowPartial, reprint: printReprint }) => {
-            const body: FbsOrderPrintTapeRequest = {
-              order_ids: orders.map((order) => order.id),
-              layout_json: layout,
-              allow_partial: allowPartial,
-              include_order_qr: true,
-              reprint: printReprint,
-            }
-            return printFbsOrderTape(token, authHeaders, workspace.supply.id, body)
+  const openBulkOrderMarkingPrint = async (reprint = false) => {
+    if (!workspace) return
+    setBusy(true)
+    setError(null)
+    try {
+      // ID берём только из серверного листа; workspace нужен лишь для превью.
+      const [pickingItems, freshWorkspace] = await Promise.all([getFbsPickingList(token, authHeaders, workspace.supply.id), fetchFbsWorkspace(token, authHeaders, workspace.supply.id)])
+      const canonicalOrderIds = pickingItems.flatMap((item) => item.order_ids)
+      const ordersById = new Map(freshWorkspace.orders.map((order) => [order.id, order]))
+      const orders = canonicalOrderIds.map((orderId) => ordersById.get(orderId)).filter((order): order is FbsWorkspace['orders'][number] => Boolean(order))
+      if (canonicalOrderIds.length === 0 || orders.length !== canonicalOrderIds.length) {
+        setError('Не удалось получить полный состав поставки для печати.'); return
+      }
+      const firstOrder = orders[0]
+      const firstLine = firstOrder?.product.id ? packLineByProduct.get(firstOrder.product.id) : undefined
+      if (!firstOrder || !firstOrder.product.id) return
+      const anyHonestSign = orders.some(requiresOrderHonestSign)
+      const tapeOrders = orders.map((order) => ({ orderId: order.id, wbOrderId: order.wb_order_id, requiresHonestSign: requiresOrderHonestSign(order), productLabel: productLabelFromOrder(order) }))
+      openPrint(
+        {
+          token,
+          productId: firstOrder.product.id,
+          documentNumber: workspace.supply.name,
+          qtyNeedPack: anyHonestSign ? tapeOrders.filter((order) => order.requiresHonestSign).length : tapeOrders.length,
+          markingAvailable: markingAvailableForOrders(orders), qtyMarkingPrinted: orders.filter(orderPrintDone).length, requiresHonestSign: anyHonestSign,
+          skuCode: firstLine?.sku_code ?? firstOrder.product.seller_article ?? `WB-${firstOrder.wb_order_id}`,
+          productName: workspace.supply.name,
+          productLabel: productLabelFromOrder(firstOrder),
+          fbsTape: {
+            orders: tapeOrders,
+            includeOrderQr: true,
+            print: async ({ layout, allowPartial, reprint: printReprint }) => {
+              const latestPickingItems = await getFbsPickingList(token, authHeaders, workspace.supply.id)
+              const body: FbsOrderPrintTapeRequest = { order_ids: latestPickingItems.flatMap((item) => item.order_ids), layout_json: layout, allow_partial: allowPartial, include_order_qr: true, reprint: printReprint }
+              return printFbsOrderTape(token, authHeaders, workspace.supply.id, body)
+            },
+            confirmQrApplied: async (asset) => { await confirmFbsPrintApplied(token, authHeaders, asset.id, createFbsIdempotencyKey()) },
           },
-          confirmQrApplied: async (asset) => {
-            await confirmFbsPrintApplied(token, authHeaders, asset.id, createFbsIdempotencyKey())
-          },
+          onPrinted: () => { void refreshPackagingTask() },
         },
-        onPrinted: () => { void refreshPackagingTask() },
-      },
-      { reprint },
-    )
+        { reprint },
+      )
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Не удалось получить полный состав поставки для печати.')
+    } finally { setBusy(false) }
   }
 
   /** Печать ЧЗ и ШК заказа через стандартный конструктор системы. */
@@ -1768,13 +1768,12 @@ export function FfFbsSupplyWorkspace({
                       <Stack direction="row" spacing={1}>
                         <Button
                           disabled={!packagingEditable || busy || packingOrders.length === 0}
-                          onClick={() => openBulkOrderMarkingPrint(
+                          onClick={() => void openBulkOrderMarkingPrint(
                             // L8 (21.08.2026): в ленту идут ВСЕ заказы поставки, а не только
                             // ненапечатанные. Иначе после первой печати (или после зажёванной
                             // бумаги) лента выходила короче листа подбора, и оператор об этом
                             // не знал. Коды Честного знака от этого не жгутся: у заказа, где
                             // код уже выпущен, сервер переиспользует его, а не берёт новый.
-                            packingOrders,
                             unprintedPackingOrders.length === 0,
                           )}
                           data-task-id="FBS-21"

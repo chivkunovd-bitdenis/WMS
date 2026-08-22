@@ -1,15 +1,18 @@
 ## Изменённые файлы
 
 - /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/screens/v2/FbsPrintPreviewDialog.tsx
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/night/volna-9-recovery/cards/06-picking-list-order/DEV.md
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` — красный: в рабочей копии отсутствует локальный `tsc`, а сеть недоступна для загрузки пакета (`ENOTFOUND registry.npmjs.org`).
-- `python3 scripts/ui/ui_guard.py` — красный из-за существующих нарушений вне атома: `frontend/src/components/WbProductPickerDialog.tsx` и `frontend/src/screens/v2/SellerInboundDraftScreen.tsx`. Для затронутого `FfFbsSupplyWorkspace.tsx` нового нарушения после правки нет.
-- `npm run test:unit` — красный: отсутствует локальный `vitest` (`sh: vitest: command not found`).
+- `npx tsc --noEmit -p tsconfig.app.json` (из `frontend/`) — зелёный.
+- `python3 scripts/ui/ui_guard.py` (из корня) — зелёный.
+- `npm run test:unit` (из `frontend/`) — красный: в рабочей копии нет локального `vitest` (`sh: vitest: command not found`).
+- `git diff --check` — зелёный.
 
 ## Не реализовано
 
-- Полный Playwright-сценарий из контракта не запускался: frontend-зависимости в этой рабочей копии не установлены.
-- Физическая серверная выдача полных ID и полей порядка не изменялась: атом ограничен тремя frontend-файлами, указанными в контракте.
+- Находки 1 и 2 относятся к `/frontend/src/screens/v2/FfFbsPickList.tsx`, который не входит в атом 5; они требуют отдельной доработки печатного окна и состава ленты с Честным знаком.
+- Находка 3 относится к серверной проверке полного состава в `/backend/app/services/fbs_order_tape_print_service.py`; этот backend-слой не входит в атом 5.
+- Находка 4 уже устранена серверным атомом 4: endpoint `print-assets` возвращает `wb_order_id` и `order_number`, которые существующий `FbsPrintPreviewDialog.tsx` показывает и использует для служебной этикетки. В этом атоме новых правок для него не потребовалось.
+- Находка 5 требует Playwright-сценариев и относится к следующему атому 6; автоматический unit-gate сейчас не запускается из-за отсутствующего `vitest`.
