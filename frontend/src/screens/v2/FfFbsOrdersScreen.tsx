@@ -387,7 +387,10 @@ function supplyStatusLabel(status: string): string {
     // документа. В списке поставок черновик должен называться черновиком.
     draft: 'Черновик',
     assembling: 'В работе',
-    packed: 'Готова к сдаче',
+    // A packed supply does not carry the aggregated WB verdict in this
+    // worklist payload. Keep the lifecycle label neutral until the order-level
+    // verdict is available in the workspace; never promise delivery here.
+    packed: 'Упакована',
     in_delivery: 'В доставке',
     done: 'Завершена',
   }

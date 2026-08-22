@@ -224,6 +224,26 @@ test('fbs orders: shows the server WB verdict and safe operator reason', async (
   await expect(page.getByTestId('fbs-order-3')).not.toContainText('invalid_code')
 })
 
+// S-03-TC-006 — a packed supply without order-level verdict data must not claim readiness.
+test('fbs supplies: packed status does not promise delivery', async ({ page }) => {
+  await registerFf(page, 'packed-supply-status')
+
+  await page.route('**/operations/fbs-supplies/worklist**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(supplyWorklist([supplyRow('sup-packed', { status: 'packed' })])),
+    })
+  })
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await page.getByRole('tab', { name: 'В работе' }).click()
+  const status = page.getByTestId('fbs-18-supply-status')
+  await expect(status).toHaveText('Упакована')
+  await expect(status).not.toHaveText('Готова к сдаче')
+})
+
 // HOTFIX 20.08.2026: оператор видит полный список и может отметить любые отдельные
 // заказы; memo-строки не заставляют React заново строить остальные 499 строк.
 test('fbs orders: 500 new orders allow selecting any two orders', async ({ page }) => {
