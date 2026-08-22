@@ -42,6 +42,7 @@ test('admin creates seller user; seller sees filtered catalog and inbound', asyn
   const skuA2 = `SKU-SELL-A2-${Date.now()}`;
   const skuB = `SKU-SELL-B-${Date.now()}`;
   const whCode = `wh-sell-${Date.now()}`;
+  const whSouthCode = `wh-sell-south-${Date.now()}`;
 
   await page.goto('/');
   await openFulfillmentRegistration(page);
@@ -67,6 +68,12 @@ test('admin creates seller user; seller sees filtered catalog and inbound', asyn
   const wh = await page.request.post('/api/warehouses', { headers: h, data: { name: 'WH', code: whCode } });
   expect(wh.ok()).toBeTruthy();
   const wid = String(((await wh.json()) as { id: string }).id);
+  const whSouth = await page.request.post('/api/warehouses', {
+    headers: h,
+    data: { name: 'Юг', code: whSouthCode },
+  });
+  expect(whSouth.ok()).toBeTruthy();
+  const southWarehouseId = String(((await whSouth.json()) as { id: string }).id);
   const loc = await page.request.post(`/api/warehouses/${wid}/locations`, { headers: h, data: { code: 'L1' } });
   expect(loc.ok()).toBeTruthy();
 
@@ -139,7 +146,18 @@ test('admin creates seller user; seller sees filtered catalog and inbound', asyn
   await expect(page.getByTestId('seller-documents-table')).toBeVisible();
   await page.getByTestId('seller-create-inbound').click();
   await page.waitForURL('**/seller/inbound/new**');
-  await waitForPostOk(page, baseIn, (u) => !u.includes('/lines') && !u.includes('/submit'));
+  await expect(page.getByTestId('seller-inbound-new-warehouse-select')).toBeVisible();
+  await page.getByTestId('seller-inbound-new-warehouse-select').click();
+  const warehouseOptions = page.getByRole('listbox');
+  await expect(warehouseOptions).toContainText('WH');
+  await expect(warehouseOptions).toContainText('Юг');
+  await expect(warehouseOptions).not.toContainText(whCode);
+  await expect(warehouseOptions).not.toContainText(whSouthCode);
+  const [draftResponse] = await Promise.all([
+    waitForPostOk(page, baseIn, (u) => !u.includes('/lines') && !u.includes('/submit')),
+    page.getByRole('option', { name: 'Юг' }).click(),
+  ]);
+  expect(String(((await draftResponse.json()) as { warehouse_id: string }).warehouse_id)).toBe(southWarehouseId);
   await expect(page.getByTestId('seller-inbound-draft-form')).toBeVisible();
   await page.getByTestId('seller-inbound-add-products').click();
   await expect(page.getByTestId('seller-inbound-picker')).toBeVisible();
@@ -156,6 +174,7 @@ test('admin creates seller user; seller sees filtered catalog and inbound', asyn
     page.getByTestId('seller-inbound-submit-warehouse').click(),
   ]);
   await expect(page.getByTestId('seller-documents-row')).toHaveCount(1);
+  await expect(page.getByTestId('warehouse-context-switch')).toHaveCount(0);
 });
 
 // TC-NEW-SELLER-SCOPE-001 — shop manager sees only products of the active allowed seller.

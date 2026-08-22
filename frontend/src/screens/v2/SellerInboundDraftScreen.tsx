@@ -191,6 +191,13 @@ export function shouldShowSellerWarehouseSelector(
   return warehouseCount > 1 && status === 'draft'
 }
 
+export function sellerWarehouseWasSaved(
+  detail: Pick<InboundDetail, 'warehouse_id'>,
+  warehouseId: string,
+): boolean {
+  return detail.warehouse_id === warehouseId
+}
+
 export function sellerInboundPendingText(routeRequestId: string | null): string {
   return routeRequestId ? 'Загружаем карточку приёмки…' : 'Создаём черновик…'
 }
@@ -504,9 +511,9 @@ export function SellerInboundDraftScreen({
     }
   }
 
-  const patchDraftField = async (body: Record<string, unknown>): Promise<boolean> => {
+  const patchDraftField = async (body: Record<string, unknown>): Promise<InboundDetail | null> => {
     if (!requestId) {
-      return false
+      return null
     }
     setBusy(true)
     setLocalError(null)
@@ -522,13 +529,14 @@ export function SellerInboundDraftScreen({
       })
       if (!res.ok) {
         setLocalError(await readApiErrorMessage(res))
-        return false
+        return null
       }
-      setDetail((await res.json()) as InboundDetail)
-      return true
+      const updated = (await res.json()) as InboundDetail
+      setDetail(updated)
+      return updated
     } catch (e) {
       setLocalError(e instanceof Error ? e.message : 'Не удалось сохранить заявку.')
-      return false
+      return null
     } finally {
       setBusy(false)
     }
@@ -560,15 +568,15 @@ export function SellerInboundDraftScreen({
 
   const saveDraftFields = async (): Promise<boolean> => {
     const plannedBoxCount = parsedPlannedBoxCount()
-    const ok = await patchDraftField({
+    const updated = await patchDraftField({
       planned_delivery_date: plannedDateDraft || null,
       planned_box_count: plannedBoxCount,
     })
-    if (ok) {
+    if (updated) {
       setLocalNotice('Заявка сохранена.')
       await onRefreshInboundList()
     }
-    return ok
+    return updated !== null
   }
 
   const saveWarehouse = async (nextWarehouseId: string): Promise<void> => {
@@ -577,10 +585,14 @@ export function SellerInboundDraftScreen({
     if (!detail || detail.status !== 'draft' || nextWarehouseId === detail.warehouse_id) {
       return
     }
-    const ok = await patchDraftField({ warehouse_id: nextWarehouseId })
-    if (!ok && previousWarehouseId) {
+    const updated = await patchDraftField({ warehouse_id: nextWarehouseId })
+    if (!updated || !sellerWarehouseWasSaved(updated, nextWarehouseId)) {
       setSelectedWarehouseId(previousWarehouseId)
+      setLocalError('Не удалось сменить склад заявки. Обновите страницу и попробуйте ещё раз.')
+      return
     }
+    setLocalNotice('Склад заявки сохранён.')
+    await onRefreshInboundList()
   }
 
   const patchLineQty = async (lineId: string, expectedQty: number) => {

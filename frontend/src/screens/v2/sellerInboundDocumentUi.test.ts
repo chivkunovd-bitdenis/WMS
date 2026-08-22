@@ -4,6 +4,7 @@ import { sellerDocumentStatusRu } from './SellerDocumentsScreen'
 import {
   sellerInboundStatusRu,
   sellerInboundPendingText,
+  sellerWarehouseWasSaved,
   shouldShowSellerInboundLoadError,
   shouldShowSellerInboundNoWarehouse,
   shouldShowSellerWarehouseSelector,
@@ -66,5 +67,10 @@ describe('seller inbound document UI helpers', () => {
 
   it('locks the seller inbound card after it is transferred', () => {
     expect(shouldShowSellerWarehouseSelector(2, 'submitted')).toBe(false)
+  })
+
+  it('confirms a draft warehouse change only from the returned document', () => {
+    expect(sellerWarehouseWasSaved({ warehouse_id: 'south' }, 'south')).toBe(true)
+    expect(sellerWarehouseWasSaved({ warehouse_id: 'north' }, 'south')).toBe(false)
   })
 })
