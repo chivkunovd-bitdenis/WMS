@@ -32,6 +32,74 @@ const productReportFixture = (name = 'Report product') => ({
   }],
 })
 
+// S-33-TC-008 — a late page response cannot overwrite a freshly filtered
+// slice, and a table failure is not presented as a valid empty report.
+test('FF report keeps one table slice and distinguishes a table error from empty data', async ({ page }) => {
+  await seedFfSellerInbound(page, `ff-report-table-state-${Date.now()}`)
+
+  let releaseOldPage: (() => void) | undefined
+  let markOldPageStarted: (() => void) | undefined
+  let markOldPageHandled: (() => void) | undefined
+  const oldPageRelease = new Promise<void>((resolve) => { releaseOldPage = resolve })
+  const oldPageStarted = new Promise<void>((resolve) => { markOldPageStarted = resolve })
+  const oldPageHandled = new Promise<void>((resolve) => { markOldPageHandled = resolve })
+
+  await page.route('**/api/reports/overview?**', async (route) => {
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify(overviewFixture()) })
+  })
+  await page.route('**/api/reports/inventory?**', async (route) => {
+    const url = new URL(route.request().url())
+    const search = url.searchParams.get('search') ?? ''
+    if (url.searchParams.get('page') === '2') {
+      markOldPageStarted?.()
+      await oldPageRelease
+      try {
+        await route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+          ...productReportFixture('Stale page result'), page: 2,
+        }) })
+      } catch {
+        // The screen is expected to abort this request when the filter changes.
+      } finally {
+        markOldPageHandled?.()
+      }
+      return
+    }
+    if (search === 'table-error') {
+      await route.fulfill({ status: 503, body: 'table unavailable' })
+      return
+    }
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+      ...productReportFixture(search === 'fresh-slice' ? 'Fresh filtered result' : undefined),
+      total: 51,
+    }) })
+  })
+
+  await page.getByTestId('nav-ff-reports').click()
+  await expect(page.getByTestId('ff-reports-table')).toContainText('Report product')
+  await expect(page.getByRole('columnheader', { name: 'Остаток сейчас' })).toHaveAttribute('width', '130')
+  await expect(page.getByRole('columnheader', { name: 'Приход' })).toHaveAttribute('width', '110')
+  await expect(page.getByRole('columnheader', { name: 'Расход' })).toHaveAttribute('width', '110')
+  await expect(page.getByRole('columnheader', { name: 'Нетто' })).toHaveAttribute('width', '100')
+
+  await page.getByTestId('ff-reports-next-page').click()
+  await oldPageStarted
+  await page.getByTestId('filter-search').fill('fresh-slice')
+  await expect(page.getByTestId('ff-reports-table')).toContainText('Fresh filtered result')
+  releaseOldPage?.()
+  await oldPageHandled
+  await page.waitForTimeout(100)
+  await expect(page.getByTestId('ff-reports-table')).toContainText('Fresh filtered result')
+  await expect(page.getByTestId('ff-reports-table')).not.toContainText('Stale page result')
+
+  await page.getByTestId('filter-search').fill('table-error')
+  await expect(page.getByTestId('ff-reports-table-error')).toBeVisible()
+  await expect(page.getByTestId('ff-reports-table')).toHaveCount(0)
+  await expect(page.getByText('За выбранный период движений нет')).toHaveCount(0)
+  await expect(page.getByTestId('ff-reports-download-csv')).toBeDisabled()
+  await page.getByTestId('ff-reports-download-csv').hover()
+  await expect(page.getByText('Строки отчёта не загружены')).toBeVisible()
+})
+
 // S-33-TC-003 / S-33-TC-014 — a technical FBS warehouse must not turn a
 // single physical warehouse into a visible report scope selector.
 test('FF reports exclude service warehouses from the warehouse filter', async ({ page }) => {

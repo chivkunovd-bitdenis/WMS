@@ -167,6 +167,8 @@ export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
     if (periodError) return
     overviewRetryAbortRef.current?.abort()
     abortRef.current?.abort()
+    tableAbortRef.current?.abort()
+    tableAbortRef.current = null
     const controller = new AbortController()
     abortRef.current = controller
     setLoading(true); setSummaryLoading(false); setSummaryError(false); setTableError(false)
@@ -205,6 +207,7 @@ export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
     return () => {
       abortRef.current?.abort()
       overviewRetryAbortRef.current?.abort()
+      tableAbortRef.current?.abort()
     }
   }, [load])
 
@@ -256,6 +259,10 @@ export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
     { key: 'comparison', label: 'Расход к прошлому периоду', value: overview?.comparison.change_percent == null ? null : overview.comparison.change, delta: overview?.comparison.change_percent == null ? undefined : { value: overview.comparison.change_percent, unit: 'percent' as const, direction: overview.comparison.change_percent >= 0 ? 'up' as const : 'down' as const, a11yLabel: 'Процент изменения расхода' }, nullValueLabel: 'В прошлом периоде расхода не было' },
   ]
   const hasIntegrityError = rows.some((row) => row.integrity_error)
+  const csvDisabledReason = periodError
+    || (csvLoading ? 'Файл формируется' : '')
+    || (tableError ? 'Строки отчёта не загружены' : '')
+    || (rows.length === 0 ? 'За выбранный период нечего выгружать' : undefined)
 
   return <Stack spacing={0} data-testid="ff-reports-page">
     <ScreenHeader title="Остатки и движения" purpose="Текущий остаток и складские движения за выбранный период." />
@@ -280,9 +287,9 @@ export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
       <TextField select size="small" label="Группировка" value={grouping} onChange={event => { const next = event.target.value as 'product' | 'operation'; groupingRef.current = next; setGrouping(next); void changeTable(next, 1) }} data-testid="ff-reports-grouping">
         <MenuItem value="product">По товарам</MenuItem><MenuItem value="operation">По операциям</MenuItem>
       </TextField>
-      <PrimaryAction onClick={() => void downloadCsv()} disabledReason={periodError || csvLoading ? (csvLoading ? 'Файл формируется' : periodError) : (rows.length === 0 ? 'За выбранный период нечего выгружать' : undefined)} data-testid="ff-reports-download-csv">{csvLoading ? 'Формирование CSV…' : 'Скачать CSV'}</PrimaryAction>
+      <PrimaryAction onClick={() => void downloadCsv()} disabledReason={csvDisabledReason} data-testid="ff-reports-download-csv">{csvLoading ? 'Формирование CSV…' : 'Скачать CSV'}</PrimaryAction>
     </Stack>
-    <DataTable<Row> columns={grouping === 'product' ? [
+    {tableError ? null : <><DataTable<Row> columns={grouping === 'product' ? [
       { key: 'product', header: 'Товар', width: 150, render: row => <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}><ProductCell sku={row.sku_code} photo={row.photo_url ? <img src={row.photo_url} alt="" width="32" height="32" /> : undefined} />{row.integrity_error ? <StatusChip label="Ошибка" tone="stop" testId="ff-reports-row-integrity-error" /> : null}</Stack> },
       { key: 'name', header: 'Название', width: 240, render: row => <TextCell value={row.product_name} /> },
       { key: 'vendor', header: 'Артикул продавца', width: 170, render: row => <TextCell value={row.wb_vendor_code ?? '—'} /> },
@@ -301,6 +308,6 @@ export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
     <Stack direction="row" sx={{ py: 2, justifyContent: 'space-between', alignItems: 'center' }} data-testid="ff-reports-pagination">
       <Typography variant="body2" color="text.secondary">{total === 0 ? '0 из 0' : `${(page - 1) * 50 + 1}–${Math.min(page * 50, total)} из ${total}`}</Typography>
       <Stack direction="row" spacing={1}><SecondaryAction data-testid="ff-reports-previous-page" disabledReason={page <= 1 ? 'Это первая страница' : undefined} onClick={() => void changeTable(grouping, page - 1)}>Назад</SecondaryAction><SecondaryAction data-testid="ff-reports-next-page" disabledReason={page * 50 >= total ? 'Это последняя страница' : undefined} onClick={() => void changeTable(grouping, page + 1)}>Вперёд</SecondaryAction></Stack>
-    </Stack>
+    </Stack></>}
   </Stack>
 }
