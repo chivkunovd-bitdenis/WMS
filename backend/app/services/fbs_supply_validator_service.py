@@ -71,6 +71,7 @@ class SupplyStockLine:
     shortage: int
     source_warehouse_id: uuid.UUID | None = None
     source_warehouse_name: str | None = None
+    source_available: int = 0
 
 
 @dataclass(frozen=True)
@@ -204,8 +205,22 @@ async def _stock_preflight(
         )
     current_id = selected_warehouse_id or (orders[0].warehouse_id if orders else None)
     def coverage(warehouse: Warehouse) -> int:
-        return sum(availability[warehouse.id].get(pid, 0) >= qty for pid, qty in required.items())
-    recommended = max(warehouses, key=lambda w: (coverage(w), w.id == current_id), default=None)
+        """Count units that can stay on one consolidation warehouse.
+
+        A SKU-only count incorrectly treats one covered unit and a fully covered
+        large order as equal.  The recommendation must minimise the actual
+        cross-warehouse pick quantity instead.
+        """
+        return sum(
+            min(availability[warehouse.id].get(pid, 0), qty)
+            for pid, qty in required.items()
+        )
+
+    recommended = max(
+        warehouses,
+        key=lambda warehouse: (coverage(warehouse), warehouse.id == current_id),
+        default=None,
+    )
     warning: list[SupplyStockLine] = []
     blocking: list[SupplyStockLine] = []
     for pid, qty in required.items():
@@ -222,7 +237,9 @@ async def _stock_preflight(
         )
         line = SupplyStockLine(
             pid, getattr(products.get(pid), "name", "Товар"), qty, current, total, shortage,
-            source.id if source else None, source.name if source else None,
+            source.id if source else None,
+            source.name if source else None,
+            availability[source.id].get(pid, 0) if source else 0,
         )
         if shortage:
             blocking.append(line)
@@ -399,7 +416,11 @@ def preflight_to_dict(
                 "required": line.required, "current": line.current, "total": line.total,
                 "shortage": line.shortage,
                 "source_warehouse": (
-                    {"id": str(line.source_warehouse_id), "name": line.source_warehouse_name}
+                    {
+                        "id": str(line.source_warehouse_id),
+                        "name": line.source_warehouse_name,
+                        "available": line.source_available,
+                    }
                     if line.source_warehouse_id else None
                 )}
     return {

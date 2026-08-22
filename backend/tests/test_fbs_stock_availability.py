@@ -17,12 +17,14 @@ from app.models.marketplace_unload import MarketplaceUnloadLine, MarketplaceUnlo
 from app.models.marketplace_unload_reservation import MarketplaceUnloadReservation
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
 from app.models.product import Product
+from app.models.warehouse import Warehouse
 from app.services import inventory_service, stock_direction_service
 from app.services.fbs_stock_availability_service import (
     clamp_nonneg,
     fbs_available_qty_by_product,
     fbs_available_qty_for_product,
 )
+from app.services.fbs_supply_validator_service import _stock_preflight
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import available_qty_for_fbs_reserve
 
@@ -48,6 +50,101 @@ def test_preflight_response_model_preserves_stock_details() -> None:
         "id": "warehouse-b",
         "name": "Юг",
     }
+
+
+# TC-NEW-FBS-STOCK-038 — operational warehouses form one FBS preflight pool.
+@pytest.mark.asyncio
+async def test_preflight_aggregates_operational_stock_and_exposes_source_capacity(
+    async_client: AsyncClient,
+) -> None:
+    """Stock split across operational warehouses warns but does not block.
+
+    A service warehouse intentionally has a large balance: it must not affect
+    either the total or the recommendation.
+    """
+    headers, seller_id, current_warehouse_id, product_id, _current_location_id = (
+        await _setup_tenant_product(async_client)
+    )
+
+    async def create_warehouse_with_location(name: str, code: str) -> tuple[uuid.UUID, uuid.UUID]:
+        warehouse = await async_client.post(
+            "/warehouses", headers=headers, json={"name": name, "code": code}
+        )
+        assert warehouse.status_code in (200, 201), warehouse.text
+        warehouse_id = uuid.UUID(warehouse.json()["id"])
+        location = await async_client.post(
+            f"/warehouses/{warehouse_id}/locations",
+            headers=headers,
+            json={"code": f"{code}-CELL"},
+        )
+        assert location.status_code in (200, 201), location.text
+        return warehouse_id, uuid.UUID(location.json()["id"])
+
+    suffix = str(time.time_ns())[-8:]
+    south_id, south_location_id = await create_warehouse_with_location("Юг", f"south-{suffix}")
+    _north_id, north_location_id = await create_warehouse_with_location(
+        "Север", f"north-{suffix}"
+    )
+    service_id, service_location_id = await create_warehouse_with_location(
+        "FBS WB service", f"service-{suffix}"
+    )
+
+    async with SessionLocal() as session:
+        product = await session.get(Product, product_id)
+        service = await session.get(Warehouse, service_id)
+        assert product is not None
+        assert service is not None
+        service.is_operational = False
+        order = FbsOrder(
+            tenant_id=product.tenant_id,
+            seller_id=seller_id,
+            warehouse_id=current_warehouse_id,
+            product_id=product_id,
+            wb_order_id=990_038,
+            created_at_wb=product.created_at,
+            deadline_at=product.created_at,
+            mapping_status="mapped",
+            reserve_status="reserved",
+        )
+        session.add(order)
+        await session.flush()
+        reservation = FbsOrderReservation(
+            tenant_id=product.tenant_id,
+            fbs_order_id=order.id,
+            product_id=product_id,
+            warehouse_id=current_warehouse_id,
+            quantity=10,
+        )
+        session.add(reservation)
+        await inventory_service.record_movement_and_adjust_balance(
+            session, tenant_id=product.tenant_id, product_id=product_id,
+            storage_location_id=south_location_id, quantity_delta=6,
+            movement_type="inbound_intake",
+        )
+        await inventory_service.record_movement_and_adjust_balance(
+            session, tenant_id=product.tenant_id, product_id=product_id,
+            storage_location_id=north_location_id, quantity_delta=4,
+            movement_type="inbound_intake",
+        )
+        await inventory_service.record_movement_and_adjust_balance(
+            session, tenant_id=product.tenant_id, product_id=product_id,
+            storage_location_id=service_location_id, quantity_delta=100,
+            movement_type="inbound_intake",
+        )
+        await session.flush()
+        order.product = product
+        order.reservation = reservation
+        preflight = await _stock_preflight(
+            session, product.tenant_id, [order], selected_warehouse_id=current_warehouse_id
+        )
+
+    assert preflight.compatible is True
+    assert preflight.recommended_warehouse_id == south_id
+    assert len(preflight.warning_lines) == 1
+    line = preflight.warning_lines[0]
+    assert (line.current, line.total, line.shortage) == (0, 10, 0)
+    assert (line.source_warehouse_id, line.source_available) == (south_id, 6)
+    assert preflight.blocking_lines == ()
 
 
 async def _setup_tenant_product(

@@ -1,45 +1,25 @@
-# DEV · 04-warehouse-switch · атом 2
+# Backend dev · 04-warehouse-switch · атом 2
 
 ## Изменённые файлы
 
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/api/fbs_supplies.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_supply_service.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_supply_validator_service.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/tests/test_fbs_stock_availability.py
-
-## Что реализовано
-
-- Привязка WB уже запрещает служебные склады; preflight считает только операционные склады tenant.
-- Выбранный склад теперь участвует в расчёте текущего остатка и агрегированных предупреждений/блокировок.
-- API-модель сохраняет `stock_preflight`, включая рекомендацию и строки дефицита.
-
-## Миграции
-
-Нет.
-
-## Тесты
-
-- Добавлен регрессионный тест `test_preflight_response_model_preserves_stock_details`.
-- Изменённые backend-файлы прошли targeted ruff; focused тест прошёл: 1 passed.
-- Целевой набор `test_fbs_stock_availability.py` + `test_fbs_supply_from_orders.py`: 25 passed, 1 skipped, 1 failed на календарном тесте с фиксированной датой `2026-08-15`, уже прошедшей в окружении.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_supply_validator_service.py` — рекомендация склада считает покрытые единицы, а предупреждение возвращает доступное количество на складе-источнике.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_supply_service.py` — выбранный склад участвует в обеих проверках перед созданием; без явного выбора поставка берёт рассчитанный операционный рекомендованный склад, а не legacy-склад заказа.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/tests/test_fbs_stock_availability.py` — регрессия для агрегирования остатков только по операционным складам и точного количества у источника подбора.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md` — отчёт backend-dev.
 
 ## Гейты
 
-- ruff: полный `ruff check .` не пройден из-за 80 предсуществующих ошибок вне этого diff; targeted ruff изменённых файлов — PASS.
-- mypy: не пройден из-за 4 предсуществующих ошибок в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py`, `fbs_warehouse_binding_service.py`; новых ошибок в изменённых строках не выявлено.
-- pytest: targeted набор — 25 passed, 1 skipped, 1 unrelated calendar failure; focused новый тест — PASS.
-- back_guard.py: файл отсутствует в этой рабочей копии, запуск невозможен.
-- check_migrations.py: файл отсутствует в этой рабочей копии, запуск невозможен.
+- `ruff check` по затронутому backend-набору: пройдено.
+- `mypy .`: не пройдено из-за 21 существующей ошибки вне атома; в частности, в неизменённом `fbs_warehouse_binding_service.py` уже есть два нарушения generic-типов.
+- `pytest tests/test_fbs_stock_availability.py -q`: пройдено.
+- `pytest`: пройдено, 822 теста собраны; процесс завершился с кодом 0.
+- `ruff check .`: не пройдено из-за 80 существующих нарушений вне затронутых файлов.
+- `back_guard.py`: не запущен — файл `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/scripts/ci/back_guard.py` отсутствует в рабочей копии.
+- `check_migrations.py`: не запущен по той же причине: файл отсутствует.
+- `git diff --check`: пройдено.
+- `git commit`: не выполнен — среда запретила создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-04-warehouse-switch/index.lock` (`Operation not permitted`). Изменения остаются незакоммиченными в этой рабочей копии.
 
 ## Не реализовано
 
-- UI-находки ревью (переключатель, S-03/S-14/S-25 и E2E) не входят в backend-атом 2.
-- Остаточные находки по picking idempotency, блокировкам supply и transfer-парам не входят в этот атом.
-
-## Находки
-
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не открывались и не изменялись.
-
-## Блокеры
-
-Нет блокеров для сохранения backend-правки; общие гейты требуют исправления предсуществующих ошибок и отсутствующих guard-скриптов.
+- Миграций нет: для атома 2 они не требуются.
+- Остальные находки `REVIEW.md` относятся к соседним атомам или frontend-слою и в этом проходе не менялись.

@@ -1,36 +1,25 @@
-# DEV · 04-warehouse-switch · атом 1
+# Backend dev · 04-warehouse-switch · атом 2
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/tests/test_warehouses.py` — добавлены регрессии resolver-а для legacy-коллизии штрихкодов и изоляции чужого tenant.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md` — этот отчёт.
-
-## Что реализовано
-
-- `GET /warehouses/resolve` — существующее разрешение сканов подтверждено тестом: коллизия склада и ячейки возвращает `409 barcode_ambiguous`, а штрихкод другого tenant возвращает `404 barcode_unknown`.
-- `catalog_service.resolve_warehouse_scan` — при исторической межсущностной коллизии не выбирает объект по приоритету; это покрыто прямой регрессией на сохранённых данных.
-
-## Миграции
-
-- Нет новых миграций: миграция `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/alembic/versions/20260822_0094_warehouse_operational_barcode.py` уже добавляет `is_operational` и `barcode`, а также помечает `fbs-wb-*` / `FBS WB *` служебными.
-
-## Тесты
-
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/tests/test_warehouses.py` — складской штрихкод → `warehouse`, штрихкод ячейки → `location`, legacy-коллизия → понятный `409`, чужой tenant → `404` без раскрытия данных.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_supply_validator_service.py` — рекомендация склада считает покрытые единицы, а предупреждение возвращает доступное количество на складе-источнике.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_supply_service.py` — выбранный склад участвует в обеих проверках перед созданием; без явного выбора поставка берёт рассчитанный операционный рекомендованный склад, а не legacy-склад заказа.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/tests/test_fbs_stock_availability.py` — регрессия для агрегирования остатков только по операционным складам и точного количества у источника подбора.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md` — отчёт backend-dev.
 
 ## Гейты
 
-- `ruff check .` — не пройден: 80 существующих нарушений вне изменённого файла; `ruff check tests/test_warehouses.py` пройден.
-- `mypy .` — не пройден: 21 существующая ошибка в шести других файлах; изменённый тест типовых ошибок не добавил.
-- `pytest` — остановлен после 118 passed на двух существующих регрессиях вне атома: `test_document_number_service.py::test_inbound_and_unload_api_assign_document_number` (`product seller not found`) и `test_fbs_manual_pick.py::test_manual_pick_rejects_wrong_cell_product_and_packed_order` (ожидается 404, получен 200). Целевой `pytest tests/test_warehouses.py` — пройден, 1 passed.
-- `python3 scripts/ci/back_guard.py` — не запущен: файла `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/scripts/ci/back_guard.py` нет в рабочей копии.
-- `python3 scripts/ci/check_migrations.py` — не запущен: файла `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/scripts/ci/check_migrations.py` нет в рабочей копии.
-- `git diff --check` — пройден.
+- `ruff check` по затронутому backend-набору: пройдено.
+- `mypy .`: не пройдено из-за 21 существующей ошибки вне атома; в частности, в неизменённом `fbs_warehouse_binding_service.py` уже есть два нарушения generic-типов.
+- `pytest tests/test_fbs_stock_availability.py -q`: пройдено.
+- `pytest`: пройдено, 822 теста собраны; процесс завершился с кодом 0.
+- `ruff check .`: не пройдено из-за 80 существующих нарушений вне затронутых файлов.
+- `back_guard.py`: не запущен — файл `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/scripts/ci/back_guard.py` отсутствует в рабочей копии.
+- `check_migrations.py`: не запущен по той же причине: файл отсутствует.
+- `git diff --check`: пройдено.
+- `git commit`: не выполнен — среда запретила создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-04-warehouse-switch/index.lock` (`Operation not permitted`). Изменения остаются незакоммиченными в этой рабочей копии.
 
 ## Не реализовано
 
-- Находка review №3 о переносе старых FBS-binding/заказов при маркировке legacy-складов относится к следующему атому 3 (`fbs_supply_service.py`) и не затронута: этот проход ограничен атомом 1 и его файлами.
-
-## Находки
-
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не открывались и не изменялись.
+- Миграций нет: для атома 2 они не требуются.
+- Остальные находки `REVIEW.md` относятся к соседним атомам или frontend-слою и в этом проходе не менялись.

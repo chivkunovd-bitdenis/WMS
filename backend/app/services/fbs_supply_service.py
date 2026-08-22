@@ -617,6 +617,7 @@ async def create_supply_from_orders(
             tenant_id,
             order_ids,
             planned_delivery_type=planned_delivery_type,
+            selected_warehouse_id=selected_warehouse_id,
         )
     except FbsSupplyValidationError as exc:
         raise FbsSupplyError(exc.code) from exc
@@ -649,6 +650,7 @@ async def create_supply_from_orders(
             order_ids,
             planned_delivery_type=planned_delivery_type,
             for_update=True,
+            selected_warehouse_id=selected_warehouse_id,
         )
         if not locked.compatible:
             raise FbsSupplyError(
@@ -692,14 +694,21 @@ async def create_supply_from_orders(
             orders,
         )
 
+        target_warehouse_id = (
+            selected_warehouse.id
+            if selected_warehouse is not None
+            else locked.stock.recommended_warehouse_id
+        )
+        if target_warehouse_id is None:
+            raise FbsSupplyError(
+                "warehouse_not_found",
+                message="Не найден рабочий склад для создания поставки.",
+            )
+
         supply = FbsSupply(
             tenant_id=tenant_id,
             seller_id=seller_id,
-            warehouse_id=(
-                selected_warehouse.id
-                if selected_warehouse is not None
-                else summary.wms_warehouse_id
-            ),
+            warehouse_id=target_warehouse_id,
             wb_supply_id=f"PENDING-{operation.id}",
             name=name,
             source=FBS_SUPPLY_SOURCE_WMS,
