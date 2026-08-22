@@ -675,8 +675,9 @@ test('fbs orders: filter new orders by warehouse', async ({ page }) => {
   expect(lastWbWarehouseId).toBe('501002')
 })
 
-// TC-NEW-FBS-SEARCH-001 / TC-NEW-FBS-SELECT-001 / TC-NEW-FBS-EXPORT-001 —
-// search highlights without filtering, selection survives search and Excel exports the chosen set.
+// TC-NEW-FBS-SEARCH-001 / TC-NEW-FBS-SELECT-001 / TC-NEW-FBS-EXPORT-001 / S-03-TC-016 —
+// search keeps rows uncoloured, selection survives search, fixed New-tab columns keep their widths,
+// and Excel exports the chosen set.
 test('fbs orders: search keeps list, selected drawer stays stable and Excel downloads', async ({ page }) => {
   await registerFf(page, 'search-select-export')
 
@@ -730,9 +731,20 @@ test('fbs orders: search keeps list, selected drawer stays stable and Excel down
   await page.getByLabel('Поиск: заказ, товар, категория, артикул, ШК, SKU, цвет, размер').fill('бомбер')
   await expect(page.getByTestId('fbs-order-1')).toBeVisible()
   await expect(page.getByTestId('fbs-order-2')).toBeVisible()
+  const newTable = page.getByTestId('fbs-worklist-table')
+  await expect(newTable).toHaveCSS('table-layout', 'fixed')
+  await expect(newTable).toHaveCSS('width', '713px')
+  await expect(page.getByRole('columnheader', { name: 'Товар', exact: true })).toHaveCSS('white-space', 'nowrap')
+  await expect(page.getByRole('columnheader', { name: 'Селлер', exact: true })).toHaveCSS('white-space', 'nowrap')
+  await expect(page.getByRole('columnheader', { name: 'Маршрут сдачи', exact: true })).toHaveCSS('white-space', 'nowrap')
+  await expect(page.getByRole('columnheader', { name: 'Отгрузить до', exact: true })).toHaveCSS('white-space', 'nowrap')
   await expect
     .poll(async () => page.getByTestId('fbs-order-1').evaluate((node) => getComputedStyle(node).backgroundColor))
-    .toBe('rgba(255, 214, 102, 0.24)')
+    .not.toBe('rgba(255, 214, 102, 0.24)')
+  await page.getByTestId('fbs-order-1').hover()
+  await expect
+    .poll(async () => page.getByTestId('fbs-order-1').evaluate((node) => getComputedStyle(node).backgroundColor))
+    .not.toBe('rgba(255, 214, 102, 0.24)')
   await expect(page.getByTestId('fbs-selection-bar')).toContainText('Выбрано заказов: 1')
 
   await page.getByTestId('fbs-selected-open').click()

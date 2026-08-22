@@ -129,3 +129,16 @@
 00:48   05-prod-slow · dev: фича 2/3 сохранена 7115067808ad
 00:54   05-prod-slow · screen-dev: готово
 00:54   05-prod-slow · dev: фича 3/3 сохранена fbd94bb99bdc
+01:01   05-prod-slow · reviewer: нет файла REVIEW.md (код 1, попытка 1)
+01:01   05-prod-slow · reviewer: нет файла REVIEW.md (код 1, попытка 2)
+01:01 05-prod-slow: отложено на шаге reviewer
+01:16   05-prod-slow · solution-architect: уже сделано, пропускаю
+01:16   05-prod-slow · product: уже сделано, пропускаю
+01:16   05-prod-slow · ux-architect: уже сделано, пропускаю
+01:17   05-prod-slow · tester: готово
+01:19   05-prod-slow · breaker: готово
+01:19   05-prod-slow · splitter: уже сделано, пропускаю
+01:19   05-prod-slow · dev: уже сделано по 3 атомарным фичам
+01:26   05-prod-slow · reviewer: готово
+01:26   05-prod-slow · reviewer: находки, круг 1 — назад к разработке
+01:28   05-prod-slow · screen-dev: готово

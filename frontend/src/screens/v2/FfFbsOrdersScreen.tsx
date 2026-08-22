@@ -1275,7 +1275,12 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
           transition: 'max-height 0.15s ease',
         }}
       >
-        <Table stickyHeader size="small" data-testid="fbs-worklist-table">
+        <Table
+          stickyHeader
+          size="small"
+          data-testid="fbs-worklist-table"
+          sx={statusGroup === 'new' ? { tableLayout: 'fixed', width: 713 } : undefined}
+        >
           <TableHead>
             <TableRow>
               <TableCell padding="checkbox">
