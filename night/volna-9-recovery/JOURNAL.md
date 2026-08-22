@@ -109,3 +109,4 @@
 22:45 05-prod-slow: отложено — reviewer, эскалация не помогла
 23:43   05-prod-slow · resume: поатомный rework Sol по сохранённым находкам
 23:48   05-prod-slow · backend-dev: готово
+23:48   05-prod-slow · dev: фича 4/7 сохранена fe123ec4ba12
