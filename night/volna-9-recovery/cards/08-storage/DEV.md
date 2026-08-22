@@ -1,26 +1,26 @@
-# DEV · 08-storage · атом 5
+# Backend-dev отчёт · 08-storage
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_storage_models.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/night/volna-9-recovery/cards/08-storage/DEV.md`
-
-Модели и миграция атома уже содержали таблицы `StorageMeasurement` и `StorageStatement`,
-уникальность месячного документа и внешние ключи диапазона на `InventoryMovement.id`.
-Добавлены проверки, которые закрепляют ссылку диапазона движения и отсутствие финансовых
-полей в документе хранения.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/storage_measurement_service.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/models/inventory_movement.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/models/warehouse.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/alembic/versions/20260822_0097_storage_movement_scope.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_storage_measurement_service.py`
 
 ## Гейты
 
-- `ruff check .` — FAIL: 80 ранее существующих ошибок вне изменённых файлов; targeted `ruff check` для моделей и `test_storage_models.py` — PASS.
-- `mypy .` — не запускался до конца из-за общего набора; `mypy app/models/storage_measurement.py app/models/storage_statement.py` — PASS.
-- `pytest` — targeted storage suite PASS: `7 passed`.
-- `back_guard.py` — BLOCKED: файл `scripts/ci/back_guard.py` отсутствует в этой рабочей копии.
-- `check_migrations.py` — BLOCKED: файл `scripts/ci/check_migrations.py` отсутствует в этой рабочей копии.
+- ruff: целевые файлы — PASS; полный `ruff check .` — FAIL на 80 существующих нарушениях вне этого атома.
+- mypy: целевые backend-файлы — PASS.
+- pytest: целевые тесты — PASS, 7 passed.
+- back_guard.py: не запущен — файл отсутствует в этой рабочей копии.
+- check_migrations.py: не запущен — файл отсутствует в этой рабочей копии.
 
 ## Не реализовано
 
-- Исправления сервисов расчёта/фиксации, биллинга, API, ролей и UI из находок 2–12 не входят в атом моделей и не выполнялись.
-- Проверка `Warehouse.is_operational` и заполнение `InventoryMovement.warehouse_id` принадлежат внешнему фундаменту 07-A; в этой ветке соответствующего поля ещё нет, поэтому атом не создаёт дублирующую миграцию 07-A.
-- Полная проверка миграции через guard невозможна: оба guard-скрипта отсутствуют в рабочей копии.
+- API и фоновый контракт атома не расширялись: исправлен только расчётный слой и его модельная опора.
+- Backfill старых движений в `warehouse_id` не выполнялся: это граница внешнего контракта 07-A; новая миграция добавляет поле nullable, не меняя исторические данные предположением.
 
+## Находки
+
+- В рабочей копии отсутствуют `scripts/ci/back_guard.py` и `scripts/ci/check_migrations.py`; это записано как ограничение проверки, не как причина остановки работы.

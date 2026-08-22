@@ -48,6 +48,14 @@ class InventoryMovement(Base):
         ForeignKey("storage_locations.id", ondelete="CASCADE"),
         index=True,
     )
+    # Frozen by the 07-A movement contract; never resolve historical storage
+    # through the mutable location relation.
+    warehouse_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("warehouses.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
     quantity_delta: Mapped[int] = mapped_column(Integer, nullable=False)
     movement_type: Mapped[str] = mapped_column(String(64), nullable=False)
     inbound_intake_line_id: Mapped[uuid.UUID | None] = mapped_column(

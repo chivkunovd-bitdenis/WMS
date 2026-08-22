@@ -13,9 +13,9 @@ from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
 from app.models.product_dimension_event import ProductDimensionEvent
 from app.models.seller import Seller
-from app.models.storage_location import StorageLocation
 from app.models.storage_measurement import StorageMeasurement
 from app.models.storage_statement import StorageStatement
+from app.models.warehouse import Warehouse
 
 
 class StorageMeasurementError(ValueError):
@@ -43,6 +43,38 @@ def _seconds(a: datetime, b: datetime) -> Decimal:
     return Decimal(str(max(0, (b - a).total_seconds()))) / Decimal(86400)
 
 
+def _stock_segments(
+    movements: list[InventoryMovement], start: datetime, end: datetime
+) -> list[tuple[datetime, datetime, int]]:
+    """Return held-stock intervals, preserving the movement history boundaries."""
+    quantity = 0
+    cursor = start
+    segments: list[tuple[datetime, datetime, int]] = []
+    for movement in movements:
+        at = (
+            movement.created_at.replace(tzinfo=MOSCOW)
+            if movement.created_at.tzinfo is None
+            else movement.created_at.astimezone(MOSCOW)
+        )
+        if at <= start:
+            quantity += movement.quantity_delta
+            continue
+        bounded = min(at, end)
+        if quantity < 0:
+            raise StorageMeasurementError("negative_reconstructed_stock")
+        if bounded > cursor:
+            segments.append((cursor, bounded, quantity))
+        cursor = bounded
+        quantity += movement.quantity_delta
+        if at >= end:
+            break
+    if quantity < 0:
+        raise StorageMeasurementError("negative_reconstructed_stock")
+    if cursor < end:
+        segments.append((cursor, end, quantity))
+    return segments
+
+
 async def rebuild_storage_measurements(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -62,21 +94,21 @@ async def rebuild_storage_measurements(
     period_start_at = datetime.combine(period_start, time.min, MOSCOW)
     period_end_exclusive = datetime.combine(period_end + timedelta(days=1), time.min, MOSCOW)
 
-    locations = select(StorageLocation).where(
-        StorageLocation.tenant_id == tenant_id,
-        StorageLocation.deleted_at.is_(None),
+    warehouses = select(Warehouse.id).where(
+        Warehouse.tenant_id == tenant_id, Warehouse.is_operational.is_(True)
     )
     if warehouse_id is not None:
-        locations = locations.where(StorageLocation.warehouse_id == warehouse_id)
-    location_rows = list((await session.scalars(locations)).all())
-    operational = {row.id: row.warehouse_id for row in location_rows}
+        warehouses = warehouses.where(Warehouse.id == warehouse_id)
+    operational_warehouse_ids = set((await session.scalars(warehouses)).all())
     movements = list(
         (
             await session.scalars(
                 select(InventoryMovement)
                 .where(
                     InventoryMovement.tenant_id == tenant_id,
-                    InventoryMovement.storage_location_id.in_(operational or {uuid.UUID(int=0)}),
+                    InventoryMovement.warehouse_id.in_(
+                        operational_warehouse_ids or {uuid.UUID(int=0)}
+                    ),
                 )
                 .order_by(InventoryMovement.created_at, InventoryMovement.id)
             )
@@ -99,17 +131,12 @@ async def rebuild_storage_measurements(
         p.id: p
         for p in (await session.scalars(select(Product).where(Product.id.in_(product_ids)))).all()
     }
-    events = {
-        e.product_id: e
-        for e in (
-            await session.scalars(
-                select(ProductDimensionEvent).where(
-                    ProductDimensionEvent.tenant_id == tenant_id,
-                    ProductDimensionEvent.applied.is_(True),
-                )
-            )
-        ).all()
-    }
+    events_by_product: dict[uuid.UUID, list[ProductDimensionEvent]] = {}
+    for event in (await session.scalars(select(ProductDimensionEvent).where(
+        ProductDimensionEvent.tenant_id == tenant_id,
+        ProductDimensionEvent.product_id.in_(product_ids or {uuid.UUID(int=0)}),
+    ).order_by(ProductDimensionEvent.observed_at, ProductDimensionEvent.id))).all():
+        events_by_product.setdefault(event.product_id, []).append(event)
 
     rows: list[StorageMeasurement] = []
     problems = 0
@@ -118,8 +145,7 @@ async def rebuild_storage_measurements(
         product = products.get(movement.product_id)
         if product is None or product.seller_id is None:
             continue
-        movement_warehouse_id = getattr(movement, "warehouse_id", None)
-        warehouse = movement_warehouse_id or operational.get(movement.storage_location_id)
+        warehouse = movement.warehouse_id
         if warehouse is not None:
             grouped.setdefault((product.seller_id, warehouse), []).append(movement)
     for (seller_id, wh_id), group in grouped.items():
@@ -130,6 +156,8 @@ async def rebuild_storage_measurements(
             quantity = 0
             cursor = period_start_at
             quantity_days = Decimal(0)
+            first_movement: InventoryMovement | None = None
+            last_movement: InventoryMovement | None = None
             for movement in product_moves:
                 at = movement.created_at
                 at = at.replace(tzinfo=MOSCOW) if at.tzinfo is None else at.astimezone(MOSCOW)
@@ -140,6 +168,8 @@ async def rebuild_storage_measurements(
                 if quantity < 0:
                     raise StorageMeasurementError("negative_reconstructed_stock")
                 quantity_days += Decimal(quantity) * _seconds(cursor, bounded)
+                first_movement = first_movement or movement
+                last_movement = movement
                 cursor = at
                 quantity += movement.quantity_delta
                 if at >= period_end_exclusive:
@@ -149,17 +179,25 @@ async def rebuild_storage_measurements(
                     raise StorageMeasurementError("negative_reconstructed_stock")
                 quantity_days += Decimal(quantity) * _seconds(cursor, period_end_exclusive)
             product = products[product_id]
-            event = events.get(product_id)
-            volume = (
-                event.volume_liters
-                if event
-                else (
+            effective_events = events_by_product.get(product_id, [])
+            volume_days = Decimal(0)
+            for start, end, held in _stock_segments(
+                product_moves, period_start_at, period_end_exclusive
+            ):
+                if held <= 0:
+                    continue
+                applicable = [e for e in effective_events if e.observed_at <= start]
+                applicable_event = applicable[-1] if applicable else None
+                volume = applicable_event.volume_liters if applicable_event else (
                     Decimal(str(product.volume_liters))
                     if product.volume_liters is not None
                     else None
                 )
-            )
-            if quantity_days > 0 and volume is None:
+                if volume is not None:
+                    volume_days += Decimal(held) * _seconds(start, end) * volume
+            dimension_event = effective_events[-1] if effective_events else None
+            missing_dimensions = quantity_days > 0 and volume_days == 0
+            if missing_dimensions:
                 problems += 1
             rows.append(
                 StorageMeasurement(
@@ -167,20 +205,20 @@ async def rebuild_storage_measurements(
                     seller_id=seller_id,
                     warehouse_id=wh_id,
                     product_id=product_id,
-                    dimension_event_id=event.id if event else None,
+                    dimension_event_id=dimension_event.id if dimension_event else None,
                     period_start=period_start,
                     period_end=period_end,
                     quantity_days=quantity_days,
-                    liter_days=quantity_days * volume if volume is not None else Decimal(0),
-                    status="missing_dimensions"
-                    if quantity_days > 0 and volume is None
-                    else "calculated",
+                    movement_start_id=first_movement.id if first_movement else None,
+                    movement_end_id=last_movement.id if last_movement else None,
+                    liter_days=volume_days,
+                    status="missing_dimensions" if missing_dimensions else "calculated",
                 )
             )
     seller_ids = {seller_id} if seller_id is not None else set(
         (await session.scalars(select(Seller.id).where(Seller.tenant_id == tenant_id))).all()
     )
-    warehouse_ids = set(operational.values())
+    warehouse_ids = operational_warehouse_ids
     scopes = {(r.seller_id, r.warehouse_id) for r in rows}
     scopes |= {(seller_id, wh_id) for seller_id in seller_ids for wh_id in warehouse_ids}
     for seller_id, wh_id in scopes:
