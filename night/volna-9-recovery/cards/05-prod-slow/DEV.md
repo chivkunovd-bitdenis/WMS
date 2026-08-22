@@ -1,20 +1,16 @@
-# Backend dev · 05-prod-slow · атом 2 · переделка по ревью
+# Backend dev · 05-prod-slow · атом 4 · rework по REVIEW.md
 
 ## Что реализовано
 
-- Эндпоинты: новых и изменённых эндпоинтов нет.
-- Сервис `seller_sync_flight`: single-flight остаётся раздельным по `(seller_id, sync_kind)`, поэтому повтор одного вида блокируется, а `new` и `reconcile` одного продавца могут выполняться одновременно без общего `wb_seller_lock` во время HTTP-чтения.
-- Сервисы `sync_new_orders_for_seller_job` и `reconcile_orders_for_seller_job`: сохранены независимые задания продавца для лёгкого импорта новых заказов и полной сверки.
-- Сервис `_debit_stock_pool_once`: строка `FbsBindingStockPool` читается с `FOR UPDATE`, поэтому параллельные `new` и `reconcile` последовательно списывают два разных заказа из одного пула и не теряют изменение количества.
-- Celery Beat и фоновые задания: `new` запускается раз в 180 секунд, `reconcile` — раз в 3600 секунд; задания распределяются по продавцам внутри своего интервала и направляются в отдельную очередь `wb_sync`.
+- `background_job_service.run_marking_label_tape_job` — для активной сборки ленты ЧЗ добавлен heartbeat раз в 60 секунд: он продлевает 15-минутный lease только при совпадении предыдущей отметки владельца, поэтому повторная доставка того же Celery-задания не запускает параллельную сборку и не создаёт второй `label_tape` asset.
+- `_refresh_marking_label_tape_lease` / `_maintain_marking_label_tape_lease` — heartbeat работает через отдельную короткую сессию БД; ошибка обновления или потеря lease переводит текущую сборку в безопасную ошибку `marking_label_tape_lease_lost` до публикации asset.
+- Существующий `POST /operations/marking-codes/label-artifact-tape` не менялся: по-прежнему отвечает `202`, возвращает `job_id` и переиспользует тот же активный job.
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/wb_marketplace_orders_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_wb_marketplace_orders_service.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/app/services/background_job_service.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend/tests/test_background_jobs.py`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/night/volna-9-recovery/cards/05-prod-slow/DEV.md`
-
-Первые два файла уже сохранены в текущем `HEAD` коммитом `ab19c4844831dd968e484a09d73a9334300a189b`; этот проход повторно проверил реализацию и восстановил обязательный артефакт, удалённый оркестратором перед запуском роли.
 
 ## Миграции
 
@@ -22,32 +18,33 @@
 
 ## Тесты
 
-- `test_wb_order_schedule_and_single_flight_are_per_kind` — подтверждает периоды 180/3600 секунд и отдельную очередь обоих контуров.
-- `test_wb_order_tasks_invoke_new_and_reconcile_independently` — вызывает оба фоновых задания отдельно.
-- `test_wb_order_flights_allow_new_and_reconcile_together` и `test_wb_order_flight_uses_distinct_postgres_keys_per_kind` — подтверждают single-flight по `(seller_id, sync_kind)`: одинаковый вид не дублируется, разные виды не блокируют друг друга.
-- `test_wb_order_jobs_do_not_take_seller_wide_lock_during_http_read` — подтверждает отсутствие общего `wb_seller_lock` во время сетевого чтения.
-- `test_new_and_reconcile_serialize_different_order_debits_on_one_pool` — регрессия на находку ревью №1: два разных заказа из параллельных контуров создают две строки `FbsStockPoolDebit` и уменьшают общий пул с 10 до 8; тест отдельно требует наличие `FOR UPDATE`.
-- Весь профильный файл повторно проверяет лёгкий `new`, полный курсорный `reconcile`, идемпотентность импорта и связанные регрессии WB-заказов.
+- `test_marking_label_tape_heartbeat_prevents_duplicate_worker_and_asset` — искусственно сокращает lease до 80 мс, держит первую сборку дольше lease, запускает повторный worker и подтверждает один вызов сборщика, статус `done` и ровно один asset.
+- Целевой набор атома повторно проверяет `202`, повторное использование pending/running/done job, один готовый asset, `failed` при ошибке, недоступность истёкшего asset и сохранность аудиторской строки.
+- Нагрузочные параметры 155 и 500 этикеток повторно проверены параллельно с `/health`.
 
 ## Гейты
 
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend && ruff check app/services/fbs_autopoll_service.py app/services/wb_marketplace_orders_service.py app/tasks/background_jobs.py app/celery_app.py tests/test_wb_marketplace_orders_service.py` — PASS, `All checks passed!`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend && mypy --follow-imports=skip app/services/fbs_autopoll_service.py app/services/wb_marketplace_orders_service.py app/tasks/background_jobs.py app/celery_app.py` — FAIL на 14 ранее существующих ошибках `no-any-return`: 12 в `wb_marketplace_orders_service.py` на строках 184, 186, 188, 190, 192, 193, 246, 318, 548, 1160, 1444, 1451 и 2 в `fbs_autopoll_service.py` на строках 55, 370; исправленная функция `_debit_stock_pool_once` и модули задач/расписания в диагностике отсутствуют.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend && pytest -q tests/test_wb_marketplace_orders_service.py` — PASS, `19 passed in 4.58s`.
-- `python3 scripts/ci/back_guard.py` не запускался: атом не добавляет и не меняет роуты.
-- `python3 scripts/ci/check_migrations.py` не запускался: атом не добавляет миграцию.
-- Полный `pytest`, `ruff check .` и `mypy .` не запускались: атомарная инструкция прямо запрещает общий backend-регресс на этом шаге.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend && ruff check app/services/background_job_service.py tests/test_background_jobs.py` — PASS, `All checks passed!`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend && mypy app/services/background_job_service.py` — FAIL только на 4 ранее существующих ошибках импортируемых соседних модулей: `wildberries_credentials_service.py:167`, `fbs_stock_sync_service.py:617`, `fbs_warehouse_binding_service.py:23,291`; в изменённом модуле ошибок нет.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend && mypy --follow-imports=skip app/services/background_job_service.py` — PASS, `Success: no issues found in 1 source file`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend && pytest -q tests/test_background_jobs.py::test_marking_label_tape_worker_does_not_reclaim_fresh_running_job tests/test_background_jobs.py::test_marking_label_tape_worker_reclaims_stale_running_job tests/test_background_jobs.py::test_marking_label_tape_heartbeat_prevents_duplicate_worker_and_asset` — PASS, `3 passed in 2.87s`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend && pytest -q tests/test_marking_codes.py tests/test_marking_pdf_label_artifact.py tests/test_background_jobs.py tests/test_fbs_print_assets.py` — PASS, `45 passed, 5 warnings in 27.24s`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow/backend && pytest -q -s tests/test_marking_pdf_label_artifact.py::test_label_tape_load_does_not_block_health` — PASS, `2 passed`; 155 этикеток: job `0.082 s`, max `/health` `0.023 s`; 500 этикеток: job `0.265 s`, max `/health` `0.000 s`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow && git diff --check` — PASS.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-05-prod-slow && git add backend/app/services/background_job_service.py backend/tests/test_background_jobs.py night/volna-9-recovery/cards/05-prod-slow/DEV.md && git commit -m "fix(marking): keep label tape lease alive"` — BLOCKED до изменения индекса: среда запретила создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-05-prod-slow/index.lock` (`Operation not permitted`).
+- `python3 scripts/ci/back_guard.py` не запускался: новый роут не добавлялся.
+- `python3 scripts/ci/check_migrations.py` не запускался: миграция не добавлялась.
 
 ## Не реализовано
 
-- Находки ревью №2–6 относятся к фоновой печати, frontend и документации, поэтому не входят в backend-слой этого атома и не изменялись.
-- Старые 14 ошибок `no-any-return` не исправлялись: они не относятся к конкурентному списанию, расписанию или single-flight этого атома.
-- В `CONTRACT.md` нет отдельного раздела «API и данные»; работа выполнена по явно заданному владельцем атому из `FEATURES.md` и относящейся к нему находке №1 из `REVIEW.md`, без расширения поведения.
-
-## Блокеры
-
-Нет функциональных блокеров в границах атома.
+- Находка ревью №1 относится к атомам WB-sync (`fbs_autopoll_service.py`, `wb_marketplace_orders_service.py`), находки №3–5 — к frontend, находка №6 — к документации блокеров. В рамках роли `backend-dev` и атома 4 эти файлы не менялись.
+- API-контракт, PDF-сборщик и инфраструктура очереди не переписывались: текущий rework адресно исправляет единственную относящуюся к этому слою находку №2.
+- Боевой production и живой кабинет Wildberries не затрагивались.
 
 ## Находки
 
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных, боевой прод `194.87.96.144` и живой кабинет Wildberries не читались и не затрагивались.
+- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались и не изменялись.
+
+## Блокеры
+
+- Код, тест и артефакт находятся в постоянной зарегистрированной рабочей копии, но отдельный commit SHA создать невозможно из-за запрета среды на запись в служебный Git-каталог worktree. Изменения локально реализованы и проверены, но не сохранены отдельным коммитом и не опубликованы.

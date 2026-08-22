@@ -35,6 +35,7 @@ JOB_TYPE_MARKING_LABEL_TAPE = "marking_label_tape"
 # idempotent request permanently stuck.  A repeated request republishes the
 # same job and can reclaim it only after this lease has elapsed.
 MARKING_LABEL_TAPE_RUNNING_LEASE = timedelta(minutes=15)
+MARKING_LABEL_TAPE_HEARTBEAT_INTERVAL_SECONDS = 60.0
 
 
 async def _reusable_job(
@@ -145,7 +146,7 @@ def should_enqueue_marking_label_tape_job(job: BackgroundJob) -> bool:
 async def _claim_marking_label_tape_job(
     session: AsyncSession,
     job_id: uuid.UUID,
-) -> bool:
+) -> datetime | None:
     now = datetime.now(UTC)
     stale_before = now - MARKING_LABEL_TAPE_RUNNING_LEASE
     claimed = await session.execute(
@@ -167,7 +168,63 @@ async def _claim_marking_label_tape_job(
         .execution_options(synchronize_session=False)
     )
     await session.commit()
-    return isinstance(claimed, CursorResult) and claimed.rowcount == 1
+    if not isinstance(claimed, CursorResult) or claimed.rowcount != 1:
+        return None
+    return now
+
+
+async def _refresh_marking_label_tape_lease(
+    job_id: uuid.UUID,
+    expected_started_at: datetime,
+) -> datetime | None:
+    """Extend a print lease only while this worker still owns its claim."""
+    refreshed_at = datetime.now(UTC)
+    async with SessionLocal() as heartbeat_session:
+        refreshed = await heartbeat_session.execute(
+            update(BackgroundJob)
+            .where(
+                BackgroundJob.id == job_id,
+                BackgroundJob.status == JOB_STATUS_RUNNING,
+                BackgroundJob.started_at == expected_started_at,
+            )
+            .values(started_at=refreshed_at)
+            .execution_options(synchronize_session=False)
+        )
+        await heartbeat_session.commit()
+    if not isinstance(refreshed, CursorResult) or refreshed.rowcount != 1:
+        return None
+    return refreshed_at
+
+
+async def _maintain_marking_label_tape_lease(
+    job_id: uuid.UUID,
+    claimed_at: datetime,
+    stop: asyncio.Event,
+    lease_lost: asyncio.Event,
+) -> None:
+    """Keep a long PDF build from looking abandoned to duplicate deliveries."""
+    current_heartbeat = claimed_at
+    while not stop.is_set():
+        try:
+            await asyncio.wait_for(
+                stop.wait(),
+                timeout=MARKING_LABEL_TAPE_HEARTBEAT_INTERVAL_SECONDS,
+            )
+        except TimeoutError:
+            try:
+                refreshed_at = await _refresh_marking_label_tape_lease(
+                    job_id,
+                    current_heartbeat,
+                )
+            except Exception:
+                logger.exception("marking label tape heartbeat failed: %s", job_id)
+                lease_lost.set()
+                return
+            if refreshed_at is None:
+                logger.error("marking label tape lease lost: %s", job_id)
+                lease_lost.set()
+                return
+            current_heartbeat = refreshed_at
 
 
 async def run_movements_digest_job(job_id: uuid.UUID) -> None:
@@ -472,9 +529,20 @@ async def run_marking_label_tape_job(job_id: uuid.UUID) -> None:
         job = await session.get(BackgroundJob, job_id)
         if job is None:
             return
-        if not await _claim_marking_label_tape_job(session, job_id):
+        claimed_at = await _claim_marking_label_tape_job(session, job_id)
+        if claimed_at is None:
             return
         await session.refresh(job)
+        heartbeat_stop = asyncio.Event()
+        lease_lost = asyncio.Event()
+        heartbeat_task = asyncio.create_task(
+            _maintain_marking_label_tape_lease(
+                job_id,
+                claimed_at,
+                heartbeat_stop,
+                lease_lost,
+            )
+        )
         try:
             payload = job.payload_json or {}
             ids = [uuid.UUID(str(value)) for value in payload.get("code_ids", [])]
@@ -485,6 +553,10 @@ async def run_marking_label_tape_job(job_id: uuid.UUID) -> None:
                 page_width_mm=payload.get("page_width_mm"),
                 page_height_mm=payload.get("page_height_mm"),
             )
+            heartbeat_stop.set()
+            await heartbeat_task
+            if lease_lost.is_set():
+                raise RuntimeError("marking_label_tape_lease_lost")
             code = await session.get(MarkingCode, ids[0])
             if code is None:
                 raise ValueError("seller_not_found")
@@ -508,6 +580,9 @@ async def run_marking_label_tape_job(job_id: uuid.UUID) -> None:
             job.status = JOB_STATUS_FAILED
             job.result_json = None
             job.error_message = str(exc)
+        finally:
+            heartbeat_stop.set()
+            await heartbeat_task
         job.finished_at = datetime.now(UTC)
         await session.commit()
 

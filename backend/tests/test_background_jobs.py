@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import func, select
 
 from app.db.session import SessionLocal
 from app.models.background_job import BackgroundJob
@@ -319,6 +320,87 @@ async def test_marking_label_tape_worker_reclaims_stale_running_job(
         await session.refresh(job)
         assert job.status == JOB_STATUS_FAILED
         assert job.error_message == "recovered_stale_job"
+
+
+@pytest.mark.asyncio
+async def test_marking_label_tape_heartbeat_prevents_duplicate_worker_and_asset(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.models.fbs_print_asset import FbsPrintAsset
+    from app.models.marking_code import MarkingCode
+    from app.models.seller import Seller
+
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post("/auth/register", json={
+        "organization_name": "Tape Heartbeat Co", "slug": f"tape-heartbeat-{suffix}",
+        "admin_email": f"tape-heartbeat-{suffix}@example.com", "password": "password123",
+    })
+    tenant_id = uuid.UUID(str(decode_access_token(reg.json()["access_token"])["tenant_id"]))
+    build_started = asyncio.Event()
+    finish_build = asyncio.Event()
+    build_calls = 0
+
+    async def slow_build(*args: object, **kwargs: object) -> bytes:
+        nonlocal build_calls
+        build_calls += 1
+        build_started.set()
+        await finish_build.wait()
+        return b"one-pdf"
+
+    monkeypatch.setattr(
+        "app.services.background_job_service.MARKING_LABEL_TAPE_RUNNING_LEASE",
+        timedelta(milliseconds=80),
+    )
+    monkeypatch.setattr(
+        "app.services.background_job_service.MARKING_LABEL_TAPE_HEARTBEAT_INTERVAL_SECONDS",
+        0.01,
+    )
+    monkeypatch.setattr(
+        "app.services.marking_code_service.build_label_artifact_tape_pdf",
+        slow_build,
+    )
+    monkeypatch.setattr(
+        "app.services.fbs_print_asset_storage.save_pdf",
+        lambda path, content: path,
+    )
+
+    async with SessionLocal() as session:
+        seller = Seller(tenant_id=tenant_id, name="Heartbeat seller")
+        session.add(seller)
+        await session.flush()
+        code = MarkingCode(
+            tenant_id=tenant_id,
+            seller_id=seller.id,
+            cis_code="010460000000000121HEARTBEAT",
+        )
+        session.add(code)
+        await session.flush()
+        job = await create_pending_job(
+            session,
+            tenant_id,
+            job_type=JOB_TYPE_MARKING_LABEL_TAPE,
+            idempotency_key="heartbeat-request",
+            payload_json={"code_ids": [str(code.id)]},
+        )
+        job_id = job.id
+
+    first_worker = asyncio.create_task(run_marking_label_tape_job(job_id))
+    await asyncio.wait_for(build_started.wait(), timeout=1)
+    await asyncio.sleep(0.12)
+    await run_marking_label_tape_job(job_id)
+    finish_build.set()
+    await first_worker
+
+    async with SessionLocal() as session:
+        completed = await session.get(BackgroundJob, job_id)
+        asset_count = await session.scalar(
+            select(func.count(FbsPrintAsset.id)).where(FbsPrintAsset.tenant_id == tenant_id)
+        )
+        assert completed is not None
+        assert completed.status == JOB_STATUS_DONE
+        assert build_calls == 1
+        assert asset_count == 1
 
 
 def test_marking_job_status_contract() -> None:
