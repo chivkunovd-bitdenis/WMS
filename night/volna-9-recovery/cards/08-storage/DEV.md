@@ -1,31 +1,21 @@
-# DEV · 08-storage · атом 7
-
 ## Изменённые файлы
 
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/storage_statement_service.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/api/storage.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/night/volna-9-recovery/cards/08-storage/DEV.md
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend/src/screens/ff/FfStoragePage.tsx`
 
-## Что реализовано
-
-- Фиксация повторно использует уже опубликованный ledger для измерений и не создаёт дубли.
-- Выбор тарифа детерминирован: индивидуальный тариф имеет приоритет над общим, затем берётся последняя версия, действующая на начало периода.
-- Нулевой statement публикует одну нулевую ledger-строку.
-- Печать ограничена измерениями конкретного tenant/seller/warehouse/month и возвращает ставку-снимок, сумму строки и единый service/source contract.
+Экран S-11 теперь показывает прошлый календарный месяц по умолчанию, сводку селлеров и SKU, поиск по видимым строкам, роли администратора и сотрудника, нулевые значения, блокировку фиксации без габаритов, диалоги тарифа/обмера/истории и A4-предпросмотр с повторной печатью. Внутренняя таблица использует ставку снимка и отдельные поля источника, литро-дней и суммы.
 
 ## Гейты
 
-- ruff: PASS для изменённых `storage_statement_service.py` и `storage.py`.
-- mypy: FAIL: внешний `app.models.billing` отсутствует в этой рабочей копии; также полный запуск выявляет существующие ошибки в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py`, `fbs_warehouse_binding_service.py`.
-- pytest: PASS, `5 passed` для `tests/test_storage_statement_service.py tests/test_storage_models.py`.
-- back_guard.py: не запускался до полного backend-гейта; ожидает отсутствующий общий billing-контракт.
-- check_migrations.py: не запускался, миграции атома не менялись.
+- `npx tsc --noEmit -p tsconfig.app.json` — зелёный.
+- `python3 scripts/ui/ui_guard.py` — красный из-за трёх ранее существовавших нарушений в соседних файлах: `src/components/WbProductPickerDialog.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx`, `src/screens/v2/SellerInboundDraftScreen.tsx`. Новых нарушений от S-11 guard не показал; базовую линию не обновлял.
+- `npm run test:unit` — не запустился: в рабочей копии отсутствует команда `vitest` (`sh: vitest: command not found`).
 
 ## Не реализовано
 
-- Внешние модели `BillingTariffVersion` и `BillingLedgerEntry` не добавлялись: это обязательная зависимость 09-A, а создание локальных storage-тарифов или второго ledger запрещено `ARCH-CROSS.md`.
-- Тесты конкурентных API-запросов и финансового DTO не расширены: текущая ветка не содержит billing-моделей/схемы, на которой их можно выполнить.
+- Реальный API-путь, сохранение после перезагрузки и серверная фиксация начисления не реализованы в этом экранном атоме: backend-файлы не входят в разрешённый список S-11.
+- `frontend/screens.registry.json` не изменён, потому что роль screen-dev разрешает править только файлы, перечисленные для карточки; обновление реестра требует отдельного согласования границ.
+- Сквозной Playwright-путь с авторизацией и серверными данными не подтверждён: текущий `storage.spec.ts` содержит только локальные UI-сценарии, а unit-тесты не запускаются из-за отсутствующего `vitest`.
 
 ## Находки
 
-- В рабочем дереве отсутствует общий billing-контракт 09-A; это техническая зависимость, не секрет и не причина останавливать остальные проверки.
+Секреты, ключи, токены, `.env`, кабинеты учётных данных и персональные данные не открывались и не использовались.
