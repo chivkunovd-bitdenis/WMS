@@ -308,6 +308,14 @@ test('fbs workspace: scan location then product', async ({ page }) => {
   await page.route('**/operations/fbs-supplies/sup-1/workspace', (route) =>
     json(route, workspace({ stage: 'picking', status: 'assembling', orders: [pendingOrder] })),
   )
+  await page.route('**/warehouses/resolve?barcode=*', (route) =>
+    json(route, {
+      type: 'location',
+      id: 'loc-1',
+      warehouse_id: 'w-1',
+      code: 'A-01',
+    }),
+  )
   await page.route('**/operations/fbs-supplies/sup-1/pick/scan-location', (route) =>
     json(route, {
       id: 'loc-1',
@@ -332,13 +340,15 @@ test('fbs workspace: scan location then product', async ({ page }) => {
   await page.getByTestId('nav-ff-fbs').click()
   await page.getByTestId('fbs-order-1').click()
   await expect(page.getByTestId('fbs-workspace')).toBeVisible()
+  await expect(page.getByTestId('fbs-picking-scanner-line')).toContainText('пикните ШК склада или ячейки')
   await page.getByLabel('Штрихкод ячейки').fill('CELL-A-01')
   await page.getByRole('button', { name: 'Подтвердить ячейку' }).click()
-  await expect(page.getByText(/Ячейка A-01 подтверждена/)).toBeVisible()
+  await expect(page.getByTestId('fbs-picking-scanner-line')).toContainText('пикните ШК товара')
   await page.getByLabel('Штрихкод товара').fill('2000001')
   await page.getByRole('button', { name: 'Подобрать товар' }).click()
 
   await expect(page.getByText('Товар подобран. Прогресс синхронизирован для всех операторов.')).toBeVisible()
+  await expect(page.getByTestId('fbs-pick-result')).toContainText('Взято: Основной склад / ячейка A-01')
 })
 
 // TC-NEW-FBS-12 — boxes can be created in "without distribution" mode.

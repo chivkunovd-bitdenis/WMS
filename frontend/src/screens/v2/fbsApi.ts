@@ -328,6 +328,27 @@ export type FbsPickLocation = {
   }>
 }
 
+export type FbsWarehouseScan = {
+  type: 'warehouse' | 'location'
+  id: string
+  warehouse_id: string
+  name?: string | null
+  code: string
+}
+
+export async function resolveFbsWarehouseScan(
+  token: string,
+  ah: AuthHeaders,
+  barcode: string,
+): Promise<FbsWarehouseScan> {
+  const qs = new URLSearchParams({ barcode })
+  return jsonOrThrow<FbsWarehouseScan>(
+    await fetch(apiUrl(`/warehouses/resolve?${qs.toString()}`), {
+      headers: { ...ah(token) },
+    }),
+  )
+}
+
 export type FbsPrintAsset = {
   id: string
   kind: 'order_sticker' | 'cargo_place_qr' | 'supply_qr' | 'box_qr'

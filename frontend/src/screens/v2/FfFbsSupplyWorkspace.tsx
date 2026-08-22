@@ -46,7 +46,7 @@ import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import type { ProductThermalLabelData } from '../../utils/printProductThermalLabel'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
-import { WarehouseContextSwitch, type WarehouseOption } from '../../ui-kit'
+import { ScannerLine, WarehouseContextSwitch, type WarehouseOption } from '../../ui-kit'
 import { buildFbsPickingListPrintHtml, ordersWord } from './fbsUx'
 import {
   confirmFbsPrintApplied,
@@ -69,6 +69,7 @@ import {
   removeFbsPackingBoxOrder,
   retryFbsPackingBoxQr,
   retryFbsSupplyQr,
+  resolveFbsWarehouseScan,
   scanFbsPickLocation,
   scanFbsPickProduct,
   selectFbsManualPickLocation,
@@ -497,12 +498,15 @@ export function FfFbsSupplyWorkspace({
     setBusy(true)
     setError(null)
     try {
-      const result = await scanFbsPickLocation(
-        token,
-        authHeaders,
-        workspace.supply.id,
-        locationBarcode.trim(),
-      )
+      const scan = await resolveFbsWarehouseScan(token, authHeaders, locationBarcode.trim())
+      if (scan.type === 'warehouse') {
+        setSelectedWarehouseId(scan.warehouse_id)
+        setPickLocation(null)
+        setProductBarcode('')
+        return
+      }
+      const result = await scanFbsPickLocation(token, authHeaders, workspace.supply.id, locationBarcode.trim())
+      setSelectedWarehouseId(result.warehouse_id)
       setPickLocation(result)
       setProductBarcode('')
     } catch (cause) {
@@ -1670,14 +1674,22 @@ export function FfFbsSupplyWorkspace({
                     Печать листа подбора
                   </Button>
                 </Stack>
+                <ScannerLine
+                  active={stageIsCurrent && !allPicked}
+                  expects={pickLocation ? 'пикните ШК товара' : 'пикните ШК склада или ячейки'}
+                  testId="fbs-picking-scanner-line"
+                />
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5}>
                   <TextField label="Штрихкод ячейки" value={locationBarcode} onChange={(e) => setLocationBarcode(e.target.value)} disabled={!stageIsCurrent || allPicked} onKeyDown={(e) => { if (e.key === 'Enter') void scanLocation() }} />
                   <Button variant="outlined" onClick={() => void scanLocation()} disabled={!stageIsCurrent || allPicked}>Подтвердить ячейку</Button>
                   <TextField label="Штрихкод товара" value={productBarcode} onChange={(e) => setProductBarcode(e.target.value)} disabled={!stageIsCurrent || !pickLocation || allPicked} onKeyDown={(e) => { if (e.key === 'Enter') void scanProduct() }} sx={{ flex: 1 }} />
                   <Button variant="contained" onClick={() => void scanProduct()} disabled={!stageIsCurrent || !pickLocation || !productBarcode.trim() || allPicked}>Подобрать товар</Button>
                 </Stack>
-                {pickLocation ? <Alert severity="success" sx={{ mt: 2 }}>Ячейка {pickLocation.code} подтверждена · {pickLocation.warehouse_name}</Alert> : null}
-                {allPicked ? <Alert severity="success" sx={{ mt: 2 }}>Все товары подобраны. Перейдите к упаковке.</Alert> : null}
+                {pickLocation && workspace.orders.some((order) => order.pick.status === 'picked') ? (
+                  <Alert severity="success" sx={{ mt: 2 }} data-testid="fbs-pick-result">
+                    Взято: {pickLocation.warehouse_name} / ячейка {pickLocation.code}
+                  </Alert>
+                ) : null}
               </Paper>
               <Paper variant="outlined" sx={{ p: 2 }} data-testid="fbs-manual-picking">
                 <Typography variant="h6">Подбор из ячеек</Typography>
