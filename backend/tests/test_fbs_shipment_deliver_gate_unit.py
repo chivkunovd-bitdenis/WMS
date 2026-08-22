@@ -75,11 +75,42 @@ def _mock_order_with_verdict(
     return order
 
 
-@pytest.mark.parametrize("decision", ["filled", "optional", "notRequired"])
+@pytest.mark.parametrize(
+    "decision", ["accepted", "filled", "optional", "notRequired"]
+)
 def test_delivery_uses_wb_verdict_for_allowed_decisions(decision: str) -> None:
     checks = _build_delivery_checks(
         _mock_supply(), [_mock_order_with_verdict(decision)], cargo_qr_ready=True
     )
+    _validate_checks_pass(checks)
+
+
+def test_delivery_allows_optional_wb_decision_without_local_marking() -> None:
+    """S-03-TC-002: the deliver gate reads optional WB data stored on the order."""
+    order = _mock_order_with_verdict("filled")
+    order.optional_meta_json = ["imei"]
+    order.meta_details_json = {
+        "sgtin": {
+            "status": "accepted",
+            "value": "0104601234567890",
+            "decision": "filled",
+            "reason": None,
+        },
+        "imei": {
+            "status": "allowed_without_check",
+            "value": None,
+            "decision": "optional",
+            "reason": None,
+        },
+    }
+
+    checks = _build_delivery_checks(
+        _mock_supply(), [order], cargo_qr_ready=True
+    )
+
+    allowed = next(check for check in checks if check.code == "marking_allowed")
+    assert allowed.ok is True
+    assert allowed.order_id == order.id
     _validate_checks_pass(checks)
 
 
