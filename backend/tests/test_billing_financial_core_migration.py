@@ -1,14 +1,63 @@
 from pathlib import Path
+from types import ModuleType
+from typing import Any
 
 from alembic.config import Config
 from alembic.script import ScriptDirectory
+from pytest import MonkeyPatch
+from sqlalchemy import ForeignKeyConstraint, UniqueConstraint
 
 
-def test_billing_financial_core_is_in_the_single_alembic_lineage() -> None:
+def _script_directory() -> ScriptDirectory:
     backend_root = Path(__file__).resolve().parents[1]
     config = Config(str(backend_root / "alembic.ini"))
     config.set_main_option("script_location", str(backend_root / "alembic"))
-    script = ScriptDirectory.from_config(config)
+    return ScriptDirectory.from_config(config)
 
-    assert script.get_heads() == ["20260822_0095"]
-    assert script.get_revision("20260822_0094") is not None
+
+def test_billing_financial_core_is_in_the_single_alembic_lineage() -> None:
+    script = _script_directory()
+
+    assert script.get_heads() == ["20260822_09c"]
+
+    billing_core = script.get_revision("20260822_09a")
+    billing_invoices = script.get_revision("20260822_09b")
+    billing_activation = script.get_revision("20260822_09c")
+
+    assert billing_core.down_revision == "20260821_0093"
+    assert billing_invoices.down_revision == billing_core.revision
+    assert billing_activation.down_revision == billing_invoices.revision
+
+
+def test_billing_financial_core_migration_creates_only_shared_billing_tables(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    module: ModuleType = _script_directory().get_revision("20260822_09a").module
+    created_tables: dict[str, tuple[Any, ...]] = {}
+
+    monkeypatch.setattr(
+        module.op,
+        "create_table",
+        lambda name, *items, **_kwargs: created_tables.update({name: items}),
+    )
+    monkeypatch.setattr(module.op, "create_index", lambda *_args, **_kwargs: None)
+
+    module.upgrade()
+
+    assert set(created_tables) == {
+        "billing_profiles",
+        "billing_tariff_versions",
+        "billing_ledger_entries",
+    }
+    ledger_items = created_tables["billing_ledger_entries"]
+    assert any(
+        isinstance(item, UniqueConstraint) and item.name == "uq_billing_ledger_source_event"
+        for item in ledger_items
+    )
+    assert any(
+        isinstance(item, ForeignKeyConstraint)
+        and item.name is None
+        and list(item.column_keys) == ["reversal_of_id"]
+        and item.ondelete == "RESTRICT"
+        for item in ledger_items
+    )

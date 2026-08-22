@@ -95,6 +95,11 @@ def test_billing_ledger_rejects_duplicate_source_event_and_second_reversal() -> 
         )
         session.add(reversal)
         session.commit()
+        session.refresh(original)
+
+        assert original.entry_type == "charge"
+        assert original.quantity == Decimal("1.0000")
+        assert original.amount == Decimal("10.00")
 
         session.add(
             entry(
