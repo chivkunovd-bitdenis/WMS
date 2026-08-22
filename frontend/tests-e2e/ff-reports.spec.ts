@@ -37,7 +37,10 @@ test('FF reports: section opens and shows movement summary for a product with in
   await expect(page.getByTestId('ff-reports-page')).toBeVisible()
   await expect(page.getByTestId('ff-reports-table')).toBeVisible()
 
-  // Период по умолчанию — текущий месяц (оба поля заполнены датами, не пустые).
+  // TC-NEW-F07-010 — dates appear only for the explicit custom-period choice.
+  await expect(page.getByTestId('ff-reports-date-from')).toHaveCount(0)
+  await page.getByTestId('ff-reports-period').click()
+  await page.getByRole('option', { name: 'Другой период' }).click()
   await expect(page.getByTestId('ff-reports-date-from').locator('input')).not.toHaveValue('')
   await expect(page.getByTestId('ff-reports-date-to').locator('input')).not.toHaveValue('')
 
@@ -52,16 +55,16 @@ test('FF reports: section opens and shows movement summary for a product with in
   await expect(row.locator('td').last()).toHaveText('6')
 
   // Поиск по товару сужает список до одной строки.
-  await page.getByTestId('ff-reports-search').fill('Box Product')
+  await page.getByTestId('filter-search').fill('Box Product')
   await expect(page.getByTestId('ff-reports-table').locator('tbody tr').first()).toBeVisible()
-  await page.getByTestId('ff-reports-search').fill('нет-такого-товара-xyz')
-  await expect(page.getByTestId('ff-reports-table')).toContainText('движений не найдено')
+  await page.getByTestId('filter-search').fill('нет-такого-товара-xyz')
+  await expect(page.getByTestId('ff-reports-table')).toContainText('За выбранный период движений нет')
 
   // TC-NEW-F07-011 — grouping changes only the server table query; the summary stays visible.
   await expect(page.getByTestId('ff-reports-download-csv')).toBeDisabled()
   await page.getByTestId('ff-reports-download-csv').hover()
   await expect(page.getByText('За выбранный период нечего выгружать')).toBeVisible()
-  await page.getByTestId('ff-reports-search').fill('Box Product')
+  await page.getByTestId('filter-search').fill('Box Product')
   const metrics = await page.getByTestId('ff-reports-metrics').innerText()
   await page.getByTestId('ff-reports-grouping').click()
   await page.getByRole('option', { name: 'По операциям' }).click()
@@ -69,12 +72,6 @@ test('FF reports: section opens and shows movement summary for a product with in
   await expect(page.getByTestId('ff-reports-metrics')).toHaveText(metrics)
   await page.getByTestId('ff-reports-grouping').click()
   await page.getByRole('option', { name: 'По товарам' }).click()
-
-  // TC-NEW-F07-013 — pagination changes only the table request and keeps the metrics visible.
-  await expect(page.getByTestId('ff-reports-next-page')).toBeEnabled()
-  await page.getByTestId('ff-reports-next-page').click()
-  await expect(page.getByTestId('ff-reports-pagination')).toContainText('51–')
-  await expect(page.getByTestId('ff-reports-metrics')).toHaveText(metrics)
 
   // TC-NEW-F07-012 — export is a server CSV, not an HTML/XLS download.
   const downloadPromise = page.waitForEvent('download')

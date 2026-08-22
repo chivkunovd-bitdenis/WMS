@@ -60,14 +60,33 @@ const normalizeRow = (row: Row): Row => ({
   net: row.net ?? (row.in_qty ?? 0) - (row.out_qty ?? 0),
 })
 
-const dateString = (date: Date) => date.toISOString().slice(0, 10)
-const monthStart = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`
-const monthEnd = (date: Date) => dateString(new Date(date.getFullYear(), date.getMonth() + 1, 0))
-const yearStart = (date: Date) => `${date.getFullYear()}-01-01`
-const yearEnd = (date: Date) => `${date.getFullYear()}-12-31`
+type CalendarDate = { year: number; month: number; day: number }
+
+const moscowDateFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit',
+})
+
+const dateString = ({ year, month, day }: CalendarDate) => `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+const moscowCalendarDate = (date: Date): CalendarDate => {
+  const parts = moscowDateFormatter.formatToParts(date)
+  const value = (type: 'year' | 'month' | 'day') => Number(parts.find((part) => part.type === type)?.value)
+  return { year: value('year'), month: value('month'), day: value('day') }
+}
+const addDays = (date: CalendarDate, days: number) => {
+  const result = new Date(Date.UTC(date.year, date.month - 1, date.day + days))
+  return { year: result.getUTCFullYear(), month: result.getUTCMonth() + 1, day: result.getUTCDate() }
+}
+const monthStart = (date: CalendarDate) => dateString({ ...date, day: 1 })
+const monthEnd = (date: CalendarDate) => dateString(addDays({ year: date.year, month: date.month === 12 ? 1 : date.month + 1, day: 1 }, -1))
+const yearStart = (date: CalendarDate) => `${date.year}-01-01`
+const yearEnd = (date: CalendarDate) => `${date.year}-12-31`
+const nextDateString = (date: string) => {
+  const [year, month, day] = date.split('-').map(Number)
+  return dateString(addDays({ year, month, day }, 1))
+}
 
 export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
-  const now = useMemo(() => new Date(), [])
+  const now = useMemo(() => moscowCalendarDate(new Date()), [])
   const [period, setPeriod] = useState('month')
   const [dateFrom, setDateFrom] = useState(monthStart(now))
   const [dateTo, setDateTo] = useState(monthEnd(now))
@@ -90,16 +109,19 @@ export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
   const [periodError, setPeriodError] = useState('')
   const abortRef = useRef<AbortController | null>(null)
   const tableAbortRef = useRef<AbortController | null>(null)
+  const effectiveWarehouseId = warehouses.length === 1 ? warehouses[0].id : warehouseId
 
   const params = useCallback((group?: string, requestedPage?: number) => {
-    const query = new URLSearchParams({ date_from: `${dateFrom}T00:00:00`, date_to: `${dateTo}T23:59:59` })
+    // The reporting API uses an exclusive end boundary. Sending the next Moscow
+    // calendar day keeps every fractional second of the selected final day.
+    const query = new URLSearchParams({ date_from: `${dateFrom}T00:00:00`, date_to: `${nextDateString(dateTo)}T00:00:00` })
     if (sellerId) query.set('seller_id', sellerId)
-    if (warehouseId) query.set('warehouse_id', warehouseId)
+    if (effectiveWarehouseId) query.set('warehouse_id', effectiveWarehouseId)
     if (search.trim()) query.set('search', search.trim())
     if (group) query.set('group_by', group)
     if (requestedPage) query.set('page', String(requestedPage))
     return query
-  }, [dateFrom, dateTo, sellerId, search, warehouseId])
+  }, [dateFrom, dateTo, effectiveWarehouseId, sellerId, search])
 
   const loadOverview = useCallback(async (signal: AbortSignal) => {
     const response = await fetch(apiUrl(`/reports/overview?${params().toString()}`), {
@@ -125,8 +147,9 @@ export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
     const controller = new AbortController()
     abortRef.current = controller
     setLoading(true); setSummaryError(false); setTableError(false)
+    // A changed filter must never leave values from the previous scope visible.
+    setOverview(null); setRows([]); setTotal(0)
     try {
-      const headers = { Authorization: `Bearer ${token}` }
       await Promise.all([
         loadOverview(controller.signal).catch(error => { if (!(error instanceof DOMException && error.name === 'AbortError')) setSummaryError(true) }),
         loadTable(controller.signal, 1, groupingRef.current).catch(error => { if (!(error instanceof DOMException && error.name === 'AbortError')) setTableError(true) }),
@@ -168,9 +191,9 @@ export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
 
   const choosePeriod = (value: string) => {
     setPeriod(value)
-    const end = new Date()
-    if (value === '7') { const start = new Date(end); start.setDate(end.getDate() - 6); setDateFrom(dateString(start)); setDateTo(dateString(end)) }
-    if (value === '30') { const start = new Date(end); start.setDate(end.getDate() - 29); setDateFrom(dateString(start)); setDateTo(dateString(end)) }
+    const end = moscowCalendarDate(new Date())
+    if (value === '7') { setDateFrom(dateString(addDays(end, -6))); setDateTo(dateString(end)) }
+    if (value === '30') { setDateFrom(dateString(addDays(end, -29))); setDateTo(dateString(end)) }
     if (value === 'month') { setDateFrom(monthStart(end)); setDateTo(monthEnd(end)) }
     if (value === 'year') { setDateFrom(yearStart(end)); setDateTo(yearEnd(end)) }
   }
@@ -186,7 +209,7 @@ export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
     { key: 'balance', label: 'Остаток сейчас', value: overview?.current_balance ?? null },
     { key: 'inbound', label: 'Приход за период', value: overview?.in_qty ?? null },
     { key: 'outbound', label: 'Расход за период', value: overview?.out_qty ?? null },
-    { key: 'comparison', label: 'Расход к прошлому периоду', value: overview?.comparison.change ?? null, delta: overview?.comparison.change_percent == null ? undefined : { value: overview.comparison.change_percent, unit: 'percent' as const, direction: overview.comparison.change_percent >= 0 ? 'up' as const : 'down' as const, a11yLabel: 'Процент изменения расхода' }, nullValueLabel: 'В прошлом периоде расхода не было' },
+    { key: 'comparison', label: 'Расход к прошлому периоду', value: overview?.comparison.change_percent == null ? null : overview.comparison.change, delta: overview?.comparison.change_percent == null ? undefined : { value: overview.comparison.change_percent, unit: 'percent' as const, direction: overview.comparison.change_percent >= 0 ? 'up' as const : 'down' as const, a11yLabel: 'Процент изменения расхода' }, nullValueLabel: 'В прошлом периоде расхода не было' },
   ]
 
   return <Stack spacing={0} data-testid="ff-reports-page">
@@ -200,10 +223,11 @@ export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
     </FilterBar>
     {overview?.warnings.map(warning => <WarningNotice key={warning} testId="ff-reports-warning">{warning}</WarningNotice>)}
     {periodError ? <ErrorNotice testId="ff-reports-period-error">{periodError}</ErrorNotice> : null}
-    {summaryError ? <ErrorNotice testId="ff-reports-summary-error">Не удалось загрузить сводку. <PrimaryAction onClick={() => void load()}>Повторить</PrimaryAction></ErrorNotice> : null}
-    <ReportMetricStrip items={metrics} loading={loading} testId="ff-reports-metrics" />
-    <MovementFlowChart series={overview?.daily.map(day => ({ date: day.date, inbound: day.in_qty, outbound: day.out_qty, previousOutbound: day.previous_out_qty })) ?? []} showPrevious={comparison === 'previous'} loading={loading} ariaDescription="Дневной приход и расход" testId="ff-reports-chart" />
-    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }} data-testid="ff-reports-freshness">Данные на {overview ? new Date(overview.generated_at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' }) : '—'} МСК</Typography>
+    {summaryError ? <ErrorNotice testId="ff-reports-summary-error">Не удалось загрузить сводку. <PrimaryAction onClick={() => void load()}>Повторить</PrimaryAction></ErrorNotice> : <>
+      <ReportMetricStrip items={metrics} loading={loading} testId="ff-reports-metrics" />
+      <MovementFlowChart series={overview?.daily.map(day => ({ date: day.date, inbound: day.in_qty, outbound: day.out_qty, previousOutbound: day.previous_out_qty })) ?? []} showPrevious={comparison === 'previous'} loading={loading} ariaDescription="Дневной приход и расход" testId="ff-reports-chart" />
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }} data-testid="ff-reports-freshness">Данные на {overview ? new Date(overview.generated_at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' }) : '—'} МСК</Typography>
+    </>}
     {tableError ? <ErrorNotice testId="ff-reports-table-error">Не удалось загрузить строки отчёта. Повторите попытку.</ErrorNotice> : null}
     {csvError ? <ErrorNotice testId="ff-reports-csv-error">Не удалось скачать CSV. Повторите попытку.</ErrorNotice> : null}
     <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }} data-testid="ff-reports-table-controls">
