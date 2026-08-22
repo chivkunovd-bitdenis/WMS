@@ -162,6 +162,44 @@ def регрессии_макета(проверь) -> None:
         проверь("ARCH-CROSS: копия дошла в lane", (target / "ARCH-CROSS.md").exists(), True)
 
 
+def регрессии_зависимостей(проверь) -> None:
+    """Зависимый атом ждёт без слота модели, независимый едет сразу."""
+    import threading
+    import time
+
+    with tempfile.TemporaryDirectory(prefix="check-night-deps-") as временный:
+        root = pathlib.Path(временный)
+        wave = root / "wave"
+        wave.mkdir()
+        workers = {}
+        for card in ("upstream", "downstream"):
+            checkout = root / card
+            folder = checkout / "night" / "wave" / "cards" / card
+            folder.mkdir(parents=True)
+            (folder / "FEATURES.md").write_text(
+                "## Фичи\n### 1. Атом карточки\n"
+                "Файлы: `backend/app/x.py`\n\n## Порядок\n1\n", encoding="utf-8")
+            workers[card] = n.РабочаяКарточка(
+                card, 1, checkout, checkout / "night" / "wave", folder, f"test/{card}")
+        (wave / "DEPENDENCIES.json").write_text(json.dumps({
+            "milestones": {"foundation": {"card": "upstream", "feature": 1}},
+            "requires": {"downstream#1": ["foundation"]},
+        }), encoding="utf-8")
+        with mock.patch.object(n, "_git", return_value=mock.Mock(returncode=1, stdout="", stderr="")):
+            проверь("зависимости: схема валидна",
+                    n.подготовить_зависимости(wave, workers), [])
+        результат = {}
+        thread = threading.Thread(target=lambda: результат.setdefault(
+            "wait", n.дождаться_рубежей("downstream", 1, wave)))
+        thread.start()
+        time.sleep(0.05)
+        проверь("зависимости: downstream ждёт", thread.is_alive(), True)
+        n.отметить_рубежи("upstream", 1)
+        thread.join(timeout=1)
+        проверь("зависимости: downstream поехал после рубежа",
+                результат.get("wait"), (True, ""))
+
+
 def fake_e2e_smoke(проверь) -> None:
     """Детерминированный full-chain smoke без Codex, git и стенда.
 
@@ -685,6 +723,7 @@ def main() -> int:
     fake_e2e_smoke(проверь)
     регрессии_r04(проверь)
     регрессии_макета(проверь)
+    регрессии_зависимостей(проверь)
 
     if беды:
         print("ПРОВЕРКА ОРКЕСТРАТОРА КРАСНАЯ:", file=sys.stderr)
