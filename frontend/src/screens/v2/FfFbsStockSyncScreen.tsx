@@ -33,6 +33,7 @@ import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { FbsStockAllocationDialog } from './FbsStockAllocationDialog'
 import { FfFbsSectionNav } from './FfFbsSectionNav'
+import { EmptyState, WarehouseContextSwitch } from '../../ui-kit'
 import {
   disableFbsWarehouseBinding,
   FbsApiError,
@@ -251,6 +252,9 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
     Record<string, number>
   >({})
   const [savingWbId, setSavingWbId] = useState<number | null>(null)
+  const [selectedOperationalWarehouseId, setSelectedOperationalWarehouseId] = useState<string | null>(
+    () => sessionStorage.getItem('wms_operational_warehouse:fulfillment'),
+  )
 
   const [statusOpen, setStatusOpen] = useState(false)
   const [statusLoading, setStatusLoading] = useState(false)
@@ -279,6 +283,24 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
     () => warehouses.filter((w) => !isTechnicalWmsWarehouse(w)),
     [warehouses],
   )
+
+  const operationalWarehouseOptions = useMemo(
+    () => physicalWarehouses.map((warehouse) => ({ id: warehouse.id, name: warehouse.name })),
+    [physicalWarehouses],
+  )
+
+  useEffect(() => {
+    if (physicalWarehouses.length === 0) {
+      setSelectedOperationalWarehouseId(null)
+      return
+    }
+    const current = physicalWarehouses.some((warehouse) => warehouse.id === selectedOperationalWarehouseId)
+    if (!current) {
+      const next = physicalWarehouses[0].id
+      setSelectedOperationalWarehouseId(next)
+      sessionStorage.setItem('wms_operational_warehouse:fulfillment', next)
+    }
+  }, [physicalWarehouses, selectedOperationalWarehouseId])
 
   const officeCityById = useMemo(() => {
     const m = new Map<number, string>()
@@ -347,8 +369,13 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
   ])
 
   const syncableRows = useMemo(
-    () => rows.filter((row) => row.isMapped && row.stockSyncEnabled),
-    [rows],
+    () => rows.filter((row) => row.isMapped && row.stockSyncEnabled && row.selectedWmsId === selectedOperationalWarehouseId),
+    [rows, selectedOperationalWarehouseId],
+  )
+
+  const visibleRows = useMemo(
+    () => rows.filter((row) => row.selectedWmsId === selectedOperationalWarehouseId),
+    [rows, selectedOperationalWarehouseId],
   )
 
   const loadWarehouses = useCallback(async () => {
@@ -691,10 +718,24 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
       ) : null}
 
       {physicalWarehouses.length === 0 ? (
-        <Alert severity="warning" sx={{ mb: 2 }} data-testid="fbs-stock-no-wms">
-          Создайте WMS-склад перед сопоставлением складов WB.
-        </Alert>
+        <Box sx={{ mb: 2 }} data-testid="fbs-stock-no-wms">
+          <EmptyState
+            title="Нет рабочего склада"
+            hint="Попросите администратора добавить рабочий склад. Служебные склады Wildberries здесь не считаются."
+          />
+        </Box>
       ) : null}
+
+      <WarehouseContextSwitch
+        options={operationalWarehouseOptions}
+        value={selectedOperationalWarehouseId}
+        onChange={(warehouseId) => {
+          setSelectedOperationalWarehouseId(warehouseId)
+          sessionStorage.setItem('wms_operational_warehouse:fulfillment', warehouseId)
+        }}
+        loading={busy && physicalWarehouses.length === 0}
+        testId="fbs-stock-warehouse-context"
+      />
 
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }} data-testid="fbs-stock-filters">
         <Stack
@@ -768,20 +809,18 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
             </TableRow>
           </TableHead>
           <TableBody>
-            {rows.length === 0 ? (
+            {visibleRows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6}>
-                  <Box sx={{ py: 3, textAlign: 'center' }} data-testid="fbs-stock-bindings-empty">
-                    <Typography color="text.secondary">
-                      {error
-                        ? 'Список складов не загрузился — причина в сообщении выше.'
-                        : 'У этого селлера нет складов Wildberries. Подключите склад в личном кабинете WB и нажмите «Обновить».'}
-                    </Typography>
-                  </Box>
+                  <EmptyState
+                    title={error ? 'Список складов не загрузился' : 'На выбранном складе нет привязок'}
+                    hint={error ? 'Причина указана выше.' : 'Выберите другой склад или добавьте привязку склада WB.'}
+                    testId="fbs-stock-bindings-empty"
+                  />
                 </TableCell>
               </TableRow>
             ) : (
-              rows.map((row) => {
+              visibleRows.map((row) => {
                 const rowState = rowStateInfo(row)
                 return (
                 <TableRow key={row.wbId} data-testid="fbs-stock-binding-row">
