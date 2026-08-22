@@ -615,13 +615,19 @@ async def _debit_stock_pool_once(
     empty: dict[str, int],
 ) -> dict[str, int]:
     async with session.begin_nested():
-        # Без FOR UPDATE намеренно. Идемпотентность списания держит уникальность
-        # order_id в fbs_stock_pool_debits, а гонку двух синхронизаций ловит
-        # перехват IntegrityError у вызывающего — блокировка строки тут ничего
-        # не добавляет, зато на SQLite приводит к «database is locked».
-        pool_stmt = select(FbsBindingStockPool).where(
-            FbsBindingStockPool.binding_id == binding_id,
-            FbsBindingStockPool.product_id == order.product_id,
+        # UNIQUE(order_id) защищает повтор одного заказа, но два разных заказа
+        # из параллельных контуров new/reconcile могут списывать один пул. Строка
+        # пула должна оставаться заблокированной от чтения quantity до flush,
+        # иначе оба контура способны прочитать 10 и сохранить 9. SQLite игнорирует
+        # FOR UPDATE; его локальная конкуренция по-прежнему проходит через retry
+        # OperationalError в вызывающей функции.
+        pool_stmt = (
+            select(FbsBindingStockPool)
+            .where(
+                FbsBindingStockPool.binding_id == binding_id,
+                FbsBindingStockPool.product_id == order.product_id,
+            )
+            .with_for_update()
         )
         pool_row = (await session.execute(pool_stmt)).scalar_one_or_none()
         if pool_row is None:

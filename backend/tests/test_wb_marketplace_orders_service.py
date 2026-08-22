@@ -8,9 +8,11 @@ TC-NEW-SUPPLY-SYNC-004 — pagination: multiple pages merged into one supplies d
 
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, call
 
 import httpx
@@ -20,7 +22,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
+from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_order import FBS_ORDER_STATUS_ASSEMBLING, FbsOrder
+from app.models.fbs_stock_pool_debit import FbsStockPoolDebit
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_DONE,
@@ -217,6 +221,93 @@ class _AsyncClientContext:
 
     async def __aexit__(self, *_args: object) -> None:
         return None
+
+
+class _PoolRowResult:
+    def __init__(self, pool: FbsBindingStockPool) -> None:
+        self._pool = pool
+
+    def scalar_one_or_none(self) -> FbsBindingStockPool:
+        return self._pool
+
+
+class _LockedPoolTransaction:
+    def __init__(self, lock: asyncio.Lock) -> None:
+        self._lock = lock
+
+    async def __aenter__(self) -> None:
+        await self._lock.acquire()
+
+    async def __aexit__(self, *_args: object) -> None:
+        self._lock.release()
+
+
+class _ConcurrentPoolDebitSession:
+    """Minimal session double that models a database row lock for one pool."""
+
+    def __init__(
+        self,
+        pool: FbsBindingStockPool,
+        lock: asyncio.Lock,
+        ledger: list[FbsStockPoolDebit],
+    ) -> None:
+        self._pool = pool
+        self._lock = lock
+        self._ledger = ledger
+
+    def begin_nested(self) -> _LockedPoolTransaction:
+        return _LockedPoolTransaction(self._lock)
+
+    async def execute(self, statement: object) -> _PoolRowResult:
+        # The test double serializes only a query that explicitly requests the
+        # same row lock PostgreSQL uses in production.
+        assert getattr(statement, "_for_update_arg", None) is not None
+        return _PoolRowResult(self._pool)
+
+    def add(self, row: FbsStockPoolDebit) -> None:
+        self._ledger.append(row)
+
+    async def flush(self) -> None:
+        return None
+
+
+# TC-NEW-WB-SYNC-005: new/reconcile may debit different orders from one pool concurrently.
+@pytest.mark.asyncio
+async def test_new_and_reconcile_serialize_different_order_debits_on_one_pool() -> None:
+    tenant_id = uuid.uuid4()
+    binding_id = uuid.uuid4()
+    product_id = uuid.uuid4()
+    pool = FbsBindingStockPool(
+        id=uuid.uuid4(),
+        tenant_id=tenant_id,
+        binding_id=binding_id,
+        product_id=product_id,
+        quantity=10,
+    )
+    ledger: list[FbsStockPoolDebit] = []
+    row_lock = asyncio.Lock()
+    new_session = _ConcurrentPoolDebitSession(pool, row_lock, ledger)
+    reconcile_session = _ConcurrentPoolDebitSession(pool, row_lock, ledger)
+    new_order = SimpleNamespace(id=uuid.uuid4(), product_id=product_id)
+    reconcile_order = SimpleNamespace(id=uuid.uuid4(), product_id=product_id)
+
+    new_result, reconcile_result = await asyncio.gather(
+        orders_service._debit_stock_pool_once(  # type: ignore[arg-type]
+            new_session, tenant_id, new_order, binding_id, {"debited": 0, "shortfall": 0}
+        ),
+        orders_service._debit_stock_pool_once(  # type: ignore[arg-type]
+            reconcile_session,
+            tenant_id,
+            reconcile_order,
+            binding_id,
+            {"debited": 0, "shortfall": 0},
+        ),
+    )
+
+    assert new_result == {"debited": 1, "shortfall": 0}
+    assert reconcile_result == {"debited": 1, "shortfall": 0}
+    assert pool.quantity == 8
+    assert {row.order_id for row in ledger} == {new_order.id, reconcile_order.id}
 
 
 # TC-NEW-WB-SYNC-001: new sync uses only /orders/new and performs an idempotent upsert.
