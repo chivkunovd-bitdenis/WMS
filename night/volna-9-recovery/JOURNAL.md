@@ -66,3 +66,7 @@
 20:07   03-no-distribution-mode · dev: фича 3/4 сохранена a8d744b76e6f
 20:11   03-no-distribution-mode · screen-dev: готово
 20:11   03-no-distribution-mode · dev: фича 4/4 сохранена 7d279ce41d5b
+20:18   03-no-distribution-mode · reviewer: готово
+20:18   03-no-distribution-mode · reviewer: Terra-rework не закрыл вердикт — эскалация Sol
+20:18   03-no-distribution-mode · reviewer: находки, круг 2 — назад к разработке
+20:46   03-no-distribution-mode · backend-dev: готово

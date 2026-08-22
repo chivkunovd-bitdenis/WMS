@@ -40,7 +40,9 @@ class DeliveryBoxReadiness:
 
 
 WITHOUT_DISTRIBUTION_KEY_PREFIX = "no-distribution:"
-RETIRED_WITHOUT_DISTRIBUTION_KEY_PREFIX = "disabled-no-distribution:"
+# Keep this marker exactly as wide as the legacy marker: the stored key may
+# already occupy the full String(128) column when the mode is switched off.
+RETIRED_WITHOUT_DISTRIBUTION_KEY_PREFIX = "retired-no-dist:"
 
 
 async def get_delivery_box_readiness(

@@ -359,12 +359,13 @@ async def test_without_distribution_toggle_preserves_legacy_key_for_create_retry
 ) -> None:
     """TC-NEW-005: toggling never breaks an earlier create retry."""
     headers, supply_id, _ = await _packed_supply(async_client)
+    idempotency_key = "k" * 128
     created = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/boxes",
         headers=headers,
         json={
             "count": 1,
-            "idempotency_key": "legacy-mode-box",
+            "idempotency_key": idempotency_key,
             "without_distribution": True,
         },
     )
@@ -391,7 +392,7 @@ async def test_without_distribution_toggle_preserves_legacy_key_for_create_retry
         headers=headers,
         json={
             "count": 1,
-            "idempotency_key": "legacy-mode-box",
+            "idempotency_key": idempotency_key,
             "without_distribution": True,
         },
     )
@@ -406,7 +407,8 @@ async def test_without_distribution_toggle_preserves_legacy_key_for_create_retry
         box = await session.get(FbsPackingBox, box_id)
         assert box is not None
         assert box.creation_idempotency_key is not None
-        assert box.creation_idempotency_key == "disabled-no-distribution:legacy-mode-box"
+        assert box.creation_idempotency_key == f"retired-no-dist:{'k' * 112}"
+        assert len(box.creation_idempotency_key) == 128
         supply = await session.get(FbsSupply, supply_id)
         assert supply is not None
         assert supply.boxes_without_distribution_at is None
