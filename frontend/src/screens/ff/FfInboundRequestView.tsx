@@ -144,8 +144,25 @@ export function applyScannedInboundLine<T extends { id: string }>(
     : [...lines, scannedLine]
 }
 
-export function reconcileInboundScan(reload: () => Promise<unknown>): void {
-  void reload().catch(() => undefined)
+// eslint-disable-next-line react-refresh/only-export-components
+export function createDebouncedInboundReconciler(
+  reload: () => Promise<unknown>,
+  delayMs = 2500,
+) {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  return {
+    schedule(): void {
+      if (timer !== null) clearTimeout(timer)
+      timer = setTimeout(() => {
+        timer = null
+        void reload().catch(() => undefined)
+      }, delayMs)
+    },
+    cancel(): void {
+      if (timer !== null) clearTimeout(timer)
+      timer = null
+    },
+  }
 }
 
 export function isLatestScannedInboundLine(lineId: string, lastScannedLineId: string | null): boolean {
@@ -598,6 +615,18 @@ export function FfInboundRequestView({
     return data
   }, [authHeaders, requestId])
 
+  const receivingScanReconciler = useMemo(
+    () => createDebouncedInboundReconciler(loadDetail),
+    [loadDetail],
+  )
+
+  useEffect(
+    () => () => {
+      receivingScanReconciler.cancel()
+    },
+    [receivingScanReconciler],
+  )
+
   const loadLinkedDiscrepancyActs = useCallback(async (): Promise<void> => {
     if (!isFulfillmentAdmin) {
       setLinkedDiscrepancyActs([])
@@ -783,12 +812,14 @@ export function FfInboundRequestView({
     void loadLinkedDiscrepancyActs()
   }, [loadLinkedDiscrepancyActs])
 
+  const catalogDetailLoaded = detail !== null
+  const catalogSellerId = detail?.seller_id
   useEffect(() => {
-    if (!detail) {
+    if (!catalogDetailLoaded) {
       return
     }
     void loadCatalog()
-  }, [detail, loadCatalog])
+  }, [catalogDetailLoaded, catalogSellerId, loadCatalog])
 
   useEffect(() => {
     setPlannedDateDraft(detail?.planned_delivery_date ?? '')
@@ -828,18 +859,13 @@ export function FfInboundRequestView({
   }, [actualDraftByLineId])
 
   useEffect(() => {
-    if (!detail) {
+    const warehouseId = detail?.warehouse_id
+    if (!warehouseId) {
       setLocations([])
       setRequestWarehouse(null)
       return
     }
-    // For verified stage we need the cell directory to assign storage locations.
-    if (!detail.warehouse_id) {
-      setLocations([])
-      setRequestWarehouse(null)
-      return
-    }
-    void loadLocations(detail.warehouse_id)
+    void loadLocations(warehouseId)
     void (async () => {
       const res = await fetch(apiUrl('/warehouses'), { headers: authHeaders })
       if (!res.ok) {
@@ -847,9 +873,9 @@ export function FfInboundRequestView({
         return
       }
       const rows = (await res.json()) as WarehouseRow[]
-      setRequestWarehouse(rows.find((w) => w.id === detail.warehouse_id) ?? null)
+      setRequestWarehouse(rows.find((w) => w.id === warehouseId) ?? null)
     })()
-  }, [authHeaders, detail?.warehouse_id, loadLocations, detail])
+  }, [authHeaders, detail?.warehouse_id, loadLocations])
 
   useEffect(() => {
     if (!detail) {
@@ -1641,9 +1667,9 @@ export function FfInboundRequestView({
       if (isReturnOperation && returnAutoPrint) {
         printReturnBarcodeForLine(scannedLine)
       }
-      // POST already returned the authoritative changed line. Reconcile the rest of the
-      // document in the background so the next physical scan is not held by a full reload.
-      reconcileInboundScan(loadDetail)
+      // Coalesce the expensive document reload until the operator pauses scanning.
+      // The POST response already contains the authoritative changed line.
+      receivingScanReconciler.schedule()
     } catch (e) {
       setScanToastError(e instanceof Error ? e.message : 'Не удалось выполнить скан.')
     } finally {

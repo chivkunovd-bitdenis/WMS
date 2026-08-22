@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   applyScannedInboundLine,
+  createDebouncedInboundReconciler,
   createSerialScanQueue,
   isLatestScannedInboundLine,
-  reconcileInboundScan,
 } from './FfInboundRequestView'
 
 describe('inbound scan fast path', () => {
@@ -32,21 +32,21 @@ describe('inbound scan fast path', () => {
     expect(isLatestScannedInboundLine('line-b', 'line-b')).toBe(true)
   })
 
-  it('starts reconciliation without waiting for it to finish', async () => {
-    let finishReload: (() => void) | undefined
-    const reload = vi.fn(
-      () =>
-        new Promise<void>((resolve) => {
-          finishReload = resolve
-        }),
-    )
+  it('coalesces repeated reconciliation until scanning pauses', async () => {
+    vi.useFakeTimers()
+    const reload = vi.fn(async () => undefined)
+    const reconciler = createDebouncedInboundReconciler(reload, 2500)
 
-    reconcileInboundScan(reload)
+    reconciler.schedule()
+    await vi.advanceTimersByTimeAsync(2000)
+    reconciler.schedule()
+    await vi.advanceTimersByTimeAsync(2499)
+    expect(reload).not.toHaveBeenCalled()
 
+    await vi.advanceTimersByTimeAsync(1)
     expect(reload).toHaveBeenCalledOnce()
-    expect(finishReload).toBeDefined()
-    finishReload?.()
-    await Promise.resolve()
+    reconciler.cancel()
+    vi.useRealTimers()
   })
 
   it('serializes rapid scans in their physical arrival order', async () => {
