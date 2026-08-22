@@ -17,6 +17,7 @@ import {
   ScreenHeader,
   SecondaryAction,
   TextCell,
+  TableLoadMore,
 } from './index'
 import type { Column } from './index'
 import { useState } from 'react'
@@ -209,6 +210,20 @@ export function UiKitShowcase() {
               hint: 'Загрузите каталог из Wildberries или создайте товар вручную',
               action: <PrimaryAction>Загрузить каталог</PrimaryAction>,
             }}
+          />
+        </Stack>
+      </Section>
+
+      <Section title="Таблица — показать ещё" note="Продолжение списка скрывается без следующего курсора и блокируется на время запроса.">
+        <Stack spacing={2} sx={{ alignItems: 'flex-start' }}>
+          <TableLoadMore hasNext={false} onLoadMore={() => undefined} testId="showcase-load-more-hidden" />
+          <TableLoadMore hasNext onLoadMore={() => undefined} testId="showcase-load-more-ready" />
+          <TableLoadMore hasNext loading onLoadMore={() => undefined} testId="showcase-load-more-loading" />
+          <TableLoadMore
+            hasNext
+            error="Не удалось загрузить следующие заказы"
+            onLoadMore={() => undefined}
+            testId="showcase-load-more-error"
           />
         </Stack>
       </Section>
