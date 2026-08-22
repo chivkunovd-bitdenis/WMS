@@ -39,6 +39,7 @@ const previousMonth = () => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 }
 const currentMonth = () => new Date().toISOString().slice(0, 7)
+const currentDate = () => new Date().toISOString().slice(0, 10)
 const authHeaders = (token: string) => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' })
 const statusLabel = (statement: Statement) => statement.status === 'fixed' ? 'Зафиксирован' : statement.problem_count ? 'Требует исправления' : 'Черновик'
 const statusTone = (statement: Statement) => statement.status === 'fixed' ? 'ok' as const : statement.problem_count ? 'stop' as const : 'neutral' as const
@@ -65,6 +66,14 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
   const [history, setHistory] = useState<HistoryRow[]>([])
   const [historyError, setHistoryError] = useState<string | null>(null)
   const [rateOpen, setRateOpen] = useState(false)
+  const [rateWarehouseId, setRateWarehouseId] = useState('')
+  const [rateAmount, setRateAmount] = useState('')
+  const [rateValidFrom, setRateValidFrom] = useState(currentDate())
+  const [sellerRateEnabled, setSellerRateEnabled] = useState(false)
+  const [rateSellerId, setRateSellerId] = useState('')
+  const [sellerRateAmount, setSellerRateAmount] = useState('')
+  const [sellerRateValidFrom, setSellerRateValidFrom] = useState(currentDate())
+  const [rateError, setRateError] = useState<string | null>(null)
   const [printStatement, setPrintStatement] = useState<Statement | null>(null)
 
   const load = useCallback(async () => {
@@ -94,6 +103,18 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
   const expanded = data?.statements.find((statement) => statement.id === expandedId) ?? null
   const missingCount = expanded?.measurements.filter((row) => row.status === 'missing_dimensions').length ?? 0
   const computedVolume = Number(length.replace(',', '.')) * Number(width.replace(',', '.')) * Number(height.replace(',', '.')) / 1000
+  const sellers = useMemo(() => Array.from(new Map((data?.statements ?? []).map((statement) => [statement.seller_id, { id: statement.seller_id, name: statement.seller_name }])).values()), [data])
+  const parsedRate = Number(rateAmount.replace(',', '.'))
+  const parsedSellerRate = Number(sellerRateAmount.replace(',', '.'))
+  const rateDisabledReason = !rateWarehouseId
+    ? 'Выберите склад'
+    : !Number.isFinite(parsedRate) || parsedRate <= 0
+      ? 'Введите положительную ставку'
+      : !rateValidFrom
+        ? 'Укажите дату начала'
+        : sellerRateEnabled && (!rateSellerId || !Number.isFinite(parsedSellerRate) || parsedSellerRate <= 0 || !sellerRateValidFrom)
+          ? 'Заполните индивидуальную ставку селлера'
+          : undefined
 
   async function request(path: string, init: RequestInit) {
     const response = await fetch(apiUrl(path), { ...init, headers: authHeaders(token) })
@@ -159,6 +180,24 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
     catch { setError('Не удалось открыть печатную форму. Повторите попытку') }
     finally { setActionLoading(false) }
   }
+  function openRate() {
+    setRateWarehouseId(selectedWarehouse || data?.warehouses[0]?.id || '')
+    setRateError(null)
+    setRateOpen(true)
+  }
+  async function saveRate() {
+    if (rateDisabledReason) return
+    setActionLoading(true); setRateError(null)
+    try {
+      await request('/operations/storage/tariffs', { method: 'POST', body: JSON.stringify({ warehouse_id: rateWarehouseId, amount: parsedRate, valid_from: rateValidFrom }) })
+      if (sellerRateEnabled) {
+        await request('/operations/storage/tariffs', { method: 'POST', body: JSON.stringify({ warehouse_id: rateWarehouseId, seller_id: rateSellerId, amount: parsedSellerRate, valid_from: sellerRateValidFrom }) })
+      }
+      setRateOpen(false)
+      await load()
+    } catch { setRateError('Не удалось сохранить тариф. Проверьте ставку и дату начала.') }
+    finally { setActionLoading(false) }
+  }
 
   return <Box data-testid="ff-storage-page">
     <ScreenHeader title="Хранение" purpose="Рассчитайте фактическое хранение по селлерам и зафиксируйте месяц для начисления" />
@@ -169,7 +208,7 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
     {error && <ErrorNotice testId="storage-error">{error}</ErrorNotice>}
     <ActionGroup>
       <PrimaryAction data-testid="storage-generate" disabledReason={actionLoading ? 'Формирование уже запущено' : undefined} onClick={() => void generate()}>{actionLoading ? 'Формируем…' : 'Сформировать за месяц'}</PrimaryAction>
-      {isFulfillmentAdmin && data?.tariff_configured && <SecondaryAction data-testid="storage-rate" onClick={() => setRateOpen(true)}>Изменить тариф</SecondaryAction>}
+      {isFulfillmentAdmin && data?.tariff_configured && <SecondaryAction data-testid="storage-rate" onClick={openRate}>Изменить тариф</SecondaryAction>}
     </ActionGroup>
     <Box sx={{ mt: 2 }}>
       <DataTable columns={[
@@ -179,7 +218,7 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
         { key: 'total', header: 'Сумма, ₽', width: 140, align: 'right', render: (row: Statement) => row.total_amount },
         { key: 'problems', header: 'Проблемы', width: 110, align: 'right', render: (row: Statement) => row.problem_count },
         { key: 'actions', header: 'Действия', width: 120, align: 'center', render: (row: Statement) => <Stack direction="row"><IconAction title={expandedId === row.id ? 'Закрыть расчёт селлера' : 'Открыть расчёт селлера'} onClick={() => setExpandedId(expandedId === row.id ? null : row.id)} testId={`storage-expand-${row.id}`}><ExpandMoreIcon /></IconAction>{row.status === 'fixed' && <PrintAction what="накладную" placement="row" onClick={() => void openPrint(row)} testId={`storage-print-${row.id}`} />}</Stack> },
-      ]} rows={statements} getRowKey={(row) => row.id} loading={loading} empty={data?.tariff_configured === false ? { title: 'Тариф хранения ещё не задан', hint: isFulfillmentAdmin ? 'Задайте цену за литр-день и дату начала, чтобы сформировать первый расчёт' : 'Обратитесь к администратору ФФ, чтобы задать тариф хранения.', action: isFulfillmentAdmin ? <PrimaryAction onClick={() => setRateOpen(true)}>Задать тариф</PrimaryAction> : undefined } : { title: 'Ничего не найдено — измените поиск или фильтры' }} testId="storage-seller-table" />
+      ]} rows={statements} getRowKey={(row) => row.id} loading={loading} empty={data?.tariff_configured === false ? { title: 'Тариф хранения ещё не задан', hint: isFulfillmentAdmin ? 'Задайте цену за литр-день и дату начала, чтобы сформировать первый расчёт' : 'Обратитесь к администратору ФФ, чтобы задать тариф хранения.', action: isFulfillmentAdmin ? <PrimaryAction onClick={openRate}>Задать тариф</PrimaryAction> : undefined } : { title: 'Ничего не найдено — измените поиск или фильтры' }} testId="storage-seller-table" />
       {expanded && <Box sx={{ p: 2, mt: 1, borderLeft: 4, borderColor: 'primary.main' }} data-testid="storage-detail">
         <Typography variant="h6">{expanded.seller_name} · {formatMonth(month)}</Typography><Typography color="text.secondary">{expanded.warehouse_name} · ставка снимка</Typography>
         {missingCount > 0 && <ErrorNotice>Расчёт нельзя зафиксировать: устраните проблемы в строках ниже</ErrorNotice>}
@@ -198,7 +237,7 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
       </Box>}
     </Box>
     <Dialog open={Boolean(measure)} onClose={() => setMeasure(null)}><DialogTitle>Внести обмер</DialogTitle><DialogContent><Typography sx={{ mb: 1 }}>{measure?.sku} · {measure?.seller_article}</Typography><RadioGroup row value={measureMode} onChange={(event) => setMeasureMode(event.target.value as 'dimensions' | 'container')}><FormControlLabel value="dimensions" control={<Radio />} label="Габариты товара" /><FormControlLabel value="container" control={<Radio />} label="Объём тары" /></RadioGroup>{measureMode === 'dimensions' ? <><Stack direction="row" spacing={1}><TextField label="Длина, см" value={length} onChange={(event) => setLength(event.target.value)} /><TextField label="Ширина, см" value={width} onChange={(event) => setWidth(event.target.value)} /><TextField label="Высота, см" value={height} onChange={(event) => setHeight(event.target.value)} /></Stack><Typography sx={{ mt: 2 }}>Объём: {Number.isFinite(computedVolume) && computedVolume > 0 ? computedVolume.toFixed(2).replace('.', ',') : '—'} л</Typography></> : <Stack spacing={1}><TextField label="Объём тары, л" value={containerVolume} onChange={(event) => setContainerVolume(event.target.value)} /><TextField label="Комментарий" value={containerBasis} onChange={(event) => setContainerBasis(event.target.value)} /></Stack>}</DialogContent><DialogActions><SecondaryAction onClick={() => setMeasure(null)}>Отмена</SecondaryAction><PrimaryAction disabledReason={measureMode === 'dimensions' ? !Number.isFinite(computedVolume) || computedVolume <= 0 ? 'Введите положительные габариты' : undefined : !Number(containerVolume.replace(',', '.')) || !containerBasis.trim() ? 'Укажите объём и причину' : undefined} onClick={() => void saveMeasure()}>Сохранить</PrimaryAction></DialogActions></Dialog>
-    <Dialog open={rateOpen} onClose={() => setRateOpen(false)}><DialogTitle>Тариф хранения</DialogTitle><DialogContent><Typography>Настройка тарифа будет сохранена в едином биллинге.</Typography><Typography color="text.secondary" sx={{ mt: 1 }}>API настройки тарифа ещё не опубликован владельцем биллинга.</Typography></DialogContent><DialogActions><SecondaryAction onClick={() => setRateOpen(false)}>Отмена</SecondaryAction></DialogActions></Dialog>
+    <Dialog open={rateOpen} onClose={() => !actionLoading && setRateOpen(false)} fullWidth maxWidth="sm"><DialogTitle>Тариф хранения</DialogTitle><DialogContent><Stack spacing={2} sx={{ pt: 1 }}>{rateError && <ErrorNotice>{rateError}</ErrorNotice>}{(data?.warehouses.length ?? 0) > 1 ? <TextField select label="Операционный склад" value={rateWarehouseId} onChange={(event) => setRateWarehouseId(event.target.value)} size="small" required>{data?.warehouses.map((warehouse) => <MenuItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</MenuItem>)}</TextField> : <Typography color="text.secondary">{data?.warehouses[0]?.name ?? 'Операционный склад не выбран'}</Typography>}<Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}><TextField label="Ставка, ₽/л·день" value={rateAmount} onChange={(event) => setRateAmount(event.target.value)} inputMode="decimal" required fullWidth slotProps={{ htmlInput: { 'data-testid': 'storage-rate-amount' } }} /><TextField label="Дата начала" type="date" value={rateValidFrom} onChange={(event) => setRateValidFrom(event.target.value)} required fullWidth slotProps={{ inputLabel: { shrink: true }, htmlInput: { 'data-testid': 'storage-rate-valid-from' } }} /></Stack><Box component="details" open={sellerRateEnabled} onToggle={(event) => setSellerRateEnabled((event.currentTarget as HTMLDetailsElement).open)}><Typography component="summary" color="primary" sx={{ cursor: 'pointer', fontWeight: 700 }}>Индивидуальная ставка селлера</Typography><Stack spacing={2} sx={{ pt: 2 }}><TextField select label="Селлер" value={rateSellerId} onChange={(event) => setRateSellerId(event.target.value)} size="small" required>{sellers.map((seller) => <MenuItem key={seller.id} value={seller.id}>{seller.name}</MenuItem>)}</TextField><Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}><TextField label="Ставка, ₽/л·день" value={sellerRateAmount} onChange={(event) => setSellerRateAmount(event.target.value)} inputMode="decimal" required fullWidth /><TextField label="Дата начала" type="date" value={sellerRateValidFrom} onChange={(event) => setSellerRateValidFrom(event.target.value)} required fullWidth slotProps={{ inputLabel: { shrink: true } }} /></Stack></Stack></Box></Stack></DialogContent><DialogActions><SecondaryAction onClick={() => setRateOpen(false)}>Отмена</SecondaryAction><PrimaryAction data-testid="storage-rate-save" disabledReason={actionLoading ? 'Сохранение тарифа выполняется' : rateDisabledReason} onClick={() => void saveRate()}>Сохранить</PrimaryAction></DialogActions></Dialog>
     <Dialog open={Boolean(historyProductId)} onClose={() => setHistoryProductId(null)} maxWidth="md" fullWidth><DialogTitle>История габаритов</DialogTitle><DialogContent>{historyError && <ErrorNotice>{historyError}</ErrorNotice>}<DataTable columns={[{ key: 'date', header: 'Дата', render: (row: HistoryRow) => new Date(row.created_at).toLocaleString('ru-RU') }, { key: 'source', header: 'Источник', render: (row: HistoryRow) => sourceLabel(row.source) }, { key: 'value', header: 'Габариты / объём', render: (row: HistoryRow) => row.volume_liters ? `${row.length_mm ?? '—'} × ${row.width_mm ?? '—'} × ${row.height_mm ?? '—'} мм · ${row.volume_liters} л` : '—' }, { key: 'author', header: 'Автор', render: (row: HistoryRow) => row.author_name ?? 'Импорт' }, { key: 'current', header: 'Применено', render: (row: HistoryRow) => <StatusChip tone={row.is_current ? 'ok' : 'neutral'} label={row.is_current ? 'Действует' : 'История'} /> }]} rows={history} getRowKey={(row) => row.id} empty={{ title: 'История габаритов пока пуста' }} /></DialogContent><DialogActions><SecondaryAction onClick={() => setHistoryProductId(null)}>Закрыть</SecondaryAction>{isFulfillmentAdmin && <PrimaryAction onClick={() => void restoreWb()}>Вернуть данные WB</PrimaryAction>}</DialogActions></Dialog>
     <Dialog open={Boolean(printStatement)} onClose={() => setPrintStatement(null)} maxWidth="md" fullWidth><DialogTitle>Расчёт хранения за {formatMonth(month)}</DialogTitle><DialogContent>{printStatement && <Box data-testid="storage-print-preview"><Typography>Селлер: {printStatement.seller_name}</Typography><Typography>Склад: {printStatement.warehouse_name}</Typography><Typography>Зафиксирован: {printStatement.fixed_at ? new Date(printStatement.fixed_at).toLocaleString('ru-RU') : '—'}</Typography><DataTable columns={[{ key: 'sku', header: 'SKU', render: (row: Measurement) => row.sku }, { key: 'article', header: 'Артикул продавца', render: (row: Measurement) => row.seller_article ?? '—' }, { key: 'volume', header: 'Объём, л', align: 'right', render: (row: Measurement) => row.volume_liters ?? '—' }, { key: 'source', header: 'Источник', render: (row: Measurement) => sourceLabel(row.dimensions_source) }, { key: 'days', header: 'Литро-дни', align: 'right', render: (row: Measurement) => row.liter_days }, { key: 'amount', header: 'Сумма, ₽', align: 'right', render: (row: Measurement) => row.amount ?? '0' }]} rows={printStatement.measurements} getRowKey={(row) => row.product_id} empty={{ title: 'В выбранном месяце хранения не было' }} /><Typography sx={{ mt: 2, fontWeight: 700, textAlign: 'right' }}>Итого: {printStatement.total_amount} ₽</Typography></Box>}</DialogContent><DialogActions><SecondaryAction onClick={() => setPrintStatement(null)}>Закрыть</SecondaryAction><PrintAction what="накладную" placement="panel" onClick={() => window.print()} /></DialogActions></Dialog>
   </Box>

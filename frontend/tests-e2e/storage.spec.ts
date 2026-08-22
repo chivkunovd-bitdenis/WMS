@@ -29,6 +29,21 @@ test('S-11-TC-001 administrator opens the previous-month storage screen', async 
   await expect(page.getByTestId('storage-month')).toHaveValue('2026-07')
 })
 
+test('S-11-TC-002 administrator saves a warehouse storage rate effective forward', async ({ page }) => {
+  await openStorage(page, 'fulfillment_admin', false)
+  let tariffBody: unknown = null
+  await page.route('**/api/operations/storage/tariffs', async (route) => {
+    tariffBody = route.request().postDataJSON()
+    await route.fulfill({ status: 201, json: { id: 'tariff-1' } })
+  })
+  await page.getByRole('button', { name: 'Задать тариф' }).click()
+  await page.getByTestId('storage-rate-amount').fill('0,70')
+  await page.getByTestId('storage-rate-valid-from').fill('2026-08-01')
+  await page.getByTestId('storage-rate-save').click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  expect(tariffBody).toEqual({ warehouse_id: 'warehouse-1', amount: 0.7, valid_from: '2026-08-01' })
+})
+
 test('S-11-TC-003 forms only the selected month through the storage API', async ({ page }) => {
   await openStorage(page)
   let rebuildBody: unknown = null
@@ -116,6 +131,14 @@ test('S-11-TC-012 staff without a tariff sees guidance and no tariff controls', 
   await expect(page.getByTestId('storage-seller-table')).toContainText('Тариф хранения ещё не задан')
   await expect(page.getByTestId('storage-seller-table')).toContainText('Обратитесь к администратору ФФ')
   await expect(page.getByTestId('storage-rate')).toHaveCount(0)
+})
+
+test('S-11-TC-012 staff with a tariff can inspect rows but cannot change or fix billing', async ({ page }) => {
+  await openStorage(page, 'fulfillment_staff', true)
+  await page.getByTestId('storage-expand-draft-ready').click()
+  await expect(page.getByTestId('storage-detail')).toContainText('SKU-20001')
+  await expect(page.getByTestId('storage-rate')).toHaveCount(0)
+  await expect(page.getByTestId('storage-fix')).toHaveCount(0)
 })
 
 test('S-11-TC-012 cells permission alone does not grant access to storage', async ({ page }) => {
