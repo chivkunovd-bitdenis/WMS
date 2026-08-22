@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
+from decimal import Decimal
 
 import sqlalchemy as sa
 from sqlalchemy import select
@@ -24,6 +25,7 @@ from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.services import inventory_service as inv_svc
 from app.services import sorting_location_service as sorting_loc_svc
+from app.services.billing_ledger_service import record_operational_charge
 from app.services.catalog_service import (
     get_storage_location_in_warehouse,
     get_warehouse,
@@ -896,6 +898,7 @@ async def receive_line(
     line_id: uuid.UUID,
     *,
     quantity: int,
+    performer_id: uuid.UUID | None = None,
 ) -> InboundIntakeRequest:
     pair = await _line_on_request(session, tenant_id, request_id, line_id)
     if pair is None:
@@ -930,6 +933,19 @@ async def receive_line(
     )
     line.posted_qty += quantity
     _maybe_complete_request(req)
+    if req.status == STATUS_DONE:
+        await record_operational_charge(
+            session,
+            tenant_id=tenant_id,
+            seller_id=req.seller_id,
+            source_type="inbound_intake",
+            source_id=req.id,
+            source="inbound",
+            service_code="inbound",
+            quantity=Decimal(sum(ln.posted_qty for ln in req.lines)),
+            occurred_at=req.posted_at or datetime.now(UTC),
+            performer_id=performer_id,
+        )
     await session.commit()
     await session.refresh(req)
     return req
@@ -939,6 +955,8 @@ async def post_all_remaining(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
+    *,
+    performer_id: uuid.UUID | None = None,
 ) -> InboundIntakeRequest:
     req = await get_request(session, tenant_id, request_id)
     if req is None:
@@ -978,6 +996,19 @@ async def post_all_remaining(
         )
         line.posted_qty += rem
     _maybe_complete_request(req)
+    if req.status == STATUS_DONE:
+        await record_operational_charge(
+            session,
+            tenant_id=tenant_id,
+            seller_id=req.seller_id,
+            source_type="inbound_intake",
+            source_id=req.id,
+            source="inbound",
+            service_code="inbound",
+            quantity=Decimal(sum(ln.posted_qty for ln in req.lines)),
+            occurred_at=req.posted_at or datetime.now(UTC),
+            performer_id=performer_id,
+        )
     await session.commit()
     await session.refresh(req)
     return req

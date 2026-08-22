@@ -1,0 +1,73 @@
+from __future__ import annotations
+
+import uuid
+from datetime import UTC, datetime
+from decimal import Decimal
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.billing import BillingLedgerEntry, BillingTariffVersion
+
+
+async def record_operational_charge(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID | None,
+    source_type: str,
+    source_id: uuid.UUID,
+    source: str,
+    service_code: str,
+    quantity: Decimal,
+    occurred_at: datetime,
+    performer_id: uuid.UUID | None,
+) -> BillingLedgerEntry:
+    """Record the first final operational fact, without blocking on a missing tariff."""
+    existing = await session.scalar(
+        select(BillingLedgerEntry).where(
+            BillingLedgerEntry.tenant_id == tenant_id,
+            BillingLedgerEntry.source_type == source_type,
+            BillingLedgerEntry.source_id == source_id,
+            BillingLedgerEntry.entry_type == "charge",
+        )
+    )
+    if existing is not None:
+        return existing
+
+    fact_date = occurred_at.astimezone(UTC).date()
+    tariff = await session.scalar(
+        select(BillingTariffVersion)
+        .where(
+            BillingTariffVersion.tenant_id == tenant_id,
+            BillingTariffVersion.service_code == service_code,
+            BillingTariffVersion.valid_from <= fact_date,
+            (
+                BillingTariffVersion.valid_to.is_(None)
+                | (BillingTariffVersion.valid_to >= fact_date)
+            ),
+            (BillingTariffVersion.seller_id == seller_id)
+            | BillingTariffVersion.seller_id.is_(None),
+        )
+        .order_by(BillingTariffVersion.seller_id.is_(None), BillingTariffVersion.valid_from.desc())
+    )
+    rate = tariff.amount if tariff is not None else None
+    billed_quantity = Decimal("1") if tariff is not None and tariff.unit == "document" else quantity
+    amount = None if rate is None else (rate * billed_quantity).quantize(Decimal("0.01"))
+    entry = BillingLedgerEntry(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        tariff_version_id=tariff.id if tariff is not None else None,
+        performer_id=performer_id,
+        service_code=service_code,
+        source=source,
+        source_type=source_type,
+        source_id=source_id,
+        unit=tariff.unit if tariff is not None else "item",
+        quantity=billed_quantity,
+        rate=rate,
+        amount=amount,
+        occurred_at=occurred_at,
+    )
+    session.add(entry)
+    return entry

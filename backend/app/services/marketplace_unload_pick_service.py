@@ -380,6 +380,7 @@ async def ship_request(
     request_id: uuid.UUID,
     *,
     acknowledge_discrepancy: bool = False,
+    performer_id: uuid.UUID | None = None,
 ) -> MarketplaceUnloadRequest:
     try:
         return await mu_svc.complete_unload(
@@ -387,6 +388,7 @@ async def ship_request(
             tenant_id,
             request_id,
             acknowledge_discrepancy=acknowledge_discrepancy,
+            performer_id=performer_id,
         )
     except mu_svc.MarketplaceUnloadError as exc:
         raise MarketplaceUnloadPickError(exc.code) from None

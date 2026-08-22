@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from sqlalchemy import and_, delete, func, or_, select
@@ -26,6 +27,7 @@ from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.user import User
 from app.services import inventory_service, stock_direction_service
+from app.services.billing_ledger_service import record_operational_charge
 from app.services.catalog_service import get_warehouse
 from app.services.document_number_service import (
     DOC_TYPE_UNLOAD,
@@ -965,6 +967,7 @@ async def complete_unload(
     request_id: uuid.UUID,
     *,
     acknowledge_discrepancy: bool = False,
+    performer_id: uuid.UUID | None = None,
 ) -> MarketplaceUnloadRequest:
     """Single completion op: ship unload; set has_discrepancy when plan ≠ fact."""
     req = await get_request(session, tenant_id, request_id)
@@ -1001,6 +1004,18 @@ async def complete_unload(
     req.has_discrepancy = has_discrepancy
     await delete_empty_boxes_for_ship(session, req)
     req.status = STATUS_SHIPPED
+    await record_operational_charge(
+        session,
+        tenant_id=tenant_id,
+        seller_id=req.seller_id,
+        source_type="marketplace_unload",
+        source_id=req.id,
+        source="marketplace_unload",
+        service_code="marketplace_outbound",
+        quantity=Decimal(sum(distributed.values())),
+        occurred_at=datetime.now(UTC),
+        performer_id=performer_id,
+    )
     await release_reservations_for_shipped(session, req.id)
     await session.commit()
     r2 = await get_request(session, tenant_id, request_id)

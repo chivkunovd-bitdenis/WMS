@@ -1336,6 +1336,7 @@ async def ship_marketplace_unload(
             user.tenant_id,
             request_id,
             acknowledge_discrepancy=bool(body.acknowledge_discrepancy) if body else False,
+            performer_id=user.id,
         )
     except MarketplaceUnloadPickError as exc:
         raise _map_pick_err(exc) from None

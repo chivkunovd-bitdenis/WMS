@@ -15,3 +15,5 @@
 18:07   09-billing · screen-dev: готово
 18:07   09-billing · dev: фича 5/11 сохранена 82e41069b6ef
 18:10   09-billing · screen-dev: готово
+18:10   09-billing · dev: фича 6/11 сохранена e809836d6311
+18:15   09-billing · backend-dev: готово
