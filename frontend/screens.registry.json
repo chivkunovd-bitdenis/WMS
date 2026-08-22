@@ -122,6 +122,7 @@
         "src/screens/v2/FbsPrintPreviewDialog.tsx",
         "src/screens/v2/FbsSupplyCreateDialog.tsx",
         "src/screens/v2/FfFbsOrdersScreen.tsx",
+        "src/screens/v2/FfFbsPickList.tsx",
         "src/screens/v2/FfFbsSupplyWorkspace.tsx",
         "src/screens/v2/fbsUx.ts"
       ],
