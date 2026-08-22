@@ -302,7 +302,7 @@ def fake_e2e_smoke(проверь) -> None:
             проверь("fake E2E: resume проходит", n.ночь(wave, 1), 0)
             проверь("fake E2E: resume снимает отложено", (wave / "cards" / "fail" / "OTLOZHENO.md").exists(), False)
             проверь("fake E2E: acceptor вызван", sum(role == "product-acceptor" for role, _ in calls), 2)
-            проверь("fake E2E: отдельный stand на карточку", len(stands), 2)
+            проверь("fake E2E: clicker и judge получили stand карточки", len(stands), 4)
             проверь("fake E2E: dev обязан сохранить commit", all(committed.values()), True)
             acceptor_prompts = [p for role, p in calls if role == "product-acceptor"]
             проверь("fake E2E: acceptor получает SHA карточек",
@@ -480,6 +480,32 @@ def main() -> int:
             except ValueError:
                 ошибка_фильтра = True
             проверь("resume: неизвестная карточка отклоняется", ошибка_фильтра, True)
+
+            волна_полосы = t / "stable-wave"
+            (волна_полосы / "cards" / "card-x").mkdir(parents=True)
+            старая_копия = t / "existing-lane-2"
+            старая_копия.mkdir()
+            старая_ветка = "night/stable-wave/lane-2/card-x"
+            fake_git_result = mock.Mock(returncode=0, stdout="base-sha\n", stderr="")
+            with mock.patch.object(n, "_worktree_пути", return_value={старая_ветка: старая_копия}), \
+                 mock.patch.object(n, "_git", return_value=fake_git_result):
+                возобновлённая = n._создать_рабочую_карточку("card-x", волна_полосы, 5)
+            проверь("resume: повышение параллельности не меняет полосу",
+                    возобновлённая.lane, 2)
+            проверь("resume: используется исходная ветка",
+                    возобновлённая.ветка, старая_ветка)
+
+            вызовы_стенда = []
+
+            def fake_force_stand(полоса, _рабочая=None, force=False):
+                вызовы_стенда.append((полоса, force))
+                return "stand-ready"
+
+            with mock.patch.object(n, "поднять_стенд", side_effect=fake_force_stand):
+                n.стенд_для("clicker", "x", рабочая)
+                n.стенд_для("ux-judge", "x", рабочая)
+            проверь("stand: clicker может использовать кэш", вызовы_стенда[0], (1, False))
+            проверь("stand: ux-judge заново поднимает свой SHA", вызовы_стенда[1], (1, True))
 
             (t / "RAZBOR.md").write_text("## Тип\nбаг\n## Экраны\n- S-03\n", encoding="utf-8")
             проверь("тип читается", n.поле(t, "RAZBOR.md", "Тип").strip(), "баг")
