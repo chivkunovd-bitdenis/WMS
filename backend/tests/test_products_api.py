@@ -32,6 +32,9 @@ async def test_product_dimension_history_and_container_measurement(async_client)
     )
     assert saved.status_code == 200, saved.text
     assert saved.json()["volume_liters"] == pytest.approx(2.5)
+    assert saved.json()["dimensions_source"] == "container_override"
+    assert saved.json()["dimensions_updated_at"] is not None
+    assert saved.json()["dimensions_updated_by_user_id"] is not None
 
     history = await async_client.get(
         f"/products/{product_id}/dimensions/history", headers=headers
@@ -68,6 +71,9 @@ async def test_product_dimension_history_and_container_measurement(async_client)
     )
     assert manual.status_code == 200, manual.text
     assert manual.json()["volume_liters"] == pytest.approx(6.0)
+    assert manual.json()["dimensions_source"] == "manual"
+    assert manual.json()["dimensions_updated_at"] is not None
+    assert manual.json()["dimensions_updated_by_user_id"] is not None
 
     history = await async_client.get(
         f"/products/{product_id}/dimensions/history", headers=headers
@@ -80,5 +86,5 @@ async def test_product_dimension_history_and_container_measurement(async_client)
     restore = await async_client.post(
         f"/products/{product_id}/dimensions/restore-wb", headers=headers
     )
-    assert restore.status_code == 422
+    assert restore.status_code == 404
     assert restore.json()["detail"] == "wb_dimensions_not_found"

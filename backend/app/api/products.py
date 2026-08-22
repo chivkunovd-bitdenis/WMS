@@ -60,12 +60,7 @@ from app.services.seller_wb_catalog_service import (
     list_linked_wb_catalog_rows,
     list_seller_wb_catalog_rows,
 )
-from app.services.staff_permissions_service import (
-    PERM_INVENTORY,
-    PERM_RECEPTION,
-    PERM_SHIFT_LEAD,
-    get_staff_permissions,
-)
+from app.services.staff_permissions_service import PERM_INVENTORY, get_staff_permissions
 from app.services.stock_direction_service import (
     StockDirectionError,
     create_stock_direction,
@@ -168,6 +163,9 @@ class ProductOut(BaseModel):
     requires_honest_sign: bool = False
     is_manual: bool = False
     volume_liters: float | None = None
+    dimensions_source: str | None = None
+    dimensions_updated_at: datetime | None = None
+    dimensions_updated_by_user_id: str | None = None
 
 
 class ProductTzRowPreviewOut(BaseModel):
@@ -352,6 +350,13 @@ def _product_out(p: object) -> ProductOut:
             p.volume_liters
             if p.volume_liters is not None
             else volume_liters_from_mm(p.length_mm, p.width_mm, p.height_mm)
+        ),
+        dimensions_source=p.dimensions_source,
+        dimensions_updated_at=p.dimensions_updated_at,
+        dimensions_updated_by_user_id=(
+            str(p.dimensions_updated_by_user_id)
+            if p.dimensions_updated_by_user_id is not None
+            else None
         ),
     )
 
@@ -747,11 +752,7 @@ async def patch_product_dimensions(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="product_not_found")
     if user.role == FULFILLMENT_STAFF:
         perms = await get_staff_permissions(session, user)
-        if not (
-            perms.has(PERM_RECEPTION)
-            or perms.has(PERM_SHIFT_LEAD)
-            or perms.has(PERM_INVENTORY)
-        ):
+        if not perms.has(PERM_INVENTORY):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     elif user.role != FULFILLMENT_ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
