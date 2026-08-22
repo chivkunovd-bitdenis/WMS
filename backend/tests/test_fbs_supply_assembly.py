@@ -226,6 +226,13 @@ async def test_fbs_supply_orders_are_returned_in_stable_order(
     assert [row["wb_order_id"] for row in loaded.json()["orders"]] == [810101, 810102]
 
 
+def test_fbs_supply_relationship_orders_by_wb_id_then_internal_id() -> None:
+    order_by = FbsSupply.orders.property.order_by
+    assert len(order_by) == 2
+    assert str(order_by[0]).endswith("fbs_orders.wb_order_id")
+    assert str(order_by[1]).endswith("fbs_orders.id")
+
+
 @pytest.mark.asyncio
 async def test_fbs_supply_create_wb_error_no_db_row(
     async_client: AsyncClient,
