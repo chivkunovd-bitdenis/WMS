@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.product import Product
+from app.models.product_dimension_event import ProductDimensionEvent
 from app.services.catalog_service import (
     DEFAULT_PRODUCT_DIM_MM,
     _dimension_fingerprint,
@@ -327,6 +328,15 @@ async def upsert_products_from_wb_cards(
                 wb_volume_liters = volume_liters_from_mm(
                     card_length_mm, card_width_mm, card_height_mm
                 )
+                active_event = await session.scalar(
+                    select(ProductDimensionEvent).where(
+                        ProductDimensionEvent.product_id == p.id,
+                        ProductDimensionEvent.applied.is_(True),
+                    )
+                )
+                protected_manual_measurement = active_event is not None and active_event.source in {
+                    "manual", "container_override", "container"
+                }
                 await _record_dimension_event(
                     session, p, source="wb", author_user_id=None,
                     length_mm=card_length_mm, width_mm=card_width_mm, height_mm=card_height_mm,
@@ -335,11 +345,9 @@ async def upsert_products_from_wb_cards(
                         card_length_mm, card_width_mm, card_height_mm,
                         p.weight_g, wb_volume_liters, "wb", None,
                     ),
-                    apply=p.dimensions_source not in {
-                        "manual", "container", "container_override"
-                    },
+                    apply=not protected_manual_measurement,
                 )
-                if p.dimensions_source not in {"manual", "container", "container_override"}:
+                if not protected_manual_measurement:
                     p.volume_liters = wb_volume_liters
                     p.dimensions_source = "wb"
             # Same rule for country of origin / shelf life: WB card fills the gap,

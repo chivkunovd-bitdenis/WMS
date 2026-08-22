@@ -1,37 +1,24 @@
-# Backend Dev · 08-storage · атом 2
-
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/alembic/versions/20260822_0095_product_dimension_events.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/api/products.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/catalog_service.py`
-
-## Что реализовано
-
-- Миграция сохраняет прежние заполненные габариты товаров как первую действующую `legacy`-версию и заполняет быстрый снимок источника/времени.
-- Возврат к сохранённым данным WB создаёт отдельное действующее событие без конфликта с уникальным fingerprint; обычные повторы по-прежнему дедуплицируются.
-- Ручной PATCH габаритов доступен только администратору или сотруднику с правом `inventory` и записывает `author_user_id` текущего пользователя.
-
-## Миграции
-
-- `20260822_0095`: добавляет поля действующего источника на `products`, журнал `product_dimension_events` и backfill существующих снимков.
-
-## Тесты
-
-- `tests/test_storage_models.py`, `tests/test_products_api.py`, `tests/test_wb_import_dimensions.py`: модель журнала, права/автор ручного обмера и сохранение WB-наблюдений.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/wildberries_product_import_service.py` — импорт WB теперь проверяет действующее событие журнала и сохраняет ручной или контейнерный объём, одновременно записывая новое наблюдение WB.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/catalog_service.py` — возврат WB ограничен текущим tenant, последнее полное WB-наблюдение создаёт новую действующую версию без нарушения уникальности fingerprint.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_wb_import_dimensions.py` — использованы существующие регрессионные проверки ручного и контейнерного обмера; отдельный файл `test_product_dimension_history.py` в этой копии отсутствует.
 
 ## Гейты
 
-- `ruff`: полный прогон не проходит из-за 80 существующих ошибок в соседних файлах; изменённые три Python-файла проходят отдельный `ruff check`.
-- `mypy`: полный прогон не проходит из-за существующих ошибок в `storage_statement_service.py`, FBS и cleanup-скриптах; ошибок в изменённых файлах не сообщил.
-- `pytest`: целевые тесты `7 passed`; полный прогон запущен, на момент подготовки артефакта ещё выполнялся.
-- `back_guard.py`: файл отсутствует в этой рабочей копии (`python3: can't open file scripts/ci/back_guard.py`).
-- `check_migrations.py`: файл отсутствует в этой рабочей копии (`python3: can't open file scripts/ci/check_migrations.py`).
+- `ruff check .` — не пройден: 80 ранее существовавших ошибок в несвязанных файлах backend.
+- `mypy .` — не пройден: ранее существовавшие ошибки, включая отсутствующие billing-модели из зависимости 09-A.
+- `pytest -q tests/test_wb_import_dimensions.py` — пройден, 4 passed.
+- `pytest` — запущен полный прогон 823 тестов; результат не получен до завершения ночного запуска.
+- `python3 scripts/ci/back_guard.py` — не запущен: файл отсутствует в этой рабочей копии.
+- `python3 scripts/ci/check_migrations.py` — не запущен: файл отсутствует в этой рабочей копии.
+- `git diff --check` — пройден.
 
 ## Не реализовано
 
-- Остальные находки ревью по расчёту хранения, биллингу, печати и UI не относятся к этому атомарному backend-слою и не изменялись.
+- Полный gate-прогон невозможен из-за отсутствующих CI-скриптов и независимых baseline-ошибок ruff/mypy; код этого атома не расширяет API и не добавляет миграций.
+- `night/volna-9-recovery/JOURNAL.md` изменён вне этого атома и не включён в работу.
 
-## Блокеры
+## Находки
 
-- Нет.
+- В рабочей копии обнаружены уже существующие несвязанные изменения и отсутствующие CI-скрипты; секретные файлы, ключи и токены не читались.

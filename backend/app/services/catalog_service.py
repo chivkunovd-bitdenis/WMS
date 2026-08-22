@@ -829,6 +829,7 @@ async def restore_latest_wb_dimensions(session: AsyncSession, tenant_id: uuid.UU
     if p is None:
         raise CatalogError("product_not_found")
     result = await session.execute(select(ProductDimensionEvent).where(
+        ProductDimensionEvent.tenant_id == tenant_id,
         ProductDimensionEvent.product_id == product_id,
         ProductDimensionEvent.source == "wb",
         ProductDimensionEvent.length_mm.is_not(None),
