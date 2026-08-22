@@ -5,10 +5,12 @@ import io
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
@@ -19,6 +21,7 @@ from app.models.warehouse import Warehouse
 TRANSFER_TYPES = {"stock_transfer_in", "stock_transfer_out"}
 PAGE_SIZE = 50
 GROUP_BY_VALUES = {"product", "operation"}
+MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 
 
 def validate_period(date_from: datetime, date_to: datetime) -> None:
@@ -214,6 +217,7 @@ async def build_overview(
     seller_id: uuid.UUID | None,
     warehouse_id: uuid.UUID | None = None,
     search: str | None = None,
+    include_technical_warnings: bool = True,
 ) -> dict[str, object]:
     validate_period(date_from, date_to)
     movement_filter = [
@@ -332,49 +336,95 @@ async def build_overview(
         )
     current_balance = int((await session.scalar(balance_stmt)) or 0)
 
+    # Keep calendar grouping in Python.  This is deliberately portable between
+    # SQLite (tests) and PostgreSQL and, unlike ``date(created_at)``, always
+    # uses the Moscow calendar that defines the requested report period.
     daily_stmt = (
         select(
-            func.date(InventoryMovement.created_at),
-            func.coalesce(
-                func.sum(
-                    case(
-                        (InventoryMovement.quantity_delta > 0, InventoryMovement.quantity_delta),
-                        else_=0,
-                    )
-                ),
-                0,
-            ),
-            func.coalesce(
-                func.sum(
-                    case(
-                        (InventoryMovement.quantity_delta < 0, -InventoryMovement.quantity_delta),
-                        else_=0,
-                    )
-                ),
-                0,
-            ),
+            InventoryMovement.created_at,
+            InventoryMovement.quantity_delta,
         )
         .select_from(InventoryMovement)
         .join(Product, Product.id == InventoryMovement.product_id)
         .join(Warehouse, Warehouse.id == InventoryMovement.warehouse_id)
         .where(*movement_filter)
-        .group_by(func.date(InventoryMovement.created_at))
     )
-    daily = {
-        str(day): {"in_qty": int(in_qty), "out_qty": int(out_qty)}
-        for day, in_qty, out_qty in (await session.execute(daily_stmt)).all()
-    }
-    days: list[dict[str, object]] = []
-    cursor = date_from.date()
-    last_day = (
-        date_to.date()
-        if date_to.time() != datetime.min.time()
-        else date_to.date() - timedelta(days=1)
+    daily: dict[str, dict[str, int]] = {}
+    for created_at, quantity_delta in (await session.execute(daily_stmt)).all():
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=UTC)
+        key = created_at.astimezone(MOSCOW_TZ).date().isoformat()
+        item = daily.setdefault(key, {"in_qty": 0, "out_qty": 0, "previous_out_qty": 0})
+        if quantity_delta > 0:
+            item["in_qty"] += int(quantity_delta)
+        else:
+            item["out_qty"] += -int(quantity_delta)
+
+    previous_daily_stmt = (
+        select(InventoryMovement.created_at, InventoryMovement.quantity_delta)
+        .select_from(InventoryMovement)
+        .join(Product, Product.id == InventoryMovement.product_id)
+        .join(Warehouse, Warehouse.id == InventoryMovement.warehouse_id)
+        .where(*previous_filter)
     )
-    while cursor <= last_day:
-        item = daily.get(cursor.isoformat(), {"in_qty": 0, "out_qty": 0})
-        days.append({"date": cursor.isoformat(), **item})
-        cursor += timedelta(days=1)
+    for created_at, quantity_delta in (await session.execute(previous_daily_stmt)).all():
+        if quantity_delta >= 0:
+            continue
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=UTC)
+        previous_day = created_at.astimezone(MOSCOW_TZ).date()
+        current_day = previous_day + length
+        key = current_day.isoformat()
+        item = daily.setdefault(key, {"in_qty": 0, "out_qty": 0, "previous_out_qty": 0})
+        item["previous_out_qty"] += -int(quantity_delta)
+
+    # An empty series is an explicit signal for the chart empty state.  Do not
+    # manufacture zero-valued points for every date in an otherwise empty slice.
+    days = [
+        {"date": day, **values}
+        for day, values in sorted(daily.items())
+    ]
+
+    legacy_stmt = select(func.count()).select_from(InventoryMovement).join(
+        Warehouse, Warehouse.id == InventoryMovement.warehouse_id
+    ).where(*movement_filter, InventoryMovement.reporting_dimensions_legacy.is_(True))
+    legacy_count = int((await session.scalar(legacy_stmt)) or 0)
+
+    freshness_filters = [
+        FbsWarehouseBinding.tenant_id == tenant_id,
+        FbsWarehouseBinding.is_active.is_(True),
+        FbsWarehouseBinding.stock_sync_enabled.is_(True),
+    ]
+    if seller_id is not None:
+        freshness_filters.append(FbsWarehouseBinding.seller_id == seller_id)
+    if warehouse_id is not None:
+        freshness_filters.append(FbsWarehouseBinding.wms_warehouse_id == warehouse_id)
+    binding_count, oldest_sync = (
+        await session.execute(
+            select(func.count(), func.min(FbsWarehouseBinding.last_sync_at)).where(
+                *freshness_filters
+            )
+        )
+    ).one()
+    source_freshness: dict[str, object] | None = None
+    warnings: list[dict[str, object]] = []
+    if binding_count:
+        sync_at = oldest_sync
+        if sync_at is not None and sync_at.tzinfo is None:
+            sync_at = sync_at.replace(tzinfo=UTC)
+        # A missing timestamp is stale as well: it means that this enabled WB
+        # feed has not yet supplied a confirmed freshness point.
+        is_stale = sync_at is None or datetime.now(UTC) - sync_at > timedelta(hours=1)
+        source_freshness = {
+            "source": "wildberries",
+            "last_updated_at": sync_at.isoformat() if sync_at else None,
+            "is_stale": is_stale,
+        }
+        if is_stale:
+            warnings.append({"code": "wildberries_stale", "source": "wildberries",
+                "last_updated_at": sync_at.isoformat() if sync_at else None})
+    if include_technical_warnings and legacy_count:
+        warnings.append({"code": "reporting_dimensions_legacy", "count": legacy_count})
 
     return {
         "date_from": date_from.isoformat(), "date_to": date_to.isoformat(),
@@ -389,5 +439,5 @@ async def build_overview(
         },
         "daily": days,
         "generated_at": datetime.now(UTC).isoformat(),
-        "source_freshness": None, "warnings": [],
+        "source_freshness": source_freshness, "warnings": warnings,
     }

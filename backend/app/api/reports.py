@@ -13,6 +13,7 @@ from app.api.deps import (
     get_current_user,
     seller_line_product_scope,
 )
+from app.core.roles import FULFILLMENT_ADMIN
 from app.db.session import get_db
 from app.models.user import User
 from app.services.reporting_service import (
@@ -65,6 +66,7 @@ async def get_reports_overview(
             seller_id=seller_scope if seller_scope is not None else seller_id,
             warehouse_id=warehouse_id,
             search=search,
+            include_technical_warnings=user.role == FULFILLMENT_ADMIN,
         )
     except ValueError as exc:
         raise HTTPException(

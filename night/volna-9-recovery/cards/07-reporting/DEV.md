@@ -1,24 +1,21 @@
-# DEV · 07-reporting · атом 5
+# DEV · 07-reporting · атом 6
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/MovementFlowChart.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/MovementFlowChart.test.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/DEV.md`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/app/services/reporting_service.py` — `GET /reports/overview`: московская дневная агрегация, сопоставленная серия прошлого периода, пустая серия без искусственных нулей, свежесть Wildberries и предупреждения legacy-истории.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/app/api/reports.py` — служебное предупреждение legacy-истории доступно только администратору ФФ; селлер получает только предупреждение о свежести внешнего источника.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/tests/test_reports_overview.py` — API-покрытие 367 дней, аутентификации, полуоткрытой верхней границы, Moscow-дня, transfer-исключения, физического остатка, нулевой базы сравнения и принудительного seller scope.
 
 ## Гейты
 
-- Зелёный: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npx tsc --noEmit -p tsconfig.app.json`.
-- Красный: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && python3 scripts/ui/ui_guard.py`. Новые нарушения зафиксированы в чужих файлах вне атома: `frontend/src/App.tsx`, `frontend/src/components/WbProductPickerDialog.tsx`, `frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx`, `frontend/src/screens/v2/SellerInboundDraftScreen.tsx`. Базовая линия не обновлялась.
-- Красный: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npm run test:unit -- src/ui-kit/MovementFlowChart.test.tsx --run`. Причина: `sh: vitest: command not found`; зависимости для frontend не установлены в этой рабочей копии.
-
-Точная команда, выполненная ранее в составе связанной проверки: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npx tsc --noEmit -p tsconfig.app.json && npm run test:unit -- MovementFlowChart.test.tsx`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && ruff check app/services/reporting_service.py app/api/reports.py tests/test_reports_overview.py` — `All checks passed!`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && mypy app/services/reporting_service.py app/api/reports.py` — `Success: no issues found in 2 source files`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && pytest -q tests/test_reports_overview.py` — `4 passed in 3.34s`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && python3 scripts/ci/back_guard.py` — не запущен: файла `scripts/ci/back_guard.py` в этой рабочей копии нет.
+- `git diff --check` — без ошибок.
+- `check_migrations.py` не применим: миграция в этом атоме не добавлялась.
 
 ## Не реализовано
 
-Нет. Находка review №7, относящаяся к этому атому, исправлена: график теперь показывает пустое состояние и для непустой дневной серии, в которой все отображаемые значения равны нулю, а не рисует нулевые линии.
-
-## Находки
-
-- `ui_guard.py` обнаружил новые нарушения вне разрешённых файлов атома; они не изменялись.
-- Установленные frontend-зависимости отсутствуют, поэтому Vitest не запускается.
+- Замечания ревью по таблице transfer-пар, CSV и миграционному backfill не менялись: это атомы 7, 8 и 07-A соответственно, вне границы текущего `GET /reports/overview`.
+- Клиентская передача закрытой даты как полуоткрытой верхней границы, московские пресеты, отображение линии сравнения и предупреждений не менялись: это frontend-слой.

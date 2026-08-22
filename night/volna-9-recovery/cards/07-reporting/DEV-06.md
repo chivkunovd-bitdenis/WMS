@@ -1,27 +1,21 @@
-# DEV — 07-reporting
+# DEV · 07-reporting · атом 6
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/app/services/reporting_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/DEV.md`
-
-Исправлен backend-слой отчёта: дневная серия явно соединяет склад, корректно включает последний календарный день для неполуночного `date_to`, текущий остаток товарной строки ограничивается текущим `Product.seller_id`, а целостность transfer-пары проверяет состав пары, склады, направление и количество.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/app/services/reporting_service.py` — `GET /reports/overview`: московская дневная агрегация, сопоставленная серия прошлого периода, пустая серия без искусственных нулей, свежесть Wildberries и предупреждения legacy-истории.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/app/api/reports.py` — служебное предупреждение legacy-истории доступно только администратору ФФ; селлер получает только предупреждение о свежести внешнего источника.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/tests/test_reports_overview.py` — API-покрытие 367 дней, аутентификации, полуоткрытой верхней границы, Moscow-дня, transfer-исключения, физического остатка, нулевой базы сравнения и принудительного seller scope.
 
 ## Гейты
 
-- `ruff check` по изменённым backend-файлам: PASS.
-- `mypy` по изменённым сервису и API: PASS (`Success: no issues found in 2 source files`).
-- `pytest` по `test_reports_overview.py` и `test_reports_inventory.py`: PASS (`4 passed`).
-- Полный `ruff check .`: FAIL на 82 существующих ошибках в несвязанных файлах; изменённые файлы проходят.
-- Полный `mypy .` и полный `pytest`: не запускались после остановки цепочки полным ruff.
-- `python3 scripts/ci/back_guard.py`: недоступен — файла `scripts/ci/back_guard.py` нет в этой рабочей копии.
-- `python3 scripts/ci/check_migrations.py`: недоступен — файла `scripts/ci/check_migrations.py` нет в этой рабочей копии.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && ruff check app/services/reporting_service.py app/api/reports.py tests/test_reports_overview.py` — `All checks passed!`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && mypy app/services/reporting_service.py app/api/reports.py` — `Success: no issues found in 2 source files`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && pytest -q tests/test_reports_overview.py` — `4 passed in 3.34s`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && python3 scripts/ci/back_guard.py` — не запущен: файла `scripts/ci/back_guard.py` в этой рабочей копии нет.
+- `git diff --check` — без ошибок.
+- `check_migrations.py` не применим: миграция в этом атоме не добавлялась.
 
 ## Не реализовано
 
-- Фильтрация по `Warehouse.is_operational` и вычисление `source_freshness`/legacy-предупреждения не добавлены: в этой рабочей копии нет поля `Warehouse.is_operational`, миграции для него или канонической модели времени успешного импорта WB. Эвристика по имени склада намеренно не расширялась.
-- Frontend-находки из REVIEW.md не реализовывались: роль ограничена backend-dev.
-
-## Блокеры
-
-Нет.
+- Замечания ревью по таблице transfer-пар, CSV и миграционному backfill не менялись: это атомы 7, 8 и 07-A соответственно, вне границы текущего `GET /reports/overview`.
+- Клиентская передача закрытой даты как полуоткрытой верхней границы, московские пресеты, отображение линии сравнения и предупреждений не менялись: это frontend-слой.
