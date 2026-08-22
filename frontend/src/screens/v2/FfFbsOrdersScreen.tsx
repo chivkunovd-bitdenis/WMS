@@ -56,6 +56,7 @@ import {
   type FbsWorklistWarehouseOption,
   type FbsWorkspace,
 } from './fbsApi'
+import { WarehouseContextSwitch, type WarehouseOption } from '../../ui-kit'
 
 type SellerRow = { id: string; name: string }
 
@@ -515,6 +516,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [workspaceOpen, setWorkspaceOpen] = useState(false)
   const [workspaceId, setWorkspaceId] = useState<string | null>(null)
   const [workspaceSeed, setWorkspaceSeed] = useState<FbsWorkspace | null>(null)
+  const [wmsWarehouseId, setWmsWarehouseId] = useState<string | null>(null)
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({})
   const registerRow = useCallback((id: string, node: HTMLTableRowElement | null) => {
     rowRefs.current[id] = node
@@ -529,6 +531,18 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   // панель — так нижние строки остаются кликабельными при любой высоте панели.
   const selectionBarRef = useRef<HTMLDivElement | null>(null)
   const [selectionBarHeight, setSelectionBarHeight] = useState(0)
+  const wmsWarehouseOptions = useMemo<WarehouseOption[]>(() => {
+    const values = new Map<string, string>()
+    for (const item of [...orders, ...activeSupplies]) values.set(item.wms_warehouse.id, item.wms_warehouse.name)
+    return [...values].map(([id, name]) => ({ id, name }))
+  }, [orders, activeSupplies])
+  const visibleOrders = useMemo(() => wmsWarehouseId ? orders.filter((item) => item.wms_warehouse.id === wmsWarehouseId) : orders, [orders, wmsWarehouseId])
+  const visibleSupplies = useMemo(() => wmsWarehouseId ? activeSupplies.filter((item) => item.wms_warehouse.id === wmsWarehouseId) : activeSupplies, [activeSupplies, wmsWarehouseId])
+  const visibleExternalOrders = useMemo(() => wmsWarehouseId ? externalActiveOrders.filter((item) => item.wms_warehouse.id === wmsWarehouseId) : externalActiveOrders, [externalActiveOrders, wmsWarehouseId])
+  useEffect(() => {
+    if (wmsWarehouseOptions.length === 1) setWmsWarehouseId(wmsWarehouseOptions[0].id)
+    if (wmsWarehouseId && !wmsWarehouseOptions.some((option) => option.id === wmsWarehouseId)) setWmsWarehouseId(null)
+  }, [wmsWarehouseOptions, wmsWarehouseId])
 
   const load = useCallback(async () => {
     // Задача 9 пула (HANDOFF-POLISH.md): поллинг не должен наслаиваться сам на себя —
@@ -725,31 +739,31 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         Number(order.wb_warehouse.id) === Number(first.wb_warehouse.id),
     )
     if (!sameSelection) return []
-    return activeSupplies.filter(
+    return visibleSupplies.filter(
       (supply) =>
         supply.can_add_orders &&
         supply.seller.id === first.seller.id &&
         Number(supply.wb_warehouse.id) === Number(first.wb_warehouse.id),
     )
-  }, [activeSupplies, selectedOrders])
+  }, [visibleSupplies, selectedOrders])
   const selectionBlockers = useMemo(
     () => selectedOrders.flatMap((order) => order.selection_blockers.map((blocker) => ({ order, blocker }))),
     [selectedOrders],
   )
   const selectableIds = useMemo(
-    () => orders.filter((order) => order.selection_blockers.length === 0).map((order) => order.id),
-    [orders],
+    () => visibleOrders.filter((order) => order.selection_blockers.length === 0).map((order) => order.id),
+    [visibleOrders],
   )
   const searchTerm = normalizeSearch(activeSearch)
   const matchingOrders = useMemo(
-    () => (searchTerm ? orders.filter((order) => orderSearchText(order).includes(searchTerm)) : []),
-    [orders, searchTerm],
+    () => (searchTerm ? visibleOrders.filter((order) => orderSearchText(order).includes(searchTerm)) : []),
+    [visibleOrders, searchTerm],
   )
   const matchingIds = useMemo(
     () => new Set(matchingOrders.map((order) => order.id)),
     [matchingOrders],
   )
-  const exportRows = selected.size > 0 ? selectedOrders : searchTerm ? matchingOrders : orders
+  const exportRows = selected.size > 0 ? selectedOrders : searchTerm ? matchingOrders : visibleOrders
 
   const addSelectedToExistingSupply = async () => {
     if (!addExistingSupplyId || selectedOrderIds.length === 0) return
@@ -938,6 +952,13 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       </Stack>
 
       <FfFbsSectionNav showStockSync={isAdmin} />
+      <WarehouseContextSwitch
+        options={wmsWarehouseOptions}
+        value={wmsWarehouseId}
+        onChange={setWmsWarehouseId}
+        loading={busy && wmsWarehouseOptions.length === 0}
+        testId="fbs-wms-warehouse-context"
+      />
 
       <Paper variant="outlined" sx={{ overflow: 'hidden', mt: 2 }}>
         <Tabs
@@ -1100,9 +1121,9 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         </Alert>
       ) : null}
 
-      {isFbsSupplyGroup(statusGroup) && externalActiveOrders.length > 0 ? (
+      {isFbsSupplyGroup(statusGroup) && visibleExternalOrders.length > 0 ? (
         <Alert severity="info" sx={{ mt: 2 }} data-testid="fbs-06-external-supply-explanation">
-          {externalActiveOrders.length} {ordersWord(externalActiveOrders.length)} уже видны в WB, но локальной карточки поставки в WMS нет. Они не открываются как поставка здесь.
+          {visibleExternalOrders.length} {ordersWord(visibleExternalOrders.length)} уже видны в WB, но локальной карточки поставки в WMS нет. Они не открываются как поставка здесь.
         </Alert>
       ) : null}
 
@@ -1121,7 +1142,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               </TableRow>
             </TableHead>
             <TableBody>
-              {activeSupplies.map((supply) => (
+              {visibleSupplies.map((supply) => (
                 <TableRow
                   key={supply.id}
                   hover
@@ -1160,13 +1181,13 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                   <TableCell>{formatNullableDateTime(supply.planned_shipment_date)}</TableCell>
                 </TableRow>
               ))}
-              {!busy && activeSupplies.length === 0 && isFbsSupplyGroup(statusGroup) ? (
+              {!busy && visibleSupplies.length === 0 && isFbsSupplyGroup(statusGroup) ? (
                 <TableRow>
                   <TableCell colSpan={7}>
                     <Box sx={{ py: 8, textAlign: 'center' }}>
                       <Inventory2OutlinedIcon sx={{ fontSize: 42, color: 'text.disabled' }} />
                       <Typography variant="subtitle1" sx={{ mt: 1 }}>
-                        {SUPPLY_EMPTY_STATE[statusGroup].title}
+                        {wmsWarehouseId ? `На складе «${wmsWarehouseOptions.find((option) => option.id === wmsWarehouseId)?.name ?? ''}» пока нет поставок.` : SUPPLY_EMPTY_STATE[statusGroup].title}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
                         {SUPPLY_EMPTY_STATE[statusGroup].hint}
@@ -1231,7 +1252,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
             </TableRow>
           </TableHead>
           <TableBody>
-            {orders.map((order) => {
+            {visibleOrders.map((order) => {
               if (statusGroup === 'new') {
                 return (
                   <NewOrderRow
@@ -1360,16 +1381,16 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                 ) : row
               )
             })}
-            {!busy && orders.length === 0 ? (
+            {!busy && visibleOrders.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6}>
                   <Box sx={{ py: 8, textAlign: 'center' }}>
                     <Inventory2OutlinedIcon sx={{ fontSize: 42, color: 'text.disabled' }} />
                     <Typography variant="subtitle1" sx={{ mt: 1 }}>
-                      Заказов в этой группе нет
+                      {wmsWarehouseId ? `На складе «${wmsWarehouseOptions.find((option) => option.id === wmsWarehouseId)?.name ?? ''}» пока нет заказов.` : 'Заказов в этой группе нет'}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Измените фильтры или обновите синхронизацию с WB.
+                      {wmsWarehouseId ? 'Выберите другой склад или дождитесь новых заказов.' : 'Измените фильтры или обновите синхронизацию с WB.'}
                     </Typography>
                   </Box>
                 </TableCell>

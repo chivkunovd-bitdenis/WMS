@@ -46,6 +46,7 @@ import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import type { ProductThermalLabelData } from '../../utils/printProductThermalLabel'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
+import { WarehouseContextSwitch, type WarehouseOption } from '../../ui-kit'
 import { buildFbsPickingListPrintHtml, ordersWord } from './fbsUx'
 import {
   confirmFbsPrintApplied,
@@ -274,6 +275,7 @@ export function FfFbsSupplyWorkspace({
   onClose,
 }: Props) {
   const [workspace, setWorkspace] = useState<FbsWorkspace | null>(initialWorkspace ?? null)
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(initialWorkspace?.supply.wms_warehouse.id ?? null)
   const [stage, setStage] = useState<StageKey>('composition')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -347,6 +349,7 @@ export function FfFbsSupplyWorkspace({
     setError(null)
     setNotice(null)
     setWorkspace(initialWorkspace ?? null)
+    setSelectedWarehouseId(initialWorkspace?.supply.wms_warehouse.id ?? null)
     setStage(initialWorkspace ? visualStage(initialWorkspace.stage) : 'composition')
     setDeliveryKey(persistentOperationKey(supplyId, 'delivery'))
     setPrintBatch(null)
@@ -1528,6 +1531,12 @@ export function FfFbsSupplyWorkspace({
           </IconButton>
         </Stack>
       </Box>
+
+      {workspace ? <Box sx={{ px: 2.5, pt: 2, bgcolor: '#fff' }}><WarehouseContextSwitch
+        options={[{ id: workspace.supply.wms_warehouse.id, name: workspace.supply.wms_warehouse.name } satisfies WarehouseOption]}
+        value={selectedWarehouseId} onChange={setSelectedWarehouseId}
+        disabledReason={workspace.supply.status === 'draft' ? undefined : 'Склад закреплён: подбор уже начат'} testId="fbs-supply-wms-warehouse-context"
+      /></Box> : null}
 
       <Tabs
         value={stage}
