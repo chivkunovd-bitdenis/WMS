@@ -470,7 +470,15 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
             path="/reports"
             element={
               token && sellerPermissions.products ? (
-                <FfReportsPage key={catalogScopeKey} token={token} sellers={[]} />
+                <FfReportsPage
+                  key={catalogScopeKey}
+                  token={token}
+                  sellers={[]}
+                  warehouses={warehouses.map((warehouse) => ({
+                    id: warehouse.id,
+                    name: warehouse.name,
+                  }))}
+                />
               ) : (
                 accessDenied
               )

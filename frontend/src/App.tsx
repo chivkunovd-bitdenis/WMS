@@ -3074,6 +3074,10 @@ export default function App() {
                 <FfReportsPage
                   token={token}
                   sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
+                  warehouses={warehouses.map((warehouse) => ({
+                    id: warehouse.id,
+                    name: warehouse.name,
+                  }))}
                 />
               ) : (
                 ffAccessDenied
@@ -3084,7 +3088,14 @@ export default function App() {
             path="seller/reports"
             element={
               token && me.seller_permissions?.products ? (
-                <FfReportsPage token={token} sellers={[]} />
+                <FfReportsPage
+                  token={token}
+                  sellers={[]}
+                  warehouses={warehouses.map((warehouse) => ({
+                    id: warehouse.id,
+                    name: warehouse.name,
+                  }))}
+                />
               ) : (
                 ffAccessDenied
               )
