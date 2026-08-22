@@ -3,10 +3,11 @@ from __future__ import annotations
 import uuid
 from datetime import date
 from decimal import Decimal
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_fulfillment_admin
@@ -82,6 +83,19 @@ async def put_ff_profile(
         raise _error(exc) from exc
 
 
+@router.get("/profiles/ff", response_model=ProfileOut | None)
+async def get_ff_profile(
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> BillingProfile | None:
+    return cast(BillingProfile | None, await session.scalar(
+        select(BillingProfile).where(
+            BillingProfile.tenant_id == user.tenant_id,
+            BillingProfile.seller_id.is_(None),
+        )
+    ))
+
+
 @router.put("/profiles/sellers/{seller_id}", response_model=ProfileOut)
 async def put_seller_profile(
     seller_id: uuid.UUID,
@@ -100,6 +114,20 @@ async def put_seller_profile(
         raise _error(exc) from exc
 
 
+@router.get("/profiles/sellers/{seller_id}", response_model=ProfileOut | None)
+async def get_seller_profile(
+    seller_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> BillingProfile | None:
+    return cast(BillingProfile | None, await session.scalar(
+        select(BillingProfile).where(
+            BillingProfile.tenant_id == user.tenant_id,
+            BillingProfile.seller_id == seller_id,
+        )
+    ))
+
+
 @router.post("/tariffs", response_model=TariffOut, status_code=status.HTTP_201_CREATED)
 async def post_tariff(
     body: TariffBody,
@@ -113,6 +141,19 @@ async def post_tariff(
     except BillingConfigurationError as exc:
         await session.rollback()
         raise _error(exc) from exc
+
+
+@router.get("/tariffs", response_model=list[TariffOut])
+async def get_tariffs(
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[TariffOut]:
+    result = await session.scalars(
+        select(BillingTariffVersion)
+        .where(BillingTariffVersion.tenant_id == user.tenant_id)
+        .order_by(BillingTariffVersion.valid_from.desc())
+    )
+    return [TariffOut.from_model(value) for value in result]
 
 
 @router.post("/invoices/{seller_id}/{period}/form")

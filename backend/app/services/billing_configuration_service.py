@@ -15,6 +15,13 @@ class BillingConfigurationError(ValueError):
     pass
 
 
+_SERVICE_UNITS: dict[str, frozenset[str]] = {
+    "inbound": frozenset({"document", "item"}),
+    "marketplace_outbound": frozenset({"document", "item"}),
+    "storage_liter_day": frozenset({"liter_day"}),
+}
+
+
 def validate_inn(inn: str) -> str:
     value = inn.strip()
     if not value.isdigit() or len(value) not in (10, 12):
@@ -94,7 +101,12 @@ async def create_tariff(
     amount: Decimal,
     valid_from: date,
 ) -> BillingTariffVersion:
-    if unit not in {"document", "item", "liter_day"}:
+    allowed_units = _SERVICE_UNITS.get(service_code)
+    if allowed_units is None:
+        raise BillingConfigurationError("Недопустимая услуга")
+    if unit not in allowed_units:
+        if service_code == "storage_liter_day":
+            raise BillingConfigurationError("Для хранения доступен только расчёт за литр-день")
         raise BillingConfigurationError("Недопустимая единица расчёта")
     if amount < 0:
         raise BillingConfigurationError("Ставка не может быть отрицательной")

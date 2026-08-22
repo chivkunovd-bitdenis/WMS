@@ -50,3 +50,28 @@ async def test_tariff_versions_cannot_overlap_by_unit() -> None:
             amount=Decimal("1.00"),
             valid_from=start,
         )
+
+
+@pytest.mark.asyncio
+async def test_tariff_rejects_unknown_service_and_invalid_unit_pair() -> None:
+    session = AsyncMock()
+    with pytest.raises(BillingConfigurationError, match="Недопустимая услуга"):
+        await create_tariff(
+            session,
+            tenant_id=uuid4(),
+            seller_id=None,
+            service_code="custom",
+            unit="document",
+            amount=Decimal("1.00"),
+            valid_from=date(2026, 1, 1),
+        )
+    with pytest.raises(BillingConfigurationError, match="литр-день"):
+        await create_tariff(
+            session,
+            tenant_id=uuid4(),
+            seller_id=None,
+            service_code="storage_liter_day",
+            unit="item",
+            amount=Decimal("1.00"),
+            valid_from=date(2026, 1, 1),
+        )
