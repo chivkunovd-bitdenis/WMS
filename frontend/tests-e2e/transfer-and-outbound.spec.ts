@@ -157,3 +157,105 @@ test('stock transfer and outbound shipment — UI', async ({ page }) => {
   await expect(movRows.nth(0)).toContainText('Отгрузка');
   await expect(movRows.nth(1)).toContainText('Отгрузка');
 });
+
+// TC-NEW-WAREHOUSE-TRANSFER-CONTEXT — выбранный склад фильтрует обычные transfer-группы,
+// а межскладская пара остаётся одной строкой и раскрывает обе стороны без UUID в интерфейсе.
+test('warehouse context filters transfers and shows the matching side of a cross-warehouse pair', async ({ page }) => {
+  const email = `e2e-transfer-context-${Date.now()}@example.com`;
+
+  await page.goto('/');
+  await openFulfillmentRegistration(page);
+  await page.getByTestId('register-form').getByLabel('Организация').fill('E2E Transfer Context');
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email);
+  await page.getByTestId('register-form').getByLabel('Пароль').fill('password123');
+  await Promise.all([
+    waitForPostOk(page, '/api/auth/register'),
+    waitForGetOk(page, '/api/auth/me'),
+    page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
+  ]);
+
+  const northId = '10000000-0000-4000-8000-000000000001';
+  const southId = '10000000-0000-4000-8000-000000000002';
+  const crossGroupId = '20000000-0000-4000-8000-000000000001';
+  const localGroupId = '20000000-0000-4000-8000-000000000002';
+  await page.route('**/api/warehouses', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        { id: northId, name: 'Склад Север', code: 'NORTH', is_operational: true, is_primary: true },
+        { id: southId, name: 'Склад Юг', code: 'SOUTH', is_operational: true, is_primary: false },
+      ]),
+    });
+  });
+  await page.route('**/api/warehouses/*/locations', async (route) => {
+    const isNorth = route.request().url().includes(northId);
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(isNorth
+        ? [
+            { id: 'north-from', code: 'N-01', warehouse_id: northId, barcode: 'N-01' },
+            { id: 'north-to', code: 'N-02', warehouse_id: northId, barcode: 'N-02' },
+          ]
+        : [{ id: 'south-to', code: 'S-01', warehouse_id: southId, barcode: 'S-01' }]),
+    });
+  });
+  await page.route('**/api/operations/inventory-movements?limit=80', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 'movement-cross-out', product_id: 'product-1', sku_code: 'SKU-CROSS', product_name: 'Кросс-товар',
+          storage_location_id: 'north-from', storage_location_code: 'N-01', warehouse_id: northId,
+          warehouse_name: 'Склад Север', quantity_delta: -3, movement_type: 'stock_transfer_out',
+          transfer_group_id: crossGroupId, created_at: '2026-08-22T06:00:00Z',
+        },
+        {
+          id: 'movement-cross-in', product_id: 'product-1', sku_code: 'SKU-CROSS', product_name: 'Кросс-товар',
+          storage_location_id: 'south-to', storage_location_code: 'S-01', warehouse_id: southId,
+          warehouse_name: 'Склад Юг', quantity_delta: 3, movement_type: 'stock_transfer_in',
+          transfer_group_id: crossGroupId, created_at: '2026-08-22T06:00:00Z',
+        },
+        {
+          id: 'movement-local-out', product_id: 'product-2', sku_code: 'SKU-LOCAL', product_name: 'Обычный товар',
+          storage_location_id: 'north-from', storage_location_code: 'N-01', warehouse_id: northId,
+          warehouse_name: 'Склад Север', quantity_delta: -2, movement_type: 'stock_transfer_out',
+          transfer_group_id: localGroupId, created_at: '2026-08-22T05:00:00Z',
+        },
+        {
+          id: 'movement-local-in', product_id: 'product-2', sku_code: 'SKU-LOCAL', product_name: 'Обычный товар',
+          storage_location_id: 'north-to', storage_location_code: 'N-02', warehouse_id: northId,
+          warehouse_name: 'Склад Север', quantity_delta: 2, movement_type: 'stock_transfer_in',
+          transfer_group_id: localGroupId, created_at: '2026-08-22T05:00:00Z',
+        },
+      ]),
+    });
+  });
+
+  await page.reload();
+  await page.goto('/app/ops/transfers');
+
+  const list = page.getByTestId('transfer-operations-list');
+  await expect(page.getByTestId('transfers-warehouse-context')).toContainText('Склад Север');
+  await expect(list.getByText('SKU-CROSS — Кросс-товар')).toBeVisible();
+  await expect(list.getByText('SKU-LOCAL — Обычный товар')).toBeVisible();
+  await expect(list.getByText('Из склада «Склад Север»')).toBeVisible();
+
+  await page.getByTestId(`transfer-operation-toggle-${crossGroupId}`).click();
+  const details = page.getByTestId(`transfer-operation-details-${crossGroupId}`);
+  await expect(details).toContainText('Из склада «Склад Север» · ячейка N-01');
+  await expect(details).toContainText('В склад «Склад Юг» · ячейка S-01');
+  await expect(list.getByText(crossGroupId)).toHaveCount(0);
+
+  await page.getByTestId('transfers-warehouse-context-button').click();
+  await page.getByTestId(`transfers-warehouse-context-option-${southId}`).click();
+  await expect(list.getByText('В склад «Склад Юг»')).toBeVisible();
+  await expect(list.getByText('SKU-CROSS — Кросс-товар')).toBeVisible();
+  await expect(list.getByText('SKU-LOCAL — Обычный товар')).toHaveCount(0);
+});

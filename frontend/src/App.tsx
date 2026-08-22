@@ -3249,7 +3249,6 @@ export default function App() {
             path="ops"
             element={token && canReceptionOps ? <Navigate to={`${base}/reception`} replace /> : ffAccessDenied}
           />
-
           <Route
             path="ops/inbound"
             element={
@@ -3289,7 +3288,6 @@ export default function App() {
               )
             }
           />
-
           <Route
             path="ops/outbound"
             element={
@@ -3323,7 +3321,6 @@ export default function App() {
               )
             }
           />
-
           <Route
             path="ops/movements"
             element={
@@ -3342,7 +3339,6 @@ export default function App() {
               )
             }
           />
-
           <Route
             path="ops/transfers"
             element={
@@ -3354,13 +3350,17 @@ export default function App() {
                   locations={locations}
                   products={products}
                   onStockTransfer={(e) => void onStockTransfer(e)}
+                  warehouses={operationalWarehouses(warehouses)}
+                  selectedWarehouseId={selectedWarehouseId}
+                  onWarehouseChange={selectWarehouse}
+                  transferMovements={globalMovements}
+                  onRefreshTransferMovements={onRefreshGlobalMovementsClick}
                 />
               ) : (
                 ffAccessDenied
               )
             }
           />
-
           <Route
             path="integrations/wb"
             element={

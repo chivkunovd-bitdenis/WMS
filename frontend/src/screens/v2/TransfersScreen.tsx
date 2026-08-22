@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEventHandler } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEventHandler } from 'react'
 import {
   Alert,
   Button,
@@ -13,15 +13,32 @@ import {
 import { Screen } from '../AppV2Screens'
 import {
   DataTable,
+  QtyCell,
   SecondaryAction,
+  TextCell,
   WarehouseContextSwitch,
   type WarehouseOption,
 } from '../../ui-kit'
 
-type LocationRow = { id: string; code: string; warehouse_id: string }
+export type TransferLocationRow = { id: string; code: string; warehouse_id: string }
 type ProductRow = { id: string; name: string; sku_code: string }
 type TransferSummary = { quantity: number; product: string; from: string; to: string }
-type TransferOperation = {
+export type TransferMovementRow = {
+  id: string
+  product_id: string
+  sku_code: string
+  product_name?: string | null
+  storage_location_id: string
+  storage_location_code?: string | null
+  warehouse_id?: string | null
+  warehouse_name?: string | null
+  quantity_delta: number
+  movement_type: string
+  transfer_group_id?: string | null
+  created_at: string
+}
+
+export type TransferOperation = {
   id: string
   product: string
   quantity: number
@@ -35,14 +52,56 @@ type Props = {
   opsError: string | null
   opsBusy: boolean
   isFulfillmentAdmin: boolean
-  locations: LocationRow[]
+  locations: TransferLocationRow[]
   products: ProductRow[]
   onStockTransfer: FormEventHandler<HTMLFormElement>
   warehouses?: WarehouseOption[]
   selectedWarehouseId?: string | null
   onWarehouseChange?: (warehouseId: string) => void
-  transferOperations?: TransferOperation[]
-  transferOperationsLoading?: boolean
+  transferMovements?: TransferMovementRow[]
+  onRefreshTransferMovements?: () => Promise<void>
+}
+
+export function buildTransferOperations(
+  transferMovements: TransferMovementRow[],
+  warehouses: WarehouseOption[],
+  locations: TransferLocationRow[],
+): TransferOperation[] {
+  const movementsByGroup = new Map<string, TransferMovementRow[]>()
+  transferMovements.forEach((movement) => {
+    if (
+      !movement.transfer_group_id ||
+      (movement.movement_type !== 'stock_transfer_out' && movement.movement_type !== 'stock_transfer_in')
+    ) return
+    const group = movementsByGroup.get(movement.transfer_group_id) ?? []
+    group.push(movement)
+    movementsByGroup.set(movement.transfer_group_id, group)
+  })
+
+  const warehouseById = new Map(warehouses.map((warehouse) => [warehouse.id, warehouse]))
+  const locationById = new Map(locations.map((location) => [location.id, location.code]))
+  return [...movementsByGroup.entries()].flatMap(([groupId, movements]) => {
+    const from = movements.find((movement) => movement.movement_type === 'stock_transfer_out')
+    const to = movements.find((movement) => movement.movement_type === 'stock_transfer_in')
+    if (!from?.warehouse_id || !to?.warehouse_id) return []
+    const fromWarehouse = warehouseById.get(from.warehouse_id) ?? {
+      id: from.warehouse_id,
+      name: from.warehouse_name ?? 'Склад не указан',
+    }
+    const toWarehouse = warehouseById.get(to.warehouse_id) ?? {
+      id: to.warehouse_id,
+      name: to.warehouse_name ?? 'Склад не указан',
+    }
+    return [{
+      id: groupId,
+      product: from.product_name ? `${from.sku_code} — ${from.product_name}` : from.sku_code,
+      quantity: Math.abs(from.quantity_delta),
+      fromWarehouse,
+      toWarehouse,
+      fromLocation: from.storage_location_code ?? locationById.get(from.storage_location_id) ?? 'Ячейка не указана',
+      toLocation: to.storage_location_code ?? locationById.get(to.storage_location_id) ?? 'Ячейка не указана',
+    }]
+  })
 }
 
 export function TransfersScreen({
@@ -55,8 +114,8 @@ export function TransfersScreen({
   warehouses = [],
   selectedWarehouseId = null,
   onWarehouseChange,
-  transferOperations = [],
-  transferOperationsLoading = false,
+  transferMovements = [],
+  onRefreshTransferMovements,
 }: Props) {
   const [fromLoc, setFromLoc] = useState('')
   const [toLoc, setToLoc] = useState('')
@@ -65,6 +124,14 @@ export function TransfersScreen({
   const [lastTransfer, setLastTransfer] = useState<TransferSummary | null>(null)
   const [pendingTransfer, setPendingTransfer] = useState<TransferSummary | null>(null)
   const [expandedTransferIds, setExpandedTransferIds] = useState<Set<string>>(() => new Set())
+  const [transferOperationsLoading, setTransferOperationsLoading] = useState(Boolean(onRefreshTransferMovements))
+  const transferRefreshStarted = useRef(false)
+
+  useEffect(() => {
+    if (transferRefreshStarted.current || !onRefreshTransferMovements) return
+    transferRefreshStarted.current = true
+    void onRefreshTransferMovements().finally(() => setTransferOperationsLoading(false))
+  }, [onRefreshTransferMovements])
 
   useEffect(() => {
     if (pendingTransfer && !opsBusy) {
@@ -95,6 +162,10 @@ export function TransfersScreen({
     Number.isInteger(quantityNumber) &&
     quantityNumber > 0 &&
     !sameLocation
+  const transferOperations = useMemo(
+    () => buildTransferOperations(transferMovements, warehouses, locations),
+    [locations, transferMovements, warehouses],
+  )
   const visibleTransferOperations = useMemo(
     () => transferOperations.filter((operation) => {
       if (!selectedWarehouseId) return true
@@ -102,14 +173,26 @@ export function TransfersScreen({
     }),
     [selectedWarehouseId, transferOperations],
   )
+  const selectedWarehouseName = warehouses.find((warehouse) => warehouse.id === selectedWarehouseId)?.name
   const transferColumns = [
     {
       key: 'operation',
-      header: 'Операция',
-      render: (operation: TransferOperation) => `${operation.fromWarehouse.name} / ${operation.toWarehouse.name}`,
+      header: 'Перемещение',
+      render: (operation: TransferOperation) => {
+        if (operation.fromWarehouse.id === operation.toWarehouse.id) {
+          return <TextCell value={`На складе «${operation.fromWarehouse.name}»`} />
+        }
+        if (selectedWarehouseId === operation.fromWarehouse.id) {
+          return <TextCell value={`Из склада «${operation.fromWarehouse.name}»`} />
+        }
+        if (selectedWarehouseId === operation.toWarehouse.id) {
+          return <TextCell value={`В склад «${operation.toWarehouse.name}»`} />
+        }
+        return <TextCell value={`${operation.fromWarehouse.name} → ${operation.toWarehouse.name}`} />
+      },
     },
-    { key: 'product', header: 'Товар', render: (operation: TransferOperation) => operation.product },
-    { key: 'quantity', header: 'Количество', align: 'right' as const, render: (operation: TransferOperation) => operation.quantity },
+    { key: 'product', header: 'Товар', render: (operation: TransferOperation) => <TextCell value={operation.product} /> },
+    { key: 'quantity', header: 'Количество', align: 'right' as const, render: (operation: TransferOperation) => <QtyCell value={operation.quantity} /> },
     {
       key: 'details',
       header: 'Детали',
@@ -130,9 +213,10 @@ export function TransfersScreen({
               {expanded ? 'Скрыть' : 'Раскрыть'}
             </SecondaryAction>
             {expanded ? (
-              <div data-testid={`transfer-operation-details-${operation.id}`}>
-                {operation.fromWarehouse.name}: {operation.fromLocation} → {operation.toWarehouse.name}: {operation.toLocation}
-              </div>
+              <Stack spacing={0.5} sx={{ mt: 1 }} data-testid={`transfer-operation-details-${operation.id}`}>
+                <TextCell value={`Из склада «${operation.fromWarehouse.name}» · ячейка ${operation.fromLocation}`} />
+                <TextCell value={`В склад «${operation.toWarehouse.name}» · ячейка ${operation.toLocation}`} />
+              </Stack>
             ) : null}
           </>
         )
@@ -190,7 +274,7 @@ export function TransfersScreen({
             getRowKey={(operation) => operation.id}
             loading={transferOperationsLoading}
             empty={{
-              title: selectedWarehouseId ? 'На выбранном складе пока нет перемещений.' : 'Перемещений пока нет.',
+              title: selectedWarehouseName ? `На складе «${selectedWarehouseName}» пока нет перемещений.` : 'Перемещений пока нет.',
               hint: selectedWarehouseId ? 'Выберите другой склад или дождитесь новой операции.' : undefined,
             }}
             testId="transfer-operations-list"
