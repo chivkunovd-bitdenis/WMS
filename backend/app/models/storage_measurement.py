@@ -13,6 +13,7 @@ from sqlalchemy import (
     Index,
     Numeric,
     String,
+    UniqueConstraint,
     Uuid,
     func,
 )
@@ -43,6 +44,16 @@ class StorageMeasurement(Base):
             name="ck_storage_measurements_quantity_days_nonnegative",
         ),
         CheckConstraint("liter_days >= 0", name="ck_storage_measurements_liter_days_nonnegative"),
+        # A monthly draft has one aggregate measurement per SKU.  This is the
+        # database-side idempotency boundary for concurrent rebuild jobs.
+        UniqueConstraint(
+            "tenant_id",
+            "seller_id",
+            "warehouse_id",
+            "product_id",
+            "period_start",
+            name="uq_storage_measurements_tenant_seller_warehouse_product_period",
+        ),
         Index(
             "ix_storage_measurements_scope_period",
             "tenant_id",

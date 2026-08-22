@@ -22,6 +22,21 @@ def test_statement_is_unique_for_tenant_seller_warehouse_and_month() -> None:
     ]
 
 
+def test_measurement_is_unique_for_tenant_seller_warehouse_sku_and_month() -> None:
+    constraint = _constraint(
+        StorageMeasurement.__table__,
+        "uq_storage_measurements_tenant_seller_warehouse_product_period",
+    )
+    assert isinstance(constraint, UniqueConstraint)
+    assert [column.name for column in constraint.columns] == [
+        "tenant_id",
+        "seller_id",
+        "warehouse_id",
+        "product_id",
+        "period_start",
+    ]
+
+
 def test_storage_rows_reject_negative_accumulated_values() -> None:
     assert (
         _constraint(
@@ -52,6 +67,7 @@ def test_measurement_keeps_immutable_movement_boundary_references() -> None:
     assert foreign_keys == {
         "inventory_movements.id",
     }
+    assert "storage_location_id" not in StorageMeasurement.__table__.columns
 
 
 def test_storage_models_have_no_financial_columns() -> None:

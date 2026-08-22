@@ -59,14 +59,31 @@ def upgrade() -> None:
         ),
         sa.Column("period_start", sa.Date(), nullable=False),
         sa.Column("period_end", sa.Date(), nullable=False),
-        sa.CheckConstraint("period_end >= period_start", name="ck_storage_measurements_period_end_after_start"),
-        sa.CheckConstraint("quantity_days >= 0", name="ck_storage_measurements_quantity_days_nonnegative"),
-        sa.CheckConstraint("liter_days >= 0", name="ck_storage_measurements_liter_days_nonnegative"),
+        sa.CheckConstraint(
+            "period_end >= period_start",
+            name="ck_storage_measurements_period_end_after_start",
+        ),
+        sa.CheckConstraint(
+            "quantity_days >= 0",
+            name="ck_storage_measurements_quantity_days_nonnegative",
+        ),
+        sa.CheckConstraint(
+            "liter_days >= 0",
+            name="ck_storage_measurements_liter_days_nonnegative",
+        ),
         sa.Column("quantity_days", sa.Numeric(18, 6), nullable=False),
         sa.Column("liter_days", sa.Numeric(24, 6), nullable=False),
         sa.Column("status", sa.String(32), server_default="calculated", nullable=False),
         sa.Column(
             "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.UniqueConstraint(
+            "tenant_id",
+            "seller_id",
+            "warehouse_id",
+            "product_id",
+            "period_start",
+            name="uq_storage_measurements_tenant_seller_warehouse_product_period",
         ),
     )
     for name, cols in (
@@ -100,7 +117,10 @@ def upgrade() -> None:
         ),
         sa.Column("period_start", sa.Date(), nullable=False),
         sa.Column("period_end", sa.Date(), nullable=False),
-        sa.CheckConstraint("period_end >= period_start", name="ck_storage_statements_period_end_after_start"),
+        sa.CheckConstraint(
+            "period_end >= period_start",
+            name="ck_storage_statements_period_end_after_start",
+        ),
         sa.Column("status", sa.String(32), server_default="draft", nullable=False),
         sa.Column("document_number", sa.String(64)),
         sa.Column("fixed_at", sa.DateTime(timezone=True)),
