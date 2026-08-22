@@ -775,11 +775,6 @@ async def patch_inbound_request_planned(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="request_not_found",
             ) from None
-        if exc.code == "warehouse_not_found":
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="warehouse_not_found",
-            ) from None
         if exc.code == "not_draft":
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,

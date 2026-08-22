@@ -1491,6 +1491,12 @@ async def test_patch_warehouse_id_saves_on_draft(async_client: AsyncClient) -> N
     assert patch.status_code == 200, patch.text
     assert patch.json()["warehouse_id"] == wid2
 
+    null_patch = await async_client.patch(
+        f"{base}/{rid}", headers=ah, json={"warehouse_id": None}
+    )
+    assert null_patch.status_code == 422, null_patch.text
+    assert null_patch.json()["detail"] == "invalid_warehouse"
+
 
 @pytest.mark.asyncio
 async def test_patch_warehouse_id_rejected_after_submission(async_client: AsyncClient) -> None:
