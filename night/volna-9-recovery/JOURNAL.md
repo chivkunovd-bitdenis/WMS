@@ -94,3 +94,4 @@
 21:37   02-verdikt-screen · screen-dev: готово
 21:37   02-verdikt-screen · dev: фича 4/5 сохранена 76f9dbd3fb89
 21:42   02-verdikt-screen · screen-dev: готово
+21:42   02-verdikt-screen · dev: фича 5/5 сохранена 31a0d3541351
