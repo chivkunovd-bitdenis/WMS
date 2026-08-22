@@ -1908,6 +1908,7 @@ export function FfFbsSupplyWorkspace({
                       ].filter(Boolean).join(' · ')
                       const tail = kizTail(order)
                       const metaStatus = metaStatusView(order.metadata.verdict)
+                      const markingReady = Boolean(tail) && order.metadata.verdict.delivery_allowed
                       return (
                         <Stack
                           key={order.id}
@@ -1920,13 +1921,13 @@ export function FfFbsSupplyWorkspace({
                             py: 1.25,
                             bgcolor: kizRowActive
                               ? 'info.light'
-                              : tail
+                              : markingReady
                                 ? 'success.light'
                                 : (printed ? 'action.hover' : 'background.paper'),
                             borderLeft: '4px solid',
-                            borderLeftColor: kizRowActive ? 'info.main' : (tail ? 'success.main' : 'transparent'),
+                            borderLeftColor: kizRowActive ? 'info.main' : (markingReady ? 'success.main' : 'transparent'),
                           }}
-                          data-testid={kizRowActive ? 'fbs-kiz-row-active' : undefined}
+                          data-testid={kizRowActive ? 'fbs-kiz-row-active' : `fbs-kiz-row-${order.id}`}
                           data-kiz-tail={tail ?? ''}
                         >
                           <ProductPhotoThumb src={order.product.image_url} alt={order.product.name} size={40} previewSize={280} />

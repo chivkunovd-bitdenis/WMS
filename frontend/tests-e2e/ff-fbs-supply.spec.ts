@@ -258,7 +258,17 @@ test('fbs workspace: required WB verdict explains missing code', async ({ page }
 
 // S-03-TC-007 — one server-side blocker disables the whole supply and names its order.
 test('fbs workspace: one blocked order prevents whole-supply delivery', async ({ page }) => {
-  const accepted = order('1', { supply_id: 'sup-1' })
+  const accepted = order('1', {
+    supply_id: 'sup-1',
+    metadata: {
+      required: ['sgtin'],
+      optional: [],
+      states: [{ kind: 'sgtin', status: 'accepted', value_tail: '…5678' }],
+      delivery_allowed: true,
+      verdict: { signature: 'WB: принято', tone: 'ok', reason: null, delivery_allowed: true },
+      last_checked_at: new Date().toISOString(),
+    },
+  })
   const blocked = order('2', {
     supply_id: 'sup-1',
     metadata: {
@@ -277,6 +287,18 @@ test('fbs workspace: one blocked order prevents whole-supply delivery', async ({
   await expect(page.getByText('1 из 2 подготовлено к отгрузке')).toBeVisible()
   await expect(page.getByText('2 из 2 подготовлено к отгрузке')).toHaveCount(0)
   await expect(page.getByTestId('fbs-order-print-done-2')).toHaveCount(0)
+  const acceptedRow = page.getByTestId('fbs-kiz-row-1')
+  const blockedRow = page.getByTestId('fbs-kiz-row-2')
+  const acceptedStyle = await acceptedRow.evaluate((element) => {
+    const style = window.getComputedStyle(element)
+    return { backgroundColor: style.backgroundColor, borderLeftColor: style.borderLeftColor }
+  })
+  const blockedStyle = await blockedRow.evaluate((element) => {
+    const style = window.getComputedStyle(element)
+    return { backgroundColor: style.backgroundColor, borderLeftColor: style.borderLeftColor }
+  })
+  expect(blockedStyle.backgroundColor).not.toBe(acceptedStyle.backgroundColor)
+  expect(blockedStyle.borderLeftColor).not.toBe(acceptedStyle.borderLeftColor)
   const deliver = page.getByRole('button', { name: 'Передать в WB' })
   await expect(deliver).toBeDisabled()
   await deliver.hover()
