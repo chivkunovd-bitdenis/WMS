@@ -88,6 +88,9 @@ class FbsSupplyPreflightOut(BaseModel):
     issues: list[FbsSupplyPreflightIssueOut]
     server_now: str
     stock_preflight: dict[str, object]
+    warehouse_options: list[dict[str, str]] = Field(default_factory=list)
+    recommended_warehouse: dict[str, str] | None = None
+    inventory: list[dict[str, object]] = Field(default_factory=list)
 
 
 class FbsSupplyCreateBody(BaseModel):

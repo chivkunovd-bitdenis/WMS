@@ -34,11 +34,15 @@ def request_hash_for_from_orders(
     name: str,
     order_ids: list[uuid.UUID],
     planned_delivery_type: str,
+    selected_warehouse_id: uuid.UUID | None = None,
 ) -> str:
     payload = {
         "name": name,
         "order_ids": sorted(str(oid) for oid in order_ids),
         "planned_delivery_type": planned_delivery_type,
+        "selected_warehouse_id": (
+            str(selected_warehouse_id) if selected_warehouse_id is not None else None
+        ),
     }
     raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(raw).hexdigest()

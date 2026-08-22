@@ -212,9 +212,13 @@ async def _stock_preflight(
         current = availability.get(current_id, {}).get(pid, 0) if current_id else 0
         total = sum(values.get(pid, 0) for values in availability.values())
         shortage = max(qty - total, 0)
-        source = next(
-            (w for w in warehouses if w.id != current_id and availability[w.id].get(pid, 0) > 0),
-            None,
+        source = max(
+            (
+                w for w in warehouses
+                if w.id != current_id and availability[w.id].get(pid, 0) > 0
+            ),
+            key=lambda w: availability[w.id].get(pid, 0),
+            default=None,
         )
         line = SupplyStockLine(
             pid, getattr(products.get(pid), "name", "Товар"), qty, current, total, shortage,

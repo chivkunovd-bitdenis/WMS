@@ -1,17 +1,18 @@
-# DEV · 04-warehouse-switch · атом 2
+# DEV · 04-warehouse-switch · атом 3
 
 ## Изменённые файлы
 
 - /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/api/fbs_supplies.py
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_supply_reconcile_service.py
 - /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_supply_service.py
 - /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_supply_validator_service.py
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/tests/test_fbs_stock_availability.py
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md
 
 ## Что реализовано
 
-- Привязка WB уже запрещает служебные склады; preflight считает только операционные склады tenant.
-- Выбранный склад теперь участвует в расчёте текущего остатка и агрегированных предупреждений/блокировок.
-- API-модель сохраняет `stock_preflight`, включая рекомендацию и строки дефицита.
+- Preflight API теперь сохраняет в ответе `stock_preflight`, варианты операционных складов, рекомендованный склад и агрегированный inventory.
+- Выбранный операционный склад участвует в расчёте текущего остатка и рекомендаций; источник межскладского подбора выбирается по максимальному доступному остатку.
+- Idempotency-хэш создания поставки учитывает `selected_warehouse_id`, поэтому повтор с тем же ключом и другим складом не переиспользует старый результат.
 
 ## Миграции
 
@@ -19,22 +20,19 @@
 
 ## Тесты
 
-- Добавлен регрессионный тест `test_preflight_response_model_preserves_stock_details`.
-- Изменённые backend-файлы прошли targeted ruff; focused тест прошёл: 1 passed.
-- Целевой набор `test_fbs_stock_availability.py` + `test_fbs_supply_from_orders.py`: 25 passed, 1 skipped, 1 failed на календарном тесте с фиксированной датой `2026-08-15`, уже прошедшей в окружении.
+- `backend/tests/test_fbs_supply_from_orders.py`: targeted набор проверяет preflight и создание/смену склада; 17 passed, 1 skipped, 1 календарный fail на фиксированной дате `2026-08-15`, уже прошедшей в текущем окружении.
 
 ## Гейты
 
-- ruff: полный `ruff check .` не пройден из-за 80 предсуществующих ошибок вне этого diff; targeted ruff изменённых файлов — PASS.
-- mypy: не пройден из-за 4 предсуществующих ошибок в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py`, `fbs_warehouse_binding_service.py`; новых ошибок в изменённых строках не выявлено.
-- pytest: targeted набор — 25 passed, 1 skipped, 1 unrelated calendar failure; focused новый тест — PASS.
-- back_guard.py: файл отсутствует в этой рабочей копии, запуск невозможен.
-- check_migrations.py: файл отсутствует в этой рабочей копии, запуск невозможен.
+- ruff: PASS для изменённых backend-файлов.
+- mypy: FAIL из-за 4 предсуществующих ошибок в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py`, `fbs_warehouse_binding_service.py`.
+- pytest: 17 passed, 1 skipped, 1 unrelated calendar failure.
+- back_guard.py: запуск невозможен — `scripts/ci/back_guard.py` отсутствует в этой рабочей копии.
+- check_migrations.py: запуск невозможен — `scripts/ci/check_migrations.py` отсутствует в этой рабочей копии.
 
 ## Не реализовано
 
-- UI-находки ревью (переключатель, S-03/S-14/S-25 и E2E) не входят в backend-атом 2.
-- Остаточные находки по picking idempotency, блокировкам supply и transfer-парам не входят в этот атом.
+- UI-находки REVIEW и соседние picking/packing/transfer-задачи не входят в backend-атом 3.
 
 ## Находки
 
@@ -42,4 +40,4 @@
 
 ## Блокеры
 
-Нет блокеров для сохранения backend-правки; общие гейты требуют исправления предсуществующих ошибок и отсутствующих guard-скриптов.
+- Только общие инфраструктурные гейты: отсутствующие guard-скрипты, предсуществующие mypy-ошибки и календарный тест с устаревшей фиксированной датой.

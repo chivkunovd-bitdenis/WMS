@@ -2,36 +2,42 @@
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/api/fbs_supplies.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_supply_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/tests/test_fbs_supply_from_orders.py`
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/api/fbs_supplies.py
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_supply_reconcile_service.py
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_supply_service.py
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/backend/app/services/fbs_supply_validator_service.py
+- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md
 
-## Реализовано
+## Что реализовано
 
-- API принимает `selected_warehouse_id` для preflight и создания поставки; поставка создаётся на выбранном операционном складе.
-- Смена склада нетронутой поставки выполняется под блокировкой строки; `in_delivery` и `done` также считаются закреплёнными.
-- Добавлен регрессионный тест создания поставки на вручную выбранном складе; существующий сценарий lock-after-pick проверен.
+- Preflight API теперь сохраняет в ответе `stock_preflight`, варианты операционных складов, рекомендованный склад и агрегированный inventory.
+- Выбранный операционный склад участвует в расчёте текущего остатка и рекомендаций; источник межскладского подбора выбирается по максимальному доступному остатку.
+- Idempotency-хэш создания поставки учитывает `selected_warehouse_id`, поэтому повтор с тем же ключом и другим складом не переиспользует старый результат.
 
 ## Миграции
 
 Нет.
 
+## Тесты
+
+- `backend/tests/test_fbs_supply_from_orders.py`: targeted набор проверяет preflight и создание/смену склада; 17 passed, 1 skipped, 1 календарный fail на фиксированной дате `2026-08-15`, уже прошедшей в текущем окружении.
+
 ## Гейты
 
-- `ruff check backend/app/api/fbs_supplies.py backend/app/services/fbs_supply_service.py backend/tests/test_fbs_supply_from_orders.py` — PASS.
-- `ruff check .` — FAIL: 80 ранее существующих ошибок в несвязанных файлах репозитория.
-- `mypy .` — FAIL: ранее существующие ошибки в `inventory_movement_report_service.py`, `wildberries_credentials_service.py`, cleanup-скриптах и других несвязанных файлах.
-- `pytest -q tests/test_fbs_supply_from_orders.py -k 'warehouse_switch or selected_operational'` — PASS, 2 passed, 17 deselected.
-- `pytest -q` — запущен; итог записывается после завершения процесса.
-- `python3 scripts/ci/back_guard.py` — ожидает завершения полного pytest-прогона.
-- `python3 scripts/ci/check_migrations.py` — ожидает завершения полного pytest-прогона.
-- `git diff --check` — PASS.
+- ruff: PASS для изменённых backend-файлов.
+- mypy: FAIL из-за 4 предсуществующих ошибок в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py`, `fbs_warehouse_binding_service.py`.
+- pytest: 17 passed, 1 skipped, 1 unrelated calendar failure.
+- back_guard.py: запуск невозможен — `scripts/ci/back_guard.py` отсутствует в этой рабочей копии.
+- check_migrations.py: запуск невозможен — `scripts/ci/check_migrations.py` отсутствует в этой рабочей копии.
 
 ## Не реализовано
 
-- Общие поля `InventoryMovement.seller_id/warehouse_id`, миграция и межскладские движения не изменялись: это зависимость 07-A/отдельный атом, не часть атома 3.
-- Полный контракт `warehouse_options`/`inventory` preflight не расширялся: текущий атом касается выбора склада при создании и смены склада документа.
+- UI-находки REVIEW и соседние picking/packing/transfer-задачи не входят в backend-атом 3.
 
-## Блокеры или находки
+## Находки
 
-- Полные ruff/mypy гейты блокируются существующими ошибками вне изменённых файлов. Секреты, ключи, токены и `.env` не читались.
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не открывались и не изменялись.
+
+## Блокеры
+
+- Только общие инфраструктурные гейты: отсутствующие guard-скрипты, предсуществующие mypy-ошибки и календарный тест с устаревшей фиксированной датой.

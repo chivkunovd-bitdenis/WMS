@@ -356,6 +356,29 @@ async def preflight_supply_composition(
     except FbsSupplyValidationError as exc:
         raise FbsSupplyError(exc.code) from exc
     payload = preflight_to_dict(result)
+    warehouses = list((await session.execute(
+        select(Warehouse).where(
+            Warehouse.tenant_id == tenant_id,
+            Warehouse.is_operational.is_(True),
+        ).order_by(Warehouse.name, Warehouse.id)
+    )).scalars().all())
+    stock = payload["stock_preflight"]
+    payload["warehouse_options"] = [
+        {"id": str(warehouse.id), "name": warehouse.name} for warehouse in warehouses
+    ]
+    payload["recommended_warehouse"] = stock.get("recommended_warehouse")
+    payload["inventory"] = [
+        {
+            "product_id": line["product_id"],
+            "product_name": line["product_name"],
+            "required": line["required"],
+            "current": line["current"],
+            "total": line["total"],
+            "shortage": line["shortage"],
+            "source_warehouse": line["source_warehouse"],
+        }
+        for line in [*stock["warning_lines"], *stock["blocking_lines"]]
+    ]
     if selected_warehouse_id is not None:
         warehouse = await session.scalar(select(Warehouse).where(
             Warehouse.id == selected_warehouse_id,
@@ -560,6 +583,7 @@ async def create_supply_from_orders(
         name=name,
         order_ids=order_ids,
         planned_delivery_type=planned_delivery_type,
+        selected_warehouse_id=selected_warehouse_id,
     )
 
     try:
