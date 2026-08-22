@@ -4,7 +4,17 @@ import uuid
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Date, DateTime, ForeignKey, Index, String, UniqueConstraint, Uuid, func
+from sqlalchemy import (
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+    Uuid,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -25,8 +35,11 @@ class StorageStatement(Base):
             "seller_id",
             "warehouse_id",
             "period_start",
-            "period_end",
             name="uq_storage_statements_tenant_seller_warehouse_period",
+        ),
+        CheckConstraint(
+            "period_end >= period_start",
+            name="ck_storage_statements_period_end_after_start",
         ),
         Index(
             "ix_storage_statements_scope_status", "tenant_id", "seller_id", "warehouse_id", "status"

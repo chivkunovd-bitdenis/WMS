@@ -5,7 +5,17 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Date, DateTime, ForeignKey, Index, Numeric, String, Uuid, func
+from sqlalchemy import (
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Uuid,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -24,6 +34,15 @@ class StorageMeasurement(Base):
 
     __tablename__ = "storage_measurements"
     __table_args__ = (
+        CheckConstraint(
+            "period_end >= period_start",
+            name="ck_storage_measurements_period_end_after_start",
+        ),
+        CheckConstraint(
+            "quantity_days >= 0",
+            name="ck_storage_measurements_quantity_days_nonnegative",
+        ),
+        CheckConstraint("liter_days >= 0", name="ck_storage_measurements_liter_days_nonnegative"),
         Index(
             "ix_storage_measurements_scope_period",
             "tenant_id",

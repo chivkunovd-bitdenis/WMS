@@ -1,40 +1,23 @@
-# DEV · 08-storage · атом 4
+# DEV · 08-storage · атом 5
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/api/products.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/catalog_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_products_api.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/models/storage_measurement.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/models/storage_statement.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/alembic/versions/20260822_0096_storage_measurements_and_statements.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_storage_models.py`
 
-## Что реализовано
-
-- История габаритов фильтруется по tenant и явно ограничивается seller-владельцем товара; чужой товар для seller возвращает `product_not_found`.
-- API ручного обмера сохраняет `container_override`; тестами закреплены запрет неполного и нулевого обмера.
-- Доступ сотрудника с правом `inventory` к ручному обмеру сохранён в API-ветке.
-
-## Миграции
-
-Нет.
-
-## Тесты
-
-- `backend/tests/test_products_api.py`: история container-обмера, запрет неполных и нулевых габаритов.
+Добавлены переносимые ограничения неотрицательных измерений и корректного диапазона периода. Уникальность `StorageStatement` теперь привязана к `tenant_id + seller_id + warehouse_id + period_start`, поэтому второй документ за тот же календарный месяц создать нельзя.
 
 ## Гейты
 
-- `ruff check .`: FAIL — существующие ошибки вне изменённых файлов (80 ошибок, включая `storage_statement_service.py` и FBS-модули).
-- `mypy .`: FAIL — существующие ошибки, включая отсутствующий `app.models.billing`; ошибок в изменённых строках не показано.
-- `pytest -q tests/test_products_api.py`: PASS — 1 passed.
-- `pytest -q`: INTERRUPTED вручную после прохождения 26% набора без ошибки; полный результат не получен.
-- `python3 scripts/ci/back_guard.py`: BLOCKED — файл отсутствует в рабочей копии.
-- `python3 scripts/ci/check_migrations.py`: BLOCKED — файл отсутствует в рабочей копии.
-- Commit: BLOCKED — Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-08-storage1/index.lock` из-за запрета доступа к общему git-метадаталогу.
+- `ruff`: PASS для изменённых backend-файлов; полный `ruff check .` — FAIL из-за 93 ранее существовавших ошибок в несвязанных файлах.
+- `mypy`: PASS для изменённых моделей; полный `mypy .` — FAIL из-за ошибок в несвязанных сервисах и cleanup-скриптах.
+- `pytest`: 5 целевых тестов PASS. Полный запуск остановлен после 32 passed / 63 errors: общие тесты падают на подготовке существующей схемы/фикстур, не в тестах атома.
+- `back_guard.py`: не запущен — файл отсутствует по пути `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/scripts/ci/back_guard.py`.
+- `check_migrations.py`: не запущен — файл отсутствует по пути `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/scripts/ci/check_migrations.py`.
 
 ## Не реализовано
 
-- Остальные находки ревью по storage statements, billing, WB-импорту и frontend находятся за пределами атома 4 и не изменялись.
-
-## Блокеры
-
-- Нет блокеров по коду атома; общие гейты требуют исправлений/файлов, отсутствующих в этой рабочей копии.
-- Сохранение commit заблокировано правами на общий git worktree; изменения остаются в рабочей копии до устранения ограничения.
+- Проверка соответствия `StorageMeasurement.warehouse_id` фактическому `InventoryMovement.warehouse_id` и исключение служебных складов не добавлены: поля `InventoryMovement.warehouse_id` и `Warehouse.is_operational` принадлежат внешнему фундаменту 07-A и отсутствуют в этой рабочей копии.
+- Идемпотентный rebuild, часовой пояс МСК, публикация ledger, API и ролевые ограничения относятся к соседним сервисным/API-атомам и намеренно не изменялись.
