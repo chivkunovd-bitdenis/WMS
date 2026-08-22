@@ -93,3 +93,5 @@
 22:40 06-picking-list-order: отложено — ui-critic, эскалация не помогла
 23:02   06-picking-list-order · resume: поатомный rework Sol по сохранённым находкам
 23:05   06-picking-list-order · screen-dev: готово
+23:05   06-picking-list-order · dev: фича 5/6 сохранена b6d7142dc2f8
+23:08   06-picking-list-order · screen-dev: готово
