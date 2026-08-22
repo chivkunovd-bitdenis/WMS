@@ -1052,6 +1052,10 @@ export type FbsPickingItem = {
   order_ids: string[]
 }
 
+export function getFullFbsPickingOrderIds(items: FbsPickingItem[]): string[] {
+  return items.flatMap((item) => item.order_ids)
+}
+
 export async function getFbsPickingList(
   token: string,
   ah: (t: string) => Record<string, string>,

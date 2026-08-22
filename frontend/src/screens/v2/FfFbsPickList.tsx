@@ -13,9 +13,16 @@ import {
   TextCell,
   type Column,
 } from '../../ui-kit'
-import { getFbsPickingList, printFbsOrderTape, resolveFbsAssetUrl, type FbsOrderPrintTapeOrder, type FbsPickingItem } from './fbsApi'
+import { getFbsPickingList, type FbsPickingItem } from './fbsApi'
 
-type Props = { token: string; authHeaders: (t: string) => Record<string, string>; supplyId: string | null; open: boolean; onClose: () => void }
+type Props = {
+  token: string
+  authHeaders: (t: string) => Record<string, string>
+  supplyId: string | null
+  open: boolean
+  onClose: () => void
+  onPrintStickers: () => Promise<void>
+}
 type Mark = { collected: boolean; packed: boolean }
 type Marks = Record<string, Mark>
 type PickFilter = 'all' | 'not_collected' | 'not_packed'
@@ -29,35 +36,12 @@ export function markKey(item: Pick<FbsPickingItem, 'article' | 'sku_code' | 'siz
   return [item.article, item.sku_code ?? '', item.size ?? '', item.product_name].join('::')
 }
 
-function escapePrintHtml(value: string | number): string {
-  return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;')
-}
-
-export function buildFbsOrderTapeHtml(orders: Array<FbsOrderPrintTapeOrder & { imageUrl: string }>): string {
-  return orders.flatMap((order, index) => {
-    const number = order.order_number ?? index + 1
-    const markingLabels = order.printed_codes.map((code) => (
-      `<section class="label marking"><strong>Честный знак</strong><span>${escapePrintHtml(code.cis_code)}</span></section>`
-    ))
-    return [
-      ...markingLabels,
-      `<section class="label"><img src="${escapePrintHtml(order.imageUrl)}" alt="Стикер WB №${escapePrintHtml(order.wb_order_id)}"></section>`,
-      `<section class="label service">№ ${escapePrintHtml(number)}<small>Заказ WB №${escapePrintHtml(order.wb_order_id)}</small></section>`,
-    ]
-  }).join('')
-}
-
 function loadMarks(supplyId: string): Marks {
   try { return JSON.parse(localStorage.getItem(`fbs-picklist-${supplyId}`) ?? '{}') as Marks } catch { return {} }
 }
 function saveMarks(supplyId: string, marks: Marks): void { localStorage.setItem(`fbs-picklist-${supplyId}`, JSON.stringify(marks)) }
 
-export function FfFbsPickList({ token, authHeaders, supplyId, open, onClose }: Props) {
+export function FfFbsPickList({ token, authHeaders, supplyId, open, onClose, onPrintStickers }: Props) {
   const [items, setItems] = useState<FbsPickingItem[]>([])
   const [marks, setMarks] = useState<Marks>({})
   const [loading, setLoading] = useState(false)
@@ -96,46 +80,15 @@ export function FfFbsPickList({ token, authHeaders, supplyId, open, onClose }: P
 
   const printStickers = useCallback(async () => {
     if (!supplyId || !canPrint) return
-    // Окно резервируется в рамках жеста оператора: после POST сервер может
-    // необратимо назначить коды маркировки, поэтому молча потерять печать нельзя.
-    const printWindow = window.open('', '_blank')
-    if (!printWindow) {
-      setError('Браузер заблокировал окно печати. Разрешите всплывающие окна для WMS.')
-      return
-    }
-    printWindow.opener = null
     setPrinting(true); setError(null)
     try {
-      const freshItems = await getFbsPickingList(token, authHeaders, supplyId)
-      setItems(freshItems)
-      const orderIds = freshItems.flatMap((item) => item.order_ids)
-      if (orderIds.length === 0) { setError('В поставке нет заказов для печати'); return }
-      const tape = await printFbsOrderTape(token, authHeaders, supplyId, {
-        order_ids: orderIds,
-        layout_json: null,
-        allow_partial: false,
-        include_order_qr: true,
-        reprint: false,
-      })
-      if (tape.shortage > 0 || tape.missing > 0 || tape.failed > 0 || tape.order_errors.length > 0) {
-        setError(['Стикеры ещё не готовы или получены не все', ...tape.order_errors.map((item) => `Заказ WB №${item.wb_order_id}: стикер не получен (№ ${item.order_number ?? '—'})`)].join('\n'))
-        return
-      }
-      const ordersWithImages = await Promise.all(tape.orders.map(async (order) => {
-        if (!order.qr_asset?.preview_url) throw new Error(`Заказ WB №${order.wb_order_id}: стикер не получен`)
-        const response = await fetch(resolveFbsAssetUrl(order.qr_asset.preview_url), { headers: { ...authHeaders(token) } })
-        if (!response.ok) throw new Error(`Заказ WB №${order.wb_order_id}: стикер не получен`)
-        const imageUrl = URL.createObjectURL(await response.blob())
-        return { ...order, imageUrl }
-      }))
-      const css = '@page{size:40mm 58mm;margin:0}html,body{margin:0;padding:0}.label{width:40mm;height:58mm;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;break-after:page;padding:1mm;font-family:Arial,sans-serif;text-align:center}.label img{max-width:100%;max-height:100%;object-fit:contain}.service{font-size:28pt;font-weight:900}.service small{display:block;font-size:8pt;font-weight:400;margin-top:4mm}.marking{gap:4mm;font-size:12pt;word-break:break-all}.marking span{font-size:8pt}'
-      printWindow.document.write(`<title>Стикеры заказов FBS</title><style>${css}</style>${buildFbsOrderTapeHtml(ordersWithImages)}<script>Promise.all(Array.from(document.images).map(function(i){return i.complete?Promise.resolve():new Promise(function(r){i.onload=r;i.onerror=r})})).then(function(){window.focus();window.print()})</script>`); printWindow.document.close()
-    } catch (e) { printWindow.close(); setError(e instanceof Error ? e.message : 'Не удалось получить стикеры') }
+      await onPrintStickers()
+    } catch (e) { setError(e instanceof Error ? e.message : 'Не удалось получить стикеры') }
     finally { setPrinting(false) }
-  }, [authHeaders, canPrint, supplyId, token])
+  }, [canPrint, onPrintStickers, supplyId])
 
   const columns: Column<NumberedItem>[] = [
-    { key: 'number', header: '№', width: 76, align: 'center', render: (i) => <Typography fontWeight={800}>{i.numberFrom === i.numberTo ? i.numberFrom : `${i.numberFrom}–${i.numberTo}`}</Typography> },
+    { key: 'number', header: '№', width: 76, align: 'center', render: (i) => <Typography sx={{ fontWeight: 800 }}>{i.numberFrom === i.numberTo ? i.numberFrom : `${i.numberFrom}–${i.numberTo}`}</Typography> },
     { key: 'product', header: 'Товар', render: (i) => <Stack><TextCell value={i.product_name} /><Typography variant="caption" color="text.secondary">{i.article}</Typography></Stack> },
     { key: 'size', header: 'Размер', width: 92, align: 'center', render: (i) => i.size || '—' },
     { key: 'quantity', header: 'Кол-во', width: 90, align: 'right', render: (i) => <QtyCell value={i.quantity} /> },

@@ -1,18 +1,23 @@
+# DEV · 06-picking-list-order · атом 5
+
 ## Изменённые файлы
 
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/night/volna-9-recovery/cards/06-picking-list-order/DEV.md
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/screens/v2/fbsApi.ts`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/screens/v2/FbsPrintPreviewDialog.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/screens/v2/FfFbsPickList.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/screens/v2/FfFbsPickList.test.ts`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/frontend/src/screens/v2/FbsPrintPreviewDialog.test.ts`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/night/volna-9-recovery/cards/06-picking-list-order/DEV.md`
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` (из `frontend/`) — зелёный.
-- `python3 scripts/ui/ui_guard.py` (из корня) — зелёный.
-- `npm run test:unit` (из `frontend/`) — красный: в рабочей копии нет локального `vitest` (`sh: vitest: command not found`).
-- `git diff --check` — зелёный.
+- `npx tsc --noEmit -p tsconfig.app.json` из `frontend/` — **красный на существующих зависимостях вне разрешённых файлов атома**. Ошибки: `frontend/src/ui-kit/Cells.tsx:89` использует отсутствующий в MUI 9 prop `inputProps`; `frontend/src/ui-kit/ModalFrame.tsx:32-33` использует отсутствующий prop `disableEscapeKeyDown`, а параметр `reason` не используется. В изменённых файлах TypeScript-ошибок нет.
+- `python3 scripts/ui/ui_guard.py` из корня — **красный на существующих файлах вне разрешённых файлов атома**: `frontend/src/components/WbProductPickerDialog.tsx` (`экран-монолит 0 → 646`) и `frontend/src/screens/v2/SellerInboundDraftScreen.tsx` (`экран-монолит 1111 → 1169`). Базовая линия не обновлялась. По затронутым экранам проверка сообщает улучшения: `FfFbsPickList.tsx` — убраны локальные чип, кнопки и таблица; `FfFbsSupplyWorkspace.tsx` — монолит уменьшен.
+- `npm run test:unit` из `frontend/` — **зелёный**: 21 файл, 149 тестов пройдены. Добавлены проверки полного серверного набора ID, порядка `WB → WMS № K`, сохранения номера вокруг пропущенного стикера и использования сохранённого изображения Честного знака вместо текстового КИЗ.
 
 ## Не реализовано
 
-- Находки 1 и 2 относятся к `/frontend/src/screens/v2/FfFbsPickList.tsx`, который не входит в атом 5; они требуют отдельной доработки печатного окна и состава ленты с Честным знаком.
-- Находка 3 относится к серверной проверке полного состава в `/backend/app/services/fbs_order_tape_print_service.py`; этот backend-слой не входит в атом 5.
-- Находка 4 уже устранена серверным атомом 4: endpoint `print-assets` возвращает `wb_order_id` и `order_number`, которые существующий `FbsPrintPreviewDialog.tsx` показывает и использует для служебной этикетки. В этом атоме новых правок для него не потребовалось.
-- Находка 5 требует Playwright-сценариев и относится к следующему атому 6; автоматический unit-gate сейчас не запускается из-за отсутствующего `vitest`.
+- Нельзя буквально сдать зелёные `tsc` и `ui_guard.py`, не меняя запрещённые этим атомом соседние файлы. Конкретные внешние ошибки перечислены в разделе «Гейты»; файлы и базовая линия не тронуты.
+- Живой браузерный проход не выполнялся: роль `screen-dev` реализует экран и unit-проверки, но не подменяет роль проверки готового результата.
+- Commit создать не удалось: Git не может создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-06-picking-list-order/index.lock` из-за `Operation not permitted`. Метаданные общего Git-каталога находятся вне разрешённой для записи рабочей копии; изменения остаются локальными и незакоммиченными.

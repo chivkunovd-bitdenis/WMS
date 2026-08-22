@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildFbsOrderTapeHtml, buildNumberedItems, markKey } from './FfFbsPickList'
+import { buildNumberedItems, markKey } from './FfFbsPickList'
 
 describe('Лист подбора: отметки «Собрал» и «Упаковал»', () => {
   it('сохраняет сквозные диапазоны при скрытии строк представления', () => {
@@ -18,7 +18,7 @@ describe('Лист подбора: отметки «Собрал» и «Упак
   })
 
   it('товар без размера опирается на артикул', () => {
-    expect(markKey({ article: 'ART-1', sku_code: null, product_name: 'Товар', size: null })).toBe('ART-1::::Товар')
+    expect(markKey({ article: 'ART-1', sku_code: null, product_name: 'Товар', size: null })).toBe('ART-1::::::Товар')
   })
 
   it('одинаковый размер у разных артикулов не смешивается', () => {
@@ -29,28 +29,5 @@ describe('Лист подбора: отметки «Собрал» и «Упак
   it('различает одинаковые артикул и размер при разном SKU или названии', () => {
     expect(markKey({ article: 'A', sku_code: 'SKU-1', product_name: 'Один', size: 'M' }))
       .not.toBe(markKey({ article: 'A', sku_code: 'SKU-2', product_name: 'Два', size: 'M' }))
-  })
-})
-
-describe('Лента печати листа подбора', () => {
-  it('TC-S03-006 сохраняет код маркировки перед парой WB и WMS с постоянным номером', () => {
-    const html = buildFbsOrderTapeHtml([{
-      order_id: 'order-1',
-      wb_order_id: 12345,
-      order_number: 7,
-      requires_honest_sign: true,
-      qr_asset: null,
-      codes: ['010123'],
-      printed_codes: [{ id: 'code-1', cis_code: '010123', has_label_artifact: true }],
-      shortage: null,
-      imageUrl: 'blob:wb-label',
-    }])
-
-    expect(html).toContain('Честный знак')
-    expect(html).toContain('010123')
-    expect(html).toContain('Стикер WB №12345')
-    expect(html).toContain('№ 7')
-    expect(html.indexOf('Честный знак')).toBeLessThan(html.indexOf('Стикер WB №12345'))
-    expect(html.indexOf('Стикер WB №12345')).toBeLessThan(html.indexOf('№ 7'))
   })
 })

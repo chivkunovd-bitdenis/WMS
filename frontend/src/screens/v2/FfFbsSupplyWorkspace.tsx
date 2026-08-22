@@ -46,7 +46,8 @@ import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import type { ProductThermalLabelData } from '../../utils/printProductThermalLabel'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
-import { buildFbsPickingListPrintHtml, ordersWord } from './fbsUx'
+import { FfFbsPickList } from './FfFbsPickList'
+import { ordersWord } from './fbsUx'
 import {
   confirmFbsPrintApplied,
   confirmFbsManualPick,
@@ -64,6 +65,7 @@ import {
   fetchFbsWorklist,
   fetchFbsWorkspace,
   getFbsPickingList,
+  getFullFbsPickingOrderIds,
   lookupFbsOrderBySticker,
   printFbsOrderTape,
   removeFbsPackingBoxOrder,
@@ -79,6 +81,7 @@ import {
   validateFbsKiz,
   type FbsKizLookup,
   type FbsOrderPrintTapeRequest,
+  type FbsOrderPrintTape,
   type FbsPickLocation,
   type FbsPrintAsset,
   type FbsPrintBatch,
@@ -283,7 +286,9 @@ export function FfFbsSupplyWorkspace({
   const [productBarcode, setProductBarcode] = useState('')
   const [pickLocation, setPickLocation] = useState<FbsPickLocation | null>(null)
   const [printBatch, setPrintBatch] = useState<FbsPrintBatch | null>(null)
+  const [printTape, setPrintTape] = useState<FbsOrderPrintTape | null>(null)
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false)
+  const [pickListOpen, setPickListOpen] = useState(false)
   const [packagingTask, setPackagingTask] = useState<PackagingTask | null>(null)
   const [manualPickLocationRows, setManualPickLocationRows] = useState<Record<string, string[]>>({})
   const [boxCount, setBoxCount] = useState('1')
@@ -351,6 +356,8 @@ export function FfFbsSupplyWorkspace({
     setStage(initialWorkspace ? visualStage(initialWorkspace.stage) : 'composition')
     setDeliveryKey(persistentOperationKey(supplyId, 'delivery'))
     setPrintBatch(null)
+    setPrintTape(null)
+    setPickListOpen(false)
     setPickLocation(null)
     setManualPickLocationRows({})
     setBoxCount('1')
@@ -654,6 +661,7 @@ export function FfFbsSupplyWorkspace({
         order_ids: printOrderIds,
         retry_missing: retryMissing,
       })
+      setPrintTape(null)
       setPrintBatch(batch); if (batch.ready === 0) {
         setError('WB не вернул ни одного готового стикера. Печать не открыта.')
       } else setPrintPreviewOpen(true)
@@ -672,12 +680,19 @@ export function FfFbsSupplyWorkspace({
         ? { ...asset, applied_at: new Date().toISOString() }
         : asset),
     } : current)
+    setPrintTape((current) => current ? {
+      ...current,
+      orders: current.orders.map((order) => order.qr_asset?.id === assetId
+        ? { ...order, qr_asset: { ...order.qr_asset, applied_at: new Date().toISOString() } }
+        : order),
+    } : current)
     await load(true)
   }
 
   const openAssetPreview = (assets: Array<NonNullable<FbsWorkspace['supply']['barcode_asset']>>) => {
     const readyAssets = assets.filter((asset) => asset.status === 'ready' && asset.preview_url)
     const failedAssets = assets.filter((asset) => asset.status === 'error')
+    setPrintTape(null)
     setPrintBatch({
       requested: assets.length,
       ready: readyAssets.length,
@@ -710,6 +725,7 @@ export function FfFbsSupplyWorkspace({
         applied_at: null,
         error: null,
       }
+      setPrintTape(null)
       setPrintBatch({
         requested: 1,
         ready: 1,
@@ -891,61 +907,56 @@ export function FfFbsSupplyWorkspace({
     return Boolean(line?.requires_honest_sign || order.metadata.required.includes('sgtin'))
   }
 
-  const markingAvailableForOrders = (orders: Array<FbsWorkspace['orders'][number]>) => {
-    const seen = new Set<string>()
-    let total = 0
-    for (const order of orders) {
-      if (!requiresOrderHonestSign(order) || !order.product.id || seen.has(order.product.id)) continue
-      seen.add(order.product.id)
-      total += packLineByProduct.get(order.product.id)?.marking_available_count ?? 0
-    }
-    return total
-  }
-
-  const openBulkOrderMarkingPrint = async (reprint = false) => {
+  const prepareFullOrderTapePreview = async (reprint = false) => {
     if (!workspace) return
     setBusy(true)
     setError(null)
     try {
-      // ID берём только из серверного листа; workspace нужен лишь для превью.
-      const [pickingItems, freshWorkspace] = await Promise.all([getFbsPickingList(token, authHeaders, workspace.supply.id), fetchFbsWorkspace(token, authHeaders, workspace.supply.id)])
-      const canonicalOrderIds = pickingItems.flatMap((item) => item.order_ids)
-      const ordersById = new Map(freshWorkspace.orders.map((order) => [order.id, order]))
-      const orders = canonicalOrderIds.map((orderId) => ordersById.get(orderId)).filter((order): order is FbsWorkspace['orders'][number] => Boolean(order))
-      if (canonicalOrderIds.length === 0 || orders.length !== canonicalOrderIds.length) {
-        setError('Не удалось получить полный состав поставки для печати.'); return
+      // Состав и порядок всегда берём из свежего серверного листа. Порядок
+      // workspace.orders может быть любым и на физическую ленту не влияет.
+      const pickingItems = await getFbsPickingList(token, authHeaders, workspace.supply.id)
+      const canonicalOrderIds = getFullFbsPickingOrderIds(pickingItems)
+      if (canonicalOrderIds.length === 0) {
+        throw new Error('В поставке нет заказов для печати')
       }
-      const firstOrder = orders[0]
-      const firstLine = firstOrder?.product.id ? packLineByProduct.get(firstOrder.product.id) : undefined
-      if (!firstOrder || !firstOrder.product.id) return
-      const anyHonestSign = orders.some(requiresOrderHonestSign)
-      const tapeOrders = orders.map((order) => ({ orderId: order.id, wbOrderId: order.wb_order_id, requiresHonestSign: requiresOrderHonestSign(order), productLabel: productLabelFromOrder(order) }))
-      openPrint(
-        {
-          token,
-          productId: firstOrder.product.id,
-          documentNumber: workspace.supply.name,
-          qtyNeedPack: anyHonestSign ? tapeOrders.filter((order) => order.requiresHonestSign).length : tapeOrders.length,
-          markingAvailable: markingAvailableForOrders(orders), qtyMarkingPrinted: orders.filter(orderPrintDone).length, requiresHonestSign: anyHonestSign,
-          skuCode: firstLine?.sku_code ?? firstOrder.product.seller_article ?? `WB-${firstOrder.wb_order_id}`,
-          productName: workspace.supply.name,
-          productLabel: productLabelFromOrder(firstOrder),
-          fbsTape: {
-            orders: tapeOrders,
-            includeOrderQr: true,
-            print: async ({ layout, allowPartial, reprint: printReprint }) => {
-              const latestPickingItems = await getFbsPickingList(token, authHeaders, workspace.supply.id)
-              const body: FbsOrderPrintTapeRequest = { order_ids: latestPickingItems.flatMap((item) => item.order_ids), layout_json: layout, allow_partial: allowPartial, include_order_qr: true, reprint: printReprint }
-              return printFbsOrderTape(token, authHeaders, workspace.supply.id, body)
-            },
-            confirmQrApplied: async (asset) => { await confirmFbsPrintApplied(token, authHeaders, asset.id, createFbsIdempotencyKey()) },
-          },
-          onPrinted: () => { void refreshPackagingTask() },
-        },
-        { reprint },
-      )
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Не удалось получить полный состав поставки для печати.')
-    } finally { setBusy(false) }
+      const tape = await printFbsOrderTape(token, authHeaders, workspace.supply.id, {
+        order_ids: canonicalOrderIds,
+        layout_json: null,
+        allow_partial: false,
+        include_order_qr: true,
+        reprint,
+      })
+      if (tape.shortage > 0 && tape.orders.length === 0) {
+        throw new Error(`Не хватает кодов маркировки: ${tape.shortage}`)
+      }
+      if (tape.orders.length === 0 && tape.order_errors.length === 0) {
+        throw new Error('Стикеры ещё не готовы или получены не все')
+      }
+      setPrintBatch(null)
+      setPrintTape(tape)
+      setPickListOpen(false)
+      setPrintPreviewOpen(true)
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : ''
+      if (
+        message === 'В поставке нет заказов для печати' ||
+        message === 'Стикеры ещё не готовы или получены не все' ||
+        message.startsWith('Не хватает кодов маркировки:')
+      ) {
+        throw cause
+      }
+      throw new Error('Не удалось подготовить стикеры. Попробуйте ещё раз')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const openBulkOrderMarkingPrint = async (reprint = false) => {
+    try {
+      await prepareFullOrderTapePreview(reprint)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось получить полный состав поставки для печати.')
+    }
   }
 
   /** Печать ЧЗ и ШК заказа через стандартный конструктор системы. */
@@ -1076,51 +1087,6 @@ export function FfFbsSupplyWorkspace({
       )
     : 0
   const percent = total ? Math.round((ready / total) * 100) : 0
-  const pickingRows = useMemo(() => {
-    if (!workspace) return []
-    const grouped = new Map<string, {
-      key: string
-      name: string
-      size: string | null
-      imageUrl: string | null
-      identifiers: string[]
-      locations: string[]
-      required: number
-      picked: number
-      wbOrders: number[]
-      stickerCodes: Array<string | null>
-      marking: string
-      nearestDeadline: string
-    }>()
-    for (const order of workspace.orders) {
-      const key = order.product.id ?? `unmapped-${order.id}`
-      const current = grouped.get(key) ?? {
-        key,
-        name: order.product.name,
-        size: order.product.size,
-        imageUrl: order.product.image_url,
-        identifiers: [order.product.seller_article, order.product.wb_article ? `WB ${order.product.wb_article}` : null, order.product.barcode].filter((value): value is string => Boolean(value)),
-        locations: [],
-        required: 0,
-        picked: 0,
-        wbOrders: [],
-        stickerCodes: [],
-        marking: order.metadata.required.length ? order.metadata.required.join(', ') : 'Не требуется',
-        nearestDeadline: order.deadline_at,
-      }
-      current.required += 1
-      if (order.pick.status === 'picked') current.picked += 1
-      current.wbOrders.push(order.wb_order_id)
-      current.stickerCodes.push(order.sticker.code)
-      const locations = order.inventory.locations
-        .filter((location) => location.available_unpacked > 0)
-        .map((location) => `${location.code}: ${location.available_unpacked}`)
-      current.locations = [...new Set([...current.locations, ...locations])]
-      if (new Date(order.deadline_at).getTime() < new Date(current.nearestDeadline).getTime()) current.nearestDeadline = order.deadline_at
-      grouped.set(key, current)
-    }
-    return [...grouped.values()]
-  }, [workspace])
   const manualPickRows = useMemo(() => {
     if (!workspace) return []
     const byProduct = new Map<string, typeof workspace.orders>()
@@ -1188,27 +1154,6 @@ export function FfFbsSupplyWorkspace({
       })
     })
   }, [manualPickLocationRows, workspace])
-  const printPickingList = () => {
-    if (!workspace) return
-    const printWindow = window.open('', '_blank')
-    if (!printWindow) {
-      setError('Браузер заблокировал окно печати. Разрешите всплывающие окна и повторите.')
-      return
-    }
-    printWindow.opener = null
-    printWindow.document.open()
-    printWindow.document.write(buildFbsPickingListPrintHtml({
-      supplyName: workspace.supply.name,
-      wbSupplyId: workspace.supply.wb_supply_id,
-      sellerName: workspace.supply.seller.name,
-      wmsWarehouseName: workspace.supply.wms_warehouse.name,
-      routeLabel: workspace.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ',
-      deadlineLabel: new Date(workspace.supply.nearest_deadline_at).toLocaleString('ru-RU'),
-      printedAtLabel: new Date().toLocaleString('ru-RU'),
-      rows: pickingRows,
-    }))
-    printWindow.document.close()
-  }
   const packLineByProduct = useMemo(() => {
     const map = new Map<string, PackagingTaskLine>()
     for (const line of packagingTask?.lines ?? []) map.set(line.product_id, line)
@@ -1602,7 +1547,7 @@ export function FfFbsSupplyWorkspace({
                     >
                       Добавить заказы
                     </Button>
-                    <Button variant="outlined" startIcon={<PrintOutlinedIcon />} onClick={printPickingList} data-testid="fbs-pick-list-print">
+                    <Button variant="outlined" startIcon={<PrintOutlinedIcon />} onClick={() => setPickListOpen(true)} data-testid="fbs-pick-list-print">
                       Печать листа подбора
                     </Button>
                   </Stack>
@@ -1652,7 +1597,7 @@ export function FfFbsSupplyWorkspace({
                       Сначала подтвердите ячейку, затем сканируйте товары. Прогресс хранится на сервере.
                     </Typography>
                   </Box>
-                  <Button variant="outlined" startIcon={<PrintOutlinedIcon />} onClick={printPickingList} data-testid="fbs-pick-list-print">
+                  <Button variant="outlined" startIcon={<PrintOutlinedIcon />} onClick={() => setPickListOpen(true)} data-testid="fbs-pick-list-print">
                     Печать листа подбора
                   </Button>
                 </Stack>
@@ -2207,10 +2152,19 @@ export function FfFbsSupplyWorkspace({
           ) : null}
         </Box>
       </DialogContent>
+      <FfFbsPickList
+        token={token}
+        authHeaders={authHeaders}
+        supplyId={workspace?.supply.id ?? null}
+        open={pickListOpen}
+        onClose={() => setPickListOpen(false)}
+        onPrintStickers={() => prepareFullOrderTapePreview(false)}
+      />
       <FbsPrintPreviewDialog
         token={token}
         authHeaders={authHeaders}
         batch={printBatch}
+        tape={printTape}
         open={printPreviewOpen}
         onClose={() => setPrintPreviewOpen(false)}
         onApplied={(asset) => confirmPrintApplied(asset.id)}
