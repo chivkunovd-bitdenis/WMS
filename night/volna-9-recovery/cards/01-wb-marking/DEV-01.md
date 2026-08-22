@@ -1,14 +1,9 @@
-# DEV · 01-wb-marking · backend-dev
+# DEV · 01-wb-marking · backend-dev · атом 1
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/services/wildberries_fbs_client.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_wildberries_marketplace_fbs_client.py`
-
-## Что реализовано
-
-- `fetch_marketplace_orders_meta_batch`: `MarketplaceMetaDetail` теперь сохраняет `decision`, `value` и `reason` из `metaDetails`.
-- `fetch_marketplace_orders_meta_batch`: при первом `429` ждёт числовой `Retry-After` и повторяет ровно ту же пачку один раз; остальные ошибки и неразбираемый ответ возвращаются как ошибка без DTO.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/services/wildberries_fbs_client.py` — batch DTO сохраняет `decision`, `value`, `reason`; первый ответ `429` ожидает числовой `Retry-After` и повторяет ту же пачку ровно один раз.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_wildberries_marketplace_fbs_client.py` — проверки полного `metaDetails`, единственного повтора `429`, ошибок `4xx/5xx` и неразбираемого ответа.
 
 ## Миграции
 
@@ -16,21 +11,21 @@
 
 ## Тесты
 
-- Расширен batch-тест на сохранение `decision`, `value`, `reason`.
-- Добавлен тест ровно одного повтора `429` с проверкой `Retry-After`.
-- Добавлены проверки отсутствия повтора для `400`/`500` и ошибки неразбираемого тела после повтора.
+- `test_fetch_orders_meta_batch_exact_contract_and_parse` проверяет сохранение `decision`, `value`, `reason`.
+- `test_fetch_orders_meta_batch_retries_429_once_after_retry_after` проверяет ровно два запроса и ожидание `Retry-After`.
+- Проверки ошибок подтверждают, что неуспешный или неразбираемый ответ не превращается в DTO-успех.
 
 ## Гейты
 
-- `ruff`: целевые файлы — PASS; полный `ruff check .` — FAIL из-за 81 ранее существующей ошибки в несвязанных файлах backend.
-- `mypy`: целевой файл `app/services/wildberries_fbs_client.py` — PASS (`Success: no issues found in 1 source file`). Полный запуск остановлен после полного ruff.
-- `pytest`: `tests/test_wildberries_marketplace_fbs_client.py` — PASS, 17 passed. Полный suite не запускался после обнаружения общих lint-ошибок.
-- `back_guard.py`: FAIL технически — файл отсутствует в рабочей копии по ожидаемому пути `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/scripts/ci/back_guard.py`.
-- `check_migrations.py`: FAIL технически — файл отсутствует в рабочей копии по ожидаемому пути `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/scripts/ci/check_migrations.py`; миграций нет.
+- `ruff check .` — FAIL: в полном backend есть ранее существующие ошибки в несвязанных файлах; целевые файлы проходят (`All checks passed`).
+- `mypy .` — FAIL/не пройден в полном backend из-за ранее существующих ошибок; целевой `app/services/wildberries_fbs_client.py` проходит (`Success: no issues found`).
+- `pytest` — релевантный набор PASS: 17 passed; полный suite не запускался.
+- `python3 scripts/ci/back_guard.py` — недоступен: файл отсутствует в рабочей копии.
+- `python3 scripts/ci/check_migrations.py` — недоступен: файл отсутствует в рабочей копии; миграций нет.
 
 ## Не реализовано
 
-- Остальные фичи карточки (`wb_orphaned`, применение ответа к локальной привязке, автополлер пачек и удаление одиночного чтения) не затрагивались: реализован только кусок 1.
+- Остальные атомы карточки не затрагивались: `wb_orphaned`, применение ответа к локальной привязке, автополлер пачек и удаление устаревшего одиночного чтения.
 
 ## Находки
 
