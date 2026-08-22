@@ -1,26 +1,26 @@
-# DEV · 01-wb-marking · backend-dev · атом 2 (rework)
+# DEV · 01-wb-marking · атом 3
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_marking_code_events.py` — усилена проверка записи `wb_orphaned`: аудит-событие сохраняет допустимый тип и ссылку на исходный КИЗ, не меняя статус, пул или товар КИЗ.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/models/marking_code.py` — в базовом коммите этого атома уже определены `EVENT_WB_ORPHANED` и его допустимость в `MARKING_CODE_EVENT_TYPES`; повторная правка модели не потребовалась.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/night/volna-9-recovery/cards/01-wb-marking/DEV.md` — отчёт rework-прохода.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/services/fbs_marking_service.py` — безопасное применение `metaDetails`, сохранение raw-блока, согласование legacy `check_status`, блокировки актуальных строк и идемпотентный аудит.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/app/services/fbs_autopoll_service.py` — частично возвращённый batch не учитывается как успешная синхронизация и не запускает производное обновление.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend/tests/test_fbs_kiz.py` — сценарии решений WB, неполного ответа, сохранения raw-данных и единственного `wb_orphaned`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/night/volna-9-recovery/cards/01-wb-marking/DEV.md` — этот отчёт.
 
 ## Гейты
 
-- `ruff check backend/app/models/marking_code.py backend/tests/test_marking_code_events.py` — PASS.
-- `mypy backend/app/models/marking_code.py backend/tests/test_marking_code_events.py` — PASS.
-- `pytest -q backend/tests/test_marking_code_events.py` — PASS.
-- `ruff check .` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend` — FAIL: 80 уже существующих ошибок вне изменённых файлов.
-- `mypy .` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend` — FAIL: 21 уже существующая ошибка в шести посторонних файлах.
-- `pytest` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/backend` — итог не получен: запуск собрал 827 тестов и начал выполнение, но среда прекратила возврат вывода до финального статуса; целевой набор прошёл.
-- `python3 scripts/ci/back_guard.py` — не запущен: файла `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/scripts/ci/back_guard.py` в рабочей копии нет.
-- `python3 scripts/ci/check_migrations.py` — не запущен: файла `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/scripts/ci/check_migrations.py` в рабочей копии нет; миграции не добавлялись.
+- `ruff check` (из `backend/`, изменённые файлы): PASS.
+- `ruff check .` (из `backend/`): FAIL — 80 существующих нарушений в несвязанных API, сервисах, скриптах и тестах; данный атом новых нарушений не добавляет.
+- `mypy .` (из `backend/`): FAIL — 21 существующая ошибка в шести несвязанных файлах; изменённый `fbs_marking_service.py` типовых ошибок не содержит.
+- `pytest -q tests/test_fbs_kiz.py -k 'wb_meta_decision_is_safe or partial_wb_row or orphaned_audit'`: PASS, 11 passed.
+- `pytest` (из `backend/`): полный прогон начат, но в доступной ночной оболочке не вернул финальный код после 11 точек вывода; итог не подтверждён.
+- `python3 scripts/ci/back_guard.py`: не запущен — файла `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/scripts/ci/back_guard.py` нет.
+- `python3 scripts/ci/check_migrations.py`: не запущен — файла `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-01-wb-marking/scripts/ci/check_migrations.py` нет.
 
 ## Не реализовано
 
-- Замечание review №7 о проверке вызова `wb_orphaned` из сервисной сверки не менялось: этот вызов и сценарии `missing`/`replacement_required` принадлежат следующему атому 3 в `backend/app/services/fbs_marking_service.py`. В границе атома 2 покрыта допустимость и сохранение самого события в существующем журнале.
-- Прочие замечания `REVIEW.md` относятся к атомам 1, 3 и 4; этот проход не затрагивает соседние сервисы.
+- Ревью-находка о максимальном `Retry-After` относится к клиенту WB из атома 1 и не менялась в атоме 3.
+- Миграции: нет. Для однократности `wb_orphaned` используется блокировка уже существующей строки `MarkingCode`; схема не расширяется.
 
 ## Находки
 

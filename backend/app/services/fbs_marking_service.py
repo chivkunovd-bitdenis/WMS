@@ -158,7 +158,6 @@ def map_wb_decision_to_meta_status(decision: str | None) -> str | None:
         "optional": META_STATUS_ALLOWED_WITHOUT_CHECK,
         "notrequired": META_STATUS_ALLOWED_WITHOUT_CHECK,
         "not_required": META_STATUS_ALLOWED_WITHOUT_CHECK,
-        "required": META_STATUS_ACCEPTED,
     }
     return mapping.get(key)
 
@@ -494,6 +493,21 @@ def _apply_meta_detail_to_marking(
     }
 
 
+def _check_status_for_meta_status(meta_status: str) -> str:
+    """Keep the legacy status consistent with the authoritative WB decision."""
+    if meta_status == META_STATUS_ACCEPTED:
+        return CHECK_STATUS_OK
+    if meta_status == META_STATUS_ALLOWED_WITHOUT_CHECK:
+        return CHECK_STATUS_NO_CHECK
+    if meta_status in {
+        META_STATUS_REJECTED,
+        META_STATUS_MISSING,
+        META_STATUS_REPLACEMENT_REQUIRED,
+    }:
+        return CHECK_STATUS_ERROR
+    return CHECK_STATUS_CHECKING
+
+
 async def _record_wb_orphaned_once(
     session: AsyncSession,
     marking: FbsOrderMarking,
@@ -501,6 +515,15 @@ async def _record_wb_orphaned_once(
     reason: str | None,
 ) -> None:
     if marking.marking_code_id is None:
+        return
+    # Serialize event creation on the code row.  A check-then-insert without this
+    # lock allows two concurrent WB polls to produce duplicate audit facts.
+    code = await session.scalar(
+        select(MarkingCode)
+        .where(MarkingCode.id == marking.marking_code_id)
+        .with_for_update()
+    )
+    if code is None:
         return
     existing = await session.scalar(
         select(MarkingCodeEvent.id).where(
@@ -510,15 +533,13 @@ async def _record_wb_orphaned_once(
     )
     if existing is not None:
         return
-    code = await session.get(MarkingCode, marking.marking_code_id)
-    if code is not None:
-        await record_event(
-            session,
-            code=code,
-            event_type=EVENT_WB_ORPHANED,
-            actor=None,
-            reason=reason,
-        )
+    await record_event(
+        session,
+        code=code,
+        event_type=EVENT_WB_ORPHANED,
+        actor=None,
+        reason=reason,
+    )
 
 
 async def _sync_order_meta_from_wb(
@@ -529,20 +550,43 @@ async def _sync_order_meta_from_wb(
     *,
     meta_batch: list[MarketplaceOrderMetaRow] | None = None,
 ) -> list[FbsOrderMarking]:
-    markings = await list_order_markings(session, order.tenant_id, order.id)
+    order_id = order.id
+    tenant_id = order.tenant_id
+    wb_order_id = int(order.wb_order_id)
     batch = meta_batch
     if batch is None:
         batch = await fetch_marketplace_orders_meta_batch(
             http_client,
             api_token=token,
-            order_ids=[int(order.wb_order_id)],
+            order_ids=[wb_order_id],
         )
+    # Network I/O above may have overlapped with an operator changing the KIZ.
+    # Lock and reload the current local state before applying the remote snapshot.
+    locked_order = await session.scalar(
+        select(FbsOrder).where(FbsOrder.id == order_id).with_for_update()
+    )
+    if locked_order is None:
+        raise FbsMarkingError("order_not_found")
+    order = locked_order
+    markings = list(
+        (
+            await session.execute(
+                select(FbsOrderMarking)
+                .where(
+                    FbsOrderMarking.tenant_id == tenant_id,
+                    FbsOrderMarking.order_id == order_id,
+                )
+                .order_by(FbsOrderMarking.kind, FbsOrderMarking.value)
+                .with_for_update()
+            )
+        ).scalars().all()
+    )
     details_by_kind: dict[str, MarketplaceMetaDetail] = {}
     returned_kinds: set[str] = set()
     returned_row = False
     status_map: dict[tuple[str, str], str] = {}
     for row in batch:
-        if row.order_id != int(order.wb_order_id):
+        if row.order_id != wb_order_id:
             continue
         returned_row = True
         if row.meta is not None:
@@ -554,9 +598,6 @@ async def _sync_order_meta_from_wb(
                 details_by_kind[kind] = detail
 
     for marking in markings:
-        wb_status = status_map.get((marking.kind, marking.value))
-        if wb_status is not None:
-            marking.check_status = wb_status
         meta_detail = details_by_kind.get(marking.kind)
         current = current_order_marking(markings, marking.kind, include_rejected=True)
         # A returned row is successful only when WB returned the expected kind.
@@ -565,38 +606,32 @@ async def _sync_order_meta_from_wb(
         # lifecycle state.
         if returned_row and marking.kind not in returned_kinds:
             marking.meta_status = META_STATUS_UNKNOWN
+            marking.check_status = CHECK_STATUS_CHECKING
             continue
-        detail_matches = meta_detail is not None and (
-            meta_detail.value == marking.value
-            or (meta_detail.value is None and current is marking)
-        )
-        if (
-            meta_detail is not None
-            and current is marking
-            and meta_detail.value
-            and meta_detail.value != marking.value
-        ):
-            marking.meta_status = META_STATUS_REPLACEMENT_REQUIRED
-            marking.reason = meta_detail.reason
-            marking.meta_details_json = {
-                "decision": meta_detail.decision,
-                "value": meta_detail.value,
-                "reason": meta_detail.reason,
-            }
-            await _record_wb_orphaned_once(session, marking, reason=meta_detail.reason)
-        elif meta_detail is not None and detail_matches:
-            marking.reason = meta_detail.reason
-            if meta_detail.decision.strip().lower() == "required" and not meta_detail.value:
-                marking.meta_status = META_STATUS_MISSING
-            elif meta_detail.value and meta_detail.value != marking.value:
+        if meta_detail is not None and current is marking:
+            # Preserve every received WB detail, including unknown decisions, so a
+            # later investigation sees the original remote answer rather than an
+            # inferred local state.
+            _apply_meta_detail_to_marking(marking, meta_detail)
+            decision = meta_detail.decision.strip().lower()
+            if decision == "required":
+                marking.meta_status = (
+                    META_STATUS_MISSING if not meta_detail.value else META_STATUS_UNKNOWN
+                )
+            elif (
+                decision in {"accepted", "filled"}
+                and meta_detail.value
+                and meta_detail.value != marking.value
+            ):
                 marking.meta_status = META_STATUS_REPLACEMENT_REQUIRED
             elif map_wb_decision_to_meta_status(meta_detail.decision) is None:
                 marking.meta_status = META_STATUS_UNKNOWN
-            else:
-                _apply_meta_detail_to_marking(marking, meta_detail, check_status=wb_status)
+            marking.check_status = _check_status_for_meta_status(marking.meta_status)
             if marking.meta_status in {META_STATUS_MISSING, META_STATUS_REPLACEMENT_REQUIRED}:
                 await _record_wb_orphaned_once(session, marking, reason=marking.reason)
-        elif wb_status is not None:
+        elif status_map.get((marking.kind, marking.value)) is not None:
+            wb_status = status_map[(marking.kind, marking.value)]
+            marking.check_status = wb_status
             marking.meta_status = derive_meta_status(
                 check_status=wb_status,
                 has_value=True,
@@ -604,7 +639,7 @@ async def _sync_order_meta_from_wb(
 
     order.meta_details_json = _meta_details_from_markings(markings)
     order.metadata_delivery_allowed = compute_delivery_allowed(order, markings)
-    if returned_row:
+    if returned_row and all(marking.kind in returned_kinds for marking in markings):
         order.metadata_last_checked_at = datetime.now(tz=UTC)
     await session.flush()
     return markings

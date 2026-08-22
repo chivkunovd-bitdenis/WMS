@@ -270,6 +270,12 @@ async def sync_marking_statuses_for_assembling_supplies(
                 continue
             if not await list_order_markings(session, target.tenant_id, order.id):
                 continue
+            # A partial WB batch must not look like a successful local sync.  In
+            # particular, do not update derived packaging state or the counter for
+            # an order whose row WB did not return at all.
+            if int(order.wb_order_id) not in rows_by_wb_order_id:
+                logger.warning("fbs autopoll marking response missed order %s", order.id)
+                continue
             try:
                 await _sync_order_meta_from_wb(
                     session, order, http_client, token,
