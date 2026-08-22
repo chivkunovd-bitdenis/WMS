@@ -336,7 +336,7 @@ export function FfFbsSupplyWorkspace({
       if (!silent) setBusy(true)
       try {
         const next = await fetchFbsWorkspace(token, authHeaders, supplyId)
-        setWorkspace(next)
+        setWorkspace(safeInitialWorkspace(next))
         if (!silent) setStage(visualStage(next.stage))
       } catch (cause) {
         if (!silent) setError(cause instanceof Error ? cause.message : 'Не удалось загрузить поставку.')
@@ -426,7 +426,7 @@ export function FfFbsSupplyWorkspace({
     setRetryAction(null)
     try {
       const next = await operation()
-      setWorkspace(next)
+      setWorkspace(safeInitialWorkspace(next))
       setStage(visualStage(next.stage))
       if (success) setNotice(success)
       return next
@@ -472,7 +472,7 @@ export function FfFbsSupplyWorkspace({
         order_ids: [...addableSelected],
         idempotency_key: createFbsIdempotencyKey(),
       })
-      setWorkspace(next)
+      setWorkspace(safeInitialWorkspace(next))
       setStage(visualStage(next.stage))
       setAddOrdersOpen(false)
       setAddableSelected(new Set())
@@ -637,7 +637,7 @@ export function FfFbsSupplyWorkspace({
           idempotency_key: createFbsIdempotencyKey(),
         })
       }
-      setWorkspace(next)
+      setWorkspace(safeInitialWorkspace(next))
       setStage(visualStage(next.stage))
       setNotice(`Снято из ячейки: ${orderIds.length} шт.`)
     } catch (cause) {
@@ -862,7 +862,7 @@ export function FfFbsSupplyWorkspace({
   }
 
   const deliver = async () => {
-    if (!workspace || deliveryConfirmed) return
+    if (!workspace || deliveryConfirmed || deliveryBlocker) return
     const next = await run(
       () =>
         deliverFbsSupply(token, authHeaders, workspace.supply.id, {
@@ -1062,7 +1062,7 @@ export function FfFbsSupplyWorkspace({
     setError(null)
     try {
       const next = await skipFbsSupplyHonestSign(token, authHeaders, workspace.supply.id)
-      setWorkspace(next)
+      setWorkspace(safeInitialWorkspace(next))
       setSkipHonestSignOpen(false)
       setNotice('Требование Честного знака снято со всей поставки.')
     } catch (cause) {
@@ -2418,7 +2418,9 @@ export function FfFbsSupplyWorkspace({
           <Button onClick={() => setDeliverConfirmOpen(false)}>Не передавать</Button>
           <Button
             variant="contained"
+            disabled={Boolean(deliveryBlocker) || busy}
             onClick={() => {
+              if (deliveryBlocker) return
               setDeliverConfirmOpen(false)
               void deliver()
             }}
