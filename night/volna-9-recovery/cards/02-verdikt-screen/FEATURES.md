@@ -1,125 +1,51 @@
-ФИЧ: 5
+ФИЧ: 1
 
 ## Фичи
 
-### 1. Сервер собирает единый вердикт WB для заказа
+### 1. Убрать зелёную заливку строки заказа по WB-вердикту в рабочем месте поставки
 
-Оператор получает от сервера не набор внутренних состояний для самостоятельного
-толкования, а один итоговый вердикт заказа: подпись, тон, причина (если есть) и
-разрешение передачи. Сервер учитывает `filled`, `optional`, `notRequired`,
-`pending`, `required`, отсутствие или неизвестность ответа; непустой `reason`
-всегда имеет наивысший приоритет. В ответе метаданных сохраняется достаточно
-данных, чтобы оба места S-03 показывали один и тот же результат.
+**Что меняется словами оператора.**
+Сейчас строка заказа с принятым WB-кодом (`delivery_allowed = true`) отображается с зелёным фоном (`success.light`) и зелёной левой границей (`success.main`). Это второй сигнал той же сущности, которую уже несёт `StatusChip` «WB: принято» в зоне «ЧЗ». После правки строка имеет нейтральный фон во всех состояниях: активная на сканере — `info.light`/`info.main`-бордер, напечатана — `action.hover`, обычная — `background.paper`. WB-вердикт транслируется исключительно чипом.
 
-Файлы:
+**Открытая находка DESIGN-REVIEW:** R-11 → R-35, `FfFbsSupplyWorkspace.tsx:1911, 1922–1928` — строка всё ещё красится в `success.light`/`success.main` при `metadata.verdict.delivery_allowed = true`.
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/app/services/fbs_marking_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/app/api/fbs_marking.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/tests/test_fbs_marking.py`
+**Что именно менять:**
 
-Зависимости: нет.
+В `frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx`:
+- Строка 1911: удалить `const markingReady = Boolean(tail) && order.metadata.verdict.delivery_allowed`
+- Строки 1922–1926: заменить `markingReady ? 'success.light' :` → убрать ветку; оставить `kizRowActive ? 'info.light' : (printed ? 'action.hover' : 'background.paper')`
+- Строка 1928: заменить `(markingReady ? 'success.main' : 'transparent')` → `(kizRowActive ? 'info.main' : 'transparent')`
 
-Проверка: unit/API-тесты покрывают S-03-TC-001…007: принятый и необязательный
-код разрешают передачу; `reason`, `pending`, `required`, отсутствие и
-неизвестный `decision` запрещают её; при нескольких требованиях один блокер
-перевешивает положительные ответы. В полезной нагрузке нет технической подписи
-для оператора вместо заданного серверного вердикта.
+В `frontend/tests-e2e/ff-fbs-supply.spec.ts` (S-03-TC-007, строки 292–301):
+- Утверждение `expect(blockedStyle.backgroundColor).not.toBe(acceptedStyle.backgroundColor)` заменить на проверку, что `acceptedRow` имеет тот же нейтральный фон, что и `blockedRow` (оба `background.paper`); убедиться, что ни у одной строки нет зелёного цвета.
 
-### 2. Передача поставки использует тот же серверный запрет
+**Файлы:**
+- `frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx`
+- `frontend/tests-e2e/ff-fbs-supply.spec.ts`
 
-Серверная проверка действия «Передать в WB» читает итоговое правило из фичи 1,
-а не допускает заказ по одному `check_status = ok`, `assigned` или `pending`.
-Для блокировки возвращается привязанный к заказу результат, из которого UI
-может показать понятную причину недоступности действия.
+**Зависит от:** ничего — независимая правка.
 
-Файлы:
+**Как проверить:**
+1. В рабочем месте поставки открыть заказ с хвостом кода ЧЗ и `delivery_allowed = true` — строка НЕ зелёная, фон `background.paper`, нет зелёного бордера.
+2. Рядом открыть заказ с `delivery_allowed = false` — строка тоже `background.paper`.
+3. Оба заказа имеют одинаковый нейтральный фон строки.
+4. `StatusChip` «WB: принято» в зоне «ЧЗ» по-прежнему виден — единственный зелёный сигнал.
+5. Активная строка сканера по-прежнему `info.light` + `info.main`-бордер.
+6. Напечатанная строка — `action.hover`.
+7. `npm run test:unit` из `frontend/` — зелёный.
+8. `npx tsc --noEmit -p tsconfig.app.json` из `frontend/` — зелёный.
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/app/services/fbs_shipment_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/tests/test_fbs_shipment_deliver_gate_unit.py`
-
-Зависимости: фича 1.
-
-Проверка: unit-тест отправки поставки подтверждает, что `filled` без причины и
-`optional`/`notRequired` без причины проходят, а отказ с причиной, ожидание,
-обязательный или неизвестный ответ WB останавливают передачу. Сообщение
-проверки относится к конкретному заказу и не даёт обойти запрет прямым запросом
-к серверу.
-
-### 3. Фронт получает тип и единый словарь отображения вердикта
-
-Клиентский API описывает серверный вердикт как источник истины, а один
-утилитный словарь переводит его в фиксированные тексты, тоны `StatusChip`,
-понятные русские причины и `disabledReason`. Компоненты экранов не выводят
-готовность из локальных `assigned`, `pending` или `check_status`.
-
-Файлы:
-
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/fbsApi.ts`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/utils/metaStatus.ts`
-
-Зависимости: фича 1.
-
-Проверка: тип не позволяет экрану подменить серверное `delivery_allowed`, а
-словарь для всех контрактных состояний возвращает ровно `WB: принято`, `WB: код
-не требуется`, `WB не принял`, `WB: проверяет`, `WB: нужен код` или `Нет ответа
-WB`, с нужными тонами и безопасным отображением неизвестной причины.
-
-### 4. Список FBS-заказов показывает вердикт в существующей зоне статуса
-
-В строке заказа S-03 старый параллельный признак отклонения заменяется одним
-`StatusChip` из ui-kit и, при отказе, `TextCell` с понятной причиной. Новая
-колонка и заливка строки не появляются; пустой список, загрузка и общий
-`ErrorNotice` не меняются.
-
-Файлы:
-
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/FfFbsOrdersScreen.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/tests-e2e/ff-fbs-orders.spec.ts`
-
-Зависимости: фича 3.
-
-Проверка: Playwright-сценарии S-03-TC-001, S-03-TC-002, S-03-TC-003 и
-S-03-TC-006 открывают список через UI и видят в строке соответственно
-подтверждение, нейтральный необязательный код, `WB не принял` с русской
-причиной и `Нет ответа WB` с «Сдача пока недоступна». Технические поля WB на
-странице не видны.
-
-### 5. Рабочее место поставки показывает вердикт и блокирует передачу
-
-В строке ЧЗ каждого заказа рабочего места S-03 показывается тот же вердикт и
-причина, что в списке. Готовность заказа и доступность прежнего главного
-действия «Передать в WB» берутся только из серверного признака; оптимистичная
-надпись «Готова к сдаче» не сосуществует с блокером, а `disabledReason`
-объясняет конкретный заказ.
-
-Файлы:
-
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/tests-e2e/ff-fbs-supply.spec.ts`
-
-Зависимости: фичи 2 и 3.
-
-Проверка: Playwright-сценарии S-03-TC-004, S-03-TC-005 и S-03-TC-007 проходят
-путь оператора до рабочего места: `pending` показывает «WB: проверяет» и не
-открывает передачу, `required` показывает «WB: нужен код», а единственный
-блокирующий заказ запрещает сдачу всей поставки и объясняет почему. При общем
-положительном серверном вердикте действие остаётся на прежнем месте и доступно.
+---
 
 ## Порядок
 
-Сначала сделать фичу 1: она создаёт единственный источник истины, без которого
-ни серверная защита, ни UI не должны угадывать разрешение. Затем фичи 2 и 3
-независимы друг от друга и могут выполняться параллельно: первая подключает это
-правило к серверному действию, вторая готовит клиентский контракт и словарь
-отображения. После фичи 3 можно делать фичу 4. Фича 5 начинается только после
-фич 2 и 3, потому что одновременно использует готовый UI-контракт и проверяет
-реальную недоступность передачи.
+Единственная фича: выполняется самостоятельно, без блокирующих зависимостей.
+
+---
 
 ## Что осталось за бортом
 
-- Частота автопроверки WB, получение запоздалых ответов и возврат потерянного
-  кода в пул относятся к карточке `01-wb-marking`, а не к отображению вердикта.
-- Оптимизация фоновых опросов и обновления страницы относится к карточке
-  `05-prod-slow`.
-- Сценарии гонок S-03-TC-008, S-03-TC-009 и S-03-TC-012 требуют отдельного
-  контракта синхронизации и не добавлены к этой атомарной UI-карточке.
+- Коммит в Git не создан: изменения в рабочей копии есть (DEV-01 — DEV-05), но sandbox заблокировал запись в `.git/worktrees/.../index.lock`. Оркестратор коммитит вручную.
+- Playwright-прогон S-03-TC-004/005/007: порт `127.0.0.1:18000` недоступен в sandbox; запускать в полной среде.
+- Предсуществующие нарушения `ui_guard.py` в `WbProductPickerDialog.tsx` и `SellerInboundDraftScreen.tsx` — вне границы карточки 02, не созданы ею.
+- Предсуществующие mypy-ошибки в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py`, `fbs_warehouse_binding_service.py` — не создавались карточкой 02.

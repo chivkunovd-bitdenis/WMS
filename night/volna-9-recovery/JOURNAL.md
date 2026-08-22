@@ -104,3 +104,17 @@
 23:53   02-verdikt-screen · dev: фича 2/5 сохранена fe1a77623ffb
 23:58   02-verdikt-screen · screen-dev: готово
 23:58   02-verdikt-screen · dev: фича 5/5 сохранена e7f7813a742a
+00:02   02-verdikt-screen · reviewer: готово
+00:04   02-verdikt-screen · ui-critic: готово
+00:04 02-verdikt-screen: отложено — ui-critic, эскалация не помогла
+00:10 02-verdikt-screen: отложено — финальная эскалация уже была
+00:15   02-verdikt-screen · repair-plan: сильный ремонт не помог — дорезаем находки
+00:19   02-verdikt-screen · ux-architect: CONTRACT.md: нужны машинные строки МАКЕТ и UI-KIT (код 0, попытка 1)
+00:22   02-verdikt-screen · ux-architect: CONTRACT.md: нужны машинные строки МАКЕТ и UI-KIT (код 0, попытка 2)
+00:22 02-verdikt-screen: отложено — не удалось перенарезать ремонт
+00:24   02-verdikt-screen · repair-plan: сильный ремонт не помог — дорезаем находки
+00:28   02-verdikt-screen · ux-architect: CONTRACT.md: нужны машинные строки МАКЕТ и UI-KIT (код 0, попытка 1)
+00:41   02-verdikt-screen · ux-architect: готово
+00:45   02-verdikt-screen · splitter: готово
+00:45   02-verdikt-screen · resume: поатомный rework Terra по сохранённым находкам
+00:47   02-verdikt-screen · screen-dev: готово

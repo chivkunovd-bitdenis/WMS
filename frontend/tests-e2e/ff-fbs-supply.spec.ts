@@ -287,18 +287,13 @@ test('fbs workspace: one blocked order prevents whole-supply delivery', async ({
   await expect(page.getByText('1 из 2 подготовлено к отгрузке')).toBeVisible()
   await expect(page.getByText('2 из 2 подготовлено к отгрузке')).toHaveCount(0)
   await expect(page.getByTestId('fbs-order-print-done-2')).toHaveCount(0)
+  // WB-вердикт транслируется только через StatusChip; строка остаётся нейтральной в обоих случаях.
   const acceptedRow = page.getByTestId('fbs-kiz-row-1')
   const blockedRow = page.getByTestId('fbs-kiz-row-2')
-  const acceptedStyle = await acceptedRow.evaluate((element) => {
-    const style = window.getComputedStyle(element)
-    return { backgroundColor: style.backgroundColor, borderLeftColor: style.borderLeftColor }
-  })
-  const blockedStyle = await blockedRow.evaluate((element) => {
-    const style = window.getComputedStyle(element)
-    return { backgroundColor: style.backgroundColor, borderLeftColor: style.borderLeftColor }
-  })
-  expect(blockedStyle.backgroundColor).not.toBe(acceptedStyle.backgroundColor)
-  expect(blockedStyle.borderLeftColor).not.toBe(acceptedStyle.borderLeftColor)
+  const acceptedBg = await acceptedRow.evaluate((el) => window.getComputedStyle(el).backgroundColor)
+  const blockedBg = await blockedRow.evaluate((el) => window.getComputedStyle(el).backgroundColor)
+  // Оба ряда имеют одинаковый нейтральный фон (background.paper) — зелёного нет ни у одного.
+  expect(acceptedBg).toBe(blockedBg)
   const deliver = page.getByRole('button', { name: 'Передать в WB' })
   await expect(deliver).toBeDisabled()
   await deliver.hover()
