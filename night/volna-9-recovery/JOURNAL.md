@@ -50,3 +50,6 @@
 19:19   07-reporting · dev: фича 10/11 сохранена 7e0eea8ac7aa
 19:22   07-reporting · screen-dev: готово
 19:22   07-reporting · dev: фича 11/11 сохранена c5bae255db15
+19:26   07-reporting · reviewer: готово
+19:26   07-reporting · reviewer: находки, круг 2 — назад к разработке
+19:27   07-reporting · backend-dev: готово

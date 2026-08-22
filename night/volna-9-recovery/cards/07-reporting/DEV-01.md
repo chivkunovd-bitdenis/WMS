@@ -1,31 +1,26 @@
-# Backend Dev · 07-reporting · атом 1
+# Backend-dev · 07-reporting · атом 1
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/alembic/versions/20260822_0094_inventory_movement_reporting_dimensions.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/tests/test_inventory_movement_reporting_dimensions.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/DEV.md`
-
-Исправлен backfill измерений движения: PostgreSQL-совместимые коррелированные подзапросы вместо недопустимого `JOIN` с alias целевой таблицы. Перед переводом `warehouse_id` в `NOT NULL` миграция теперь явно останавливается при неразрешимой исторической привязке, не подставляя догадку. Тест проверяет эту форму SQL.
-
-## Миграции
-
-- `20260822_0094` — изменена существующая добавляющая миграция: backfill `seller_id`, `warehouse_id`, `reporting_dimensions_legacy`; проверка полноты `warehouse_id`; составные индексы без изменений.
+- Изменений в backend-файлах по результатам re-review не потребовалось: замечания REVIEW.md относятся к 07-B reporting API/UI, а не к 07-A модели и миграции.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/app/models/inventory_movement.py` — проверен контракт `seller_id`, обязательный `warehouse_id` и `reporting_dimensions_legacy`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/alembic/versions/20260822_0094_inventory_movement_reporting_dimensions.py` — проверен backfill коррелированными подзапросами, отказ при неразрешимом `warehouse_id`, внешние ключи и составные индексы.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/tests/test_inventory_movement_reporting_dimensions.py` — проверены модель и текстовые инварианты миграции.
 
 ## Гейты
 
-- `ruff check .` — FAIL: 82 pre-existing ошибок в несвязанных файлах backend; ошибок в изменённых файлах отдельно не выявлено.
-- `mypy .` — FAIL: 20 pre-existing ошибок в несвязанных сервисах и cleanup-скрипте; `mypy app/models/inventory_movement.py` — PASS.
-- `pytest` — целевой `tests/test_inventory_movement_reporting_dimensions.py`: PASS, 2 passed.
-- `python3 scripts/ci/back_guard.py` — BLOCKED: файл отсутствует в рабочей копии.
-- `python3 scripts/ci/check_migrations.py` — BLOCKED: файл отсутствует в рабочей копии.
-- `git diff --check` — PASS.
+- `ruff check .` — FAIL: 82 уже существующих ошибок в несвязанных backend-файлах; ошибок в перечисленных файлах атома в выводе нет.
+- `mypy .` — FAIL: 21 уже существующая ошибка в 6 несвязанных файлах; ошибок в перечисленных файлах атома нет.
+- `pytest -q tests/test_inventory_movement_reporting_dimensions.py` — PASS, 2 passed.
+- `pytest` — не запускался целиком после целевого теста: полный backend уже блокируется перечисленными ruff/mypy-ошибками.
+- `python3 scripts/ci/back_guard.py` — не запущен: файла `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/scripts/ci/back_guard.py` в этой рабочей копии нет.
+- `python3 scripts/ci/check_migrations.py` — не запущен: файла `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/scripts/ci/check_migrations.py` в этой рабочей копии нет.
 
 ## Не реализовано
 
-- Остальные находки `REVIEW.md` по reporting API, CSV и frontend не относятся к этому атомарному backend-изменению и не трогались.
-- Полное исполнение миграции на PostgreSQL не проведено: в окружении нет доступной тестовой базы; SQL теперь не использует запрещённую форму `UPDATE ... FROM ... JOIN`.
+- Находки 1–15 из REVIEW.md, относящиеся к `reporting_service.py`, frontend, UI-реестру, E2E и `docs/blockers`, не реализовывались: они находятся вне атома 07-A и вне роли backend-dev для указанных трёх файлов.
+- Полное применение миграции к живой базе не выполнялось: для этого в рабочей копии нет предусмотренного migration guard/тестового окружения; секреты, `.env`, ключи и кабинеты учётных данных не читались.
 
-## Блокеры
+## Находки
 
-- Нет блокеров для внесённого исправления; общие гейты ограничены существующими ошибками репозитория и отсутствующими скриптами.
+- В текущей рабочей копии обязательные guard-скрипты отсутствуют по указанным путям.
