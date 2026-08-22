@@ -224,6 +224,21 @@ test('fbs orders: create supply from selected orders', async ({ page }) => {
         nearest_deadline_at: new Date(Date.now() + 100 * 3600 * 1000).toISOString(),
       },
       issues: [],
+      stock_preflight: {
+        compatible: true,
+        recommended_warehouse: { id: 'w-2', name: 'Склад Юг' },
+        warning_lines: [{
+          product_id: 'p-1', product_name: 'Товар 1', required: 2, current: 0, total: 2, shortage: 0,
+          source_warehouse: { id: 'w-2', name: 'Склад Юг', available: 2 },
+        }],
+        blocking_lines: [],
+      },
+      warehouse_options: [{ id: 'w-1', name: 'Основной склад' }, { id: 'w-2', name: 'Склад Юг' }],
+      recommended_warehouse: { id: 'w-2', name: 'Склад Юг' },
+      inventory: [{
+        product_id: 'p-1', product_name: 'Товар 1', required: 2, current: 0, total: 2, shortage: 0,
+        source_warehouse: { id: 'w-2', name: 'Склад Юг', available: 2 },
+      }],
     }),
   )
   await page.route('**/operations/fbs-supplies/from-orders', async (route) => {
@@ -243,6 +258,8 @@ test('fbs orders: create supply from selected orders', async ({ page }) => {
   await page.getByTestId('fbs-order-2').getByRole('checkbox').click()
   await expect(page.getByTestId('fbs-selection-bar')).toBeVisible()
   await page.getByRole('button', { name: 'Сформировать поставку' }).click()
+  await expect(page.getByTestId('fbs-preflight-warehouse')).toContainText('Склад Юг')
+  await expect(page.getByTestId('fbs-preflight-warning')).toContainText('На складе «Основной склад» не хватает 2 шт.')
   await expect(page.getByText('Можно создать поставку')).toBeVisible()
   await expect(page.getByTestId('fbs-create-submit')).toBeEnabled()
   await page.getByTestId('fbs-create-submit').click()
@@ -253,6 +270,7 @@ test('fbs orders: create supply from selected orders', async ({ page }) => {
   await page.getByTestId('cal-02-fbs-shipment-date-save').click()
   await expect(page.getByText('Дата отгрузки сохранена.')).toBeVisible()
   expect(createBody?.order_ids).toEqual(['1', '2'])
+  expect(createBody?.selected_warehouse_id).toEqual('w-2')
   expect(createBody?.idempotency_key).toEqual(expect.any(String))
   expect(plannedDateBody).toEqual({ planned_shipment_date: '2026-08-17' })
 })

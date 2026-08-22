@@ -273,11 +273,27 @@ export type FbsSupplyPreflight = {
     pvz_allowed_count: number
     pvz_blocked_count: number
     nearest_deadline_at: string
-    recommended_warehouse?: { id: string; name: string } | null
-    warehouse_options?: Array<{ id: string; name: string }>
-    inventory?: { total_shortage: number; local_shortage: number; shortage_products: number; lines: Array<{ product_id: string; name: string; required: number; here: number; total: number; shortage: number; source_warehouse?: { id: string; name: string; quantity: number } | null }> }
   }
   issues: Array<{ order_id: string; code: string; message: string }>
+  stock_preflight: {
+    compatible: boolean
+    recommended_warehouse: { id: string; name: string } | null
+    warning_lines: FbsSupplyPreflightInventoryLine[]
+    blocking_lines: FbsSupplyPreflightInventoryLine[]
+  }
+  warehouse_options: Array<{ id: string; name: string }>
+  recommended_warehouse: { id: string; name: string } | null
+  inventory: FbsSupplyPreflightInventoryLine[]
+}
+
+export type FbsSupplyPreflightInventoryLine = {
+  product_id: string
+  product_name: string
+  required: number
+  current: number
+  total: number
+  shortage: number
+  source_warehouse: { id: string; name: string; available: number } | null
 }
 
 export type FbsSupplyCreateFromOrdersRequest = {
