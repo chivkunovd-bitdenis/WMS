@@ -136,6 +136,7 @@ test('outbound submit without cell reserves warehouse; post needs cell', async (
   await expect(page.getByTestId('outbound-warehouse-context')).toHaveCount(0);
   await page.getByTestId('outbound-request-item').first().click();
   await expect(page.getByTestId('outbound-detail-status')).toContainText('submitted');
+  await expect(page.getByTestId('outbound-document-warehouse')).toContainText('Склад: WH');
 
   const storageForm = page.locator(
     `[data-testid="outbound-line-storage-form"][data-line-id="${lineId}"]`,
@@ -165,11 +166,20 @@ test('outbound submit without cell reserves warehouse; post needs cell', async (
   });
   expect(southLocation.ok()).toBeTruthy();
 
-  // TC-NEW-04-004: контекст отгрузки задаёт склад нового документа без второго поля формы.
+  // TC-NEW-04-004: историческая отгрузка показывает свой склад, возврат восстанавливает
+  // контекст сессии, а новый документ получает его без второго поля формы.
   await page.reload();
   await page.getByTestId('outbound-warehouse-context-button').click();
   await page.getByTestId(`outbound-warehouse-context-option-${southWarehouseId}`).click();
   await expect(page.getByTestId('outbound-warehouse-context-button')).toContainText('WH South');
+  await page.locator(`[data-testid="outbound-request-item"][data-request-id="${oid}"]`).click();
+  await expect(page.getByTestId('outbound-document-warehouse')).toContainText('Склад: WH');
+  await expect(page.getByTestId('outbound-warehouse-context-button')).toContainText('WH');
+  await expect(page.getByTestId('outbound-warehouse-context-button')).toBeDisabled();
+  await page.getByTestId('outbound-back-to-list').click();
+  await expect(page.getByTestId('outbound-detail')).toContainText('Выбери заявку слева');
+  await expect(page.getByTestId('outbound-warehouse-context-button')).toContainText('WH South');
+  await expect(page.getByTestId('outbound-warehouse-context-button')).toBeEnabled();
   await expect(page.locator('[name="outbound_warehouse_id"]')).toHaveCount(0);
   const [createdOutbound] = await Promise.all([
     waitForPostOk(

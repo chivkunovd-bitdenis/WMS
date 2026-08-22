@@ -6,7 +6,7 @@ import { Select } from '../../ui/Select'
 import { Screen } from '../AppV2Screens'
 import { printOperationalOutboundWaybill } from '../../utils/printShipmentWaybill'
 import { movementTypeLabel } from '../../utils/movementTypeLabel'
-import { WarehouseContextSwitch } from '../../ui-kit'
+import { SecondaryAction, WarehouseContextSwitch } from '../../ui-kit'
 
 type WarehouseRow = { id: string; name: string; code: string }
 type LocationRow = { id: string; code: string; warehouse_id: string }
@@ -62,7 +62,7 @@ type Props = {
 
   outboundSummaries: OutboundSummaryRow[]
   selectedOutboundId: string | null
-  setSelectedOutboundId: (id: string) => void
+  setSelectedOutboundId: (id: string | null) => void
   outboundDetail: OutboundDetailRow | null
   outboundRequestLocations: LocationRow[]
   outboundMovements: OutboundMovementRow[]
@@ -102,8 +102,25 @@ export function OutboundScreen(props: Props) {
     onPostOutboundRequest,
   } = props
 
+  const outboundSummary = outboundDetail
+    ? outboundSummaries.find((summary) => summary.id === outboundDetail.id)
+    : null
+  const outboundWarehouseName = outboundDetail
+    ? warehouses.find((warehouse) => warehouse.id === outboundDetail.warehouse_id)?.name ??
+      outboundSummary?.warehouse_name ??
+      'Склад не найден'
+    : null
+
   return (
     <Screen title="Отгрузка" subtitle="Заявки → строки → подбор → списание">
+      <WarehouseContextSwitch
+        options={warehouses.map((warehouse) => ({ id: warehouse.id, name: warehouse.name }))}
+        value={outboundDetail?.warehouse_id ?? selectedWarehouseId}
+        onChange={(warehouseId) => onWarehouseChange?.(warehouseId)}
+        disabledReason={outboundDetail ? 'Склад закреплён: документ уже открыт' : undefined}
+        testId="outbound-warehouse-context"
+      />
+
       {opsError ? (
         <Card className="card">
           <p className="error" data-testid="operations-error">
@@ -114,13 +131,6 @@ export function OutboundScreen(props: Props) {
 
       <div className="screen-grid">
         <div className="stack">
-          <WarehouseContextSwitch
-            options={warehouses.map((warehouse) => ({ id: warehouse.id, name: warehouse.name }))}
-            value={outboundDetail?.warehouse_id ?? selectedWarehouseId}
-            onChange={(warehouseId) => onWarehouseChange?.(warehouseId)}
-            disabledReason={outboundDetail ? 'Склад закреплён: документ уже открыт' : undefined}
-            testId="outbound-warehouse-context"
-          />
           <Card className="card" data-testid="outbound-section">
             <h3 style={{ margin: 0, fontSize: 16 }}>Заявки на отгрузку</h3>
             <p className="subtle">
@@ -159,6 +169,7 @@ export function OutboundScreen(props: Props) {
                     data-selected={row.id === selectedOutboundId ? 'true' : 'false'}
                     onClick={() => setSelectedOutboundId(row.id)}
                     data-testid="outbound-request-item"
+                    data-request-id={row.id}
                     data-status={row.status}
                   >
                     <td>
@@ -194,6 +205,16 @@ export function OutboundScreen(props: Props) {
                 <p className="subtle" data-testid="outbound-detail-status">
                   Статус: {outboundDetail.status}
                 </p>
+                <p className="subtle" data-testid="outbound-document-warehouse">
+                  Склад: {outboundWarehouseName}
+                </p>
+                <SecondaryAction
+                  type="button"
+                  data-testid="outbound-back-to-list"
+                  onClick={() => setSelectedOutboundId(null)}
+                >
+                  К списку
+                </SecondaryAction>
 
                 {outboundDetail.lines.length > 0 ? (
                   <Button

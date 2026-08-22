@@ -2,7 +2,6 @@ import { test, expect } from '@playwright/test';
 
 import {
   waitForGetOk,
-  waitForLocationsListGet,
   waitForPatchOk,
   waitForPostOk,
 } from './api-waits';
@@ -67,11 +66,28 @@ test('create inbound request, add line, submit — UI and API', async ({ page })
   });
   expect(southLocation.ok()).toBeTruthy();
 
-  // TC-NEW-04-003: смена контекста до создания задаёт склад заявки и оставляет только его ячейки.
+  const historicalNorth = await page.request.post('/api/operations/inbound-intake-requests', {
+    headers: h,
+    data: { warehouse_id: wid, planned_delivery_date: new Date().toISOString().slice(0, 10) },
+  });
+  expect(historicalNorth.ok()).toBeTruthy();
+  const historicalNorthId = String(((await historicalNorth.json()) as { id: string }).id);
+
+  // TC-NEW-04-003: контекст задаёт новый документ, исторический показывает свой склад,
+  // а возврат к списку восстанавливает склад сессии и только его ячейки.
   await page.reload();
   await page.getByTestId('inbound-warehouse-context-button').click();
   await page.getByTestId(`inbound-warehouse-context-option-${southWarehouseId}`).click();
   await expect(page.getByTestId('inbound-warehouse-context-button')).toContainText('Склад Юг');
+  await page.locator(`[data-testid="inbound-request-item"][data-request-id="${historicalNorthId}"]`).click();
+  await expect(page.getByTestId('inbound-document-warehouse')).toContainText('Склад: Склад');
+  await expect(page.getByTestId('inbound-warehouse-context-button')).toContainText('Склад');
+  await expect(page.getByTestId('inbound-warehouse-context-button')).toBeDisabled();
+  await page.getByTestId('inbound-back-to-list').click();
+  await expect(page.getByTestId('inbound-detail')).toContainText('Выбери заявку слева');
+  await expect(page.getByTestId('inbound-warehouse-context-button')).toContainText('Склад Юг');
+  await expect(page.getByTestId('inbound-warehouse-context-button')).toBeEnabled();
+  await expect(page.locator('[name="inbound_warehouse_id"]')).toHaveCount(0);
 
   const [createRes] = await Promise.all([
     waitForPostOk(
@@ -120,7 +136,7 @@ test('create inbound request, add line, submit — UI and API', async ({ page })
   expect(submitRes.ok()).toBeTruthy();
   await expect(page.getByTestId('inbound-detail-status')).toContainText('submitted');
   await expect(
-    page.getByTestId('inbound-requests-list').getByTestId('inbound-request-item').first(),
+    page.locator(`[data-testid="inbound-request-item"][data-request-id="${requestId}"]`),
   ).toContainText('submitted');
 
   const [primRes] = await Promise.all([

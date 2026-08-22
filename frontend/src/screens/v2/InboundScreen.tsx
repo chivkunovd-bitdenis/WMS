@@ -7,7 +7,7 @@ import { Input } from '../../ui/Input'
 import { Select } from '../../ui/Select'
 import { Screen } from '../AppV2Screens'
 import { movementTypeLabel } from '../../utils/movementTypeLabel'
-import { WarehouseContextSwitch } from '../../ui-kit'
+import { SecondaryAction, WarehouseContextSwitch } from '../../ui-kit'
 
 type WarehouseRow = { id: string; name: string; code: string }
 type LocationRow = { id: string; code: string; warehouse_id: string }
@@ -96,7 +96,7 @@ type Props = {
 
   inboundSummaries: InboundSummaryRow[]
   selectedInboundId: string | null
-  setSelectedInboundId: (id: string) => void
+  setSelectedInboundId: (id: string | null) => void
   inboundDetail: InboundDetailRow | null
   inboundRequestLocations: LocationRow[]
   inboundMovements: InboundMovementRow[]
@@ -156,6 +156,9 @@ export function InboundScreen(props: Props) {
 
   const boxIntakeMode = (inboundDetail?.boxes?.length ?? 0) > 0
   const activeIntakeBox = inboundDetail?.boxes?.find((b) => b.is_open) ?? null
+  const inboundWarehouseName = inboundDetail
+    ? warehouses.find((warehouse) => warehouse.id === inboundDetail.warehouse_id)?.name ?? 'Склад не найден'
+    : null
 
   const filteredProducts = useMemo(() => {
     const q = productQuery.trim().toLowerCase()
@@ -179,6 +182,14 @@ export function InboundScreen(props: Props) {
 
   return (
     <Screen title="Приёмка" subtitle="Список заявок → детали → приём по строкам">
+      <WarehouseContextSwitch
+        options={warehouses.map((warehouse) => ({ id: warehouse.id, name: warehouse.name }))}
+        value={inboundDetail?.warehouse_id ?? selectedWarehouseId}
+        onChange={(warehouseId) => onWarehouseChange?.(warehouseId)}
+        disabledReason={inboundDetail ? 'Склад закреплён: документ уже открыт' : undefined}
+        testId="inbound-warehouse-context"
+      />
+
       {opsError ? (
         <Card className="card">
           <p className="error" data-testid="operations-error">
@@ -189,13 +200,6 @@ export function InboundScreen(props: Props) {
 
       <div className="screen-grid">
         <div className="stack">
-          <WarehouseContextSwitch
-            options={warehouses.map((warehouse) => ({ id: warehouse.id, name: warehouse.name }))}
-            value={inboundDetail?.warehouse_id ?? selectedWarehouseId}
-            onChange={(warehouseId) => onWarehouseChange?.(warehouseId)}
-            disabledReason={inboundDetail ? 'Склад закреплён: документ уже открыт' : undefined}
-            testId="inbound-warehouse-context"
-          />
           <Card className="card">
             <h3 style={{ margin: 0, fontSize: 16 }}>Заявки на приёмку</h3>
             <p className="subtle">
@@ -255,6 +259,7 @@ export function InboundScreen(props: Props) {
                     data-selected={row.id === selectedInboundId ? 'true' : 'false'}
                     onClick={() => setSelectedInboundId(row.id)}
                     data-testid="inbound-request-item"
+                    data-request-id={row.id}
                     data-status={row.status}
                   >
                     <td>
@@ -298,6 +303,10 @@ export function InboundScreen(props: Props) {
                 <p className="subtle" data-testid="inbound-detail-planned-date">
                   Дата привоза (план): {inboundDetail.planned_delivery_date ?? '—'}
                 </p>
+                <p className="subtle" data-testid="inbound-document-warehouse">Склад: {inboundWarehouseName}</p>
+                <SecondaryAction type="button" data-testid="inbound-back-to-list" onClick={() => setSelectedInboundId(null)}>
+                  К списку
+                </SecondaryAction>
 
                 <ul className="list-plain" data-testid="inbound-detail-lines">
                   {inboundDetail.lines.map((ln) => (
