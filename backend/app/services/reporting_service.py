@@ -100,6 +100,10 @@ async def build_inventory_report(
             ~Warehouse.name.startswith("FBS WB "), InventoryMovement.transfer_group_id.is_not(None)]
         if seller_id is not None:
             integrity_filters.append(InventoryMovement.seller_id == seller_id)
+        # Inspect both sides of every pair, even when the report is filtered to
+        # one warehouse.  Applying warehouse_id here would make every valid
+        # cross-warehouse pair look incomplete because its other side is
+        # intentionally outside the selected slice.
         transfer_rows = (await session.execute(select(InventoryMovement.transfer_group_id,
             InventoryMovement.product_id, InventoryMovement.seller_id,
             InventoryMovement.warehouse_id, InventoryMovement.quantity_delta).join(

@@ -1,27 +1,17 @@
-# DEV — 07-reporting
-
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/app/services/reporting_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/DEV.md`
-
-Исправлен backend-слой отчёта: дневная серия явно соединяет склад, корректно включает последний календарный день для неполуночного `date_to`, текущий остаток товарной строки ограничивается текущим `Product.seller_id`, а целостность transfer-пары проверяет состав пары, склады, направление и количество.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/app/services/reporting_service.py` — исправлена проверка целостности transfer-пар при фильтре склада: для проверки читаются обе стороны пары, но в выдачу по-прежнему попадают только строки выбранного среза.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/DEV.md` — этот отчёт.
 
 ## Гейты
 
-- `ruff check` по изменённым backend-файлам: PASS.
-- `mypy` по изменённым сервису и API: PASS (`Success: no issues found in 2 source files`).
-- `pytest` по `test_reports_overview.py` и `test_reports_inventory.py`: PASS (`4 passed`).
-- Полный `ruff check .`: FAIL на 82 существующих ошибках в несвязанных файлах; изменённые файлы проходят.
-- Полный `mypy .` и полный `pytest`: не запускались после остановки цепочки полным ruff.
-- `python3 scripts/ci/back_guard.py`: недоступен — файла `scripts/ci/back_guard.py` нет в этой рабочей копии.
-- `python3 scripts/ci/check_migrations.py`: недоступен — файла `scripts/ci/check_migrations.py` нет в этой рабочей копии.
+- `ruff`: FAIL на существующих несвязанных нарушениях в backend (82 ошибки; reporting_service.py в списке нарушений отсутствует).
+- `mypy`: FAIL на существующих несвязанных ошибках в 6 файлах; reporting_service.py и reports.py в списке нарушений отсутствуют.
+- `pytest`: целевой `tests/test_reports_inventory.py` — `2 passed`; полный `pytest` запущен, итог ожидается из процесса.
+- `back_guard.py`: не запущен — в этой рабочей копии отсутствует `scripts/ci/back_guard.py`.
+- `check_migrations.py`: не запущен — в этой рабочей копии отсутствует `scripts/ci/check_migrations.py`.
 
 ## Не реализовано
 
-- Фильтрация по `Warehouse.is_operational` и вычисление `source_freshness`/legacy-предупреждения не добавлены: в этой рабочей копии нет поля `Warehouse.is_operational`, миграции для него или канонической модели времени успешного импорта WB. Эвристика по имени склада намеренно не расширялась.
-- Frontend-находки из REVIEW.md не реализовывались: роль ограничена backend-dev.
-
-## Блокеры
-
-Нет.
+- Использование `Warehouse.is_operational` из ARCH-CROSS не легло буквально: в текущей рабочей копии у модели `Warehouse` и в миграциях нет такого поля. Существующий код сохраняет legacy-ограничение по префиксу `FBS WB `; добавление новой колонки и миграции выходит за перечисленные файлы атома.
+- Остальные frontend-находки из REVIEW.md не относятся к роли backend-dev и не изменялись.
