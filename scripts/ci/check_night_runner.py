@@ -199,6 +199,17 @@ def регрессии_зависимостей(проверь) -> None:
         проверь("зависимости: downstream поехал после рубежа",
                 результат.get("wait"), (True, ""))
 
+        (wave / "DEPENDENCIES.json").write_text(json.dumps({
+            "milestones": {"old-foundation": {"card": "upstream", "feature": 9}},
+            "requires": {"downstream#7": ["old-foundation"]},
+        }), encoding="utf-8")
+        downstream_folder = workers["downstream"].папка
+        with mock.patch.object(
+                n, "круг_из_парковки",
+                side_effect=lambda folder: 1 if folder == downstream_folder else 0):
+            проверь("зависимости: repair-нарезка не сверяется со старыми номерами",
+                    n.подготовить_зависимости(wave, workers), [])
+
 
 def fake_e2e_smoke(проверь) -> None:
     """Детерминированный full-chain smoke без Codex, git и стенда.
