@@ -1,4 +1,4 @@
-# Backend DEV · 02-verdikt-screen
+# Backend DEV · 02-verdikt-screen · feature 1
 
 ## Изменённые файлы
 
@@ -6,21 +6,30 @@
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/app/api/fbs_marking.py`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/backend/tests/test_fbs_marking.py`
 
-Реализован единый серверный вердикт WB в ответе `GET /operations/fbs-orders/{order_id}/metadata`: подпись, тон, причина и разрешение передачи. Добавлены все контрактные решения `filled`, `optional`, `notRequired`, `pending`, `required`, неизвестный и отсутствующий ответ; причина имеет приоритет, блокер перевешивает положительный ответ.
+В `GET /operations/fbs-orders/{order_id}/metadata` используется единый серверный
+вердикт WB: фиксированная подпись, тон, причина и `delivery_allowed`. Причина
+имеет высший приоритет; `pending`, `required`, отсутствие и неизвестное решение
+блокируют передачу; `filled`, `optional` и `notRequired` без причины разрешают её.
+Агрегация нескольких требований выбирает блокирующее состояние вместо
+положительного.
+
+## Миграции
+
+Нет.
 
 ## Гейты
 
-- `ruff`: целевые файлы прошли; полный запуск заблокирован существующими ошибками в несвязанных файлах репозитория.
-- `mypy`: целевые импорты проверены; полный запуск выявил 4 существующие ошибки в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py` и `fbs_warehouse_binding_service.py`.
-- `pytest`: `13 passed` (`backend/tests/test_fbs_marking.py`).
-- `back_guard.py`: не запущен — файл отсутствует в рабочей копии по `scripts/ci/back_guard.py`.
-- `check_migrations.py`: не запущен — файл отсутствует в рабочей копии по `scripts/ci/check_migrations.py`.
+- `ruff check app/services/fbs_marking_service.py app/api/fbs_marking.py tests/test_fbs_marking.py` — FAIL: старая неиспользуемая директива `RUF003` в `fbs_marking_service.py`.
+- `mypy app/services/fbs_marking_service.py app/api/fbs_marking.py` — FAIL: 4 ранее существующие ошибки в `wildberries_credentials_service.py`, `fbs_stock_sync_service.py` и `fbs_warehouse_binding_service.py`.
+- `pytest -q tests/test_fbs_marking.py` — PASS: 13 passed.
+- `python3 scripts/ci/back_guard.py` — не запущен: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/scripts/ci/back_guard.py` отсутствует.
+- `python3 scripts/ci/check_migrations.py` — не запущен: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/scripts/ci/check_migrations.py` отсутствует.
 
 ## Не реализовано
 
-- Серверная защита действия передачи и UI находятся в следующих атомарных фичах контракта и не изменялись.
-- Миграции не нужны.
+- Серверная защита действия передачи и UI относятся к следующим атомарным
+  фичам контракта и не изменялись.
 
 ## Блокеры
 
-Нет блокеров по реализации; технические ограничения гейтов описаны выше.
+Нет блокеров реализации; ограничения проверок перечислены в разделе «Гейты».
