@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import pathlib
+import re
 import sys
 import tempfile
 import json
@@ -743,16 +744,20 @@ def main() -> int:
         if имя is not None and not секции:
             беды.append(f"для роли {р} назван файл {имя}, но нет обязательных секций")
 
-    # Контракт Codex-адаптера повторяет класс модели из файла роли:
-    # opus → Sol, sonnet → Terra, haiku → Luna.
+    # Codex-адаптер выбирает профиль по классу модели из файла роли, но не вклеивает
+    # устаревшую строку `model:` обратно в runtime-промпт.
     analyst_prompt = n.роль_с_инъекцией("analyst", "marker")
     intake_prompt = n.роль_с_инъекцией("intake", "marker")
     проверь("роль analyst opus → Sol", analyst_prompt.startswith(
         "Профиль исполнителя: Sol. Выполняй только роль `analyst`."), True)
     проверь("роль intake haiku → Luna", intake_prompt.startswith(
         "Профиль исполнителя: Luna. Выполняй только роль `intake`."), True)
-    проверь("промпт analyst содержит полный текст роли",
-            pathlib.Path(n.КОРЕНЬ, ".claude/agents/analyst.md").read_text(encoding="utf-8") in analyst_prompt, True)
+    analyst_role = pathlib.Path(
+        n.КОРЕНЬ, ".claude/agents/analyst.md").read_text(encoding="utf-8")
+    analyst_role = re.sub(
+        r"^model:\s*(?:opus|sonnet|haiku)\s*$\n?", "", analyst_role, flags=re.M)
+    проверь("промпт analyst содержит инструкцию роли без legacy model",
+            analyst_role in analyst_prompt, True)
 
     # JSONL-ответ Codex — это транспорт, не гейт: текст и ошибки должны
     # извлекаться детерминированно, а мусорные события игнорироваться.
