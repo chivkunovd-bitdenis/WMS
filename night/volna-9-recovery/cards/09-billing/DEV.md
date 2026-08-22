@@ -1,20 +1,19 @@
+# 09-billing · screen-dev
+
 ## Изменённые файлы
 
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/api/billing.py — добавлены реальные GET-ручки начислений, списка счетов и детализации счета с tenant/admin изоляцией.
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/services/billing_invoice_service.py — пустой месяц и незакрытое хранение блокируют выпуск, строки счета получают стабильный `id`.
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/tasks/billing_tasks.py — ежедневный запуск догоняет все закрытые месяцы, для которых есть ledger-факты.
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/celery_app.py — расписание Celery закреплено за Europe/Moscow.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfBillingScreen.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/night/volna-9-recovery/cards/09-billing/DEV.md`
+
+Экран оставлен в границах контракта: маршрут и пункт меню уже были доступны только администратору, поэтому `App.tsx` и `AuthedAppLayout.tsx` не менялись.
 
 ## Гейты
 
-- ruff — зелёный для изменённых backend-файлов.
-- mypy — зелёный для изменённых backend-файлов.
-- pytest — адресные billing-тесты: 7 passed; полный запуск начат, в этой сессии остановился на длительном прогоне после 16% без финального результата.
-- back_guard.py — не выполнен: файл отсутствует в этой рабочей копии.
-- check_migrations.py — не выполнен: файл отсутствует в этой рабочей копии.
+- `npx tsc --noEmit -p tsconfig.app.json` — не завершён: процесс не вывел ошибок, но завис в окружении без завершения и был остановлен после ожидания.
+- `python3 scripts/ui/ui_guard.py` — красный из-за пяти ранее существовавших нарушений в `src/App.tsx`, `src/components/WbProductPickerDialog.tsx`, `src/screens/ff/FfSettingsScreen.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx` и `src/screens/v2/SellerInboundDraftScreen.tsx`; `--update` не применялся.
+- `npm run test:unit` — не запущен: в окружении отсутствует команда `vitest` (`vitest: command not found`).
 
 ## Не реализовано
 
-- Полная переоценка ранее `unpriced` ledger-строк после добавления тарифа не внесена: immutable ledger не должен переписывать исторический факт; повторный выпуск остаётся заблокированным до отдельного решения алгоритма ретарификации.
-- Подключение `record_reversal` к конкретному бизнес-событию отмены не менялось: в разрешённом атоме нет названного backend-пути отмены складской операции.
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не читались и не затрагивались.
+- Backend-находки из `REVIEW.md` не исправлялись: они находятся вне файлового списка атома `09-billing` и требуют отдельного backend-прохода.
+- Полное browser product review не выполнялось ролью `screen-dev`.
