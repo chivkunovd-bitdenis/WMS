@@ -1,19 +1,22 @@
-# DEV · 04-warehouse-switch · атом 6
+# DEV · 04-warehouse-switch · screen-dev
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/FfFbsStockSyncScreen.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/InboundScreen.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/OutboundScreen.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/tests-e2e/inbound-intake.spec.ts`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/tests-e2e/outbound-submit-storage.spec.ts`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md`
-
-Экран S-04 переведён на общий `useWarehouseContext('fulfillment')`: загрузка складов заполняет единый контекст, выбор публикует его событие, а изменения контекста на другом экране обновляют S-04. Фильтр строк и остатки по-прежнему используют только выбранный операционный WMS-склад; WB-склады не участвуют в выборе и не публикуются при смене контекста.
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` — зелёный.
-- `python3 scripts/ui/ui_guard.py` — красный из-за уже существующих нарушений храповика: `FfFbsStockSyncScreen.tsx` `экран-монолит 1083 → 1124` (в `HEAD` тот же размер файла; baseline уже отстаёт). Флаг `--update` не применялся.
-- `npm run test:unit` — не запустился: в окружении отсутствует команда `vitest` (`sh: vitest: command not found`).
+- `npx tsc --noEmit -p tsconfig.app.json` — не подтверждён: локальный `tsc` отсутствует, а `npx` не завершился в рабочей копии без локальных зависимостей.
+- `python3 scripts/ui/ui_guard.py` — красный из-за уже существующих нарушений в соседних экранах; новых нарушений в `InboundScreen.tsx` и `OutboundScreen.tsx` нет. Для `InboundScreen.tsx` guard показывает улучшение `691 → 681` строк.
+- `npm run test:unit` — красный технически: `vitest: command not found`.
+
+Проверены сценарии S-22/S-24: при одном операционном складе `WarehouseContextSwitch` не рендерится; при нескольких он расположен до списка и формы, а выбор передаётся через `onWarehouseChange`. При открытом документе значение берётся из `inboundDetail.warehouse_id`/`outboundDetail.warehouse_id`, переключатель блокируется, и отдельного поля «Склад для заявки/отгрузки» в формах нет.
 
 ## Не реализовано
 
-- Из находок ревью вне разрешённых файлов атома (API preflight, S-03, S-14, backend и другие экраны) ничего не менялось.
-- В `CatalogSection.tsx` отдельного списка складских количеств товара нет: этот файл содержит каталог ячеек, поэтому добавлять неподтверждённую разметку остатков в него нельзя.
+- Находки REVIEW.md по backend, `App.tsx`, FBS-подбору, упаковке, перемещениям и документации не относятся к разрешённым файлам этого screen-dev атома и не изменялись.
+- Полный E2E-прогон не выполнен из-за отсутствующих локальных frontend-зависимостей; это ограничение проверки, а не изменение контракта.
