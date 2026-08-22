@@ -367,6 +367,86 @@ async def test_fbs_supply_creation_uses_selected_operational_warehouse(
     assert response.json()["supply"]["wms_warehouse"]["id"] == target_id
 
 
+# TC-NEW-04-WH-recommended — legacy clients without a warehouse still use the recommendation.
+@pytest.mark.asyncio
+async def test_fbs_supply_creation_without_selection_uses_recommended_warehouse(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    me = await async_client.get("/auth/me", headers=headers)
+    tenant_id = uuid.UUID(me.json()["tenant_id"])
+    seller_id, source_warehouse_id, source_location_id = await _setup_seller_with_token(
+        async_client, headers, f"recommended-wh-{suffix}"
+    )
+    target = await async_client.post(
+        "/warehouses",
+        headers=headers,
+        json={"name": "Consolidation B", "code": f"recommended-{uuid.uuid4().hex[:10]}"},
+    )
+    assert target.status_code in (200, 201), target.text
+    target_id = target.json()["id"]
+    target_location = await async_client.post(
+        f"/warehouses/{target_id}/locations",
+        headers=headers,
+        json={"code": f"B-{uuid.uuid4().hex[:10]}"},
+    )
+    assert target_location.status_code in (200, 201), target_location.text
+    product = await _create_product(
+        async_client, headers, seller_id, sku=f"recommended-{suffix[-6:]}"
+    )
+    order_id = await _create_ready_order(
+        tenant_id,
+        uuid.UUID(seller_id),
+        uuid.UUID(source_warehouse_id),
+        uuid.UUID(source_location_id),
+        product,
+        order_id=851003,
+    )
+    async with SessionLocal() as session:
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=product.id,
+            storage_location_id=uuid.UUID(source_location_id),
+            quantity_delta=-3,
+            movement_type="inventory_adjustment",
+        )
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=tenant_id,
+            product_id=product.id,
+            storage_location_id=uuid.UUID(target_location.json()["id"]),
+            quantity_delta=3,
+            movement_type="inventory_adjustment",
+        )
+        await session.commit()
+
+    preflight = await async_client.post(
+        "/operations/fbs-supplies/preflight",
+        headers=headers,
+        json={
+            "order_ids": [str(order_id)],
+            "planned_delivery_type": "warehouse_sc",
+        },
+    )
+    assert preflight.status_code == 200, preflight.text
+    assert preflight.json()["recommended_warehouse"]["id"] == target_id
+
+    response = await async_client.post(
+        "/operations/fbs-supplies/from-orders",
+        headers=headers,
+        json={
+            "name": "Recommended warehouse supply",
+            "order_ids": [str(order_id)],
+            "planned_delivery_type": "warehouse_sc",
+            "idempotency_key": str(uuid.uuid4()),
+        },
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["supply"]["wms_warehouse"]["id"] == target_id
+
+
 # TC-02 — different WB warehouses → preflight incompatible
 @pytest.mark.asyncio
 async def test_tc02_preflight_different_wb_warehouses(
