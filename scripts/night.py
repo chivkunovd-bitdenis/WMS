@@ -775,7 +775,9 @@ def фичи_для_переделки(куски: list[str], вердикт: Pa
     if вердикт is None or not вердикт.exists():
         return все
     текст = вердикт.read_text(encoding="utf-8", errors="replace")
-    ссылки = set(re.findall(r"(?:backend|frontend)/[A-Za-z0-9_./-]+", текст))
+    секция = re.search(r"^##\s+Находки\s*$\n(.*?)(?=^##\s|\Z)", текст, re.M | re.S)
+    находки = секция.group(1) if секция else текст
+    ссылки = set(re.findall(r"(?:backend|frontend)/[A-Za-z0-9_./-]+", находки))
     выбранные = [
         (номер, кусок) for номер, кусок in все
         if any(ссылка in кусок or Path(ссылка).name in кусок for ссылка in ссылки)
@@ -787,7 +789,7 @@ def фичи_для_переделки(куски: list[str], вердикт: Pa
     # не переделываем, а повторяем ревью с исправленной границей.
     только_процесс = bool(re.search(
         r"(?:\.claude/agents/|scripts/night\.py|scripts/ci/check_night_runner\.py|/AGENTS\.md)",
-        текст,
+        находки,
     )) and not ссылки
     return [] if только_процесс else все
 
