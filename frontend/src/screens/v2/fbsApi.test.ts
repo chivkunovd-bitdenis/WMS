@@ -4,6 +4,7 @@ import {
   deleteFbsCargoPlaces,
   deliverFbsSupply,
   FbsApiError,
+  fetchFbsSupplyWorklist,
   fetchFbsWorklist,
   retryFbsSupplyQr,
   validateFbsKiz,
@@ -16,6 +17,28 @@ afterEach(() => {
 })
 
 describe('FBS API client', () => {
+  it('requests the supply worklist for the selected WMS warehouse', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ items: [], server_now: '2026-08-22T00:00:00Z' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await fetchFbsSupplyWorklist('token', authHeaders, {
+      seller_id: 'seller-1',
+      warehouse_id: 'warehouse-south',
+      status_group: 'active',
+      limit: 500,
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/operations/fbs-supplies/worklist?limit=500&seller_id=seller-1&warehouse_id=warehouse-south&status_group=active',
+      { headers: { Authorization: 'Bearer token' } },
+    )
+  })
+
   it('returns scanner normalization hints from KIZ validation', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(

@@ -614,10 +614,16 @@ export async function createFbsSupplyFromOrders(
 export async function fetchFbsSupplyWorklist(
   token: string,
   ah: AuthHeaders,
-  params: { seller_id?: string | null; status_group?: string | null; limit?: number } = {},
+  params: {
+    seller_id?: string | null
+    warehouse_id?: string | null
+    status_group?: string | null
+    limit?: number
+  } = {},
 ): Promise<FbsSupplyWorklistPage> {
   const qs = new URLSearchParams({ limit: String(params.limit ?? 100) })
   if (params.seller_id) qs.set('seller_id', params.seller_id)
+  if (params.warehouse_id) qs.set('warehouse_id', params.warehouse_id)
   if (params.status_group) qs.set('status_group', params.status_group)
   return jsonOrThrow<FbsSupplyWorklistPage>(
     await fetch(apiUrl(`/operations/fbs-supplies/worklist?${qs.toString()}`), {

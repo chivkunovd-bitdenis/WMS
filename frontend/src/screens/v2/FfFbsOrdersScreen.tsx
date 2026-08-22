@@ -570,6 +570,15 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   }, [authHeaders, token, warehouseContext.setWarehouses])
 
   const load = useCallback(async () => {
+    // Не запрашиваем общий список до готовности WMS-контекста: иначе первый ответ
+    // всех складов успевает попасть под серверный limit ещё до выбора оператора.
+    if (!wmsWarehouseId) {
+      setOrders([])
+      setActiveSupplies([])
+      setExternalActiveOrders([])
+      setBusy(false)
+      return
+    }
     // Задача 9 пула (HANDOFF-POLISH.md): поллинг не должен наслаиваться сам на себя —
     // если предыдущий запрос ещё летит, новый тик пропускаем.
     if (loadingRef.current) return
@@ -581,14 +590,20 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         // Задача 4 пула (HANDOFF-POLISH.md, решение П3): «В работе», «В доставке» и
         // «Завершённые» показывают поставки, не отдельные заказы; ordersPage тут нужен
         // только чтобы найти заказы WB без локальной карточки поставки в WMS.
-        const params = {
+        const supplyParams = {
+          seller_id: sellerId === '__all__' ? null : sellerId,
+          warehouse_id: wmsWarehouseId,
+          status_group: statusGroup,
+          limit: 500,
+        }
+        const orderParams = {
           seller_id: sellerId === '__all__' ? null : sellerId,
           status_group: statusGroup,
           limit: 500,
         }
         const [suppliesPage, ordersPage] = await Promise.all([
-          fetchFbsSupplyWorklist(token, authHeaders, params),
-          fetchFbsWorklist(token, authHeaders, params),
+          fetchFbsSupplyWorklist(token, authHeaders, supplyParams),
+          fetchFbsWorklist(token, authHeaders, orderParams),
         ])
         setActiveSupplies(suppliesPage.items)
         setExternalActiveOrders(ordersPage.items.filter((order) => !order.supply_id))

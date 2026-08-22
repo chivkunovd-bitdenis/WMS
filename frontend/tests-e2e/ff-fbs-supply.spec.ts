@@ -157,6 +157,46 @@ async function mockSupplyWorklist(page: Page, items: JsonObject[]) {
   )
 }
 
+// TC-NEW-FBS-WMS-SUPPLY-FILTER — switching WMS context reloads the server-filtered
+// supply list and remains independent from the seller/WB warehouse filter.
+test('fbs supply list: WMS warehouse context is sent to the server', async ({ page }) => {
+  await registerFf(page, 'warehouse-filter')
+  await page.route('**/warehouses', (route) =>
+    route.request().method() === 'GET'
+      ? json(route, [
+          { id: 'w-1', name: 'Склад Север', code: 'NORTH', is_operational: true, is_primary: true },
+          { id: 'w-2', name: 'Склад Юг', code: 'SOUTH', is_operational: true, is_primary: false },
+        ])
+      : route.fallback(),
+  )
+  await mockWorklist(page, [])
+
+  const requestedWarehouseIds: Array<string | null> = []
+  await page.route('**/operations/fbs-supplies/worklist**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    const warehouseId = new URL(route.request().url()).searchParams.get('warehouse_id')
+    requestedWarehouseIds.push(warehouseId)
+    const items = warehouseId === 'w-2'
+      ? [supplyWorklistRow('south', { wms_warehouse: { id: 'w-2', name: 'Склад Юг' } })]
+      : [supplyWorklistRow('north', { wms_warehouse: { id: 'w-1', name: 'Склад Север' } })]
+    await json(route, { items, server_now: new Date().toISOString() })
+  })
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await page.getByRole('tab', { name: 'В работе' }).click()
+  await expect(page.getByTestId('fbs-18-supply-north')).toBeVisible()
+  await expect(page.getByTestId('fbs-18-supply-south')).toHaveCount(0)
+
+  await page.getByTestId('fbs-wms-warehouse-context-button').click()
+  await page.getByTestId('fbs-wms-warehouse-context-option-w-2').click()
+
+  await expect(page.getByTestId('fbs-18-supply-south')).toBeVisible()
+  await expect(page.getByTestId('fbs-18-supply-north')).toHaveCount(0)
+  expect(requestedWarehouseIds).not.toContain(null)
+  expect(requestedWarehouseIds).toContain('w-1')
+  expect(requestedWarehouseIds.at(-1)).toBe('w-2')
+})
+
 // TC-S17-019 / TC-S17-021 — fresh preflight and idempotent warehouse/SC delivery.
 test('fbs workspace: preflight and deliver', async ({ page }) => {
   await registerFf(page, 'deliver')
