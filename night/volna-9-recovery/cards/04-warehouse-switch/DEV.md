@@ -1,21 +1,35 @@
-# DEV · 04-warehouse-switch
+# DEV · 04-warehouse-switch · screen-dev
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/ui-kit/WarehouseContextSwitch.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/ui-kit/WarningNotice.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/ui-kit/index.ts`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/ui-kit/WarehouseContextSwitch.test.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/contexts/WarehouseContext.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/App.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md`
 
-Компоненты и тесты уже соответствуют контракту: выбор скрыт при одном складе, при двух и более открывается по клику, показывает только имена, вызывает `onChange` и закрывается; loading, error и disabled-состояния объясняют причину и блокируют действие. `WarningNotice` экспортируется из ui-kit как неблокирующее предупреждение.
+Исправлено по находкам `REVIEW.md` этого слоя: исторические документы больше не меняют
+сессионный склад, а выбор и очистка контекста синхронизируют экраны одной вкладки через
+событие окна. Создание нового склада использует тот же персистентный setter.
 
 ## Гейты
 
-- `npx tsc --noEmit -p tsconfig.app.json` — красный: локальный `tsc` отсутствует, `npx` попытался скачать пакет и получил `ENOTFOUND registry.npmjs.org`.
-- `python3 scripts/ui/ui_guard.py` — красный из-за пяти предварительно существующих нарушений в соседних экранах: `WbProductPickerDialog.tsx`, `FfFbsOrdersScreen.tsx`, `FfFbsStockSyncScreen.tsx`, `FfFbsSupplyWorkspace.tsx`, `SellerInboundDraftScreen.tsx`. В ui-kit новых нарушений не выявлено; базовую линию не обновлял.
-- `npm run test:unit -- --run src/ui-kit/WarehouseContextSwitch.test.tsx` — красный: `vitest: command not found`, зависимости frontend не установлены.
+- `npx tsc --noEmit -p tsconfig.app.json` — не завершён: процесс запущен, но в локальной
+  копии не выдал результата и был остановлен после ожидания.
+- `python3 scripts/ui/ui_guard.py` — красный из-за новых нарушений в ранее затронутых
+  файлах `src/components/WbProductPickerDialog.tsx`, `src/screens/v2/FfFbsOrdersScreen.tsx`,
+  `src/screens/v2/FfFbsStockSyncScreen.tsx`, `src/screens/v2/FfFbsSupplyWorkspace.tsx` и
+  `src/screens/v2/SellerInboundDraftScreen.tsx`; эти файлы не относятся к разрешённому
+  слою и не изменялись.
+- `npm run test:unit` — не запущен: в `frontend` отсутствует исполняемый файл `vitest`
+  (`sh: vitest: command not found`).
 
 ## Не реализовано
 
-- Находки 1–16 из `REVIEW.md` относятся к backend или конкретным продуктовым экранам и не относятся к четырём файлам этого ui-kit-атома; по границам роли `screen-dev` они не менялись.
-- Полный запуск TypeScript и unit-тестов невозможен без локальных frontend-зависимостей и сетевого доступа к npm registry.
+- Полный зелёный результат обязательных гейтов получить не удалось из-за состояния
+  локальных зависимостей и существующих нарушений ui-храповика; базовую линию не обновлял.
+- Остальные находки `REVIEW.md` относятся к backend или к экранам, не входящим в этот
+  атомарный слой, поэтому их не менял.
+
+## Находки
+
+Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не открывались и не
+изменялись.

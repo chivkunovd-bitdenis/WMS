@@ -276,7 +276,6 @@ export default function App() {
     selectedWarehouseId,
     setWarehouses,
     selectWarehouse,
-    setSelectedWarehouseId,
     clearWarehouseContext,
   } =
     useWarehouseContext('fulfillment')
@@ -795,20 +794,6 @@ export default function App() {
   }, [selectedInboundId])
 
   useEffect(() => {
-    if (ffDocModal !== 'inbound' || !inboundDetail?.warehouse_id) {
-      return
-    }
-    setSelectedWarehouseId(inboundDetail.warehouse_id)
-  }, [ffDocModal, inboundDetail?.warehouse_id])
-
-  useEffect(() => {
-    if (ffDocModal !== 'outbound' || !outboundDetail?.warehouse_id) {
-      return
-    }
-    setSelectedWarehouseId(outboundDetail.warehouse_id)
-  }, [ffDocModal, outboundDetail?.warehouse_id])
-
-  useEffect(() => {
     if (!token || !inboundDetail?.warehouse_id) {
       setInboundRequestLocations([])
       return
@@ -988,7 +973,7 @@ export default function App() {
       const created = (await res.json()) as WarehouseRow
       form.reset()
       await refreshWarehouses(token)
-      setSelectedWarehouseId(created.id)
+      selectWarehouse(created.id)
     } catch (e) {
       setCatalogError(
         e instanceof Error
@@ -3171,7 +3156,7 @@ export default function App() {
                     warehouses={warehouses}
                     locations={locations}
                     selectedWarehouseId={selectedWarehouseId}
-                    setSelectedWarehouseId={setSelectedWarehouseId}
+                    setSelectedWarehouseId={selectWarehouse}
                     products={products}
                     onCreateWarehouse={(e) => void onCreateWarehouse(e)}
                     onCreateLocation={onCreateLocation}
