@@ -520,14 +520,19 @@ async def _boxes_by_creation_key(
     max_legacy_raw_len = CREATION_IDEMPOTENCY_KEY_MAX_LENGTH - len(
         WITHOUT_DISTRIBUTION_KEY_PREFIX
     )
-    legacy_raw_key = key[:max_legacy_raw_len]
+    # The legacy prefix consumed part of the 128-character column and old
+    # writes therefore truncated longer raw keys.  Such a value cannot be
+    # matched safely: different valid API keys may share the stored prefix.
+    # Keep the fallback only where the legacy representation was lossless.
+    if len(key) > max_legacy_raw_len:
+        return []
     return await _boxes_by_stored_creation_keys(
         session,
         tenant_id,
         supply_id,
         [
-            f"{WITHOUT_DISTRIBUTION_KEY_PREFIX}{legacy_raw_key}",
-            f"{RETIRED_WITHOUT_DISTRIBUTION_KEY_PREFIX}{legacy_raw_key}",
+            f"{WITHOUT_DISTRIBUTION_KEY_PREFIX}{key}",
+            f"{RETIRED_WITHOUT_DISTRIBUTION_KEY_PREFIX}{key}",
         ],
     )
 

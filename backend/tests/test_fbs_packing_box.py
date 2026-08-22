@@ -343,6 +343,66 @@ async def test_legacy_without_distribution_create_retry_returns_existing_box(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "stored_prefix",
+    ["no-distribution:", "retired-no-dist:"],
+)
+async def test_truncated_legacy_key_does_not_capture_distinct_long_key(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    stored_prefix: str,
+) -> None:
+    """A lossy legacy key must not match a distinct 128-character API key."""
+    headers, supply_id, _ = await _packed_supply(async_client)
+    boxes_url = f"/operations/fbs-supplies/{supply_id}/boxes"
+    shared_prefix = "x" * 112
+    original_key = f"{shared_prefix}{'A' * 16}"
+    distinct_key = f"{shared_prefix}{'B' * 16}"
+    created = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={
+            "count": 1,
+            "idempotency_key": original_key,
+            "without_distribution": True,
+        },
+    )
+    assert created.status_code == 201, created.text
+    created_box_id = created.json()["boxes"][0]["id"]
+
+    async with SessionLocal() as session:
+        box = await session.get(FbsPackingBox, uuid.UUID(created_box_id))
+        assert box is not None
+        box.creation_idempotency_key = f"{stored_prefix}{shared_prefix}"
+        await session.commit()
+
+    distinct_create = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={
+            "count": 1,
+            "idempotency_key": distinct_key,
+            "without_distribution": True,
+        },
+    )
+    assert distinct_create.status_code == 201, distinct_create.text
+    assert len(distinct_create.json()["boxes"]) == 2
+    assert distinct_create.json()["boxes"][1]["id"] != created_box_id
+
+    async with SessionLocal() as session:
+        stored_keys = set(
+            (
+                await session.scalars(
+                    select(FbsPackingBox.creation_idempotency_key).where(
+                        FbsPackingBox.supply_id == supply_id
+                    )
+                )
+            ).all()
+        )
+        assert stored_keys == {f"{stored_prefix}{shared_prefix}", distinct_key}
+
+
+@pytest.mark.asyncio
 async def test_without_distribution_mode_depends_on_assignments_not_box_count(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
