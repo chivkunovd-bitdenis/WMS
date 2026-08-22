@@ -28,7 +28,13 @@ from app.services.billing_configuration_service import (
     create_tariff,
     save_profile,
 )
-from app.services.billing_invoice_service import _month_bounds, cancel_invoice, form_invoice
+from app.services.billing_invoice_service import (
+    _month_bounds,
+    _source_numbers,
+    cancel_invoice,
+    current_blocking_reason,
+    form_invoice,
+)
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -95,6 +101,18 @@ def _seller_filter(value: str | None) -> uuid.UUID | None:
         return uuid.UUID(value)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="Некорректный селлер") from exc
+
+
+def _query_period(period: str | None, date_value: str | None) -> date:
+    if period is None and date_value is None:
+        raise HTTPException(status_code=422, detail="Укажите месяц")
+    if period is not None and date_value is not None:
+        first = _month_period(period)
+        second = _month_period(date_value)
+        if first != second:
+            raise HTTPException(status_code=422, detail="Переданы разные месяцы")
+        return first
+    return _month_period(period or date_value or "")
 
 
 def _invoice_out(
@@ -212,7 +230,8 @@ async def get_tariffs(
 @router.get("/ledger")
 async def get_billing_ledger(
     *,
-    period: str,
+    period: str | None = None,
+    date: str | None = None,
     seller_id: str | None = None,
     service_code: str | None = None,
     mode: str | None = None,
@@ -221,7 +240,7 @@ async def get_billing_ledger(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, list[dict[str, Any]]]:
     del mode  # grouping is intentionally a presentation concern.
-    month = _month_period(period)
+    month = _query_period(period, date)
     start, end = _month_bounds(month)
     requested_seller = _seller_filter(seller_id)
     query = select(BillingLedgerEntry, Seller.name, User.email).outerjoin(
@@ -236,6 +255,8 @@ async def get_billing_ledger(
     if service_code not in (None, "", "all"):
         query = query.where(BillingLedgerEntry.service_code == service_code)
     rows = (await session.execute(query.order_by(BillingLedgerEntry.occurred_at))).all()
+    ledger_rows = [row for row, _seller_name, _performer_name in rows]
+    source_numbers = await _source_numbers(session, ledger_rows, month)
     entries = [{
         "id": row.id, "seller_id": row.seller_id, "seller_name": seller_name or "Не указан",
         "service_code": row.service_code,
@@ -243,7 +264,7 @@ async def get_billing_ledger(
         "quantity": row.quantity, "unit": row.unit, "rate": row.rate,
         "amount": row.amount, "occurred_at": row.occurred_at,
         "performer_id": row.performer_id, "performer_name": performer_name,
-        "document_number": str(row.source_id),
+        "document_number": source_numbers[row.id],
         "problem": "unpriced" if row.amount is None else None,
     } for row, seller_name, performer_name in rows]
     if document_number:
@@ -287,17 +308,26 @@ async def get_billing_invoices(
     if requested_seller is not None:
         issues_query = issues_query.where(BillingRunIssue.seller_id == requested_seller)
     issue_rows = (await session.execute(issues_query)).all()
-    issues = [
-        {
-            "id": issue.id,
-            "seller_id": issue.seller_id,
-            "seller_name": seller_name,
-            "period": issue.period,
-            "reason": issue.reason,
-            "message": issue.message,
-        }
-        for issue, seller_name in issue_rows
-    ]
+    issues = []
+    for issue, seller_name in issue_rows:
+        live_reason = await current_blocking_reason(
+            session,
+            tenant_id=user.tenant_id,
+            seller_id=issue.seller_id,
+            period=issue.period,
+        )
+        if live_reason != issue.reason:
+            continue
+        issues.append(
+            {
+                "id": issue.id,
+                "seller_id": issue.seller_id,
+                "seller_name": seller_name,
+                "period": issue.period,
+                "reason": issue.reason,
+                "message": issue.message,
+            }
+        )
     return {"invoices": invoices, "issues": issues}
 
 
