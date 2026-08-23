@@ -79,7 +79,7 @@ async def test_empty_month_is_not_persisted_as_blocking_issue() -> None:
         period=date(2026, 7, 1),
     )
 
-    assert result.reason == "no_entries"
+    assert result is None
     session.execute.assert_awaited_once()
     session.add.assert_not_called()
 

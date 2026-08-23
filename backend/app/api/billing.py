@@ -359,6 +359,8 @@ async def form_billing_invoice(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     await session.commit()
+    if result is None:
+        return {"status": "empty"}
     if isinstance(result, BillingInvoice):
         return {
             "status": result.status,

@@ -108,8 +108,8 @@ async def test_billing_http_parallel_form_uses_date_alias_and_keeps_document_sna
                 source_id=source_id,
                 unit="item",
                 quantity=Decimal("14"),
-                rate=Decimal("45.00"),
-                amount=Decimal("630.00"),
+                rate=4500,
+                amount=63000,
                 occurred_at=datetime(2026, 7, 15, 9, tzinfo=UTC),
             )
         )
@@ -135,7 +135,7 @@ async def test_billing_http_parallel_form_uses_date_alias_and_keeps_document_sna
     invoice_id = uuid.UUID(first.json()["id"])
     detail = await async_client.get(f"/billing/invoices/{invoice_id}", headers=headers)
     assert detail.status_code == 200, detail.text
-    assert Decimal(str(detail.json()["total_amount"])) == Decimal("630.00")
+    assert Decimal(str(detail.json()["total_amount"])) == Decimal("63000")
     assert detail.json()["lines"][0]["documents"][0]["number"] == "ПР-101"
 
     first_cancel = await async_client.post(
@@ -165,6 +165,63 @@ async def test_billing_http_parallel_form_uses_date_alias_and_keeps_document_sna
 
 
 @pytest.mark.asyncio
+async def test_form_invoice_returns_empty_for_a_month_without_charges(
+    async_client: AsyncClient,
+) -> None:
+    """S-31-TC-006: a month without charges is an empty state, not a blocker."""
+    headers, _tenant_id, seller_id, _warehouse_id = await _billing_context(async_client)
+
+    formed = await async_client.post(
+        f"/billing/invoices/{seller_id}/2026-07/form",
+        headers=headers,
+    )
+
+    assert formed.status_code == 200, formed.text
+    assert formed.json() == {"status": "empty"}
+
+    invoices = await async_client.get("/billing/invoices?period=2026-07", headers=headers)
+    assert invoices.status_code == 200, invoices.text
+    assert invoices.json() == {"invoices": [], "issues": []}
+
+
+@pytest.mark.asyncio
+async def test_form_invoice_keeps_unpriced_charge_as_blocking_reason(
+    async_client: AsyncClient,
+) -> None:
+    """S-31-TC-012: a charge without a tariff remains an actionable blocker."""
+    headers, tenant_id, seller_id, _warehouse_id = await _billing_context(async_client)
+    async with SessionLocal() as session:
+        session.add(
+            BillingLedgerEntry(
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                service_code="inbound",
+                source="inbound",
+                source_type="test_fact",
+                source_id=uuid.uuid4(),
+                unit="document",
+                quantity=Decimal("1"),
+                rate=None,
+                amount=None,
+                occurred_at=datetime(2026, 7, 15, 9, tzinfo=UTC),
+            )
+        )
+        await session.commit()
+
+    formed = await async_client.post(
+        f"/billing/invoices/{seller_id}/2026-07/form",
+        headers=headers,
+    )
+
+    assert formed.status_code == 200, formed.text
+    assert formed.json() == {
+        "status": "blocked",
+        "reason": "unpriced",
+        "message": "Нет тарифа",
+    }
+
+
+@pytest.mark.asyncio
 async def test_invoice_list_hides_resolved_and_nonblocking_run_issues(
     async_client: AsyncClient,
 ) -> None:
@@ -181,8 +238,8 @@ async def test_invoice_list_hides_resolved_and_nonblocking_run_issues(
                 source_id=uuid.uuid4(),
                 unit="document",
                 quantity=Decimal("1"),
-                rate=Decimal("1.00"),
-                amount=Decimal("1.00"),
+                rate=100,
+                amount=100,
                 occurred_at=datetime(2026, 6, 15, 9, tzinfo=UTC),
             )
         )

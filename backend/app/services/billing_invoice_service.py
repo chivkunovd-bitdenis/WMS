@@ -28,7 +28,6 @@ REASONS = {
     "unpriced": "Нет тарифа",
     "missing_profile": "Нет реквизитов",
     "storage_period_not_closed": "Хранение не закрыто",
-    "no_entries": "Нет начислений для формирования",
 }
 BLOCKING_REASONS = frozenset({"unpriced", "missing_profile", "storage_period_not_closed"})
 MSK = ZoneInfo("Europe/Moscow")
@@ -194,7 +193,7 @@ async def _invoice_inputs(
         ).all()
     )
     if not entries:
-        return _InvoiceInputs([], None, None, "no_entries")
+        return _InvoiceInputs([], None, None, None)
 
     ff_profile = await session.scalar(
         select(BillingProfile).where(
@@ -363,7 +362,7 @@ async def _source_numbers(
 
 async def form_invoice(
     session: AsyncSession, *, tenant_id: uuid.UUID, seller_id: uuid.UUID, period: date
-) -> BillingInvoice | BillingRunIssue:
+) -> BillingInvoice | BillingRunIssue | None:
     _month_bounds(period)
     today_msk = datetime.now(MSK).date()
     if period >= date(today_msk.year, today_msk.month, 1):
@@ -393,6 +392,16 @@ async def form_invoice(
     inputs = await _invoice_inputs(
         session, tenant_id=tenant_id, seller_id=seller_id, period=period
     )
+    if not inputs.entries:
+        await _replace_issue(
+            session,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            period=period,
+            reason=None,
+        )
+        return None
+
     issue = await _replace_issue(
         session,
         tenant_id=tenant_id,
@@ -414,7 +423,8 @@ async def form_invoice(
     grouped: dict[tuple[str, str, Decimal], dict[str, Any]] = {}
     for entry in inputs.entries:
         assert entry.amount is not None
-        key = (entry.service_code, entry.unit, entry.rate or Decimal("0"))
+        rate = Decimal(str(entry.rate)) if entry.rate is not None else Decimal("0")
+        key = (entry.service_code, entry.unit, rate)
         row = grouped.setdefault(
             key, {"quantity": Decimal("0"), "amount": Decimal("0"), "documents": []}
         )
