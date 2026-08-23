@@ -24,6 +24,7 @@ type Seller = { id: string; name: string }
 type Props = { sellers?: Seller[]; token: string; onOpenInbound: (id: string) => void }
 type LedgerEntry = {
   id: string
+  entry_type: 'charge' | 'reversal' | string
   occurred_at: string
   seller_name: string
   service_code: 'inbound' | 'marketplace_outbound' | 'storage_liter_day' | string
@@ -120,6 +121,10 @@ function invoiceIssueContext(sellerId: string, period: string): string {
   return `${sellerId}:${period}`
 }
 
+function ledgerDocumentLabel(entry: LedgerEntry): string {
+  return entry.entry_type === 'reversal' ? `Сторно ${entry.document_number}` : entry.document_number
+}
+
 export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
   const navigate = useNavigate()
   const [tab, setTab] = useState(0)
@@ -199,6 +204,7 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
   const performerRows = useMemo<PerformerRow[]>(() => {
     const grouped = new Map<string, PerformerRow>()
     rows.forEach((row) => {
+      if (row.entry_type === 'reversal') return
       const key = `${row.performer_name ?? 'Исполнитель не зафиксирован'}|${row.service_code}|${row.unit}`
       const current = grouped.get(key) ?? { performer_name: row.performer_name ?? 'Исполнитель не зафиксирован', service_code: row.service_code, unit: row.unit, quantity: 0, documents: 0 }
       current.quantity += row.quantity
@@ -217,14 +223,14 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
       return target ? (
         target.kind === 'inbound' ? (
           <Link component="button" type="button" variant="body2" onClick={() => onOpenInbound(target.sourceId)} data-testid={`billing-document-${row.id}`}>
-            <TextCell value={row.document_number} />
+            <TextCell value={ledgerDocumentLabel(row)} />
           </Link>
         ) : (
           <Link component={RouterLink} to={target.to} variant="body2" data-testid={`billing-document-${row.id}`}>
-            <TextCell value={row.document_number} />
+            <TextCell value={ledgerDocumentLabel(row)} />
           </Link>
         )
-      ) : <TextCell value={row.document_number} />
+      ) : <TextCell value={ledgerDocumentLabel(row)} />
     } },
     { key: 'quantity', header: 'Количество', width: 120, align: 'right' as const, render: (row: LedgerEntry) => <QtyCell value={row.quantity} /> },
     { key: 'unit', header: 'Расчёт', width: 150, render: (row: LedgerEntry) => unitLabels[row.unit] ?? '—' },

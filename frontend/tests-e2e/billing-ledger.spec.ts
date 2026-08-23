@@ -59,6 +59,66 @@ test('billing ledger performer mode keeps fixed columns and hides money', async 
   await expect(page.getByRole('columnheader', { name: 'Ставка' })).toHaveCount(0)
 })
 
+// S-31-TC-016 — Given a completed operation and its reversal by another user, When the admin opens performer mode,
+// Then the reversal is not counted as the cancelling user's work; its marked operation row still opens the original document.
+test('billing ledger excludes reversals from performer totals and keeps their source document link', async ({ page }) => {
+  await page.route('**/api/billing/ledger**', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ entries: [
+      {
+        id: 'charge-entry',
+        entry_type: 'charge',
+        occurred_at: '2026-08-18T00:00:00Z',
+        seller_name: 'Луна',
+        service_code: 'inbound',
+        source_type: 'inbound_intake',
+        source_id: 'inbound-original',
+        document_number: 'ПР-000184',
+        quantity: 20,
+        unit: 'item',
+        rate: 12,
+        amount: 240,
+        performer_name: 'Анна К.',
+        problem: null,
+      },
+      {
+        id: 'reversal-entry',
+        entry_type: 'reversal',
+        occurred_at: '2026-08-19T00:00:00Z',
+        seller_name: 'Луна',
+        service_code: 'inbound',
+        source_type: 'inbound_intake',
+        source_id: 'inbound-original',
+        document_number: 'ПР-000184',
+        quantity: -20,
+        unit: 'item',
+        rate: 12,
+        amount: -240,
+        performer_name: 'Борис Р.',
+        problem: null,
+      },
+    ] }),
+  }))
+
+  await page.goto('/app/ff/billing')
+  await page.getByTestId('billing-mode').click()
+  await page.getByRole('option', { name: 'По исполнителям' }).click()
+
+  const table = page.getByTestId('billing-ledger-table')
+  await expect(table.getByRole('cell', { name: 'Анна К.', exact: true })).toBeVisible()
+  await expect(table.getByRole('cell', { name: '20', exact: true })).toBeVisible()
+  await expect(table.getByRole('cell', { name: 'Борис Р.', exact: true })).toHaveCount(0)
+  await expect(table.getByRole('cell', { name: '-20', exact: true })).toHaveCount(0)
+
+  await page.getByTestId('billing-mode').click()
+  await page.getByRole('option', { name: 'По операциям' }).click()
+  const reversalDocument = page.getByTestId('billing-document-reversal-entry')
+  await expect(reversalDocument).toHaveText('Сторно ПР-000184')
+  await reversalDocument.click()
+  await expect(page.getByTestId('ff-doc-dialog')).toBeVisible()
+})
+
 // S-31-TC-012 — Given a completed operation without a tariff, Then it remains visible and is marked as actionable.
 test('billing ledger shows unpriced operation without blocking it', async ({ page }) => {
   await page.route('**/api/billing/ledger**', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ entries: [{ id: 'entry-3', occurred_at: '2026-08-19T00:00:00Z', seller_name: 'Север', service_code: 'marketplace_outbound', document_number: 'ОТГ-000092', quantity: 1, unit: 'document', rate: null, amount: null, performer_name: 'Игорь М.', problem: 'unpriced' }] }) }))
