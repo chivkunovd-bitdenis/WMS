@@ -380,9 +380,9 @@ async def test_fbs_marking_sync_does_not_apply_stale_response(
         async with SessionLocal() as session:
             older_result = await session.get(FbsOrder, order_id)
             assert older_result is not None
-            assert older_result.metadata_delivery_allowed is True
-            assert older_result.meta_details_json is not None
-            assert older_result.meta_details_json["sgtin"]["reason"] is None
+            # B has already started, so A cannot expose its stale acceptance
+            # while B is still waiting for the authoritative WB response.
+            assert older_result.metadata_delivery_allowed is not True
         release_second_request.set()
         await second_request
     else:
