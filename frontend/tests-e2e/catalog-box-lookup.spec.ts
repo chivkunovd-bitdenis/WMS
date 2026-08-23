@@ -63,6 +63,7 @@ function packageByBarcode(page: Page, barcode: string): Locator {
     .filter({ hasText: barcode })
 }
 
+// TC-NEW-CATALOG-BOX-001: the printed box barcode opens the matching current contents.
 test('scan opens the received box and shows its current contents', async ({ page }) => {
   const seed = await seedFfSellerInbound(page, `catalog-package-${Date.now()}`)
   const { requestId, headers } = await createReceivingRequest(page, seed)
@@ -105,6 +106,7 @@ test('scan opens the received box and shows its current contents', async ({ page
   )
 })
 
+// TC-NEW-CATALOG-BOX-002: a stale response cannot overwrite the operator's next scan.
 test('a late failed scan cannot replace the next successful box', async ({ page }) => {
   const seed = await seedFfSellerInbound(page, `catalog-race-${Date.now()}`)
   const { requestId, headers } = await createReceivingRequest(page, seed)
