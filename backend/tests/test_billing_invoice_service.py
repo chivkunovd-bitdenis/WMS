@@ -58,7 +58,7 @@ async def test_form_invoice_blocks_unpriced_with_one_current_issue() -> None:
         inn="456",
     )
     session.scalar = AsyncMock(
-        side_effect=[object(), None, None, ff_profile, seller_profile, None]
+        side_effect=[object(), None, None, ff_profile, seller_profile, None, None]
     )
     session.scalars = AsyncMock(return_value=_result([entry]))
 
@@ -112,6 +112,45 @@ def _priced_entry(tenant_id: uuid.UUID, seller_id: uuid.UUID) -> BillingLedgerEn
 
 
 @pytest.mark.asyncio
+async def test_form_invoice_keeps_operational_overflow_as_a_hard_blocker() -> None:
+    tenant_id = uuid.uuid4()
+    seller_id = uuid.uuid4()
+    issue = BillingRunIssue(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        period=date(2026, 7, 1),
+        reason="billing_calculation_overflow",
+        message="Начисление не рассчитано: значение слишком велико",
+    )
+    session = _savepoint_session()
+    session.scalar = AsyncMock(
+        side_effect=[
+            object(),
+            None,
+            None,
+            _complete_ff_profile(tenant_id),
+            _complete_seller_profile(tenant_id, seller_id),
+            issue,
+            issue,
+        ]
+    )
+    session.scalars = AsyncMock(return_value=_result([_priced_entry(tenant_id, seller_id)]))
+
+    result = await form_invoice(
+        session,
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        period=date(2026, 7, 1),
+    )
+
+    assert result is issue
+    assert result.reason == "billing_calculation_overflow"
+    assert not any(
+        isinstance(call_.args[0], BillingInvoice) for call_ in session.add.call_args_list
+    )
+
+
+@pytest.mark.asyncio
 async def test_form_invoice_uses_shared_document_number_for_each_seller(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -133,6 +172,7 @@ async def test_form_invoice_uses_shared_document_number_for_each_seller(
                 None,
                 _complete_ff_profile(tenant_id),
                 _complete_seller_profile(tenant_id, seller_id),
+                None,
             ]
         )
         session.scalars = AsyncMock(return_value=_result([entry]))
@@ -182,6 +222,7 @@ async def test_form_invoice_uses_moscow_date_for_invoice_line_documents(
             None,
             _complete_ff_profile(tenant_id),
             _complete_seller_profile(tenant_id, seller_id),
+            None,
         ]
     )
     session.scalars = AsyncMock(return_value=_result([entry]))
@@ -220,6 +261,7 @@ async def test_form_invoice_returns_incomplete_seller_profile_reason_without_ff_
             _complete_ff_profile(tenant_id),
             incomplete_seller,
             None,
+            None,
         ]
     )
     session.scalars = AsyncMock(return_value=_result([_priced_entry(tenant_id, seller_id)]))
@@ -256,6 +298,7 @@ async def test_form_invoice_returns_ff_profile_reason_without_seller_reason() ->
             incomplete_ff,
             _complete_seller_profile(tenant_id, seller_id),
             None,
+            None,
         ]
     )
     session.scalars = AsyncMock(return_value=_result([_priced_entry(tenant_id, seller_id)]))
@@ -274,7 +317,9 @@ async def test_form_invoice_returns_each_missing_profile_reason() -> None:
     tenant_id = uuid.uuid4()
     seller_id = uuid.uuid4()
     session = _savepoint_session()
-    session.scalar = AsyncMock(side_effect=[object(), None, None, None, None, None, None])
+    session.scalar = AsyncMock(
+        side_effect=[object(), None, None, None, None, None, None, None]
+    )
     session.scalars = AsyncMock(return_value=_result([_priced_entry(tenant_id, seller_id)]))
 
     result = await form_invoice(
