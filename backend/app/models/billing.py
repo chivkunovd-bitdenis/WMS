@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from app.models.seller import Seller
     from app.models.tenant import Tenant
     from app.models.user import User
+    from app.models.warehouse import Warehouse
 
 
 class BillingProfile(Base):
@@ -74,22 +75,45 @@ class BillingTariffVersion(Base):
     __tablename__ = "billing_tariff_versions"
     __table_args__ = (
         Index(
-            "uq_billing_tariff_version_seller",
+            "uq_billing_tariff_version_global_seller",
             "tenant_id", "seller_id", "service_code", "unit", "valid_from",
             unique=True,
-            postgresql_where=text("seller_id IS NOT NULL"),
-            sqlite_where=text("seller_id IS NOT NULL"),
+            postgresql_where=text("seller_id IS NOT NULL AND warehouse_id IS NULL"),
+            sqlite_where=text("seller_id IS NOT NULL AND warehouse_id IS NULL"),
         ),
         Index(
-            "uq_billing_tariff_version_common",
+            "uq_billing_tariff_version_global_common",
             "tenant_id", "service_code", "unit", "valid_from",
             unique=True,
-            postgresql_where=text("seller_id IS NULL"),
-            sqlite_where=text("seller_id IS NULL"),
+            postgresql_where=text("seller_id IS NULL AND warehouse_id IS NULL"),
+            sqlite_where=text("seller_id IS NULL AND warehouse_id IS NULL"),
+        ),
+        Index(
+            "uq_billing_tariff_version_warehouse_seller",
+            "tenant_id", "warehouse_id", "seller_id", "service_code", "unit", "valid_from",
+            unique=True,
+            postgresql_where=text("seller_id IS NOT NULL AND warehouse_id IS NOT NULL"),
+            sqlite_where=text("seller_id IS NOT NULL AND warehouse_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_billing_tariff_version_warehouse_common",
+            "tenant_id", "warehouse_id", "service_code", "unit", "valid_from",
+            unique=True,
+            postgresql_where=text("seller_id IS NULL AND warehouse_id IS NOT NULL"),
+            sqlite_where=text("seller_id IS NULL AND warehouse_id IS NOT NULL"),
         ),
         CheckConstraint("unit IN ('document', 'item', 'liter_day')", name="ck_billing_tariff_unit"),
         CheckConstraint("amount >= 0", name="ck_billing_tariff_amount_nonnegative"),
+        CheckConstraint(
+            "(service_code = 'storage_liter_day' AND warehouse_id IS NOT NULL) OR "
+            "(service_code <> 'storage_liter_day' AND warehouse_id IS NULL)",
+            name="ck_billing_tariff_warehouse_scope",
+        ),
         Index("ix_billing_tariffs_tenant_service", "tenant_id", "service_code", "valid_from"),
+        Index(
+            "ix_billing_tariffs_scope_lookup",
+            "tenant_id", "service_code", "warehouse_id", "seller_id", "valid_from",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -98,6 +122,12 @@ class BillingTariffVersion(Base):
     )
     seller_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("sellers.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    warehouse_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("warehouses.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
     )
     service_code: Mapped[str] = mapped_column(String(64), nullable=False)
     unit: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -111,6 +141,7 @@ class BillingTariffVersion(Base):
 
     tenant: Mapped[Tenant] = relationship("Tenant")
     seller: Mapped[Seller | None] = relationship("Seller")
+    warehouse: Mapped[Warehouse | None] = relationship("Warehouse")
 
 
 class BillingLedgerEntry(Base):
@@ -148,6 +179,12 @@ class BillingLedgerEntry(Base):
     seller_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("sellers.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    warehouse_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("warehouses.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
     tariff_version_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("billing_tariff_versions.id", ondelete="SET NULL"),
@@ -179,6 +216,7 @@ class BillingLedgerEntry(Base):
 
     tenant: Mapped[Tenant] = relationship("Tenant")
     seller: Mapped[Seller | None] = relationship("Seller")
+    warehouse: Mapped[Warehouse | None] = relationship("Warehouse")
     tariff_version: Mapped[BillingTariffVersion | None] = relationship("BillingTariffVersion")
     reversal_of: Mapped[BillingLedgerEntry | None] = relationship(
         "BillingLedgerEntry", remote_side=[id]

@@ -5,7 +5,7 @@ from typing import Any
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from pytest import MonkeyPatch
-from sqlalchemy import Column, ForeignKeyConstraint, Integer, UniqueConstraint
+from sqlalchemy import CheckConstraint, Column, ForeignKeyConstraint, Integer, UniqueConstraint
 
 from app.models.billing import BillingLedgerEntry, BillingTariffVersion
 from app.services.staff_packaging_billing_service import kopecks_to_rub_str
@@ -60,11 +60,24 @@ def test_billing_financial_core_migration_creates_only_shared_billing_tables(
     }
     ledger_columns = {item.name: item for item in ledger_items if isinstance(item, Column)}
     assert isinstance(tariff_columns["amount"].type, Integer)
+    assert tariff_columns["warehouse_id"].nullable is True
     assert isinstance(ledger_columns["rate"].type, Integer)
     assert isinstance(ledger_columns["amount"].type, Integer)
     assert any(
         isinstance(item, UniqueConstraint) and item.name == "uq_billing_ledger_source_event"
         for item in ledger_items
+    )
+    tariff_items = created_tables["billing_tariff_versions"]
+    assert any(
+        isinstance(item, ForeignKeyConstraint)
+        and list(item.column_keys) == ["warehouse_id"]
+        and item.ondelete == "RESTRICT"
+        for item in tariff_items
+    )
+    assert any(
+        isinstance(item, CheckConstraint)
+        and item.name == "ck_billing_tariff_warehouse_scope"
+        for item in tariff_items
     )
     assert any(
         isinstance(item, ForeignKeyConstraint)

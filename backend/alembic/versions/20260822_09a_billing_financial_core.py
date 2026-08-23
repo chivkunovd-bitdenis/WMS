@@ -53,6 +53,7 @@ def upgrade() -> None:
         sa.Column("id", uuid, nullable=False),
         sa.Column("tenant_id", uuid, nullable=False),
         sa.Column("seller_id", uuid, nullable=True),
+        sa.Column("warehouse_id", uuid, nullable=True),
         sa.Column("service_code", sa.String(64), nullable=False),
         sa.Column("unit", sa.String(16), nullable=False),
         sa.Column("amount", sa.Integer(), nullable=False),
@@ -65,8 +66,14 @@ def upgrade() -> None:
             "unit IN ('document', 'item', 'liter_day')", name="ck_billing_tariff_unit"
         ),
         sa.CheckConstraint("amount >= 0", name="ck_billing_tariff_amount_nonnegative"),
+        sa.CheckConstraint(
+            "(service_code = 'storage_liter_day' AND warehouse_id IS NOT NULL) OR "
+            "(service_code <> 'storage_liter_day' AND warehouse_id IS NULL)",
+            name="ck_billing_tariff_warehouse_scope",
+        ),
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["seller_id"], ["sellers.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["warehouse_id"], ["warehouses.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -76,25 +83,51 @@ def upgrade() -> None:
         "ix_billing_tariff_versions_seller_id", "billing_tariff_versions", ["seller_id"]
     )
     op.create_index(
+        "ix_billing_tariff_versions_warehouse_id",
+        "billing_tariff_versions",
+        ["warehouse_id"],
+    )
+    op.create_index(
         "ix_billing_tariffs_tenant_service",
         "billing_tariff_versions",
         ["tenant_id", "service_code", "valid_from"],
     )
     op.create_index(
-        "uq_billing_tariff_version_seller",
+        "ix_billing_tariffs_scope_lookup",
+        "billing_tariff_versions",
+        ["tenant_id", "service_code", "warehouse_id", "seller_id", "valid_from"],
+    )
+    op.create_index(
+        "uq_billing_tariff_version_global_seller",
         "billing_tariff_versions",
         ["tenant_id", "seller_id", "service_code", "unit", "valid_from"],
         unique=True,
-        postgresql_where=sa.text("seller_id IS NOT NULL"),
-        sqlite_where=sa.text("seller_id IS NOT NULL"),
+        postgresql_where=sa.text("seller_id IS NOT NULL AND warehouse_id IS NULL"),
+        sqlite_where=sa.text("seller_id IS NOT NULL AND warehouse_id IS NULL"),
     )
     op.create_index(
-        "uq_billing_tariff_version_common",
+        "uq_billing_tariff_version_global_common",
         "billing_tariff_versions",
         ["tenant_id", "service_code", "unit", "valid_from"],
         unique=True,
-        postgresql_where=sa.text("seller_id IS NULL"),
-        sqlite_where=sa.text("seller_id IS NULL"),
+        postgresql_where=sa.text("seller_id IS NULL AND warehouse_id IS NULL"),
+        sqlite_where=sa.text("seller_id IS NULL AND warehouse_id IS NULL"),
+    )
+    op.create_index(
+        "uq_billing_tariff_version_warehouse_seller",
+        "billing_tariff_versions",
+        ["tenant_id", "warehouse_id", "seller_id", "service_code", "unit", "valid_from"],
+        unique=True,
+        postgresql_where=sa.text("seller_id IS NOT NULL AND warehouse_id IS NOT NULL"),
+        sqlite_where=sa.text("seller_id IS NOT NULL AND warehouse_id IS NOT NULL"),
+    )
+    op.create_index(
+        "uq_billing_tariff_version_warehouse_common",
+        "billing_tariff_versions",
+        ["tenant_id", "warehouse_id", "service_code", "unit", "valid_from"],
+        unique=True,
+        postgresql_where=sa.text("seller_id IS NULL AND warehouse_id IS NOT NULL"),
+        sqlite_where=sa.text("seller_id IS NULL AND warehouse_id IS NOT NULL"),
     )
 
     op.create_table(
@@ -102,6 +135,7 @@ def upgrade() -> None:
         sa.Column("id", uuid, nullable=False),
         sa.Column("tenant_id", uuid, nullable=False),
         sa.Column("seller_id", uuid, nullable=True),
+        sa.Column("warehouse_id", uuid, nullable=True),
         sa.Column("tariff_version_id", uuid, nullable=True),
         sa.Column("reversal_of_id", uuid, nullable=True),
         sa.Column("performer_id", uuid, nullable=True),
@@ -128,6 +162,7 @@ def upgrade() -> None:
         sa.CheckConstraint("service_code <> ''", name="ck_billing_ledger_service_code"),
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["seller_id"], ["sellers.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["warehouse_id"], ["warehouses.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(
             ["tariff_version_id"], ["billing_tariff_versions.id"], ondelete="SET NULL"
         ),
@@ -148,6 +183,7 @@ def upgrade() -> None:
     for name, column in (
         ("tenant_id", "tenant_id"),
         ("seller_id", "seller_id"),
+        ("warehouse_id", "warehouse_id"),
         ("reversal_of_id", "reversal_of_id"),
         ("performer_id", "performer_id"),
     ):
