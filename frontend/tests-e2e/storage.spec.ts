@@ -78,8 +78,8 @@ test('S-11-TC-001 administrator opens the previous-month storage screen', async 
   await expect(page.getByTestId('storage-month')).toHaveValue('2026-08')
 })
 
-// TC-NEW-STORAGE-REVIEW-01 — будущие месяцы объяснены сотруднику и остаются недоступны в календаре.
-test('staff sees why future storage months are unavailable', async ({ page }) => {
+// S-11-TC-022 — будущие месяцы объяснены сотруднику и остаются недоступны в календаре.
+test('S-11-TC-022 staff sees why future storage months are unavailable', async ({ page }) => {
   await page.clock.install({ time: new Date('2026-08-20T12:00:00.000Z') })
   await openStorage(page, 'fulfillment_staff')
 
@@ -87,7 +87,7 @@ test('staff sees why future storage months are unavailable', async ({ page }) =>
   await expect(page.getByTestId('storage-month')).toHaveAttribute('max', '2026-08')
 })
 
-test('TC-NEW-STORAGE-REFRESH-01 calculates December of the previous year after Moscow January', () => {
+test('S-11-TC-001 calculates December of the previous year after Moscow January', () => {
   expect(previousMoscowMonth(new Date('2027-01-15T12:00:00.000Z'))).toBe('2026-12')
 })
 
@@ -132,8 +132,8 @@ test('S-11-TC-021 blocks Moscow-past start dates with a visible explanation', as
   await expect(saveRate).toBeEnabled()
 })
 
-// TC-NEW-STORAGE-REFRESH-01 — сохранённая поздняя ставка не подменяет серверное состояние закрытого месяца.
-test('administrator keeps a previous month without a tariff after saving a later rate', async ({ page }) => {
+// S-11-TC-002 — сохранённая поздняя ставка не подменяет серверное состояние закрытого месяца.
+test('S-11-TC-002 keeps a previous month without a tariff after saving a later rate', async ({ page }) => {
   await page.clock.install({ time: new Date('2026-08-31T21:30:00.000Z') })
   const validFrom = '2026-09-01'
   const previousMonth = '2026-08'
