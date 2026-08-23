@@ -14,4 +14,4 @@ FROM caddy:2-alpine
 
 WORKDIR /srv
 COPY --from=build /app/frontend/dist /srv
-COPY frontend/deploy/Caddyfile.seller.local /etc/caddy/Caddyfile
+COPY frontend/deploy/Caddyfile.seller /etc/caddy/Caddyfile

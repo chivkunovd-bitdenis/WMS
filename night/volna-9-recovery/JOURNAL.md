@@ -195,3 +195,8 @@
 06:43   07-reporting · dev: фича 1/2 сохранена ffd2eaae333c
 06:47   07-reporting · screen-dev: готово
 06:47   07-reporting · dev: фича 2/2 сохранена 48e2526f17c1
+06:53   07-reporting · reviewer: готово
+06:53   07-reporting · reviewer: находки не закрыты — повторный Terra-ремонт
+06:53   07-reporting · reviewer: находки, круг 3 — назад к разработке
+06:55   07-reporting · splitter: готово
+06:58   07-reporting · screen-dev: готово

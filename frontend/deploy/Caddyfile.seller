@@ -1,0 +1,30 @@
+:80 {
+  encode gzip zstd
+
+  # The seller bundle is built with BrowserRouter basename /app/seller.
+  # Keep root-hosted legacy links working by redirecting them below that base.
+  route {
+    handle_path /api/* {
+      reverse_proxy api:8000
+    }
+
+    @seller_app path /app/seller /app/seller/*
+    handle @seller_app {
+      root * /srv
+      try_files {path} /seller/index.html
+      file_server
+    }
+
+    handle /assets/* {
+      root * /srv
+      file_server
+    }
+
+    handle /portal-logo-seller.png {
+      root * /srv
+      file_server
+    }
+
+    redir /app/seller{uri} permanent
+  }
+}
