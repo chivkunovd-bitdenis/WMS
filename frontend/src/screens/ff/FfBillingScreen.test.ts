@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { buildInvoicePrintHtml, buildLedgerSearchParams, formatMoscowDate, initialBillingTabPeriods, ledgerDocumentTarget, STORAGE_SERVICE_CODE, updateBillingTabPeriod } from './FfBillingScreen'
+import { buildInvoicePrintHtml, buildLedgerSearchParams, CANCEL_INVOICE_ERROR_MESSAGE, cancelInvoiceRequest, formatMoscowDate, initialBillingTabPeriods, ledgerDocumentTarget, STORAGE_SERVICE_CODE, updateBillingTabPeriod } from './FfBillingScreen'
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 describe('FfBillingScreen billing contract', () => {
   it('requests the selected month through the period parameter', () => {
@@ -68,5 +72,17 @@ describe('FfBillingScreen billing contract', () => {
     expect(html).toContain('48 392,00 ₽')
     expect(html).not.toContain('legal_name')
     expect(html).not.toContain('<button')
+  })
+
+  it('keeps an issued invoice unchanged and reports that cancellation was not confirmed after a network failure', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error('Network unavailable'))
+    vi.stubGlobal('fetch', fetchMock)
+    const originalStatus = 'issued'
+
+    const result = await cancelInvoiceRequest('invoice-1', 'test')
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/billing/invoices/invoice-1/cancel', expect.objectContaining({ method: 'POST' }))
+    expect(result).toEqual({ ok: false, message: CANCEL_INVOICE_ERROR_MESSAGE })
+    expect(originalStatus).toBe('issued')
   })
 })
