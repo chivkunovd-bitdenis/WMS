@@ -59,17 +59,23 @@ class ProfileOut(ProfileBody):
         return cls.model_validate(value, from_attributes=True)
 
 
-class TariffBody(BaseModel):
+class TariffCreateBody(BaseModel):
     seller_id: uuid.UUID | None = None
     service_code: str = Field(min_length=1, max_length=64)
     unit: str
+    # The operator enters rubles; the billing core persists and returns kopecks.
     amount: Decimal = Field(ge=0, decimal_places=2, max_digits=14)
     valid_from: date
 
 
-class TariffOut(TariffBody):
+class TariffOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
+    seller_id: uuid.UUID | None
+    service_code: str
+    unit: str
+    amount: int
+    valid_from: date
     valid_to: date | None
 
     @classmethod
@@ -198,7 +204,7 @@ async def get_seller_profile(
 
 @router.post("/tariffs", response_model=TariffOut, status_code=status.HTTP_201_CREATED)
 async def post_tariff(
-    body: TariffBody,
+    body: TariffCreateBody,
     user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> TariffOut:

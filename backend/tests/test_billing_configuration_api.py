@@ -5,6 +5,10 @@ import uuid
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
+
+from app.db.session import SessionLocal
+from app.models.billing import BillingTariffVersion
 
 
 async def _register_admin(async_client: AsyncClient, label: str) -> dict[str, str]:
@@ -87,14 +91,33 @@ async def test_billing_configuration_api_validates_profiles_tariffs_and_tenant_b
     }
     created = await async_client.post("/billing/tariffs", headers=owner_headers, json=tariff)
     assert created.status_code == 201, created.text
-    assert created.json()["amount"] == "0.00"
+    assert created.json()["amount"] == 0
 
     future_tariff = await async_client.post(
         "/billing/tariffs",
         headers=owner_headers,
-        json={**tariff, "amount": "15.00", "valid_from": "2026-11-01"},
+        json={**tariff, "amount": "45.00", "valid_from": "2026-11-01"},
     )
     assert future_tariff.status_code == 201, future_tariff.text
+    assert future_tariff.json()["amount"] == 4500
+
+    async with SessionLocal() as session:
+        persisted_tariffs = (await session.scalars(
+            select(BillingTariffVersion).where(
+                BillingTariffVersion.id.in_(
+                    (uuid.UUID(created.json()["id"]), uuid.UUID(future_tariff.json()["id"]))
+                )
+            )
+        )).all()
+    assert {tariff.amount for tariff in persisted_tariffs} == {0, 4500}
+
+    for invalid_amount in ("-0.01", "45.001"):
+        invalid_amount_response = await async_client.post(
+            "/billing/tariffs",
+            headers=owner_headers,
+            json={**tariff, "amount": invalid_amount, "valid_from": "2026-12-01"},
+        )
+        assert invalid_amount_response.status_code == 422
 
     conflicting = await async_client.post(
         "/billing/tariffs",
@@ -108,4 +131,4 @@ async def test_billing_configuration_api_validates_profiles_tariffs_and_tenant_b
     assert tariffs.status_code == 200
     assert [item["valid_from"] for item in tariffs.json()] == ["2026-11-01", "2026-09-01"]
     assert [item["valid_to"] for item in tariffs.json()] == [None, "2026-10-31"]
-    assert [item["amount"] for item in tariffs.json()] == ["15.00", "0.00"]
+    assert [item["amount"] for item in tariffs.json()] == [4500, 0]

@@ -208,3 +208,8 @@
 08:15   09-billing · dev: фича 19/20 сохранена fa440a51917d
 08:18   09-billing · screen-dev: готово
 08:18   09-billing · dev: фича 20/20 сохранена 986f449b6f27
+08:34   09-billing · reviewer: готово
+08:34   09-billing · reviewer: находки не закрыты — повторный Terra-ремонт
+08:34   09-billing · reviewer: находки, круг 3 — назад к разработке
+08:38   09-billing · splitter: готово
+08:41   09-billing · backend-dev: готово

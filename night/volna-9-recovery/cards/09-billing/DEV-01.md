@@ -1,18 +1,37 @@
+# 09-billing — backend-dev, атом 1
+
 ## Изменённые файлы
 
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfSettingsScreen.tsx
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/v2/SellersScreen.tsx
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/ui-kit/PeriodPicker.tsx
-- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/night/volna-9-recovery/cards/09-billing/DEV.md
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/api/billing.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/services/billing_configuration_service.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/tests/test_billing_configuration_api.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/night/volna-9-recovery/cards/09-billing/DEV.md`
+
+## Реализовано
+
+- `POST /billing/tariffs`: входное поле `amount` остаётся суммой в рублях с двумя знаками, а ответ и `GET /billing/tariffs` возвращают целые копейки.
+- `create_tariff`: до записи преобразует рубли в `int` копеек; дооценка ранее неоценённых строк этого же сервиса также записывает целые копейки.
+
+## Миграции
+
+Нет.
+
+## Тесты
+
+- `test_billing_configuration_api_validates_profiles_tariffs_and_tenant_boundary`: `0.00` и `45.00` создают тарифы с `0` и `4500` копеек в HTTP-ответах и базе; отрицательная и трёхзнаковая дробная ставки отклоняются валидацией.
 
 ## Гейты
 
-- Зелёный: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npx tsc --noEmit -p tsconfig.app.json`.
-- Зелёный: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npm run build` — TypeScript и production-бандл Vite собраны успешно; Vite вывел только предупреждение о размере уже существующих чанков.
-- Зелёный: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npm run test:unit -- src/screens/ff/FfSettingsScreen.test.ts src/ui-kit/Cells.test.ts` — 2 файла, 2 теста passed.
-- Красный, базовая линия не менялась: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing && python3 scripts/ui/ui_guard.py`. Сторож сообщает превышения, уже существующие вне атома: `src/components/WbProductPickerDialog.tsx` 0 → 646, `src/screens/v2/FfFbsSupplyWorkspace.tsx` 2493 → 2498, `src/screens/v2/SellerInboundDraftScreen.tsx` 1111 → 1169; также у разрешённого S-19 зафиксированное до этого атома превышение `src/screens/ff/FfSettingsScreen.tsx` 701 → 799. Последнее не связано с заменой устаревших свойств MUI (до правки файл уже был больше порога); сокращение всего экрана не входит в атом восстановления типовой сборки. Флаг `--update` не применялся.
-- Не сохранено новым Git-коммитом: `git add … && git commit -m 'fix(09-billing): restore MUI form typing'` не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-09-billing1/index.lock` (`Operation not permitted`). Исходные изменения и этот артефакт остаются в рабочей копии.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && ruff check app/api/billing.py app/services/billing_configuration_service.py tests/test_billing_configuration_api.py` — пройдено (`All checks passed!`).
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && mypy app/api/billing.py app/services/billing_configuration_service.py` — пройдено (`Success: no issues found in 2 source files`).
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && pytest -q tests/test_billing_configuration_api.py` — пройдено (`1 passed`).
+- `back_guard.py` и `check_migrations.py` не запускались: атом не добавляет роут и миграцию.
 
 ## Не реализовано
 
-В рамках атома не осталось нереализованных требований: устаревшие свойства MUI заменены на `slotProps`, неиспользуемый импорт удалён, прежние `data-testid` полей сохранены. Также устранены относящиеся к этой форме находки ревью: при возврате с хранения расчёт снова становится допустимым, а сетевые ошибки сохранения реквизитов и тарифа видны пользователю. Отдельный commit SHA не получен из-за запрета среды на Git lock; поэтому результат локально реализован, но не сохранён в новом коммите.
+- Атомы 2–7 из `FEATURES.md` не затрагивались. Изменение дооценки внутри `create_tariff` ограничено устранением связанной находки ревью о передаче `Decimal` в целочисленные поля.
+- Отдельный Git-коммит не создан: `git add` не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-09-billing1/index.lock` (`Operation not permitted`). Поэтому изменения существуют только в рабочем дереве и нуждаются в сохранении после восстановления доступа к Git-метаданным.
+
+## Блокеры
+
+Нет.

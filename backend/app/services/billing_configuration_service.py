@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.billing import BillingLedgerEntry, BillingProfile, BillingTariffVersion
 from app.models.seller import Seller
 from app.models.tenant import Tenant
+from app.services.staff_packaging_billing_service import rub_to_kopecks
 
 
 class BillingConfigurationError(ValueError):
@@ -133,6 +134,7 @@ async def create_tariff(
         raise BillingConfigurationError("Для хранения доступен только расчёт за литр-день")
     if seller_id is not None:
         await assert_seller_in_tenant(session, tenant_id=tenant_id, seller_id=seller_id)
+    amount_kopecks = rub_to_kopecks(amount)
     # A tenant row is present for every authenticated caller. Lock it to make an
     # empty tariff stream serializable too; locking only existing versions leaves
     # two first writes free to create overlapping open-ended periods.
@@ -161,7 +163,7 @@ async def create_tariff(
         seller_id=seller_id,
         service_code=service_code,
         unit=unit,
-        amount=amount,
+        amount=amount_kopecks,
         valid_from=valid_from,
     )
     if tenant.billing_enabled_from is None:
@@ -197,8 +199,12 @@ async def create_tariff(
             continue
         entry.tariff_version_id = tariff.id
         entry.unit = unit
-        entry.rate = amount
+        entry.rate = amount_kopecks
         quantity = Decimal("1") if unit == "document" else entry.quantity
         entry.quantity = quantity
-        entry.amount = (amount * quantity).quantize(Decimal("0.01"))
+        entry.amount = int(
+            (Decimal(amount_kopecks) * quantity).quantize(
+                Decimal("1"), rounding=ROUND_HALF_UP
+            )
+        )
     return tariff
