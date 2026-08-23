@@ -56,7 +56,7 @@ async function openCatalogArtifactTapeDialog(page: Page) {
 
 // S-03-TC-008 — ожидание подготовки и только явное открытие готового PDF.
 // S-03-TC-009 — повторное открытие тех же данных показывает существующее активное задание.
-// S-03-TC-018 — в состоянии подготовки нет действий, а диалог закрывается через backdrop.
+// S-03-TC-018 — в состоянии подготовки нет действий, а диалог закрывается через Esc и backdrop.
 test('S-03 marking tape restores either of two background jobs and opens PDF explicitly', async ({ page }) => {
   test.setTimeout(180_000)
   const { firstPrintAction, secondPrintAction, productX } = await openCatalogArtifactTapeDialog(page)
@@ -131,8 +131,7 @@ test('S-03 marking tape restores either of two background jobs and opens PDF exp
 
   const dialog = page.getByTestId('marking-print-dialog')
   const backdropRegion = dialog.locator('.MuiDialog-container')
-  await expect(backdropRegion).toBeVisible()
-  await backdropRegion.click({ position: { x: 8, y: 8 } })
+  await page.keyboard.press('Escape')
   await expect(page.getByTestId('marking-print-dialog')).toBeHidden()
   await secondPrintAction.click()
   await expect(page.getByTestId('marking-print-preparing')).toHaveCount(0)

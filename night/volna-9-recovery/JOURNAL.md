@@ -160,3 +160,8 @@
 04:27   05-prod-slow · dev: фича 1/2 сохранена b66112f1f8d9
 04:33   05-prod-slow · screen-dev: готово
 04:33   05-prod-slow · dev: фича 2/2 сохранена efdad8db99dc
+04:36   05-prod-slow · reviewer: готово
+04:36   05-prod-slow · reviewer: Terra-rework не закрыл вердикт — эскалация Sol
+04:36   05-prod-slow · reviewer: находки, круг 3 — назад к разработке
+04:39   05-prod-slow · splitter: готово
+04:43   05-prod-slow · screen-dev: готово
