@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import Annotated, Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -35,6 +35,7 @@ from app.services.storage_statement_service import (
     get_fixed_storage_statement,
     get_storage_draft_pricing,
     get_storage_ledger_rows,
+    normalize_storage_tariff_amount,
 )
 
 router = APIRouter(prefix="/operations/storage", tags=["storage"])
@@ -74,15 +75,22 @@ class StorageStatementsOut(BaseModel):
     statements: list[StorageStatementOut]
 
 
+StorageTariffAmount = Annotated[
+    Decimal,
+    Field(gt=0),
+    AfterValidator(normalize_storage_tariff_amount),
+]
+
+
 class SellerExceptionBody(BaseModel):
     seller_id: uuid.UUID
-    amount: Decimal = Field(gt=0)
+    amount: StorageTariffAmount
     valid_from: date
 
 
 class TariffCreateBody(BaseModel):
     warehouse_id: uuid.UUID
-    amount: Decimal = Field(gt=0)
+    amount: StorageTariffAmount
     valid_from: date
     seller_exception: SellerExceptionBody | None = None
 

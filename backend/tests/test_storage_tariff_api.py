@@ -14,10 +14,12 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from datetime import time as datetime_time
 from decimal import Decimal
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
 from app.models.billing import BillingLedgerEntry, BillingTariffVersion
@@ -27,8 +29,13 @@ from app.models.seller import Seller
 from app.models.storage_measurement import StorageMeasurement
 from app.models.storage_statement import StorageStatement
 from app.models.warehouse import Warehouse
+from app.services import storage_statement_service
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.storage_measurement_service import MOSCOW, month_bounds
+from app.services.storage_statement_service import (
+    StorageStatementError,
+    create_storage_tariff,
+)
 
 FF_PERMISSION_DEFAULTS = {
     "settings": False,
@@ -291,14 +298,31 @@ async def test_staff_inventory_cannot_set_tariff(async_client: AsyncClient) -> N
     [
         ("warehouse", "0"),
         ("warehouse", "-0.01"),
+        ("warehouse", "0.001"),
         ("seller_exception", "0"),
         ("seller_exception", "-0.01"),
+        ("seller_exception", "0.001"),
     ],
 )
 async def test_tariff_amount_must_be_positive(
-    async_client: AsyncClient, target: str, amount: str
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    target: str,
+    amount: str,
 ) -> None:
-    """The API rejects non-positive common and seller rates before any write."""
+    """The API rejects common and seller rates that persist as zero."""
+    reprice_called = False
+
+    async def unexpected_reprice(*args: object, **kwargs: object) -> list[object]:
+        nonlocal reprice_called
+        reprice_called = True
+        return []
+
+    monkeypatch.setattr(
+        storage_statement_service,
+        "reprice_open_storage_drafts",
+        unexpected_reprice,
+    )
     suffix = str(time.time_ns())
     headers = await _register_admin(async_client, suffix)
     warehouse_id = await _create_warehouse(async_client, headers, suffix, "amount")
@@ -332,6 +356,7 @@ async def test_tariff_amount_must_be_positive(
 
     assert response.status_code == 422, response.text
     assert response.json()["detail"][0]["loc"] == expected_location
+    assert reprice_called is False
     async with SessionLocal() as session:
         count = await session.scalar(
             select(func.count(BillingTariffVersion.id)).where(
@@ -339,6 +364,105 @@ async def test_tariff_amount_must_be_positive(
             )
         )
     assert count == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("target", ["warehouse", "seller_exception"])
+async def test_storage_tariff_service_rejects_amount_rounding_to_zero(
+    monkeypatch: pytest.MonkeyPatch,
+    target: str,
+) -> None:
+    """The service keeps the persisted-money guard for callers outside the API."""
+    reprice_called = False
+
+    async def unexpected_reprice(*args: object, **kwargs: object) -> list[object]:
+        nonlocal reprice_called
+        reprice_called = True
+        return []
+
+    monkeypatch.setattr(
+        storage_statement_service,
+        "reprice_open_storage_drafts",
+        unexpected_reprice,
+    )
+    tenant_id = uuid.uuid4()
+    warehouse_id = uuid.uuid4()
+    seller_exception = (
+        (uuid.uuid4(), Decimal("0.001"), datetime.now(MOSCOW).date())
+        if target == "seller_exception"
+        else None
+    )
+    warehouse_amount = Decimal("0.001") if target == "warehouse" else Decimal("5.00")
+    session = AsyncMock(spec=AsyncSession)
+
+    with pytest.raises(
+        StorageStatementError,
+        match=r"^tariff_amount_must_be_positive$",
+    ):
+        await create_storage_tariff(
+            session,
+            tenant_id,
+            warehouse_id,
+            warehouse_amount,
+            datetime.now(MOSCOW).date(),
+            seller_exception,
+        )
+
+    session.scalar.assert_not_awaited()
+    session.add.assert_not_called()
+    session.flush.assert_not_awaited()
+    session.commit.assert_not_awaited()
+    assert reprice_called is False
+
+
+@pytest.mark.asyncio
+async def test_tariff_amount_rounding_that_stays_positive_is_saved(
+    async_client: AsyncClient,
+) -> None:
+    """Half a kopeck rounds to one kopeck for both tariff scopes."""
+    suffix = str(time.time_ns())
+    headers = await _register_admin(async_client, suffix)
+    warehouse_id = await _create_warehouse(async_client, headers, suffix, "rounded")
+    today = datetime.now(MOSCOW).date()
+
+    async with SessionLocal() as session:
+        warehouse = await session.get(Warehouse, warehouse_id)
+        assert warehouse is not None
+        seller = Seller(tenant_id=warehouse.tenant_id, name=f"Rounded seller {suffix}")
+        session.add(seller)
+        await session.commit()
+        await session.refresh(seller)
+        seller_id = seller.id
+
+    response = await async_client.post(
+        "/operations/storage/tariffs",
+        headers=headers,
+        json={
+            "warehouse_id": str(warehouse_id),
+            "amount": "0.005",
+            "valid_from": today.isoformat(),
+            "seller_exception": {
+                "seller_id": str(seller_id),
+                "amount": "0.005",
+                "valid_from": today.isoformat(),
+            },
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["warehouse_tariff"]["amount"] == "0.01"
+    assert response.json()["seller_exception"]["amount"] == "0.01"
+    async with SessionLocal() as session:
+        stored_amounts = list(
+            (
+                await session.scalars(
+                    select(BillingTariffVersion.amount).where(
+                        BillingTariffVersion.warehouse_id == warehouse_id
+                    )
+                )
+            ).all()
+        )
+    assert stored_amounts == [Decimal("0.01"), Decimal("0.01")]
 
 
 @pytest.mark.asyncio

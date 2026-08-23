@@ -4,7 +4,7 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from itertools import pairwise
 from typing import Any
 
@@ -31,6 +31,20 @@ from app.services.storage_measurement_service import (
 
 class StorageStatementError(ValueError):
     pass
+
+
+STORAGE_TARIFF_MONEY_QUANTUM = Decimal("0.01")
+
+
+def normalize_storage_tariff_amount(amount: Decimal) -> Decimal:
+    """Round a storage rate to persisted money precision and reject zero."""
+    normalized = amount.quantize(
+        STORAGE_TARIFF_MONEY_QUANTUM,
+        rounding=ROUND_HALF_UP,
+    )
+    if normalized <= 0:
+        raise StorageStatementError("tariff_amount_must_be_positive")
+    return normalized
 
 
 StorageDraftPricing = dict[
@@ -527,11 +541,13 @@ async def create_storage_tariff(
     unit-of-work.  A failed INSERT rolls back before repricing; a repricing error
     also rolls back the new tariff versions.
     """
-    amounts = [amount]
+    amount = normalize_storage_tariff_amount(amount)
     if seller_exception is not None:
-        amounts.append(seller_exception[1])
-    if any(candidate <= 0 for candidate in amounts):
-        raise StorageStatementError("tariff_amount_must_be_positive")
+        seller_exception = (
+            seller_exception[0],
+            normalize_storage_tariff_amount(seller_exception[1]),
+            seller_exception[2],
+        )
 
     today_moscow = datetime.now(MOSCOW).date()
     effective_dates = [valid_from]
