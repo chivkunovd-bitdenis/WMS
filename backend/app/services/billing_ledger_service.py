@@ -3,16 +3,71 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from typing import cast
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.models.billing import BillingLedgerEntry, BillingTariffVersion
 from app.models.tenant import Tenant
 
 MOSCOW = ZoneInfo("Europe/Moscow")
+
+
+async def _active_charge_for_source(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    source_type: str,
+    source_id: uuid.UUID,
+) -> BillingLedgerEntry | None:
+    """Return the only charge for a source that has not been reversed."""
+    charge = aliased(BillingLedgerEntry)
+    reversal = aliased(BillingLedgerEntry)
+    return cast(
+        BillingLedgerEntry | None,
+        await session.scalar(
+            select(charge)
+            .outerjoin(reversal, reversal.reversal_of_id == charge.id)
+            .where(
+                charge.tenant_id == tenant_id,
+                charge.source_type == source_type,
+                charge.source_id == source_id,
+                charge.entry_type == "charge",
+                reversal.id.is_(None),
+            )
+            .order_by(charge.occurred_at.desc(), charge.id.desc())
+        ),
+    )
+
+
+async def _latest_reversal_for_source(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    source_type: str,
+    source_id: uuid.UUID,
+) -> BillingLedgerEntry | None:
+    """Return the latest immutable reversal in a source's charge history."""
+    charge = aliased(BillingLedgerEntry)
+    reversal = aliased(BillingLedgerEntry)
+    return cast(
+        BillingLedgerEntry | None,
+        await session.scalar(
+            select(reversal)
+            .join(charge, reversal.reversal_of_id == charge.id)
+            .where(
+                charge.tenant_id == tenant_id,
+                charge.source_type == source_type,
+                charge.source_id == source_id,
+                charge.entry_type == "charge",
+            )
+            .order_by(reversal.occurred_at.desc(), reversal.id.desc())
+        ),
+    )
 
 
 async def record_operational_charge(
@@ -36,16 +91,26 @@ async def record_operational_charge(
     if billing_enabled_from is None or fact_date < billing_enabled_from:
         return None
 
-    existing = await session.scalar(
-        select(BillingLedgerEntry).where(
-            BillingLedgerEntry.tenant_id == tenant_id,
-            BillingLedgerEntry.source_type == source_type,
-            BillingLedgerEntry.source_id == source_id,
-            BillingLedgerEntry.entry_type == "charge",
-        )
+    existing = await _active_charge_for_source(
+        session,
+        tenant_id=tenant_id,
+        source_type=source_type,
+        source_id=source_id,
     )
     if existing is not None:
         return existing
+
+    previous_reversal = await _latest_reversal_for_source(
+        session,
+        tenant_id=tenant_id,
+        source_type=source_type,
+        source_id=source_id,
+    )
+    event_kind = (
+        "completed"
+        if previous_reversal is None
+        else f"completed_after_reversal:{previous_reversal.id}"
+    )
 
     tariff = await session.scalar(
         select(BillingTariffVersion)
@@ -70,10 +135,12 @@ async def record_operational_charge(
         seller_id=seller_id,
         tariff_version_id=tariff.id if tariff is not None else None,
         performer_id=performer_id,
+        entry_type="charge",
         service_code=service_code,
         source=source,
         source_type=source_type,
         source_id=source_id,
+        event_kind=event_kind,
         unit=tariff.unit if tariff is not None else "item",
         quantity=billed_quantity,
         rate=rate,
@@ -90,13 +157,11 @@ async def record_operational_charge(
         await session.flush()
     except IntegrityError:
         await nested.rollback()
-        concurrent = await session.scalar(
-            select(BillingLedgerEntry).where(
-                BillingLedgerEntry.tenant_id == tenant_id,
-                BillingLedgerEntry.source_type == source_type,
-                BillingLedgerEntry.source_id == source_id,
-                BillingLedgerEntry.entry_type == "charge",
-            )
+        concurrent = await _active_charge_for_source(
+            session,
+            tenant_id=tenant_id,
+            source_type=source_type,
+            source_id=source_id,
         )
         if concurrent is None:
             raise
@@ -116,17 +181,22 @@ async def record_operational_reversal(
     performer_id: uuid.UUID | None,
 ) -> BillingLedgerEntry | None:
     """Reverse a recorded final fact once, preserving its immutable tariff snapshot."""
-    original = await session.scalar(
-        select(BillingLedgerEntry).where(
-            BillingLedgerEntry.tenant_id == tenant_id,
-            BillingLedgerEntry.source_type == source_type,
-            BillingLedgerEntry.source_id == source_id,
-            BillingLedgerEntry.entry_type == "charge",
-        )
+    original = await _active_charge_for_source(
+        session,
+        tenant_id=tenant_id,
+        source_type=source_type,
+        source_id=source_id,
     )
     if original is None:
         # Billing may have been disabled when the warehouse fact was recorded.
-        return None
+        # A repeated cancellation returns the historical reversal, without
+        # creating a second correction.
+        return await _latest_reversal_for_source(
+            session,
+            tenant_id=tenant_id,
+            source_type=source_type,
+            source_id=source_id,
+        )
 
     existing = await session.scalar(
         select(BillingLedgerEntry).where(
@@ -147,6 +217,7 @@ async def record_operational_reversal(
         source=original.source,
         source_type="billing_reversal",
         source_id=original.id,
+        event_kind=f"reversal:{original.id}",
         unit=original.unit,
         quantity=-original.quantity,
         rate=original.rate,

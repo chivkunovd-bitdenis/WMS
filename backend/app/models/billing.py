@@ -119,7 +119,12 @@ class BillingLedgerEntry(Base):
     __tablename__ = "billing_ledger_entries"
     __table_args__ = (
         UniqueConstraint(
-            "tenant_id", "source_type", "source_id", name="uq_billing_ledger_source_event"
+            "tenant_id",
+            "service_code",
+            "source_type",
+            "source_id",
+            "event_kind",
+            name="uq_billing_ledger_source_event",
         ),
         Index(
             "uq_billing_ledger_reversal_of",
@@ -162,6 +167,7 @@ class BillingLedgerEntry(Base):
     source: Mapped[str] = mapped_column(String(64), nullable=False)
     source_type: Mapped[str] = mapped_column(String(64), nullable=False)
     source_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    event_kind: Mapped[str] = mapped_column(String(64), nullable=False, default="completed")
     unit: Mapped[str] = mapped_column(String(16), nullable=False)
     quantity: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
     rate: Mapped[int | None] = mapped_column(Integer, nullable=True)

@@ -110,6 +110,7 @@ def upgrade() -> None:
         sa.Column("source", sa.String(64), nullable=False),
         sa.Column("source_type", sa.String(64), nullable=False),
         sa.Column("source_id", uuid, nullable=False),
+        sa.Column("event_kind", sa.String(64), nullable=False),
         sa.Column("unit", sa.String(16), nullable=False),
         sa.Column("quantity", sa.Numeric(14, 4), nullable=False),
         sa.Column("rate", sa.Integer(), nullable=True),
@@ -136,7 +137,12 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["performer_id"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
-            "tenant_id", "source_type", "source_id", name="uq_billing_ledger_source_event"
+            "tenant_id",
+            "service_code",
+            "source_type",
+            "source_id",
+            "event_kind",
+            name="uq_billing_ledger_source_event",
         ),
     )
     for name, column in (

@@ -23,7 +23,7 @@ def _savepoint_session() -> AsyncMock:
 async def test_operational_charge_without_tariff_is_unpriced() -> None:
     session = _savepoint_session()
     session.add = Mock()
-    session.scalar = AsyncMock(side_effect=[date(2026, 1, 1), None, None])
+    session.scalar = AsyncMock(side_effect=[date(2026, 1, 1), None, None, None])
     tenant_id = uuid.uuid4()
     source_id = uuid.uuid4()
 
@@ -86,7 +86,7 @@ async def test_tariff_period_uses_moscow_calendar_date() -> None:
     session = _savepoint_session()
     session.add = Mock()
     tariff = Mock(id=uuid.uuid4(), amount=Decimal("10.00"), unit="item")
-    session.scalar = AsyncMock(side_effect=[date(2026, 1, 1), None, tariff])
+    session.scalar = AsyncMock(side_effect=[date(2026, 1, 1), None, None, tariff])
 
     entry = await record_operational_charge(
         session,
@@ -170,7 +170,7 @@ async def test_operational_reversal_preserves_snapshot_and_is_idempotent() -> No
     assert reversal.performer_id == cancelled_by
     session.add.assert_called_once_with(reversal)
 
-    session.scalar = AsyncMock(side_effect=[original, reversal])
+    session.scalar = AsyncMock(side_effect=[None, reversal])
     repeated = await record_operational_reversal(
         session,
         tenant_id=original.tenant_id,
@@ -182,3 +182,90 @@ async def test_operational_reversal_preserves_snapshot_and_is_idempotent() -> No
 
     assert repeated is reversal
     session.add.assert_called_once_with(reversal)
+
+
+@pytest.mark.asyncio
+async def test_charge_is_created_again_only_after_the_same_fact_is_reversed() -> None:
+    session = _savepoint_session()
+    entries: list[BillingLedgerEntry] = []
+    session.add = Mock(side_effect=entries.append)
+    tenant_id = uuid.uuid4()
+    seller_id = uuid.uuid4()
+    source_id = uuid.uuid4()
+    occurred_at = datetime(2026, 8, 20, 10, tzinfo=UTC)
+
+    session.scalar = AsyncMock(side_effect=[date(2026, 1, 1), None, None, None])
+    initial = await record_operational_charge(
+        session,
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        source_type="marketplace_unload",
+        source_id=source_id,
+        source="marketplace_unload",
+        service_code="marketplace_outbound",
+        quantity=Decimal("4"),
+        occurred_at=occurred_at,
+        performer_id=uuid.uuid4(),
+    )
+
+    assert initial is not None
+    session.scalar = AsyncMock(side_effect=[initial, None])
+    reversal = await record_operational_reversal(
+        session,
+        tenant_id=tenant_id,
+        source_type="marketplace_unload",
+        source_id=source_id,
+        occurred_at=occurred_at,
+        performer_id=uuid.uuid4(),
+    )
+
+    assert reversal is not None
+    session.scalar = AsyncMock(side_effect=[date(2026, 1, 1), None, reversal, None])
+    repeated_fact = await record_operational_charge(
+        session,
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        source_type="marketplace_unload",
+        source_id=source_id,
+        source="marketplace_unload",
+        service_code="marketplace_outbound",
+        quantity=Decimal("4"),
+        occurred_at=occurred_at,
+        performer_id=uuid.uuid4(),
+    )
+
+    assert repeated_fact is not None
+    assert [entry.entry_type for entry in entries] == ["charge", "reversal", "charge"]
+    assert [entry.quantity for entry in entries] == [Decimal("4"), Decimal("-4"), Decimal("4")]
+    assert initial.event_kind == "completed"
+    assert repeated_fact.event_kind == f"completed_after_reversal:{reversal.id}"
+
+
+@pytest.mark.asyncio
+async def test_identical_charge_calls_without_reversal_create_one_ledger_entry() -> None:
+    session = _savepoint_session()
+    entries: list[BillingLedgerEntry] = []
+    session.add = Mock(side_effect=entries.append)
+    tenant_id = uuid.uuid4()
+    source_id = uuid.uuid4()
+    kwargs = {
+        "tenant_id": tenant_id,
+        "seller_id": uuid.uuid4(),
+        "source_type": "inbound_intake",
+        "source_id": source_id,
+        "source": "inbound",
+        "service_code": "inbound",
+        "quantity": Decimal("3"),
+        "occurred_at": datetime(2026, 8, 20, 10, tzinfo=UTC),
+        "performer_id": uuid.uuid4(),
+    }
+
+    session.scalar = AsyncMock(side_effect=[date(2026, 1, 1), None, None, None])
+    initial = await record_operational_charge(session, **kwargs)
+
+    assert initial is not None
+    session.scalar = AsyncMock(side_effect=[date(2026, 1, 1), initial])
+    repeated = await record_operational_charge(session, **kwargs)
+
+    assert repeated is initial
+    assert entries == [initial]
