@@ -40,27 +40,37 @@ test('admin switches between settings tabs without losing their existing content
 test('admin creates an active FF tariff', async ({ page }) => {
   await openTariffs(page)
   await page.getByTestId('ff-tariff-new').click()
-  await page.getByLabel('Ставка, ₽').fill('45')
+  await page.getByLabel('Ставка, ₽').fill('45.5')
   await Promise.all([
     page.waitForResponse((response) => response.url().includes('/api/billing/tariffs') && response.request().method() === 'POST' && response.ok()),
     page.getByRole('button', { name: 'Сохранить ставку' }).click(),
   ])
-  await expect(page.getByTestId('ff-tariffs-table')).toContainText('45,00 ₽')
+  await expect.poll(() => page.getByTestId('ff-tariffs-table').textContent()).toContain('45,50\u00a0₽')
 })
 
 // S-31-TC-003 — Given an existing tariff, When a later version is saved, Then the new version is active and the old one remains in history.
 test('admin creates a later tariff version without replacing history', async ({ page }) => {
   await openTariffs(page)
   await page.getByTestId('ff-tariff-new').click()
-  await page.getByLabel('Ставка, ₽').fill('45')
+  await page.getByLabel('Ставка, ₽').fill('45.5')
   await page.getByRole('button', { name: 'Сохранить ставку' }).click()
-  await expect(page.getByTestId('ff-tariffs-table')).toContainText('45,00 ₽')
+  const tariffsTable = page.getByTestId('ff-tariffs-table')
+  await expect.poll(() => tariffsTable.textContent()).toContain('45,50\u00a0₽')
 
   await page.getByTestId('ff-tariff-new').click()
-  await page.getByLabel('Ставка, ₽').fill('50')
+  await page.getByLabel('Ставка, ₽').fill('50.25')
   await page.getByLabel('Действует с').fill('2099-01-01')
   await page.getByRole('button', { name: 'Сохранить ставку' }).click()
-  await expect(page.getByTestId('ff-tariffs-table')).toContainText('50,00 ₽')
-  await page.getByTitle('Открыть историю ставок').click()
-  await expect(page.getByTestId('ff-tariff-history')).toContainText('45,00 ₽')
+  await expect.poll(() => tariffsTable.textContent()).toContain('50,25\u00a0₽')
+
+  await page.getByTestId('ff-tariff-history-open').click()
+  const historyDialog = page.getByRole('dialog', { name: 'История ставок' })
+  await expect(historyDialog).toBeVisible()
+  const historyText = await historyDialog.textContent()
+  expect(historyText).toContain('50,25\u00a0₽')
+  expect(historyText).toContain('45,50\u00a0₽')
+
+  await historyDialog.getByTestId('ff-tariff-history-close').click()
+  await expect(historyDialog).toBeHidden()
+  await expect.poll(() => tariffsTable.textContent()).toContain('50,25\u00a0₽')
 })
