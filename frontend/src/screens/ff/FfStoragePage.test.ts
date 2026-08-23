@@ -21,7 +21,7 @@ describe('isStorageRateStartDateAllowed', () => {
 
     expect(isStorageRateStartDateAllowed('2026-08-22', moscowToday)).toBe(false)
     expect(screenSource).toContain("? 'Дата начала не может быть в прошлом'")
-    expect(screenSource).toContain('data-testid="storage-rate-save" disabledReason={actionLoading ? \'Сохранение тарифа выполняется\' : rateDisabledReason}')
+    expect(screenSource).toContain('data-testid="storage-rate-save" disabledReason={actionLoading ? \'Сохранение тарифа выполняется\'')
   })
 })
 

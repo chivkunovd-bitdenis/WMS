@@ -268,6 +268,39 @@ test('S-11-TC-017 tariff repricing failure keeps the last successful summary', a
   expect(rebuildPosts).toBe(0)
 })
 
+test('S-11-TC-017 keeps the saved tariff dialog open until statement reading recovers', async ({ page }) => {
+  await openStorage(page)
+  let tariffPosts = 0
+  let failRefresh = true
+
+  await page.route('**/api/operations/storage/tariffs', (route) => {
+    tariffPosts += 1
+    return route.fulfill({ status: 201, json: { recalculated_statements: [rows[1]] } })
+  })
+  await page.route('**/api/operations/storage/statements?*', (route) => {
+    if (failRefresh) return route.fulfill({ status: 500, json: { detail: 'temporary_failure' } })
+    return route.fulfill({ json: { tariff_configured: true, warehouses: [{ id: 'warehouse-1', name: 'Основной склад' }], statements: [rows[1]] } })
+  })
+
+  await page.getByTestId('storage-rate').click()
+  await page.getByTestId('storage-rate-amount').fill('1,40')
+  await page.getByTestId('storage-rate-save').click()
+
+  const dialog = page.getByRole('dialog')
+  const saveRate = page.getByTestId('storage-rate-save')
+  await expect(dialog).toContainText('Тариф сохранён, но расчёты не обновлены')
+  await expect(saveRate).toBeDisabled()
+  await expect(page.getByTestId('storage-seller-table')).not.toContainText('Красотка')
+  await saveRate.evaluate((button) => (button as HTMLButtonElement).click())
+  expect(tariffPosts).toBe(1)
+
+  failRefresh = false
+  await page.getByTestId('storage-rate-refresh').click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(page.getByTestId('storage-seller-table')).toContainText('Норд')
+  expect(tariffPosts).toBe(1)
+})
+
 test('S-11-TC-003 forms only the selected month through the storage API', async ({ page }) => {
   await openStorage(page)
   let rebuildBody: unknown = null
