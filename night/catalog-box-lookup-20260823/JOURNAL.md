@@ -51,3 +51,9 @@
 07:56   01-catalog-box-lookup · splitter: готово
 07:59   01-catalog-box-lookup · screen-dev: готово
 07:59   01-catalog-box-lookup · dev: фича 1/1 сохранена 2ec4444a203b
+08:03   01-catalog-box-lookup · reviewer: готово
+08:03 01-catalog-box-lookup: отложено — reviewer, эскалация не помогла
+10:31   01-catalog-box-lookup · repair-plan: новый вердикт дорезается до dev
+10:33   01-catalog-box-lookup · splitter: готово
+10:33   01-catalog-box-lookup · resume: поатомный rework Terra по сохранённым находкам
+10:36   01-catalog-box-lookup · screen-dev: готово

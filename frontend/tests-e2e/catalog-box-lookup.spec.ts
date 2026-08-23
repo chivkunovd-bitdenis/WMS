@@ -565,6 +565,11 @@ test('catalog deduplicates repeated scans while the first lookup is pending', as
   ])
 
   const nextBarcode = 'INB-NEXT-SCAN'
+  await search.selectText()
+  await expect.poll(() => search.evaluate((input) => [input.selectionStart, input.selectionEnd])).toEqual([
+    0,
+    barcode.length,
+  ])
   await search.pressSequentially(nextBarcode)
   await expect(search).toHaveValue(nextBarcode)
   await expect.poll(() => search.evaluate((input) => [input.selectionStart, input.selectionEnd])).toEqual([
