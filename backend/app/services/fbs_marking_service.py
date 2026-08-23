@@ -289,8 +289,13 @@ def compute_delivery_allowed(
         if mark is None:
             return False
         details = mark.meta_details_json if isinstance(mark.meta_details_json, dict) else {}
+        if mark.meta_status in {META_STATUS_REJECTED, META_STATUS_REPLACEMENT_REQUIRED}:
+            return False
         reason = details.get("reason") if "reason" in details else mark.reason
         if isinstance(reason, str) and reason.strip():
+            return False
+        remote_value = details.get("value")
+        if isinstance(remote_value, str) and remote_value != mark.value:
             return False
         decision = details.get("decision")
         if not isinstance(decision, str):
@@ -313,9 +318,16 @@ def delivery_marking_message(
         if mark is None:
             return "WB ещё не подтвердил маркировку."
         details = mark.meta_details_json if isinstance(mark.meta_details_json, dict) else {}
+        if mark.meta_status == META_STATUS_REPLACEMENT_REQUIRED:
+            return "WB подтвердил другой код маркировки."
+        if mark.meta_status == META_STATUS_REJECTED:
+            return "WB не принял маркировку."
         reason = details.get("reason") if "reason" in details else mark.reason
         if isinstance(reason, str) and reason.strip():
             return f"WB не принял маркировку: {reason.strip()}"
+        remote_value = details.get("value")
+        if isinstance(remote_value, str) and remote_value != mark.value:
+            return "WB подтвердил другой код маркировки."
         decision = details.get("decision")
         if not isinstance(decision, str):
             return "WB ещё не подтвердил маркировку."

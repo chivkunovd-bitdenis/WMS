@@ -20,6 +20,7 @@ from app.models.fbs_order import (
     META_STATUS_ALLOWED_WITHOUT_CHECK,
     META_STATUS_PENDING,
     META_STATUS_REJECTED,
+    META_STATUS_REPLACEMENT_REQUIRED,
     META_STATUS_UNKNOWN,
     FbsOrder,
     FbsOrderMarking,
@@ -386,6 +387,13 @@ def test_fbs_metadata_gate_pending_blocks_filled_allows() -> None:
     )
     assert compute_delivery_allowed(order, [filled]) is True
     filled.meta_details_json = {"decision": "filled", "reason": "uinBadStatus"}
+    assert compute_delivery_allowed(order, [filled]) is False
+    filled.meta_status = META_STATUS_REPLACEMENT_REQUIRED
+    filled.meta_details_json = {
+        "decision": "filled",
+        "reason": None,
+        "value": "01CIS-OTHER",
+    }
     assert compute_delivery_allowed(order, [filled]) is False
 
 

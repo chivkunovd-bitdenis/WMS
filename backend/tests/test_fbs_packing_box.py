@@ -193,12 +193,23 @@ async def test_box_creation_key_is_idempotent_and_rejects_different_count(
         headers=headers,
         json={"count": 2, "idempotency_key": "same-key"},
     )
+    mode_conflict = await async_client.post(
+        url,
+        headers=headers,
+        json={
+            "count": 1,
+            "idempotency_key": "same-key",
+            "without_distribution": True,
+        },
+    )
 
     assert first.status_code == 201, first.text
     assert second.status_code == 201, second.text
     assert first.json()["boxes"] == second.json()["boxes"]
     assert conflict.status_code == 409, conflict.text
     assert conflict.json()["detail"]["code"] == "idempotency_key_reused"
+    assert mode_conflict.status_code == 409, mode_conflict.text
+    assert mode_conflict.json()["detail"]["code"] == "idempotency_key_reused"
 
 
 @pytest.mark.asyncio

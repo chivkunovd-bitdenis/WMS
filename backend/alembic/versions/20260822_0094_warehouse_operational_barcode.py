@@ -37,24 +37,9 @@ def upgrade() -> None:
                 barcode=f"WH-{uuid.uuid4().hex[:12].upper()}",
             )
         )
-    for tenant_id in {row.tenant_id for row in rows}:
-        has_operational = conn.execute(
-            sa.select(t.c.id)
-            .where(
-                t.c.tenant_id == tenant_id,
-                t.c.is_operational.is_(True),
-            )
-            .limit(1)
-        ).first()
-        if has_operational is None:
-            primary = conn.execute(
-                sa.select(t.c.id)
-                .where(t.c.tenant_id == tenant_id)
-                .order_by(t.c.name, t.c.id)
-                .limit(1)
-            ).first()
-            if primary:
-                conn.execute(sa.update(t).where(t.c.id == primary.id).values(is_operational=True))
+    # Zero physical warehouses is a valid state.  Never promote a legacy
+    # ``FBS WB *`` routing stub merely to manufacture an operational warehouse:
+    # the operator must create the real physical warehouse explicitly.
     op.alter_column("warehouses", "is_operational", nullable=False, server_default=sa.true())
     op.alter_column("warehouses", "barcode", nullable=False)
     op.create_index("ix_warehouses_barcode", "warehouses", ["barcode"], unique=True)

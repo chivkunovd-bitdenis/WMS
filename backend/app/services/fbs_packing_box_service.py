@@ -113,7 +113,8 @@ async def create_boxes(
         stored_key,
     )
     if boxes:
-        if len(boxes) != count:
+        persisted_without_distribution = supply.boxes_without_distribution_at is not None
+        if len(boxes) != count or persisted_without_distribution != without_distribution:
             raise FbsPackingBoxError("idempotency_key_reused")
     else:
         assigned_count = await session.scalar(

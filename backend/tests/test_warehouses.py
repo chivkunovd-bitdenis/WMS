@@ -2,12 +2,67 @@ from __future__ import annotations
 
 import time
 import uuid
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from httpx import AsyncClient
 
 from app.db.session import SessionLocal
 from app.models.warehouse import Warehouse
+
+_MIGRATION_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "alembic/versions/20260822_0094_warehouse_operational_barcode.py"
+)
+_migration_spec = spec_from_file_location("warehouse_operational_migration", _MIGRATION_PATH)
+assert _migration_spec is not None and _migration_spec.loader is not None
+_migration = module_from_spec(_migration_spec)
+_migration_spec.loader.exec_module(_migration)
+
+
+def test_migration_does_not_promote_tenant_only_technical_warehouse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rows = [
+        SimpleNamespace(
+            id=uuid.uuid4(),
+            tenant_id=uuid.uuid4(),
+            name="FBS WB Legacy",
+            code="fbs-wb-legacy",
+        )
+    ]
+
+    class Result:
+        def __init__(self, values: list[SimpleNamespace] | None = None) -> None:
+            self.values = values or []
+
+        def fetchall(self) -> list[SimpleNamespace]:
+            return self.values
+
+    class Connection:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.update_params: list[dict[str, object]] = []
+
+        def execute(self, statement: object) -> Result:
+            self.calls += 1
+            if self.calls == 1:
+                return Result(rows)
+            self.update_params.append(statement.compile().params)  # type: ignore[attr-defined]
+            return Result()
+
+    connection = Connection()
+    monkeypatch.setattr(_migration.op, "add_column", lambda *args, **kwargs: None)
+    monkeypatch.setattr(_migration.op, "get_bind", lambda: connection)
+    monkeypatch.setattr(_migration.op, "alter_column", lambda *args, **kwargs: None)
+    monkeypatch.setattr(_migration.op, "create_index", lambda *args, **kwargs: None)
+
+    _migration.upgrade()
+
+    assert len(connection.update_params) == 1
+    assert connection.update_params[0]["is_operational"] is False
 
 
 @pytest.mark.asyncio
