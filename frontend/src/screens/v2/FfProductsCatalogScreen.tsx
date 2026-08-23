@@ -48,6 +48,11 @@ import {
 } from '../../types/wbProductCatalog'
 import { FfManualProductCreateDialog } from '../ff/FfManualProductCreateDialog'
 import { FfProductTzImportDialog } from '../ff/FfProductTzImportDialog'
+import {
+  FfCatalogInboundPackages,
+  type CatalogInboundPackagesHandle,
+} from './FfCatalogInboundPackages'
+import { ErrorNotice, ScannerLine } from '../../ui-kit'
 
 type SellerRow = { id: string; name: string }
 
@@ -213,6 +218,9 @@ export function FfProductsCatalogScreen({
   const [filterSearch, setFilterSearch] = useState('')
   const [filterSellerId, setFilterSellerId] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
+  const [inboundPackageLookupError, setInboundPackageLookupError] = useState(false)
+  const catalogSearchRef = useRef<HTMLInputElement>(null)
+  const inboundPackagesRef = useRef<CatalogInboundPackagesHandle>(null)
 
   // ── FBS-пул: направления остатка (перенесено из SellerProductsStockScreen) ──
   const [directionProductId, setDirectionProductId] = useState<string | null>(null)
@@ -451,6 +459,22 @@ export function FfProductsCatalogScreen({
           (!filterCategory || row.wb_subject_name === filterCategory),
       ),
     [rows, filterSearch, filterSellerId, filterCategory],
+  )
+
+  const handleCatalogSearchKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>) => {
+      if (event.key !== 'Enter') return
+      const barcode = filterSearch.trim().toUpperCase()
+      if (!/^(INB|ICG)-.+$/.test(barcode)) return
+      event.preventDefault()
+      setInboundPackageLookupError(false)
+      void inboundPackagesRef.current?.lookup(barcode).then((found) => {
+        if (found === false) setInboundPackageLookupError(true)
+        catalogSearchRef.current?.focus()
+        catalogSearchRef.current?.select()
+      })
+    },
+    [filterSearch],
   )
 
   const markDirectionBusy = useCallback((productId: string, pending: boolean) => {
@@ -708,10 +732,15 @@ export function FfProductsCatalogScreen({
             sx={{ alignItems: { sm: 'center' }, flexWrap: 'wrap', rowGap: 2 }}
           >
             <TextField
+              inputRef={catalogSearchRef}
               size="small"
               placeholder="Поиск по названию, артикулу, SKU или ШК"
               value={filterSearch}
-              onChange={(e) => setFilterSearch(e.target.value)}
+              onChange={(e) => {
+                setFilterSearch(e.target.value)
+                setInboundPackageLookupError(false)
+              }}
+              onKeyDown={handleCatalogSearchKeyDown}
               slotProps={{ htmlInput: { 'data-testid': 'ff-catalog-search' } }}
               sx={{ minWidth: 260 }}
             />
@@ -754,6 +783,17 @@ export function FfProductsCatalogScreen({
             </Typography>
           </Stack>
         </Paper>
+
+        <ScannerLine
+          active
+          expects="пикните внутренний ШК короба или грузоместа"
+          testId="ff-catalog-inbound-packages-scanner-line"
+        />
+        {inboundPackageLookupError ? (
+          <ErrorNotice testId="ff-catalog-inbound-packages-lookup-error">
+            Короб или грузоместо не найдено
+          </ErrorNotice>
+        ) : null}
 
         <TableContainer
           component={Paper}
@@ -1054,6 +1094,13 @@ export function FfProductsCatalogScreen({
             </TableBody>
           </Table>
         </TableContainer>
+
+        <FfCatalogInboundPackages
+          ref={inboundPackagesRef}
+          token={token}
+          authHeaders={authHeaders}
+          products={catalog}
+        />
 
         {canManageCatalog ? (
           <>
