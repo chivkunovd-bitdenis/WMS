@@ -21,9 +21,10 @@ test('billing invoices show server-side formation issues separate from invoices'
 
 // S-31-TC-006 — Given the seller's blocking causes are resolved, When the admin retries formation,
 // Then the primary action has a short label and the newly issued invoice becomes visible.
-test('billing invoice retry uses a short action label and keeps the visible formation result', async ({ page }) => {
+test('billing invoice retry is offered only after the server confirms a blocking cause is resolved', async ({ page }) => {
   const seller = { id: 'seller-1', name: 'Луна' }
   let formed = false
+  let causeResolved = false
   let formationRequests = 0
 
   await page.addInitScript(() => localStorage.setItem('wms_token_ff', 'e2e-billing-admin'))
@@ -40,7 +41,10 @@ test('billing invoice retry uses a short action label and keeps the visible form
   await page.route('**/api/billing/invoices?**', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
-    body: JSON.stringify({ invoices: formed ? [invoice] : [], issues: [] }),
+    body: JSON.stringify({
+      invoices: formed ? [invoice] : [],
+      issues: causeResolved ? [] : [{ id: 'issue-1', seller_id: seller.id, seller_name: seller.name, period: '2026-07', reason: 'unpriced' }],
+    }),
   }))
   await page.route(`**/api/billing/invoices/${seller.id}/*/form`, async (route) => {
     formationRequests += 1
@@ -52,6 +56,14 @@ test('billing invoice retry uses a short action label and keeps the visible form
   await page.getByTestId('billing-tab-invoices').click()
   await page.getByTestId('billing-seller').click()
   await page.getByRole('option', { name: seller.name }).click()
+
+  await expect(page.getByTestId('billing-invoice-issues')).toContainText('Нет тарифа')
+  await expect(page.getByRole('button', { name: 'Повторить формирование', exact: true })).toBeDisabled()
+  causeResolved = true
+  await page.getByTestId('billing-status').click()
+  await page.getByRole('option', { name: 'Выставлен' }).click()
+  await page.getByTestId('billing-status').click()
+  await page.getByRole('option', { name: 'Все статусы' }).click()
 
   await expect(page.getByText('Причины устранены — повторите формирование', { exact: true })).toBeVisible()
   const retry = page.getByRole('button', { name: 'Повторить формирование', exact: true })
@@ -66,6 +78,44 @@ test('billing invoice retry uses a short action label and keeps the visible form
   await expect(page.getByTestId('billing-invoices-table')).toContainText(invoice.number)
   await expect(page.getByTestId('billing-invoices-table')).toContainText('Выставлен')
   expect(formationRequests).toBe(1)
+})
+
+// S-31-TC-013 — Given the selected seller has no charges in the closed month, When the invoices API returns no invoice and no issue, Then the admin sees the normal empty state without a corrective action.
+test('billing invoices show a normal empty month without retrying formation', async ({ page }) => {
+  const seller = { id: 'seller-empty', name: 'Пустой месяц' }
+  let formationRequests = 0
+
+  await page.addInitScript(() => localStorage.setItem('wms_token_ff', 'e2e-billing-admin'))
+  await page.route('**/api/auth/me', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ email: 'billing-admin@example.test', organization_name: 'ФФ Волна', role: 'fulfillment_admin' }),
+  }))
+  await page.route('**/api/sellers', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify([seller]),
+  }))
+  await page.route('**/api/billing/invoices?**', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ invoices: [], issues: [] }),
+  }))
+  await page.route(`**/api/billing/invoices/${seller.id}/*/form`, async (route) => {
+    formationRequests += 1
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'empty' }) })
+  })
+
+  await page.goto('/app/ff/billing')
+  await page.getByTestId('billing-tab-invoices').click()
+  await page.getByTestId('billing-seller').click()
+  await page.getByRole('option', { name: seller.name }).click()
+
+  await expect(page.getByTestId('billing-invoices-table')).toContainText('За этот месяц счета не выставлены')
+  await expect(page.getByTestId('billing-invoices-table')).toContainText('Нет начислений для формирования')
+  await expect(page.getByTestId('billing-invoice-issues')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Повторить формирование', exact: true })).toHaveCount(0)
+  expect(formationRequests).toBe(0)
 })
 
 // S-31-TC-007 — Given an issued invoice, When the admin opens it, Then the six fixed columns stay aligned and document details and print remain available.
