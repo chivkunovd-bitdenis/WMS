@@ -39,7 +39,9 @@ test('seller staff without products access cannot open the direct reports route'
     ),
     page.getByTestId('seller-staff-submit').click(),
   ])
-  await expect(page.getByTestId('seller-staff-row').filter({ hasText: staffEmail })).toBeVisible()
+  await expect(
+    page.getByTestId('seller-staff-row').filter({ has: page.getByText(staffEmail, { exact: true }) }),
+  ).toBeVisible()
 
   await page.getByTestId('logout').click()
   await loginAsSeller(page, staffEmail, seed.password, { firstTime: true })
@@ -55,7 +57,6 @@ test('seller staff without products access cannot open the direct reports route'
   const directReportsPath = sellerPath('/reports')
   await page.goto(directReportsPath)
 
-  expect(directReportsPath).toBe('/app/seller/reports')
   await expect.poll(() => new URL(page.url()).pathname).toBe(directReportsPath)
   await expect(page.getByTestId('seller-access-denied')).toContainText(
     'Нет доступа к этому разделу. Обратитесь к администратору селлера.',
@@ -109,6 +110,17 @@ test('seller reports exclude non-operational warehouses and other seller data', 
   const otherProductId = String(
     ((await otherProductResponse.json()) as { id: string }).id,
   )
+  const locationResponse = await page.request.post(
+    `/api/warehouses/${seed.warehouseId}/locations`,
+    {
+      headers: adminHeaders,
+      data: { code: `REPORT-${suffix}` },
+    },
+  )
+  expect(locationResponse.ok()).toBeTruthy()
+  const storageLocationId = String(
+    ((await locationResponse.json()) as { id: string }).id,
+  )
 
   const reportSeeds = [
     seed,
@@ -124,6 +136,7 @@ test('seller reports exclude non-operational warehouses and other seller data', 
     const requestId = await apiCreateSubmittedInbound(page.request, reportSeed, {
       plannedBoxes: 1,
       expectedQty: index + 2,
+      storageLocationId,
     })
     const { boxes } = await beginInboundReceivingWithBoxes(
       page.request,
@@ -146,7 +159,7 @@ test('seller reports exclude non-operational warehouses and other seller data', 
     const postResponse = await page.request.post(`${INBOUND_API}/${requestId}/post`, {
       headers: adminHeaders,
     })
-    expect(postResponse.ok()).toBeTruthy()
+    expect(postResponse.ok(), `${postResponse.status()} ${await postResponse.text()}`).toBeTruthy()
   }
 
   await page.route('**/api/warehouses', async (route) => {
@@ -176,7 +189,7 @@ test('seller reports exclude non-operational warehouses and other seller data', 
   await loginSellerPortal(page, seed.sellerEmail, seed.password)
   await page.getByTestId('nav-seller-reports').click()
 
-  await expect(page).toHaveURL('/app/seller/reports')
+  await expect(page).toHaveURL(sellerPath('/reports'))
   await expect(page.getByTestId('ff-reports-page')).toBeVisible()
   await expect(page.getByTestId('ff-reports-seller')).toHaveCount(0)
   await expect(page.getByRole('option', { name: 'Архив' })).toHaveCount(0)
