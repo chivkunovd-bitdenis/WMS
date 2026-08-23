@@ -679,6 +679,12 @@ def main() -> int:
                 "снимок отсутствует.\n", encoding="utf-8")
             проверь("browser: старый environment-only verdict не идёт в code rework",
                     n.браузерный_блокер(blocked_judge, "ux-judge"), True)
+            (blocked_judge / "JUDGE.md").write_text(
+                "ВЕРДИКТ: НАХОДКИ 6\n\n`BLOCKED`\n\n"
+                "Кликер не получил браузерный сеанс и не открыл ни одного экрана. "
+                "No browser is available.\n", encoding="utf-8")
+            проверь("browser: bare BLOCKED и фактический текст кликера тоже распознаны",
+                    n.браузерный_блокер(blocked_judge, "ux-judge"), True)
             (blocked_judge / "OTLOZHENO.md").write_text(
                 "splitter не оставил ни одной читаемой фичи\n", encoding="utf-8")
             (blocked_judge / "CLICKS.md").write_text("старый прогон\n", encoding="utf-8")
