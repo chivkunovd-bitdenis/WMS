@@ -24,13 +24,37 @@ test('billing ledger preserves filters and month context', async ({ page }) => {
   await expect(page.getByTestId('ff-doc-dialog')).toBeVisible()
 })
 
-// S-31-TC-005 — Given completed work, When switching to performers, Then money columns are absent.
-test('billing ledger performer mode hides money columns', async ({ page }) => {
-  await page.route('**/api/billing/ledger**', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ entries: [{ id: 'entry-2', occurred_at: '2026-08-18T00:00:00Z', seller_name: 'Луна', service_code: 'inbound', document_number: 'ПР-000184', quantity: 2, unit: 'item', rate: 12, amount: 24, performer_name: 'Анна К.', problem: null }] }) }))
+// S-31-TC-005 — Given completed work and a long performer name, When switching to performers,
+// Then all five columns keep fixed boundaries, numeric columns stay right-aligned, and money columns are absent.
+test('billing ledger performer mode keeps fixed columns and hides money', async ({ page }) => {
+  const performerName = 'Александра Константиновна Очень-Длинная-Фамилия'
+  await page.route('**/api/billing/ledger**', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ entries: [{ id: 'entry-2', occurred_at: '2026-08-18T00:00:00Z', seller_name: 'Луна', service_code: 'inbound', document_number: 'ПР-000184', quantity: 238, unit: 'item', rate: 12, amount: 2856, performer_name: performerName, problem: null }] }) }))
   await page.goto('/app/ff/billing')
   await page.getByTestId('billing-mode').click()
   await page.getByRole('option', { name: 'По исполнителям' }).click()
-  await expect(page.getByText('Анна К.')).toBeVisible()
+
+  const table = page.getByTestId('billing-ledger-table')
+  const fixedHeaders = [
+    ['Исполнитель', '220'],
+    ['Услуга', '150'],
+    ['Расчёт', '150'],
+    ['Количество', '120'],
+    ['Документов', '120'],
+  ] as const
+  for (const [name, width] of fixedHeaders) {
+    await expect(table.getByRole('columnheader', { name, exact: true })).toHaveAttribute('width', width)
+  }
+
+  const performerCell = table.getByRole('cell', { name: performerName })
+  await expect(performerCell).toBeVisible()
+  const performerText = performerCell.locator('span').first()
+  await expect(performerText).toHaveCSS('text-overflow', 'ellipsis')
+  const performerTextWidth = await performerText.evaluate((element) => ({ client: element.clientWidth, scroll: element.scrollWidth }))
+  expect(performerTextWidth.scroll).toBeGreaterThan(performerTextWidth.client)
+  await expect(table.getByRole('cell', { name: 'Приёмка', exact: true })).toBeVisible()
+  await expect(table.getByRole('cell', { name: 'За штуку', exact: true })).toBeVisible()
+  await expect(table.getByRole('cell', { name: '238', exact: true })).toHaveCSS('text-align', 'right')
+  await expect(table.getByRole('cell', { name: '1', exact: true })).toHaveCSS('text-align', 'right')
   await expect(page.getByRole('columnheader', { name: 'Сумма' })).toHaveCount(0)
   await expect(page.getByRole('columnheader', { name: 'Ставка' })).toHaveCount(0)
 })

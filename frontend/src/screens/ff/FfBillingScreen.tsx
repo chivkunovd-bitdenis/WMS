@@ -219,11 +219,11 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
     { key: 'problem', header: 'Проблема', width: 180, render: (row: LedgerEntry) => row.problem ? <StatusChip label={problemLabels[row.problem]} tone="stop" /> : '—' },
   ]
   const performerColumns = [
-    { key: 'performer', header: 'Исполнитель', render: (row: PerformerRow) => <TextCell value={row.performer_name} /> },
-    { key: 'service', header: 'Услуга', render: (row: PerformerRow) => serviceLabels[row.service_code] ?? row.service_code },
-    { key: 'unit', header: 'Расчёт', render: (row: PerformerRow) => unitLabels[row.unit] ?? row.unit },
-    { key: 'quantity', header: 'Количество', align: 'right' as const, render: (row: PerformerRow) => <QtyCell value={row.quantity} /> },
-    { key: 'documents', header: 'Документов', align: 'right' as const, render: (row: PerformerRow) => <QtyCell value={row.documents} /> },
+    { key: 'performer', header: 'Исполнитель', width: 220, render: (row: PerformerRow) => <TextCell value={row.performer_name} width={200} /> },
+    { key: 'service', header: 'Услуга', width: 150, render: (row: PerformerRow) => serviceLabels[row.service_code] ?? row.service_code },
+    { key: 'unit', header: 'Расчёт', width: 150, render: (row: PerformerRow) => unitLabels[row.unit] ?? row.unit },
+    { key: 'quantity', header: 'Количество', width: 120, align: 'right' as const, render: (row: PerformerRow) => <QtyCell value={row.quantity} /> },
+    { key: 'documents', header: 'Документов', width: 120, align: 'right' as const, render: (row: PerformerRow) => <QtyCell value={row.documents} /> },
   ]
   const activeRows = mode === 'operations' ? rows : performerRows
   const hasFilters = Boolean(search || sellerId !== 'all' || service !== 'all')
