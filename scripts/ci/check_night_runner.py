@@ -680,7 +680,7 @@ def main() -> int:
             проверь("browser: старый environment-only verdict не идёт в code rework",
                     n.браузерный_блокер(blocked_judge, "ux-judge"), True)
             (blocked_judge / "OTLOZHENO.md").write_text(
-                "ux-judge: браузерная среда недоступна\n", encoding="utf-8")
+                "splitter не оставил ни одной читаемой фичи\n", encoding="utf-8")
             (blocked_judge / "CLICKS.md").write_text("старый прогон\n", encoding="utf-8")
             blocked_marker = blocked_judge / "marker"
             blocked_marker.write_text("СТАТУС: ACTIVE\nКРУГ: 3\n", encoding="utf-8")
