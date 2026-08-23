@@ -228,3 +228,10 @@
 06:35   04-warehouse-switch · splitter: готово
 06:39   04-warehouse-switch · screen-dev: готово
 06:39   04-warehouse-switch · dev: фича 1/1 сохранена 2d8b40a7a468
+06:42   04-warehouse-switch · reviewer: готово
+06:46   04-warehouse-switch · ui-critic: готово
+06:46 04-warehouse-switch: отложено — ui-critic, эскалация не помогла
+06:51   04-warehouse-switch · repair-plan: новый вердикт дорезается до dev
+06:53   04-warehouse-switch · splitter: готово
+06:53   04-warehouse-switch · resume: поатомный rework Terra по сохранённым находкам
+06:56   04-warehouse-switch · screen-dev: готово

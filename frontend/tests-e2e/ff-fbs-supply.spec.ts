@@ -197,6 +197,24 @@ test('fbs supply list: WMS warehouse context is sent to the server', async ({ pa
   expect(requestedWarehouseIds.at(-1)).toBe('w-2')
 })
 
+// TC-NEW-FBS-WMS-WAREHOUSE-LOAD-ERROR — a failed warehouse request keeps one
+// actionable error notice in the warehouse context and does not duplicate it outside.
+test('fbs orders: warehouse load error is shown once in the context', async ({ page }) => {
+  await registerFf(page, 'warehouse-load-error')
+  await page.route('**/warehouses', (route) =>
+    route.request().method() === 'GET'
+      ? json(route, { detail: 'Временная ошибка.' }, 503)
+      : route.fallback(),
+  )
+
+  await page.getByTestId('nav-ff-fbs').click()
+
+  const warehouseContext = page.getByTestId('fbs-wms-warehouse-context')
+  await expect(warehouseContext).toHaveText('Не удалось загрузить склады. Обновите страницу.')
+  await expect(warehouseContext.getByText('Не удалось загрузить склады. Обновите страницу.', { exact: true })).toHaveCount(1)
+  await expect(page.getByTestId('fbs-wms-warehouse-context-error')).toHaveCount(0)
+})
+
 // TC-S17-019 / TC-S17-021 — fresh preflight and idempotent warehouse/SC delivery.
 test('fbs workspace: preflight and deliver', async ({ page }) => {
   await registerFf(page, 'deliver')

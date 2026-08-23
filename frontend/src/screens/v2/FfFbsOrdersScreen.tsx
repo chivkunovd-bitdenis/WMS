@@ -1022,12 +1022,6 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         testId="fbs-wms-warehouse-context"
       />
 
-      {wmsWarehouseLoadError ? (
-        <Alert severity="error" sx={{ mt: 2 }} data-testid="fbs-wms-warehouse-context-error">
-          {wmsWarehouseLoadError}
-        </Alert>
-      ) : null}
-
       <Paper variant="outlined" sx={{ overflow: 'hidden', mt: 2 }}>
         <Tabs
           value={statusGroup}
