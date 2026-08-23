@@ -81,7 +81,7 @@ test('S-11-TC-002 blocks a rate that rounds to zero before saving', async ({ pag
   expect(tariffPosts).toBe(0)
 })
 
-test('S-11-TC-018 blocks Moscow-past start dates with a visible explanation', async ({ page }) => {
+test('S-11-TC-021 blocks Moscow-past start dates with a visible explanation', async ({ page }) => {
   await openStorage(page, 'fulfillment_admin', false)
   const moscowToday = moscowDate()
   const yesterday = moscowDate(-1)

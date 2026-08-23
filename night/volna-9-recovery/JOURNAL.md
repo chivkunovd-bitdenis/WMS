@@ -193,3 +193,5 @@
 07:08   08-storage · screen-dev: готово
 07:08   08-storage · dev: фича 1/3 сохранена 405cd96716ea
 07:12   08-storage · screen-dev: готово
+07:12   08-storage · dev: фича 2/3 сохранена 50cfc3fe1602
+07:14   08-storage · screen-dev: готово
