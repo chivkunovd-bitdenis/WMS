@@ -7,9 +7,9 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import event, select
 
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, engine
 from app.models.inbound_intake import (
     InboundIntakeBox,
     InboundIntakeBoxLine,
@@ -350,6 +350,69 @@ async def test_catalog_list_and_lookup_are_tenant_scoped_read_only(
     assert unknown.status_code == foreign.status_code == 404
     assert unknown.json() == foreign.json() == {"detail": "package_not_found"}
     assert await _read_state(ids) == before
+
+
+@pytest.mark.asyncio
+async def test_catalog_list_loads_only_current_package_rows(
+    async_client: AsyncClient,
+) -> None:
+    """TC-S16-003: list SQL excludes historical package rows before eager loading."""
+    suffix = uuid.uuid4().hex[:12]
+    admin_headers = await _register_admin(async_client, suffix)
+    tenant_id = await _tenant_id(async_client, admin_headers)
+    ids = await _seed_packages(tenant_id)
+    statements: list[tuple[str, object]] = []
+
+    def capture_sql(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        parameters: object,
+        _context: object,
+        _executemany: object,
+    ) -> None:
+        if "inbound_intake_" in statement:
+            statements.append((statement, parameters))
+
+    event.listen(engine.sync_engine, "before_cursor_execute", capture_sql)
+    try:
+        response = await async_client.get("/operations/inbound-packages", headers=admin_headers)
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", capture_sql)
+
+    assert response.status_code == 200, response.text
+    assert [row["internal_barcode"] for row in response.json()] == [
+        "INB-CURRENT-RESIDUAL",
+        "INB-CURRENT-EMPTY",
+        "ICG-CURRENT",
+        "INB-OLD-RESIDUAL",
+    ]
+
+    box_statement = next(
+        statement
+        for statement, _parameters in statements
+        if "FROM inbound_intake_boxes" in statement
+    )
+    assert "EXISTS" in box_statement
+    assert (
+        "inbound_intake_box_lines.quantity > inbound_intake_box_lines.posted_qty"
+        in box_statement
+    )
+
+    cargo_statement = next(
+        statement
+        for statement, _parameters in statements
+        if "FROM inbound_intake_cargo_places" in statement
+    )
+    assert "inbound_intake_requests.status != ?" in cargo_statement
+
+    line_parameters = next(
+        parameters
+        for statement, parameters in statements
+        if "FROM inbound_intake_box_lines" in statement
+    )
+    assert str(ids["distributed_box_id"]) not in str(line_parameters)
+    assert str(ids["done_box_id"]) not in str(line_parameters)
 
 
 @pytest.mark.asyncio

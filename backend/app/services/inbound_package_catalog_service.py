@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
 
-from sqlalchemy import select
+from sqlalchemy import and_, exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -116,9 +116,27 @@ async def _warehouse_names_for_tenant(
 async def _load_tenant_packages(
     session: AsyncSession, tenant_id: uuid.UUID
 ) -> tuple[list[InboundIntakeBox], list[InboundIntakeCargoPlace], dict[uuid.UUID, str]]:
+    has_remaining_line = exists(
+        select(InboundIntakeBoxLine.id).where(
+            InboundIntakeBoxLine.box_id == InboundIntakeBox.id,
+            InboundIntakeBoxLine.quantity > InboundIntakeBoxLine.posted_qty,
+        )
+    )
+    has_any_line = exists(
+        select(InboundIntakeBoxLine.id).where(
+            InboundIntakeBoxLine.box_id == InboundIntakeBox.id,
+        )
+    )
     boxes_result = await session.execute(
         select(InboundIntakeBox)
-        .where(InboundIntakeBox.tenant_id == tenant_id)
+        .join(InboundIntakeBox.request)
+        .where(
+            InboundIntakeBox.tenant_id == tenant_id,
+            or_(
+                has_remaining_line,
+                and_(~has_any_line, InboundIntakeRequest.status != "done"),
+            ),
+        )
         .options(
             selectinload(InboundIntakeBox.lines),
             selectinload(InboundIntakeBox.request),
@@ -126,7 +144,11 @@ async def _load_tenant_packages(
     )
     cargo_places_result = await session.execute(
         select(InboundIntakeCargoPlace)
-        .where(InboundIntakeCargoPlace.tenant_id == tenant_id)
+        .join(InboundIntakeCargoPlace.request)
+        .where(
+            InboundIntakeCargoPlace.tenant_id == tenant_id,
+            InboundIntakeRequest.status != "done",
+        )
         .options(selectinload(InboundIntakeCargoPlace.request))
     )
     warehouse_names = await _warehouse_names_for_tenant(session, tenant_id)
