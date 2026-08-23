@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
-from app.models.fbs_order import FbsOrder, FbsOrderReservation
+from app.models.fbs_order import FBS_ORDER_STATUS_NEW, FbsOrder, FbsOrderReservation
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.models.seller import Seller
@@ -37,6 +37,108 @@ def is_auto_fbs_wms_warehouse(warehouse: Warehouse) -> bool:
         warehouse.code.startswith(f"{AUTO_FBS_WAREHOUSE_CODE_PREFIX}-")
         or warehouse.name.startswith("FBS WB ")
     )
+
+
+async def get_or_create_binding_for_sole_operational_warehouse(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    wb_warehouse_id: int,
+) -> FbsWarehouseBinding | None:
+    """Bind a WB warehouse only when the tenant has one physical warehouse.
+
+    A normal or inactive existing row is an operator decision and is never
+    changed here.  The one exception is a legacy active binding to a technical
+    ``FBS WB *`` warehouse: it is repaired only before any warehouse work has
+    started.  Auto-created and repaired bindings keep stock publication
+    disabled: this chooses the local processing warehouse, it does not allocate
+    or publish stock for the seller.
+    """
+    existing = await _get_binding_row(
+        session, tenant_id, seller_id, wb_warehouse_id, for_update=True
+    )
+    physical_warehouse = await _sole_physical_operational_warehouse(session, tenant_id)
+    if existing is not None:
+        if not existing.is_active:
+            return existing
+        bound_warehouse = await session.get(Warehouse, existing.wms_warehouse_id)
+        if bound_warehouse is None or not is_auto_fbs_wms_warehouse(bound_warehouse):
+            return existing
+        if physical_warehouse is None or await _has_started_binding_work(
+            session, tenant_id, seller_id, wb_warehouse_id
+        ):
+            return existing
+        existing.wms_warehouse_id = physical_warehouse.id
+        existing.stock_sync_enabled = False
+        await session.flush()
+        return existing
+
+    if physical_warehouse is None:
+        return None
+
+    binding = FbsWarehouseBinding(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        wb_warehouse_id=wb_warehouse_id,
+        wms_warehouse_id=physical_warehouse.id,
+        is_active=True,
+        stock_sync_enabled=False,
+    )
+    try:
+        async with session.begin_nested():
+            session.add(binding)
+            await session.flush()
+    except IntegrityError:
+        # A concurrent sync may have created the same unique seller/WB row.
+        # Read it back instead of letting the repeated import create a duplicate.
+        return await _get_binding_row(session, tenant_id, seller_id, wb_warehouse_id)
+    return binding
+
+
+async def _sole_physical_operational_warehouse(
+    session: AsyncSession, tenant_id: uuid.UUID
+) -> Warehouse | None:
+    warehouses = list(
+        (
+            await session.execute(
+                select(Warehouse).where(
+                    Warehouse.tenant_id == tenant_id,
+                    Warehouse.is_operational.is_(True),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    physical_warehouses = [
+        warehouse for warehouse in warehouses if not is_auto_fbs_wms_warehouse(warehouse)
+    ]
+    if len(physical_warehouses) != 1:
+        return None
+    return physical_warehouses[0]
+
+
+async def _has_started_binding_work(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    wb_warehouse_id: int,
+) -> bool:
+    stmt = (
+        select(FbsOrder.id)
+        .where(
+            FbsOrder.tenant_id == tenant_id,
+            FbsOrder.seller_id == seller_id,
+            FbsOrder.wb_warehouse_id == wb_warehouse_id,
+            or_(
+                FbsOrder.warehouse_id.is_not(None),
+                FbsOrder.supply_id.is_not(None),
+                FbsOrder.status != FBS_ORDER_STATUS_NEW,
+            ),
+        )
+        .limit(1)
+    )
+    return (await session.execute(stmt)).scalar_one_or_none() is not None
 
 
 async def _seller_in_tenant(
