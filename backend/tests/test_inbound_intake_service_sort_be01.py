@@ -4,17 +4,19 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.db.session import SessionLocal
-from app.models.billing import BillingLedgerEntry, BillingTariffVersion
+from app.models.billing import BillingLedgerEntry, BillingRunIssue, BillingTariffVersion
 from app.models.inbound_intake import InboundIntakeBoxLine
 from app.models.tenant import Tenant
 from app.services import inbound_intake_box_service as box_svc
 from app.services import inbound_intake_service as svc
+from app.services.billing_ledger_service import BillingLedgerError
 from app.services.catalog_service import (
     create_location,
     create_product,
@@ -267,6 +269,56 @@ async def test_complete_distribution_mixed_box_and_loose(
         box = next(b for b in req.boxes if b.id == box_id)
         bl = next(bl for bl in box.lines if bl.product_id == product_id)
         assert bl.posted_qty == 6
+
+
+@pytest.mark.asyncio
+async def test_billing_overflow_does_not_block_completed_inbound(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tenant_id = await _tenant_id(async_client)
+    request_id, product_id, box_id, loc_a, loc_b = await _mixed_sorting_request(
+        async_client, tenant_id, loose_qty=4, box_qty=6
+    )
+    async with SessionLocal() as session:
+        seller = await create_seller(session, tenant_id, name="Overflow intake seller")
+        request = await svc.get_request(session, tenant_id, request_id)
+        assert request is not None
+        request.seller_id = seller.id
+        await session.commit()
+    monkeypatch.setattr(
+        svc,
+        "record_operational_charge",
+        AsyncMock(side_effect=BillingLedgerError("billing_amount_overflow")),
+    )
+
+    async with SessionLocal() as session:
+        await svc.replace_distribution_lines(
+            session,
+            tenant_id,
+            request_id,
+            lines=[
+                (None, product_id, loc_a, 4),
+                (box_id, product_id, loc_b, 6),
+            ],
+        )
+        done = await svc.complete_distribution(session, tenant_id, request_id)
+        assert done.status == svc.STATUS_DONE
+
+        charge = await session.scalar(
+            select(BillingLedgerEntry).where(
+                BillingLedgerEntry.source_type == "inbound_intake",
+                BillingLedgerEntry.source_id == request_id,
+            )
+        )
+        issue = await session.scalar(
+            select(BillingRunIssue).where(
+                BillingRunIssue.tenant_id == tenant_id,
+                BillingRunIssue.reason == "billing_calculation_overflow",
+            )
+        )
+        assert charge is None
+        assert issue is not None
+        assert "Складская операция завершена" in issue.message
 
 
 async def _zero_actual_intake(

@@ -11,12 +11,17 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from app.models.billing import BillingLedgerEntry, BillingTariffVersion
+from app.models.billing import BillingLedgerEntry, BillingRunIssue, BillingTariffVersion
 from app.models.tenant import Tenant
 
 MOSCOW = ZoneInfo("Europe/Moscow")
 POSTGRES_INTEGER_MIN = -(2**31)
 POSTGRES_INTEGER_MAX = 2**31 - 1
+OPERATIONAL_BILLING_ISSUE_REASON = "billing_calculation_overflow"
+OPERATIONAL_BILLING_ISSUE_MESSAGE = (
+    "Начисление не рассчитано: значение превышает допустимый предел. "
+    "Складская операция завершена."
+)
 
 
 class BillingLedgerError(ValueError):
@@ -54,6 +59,47 @@ def postgres_integer(value: Decimal, *, field: str) -> int:
     if not POSTGRES_INTEGER_MIN <= rounded <= POSTGRES_INTEGER_MAX:
         raise BillingLedgerError(f"{field}_overflow")
     return rounded
+
+
+async def record_operational_billing_issue(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    occurred_at: datetime,
+) -> BillingRunIssue:
+    """Persist a visible billing issue without undoing the completed warehouse fact."""
+    period_date = occurred_at.astimezone(MOSCOW).date()
+    period = period_date.replace(day=1)
+    issue_scope = (
+        BillingRunIssue.tenant_id == tenant_id,
+        BillingRunIssue.seller_id == seller_id,
+        BillingRunIssue.period == period,
+        BillingRunIssue.reason == OPERATIONAL_BILLING_ISSUE_REASON,
+    )
+    existing = await session.scalar(select(BillingRunIssue).where(*issue_scope))
+    if existing is not None:
+        return existing
+    issue = BillingRunIssue(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        period=period,
+        reason=OPERATIONAL_BILLING_ISSUE_REASON,
+        message=OPERATIONAL_BILLING_ISSUE_MESSAGE,
+    )
+    savepoint = await session.begin_nested()
+    try:
+        session.add(issue)
+        await session.flush()
+    except IntegrityError:
+        await savepoint.rollback()
+        concurrent = await session.scalar(select(BillingRunIssue).where(*issue_scope))
+        if concurrent is None:
+            raise
+        return concurrent
+    else:
+        await savepoint.commit()
+        return issue
 
 
 async def resolve_active_tariff(

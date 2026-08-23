@@ -28,6 +28,8 @@ from app.models.storage_location import StorageLocation
 from app.models.user import User
 from app.services import inventory_service, stock_direction_service
 from app.services.billing_ledger_service import (
+    BillingLedgerError,
+    record_operational_billing_issue,
     record_operational_charge,
     record_operational_reversal,
 )
@@ -1010,18 +1012,28 @@ async def complete_unload(
     req.has_discrepancy = has_discrepancy
     await delete_empty_boxes_for_ship(session, req)
     req.status = STATUS_SHIPPED
-    await record_operational_charge(
-        session,
-        tenant_id=tenant_id,
-        seller_id=req.seller_id,
-        source_type="marketplace_unload",
-        source_id=req.id,
-        source="marketplace_unload",
-        service_code="marketplace_outbound",
-        quantity=Decimal(sum(distributed.values())),
-        occurred_at=datetime.now(UTC),
-        performer_id=performer_id,
-    )
+    occurred_at = datetime.now(UTC)
+    try:
+        await record_operational_charge(
+            session,
+            tenant_id=tenant_id,
+            seller_id=req.seller_id,
+            source_type="marketplace_unload",
+            source_id=req.id,
+            source="marketplace_unload",
+            service_code="marketplace_outbound",
+            quantity=Decimal(sum(distributed.values())),
+            occurred_at=occurred_at,
+            performer_id=performer_id,
+        )
+    except BillingLedgerError:
+        if req.seller_id is not None:
+            await record_operational_billing_issue(
+                session,
+                tenant_id=tenant_id,
+                seller_id=req.seller_id,
+                occurred_at=occurred_at,
+            )
     await release_reservations_for_shipped(session, req.id)
     await session.commit()
     r2 = await get_request(session, tenant_id, request_id)

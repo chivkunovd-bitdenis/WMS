@@ -30,7 +30,9 @@ REASONS = {
     "missing_ff_profile": "Нет реквизитов ФФ",
     "missing_seller_profile": "Нет реквизитов селлера",
     "storage_period_not_closed": "Хранение не закрыто",
+    "billing_calculation_overflow": "Начисление не рассчитано: значение слишком велико",
 }
+PERSISTENT_OPERATIONAL_REASONS = frozenset({"billing_calculation_overflow"})
 BLOCKING_REASONS = frozenset(REASONS)
 MSK = ZoneInfo("Europe/Moscow")
 
@@ -287,12 +289,18 @@ async def _replace_issues(
         BillingRunIssue.period == period,
     )
     if not reasons:
-        await session.execute(delete(BillingRunIssue).where(*issue_scope))
+        await session.execute(
+            delete(BillingRunIssue).where(
+                *issue_scope,
+                BillingRunIssue.reason.not_in(PERSISTENT_OPERATIONAL_REASONS),
+            )
+        )
         return []
     await session.execute(
         delete(BillingRunIssue).where(
             *issue_scope,
             BillingRunIssue.reason.not_in(reasons),
+            BillingRunIssue.reason.not_in(PERSISTENT_OPERATIONAL_REASONS),
         )
     )
     result: list[BillingRunIssue] = []

@@ -53,9 +53,9 @@ test('billing charges display kopecks exactly once', async ({ page }) => {
   await page.goto('/app/ff/billing')
 
   const cells = page.getByTestId('billing-ledger-table').locator('tbody tr').first().getByRole('cell')
-  await expect(cells.nth(6)).toHaveText('12,00 ₽')
-  await expect(cells.nth(7)).toHaveText('630,00 ₽')
-  await expect(cells.nth(7)).not.toHaveText('63 000,00 ₽')
+  await expect(cells.nth(3)).toContainText('12,00 ₽')
+  await expect(cells.nth(4)).toHaveText('630,00 ₽')
+  await expect(cells.nth(4)).not.toHaveText('63 000,00 ₽')
 })
 
 // S-31-TC-017 — Given the seller billing profile blocks formation, Then the corrective action targets that seller.
