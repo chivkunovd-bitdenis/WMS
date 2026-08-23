@@ -43,6 +43,20 @@ function moscowDate(offsetDays = 0) {
   return `${part('year')}-${part('month')}-${part('day')}`
 }
 
+function previousMoscowMonth(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Moscow',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(date)
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? ''
+  const year = Number(part('year'))
+  const month = Number(part('month'))
+  const previousYear = month === 1 ? year - 1 : year
+  const previousMonth = month === 1 ? 12 : month - 1
+  return `${previousYear}-${String(previousMonth).padStart(2, '0')}`
+}
+
 async function waitForLiveJob(page: Page, headers: Record<string, string>, jobId: string) {
   for (let attempt = 0; attempt < 60; attempt += 1) {
     const response = await page.request.get(`/api/operations/background-jobs/${jobId}`, { headers })
@@ -58,7 +72,11 @@ async function waitForLiveJob(page: Page, headers: Record<string, string>, jobId
 test('S-11-TC-001 administrator opens the previous-month storage screen', async ({ page }) => {
   await openStorage(page)
   await expect(page.getByRole('heading', { name: 'Хранение' })).toBeVisible()
-  await expect(page.getByTestId('storage-month')).toHaveValue('2026-07')
+  await expect(page.getByTestId('storage-month')).toHaveValue(previousMoscowMonth())
+})
+
+test('TC-NEW-STORAGE-REFRESH-01 calculates December of the previous year after Moscow January', () => {
+  expect(previousMoscowMonth(new Date('2027-01-15T12:00:00.000Z'))).toBe('2026-12')
 })
 
 test('S-11-TC-002 blocks a rate that rounds to zero before saving', async ({ page }) => {
@@ -105,13 +123,14 @@ test('S-11-TC-021 blocks Moscow-past start dates with a visible explanation', as
 // TC-NEW-STORAGE-REFRESH-01 — сохранённая поздняя ставка не подменяет серверное состояние закрытого месяца.
 test('administrator keeps a previous month without a tariff after saving a later rate', async ({ page }) => {
   const validFrom = moscowDate()
+  const previousMonth = previousMoscowMonth()
   let tariffSaved = false
   let refreshGets = 0
   let tariffBody: unknown = null
 
   await openStorage(page, 'fulfillment_admin', false)
-  await expect(page.getByTestId('storage-month')).toHaveValue('2026-07')
-  expect(validFrom > '2026-07-31').toBeTruthy()
+  await expect(page.getByTestId('storage-month')).toHaveValue(previousMonth)
+  expect(validFrom.slice(0, 7) > previousMonth).toBeTruthy()
 
   await page.route('**/api/operations/storage/statements?*', (route) => {
     if (tariffSaved) refreshGets += 1
