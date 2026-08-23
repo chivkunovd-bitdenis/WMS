@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { buildInvoicePrintHtml, buildLedgerSearchParams, CANCEL_INVOICE_ERROR_MESSAGE, cancelInvoiceRequest, formatMoscowDate, initialBillingTabPeriods, InvoiceDocumentDetails, ledgerDocumentTarget, parseApiDecimal, STORAGE_SERVICE_CODE, updateBillingTabPeriod } from './FfBillingScreen'
+import { buildInvoicePrintHtml, buildLedgerSearchParams, CANCEL_INVOICE_ERROR_MESSAGE, cancelInvoiceRequest, formatMoscowDate, initialBillingTabPeriods, InvoiceDocumentDetails, joinVisibleParts, ledgerDocumentTarget, parseApiDecimal, STORAGE_SERVICE_CODE, updateBillingTabPeriod } from './FfBillingScreen'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -23,6 +23,11 @@ describe('FfBillingScreen billing contract', () => {
   it('normalizes decimal strings returned by the invoice API', () => {
     expect(parseApiDecimal('181900.000')).toBe(181900)
     expect(parseApiDecimal('63000.00')).toBe(63000)
+  })
+
+  it('joins only visible invoice document parts', () => {
+    expect(joinVisibleParts(['31.07.2026', '', null, '181 900', '14 552,00 ₽']))
+      .toBe('31.07.2026 · 181 900 · 14 552,00 ₽')
   })
 
   it('formats dates in Moscow time independently from the environment timezone', () => {
@@ -94,7 +99,7 @@ describe('FfBillingScreen billing contract', () => {
     expect(originalStatus).toBe('issued')
   })
 
-  it('renders expanded source document quantity and kopeck amount in separate cells', () => {
+  it('renders expanded source document as one clean sequence of visible parts', () => {
     const markup = renderToStaticMarkup(createElement(InvoiceDocumentDetails, {
       period: '2026-07',
       line: {
@@ -104,8 +109,7 @@ describe('FfBillingScreen billing contract', () => {
     }))
 
     expect(markup).toContain('ПР-000141')
-    expect(markup).toContain('>84</span>')
-    expect(markup).toContain('>1 008,00 ₽</span>')
+    expect(markup).toContain('ПР-000141 · 84 · 1 008,00 ₽')
     expect(markup).not.toContain('100800')
     expect(markup.replace(/<[^>]+>/g, '')).not.toContain('· ·')
   })

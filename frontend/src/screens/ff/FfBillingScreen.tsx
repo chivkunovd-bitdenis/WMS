@@ -55,6 +55,10 @@ export function parseApiDecimal(value: ApiDecimal): number {
   return typeof value === 'number' ? value : Number(value)
 }
 
+export function joinVisibleParts(parts: Array<string | null | undefined>): string {
+  return parts.map((part) => part?.trim()).filter(Boolean).join(' · ')
+}
+
 export function formatMoscowDate(value: string): string {
   return new Intl.DateTimeFormat('ru-RU', { timeZone: MOSCOW_TIME_ZONE }).format(new Date(value))
 }
@@ -177,7 +181,17 @@ function ledgerDocumentLabel(entry: LedgerEntry): string {
 }
 
 export function InvoiceDocumentDetails({ line, period }: { line: InvoiceLine; period: string }) {
-  return <Stack data-testid="billing-invoice-documents" spacing={0.5}>{(line.documents ?? []).map((doc) => <Stack key={`${doc.date}-${doc.number}`} direction="row" spacing={1} sx={{ alignItems: 'baseline', flexWrap: 'wrap' }}><Typography component="span">Исходный документ: {formatMoscowDate(doc.date)} · {line.service_code === STORAGE_SERVICE_CODE ? `Расчёт хранения за ${formatPeriod(period)}` : doc.number}</Typography><Typography component="span">·</Typography><QtyCell value={parseApiDecimal(doc.quantity)} /><Typography component="span">·</Typography><MoneyCell minor={doc.amount} /></Stack>)}</Stack>
+  return <Stack data-testid="billing-invoice-documents" spacing={0.5}>{(line.documents ?? []).map((doc) => {
+    const quantity = parseApiDecimal(doc.quantity)
+    const money = formatMoney(doc.amount)
+    const text = joinVisibleParts([
+      formatMoscowDate(doc.date),
+      line.service_code === STORAGE_SERVICE_CODE ? `Расчёт хранения за ${formatPeriod(period)}` : doc.number,
+      Number.isFinite(quantity) ? quantity.toLocaleString('ru-RU') : null,
+      money === '—' ? null : money,
+    ])
+    return <Typography key={`${doc.date}-${doc.number}`}>Исходный документ: {text}</Typography>
+  })}</Stack>
 }
 
 export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
@@ -272,12 +286,9 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
   }, [rows])
 
   const operationColumns = [
-    { key: 'date', header: 'Дата', width: 120, render: (row: LedgerEntry) => <TextCell value={formatMoscowDate(row.occurred_at)} /> },
-    { key: 'seller', header: 'Селлер', width: 190, render: (row: LedgerEntry) => <TextCell value={row.seller_name} /> },
-    { key: 'service', header: 'Услуга', width: 150, render: (row: LedgerEntry) => serviceLabels[row.service_code] ?? '—' },
     { key: 'document', header: 'Документ', width: 190, render: (row: LedgerEntry) => {
       const target = ledgerDocumentTarget(row)
-      return target ? (
+      const document = target ? (
         target.kind === 'inbound' ? (
           <Link component="button" type="button" variant="body2" onClick={() => onOpenInbound(target.sourceId)} data-testid={`billing-document-${row.id}`}>
             <TextCell value={ledgerDocumentLabel(row)} />
@@ -288,13 +299,13 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
           </Link>
         )
       ) : <TextCell value={ledgerDocumentLabel(row)} />
+      return <Stack spacing={0.25}>{document}<Typography variant="caption" color="text.secondary">{formatMoscowDate(row.occurred_at)}</Typography></Stack>
     } },
-    { key: 'quantity', header: 'Количество', width: 120, align: 'right' as const, render: (row: LedgerEntry) => <QtyCell value={parseApiDecimal(row.quantity)} /> },
-    { key: 'unit', header: 'Расчёт', width: 150, render: (row: LedgerEntry) => unitLabels[row.unit] ?? '—' },
-    { key: 'rate', header: 'Ставка', width: 130, align: 'right' as const, render: (row: LedgerEntry) => <MoneyCell minor={row.rate} /> },
-    { key: 'amount', header: 'Сумма', width: 140, align: 'right' as const, render: (row: LedgerEntry) => <MoneyCell minor={row.amount} /> },
-    { key: 'performer', header: 'Исполнитель', width: 220, render: (row: LedgerEntry) => <TextCell value={row.performer_name ?? 'Исполнитель не зафиксирован'} /> },
-    { key: 'problem', header: 'Проблема', width: 180, render: (row: LedgerEntry) => row.problem ? <StatusChip label={problemLabels[row.problem]} tone="stop" /> : '—' },
+    { key: 'seller', header: 'Селлер', width: 130, render: (row: LedgerEntry) => <TextCell value={row.seller_name} width={120} /> },
+    { key: 'service', header: 'Услуга', width: 110, render: (row: LedgerEntry) => serviceLabels[row.service_code] ?? '—' },
+    { key: 'calculation', header: 'Расчёт', width: 180, align: 'right' as const, render: (row: LedgerEntry) => <Stack spacing={0.25} sx={{ alignItems: 'flex-end' }}><QtyCell value={parseApiDecimal(row.quantity)} /><Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>{joinVisibleParts([unitLabels[row.unit] ?? '—', formatMoney(row.rate)])}</Typography></Stack> },
+    { key: 'amount', header: 'Сумма', width: 110, align: 'right' as const, render: (row: LedgerEntry) => <MoneyCell minor={row.amount} /> },
+    { key: 'performer', header: 'Исполнитель / проблема', width: 190, render: (row: LedgerEntry) => <Stack spacing={0.5}><TextCell value={row.performer_name ?? 'Исполнитель не зафиксирован'} width={180} />{row.problem ? <StatusChip label={problemLabels[row.problem]} tone="stop" /> : null}</Stack> },
   ]
   const performerColumns = [
     { key: 'performer', header: 'Исполнитель', width: 220, render: (row: PerformerRow) => <TextCell value={row.performer_name} width={200} /> },
@@ -330,6 +341,7 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
     missing_seller_profile: 'Нет реквизитов',
     missing_ff_profile: 'Нет реквизитов',
     storage_period_not_closed: 'Хранение не закрыто',
+    billing_calculation_overflow: 'Начисление не рассчитано',
   }
   const issueAction = (issue: InvoiceIssue): { label: string; to: string } | null => {
     if (issue.reason === 'unpriced') return { label: 'Открыть тарифы', to: '/app/ff/settings?tab=tariffs' }

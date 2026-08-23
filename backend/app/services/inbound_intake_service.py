@@ -25,7 +25,11 @@ from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.services import inventory_service as inv_svc
 from app.services import sorting_location_service as sorting_loc_svc
-from app.services.billing_ledger_service import record_operational_charge
+from app.services.billing_ledger_service import (
+    BillingLedgerError,
+    record_operational_billing_issue,
+    record_operational_charge,
+)
 from app.services.catalog_service import (
     get_storage_location_in_warehouse,
     get_warehouse,
@@ -589,18 +593,28 @@ async def _record_charge_if_done(
 ) -> None:
     if req.status != STATUS_DONE:
         return
-    await record_operational_charge(
-        session,
-        tenant_id=req.tenant_id,
-        seller_id=req.seller_id,
-        source_type="inbound_intake",
-        source_id=req.id,
-        source="inbound",
-        service_code="inbound",
-        quantity=Decimal(sum(line.posted_qty for line in req.lines)),
-        occurred_at=req.posted_at or datetime.now(UTC),
-        performer_id=performer_id,
-    )
+    occurred_at = req.posted_at or datetime.now(UTC)
+    try:
+        await record_operational_charge(
+            session,
+            tenant_id=req.tenant_id,
+            seller_id=req.seller_id,
+            source_type="inbound_intake",
+            source_id=req.id,
+            source="inbound",
+            service_code="inbound",
+            quantity=Decimal(sum(line.posted_qty for line in req.lines)),
+            occurred_at=occurred_at,
+            performer_id=performer_id,
+        )
+    except BillingLedgerError:
+        if req.seller_id is not None:
+            await record_operational_billing_issue(
+                session,
+                tenant_id=req.tenant_id,
+                seller_id=req.seller_id,
+                occurred_at=occurred_at,
+            )
 
 
 async def primary_accept_request(

@@ -29,6 +29,7 @@ from app.services.billing_configuration_service import (
     save_profile,
 )
 from app.services.billing_invoice_service import (
+    PERSISTENT_OPERATIONAL_REASONS,
     _month_bounds,
     _source_numbers,
     cancel_invoice,
@@ -347,14 +348,15 @@ async def get_billing_invoices(
     issue_rows = (await session.execute(issues_query)).all()
     issues = []
     for issue, seller_name in issue_rows:
-        live_reasons = await current_blocking_reasons(
-            session,
-            tenant_id=user.tenant_id,
-            seller_id=issue.seller_id,
-            period=issue.period,
-        )
-        if issue.reason not in live_reasons:
-            continue
+        if issue.reason not in PERSISTENT_OPERATIONAL_REASONS:
+            live_reasons = await current_blocking_reasons(
+                session,
+                tenant_id=user.tenant_id,
+                seller_id=issue.seller_id,
+                period=issue.period,
+            )
+            if issue.reason not in live_reasons:
+                continue
         issues.append(
             {
                 "id": issue.id,

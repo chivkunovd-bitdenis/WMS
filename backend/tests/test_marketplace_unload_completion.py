@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import time
 import uuid
+from datetime import datetime
+from unittest.mock import AsyncMock
+from zoneinfo import ZoneInfo
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from test_marketplace_unload_and_discrepancy_acts import (
     E2E_BARCODE,
     _finish_unload_packaging,
@@ -19,6 +23,9 @@ from test_marketplace_unload_and_discrepancy_acts import (
 )
 
 from app.db.session import SessionLocal
+from app.models.billing import BillingLedgerEntry, BillingRunIssue
+from app.services import marketplace_unload_service as unload_svc
+from app.services.billing_ledger_service import BillingLedgerError
 from app.services.marketplace_unload_service import (
     MarketplaceUnloadError,
     complete_unload,
@@ -223,6 +230,51 @@ async def test_complete_unload_without_discrepancy(
         assert req.status == "shipped"
         assert req.has_discrepancy is False
         assert compute_has_discrepancy(req) is False
+
+
+@pytest.mark.asyncio
+async def test_billing_overflow_does_not_block_completed_unload_and_is_visible(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    h, mid, loc_id = await _confirmed_unload_with_stock(
+        async_client, monkeypatch, plan_qty=2
+    )
+    await _collect_qty_via_scan(async_client, h, mid, loc_id=loc_id, qty=2)
+    reg = await async_client.get("/auth/me", headers=h)
+    tenant_id = uuid.UUID(reg.json()["tenant_id"])
+    monkeypatch.setattr(
+        unload_svc,
+        "record_operational_charge",
+        AsyncMock(side_effect=BillingLedgerError("billing_amount_overflow")),
+    )
+
+    shipped = await async_client.post(_ship_url(mid), headers=h, json={})
+    assert shipped.status_code == 200, shipped.text
+    assert shipped.json()["status"] == "shipped"
+
+    async with SessionLocal() as session:
+        charge = await session.scalar(
+            select(BillingLedgerEntry).where(
+                BillingLedgerEntry.source_type == "marketplace_unload",
+                BillingLedgerEntry.source_id == mid,
+            )
+        )
+        issue = await session.scalar(
+            select(BillingRunIssue).where(
+                BillingRunIssue.tenant_id == tenant_id,
+                BillingRunIssue.reason == "billing_calculation_overflow",
+            )
+        )
+        assert charge is None
+        assert issue is not None
+
+    period = datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m")
+    visible = await async_client.get(f"/billing/invoices?period={period}", headers=h)
+    assert visible.status_code == 200, visible.text
+    assert any(
+        issue["reason"] == "billing_calculation_overflow"
+        for issue in visible.json()["issues"]
+    )
 
 
 @pytest.mark.asyncio
