@@ -20,14 +20,29 @@ describe('metaStatusView', () => {
     ['WB: принято', true, 'WB: принято', 'ok'],
     ['WB: код не требуется', true, 'WB: код не требуется', 'neutral'],
     ['WB не принял', false, 'WB не принял', 'stop'],
-    ['WB: проверяет', false, 'WB: проверяет', 'stop'],
-    ['WB: нужен код', false, 'WB: нужен код', 'stop'],
-    ['Нет ответа WB', false, 'Нет ответа WB', 'stop'],
   ] as const)('maps %s to the contract label and tone', (signature, deliveryAllowed, label, tone) => {
     expect(metaStatusView(verdict(signature, deliveryAllowed))).toMatchObject({
       label,
       tone,
       disabledReason: deliveryAllowed ? null : 'Сдача пока недоступна',
+    })
+  })
+
+  it('keeps a pending WB check neutral and explains why delivery is blocked', () => {
+    expect(metaStatusView(verdict('WB: проверяет', false))).toEqual({
+      label: 'WB: проверяет',
+      tone: 'neutral',
+      reason: null,
+      disabledReason: 'WB ещё не подтвердил код',
+    })
+  })
+
+  it('shows the next action when WB requires a marking code', () => {
+    expect(metaStatusView(verdict('WB: нужен код', false))).toEqual({
+      label: 'WB: нужен код',
+      tone: 'stop',
+      reason: 'Пришлите ЧЗ',
+      disabledReason: 'Пришлите ЧЗ',
     })
   })
 
@@ -69,13 +84,19 @@ describe('metaStatusView', () => {
       label: 'Нет ответа WB',
       tone: 'stop',
       reason: null,
-      disabledReason: 'Сдача пока недоступна',
+      disabledReason: 'Ждём ответа Wildberries',
+    })
+    expect(metaStatusView(verdict('Нет ответа WB', false))).toEqual({
+      label: 'Нет ответа WB',
+      tone: 'stop',
+      reason: null,
+      disabledReason: 'Ждём ответа Wildberries',
     })
     expect(metaStatusView(unknownVerdict)).toEqual({
       label: 'Нет ответа WB',
       tone: 'stop',
       reason: null,
-      disabledReason: 'Сдача пока недоступна',
+      disabledReason: 'Ждём ответа Wildberries',
     })
   })
 })

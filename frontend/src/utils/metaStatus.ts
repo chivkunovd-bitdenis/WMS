@@ -28,6 +28,9 @@ function reasonLabel(reason: string | null): string | null {
 }
 
 const BLOCKED_REASON = 'Сдача пока недоступна'
+const PENDING_REASON = 'WB ещё не подтвердил код'
+const REQUIRED_REASON = 'Пришлите ЧЗ'
+const NO_RESPONSE_REASON = 'Ждём ответа Wildberries'
 
 function blockedView(
   label: MetaStatusLabel,
@@ -40,7 +43,7 @@ function blockedView(
 /** Maps the server verdict to the fixed operator-facing vocabulary. */
 export function metaStatusView(verdict: FbsOrderVerdict | null | undefined): MetaStatusView {
   if (!verdict) {
-    return blockedView('Нет ответа WB')
+    return blockedView('Нет ответа WB', null, NO_RESPONSE_REASON)
   }
 
   const knownSignatures: FbsOrderVerdictSignature[] = [
@@ -51,7 +54,9 @@ export function metaStatusView(verdict: FbsOrderVerdict | null | undefined): Met
     'WB: нужен код',
     'Нет ответа WB',
   ]
-  if (!knownSignatures.includes(verdict.signature)) return blockedView('Нет ответа WB')
+  if (!knownSignatures.includes(verdict.signature)) {
+    return blockedView('Нет ответа WB', null, NO_RESPONSE_REASON)
+  }
 
   const reason = reasonLabel(verdict.reason)
   if (reason) {
@@ -74,14 +79,19 @@ export function metaStatusView(verdict: FbsOrderVerdict | null | undefined): Met
         disabledReason: verdict.delivery_allowed ? null : BLOCKED_REASON,
       }
     case 'WB: проверяет':
-      return blockedView('WB: проверяет')
+      return {
+        label: 'WB: проверяет',
+        tone: 'neutral',
+        reason: null,
+        disabledReason: PENDING_REASON,
+      }
     case 'WB: нужен код':
-      return blockedView('WB: нужен код')
+      return blockedView('WB: нужен код', REQUIRED_REASON, REQUIRED_REASON)
     case 'WB не принял':
       return blockedView('WB не принял')
     case 'Нет ответа WB':
-      return blockedView('Нет ответа WB')
+      return blockedView('Нет ответа WB', null, NO_RESPONSE_REASON)
     default:
-      return blockedView('Нет ответа WB')
+      return blockedView('Нет ответа WB', null, NO_RESPONSE_REASON)
   }
 }
