@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+
 import { describe, expect, it } from 'vitest'
 
 import { isStorageRateStartDateAllowed, mergeRecalculatedStorageData, mergeRecalculatedStorageStatements } from './FfStoragePage'
@@ -12,6 +14,14 @@ describe('isStorageRateStartDateAllowed', () => {
   it('allows today and a future date in Moscow', () => {
     expect(isStorageRateStartDateAllowed(moscowToday, moscowToday)).toBe(true)
     expect(isStorageRateStartDateAllowed('2026-08-24', moscowToday)).toBe(true)
+  })
+
+  it('keeps save unavailable and explains why when the start date is in Moscow past', () => {
+    const screenSource = readFileSync(new URL('./FfStoragePage.tsx', import.meta.url), 'utf8')
+
+    expect(isStorageRateStartDateAllowed('2026-08-22', moscowToday)).toBe(false)
+    expect(screenSource).toContain("? 'Дата начала не может быть в прошлом'")
+    expect(screenSource).toContain('data-testid="storage-rate-save" disabledReason={actionLoading ? \'Сохранение тарифа выполняется\' : rateDisabledReason}')
   })
 })
 
