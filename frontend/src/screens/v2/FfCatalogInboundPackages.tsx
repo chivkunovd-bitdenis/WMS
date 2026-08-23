@@ -18,7 +18,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiUrl } from '../../api'
 import { ProductBarcodeCell } from '../../components/ProductBarcodeCell'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
@@ -122,6 +122,231 @@ async function lookupErrorMessage(response: Response): Promise<string> {
   return 'Не удалось выполнить поиск. Повторите сканирование.'
 }
 
+type PackageAccordionProps = {
+  item: InboundPackage
+  productsById: Map<string, CatalogInboundPackageProduct>
+  expanded: boolean
+  highlighted: boolean
+  onExpandedChange: (packageId: string, expanded: boolean) => void
+}
+
+const PackageAccordion = memo(function PackageAccordion({
+  item,
+  productsById,
+  expanded,
+  highlighted,
+  onExpandedChange,
+}: PackageAccordionProps) {
+  const compositionRows = useMemo<PackageCompositionRow[]>(
+    () =>
+      item.lines.map((line) => {
+        const product = productsById.get(line.product_id)
+        return {
+          ...line,
+          name: product?.name ?? line.name,
+          sku_code: product?.sku_code ?? line.sku_code,
+          seller_name: product?.seller_name ?? line.seller_name,
+          wb_vendor_code: product?.wb_vendor_code ?? line.wb_vendor_code,
+          wb_size: product?.wb_size ?? line.wb_size,
+          wb_primary_image_url: product?.wb_primary_image_url ?? null,
+          wb_primary_barcode: product?.wb_primary_barcode ?? line.wb_barcode,
+          wb_barcodes: product?.wb_barcodes ?? (line.wb_barcode ? [line.wb_barcode] : []),
+        }
+      }),
+    [item.lines, productsById],
+  )
+  const completed = item.intake_status === 'done'
+  const fullyDistributed = item.kind === 'box' && item.fully_distributed
+
+  return (
+    <Accordion
+      id={`ff-catalog-inbound-package-${item.id}`}
+      expanded={expanded}
+      onChange={(_, isExpanded) => onExpandedChange(item.id, isExpanded)}
+      disableGutters
+      elevation={0}
+      data-testid={`ff-catalog-inbound-package-${item.id}`}
+      sx={{
+        mb: 1,
+        overflow: 'hidden',
+        border: '1px solid',
+        borderColor: 'divider',
+        '&::before': { display: 'none' },
+        ...(highlighted
+          ? {
+              bgcolor: 'rgba(46, 125, 50, 0.08)',
+              borderLeft: '3px solid',
+              borderLeftColor: 'success.main',
+            }
+          : {}),
+      }}
+    >
+      <AccordionSummary
+        expandIcon={<ExpandMoreIcon />}
+        aria-controls={`ff-catalog-inbound-package-content-${item.id}`}
+        id={`ff-catalog-inbound-package-header-${item.id}`}
+        sx={{
+          px: 2,
+          minHeight: 48,
+          '& .MuiAccordionSummary-content': { my: 1, minWidth: 0 },
+        }}
+      >
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={{ xs: 0.25, sm: 2 }}
+          sx={{
+            minWidth: 0,
+            width: '100%',
+            pr: 1,
+            alignItems: { sm: 'center' },
+          }}
+        >
+          <Typography variant="body2" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
+            {packageTitle(item)}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+            {item.internal_barcode}
+          </Typography>
+          <Stack direction="row" spacing={2} sx={{ minWidth: 0, ml: { sm: 'auto' }, flexWrap: 'wrap' }}>
+            <Typography variant="body2" color="text.secondary" noWrap>
+              {sourceDocumentTitle(item.source_document)} · {sourceDocumentDate(item.source_document)}
+            </Typography>
+            {item.warehouse_name ? (
+              <Typography variant="body2" color="text.secondary" noWrap>
+                Склад: {item.warehouse_name}
+              </Typography>
+            ) : null}
+          </Stack>
+        </Stack>
+      </AccordionSummary>
+      <AccordionDetails id={`ff-catalog-inbound-package-content-${item.id}`} sx={{ px: 2, pb: 2, pt: 0 }}>
+        {item.kind === 'cargo_place' ? (
+          <EmptyPanel
+            title={completed ? 'Приёмка завершена' : 'Состав по грузоместу не ведётся'}
+            hint={completed ? 'Состав по грузоместу не ведётся' : undefined}
+          />
+        ) : fullyDistributed || completed ? (
+          <EmptyPanel title="Товар из короба уже разложен" hint="Исторический состав здесь не показывается." />
+        ) : compositionRows.length === 0 ? (
+          <EmptyPanel title="В коробе пока нет товаров" hint="Наполните короб в разделе «Приёмка»." />
+        ) : (
+          <TableContainer
+            sx={{ maxWidth: '100%', overflowX: 'auto' }}
+            data-testid={`ff-catalog-inbound-composition-${item.id}`}
+          >
+            <Table
+              size="small"
+              sx={{
+                minWidth: 1118,
+                tableLayout: 'fixed',
+                '& .MuiTableCell-root': {
+                  px: 1,
+                  py: 1,
+                  overflow: 'hidden',
+                  verticalAlign: 'middle',
+                },
+                '& .MuiTableCell-head': {
+                  fontWeight: 600,
+                  lineHeight: 1.2,
+                  whiteSpace: 'normal',
+                },
+              }}
+            >
+              <colgroup>
+                <col style={{ width: 56 }} />
+                <col style={{ width: 200 }} />
+                <col style={{ width: 130 }} />
+                <col style={{ width: 118 }} />
+                <col style={{ width: 130 }} />
+                <col style={{ width: 64 }} />
+                <col style={{ width: 110 }} />
+                <col style={{ width: 90 }} />
+                <col style={{ width: 220 }} />
+              </colgroup>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Фото</TableCell>
+                  <TableCell>Название</TableCell>
+                  <TableCell>Артикул продавца</TableCell>
+                  <TableCell>SKU</TableCell>
+                  <TableCell>ШК</TableCell>
+                  <TableCell>Размер</TableCell>
+                  <TableCell>Селлер</TableCell>
+                  <TableCell align="right">В коробе</TableCell>
+                  <TableCell>Документ прихода</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {compositionRows.map((row) => (
+                  <TableRow key={row.product_id} hover data-testid="ff-catalog-inbound-product-row">
+                    <TableCell>
+                      <ProductPhotoThumb src={row.wb_primary_image_url} alt={row.name} />
+                    </TableCell>
+                    <TableCell>
+                      <Typography
+                        component="span"
+                        variant="body2"
+                        title={row.name}
+                        sx={{
+                          minWidth: 0,
+                          display: '-webkit-box',
+                          WebkitBoxOrient: 'vertical',
+                          WebkitLineClamp: 2,
+                          overflow: 'hidden',
+                          lineHeight: 1.25,
+                        }}
+                      >
+                        {row.name}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                        {row.wb_vendor_code ?? '—'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>
+                        {row.sku_code}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <ProductBarcodeCell
+                        barcode={row.wb_primary_barcode ?? row.wb_barcodes[0] ?? null}
+                        wb_size={null}
+                        wb_composition={null}
+                        testId={`ff-catalog-inbound-barcode-${item.id}-${row.product_id}`}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" noWrap>
+                        {row.wb_size ?? '—'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                        {row.seller_name ?? '—'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">{row.remaining_qty}</TableCell>
+                    <TableCell data-testid={`ff-catalog-inbound-source-${item.id}-${row.product_id}`}>
+                      <Typography variant="body2" noWrap title={sourceDocumentTitle(item.source_document)}>
+                        {sourceDocumentTitle(item.source_document)}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {sourceDocumentDate(item.source_document)}
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </AccordionDetails>
+    </Accordion>
+  )
+})
+
 export function FfCatalogInboundPackages({ token, authHeaders, products }: Props) {
   const [listLoading, setListLoading] = useState(false)
   const [listLoaded, setListLoaded] = useState(false)
@@ -137,10 +362,7 @@ export function FfCatalogInboundPackages({ token, authHeaders, products }: Props
   const requestSequence = useRef(0)
   const scanInputRef = useRef<HTMLInputElement>(null)
 
-  const productsById = useMemo(
-    () => new Map(products.map((product) => [product.id, product])),
-    [products],
-  )
+  const productsById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products])
 
   const packages = useMemo(() => {
     if (!addressedPackage) return listedPackages
@@ -149,11 +371,7 @@ export function FfCatalogInboundPackages({ token, authHeaders, products }: Props
     return listedPackages.map((item) => (item.id === addressedPackage.id ? addressedPackage : item))
   }, [addressedPackage, listedPackages])
 
-  const visiblePackages = listLoading
-    ? addressedPackage
-      ? [addressedPackage]
-      : []
-    : packages
+  const visiblePackages = listLoading ? (addressedPackage ? [addressedPackage] : []) : packages
 
   const loadList = useCallback(async () => {
     setListLoading(true)
@@ -176,48 +394,51 @@ export function FfCatalogInboundPackages({ token, authHeaders, products }: Props
     void loadList()
   }, [loadList])
 
-  const lookup = useCallback(async (barcode: string): Promise<void> => {
-    const sequence = requestSequence.current + 1
-    requestSequence.current = sequence
-    setScanError(null)
-    setScanAnnouncement('')
-    setScanLoading(true)
-    try {
-      const response = await fetch(
-        apiUrl(`/operations/inbound-packages/lookup?barcode=${encodeURIComponent(barcode)}`),
-        { headers: { ...authHeaders(token) } },
-      )
-      if (requestSequence.current !== sequence) return
-      if (!response.ok) {
-        setScanError(await lookupErrorMessage(response))
-        return
-      }
-      const item = (await response.json()) as InboundPackage
-      if (requestSequence.current !== sequence) return
-      setAddressedPackage(item)
-      setOpenPackageId(item.id)
-      setHighlightedPackageId(item.id)
-      setScanAnnouncement(`${packageTitle(item)} открыт`)
-      window.setTimeout(() => {
-        document.getElementById(`ff-catalog-inbound-package-${item.id}`)?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'nearest',
-        })
-      }, 0)
-    } catch {
-      if (requestSequence.current === sequence) {
-        setScanError('Нет связи с сервером. Повторите сканирование.')
-      }
-    } finally {
-      if (requestSequence.current === sequence) {
-        setScanLoading(false)
+  const lookup = useCallback(
+    async (barcode: string): Promise<void> => {
+      const sequence = requestSequence.current + 1
+      requestSequence.current = sequence
+      setScanError(null)
+      setScanAnnouncement('')
+      setScanLoading(true)
+      try {
+        const response = await fetch(
+          apiUrl(`/operations/inbound-packages/lookup?barcode=${encodeURIComponent(barcode)}`),
+          { headers: { ...authHeaders(token) } },
+        )
+        if (requestSequence.current !== sequence) return
+        if (!response.ok) {
+          setScanError(await lookupErrorMessage(response))
+          return
+        }
+        const item = (await response.json()) as InboundPackage
+        if (requestSequence.current !== sequence) return
+        setAddressedPackage(item)
+        setOpenPackageId(item.id)
+        setHighlightedPackageId(item.id)
+        setScanAnnouncement(`${packageTitle(item)} открыт`)
         window.setTimeout(() => {
-          scanInputRef.current?.focus()
-          scanInputRef.current?.select()
+          document.getElementById(`ff-catalog-inbound-package-${item.id}`)?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'nearest',
+          })
         }, 0)
+      } catch {
+        if (requestSequence.current === sequence) {
+          setScanError('Нет связи с сервером. Повторите сканирование.')
+        }
+      } finally {
+        if (requestSequence.current === sequence) {
+          setScanLoading(false)
+          window.setTimeout(() => {
+            scanInputRef.current?.focus()
+            scanInputRef.current?.select()
+          }, 0)
+        }
       }
-    }
-  }, [authHeaders, token])
+    },
+    [authHeaders, token],
+  )
 
   const handleScanKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -229,6 +450,10 @@ export function FfCatalogInboundPackages({ token, authHeaders, products }: Props
     },
     [lookup, scanValue],
   )
+
+  const handlePackageExpandedChange = useCallback((packageId: string, expanded: boolean) => {
+    setOpenPackageId(expanded ? packageId : null)
+  }, [])
 
   return (
     <Box data-testid="ff-catalog-inbound-packages">
@@ -252,12 +477,22 @@ export function FfCatalogInboundPackages({ token, authHeaders, products }: Props
           error={scanError !== null}
           disabled={scanLoading}
           helperText={scanLoading ? 'Ищем короб…' : 'После скана нужный короб раскроется и подсветится.'}
-          slotProps={{ htmlInput: { 'data-testid': 'ff-catalog-inbound-packages-scan' } }}
+          slotProps={{
+            htmlInput: { 'data-testid': 'ff-catalog-inbound-packages-scan' },
+          }}
         />
         <Box
           role="status"
           aria-live="polite"
-          sx={{ position: 'absolute', width: 1, height: 1, p: 0, m: -1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}
+          sx={{
+            position: 'absolute',
+            width: 1,
+            height: 1,
+            p: 0,
+            m: -1,
+            overflow: 'hidden',
+            clip: 'rect(0 0 0 0)',
+          }}
         >
           {scanAnnouncement}
         </Box>
@@ -294,198 +529,19 @@ export function FfCatalogInboundPackages({ token, authHeaders, products }: Props
       ) : null}
 
       {listLoaded && !listLoading && !listError && packages.length === 0 ? (
-        <EmptyPanel
-          title="Коробов и грузомест пока нет"
-          hint="Создайте короб или грузоместо в разделе «Приёмка»."
-        />
+        <EmptyPanel title="Коробов и грузомест пока нет" hint="Создайте короб или грузоместо в разделе «Приёмка»." />
       ) : null}
 
-      {visiblePackages.map((item) => {
-        const compositionRows: PackageCompositionRow[] = item.lines.map((line) => {
-          const product = productsById.get(line.product_id)
-          return {
-            ...line,
-            name: product?.name ?? line.name,
-            sku_code: product?.sku_code ?? line.sku_code,
-            seller_name: product?.seller_name ?? line.seller_name,
-            wb_vendor_code: product?.wb_vendor_code ?? line.wb_vendor_code,
-            wb_size: product?.wb_size ?? line.wb_size,
-            wb_primary_image_url: product?.wb_primary_image_url ?? null,
-            wb_primary_barcode: product?.wb_primary_barcode ?? line.wb_barcode,
-            wb_barcodes: product?.wb_barcodes ?? (line.wb_barcode ? [line.wb_barcode] : []),
-          }
-        })
-        const completed = item.intake_status === 'done'
-        const fullyDistributed = item.kind === 'box' && item.fully_distributed
-        return (
-          <Accordion
-            key={item.id}
-            id={`ff-catalog-inbound-package-${item.id}`}
-            expanded={openPackageId === item.id}
-            onChange={(_, expanded) => setOpenPackageId(expanded ? item.id : null)}
-            disableGutters
-            elevation={0}
-            data-testid={`ff-catalog-inbound-package-${item.id}`}
-            sx={{
-              mb: 1,
-              overflow: 'hidden',
-              border: '1px solid',
-              borderColor: 'divider',
-              '&::before': { display: 'none' },
-              ...(highlightedPackageId === item.id
-                ? {
-                    bgcolor: 'rgba(46, 125, 50, 0.08)',
-                    borderLeft: '3px solid',
-                    borderLeftColor: 'success.main',
-                  }
-                : {}),
-            }}
-          >
-            <AccordionSummary
-              expandIcon={<ExpandMoreIcon />}
-              aria-controls={`ff-catalog-inbound-package-content-${item.id}`}
-              id={`ff-catalog-inbound-package-header-${item.id}`}
-              sx={{ px: 2, minHeight: 48, '& .MuiAccordionSummary-content': { my: 1, minWidth: 0 } }}
-            >
-              <Stack
-                direction={{ xs: 'column', sm: 'row' }}
-                spacing={{ xs: 0.25, sm: 2 }}
-                sx={{ minWidth: 0, width: '100%', pr: 1, alignItems: { sm: 'center' } }}
-              >
-                <Typography variant="body2" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
-                  {packageTitle(item)}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
-                  {item.internal_barcode}
-                </Typography>
-                <Stack direction="row" spacing={2} sx={{ minWidth: 0, ml: { sm: 'auto' }, flexWrap: 'wrap' }}>
-                  <Typography variant="body2" color="text.secondary" noWrap>
-                    {sourceDocumentTitle(item.source_document)} · {sourceDocumentDate(item.source_document)}
-                  </Typography>
-                  {item.warehouse_name ? (
-                    <Typography variant="body2" color="text.secondary" noWrap>
-                      Склад: {item.warehouse_name}
-                    </Typography>
-                  ) : null}
-                </Stack>
-              </Stack>
-            </AccordionSummary>
-            <AccordionDetails id={`ff-catalog-inbound-package-content-${item.id}`} sx={{ px: 2, pb: 2, pt: 0 }}>
-              {item.kind === 'cargo_place' ? (
-                <EmptyPanel
-                  title={completed ? 'Приёмка завершена' : 'Состав по грузоместу не ведётся'}
-                  hint={completed ? 'Состав по грузоместу не ведётся' : undefined}
-                />
-              ) : fullyDistributed || completed ? (
-                <EmptyPanel title="Товар из короба уже разложен" hint="Исторический состав здесь не показывается." />
-              ) : compositionRows.length === 0 ? (
-                <EmptyPanel title="В коробе пока нет товаров" hint="Наполните короб в разделе «Приёмка»." />
-              ) : (
-                <TableContainer
-                  sx={{ maxWidth: '100%', overflowX: 'auto' }}
-                  data-testid={`ff-catalog-inbound-composition-${item.id}`}
-                >
-                  <Table
-                    size="small"
-                    sx={{
-                      minWidth: 1118,
-                      tableLayout: 'fixed',
-                      '& .MuiTableCell-root': { px: 1, py: 1, overflow: 'hidden', verticalAlign: 'middle' },
-                      '& .MuiTableCell-head': { fontWeight: 600, lineHeight: 1.2, whiteSpace: 'normal' },
-                    }}
-                  >
-                    <colgroup>
-                      <col style={{ width: 56 }} />
-                      <col style={{ width: 200 }} />
-                      <col style={{ width: 130 }} />
-                      <col style={{ width: 118 }} />
-                      <col style={{ width: 130 }} />
-                      <col style={{ width: 64 }} />
-                      <col style={{ width: 110 }} />
-                      <col style={{ width: 90 }} />
-                      <col style={{ width: 220 }} />
-                    </colgroup>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Фото</TableCell>
-                        <TableCell>Название</TableCell>
-                        <TableCell>Артикул продавца</TableCell>
-                        <TableCell>SKU</TableCell>
-                        <TableCell>ШК</TableCell>
-                        <TableCell>Размер</TableCell>
-                        <TableCell>Селлер</TableCell>
-                        <TableCell align="right">В коробе</TableCell>
-                        <TableCell>Документ прихода</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {compositionRows.map((row) => (
-                        <TableRow key={row.product_id} hover data-testid="ff-catalog-inbound-product-row">
-                          <TableCell>
-                            <ProductPhotoThumb src={row.wb_primary_image_url} alt={row.name} />
-                          </TableCell>
-                          <TableCell>
-                            <Typography
-                              component="span"
-                              variant="body2"
-                              title={row.name}
-                              sx={{
-                                minWidth: 0,
-                                display: '-webkit-box',
-                                WebkitBoxOrient: 'vertical',
-                                WebkitLineClamp: 2,
-                                overflow: 'hidden',
-                                lineHeight: 1.25,
-                              }}
-                            >
-                              {row.name}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
-                              {row.wb_vendor_code ?? '—'}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>
-                              {row.sku_code}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
-                            <ProductBarcodeCell
-                              barcode={row.wb_primary_barcode ?? row.wb_barcodes[0] ?? null}
-                              wb_size={null}
-                              wb_composition={null}
-                              testId={`ff-catalog-inbound-barcode-${item.id}-${row.product_id}`}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" noWrap>{row.wb_size ?? '—'}</Typography>
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
-                              {row.seller_name ?? '—'}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align="right">{row.remaining_qty}</TableCell>
-                          <TableCell data-testid={`ff-catalog-inbound-source-${item.id}-${row.product_id}`}>
-                            <Typography variant="body2" noWrap title={sourceDocumentTitle(item.source_document)}>
-                              {sourceDocumentTitle(item.source_document)}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {sourceDocumentDate(item.source_document)}
-                            </Typography>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              )}
-            </AccordionDetails>
-          </Accordion>
-        )
-      })}
+      {visiblePackages.map((item) => (
+        <PackageAccordion
+          key={item.id}
+          item={item}
+          productsById={productsById}
+          expanded={openPackageId === item.id}
+          highlighted={highlightedPackageId === item.id}
+          onExpandedChange={handlePackageExpandedChange}
+        />
+      ))}
     </Box>
   )
 }
