@@ -502,6 +502,40 @@ def main() -> int:
                 "## Порядок\n1\n", encoding="utf-8")
             проверь("splitter: смешанный атом отклонён", n.артефакт_готов(t, "splitter")[0], False)
 
+            первичная = t / "initial-split"
+            первичная.mkdir()
+            атомы = "\n\n".join(
+                f"### {i}. atom {i}\nФайлы: `backend/app/a{i}.py`\nПроверка: unit"
+                for i in range(1, 8))
+            (первичная / "FEATURES.md").write_text(
+                f"ФИЧ: 7\n\n## Фичи\n{атомы}\n\n## Порядок\nпо очереди\n",
+                encoding="utf-8")
+            проверь("splitter: первичная нарезка больше шести отклонена",
+                    n.артефакт_готов(первичная, "splitter")[0], False)
+
+            ремонт = t / "repair-split"
+            ремонт.mkdir()
+            (ремонт / "REVIEW.md").write_text(
+                "ВЕРДИКТ: НАХОДКИ 4\n\n## Находки\nчетыре связанных дефекта\n",
+                encoding="utf-8")
+            атомы = "\n\n".join(
+                f"### {i}. repair {i}\nФайлы: `backend/app/r{i}.py`\nПроверка: unit"
+                for i in range(1, 5))
+            (ремонт / "FEATURES.md").write_text(
+                f"ФИЧ: 4\n\n## Фичи\n{атомы}\n\n## Порядок\nпо очереди\n",
+                encoding="utf-8")
+            проверь("splitter: ремонт больше трёх атомов отклонён",
+                    n.артефакт_готов(ремонт, "splitter")[0], False)
+            (ремонт / "FEATURES.md").write_text(
+                "ФИЧ: 2\n\n## Фичи\n"
+                "### 1. repair one\nФайлы:\n- `frontend/tests-e2e/scan.spec.ts`\n"
+                "Проверка: case one\n\n"
+                "### 2. repair two\nФайлы:\n- `frontend/tests-e2e/scan.spec.ts`\n"
+                "Проверка: case two\n\n## Порядок\nпо очереди\n",
+                encoding="utf-8")
+            проверь("splitter: один файл нельзя дробить между ремонтными атомами",
+                    n.артефакт_готов(ремонт, "splitter")[0], False)
+
             (t / "FEATURES.md").write_text(
                 "ФИЧ: 2\n\n## Фичи\n### 1. backend atom\n"
                 "Файлы: `backend/app/a.py`\nПроверка: unit\n\n"
@@ -545,6 +579,10 @@ def main() -> int:
             проверь("rework: REVIEW.md передан разработчику",
                     all("REVIEW.md" in дополнение and "ПЕРЕДЕЛКА ПО НАХОДКАМ" in дополнение
                         for _, дополнение in вызовы_dev), True)
+            проверь("rework: последний атом обязан выполнить целевую интеграцию",
+                    "ПОСЛЕДНИЙ АТОМ РЕМОНТА" in вызовы_dev[-1][1]
+                    and "reviewer не должен быть первым интеграционным тестом" in вызовы_dev[-1][1],
+                    True)
             проверь("rework: запускается только затронутый backend-атом",
                     [роль for роль, _ in вызовы_dev], ["backend-dev"])
             проверь("rework: вердикт не удалён до исправления", (t / "REVIEW.md").exists(), True)
