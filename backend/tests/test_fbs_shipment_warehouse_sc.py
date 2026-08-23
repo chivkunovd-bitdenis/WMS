@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient, Response
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import settings
 from app.db.session import SessionLocal
@@ -353,7 +354,38 @@ async def test_fbs_shipment_second_deliver_does_not_reach_wb_while_first_holds_s
 
     first_deliver_entered = asyncio.Event()
     release_first_deliver = asyncio.Event()
+    second_lock_boundary_entered = asyncio.Event()
     deliver_calls = 0
+    locked_supply_reads = 0
+
+    real_get_supply_for_update = shipment_mod._get_supply_for_update
+
+    async def observed_get_supply_for_update(
+        session: AsyncSession,
+        locked_tenant_id: uuid.UUID,
+        locked_supply_id: uuid.UUID,
+        *,
+        with_trbxes: bool = False,
+    ) -> FbsSupply | None:
+        nonlocal locked_supply_reads
+        locked_supply_reads += 1
+        if locked_supply_reads == 2:
+            # Event.set() does not yield: the second request proceeds directly
+            # into the real SELECT ... FOR UPDATE before this test can release
+            # the first WB call.
+            second_lock_boundary_entered.set()
+        return await real_get_supply_for_update(
+            session,
+            locked_tenant_id,
+            locked_supply_id,
+            with_trbxes=with_trbxes,
+        )
+
+    monkeypatch.setattr(
+        shipment_mod,
+        "_get_supply_for_update",
+        observed_get_supply_for_update,
+    )
 
     async def delayed_deliver(*_args: object, **_kwargs: object) -> None:
         nonlocal deliver_calls
@@ -382,7 +414,7 @@ async def test_fbs_shipment_second_deliver_does_not_reach_wb_while_first_holds_s
             idempotency_key=str(uuid.uuid4()),
         )
     )
-    await asyncio.sleep(0.1)
+    await asyncio.wait_for(second_lock_boundary_entered.wait(), timeout=2)
     assert deliver_calls == 1
     assert not second_request.done()
 
@@ -394,6 +426,7 @@ async def test_fbs_shipment_second_deliver_does_not_reach_wb_while_first_holds_s
     assert second_response.status_code == 400, second_response.text
     assert second_response.json()["detail"]["code"] == "supply_bad_status"
     assert deliver_calls == 1
+    assert locked_supply_reads == 2
 
     async with SessionLocal() as session:
         operations = list(
