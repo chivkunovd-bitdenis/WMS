@@ -13,7 +13,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import func, select
 
-from app.api.storage import _print_measurements, _rate_snapshot
+from app.api.storage import _apply_draft_pricing, _print_measurements, _rate_snapshot
 from app.db.session import SessionLocal
 from app.models.billing import BillingLedgerEntry, BillingTariffVersion
 from app.models.inventory_movement import InventoryMovement
@@ -110,6 +110,31 @@ def test_print_row_uses_charged_ledger_quantity_instead_of_full_month_measuremen
     assert printed["liter_days"] == "22"
     assert printed["rate_snapshot"] == "2.00"
     assert printed["amount"] == "44.00"
+
+
+def test_draft_rate_snapshot_does_not_expose_decimal_division_noise() -> None:
+    measurement_id = uuid.uuid4()
+    output = SimpleNamespace(
+        measurements=[{"rate_snapshot": None, "liter_days": "0", "amount": None}],
+        total_liter_days="0",
+        total_amount="0",
+    )
+    measurement = SimpleNamespace(id=measurement_id)
+    tariff = SimpleNamespace(amount=65)
+
+    _apply_draft_pricing(
+        output,
+        [measurement],
+        {
+            measurement_id: (
+                Decimal("125001.52"),
+                Decimal("81250.98"),
+                tariff,
+            )
+        },
+    )
+
+    assert output.measurements[0]["rate_snapshot"] == "0.65"
 
 
 def test_storage_ledger_quantity_is_rounded_within_numeric_14_4() -> None:

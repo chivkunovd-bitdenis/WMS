@@ -4,7 +4,7 @@ import calendar
 import uuid
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from itertools import pairwise
+from itertools import groupby, pairwise
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import delete, select
@@ -24,6 +24,15 @@ class StorageMeasurementError(ValueError):
 
 
 MOSCOW = ZoneInfo("Europe/Moscow")
+
+
+def _movement_time(movement: InventoryMovement) -> datetime:
+    created_at = movement.created_at
+    return (
+        created_at.replace(tzinfo=MOSCOW)
+        if created_at.tzinfo is None
+        else created_at.astimezone(MOSCOW)
+    )
 
 
 def previous_month(today: date | None = None) -> tuple[date, date]:
@@ -70,14 +79,10 @@ def _stock_segments(
     quantity = 0
     cursor = start
     segments: list[tuple[datetime, datetime, int]] = []
-    for movement in movements:
-        at = (
-            movement.created_at.replace(tzinfo=MOSCOW)
-            if movement.created_at.tzinfo is None
-            else movement.created_at.astimezone(MOSCOW)
-        )
+    for at, same_time in groupby(movements, key=_movement_time):
+        delta = sum(movement.quantity_delta for movement in same_time)
         if at <= start:
-            quantity += movement.quantity_delta
+            quantity += delta
             continue
         bounded = min(at, end)
         if quantity < 0:
@@ -85,7 +90,7 @@ def _stock_segments(
         if bounded > cursor:
             segments.append((cursor, bounded, quantity))
         cursor = bounded
-        quantity += movement.quantity_delta
+        quantity += delta
         if at >= end:
             break
     if quantity < 0:
@@ -240,20 +245,20 @@ async def rebuild_storage_measurements(
             quantity_days = Decimal(0)
             first_movement: InventoryMovement | None = None
             last_movement: InventoryMovement | None = None
-            for movement in product_moves:
-                at = movement.created_at
-                at = at.replace(tzinfo=MOSCOW) if at.tzinfo is None else at.astimezone(MOSCOW)
+            for at, same_time in groupby(product_moves, key=_movement_time):
+                same_time_movements = list(same_time)
+                delta = sum(movement.quantity_delta for movement in same_time_movements)
                 if at <= cursor:
-                    quantity += movement.quantity_delta
+                    quantity += delta
                     continue
                 bounded = min(at, period_end_exclusive)
                 if quantity < 0:
                     raise StorageMeasurementError("negative_reconstructed_stock")
                 quantity_days += Decimal(quantity) * _seconds(cursor, bounded)
-                first_movement = first_movement or movement
-                last_movement = movement
+                first_movement = first_movement or same_time_movements[0]
+                last_movement = same_time_movements[-1]
                 cursor = at
-                quantity += movement.quantity_delta
+                quantity += delta
                 if at >= period_end_exclusive:
                     break
             if cursor < period_end_exclusive:

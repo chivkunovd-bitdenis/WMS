@@ -246,6 +246,7 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
       }
       const result = await request('/operations/storage/tariffs', { method: 'POST', body: JSON.stringify(tariffBody) }) as TariffCreateResponse
       if (!Array.isArray(result?.recalculated_statements)) throw new Error('recalculation_result_missing')
+      setRateSellerId('')
       setData(null)
       if (await load()) {
         setRateOpen(false)

@@ -77,6 +77,23 @@ def test_stock_segments_reject_negative_reconstructed_stock() -> None:
         )
 
 
+def test_stock_segments_net_same_timestamp_internal_movements() -> None:
+    start = datetime(2026, 7, 1, tzinfo=MOSCOW)
+    moved_at = datetime(2026, 7, 1, 12, tzinfo=MOSCOW)
+    end = datetime(2026, 7, 2, tzinfo=MOSCOW)
+
+    segments = _stock_segments(
+        [
+            _movement(created_at=moved_at, quantity_delta=-1),
+            _movement(created_at=moved_at, quantity_delta=1),
+        ],
+        start,
+        end,
+    )
+
+    assert segments == [(start, moved_at, 0), (moved_at, end, 0)]
+
+
 def test_current_month_stops_at_current_moscow_instant() -> None:
     now = datetime(2026, 8, 22, 15, 30, tzinfo=MOSCOW)
 

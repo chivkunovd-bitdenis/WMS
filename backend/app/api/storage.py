@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Annotated, Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
@@ -242,7 +242,9 @@ def _apply_draft_pricing(
         if row_pricing is None:
             continue
         quantity, amount, tariff = row_pricing
-        effective_rate = amount / quantity if quantity else Decimal(tariff.amount) / Decimal(100)
+        effective_rate = (
+            amount / quantity if quantity else Decimal(tariff.amount) / Decimal(100)
+        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         public_row["liter_days"] = str(quantity)
         public_row["rate_snapshot"] = _rate_snapshot(effective_rate)
         public_row["amount"] = str(amount)

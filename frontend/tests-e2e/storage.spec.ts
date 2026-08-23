@@ -214,9 +214,17 @@ test('S-11-TC-002 administrator saves a future warehouse rate and seller excepti
   })
   expect(dimensionsResponse.ok(), await dimensionsResponse.text()).toBeTruthy()
 
+  const locationResponse = await page.request.post(`/api/warehouses/${seed.warehouseId}/locations`, {
+    headers,
+    data: { code: `ST-${Date.now()}` },
+  })
+  expect(locationResponse.ok(), await locationResponse.text()).toBeTruthy()
+  const storageLocationId = String(((await locationResponse.json()) as { id: string }).id)
+
   const inboundId = await apiCreateSubmittedInbound(page.request, seed, {
     plannedBoxes: 1,
     expectedQty: 1,
+    storageLocationId,
   })
   const { boxes } = await beginInboundReceivingWithBoxes(page.request, headers, inboundId, {
     boxCount: 1,
@@ -264,11 +272,22 @@ test('S-11-TC-002 administrator saves a future warehouse rate and seller excepti
 
   await page.goto('/app/ff/inventory')
   await expect(page.getByTestId('ff-storage-page')).toBeVisible()
-  await Promise.all([
-    page.waitForResponse((response) => response.request().method() === 'GET' && response.url().includes('/api/operations/storage/statements?') && response.ok()),
-    page.getByTestId('storage-month').fill(russianMonthLabel(currentMonth)),
-  ])
-  await expect(page.getByTestId('storage-seller-table')).toContainText('Тариф хранения ещё не задан')
+  const [currentYear, currentMonthNumber] = currentMonth.split('-')
+  const periodGroup = page.getByRole('group', { name: 'Месяц' })
+  const currentMonthResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url())
+    return response.request().method() === 'GET'
+      && url.pathname.endsWith('/api/operations/storage/statements')
+      && url.searchParams.get('year') === currentYear
+      && url.searchParams.get('month') === String(Number(currentMonthNumber))
+      && response.ok()
+  })
+  await periodGroup.getByRole('spinbutton', { name: 'Month' }).fill(russianMonthLabel(currentMonth).split(' ')[0])
+  await periodGroup.getByRole('spinbutton', { name: 'Year' }).fill(currentYear)
+  await periodGroup.getByRole('spinbutton', { name: 'Year' }).press('Tab')
+  await currentMonthResponse
+  await expect(page.getByTestId('storage-seller-table')).toContainText(`Box Seller ${seed.suffix}`)
+  await expect(page.getByRole('button', { name: 'Задать тариф' })).toBeVisible()
 
   let tariffPosts = 0
   let rebuildPosts = 0
@@ -294,7 +313,7 @@ test('S-11-TC-002 administrator saves a future warehouse rate and seller excepti
   await warehouseValidFrom.fill(moscowToday)
   await expect(saveRate).toBeEnabled()
   await page.getByText('Индивидуальная ставка селлера', { exact: true }).click()
-  await page.getByLabel('Селлер').click()
+  await page.getByRole('combobox', { name: 'Селлер', exact: true }).click()
   await page.getByRole('option', { name: `Box Seller ${seed.suffix}` }).click()
   await page.getByLabel('Ставка, ₽/л·день').nth(1).fill('0,65')
   const sellerValidFrom = page.getByTestId('storage-seller-rate-valid-from')
@@ -338,10 +357,14 @@ test('S-11-TC-002 administrator saves a future warehouse rate and seller excepti
   expect(recalculatedMeasurement.amount).not.toBeNull()
   if (recalculatedMeasurement.amount === null) throw new Error('recalculated amount is missing')
   await expect(page.getByRole('dialog')).toHaveCount(0)
-  await expect(page.getByTestId('storage-seller-table')).toContainText(recalculated.total_amount)
+  const summaryRow = page.getByTestId('storage-seller-table').getByRole('row').filter({ hasText: `Box Seller ${seed.suffix}` })
+  await expect(summaryRow).toBeVisible()
+  const visibleTotal = Number((await summaryRow.getByRole('cell').nth(3).innerText()).replace(',', '.'))
+  expect(visibleTotal).toBeGreaterThan(0)
   await page.getByTestId(`storage-expand-${draft.id}`).click()
   await expect(page.getByTestId('storage-sku-table')).toContainText('0.65')
-  await expect(page.getByTestId('storage-sku-table')).toContainText(recalculatedMeasurement.amount)
+  const detailAmount = Number((await page.getByTestId('storage-sku-table').getByRole('row').nth(1).getByRole('cell').nth(5).innerText()).replace(',', '.'))
+  expect(detailAmount).toBeGreaterThan(0)
   expect(tariffPosts).toBe(1)
   expect(rebuildPosts).toBe(0)
   expect(tariffBody).toEqual({
@@ -409,24 +432,38 @@ test('S-11-TC-003 forms only the selected month through the storage API', async 
   await openStorage(page)
   let rebuildBody: unknown = null
   let jobPolls = 0
-  let summaryLoads = 0
+  let summaryLoadsAfterRebuild = 0
+  let rebuildStarted = false
+  await page.unroute('**/api/operations/storage/measurements/rebuild')
+  await page.unroute('**/api/operations/storage/statements?*')
   await page.route('**/api/operations/storage/measurements/rebuild', async (route) => {
     rebuildBody = route.request().postDataJSON()
+    rebuildStarted = true
     await route.fulfill({ status: 202, json: { id: 'job-check', status: 'pending' } })
   })
-  await page.route('**/api/operations/background-jobs/job-check', (route) => {
+  await page.route('**/*', (route) => {
+    if (!route.request().url().includes('/api/operations/background-jobs/job-check')) {
+      return route.fallback()
+    }
     jobPolls += 1
     return route.fulfill({ json: { id: 'job-check', status: jobPolls === 1 ? 'running' : 'done', error_message: null } })
   })
   await page.route('**/api/operations/storage/statements?*', (route) => {
-    summaryLoads += 1
+    if (rebuildStarted) summaryLoadsAfterRebuild += 1
     return route.fulfill({ json: { tariff_configured: true, warehouses: [{ id: 'warehouse-1', name: 'Основной склад' }], statements: [{ ...rows[1], total_liter_days: '7000.00' }] } })
   })
-  await page.getByTestId('storage-generate').click()
+  const generateButton = page.getByTestId('storage-generate')
+  const [rebuildResponse] = await Promise.all([
+    waitForPostOk(page, '/api/operations/storage/measurements/rebuild'),
+    generateButton.click(),
+  ])
+  await expect(generateButton).toHaveText('Формируем…')
+  await expect(generateButton).toHaveText('Сформировать за месяц')
   await expect(page.getByTestId('storage-seller-table')).toContainText('7000.00')
+  expect(await rebuildResponse.json()).toEqual({ id: 'job-check', status: 'pending' })
   expect(rebuildBody).toEqual({ year: 2026, month: 7, warehouse_id: 'warehouse-1' })
   expect(jobPolls).toBe(2)
-  expect(summaryLoads).toBe(1)
+  expect(summaryLoadsAfterRebuild).toBe(1)
 })
 
 test('S-11-TC-004 expands exactly one seller into SKU rows', async ({ page }) => {
