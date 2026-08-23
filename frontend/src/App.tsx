@@ -56,7 +56,11 @@ import {
 import { setSeparateMarkingPrintEnabled } from './utils/separateMarkingPrint'
 import type { InboundOperationType } from './utils/inboundOperationType'
 
-type WarehouseRow = { id: string; name: string; code: string }
+type WarehouseRow = { id: string; name: string; code: string; is_operational: boolean }
+const reportWarehouseOptions = (warehouses: WarehouseRow[]) =>
+  warehouses
+    .filter((warehouse) => warehouse.is_operational)
+    .map((warehouse) => ({ id: warehouse.id, name: warehouse.name }))
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
 type ProductRow = {
   id: string
@@ -3070,10 +3074,25 @@ export default function App() {
           <Route
             path="ff/reports"
             element={
-              token && (isFulfillmentAdmin || canCellsOps) ? (
+              token && (isFulfillmentAdmin || canAccessFfBlock(me.role, me.permissions, 'inventory')) ? (
                 <FfReportsPage
                   token={token}
                   sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
+                  warehouses={reportWarehouseOptions(warehouses)}
+                />
+              ) : (
+                ffAccessDenied
+              )
+            }
+          />
+          <Route
+            path="seller/reports"
+            element={
+              token && me.seller_permissions?.products ? (
+                <FfReportsPage
+                  token={token}
+                  sellers={[]}
+                  warehouses={reportWarehouseOptions(warehouses)}
                 />
               ) : (
                 ffAccessDenied

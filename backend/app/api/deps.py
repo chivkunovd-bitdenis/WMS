@@ -294,7 +294,7 @@ async def assert_inventory_read_access(
         return
     if user.role == FULFILLMENT_STAFF:
         perms = await get_staff_permissions(session, user)
-        if perms.has(PERM_CELLS) or perms.has(PERM_INVENTORY):
+        if perms.has(PERM_INVENTORY):
             return
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,

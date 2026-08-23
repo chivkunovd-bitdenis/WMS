@@ -16,6 +16,7 @@ import { SellerProductsStockScreen } from '../../screens/v2/SellerProductsStockS
 import { SellerHonestSignScreen } from '../../screens/v2/SellerHonestSignScreen'
 import { SellerSettingsScreen } from '../../screens/v2/SellerSettingsScreen'
 import { NotificationsPage } from '../../screens/shared/NotificationsPage'
+import { FfReportsPage } from '../../screens/ff/FfReportsPage'
 import { SellerLayout } from './SellerLayout'
 
 type InboundSummaryRow = {
@@ -34,7 +35,11 @@ type InboundSummaryRow = {
   created_at?: string
 }
 
-type WarehouseRow = { id: string; name: string; code: string }
+type WarehouseRow = { id: string; name: string; code: string; is_operational: boolean }
+export const reportWarehouseOptions = (warehouses: WarehouseRow[]) =>
+  warehouses
+    .filter((warehouse) => warehouse.is_operational)
+    .map((warehouse) => ({ id: warehouse.id, name: warehouse.name }))
 
 type SellerAppProps = {
   navigationBasePath?: string
@@ -473,6 +478,21 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                   key={catalogScopeKey}
                   token={token}
                   sellerId={me.active_seller_id ?? me.seller_id ?? ''}
+                />
+              ) : (
+                accessDenied
+              )
+            }
+          />
+          <Route
+            path="/reports"
+            element={
+              token && sellerPermissions.products ? (
+                <FfReportsPage
+                  key={catalogScopeKey}
+                  token={token}
+                  sellers={[]}
+                  warehouses={reportWarehouseOptions(warehouses)}
                 />
               ) : (
                 accessDenied

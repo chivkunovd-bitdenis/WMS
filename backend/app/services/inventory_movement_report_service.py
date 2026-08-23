@@ -11,6 +11,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,7 +50,7 @@ _GROUP_DEFS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         "Перемещение",
         (MOVEMENT_TYPE_STOCK_TRANSFER_IN, MOVEMENT_TYPE_STOCK_TRANSFER_OUT),
     ),
-    ("tz_import", "Загрузка ТЗ", (MOVEMENT_TYPE_PRODUCT_TZ_IMPORT,)),  # noqa: RUF001
+    ("tz_import", "Загрузка ТЗ", (MOVEMENT_TYPE_PRODUCT_TZ_IMPORT,)),
     ("mp_unload", "Отгрузка на МП", (MOVEMENT_TYPE_MARKETPLACE_UNLOAD,)),
     (
         "fbs",
@@ -69,6 +70,7 @@ _OTHER_GROUP_LABEL = "Прочее"
 _TYPE_TO_GROUP: dict[str, str] = {
     mtype: key for key, _label, mtypes in _GROUP_DEFS for mtype in mtypes
 }
+REPORT_MOVEMENT_TYPE_GROUPS: dict[str, str] = dict(_TYPE_TO_GROUP)
 _GROUP_LABELS: dict[str, str] = {key: label for key, label, _ in _GROUP_DEFS}
 
 #: Порядок колонок отчёта — стабильный, чтобы фронт мог рендерить фиксированную
@@ -251,7 +253,7 @@ async def _load_photo_urls(
     Лёгкая версия обогащения, без sync-состояния FBS, которое отчёту не нужно.
     Полная версия: app/services/seller_wb_catalog_service.py.
     """
-    # Функции нужны заполненные seller_id и nm_id у товара.  # noqa: RUF003
+    # Функции нужны заполненные seller_id и nm_id у товара.
     seller_ids = {
         sid for sid, nm in seller_nm_by_product.values() if sid is not None and nm is not None
     }
@@ -262,7 +264,7 @@ async def _load_photo_urls(
         SellerWildberriesImportedCard.seller_id.in_(seller_ids),
     )
     res = await session.execute(card_stmt)
-    by_seller_nm: dict[tuple[uuid.UUID, int], dict] = {}
+    by_seller_nm: dict[tuple[uuid.UUID, int], dict[str, Any]] = {}
     for card in res.scalars().all():
         if isinstance(card.raw_json, dict):
             by_seller_nm[(card.seller_id, int(card.nm_id))] = card.raw_json

@@ -231,7 +231,7 @@ export function AuthedAppLayout({
                 <ListItemText primary={isAdmin ? 'Ячейки' : 'Каталог и ячейки'} />
               </ListItemButton>
             ) : null}
-            {canCatalogCells ? (
+            {isAdmin || can('inventory') ? (
               <ListItemButton component={NavLink} to={`${base}/reports`} data-testid="nav-ff-reports" data-task-id="NAV-01">
                 <ListItemText primary="Отчёты" />
               </ListItemButton>
