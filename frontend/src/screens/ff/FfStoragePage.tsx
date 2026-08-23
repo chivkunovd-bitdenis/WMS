@@ -56,6 +56,16 @@ export function mergeRecalculatedStorageStatements<T extends { id: string }>(cur
   return current.map((statement) => recalculatedById.get(statement.id) ?? statement)
 }
 
+export function mergeRecalculatedStorageData<T extends { statements: readonly { id: string }[] }>(
+  current: T,
+  recalculated: readonly T['statements'][number][],
+): T & { statements: T['statements'][number][] } {
+  return {
+    ...current,
+    statements: mergeRecalculatedStorageStatements(current.statements, recalculated),
+  }
+}
+
 export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmin: boolean; token: string }) {
   const [search, setSearch] = useState('')
   const [month, setMonth] = useState(previousMonth())
@@ -210,11 +220,8 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
       }
       const result = await request('/operations/storage/tariffs', { method: 'POST', body: JSON.stringify(tariffBody) }) as TariffCreateResponse
       if (!Array.isArray(result?.recalculated_statements)) throw new Error('recalculation_result_missing')
-      setData((current) => current ? {
-        ...current,
-        tariff_configured: true,
-        statements: mergeRecalculatedStorageStatements(current.statements, result.recalculated_statements),
-      } : current)
+      setData((current) => current ? mergeRecalculatedStorageData(current, result.recalculated_statements) : current)
+      await load()
       setRateOpen(false)
     } catch { setRateError('Не удалось сохранить тариф и пересчитать хранение. Последний успешный расчёт сохранён.') }
     finally { setActionLoading(false) }

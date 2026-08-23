@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { isStorageRateStartDateAllowed, mergeRecalculatedStorageStatements } from './FfStoragePage'
+import { isStorageRateStartDateAllowed, mergeRecalculatedStorageData, mergeRecalculatedStorageStatements } from './FfStoragePage'
 
 describe('isStorageRateStartDateAllowed', () => {
   const moscowToday = '2026-08-23'
@@ -43,5 +43,43 @@ describe('mergeRecalculatedStorageStatements', () => {
 
     expect(result).toEqual(current)
     expect(result[0]).toBe(current[0])
+  })
+})
+
+describe('mergeRecalculatedStorageData', () => {
+  it('keeps the server state that says the selected past month has no applicable tariff', () => {
+    const current = {
+      tariff_configured: false,
+      warehouses: [],
+      statements: [{ id: 'draft-open', total_amount: '0.00' }],
+    }
+
+    const result = mergeRecalculatedStorageData(current, [])
+
+    expect(result.tariff_configured).toBe(false)
+    expect(result.statements).toEqual(current.statements)
+    expect(result.statements[0]).toBe(current.statements[0])
+  })
+
+  it('keeps fixed rows while the server state says the selected covered month has a tariff', () => {
+    const current = {
+      tariff_configured: true,
+      warehouses: [],
+      statements: [
+        { id: 'draft-open', status: 'draft', total_amount: '100.00' },
+        { id: 'fixed', status: 'fixed', total_amount: '80.00' },
+      ],
+    }
+
+    const result = mergeRecalculatedStorageData(current, [
+      { id: 'draft-open', status: 'draft', total_amount: '140.00' },
+    ])
+
+    expect(result.tariff_configured).toBe(true)
+    expect(result.statements).toEqual([
+      { id: 'draft-open', status: 'draft', total_amount: '140.00' },
+      { id: 'fixed', status: 'fixed', total_amount: '80.00' },
+    ])
+    expect(result.statements[1]).toBe(current.statements[1])
   })
 })

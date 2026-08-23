@@ -14,7 +14,7 @@
 
 ## Миграции
 
-Нет: точность `Numeric(14, 2)` уже существует, атом добавляет валидацию до сохранения.
+Нет: точность `Numeric(14, 2)` уже существует; атом добавляет проверку до сохранения.
 
 ## Тесты
 
@@ -24,16 +24,16 @@
 
 ## Гейты
 
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && python3 -m pytest -q tests/test_storage_tariff_api.py` — успешно, `16 passed in 13.07s`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && python3 -m pytest -q tests/test_storage_tariff_api.py` — успешно, `16 passed in 19.79s`.
 - `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && python3 -m ruff check app/api/storage.py app/services/storage_statement_service.py tests/test_storage_tariff_api.py` — успешно, `All checks passed!`.
 - `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && python3 -m mypy --follow-imports=silent app/api/storage.py app/services/storage_statement_service.py` — успешно, `Success: no issues found in 2 source files`.
-- `python3 scripts/ci/back_guard.py` не запускался: атом не добавляет новый маршрут.
+- `python3 scripts/ci/back_guard.py` не запускался: этот атом не добавляет маршрут.
 - `python3 scripts/ci/check_migrations.py` не запускался: миграций нет.
 
 ## Не реализовано
 
-- Находки 2 и 3 из `REVIEW.md` относятся соответственно к frontend и реестру блокировок; этот backend-атом их не изменяет.
-- Фичи 2 и 3 из `FEATURES.md` не входят в текущий атом.
+- Находка 2 из `REVIEW.md` относится к frontend и к фиче 2; она вне backend-слоя и текущего атома.
+- Находка 3 из `REVIEW.md` относится к реестру блокировок и к фиче 3; она вне текущего атома.
 
 ## Находки
 
