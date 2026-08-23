@@ -1,0 +1,15 @@
+// Канонический набор элементов WMS. Экраны собираются из него,
+// своя вёрстка таблиц, чипов и кнопок — дефект (docs/product/UX_CANON_RU.md).
+export { StatusChip, MarkChip } from './StatusChip'
+export type { StatusTone } from './StatusChip'
+export { PrimaryAction, SecondaryAction, DangerAction, IconAction, ActionGroup, PrintAction } from './Actions'
+export type { Printable } from './Actions'
+export { DataTable } from './DataTable'
+export type { Column } from './DataTable'
+export { EmptyState, TableSkeletonBody, ErrorNotice, WarningNotice, ScreenHeader } from './States'
+export { QtyCell, PlanFactCell, TextCell, ProductCell } from './Cells'
+export { FilterBar } from './FilterBar'
+export { ReportMetricStrip } from './ReportMetricStrip'
+export type { ReportMetricItem, ReportMetricStripProps } from './ReportMetricStrip'
+export { MovementFlowChart } from './MovementFlowChart'
+export type { MovementFlowChartProps, MovementFlowPoint } from './MovementFlowChart'
