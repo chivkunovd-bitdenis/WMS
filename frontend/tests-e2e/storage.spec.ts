@@ -102,6 +102,46 @@ test('S-11-TC-018 blocks Moscow-past start dates with a visible explanation', as
   await expect(saveRate).toBeEnabled()
 })
 
+// TC-NEW-STORAGE-REFRESH-01 — сохранённая поздняя ставка не подменяет серверное состояние закрытого месяца.
+test('administrator keeps a previous month without a tariff after saving a later rate', async ({ page }) => {
+  const validFrom = moscowDate()
+  let tariffSaved = false
+  let refreshGets = 0
+  let tariffBody: unknown = null
+
+  await openStorage(page, 'fulfillment_admin', false)
+  await expect(page.getByTestId('storage-month')).toHaveValue('2026-07')
+  expect(validFrom > '2026-07-31').toBeTruthy()
+
+  await page.route('**/api/operations/storage/statements?*', (route) => {
+    if (tariffSaved) refreshGets += 1
+    return route.fulfill({ json: { tariff_configured: false, warehouses: [{ id: 'warehouse-1', name: 'Основной склад' }], statements: [] } })
+  })
+  await page.route('**/api/operations/storage/tariffs', (route) => {
+    tariffSaved = true
+    tariffBody = route.request().postDataJSON()
+    return route.fulfill({ status: 201, json: { recalculated_statements: rows } })
+  })
+
+  await page.getByRole('button', { name: 'Задать тариф' }).click()
+  await page.getByTestId('storage-rate-amount').fill('0,70')
+  await page.getByTestId('storage-rate-valid-from').fill(validFrom)
+
+  const [tariffResponse, refreshedStatements] = await Promise.all([
+    waitForPostOk(page, '/api/operations/storage/tariffs'),
+    waitForGetOk(page, '/api/operations/storage/statements?'),
+    page.getByTestId('storage-rate-save').click(),
+  ])
+  expect(tariffResponse.status()).toBe(201)
+  expect(tariffBody).toEqual({ warehouse_id: 'warehouse-1', amount: 0.7, valid_from: validFrom })
+  expect(await refreshedStatements.json()).toMatchObject({ tariff_configured: false, statements: [] })
+  expect(refreshGets).toBe(1)
+
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(page.getByTestId('storage-seller-table')).toContainText('Тариф хранения ещё не задан')
+  await expect(page.getByRole('button', { name: 'Задать тариф' })).toBeVisible()
+})
+
 test('S-11-TC-002 administrator saves a future warehouse rate and seller exception in one request', async ({ page }) => {
   test.setTimeout(120_000)
   const seed = await seedFfSellerInbound(page, `storage-${Date.now()}`)
