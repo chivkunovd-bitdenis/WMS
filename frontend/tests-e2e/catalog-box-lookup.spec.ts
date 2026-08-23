@@ -373,7 +373,7 @@ test('catalog scan follows a received box through partial and full putaway', asy
   await expect(page.getByTestId('ff-catalog-inbound-packages')).toBeVisible()
 })
 
-// S-16-TC-013, S-16-TC-016: a late failed scan must not replace the latest result or select new input.
+// S-16-TC-013, S-16-TC-016: a late network failure must enter catch without replacing the latest result or new input.
 test('catalog ignores a late failed scan after the operator starts the next barcode', async ({ page }) => {
   const seed = await seedFfSellerInbound(page, `catalog-scan-race-${Date.now()}`)
   const headers = { Authorization: `Bearer ${seed.token}` }
@@ -410,7 +410,7 @@ test('catalog ignores a late failed scan after the operator starts the next barc
     if (route.request().url().includes(encodeURIComponent(firstBarcode))) {
       markFirstLookupStarted?.()
       await firstLookupReleased
-      await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })
+      await route.abort('failed')
       return
     }
     await route.continue()
@@ -425,8 +425,17 @@ test('catalog ignores a late failed scan after the operator starts the next barc
 
   const nextBarcode = 'INB-NEXT-SCAN'
   await search.fill(nextBarcode)
+  const firstLookupFailed = page.waitForEvent(
+    'requestfailed',
+    (request) =>
+      request.method() === 'GET' &&
+      request.url().includes('/api/operations/inbound-packages/lookup') &&
+      request.url().includes(encodeURIComponent(firstBarcode)),
+  )
   releaseFirstLookup?.()
+  await firstLookupFailed
   await firstScan
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
 
   const secondPackage = page.locator('[data-testid^="ff-catalog-inbound-package-"]').filter({ hasText: secondBarcode })
   await expect(secondPackage).toBeVisible()
@@ -436,4 +445,101 @@ test('catalog ignores a late failed scan after the operator starts the next barc
     nextBarcode.length,
     nextBarcode.length,
   ])
+})
+
+// S-16-TC-014: two Enter events for one barcode must leave one addressed package and preserve scanner focus.
+test('catalog deduplicates repeated scans while the first lookup is pending', async ({ page }) => {
+  const seed = await seedFfSellerInbound(page, `catalog-repeat-scan-${Date.now()}`)
+  const headers = { Authorization: `Bearer ${seed.token}` }
+  const inbound = await page.request.post(INBOUND_API, {
+    headers,
+    data: { warehouse_id: seed.warehouseId },
+  })
+  expect(inbound.ok()).toBeTruthy()
+  const requestId = String(((await inbound.json()) as { id: string }).id)
+  const line = await page.request.post(`${INBOUND_API}/${requestId}/lines`, {
+    headers,
+    data: { product_id: seed.productId, expected_qty: 1 },
+  })
+  expect(line.ok()).toBeTruthy()
+  expect((await page.request.post(`${INBOUND_API}/${requestId}/submit`, { headers })).ok()).toBeTruthy()
+  expect((await page.request.post(`${INBOUND_API}/${requestId}/begin-receiving`, { headers })).ok()).toBeTruthy()
+  const box = await page.request.post(`${INBOUND_API}/${requestId}/boxes`, { headers })
+  expect(box.ok()).toBeTruthy()
+  const barcode = String(((await box.json()) as { internal_barcode: string }).internal_barcode)
+
+  let releaseFirstLookup: (() => void) | undefined
+  const firstLookupReleased = new Promise<void>((resolve) => {
+    releaseFirstLookup = resolve
+  })
+  let releaseSecondLookup: (() => void) | undefined
+  const secondLookupReleased = new Promise<void>((resolve) => {
+    releaseSecondLookup = resolve
+  })
+  let lookupCount = 0
+  let markFirstLookupStarted: (() => void) | undefined
+  const firstLookupStarted = new Promise<void>((resolve) => {
+    markFirstLookupStarted = resolve
+  })
+  let markSecondLookupStarted: (() => void) | undefined
+  const secondLookupStarted = new Promise<void>((resolve) => {
+    markSecondLookupStarted = resolve
+  })
+  await page.route(/\/api\/operations\/inbound-packages\/lookup/, async (route) => {
+    if (!route.request().url().includes(encodeURIComponent(barcode))) {
+      await route.continue()
+      return
+    }
+    lookupCount += 1
+    if (lookupCount === 1) {
+      markFirstLookupStarted?.()
+      await firstLookupReleased
+    } else {
+      markSecondLookupStarted?.()
+      await secondLookupReleased
+    }
+    await route.continue()
+  })
+
+  await page.goto('/app/ff/products')
+  const search = page.getByTestId('ff-catalog-search')
+  await search.fill(barcode)
+  const firstScan = search.press('Enter')
+  await firstLookupStarted
+  await search.fill(barcode)
+  const secondScan = search.press('Enter')
+  await secondLookupStarted
+
+  const secondLookupResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      response.url().includes('/api/operations/inbound-packages/lookup') &&
+      response.url().includes(encodeURIComponent(barcode)) &&
+      response.ok(),
+  )
+  releaseSecondLookup?.()
+  await secondLookupResponse
+  await secondScan
+  await expect(catalogPackageByBarcode(page, barcode)).toHaveCount(1)
+  await expect(catalogPackageByBarcode(page, barcode)).toBeVisible()
+  await expect(search).toBeFocused()
+  await expect.poll(() => search.evaluate((input) => [input.selectionStart, input.selectionEnd])).toEqual([
+    barcode.length,
+    barcode.length,
+  ])
+
+  const firstLookupResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'GET' &&
+      response.url().includes('/api/operations/inbound-packages/lookup') &&
+      response.url().includes(encodeURIComponent(barcode)) &&
+      response.ok(),
+  )
+  releaseFirstLookup?.()
+  await firstLookupResponse
+  await firstScan
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+  await expect(catalogPackageByBarcode(page, barcode)).toHaveCount(1)
+  await expect(page.getByTestId('ff-catalog-inbound-packages-lookup-error')).toBeHidden()
+  await expect(search).toBeFocused()
 })
