@@ -444,3 +444,104 @@ test('fbs workspace: supply QR preview has copies control', async ({ page }) => 
   await dialog.getByLabel('Копий каждого макета').fill('3')
   await expect(dialog.getByLabel('Копий каждого макета')).toHaveValue('3')
 })
+
+// TC-NEW-006 — Given a full FBS tape, When it opens before printing, Then its preview and request use the picking-list order.
+test('fbs workspace: full tape preview and print request use article order', async ({ page }) => {
+  await registerFf(page, 'full-tape-order')
+  const alpha = order('100', {
+    supply_id: 'sup-1',
+    product: {
+      ...(order('100').product as JsonObject),
+      name: 'Альфа',
+      seller_article: 'ZZZ',
+      sku: 'SKU-ZZZ',
+      barcode: '200000100',
+    },
+  })
+  const apple = order('8', {
+    supply_id: 'sup-1',
+    product: {
+      ...(order('8').product as JsonObject),
+      name: 'Яблоко',
+      seller_article: 'AAA',
+      sku: 'SKU-AAA',
+      barcode: '200000008',
+    },
+  })
+  const currentWorkspace = {
+    ...workspace({ stage: 'packing', orders: [alpha, apple] }),
+    supply: {
+      ...(workspace({ stage: 'packing', orders: [alpha, apple] }).supply as JsonObject),
+      packaging_task_id: 'pack-1',
+    },
+  }
+  let printBody: JsonObject | null = null
+
+  await mockWorklist(page, [alpha, apple])
+  await page.route('**/operations/fbs-supplies/sup-1/workspace', (route) => json(route, currentWorkspace))
+  await page.route('**/operations/packaging-tasks/pack-1', (route) => json(route, {
+    id: 'pack-1',
+    document_number: null,
+    warehouse_id: 'w-1',
+    status: 'in_progress',
+    marketplace_unload_request_id: null,
+    inbound_intake_request_id: null,
+    is_complete: false,
+    lines: [],
+  }))
+  await page.route('**/operations/fbs-supplies/sup-1/order-print-tape', async (route) => {
+    printBody = route.request().postDataJSON() as JsonObject
+    const orderIds = printBody.order_ids as string[]
+    await json(route, {
+      orders: orderIds.map((orderId) => ({
+        order_id: orderId,
+        wb_order_id: orderId === apple.id ? apple.wb_order_id : alpha.wb_order_id,
+        requires_honest_sign: false,
+        qr_asset: {
+          id: `asset-${orderId}`,
+          status: 'ready',
+          preview_url: `/operations/fbs-print-assets/asset-${orderId}/content`,
+          applied_at: null,
+        },
+        printed_codes: [],
+        shortage: null,
+      })),
+      order_errors: [],
+      shortage: 0,
+    })
+  })
+  await page.route('**/operations/fbs-print-assets/asset-*/content', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'image/png',
+      body: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/l9sZ3wAAAABJRU5ErkJggg==',
+        'base64',
+      ),
+    })
+  })
+  await page.route('**/operations/fbs-print-assets/asset-*/applied', (route) => json(route, {
+    id: 'asset',
+    applied_at: new Date().toISOString(),
+  }))
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await page.getByTestId(`fbs-order-${alpha.id}`).click()
+  await expect(page.getByRole('button', { name: 'Печать всего (2)' })).toBeVisible()
+  await page.getByRole('button', { name: 'Печать всего (2)' }).click()
+
+  const printDialog = page.getByTestId('marking-print-dialog')
+  const previewBody = printDialog
+    .frameLocator('[data-testid="marking-print-wb-only-preview"] iframe')
+    .locator('body')
+  await expect(previewBody).toContainText('Яблоко')
+  await expect(previewBody).toContainText('Альфа')
+  const previewText = await previewBody.innerText()
+  expect(previewText.indexOf('Яблоко')).toBeLessThan(previewText.indexOf('Альфа'))
+
+  await Promise.all([
+    page.waitForRequest((request) => request.url().includes('/order-print-tape') && request.method() === 'POST'),
+    printDialog.getByTestId('marking-print-confirm').click(),
+  ])
+  expect(printBody?.order_ids).toEqual([apple.id, alpha.id])
+})

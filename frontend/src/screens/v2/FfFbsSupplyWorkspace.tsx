@@ -1220,16 +1220,11 @@ export function FfFbsSupplyWorkspace({
     return map
   }, [packagingTask])
 
-  /** Строка упаковки — один заказ. Заказы одного товара идут подряд. */
   const packingOrders = useMemo(() => {
     if (!workspace) return []
-    return [...workspace.orders].sort((a, b) => {
-      const byName = a.product.name.localeCompare(b.product.name, 'ru')
-      if (byName !== 0) return byName
-      return a.wb_order_id - b.wb_order_id
-    })
+    const key = (order: FbsWorkspace['orders'][number]) => [order.product.seller_article ?? order.product.sku ?? '', order.product.sku ?? '', order.product.size ?? '', order.product.name].join('\u0000')
+    return [...workspace.orders].sort((a, b) => key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : a.wb_order_id - b.wb_order_id || a.id.localeCompare(b.id))
   }, [workspace])
-
   const orderPrintDone = useCallback(
     (order: FbsWorkspace['orders'][number]) =>
       (Boolean(order.sticker.applied_at) || STICKER_PRINTED_STATUSES.includes(order.sticker.status)) &&
