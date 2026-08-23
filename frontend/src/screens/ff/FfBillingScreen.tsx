@@ -86,14 +86,28 @@ export function ledgerDocumentTarget(entry: Pick<LedgerEntry, 'source_type' | 's
 type BillingTab = 'charges' | 'invoices'
 type BillingTabPeriods = Record<BillingTab, string>
 
-function formatMonth(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+function formatMonth(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, '0')}`
+}
+
+function moscowYearMonth(date: Date): { year: number; month: number } {
+  const values = new Intl.DateTimeFormat('en-US', {
+    timeZone: MOSCOW_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(date)
+  const year = Number(values.find((part) => part.type === 'year')?.value)
+  const month = Number(values.find((part) => part.type === 'month')?.value)
+  return { year, month }
 }
 
 export function initialBillingTabPeriods(now = new Date()): BillingTabPeriods {
+  const { year, month } = moscowYearMonth(now)
+  const previousYear = month === 1 ? year - 1 : year
+  const previousMonth = month === 1 ? 12 : month - 1
   return {
-    charges: formatMonth(now),
-    invoices: formatMonth(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
+    charges: formatMonth(year, month),
+    invoices: formatMonth(previousYear, previousMonth),
   }
 }
 

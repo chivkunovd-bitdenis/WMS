@@ -34,11 +34,11 @@ describe('FfBillingScreen billing contract', () => {
     expect(tokyoResult).toBe('01.09.2026')
   })
 
-  it('opens charges and invoices with their contract months and preserves each manually selected month', () => {
-    const opened = initialBillingTabPeriods(new Date(2026, 7, 23))
+  it('opens charges and invoices with Moscow months and preserves each manually selected month', () => {
+    const opened = initialBillingTabPeriods(new Date('2026-08-31T21:30:00Z'))
 
-    expect(opened.charges).toBe('2026-08')
-    expect(opened.invoices).toBe('2026-07')
+    expect(opened.charges).toBe('2026-09')
+    expect(opened.invoices).toBe('2026-08')
 
     const afterChargesSelection = updateBillingTabPeriod(opened, 'charges', '2026-06')
     const afterInvoicesSelection = updateBillingTabPeriod(afterChargesSelection, 'invoices', '2026-05')
