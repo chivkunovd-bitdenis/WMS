@@ -166,3 +166,12 @@
 04:39   05-prod-slow · splitter: готово
 04:43   05-prod-slow · screen-dev: готово
 04:43   05-prod-slow · dev: фича 1/1 сохранена e5cae3de0f2e
+04:49   05-prod-slow · reviewer: готово
+04:53   05-prod-slow · ui-critic: готово
+04:57   05-prod-slow · clicker: готово
+05:05   05-prod-slow · ux-judge: готово
+05:05 05-prod-slow: отложено — ux-judge, эскалация не помогла
+05:55   05-prod-slow · repair-plan: новый вердикт дорезается до dev
+05:57   05-prod-slow · splitter: готово
+05:57   05-prod-slow · resume: поатомный rework Terra по сохранённым находкам
+06:01   05-prod-slow · screen-dev: готово
