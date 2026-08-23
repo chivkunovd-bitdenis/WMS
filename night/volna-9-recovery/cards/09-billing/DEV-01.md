@@ -1,46 +1,38 @@
-# 09-billing · backend-dev · атом 1
+# 09-billing · screen-dev · атом 1
 
-## Что реализовано
-
-- Эндпоинт `POST /operations/marketplace-unload-requests/{request_id}/cancel`: существующий маршрут при позднем вызове для документа `shipped` возвращает документ в статусе `shipped`; до физической отгрузки прежняя отмена в `cancelled` сохранена.
-- Сервис `cancel_request`: для `shipped` записывает одну идемпотентную обратную финансовую запись и не запускает возврат складского остатка; статус `cancelled` теперь присваивается только в ветке отмены до отгрузки.
-
-## Миграции
-
-Нет.
-
-## Тесты
-
-- Расширен `test_cancel_shipped_unload_records_one_reversal_http`: после двух вызовов отмены ответы и повторно загруженный документ остаются `shipped`, снимок остатка совпадает со снимком после отгрузки, а в `BillingLedgerEntry` остаются одна исходная строка и ровно одна отрицательная `reversal` со снимком исходной ставки.
-- Повторно проверен существующий `test_marketplace_unload_cancel_partial_distribution_restores_inventory`: отмена до отгрузки по-прежнему переводит документ в `cancelled` и возвращает собранный товар.
+Роль: `screen-dev`. Реализован только атом «Сделать переключатель разделов настроек настоящими вкладками» из `FEATURES.md`.
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/app/services/marketplace_unload_service.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend/tests/test_marketplace_unload_completion.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfSettingsScreen.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfSettingsScreen.test.ts`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/tests-e2e/billing-tariffs.spec.ts`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/night/volna-9-recovery/cards/09-billing/DEV.md`
+
+`FfSettingsScreen` теперь использует семантические MUI-вкладки `Tabs`/`Tab`. У выбранной вкладки есть штатный нижний индикатор и `aria-selected="true"`; доступ к «Тарифам ФФ» по-прежнему есть только у администратора. Содержимое разделов не менялось. Добавлены узкий unit-тест начального выбранного состояния и пользовательский Playwright-сценарий `S-19-TC-001` с переходом в «Тарифы ФФ» и обратно.
 
 ## Гейты
 
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && pytest -q tests/test_marketplace_unload_completion.py::test_cancel_shipped_unload_records_one_reversal_http` — `1 passed in 2.57s` после изменения.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && pytest -q tests/test_marketplace_unload_completion.py::test_cancel_shipped_unload_records_one_reversal_http tests/test_marketplace_unload_and_discrepancy_acts.py::test_marketplace_unload_cancel_partial_distribution_restores_inventory` — `2 passed in 4.88s`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && ruff check app/services/marketplace_unload_service.py tests/test_marketplace_unload_completion.py` — `All checks passed!`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && mypy app/services/marketplace_unload_service.py` — изменённый модуль проверен, но команда завершилась с четырьмя ранее существующими ошибками в импортируемых `wildberries_credentials_service.py`, `fbs_stock_sync_service.py` и `fbs_warehouse_binding_service.py`; эти файлы не относятся к атому и не изменялись.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/backend && mypy --follow-imports=skip app/services/marketplace_unload_service.py` — `Success: no issues found in 1 source file`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing && git diff --check -- backend/app/services/marketplace_unload_service.py backend/tests/test_marketplace_unload_completion.py` — успешно, ошибок пробелов нет.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing && git add -- backend/app/services/marketplace_unload_service.py backend/tests/test_marketplace_unload_completion.py night/volna-9-recovery/cards/09-billing/DEV.md && git diff --cached --name-status && git diff --cached --check && git commit -m "fix(billing): preserve shipped unload after reversal"` — не выполнено: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-09-billing1/index.lock` (`Operation not permitted`).
-- `back_guard.py` не запускался: атом не добавляет и не меняет маршрут.
-- `check_migrations.py` не запускался: миграций нет.
+- **Красный** — `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npx tsc --noEmit -p tsconfig.app.json`. Код возврата 2. Компиляцию блокируют уже существующие ошибки вне строк этого атома: типы таблиц и MUI-пропсы в `FfBillingScreen.tsx`, старые `inputProps`/`SelectProps`/`InputLabelProps` и неиспользуемый `EmptyState` в тарифной части `FfSettingsScreen.tsx`, `inputProps` в `SellersScreen.tsx` и `PeriodPicker.tsx`. В добавленных `Tabs`/`Tab` ошибок TypeScript нет.
+- **Красный** — `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing && python3 scripts/ui/ui_guard.py`. Код возврата 1. Храповик воспроизводит существующие отклонения: `WbProductPickerDialog.tsx` 0 → 646, `FfSettingsScreen.tsx` 701 → 795, `FfFbsSupplyWorkspace.tsx` 2493 → 2498, `SellerInboundDraftScreen.tsx` 1111 → 1169. Базовая линия не обновлялась. Физический размер `FfSettingsScreen.tsx` до и после атома одинаковый: 794 строки, поэтому вкладки не добавили нового роста монолита.
+- **Зелёный** — `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npm run test:unit -- src/screens/ff/FfSettingsScreen.test.ts`. Один файл и один тест пройдены.
+- **Красный по среде** — `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npx playwright test tests-e2e/billing-tariffs.spec.ts --grep "admin switches between settings tabs"`. Playwright не смог запустить локальный webServer: привязка `127.0.0.1:18000` запрещена средой с ошибкой `operation not permitted`; сам тест не стартовал.
+- **Зелёный** — `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npx playwright test tests-e2e/billing-tariffs.spec.ts --grep "admin switches between settings tabs" --list`. Найден ровно один требуемый кейс в одном файле.
+- **Зелёный** — `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing && git diff --check`.
+- **Красный по среде** — `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing && git add -- frontend/src/screens/ff/FfSettingsScreen.tsx frontend/src/screens/ff/FfSettingsScreen.test.ts frontend/tests-e2e/billing-tariffs.spec.ts night/volna-9-recovery/cards/09-billing/DEV.md && git diff --cached --name-status && git diff --cached --check && git commit -m "fix(settings): use semantic billing tabs"`. Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-09-billing1/index.lock`: `Operation not permitted`. Коммит не создан.
+
+Перед проверками зависимости установлены строго из lock-файла командой `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npm ci --prefer-offline --no-audit --no-fund`; `package-lock.json` не изменён.
 
 ## Не реализовано
 
-- Отдельный атом 2 про неизменяемость уже выставленного счёта и перенос сторно в следующий месяц не реализовывался: текущий запуск ограничен только атомом 1 из `FEATURES.md`.
-- Новый UI, новый API-маршрут и новый пользовательский сценарий позднего сторно не добавлялись, как и требует граница атома.
+Пунктов контракта, которые не удалось реализовать буквально в коде атома, нет. Не выполнен только живой прогон Playwright-сценария из-за запрета локального порта в среде; это не заменено изменением тестовой конфигурации или обходом проверки.
+
+Находка R-31 про одиночную кнопку «Закрыть» в истории ставок относится к следующему атому из `FEATURES.md` и намеренно не исправлялась здесь. Остальные находки `DESIGN-REVIEW.md` относятся к `FfBillingScreen.tsx` и также находятся вне этого атома.
 
 ## Находки
 
-Нет.
+Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой прод не читались и не затрагивались. Новых находок по данным, утечкам или персональным данным в границах атома нет.
 
 ## Блокеры
 
-- Изменения локально реализованы и проверены, но не сохранены коммитом: права среды запрещают запись в Git index этого зарегистрированного worktree. Проверенного commit SHA нет.
+Изменения локально реализованы и артефакт записан, но не сохранены в Git: среда запрещает запись в служебный каталог зарегистрированного worktree. Проверенного commit SHA нет. Кроме того, обязательные `tsc` и `ui_guard.py` остаются красными на перечисленных выше существующих отклонениях, а живой Playwright-прогон не стартует из-за запрета локального порта.

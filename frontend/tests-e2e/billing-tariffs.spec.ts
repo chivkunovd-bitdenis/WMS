@@ -6,12 +6,39 @@ async function openSettings(page: Parameters<typeof openFulfillmentRegistration>
   await page.goto('/')
   await openFulfillmentRegistration(page)
   await page.getByTestId('nav-ff-settings').click()
+}
+
+async function openTariffs(page: Parameters<typeof openFulfillmentRegistration>[0]) {
+  await openSettings(page)
   await page.getByTestId('ff-settings-tariffs-tab').click()
 }
 
+// S-19-TC-001 — Given an FF administrator, When settings sections are switched, Then the current tab and its existing content are visible.
+test('admin switches between settings tabs without losing their existing content', async ({ page }) => {
+  await openSettings(page)
+
+  const staffTab = page.getByRole('tab', { name: 'Склад и сотрудники' })
+  const tariffsTab = page.getByRole('tab', { name: 'Тарифы ФФ' })
+
+  await expect(staffTab).toHaveAttribute('aria-selected', 'true')
+  await expect(tariffsTab).toHaveAttribute('aria-selected', 'false')
+  await expect(page.getByTestId('ff-settings-warehouse-panel')).toBeVisible()
+
+  await tariffsTab.click()
+  await expect(tariffsTab).toHaveAttribute('aria-selected', 'true')
+  await expect(staffTab).toHaveAttribute('aria-selected', 'false')
+  await expect(page.getByTestId('ff-settings-tariffs-panel')).toBeVisible()
+  await expect(page.getByText('Действующие тарифы')).toBeVisible()
+
+  await staffTab.click()
+  await expect(staffTab).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByTestId('ff-settings-warehouse-panel')).toBeVisible()
+  await expect(page.getByTestId('ff-settings-users-panel')).toBeVisible()
+})
+
 // S-31-TC-002 — Given an FF administrator, When a valid tariff is saved, Then it is visible as the active version.
 test('admin creates an active FF tariff', async ({ page }) => {
-  await openSettings(page)
+  await openTariffs(page)
   await page.getByTestId('ff-tariff-new').click()
   await page.getByLabel('Ставка, ₽').fill('45')
   await Promise.all([
@@ -23,7 +50,7 @@ test('admin creates an active FF tariff', async ({ page }) => {
 
 // S-31-TC-003 — Given an existing tariff, When a later version is saved, Then the new version is active and the old one remains in history.
 test('admin creates a later tariff version without replacing history', async ({ page }) => {
-  await openSettings(page)
+  await openTariffs(page)
   await page.getByTestId('ff-tariff-new').click()
   await page.getByLabel('Ставка, ₽').fill('45')
   await page.getByRole('button', { name: 'Сохранить ставку' }).click()
@@ -37,4 +64,3 @@ test('admin creates a later tariff version without replacing history', async ({ 
   await page.getByTitle('Открыть историю ставок').click()
   await expect(page.getByTestId('ff-tariff-history')).toContainText('45,00 ₽')
 })
-

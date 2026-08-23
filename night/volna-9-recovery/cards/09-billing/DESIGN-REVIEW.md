@@ -1,0 +1,27 @@
+# 09-billing — UI-критика исполнения
+
+ВЕРДИКТ: НАХОДКИ 8
+
+## Находки
+
+| Правило | Файл:строка | Что теряет оператор | Как чинить |
+|---|---|---|---|
+| R-31 | `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfSettingsScreen.tsx:425` | Переключатель разделов реализован двумя отдельными контурными кнопками без главного действия. Контурная кнопка здесь выглядит как слабое действие, а не как выбранная вкладка, поэтому оператору труднее считывать текущий раздел. | Заменить пару `SecondaryAction` на вкладки из макета/контракта; не использовать контурные действия как навигационные вкладки. |
+| R-31 | `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfSettingsScreen.tsx:442` | Одинокая контурная кнопка «Закрыть» в блоке истории не находится рядом с главным действием. Она выглядит случайно ослабленной и не создаёт понятной иерархии действия. | Открывать историю в согласованном диалоге либо дать ей главный контекст; для закрытия использовать штатное закрытие диалога/иконку с подсказкой. |
+| R-08 | `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfBillingScreen.tsx:311` | В детализации счёта столбец «Количество» и его заголовок не выровнены вправо; числовой столбец перестаёт читаться вертикально рядом со ставкой и суммой. | Передать `align: 'right'` для `qty`, `rate` и `amount` в массиве колонок детализации. |
+| R-09 | `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfBillingScreen.tsx:221` | У таблицы «По исполнителям» нет фиксированной ширины ни у одной колонки. При длинном имени исполнителя или смене данных границы колонок смещаются, и оператор хуже сопоставляет объём с услугой. | Задать `width` для всех пяти колонок по примеру основной таблицы. |
+| R-09 | `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfBillingScreen.tsx:311` | У таблицы строк счёта нет фиксированных ширин. Детализация в диалоге меняет сетку от счёта к счёту, поэтому ставку и итог сложнее сверять с одной строкой услуги. | Задать фиксированные `width` шести колонкам детализации, включая узкую центральную колонку действия. |
+| R-08 | `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfSettingsScreen.tsx:440` | Ставка форматируется локально, а не `MoneyCell`: у дробного значения возможен третий знак (`1,234 ₽`), пробел перед ₽ не неразрывный. Оператор видит тариф в формате, отличающемся от начислений и счёта. | Рендерить ставку через `MoneyCell` (или общий `formatMoney` с двумя знаками и неразрывным пробелом). |
+| R-32 | `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfBillingScreen.tsx:310` | Подпись «Причины устранены — повторите формирование» длиннее 22 символов и трёх слов. Она ломает единый размер панели действий и заставляет искать главное действие взглядом. | Оставить объяснение в `Alert`, а кнопке дать короткую подпись из макета: «Повторить формирование». |
+| R-30 | `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfBillingScreen.tsx:199` | При неизвестном коде услуги или единицы экран выводит backend-значение как есть (`serviceLabels[...] ?? row.service_code`, аналогично единице и строке счёта). Оператор может увидеть технический код вместо складского термина. | Использовать закрытые отображаемые словари; для неизвестного значения показывать безопасное «—» и `ErrorNotice`, не выдавая код API в интерфейс. |
+
+## Проверено и нормально
+
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfBillingScreen.tsx` использует `ScreenHeader`, `FilterBar`, `PeriodPicker`, `DataTable`, `MoneyCell`, `QtyCell`, `StatusChip` и `PrintAction`; новых локальных визуальных компонентов вместо ui-kit не найдено.
+- Основная таблица начислений и таблица счетов используют `DataTable`: это даёт `Paper variant="outlined"`, `size="small"`, липкую шапку, отсутствие заливки нормальных строк и обязательные фиксированные ширины.
+- Подписи «Расчёты», «Начисления», «Счета», «Новая ставка», «Реквизиты ФФ», «Реквизиты для счетов», статусы «Выставлен» и «Отменён» существуют в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/docs/product/ui-inventory.json`; придуманных подписей в проверенных зонах не найдено.
+- `python3 /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/scripts/ui/ui_inventory.py` завершился успешно.
+
+## ui_guard.py
+
+Новые отступления есть. `python3 /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/scripts/ui/ui_guard.py` вернул код 1: в текущей области карточки `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfSettingsScreen.tsx` зафиксирован экран-монолит `701 → 795`. Это результат храповика, а не отдельная нумерованная находка: канон не назначает экрану-монолиту правило R-XX, а отчёт роли запрещает включать в таблицу находку без номера правила. Остальные три записи guard относятся к экранам вне границ карточки и не рассматривались.

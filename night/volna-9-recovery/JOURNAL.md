@@ -127,3 +127,9 @@
 04:28   09-billing · dev: фича 1/2 сохранена 55781f530cac
 04:35   09-billing · backend-dev: готово
 04:35   09-billing · dev: фича 2/2 сохранена ed46b89341c5
+04:40   09-billing · reviewer: готово
+04:45   09-billing · ui-critic: готово
+04:45   09-billing · ui-critic: Terra-rework не закрыл вердикт — эскалация Sol
+04:45   09-billing · ui-critic: находки, круг 3 — назад к разработке
+04:47   09-billing · splitter: готово
+04:56   09-billing · screen-dev: готово

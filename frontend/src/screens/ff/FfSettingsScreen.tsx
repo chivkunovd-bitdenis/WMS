@@ -9,7 +9,7 @@ import {
   Paper,
   Snackbar,
   Stack,
-  Table,
+  Tab, Tabs, Table,
   TableBody,
   TableCell,
   TableContainer,
@@ -421,10 +421,10 @@ export function FfSettingsScreen({
         Склад, печать, сотрудники и тарифы фулфилмента.
       </Typography>
 
-      <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-        <SecondaryAction onClick={() => setSection('staff')} disabled={section === 'staff'} data-testid="ff-settings-staff-tab">Склад и сотрудники</SecondaryAction>
-        {isFulfillmentAdmin ? <SecondaryAction onClick={() => setSection('tariffs')} disabled={section === 'tariffs'} data-testid="ff-settings-tariffs-tab">Тарифы ФФ</SecondaryAction> : null}
-      </Stack>
+      <Tabs value={section} onChange={(_event, nextSection: 'staff' | 'tariffs') => setSection(nextSection)} aria-label="Разделы настроек" sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}>
+        <Tab value="staff" label="Склад и сотрудники" data-testid="ff-settings-staff-tab" />
+        {isFulfillmentAdmin ? <Tab value="tariffs" label="Тарифы ФФ" data-testid="ff-settings-tariffs-tab" /> : null}
+      </Tabs>
 
       {section === 'tariffs' && isFulfillmentAdmin ? (
         <Stack spacing={2} data-testid="ff-settings-tariffs-panel">
