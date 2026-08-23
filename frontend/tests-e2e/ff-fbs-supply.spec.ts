@@ -426,6 +426,91 @@ test('fbs workspace: accepted verdict does not paint order rows green', async ({
     .toBe('rgb(27, 94, 32)')
 })
 
+// S-03-TC-018 — a failed background refresh invalidates the old WB verdict until a fresh response arrives.
+test('S-03-TC-018: failed workspace refresh closes WB delivery', async ({ page }) => {
+  await page.clock.install()
+  await registerFf(page, 'verdict-refresh-failure')
+
+  const accepted = order('1', {
+    status: 'packed',
+    supply_id: 'sup-1',
+    sticker: { status: 'applied', asset_url: null, applied_at: new Date().toISOString() },
+    pick: { status: 'picked', location_code: 'A-01', picked_at: new Date().toISOString() },
+    pack: { status: 'packed', packed_at: new Date().toISOString() },
+    metadata: {
+      required: ['sgtin'],
+      optional: [],
+      states: [{ kind: 'sgtin', status: 'accepted', value_tail: '…5678' }],
+      delivery_allowed: true,
+      verdict: { signature: 'WB: принято', tone: 'ok', reason: null, delivery_allowed: true },
+      last_checked_at: new Date().toISOString(),
+    },
+  })
+  const rejected = order('1', {
+    ...accepted,
+    metadata: {
+      required: ['sgtin'],
+      optional: [],
+      states: [{ kind: 'sgtin', status: 'rejected', value_tail: '…5678' }],
+      delivery_allowed: false,
+      verdict: {
+        signature: 'WB не принял',
+        tone: 'stop',
+        reason: 'uinBadStatus',
+        delivery_allowed: false,
+      },
+      last_checked_at: new Date().toISOString(),
+    },
+  })
+  await mockWorklist(page, [accepted])
+
+  let refreshResult: 'accepted' | 'error' | 'rejected' = 'accepted'
+  await page.route('**/operations/fbs-supplies/sup-1/workspace', (route) => {
+    if (refreshResult === 'error') {
+      return json(route, { detail: 'HTTP 503 from upstream' }, 503)
+    }
+    const orders = refreshResult === 'rejected' ? [rejected] : [accepted]
+    return json(route, workspace({
+      stage: 'delivery',
+      status: 'packed',
+      orders,
+      packagingTaskId: 'task-verdict',
+    }))
+  })
+  await page.route('**/operations/packaging-tasks/task-verdict', (route) =>
+    json(route, packagingTask([accepted])),
+  )
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await page.getByTestId('fbs-order-1').click()
+  await expect(page.getByTestId('fbs-boxes')).toBeVisible()
+  const deliver = page.getByRole('button', { name: 'Передать в WB' })
+  await expect(deliver).toBeEnabled()
+
+  refreshResult = 'error'
+  await page.clock.fastForward(15_000)
+
+  const refreshAlert = page.getByTestId('fbs-workspace-refresh-error')
+  await expect(refreshAlert).toBeVisible()
+  await expect(refreshAlert).toContainText('Не удалось обновить поставку')
+  await expect(refreshAlert).not.toContainText('503')
+  await expect(deliver).toBeDisabled()
+
+  await page.getByRole('tab', { name: 'Упаковка и маркировка' }).click()
+  await expect(page.getByTestId('fbs-wb-verdict-1')).toHaveText('Нет ответа WB')
+  await expect(page.getByText('Сдача пока недоступна')).toBeVisible()
+
+  refreshResult = 'rejected'
+  await page.getByRole('tab', { name: 'Короба' }).click()
+  await page.clock.fastForward(15_000)
+
+  await expect(refreshAlert).toHaveCount(0)
+  await expect(deliver).toBeDisabled()
+  await page.getByRole('tab', { name: 'Упаковка и маркировка' }).click()
+  await expect(page.getByTestId('fbs-wb-verdict-1')).toHaveText('WB не принял')
+  await expect(page.getByText('неверный статус УИН')).toBeVisible()
+})
+
 // TC-S17-006 — compatible selection creates one atomic supply and opens its workspace.
 test('fbs orders: create supply from selected orders', async ({ page }) => {
   await registerFf(page, 'create')

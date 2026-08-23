@@ -281,6 +281,7 @@ export function FfFbsSupplyWorkspace({
   const [stage, setStage] = useState<StageKey>('composition')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [refreshError, setRefreshError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [locationBarcode, setLocationBarcode] = useState('')
   const [productBarcode, setProductBarcode] = useState('')
@@ -333,10 +334,11 @@ export function FfFbsSupplyWorkspace({
       if (!silent) setBusy(true)
       try {
         const next = await fetchFbsWorkspace(token, authHeaders, supplyId)
-        setWorkspace(safeInitialWorkspace(next))
+        setWorkspace(safeInitialWorkspace(next)); setRefreshError(null)
         if (!silent) setStage(visualStage(next.stage))
       } catch (cause) {
-        if (!silent) setError(cause instanceof Error ? cause.message : 'Не удалось загрузить поставку.')
+        if (silent) setRefreshError('Не удалось обновить поставку. Передача в WB временно недоступна — ждём свежий ответ Wildberries.')
+        else setError(cause instanceof Error ? cause.message : 'Не удалось загрузить поставку.')
       } finally {
         if (!silent) setBusy(false)
       }
@@ -346,8 +348,7 @@ export function FfFbsSupplyWorkspace({
 
   useEffect(() => {
     if (!open || !supplyId) return
-    setError(null)
-    setNotice(null)
+    setError(null); setRefreshError(null); setNotice(null)
     setWorkspace(safeInitialWorkspace(initialWorkspace))
     setStage(initialWorkspace ? visualStage(initialWorkspace.stage) : 'composition')
     setDeliveryKey(persistentOperationKey(supplyId, 'delivery'))
@@ -1075,7 +1076,7 @@ export function FfFbsSupplyWorkspace({
         total,
         workspace.progress.picked,
         workspace.progress.packed,
-        workspace.progress.metadata_ready,
+        refreshError ? 0 : workspace.progress.metadata_ready,
         workspace.progress.stickers_ready,
       )
     : 0
@@ -1231,9 +1232,9 @@ export function FfFbsSupplyWorkspace({
 
   const orderPrintDone = useCallback(
     (order: FbsWorkspace['orders'][number]) =>
-      (Boolean(order.sticker.applied_at) || STICKER_PRINTED_STATUSES.includes(order.sticker.status)) &&
+      !refreshError && (Boolean(order.sticker.applied_at) || STICKER_PRINTED_STATUSES.includes(order.sticker.status)) &&
       isOrderMarkingReady(order),
-    [],
+    [refreshError],
   )
 
   const printedOrdersCount = packingOrders.filter(orderPrintDone).length
@@ -1264,11 +1265,12 @@ export function FfFbsSupplyWorkspace({
     (order) => order.pack.status === 'packed' && !assignedBoxOrderIds.has(order.id),
   )
   const deliveryBlocker = useMemo(() => {
+    if (refreshError) return workspace?.orders[0] ? `Заказ №${workspace.orders[0].wb_order_id}: Ждём ответа Wildberries` : 'Ждём ответа Wildberries'
     const blockedOrder = workspace?.orders.find((order) => !order.metadata.verdict.delivery_allowed)
     if (!blockedOrder) return null
     const status = metaStatusView(blockedOrder.metadata.verdict)
     return `Заказ №${blockedOrder.wb_order_id}: ${status.disabledReason ?? status.label}`
-  }, [workspace])
+  }, [workspace, refreshError])
   const boxAssignName = workspace?.boxes.find((box) => box.id === boxAssignTarget)?.box_number
   const reprintOrder = workspace?.orders.find((order) => order.id === reprintMenu?.orderId) ?? null
   const reprintLine = reprintOrder?.product.id ? packLineByProduct.get(reprintOrder.product.id) : undefined
@@ -1559,6 +1561,7 @@ export function FfFbsSupplyWorkspace({
       {busy ? <LinearProgress /> : null}
       <DialogContent sx={{ p: 0, bgcolor: '#f4f6fb' }}>
         <Box sx={{ p: { xs: 1.5, md: 2.5 }, minHeight: '100%' }}>
+          {refreshError ? <Alert severity="error" sx={{ mb: 2 }} data-testid="fbs-workspace-refresh-error">{refreshError}</Alert> : null}
           {error ? <Alert severity="error" sx={{ mb: 2 }} action={retryAction ? <Button color="inherit" size="small" onClick={retryAction}>Повторить</Button> : undefined}>{error}</Alert> : null}
           {notice ? <Alert severity="success" sx={{ mb: 2 }}>{notice}</Alert> : null}
           {workspace?.picking_auto_passed_reason ? (
@@ -1907,7 +1910,7 @@ export function FfFbsSupplyWorkspace({
                         `заказ ${order.wb_order_id}`,
                       ].filter(Boolean).join(' · ')
                       const tail = kizTail(order)
-                      const metaStatus = metaStatusView(order.metadata.verdict)
+                      const metaStatus = metaStatusView(refreshError ? NO_WB_VERDICT : order.metadata.verdict)
                       return (
                         <Stack
                           key={order.id}
