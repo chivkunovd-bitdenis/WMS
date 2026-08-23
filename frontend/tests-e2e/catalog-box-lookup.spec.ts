@@ -281,6 +281,7 @@ test('catalog scan follows a received box through partial and full putaway', asy
   await scanCatalogPackage(page, boxBarcode!)
   const scannedBox = catalogPackageByBarcode(page, boxBarcode!)
   await expect(scannedBox).toContainText('Короб № 1')
+  await expect(scannedBox.getByText(/^Приёмка №(?!\s*№)\d+$/, { exact: true })).toBeVisible()
   await expect(scannedBox).toContainText(seed.sku)
   await expect(packageQtyCell(scannedBox, seed.sku)).toHaveText('4')
 
