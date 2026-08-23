@@ -96,6 +96,7 @@ test('FF staff with cells access but without inventory access cannot open the di
 // S-33-TC-008 — a late page response cannot overwrite a freshly filtered
 // slice, and a table failure is not presented as a valid empty report.
 test('FF report keeps one table slice and distinguishes a table error from empty data', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
   await seedFfSellerInbound(page, `ff-report-table-state-${Date.now()}`)
 
   let releaseOldPage: (() => void) | undefined
@@ -137,10 +138,20 @@ test('FF report keeps one table slice and distinguishes a table error from empty
 
   await page.getByTestId('nav-ff-reports').click()
   await expect(page.getByTestId('ff-reports-table')).toContainText('Report product')
-  await expect(page.getByRole('columnheader', { name: 'Остаток сейчас' })).toHaveAttribute('width', '130')
-  await expect(page.getByRole('columnheader', { name: 'Приход' })).toHaveAttribute('width', '110')
-  await expect(page.getByRole('columnheader', { name: 'Расход' })).toHaveAttribute('width', '110')
-  await expect(page.getByRole('columnheader', { name: 'Нетто' })).toHaveAttribute('width', '100')
+  await expect(page.getByRole('columnheader', { name: 'Остаток сейчас' })).toHaveAttribute('width', '105')
+  await expect(page.getByRole('columnheader', { name: 'Приход' })).toHaveAttribute('width', '65')
+  await expect(page.getByRole('columnheader', { name: 'Расход' })).toHaveAttribute('width', '65')
+  const netHeader = page.getByRole('columnheader', { name: 'Нетто' })
+  await expect(netHeader).toHaveAttribute('width', '65')
+  const netBounds = await netHeader.boundingBox()
+  expect(netBounds).not.toBeNull()
+  expect((netBounds?.x ?? 0) + (netBounds?.width ?? 0)).toBeLessThanOrEqual(1280)
+
+  await page.getByTestId('ff-reports-comparison').getByRole('combobox').click()
+  await page.getByRole('option', { name: 'Не показывать' }).click()
+  await expect(page.getByTestId('ff-reports-metrics-comparison')).toHaveCount(0)
+  await expect(page.getByTestId('ff-reports-metrics-net')).toContainText('3 шт.')
+  await expect(page.getByTestId('ff-reports-chart')).not.toContainText('Расход, прошлый период')
 
   await page.getByTestId('ff-reports-next-page').click()
   await oldPageStarted

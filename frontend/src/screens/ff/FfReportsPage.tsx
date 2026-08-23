@@ -263,7 +263,9 @@ export function FfReportsPage({ token, sellers = [], warehouses = [], contentIns
     { key: 'balance', label: 'Остаток сейчас', value: overview?.current_balance ?? null },
     { key: 'inbound', label: 'Приход за период', value: overview?.in_qty ?? null },
     { key: 'outbound', label: 'Расход за период', value: overview?.out_qty ?? null },
-    { key: 'comparison', label: 'Расход к прошлому периоду', value: overview?.comparison.change_percent == null ? null : overview.comparison.change, delta: overview?.comparison.change_percent == null ? undefined : { value: overview.comparison.change_percent, unit: 'percent' as const, direction: overview.comparison.change_percent >= 0 ? 'up' as const : 'down' as const, a11yLabel: 'Процент изменения расхода' }, nullValueLabel: 'В прошлом периоде расхода не было' },
+    comparison === 'previous'
+      ? { key: 'comparison', label: 'Расход к прошлому периоду', value: overview?.comparison.change_percent == null ? null : overview.comparison.change, delta: overview?.comparison.change_percent == null ? undefined : { value: overview.comparison.change_percent, unit: 'percent' as const, direction: overview.comparison.change_percent >= 0 ? 'up' as const : 'down' as const, a11yLabel: 'Процент изменения расхода' }, nullValueLabel: 'В прошлом периоде расхода не было' }
+      : { key: 'net', label: 'Нетто за период', value: overview == null ? null : overview.in_qty - overview.out_qty },
   ]
   const hasIntegrityError = rows.some((row) => row.integrity_error)
   const csvDisabledReason = periodError
@@ -297,15 +299,15 @@ export function FfReportsPage({ token, sellers = [], warehouses = [], contentIns
       <PrimaryAction onClick={() => void downloadCsv()} disabledReason={csvDisabledReason} data-testid="ff-reports-download-csv">{csvLoading ? 'Формирование CSV…' : 'Скачать CSV'}</PrimaryAction>
     </Stack>
     {tableError ? null : <><DataTable<Row> columns={grouping === 'product' ? [
-      { key: 'product', header: 'Товар', width: 150, render: row => <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}><ProductCell sku={row.sku_code} photo={row.photo_url ? <img src={row.photo_url} alt="" width="32" height="32" /> : undefined} />{row.integrity_error ? <StatusChip label="Ошибка" tone="stop" testId="ff-reports-row-integrity-error" /> : null}</Stack> },
-      { key: 'name', header: 'Название', width: 240, render: row => <TextCell value={row.product_name} /> },
-      { key: 'vendor', header: 'Артикул продавца', width: 170, render: row => <TextCell value={row.wb_vendor_code ?? '—'} /> },
-      { key: 'barcode', header: 'ШК', width: 150, render: row => <TextCell value={row.wb_barcode ?? '—'} /> },
-      ...(sellers.length > 0 ? [{ key: 'seller', header: 'Селлер', width: 150, render: (row: Row) => <TextCell value={row.seller_name ?? '—'} /> }] : []),
-      { key: 'balance', header: 'Остаток сейчас', align: 'right', width: 130, render: row => <QtyCell value={row.current_balance ?? 0} /> },
-      { key: 'in', header: 'Приход', align: 'right', width: 110, render: row => <QtyCell value={row.total_in} /> },
-      { key: 'out', header: 'Расход', align: 'right', width: 110, render: row => <QtyCell value={row.total_out} /> },
-      { key: 'net', header: 'Нетто', align: 'right', width: 100, render: row => <QtyCell value={row.net} /> },
+      { key: 'product', header: 'Товар', width: 105, render: row => <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}><ProductCell sku={row.sku_code} photo={row.photo_url ? <img src={row.photo_url} alt="" width="32" height="32" /> : undefined} />{row.integrity_error ? <StatusChip label="Ошибка" tone="stop" testId="ff-reports-row-integrity-error" /> : null}</Stack> },
+      { key: 'name', header: 'Название', width: 125, render: row => <TextCell value={row.product_name} width={115} /> },
+      { key: 'vendor', header: <Typography component="span" variant="inherit" sx={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Артикул продавца</Typography>, width: 120, render: row => <TextCell value={row.wb_vendor_code ?? '—'} width={110} /> },
+      { key: 'barcode', header: 'ШК', width: 120, render: row => <TextCell value={row.wb_barcode ?? '—'} width={110} /> },
+      ...(sellers.length > 0 ? [{ key: 'seller', header: 'Селлер', width: 90, render: (row: Row) => <TextCell value={row.seller_name ?? '—'} width={80} /> }] : []),
+      { key: 'balance', header: <Typography component="span" variant="inherit" sx={{ whiteSpace: 'normal', lineHeight: 1.15 }}>Остаток сейчас</Typography>, align: 'right', width: 105, render: row => <QtyCell value={row.current_balance ?? 0} /> },
+      { key: 'in', header: 'Приход', align: 'right', width: 65, render: row => <QtyCell value={row.total_in} /> },
+      { key: 'out', header: 'Расход', align: 'right', width: 65, render: row => <QtyCell value={row.total_out} /> },
+      { key: 'net', header: 'Нетто', align: 'right', width: 65, render: row => <QtyCell value={row.net} /> },
     ] : [
       { key: 'operation', header: 'Операция', width: 260, render: row => <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}><TextCell value={(row as Row & { operation?: string }).operation ?? '—'} />{row.integrity_error ? <StatusChip label="Ошибка" tone="stop" testId="ff-reports-row-integrity-error" /> : null}</Stack> },
       { key: 'in', header: 'Приход', width: 130, align: 'right', render: row => { const value = row.total_in ?? (row as Row & { in_qty?: number }).in_qty ?? 0; return <QtyCell value={row.integrity_error && value === 0 ? null : value} /> } },
