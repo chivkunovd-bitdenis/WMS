@@ -180,6 +180,38 @@ This document expands **[IMPLEMENTED_PRODUCT_SCENARIOS_EN.md](./IMPLEMENTED_PROD
 - **Then:** UI reports that the file was already applied; added quantity and movement count are zero; product and stock totals stay unchanged.
 - **Negative / restrictions:** the duplicate guard is tenant/seller/warehouse scoped; a file applied in one scope must not expose or suppress another tenant’s data.
 
+### TC-NEW-CATALOG-PACKAGES-001 Catalog scan shows the current contents of an inbound box
+
+- **Actor:** fulfillment admin or a staff member with **cells** or **inventory** permission.
+- **Given:** an inbound request is in receiving or sorting; its box contains a product with a positive unposted quantity.
+- **When:** the actor opens the FF product catalog and submits the exact `INB-*` barcode in the existing search field.
+- **Then:** the catalog opens the **Boxes and cargo places** section, expands only the found box, and visibly shows its product SKU, name, barcode, and current remaining quantity.
+- **Negative / restrictions:** catalog lookup is read-only: it does not open or close the inbound box, print a label, or change intake status or quantities.
+
+### TC-NEW-CATALOG-PACKAGES-002 Catalog reflects partial and full putaway of a box
+
+- **Actor:** fulfillment admin.
+- **Given:** a received box with a positive quantity is visible in the catalog and its inbound request is in FF sorting.
+- **When:** the actor puts away part of the box through **Sorting**, then scans the same `INB-*` barcode in the catalog; afterwards the actor puts away the remaining quantity and scans again.
+- **Then:** after the partial putaway the catalog shows the reduced current remainder; after the full putaway it shows **«Товар из короба уже разложен»** and does not restore historical composition.
+- **Negative / restrictions:** the catalog has no putaway controls, so the change must originate only from the existing Sorting workflow.
+
+### TC-NEW-CATALOG-PACKAGES-003 Cargo place and protected barcode lookup
+
+- **Actor:** fulfillment admin or catalog-authorized staff member.
+- **Given:** an unfinished inbound request has a cargo place with an `ICG-*` barcode; another tenant may have a valid internal package barcode.
+- **When:** the actor scans the cargo-place barcode, an unknown `INB-*` barcode, and a barcode that belongs to the other tenant.
+- **Then:** cargo place visibly states **«Состав по грузоместу не ведётся»**; both unknown and foreign barcodes show the identical message **«Короб или грузоместо не найдено»**.
+- **Negative / restrictions:** the catalog must not infer cargo composition or disclose another tenant's intake, warehouse, or package context.
+
+### TC-NEW-CATALOG-PACKAGES-004 Catalog-authorized staff can view packages without reception permission
+
+- **Actor:** fulfillment staff member with **cells** or **inventory** permission and without reception permission.
+- **Given:** the tenant has catalog packages and the staff account has the stated catalog permission.
+- **When:** the staff member opens the FF product catalog.
+- **Then:** the catalog and its **Boxes and cargo places** section are visible and available for lookup.
+- **Negative / restrictions:** this does not grant Reception navigation or any intake-changing command.
+
 ---
 
 ## S06 — Inbound intake (receiving)
