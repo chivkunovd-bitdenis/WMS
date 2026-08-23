@@ -12,6 +12,7 @@ import {
 const rows = [
   { id: 'draft-problem', seller_id: 'seller-1', seller_name: 'Красотка', warehouse_id: 'warehouse-1', warehouse_name: 'Основной склад', status: 'draft', fixed_at: null, total_liter_days: '12840.50', total_amount: '8988.35', problem_count: 1, measurements: [{ product_id: 'product-missing', sku: 'SKU-11890', seller_article: 'NRD-2XL-LONG', volume_liters: null, dimensions_source: null, liter_days: '0', rate_snapshot: '0.70', amount: null, status: 'missing_dimensions' }, { product_id: 'product-ready', sku: 'SKU-10432', seller_article: 'KRS-44-BLK', volume_liters: '2.40', dimensions_source: 'manual', liter_days: '8928.00', rate_snapshot: '0.70', amount: '6249.60', status: 'calculated' }] },
   { id: 'draft-ready', seller_id: 'seller-3', seller_name: 'Норд', warehouse_id: 'warehouse-1', warehouse_name: 'Основной склад', status: 'draft', fixed_at: null, total_liter_days: '6432.00', total_amount: '4502.40', problem_count: 0, measurements: [{ product_id: 'product-nord', sku: 'SKU-20001', seller_article: 'NRD-READY', volume_liters: '1.20', dimensions_source: 'wildberries', liter_days: '6432.00', rate_snapshot: '0.70', amount: '4502.40', status: 'calculated' }] },
+  { id: 'fixed-rate', seller_id: 'seller-4', seller_name: 'Север', warehouse_id: 'warehouse-1', warehouse_name: 'Основной склад', status: 'fixed', fixed_at: '2026-08-01T09:20:00+03:00', total_liter_days: '8928.00', total_amount: '6249.60', problem_count: 0, measurements: [{ product_id: 'product-fixed-rate', sku: 'SKU-10432', seller_article: 'KRS-44-BLK-VERY-LONG-SELLER-ARTICLE-FOR-PRINT-PREVIEW', volume_liters: '2.40', dimensions_source: 'manual', liter_days: '8928.00', rate_snapshot: '0.70', amount: '6249.60', status: 'calculated' }] },
   { id: 'fixed-zero', seller_id: 'seller-2', seller_name: 'Вектор', warehouse_id: 'warehouse-1', warehouse_name: 'Основной склад', status: 'fixed', fixed_at: '2026-08-01T09:20:00+03:00', total_liter_days: '0', total_amount: '0.00', problem_count: 0, measurements: [] },
 ]
 
@@ -27,7 +28,8 @@ async function openStorage(page: Page, role: 'fulfillment_admin' | 'fulfillment_
   await page.route('**/api/products/product-ready/dimensions/restore-wb', (route) => route.fulfill({ json: {} }))
   await page.route('**/api/operations/storage/statements/draft-problem/fix', (route) => route.fulfill({ json: { ...rows[0], status: 'fixed', problem_count: 0, fixed_at: '2026-08-01T09:20:00+03:00' } }))
   await page.route('**/api/operations/storage/statements/draft-ready/fix', (route) => route.fulfill({ json: { ...rows[1], status: 'fixed', fixed_at: '2026-08-01T09:20:00+03:00' } }))
-  await page.route('**/api/operations/storage/statements/fixed-zero/print', (route) => route.fulfill({ json: rows[2] }))
+  await page.route('**/api/operations/storage/statements/fixed-rate/print', (route) => route.fulfill({ json: rows[2] }))
+  await page.route('**/api/operations/storage/statements/fixed-zero/print', (route) => route.fulfill({ json: rows[3] }))
   await page.goto('/app/ff/inventory')
   await expect(page.getByTestId('ff-storage-page')).toBeVisible()
 }
@@ -454,6 +456,20 @@ test('S-11-TC-009 opens a repeat print preview for a fixed document', async ({ p
   await openStorage(page)
   await page.getByTestId('storage-print-fixed-zero').click()
   await expect(page.getByTestId('storage-print-preview')).toContainText('Итого: 0.00 ₽')
+})
+
+// TC-NEW-STORAGE-REVIEW-03 — зафиксированный расчёт печатается со снимком ставки и устойчивыми числовыми колонками.
+test('fixed storage print preview shows the rate snapshot in fixed-width columns', async ({ page }) => {
+  await openStorage(page)
+  await page.getByTestId('storage-print-fixed-rate').click()
+
+  const preview = page.getByTestId('storage-print-preview')
+  const headers = preview.getByRole('columnheader')
+  await expect(headers).toHaveText(['SKU', 'Артикул продавца', 'Объём, л', 'Источник', 'Литро-дни', 'Ставка, ₽/л·день', 'Сумма, ₽'])
+  for (const [index, width] of [150, 180, 110, 150, 130, 150, 120].entries()) await expect(headers.nth(index)).toHaveAttribute('width', String(width))
+  await expect(preview).toContainText('KRS-44-BLK-VERY-LONG-SELLER-ARTICLE-FOR-PRINT-PREVIEW')
+  await expect(preview).toContainText('0.70')
+  await expect(preview).toContainText('Итого: 6249.60 ₽')
 })
 
 test('S-11-TC-010 keeps a zero month as a fixed row instead of an empty state', async ({ page }) => {
