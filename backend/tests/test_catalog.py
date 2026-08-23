@@ -6,6 +6,9 @@ import uuid
 import pytest
 from httpx import AsyncClient
 
+from app.db.session import SessionLocal
+from app.models.warehouse import Warehouse
+
 
 async def _register_catalog_admin(
     async_client: AsyncClient,
@@ -108,12 +111,14 @@ async def test_catalog_flow(async_client: AsyncClient) -> None:
         json={"name": "Main", "code": "main-1"},
     )
     assert wh.status_code == 200, wh.text
+    assert wh.json()["is_operational"] is True
     wid = wh.json()["id"]
 
     listed = await async_client.get("/warehouses", headers=h)
     assert listed.status_code == 200
     assert len(listed.json()) == 1
     assert listed.json()[0]["code"] == "main-1"
+    assert listed.json()[0]["is_operational"] is True
 
     loc = await async_client.post(
         f"/warehouses/{wid}/locations",
@@ -171,6 +176,44 @@ async def test_catalog_flow(async_client: AsyncClient) -> None:
     plist = await async_client.get("/products", headers=h)
     assert plist.status_code == 200
     assert len(plist.json()) == 1
+
+
+@pytest.mark.asyncio
+async def test_warehouse_read_model_preserves_operational_flag_after_rename(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(time.time_ns())
+    admin_headers = await _register_catalog_admin(async_client, suffix)
+    created = await async_client.post(
+        "/warehouses",
+        headers=admin_headers,
+        json={"name": "FBS WB Service", "code": f"service-{suffix}"},
+    )
+    assert created.status_code == 200, created.text
+    warehouse_id = str(created.json()["id"])
+
+    async with SessionLocal() as session:
+        warehouse = await session.get(Warehouse, uuid.UUID(warehouse_id))
+        assert warehouse is not None
+        warehouse.is_operational = False
+        await session.commit()
+
+    renamed = await async_client.patch(
+        f"/warehouses/{warehouse_id}",
+        headers=admin_headers,
+        json={"name": "Archive"},
+    )
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json() == {
+        "id": warehouse_id,
+        "name": "Archive",
+        "code": f"service-{suffix}",
+        "is_operational": False,
+    }
+
+    listed = await async_client.get("/warehouses", headers=admin_headers)
+    assert listed.status_code == 200, listed.text
+    assert listed.json() == [renamed.json()]
 
 
 @pytest.mark.asyncio

@@ -50,6 +50,7 @@ class WarehouseOut(BaseModel):
     id: str
     name: str
     code: str
+    is_operational: bool
 
     model_config = {"from_attributes": False}
 
@@ -88,7 +89,13 @@ async def list_warehouses(
 ) -> list[WarehouseOut]:
     rows = await list_wh_svc(session, user.tenant_id)
     return [
-        WarehouseOut(id=str(w.id), name=w.name, code=w.code) for w in rows
+        WarehouseOut(
+            id=str(w.id),
+            name=w.name,
+            code=w.code,
+            is_operational=w.is_operational,
+        )
+        for w in rows
     ]
 
 
@@ -112,7 +119,12 @@ async def post_warehouse(
             status_code=status.HTTP_409_CONFLICT,
             detail="warehouse_code_taken",
         ) from None
-    return WarehouseOut(id=str(w.id), name=w.name, code=w.code)
+    return WarehouseOut(
+        id=str(w.id),
+        name=w.name,
+        code=w.code,
+        is_operational=w.is_operational,
+    )
 
 
 @router.patch("/{warehouse_id}", response_model=WarehouseOut)
@@ -141,7 +153,12 @@ async def patch_warehouse(
                 detail="invalid_warehouse_name",
             ) from None
         raise
-    return WarehouseOut(id=str(w.id), name=w.name, code=w.code)
+    return WarehouseOut(
+        id=str(w.id),
+        name=w.name,
+        code=w.code,
+        is_operational=w.is_operational,
+    )
 
 
 @router.delete("/{warehouse_id}", status_code=status.HTTP_204_NO_CONTENT)
