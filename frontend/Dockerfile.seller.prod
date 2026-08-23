@@ -6,7 +6,7 @@ COPY frontend/package.json frontend/package-lock.json /app/frontend/
 RUN npm ci
 
 COPY frontend /app/frontend
-ENV VITE_SELLER_ROUTER_BASENAME=/
+ENV VITE_SELLER_ROUTER_BASENAME=/app/seller
 RUN npm run build
 
 
