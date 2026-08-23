@@ -90,10 +90,16 @@ async def print_fbs_order_tape(
 ) -> FbsOrderTapePrintResult:
     if not order_ids:
         raise FbsOrderTapePrintError("empty_order_set")
-    try:
-        print_layout = parse_layout(layout or {"units": [{"block": "cz", "copies": 1}]})
-    except PrintTemplateServiceError as exc:
-        raise FbsOrderTapePrintError(exc.code) from exc
+    qr_only = include_order_qr and isinstance(layout, dict) and layout.get("units") == []
+    if qr_only:
+        # QR заказа не является блоком раскладки ЧЗ/ШК. Пустая раскладка здесь
+        # означает «получить и напечатать только QR», без расхода КМ из пула.
+        print_layout = PrintLayout(units=[])
+    else:
+        try:
+            print_layout = parse_layout(layout or {"units": [{"block": "cz", "copies": 1}]})
+        except PrintTemplateServiceError as exc:
+            raise FbsOrderTapePrintError(exc.code) from exc
     supply = await _load_supply(session, tenant_id, supply_id)
     if supply is None:
         raise FbsOrderTapePrintError("supply_not_found")
@@ -103,7 +109,7 @@ async def print_fbs_order_tape(
     if set(order_ids) == {order.id for order in supply.orders}:
         ordered.sort(key=picking_list_order_key)
     line_by_product = await _line_by_product(session, tenant_id, supply)
-    if not reprint and not allow_partial:
+    if not qr_only and not reprint and not allow_partial:
         preflight_shortage = await _preflight_new_code_shortage(session, tenant_id, ordered)
         if preflight_shortage > 0:
             return FbsOrderTapePrintResult(
@@ -175,6 +181,16 @@ async def print_fbs_order_tape(
                     order_id=order.id,
                     wb_order_id=int(order.wb_order_id),
                     requires_honest_sign=False,
+                    qr_asset_id=qr_asset_id,
+                )
+            )
+            continue
+        if qr_only:
+            result_orders.append(
+                FbsOrderTapeOrder(
+                    order_id=order.id,
+                    wb_order_id=int(order.wb_order_id),
+                    requires_honest_sign=True,
                     qr_asset_id=qr_asset_id,
                 )
             )
