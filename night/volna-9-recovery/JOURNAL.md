@@ -96,3 +96,33 @@
 23:05   06-picking-list-order · dev: фича 5/6 сохранена b6d7142dc2f8
 23:08   06-picking-list-order · screen-dev: готово
 23:08   06-picking-list-order · dev: фича 6/6 сохранена 40e890782dbe
+23:08   06-picking-list-order · reviewer: уже сделано, пропускаю
+23:10   06-picking-list-order · ui-critic: готово
+23:11   06-picking-list-order · clicker: готово
+23:12   06-picking-list-order · ux-judge: готово
+23:12 06-picking-list-order: отложено — ux-judge, эскалация не помогла
+23:32   06-picking-list-order · product: уже сделано, пропускаю
+23:32   06-picking-list-order · ux-architect: уже сделано, пропускаю
+23:32   06-picking-list-order · tester: уже сделано, пропускаю
+23:32   06-picking-list-order · breaker: уже сделано, пропускаю
+23:32   06-picking-list-order · splitter: уже сделано, пропускаю
+23:32   06-picking-list-order · dev: уже сделано по 6 атомарным фичам
+23:32   06-picking-list-order · reviewer: уже сделано, пропускаю
+23:32   06-picking-list-order · ui-critic: уже сделано, пропускаю
+23:33   06-picking-list-order · clicker: готово
+23:36   06-picking-list-order · ux-judge: готово
+23:36 06-picking-list-order: отложено — браузерная среда, не дефект кода
+04:16   06-picking-list-order · product: уже сделано, пропускаю
+04:16   06-picking-list-order · ux-architect: уже сделано, пропускаю
+04:16   06-picking-list-order · tester: уже сделано, пропускаю
+04:16   06-picking-list-order · breaker: уже сделано, пропускаю
+04:16   06-picking-list-order · splitter: уже сделано, пропускаю
+04:16   06-picking-list-order · dev: уже сделано по 6 атомарным фичам
+04:16   06-picking-list-order · reviewer: уже сделано, пропускаю
+04:16   06-picking-list-order · ui-critic: уже сделано, пропускаю
+04:16   06-picking-list-order · clicker: уже сделано, пропускаю
+04:23   06-picking-list-order · ux-judge: готово
+04:23   06-picking-list-order · ux-judge: находки, круг 1 — назад к разработке
+04:26   06-picking-list-order · splitter: FEATURES.md: первый frontend-атом должен отдельно создать ui-kit (код 0, попытка 1)
+04:29   06-picking-list-order · splitter: готово
+04:34   06-picking-list-order · screen-dev: готово

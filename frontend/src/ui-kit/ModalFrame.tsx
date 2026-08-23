@@ -29,6 +29,7 @@ export function ModalFrame({
       open={open}
       fullWidth
       maxWidth={maxWidth}
+      disableEscapeKeyDown={busy}
       onClose={() => {
         if (!busy) onClose()
       }}

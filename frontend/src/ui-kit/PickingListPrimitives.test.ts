@@ -8,7 +8,8 @@ import { ModalFrame } from './ModalFrame'
 
 type DialogElementProps = {
   'aria-busy': boolean
-  onClose: () => void
+  disableEscapeKeyDown: boolean
+  onClose: (event: unknown, reason: 'backdropClick' | 'escapeKeyDown') => void
 }
 
 type TooltipElementProps = {
@@ -29,7 +30,9 @@ describe('picking list UI-kit primitives', () => {
     }) as ReactElement<DialogElementProps>
 
     expect(busyFrame.props['aria-busy']).toBe(true)
-    busyFrame.props.onClose()
+    expect(busyFrame.props.disableEscapeKeyDown).toBe(true)
+    busyFrame.props.onClose({}, 'escapeKeyDown')
+    busyFrame.props.onClose({}, 'backdropClick')
     expect(onClose).not.toHaveBeenCalled()
 
     const readyFrame = ModalFrame({
@@ -40,11 +43,12 @@ describe('picking list UI-kit primitives', () => {
       children: null,
     }) as ReactElement<DialogElementProps>
 
-    readyFrame.props.onClose()
+    expect(readyFrame.props.disableEscapeKeyDown).toBe(false)
+    readyFrame.props.onClose({}, 'escapeKeyDown')
     expect(onClose).toHaveBeenCalledOnce()
   })
 
-  it('keeps ChoiceFilter interactive and exposes its disabled reason', () => {
+  it('changes only the selected ChoiceFilter value and keeps its buttons keyboard-focusable', () => {
     const onChange = vi.fn()
     const readyFilter = ChoiceFilter({
       value: 'all',
@@ -64,8 +68,10 @@ describe('picking list UI-kit primitives', () => {
 
     expect(readyButtons[0].props['aria-pressed']).toBe(true)
     expect(readyButtons[1].props.disabled).toBe(false)
+    expect(readyButtons[1].props.tabIndex).not.toBe(-1)
     readyButtons[1].props.onClick()
     expect(onChange).toHaveBeenCalledWith('unpicked')
+    expect(onChange).toHaveBeenCalledTimes(1)
 
     const disabledFilter = ChoiceFilter({
       value: 'all',

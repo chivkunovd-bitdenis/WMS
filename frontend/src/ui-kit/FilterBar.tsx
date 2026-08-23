@@ -67,7 +67,17 @@ export function ChoiceFilter<Value extends string>({
           aria-label={ariaLabel}
           aria-disabled={isDisabled}
           data-testid={testId}
-          sx={{ p: 0.5, bgcolor: 'action.hover', borderRadius: 1, flexWrap: 'wrap' }}
+          sx={{
+            p: 0.5,
+            bgcolor: 'action.hover',
+            borderRadius: 1,
+            flexWrap: 'wrap',
+            '& .MuiButton-root.Mui-focusVisible': {
+              outline: '2px solid',
+              outlineColor: 'primary.main',
+              outlineOffset: 2,
+            },
+          }}
         >
           {options.map((option) => (
             <Button
