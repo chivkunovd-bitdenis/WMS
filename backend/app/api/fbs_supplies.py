@@ -283,6 +283,10 @@ class FbsSupplyPlannedShipmentDateBody(BaseModel):
     planned_shipment_date: date | None = None
 
 
+class FbsSupplyBoxesWithoutDistributionBody(BaseModel):
+    enabled: bool
+
+
 class FbsShipmentCalendarRowOut(BaseModel):
     id: str
     date: str
@@ -330,6 +334,7 @@ class FbsWorkspaceSupplyOut(BaseModel):
     packaging_task_id: str | None
     barcode_asset: FbsWorkspacePrintAssetOut | None
     honest_sign_skipped: bool
+    boxes_without_distribution: bool
 
 
 class FbsWorkspaceProgressOut(BaseModel):
@@ -693,7 +698,12 @@ def _raise_from_pvz_service(exc: pvz_svc.FbsShipmentPvzError) -> None:
 def _raise_from_packing_box_service(exc: packing_box_svc.FbsPackingBoxError) -> None:
     if exc.code in {"supply_not_found", "packing_box_not_found", "box_assignment_not_found"}:
         raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
-    if exc.code in {"idempotency_key_reused", "box_not_empty", "order_already_in_box"}:
+    if exc.code in {
+        "idempotency_key_reused",
+        "box_not_empty",
+        "order_already_in_box",
+        "boxes_already_distributed",
+    }:
         raise_fbs_http(status.HTTP_409_CONFLICT, exc.code)
     if exc.code in {
         "order_not_packed",
@@ -1217,6 +1227,31 @@ async def get_fbs_supply_workspace(
             raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
         raise_fbs_http(status.HTTP_500_INTERNAL_SERVER_ERROR, exc.code)
     return FbsWorkspaceOut.model_validate(workspace)
+
+
+@router.post(
+    "/{supply_id}/boxes-without-distribution",
+    response_model=FbsWorkspaceOut,
+    summary="Toggle FBS supply boxes without distribution mode",
+)
+async def set_fbs_supply_boxes_without_distribution(
+    supply_id: uuid.UUID,
+    body: FbsSupplyBoxesWithoutDistributionBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    try:
+        await packing_box_svc.set_boxes_without_distribution(
+            session,
+            user.tenant_id,
+            supply_id,
+            body.enabled,
+            actor_user_id=user.id,
+        )
+    except packing_box_svc.FbsPackingBoxError as exc:
+        _raise_from_packing_box_service(exc)
+    await session.commit()
+    return await _workspace_after_packing_box_action(session, user.tenant_id, supply_id)
 
 
 @router.patch("/{supply_id}/planned-shipment-date", response_model=FbsWorkspaceOut)
