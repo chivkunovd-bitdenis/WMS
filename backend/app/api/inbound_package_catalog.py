@@ -29,6 +29,7 @@ class InboundPackageCatalogItemOut(BaseModel):
     warehouse_name: str | None = None
     intake_status: str
     composition_tracked: bool
+    fully_distributed: bool
     remaining_qty: int | None = None
     lines: list[InboundPackageCatalogLineOut] = Field(default_factory=list)
 
@@ -44,6 +45,7 @@ def _item_out(item: catalog_svc.InboundPackageCatalogItem) -> InboundPackageCata
         warehouse_name=item.warehouse_name,
         intake_status=item.intake_status,
         composition_tracked=item.composition_tracked,
+        fully_distributed=item.fully_distributed,
         remaining_qty=item.remaining_qty,
         lines=[
             InboundPackageCatalogLineOut(

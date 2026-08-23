@@ -37,6 +37,7 @@ class InboundPackageCatalogItem:
     warehouse_name: str | None
     intake_status: str
     composition_tracked: bool
+    fully_distributed: bool
     remaining_qty: int | None
     lines: tuple[InboundPackageCatalogLine, ...]
     request_created_at: datetime
@@ -71,6 +72,9 @@ def _box_item(
         warehouse_name=warehouse_name,
         intake_status=request.status,
         composition_tracked=True,
+        fully_distributed=bool(box.lines) and all(
+            _box_line_remaining_qty(line) == 0 for line in box.lines
+        ),
         remaining_qty=sum(line.remaining_qty for line in lines),
         lines=lines,
         request_created_at=request.created_at,
@@ -93,6 +97,7 @@ def _cargo_place_item(
         warehouse_name=warehouse_name,
         intake_status=request.status,
         composition_tracked=False,
+        fully_distributed=False,
         remaining_qty=None,
         lines=(),
         request_created_at=request.created_at,

@@ -18,3 +18,5 @@
 06:46   01-catalog-box-lookup · reviewer: находки, круг 1 — назад к разработке
 06:48   01-catalog-box-lookup · splitter: готово
 06:53   01-catalog-box-lookup · screen-dev: готово
+06:53   01-catalog-box-lookup · dev: фича 1/8 сохранена 48f608534328
+06:55   01-catalog-box-lookup · backend-dev: готово

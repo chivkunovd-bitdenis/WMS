@@ -90,7 +90,7 @@ async def _seed_packages(tenant_id: uuid.UUID) -> dict[str, uuid.UUID]:
         id=uuid.uuid4(),
         tenant_id=tenant_id,
         warehouse_id=warehouse_one.id,
-        status="receiving",
+        status="sorting",
         display_number="№000002",
         document_number="ПРИЕМ-26-08-23-2",
         created_at=now,
@@ -277,12 +277,15 @@ async def test_catalog_list_and_lookup_are_tenant_scoped_read_only(
     ]
     residual = rows[0]
     assert residual["kind"] == "box"
+    assert residual["fully_distributed"] is False
     assert residual["remaining_qty"] == 6
     assert residual["lines"] == [{"product_id": str(ids["product_id"]), "remaining_qty": 6}]
     assert residual["warehouse_name"] == "Основной"
     assert rows[1]["remaining_qty"] == 0
+    assert rows[1]["fully_distributed"] is False
     assert rows[2]["kind"] == "cargo_place"
     assert rows[2]["composition_tracked"] is False
+    assert rows[2]["fully_distributed"] is False
     assert rows[2]["remaining_qty"] is None
     assert rows[3]["warehouse_name"] == "Резерв"
 
@@ -294,6 +297,18 @@ async def test_catalog_list_and_lookup_are_tenant_scoped_read_only(
     assert done_box.json()["remaining_qty"] == 0
     assert done_box.json()["lines"] == []
     assert done_box.json()["intake_status"] == "done"
+    assert done_box.json()["fully_distributed"] is True
+
+    distributed_box = await async_client.get(
+        "/operations/inbound-packages/lookup?barcode=INB-CURRENT-DISTRIBUTED",
+        headers=admin_headers,
+    )
+    assert distributed_box.status_code == 200, distributed_box.text
+    assert distributed_box.json()["intake_status"] == "sorting"
+    assert distributed_box.json()["remaining_qty"] == 0
+    assert distributed_box.json()["lines"] == []
+    assert distributed_box.json()["fully_distributed"] is True
+    assert "INB-CURRENT-DISTRIBUTED" not in [row["internal_barcode"] for row in rows]
 
     done_cargo = await async_client.get(
         "/operations/inbound-packages/lookup?barcode=ICG-DONE", headers=admin_headers
