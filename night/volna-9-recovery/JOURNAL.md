@@ -156,3 +156,5 @@
 04:20   07-reporting · splitter: готово
 04:20   07-reporting · resume: поатомный rework Sol по сохранённым находкам
 04:25   07-reporting · backend-dev: готово
+04:25   07-reporting · dev: фича 1/7 сохранена 9c838c719338
+04:33   07-reporting · backend-dev: готово
