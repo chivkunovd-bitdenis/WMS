@@ -386,7 +386,7 @@ def _wb_order_verdict(
     if "pending" in decisions:
         return {
             "signature": "WB: проверяет",
-            "tone": "stop",
+            "tone": "neutral",
             "reason": None,
             "delivery_allowed": False,
         }
