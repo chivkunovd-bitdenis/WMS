@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient, Response
 from sqlalchemy import event, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import settings
 from app.db.session import SessionLocal, engine
@@ -353,11 +354,36 @@ async def test_fbs_shipment_second_deliver_does_not_reach_wb_while_first_holds_s
 
     first_deliver_entered = asyncio.Event()
     release_first_deliver = asyncio.Event()
-    second_locked_supply_select_started = asyncio.Event()
+    second_marker_update_started = asyncio.Event()
+    second_marker_update_finished = asyncio.Event()
     deliver_calls = 0
+    premature_commit_count = 0
+    first_request: asyncio.Task[Response] | None = None
     second_request: asyncio.Task[Response] | None = None
 
-    def observe_locked_supply_select(
+    real_commit = AsyncSession.commit
+
+    async def observe_commit(session: AsyncSession) -> None:
+        nonlocal premature_commit_count
+        if (
+            asyncio.current_task() is first_request
+            and not first_deliver_entered.is_set()
+        ):
+            premature_commit_count += 1
+        await real_commit(session)
+
+    def is_second_marker_update(sql: str, context: object) -> bool:
+        """Match the write that SQLite must hold until the WB handoff ends."""
+        compiled = getattr(context, "compiled", None)
+        statement = getattr(compiled, "statement", None)
+        return (
+            asyncio.current_task() is second_request
+            and "UPDATE fbs_orders" in sql
+            and "metadata_last_checked_at" in sql
+            and statement is not None
+        )
+
+    def observe_second_marker_update_started(
         _conn: object,
         _cursor: object,
         sql: str,
@@ -365,22 +391,19 @@ async def test_fbs_shipment_second_deliver_does_not_reach_wb_while_first_holds_s
         context: object,
         _executemany: bool,
     ) -> None:
-        """Observe the database boundary, not the service helper boundary."""
-        compiled = getattr(context, "compiled", None)
-        statement = getattr(compiled, "statement", None)
-        if (
-            asyncio.current_task() is not second_request
-            or second_locked_supply_select_started.is_set()
-            or getattr(statement, "_for_update_arg", None) is None
-            or "FROM fbs_supplies" not in sql
-        ):
-            return
+        if is_second_marker_update(sql, context):
+            second_marker_update_started.set()
 
-        # before_cursor_execute runs only after AsyncSession.execute has
-        # started this concrete SELECT ... FOR UPDATE.  Releasing the first
-        # WB call only after this signal makes an early transaction commit
-        # expose a second WB mutation instead of racing green.
-        second_locked_supply_select_started.set()
+    def observe_second_marker_update_finished(
+        _conn: object,
+        _cursor: object,
+        sql: str,
+        _parameters: object,
+        context: object,
+        _executemany: bool,
+    ) -> None:
+        if is_second_marker_update(sql, context):
+            second_marker_update_finished.set()
 
     async def delayed_deliver(*_args: object, **_kwargs: object) -> None:
         nonlocal deliver_calls
@@ -390,9 +413,19 @@ async def test_fbs_shipment_second_deliver_does_not_reach_wb_while_first_holds_s
             await release_first_deliver.wait()
 
     monkeypatch.setattr(shipment_mod, "deliver_marketplace_supply", delayed_deliver)
+    monkeypatch.setattr(AsyncSession, "commit", observe_commit)
 
     sync_engine = engine.sync_engine
-    event.listen(sync_engine, "before_cursor_execute", observe_locked_supply_select)
+    event.listen(
+        sync_engine,
+        "before_cursor_execute",
+        observe_second_marker_update_started,
+    )
+    event.listen(
+        sync_engine,
+        "after_cursor_execute",
+        observe_second_marker_update_finished,
+    )
     try:
         first_request = asyncio.create_task(
             _deliver_direct(
@@ -403,6 +436,10 @@ async def test_fbs_shipment_second_deliver_does_not_reach_wb_while_first_holds_s
             )
         )
         await asyncio.wait_for(first_deliver_entered.wait(), timeout=2)
+        # This is the negative oracle for the historical regression.  If
+        # _record_wb_sync_started switches its flush back to commit(), this
+        # assertion fires before the first WB call is allowed to continue.
+        assert premature_commit_count == 0
 
         second_request = asyncio.create_task(
             _deliver_direct(
@@ -412,7 +449,15 @@ async def test_fbs_shipment_second_deliver_does_not_reach_wb_while_first_holds_s
                 idempotency_key=str(uuid.uuid4()),
             )
         )
-        await asyncio.wait_for(second_locked_supply_select_started.wait(), timeout=2)
+        await asyncio.wait_for(second_marker_update_started.wait(), timeout=2)
+        # SQLite has no row-level SELECT ... FOR UPDATE.  Its write lock is
+        # acquired by the marker UPDATE instead.  The after hook is therefore
+        # the proof point: the second request reached DBAPI execute but must
+        # not complete that write until the first WB handoff releases its
+        # transaction.  An early commit in _record_wb_sync_started makes this
+        # event set before release and turns this regression red.
+        await asyncio.sleep(0)
+        assert not second_marker_update_finished.is_set()
         assert deliver_calls == 1
         assert not second_request.done()
 
@@ -421,7 +466,16 @@ async def test_fbs_shipment_second_deliver_does_not_reach_wb_while_first_holds_s
         second_response = await second_request
     finally:
         release_first_deliver.set()
-        event.remove(sync_engine, "before_cursor_execute", observe_locked_supply_select)
+        event.remove(
+            sync_engine,
+            "before_cursor_execute",
+            observe_second_marker_update_started,
+        )
+        event.remove(
+            sync_engine,
+            "after_cursor_execute",
+            observe_second_marker_update_finished,
+        )
 
     assert first_response.status_code == 200, first_response.text
     assert second_response.status_code == 400, second_response.text

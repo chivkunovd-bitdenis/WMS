@@ -231,3 +231,8 @@
 10:33   02-verdikt-screen · resume: поатомный rework Terra по сохранённым находкам
 10:41   02-verdikt-screen · backend-dev: готово
 10:41   02-verdikt-screen · dev: фича 1/1 сохранена 8d178033ed8e
+10:48   02-verdikt-screen · reviewer: готово
+10:48   02-verdikt-screen · reviewer: находки не закрыты — повторный Terra-ремонт
+10:48   02-verdikt-screen · reviewer: находки, круг 3 — назад к разработке
+10:50   02-verdikt-screen · splitter: готово
+10:55   02-verdikt-screen · backend-dev: готово
