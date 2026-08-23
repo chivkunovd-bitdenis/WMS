@@ -118,3 +118,9 @@
 01:21   09-billing · dev: фича 10/11 сохранена fc205a21ff4f
 01:25   09-billing · screen-dev: готово
 01:25   09-billing · dev: фича 11/11 сохранена 96cacc599310
+01:28   09-billing · reviewer: готово
+01:28 09-billing: отложено — reviewer, эскалация не помогла
+04:16   09-billing · repair-plan: новый вердикт дорезается до dev
+04:20   09-billing · splitter: готово
+04:20   09-billing · resume: поатомный rework Sol по сохранённым находкам
+04:28   09-billing · backend-dev: готово

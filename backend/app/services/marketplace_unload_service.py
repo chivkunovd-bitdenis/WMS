@@ -1088,7 +1088,7 @@ async def cancel_request(
     *,
     performer_id: uuid.UUID | None = None,
 ) -> MarketplaceUnloadRequest:
-    """Cancel an unload; a shipped fact gets financial reversal without stock rollback."""
+    """Cancel before shipment, or reverse shipped billing without changing warehouse fact."""
     req = await get_request(session, tenant_id, request_id)
     if req is None:
         raise MarketplaceUnloadError("not_found")
@@ -1113,7 +1113,7 @@ async def cancel_request(
             session, tenant_id, req.warehouse_id, request_id
         )
         await _release_reservations(session, request_id)
-    req.status = STATUS_CANCELLED
+        req.status = STATUS_CANCELLED
     await session.commit()
     r2 = await get_request(session, tenant_id, request_id)
     assert r2 is not None

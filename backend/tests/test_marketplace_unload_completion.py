@@ -172,7 +172,7 @@ async def test_ship_unload_without_discrepancy_http(
 async def test_cancel_shipped_unload_records_one_reversal_http(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """S-31-TC-016: late operational cancellation adds one next-period reversal."""
+    """S-31-TC-016: late cancellation preserves shipped stock and reverses billing once."""
     h, mid, loc_id = await _confirmed_unload_with_stock(
         async_client, monkeypatch, plan_qty=2
     )
@@ -199,18 +199,39 @@ async def test_cancel_shipped_unload_records_one_reversal_http(
 
     ship = await async_client.post(_ship_url(mid), headers=h)
     assert ship.status_code == 200, ship.text
+    stock_after_ship = await async_client.get(
+        "/operations/inventory-balances",
+        headers=h,
+        params={"storage_location_id": loc_id},
+    )
+    assert stock_after_ship.status_code == 200, stock_after_ship.text
+    assert len(stock_after_ship.json()) == 1
+    assert stock_after_ship.json()[0]["quantity"] == 3
 
     cancelled = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/cancel", headers=h
     )
     assert cancelled.status_code == 200, cancelled.text
-    assert cancelled.json()["status"] == "cancelled"
+    assert cancelled.json()["status"] == "shipped"
 
     repeated = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/cancel", headers=h
     )
     assert repeated.status_code == 200, repeated.text
-    assert repeated.json()["status"] == "cancelled"
+    assert repeated.json()["status"] == "shipped"
+
+    stored = await async_client.get(
+        f"/operations/marketplace-unload-requests/{mid}", headers=h
+    )
+    assert stored.status_code == 200, stored.text
+    assert stored.json()["status"] == "shipped"
+    stock_after_repeated_cancel = await async_client.get(
+        "/operations/inventory-balances",
+        headers=h,
+        params={"storage_location_id": loc_id},
+    )
+    assert stock_after_repeated_cancel.status_code == 200, stock_after_repeated_cancel.text
+    assert stock_after_repeated_cancel.json() == stock_after_ship.json()
 
     async with SessionLocal() as session:
         entries = list(
