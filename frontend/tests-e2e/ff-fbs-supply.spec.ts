@@ -267,7 +267,7 @@ test('fbs workspace: pending WB verdict blocks delivery', async ({ page }) => {
     supply_id: 'sup-1',
     metadata: {
       required: ['sgtin'], optional: [], states: [], delivery_allowed: false,
-      verdict: { signature: 'WB: проверяет', tone: 'stop', reason: null, delivery_allowed: false },
+      verdict: { signature: 'WB: проверяет', tone: 'neutral', reason: null, delivery_allowed: false },
       last_checked_at: new Date().toISOString(),
     },
   })
@@ -278,7 +278,7 @@ test('fbs workspace: pending WB verdict blocks delivery', async ({ page }) => {
   const deliver = page.getByRole('button', { name: 'Передать в WB' })
   await expect(deliver).toBeDisabled()
   await deliver.hover()
-  await expect(page.getByRole('tooltip')).toContainText('Заказ №1: Сдача пока недоступна')
+  await expect(page.getByRole('tooltip')).toContainText('Заказ №1: WB ещё не подтвердил код')
 })
 
 // S-03-TC-005 — required verdict tells the operator that a code is needed.
