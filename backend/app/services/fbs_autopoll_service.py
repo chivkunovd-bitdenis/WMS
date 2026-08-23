@@ -231,11 +231,16 @@ async def sync_marking_statuses_for_assembling_supplies(
 ) -> int:
     from app.services.fbs_marking_service import (
         FbsMarkingError,
-        sync_order_marking_statuses,
+        _notify_supply_marking_update,
+        _sync_order_meta_from_wb,
+        list_order_markings,
+        require_marketplace_token,
     )
+    from app.services.wildberries_errors import WildberriesClientError
+    from app.services.wildberries_fbs_client import fetch_marketplace_orders_meta_batch
 
     stmt = (
-        select(FbsOrder.id)
+        select(FbsOrder)
         .join(FbsSupply, FbsOrder.supply_id == FbsSupply.id)
         .where(
             FbsOrder.tenant_id == target.tenant_id,
@@ -243,20 +248,46 @@ async def sync_marking_statuses_for_assembling_supplies(
             FbsSupply.status == FBS_SUPPLY_STATUS_ASSEMBLING,
         )
         .order_by(FbsOrder.created_at_wb.asc(), FbsOrder.id.asc())
-        .limit(MARKING_SYNC_BATCH_SIZE)
     )
-    order_ids = [row[0] for row in (await session.execute(stmt)).all()]
+    orders = list((await session.execute(stmt)).scalars().all())
+    if not orders:
+        return 0
+    token = await require_marketplace_token(session, target.tenant_id, target.seller_id)
     synced = 0
-    for order_id in order_ids:
+    unique_wb_order_ids = list(dict.fromkeys(int(order.wb_order_id) for order in orders))
+    for start in range(0, len(unique_wb_order_ids), MARKING_SYNC_BATCH_SIZE):
+        wb_order_ids = unique_wb_order_ids[start : start + MARKING_SYNC_BATCH_SIZE]
         try:
-            await sync_order_marking_statuses(session, target.tenant_id, order_id, http_client)
-            synced += 1
-        except FbsMarkingError as exc:
-            logger.warning(
-                "fbs autopoll marking sync skipped order %s: %s",
-                order_id,
-                exc.code,
+            meta_batch = await fetch_marketplace_orders_meta_batch(
+                http_client, api_token=token, order_ids=wb_order_ids
             )
+        except (FbsMarkingError, WildberriesClientError) as exc:
+            logger.warning(
+                "fbs autopoll marking batch skipped (%s orders): %s", len(wb_order_ids), exc
+            )
+            continue
+        rows_by_wb_order_id = {row.order_id: [row] for row in meta_batch}
+        for order in orders:
+            if int(order.wb_order_id) not in wb_order_ids:
+                continue
+            if not await list_order_markings(session, target.tenant_id, order.id):
+                continue
+            returned_rows = rows_by_wb_order_id.get(int(order.wb_order_id), [])
+            try:
+                await _sync_order_meta_from_wb(
+                    session, order, http_client, token,
+                    meta_batch=returned_rows,
+                )
+                # A partial WB batch must clear a stale positive verdict, but it
+                # must not look like a successful local sync: there is no fresh
+                # timestamp, derived packaging update, or success counter.
+                if not returned_rows:
+                    logger.warning("fbs autopoll marking response missed order %s", order.id)
+                    continue
+                await _notify_supply_marking_update(session, target.tenant_id, order.id)
+                synced += 1
+            except (FbsMarkingError, WildberriesClientError) as exc:
+                logger.warning("fbs autopoll marking sync skipped order %s: %s", order.id, exc)
     return synced
 
 

@@ -359,7 +359,10 @@ async def test_order_print_tape_assigns_codes_to_requested_orders(
         capture_wb_meta_put,
     )
 
-    from app.services.wildberries_fbs_client import MarketplaceOrderMetaRow
+    from app.services.wildberries_fbs_client import (
+        MarketplaceMetaDetail,
+        MarketplaceOrderMetaRow,
+    )
 
     async def fake_meta_batch(
         client: object,
@@ -374,14 +377,13 @@ async def test_order_print_tape_assigns_codes_to_requested_orders(
         return [
             MarketplaceOrderMetaRow(
                 order_id=wb_order_id,
-                meta={
-                    "sgtins": [
-                        {
-                            "value": value,
-                            "checkStatus": "checking",
-                        }
-                    ]
-                },
+                meta_details=(
+                    MarketplaceMetaDetail(
+                        key=MARKING_KIND_SGTIN,
+                        value=value,
+                        decision="pending",
+                    ),
+                ),
             )
         ]
 

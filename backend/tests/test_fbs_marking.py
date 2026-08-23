@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -18,8 +20,11 @@ from app.models.fbs_order import (
     META_STATUS_ALLOWED_WITHOUT_CHECK,
     META_STATUS_PENDING,
     META_STATUS_REJECTED,
+    META_STATUS_UNKNOWN,
+    FbsOrder,
     FbsOrderMarking,
 )
+from app.models.fbs_supply import FBS_SUPPLY_STATUS_ASSEMBLING, FbsSupply
 from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
 from app.services.wildberries_client import reset_mock_marketplace_order_meta
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
@@ -157,7 +162,10 @@ async def test_fbs_marking_sync_updates_check_status(
         )
         await session.commit()
 
-    from app.services.wildberries_fbs_client import MarketplaceOrderMetaRow
+    from app.services.wildberries_fbs_client import (
+        MarketplaceMetaDetail,
+        MarketplaceOrderMetaRow,
+    )
 
     async def fake_meta_batch(
         client: object,
@@ -170,7 +178,13 @@ async def test_fbs_marking_sync_updates_check_status(
         return [
             MarketplaceOrderMetaRow(
                 order_id=920001,
-                meta={"sgtins": [{"value": cis, "checkStatus": "checking"}]},
+                meta_details=(
+                    MarketplaceMetaDetail(
+                        key="sgtin",
+                        value=cis,
+                        decision="pending",
+                    ),
+                ),
             )
         ]
 
@@ -382,3 +396,186 @@ async def test_fbs_intake_stores_required_optional_meta(
         assert order is not None
         assert order.required_meta_json == ["sgtin"]
         assert order.optional_meta_json == ["imei"]
+
+
+# TC-NEW-FBS-MARK-005 — batch polling keeps progressing after a local WB batch failure.
+@pytest.mark.asyncio
+async def test_fbs_marking_autopoll_batches_unique_ids_and_skips_partial_or_failed_batches(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A missing WB row or one failed batch must never become a local sync."""
+    from app.services import fbs_autopoll_service as autopoll
+    from app.services.fbs_autopoll_service import SellerPollTarget
+    from app.services.wildberries_errors import WildberriesClientError
+    from app.services.wildberries_fbs_client import MarketplaceOrderMetaRow
+
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    seller_uuid = uuid.UUID(seller_id)
+    warehouse_uuid = uuid.UUID(warehouse_id)
+    wb_order_ids = list(range(970000, 970201))
+    now = datetime.now(tz=UTC)
+    async with SessionLocal() as session:
+        supply = FbsSupply(
+            tenant_id=tenant_id,
+            seller_id=seller_uuid,
+            warehouse_id=warehouse_uuid,
+            wb_supply_id=f"WB-BATCH-{suffix[-8:]}",
+            name="Batch marking supply",
+            status=FBS_SUPPLY_STATUS_ASSEMBLING,
+            delivery_type="warehouse_sc",
+        )
+        session.add(supply)
+        await session.flush()
+        for index, wb_order_id in enumerate(wb_order_ids):
+            order = FbsOrder(
+                tenant_id=tenant_id,
+                seller_id=seller_uuid,
+                warehouse_id=warehouse_uuid,
+                wb_order_id=wb_order_id,
+                wb_rid=f"batch-rid-{wb_order_id}",
+                status=FBS_ORDER_STATUS_PACKED,
+                supply_id=supply.id,
+                created_at_wb=now + timedelta(seconds=index),
+                deadline_at=now + timedelta(days=1),
+                mapping_status="mapped",
+                reserve_status="reserved",
+            )
+            session.add(order)
+            await session.flush()
+            session.add(
+                FbsOrderMarking(
+                    order_id=order.id,
+                    tenant_id=tenant_id,
+                    kind="sgtin",
+                    value=f"01BATCH{wb_order_id}",
+                    check_status=CHECK_STATUS_NEW,
+                    meta_status=META_STATUS_PENDING,
+                )
+            )
+        await session.commit()
+
+    requested_batches: list[list[int]] = []
+    completed_batches: list[list[int]] = []
+    synced_wb_order_ids: list[int] = []
+    omitted_wb_order_ids: list[int] = []
+    notified_order_ids: list[uuid.UUID] = []
+    active_batch_requests = 0
+    max_active_batch_requests = 0
+
+    async def fake_fetch_batch(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[MarketplaceOrderMetaRow]:
+        nonlocal active_batch_requests, max_active_batch_requests
+        active_batch_requests += 1
+        max_active_batch_requests = max(max_active_batch_requests, active_batch_requests)
+        requested_batches.append(order_ids)
+        try:
+            # Yield control so this test observes overlap if batches are ever
+            # changed from sequential awaits to concurrently scheduled tasks.
+            await asyncio.sleep(0)
+            if len(requested_batches) == 2:
+                raise WildberriesClientError("upstream_error")
+            # The first response deliberately omits an order and reverses the rest:
+            # matching must use order_id, not row position, and the omitted order is
+            # not allowed to look like a successful local update.
+            response_ids = order_ids[:-1] if len(requested_batches) == 1 else order_ids
+            return [
+                MarketplaceOrderMetaRow(order_id=order_id)
+                for order_id in reversed(response_ids)
+            ]
+        finally:
+            completed_batches.append(order_ids)
+            active_batch_requests -= 1
+
+    async def fake_sync(
+        session: object,
+        order: FbsOrder,
+        http_client: object,
+        token: str,
+        *,
+        meta_batch: list[MarketplaceOrderMetaRow] | None = None,
+    ) -> list[object]:
+        assert meta_batch is not None
+        if meta_batch:
+            assert [row.order_id for row in meta_batch] == [order.wb_order_id]
+        else:
+            omitted_wb_order_ids.append(order.wb_order_id)
+            marking = await session.scalar(
+                select(FbsOrderMarking).where(FbsOrderMarking.order_id == order.id)
+            )
+            assert marking is not None
+            marking.meta_status = META_STATUS_UNKNOWN
+        synced_wb_order_ids.append(order.wb_order_id)
+        return []
+
+    async def fake_notify(session: object, tenant: uuid.UUID, order_id: uuid.UUID) -> None:
+        notified_order_ids.append(order_id)
+
+    async def fake_list_markings(
+        session: object, tenant: uuid.UUID, order_id: uuid.UUID
+    ) -> list[object]:
+        return [object()]
+
+    async def fake_token(session: object, tenant: uuid.UUID, seller: uuid.UUID) -> str:
+        return "test-token"
+
+    monkeypatch.setattr(
+        "app.services.wildberries_fbs_client.fetch_marketplace_orders_meta_batch",
+        fake_fetch_batch,
+    )
+    monkeypatch.setattr("app.services.fbs_marking_service._sync_order_meta_from_wb", fake_sync)
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service._notify_supply_marking_update", fake_notify
+    )
+    monkeypatch.setattr("app.services.fbs_marking_service.list_order_markings", fake_list_markings)
+    monkeypatch.setattr("app.services.fbs_marking_service.require_marketplace_token", fake_token)
+
+    async with SessionLocal() as session:
+        synced = await autopoll.sync_marking_statuses_for_assembling_supplies(
+            session,
+            SellerPollTarget(tenant_id=tenant_id, seller_id=seller_uuid),
+            async_client,
+        )
+        omitted_marking = await session.scalar(
+            select(FbsOrderMarking)
+            .join(FbsOrder, FbsOrder.id == FbsOrderMarking.order_id)
+            .where(FbsOrder.wb_order_id == wb_order_ids[99])
+        )
+        assert omitted_marking is not None
+        assert omitted_marking.meta_status == META_STATUS_UNKNOWN
+
+    assert [len(batch) for batch in requested_batches] == [100, 100, 1]
+    assert all(len(batch) <= 100 and len(batch) == len(set(batch)) for batch in requested_batches)
+    assert requested_batches == [wb_order_ids[:100], wb_order_ids[100:200], wb_order_ids[200:]]
+    assert completed_batches == requested_batches
+    assert max_active_batch_requests == 1
+    expected_synced = wb_order_ids[:99] + wb_order_ids[200:]
+    assert synced == len(expected_synced)
+    assert set(synced_wb_order_ids) == set([*expected_synced, wb_order_ids[99]])
+    assert omitted_wb_order_ids == [wb_order_ids[99]]
+    assert len(notified_order_ids) == len(expected_synced)
+
+    async with SessionLocal() as session:
+        failed_batch_markings = list(
+            (
+                await session.execute(
+                    select(FbsOrderMarking)
+                    .join(FbsOrder, FbsOrder.id == FbsOrderMarking.order_id)
+                    .where(FbsOrder.wb_order_id.in_(wb_order_ids[100:200]))
+                )
+            ).scalars()
+        )
+    assert len(failed_batch_markings) == 100
+    assert all(
+        marking.check_status == CHECK_STATUS_NEW
+        and marking.meta_status == META_STATUS_PENDING
+        for marking in failed_batch_markings
+    )

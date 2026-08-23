@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from dataclasses import dataclass
@@ -13,14 +14,21 @@ from sqlalchemy.orm import selectinload
 
 from app.db.session import SessionLocal
 from app.models.fbs_order import (
+    CHECK_STATUS_CHECKING,
+    CHECK_STATUS_ERROR,
     CHECK_STATUS_NEW,
+    CHECK_STATUS_OK,
     FBS_ORDER_STATUS_IN_DELIVERY,
     FBS_ORDER_STATUS_PACKED,
     MAPPING_STATUS_MAPPED,
     MARKING_KIND_SGTIN,
     META_STATUS_ACCEPTED,
+    META_STATUS_ALLOWED_WITHOUT_CHECK,
+    META_STATUS_MISSING,
+    META_STATUS_PENDING,
     META_STATUS_REJECTED,
     META_STATUS_REPLACEMENT_REQUIRED,
+    META_STATUS_UNKNOWN,
     RESERVE_STATUS_RESERVED,
     FbsOrder,
     FbsOrderMarking,
@@ -30,6 +38,7 @@ from app.models.fbs_supply import FBS_DELIVERY_TYPE_WAREHOUSE_SC, FbsSupply
 from app.models.marking_code import (
     EVENT_APPLIED,
     EVENT_VOIDED,
+    EVENT_WB_ORPHANED,
     STATUS_APPLIED,
     STATUS_AVAILABLE,
     STATUS_PRINTED,
@@ -53,6 +62,26 @@ from app.services.wildberries_errors import (
     WildberriesClientError,
 )
 from app.services.wildberries_fbs_client import MarketplaceMetaDetail, MarketplaceOrderMetaRow
+
+
+@pytest.mark.parametrize(
+    ("decision", "expected"),
+    [
+        ("filled", META_STATUS_ACCEPTED),
+        ("optional", META_STATUS_ALLOWED_WITHOUT_CHECK),
+        ("pending", META_STATUS_PENDING),
+        ("required", None),
+        ("invalid", META_STATUS_REJECTED),
+        ("something-new", None),
+    ],
+)
+def test_wb_decision_mapping_covers_safe_sync_states(
+    decision: str, expected: str | None
+) -> None:
+    # TC-NEW-FBS-MARKING-001: WB decisions map to stable local statuses;
+    # unknown decisions are fail-closed and do not become an acceptance.
+    assert fbs_marking_svc.map_wb_decision_to_meta_status(decision) == expected
+
 
 _GS = "\x1d"
 _CLEAN_CIS = f"010460043993125321AbCxyz{_GS}91K1aZ{_GS}92Crypto~|#<GS>tail"
@@ -2580,7 +2609,8 @@ async def test_fbs_marking_readers_prefer_active_row_over_newer_rejected_row(
                 ),
                 meta={
                     MARKING_KIND_SGTIN: [
-                        {"value": active_value, "checkStatus": "ok"}
+                        {"value": active_value, "checkStatus": "error"},
+                        {"value": rejected_value, "checkStatus": "ok"},
                     ]
                 },
             )
@@ -2615,7 +2645,341 @@ async def test_fbs_marking_readers_prefer_active_row_over_newer_rejected_row(
     assert worklist_metadata["states"][0]["status"] == META_STATUS_ACCEPTED
     assert current is not None
     assert current.value == active_value
+    # Deprecated row.meta must not override either the current or historical row.
     assert rejected.meta_status == META_STATUS_REJECTED
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("decision", "wb_value", "expected_status", "expected_check_status"),
+    [
+        ("filled", "same", META_STATUS_ACCEPTED, "ok"),
+        ("optional", "same", META_STATUS_ALLOWED_WITHOUT_CHECK, "no_check"),
+        ("pending", "same", META_STATUS_PENDING, CHECK_STATUS_CHECKING),
+        ("required", None, META_STATUS_MISSING, CHECK_STATUS_NEW),
+        ("invalid", "same", META_STATUS_REJECTED, CHECK_STATUS_ERROR),
+        ("unrecognized", "same", META_STATUS_UNKNOWN, CHECK_STATUS_ERROR),
+        ("required", "same", META_STATUS_UNKNOWN, CHECK_STATUS_NEW),
+        ("filled", "other", META_STATUS_REPLACEMENT_REQUIRED, CHECK_STATUS_ERROR),
+        ("invalid", "other", META_STATUS_REPLACEMENT_REQUIRED, CHECK_STATUS_ERROR),
+    ],
+)
+async def test_fbs_marking_wb_meta_decision_is_safe_and_preserves_raw_detail(
+    async_client: AsyncClient,
+    decision: str,
+    wb_value: str | None,
+    expected_status: str,
+    expected_check_status: str,
+) -> None:
+    # TC-NEW-FBS-MARKING-001: Given a returned WB detail, When its decision is
+    # applied, Then its raw payload and a fail-closed compatible status are saved.
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
+        async_client, headers, suffix
+    )
+    supply_id = await _create_supply(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id, suffix=suffix
+    )
+    value = _cis(f"SYNC-{decision}")
+    order = await _create_order(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        supply_id=supply_id,
+        suffix=suffix,
+        wb_order_id=951000 + len(decision),
+        sticker_code="WB-META-SYNC",
+        wb_barcode="WB-META-SYNC-BAR",
+        marking=FbsOrderMarking(
+            kind=MARKING_KIND_SGTIN,
+            value=value,
+            source="operator",
+            check_status=CHECK_STATUS_NEW,
+            meta_status=META_STATUS_ACCEPTED,
+        ),
+    )
+    remote_value = value if wb_value == "same" else (_cis("OTHER") if wb_value else None)
+    batch = [
+        MarketplaceOrderMetaRow(
+            order_id=order.wb_order_id,
+            meta_details=(
+                MarketplaceMetaDetail(
+                    key=MARKING_KIND_SGTIN,
+                    value=remote_value,
+                    decision=decision,
+                    reason="WB reason",
+                ),
+            ),
+        )
+    ]
+    async with SessionLocal() as session:
+        db_order = await session.get(FbsOrder, order.order_id)
+        assert db_order is not None
+        markings = await fbs_marking_svc._sync_order_meta_from_wb(
+            session, db_order, async_client, "test-token", meta_batch=batch
+        )
+        await session.commit()
+        remote_summary = db_order.meta_details_json
+
+    marking = markings[0]
+    assert marking.meta_status == expected_status
+    assert marking.check_status == expected_check_status
+    assert marking.reason == "WB reason"
+    assert marking.meta_details_json == {
+        "decision": decision,
+        "value": remote_value,
+        "reason": "WB reason",
+    }
+    assert remote_summary[MARKING_KIND_SGTIN] == {
+        "status": (
+            fbs_marking_svc.map_wb_decision_to_meta_status(decision)
+            or META_STATUS_UNKNOWN
+        ),
+        "value": remote_value,
+        "decision": decision,
+        "reason": "WB reason",
+    }
+
+
+@pytest.mark.asyncio
+async def test_fbs_marking_partial_wb_row_is_unknown_without_fresh_check_time(
+    async_client: AsyncClient,
+) -> None:
+    # TC-NEW-FBS-MARKING-001: negative — a row without the expected kind is not
+    # a successful check and must not overwrite the prior KIZ payload or timestamp.
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
+        async_client, headers, suffix
+    )
+    supply_id = await _create_supply(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id, suffix=suffix
+    )
+    value = _cis("PARTIAL")
+    order = await _create_order(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        supply_id=supply_id,
+        suffix=suffix,
+        wb_order_id=951099,
+        sticker_code="WB-META-PARTIAL",
+        wb_barcode="WB-META-PARTIAL-BAR",
+        marking=FbsOrderMarking(
+            kind=MARKING_KIND_SGTIN,
+            value=value,
+            source="operator",
+            check_status=CHECK_STATUS_NEW,
+            meta_status=META_STATUS_ACCEPTED,
+            meta_details_json={"kept": True},
+        ),
+    )
+    async with SessionLocal() as session:
+        db_order = await session.get(FbsOrder, order.order_id)
+        assert db_order is not None
+        markings = await fbs_marking_svc._sync_order_meta_from_wb(
+            session,
+            db_order,
+            async_client,
+            "test-token",
+            meta_batch=[
+                MarketplaceOrderMetaRow(
+                    order_id=order.wb_order_id,
+                    meta_details=(
+                        MarketplaceMetaDetail(
+                            key="future_wb_key",
+                            value="remote-only-value",
+                            decision="future_decision",
+                            reason="future reason",
+                        ),
+                    ),
+                )
+            ],
+        )
+        await session.commit()
+        remote_summary = db_order.meta_details_json
+
+    assert markings[0].meta_status == META_STATUS_UNKNOWN
+    assert markings[0].meta_details_json == {"kept": True}
+    assert markings[0].check_status == CHECK_STATUS_ERROR
+    assert remote_summary == {
+        "future_wb_key": {
+            "status": META_STATUS_UNKNOWN,
+            "value": "remote-only-value",
+            "decision": "future_decision",
+            "reason": "future reason",
+        }
+    }
+    async with SessionLocal() as session:
+        refreshed = await session.get(FbsOrder, order.order_id)
+        assert refreshed is not None
+        assert refreshed.metadata_last_checked_at is None
+
+
+@pytest.mark.asyncio
+async def test_fbs_marking_omitted_wb_row_clears_stale_verdict_only(
+    async_client: AsyncClient,
+) -> None:
+    # TC-NEW-FBS-MARKING-001: negative — an order omitted from a successful
+    # batch becomes unknown without erasing its KIZ binding, lifecycle, raw
+    # detail, reason, or last successful check time.
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
+        async_client, headers, suffix
+    )
+    supply_id = await _create_supply(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id, suffix=suffix
+    )
+    order = await _create_order(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        supply_id=supply_id,
+        suffix=suffix,
+        wb_order_id=951100,
+        sticker_code="WB-META-OMITTED",
+        wb_barcode="WB-META-OMITTED-BAR",
+        with_packaging=True,
+    )
+    value = _cis("OMITTED")
+    code_id = await _seed_active_marking(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        order=order,
+        value=value,
+        code_source="pool",
+        marking_source="pool",
+        code_status=STATUS_RESERVED,
+        qty_marking_printed=1,
+        qty_marking_external=0,
+    )
+    previous_check = datetime.now(tz=UTC) - timedelta(hours=1)
+    async with SessionLocal() as session:
+        db_order = await session.get(FbsOrder, order.order_id)
+        marking = await session.scalar(
+            select(FbsOrderMarking).where(FbsOrderMarking.order_id == order.order_id)
+        )
+        assert db_order is not None
+        assert marking is not None
+        db_order.metadata_last_checked_at = previous_check
+        marking.meta_status = META_STATUS_ACCEPTED
+        marking.check_status = CHECK_STATUS_OK
+        marking.reason = "previous WB reason"
+        marking.meta_details_json = {"decision": "filled", "value": value}
+        await session.commit()
+
+    async with SessionLocal() as session:
+        db_order = await session.get(FbsOrder, order.order_id)
+        assert db_order is not None
+        markings = await fbs_marking_svc._sync_order_meta_from_wb(
+            session, db_order, async_client, "test-token", meta_batch=[]
+        )
+        await session.commit()
+
+    marking = markings[0]
+    assert marking.meta_status == META_STATUS_UNKNOWN
+    assert marking.check_status == CHECK_STATUS_ERROR
+    assert marking.marking_code_id == code_id
+    assert marking.reason == "previous WB reason"
+    assert marking.meta_details_json == {"decision": "filled", "value": value}
+    async with SessionLocal() as session:
+        refreshed_order = await session.get(FbsOrder, order.order_id)
+        refreshed_code = await session.get(MarkingCode, code_id)
+        assert refreshed_order is not None
+        assert refreshed_order.metadata_last_checked_at == previous_check.replace(tzinfo=None)
+        assert refreshed_code is not None
+        assert refreshed_code.status == STATUS_RESERVED
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("decision", "remote_value", "expected_status"),
+    [
+        ("required", None, META_STATUS_MISSING),
+        ("invalid", "other", META_STATUS_REPLACEMENT_REQUIRED),
+    ],
+)
+async def test_fbs_marking_orphaned_audit_is_created_once_for_concurrent_and_repeated_mismatch(
+    async_client: AsyncClient,
+    decision: str,
+    remote_value: str | None,
+    expected_status: str,
+) -> None:
+    # TC-NEW-FBS-MARKING-001: Given WB repeatedly reports a missing or different
+    # KIZ, When two workers sync concurrently and one repeats, Then the binding
+    # stays intact and there is one audit fact.
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
+        async_client, headers, suffix
+    )
+    supply_id = await _create_supply(
+        tenant_id=tenant_id, seller_id=seller_id, warehouse_id=warehouse_id, suffix=suffix
+    )
+    order = await _create_order(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        supply_id=supply_id,
+        suffix=suffix,
+        wb_order_id=951200,
+        sticker_code="WB-META-AUDIT",
+        wb_barcode="WB-META-AUDIT-BAR",
+        with_packaging=True,
+    )
+    value = _cis("AUDIT")
+    wb_value = _cis("AUDIT-OTHER") if remote_value == "other" else None
+    code_id = await _seed_active_marking(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        order=order,
+        value=value,
+        code_source="pool",
+        marking_source="pool",
+        code_status=STATUS_RESERVED,
+        qty_marking_printed=1,
+        qty_marking_external=0,
+    )
+    batch = [
+        MarketplaceOrderMetaRow(
+            order_id=order.wb_order_id,
+            meta_details=(
+                MarketplaceMetaDetail(
+                    key=MARKING_KIND_SGTIN,
+                    value=wb_value,
+                    decision=decision,
+                    reason="mismatch at WB",
+                ),
+            ),
+        )
+    ]
+    async def sync_once() -> None:
+        async with SessionLocal() as session:
+            db_order = await session.get(FbsOrder, order.order_id)
+            assert db_order is not None
+            await fbs_marking_svc._sync_order_meta_from_wb(
+                session, db_order, async_client, "test-token", meta_batch=batch
+            )
+            await session.commit()
+
+    await asyncio.gather(sync_once(), sync_once())
+    await sync_once()
+
+    async with SessionLocal() as session:
+        marking = await session.scalar(
+            select(FbsOrderMarking).where(FbsOrderMarking.order_id == order.order_id)
+        )
+        code = await session.get(MarkingCode, code_id)
+        audit_count = await session.scalar(
+            select(func.count(MarkingCodeEvent.id)).where(
+                MarkingCodeEvent.code_id == code_id,
+                MarkingCodeEvent.event_type == EVENT_WB_ORPHANED,
+            )
+        )
+    assert marking is not None
+    assert marking.meta_status == expected_status
+    assert marking.marking_code_id == code_id
+    assert code is not None
+    assert code.status == STATUS_RESERVED
+    assert audit_count == 1
 
 
 @pytest.mark.asyncio

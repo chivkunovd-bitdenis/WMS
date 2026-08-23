@@ -1,4 +1,3 @@
-# ruff: noqa: RUF003
 """FBS order marking — WB metadata requirements, pool KIZ, and status sync."""
 
 from __future__ import annotations
@@ -33,8 +32,14 @@ from app.models.fbs_order import (
     FbsOrderMarking,
     current_order_marking,
 )
-from app.models.marking_code import STATUS_AVAILABLE, STATUS_RESERVED, MarkingCode
-from app.services.marking_code_service import normalize_cis
+from app.models.marking_code import (
+    EVENT_WB_ORPHANED,
+    STATUS_AVAILABLE,
+    STATUS_RESERVED,
+    MarkingCode,
+    MarkingCodeEvent,
+)
+from app.services.marking_code_service import normalize_cis, record_event
 from app.services.wildberries_client import (
     WildberriesClientError,
     put_marketplace_order_meta,
@@ -46,6 +51,7 @@ from app.services.wildberries_credentials_service import (
 from app.services.wildberries_errors import WildberriesBusinessError
 from app.services.wildberries_fbs_client import (
     MarketplaceMetaDetail,
+    MarketplaceOrderMetaRow,
     fetch_marketplace_orders_meta_batch,
 )
 
@@ -143,11 +149,15 @@ def map_wb_decision_to_meta_status(decision: str | None) -> str | None:
         "accepted": META_STATUS_ACCEPTED,
         "filled": META_STATUS_ACCEPTED,
         "rejected": META_STATUS_REJECTED,
+        "invalid": META_STATUS_REJECTED,
         "pending": META_STATUS_PENDING,
         "allowedwithoutcheck": META_STATUS_ALLOWED_WITHOUT_CHECK,
         "allowed_without_check": META_STATUS_ALLOWED_WITHOUT_CHECK,
         "replacementrequired": META_STATUS_REPLACEMENT_REQUIRED,
         "replacement_required": META_STATUS_REPLACEMENT_REQUIRED,
+        "optional": META_STATUS_ALLOWED_WITHOUT_CHECK,
+        "notrequired": META_STATUS_ALLOWED_WITHOUT_CHECK,
+        "not_required": META_STATUS_ALLOWED_WITHOUT_CHECK,
     }
     return mapping.get(key)
 
@@ -257,28 +267,12 @@ def _meta_details_from_wb(details: tuple[MarketplaceMetaDetail, ...]) -> dict[st
     out: dict[str, Any] = {}
     for item in details:
         kind = item.key.strip().lower()
-        if kind not in FBS_MARKING_KINDS:
-            continue
         status = map_wb_decision_to_meta_status(item.decision) or META_STATUS_UNKNOWN
         out[kind] = {
             "status": status,
             "value": item.value,
             "decision": item.decision,
-            "reason": None,
-        }
-    return out
-
-
-def _meta_details_from_markings(markings: list[FbsOrderMarking]) -> dict[str, Any]:
-    out: dict[str, Any] = {}
-    for kind in {marking.kind for marking in markings}:
-        mark = current_order_marking(markings, kind, include_rejected=True)
-        if mark is None:
-            continue
-        out[mark.kind] = {
-            "status": mark.meta_status,
-            "value": mark.value,
-            "reason": mark.reason,
+            "reason": item.reason,
         }
     return out
 
@@ -479,7 +473,68 @@ def _apply_meta_detail_to_marking(
     marking.meta_details_json = {
         "decision": detail.decision,
         "value": detail.value,
+        "reason": reason,
     }
+
+
+def _check_status_for_meta_detail(
+    *,
+    decision: str,
+    meta_status: str,
+) -> str:
+    """Keep the legacy status consistent with the authoritative WB decision."""
+    normalized_decision = (
+        decision.strip().lower().replace("-", "_").replace(" ", "_")
+    )
+    if normalized_decision == "required":
+        return CHECK_STATUS_NEW
+    if meta_status == META_STATUS_ACCEPTED:
+        return CHECK_STATUS_OK
+    if meta_status == META_STATUS_ALLOWED_WITHOUT_CHECK:
+        return CHECK_STATUS_NO_CHECK
+    if meta_status in {
+        META_STATUS_REJECTED,
+        META_STATUS_REPLACEMENT_REQUIRED,
+        META_STATUS_UNKNOWN,
+    }:
+        return CHECK_STATUS_ERROR
+    if meta_status == META_STATUS_PENDING:
+        return CHECK_STATUS_CHECKING
+    return CHECK_STATUS_ERROR
+
+
+async def _record_wb_orphaned_once(
+    session: AsyncSession,
+    marking: FbsOrderMarking,
+    *,
+    reason: str | None,
+) -> None:
+    if marking.marking_code_id is None:
+        return
+    # Serialize event creation on the code row.  A check-then-insert without this
+    # lock allows two concurrent WB polls to produce duplicate audit facts.
+    code = await session.scalar(
+        select(MarkingCode)
+        .where(MarkingCode.id == marking.marking_code_id)
+        .with_for_update()
+    )
+    if code is None:
+        return
+    existing = await session.scalar(
+        select(MarkingCodeEvent.id).where(
+            MarkingCodeEvent.code_id == marking.marking_code_id,
+            MarkingCodeEvent.event_type == EVENT_WB_ORPHANED,
+        )
+    )
+    if existing is not None:
+        return
+    await record_event(
+        session,
+        code=code,
+        event_type=EVENT_WB_ORPHANED,
+        actor=None,
+        reason=reason,
+    )
 
 
 async def _sync_order_meta_from_wb(
@@ -487,44 +542,96 @@ async def _sync_order_meta_from_wb(
     order: FbsOrder,
     http_client: httpx.AsyncClient,
     token: str,
+    *,
+    meta_batch: list[MarketplaceOrderMetaRow] | None = None,
 ) -> list[FbsOrderMarking]:
-    markings = await list_order_markings(session, order.tenant_id, order.id)
-    batch = await fetch_marketplace_orders_meta_batch(
-        http_client,
-        api_token=token,
-        order_ids=[int(order.wb_order_id)],
+    order_id = order.id
+    tenant_id = order.tenant_id
+    wb_order_id = int(order.wb_order_id)
+    batch = meta_batch
+    if batch is None:
+        batch = await fetch_marketplace_orders_meta_batch(
+            http_client,
+            api_token=token,
+            order_ids=[wb_order_id],
+        )
+    # Network I/O above may have overlapped with an operator changing the KIZ.
+    # Lock and reload the current local state before applying the remote snapshot.
+    locked_order = await session.scalar(
+        select(FbsOrder).where(FbsOrder.id == order_id).with_for_update()
+    )
+    if locked_order is None:
+        raise FbsMarkingError("order_not_found")
+    order = locked_order
+    markings = list(
+        (
+            await session.execute(
+                select(FbsOrderMarking)
+                .where(
+                    FbsOrderMarking.tenant_id == tenant_id,
+                    FbsOrderMarking.order_id == order_id,
+                )
+                .order_by(FbsOrderMarking.kind, FbsOrderMarking.value)
+                .with_for_update()
+            )
+        ).scalars().all()
     )
     details_by_kind: dict[str, MarketplaceMetaDetail] = {}
-    status_map: dict[tuple[str, str], str] = {}
+    returned_kinds: set[str] = set()
+    returned_details: tuple[MarketplaceMetaDetail, ...] = ()
+    returned_row = False
     for row in batch:
-        if row.order_id != int(order.wb_order_id):
+        if row.order_id != wb_order_id:
             continue
-        if row.meta is not None:
-            status_map.update(parse_wb_meta_statuses(row.meta))
+        returned_row = True
+        returned_details = row.meta_details
         for detail in row.meta_details:
-            details_by_kind[detail.key.strip().lower()] = detail
+            kind = detail.key.strip().lower()
+            if kind in FBS_MARKING_KINDS:
+                returned_kinds.add(kind)
+                details_by_kind[kind] = detail
 
     for marking in markings:
-        wb_status = status_map.get((marking.kind, marking.value))
-        if wb_status is not None:
-            marking.check_status = wb_status
         meta_detail = details_by_kind.get(marking.kind)
         current = current_order_marking(markings, marking.kind, include_rejected=True)
-        detail_matches = meta_detail is not None and (
-            meta_detail.value == marking.value
-            or (meta_detail.value is None and current is marking)
-        )
-        if meta_detail is not None and detail_matches:
-            _apply_meta_detail_to_marking(marking, meta_detail, check_status=wb_status)
-        elif wb_status is not None:
-            marking.meta_status = derive_meta_status(
-                check_status=wb_status,
-                has_value=True,
+        # A returned row is successful only when WB returned the expected kind.
+        # A status entry for a value is not enough: treating it as fresh metadata
+        # would mask a partial response and could incorrectly advance the local
+        # lifecycle state.
+        if not returned_row or marking.kind not in returned_kinds:
+            marking.meta_status = META_STATUS_UNKNOWN
+            marking.check_status = CHECK_STATUS_ERROR
+            continue
+        if meta_detail is not None and current is marking:
+            # Preserve every received WB detail, including unknown decisions, so a
+            # later investigation sees the original remote answer rather than an
+            # inferred local state.
+            _apply_meta_detail_to_marking(marking, meta_detail)
+            decision = meta_detail.decision.strip().lower()
+            if decision == "required" and not meta_detail.value:
+                marking.meta_status = META_STATUS_MISSING
+            elif (
+                meta_detail.value
+                and meta_detail.value != marking.value
+            ):
+                marking.meta_status = META_STATUS_REPLACEMENT_REQUIRED
+            elif map_wb_decision_to_meta_status(meta_detail.decision) is None:
+                marking.meta_status = META_STATUS_UNKNOWN
+            marking.check_status = _check_status_for_meta_detail(
+                decision=meta_detail.decision,
+                meta_status=marking.meta_status,
             )
+            if marking.meta_status in {META_STATUS_MISSING, META_STATUS_REPLACEMENT_REQUIRED}:
+                await _record_wb_orphaned_once(session, marking, reason=marking.reason)
 
-    order.meta_details_json = _meta_details_from_markings(markings)
+    if returned_row:
+        # Keep the actual WB snapshot, including remote values and keys unknown to
+        # the current application.  Local marking rows remain the source for the
+        # physical binding, but must never be presented as the remote response.
+        order.meta_details_json = _meta_details_from_wb(returned_details)
     order.metadata_delivery_allowed = compute_delivery_allowed(order, markings)
-    order.metadata_last_checked_at = datetime.now(tz=UTC)
+    if returned_row and all(marking.kind in returned_kinds for marking in markings):
+        order.metadata_last_checked_at = datetime.now(tz=UTC)
     await session.flush()
     return markings
 
