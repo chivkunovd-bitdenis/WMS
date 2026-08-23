@@ -25,6 +25,7 @@ from app.models.marking_code import EVENT_REPRINTED, STATUS_PRINTED, MarkingCode
 from app.models.packaging_task import PackagingTaskLine
 from app.services import fbs_marking_service as marking_svc
 from app.services import fbs_packaging_integration_service as pack_int_svc
+from app.services import fbs_supply_service as supply_svc
 from app.services import marking_code_service as mc_svc
 from app.services.fbs_print_asset_service import (
     FbsPrintAssetError,
@@ -82,6 +83,7 @@ async def print_fbs_order_tape(
     supply_id: uuid.UUID,
     *,
     order_ids: list[uuid.UUID],
+    picking_list_snapshot: str | None = None,
     layout: dict[str, Any] | None,
     allow_partial: bool,
     include_order_qr: bool,
@@ -109,6 +111,11 @@ async def print_fbs_order_tape(
     # The older row-level action deliberately keeps its subset behaviour.
     if include_order_qr and not _is_complete_supply_order_set(ordered, order_ids):
         raise FbsOrderTapePrintError("full_supply_order_set_required")
+    if (
+        picking_list_snapshot is not None
+        and picking_list_snapshot != supply_svc.picking_list_snapshot(ordered)
+    ):
+        raise FbsOrderTapePrintError("stale_picking_list")
     order_number_by_id = {order.id: number for number, order in enumerate(ordered, start=1)}
     # Keep numbers anchored to the complete supply, while allowing the existing
     # row action to print just its requested order(s).
@@ -316,15 +323,7 @@ async def _load_supply(
 
 
 def _orders_in_canonical_order(supply: FbsSupply) -> list[FbsOrder]:
-    def sort_key(order: FbsOrder) -> tuple[str, str, str, str, int, str]:
-        product = order.product
-        article = order.wb_article or (product.sku_code if product is not None else "") or ""
-        sku_code = product.sku_code if product is not None else ""
-        size = product.wb_size if product is not None and product.wb_size else ""
-        product_name = product.name if product is not None else (order.wb_article or "Unknown")
-        return (article, sku_code, size, product_name, int(order.wb_order_id), str(order.id))
-
-    return sorted(supply.orders, key=sort_key)
+    return supply_svc.orders_in_canonical_picking_order(supply.orders)
 
 
 def _select_requested_orders(

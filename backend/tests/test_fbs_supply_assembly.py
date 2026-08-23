@@ -880,6 +880,8 @@ async def test_fbs_supply_picking_list_grouping(
     )
     assert repeated.status_code == 200
     assert repeated.json() == picking.json()
+    assert picking.json()["snapshot"].startswith("v1:")
+    assert len(picking.json()["snapshot"]) == 67
 
     empty_supply = await _create_supply(
         async_client, headers, seller_id, warehouse_id, name="Empty"
@@ -890,6 +892,7 @@ async def test_fbs_supply_picking_list_grouping(
     )
     assert empty.status_code == 200
     assert empty.json()["items"] == []
+    assert empty.json()["snapshot"].startswith("v1:")
 
 
 # TC-NEW-FBS-SUPPLY-004 — stickers cached; WB error surfaced

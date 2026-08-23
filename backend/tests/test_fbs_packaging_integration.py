@@ -24,6 +24,7 @@ from app.models.fbs_order import (
     FbsOrderReservation,
 )
 from app.models.fbs_order_pick import FbsOrderPick
+from app.models.fbs_print_asset import FbsPrintAsset
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_IN_DELIVERY,
@@ -1333,6 +1334,7 @@ async def test_tape_covers_every_order_and_matches_picking_list(
     assert picking.status_code == 200, picking.text
     picking_total = sum(int(item["quantity"]) for item in picking.json()["items"])
     assert picking_total == len(order_ids), "лист подбора обязан покрывать все заказы поставки"
+    picking_list_snapshot = picking.json()["snapshot"]
     picking_order_ids = [
         uuid.UUID(order_id)
         for item in picking.json()["items"]
@@ -1346,6 +1348,7 @@ async def test_tape_covers_every_order_and_matches_picking_list(
         headers=headers,
         json={
             "order_ids": [str(order_ids[0])],
+            "picking_list_snapshot": picking_list_snapshot,
             "layout": None,
             "allow_partial": False,
             "include_order_qr": True,
@@ -1365,6 +1368,7 @@ async def test_tape_covers_every_order_and_matches_picking_list(
         headers=headers,
         json={
             "order_ids": [str(oid) for oid in shuffled_order_ids],
+            "picking_list_snapshot": picking_list_snapshot,
             "layout": None,
             "allow_partial": False,
             "include_order_qr": True,
@@ -1394,6 +1398,7 @@ async def test_tape_covers_every_order_and_matches_picking_list(
         headers=headers,
         json={
             "order_ids": [str(oid) for oid in shuffled_order_ids],
+            "picking_list_snapshot": picking_list_snapshot,
             "layout": None,
             "allow_partial": False,
             "include_order_qr": True,
@@ -1407,4 +1412,101 @@ async def test_tape_covers_every_order_and_matches_picking_list(
     ]
     assert [row["order_number"] for row in again.json()["orders"]] == list(
         range(1, len(order_ids) + 1)
+    )
+
+
+# S-03-TC-008 — changing a canonical grouping attribute invalidates the open list
+# even when the supply still contains exactly the same order IDs.
+@pytest.mark.asyncio
+async def test_order_tape_rejects_stale_picking_list_snapshot_before_creating_assets(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    token_payload = await async_client.get("/auth/me", headers=headers)
+    tenant_id = uuid.UUID(token_payload.json()["tenant_id"])
+    supply_id, order_ids = await _create_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+    )
+
+    opened = await async_client.get(
+        f"/operations/fbs-supplies/{supply_id}/picking-list",
+        headers=headers,
+    )
+    assert opened.status_code == 200, opened.text
+    stale_snapshot = opened.json()["snapshot"]
+    opened_order_ids = [
+        order_id
+        for item in opened.json()["items"]
+        for order_id in item["order_ids"]
+    ]
+
+    async with SessionLocal() as session:
+        orders = list(
+            (
+                await session.execute(select(FbsOrder).where(FbsOrder.id.in_(order_ids)))
+            ).scalars()
+        )
+        for order in orders:
+            if order.wb_article == "ART-A":
+                order.wb_article = "ZZZ-A"
+        await session.commit()
+
+    stale_print = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/order-print-tape",
+        headers=headers,
+        json={
+            "order_ids": opened_order_ids,
+            "picking_list_snapshot": stale_snapshot,
+            "layout_json": None,
+            "allow_partial": False,
+            "include_order_qr": True,
+            "reprint": False,
+        },
+    )
+    assert stale_print.status_code == 409, stale_print.text
+    assert stale_print.json()["detail"]["code"] == "stale_picking_list"
+
+    async with SessionLocal() as session:
+        created_assets = await session.scalar(
+            select(func.count())
+            .select_from(FbsPrintAsset)
+            .where(FbsPrintAsset.fbs_supply_id == uuid.UUID(supply_id))
+        )
+    assert created_assets == 0
+
+    refreshed = await async_client.get(
+        f"/operations/fbs-supplies/{supply_id}/picking-list",
+        headers=headers,
+    )
+    assert refreshed.status_code == 200, refreshed.text
+    assert refreshed.json()["snapshot"] != stale_snapshot
+    refreshed_order_ids = [
+        order_id
+        for item in refreshed.json()["items"]
+        for order_id in item["order_ids"]
+    ]
+    assert set(refreshed_order_ids) == set(opened_order_ids)
+
+    current_print = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/order-print-tape",
+        headers=headers,
+        json={
+            "order_ids": opened_order_ids,
+            "picking_list_snapshot": refreshed.json()["snapshot"],
+            "layout_json": None,
+            "allow_partial": False,
+            "include_order_qr": True,
+            "reprint": False,
+        },
+    )
+    assert current_print.status_code == 200, current_print.text
+    assert [row["order_id"] for row in current_print.json()["orders"]] == refreshed_order_ids
+    assert [row["order_number"] for row in current_print.json()["orders"]] == list(
+        range(1, len(refreshed_order_ids) + 1)
     )

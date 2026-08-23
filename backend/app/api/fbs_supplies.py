@@ -169,6 +169,7 @@ class FbsPickingListItemOut(BaseModel):
 
 class FbsPickingListOut(BaseModel):
     items: list[FbsPickingListItemOut]
+    snapshot: str
 
 
 class FbsStickerMetaOut(BaseModel):
@@ -224,6 +225,7 @@ class FbsPrintBatchOut(BaseModel):
 
 class FbsOrderTapePrintBody(BaseModel):
     order_ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+    picking_list_snapshot: str | None = Field(default=None, min_length=1, max_length=128)
     layout_json: dict[str, object] | None = None
     allow_partial: bool = False
     include_order_qr: bool = True
@@ -668,13 +670,14 @@ def _raise_from_order_tape_service(exc: order_tape_svc.FbsOrderTapePrintError) -
     if exc.code in {
         "empty_order_set",
         "full_supply_order_set_required",
+        "stale_picking_list",
         "invalid_layout_json",
         "invalid_layout_block",
         "invalid_layout_copies",
     }:
         raise_fbs_http(
             status.HTTP_409_CONFLICT
-            if exc.code == "full_supply_order_set_required"
+            if exc.code in {"full_supply_order_set_required", "stale_picking_list"}
             else status.HTTP_422_UNPROCESSABLE_ENTITY,
             exc.code,
         )
@@ -1488,7 +1491,7 @@ async def get_fbs_supply_picking_list(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> FbsPickingListOut:
     try:
-        items = await supply_svc.get_picking_list(session, user.tenant_id, supply_id)
+        picking_list = await supply_svc.get_picking_list(session, user.tenant_id, supply_id)
     except supply_svc.FbsSupplyError as exc:
         _raise_from_service(exc)
     return FbsPickingListOut(
@@ -1503,8 +1506,9 @@ async def get_fbs_supply_picking_list(
                 number_end=item.number_end,
                 order_ids=list(item.order_ids),
             )
-            for item in items
-        ]
+            for item in picking_list.items
+        ],
+        snapshot=picking_list.snapshot,
     )
 
 
@@ -1607,6 +1611,7 @@ async def print_fbs_supply_order_tape(
                 user.tenant_id,
                 supply_id,
                 order_ids=body.order_ids,
+                picking_list_snapshot=body.picking_list_snapshot,
                 layout=body.layout_json,
                 allow_partial=body.allow_partial,
                 include_order_qr=body.include_order_qr,

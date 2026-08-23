@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import uuid
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
@@ -139,12 +142,60 @@ class PickingListItem:
 
 
 @dataclass(frozen=True)
+class PickingList:
+    items: tuple[PickingListItem, ...]
+    snapshot: str
+
+
+@dataclass(frozen=True)
 class StickerMeta:
     order_id: uuid.UUID
     wb_order_id: int
     sticker_code: str | None
     sticker_file: str | None
     asset_id: uuid.UUID | None = None
+
+
+def _picking_list_group_key(
+    order: FbsOrder,
+) -> tuple[str, str | None, str | None, str]:
+    product = order.product
+    article = order.wb_article or (product.sku_code if product is not None else "") or ""
+    sku_code = product.sku_code if product is not None else None
+    size = product.wb_size if product is not None and product.wb_size else None
+    product_name = product.name if product is not None else (order.wb_article or "Unknown")
+    return article, sku_code, size, product_name
+
+
+def orders_in_canonical_picking_order(orders: Iterable[FbsOrder]) -> list[FbsOrder]:
+    """Return the one server order shared by the picking list and its print tape."""
+
+    def sort_key(order: FbsOrder) -> tuple[str, str, str, str, int, str]:
+        article, sku_code, size, product_name = _picking_list_group_key(order)
+        return (
+            article,
+            sku_code or "",
+            size or "",
+            product_name,
+            int(order.wb_order_id),
+            str(order.id),
+        )
+
+    return sorted(orders, key=sort_key)
+
+
+def picking_list_snapshot(orders: Iterable[FbsOrder]) -> str:
+    """Build an opaque version of every value that defines the canonical order."""
+    rows = [
+        [
+            *_picking_list_group_key(order),
+            int(order.wb_order_id),
+            str(order.id),
+        ]
+        for order in orders_in_canonical_picking_order(orders)
+    ]
+    payload = json.dumps(rows, ensure_ascii=False, separators=(",", ":")).encode()
+    return f"v1:{hashlib.sha256(payload).hexdigest()}"
 
 
 async def _order_has_ready_sticker_asset(
@@ -1578,20 +1629,15 @@ async def get_picking_list(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
-) -> list[PickingListItem]:
+) -> PickingList:
     supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
     if supply is None:
         raise FbsSupplyError("supply_not_found")
 
+    ordered_orders = orders_in_canonical_picking_order(supply.orders)
     groups: dict[tuple[str, str | None, str | None, str], list[FbsOrder]] = defaultdict(list)
-    for order in supply.orders:
-        product = order.product
-        article = order.wb_article or (product.sku_code if product is not None else "") or ""
-        sku_code = product.sku_code if product is not None else None
-        size = product.wb_size if product is not None and product.wb_size else None
-        product_name = product.name if product is not None else (order.wb_article or "Unknown")
-        key = (article, sku_code, size, product_name)
-        groups[key].append(order)
+    for order in ordered_orders:
+        groups[_picking_list_group_key(order)].append(order)
 
     items: list[PickingListItem] = []
     next_number = 1
@@ -1615,7 +1661,10 @@ async def get_picking_list(
             )
         )
         next_number = number_end + 1
-    return items
+    return PickingList(
+        items=tuple(items),
+        snapshot=picking_list_snapshot(ordered_orders),
+    )
 
 
 async def fetch_and_cache_stickers(

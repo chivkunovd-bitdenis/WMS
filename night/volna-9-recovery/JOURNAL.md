@@ -129,3 +129,8 @@
 04:34   06-picking-list-order · dev: фича 1/2 сохранена b76d255ae419
 04:39   06-picking-list-order · screen-dev: готово
 04:39   06-picking-list-order · dev: фича 2/2 сохранена 1e2aa106ade2
+04:58   06-picking-list-order · reviewer: готово
+04:58   06-picking-list-order · reviewer: Terra-rework не закрыл вердикт — эскалация Sol
+04:58   06-picking-list-order · reviewer: находки, круг 2 — назад к разработке
+05:01   06-picking-list-order · splitter: готово
+05:13   06-picking-list-order · backend-dev: готово
