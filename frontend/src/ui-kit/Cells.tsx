@@ -66,9 +66,21 @@ export function ProductCell({ photo, sku }: { photo?: ReactNode; sku: string }) 
   return (
     <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', minWidth: 0 }}>
       {photo}
-      <Typography variant="body2" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
-        {sku}
-      </Typography>
+      <Tooltip title={sku}>
+        <Typography
+          variant="body2"
+          sx={{
+            flex: 1,
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            fontWeight: 600,
+          }}
+        >
+          {sku}
+        </Typography>
+      </Tooltip>
     </Stack>
   )
 }
