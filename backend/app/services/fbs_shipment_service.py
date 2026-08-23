@@ -354,7 +354,11 @@ async def _sync_supply_orders_from_wb(
     for order in orders:
         try:
             await marking_svc.sync_order_marking_statuses(
-                session, tenant_id, order.id, http_client
+                session,
+                tenant_id,
+                order.id,
+                http_client,
+                persist_started_marker_outside_caller=False,
             )
         except marking_svc.FbsMarkingError:
             # Delivery must fail closed on every marking-sync failure, including

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from pathlib import Path
@@ -283,6 +284,130 @@ async def _deliver_direct(
         headers=headers,
         json={"idempotency_key": idempotency_key or str(uuid.uuid4())},
     )
+
+
+# Delivery-lock regression: WB metadata marker must not commit delivery state.
+@pytest.mark.asyncio
+async def test_fbs_shipment_second_deliver_does_not_reach_wb_while_first_holds_supply_lock(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.services.fbs_shipment_service as shipment_mod
+    from app.services.wildberries_fbs_client import (
+        MarketplaceMetaDetail,
+        MarketplaceOrderMetaRow,
+    )
+
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    wb_order_id = 954016
+    supply, order_ids = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=[wb_order_id],
+        supply_name="Delivery lock remains through WB metadata sync",
+    )
+    marking_value = "01CIS-S-03-TC-016-DELIVER"
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_ids[0])
+        assert order is not None
+        order.required_meta_json = ["sgtin"]
+        session.add(
+            FbsOrderMarking(
+                order_id=order.id,
+                tenant_id=tenant_id,
+                kind="sgtin",
+                value=marking_value,
+                check_status=CHECK_STATUS_NEW,
+                meta_status="pending",
+            )
+        )
+        await session.commit()
+
+    async def accepted_meta(*_args: object, **_kwargs: object) -> list[object]:
+        return [
+            MarketplaceOrderMetaRow(
+                order_id=wb_order_id,
+                meta_details=(
+                    MarketplaceMetaDetail(
+                        key="sgtin",
+                        value=marking_value,
+                        decision="filled",
+                    ),
+                ),
+            )
+        ]
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch",
+        accepted_meta,
+    )
+    await _create_and_fill_physical_box(async_client, headers, supply["id"], order_ids)
+    await _delivery_preflight(async_client, headers, supply["id"])
+
+    first_deliver_entered = asyncio.Event()
+    release_first_deliver = asyncio.Event()
+    deliver_calls = 0
+
+    async def delayed_deliver(*_args: object, **_kwargs: object) -> None:
+        nonlocal deliver_calls
+        deliver_calls += 1
+        if deliver_calls == 1:
+            first_deliver_entered.set()
+            await release_first_deliver.wait()
+
+    monkeypatch.setattr(shipment_mod, "deliver_marketplace_supply", delayed_deliver)
+
+    first_request = asyncio.create_task(
+        _deliver_direct(
+            async_client,
+            headers,
+            supply["id"],
+            idempotency_key=str(uuid.uuid4()),
+        )
+    )
+    await asyncio.wait_for(first_deliver_entered.wait(), timeout=2)
+
+    second_request = asyncio.create_task(
+        _deliver_direct(
+            async_client,
+            headers,
+            supply["id"],
+            idempotency_key=str(uuid.uuid4()),
+        )
+    )
+    await asyncio.sleep(0.1)
+    assert deliver_calls == 1
+    assert not second_request.done()
+
+    release_first_deliver.set()
+    first_response = await first_request
+    second_response = await second_request
+
+    assert first_response.status_code == 200, first_response.text
+    assert second_response.status_code == 400, second_response.text
+    assert second_response.json()["detail"]["code"] == "supply_bad_status"
+    assert deliver_calls == 1
+
+    async with SessionLocal() as session:
+        operations = list(
+            (
+                await session.execute(
+                    select(FbsWbOperation).where(
+                        FbsWbOperation.local_entity_id == uuid.UUID(supply["id"]),
+                        FbsWbOperation.operation_kind == "supply_deliver",
+                    )
+                )
+            ).scalars()
+        )
+        assert len(operations) == 1
+        assert operations[0].state == WB_OPERATION_STATE_CONFIRMED
 
 
 # TC-NEW-FBS-SHIPWH-001 — deliver → in_delivery; bad order status → 400

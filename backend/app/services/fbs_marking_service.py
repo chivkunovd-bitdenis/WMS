@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import set_committed_value
 
+from app.db.session import SessionLocal
 from app.models.fbs_order import (
     CHECK_STATUS_CHECKING,
     CHECK_STATUS_ERROR,
@@ -663,13 +664,16 @@ async def _record_wb_sync_started(
     session: AsyncSession,
     order: FbsOrder,
     started_at: datetime,
+    *,
+    persist_outside_caller: bool,
 ) -> None:
     """Persist a request-order marker before waiting for Wildberries.
 
-    Commit the marker before the external request.  Otherwise a slow WB
-    response leaves a SQLite write lock open and prevents a newer check of the
-    same order from reaching WB.  The committed timestamp is also the ordering
-    fence that keeps an older response from overwriting that newer result.
+    Ordinary metadata checks commit the marker in a short independent session
+    so a newer request can establish the ordering fence while an older request
+    waits for WB. Delivery instead holds a supply lock for its entire
+    transaction; in that path the marker is flushed into the caller's pending
+    transaction, so this helper never commits or releases that lock.
     """
     marker_stmt = (
         update(FbsOrder)
@@ -686,8 +690,12 @@ async def _record_wb_sync_started(
         # Do not evaluate this SQL predicate against the caller's identity map.
         .execution_options(synchronize_session=False)
     )
+    if persist_outside_caller:
+        async with SessionLocal.begin() as marker_session:
+            await marker_session.execute(marker_stmt)
+        return
     await session.execute(marker_stmt)
-    await session.commit()
+    await session.flush()
 
 
 async def _lock_current_marking_state(
@@ -743,12 +751,18 @@ async def _sync_order_meta_from_wb(
     token: str,
     *,
     record_started_marker: bool = True,
+    persist_started_marker_outside_caller: bool = True,
 ) -> list[FbsOrderMarking]:
     markings = await list_order_markings(session, order.tenant_id, order.id)
     started_at = datetime.now(tz=UTC)
     signature = _marking_sync_signature(order, markings)
     if record_started_marker:
-        await _record_wb_sync_started(session, order, started_at)
+        await _record_wb_sync_started(
+            session,
+            order,
+            started_at,
+            persist_outside_caller=persist_started_marker_outside_caller,
+        )
     try:
         batch = await fetch_marketplace_orders_meta_batch(
             http_client,
@@ -931,6 +945,8 @@ async def sync_order_marking_statuses(
     tenant_id: uuid.UUID,
     order_id: uuid.UUID,
     http_client: httpx.AsyncClient,
+    *,
+    persist_started_marker_outside_caller: bool = True,
 ) -> list[FbsOrderMarking]:
     order = await _get_order(session, tenant_id, order_id)
     if order is None:
@@ -943,7 +959,13 @@ async def sync_order_marking_statuses(
 
     token = await require_marketplace_token(session, tenant_id, order.seller_id)
     try:
-        markings = await _sync_order_meta_from_wb(session, order, http_client, token)
+        markings = await _sync_order_meta_from_wb(
+            session,
+            order,
+            http_client,
+            token,
+            persist_started_marker_outside_caller=persist_started_marker_outside_caller,
+        )
     except WildberriesClientError as exc:
         raise FbsMarkingError(_wb_error_code(exc)) from exc
 
