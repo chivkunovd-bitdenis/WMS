@@ -483,7 +483,7 @@ export async function fulfillInboundViaBoxScans(
 export async function apiCreateSubmittedInbound(
   req: APIRequestContext,
   seed: InboundBoxesSeed,
-  opts: { plannedBoxes: number; expectedQty: number },
+  opts: { plannedBoxes: number; expectedQty: number; storageLocationId?: string },
 ): Promise<string> {
   const sh = await sellerToken(req, seed);
   const cr = await req.post(INBOUND_API, {
@@ -500,7 +500,11 @@ export async function apiCreateSubmittedInbound(
   });
   await req.post(`${INBOUND_API}/${rid}/lines`, {
     headers: { ...sh, 'Content-Type': 'application/json' },
-    data: { product_id: seed.productId, expected_qty: opts.expectedQty },
+    data: {
+      product_id: seed.productId,
+      expected_qty: opts.expectedQty,
+      storage_location_id: opts.storageLocationId,
+    },
   });
   const sub = await req.post(`${INBOUND_API}/${rid}/submit`, { headers: sh });
   if (!sub.ok()) {

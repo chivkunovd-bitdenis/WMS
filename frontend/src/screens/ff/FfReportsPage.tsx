@@ -18,7 +18,12 @@ import {
   WarningNotice,
 } from '../../ui-kit'
 
-type Props = { token: string; sellers?: { id: string; name: string }[]; warehouses?: { id: string; name: string }[] }
+type Props = {
+  token: string
+  sellers?: { id: string; name: string }[]
+  warehouses?: { id: string; name: string }[]
+  contentInset?: number
+}
 type ReportWarning =
   | { code: 'wildberries_stale'; source: 'wildberries'; last_updated_at: string | null }
   | { code: 'reporting_dimensions_legacy'; count: number }
@@ -103,7 +108,7 @@ const warningText = (warning: ReportWarning) => warning.code === 'wildberries_st
   ? `Данные Wildberries могут быть неполными. Последнее обновление: ${moscowTimestamp(warning.last_updated_at)}.`
   : `В отчёте есть исторические записи, восстановленные по доступным связям: ${warning.count}`
 
-export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
+export function FfReportsPage({ token, sellers = [], warehouses = [], contentInset = 308 }: Props) {
   const now = useMemo(() => moscowCalendarDate(new Date()), [])
   const [period, setPeriod] = useState('month')
   const [dateFrom, setDateFrom] = useState(monthStart(now))
@@ -266,7 +271,7 @@ export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
     || (tableError ? 'Строки отчёта не загружены' : '')
     || (rows.length === 0 ? 'За выбранный период нечего выгружать' : undefined)
 
-  return <Stack spacing={0} data-testid="ff-reports-page">
+  return <Stack spacing={0} sx={{ minWidth: 0, width: `calc(100vw - ${contentInset}px)` }} data-testid="ff-reports-page">
     <ScreenHeader title="Остатки и движения" purpose="Текущий остаток и складские движения за выбранный период." />
     <FilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Название, артикул продавца, SKU, ШК" testId="ff-reports-filters">
       <TextField select size="small" label="Период" value={period} onChange={event => choosePeriod(event.target.value)} data-testid="ff-reports-period"><MenuItem value="7">7 дней</MenuItem><MenuItem value="30">30 дней</MenuItem><MenuItem value="month">Текущий месяц</MenuItem><MenuItem value="year">Текущий год</MenuItem><MenuItem value="custom">Другой период</MenuItem></TextField>

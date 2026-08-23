@@ -493,6 +493,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
                   token={token}
                   sellers={[]}
                   warehouses={reportWarehouseOptions(warehouses)}
+                  contentInset={288}
                 />
               ) : (
                 accessDenied

@@ -420,6 +420,7 @@ test('FF reports: section opens and shows movement summary for a product with in
   await expect(page.getByText('За выбранный период нечего выгружать')).toBeVisible()
   await page.getByTestId('filter-search').fill('Box Product')
   await expect(page.getByTestId('ff-reports-table').locator('tbody tr').first()).toBeVisible()
+  await expect(page.getByTestId('ff-reports-metrics')).toContainText('6 шт.')
   const metrics = await page.getByTestId('ff-reports-metrics').innerText()
 
   // The server owns the page slice. This response fixture gives the screen a
