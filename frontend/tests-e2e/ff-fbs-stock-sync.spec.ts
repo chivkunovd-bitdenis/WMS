@@ -97,12 +97,15 @@ test('fbs seller warehouses: row binding, manual sync, status panel', async ({ p
     'На выбранном складе нет привязок',
   )
   await expect(page.getByTestId('fbs-stock-binding-row')).toHaveCount(0)
+  await expect(page.getByTestId('fbs-stock-sync-all')).toBeDisabled()
   expect(syncPostRequests).toBe(0)
 
   await page.getByTestId('fbs-stock-warehouse-context-button').click()
   await page.getByTestId(`fbs-stock-warehouse-context-option-${wh.id}`).click()
   await expect(row).toContainText('публикация включена')
   expect(syncPostRequests).toBe(0)
+
+  await expect(page.getByTestId('fbs-stock-sync-all')).toHaveText('Выгрузить остатки')
 
   await Promise.all([
     page.waitForResponse(

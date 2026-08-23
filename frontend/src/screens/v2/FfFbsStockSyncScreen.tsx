@@ -770,7 +770,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
             disabled={busy || !selectedSellerId || syncableRows.length === 0}
             data-testid="fbs-stock-sync-all"
           >
-            Выгрузить остатки по включённым складам
+            Выгрузить остатки
           </Button>
           {busy ? <CircularProgress size={20} data-testid="fbs-stock-loading" /> : null}
         </Stack>
