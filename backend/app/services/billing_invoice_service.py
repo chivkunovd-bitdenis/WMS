@@ -477,7 +477,7 @@ async def form_invoice(
                 "amount": str(entry.amount),
                 "occurred_at": entry.occurred_at.isoformat(),
                 "number": source_numbers[entry.id],
-                "date": entry.occurred_at.date().isoformat(),
+                "date": entry.occurred_at.astimezone(MSK).date().isoformat(),
                 "performer_id": str(entry.performer_id) if entry.performer_id else None,
             }
         )

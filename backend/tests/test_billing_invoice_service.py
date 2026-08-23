@@ -165,6 +165,43 @@ async def test_form_invoice_uses_shared_document_number_for_each_seller(
 
 
 @pytest.mark.asyncio
+async def test_form_invoice_uses_moscow_date_for_invoice_line_documents(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """S-31-TC-006: invoice details keep the final fact's Moscow calendar date."""
+    tenant_id = uuid.uuid4()
+    seller_id = uuid.uuid4()
+    entry = _priced_entry(tenant_id, seller_id)
+    entry.source_type = "storage_measurement"
+    entry.occurred_at = datetime(2025, 6, 30, 21, 30, tzinfo=UTC)
+    session = _savepoint_session()
+    session.scalar = AsyncMock(
+        side_effect=[
+            object(),
+            None,
+            None,
+            _complete_ff_profile(tenant_id),
+            _complete_seller_profile(tenant_id, seller_id),
+        ]
+    )
+    session.scalars = AsyncMock(return_value=_result([entry]))
+    monkeypatch.setattr(
+        billing_invoice_service, "next_document_number", AsyncMock(return_value="СЧЕТ-1")
+    )
+
+    invoice = await form_invoice(
+        session,
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        period=date(2025, 7, 1),
+    )
+
+    assert isinstance(invoice, BillingInvoice)
+    assert invoice.period == date(2025, 7, 1)
+    assert invoice.lines[0]["documents"][0]["date"] == "2025-07-01"
+
+
+@pytest.mark.asyncio
 async def test_form_invoice_returns_incomplete_seller_profile_reason_without_ff_reason() -> None:
     tenant_id = uuid.uuid4()
     seller_id = uuid.uuid4()
