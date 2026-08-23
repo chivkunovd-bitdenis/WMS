@@ -1,0 +1,564 @@
+<!-- UI-KIT: ScreenHeader, FilterBar, ScannerLine, DataTable, ProductCell, TextCell, QtyCell, MarkChip, EmptyState, TableSkeletonBody, ErrorNotice, PrimaryAction, SecondaryAction -->
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>S-16 · Короба и грузоместа в каталоге</title>
+  <style>
+    :root {
+      --primary: #5b21b6;
+      --primary-dark: #4c1d95;
+      --primary-08: rgba(91, 33, 182, .08);
+      --primary-18: rgba(91, 33, 182, .18);
+      --primary-20: rgba(91, 33, 182, .20);
+      --bg: #e8ecf4;
+      --paper: #fff;
+      --text: #0f172a;
+      --muted: #475569;
+      --divider: rgba(15, 23, 42, .11);
+      --success-bg: rgba(27, 107, 69, .10);
+      --success: #14603d;
+      --error-bg: #fff4f2;
+      --error: #8f241b;
+      --shadow: 0 1px 2px rgba(15, 23, 42, .04);
+      color: var(--text);
+      background: var(--bg);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 14px;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; }
+    button, input, select { font: inherit; }
+
+    .page {
+      max-width: 1420px;
+      margin: 0 auto;
+      padding: 32px;
+    }
+
+    .artifact-head {
+      margin-bottom: 28px;
+      padding: 20px 22px;
+      border: 1px solid var(--primary-20);
+      border-radius: 14px;
+      background: var(--paper);
+      box-shadow: var(--shadow);
+    }
+
+    .artifact-head h1,
+    .screen h2,
+    .state-title { margin: 0; letter-spacing: -.02em; }
+    .artifact-head h1 { font-size: 24px; font-weight: 800; }
+    .artifact-head p,
+    .screen-purpose,
+    .state-note { color: var(--muted); line-height: 1.45; }
+    .artifact-head p { margin: 8px 0 0; }
+
+    .state-grid { display: grid; gap: 24px; }
+    .state-card {
+      border: 1px solid var(--primary-20);
+      border-radius: 14px;
+      background: var(--paper);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .state-label {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--divider);
+      background: #f7f5ff;
+    }
+    .state-title { font-size: 15px; font-weight: 800; }
+    .state-note { margin: 4px 0 0; font-size: 12px; }
+    .state-body { padding: 20px; min-width: 0; }
+
+    .screen h2 { font-size: 24px; font-weight: 800; }
+    .screen-purpose { margin: 5px 0 16px; }
+
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .button {
+      min-height: 32px;
+      padding: 6px 14px;
+      border: 1px solid transparent;
+      border-radius: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      cursor: default;
+    }
+    .button.primary { color: #fff; background: var(--primary); }
+    .button.secondary { color: var(--primary-dark); background: #fff; border-color: var(--primary); }
+    .button.tiny { min-height: 28px; padding: 4px 10px; font-size: 12px; }
+
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      border: 1px solid var(--primary-20);
+      border-radius: 14px;
+      background: var(--paper);
+      box-shadow: var(--shadow);
+    }
+    .search, .select {
+      min-height: 40px;
+      border: 1px solid rgba(15, 23, 42, .24);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--text);
+      outline: none;
+    }
+    .search { min-width: 330px; flex: 0 1 420px; padding: 8px 12px; }
+    .select { min-width: 190px; padding: 8px 34px 8px 12px; }
+    .search.focus { border: 2px solid var(--primary); padding: 7px 11px; box-shadow: 0 0 0 3px var(--primary-08); }
+    .count { color: var(--muted); font-size: 13px; }
+
+    .scanner-line {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 32px;
+      margin: 0 0 16px;
+      padding: 6px 12px;
+      border-radius: 10px;
+      background: var(--success-bg);
+      color: var(--success);
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .scanner-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
+
+    .table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      border: 1px solid var(--primary-20);
+      border-radius: 14px;
+      background: var(--paper);
+      box-shadow: var(--shadow);
+    }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    th, td {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--divider);
+      text-align: left;
+      vertical-align: middle;
+    }
+    th {
+      color: var(--text);
+      background: var(--primary-08);
+      border-bottom: 2px solid var(--primary-18);
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    tr:last-child td { border-bottom: 0; }
+    .number { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+    .muted { color: var(--muted); }
+    .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+
+    .photo {
+      display: inline-grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      background: #e2e8f0;
+      font-size: 21px;
+    }
+    .product-cell { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .product-cell strong { white-space: nowrap; }
+    .stock-lines { display: grid; justify-items: end; gap: 1px; font-size: 11px; white-space: nowrap; }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 3px 9px;
+      border: 1px solid rgba(91, 33, 182, .35);
+      border-radius: 999px;
+      color: var(--primary-dark);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .catalog-table { min-width: 1300px; margin-bottom: 18px; }
+    .catalog-table col:nth-child(1) { width: 60px; }
+    .catalog-table col:nth-child(2) { width: 190px; }
+    .catalog-table col:nth-child(3) { width: 145px; }
+    .catalog-table col:nth-child(4) { width: 120px; }
+    .catalog-table col:nth-child(5) { width: 150px; }
+    .catalog-table col:nth-child(6) { width: 72px; }
+    .catalog-table col:nth-child(7) { width: 120px; }
+    .catalog-table col:nth-child(8) { width: 140px; }
+    .catalog-table col:nth-child(9),
+    .catalog-table col:nth-child(10) { width: 76px; }
+    .catalog-table col:nth-child(11) { width: 100px; }
+    .catalog-table col:nth-child(12) { width: 80px; }
+
+    details { background: var(--paper); }
+    summary { list-style: none; }
+    summary::-webkit-details-marker { display: none; }
+
+    .packages-section {
+      border: 1px solid var(--primary-20);
+      border-radius: 14px;
+      overflow: hidden;
+      background: var(--paper);
+      box-shadow: var(--shadow);
+    }
+    .packages-section > summary,
+    .package > summary {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 48px;
+      padding: 10px 14px;
+      cursor: pointer;
+      outline: none;
+    }
+    .packages-section > summary { font-weight: 800; }
+    .packages-section > summary::before,
+    .package > summary::before {
+      content: "›";
+      display: inline-grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      flex: 0 0 24px;
+      color: var(--muted);
+      font-size: 24px;
+      line-height: 1;
+      transform: rotate(0deg);
+      transition: transform .12s ease;
+    }
+    .packages-section[open] > summary::before,
+    .package[open] > summary::before { transform: rotate(90deg); }
+    .packages-section[open] > summary { border-bottom: 1px solid var(--divider); }
+    .packages-panel { padding: 0; }
+
+    .package { border-bottom: 1px solid var(--divider); }
+    .package:last-child { border-bottom: 0; }
+    .package[open] > summary { background: rgba(91, 33, 182, .035); border-bottom: 1px solid var(--divider); }
+    .package-main { min-width: 150px; font-weight: 750; }
+    .package-code { min-width: 170px; color: var(--muted); }
+    .package-context {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex: 1 1 auto;
+      gap: 8px 18px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .package-detail { padding: 14px; }
+    .detail-table { border: 1px solid var(--primary-20); border-radius: 12px; overflow: hidden; }
+    .detail-table table { min-width: 720px; }
+    .detail-table col:nth-child(1) { width: 168px; }
+    .detail-table col:nth-child(2) { width: 320px; }
+    .detail-table col:nth-child(3) { width: 220px; }
+    .detail-table col:nth-child(4) { width: 120px; }
+
+    .empty-state { padding: 20px 18px; }
+    .empty-state strong { display: block; margin-bottom: 6px; font-size: 14px; }
+    .empty-state p { margin: 0; color: var(--muted); line-height: 1.45; }
+
+    .error-notice {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 12px 14px;
+      margin: 14px;
+      border: 1px solid rgba(163, 42, 32, .24);
+      border-radius: 10px;
+      background: var(--error-bg);
+      color: var(--error);
+      font-weight: 600;
+    }
+    .scan-error { margin: 0 0 16px; }
+
+    .skeleton-list { padding: 8px 0; }
+    .skeleton-row {
+      display: grid;
+      grid-template-columns: 24px 160px 180px 1fr;
+      gap: 14px;
+      align-items: center;
+      min-height: 48px;
+      padding: 9px 14px;
+      border-bottom: 1px solid var(--divider);
+    }
+    .skeleton-row:last-child { border-bottom: 0; }
+    .skeleton {
+      height: 12px;
+      border-radius: 6px;
+      background: linear-gradient(90deg, #e8eaf0 25%, #f5f6f9 50%, #e8eaf0 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite linear;
+    }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+
+    .target-note {
+      margin: 0 0 12px;
+      color: var(--primary-dark);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    @media (max-width: 760px) {
+      .page { padding: 16px; }
+      .state-body { padding: 14px; }
+      .search, .select { width: 100%; min-width: 0; flex: 1 1 100%; }
+      .actions { justify-content: stretch; }
+      .actions .button { flex: 1 1 160px; }
+      .package > summary { align-items: flex-start; flex-wrap: wrap; }
+      .package-context { justify-content: flex-start; flex: 1 1 100%; padding-left: 36px; flex-wrap: wrap; }
+      .error-notice { align-items: flex-start; flex-direction: column; }
+      .skeleton-row { grid-template-columns: 24px 1fr; }
+      .skeleton-row .skeleton:nth-child(n+3) { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="artifact-head">
+      <h1>S-16 · Короба и грузоместа в каталоге</h1>
+      <p>Статический UX-макет. Он показывает только добавляемый контракт и сохраняет существующие зоны каталога без редизайна.</p>
+    </header>
+
+    <div class="state-grid">
+      <section class="state-card">
+        <div class="state-label">
+          <h3 class="state-title">01 · Вход на экран — раздел свёрнут</h3>
+          <p class="state-note">Полный контекст S-16. Новый блок находится под текущей таблицей, а скан использует существующий поиск.</p>
+        </div>
+        <div class="state-body screen">
+          <h2>Каталог</h2>
+          <p class="screen-purpose">Карточки товаров селлеров: название, артикулы, ШК, размер, ТЗ упаковки и остаток на ФФ.</p>
+          <div class="actions">
+            <button class="button primary">Загрузить Excel</button>
+            <button class="button secondary">Создать товар</button>
+          </div>
+          <div class="filter-bar">
+            <input class="search" aria-label="Поиск" placeholder="Поиск по названию, артикулу, SKU или ШК">
+            <select class="select" aria-label="Селлер"><option>Все селлеры</option></select>
+            <select class="select" aria-label="Категория"><option>Все категории</option></select>
+            <span class="count">Найдено: 2 из 2</span>
+          </div>
+          <div class="scanner-line"><span class="scanner-dot"></span>Сканер активен — пикните внутренний ШК короба или грузоместа</div>
+          <div class="table-wrap catalog-table">
+            <table aria-label="Существующая таблица товаров">
+              <colgroup><col><col><col><col><col><col><col><col><col><col><col><col></colgroup>
+              <thead><tr><th>Фото</th><th>Название</th><th>Артикул продавца</th><th>SKU</th><th>ШК</th><th>Размер</th><th>Селлер</th><th class="number">Остаток</th><th>ТЗ</th><th>ЧЗ</th><th>Резервы</th><th></th></tr></thead>
+              <tbody>
+                <tr><td><span class="photo">👕</span></td><td class="ellipsis">Футболка базовая хлопок</td><td>KRS-BASIC-BLK</td><td><strong>SKU-10432</strong></td><td class="code">4607000123456</td><td>44</td><td>Красотка</td><td><div class="stock-lines"><span>В ячейках 86</span><span class="muted">На ФФ 94</span><span class="muted">Свободный FBO 70</span></div></td><td><button class="button tiny primary">ТЗ</button></td><td><span class="chip">ЧЗ</span></td><td><button class="button tiny secondary">Резервы</button></td><td>⋯</td></tr>
+                <tr><td><span class="photo">👟</span></td><td class="ellipsis">Кроссовки городские белые</td><td>NRD-WALK-WHT</td><td><strong>SKU-11890</strong></td><td class="code">4607000765432</td><td>42</td><td>Норд</td><td><div class="stock-lines"><span>В ячейках 24</span><span class="muted">На ФФ 31</span><span class="muted">Свободный FBO 18</span></div></td><td><button class="button tiny secondary">ТЗ</button></td><td></td><td><button class="button tiny secondary">Резервы</button></td><td>⋯</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <details class="packages-section">
+            <summary>Короба и грузоместа</summary>
+          </details>
+        </div>
+      </section>
+
+      <section class="state-card">
+        <div class="state-label">
+          <h3 class="state-title">02 · Обычный список — короб раскрыт</h3>
+          <p class="state-note">Новая приёмка выше старой. Склад показан только в многоскладском тенанте. Товаров с нулевым остатком нет.</p>
+        </div>
+        <div class="state-body">
+          <details class="packages-section" open>
+            <summary>Короба и грузоместа</summary>
+            <div class="packages-panel exclusive">
+              <details class="package" open>
+                <summary><span class="package-main">Короб № 3</span><span class="package-code code">INB-2026-000184-03</span><span class="package-context"><span>Приёмка № 184</span><span>Склад: Южный</span></span></summary>
+                <div class="package-detail">
+                  <div class="detail-table table-wrap">
+                    <table aria-label="Состав короба № 3">
+                      <colgroup><col><col><col><col></colgroup>
+                      <thead><tr><th>Товар</th><th>Название</th><th>ШК</th><th class="number">Остаток</th></tr></thead>
+                      <tbody>
+                        <tr><td><div class="product-cell"><span class="photo">👕</span><strong>SKU-10432</strong></div></td><td class="ellipsis" title="Футболка базовая хлопок">Футболка базовая хлопок</td><td class="code ellipsis" title="4607000123456">4607000123456</td><td class="number">8</td></tr>
+                        <tr><td><div class="product-cell"><span class="photo">👟</span><strong>SKU-11890</strong></div></td><td class="ellipsis" title="Кроссовки городские белые">Кроссовки городские белые</td><td class="code ellipsis" title="4607000765432">4607000765432</td><td class="number">3</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </details>
+              <details class="package">
+                <summary><span class="package-main">Грузоместо № 1</span><span class="package-code code">ICG-2026-000184-01</span><span class="package-context"><span>Приёмка № 184</span><span>Склад: Южный</span></span></summary>
+                <div class="empty-state"><strong>Состав по грузоместу не ведётся</strong></div>
+              </details>
+              <details class="package">
+                <summary><span class="package-main">Короб № 1</span><span class="package-code code">INB-2026-000179-01</span><span class="package-context"><span>Приёмка № 179</span><span>Склад: Северный</span></span></summary>
+                <div class="empty-state"><strong>В коробе пока нет товаров</strong><p>Наполните короб в разделе «Приёмка».</p></div>
+              </details>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section class="state-card">
+        <div class="state-label">
+          <h3 class="state-title">03 · Грузоместо раскрыто</h3>
+          <p class="state-note">Отдельный пример намеренного отсутствия состава. Новая связь с товарами не подразумевается.</p>
+        </div>
+        <div class="state-body">
+          <details class="packages-section" open>
+            <summary>Короба и грузоместа</summary>
+            <div class="packages-panel exclusive">
+              <details class="package">
+                <summary><span class="package-main">Короб № 3</span><span class="package-code code">INB-2026-000184-03</span><span class="package-context"><span>Приёмка № 184</span></span></summary>
+              </details>
+              <details class="package" open>
+                <summary><span class="package-main">Грузоместо № 1</span><span class="package-code code">ICG-2026-000184-01</span><span class="package-context"><span>Приёмка № 184</span></span></summary>
+                <div class="empty-state"><strong>Состав по грузоместу не ведётся</strong></div>
+              </details>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section class="state-card">
+        <div class="state-label">
+          <h3 class="state-title">04 · Первая загрузка списка</h3>
+          <p class="state-note">Пять скелетных строк показывают будущую форму списка; начальный каталог не ждал эту загрузку.</p>
+        </div>
+        <div class="state-body">
+          <details class="packages-section" open>
+            <summary>Короба и грузоместа</summary>
+            <div class="skeleton-list" aria-label="Загрузка коробов и грузомест">
+              <div class="skeleton-row"><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span></div>
+              <div class="skeleton-row"><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span></div>
+              <div class="skeleton-row"><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span></div>
+              <div class="skeleton-row"><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span></div>
+              <div class="skeleton-row"><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span><span class="skeleton"></span></div>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section class="state-card">
+        <div class="state-label"><h3 class="state-title">05 · Пустой список</h3><p class="state-note">Из каталога ничего не создаётся: текст указывает правильный рабочий раздел.</p></div>
+        <div class="state-body">
+          <details class="packages-section" open>
+            <summary>Короба и грузоместа</summary>
+            <div class="empty-state"><strong>Коробов и грузомест пока нет</strong><p>Создайте короб или грузоместо в разделе «Приёмка».</p></div>
+          </details>
+        </div>
+      </section>
+
+      <section class="state-card">
+        <div class="state-label"><h3 class="state-title">06 · Ошибка списка</h3><p class="state-note">Ошибка находится внутри ленивого раздела и не содержит кода ответа.</p></div>
+        <div class="state-body">
+          <details class="packages-section" open>
+            <summary>Короба и грузоместа</summary>
+            <div class="error-notice"><span>Не удалось загрузить короба и грузоместа</span><button class="button primary">Повторить</button></div>
+          </details>
+        </div>
+      </section>
+
+      <section class="state-card">
+        <div class="state-label"><h3 class="state-title">07 · Успешный точный скан</h3><p class="state-note">Поле сохраняет фокус; раздел и нужный короб раскрыты, строка не окрашена.</p></div>
+        <div class="state-body">
+          <div class="filter-bar"><input class="search focus code" aria-label="Поиск" value="INB-2026-000184-03" readonly><span class="count">Код выделен — следующий скан заменит его</span></div>
+          <div class="scanner-line"><span class="scanner-dot"></span>Сканер активен — пикните внутренний ШК короба или грузоместа</div>
+          <p class="target-note">Экран прокручен к найденному объекту</p>
+          <details class="packages-section" open>
+            <summary>Короба и грузоместа</summary>
+            <div class="packages-panel exclusive">
+              <details class="package" open>
+                <summary><span class="package-main">Короб № 3</span><span class="package-code code">INB-2026-000184-03</span><span class="package-context"><span>Приёмка № 184</span><span>Склад: Южный</span></span></summary>
+                <div class="package-detail">
+                  <div class="detail-table table-wrap">
+                    <table aria-label="Найденный состав короба"><colgroup><col><col><col><col></colgroup><thead><tr><th>Товар</th><th>Название</th><th>ШК</th><th class="number">Остаток</th></tr></thead><tbody><tr><td><div class="product-cell"><span class="photo">👕</span><strong>SKU-10432</strong></div></td><td class="ellipsis">Футболка базовая хлопок</td><td class="code ellipsis">4607000123456</td><td class="number">8</td></tr></tbody></table>
+                  </div>
+                </div>
+              </details>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section class="state-card">
+        <div class="state-label"><h3 class="state-title">08 · Неизвестный или чужой ШК</h3><p class="state-note">Формулировка одна, раздел не раскрывается, поле готово к следующему скану.</p></div>
+        <div class="state-body">
+          <div class="filter-bar"><input class="search focus code" aria-label="Поиск" value="INB-2026-999999-99" readonly></div>
+          <div class="scanner-line"><span class="scanner-dot"></span>Сканер активен — пикните внутренний ШК короба или грузоместа</div>
+          <div class="error-notice scan-error">Короб или грузоместо не найдено</div>
+          <details class="packages-section"><summary>Короба и грузоместа</summary></details>
+        </div>
+      </section>
+
+      <section class="state-card">
+        <div class="state-label"><h3 class="state-title">09 · Пустой короб незавершённой приёмки</h3><p class="state-note">Объект остаётся в обычном списке, но каталог не предлагает наполнить его здесь.</p></div>
+        <div class="state-body">
+          <details class="packages-section" open>
+            <summary>Короба и грузоместа</summary>
+            <div class="packages-panel exclusive">
+              <details class="package" open>
+                <summary><span class="package-main">Короб № 1</span><span class="package-code code">INB-2026-000179-01</span><span class="package-context"><span>Приёмка № 179</span></span></summary>
+                <div class="empty-state"><strong>В коробе пока нет товаров</strong><p>Наполните короб в разделе «Приёмка».</p></div>
+              </details>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section class="state-card">
+        <div class="state-label"><h3 class="state-title">10 · Полностью разложенный короб найден сканом</h3><p class="state-note">Временная адресная строка подтверждает этикетку, но не выдаёт исторический состав за текущий.</p></div>
+        <div class="state-body">
+          <details class="packages-section" open>
+            <summary>Короба и грузоместа</summary>
+            <div class="packages-panel exclusive">
+              <details class="package" open>
+                <summary><span class="package-main">Короб № 2</span><span class="package-code code">INB-2026-000121-02</span><span class="package-context"><span>Приёмка № 121</span></span></summary>
+                <div class="empty-state"><strong>Товар из короба уже разложен</strong><p>Исторический состав здесь не показывается.</p></div>
+              </details>
+              <details class="package"><summary><span class="package-main">Короб № 3</span><span class="package-code code">INB-2026-000184-03</span><span class="package-context"><span>Приёмка № 184</span></span></summary></details>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section class="state-card">
+        <div class="state-label"><h3 class="state-title">11 · Завершённое грузоместо найдено сканом</h3><p class="state-note">Нет статус-чипа и нет состава: достаточно двух спокойных строк результата.</p></div>
+        <div class="state-body">
+          <details class="packages-section" open>
+            <summary>Короба и грузоместа</summary>
+            <div class="packages-panel exclusive">
+              <details class="package" open>
+                <summary><span class="package-main">Грузоместо № 4</span><span class="package-code code">ICG-2026-000121-04</span><span class="package-context"><span>Приёмка № 121</span><span>Склад: Северный</span></span></summary>
+                <div class="empty-state"><strong>Приёмка завершена</strong><p>Состав по грузоместу не ведётся.</p></div>
+              </details>
+            </div>
+          </details>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    document.querySelectorAll('.exclusive').forEach((group) => {
+      group.querySelectorAll(':scope > details.package').forEach((item) => {
+        item.addEventListener('toggle', () => {
+          if (!item.open) return;
+          group.querySelectorAll(':scope > details.package[open]').forEach((other) => {
+            if (other !== item) other.open = false;
+          });
+        });
+      });
+    });
+  </script>
+</body>
+</html>
