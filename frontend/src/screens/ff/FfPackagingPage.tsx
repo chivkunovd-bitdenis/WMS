@@ -61,8 +61,7 @@ import { displayMetaToProductLabel } from '../../utils/productBarcodePrint'
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { printShipmentPackagingSheet } from '../../utils/printShipmentPackagingSheet'
 import { formatHumanDocumentNumber } from './documentDisplay'
-import { useWarehouseContext } from '../../contexts/WarehouseContext'
-import { WarehouseNoContextState } from '../../ui-kit'
+import { WarehouseContextSwitch, WarehouseNoContextState, type WarehouseOption } from '../../ui-kit'
 
 export type PackagingTaskLine = {
   id: string
@@ -1479,9 +1478,7 @@ export function FfPackagingTaskPanel({
   )
 }
 
-type PageProps = {
-  token: string
-}
+type PageProps = { token: string; warehouses: WarehouseOption[]; selectedWarehouseId: string | null; onWarehouseChange: (warehouseId: string) => void }
 
 type WarehouseRow = { id: string; name: string; code: string }
 
@@ -1852,7 +1849,7 @@ function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: Create
   )
 }
 
-export function FfPackagingPage({ token }: PageProps) {
+export function FfPackagingPage({ token, warehouses, selectedWarehouseId, onWarehouseChange }: PageProps) {
   const location = useLocation()
   const navigate = useNavigate()
   const { taskId: routeTaskId } = useParams<{ taskId?: string }>()
@@ -1863,7 +1860,6 @@ export function FfPackagingPage({ token }: PageProps) {
   const [pendingMarkingCount, setPendingMarkingCount] = useState(0)
   const [statusFilter, setStatusFilter] = useState<PackagingTaskStatusFilter>('open')
   const [search, setSearch] = useState('')
-  const { selectedWarehouseId } = useWarehouseContext('fulfillment')
   const loadTaskById = useCallback(
     async (taskId: string) => {
       const res = await fetch(apiUrl(`/operations/packaging-tasks/${taskId}`), {
@@ -1928,6 +1924,7 @@ export function FfPackagingPage({ token }: PageProps) {
         title="Упаковка"
         description="Задания на маркировку и упаковку. Создайте из ячейки или сортировки, либо откройте из отгрузки на МП."
       />
+      <WarehouseContextSwitch options={warehouses} value={selectedWarehouseId} onChange={onWarehouseChange} testId="ff-packaging-warehouse" />
       <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', mb: 2, alignItems: 'center' }}>
         <Badge badgeContent={pendingMarkingCount} color="warning" data-testid="ff-packaging-pending-badge">
           <Button

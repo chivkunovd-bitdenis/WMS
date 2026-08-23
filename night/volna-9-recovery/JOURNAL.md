@@ -203,3 +203,8 @@
 04:33   04-warehouse-switch · dev: фича 3/4 сохранена ec396ecbe595
 04:41   04-warehouse-switch · screen-dev: готово
 04:41   04-warehouse-switch · dev: фича 4/4 сохранена a9cb7b06b286
+04:51   04-warehouse-switch · reviewer: готово
+04:51   04-warehouse-switch · reviewer: Terra-rework не закрыл вердикт — эскалация Sol
+04:51   04-warehouse-switch · reviewer: находки, круг 3 — назад к разработке
+04:54   04-warehouse-switch · splitter: готово
+05:08   04-warehouse-switch · screen-dev: готово

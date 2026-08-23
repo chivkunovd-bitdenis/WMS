@@ -2985,7 +2985,7 @@ export default function App() {
             path="ff/packaging"
             element={
               token && canPackagingOps ? (
-                <FfPackagingPage token={token} />
+                <FfPackagingPage token={token} warehouses={warehouses.map(({ id, name }) => ({ id, name }))} selectedWarehouseId={selectedWarehouseId} onWarehouseChange={selectWarehouse} />
               ) : (
                 ffAccessDenied
               )
@@ -2995,7 +2995,7 @@ export default function App() {
             path="ff/packaging/:taskId"
             element={
               token && canPackagingOps ? (
-                <FfPackagingPage token={token} />
+                <FfPackagingPage token={token} warehouses={warehouses.map(({ id, name }) => ({ id, name }))} selectedWarehouseId={selectedWarehouseId} onWarehouseChange={selectWarehouse} />
               ) : (
                 ffAccessDenied
               )
