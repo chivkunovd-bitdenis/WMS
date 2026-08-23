@@ -264,7 +264,7 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
     {error && <ErrorNotice testId="storage-error">{error}</ErrorNotice>}
     <ActionGroup>
       <PrimaryAction data-testid="storage-generate" disabledReason={actionLoading ? 'Формирование уже запущено' : undefined} onClick={() => void generate()}>{actionLoading ? 'Формируем…' : 'Сформировать за месяц'}</PrimaryAction>
-      {isFulfillmentAdmin && data?.tariff_configured && <SecondaryAction data-testid="storage-rate" onClick={openRate}>Изменить тариф</SecondaryAction>}
+      {isFulfillmentAdmin && data && <SecondaryAction data-testid="storage-rate" onClick={openRate}>{data.tariff_configured ? 'Изменить тариф' : 'Задать тариф'}</SecondaryAction>}
     </ActionGroup>
     <Box sx={{ mt: 2 }}>
       <DataTable columns={[
@@ -274,20 +274,20 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
         { key: 'total', header: 'Сумма, ₽', width: 140, align: 'right', render: (row: Statement) => row.total_amount },
         { key: 'problems', header: 'Проблемы', width: 110, align: 'right', render: (row: Statement) => row.problem_count },
         { key: 'actions', header: 'Действия', width: 120, align: 'center', render: (row: Statement) => <Stack direction="row"><IconAction title={expandedId === row.id ? 'Закрыть расчёт селлера' : 'Открыть расчёт селлера'} onClick={() => setExpandedId(expandedId === row.id ? null : row.id)} testId={`storage-expand-${row.id}`}><ExpandMoreIcon /></IconAction>{row.status === 'fixed' && <PrintAction what="накладную" placement="row" onClick={() => void openPrint(row)} testId={`storage-print-${row.id}`} />}</Stack> },
-      ]} rows={statements} getRowKey={(row) => row.id} loading={loading} empty={data?.tariff_configured === false ? { title: 'Тариф хранения ещё не задан', hint: isFulfillmentAdmin ? 'Задайте цену за литр-день и дату начала, чтобы сформировать первый расчёт' : 'Обратитесь к администратору ФФ, чтобы задать тариф хранения.', action: isFulfillmentAdmin ? <PrimaryAction onClick={openRate}>Задать тариф</PrimaryAction> : undefined } : { title: 'Ничего не найдено — измените поиск или фильтры' }} testId="storage-seller-table" />
+      ]} rows={statements} getRowKey={(row) => row.id} loading={loading} empty={data?.tariff_configured === false ? { title: 'Тариф хранения ещё не задан', hint: isFulfillmentAdmin ? 'Задайте цену за литр-день и дату начала, чтобы сформировать первый расчёт' : 'Обратитесь к администратору ФФ, чтобы задать тариф хранения.' } : { title: 'Ничего не найдено — измените поиск или фильтры' }} testId="storage-seller-table" />
       {expanded && <Box sx={{ p: 2, mt: 1, minWidth: 0, maxWidth: '100%', overflow: 'hidden', borderLeft: 4, borderColor: 'primary.main', '& [data-testid="storage-sku-table"]': { maxWidth: '100%', overflowX: 'auto' }, '& [data-testid="storage-sku-table"] .MuiTable-root': { tableLayout: 'fixed', width: '100%' }, '& [data-testid="storage-sku-table"] .MuiTableCell-root': { px: 1, overflow: 'hidden', textOverflow: 'ellipsis' } }} data-testid="storage-detail">
-        <Typography variant="h6">{expanded.seller_name} · {formatMonth(month)}</Typography><Typography color="text.secondary">{expanded.warehouse_name} · ставка снимка</Typography>
+        <Typography variant="h6">Расчёт селлера {expanded.seller_name} за {formatMonth(month)}</Typography>
+        <Typography color="text.secondary">{expanded.warehouse_name}</Typography>
         {missingCount > 0 && <ErrorNotice>Расчёт нельзя зафиксировать: устраните проблемы в строках ниже</ErrorNotice>}
         <DataTable columns={[
-          { key: 'sku', header: 'Товар', width: 84, render: (row: Measurement) => <TextCell value={row.sku} width={84} /> },
-          { key: 'article', header: 'Артикул', width: 80, render: (row: Measurement) => <TextCell value={row.seller_article} /> },
-          { key: 'volume', header: 'Объём, л', width: 85, align: 'right', render: (row: Measurement) => row.volume_liters ?? '—' },
-          { key: 'source', header: 'Источник', width: 90, render: (row: Measurement) => <TextCell value={sourceLabel(row.dimensions_source)} /> },
-          { key: 'liter-days', header: 'Л-дни', width: 85, align: 'right', render: (row: Measurement) => row.status === 'missing_dimensions' ? '—' : row.liter_days },
-          { key: 'rate', header: 'Ставка, ₽/л·д.', width: 125, align: 'right', render: (row: Measurement) => row.rate_snapshot ?? '—' },
-          { key: 'amount', header: 'Сумма, ₽', width: 95, align: 'right', render: (row: Measurement) => row.status === 'missing_dimensions' ? '—' : row.amount ?? '—' },
-          { key: 'status', header: 'Статус', width: 150, render: (row: Measurement) => <StatusChip tone={row.status === 'missing_dimensions' ? 'stop' : 'neutral'} label={row.status === 'missing_dimensions' ? 'Нет габаритов' : 'Рассчитано'} /> },
-          { key: 'actions', header: 'Действия', width: 140, render: (row: Measurement) => row.status === 'missing_dimensions' ? <PrimaryAction onClick={() => setMeasure(row)}>Внести обмер</PrimaryAction> : <IconAction title="История габаритов" testId={`storage-history-${row.product_id}`} onClick={() => void openHistory(row.product_id)}><HistoryOutlinedIcon /></IconAction> },
+          { key: 'product', header: 'Товар', width: 175, render: (row: Measurement) => <Stack spacing={0.25} sx={{ minWidth: 0 }}><Typography component="div" variant="body2" sx={{ fontWeight: 600 }}><TextCell value={row.sku} width={175} /></Typography><Typography component="div" variant="caption" color="text.secondary"><TextCell value={row.seller_article} width={175} /></Typography></Stack> },
+          { key: 'volume', header: 'Объём, л', width: 90, align: 'right', render: (row: Measurement) => row.volume_liters ?? '—' },
+          { key: 'source', header: 'Источник', width: 105, render: (row: Measurement) => <TextCell value={sourceLabel(row.dimensions_source)} /> },
+          { key: 'liter-days', header: 'Л-дни', width: 80, align: 'right', render: (row: Measurement) => row.status === 'missing_dimensions' ? '—' : row.liter_days },
+          { key: 'rate', header: 'Ставка, ₽/л·д.', width: 135, align: 'right', render: (row: Measurement) => row.rate_snapshot ?? '—' },
+          { key: 'amount', header: 'Сумма, ₽', width: 90, align: 'right', render: (row: Measurement) => row.status === 'missing_dimensions' ? '—' : row.amount ?? '—' },
+          { key: 'status', header: 'Статус', width: 125, render: (row: Measurement) => <StatusChip tone={row.status === 'missing_dimensions' ? 'stop' : 'neutral'} label={row.status === 'missing_dimensions' ? 'Нет габаритов' : 'Рассчитано'} /> },
+          { key: 'actions', header: 'Действия', width: 115, render: (row: Measurement) => row.status === 'missing_dimensions' ? <PrimaryAction onClick={() => setMeasure(row)}>Внести обмер</PrimaryAction> : <IconAction title="История габаритов" testId={`storage-history-${row.product_id}`} onClick={() => void openHistory(row.product_id)}><HistoryOutlinedIcon /></IconAction> },
         ]} rows={expanded.measurements} getRowKey={(row) => row.product_id} testId="storage-sku-table" />
         {isFulfillmentAdmin && expanded.status === 'draft' && <ActionGroup><PrimaryAction data-testid="storage-fix" disabledReason={missingCount ? `Нет габаритов у ${missingCount} товара` : actionLoading ? 'Фиксация выполняется' : undefined} onClick={() => void fix()}>Зафиксировать</PrimaryAction></ActionGroup>}
       </Box>}

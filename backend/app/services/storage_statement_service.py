@@ -4,7 +4,7 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP, Decimal, DecimalException, InvalidOperation
 from itertools import pairwise
 from typing import Any
 
@@ -21,6 +21,11 @@ from app.models.seller import Seller
 from app.models.storage_measurement import StorageMeasurement
 from app.models.storage_statement import StorageStatement
 from app.models.warehouse import Warehouse
+from app.services.billing_ledger_service import (
+    BillingLedgerError,
+    postgres_integer,
+    postgres_numeric,
+)
 from app.services.staff_packaging_billing_service import rub_to_kopecks
 from app.services.storage_measurement_service import (
     MOSCOW,
@@ -39,13 +44,40 @@ STORAGE_TARIFF_MONEY_QUANTUM = Decimal("0.01")
 
 def normalize_storage_tariff_amount(amount: Decimal) -> Decimal:
     """Round a storage rate to persisted money precision and reject zero."""
-    normalized = amount.quantize(
-        STORAGE_TARIFF_MONEY_QUANTUM,
-        rounding=ROUND_HALF_UP,
-    )
+    try:
+        normalized = amount.quantize(
+            STORAGE_TARIFF_MONEY_QUANTUM,
+            rounding=ROUND_HALF_UP,
+        )
+        postgres_integer(normalized * Decimal(100), field="tariff_amount")
+    except (InvalidOperation, BillingLedgerError) as exc:
+        raise StorageStatementError("tariff_amount_out_of_range") from exc
     if normalized <= 0:
         raise StorageStatementError("tariff_amount_must_be_positive")
     return normalized
+
+
+def normalize_storage_ledger_quantity(quantity: Decimal) -> Decimal:
+    """Fit one storage charge quantity into billing ledger NUMERIC(14, 4)."""
+    try:
+        normalized = postgres_numeric(
+            quantity,
+            precision=14,
+            scale=4,
+            field="ledger_quantity",
+        )
+    except BillingLedgerError as exc:
+        raise StorageStatementError("ledger_quantity_out_of_range") from exc
+    if normalized < 0:
+        raise StorageStatementError("ledger_quantity_out_of_range")
+    return normalized
+
+
+def _storage_ledger_integer(value: Decimal, field: str) -> int:
+    try:
+        return postgres_integer(value, field=field)
+    except BillingLedgerError as exc:
+        raise StorageStatementError(f"{field}_out_of_range") from exc
 
 
 StorageDraftPricing = dict[
@@ -428,16 +460,29 @@ async def fix_storage_statement(
         ).all()
     )
     existing_ids = {row.source_id for row in existing_rows}
+    pending_entries: list[BillingLedgerEntry] = []
     for measurement in measurements:
         if measurement.id in existing_ids:
             continue
         charged_quantity, amount, tariff = pricing[measurement.id]
-        effective_rate = (
-            (amount / charged_quantity).quantize(Decimal("0.000000000001"))
-            if charged_quantity
-            else Decimal(0)
+        quantity_value = normalize_storage_ledger_quantity(charged_quantity)
+        amount_value = _storage_ledger_integer(
+            amount * Decimal(100),
+            "ledger_amount",
         )
-        session.add(
+        try:
+            effective_rate = (
+                (amount / charged_quantity).quantize(Decimal("0.000000000001"))
+                if charged_quantity
+                else Decimal(0)
+            )
+        except DecimalException as exc:
+            raise StorageStatementError("ledger_rate_out_of_range") from exc
+        rate_value = _storage_ledger_integer(
+            effective_rate * Decimal(100),
+            "ledger_rate",
+        )
+        pending_entries.append(
             BillingLedgerEntry(
                 tenant_id=tenant_id,
                 seller_id=statement.seller_id,
@@ -449,9 +494,9 @@ async def fix_storage_statement(
                 source_type="storage_measurement",
                 source_id=measurement.id,
                 event_kind="storage_fixed",
-                quantity=charged_quantity,
-                rate=rub_to_kopecks(effective_rate),
-                amount=rub_to_kopecks(amount),
+                quantity=quantity_value,
+                rate=rate_value,
+                amount=amount_value,
                 occurred_at=datetime.now(UTC),
             )
         )
@@ -461,7 +506,7 @@ async def fix_storage_statement(
             tariffs,
             key=lambda item: (item.seller_id is not None, item.valid_from, str(item.id)),
         )
-        session.add(
+        pending_entries.append(
             BillingLedgerEntry(
                 tenant_id=tenant_id,
                 seller_id=statement.seller_id,
@@ -473,12 +518,18 @@ async def fix_storage_statement(
                 source_type="storage_measurement",
                 source_id=statement.id,
                 event_kind="storage_fixed",
-                quantity=Decimal(0),
-                rate=zero_tariff.amount,
-                amount=0,
+                quantity=normalize_storage_ledger_quantity(Decimal(0)),
+                rate=_storage_ledger_integer(
+                    Decimal(zero_tariff.amount),
+                    "ledger_rate",
+                ),
+                amount=_storage_ledger_integer(Decimal(0), "ledger_amount"),
                 occurred_at=datetime.now(UTC),
             )
         )
+    # Validate the complete publication before attaching a row or mutating the
+    # statement. An overflow in a later SKU therefore leaves no partial state.
+    session.add_all(pending_entries)
     statement.status = "fixed"
     statement.fixed_at = datetime.now(UTC)
     try:
