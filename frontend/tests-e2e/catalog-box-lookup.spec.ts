@@ -340,7 +340,16 @@ test('catalog scan follows a received box through partial and full putaway', asy
   releaseFailedListRequest?.()
   await expect(page.getByTestId('ff-catalog-inbound-packages-error')).toBeVisible()
   await expect(distributedBox).toContainText('Товар из короба уже разложен')
-  await page.getByTestId('ff-catalog-inbound-packages-retry').click()
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === 'GET' &&
+        response.url().endsWith('/api/operations/inbound-packages') &&
+        response.ok(),
+    ),
+    page.getByTestId('ff-catalog-inbound-packages-retry').click(),
+  ])
+  await expect(page.getByTestId('ff-catalog-inbound-packages-skeleton')).toBeHidden()
   await expect(distributedBox).toContainText('Товар из короба уже разложен')
   await page.unroute(/\/api\/operations\/inbound-packages$/)
 
