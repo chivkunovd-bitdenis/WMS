@@ -128,12 +128,15 @@ export function PrintAction({
 }) {
   const title = what === 'стикеры заказов' ? 'Печать стикеров' : `Печать ${what}`
   const reason = busy ? 'Подготовка печати…' : disabledReason
+  // Пока формируется документ, этот же обработчик не должен остаться доступен
+  // даже программно: повторная печать создаёт второй необратимый запуск.
+  const actionOnClick = reason ? undefined : onClick
   if (placement === 'row') {
-    return <IconAction title={reason ?? title} onClick={onClick} disabledReason={reason} testId={testId}>
+    return <IconAction title={reason ?? title} onClick={actionOnClick} disabledReason={reason} testId={testId}>
       {busy ? <CircularProgress size={18} /> : <PrintOutlined fontSize="small" />}
     </IconAction>
   }
-  return <PrimaryAction onClick={onClick} disabledReason={reason} data-testid={testId}>
+  return <PrimaryAction onClick={actionOnClick} disabledReason={reason} data-testid={testId}>
     {busy ? <><CircularProgress size={16} color="inherit" sx={{ mr: 1 }} />Подготовка…</> : title}
   </PrimaryAction>
 }

@@ -88,15 +88,21 @@ describe('picking list UI-kit primitives', () => {
     expect(disabledButtons[0].props.disabled).toBe(true)
   })
 
-  it('keeps CheckCell focusable when enabled and explains why it is disabled', () => {
+  it('switches CheckCell with its accessible label and explains why it is disabled', () => {
     const onChange = vi.fn()
+    const ariaLabel = 'Собрал Футболка базовая'
     const readyCheck = CheckCell({
       checked: false,
       onChange,
-      ariaLabel: 'Собрал Футболка базовая',
-    }) as ReactElement<{ disabled: boolean; onChange: (event: { target: { checked: boolean } }) => void }>
+      ariaLabel,
+    }) as ReactElement<{
+      disabled: boolean
+      onChange: (event: { target: { checked: boolean } }) => void
+      slotProps: { input: { 'aria-label': string } }
+    }>
 
     expect(readyCheck.props.disabled).toBe(false)
+    expect(readyCheck.props.slotProps.input['aria-label']).toBe(ariaLabel)
     readyCheck.props.onChange({ target: { checked: true } })
     expect(onChange).toHaveBeenCalledWith(true)
 
@@ -112,17 +118,30 @@ describe('picking list UI-kit primitives', () => {
     expect(disabledCheckbox.props.disabled).toBe(true)
   })
 
-  it('supports order stickers and disables PrintAction while busy', () => {
+  it('shows order-sticker preparation and prevents a repeat PrintAction click while busy', () => {
+    const onClick = vi.fn()
     const readyPrint = PrintAction({ what: 'стикеры заказов', placement: 'panel' }) as ReactElement<{
       children: ReactNode
       disabledReason?: string
+      onClick?: () => void
     }>
     expect(readyPrint.props.children).toBe('Печать стикеров')
     expect(readyPrint.props.disabledReason).toBeUndefined()
+    expect(readyPrint.props.onClick).toBeUndefined()
 
-    const busyPrint = PrintAction({ what: 'стикеры заказов', placement: 'panel', busy: true }) as ReactElement<{
+    const actionablePrint = PrintAction({ what: 'стикеры заказов', placement: 'panel', onClick }) as ReactElement<{
+      onClick?: () => void
+    }>
+    actionablePrint.props.onClick?.()
+    expect(onClick).toHaveBeenCalledOnce()
+
+    const busyPrint = PrintAction({ what: 'стикеры заказов', placement: 'panel', busy: true, onClick }) as ReactElement<{
       disabledReason?: string
+      children: ReactElement<{ children: [ReactNode, string] }>
+      onClick?: () => void
     }>
     expect(busyPrint.props.disabledReason).toBe('Подготовка печати…')
+    expect(busyPrint.props.children.props.children[1]).toBe('Подготовка…')
+    expect(busyPrint.props.onClick).toBeUndefined()
   })
 })
