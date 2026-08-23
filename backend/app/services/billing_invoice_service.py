@@ -23,6 +23,7 @@ from app.models.billing import (
 from app.models.inbound_intake import InboundIntakeRequest
 from app.models.marketplace_unload import MarketplaceUnloadRequest
 from app.models.seller import Seller
+from app.services.document_number_service import DOC_TYPE_INVOICE, next_document_number
 
 REASONS = {
     "unpriced": "Нет тарифа",
@@ -497,7 +498,7 @@ async def form_invoice(
     invoice = BillingInvoice(
         tenant_id=tenant_id,
         seller_id=seller_id,
-        number=f"INV-{period:%Y%m}-{seller_id.hex[:8]}",
+        number=await next_document_number(session, tenant_id, DOC_TYPE_INVOICE),
         period=period,
         status="issued",
         total_amount=sum((value["amount"] for value in grouped.values()), Decimal("0")),

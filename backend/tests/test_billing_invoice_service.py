@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, call
 
 import pytest
 from sqlalchemy import Boolean, Date, String, Uuid
@@ -11,6 +11,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from app.models.billing import BillingInvoice, BillingLedgerEntry, BillingProfile, BillingRunIssue
 from app.services import billing_invoice_service
 from app.services.billing_invoice_service import _storage_source_ids, form_invoice
+from app.services.document_number_service import DOC_TYPE_INVOICE
 
 
 def _result(values: list[object]) -> Mock:
@@ -108,6 +109,59 @@ def _priced_entry(tenant_id: uuid.UUID, seller_id: uuid.UUID) -> BillingLedgerEn
         amount=100,
         occurred_at=datetime(2026, 7, 5, tzinfo=UTC),
     )
+
+
+@pytest.mark.asyncio
+async def test_form_invoice_uses_shared_document_number_for_each_seller(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """S-31-TC-006: invoices use opaque shared-service numbers and remain idempotent."""
+    tenant_id = uuid.uuid4()
+    seller_a_id = uuid.uuid4()
+    seller_b_id = uuid.uuid4()
+    next_number = AsyncMock(side_effect=["СЧЕТ-26-08-23-1", "СЧЕТ-26-08-23-2"])
+    monkeypatch.setattr(billing_invoice_service, "next_document_number", next_number)
+
+    async def create(seller_id: uuid.UUID) -> tuple[AsyncMock, BillingInvoice]:
+        session = _savepoint_session()
+        entry = _priced_entry(tenant_id, seller_id)
+        entry.source_type = "storage_measurement"
+        session.scalar = AsyncMock(
+            side_effect=[
+                object(),
+                None,
+                None,
+                _complete_ff_profile(tenant_id),
+                _complete_seller_profile(tenant_id, seller_id),
+            ]
+        )
+        session.scalars = AsyncMock(return_value=_result([entry]))
+        invoice = await form_invoice(
+            session, tenant_id=tenant_id, seller_id=seller_id, period=date(2026, 7, 1)
+        )
+        assert isinstance(invoice, BillingInvoice)
+        return session, invoice
+
+    first_session, first_invoice = await create(seller_a_id)
+    second_session, second_invoice = await create(seller_b_id)
+
+    assert first_invoice.number == "СЧЕТ-26-08-23-1"
+    assert second_invoice.number == "СЧЕТ-26-08-23-2"
+    assert first_invoice.number != second_invoice.number
+    assert seller_a_id.hex[:8] not in first_invoice.number
+    assert seller_b_id.hex[:8] not in second_invoice.number
+    assert next_number.await_args_list == [
+        call(first_session, tenant_id, DOC_TYPE_INVOICE),
+        call(second_session, tenant_id, DOC_TYPE_INVOICE),
+    ]
+
+    first_session.scalar = AsyncMock(side_effect=[object(), first_invoice])
+    repeated = await form_invoice(
+        first_session, tenant_id=tenant_id, seller_id=seller_a_id, period=date(2026, 7, 1)
+    )
+
+    assert repeated is first_invoice
+    assert next_number.await_count == 2
 
 
 @pytest.mark.asyncio
