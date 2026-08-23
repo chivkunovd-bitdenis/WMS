@@ -41,6 +41,11 @@ class FbsOrderTapePrintError(Exception):
         super().__init__(code)
 
 
+ORDER_TAPE_MODE_MARKING = "marking"
+ORDER_TAPE_MODE_PICKING_LIST = "picking_list"
+ORDER_TAPE_MODES = frozenset({ORDER_TAPE_MODE_MARKING, ORDER_TAPE_MODE_PICKING_LIST})
+
+
 @dataclass(frozen=True)
 class FbsOrderTapePrintedCode:
     id: uuid.UUID
@@ -90,13 +95,19 @@ async def print_fbs_order_tape(
     reprint: bool,
     actor_user_id: uuid.UUID,
     http_client: httpx.AsyncClient,
+    mode: str = ORDER_TAPE_MODE_MARKING,
 ) -> FbsOrderTapePrintResult:
+    if mode not in ORDER_TAPE_MODES:
+        raise FbsOrderTapePrintError("invalid_order_tape_mode")
     if not order_ids:
         raise FbsOrderTapePrintError("empty_order_set")
-    try:
-        print_layout = parse_layout(layout or {"units": [{"block": "cz", "copies": 1}]})
-    except PrintTemplateServiceError as exc:
-        raise FbsOrderTapePrintError(exc.code) from exc
+    picking_list_mode = mode == ORDER_TAPE_MODE_PICKING_LIST
+    print_layout: PrintLayout | None = None
+    if not picking_list_mode:
+        try:
+            print_layout = parse_layout(layout or {"units": [{"block": "cz", "copies": 1}]})
+        except PrintTemplateServiceError as exc:
+            raise FbsOrderTapePrintError(exc.code) from exc
     supply = await _load_supply(session, tenant_id, supply_id)
     if supply is None:
         raise FbsOrderTapePrintError("supply_not_found")
@@ -109,8 +120,11 @@ async def print_fbs_order_tape(
     # The picking-list action is an all-or-nothing tape: accepting a stale
     # subset would produce labels whose numbers refer to a longer current list.
     # The older row-level action deliberately keeps its subset behaviour.
-    if include_order_qr and not _is_complete_supply_order_set(ordered, order_ids):
+    include_wb_sticker = include_order_qr or picking_list_mode
+    if include_wb_sticker and not _is_complete_supply_order_set(ordered, order_ids):
         raise FbsOrderTapePrintError("full_supply_order_set_required")
+    if picking_list_mode and picking_list_snapshot is None:
+        raise FbsOrderTapePrintError("picking_list_snapshot_required")
     if (
         picking_list_snapshot is not None
         and picking_list_snapshot != supply_svc.picking_list_snapshot(ordered)
@@ -120,8 +134,10 @@ async def print_fbs_order_tape(
     # Keep numbers anchored to the complete supply, while allowing the existing
     # row action to print just its requested order(s).
     canonical_order_ids = [order.id for order in selected_orders]
-    line_by_product = await _line_by_product(session, tenant_id, supply)
-    if not reprint and not allow_partial:
+    line_by_product: dict[uuid.UUID | None, PackagingTaskLine] = {}
+    if not picking_list_mode:
+        line_by_product = await _line_by_product(session, tenant_id, supply)
+    if not picking_list_mode and not reprint and not allow_partial:
         preflight_shortage = await _preflight_new_code_shortage(session, tenant_id, selected_orders)
         if preflight_shortage > 0:
             return FbsOrderTapePrintResult(
@@ -135,7 +151,7 @@ async def print_fbs_order_tape(
     qr_asset_by_order: dict[uuid.UUID, uuid.UUID] = {}
     qr_error_order_ids: set[uuid.UUID] = set()
     errors: list[FbsOrderTapeError] = []
-    if include_order_qr:
+    if include_wb_sticker:
         try:
             batch = await request_supply_print_batch(
                 session,
@@ -175,7 +191,7 @@ async def print_fbs_order_tape(
     shortage_total = 0
     for order in selected_orders:
         qr_asset_id = qr_asset_by_order.get(order.id)
-        if include_order_qr and qr_asset_id is None and order.id not in qr_error_order_ids:
+        if include_wb_sticker and qr_asset_id is None and order.id not in qr_error_order_ids:
             errors.append(
                 FbsOrderTapeError(
                     order_id=order.id,
@@ -185,8 +201,20 @@ async def print_fbs_order_tape(
                     message="QR заказа WB не получен.",
                 )
             )
-        if include_order_qr and qr_asset_id is None:
+        if include_wb_sticker and qr_asset_id is None:
             continue
+        if picking_list_mode:
+            result_orders.append(
+                FbsOrderTapeOrder(
+                    order_id=order.id,
+                    wb_order_id=int(order.wb_order_id),
+                    order_number=order_number_by_id[order.id],
+                    requires_honest_sign=False,
+                    qr_asset_id=qr_asset_id,
+                )
+            )
+            continue
+        assert print_layout is not None
         requires_honest_sign = _order_requires_sgtin(order)
         # Поставка со снятым требованием Честного знака печатается как немаркированная:
         # новые коды из пула не выпускаются и в WB не привязываются. Уже отсканированные
@@ -295,7 +323,8 @@ async def print_fbs_order_tape(
         )
 
     await session.flush()
-    await pack_int_svc.try_promote_fbs_supply_if_ready(session, tenant_id, supply_id)
+    if not picking_list_mode:
+        await pack_int_svc.try_promote_fbs_supply_if_ready(session, tenant_id, supply_id)
     return FbsOrderTapePrintResult(
         orders=result_orders,
         print_batch=batch,

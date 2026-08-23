@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Literal
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -226,6 +226,7 @@ class FbsPrintBatchOut(BaseModel):
 class FbsOrderTapePrintBody(BaseModel):
     order_ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
     picking_list_snapshot: str | None = Field(default=None, min_length=1, max_length=128)
+    mode: Literal["marking", "picking_list"] = "marking"
     layout_json: dict[str, object] | None = None
     allow_partial: bool = False
     include_order_qr: bool = True
@@ -670,7 +671,9 @@ def _raise_from_order_tape_service(exc: order_tape_svc.FbsOrderTapePrintError) -
     if exc.code in {
         "empty_order_set",
         "full_supply_order_set_required",
+        "picking_list_snapshot_required",
         "stale_picking_list",
+        "invalid_order_tape_mode",
         "invalid_layout_json",
         "invalid_layout_block",
         "invalid_layout_copies",
@@ -1618,6 +1621,7 @@ async def print_fbs_supply_order_tape(
                 reprint=body.reprint,
                 actor_user_id=user.id,
                 http_client=http_client,
+                mode=body.mode,
             )
         except order_tape_svc.FbsOrderTapePrintError as exc:
             _raise_from_order_tape_service(exc)
