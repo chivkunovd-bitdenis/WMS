@@ -28,3 +28,5 @@
 07:07   01-catalog-box-lookup · screen-dev: готово
 07:07   01-catalog-box-lookup · dev: фича 5/8 сохранена 5156957f3b6a
 07:11   01-catalog-box-lookup · screen-dev: готово
+07:11   01-catalog-box-lookup · dev: фича 6/8 сохранена 673f7dc2f7dc
+07:15   01-catalog-box-lookup · screen-dev: готово

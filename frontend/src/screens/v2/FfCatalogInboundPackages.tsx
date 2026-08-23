@@ -60,7 +60,8 @@ function packageTitle(item: InboundPackage): string {
 }
 
 function intakeLabel(item: InboundPackage): string {
-  return `Приёмка № ${item.request_display_number ?? item.request_id}`
+  const number = item.request_display_number ?? item.request_id
+  return `Приёмка ${number.includes('№') ? number : `№ ${number}`}`
 }
 
 export const FfCatalogInboundPackages = forwardRef<CatalogInboundPackagesHandle, Props>(
