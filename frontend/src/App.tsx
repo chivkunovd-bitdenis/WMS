@@ -42,6 +42,7 @@ import { NotificationsPage } from './screens/shared/NotificationsPage'
 import { HonestSignPoolPage } from './screens/shared/HonestSignPoolPage'
 import { HonestSignProductPage } from './screens/shared/HonestSignProductPage'
 import { FfPlaceholderPage } from './screens/ff/FfPlaceholderPage'
+import { FfStoragePage } from './screens/ff/FfStoragePage'
 import { FfInboundRequestView, type InboundRequestWorkspace } from './screens/ff/FfInboundRequestView'
 import { FfInboundQueuePage } from './screens/ff/FfInboundQueuePage'
 import { FfProductsCatalogScreen } from './screens/v2/FfProductsCatalogScreen'
@@ -2761,9 +2762,8 @@ export default function App() {
       isFulfillmentAdmin || canAccessFfBlock(me.role, me.permissions, 'packaging')
     const canShiftLeadOps = canAccessFfBlock(me.role, me.permissions, 'shift_lead')
     const canReceptionOps = canAccessFfBlock(me.role, me.permissions, 'reception')
-    const canCellsOps =
-      canAccessFfBlock(me.role, me.permissions, 'cells') ||
-      canAccessFfBlock(me.role, me.permissions, 'inventory')
+    const canInventoryOps = canAccessFfBlock(me.role, me.permissions, 'inventory')
+    const canCellsOps = canAccessFfBlock(me.role, me.permissions, 'cells') || canInventoryOps
     const canSettingsOps = isFulfillmentAdmin || canAccessFfBlock(me.role, me.permissions, 'settings')
     const portal: 'seller' | 'ff' = 'ff'
     const base = '/app/ff'
@@ -3157,7 +3157,7 @@ export default function App() {
 
           <Route
             path="ff/inventory"
-            element={token && canCellsOps ? <Navigate to={`${base}/products`} replace /> : ffAccessDenied}
+            element={token && canInventoryOps ? <FfStoragePage isFulfillmentAdmin={isFulfillmentAdmin} token={token} /> : ffAccessDenied}
           />
 
           <Route

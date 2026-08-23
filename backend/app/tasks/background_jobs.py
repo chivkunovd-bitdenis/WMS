@@ -20,6 +20,13 @@ def run_movements_digest_task(job_id: str) -> None:
     asyncio.run(run_movements_digest_job(uuid.UUID(job_id)))
 
 
+@celery_app.task(name="wms.storage_measurement_rebuild")
+def run_storage_measurement_rebuild_task(job_id: str) -> None:
+    from app.services.background_job_service import run_storage_measurement_rebuild_job
+
+    asyncio.run(run_storage_measurement_rebuild_job(uuid.UUID(job_id)))
+
+
 @celery_app.task(name="wms.wildberries_cards_sync")
 def run_wildberries_cards_sync_task(job_id: str) -> None:
     asyncio.run(run_wildberries_cards_sync_job(uuid.UUID(job_id)))

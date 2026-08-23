@@ -12,13 +12,20 @@ from __future__ import annotations
 
 import time
 import uuid
+from datetime import UTC, datetime
+from decimal import Decimal
 
 import pytest
 from httpx import AsyncClient
 
 from app.db.session import SessionLocal
 from app.models.product import Product
-from app.services.catalog_service import DEFAULT_PRODUCT_DIM_MM
+from app.models.product_dimension_event import ProductDimensionEvent
+from app.services.catalog_service import (
+    DEFAULT_PRODUCT_DIM_MM,
+    update_product_container_volume,
+    update_product_dimensions,
+)
 from app.services.tokens import decode_access_token
 from app.services.wildberries_product_import_service import upsert_products_from_wb_cards
 
@@ -162,3 +169,127 @@ async def test_reimport_does_not_overwrite_real_dimensions(
         assert row["length_mm"] == 123
         assert row["width_mm"] == 45
         assert row["height_mm"] == 67
+
+
+@pytest.mark.asyncio
+async def test_wb_import_preserves_manual_and_container_override_volume(
+    async_client: AsyncClient,
+) -> None:
+    """WB observations are retained but never replace a manual active volume."""
+    suffix = str(int(time.time() * 1000))
+    tenant_id, seller_id = await _register_tenant_and_seller(async_client, suffix)
+    barcode = f"DIMBAR-{suffix}-4"
+    async with SessionLocal() as session:
+        product = Product(
+            tenant_id=tenant_id, seller_id=seller_id, name="Ручной обмер",
+            sku_code=f"DIM-MANUAL-{suffix}", wb_barcode=barcode,
+        )
+        session.add(product)
+        await session.commit()
+        await update_product_dimensions(
+            session, tenant_id, product.id, length_mm=100, width_mm=20, height_mm=10,
+            author_user_id=None,
+        )
+        product_id = product.id
+
+    card = {
+        "nmID": 800_000_004,
+        "vendorCode": f"DIM-MANUAL-{suffix}",
+        "title": "Ручной обмер",
+        "sizes": [{"skus": [barcode], "chrtID": 1}],
+        "dimensions": {"length": 30, "width": 22, "height": 5},
+    }
+    async with SessionLocal() as session:
+        await upsert_products_from_wb_cards(session, tenant_id, seller_id, [card])
+        product = await session.get(Product, product_id)
+        assert product is not None
+        assert product.volume_liters == pytest.approx(0.02)
+        events = (await session.execute(
+            ProductDimensionEvent.__table__.select().where(
+                ProductDimensionEvent.product_id == product_id
+            )
+        )).mappings().all()
+        assert {row["source"] for row in events} == {"manual", "wb"}
+
+        await update_product_container_volume(
+            session, tenant_id, product_id, volume_liters=0.5,
+            container_basis="Короб 1", author_user_id=uuid.uuid4(),
+        )
+        await upsert_products_from_wb_cards(session, tenant_id, seller_id, [card])
+        product = await session.get(Product, product_id)
+        assert product is not None
+        assert product.volume_liters == pytest.approx(0.5)
+        assert product.dimensions_source == "container_override"
+
+
+@pytest.mark.asyncio
+async def test_dimension_history_keeps_one_active_version_with_audit_context(
+    async_client: AsyncClient,
+) -> None:
+    """A manual observation may supersede WB, while both records stay auditable."""
+    suffix = str(int(time.time() * 1000))
+    tenant_id, seller_id = await _register_tenant_and_seller(async_client, suffix)
+    observed_at = datetime(2026, 8, 22, 10, 30, tzinfo=UTC)
+
+    async with SessionLocal() as session:
+        product = Product(
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            name="Версионный обмер",
+            sku_code=f"DIM-HISTORY-{suffix}",
+            length_mm=100,
+            width_mm=200,
+            height_mm=300,
+            volume_liters=6.0,
+            dimensions_source="manual",
+            dimensions_updated_at=observed_at,
+        )
+        session.add(product)
+        await session.flush()
+        session.add_all(
+            [
+                ProductDimensionEvent(
+                    tenant_id=tenant_id,
+                    product_id=product.id,
+                    source="wb",
+                    observed_at=observed_at,
+                    external_updated_at=observed_at,
+                    length_mm=90,
+                    width_mm=190,
+                    height_mm=290,
+                    volume_liters=Decimal("4.959"),
+                    applied=False,
+                    fingerprint="wb:version-1",
+                ),
+                ProductDimensionEvent(
+                    tenant_id=tenant_id,
+                    product_id=product.id,
+                    source="manual",
+                    observed_at=observed_at,
+                    length_mm=100,
+                    width_mm=200,
+                    height_mm=300,
+                    volume_liters=Decimal("6.000"),
+                    container_basis="Measured by operator",
+                    applied=True,
+                    fingerprint="manual:version-2",
+                ),
+            ]
+        )
+        await session.commit()
+
+        events = (
+            await session.execute(
+                ProductDimensionEvent.__table__.select()
+                .where(ProductDimensionEvent.product_id == product.id)
+                .order_by(ProductDimensionEvent.source)
+            )
+        ).mappings().all()
+
+    assert len(events) == 2
+    assert sum(event["applied"] for event in events) == 1
+    events_by_source = {event["source"]: event for event in events}
+    assert set(events_by_source) == {"manual", "wb"}
+    assert all(event["observed_at"] is not None for event in events)
+    assert events_by_source["wb"]["external_updated_at"] is not None
+    assert events_by_source["manual"]["container_basis"] == "Measured by operator"

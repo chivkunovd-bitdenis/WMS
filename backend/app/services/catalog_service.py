@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import uuid
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from sqlalchemy import String, cast, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
@@ -13,6 +16,7 @@ from app.models.inbound_intake import InboundIntakeRequest
 from app.models.inventory_balance import InventoryBalance
 from app.models.outbound_shipment import OutboundShipmentRequest
 from app.models.product import Product
+from app.models.product_dimension_event import ProductDimensionEvent
 from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
@@ -726,6 +730,9 @@ async def update_product_dimensions(
     height_mm: int | None,
     weight_g: int | None = None,
     weight_g_set: bool = False,
+    source: str = "manual",
+    container_basis: str | None = None,
+    author_user_id: uuid.UUID | None = None,
     commit: bool = True,
 ) -> Product:
     dim_l, dim_w, dim_h = _normalize_dimensions(length_mm, width_mm, height_mm)
@@ -739,11 +746,166 @@ async def update_product_dimensions(
     if weight_g_set:
         p.weight_g = normalized_weight_g
     p.volume_liters = volume_liters_from_mm(dim_l, dim_w, dim_h)
+    p.dimensions_source = source
+    p.dimensions_updated_at = datetime.now(UTC)
+    p.dimensions_updated_by_user_id = author_user_id
+    await _record_dimension_event(
+        session, p, source=source, author_user_id=author_user_id,
+        length_mm=dim_l, width_mm=dim_w, height_mm=dim_h, weight_g=p.weight_g,
+        volume_liters=p.volume_liters, container_basis=container_basis,
+        fingerprint=_dimension_fingerprint(
+            dim_l, dim_w, dim_h, p.weight_g, p.volume_liters, source, container_basis
+        ),
+        apply=True,
+    )
     if commit:
         await session.commit()
         await session.refresh(p, attribute_names=["seller"])
     else:
         await session.flush()
+    return p
+
+
+async def update_product_container_volume(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    *,
+    volume_liters: float,
+    container_basis: str,
+    author_user_id: uuid.UUID,
+) -> Product:
+    if volume_liters <= 0 or not container_basis.strip():
+        raise CatalogError("invalid_container_dimensions")
+    p = await get_product(session, tenant_id, product_id)
+    if p is None:
+        raise CatalogError("product_not_found")
+    p.length_mm = p.width_mm = p.height_mm = None
+    p.volume_liters = volume_liters
+    p.dimensions_source = "container_override"
+    p.dimensions_updated_at = datetime.now(UTC)
+    p.dimensions_updated_by_user_id = author_user_id
+    await _record_dimension_event(
+        session, p, source="container_override", author_user_id=author_user_id,
+        length_mm=None, width_mm=None, height_mm=None, weight_g=p.weight_g,
+        volume_liters=volume_liters, container_basis=container_basis.strip(),
+        fingerprint=_dimension_fingerprint(
+            None, None, None, p.weight_g, volume_liters,
+            "container_override", container_basis.strip(),
+        ),
+        apply=True,
+    )
+    await session.commit()
+    await session.refresh(p, attribute_names=["seller"])
+    return p
+
+
+async def list_product_dimension_events(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    *,
+    seller_id: uuid.UUID | None = None,
+) -> list[ProductDimensionEvent]:
+    p = await get_product(session, tenant_id, product_id)
+    if p is None:
+        raise CatalogError("product_not_found")
+    query = select(ProductDimensionEvent).where(
+        ProductDimensionEvent.tenant_id == tenant_id,
+        ProductDimensionEvent.product_id == product_id,
+    )
+    if seller_id is not None and p.seller_id != seller_id:
+        return []
+    result = await session.execute(query.order_by(ProductDimensionEvent.observed_at.desc()))
+    return list(result.scalars().all())
+
+
+def _dimension_fingerprint(
+    length_mm: int | None,
+    width_mm: int | None,
+    height_mm: int | None,
+    weight_g: int | None,
+    volume_liters: float | Decimal | None,
+    source: str,
+    container_basis: str | None,
+) -> str:
+    payload = [length_mm, width_mm, height_mm, weight_g, volume_liters, source, container_basis]
+    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+async def _record_dimension_event(session: AsyncSession, product: Product, *, source: str,
+                                  author_user_id: uuid.UUID | None, length_mm: int | None,
+                                  width_mm: int | None, height_mm: int | None, weight_g: int | None,
+                                  volume_liters: float | None, container_basis: str | None,
+                                  fingerprint: str, apply: bool,
+                                  force_new: bool = False) -> ProductDimensionEvent:
+    existing_event = None
+    if source == "wb":
+        result = await session.execute(select(ProductDimensionEvent).where(
+            ProductDimensionEvent.product_id == product.id,
+            ProductDimensionEvent.source == "wb",
+            ProductDimensionEvent.fingerprint == fingerprint,
+        ))
+        existing_event = result.scalar_one_or_none()
+    event = None if force_new else existing_event
+    if event is None:
+        if force_new and existing_event is not None:
+            # Restoring WB is an intentional new observation, while ordinary
+            # repeated imports remain deduplicated by the content fingerprint.
+            fingerprint = f"{fingerprint}:{uuid.uuid4().hex}"
+        if apply:
+            await session.execute(update(ProductDimensionEvent).where(
+                ProductDimensionEvent.product_id == product.id
+            ).values(applied=False))
+        event = ProductDimensionEvent(
+            tenant_id=product.tenant_id, product_id=product.id, source=source,
+            author_user_id=author_user_id, length_mm=length_mm, width_mm=width_mm,
+            height_mm=height_mm, weight_g=weight_g, volume_liters=volume_liters,
+            container_basis=container_basis, applied=apply, fingerprint=fingerprint,
+        )
+        session.add(event)
+    elif apply and not event.applied:
+        await session.execute(update(ProductDimensionEvent).where(
+            ProductDimensionEvent.product_id == product.id
+        ).values(applied=False))
+        event.applied = True
+        event.author_user_id = author_user_id
+    return event
+
+
+async def restore_latest_wb_dimensions(session: AsyncSession, tenant_id: uuid.UUID,
+                                       product_id: uuid.UUID) -> Product:
+    p = await get_product(session, tenant_id, product_id)
+    if p is None:
+        raise CatalogError("product_not_found")
+    result = await session.execute(select(ProductDimensionEvent).where(
+        ProductDimensionEvent.tenant_id == tenant_id,
+        ProductDimensionEvent.product_id == product_id,
+        ProductDimensionEvent.source == "wb",
+        ProductDimensionEvent.length_mm.is_not(None),
+        ProductDimensionEvent.width_mm.is_not(None),
+        ProductDimensionEvent.height_mm.is_not(None),
+    ).order_by(ProductDimensionEvent.observed_at.desc()))
+    event = result.scalars().first()
+    if event is None:
+        raise CatalogError("wb_dimensions_not_found")
+    p.length_mm, p.width_mm, p.height_mm = event.length_mm, event.width_mm, event.height_mm
+    p.volume_liters = volume_liters_from_mm(p.length_mm, p.width_mm, p.height_mm)
+    p.dimensions_source = "wb"
+    p.dimensions_updated_at = datetime.now(UTC)
+    p.dimensions_updated_by_user_id = None
+    await _record_dimension_event(
+        session, p, source="wb", author_user_id=None, length_mm=p.length_mm,
+        width_mm=p.width_mm, height_mm=p.height_mm, weight_g=p.weight_g,
+        volume_liters=p.volume_liters, container_basis=event.container_basis,
+        fingerprint=_dimension_fingerprint(
+            p.length_mm, p.width_mm, p.height_mm, p.weight_g, p.volume_liters,
+            "wb", event.container_basis
+        ), apply=True, force_new=True,
+    )
+    await session.commit()
+    await session.refresh(p)
     return p
 
 

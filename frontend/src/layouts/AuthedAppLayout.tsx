@@ -141,6 +141,7 @@ export function AuthedAppLayout({
   const canMpShipments = isAdmin || can('mp_shipments')
   const canPackaging = isAdmin || can('packaging')
   const canCatalogCells = isAdmin || can('cells') || can('inventory')
+  const canStorage = isAdmin || can('inventory')
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }} data-testid="app-frame">
       <CssBaseline />
@@ -234,6 +235,11 @@ export function AuthedAppLayout({
             {isAdmin || can('inventory') ? (
               <ListItemButton component={NavLink} to={`${base}/reports`} data-testid="nav-ff-reports" data-task-id="NAV-01">
                 <ListItemText primary="Отчёты" />
+              </ListItemButton>
+            ) : null}
+            {canStorage ? (
+              <ListItemButton component={NavLink} to={`${base}/inventory`} data-testid="nav-ff-storage" data-task-id="NAV-01">
+                <ListItemText primary="Хранение" />
               </ListItemButton>
             ) : null}
             {isAdmin ? (
