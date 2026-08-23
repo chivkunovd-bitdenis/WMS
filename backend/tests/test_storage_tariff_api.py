@@ -4,6 +4,8 @@ TC coverage:
   test_admin_creates_warehouse_tariff          — S-11-TC-002 happy path (common rate)
   test_admin_creates_tariff_with_seller_exception — S-11-TC-002 + atomicity invariant
   test_staff_inventory_cannot_set_tariff       — role gate (403)
+  test_tariff_scope_must_belong_to_tenant_and_operational_warehouse
+                                               — S-11-TC-002/S-11-TC-020 tenant and warehouse scope
 """
 from __future__ import annotations
 
@@ -391,47 +393,78 @@ async def test_tariff_valid_from_cannot_be_in_the_past(
 async def test_tariff_scope_must_belong_to_tenant_and_operational_warehouse(
     async_client: AsyncClient,
 ) -> None:
-    """Foreign tenant ids and service warehouses cannot enter tariff rows."""
+    """Every invalid scope rejects the atomic tariff pair before either row is written."""
     suffix = str(time.time_ns())
     headers = await _register_admin(async_client, f"owner-{suffix}")
-    warehouse_id = await _create_warehouse(async_client, headers, suffix, "service")
+    service_warehouse_id = await _create_warehouse(
+        async_client, headers, suffix, "service"
+    )
+    operational_warehouse_id = await _create_warehouse(
+        async_client, headers, suffix, "operational"
+    )
     foreign_headers = await _register_admin(async_client, f"foreign-{suffix}")
     foreign_warehouse_id = await _create_warehouse(
         async_client, foreign_headers, suffix, "foreign"
     )
     today = datetime.now(MOSCOW).date().isoformat()
 
-    foreign_warehouse = await async_client.post(
-        "/operations/storage/tariffs",
-        headers=headers,
-        json={"warehouse_id": str(foreign_warehouse_id), "amount": "5.00", "valid_from": today},
-    )
-    assert foreign_warehouse.status_code == 404, foreign_warehouse.text
-    assert foreign_warehouse.json()["detail"] == "warehouse_not_found"
-
     async with SessionLocal() as session:
-        warehouse = await session.get(Warehouse, warehouse_id)
-        assert warehouse is not None
-        warehouse.is_operational = False
+        service_warehouse = await session.get(Warehouse, service_warehouse_id)
+        assert service_warehouse is not None
+        service_warehouse.is_operational = False
+        tenant_id = service_warehouse.tenant_id
+
         foreign_warehouse = await session.get(Warehouse, foreign_warehouse_id)
         assert foreign_warehouse is not None
-        foreign_seller = Seller(tenant_id=foreign_warehouse.tenant_id, name="Foreign seller")
-        session.add(foreign_seller)
+
+        owner_seller = Seller(tenant_id=tenant_id, name=f"Owner seller {suffix}")
+        foreign_seller = Seller(
+            tenant_id=foreign_warehouse.tenant_id,
+            name=f"Foreign seller {suffix}",
+        )
+        session.add_all([owner_seller, foreign_seller])
         await session.commit()
+        await session.refresh(owner_seller)
+        owner_seller_id = owner_seller.id
         foreign_seller_id = foreign_seller.id
 
-    service_warehouse = await async_client.post(
-        "/operations/storage/tariffs",
-        headers=headers,
-        json={"warehouse_id": str(warehouse_id), "amount": "5.00", "valid_from": today},
-    )
-    assert service_warehouse.status_code == 422, service_warehouse.text
-    assert service_warehouse.json()["detail"] == "warehouse_not_operational"
+    missing_warehouse_id = uuid.uuid4()
+    missing_seller_id = uuid.uuid4()
+    invalid_scopes = [
+        (foreign_warehouse_id, owner_seller_id, 404, "warehouse_not_found"),
+        (missing_warehouse_id, owner_seller_id, 404, "warehouse_not_found"),
+        (service_warehouse_id, owner_seller_id, 422, "warehouse_not_operational"),
+        (operational_warehouse_id, foreign_seller_id, 404, "seller_not_found"),
+        (operational_warehouse_id, missing_seller_id, 404, "seller_not_found"),
+    ]
 
-    operational_warehouse_id = await _create_warehouse(
-        async_client, headers, suffix, "operational"
-    )
-    foreign_seller_response = await async_client.post(
+    for target_warehouse_id, target_seller_id, status_code, detail in invalid_scopes:
+        response = await async_client.post(
+            "/operations/storage/tariffs",
+            headers=headers,
+            json={
+                "warehouse_id": str(target_warehouse_id),
+                "amount": "5.00",
+                "valid_from": today,
+                "seller_exception": {
+                    "seller_id": str(target_seller_id),
+                    "amount": "3.00",
+                    "valid_from": today,
+                },
+            },
+        )
+        assert response.status_code == status_code, response.text
+        assert response.json()["detail"] == detail
+
+        async with SessionLocal() as session:
+            count = await session.scalar(
+                select(func.count(BillingTariffVersion.id)).where(
+                    BillingTariffVersion.tenant_id == tenant_id
+                )
+            )
+        assert count == 0
+
+    valid_response = await async_client.post(
         "/operations/storage/tariffs",
         headers=headers,
         json={
@@ -439,18 +472,27 @@ async def test_tariff_scope_must_belong_to_tenant_and_operational_warehouse(
             "amount": "5.00",
             "valid_from": today,
             "seller_exception": {
-                "seller_id": str(foreign_seller_id),
+                "seller_id": str(owner_seller_id),
                 "amount": "3.00",
                 "valid_from": today,
             },
         },
     )
-    assert foreign_seller_response.status_code == 404, foreign_seller_response.text
-    assert foreign_seller_response.json()["detail"] == "seller_not_found"
+    assert valid_response.status_code == 201, valid_response.text
 
     async with SessionLocal() as session:
-        count = await session.scalar(select(func.count(BillingTariffVersion.id)))
-    assert count == 0
+        tariffs = list(
+            (
+                await session.scalars(
+                    select(BillingTariffVersion)
+                    .where(BillingTariffVersion.tenant_id == tenant_id)
+                    .order_by(BillingTariffVersion.seller_id)
+                )
+            ).all()
+        )
+    assert len(tariffs) == 2
+    assert {tariff.warehouse_id for tariff in tariffs} == {operational_warehouse_id}
+    assert {tariff.seller_id for tariff in tariffs} == {None, owner_seller_id}
 
 
 @pytest.mark.asyncio

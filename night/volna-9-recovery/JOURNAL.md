@@ -145,3 +145,5 @@
 04:19   08-storage · splitter: готово
 04:19   08-storage · resume: поатомный rework Sol по сохранённым находкам
 04:30   08-storage · backend-dev: готово
+04:30   08-storage · dev: фича 1/6 сохранена 7f9bb7f97c49
+04:39   08-storage · backend-dev: готово
