@@ -160,3 +160,30 @@ def test_skip_honest_sign_removes_our_marking_gate() -> None:
     )
     assert not any(check.code == "marking_required" for check in checks)
     _validate_checks_pass(checks)
+
+
+def test_preflight_exposes_real_wb_marking_status() -> None:
+    order = _mock_order(FBS_ORDER_STATUS_PACKED)
+    order.required_meta_json = ["sgtin"]
+    order.markings = [
+        SimpleNamespace(
+            kind="sgtin",
+            value="0104601234567890",
+            meta_status="accepted",
+            meta_details_json={"decision": "filled", "reason": None},
+            reason=None,
+        )
+    ]
+    checks = _build_delivery_checks(_mock_supply(), [order], cargo_qr_ready=True)
+    marking = next(check for check in checks if check.code == "marking_allowed")
+    assert marking.ok is True
+    assert marking.message == "WB: маркировка подтверждена."
+
+    order.markings[0].meta_details_json = {
+        "decision": "filled",
+        "reason": "uinBadStatus",
+    }
+    checks = _build_delivery_checks(_mock_supply(), [order], cargo_qr_ready=True)
+    marking = next(check for check in checks if check.code == "marking_not_allowed")
+    assert marking.ok is False
+    assert marking.message == "WB не принял маркировку: uinBadStatus"

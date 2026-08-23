@@ -336,6 +336,7 @@ async def test_fbs_metadata_gate_rejected_blocks_allowed_without_check_ok(
                 value="01CIS-ALLOWED",
                 check_status=CHECK_STATUS_NEW,
                 meta_status=META_STATUS_ALLOWED_WITHOUT_CHECK,
+                meta_details_json={"decision": "optional", "reason": None},
             )
         )
         await session.commit()
@@ -360,7 +361,13 @@ def test_fbs_metadata_gate_pending_blocks_filled_allows() -> None:
     )
 
     order = SimpleNamespace(required_meta_json=["sgtin"])
-    pending = SimpleNamespace(kind="sgtin", value="01CIS-PENDING", meta_status=META_STATUS_PENDING)
+    pending = SimpleNamespace(
+        kind="sgtin",
+        value="01CIS-PENDING",
+        meta_status=META_STATUS_PENDING,
+        meta_details_json={"decision": "pending", "reason": None},
+        reason=None,
+    )
     assert compute_delivery_allowed(order, [pending]) is False
     assert (
         derive_meta_status(
@@ -370,8 +377,16 @@ def test_fbs_metadata_gate_pending_blocks_filled_allows() -> None:
         )
         == META_STATUS_ACCEPTED
     )
-    filled = SimpleNamespace(kind="sgtin", value="01CIS-FILLED", meta_status=META_STATUS_ACCEPTED)
+    filled = SimpleNamespace(
+        kind="sgtin",
+        value="01CIS-FILLED",
+        meta_status=META_STATUS_ACCEPTED,
+        meta_details_json={"decision": "filled", "reason": None},
+        reason=None,
+    )
     assert compute_delivery_allowed(order, [filled]) is True
+    filled.meta_details_json = {"decision": "filled", "reason": "uinBadStatus"}
+    assert compute_delivery_allowed(order, [filled]) is False
 
 
 @pytest.mark.asyncio

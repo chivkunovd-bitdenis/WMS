@@ -176,7 +176,15 @@ test('fbs workspace: preflight and deliver', async ({ page }) => {
       can_deliver: true,
       version: 'preflight-v1',
       checked_at: new Date().toISOString(),
-      checks: [{ code: 'ready', message: 'Поставка готова', ok: true, order_id: null }],
+      checks: [
+        { code: 'ready', message: 'Поставка готова', ok: true, order_id: null },
+        {
+          code: 'marking_allowed',
+          message: 'WB: маркировка подтверждена.',
+          ok: true,
+          order_id: '1',
+        },
+      ],
     }),
   )
   await page.route('**/operations/fbs-supplies/sup-1/deliver', async (route) => {
@@ -193,10 +201,13 @@ test('fbs workspace: preflight and deliver', async ({ page }) => {
   await page.getByRole('button', { name: 'Передать в WB' }).click()
   const deliverConfirmDialog = page.getByRole('dialog', { name: 'Передать поставку в WB?' })
   await expect(deliverConfirmDialog).toBeVisible()
+  await expect(deliverConfirmDialog.getByTestId('fbs-delivery-marking-status')).toHaveText(
+    'WB: маркировка подтверждена.',
+  )
   await deliverConfirmDialog.getByRole('button', { name: 'Передать в WB' }).click()
 
   await expect(page.getByText('Поставка передана, QR получить не удалось')).toBeVisible()
-  expect(deliverBody?.confirmed_preflight_version).toBeUndefined()
+  expect(deliverBody?.confirmed_preflight_version).toBe('preflight-v1')
   expect(deliverBody?.idempotency_key).toEqual(expect.any(String))
 })
 

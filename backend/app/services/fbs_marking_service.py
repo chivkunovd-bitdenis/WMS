@@ -285,14 +285,44 @@ def compute_delivery_allowed(
     if not required:
         return True
     for kind in required:
-        mark = current_order_marking(markings, kind)
+        mark = current_order_marking(markings, kind, include_rejected=True)
         if mark is None:
             return False
-        if mark.meta_status in {META_STATUS_REJECTED, META_STATUS_REPLACEMENT_REQUIRED}:
+        details = mark.meta_details_json if isinstance(mark.meta_details_json, dict) else {}
+        reason = details.get("reason") if "reason" in details else mark.reason
+        if isinstance(reason, str) and reason.strip():
             return False
-        if mark.meta_status not in _META_DELIVERY_OK:
+        decision = details.get("decision")
+        if not isinstance(decision, str):
+            return False
+        normalized = decision.strip().lower().replace("-", "_").replace(" ", "_")
+        if normalized not in {"accepted", "filled", "optional", "notrequired", "not_required"}:
             return False
     return True
+
+
+def delivery_marking_message(
+    order: FbsOrder,
+    markings: list[FbsOrderMarking],
+) -> str:
+    """One short WB status for the existing final delivery confirmation."""
+    if not order.required_meta_json:
+        return "WB: маркировка не требуется."
+    for kind in order.required_meta_json:
+        mark = current_order_marking(markings, kind, include_rejected=True)
+        if mark is None:
+            return "WB ещё не подтвердил маркировку."
+        details = mark.meta_details_json if isinstance(mark.meta_details_json, dict) else {}
+        reason = details.get("reason") if "reason" in details else mark.reason
+        if isinstance(reason, str) and reason.strip():
+            return f"WB не принял маркировку: {reason.strip()}"
+        decision = details.get("decision")
+        if not isinstance(decision, str):
+            return "WB ещё не подтвердил маркировку."
+        normalized = decision.strip().lower().replace("-", "_").replace(" ", "_")
+        if normalized not in {"accepted", "filled", "optional", "notrequired", "not_required"}:
+            return "WB ещё не подтвердил маркировку."
+    return "WB: маркировка подтверждена."
 
 
 def _marking_value_tail(value: str | None, length: int = 8) -> str | None:

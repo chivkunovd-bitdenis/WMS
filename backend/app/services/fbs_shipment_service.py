@@ -501,7 +501,7 @@ def _build_delivery_checks(
             checks.append(
                 DeliveryCheck(
                     code="marking_not_allowed",
-                    message="Метаданные WB не допускают передачу.",
+                    message=marking_svc.delivery_marking_message(order, list(order.markings)),
                     ok=False,
                     order_id=order.id,
                 )
@@ -510,7 +510,7 @@ def _build_delivery_checks(
             checks.append(
                 DeliveryCheck(
                     code="marking_allowed",
-                    message="Метаданные WB допускают передачу.",
+                    message=marking_svc.delivery_marking_message(order, list(order.markings)),
                     ok=True,
                     order_id=order.id,
                 )
