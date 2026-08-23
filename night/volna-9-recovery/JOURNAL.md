@@ -202,3 +202,4 @@
 06:58   07-reporting · screen-dev: готово
 06:58   07-reporting · dev: фича 1/2 сохранена 2902524ea519
 07:00   07-reporting · screen-dev: готово
+07:00   07-reporting · dev: фича 2/2 сохранена eab80b9c23b9
