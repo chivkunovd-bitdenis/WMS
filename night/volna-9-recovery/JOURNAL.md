@@ -222,3 +222,8 @@
 06:15   04-warehouse-switch · dev: фича 1/2 сохранена 2ee28ec467fd
 06:18   04-warehouse-switch · backend-dev: готово
 06:18   04-warehouse-switch · dev: фича 2/2 сохранена 80979babe034
+06:34   04-warehouse-switch · reviewer: готово
+06:34   04-warehouse-switch · reviewer: находки не закрыты — повторный Terra-ремонт
+06:34   04-warehouse-switch · reviewer: находки, круг 3 — назад к разработке
+06:35   04-warehouse-switch · splitter: готово
+06:39   04-warehouse-switch · screen-dev: готово
