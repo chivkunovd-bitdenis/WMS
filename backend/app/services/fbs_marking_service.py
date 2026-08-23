@@ -9,6 +9,8 @@ from typing import Any
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.models.fbs_order import (
     CHECK_STATUS_CHECKING,
@@ -676,11 +678,17 @@ async def _lock_current_marking_state(
     markings_stmt = (
         select(FbsOrderMarking)
         .where(FbsOrderMarking.order_id == locked_order.id)
+        .options(selectinload(FbsOrderMarking.marking_code))
         .order_by(FbsOrderMarking.kind, FbsOrderMarking.value)
         .with_for_update()
         .execution_options(populate_existing=True)
     )
     markings = list((await session.execute(markings_stmt)).scalars().all())
+    # ``populate_existing`` refreshes scalar state needed for concurrent WB
+    # checks, but it also expires relationships already loaded by the caller.
+    # Restore the exact locked collection without triggering async lazy IO;
+    # marking_code is eagerly refreshed by the query above for the same reason.
+    set_committed_value(locked_order, "markings", markings)
     return locked_order, markings
 
 
