@@ -7,16 +7,27 @@ from __future__ import annotations
 
 import uuid
 from datetime import timedelta
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.models.fbs_order import PACK_STATUS_PACKED, FbsOrder
-from app.models.fbs_supply import FBS_DELIVERY_TYPE_WAREHOUSE_SC, FBS_SUPPLY_STATUS_PACKED
+from app.models.fbs_packing_box import FbsPackingBox
+from app.models.fbs_supply import (
+    FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+    FBS_SUPPLY_STATUS_PACKED,
+    FbsSupply,
+)
+from app.services.fbs_packing_box_service import (
+    FbsPackingBoxError,
+    set_boxes_without_distribution,
+)
 from app.services.fbs_workspace_service import (
     WorkspaceProgress,
     _compute_stage,
@@ -28,6 +39,17 @@ from tests.test_fbs_picking import (
     _register_ff_admin,
     _seed_pick_supply,
 )
+
+_MIGRATION_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "alembic/versions/20260821_0094_fbs_supplies_boxes_without_distribution.py"
+)
+_migration_spec = spec_from_file_location(
+    "fbs_boxes_without_distribution_migration", _MIGRATION_PATH
+)
+assert _migration_spec is not None and _migration_spec.loader is not None
+_migration = module_from_spec(_migration_spec)
+_migration_spec.loader.exec_module(_migration)
 
 
 @pytest.fixture
@@ -200,6 +222,14 @@ async def test_without_distribution_boxes_do_not_accept_order_assignment(
     assert box["without_distribution"] is True
     assert box["assigned_order_ids"] == []
 
+    async with SessionLocal() as session:
+        stored_box = await session.get(FbsPackingBox, uuid.UUID(box["id"]))
+        assert stored_box is not None
+        assert (
+            stored_box.creation_idempotency_key
+            == "boxes-without-distribution-1"
+        )
+
     assigned = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/boxes/{box['id']}/orders",
         headers=headers,
@@ -207,6 +237,614 @@ async def test_without_distribution_boxes_do_not_accept_order_assignment(
     )
     assert assigned.status_code == 400, assigned.text
     assert assigned.json()["detail"]["code"] == "box_without_distribution"
+
+
+@pytest.mark.asyncio
+async def test_legacy_create_boxes_toggle_rejects_existing_assignment(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """TC-NEW-006: the legacy create endpoint cannot bypass assignment guard."""
+    headers, supply_id, order_ids = await _packed_supply(async_client)
+    boxes_url = f"/operations/fbs-supplies/{supply_id}/boxes"
+    created = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={"count": 1, "idempotency_key": "assigned-before-legacy-toggle"},
+    )
+    assert created.status_code == 201, created.text
+    box_id = created.json()["boxes"][0]["id"]
+    assigned = await async_client.post(
+        f"{boxes_url}/{box_id}/orders",
+        headers=headers,
+        json={"order_ids": [str(order_ids[0])]},
+    )
+    assert assigned.status_code == 200, assigned.text
+    legacy_toggle = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={
+            "count": 1,
+            "idempotency_key": "legacy-toggle-with-assignment",
+            "without_distribution": True,
+        },
+    )
+    assert legacy_toggle.status_code == 409, legacy_toggle.text
+    assert legacy_toggle.json()["detail"]["code"] == "boxes_already_distributed"
+
+
+@pytest.mark.asyncio
+async def test_legacy_without_distribution_marker_still_blocks_assignment(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """TC-NEW-007: pre-migration mode remains effective after deployment."""
+    headers, supply_id, order_ids = await _packed_supply(async_client)
+    boxes_url = f"/operations/fbs-supplies/{supply_id}/boxes"
+    created = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={"count": 1, "idempotency_key": "legacy-compatible-box"},
+    )
+    assert created.status_code == 201, created.text
+    box_id = uuid.UUID(created.json()["boxes"][0]["id"])
+
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, supply_id)
+        box = await session.get(FbsPackingBox, box_id)
+        assert supply is not None and box is not None
+        box.creation_idempotency_key = "no-distribution:legacy-compatible-box"
+        await session.flush()
+        await session.run_sync(
+            lambda sync_session: _migration._backfill_legacy_boxes_without_distribution(
+                sync_session.connection()
+            )
+        )
+        await session.refresh(supply)
+        assert supply.boxes_without_distribution_at is not None
+        await session.commit()
+
+    assigned = await async_client.post(
+        f"{boxes_url}/{box_id}/orders",
+        headers=headers,
+        json={"order_ids": [str(order_ids[0])]},
+    )
+    assert assigned.status_code == 400, assigned.text
+    assert assigned.json()["detail"]["code"] == "box_without_distribution"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "stored_prefix",
+    ["no-distribution:", "retired-no-dist:"],
+)
+async def test_legacy_without_distribution_create_retry_returns_existing_box(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    stored_prefix: str,
+) -> None:
+    """A retried pre-migration create never duplicates its physical box."""
+    headers, supply_id, _ = await _packed_supply(async_client)
+    boxes_url = f"/operations/fbs-supplies/{supply_id}/boxes"
+    idempotency_key = "legacy-compatible-box"
+    created = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={"count": 1, "idempotency_key": idempotency_key},
+    )
+    assert created.status_code == 201, created.text
+    created_box_id = created.json()["boxes"][0]["id"]
+
+    async with SessionLocal() as session:
+        box = await session.get(FbsPackingBox, uuid.UUID(created_box_id))
+        assert box is not None
+        box.creation_idempotency_key = f"{stored_prefix}{idempotency_key}"
+        await session.commit()
+
+    retried = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={
+            "count": 1,
+            "idempotency_key": idempotency_key,
+            "without_distribution": True,
+        },
+    )
+    assert retried.status_code == 201, retried.text
+    assert [box["id"] for box in retried.json()["boxes"]] == [created_box_id]
+
+    async with SessionLocal() as session:
+        stored_boxes = list(
+            (
+                await session.scalars(
+                    select(FbsPackingBox).where(FbsPackingBox.supply_id == supply_id)
+                )
+            ).all()
+        )
+        assert [str(box.id) for box in stored_boxes] == [created_box_id]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "stored_prefix",
+    ["no-distribution:", "retired-no-dist:"],
+)
+async def test_truncated_legacy_key_does_not_capture_distinct_long_key(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    stored_prefix: str,
+) -> None:
+    """A lossy legacy key must not match a distinct 128-character API key."""
+    headers, supply_id, _ = await _packed_supply(async_client)
+    boxes_url = f"/operations/fbs-supplies/{supply_id}/boxes"
+    shared_prefix = "x" * 112
+    original_key = f"{shared_prefix}{'A' * 16}"
+    distinct_key = f"{shared_prefix}{'B' * 16}"
+    created = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={
+            "count": 1,
+            "idempotency_key": original_key,
+            "without_distribution": True,
+        },
+    )
+    assert created.status_code == 201, created.text
+    created_box_id = created.json()["boxes"][0]["id"]
+
+    async with SessionLocal() as session:
+        box = await session.get(FbsPackingBox, uuid.UUID(created_box_id))
+        assert box is not None
+        box.creation_idempotency_key = f"{stored_prefix}{shared_prefix}"
+        await session.commit()
+
+    distinct_create = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={
+            "count": 1,
+            "idempotency_key": distinct_key,
+            "without_distribution": True,
+        },
+    )
+    assert distinct_create.status_code == 201, distinct_create.text
+    assert len(distinct_create.json()["boxes"]) == 2
+    assert distinct_create.json()["boxes"][1]["id"] != created_box_id
+
+    async with SessionLocal() as session:
+        stored_keys = set(
+            (
+                await session.scalars(
+                    select(FbsPackingBox.creation_idempotency_key).where(
+                        FbsPackingBox.supply_id == supply_id
+                    )
+                )
+            ).all()
+        )
+        assert stored_keys == {f"{stored_prefix}{shared_prefix}", distinct_key}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "stored_prefix",
+    ["no-distribution:", "retired-no-dist:"],
+)
+async def test_truncated_legacy_key_retry_returns_existing_box(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    stored_prefix: str,
+) -> None:
+    """The WB operation journal disambiguates a retry of a lossy legacy key."""
+    headers, supply_id, _ = await _packed_supply(async_client)
+    boxes_url = f"/operations/fbs-supplies/{supply_id}/boxes"
+    idempotency_key = f"{'x' * 112}{'A' * 16}"
+    created = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={
+            "count": 1,
+            "idempotency_key": idempotency_key,
+            "without_distribution": True,
+        },
+    )
+    assert created.status_code == 201, created.text
+    created_box_id = created.json()["boxes"][0]["id"]
+
+    async with SessionLocal() as session:
+        box = await session.get(FbsPackingBox, uuid.UUID(created_box_id))
+        assert box is not None
+        box.creation_idempotency_key = f"{stored_prefix}{idempotency_key[:112]}"
+        await session.commit()
+
+    retried = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={
+            "count": 1,
+            "idempotency_key": idempotency_key,
+            "without_distribution": True,
+        },
+    )
+    assert retried.status_code == 201, retried.text
+    assert [box["id"] for box in retried.json()["boxes"]] == [created_box_id]
+
+    async with SessionLocal() as session:
+        stored_box_ids = list(
+            (
+                await session.scalars(
+                    select(FbsPackingBox.id).where(
+                        FbsPackingBox.supply_id == supply_id
+                    )
+                )
+            ).all()
+        )
+        assert [str(box_id) for box_id in stored_box_ids] == [created_box_id]
+
+
+@pytest.mark.asyncio
+async def test_without_distribution_mode_depends_on_assignments_not_box_count(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, supply_id, order_ids = await _packed_supply(async_client)
+    boxes_url = f"/operations/fbs-supplies/{supply_id}/boxes"
+
+    created = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={"count": 1, "idempotency_key": "mode-empty-1"},
+    )
+    assert created.status_code == 201, created.text
+
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, supply_id)
+        assert supply is not None
+        tenant_id = supply.tenant_id
+        await set_boxes_without_distribution(
+            session, tenant_id, supply_id, True, actor_user_id=None
+        )
+        await session.commit()
+
+    deleted = await async_client.request(
+        "DELETE",
+        f"{boxes_url}/" + created.json()["boxes"][0]["id"],
+        headers=headers,
+        json={"idempotency_key": "mode-empty-delete-1"},
+    )
+    assert deleted.status_code == 200, deleted.text
+    recreated = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={"count": 1, "idempotency_key": "mode-empty-2"},
+    )
+    assert recreated.status_code == 201, recreated.text
+
+    async with SessionLocal() as session:
+        await set_boxes_without_distribution(
+            session, tenant_id, supply_id, False, actor_user_id=None
+        )
+        await session.commit()
+
+    box_id = recreated.json()["boxes"][0]["id"]
+    assigned = await async_client.post(
+        f"{boxes_url}/{box_id}/orders",
+        headers=headers,
+        json={"order_ids": [str(order_ids[0])]},
+    )
+    assert assigned.status_code == 200, assigned.text
+
+    async with SessionLocal() as session:
+        with pytest.raises(FbsPackingBoxError, match="boxes_already_distributed"):
+            await set_boxes_without_distribution(
+                session, tenant_id, supply_id, True, actor_user_id=None
+            )
+        await session.rollback()
+
+    removed = await async_client.delete(
+        f"{boxes_url}/{box_id}/orders/{order_ids[0]}", headers=headers
+    )
+    assert removed.status_code == 200, removed.text
+    async with SessionLocal() as session:
+        assert await set_boxes_without_distribution(
+            session, tenant_id, supply_id, True, actor_user_id=None
+        )
+
+
+@pytest.mark.asyncio
+async def test_without_distribution_toggle_preserves_full_key_for_create_retry(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """TC-NEW-005: toggling never breaks a new-format create retry."""
+    headers, supply_id, _ = await _packed_supply(async_client)
+    idempotency_key = "k" * 128
+    created = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes",
+        headers=headers,
+        json={
+            "count": 1,
+            "idempotency_key": idempotency_key,
+            "without_distribution": True,
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, supply_id)
+        assert supply is not None
+        tenant_id = supply.tenant_id
+        first_at = supply.boxes_without_distribution_at
+        first_by = supply.boxes_without_distribution_by_user_id
+        await set_boxes_without_distribution(
+            session, tenant_id, supply_id, True, actor_user_id=uuid.uuid4()
+        )
+        assert supply.boxes_without_distribution_at == first_at
+        assert supply.boxes_without_distribution_by_user_id == first_by
+        await set_boxes_without_distribution(
+            session, tenant_id, supply_id, False, actor_user_id=None
+        )
+        await session.commit()
+
+    retried = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes",
+        headers=headers,
+        json={
+            "count": 1,
+            "idempotency_key": idempotency_key,
+            "without_distribution": True,
+        },
+    )
+    assert retried.status_code == 201, retried.text
+    assert [box["id"] for box in retried.json()["boxes"]] == [
+        created.json()["boxes"][0]["id"]
+    ]
+    assert retried.json()["boxes"][0]["without_distribution"] is False
+
+    async with SessionLocal() as session:
+        box_id = uuid.UUID(created.json()["boxes"][0]["id"])
+        box = await session.get(FbsPackingBox, box_id)
+        assert box is not None
+        assert box.creation_idempotency_key is not None
+        assert box.creation_idempotency_key == idempotency_key
+        assert len(box.creation_idempotency_key) == 128
+        supply = await session.get(FbsSupply, supply_id)
+        assert supply is not None
+        assert supply.boxes_without_distribution_at is None
+
+
+@pytest.mark.asyncio
+async def test_without_distribution_keeps_distinct_max_length_idempotency_keys(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """Two valid keys with the same first 112 characters never collide."""
+    headers, supply_id, _ = await _packed_supply(async_client)
+    boxes_url = f"/operations/fbs-supplies/{supply_id}/boxes"
+    first_key = f"{'x' * 112}{'A' * 16}"
+    second_key = f"{'x' * 112}{'B' * 16}"
+
+    first = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={
+            "count": 1,
+            "idempotency_key": first_key,
+            "without_distribution": True,
+        },
+    )
+    second = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={
+            "count": 1,
+            "idempotency_key": second_key,
+            "without_distribution": True,
+        },
+    )
+
+    assert first.status_code == 201, first.text
+    assert second.status_code == 201, second.text
+    assert len(first.json()["boxes"]) == 1
+    assert len(second.json()["boxes"]) == 2
+    assert second.json()["boxes"][1]["id"] != first.json()["boxes"][0]["id"]
+
+    async with SessionLocal() as session:
+        stored_keys = set(
+            (
+                await session.scalars(
+                    select(FbsPackingBox.creation_idempotency_key).where(
+                        FbsPackingBox.supply_id == supply_id
+                    )
+                )
+            ).all()
+        )
+        assert stored_keys == {first_key, second_key}
+
+
+@pytest.mark.asyncio
+async def test_boxes_without_distribution_api_persists_mode_across_empty_box_lifecycle(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """TC-NEW-003: the persisted mode survives empty box lifecycle and can be reverted."""
+    headers, supply_id, _ = await _packed_supply(async_client)
+
+    enabled = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes-without-distribution",
+        headers=headers,
+        json={"enabled": True},
+    )
+    assert enabled.status_code == 200, enabled.text
+    assert enabled.json()["supply"]["boxes_without_distribution"] is True
+
+    boxes_url = f"/operations/fbs-supplies/{supply_id}/boxes"
+    created = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={"count": 1, "idempotency_key": "persist-mode-after-last-box-delete"},
+    )
+    assert created.status_code == 201, created.text
+    deleted = await async_client.request(
+        "DELETE",
+        f"{boxes_url}/{created.json()['boxes'][0]['id']}",
+        headers=headers,
+        json={"idempotency_key": "delete-last-box-with-persisted-mode"},
+    )
+    assert deleted.status_code == 200, deleted.text
+    assert deleted.json()["boxes"] == []
+
+    recreated = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={"count": 1, "idempotency_key": "recreate-box-with-persisted-mode"},
+    )
+    assert recreated.status_code == 201, recreated.text
+    assert recreated.json()["supply"]["boxes_without_distribution"] is True
+
+    workspace = await async_client.get(
+        f"/operations/fbs-supplies/{supply_id}/workspace", headers=headers
+    )
+    assert workspace.status_code == 200, workspace.text
+    assert workspace.json()["supply"]["boxes_without_distribution"] is True
+
+    disabled = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes-without-distribution",
+        headers=headers,
+        json={"enabled": False},
+    )
+    assert disabled.status_code == 200, disabled.text
+    assert disabled.json()["supply"]["boxes_without_distribution"] is False
+
+
+@pytest.mark.asyncio
+async def test_migration_moves_provable_legacy_marker_to_supply_before_empty_box_lifecycle(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """TC-NEW-006: a pre-0094 marker survives removal of its last empty box."""
+    headers, supply_id, _ = await _packed_supply(async_client)
+    boxes_url = f"/operations/fbs-supplies/{supply_id}/boxes"
+    raw_key = "pre-0094-mode-marker"
+    created = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={"count": 1, "idempotency_key": raw_key},
+    )
+    assert created.status_code == 201, created.text
+    box_id = uuid.UUID(created.json()["boxes"][0]["id"])
+
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, supply_id)
+        box = await session.get(FbsPackingBox, box_id)
+        assert supply is not None and box is not None
+        # Recreate the exact pre-0094 representation: the box carried the
+        # prefix, while the operation journal retained the raw client key.
+        supply.boxes_without_distribution_at = None
+        supply.boxes_without_distribution_by_user_id = None
+        box.creation_idempotency_key = f"no-distribution:{raw_key}"
+        await session.flush()
+        await session.run_sync(
+            lambda sync_session: _migration._backfill_legacy_boxes_without_distribution(
+                sync_session.connection()
+            )
+        )
+        await session.refresh(supply)
+        assert supply.boxes_without_distribution_at is not None
+        await session.commit()
+
+    deleted = await async_client.request(
+        "DELETE",
+        f"{boxes_url}/{box_id}",
+        headers=headers,
+        json={"idempotency_key": "delete-pre-0094-mode-box"},
+    )
+    assert deleted.status_code == 200, deleted.text
+    recreated = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={"count": 1, "idempotency_key": "recreate-pre-0094-mode-box"},
+    )
+    assert recreated.status_code == 201, recreated.text
+
+    workspace = await async_client.get(
+        f"/operations/fbs-supplies/{supply_id}/workspace", headers=headers
+    )
+    assert workspace.status_code == 200, workspace.text
+    assert workspace.json()["supply"]["boxes_without_distribution"] is True
+
+
+@pytest.mark.asyncio
+async def test_client_key_with_legacy_prefix_is_not_mode_marker_and_stays_idempotent(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """TC-NEW-007: an ordinary prefixed client key stays an ordinary retry key."""
+    headers, supply_id, _ = await _packed_supply(async_client)
+    boxes_url = f"/operations/fbs-supplies/{supply_id}/boxes"
+    body = {"count": 1, "idempotency_key": "no-distribution:abc"}
+
+    first = await async_client.post(boxes_url, headers=headers, json=body)
+    second = await async_client.post(boxes_url, headers=headers, json=body)
+    assert first.status_code == 201, first.text
+    assert second.status_code == 201, second.text
+    assert [box["id"] for box in second.json()["boxes"]] == [
+        box["id"] for box in first.json()["boxes"]
+    ]
+    assert second.json()["supply"]["boxes_without_distribution"] is False
+
+    async with SessionLocal() as session:
+        await session.run_sync(
+            lambda sync_session: _migration._backfill_legacy_boxes_without_distribution(
+                sync_session.connection()
+            )
+        )
+        supply = await session.get(FbsSupply, supply_id)
+        assert supply is not None
+        await session.refresh(supply)
+        assert supply.boxes_without_distribution_at is None
+        box_count = await session.scalar(
+            select(func.count(FbsPackingBox.id)).where(
+                FbsPackingBox.supply_id == supply_id
+            )
+        )
+        assert box_count == 1
+
+
+@pytest.mark.asyncio
+async def test_boxes_without_distribution_api_conflicts_when_order_is_assigned(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """TC-NEW-004: assigned orders prevent changing the persisted mode."""
+    headers, supply_id, order_ids = await _packed_supply(async_client)
+    boxes_url = f"/operations/fbs-supplies/{supply_id}/boxes"
+    created = await async_client.post(
+        boxes_url,
+        headers=headers,
+        json={"count": 1, "idempotency_key": "api-mode-conflict"},
+    )
+    assert created.status_code == 201, created.text
+    box_id = created.json()["boxes"][0]["id"]
+    assigned = await async_client.post(
+        f"{boxes_url}/{box_id}/orders",
+        headers=headers,
+        json={"order_ids": [str(order_ids[0])]},
+    )
+    assert assigned.status_code == 200, assigned.text
+
+    conflict = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes-without-distribution",
+        headers=headers,
+        json={"enabled": True},
+    )
+    assert conflict.status_code == 409, conflict.text
+    assert conflict.json()["detail"]["code"] == "boxes_already_distributed"
+
+    workspace = await async_client.get(
+        f"/operations/fbs-supplies/{supply_id}/workspace", headers=headers
+    )
+    assert workspace.status_code == 200, workspace.text
+    assert workspace.json()["supply"]["boxes_without_distribution"] is False
 
 
 def test_workspace_handoff_requires_boxes_and_every_packed_order_assignment() -> None:
