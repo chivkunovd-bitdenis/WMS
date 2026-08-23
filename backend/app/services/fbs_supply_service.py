@@ -135,6 +135,19 @@ class PickingListItem:
     quantity: int
 
 
+PickingListGroupKey = tuple[str, str | None, str | None, str]
+
+
+def picking_list_group_key(order: FbsOrder) -> PickingListGroupKey:
+    """Return the canonical product-group key used by the FBS picking list."""
+    product = order.product
+    article = order.wb_article or (product.sku_code if product is not None else "") or ""
+    sku_code = product.sku_code if product is not None else None
+    size = product.wb_size if product is not None and product.wb_size else None
+    product_name = product.name if product is not None else (order.wb_article or "Unknown")
+    return article, sku_code, size, product_name
+
+
 @dataclass(frozen=True)
 class StickerMeta:
     order_id: uuid.UUID
@@ -1580,15 +1593,9 @@ async def get_picking_list(
     if supply is None:
         raise FbsSupplyError("supply_not_found")
 
-    groups: dict[tuple[str, str | None, str | None, str], int] = defaultdict(int)
+    groups: dict[PickingListGroupKey, int] = defaultdict(int)
     for order in supply.orders:
-        product = order.product
-        article = order.wb_article or (product.sku_code if product is not None else "") or ""
-        sku_code = product.sku_code if product is not None else None
-        size = product.wb_size if product is not None and product.wb_size else None
-        product_name = product.name if product is not None else (order.wb_article or "Unknown")
-        key = (article, sku_code, size, product_name)
-        groups[key] += 1
+        groups[picking_list_group_key(order)] += 1
 
     items = [
         PickingListItem(

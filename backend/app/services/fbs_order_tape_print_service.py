@@ -31,6 +31,7 @@ from app.services.fbs_print_asset_service import (
     PrintBatchResult,
     request_supply_print_batch,
 )
+from app.services.fbs_supply_service import picking_list_group_key
 from app.services.print_template_service import PrintLayout, PrintTemplateServiceError, parse_layout
 
 
@@ -99,6 +100,14 @@ async def print_fbs_order_tape(
     ordered = _orders_in_requested_order(supply, order_ids)
     if len(ordered) != len(dict.fromkeys(order_ids)):
         raise FbsOrderTapePrintError("order_not_in_supply")
+    if set(order_ids) == {order.id for order in supply.orders}:
+        ordered.sort(
+            key=lambda order: (
+                picking_list_group_key(order),
+                int(order.wb_order_id),
+                order.id,
+            )
+        )
     line_by_product = await _line_by_product(session, tenant_id, supply)
     if not reprint and not allow_partial:
         preflight_shortage = await _preflight_new_code_shortage(session, tenant_id, ordered)
@@ -120,7 +129,7 @@ async def print_fbs_order_tape(
                 tenant_id,
                 supply_id,
                 kind="order_sticker",
-                order_ids=order_ids,
+                order_ids=[order.id for order in ordered],
                 # L8 (21.08.2026): лента печаталась короче листа подбора. Причина —
                 # False здесь означает «перезапросить у WB стикеры по ВСЕМ заказам
                 # заново». На полутора сотнях заказов любая осечка WB на одном куске

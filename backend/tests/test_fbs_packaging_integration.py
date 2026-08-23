@@ -35,6 +35,7 @@ from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import MOVEMENT_TYPE_FBS_SHIPMENT, InventoryMovement
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.warehouse_box import WarehouseBox
+from app.services import fbs_print_asset_service as print_asset_svc
 from app.services import inventory_service
 from app.services.fbs_packaging_integration_service import create_packaging_task_for_supply
 from app.services.fbs_stock_availability_service import fbs_available_qty_for_product
@@ -47,6 +48,11 @@ from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_b
 from tests.test_fbs_shipment_warehouse_sc import (
     _create_and_fill_physical_box,
     _deliver_with_preflight,
+)
+
+_TINY_PNG_BASE64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAE"
+    "hQGAhKmMIQAAAABJRU5ErkJggg=="
 )
 
 
@@ -1301,8 +1307,9 @@ async def test_fbs_supply_completes_even_without_stock_anywhere(
             assert balance.quantity_packed >= 0
 
 
+# S-03-TC-002, S-03-TC-003, S-03-TC-004, S-03-TC-006
 @pytest.mark.asyncio
-async def test_tape_covers_every_order_and_matches_picking_list(
+async def test_full_tape_expands_picking_groups_in_stable_order(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
@@ -1333,12 +1340,15 @@ async def test_tape_covers_every_order_and_matches_picking_list(
     assert picking.status_code == 200, picking.text
     picking_total = sum(int(item["quantity"]) for item in picking.json()["items"])
     assert picking_total == len(order_ids), "лист подбора обязан покрывать все заказы поставки"
+    assert [item["article"] for item in picking.json()["items"]] == ["ART-A", "ART-B"]
+
+    expected_order_ids = [order_ids[0], order_ids[2], order_ids[1]]
 
     tape = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/order-print-tape",
         headers=headers,
         json={
-            "order_ids": [str(oid) for oid in order_ids],
+            "order_ids": [str(order_ids[1]), str(order_ids[2]), str(order_ids[0])],
             "layout": None,
             "allow_partial": False,
             "include_order_qr": True,
@@ -1349,14 +1359,17 @@ async def test_tape_covers_every_order_and_matches_picking_list(
     tape_body = tape.json()
     assert len(tape_body["orders"]) == len(order_ids), tape_body.get("order_errors")
     assert not tape_body.get("order_errors")
+    assert [order["order_id"] for order in tape_body["orders"]] == [
+        str(order_id) for order_id in expected_order_ids
+    ]
+    assert [order["wb_order_id"] for order in tape_body["orders"]] == [910001, 910003, 910002]
 
-    # Повторная печать не должна давать ленту короче: заказы уже помечены напечатанными,
-    # но в ленту обязаны попасть все — иначе после зажёванной бумаги не перепечатать.
+    # Повторная полная печать должна воспроизводить порядок независимо от перестановки ID.
     again = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/order-print-tape",
         headers=headers,
         json={
-            "order_ids": [str(oid) for oid in order_ids],
+            "order_ids": [str(oid) for oid in reversed(order_ids)],
             "layout": None,
             "allow_partial": False,
             "include_order_qr": True,
@@ -1365,3 +1378,167 @@ async def test_tape_covers_every_order_and_matches_picking_list(
     )
     assert again.status_code == 200, again.text
     assert len(again.json()["orders"]) == len(order_ids)
+    assert [order["order_id"] for order in again.json()["orders"]] == [
+        str(order_id) for order_id in expected_order_ids
+    ]
+
+
+# S-03-TC-005
+@pytest.mark.asyncio
+async def test_selected_tape_keeps_operator_requested_order(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    tenant_id = uuid.UUID((await async_client.get("/auth/me", headers=headers)).json()["tenant_id"])
+    supply_id, order_ids = await _create_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+    )
+    selected_order_ids = [order_ids[1], order_ids[0]]
+
+    tape = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/order-print-tape",
+        headers=headers,
+        json={
+            "order_ids": [str(order_id) for order_id in selected_order_ids],
+            "layout": None,
+            "allow_partial": False,
+            "include_order_qr": True,
+            "reprint": False,
+        },
+    )
+
+    assert tape.status_code == 200, tape.text
+    assert [order["order_id"] for order in tape.json()["orders"]] == [
+        str(order_id) for order_id in selected_order_ids
+    ]
+
+
+# S-03-TC-007
+@pytest.mark.asyncio
+async def test_full_tape_keeps_canonical_order_when_wb_reverses_stickers(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    tenant_id = uuid.UUID((await async_client.get("/auth/me", headers=headers)).json()["tenant_id"])
+    supply_id, order_ids = await _create_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+    )
+    requested_wb_order_ids: list[int] = []
+
+    async def reversed_wb_stickers(
+        _client: Any,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        **_kwargs: Any,
+    ) -> list[dict[str, Any]]:
+        del api_token
+        requested_wb_order_ids.extend(order_ids)
+        return list(
+            reversed(
+                [
+                    {
+                        "orderId": order_id,
+                        "partA": order_id,
+                        "partB": order_id + 1,
+                        "barcode": f"MOCK-{order_id}",
+                        "file": _TINY_PNG_BASE64,
+                    }
+                    for order_id in order_ids
+                ]
+            )
+        )
+
+    monkeypatch.setattr(print_asset_svc, "fetch_marketplace_order_stickers", reversed_wb_stickers)
+    tape = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/order-print-tape",
+        headers=headers,
+        json={
+            "order_ids": [str(order_ids[1]), str(order_ids[0]), str(order_ids[2])],
+            "layout": None,
+            "allow_partial": False,
+            "include_order_qr": True,
+            "reprint": False,
+        },
+    )
+
+    assert tape.status_code == 200, tape.text
+    assert requested_wb_order_ids == [910001, 910003, 910002]
+    assert [order["order_id"] for order in tape.json()["orders"]] == [
+        str(order_ids[0]),
+        str(order_ids[2]),
+        str(order_ids[1]),
+    ]
+
+
+# S-03-TC-008
+@pytest.mark.asyncio
+async def test_partial_full_tape_keeps_relative_canonical_order(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    tenant_id = uuid.UUID((await async_client.get("/auth/me", headers=headers)).json()["tenant_id"])
+    supply_id, order_ids = await _create_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+    )
+
+    async def incomplete_wb_stickers(
+        _client: Any,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        **_kwargs: Any,
+    ) -> list[dict[str, Any]]:
+        del api_token
+        return [
+            {
+                "orderId": order_id,
+                "partA": order_id,
+                "partB": order_id + 1,
+                "barcode": f"MOCK-{order_id}",
+                "file": _TINY_PNG_BASE64,
+            }
+            for order_id in reversed(order_ids)
+            if order_id != 910003
+        ]
+
+    monkeypatch.setattr(print_asset_svc, "fetch_marketplace_order_stickers", incomplete_wb_stickers)
+    tape = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/order-print-tape",
+        headers=headers,
+        json={
+            "order_ids": [str(order_ids[1]), str(order_ids[2]), str(order_ids[0])],
+            "layout": None,
+            "allow_partial": True,
+            "include_order_qr": True,
+            "reprint": False,
+        },
+    )
+
+    assert tape.status_code == 200, tape.text
+    body = tape.json()
+    assert [order["order_id"] for order in body["orders"]] == [
+        str(order_ids[0]),
+        str(order_ids[1]),
+    ]
+    assert {error["order_id"] for error in body["order_errors"]} == {str(order_ids[2])}
