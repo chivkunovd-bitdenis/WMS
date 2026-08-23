@@ -18,6 +18,9 @@ from app.models.warehouse import Warehouse
 
 async def _billing_context(
     async_client: AsyncClient,
+    *,
+    with_ff_profile: bool = True,
+    with_seller_profile: bool = True,
 ) -> tuple[dict[str, str], uuid.UUID, uuid.UUID, uuid.UUID]:
     suffix = f"invoice-{time.time_ns()}"
     registered = await async_client.post(
@@ -41,25 +44,27 @@ async def _billing_context(
     assert seller.status_code == 201, seller.text
     seller_id = uuid.UUID(seller.json()["id"])
 
-    ff_profile = await async_client.put(
-        "/billing/profiles/ff",
-        headers=headers,
-        json={
-            "legal_name": "ООО ФФ",
-            "inn": "7707083893",
-            "bank_name": "Банк",
-            "bik": "044525225",
-            "settlement_account": "40702810000000000001",
-            "correspondent_account": "30101810400000000225",
-        },
-    )
-    assert ff_profile.status_code == 200, ff_profile.text
-    seller_profile = await async_client.put(
-        f"/billing/profiles/sellers/{seller_id}",
-        headers=headers,
-        json={"legal_name": "ООО Альфа", "inn": "7707083893"},
-    )
-    assert seller_profile.status_code == 200, seller_profile.text
+    if with_ff_profile:
+        ff_profile = await async_client.put(
+            "/billing/profiles/ff",
+            headers=headers,
+            json={
+                "legal_name": "ООО ФФ",
+                "inn": "7707083893",
+                "bank_name": "Банк",
+                "bik": "044525225",
+                "settlement_account": "40702810000000000001",
+                "correspondent_account": "30101810400000000225",
+            },
+        )
+        assert ff_profile.status_code == 200, ff_profile.text
+    if with_seller_profile:
+        seller_profile = await async_client.put(
+            f"/billing/profiles/sellers/{seller_id}",
+            headers=headers,
+            json={"legal_name": "ООО Альфа", "inn": "7707083893"},
+        )
+        assert seller_profile.status_code == 200, seller_profile.text
 
     async with SessionLocal() as session:
         warehouse_id = await session.scalar(
@@ -76,6 +81,28 @@ async def _billing_context(
             warehouse_id = warehouse.id
         await session.commit()
     return headers, tenant_id, seller_id, warehouse_id
+
+
+async def _add_priced_ledger_entry(
+    *, tenant_id: uuid.UUID, seller_id: uuid.UUID
+) -> None:
+    async with SessionLocal() as session:
+        session.add(
+            BillingLedgerEntry(
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                service_code="inbound",
+                source="inbound",
+                source_type="test_fact",
+                source_id=uuid.uuid4(),
+                unit="document",
+                quantity=Decimal("1"),
+                rate=100,
+                amount=100,
+                occurred_at=datetime(2026, 7, 15, 9, tzinfo=UTC),
+            )
+        )
+        await session.commit()
 
 
 @pytest.mark.asyncio
@@ -182,6 +209,56 @@ async def test_form_invoice_returns_empty_for_a_month_without_charges(
     invoices = await async_client.get("/billing/invoices?period=2026-07", headers=headers)
     assert invoices.status_code == 200, invoices.text
     assert invoices.json() == {"invoices": [], "issues": []}
+
+
+@pytest.mark.asyncio
+async def test_form_invoice_api_returns_missing_ff_profile_reason(
+    async_client: AsyncClient,
+) -> None:
+    """S-31-TC-017: absent FF requisites direct the operator to the FF profile."""
+    headers, tenant_id, seller_id, _warehouse_id = await _billing_context(
+        async_client, with_ff_profile=False
+    )
+    await _add_priced_ledger_entry(tenant_id=tenant_id, seller_id=seller_id)
+
+    formed = await async_client.post(
+        f"/billing/invoices/{seller_id}/2026-07/form",
+        headers=headers,
+    )
+
+    assert formed.status_code == 200, formed.text
+    assert formed.json() == {
+        "status": "blocked",
+        "reason": "missing_ff_profile",
+        "message": "Нет реквизитов ФФ",
+        "reasons": [{"reason": "missing_ff_profile", "message": "Нет реквизитов ФФ"}],
+    }
+
+
+@pytest.mark.asyncio
+async def test_form_invoice_api_returns_missing_seller_profile_reason(
+    async_client: AsyncClient,
+) -> None:
+    """S-31-TC-018: absent seller payer requisites direct the operator to that seller."""
+    headers, tenant_id, seller_id, _warehouse_id = await _billing_context(
+        async_client, with_seller_profile=False
+    )
+    await _add_priced_ledger_entry(tenant_id=tenant_id, seller_id=seller_id)
+
+    formed = await async_client.post(
+        f"/billing/invoices/{seller_id}/2026-07/form",
+        headers=headers,
+    )
+
+    assert formed.status_code == 200, formed.text
+    assert formed.json() == {
+        "status": "blocked",
+        "reason": "missing_seller_profile",
+        "message": "Нет реквизитов селлера",
+        "reasons": [
+            {"reason": "missing_seller_profile", "message": "Нет реквизитов селлера"}
+        ],
+    }
 
 
 @pytest.mark.asyncio
