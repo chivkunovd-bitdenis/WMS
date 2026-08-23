@@ -965,9 +965,6 @@ async def post_all_remaining(
         raise InboundIntakeError("already_posted")
     if req.status != STATUS_SORTING:
         raise InboundIntakeError("not_verified")
-    sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
-        session, tenant_id, req.warehouse_id
-    )
     to_receive: list[tuple[InboundIntakeLine, int]] = []
     for line in req.lines:
         accepted = _accepted_qty_for_line(line)
@@ -981,7 +978,30 @@ async def post_all_remaining(
             raise InboundIntakeError("sorting_location_reserved")
         to_receive.append((line, rem))
     if not to_receive:
-        raise InboundIntakeError("nothing_to_receive")
+        # A verified zero-quantity intake has no putaway work, but it is still
+        # a completed warehouse document.  Closing it here also lets the
+        # document-rate tariff produce its single operational charge.
+        _maybe_complete_request(req)
+        if req.status != STATUS_DONE:
+            raise InboundIntakeError("nothing_to_receive")
+        await record_operational_charge(
+            session,
+            tenant_id=tenant_id,
+            seller_id=req.seller_id,
+            source_type="inbound_intake",
+            source_id=req.id,
+            source="inbound",
+            service_code="inbound",
+            quantity=Decimal(sum(ln.posted_qty for ln in req.lines)),
+            occurred_at=req.posted_at or datetime.now(UTC),
+            performer_id=performer_id,
+        )
+        await session.commit()
+        await session.refresh(req)
+        return req
+    sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
+        session, tenant_id, req.warehouse_id
+    )
     for line, rem in to_receive:
         sid = line.storage_location_id
         assert sid is not None

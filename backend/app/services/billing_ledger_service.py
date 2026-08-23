@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import cast
 from zoneinfo import ZoneInfo
 
@@ -129,7 +129,15 @@ async def record_operational_charge(
     )
     rate = tariff.amount if tariff is not None else None
     billed_quantity = Decimal("1") if tariff is not None and tariff.unit == "document" else quantity
-    amount = None if rate is None else (rate * billed_quantity).quantize(Decimal("0.01"))
+    amount = (
+        None
+        if rate is None
+        else int(
+            (Decimal(rate) * billed_quantity).quantize(
+                Decimal("1"), rounding=ROUND_HALF_UP
+            )
+        )
+    )
     entry = BillingLedgerEntry(
         tenant_id=tenant_id,
         seller_id=seller_id,

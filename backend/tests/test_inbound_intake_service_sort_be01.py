@@ -3,15 +3,24 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 
 from app.db.session import SessionLocal
+from app.models.billing import BillingLedgerEntry, BillingTariffVersion
 from app.models.inbound_intake import InboundIntakeBoxLine
+from app.models.tenant import Tenant
 from app.services import inbound_intake_box_service as box_svc
 from app.services import inbound_intake_service as svc
-from app.services.catalog_service import create_location, create_product, create_warehouse
+from app.services.catalog_service import (
+    create_location,
+    create_product,
+    create_seller,
+    create_warehouse,
+)
 from app.services.tokens import decode_access_token
 
 
@@ -258,3 +267,131 @@ async def test_complete_distribution_mixed_box_and_loose(
         box = next(b for b in req.boxes if b.id == box_id)
         bl = next(bl for bl in box.lines if bl.product_id == product_id)
         assert bl.posted_qty == 6
+
+
+async def _zero_actual_intake(
+    async_client: AsyncClient,
+    *,
+    tariff_unit: str,
+) -> tuple[uuid.UUID, uuid.UUID]:
+    tenant_id = await _tenant_id(async_client)
+    async with SessionLocal() as session:
+        seller = await create_seller(session, tenant_id, name="Zero intake seller")
+        warehouse = await create_warehouse(
+            session, tenant_id, name="W", code=f"w-{uuid.uuid4().hex[:6]}"
+        )
+        product = await create_product(
+            session,
+            tenant_id,
+            seller_id=seller.id,
+            name="P",
+            sku_code=f"SKU-{uuid.uuid4().hex[:6]}",
+            length_mm=10,
+            width_mm=10,
+            height_mm=10,
+        )
+        request = await svc.create_request(
+            session, tenant_id, warehouse_id=warehouse.id, seller_id=seller.id
+        )
+        tenant = await session.get(Tenant, tenant_id)
+        assert tenant is not None
+        tenant.billing_enabled_from = date(2020, 1, 1)
+        session.add(
+            BillingTariffVersion(
+                tenant_id=tenant_id,
+                service_code="inbound",
+                unit=tariff_unit,
+                amount=4500,
+                valid_from=date(2020, 1, 1),
+            )
+        )
+        await session.commit()
+
+    async with SessionLocal() as session:
+        line = await svc.add_line(
+            session,
+            tenant_id,
+            request.id,
+            product_id=product.id,
+            expected_qty=3,
+        )
+        await svc.patch_request_draft(
+            session,
+            tenant_id,
+            request.id,
+            planned_box_count=1,
+            planned_box_count_set=True,
+        )
+        await svc.submit_request(session, tenant_id, request.id)
+        await svc.begin_receiving(session, tenant_id, request.id)
+        await svc.set_line_actual_qty(
+            session, tenant_id, request.id, line.id, actual_qty=0
+        )
+        verified = await svc.complete_receiving(session, tenant_id, request.id)
+        assert verified.status == svc.STATUS_SORTING
+
+    return tenant_id, request.id
+
+
+@pytest.mark.asyncio
+async def test_zero_actual_intake_closes_and_charges_document_tariff_once(
+    async_client: AsyncClient,
+) -> None:
+    tenant_id, request_id = await _zero_actual_intake(
+        async_client, tariff_unit="document"
+    )
+
+    async with SessionLocal() as session:
+        done = await svc.post_all_remaining(session, tenant_id, request_id)
+        assert done.status == svc.STATUS_DONE
+
+        entries = list(
+            (
+                await session.scalars(
+                    select(BillingLedgerEntry).where(
+                        BillingLedgerEntry.tenant_id == tenant_id,
+                        BillingLedgerEntry.source_id == request_id,
+                    )
+                )
+            ).all()
+        )
+        assert len(entries) == 1
+        assert entries[0].unit == "document"
+        assert entries[0].quantity == 1
+        assert entries[0].amount == 4500
+
+        with pytest.raises(svc.InboundIntakeError, match="already_posted"):
+            await svc.post_all_remaining(session, tenant_id, request_id)
+
+        repeated_entries = list(
+            (
+                await session.scalars(
+                    select(BillingLedgerEntry).where(
+                        BillingLedgerEntry.tenant_id == tenant_id,
+                        BillingLedgerEntry.source_id == request_id,
+                    )
+                )
+            ).all()
+        )
+        assert len(repeated_entries) == 1
+
+
+@pytest.mark.asyncio
+async def test_zero_actual_intake_closes_with_zero_item_tariff_amount(
+    async_client: AsyncClient,
+) -> None:
+    tenant_id, request_id = await _zero_actual_intake(async_client, tariff_unit="item")
+
+    async with SessionLocal() as session:
+        done = await svc.post_all_remaining(session, tenant_id, request_id)
+        assert done.status == svc.STATUS_DONE
+        entry = await session.scalar(
+            select(BillingLedgerEntry).where(
+                BillingLedgerEntry.tenant_id == tenant_id,
+                BillingLedgerEntry.source_id == request_id,
+            )
+        )
+        assert entry is not None
+        assert entry.unit == "item"
+        assert entry.quantity == 0
+        assert entry.amount == 0
