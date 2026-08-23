@@ -215,6 +215,18 @@ def регрессии_зависимостей(проверь) -> None:
             проверь("зависимости: repair-нарезка не сверяется со старыми номерами",
                     n.подготовить_зависимости(wave, workers), [])
 
+        upstream_folder = workers["upstream"].папка
+        (upstream_folder / "JUDGE.md").write_text(
+            "ВЕРДИКТ: НАХОДКИ 1\n\n`BLOCKED`\n\n"
+            "No browser is available; не открыл ни одного экрана.\n", encoding="utf-8")
+        (wave / "DEPENDENCIES.json").write_text(json.dumps({
+            "milestones": {"old-browser-foundation": {"card": "upstream", "feature": 9}},
+            "requires": {"downstream#1": ["old-browser-foundation"]},
+        }), encoding="utf-8")
+        with mock.patch.object(n, "круг_из_парковки", return_value=0):
+            проверь("зависимости: browser-resume не требует старой dev-нумерации",
+                    n.подготовить_зависимости(wave, workers), [])
+
 
 def fake_e2e_smoke(проверь) -> None:
     """Детерминированный full-chain smoke без Codex, git и стенда.
