@@ -111,3 +111,7 @@
 15:59   03-no-distribution-mode · ux-architect: готово
 15:59   03-no-distribution-mode · tester: уже сделано, пропускаю
 15:59   03-no-distribution-mode · breaker: в CASES.md нет секций: Ломающие кейсы, Смежные кейсы (код 1, попытка 1)
+16:01   03-no-distribution-mode · product: уже сделано, пропускаю
+16:14   03-no-distribution-mode · ux-architect: готово
+16:14   03-no-distribution-mode · tester: уже сделано, пропускаю
+16:17   03-no-distribution-mode · breaker: готово

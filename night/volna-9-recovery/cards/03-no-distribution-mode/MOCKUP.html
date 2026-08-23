@@ -1,0 +1,422 @@
+<!-- UI-KIT: PrimaryAction -->
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>03-no-distribution-mode · UX mockup</title>
+  <style>
+    :root {
+      --primary: #5b21b6;
+      --primary-dark: #4c1d95;
+      --background: #e8ecf4;
+      --surface: #ffffff;
+      --workspace: #f4f6fb;
+      --text: #0f172a;
+      --muted: #475569;
+      --divider: rgba(15, 23, 42, 0.11);
+      --outline: rgba(91, 33, 182, 0.20);
+      --radius: 12px;
+      --paper-radius: 14px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      background: var(--background);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    main {
+      width: min(1280px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 32px 0 56px;
+    }
+
+    .document-header { margin-bottom: 28px; }
+    .document-header h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+      font-weight: 800;
+    }
+
+    .document-header p { margin: 0; color: var(--muted); max-width: 920px; }
+
+    .scope-note {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border: 1px solid var(--outline);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.72);
+      color: var(--muted);
+    }
+
+    .state-grid { display: grid; gap: 24px; }
+    .state-card { min-width: 0; }
+    .state-caption {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 8px;
+      margin: 0 0 9px;
+    }
+
+    .state-caption strong { font-size: 15px; }
+    .state-caption span { color: var(--muted); font-size: 13px; }
+
+    .workspace {
+      overflow: hidden;
+      border: 1px solid var(--outline);
+      border-radius: var(--paper-radius);
+      background: var(--surface);
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+
+    .workspace-top {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--divider);
+    }
+
+    .truck {
+      width: 24px;
+      color: var(--primary);
+      font-size: 20px;
+      line-height: 1.25;
+    }
+
+    .workspace-title { flex: 1; min-width: 0; }
+    .workspace-title h2 {
+      margin: 0 0 3px;
+      font-size: 20px;
+      line-height: 1.3;
+      letter-spacing: -0.015em;
+      font-weight: 800;
+    }
+
+    .workspace-title p { margin: 0; color: var(--muted); }
+
+    .tabs {
+      display: flex;
+      overflow-x: auto;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--divider);
+      background: rgba(91, 33, 182, 0.035);
+    }
+
+    .tab {
+      padding: 13px 16px 11px;
+      color: var(--muted);
+      white-space: nowrap;
+      border-bottom: 2px solid transparent;
+      font-weight: 600;
+    }
+
+    .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+    .workspace-body { padding: 20px; background: var(--workspace); }
+
+    .boxes-paper {
+      overflow: hidden;
+      border: 1px solid var(--outline);
+      border-radius: var(--paper-radius);
+      background: var(--surface);
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+
+    .boxes-toolbar {
+      display: flex;
+      gap: 18px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--divider);
+    }
+
+    .boxes-heading h3 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.35;
+      letter-spacing: -0.015em;
+      font-weight: 800;
+    }
+
+    .toolbar-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    button, .button {
+      min-height: 32px;
+      padding: 6px 12px;
+      border: 0;
+      border-radius: var(--radius);
+      background: transparent;
+      color: var(--primary);
+      font: inherit;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .primary-action {
+      color: white;
+      background: var(--primary);
+    }
+
+    button:disabled, .button.disabled {
+      color: rgba(15, 23, 42, 0.35);
+      background: rgba(15, 23, 42, 0.07);
+    }
+
+    .mode-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    .mode-control input {
+      width: 20px;
+      height: 20px;
+      margin: 0;
+      accent-color: var(--primary);
+    }
+
+    .mode-control.disabled { color: rgba(15, 23, 42, 0.42); }
+
+    .count-field {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      width: 104px;
+      height: 40px;
+      padding: 8px 12px;
+      border: 1px solid rgba(15, 23, 42, 0.24);
+      border-radius: 4px;
+      color: var(--text);
+      background: var(--surface);
+    }
+
+    .count-field span {
+      position: absolute;
+      top: -8px;
+      left: 8px;
+      padding: 0 4px;
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .box-list { min-height: 50px; }
+
+    .box-row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      min-height: 52px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--divider);
+    }
+
+    .box-row:last-child { border-bottom: 0; }
+    .chevron { width: 18px; text-align: center; color: var(--muted); }
+    .box-name { flex: 1; min-width: 0; font-weight: 500; }
+    .box-name span { color: var(--muted); font-weight: 400; }
+    .row-actions { display: flex; align-items: center; gap: 6px; }
+    .more { min-width: 30px; padding-inline: 7px; font-size: 20px; line-height: 1; }
+
+    .handoff {
+      display: flex;
+      justify-content: flex-end;
+      padding-top: 16px;
+    }
+
+    .handoff .primary-action { min-height: 42px; padding-inline: 20px; }
+
+    .outcome {
+      margin: 10px 2px 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .outcome strong { color: var(--text); }
+
+    @media (max-width: 920px) {
+      .boxes-toolbar { align-items: flex-start; flex-direction: column; }
+      .toolbar-actions { justify-content: flex-start; }
+    }
+
+    @media (max-width: 640px) {
+      main { width: min(100% - 20px, 1280px); padding-top: 18px; }
+      .workspace-body { padding: 12px; }
+      .workspace-top { padding: 14px; }
+      .tabs { padding-inline: 4px; }
+      .tab { padding-inline: 11px; }
+      .boxes-toolbar { padding: 14px; }
+      .toolbar-actions { align-items: stretch; width: 100%; }
+      .mode-control { width: 100%; }
+      .box-row { align-items: flex-start; flex-wrap: wrap; }
+      .row-actions { width: 100%; justify-content: flex-end; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="document-header">
+      <h1>Режим «Без распределения» · S-03</h1>
+      <p>Минимальная дельта существующей вкладки «Короба»: меняется условие галки и результат
+        прежней проверки передачи. Подписи, компоновка и соседние действия не перепроектируются.</p>
+      <div class="scope-note">Строка прогресса шапки намеренно не показана и не является частью
+        контракта этого перезапуска. Подписи над рамками — пояснения макета, а не новый текст продукта.</div>
+    </header>
+
+    <section class="state-grid" aria-label="Состояния контракта">
+      <article class="state-card">
+        <div class="state-caption">
+          <strong>1. Обычное · режим выключен, два пустых короба</strong>
+          <span>Наличие пустой тары больше не блокирует галку.</span>
+        </div>
+        <div class="workspace">
+          <div class="workspace-top">
+            <div class="truck" aria-hidden="true">▣</div>
+            <div class="workspace-title"><h2>Поставка WB-15482</h2><p>Селлер «Красотка» · № WB 15482</p></div>
+          </div>
+          <div class="tabs"><div class="tab">Состав ✓</div><div class="tab">Подбор ✓</div><div class="tab">Упаковка и маркировка ✓</div><div class="tab active">Короба</div></div>
+          <div class="workspace-body">
+            <div class="boxes-paper">
+              <div class="boxes-toolbar">
+                <div class="boxes-heading"><h3>Короба · Склад / СЦ</h3></div>
+                <div class="toolbar-actions">
+                  <button type="button">Печать всех QR (2)</button>
+                  <label class="mode-control"><input type="checkbox"> <span>Без распределения</span></label>
+                  <div class="count-field"><span>Коробов</span>1</div>
+                  <button type="button" class="primary-action" data-component="PrimaryAction">Добавить короба</button>
+                </div>
+              </div>
+              <div class="box-list">
+                <div class="box-row"><div class="chevron">▸</div><div class="box-name">Короб 1 <span>· 0 шт</span></div><div class="row-actions"><button type="button">QR</button><button type="button">Добавить товары</button><button type="button" class="more" aria-label="Действия короба 1">⋮</button></div></div>
+                <div class="box-row"><div class="chevron">▸</div><div class="box-name">Короб 2 <span>· 0 шт</span></div><div class="row-actions"><button type="button">QR</button><button type="button">Добавить товары</button><button type="button" class="more" aria-label="Действия короба 2">⋮</button></div></div>
+              </div>
+            </div>
+            <div class="handoff"><button type="button" class="primary-action" data-component="PrimaryAction">Передать в WB</button></div>
+          </div>
+        </div>
+        <p class="outcome"><strong>Проверяем:</strong> галка доступна; включение не удаляет оба короба.</p>
+      </article>
+
+      <article class="state-card">
+        <div class="state-caption">
+          <strong>2. Успех · режим включён при тех же пустых коробах</strong>
+          <span>Состав и соседние действия не меняются этой карточкой.</span>
+        </div>
+        <div class="workspace">
+          <div class="workspace-top"><div class="truck" aria-hidden="true">▣</div><div class="workspace-title"><h2>Поставка WB-15482</h2><p>Селлер «Красотка» · № WB 15482</p></div></div>
+          <div class="tabs"><div class="tab">Состав ✓</div><div class="tab">Подбор ✓</div><div class="tab">Упаковка и маркировка ✓</div><div class="tab active">Короба</div></div>
+          <div class="workspace-body">
+            <div class="boxes-paper">
+              <div class="boxes-toolbar">
+                <div class="boxes-heading"><h3>Короба · Склад / СЦ</h3></div>
+                <div class="toolbar-actions">
+                  <button type="button">Печать всех QR (2)</button>
+                  <label class="mode-control"><input type="checkbox" checked> <span>Без распределения</span></label>
+                  <div class="count-field"><span>Коробов</span>1</div>
+                  <button type="button" class="primary-action" data-component="PrimaryAction">Добавить короба</button>
+                </div>
+              </div>
+              <div class="box-list">
+                <div class="box-row"><div class="chevron">▸</div><div class="box-name">Короб 1 <span>· 0 шт</span></div><div class="row-actions"><button type="button">QR</button><button type="button" disabled>Добавить товары</button><button type="button" class="more" aria-label="Действия короба 1">⋮</button></div></div>
+                <div class="box-row"><div class="chevron">▸</div><div class="box-name">Короб 2 <span>· 0 шт</span></div><div class="row-actions"><button type="button">QR</button><button type="button" disabled>Добавить товары</button><button type="button" class="more" aria-label="Действия короба 2">⋮</button></div></div>
+              </div>
+            </div>
+            <div class="handoff"><button type="button" class="primary-action" data-component="PrimaryAction">Передать в WB</button></div>
+          </div>
+        </div>
+        <p class="outcome"><strong>Проверяем:</strong> отсутствие назначений больше не является
+          причиной отказа передачи; остальные проверки передачи продолжают действовать.</p>
+      </article>
+
+      <article class="state-card">
+        <div class="state-caption">
+          <strong>3. Пусто и повторно открыто · короба удалены, режим сохранён</strong>
+          <span>Пустое сообщение не добавляется; после загрузки галка остаётся включённой.</span>
+        </div>
+        <div class="workspace">
+          <div class="workspace-top"><div class="truck" aria-hidden="true">▣</div><div class="workspace-title"><h2>Поставка WB-15482</h2><p>Селлер «Красотка» · № WB 15482</p></div></div>
+          <div class="tabs"><div class="tab">Состав ✓</div><div class="tab">Подбор ✓</div><div class="tab">Упаковка и маркировка ✓</div><div class="tab active">Короба</div></div>
+          <div class="workspace-body">
+            <div class="boxes-paper">
+              <div class="boxes-toolbar">
+                <div class="boxes-heading"><h3>Короба · Склад / СЦ</h3></div>
+                <div class="toolbar-actions">
+                  <button type="button" disabled>Печать всех QR (0)</button>
+                  <label class="mode-control"><input type="checkbox" checked> <span>Без распределения</span></label>
+                  <div class="count-field"><span>Коробов</span>1</div>
+                  <button type="button" class="primary-action" data-component="PrimaryAction">Добавить короба</button>
+                </div>
+              </div>
+              <div class="box-list" aria-label="Пустой список коробов"></div>
+            </div>
+            <div class="handoff"><button type="button" class="primary-action" data-component="PrimaryAction">Передать в WB</button></div>
+          </div>
+        </div>
+        <p class="outcome"><strong>Проверяем:</strong> после нового короба и после повторного
+          открытия галка по-прежнему включена; режим не живёт на строке короба.</p>
+      </article>
+
+      <article class="state-card">
+        <div class="state-caption">
+          <strong>4. Возврат · режим снова выключен до раскладки</strong>
+          <span>Визуал действия передачи прежний; возвращается существующая проверка.</span>
+        </div>
+        <div class="workspace">
+          <div class="workspace-top"><div class="truck" aria-hidden="true">▣</div><div class="workspace-title"><h2>Поставка WB-15482</h2><p>Селлер «Красотка» · № WB 15482</p></div></div>
+          <div class="tabs"><div class="tab">Состав ✓</div><div class="tab">Подбор ✓</div><div class="tab">Упаковка и маркировка ✓</div><div class="tab active">Короба</div></div>
+          <div class="workspace-body">
+            <div class="boxes-paper">
+              <div class="boxes-toolbar"><div class="boxes-heading"><h3>Короба · Склад / СЦ</h3></div><div class="toolbar-actions"><button type="button">Печать всех QR (1)</button><label class="mode-control"><input type="checkbox"> <span>Без распределения</span></label><div class="count-field"><span>Коробов</span>1</div><button type="button" class="primary-action" data-component="PrimaryAction">Добавить короба</button></div></div>
+              <div class="box-list"><div class="box-row"><div class="chevron">▸</div><div class="box-name">Короб 1 <span>· 0 шт</span></div><div class="row-actions"><button type="button">QR</button><button type="button">Добавить товары</button><button type="button" class="more" aria-label="Действия короба 1">⋮</button></div></div></div>
+            </div>
+            <div class="handoff"><button type="button" class="primary-action" data-component="PrimaryAction">Передать в WB</button></div>
+          </div>
+        </div>
+        <p class="outcome"><strong>Результат действия:</strong> если упакованные заказы не назначены
+          в короб, существующая проверка снова не пропускает передачу. Новая подсказка не добавляется.</p>
+      </article>
+
+      <article class="state-card">
+        <div class="state-caption">
+          <strong>5. Проблемная строка · в коробе есть назначение</strong>
+          <span>Только здесь появляется реальная причина заблокировать переключение.</span>
+        </div>
+        <div class="workspace">
+          <div class="workspace-top"><div class="truck" aria-hidden="true">▣</div><div class="workspace-title"><h2>Поставка WB-15482</h2><p>Селлер «Красотка» · № WB 15482</p></div></div>
+          <div class="tabs"><div class="tab">Состав ✓</div><div class="tab">Подбор ✓</div><div class="tab">Упаковка и маркировка ✓</div><div class="tab active">Короба</div></div>
+          <div class="workspace-body">
+            <div class="boxes-paper">
+              <div class="boxes-toolbar"><div class="boxes-heading"><h3>Короба · Склад / СЦ</h3></div><div class="toolbar-actions"><button type="button">Печать всех QR (1)</button><label class="mode-control disabled"><input type="checkbox" disabled> <span>Без распределения</span></label><div class="count-field"><span>Коробов</span>1</div><button type="button" class="primary-action" data-component="PrimaryAction">Добавить короба</button></div></div>
+              <div class="box-list"><div class="box-row"><div class="chevron">▸</div><div class="box-name">Короб 1 <span>· 1 шт</span></div><div class="row-actions"><button type="button">QR</button><button type="button">Добавить товары</button><button type="button" class="more" aria-label="Действия короба 1">⋮</button></div></div></div>
+            </div>
+            <div class="handoff"><button type="button" class="primary-action" data-component="PrimaryAction">Передать в WB</button></div>
+          </div>
+        </div>
+        <p class="outcome"><strong>Проверяем:</strong> переключение недоступно из-за назначения,
+          но карточка не добавляет тултип и не меняет QR, меню или другие действия строки.</p>
+      </article>
+
+    </section>
+  </main>
+</body>
+</html>
