@@ -93,10 +93,9 @@ test('scan opens the received box and shows its current contents', async ({ page
   await expect(page.getByTestId('ff-catalog-inbound-packages-scanner')).toBeVisible()
   const lookupStartedAt = Date.now()
   await scanCatalogPackage(page, box.barcode)
-  expect(Date.now() - lookupStartedAt).toBeLessThan(1_500)
-
   const packageItem = packageByBarcode(page, box.barcode)
   await expect(packageItem).toBeVisible()
+  expect(Date.now() - lookupStartedAt).toBeLessThan(1_500)
   await expect(packageItem).toContainText('Короб № 1')
   await expect(packageItem).toContainText(seed.sku)
   const composition = packageItem.locator('[data-testid^="ff-catalog-inbound-composition-"]')
