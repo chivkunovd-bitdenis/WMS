@@ -55,7 +55,7 @@ import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { apiUrl } from '../../api'
 import { fetchPendingMarking, pendingMarkingLineCount } from '../../utils/pendingMarkingApi'
 import { PageHeader } from '../../ui/PageHeader'
-import { productDisplayMetaFromCatalog, resolveProductPrimaryBarcode } from '../../types/wbProductCatalog'
+import { resolveProductPrimaryBarcode } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { displayMetaToProductLabel } from '../../utils/productBarcodePrint'
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
@@ -294,7 +294,7 @@ export function FfPackagingTaskPanel({
   onClose,
   onUpdated,
 }: TaskPanelProps) {
-  const { catalogById } = useWbProductCatalog(token)
+  const { getDisplayMeta } = useWbProductCatalog(token)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [defectDialogOpen, setDefectDialogOpen] = useState(false)
@@ -322,10 +322,10 @@ export function FfPackagingTaskPanel({
   }
 
   const productLabelForLine = (ln: PackagingTaskLine) =>
-    displayMetaToProductLabel(productDisplayMetaFromCatalog(ln.product_id, ln, catalogById))
+    displayMetaToProductLabel(getDisplayMeta(ln.product_id, ln))
 
   const lineBarcodeForScan = (ln: PackagingTaskLine) => {
-    const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
+    const displayMeta = getDisplayMeta(ln.product_id, ln)
     return resolveProductPrimaryBarcode(displayMeta) || ln.sku_code
   }
 
@@ -414,7 +414,7 @@ export function FfPackagingTaskPanel({
       warehouseName: task.warehouse_name ?? task.warehouse_code ?? 'Склад',
       createdAt: task.created_at ?? null,
       items: task.lines.map((ln) => {
-        const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
+        const displayMeta = getDisplayMeta(ln.product_id, ln)
         return {
           product_name: displayMeta.product_name,
           vendor_code: displayMeta.wb_vendor_code ?? '',
@@ -944,7 +944,7 @@ export function FfPackagingTaskPanel({
             </TableHead>
             <TableBody>
               {task.lines.map((ln) => {
-                const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
+                const displayMeta = getDisplayMeta(ln.product_id, ln)
                 const barcode = lineBarcodeForScan(ln)
                 const markingProgressIncomplete = isLineMarkingProgressIncomplete(ln)
                 const hasInstructions = Boolean(ln.packaging_instructions?.trim())
@@ -1082,7 +1082,7 @@ export function FfPackagingTaskPanel({
       ) : (
         <Stack spacing={1.5} data-testid="ff-packaging-lines-compact">
           {task.lines.map((ln) => {
-            const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
+            const displayMeta = getDisplayMeta(ln.product_id, ln)
             const barcode = lineBarcodeForScan(ln)
             const remaining = lineRemaining(ln)
             const markingProgressIncomplete = isLineMarkingProgressIncomplete(ln)
@@ -1509,7 +1509,7 @@ type LocationRow = { id: string; code: string; barcode: string }
 type PackagingTaskStatusFilter = 'open' | 'done' | 'cancelled'
 
 function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: CreateDialogProps) {
-  const { catalogById } = useWbProductCatalog(token, open)
+  const { getDisplayMeta } = useWbProductCatalog(token, open)
   const authHeaders = {
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
@@ -1767,7 +1767,7 @@ function FfCreatePackagingTaskDialog({ open, token, onClose, onCreated }: Create
                 </TableHead>
                 <TableBody>
                   {rows.map((r) => {
-                    const displayMeta = productDisplayMetaFromCatalog(r.product_id, r, catalogById)
+                    const displayMeta = getDisplayMeta(r.product_id, r)
                     const primaryBarcode = resolveProductPrimaryBarcode(displayMeta) || r.sku_code
                     return (
                       <TableRow key={r.product_id} data-testid="ff-packaging-create-row">
