@@ -1333,6 +1333,7 @@ async def test_tape_covers_every_order_and_matches_picking_list(
     assert picking.status_code == 200, picking.text
     picking_total = sum(int(item["quantity"]) for item in picking.json()["items"])
     assert picking_total == len(order_ids), "лист подбора обязан покрывать все заказы поставки"
+    assert [item["article"] for item in picking.json()["items"]] == ["ART-A", "ART-B"]
 
     tape = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/order-print-tape",
@@ -1349,6 +1350,25 @@ async def test_tape_covers_every_order_and_matches_picking_list(
     tape_body = tape.json()
     assert len(tape_body["orders"]) == len(order_ids), tape_body.get("order_errors")
     assert not tape_body.get("order_errors")
+    assert [item["wb_order_id"] for item in tape_body["orders"]] == [
+        910001,
+        910003,
+        910002,
+    ], "полная лента обязана идти группами в том же порядке, что и лист подбора"
+
+    partial = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/order-print-tape",
+        headers=headers,
+        json={
+            "order_ids": [str(order_ids[1]), str(order_ids[0])],
+            "layout": None,
+            "allow_partial": True,
+            "include_order_qr": True,
+            "reprint": True,
+        },
+    )
+    assert partial.status_code == 200, partial.text
+    assert [item["wb_order_id"] for item in partial.json()["orders"]] == [910002, 910001]
 
     # Повторная печать не должна давать ленту короче: заказы уже помечены напечатанными,
     # но в ленту обязаны попасть все — иначе после зажёванной бумаги не перепечатать.

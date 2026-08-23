@@ -66,7 +66,12 @@ function renderStickerCode(value: string | null) {
 }
 
 export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
-  const rows = input.rows.map((row, index) => {
+  let position = 1
+  const rows = input.rows.map((row) => {
+    const positionFrom = position
+    const positionTo = positionFrom + row.required - 1
+    position = positionTo + 1
+    const positionLabel = positionFrom === positionTo ? `${positionFrom}` : `${positionFrom}–${positionTo}`
     const imageUrl = printableImageUrl(row.imageUrl)
     const nonEmptyStickerCodes = row.stickerCodes.filter((code): code is string => Boolean(code))
     const stickerCodes = nonEmptyStickerCodes.length
@@ -74,7 +79,7 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
       : '—'
     return `
       <tr>
-        <td class="number">${index + 1}</td>
+        <td class="number">${positionLabel}</td>
         <td class="image">${imageUrl ? `<img src="${imageUrl}" alt="" />` : '<span>—</span>'}</td>
         <td>
           <strong>${escapePrintHtml(row.name)}</strong>

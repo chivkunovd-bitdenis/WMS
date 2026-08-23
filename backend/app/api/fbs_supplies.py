@@ -458,6 +458,7 @@ class FbsWorkspaceProductOut(FbsWorklistProductOut):
 
 class FbsWorkspaceOrderOut(FbsWorklistOrderOut):
     product: FbsWorkspaceProductOut
+    tape_order_index: int
 
 
 class FbsWorkspaceMarkingPoolOut(BaseModel):

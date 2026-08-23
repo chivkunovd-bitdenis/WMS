@@ -667,7 +667,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     const fallbackLabelCopies = fbsHonestSignOrders.length > 0
       ? Math.max(1, labelCopiesFromLayout(printLayout))
       : fbsLabelCopiesPerOrder
-    for (const printedOrder of result.orders) {
+    for (const [orderIndex, printedOrder] of result.orders.entries()) {
       const order = orderById.get(printedOrder.order_id)
       if (!order) continue
       if (ctx.fbsTape.includeOrderQr) {
@@ -677,7 +677,7 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
           return false
         }
         const qrDataUrl = await fetchAuthorizedImageDataUrl(ctx.token, asset.preview_url)
-        sections.push(buildWbOrderQrLabelHtml(qrDataUrl))
+        sections.push(buildWbOrderQrLabelHtml(qrDataUrl, orderIndex + 1))
         if (!asset.applied_at) {
           qrAssetsToConfirm.push(asset)
         }

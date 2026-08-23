@@ -5,6 +5,7 @@ import {
   buildCzArtifactLabelHtml,
   buildCzLabelHtml,
   buildMarkingTapeDocument,
+  buildWbOrderQrLabelHtml,
   resolveCzArtifactTapeCodeIds,
 } from './printMarkingCodeLabel'
 import type { MarkingTapeUnitInput } from './printMarkingCodeLabel'
@@ -115,5 +116,13 @@ describe('buildCzLabelHtml', () => {
     expect(doc).toContain('size: 70mm 120mm')
     expect(doc).toContain('width: 70mm')
     expect(doc).toContain('height: 120mm')
+  })
+})
+
+describe('buildWbOrderQrLabelHtml', () => {
+  it('prints the same one-based position used by the picking list', () => {
+    const section = buildWbOrderQrLabelHtml(MATRIX_STUB, 7)
+    expect(section).toContain('data-testid="fbs-order-qr-position"')
+    expect(section).toContain('№7')
   })
 })

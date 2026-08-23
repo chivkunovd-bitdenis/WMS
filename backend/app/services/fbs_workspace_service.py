@@ -48,6 +48,7 @@ from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
 from app.services import fbs_packing_box_service as packing_box_svc
 from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.fbs_packing_box_service import get_boxes_for_workspace
+from app.services.fbs_picking_order_service import picking_list_order_key
 from app.services.fbs_tracking_service import (
     build_partial_rejection_summary,
     build_tracking_summary,
@@ -100,6 +101,11 @@ async def get_supply_workspace(
     worklist_items = await build_worklist_items(
         session, tenant_id, orders, server_now=server_now
     )
+    tape_order_index_by_id = {
+        order.id: index for index, order in enumerate(sorted(orders, key=picking_list_order_key))
+    }
+    for item in worklist_items:
+        item["tape_order_index"] = tape_order_index_by_id[uuid.UUID(str(item["id"]))]
     await _inject_order_pick_fallback(session, tenant_id, supply, worklist_items)
     cargo_places = await _build_cargo_places(session, tenant_id, supply)
     boxes = await _build_boxes(session, tenant_id, supply_id)
@@ -282,7 +288,7 @@ async def _load_supply_graph(
         .options(
             selectinload(FbsSupply.seller),
             selectinload(FbsSupply.warehouse),
-            selectinload(FbsSupply.orders),
+            selectinload(FbsSupply.orders).selectinload(FbsOrder.product),
             selectinload(FbsSupply.trbxes),
             selectinload(FbsSupply.barcode_asset),
         )

@@ -1081,6 +1081,10 @@ export function FfFbsSupplyWorkspace({
       )
     : 0
   const percent = total ? Math.round((ready / total) * 100) : 0
+  const fullTapeOrders = useMemo(() => {
+    if (!workspace) return []
+    return [...workspace.orders].sort((a, b) => a.tape_order_index - b.tape_order_index)
+  }, [workspace])
   const pickingRows = useMemo(() => {
     if (!workspace) return []
     const grouped = new Map<string, {
@@ -1097,7 +1101,7 @@ export function FfFbsSupplyWorkspace({
       marking: string
       nearestDeadline: string
     }>()
-    for (const order of workspace.orders) {
+    for (const order of fullTapeOrders) {
       const key = order.product.id ?? `unmapped-${order.id}`
       const current = grouped.get(key) ?? {
         key,
@@ -1125,7 +1129,7 @@ export function FfFbsSupplyWorkspace({
       grouped.set(key, current)
     }
     return [...grouped.values()]
-  }, [workspace])
+  }, [fullTapeOrders, workspace])
   const manualPickRows = useMemo(() => {
     if (!workspace) return []
     const byProduct = new Map<string, typeof workspace.orders>()
@@ -1779,7 +1783,7 @@ export function FfFbsSupplyWorkspace({
                             // бумаги) лента выходила короче листа подбора, и оператор об этом
                             // не знал. Коды Честного знака от этого не жгутся: у заказа, где
                             // код уже выпущен, сервер переиспользует его, а не берёт новый.
-                            packingOrders,
+                            fullTapeOrders,
                             unprintedPackingOrders.length === 0,
                           )}
                           data-task-id="FBS-21"
