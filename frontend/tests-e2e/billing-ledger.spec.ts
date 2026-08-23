@@ -101,3 +101,47 @@ test('billing ledger uses the canonical storage service code', async ({ page }) 
   await page.getByRole('option', { name: 'Хранение' }).click()
   await expect.poll(() => new URL(lastLedgerUrl).searchParams.get('service_code')).toBe('storage_liter_day')
 })
+
+// S-31-TC-012 — Given an unknown service and unit from the API, When the admin views operations and performers,
+// Then both modes show safe placeholders and a clear notice without exposing either technical value.
+test('billing ledger hides unknown service and unit codes in both modes', async ({ page }) => {
+  const unknownService = 'warehouse_magic_fee'
+  const unknownUnit = 'crate_fortnight'
+  await page.route('**/api/billing/ledger**', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ entries: [{
+      id: 'entry-unknown-code',
+      occurred_at: '2026-08-22T00:00:00Z',
+      seller_name: 'Луна',
+      service_code: unknownService,
+      source_type: 'inbound_intake',
+      source_id: 'inbound-unknown',
+      document_number: 'ПР-000999',
+      quantity: 7,
+      unit: unknownUnit,
+      rate: 10,
+      amount: 70,
+      performer_name: 'Анна К.',
+      problem: null,
+    }] }),
+  }))
+
+  await page.goto('/app/ff/billing')
+  await expect(page.getByTestId('billing-ledger-data-error')).toContainText('не удалось распознать услугу или расчёт')
+
+  const table = page.getByTestId('billing-ledger-table')
+  const operationCells = table.locator('tbody tr').first().getByRole('cell')
+  await expect(operationCells.nth(2)).toHaveText('—')
+  await expect(operationCells.nth(5)).toHaveText('—')
+  await expect(page.getByText(unknownService, { exact: true })).toHaveCount(0)
+  await expect(page.getByText(unknownUnit, { exact: true })).toHaveCount(0)
+
+  await page.getByTestId('billing-mode').click()
+  await page.getByRole('option', { name: 'По исполнителям' }).click()
+  const performerCells = table.locator('tbody tr').first().getByRole('cell')
+  await expect(performerCells.nth(1)).toHaveText('—')
+  await expect(performerCells.nth(2)).toHaveText('—')
+  await expect(page.getByText(unknownService, { exact: true })).toHaveCount(0)
+  await expect(page.getByText(unknownUnit, { exact: true })).toHaveCount(0)
+})

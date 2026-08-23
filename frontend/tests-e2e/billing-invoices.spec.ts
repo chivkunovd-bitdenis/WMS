@@ -126,6 +126,54 @@ test('billing invoice opens, reveals documents and starts print', async ({ page 
   await expect(printed.getByRole('button')).toHaveCount(0)
 })
 
+// S-31-TC-007 — Given an invoice line with an unknown service and unit, When the admin opens and prints it,
+// Then the dialog and print view show safe placeholders and a clear notice without exposing technical values.
+test('billing invoice hides unknown service and unit codes', async ({ page }) => {
+  const unknownService = 'manual_dark_store_fee'
+  const unknownUnit = 'pallet_moon'
+  const invoiceWithUnknownCodes = {
+    ...invoice,
+    id: 'invoice-unknown-code',
+    number: 'СЧ-2026-00999',
+    lines: [{
+      id: 'line-unknown-code',
+      service_code: unknownService,
+      unit: unknownUnit,
+      quantity: 2,
+      rate: 100,
+      amount: 200,
+      documents: [],
+    }],
+  }
+  await page.route('**/api/billing/invoices?**', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ invoices: [invoiceWithUnknownCodes] }),
+  }))
+
+  await page.goto('/app/ff/billing')
+  await page.getByTestId('billing-tab-invoices').click()
+  await page.getByTestId('billing-invoice-open-invoice-unknown-code').click()
+
+  await expect(page.getByTestId('billing-invoice-data-error')).toContainText('нераспознанной услугой или расчётом')
+  const lineCells = page.getByTestId('billing-invoice-lines').locator('tbody tr').first().getByRole('cell')
+  await expect(lineCells.nth(0)).toHaveText('—')
+  await expect(lineCells.nth(1)).toHaveText('—')
+  await expect(page.getByText(unknownService, { exact: true })).toHaveCount(0)
+  await expect(page.getByText(unknownUnit, { exact: true })).toHaveCount(0)
+
+  const printWindow = page.waitForEvent('popup')
+  await Promise.all([
+    printWindow,
+    page.getByTestId('billing-invoice-print').click(),
+  ])
+  const printed = (await printWindow).locator('body')
+  await expect(printed.locator('tbody tr').first().locator('td').nth(0)).toHaveText('—')
+  await expect(printed.locator('tbody tr').first().locator('td').nth(1)).toHaveText('—')
+  await expect(printed).not.toContainText(unknownService)
+  await expect(printed).not.toContainText(unknownUnit)
+})
+
 // S-31-TC-008 — Given an issued invoice, When cancellation is confirmed twice, Then history has one cancelled invoice and no second cancellation request.
 test('billing invoice cancellation is confirmed and idempotent in UI', async ({ page }) => {
   let cancellations = 0
