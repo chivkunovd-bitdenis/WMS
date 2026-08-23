@@ -1950,9 +1950,9 @@ async def test_fbs_order_without_local_stock_is_selectable(
     assert preflight.json()["compatible"] is True
 
 
-# Binding later → re-sync assigns warehouse and reserves
+# A single operational warehouse binds immediately and reserves.
 @pytest.mark.asyncio
-async def test_fbs_binding_later_assigns_warehouse_and_reserves(
+async def test_fbs_sole_warehouse_auto_binds_and_reserves(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2002,25 +2002,7 @@ async def test_fbs_binding_later_assigns_warehouse_and_reserves(
     await _wait_for_job(async_client, headers, start.json()["id"])
 
     listed = await async_client.get("/operations/fbs-orders", headers=headers)
-    assert listed.json()[0]["warehouse_id"] is None
-    assert listed.json()[0]["reserve_status"] == RESERVE_STATUS_WAREHOUSE_UNMAPPED
-
-    await _create_binding(async_client, headers, seller_id, WB_WAREHOUSE_A, warehouse_id)
-    async with SessionLocal() as session:
-        prod = await session.get(Product, product_id)
-        assert prod is not None
-        await session.commit()
-
-    start2 = await async_client.post(
-        "/operations/fbs-orders/sync",
-        headers=headers,
-        json={"seller_id": seller_id},
-    )
-    assert start2.status_code == 202
-    await _wait_for_job(async_client, headers, start2.json()["id"])
-
-    listed2 = await async_client.get("/operations/fbs-orders", headers=headers)
-    order = listed2.json()[0]
+    order = listed.json()[0]
     assert order["warehouse_id"] == warehouse_id
     assert order["reserve_status"] == RESERVE_STATUS_RESERVED
 
