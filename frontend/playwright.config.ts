@@ -59,9 +59,11 @@ export default defineConfig({
       env: {
         ...process.env,
         VITE_API_PROXY: `http://127.0.0.1:${e2eApiPort}`,
-        E2E_SELLER_PATH_PREFIX: '/seller',
-        // Keep seller on the same origin during e2e (no redirect to docker :15174).
-        VITE_SELLER_PORTAL_URL: `http://127.0.0.1:${e2eWebPort}/seller/`,
+        // Exercise the dedicated seller production routing contract, while the
+        // Playwright Vite server keeps API access on this same origin.
+        VITE_SELLER_ROUTER_BASENAME: '/app/seller',
+        E2E_SELLER_PATH_PREFIX: '/app/seller',
+        VITE_SELLER_PORTAL_URL: `http://127.0.0.1:${e2eWebPort}/app/seller/`,
       },
       port: e2eWebPort,
       reuseExistingServer: reuse,

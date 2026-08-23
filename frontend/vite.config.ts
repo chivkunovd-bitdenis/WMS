@@ -15,10 +15,13 @@ const devClientPort =
     ? Number(devClientPortRaw)
     : undefined
 
+const sellerRouterBasename =
+  process.env.VITE_SELLER_ROUTER_BASENAME?.trim()?.replace(/\/+$/, '') || '/seller'
+
 function sellerSpaFallback(): Plugin {
   const rewriteSellerHtml = (url: string | undefined) => {
     const path = (url ?? '').split('?')[0] ?? ''
-    return path.startsWith('/seller/') && path !== '/seller/'
+    return path === sellerRouterBasename || path.startsWith(`${sellerRouterBasename}/`)
   }
 
   return {

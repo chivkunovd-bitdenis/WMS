@@ -50,9 +50,12 @@ test('seller staff without products access cannot open the direct reports route'
   page.on('request', (request) => {
     if (new URL(request.url()).pathname.startsWith('/api/reports/')) reportRequests += 1
   })
-  const directReportsPath = '/app/seller/reports'
+  // The Playwright web server supplies the seller bundle with its production
+  // BrowserRouter basename, so this must remain the canonical direct URL.
+  const directReportsPath = sellerPath('/reports')
   await page.goto(directReportsPath)
 
+  expect(directReportsPath).toBe('/app/seller/reports')
   await expect.poll(() => new URL(page.url()).pathname).toBe(directReportsPath)
   await expect(page.getByTestId('seller-access-denied')).toContainText(
     'Нет доступа к этому разделу. Обратитесь к администратору селлера.',
