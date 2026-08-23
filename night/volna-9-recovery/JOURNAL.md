@@ -175,3 +175,9 @@
 06:16   08-storage · dev: фича 2/3 сохранена a162c1f723e4
 06:19   08-storage · screen-dev: готово
 06:19   08-storage · dev: фича 3/3 сохранена 49bd60c2f174
+06:27   08-storage · reviewer: готово
+06:27 08-storage: отложено — reviewer, эскалация не помогла
+06:37   08-storage · repair-plan: новый вердикт дорезается до dev
+06:41   08-storage · splitter: готово
+06:41   08-storage · resume: поатомный rework Terra по сохранённым находкам
+06:46   08-storage · screen-dev: готово

@@ -15,10 +15,10 @@ const rows = [
   { id: 'fixed-zero', seller_id: 'seller-2', seller_name: 'Вектор', warehouse_id: 'warehouse-1', warehouse_name: 'Основной склад', status: 'fixed', fixed_at: '2026-08-01T09:20:00+03:00', total_liter_days: '0', total_amount: '0.00', problem_count: 0, measurements: [] },
 ]
 
-async function openStorage(page: Page, role: 'fulfillment_admin' | 'fulfillment_staff' = 'fulfillment_admin', tariffConfigured = true) {
+async function openStorage(page: Page, role: 'fulfillment_admin' | 'fulfillment_staff' = 'fulfillment_admin', tariffConfigured = true, statements = tariffConfigured ? rows : []) {
   await page.addInitScript(() => localStorage.setItem('wms_token_ff', 'storage-e2e-token'))
   await page.route('**/api/auth/me', (route) => route.fulfill({ json: { email: 'storage@example.test', organization_name: 'E2E', role, permissions: { settings: false, mp_shipments: false, reception: false, cells: false, inventory: true, packaging: false, shift_lead: false } } }))
-  await page.route('**/api/operations/storage/statements?*', (route) => route.fulfill({ json: { tariff_configured: tariffConfigured, warehouses: [{ id: 'warehouse-1', name: 'Основной склад' }], statements: tariffConfigured ? rows : [] } }))
+  await page.route('**/api/operations/storage/statements?*', (route) => route.fulfill({ json: { tariff_configured: tariffConfigured, warehouses: [{ id: 'warehouse-1', name: 'Основной склад' }], statements } }))
   await page.route('**/api/operations/storage/measurements/rebuild', (route) => route.fulfill({ status: 202, json: { id: 'job-1', status: 'pending' } }))
   await page.route('**/api/operations/background-jobs/job-1', (route) => route.fulfill({ json: { id: 'job-1', status: 'done', error_message: null } }))
   await page.route('**/api/products/product-missing/dimensions', (route) => route.fulfill({ json: {} }))
@@ -59,6 +59,35 @@ test('S-11-TC-001 administrator opens the previous-month storage screen', async 
   await openStorage(page)
   await expect(page.getByRole('heading', { name: 'Хранение' })).toBeVisible()
   await expect(page.getByTestId('storage-month')).toHaveValue('2026-07')
+})
+
+test('S-11-TC-002 blocks a rate that rounds to zero before saving', async ({ page }) => {
+  await openStorage(page, 'fulfillment_admin', false, rows)
+  let tariffPosts = 0
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && request.url().includes('/api/operations/storage/tariffs')) tariffPosts += 1
+  })
+
+  await page.getByRole('button', { name: 'Задать тариф' }).click()
+  const saveRate = page.getByTestId('storage-rate-save')
+  await page.getByTestId('storage-rate-amount').fill('0,001')
+  await expect(saveRate).toBeDisabled()
+  await saveRate.locator('..').hover()
+  await expect(page.getByRole('tooltip')).toHaveText('Минимальная сохраняемая ставка — 0,01 ₽/л·день')
+  await saveRate.evaluate((button) => (button as HTMLButtonElement).click())
+  expect(tariffPosts).toBe(0)
+
+  await page.getByTestId('storage-rate-amount').fill('0,01')
+  await expect(saveRate).toBeEnabled()
+  await page.getByText('Индивидуальная ставка селлера', { exact: true }).click()
+  await page.getByLabel('Селлер').click()
+  await page.getByRole('option', { name: 'Красотка' }).click()
+  await page.getByTestId('storage-seller-rate-amount').fill('0,001')
+  await expect(saveRate).toBeDisabled()
+  await saveRate.locator('..').hover()
+  await expect(page.getByRole('tooltip')).toHaveText('Минимальная сохраняемая ставка — 0,01 ₽/л·день')
+  await saveRate.evaluate((button) => (button as HTMLButtonElement).click())
+  expect(tariffPosts).toBe(0)
 })
 
 test('S-11-TC-002 administrator saves a future warehouse rate and seller exception in one request', async ({ page }) => {
