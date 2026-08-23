@@ -92,6 +92,37 @@ test('scan opens the received box and shows its current contents', async ({ page
   await page.getByTestId('ff-catalog-tab-packages').click()
   await expect(page.getByTestId('ff-catalog-products-panel')).toBeHidden()
   await expect(page.getByTestId('ff-catalog-inbound-packages-scanner')).toBeVisible()
+
+  const freshName = 'Updated Box Product'
+  const freshVendorArticle = `updated-${seed.vendorArticle}`
+  const freshBarcode = `updated-${seed.barcode}`
+  const freshSize = '48'
+  const freshSellerName = 'Updated Box Seller'
+  await page.route(/\/api\/operations\/inbound-packages\/lookup/, async (route) => {
+    const response = await route.fetch()
+    if (!response.ok()) {
+      await route.fulfill({ response })
+      return
+    }
+    const payload = (await response.json()) as {
+      lines: Array<{
+        name: string
+        wb_vendor_code: string | null
+        wb_barcode: string | null
+        wb_size: string | null
+        seller_name: string | null
+      }>
+    }
+    for (const line of payload.lines) {
+      line.name = freshName
+      line.wb_vendor_code = freshVendorArticle
+      line.wb_barcode = freshBarcode
+      line.wb_size = freshSize
+      line.seller_name = freshSellerName
+    }
+    await route.fulfill({ response, json: payload })
+  })
+
   const lookupStartedAt = Date.now()
   await scanCatalogPackage(page, box.barcode)
   const packageItem = packageByBarcode(page, box.barcode)
@@ -108,11 +139,11 @@ test('scan opens the received box and shows its current contents', async ({ page
   await expect(composition.locator('thead')).toContainText('Селлер')
   await expect(composition.locator('thead')).toContainText('Документ прихода')
   const productRow = composition.locator('tbody tr').filter({ hasText: seed.sku })
-  await expect(productRow).toContainText('Box Product')
-  await expect(productRow).toContainText(seed.vendorArticle)
-  await expect(productRow).toContainText(seed.barcode)
-  await expect(productRow).toContainText(seed.size)
-  await expect(productRow).toContainText('Box Seller')
+  await expect(productRow).toContainText(freshName)
+  await expect(productRow).toContainText(freshVendorArticle)
+  await expect(productRow).toContainText(freshBarcode)
+  await expect(productRow).toContainText(freshSize)
+  await expect(productRow).toContainText(freshSellerName)
   await expect(productRow).toContainText('Приёмка №000001')
   await expect(productRow).toContainText(/\d{2}\.\d{2}\.\d{4}/)
   await expect(productRow).toContainText('1')

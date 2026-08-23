@@ -143,14 +143,14 @@ const PackageAccordion = memo(function PackageAccordion({
         const product = productsById.get(line.product_id)
         return {
           ...line,
-          name: product?.name ?? line.name,
-          sku_code: product?.sku_code ?? line.sku_code,
-          seller_name: product?.seller_name ?? line.seller_name,
-          wb_vendor_code: product?.wb_vendor_code ?? line.wb_vendor_code,
-          wb_size: product?.wb_size ?? line.wb_size,
+          name: line.name,
+          sku_code: line.sku_code,
+          seller_name: line.seller_name,
+          wb_vendor_code: line.wb_vendor_code,
+          wb_size: line.wb_size,
           wb_primary_image_url: product?.wb_primary_image_url ?? null,
-          wb_primary_barcode: product?.wb_primary_barcode ?? line.wb_barcode,
-          wb_barcodes: product?.wb_barcodes ?? (line.wb_barcode ? [line.wb_barcode] : []),
+          wb_primary_barcode: line.wb_barcode ?? product?.wb_primary_barcode ?? null,
+          wb_barcodes: line.wb_barcode ? [line.wb_barcode] : (product?.wb_barcodes ?? []),
         }
       }),
     [item.lines, productsById],
