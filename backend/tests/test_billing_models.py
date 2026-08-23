@@ -21,21 +21,36 @@ def test_billing_ff_profile_index_is_partial_on_sqlite() -> None:
     assert "seller_id IS NULL" in str(ff_index["dialect_options"].get("sqlite_where"))
 
 
-def test_billing_unique_indexes_separate_common_and_seller_tariffs_and_reversals() -> None:
+def test_billing_unique_indexes_separate_global_and_warehouse_tariff_scopes() -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
 
     indexes = {
         index["name"]: index for index in inspect(engine).get_indexes("billing_tariff_versions")
     }
-    assert indexes["uq_billing_tariff_version_common"]["unique"] == 1
-    assert "seller_id IS NULL" in str(
-        indexes["uq_billing_tariff_version_common"]["dialect_options"].get("sqlite_where")
-    )
-    assert indexes["uq_billing_tariff_version_seller"]["unique"] == 1
-    assert "seller_id IS NOT NULL" in str(
-        indexes["uq_billing_tariff_version_seller"]["dialect_options"].get("sqlite_where")
-    )
+    expected_predicates = {
+        "uq_billing_tariff_version_global_common": (
+            "seller_id IS NULL",
+            "warehouse_id IS NULL",
+        ),
+        "uq_billing_tariff_version_global_seller": (
+            "seller_id IS NOT NULL",
+            "warehouse_id IS NULL",
+        ),
+        "uq_billing_tariff_version_warehouse_common": (
+            "seller_id IS NULL",
+            "warehouse_id IS NOT NULL",
+        ),
+        "uq_billing_tariff_version_warehouse_seller": (
+            "seller_id IS NOT NULL",
+            "warehouse_id IS NOT NULL",
+        ),
+    }
+    for name, predicates in expected_predicates.items():
+        assert indexes[name]["unique"] == 1
+        where = str(indexes[name]["dialect_options"].get("sqlite_where"))
+        assert all(predicate in where for predicate in predicates)
+    assert "ix_billing_tariffs_scope_lookup" in indexes
 
     ledger_indexes = {
         index["name"]: index for index in inspect(engine).get_indexes("billing_ledger_entries")
