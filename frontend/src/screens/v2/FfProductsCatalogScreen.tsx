@@ -469,6 +469,7 @@ export function FfProductsCatalogScreen({
       event.preventDefault()
       setInboundPackageLookupError(false)
       void inboundPackagesRef.current?.lookup(barcode).then((found) => {
+        if (found === null) return
         if (found === false) setInboundPackageLookupError(true)
         catalogSearchRef.current?.focus()
         catalogSearchRef.current?.select()

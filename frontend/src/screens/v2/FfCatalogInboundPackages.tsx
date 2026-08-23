@@ -130,7 +130,7 @@ export const FfCatalogInboundPackages = forwardRef<CatalogInboundPackagesHandle,
         }, 0)
         return true
       } catch {
-        return false
+        return requestSequence.current === sequence ? false : null
       }
     }, [authHeaders, token])
 

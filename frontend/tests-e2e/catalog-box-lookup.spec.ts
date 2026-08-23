@@ -275,3 +275,68 @@ test('catalog scan follows a received box through partial and full putaway', asy
   await expect(page.getByTestId('ff-products-list')).toBeVisible()
   await expect(page.getByTestId('ff-catalog-inbound-packages')).toBeVisible()
 })
+
+// S-16-TC-013, S-16-TC-016: a late failed scan must not replace the latest result or select new input.
+test('catalog ignores a late failed scan after the operator starts the next barcode', async ({ page }) => {
+  const seed = await seedFfSellerInbound(page, `catalog-scan-race-${Date.now()}`)
+  const headers = { Authorization: `Bearer ${seed.token}` }
+  const inbound = await page.request.post(INBOUND_API, {
+    headers,
+    data: { warehouse_id: seed.warehouseId },
+  })
+  expect(inbound.ok()).toBeTruthy()
+  const requestId = String(((await inbound.json()) as { id: string }).id)
+  const line = await page.request.post(`${INBOUND_API}/${requestId}/lines`, {
+    headers,
+    data: { product_id: seed.productId, expected_qty: 1 },
+  })
+  expect(line.ok()).toBeTruthy()
+  expect((await page.request.post(`${INBOUND_API}/${requestId}/submit`, { headers })).ok()).toBeTruthy()
+  expect((await page.request.post(`${INBOUND_API}/${requestId}/begin-receiving`, { headers })).ok()).toBeTruthy()
+
+  const firstBox = await page.request.post(`${INBOUND_API}/${requestId}/boxes`, { headers })
+  const secondBox = await page.request.post(`${INBOUND_API}/${requestId}/boxes`, { headers })
+  expect(firstBox.ok()).toBeTruthy()
+  expect(secondBox.ok()).toBeTruthy()
+  const firstBarcode = String(((await firstBox.json()) as { internal_barcode: string }).internal_barcode)
+  const secondBarcode = String(((await secondBox.json()) as { internal_barcode: string }).internal_barcode)
+
+  let releaseFirstLookup: (() => void) | undefined
+  const firstLookupReleased = new Promise<void>((resolve) => {
+    releaseFirstLookup = resolve
+  })
+  let markFirstLookupStarted: (() => void) | undefined
+  const firstLookupStarted = new Promise<void>((resolve) => {
+    markFirstLookupStarted = resolve
+  })
+  await page.route(/\/api\/operations\/inbound-packages\/lookup/, async (route) => {
+    if (route.request().url().includes(encodeURIComponent(firstBarcode))) {
+      markFirstLookupStarted?.()
+      await firstLookupReleased
+      await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })
+      return
+    }
+    await route.continue()
+  })
+
+  await page.goto('/app/ff/products')
+  const search = page.getByTestId('ff-catalog-search')
+  await search.fill(firstBarcode)
+  const firstScan = search.press('Enter')
+  await firstLookupStarted
+  await scanCatalogPackage(page, secondBarcode)
+
+  const nextBarcode = 'INB-NEXT-SCAN'
+  await search.fill(nextBarcode)
+  releaseFirstLookup?.()
+  await firstScan
+
+  const secondPackage = page.locator('[data-testid^="ff-catalog-inbound-package-"]').filter({ hasText: secondBarcode })
+  await expect(secondPackage).toBeVisible()
+  await expect(page.getByTestId('ff-catalog-inbound-packages-lookup-error')).toBeHidden()
+  await expect(search).toHaveValue(nextBarcode)
+  await expect.poll(() => search.evaluate((input) => [input.selectionStart, input.selectionEnd])).toEqual([
+    nextBarcode.length,
+    nextBarcode.length,
+  ])
+})
