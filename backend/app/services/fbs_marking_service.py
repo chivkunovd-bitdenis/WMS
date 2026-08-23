@@ -666,11 +666,10 @@ async def _record_wb_sync_started(
 ) -> None:
     """Persist a request-order marker before waiting for Wildberries.
 
-    The marker belongs to the caller's transaction. In particular, the FBS
-    autopoll first locks active orders while updating their WB statuses, then
-    synchronizes marking in that same transaction. Opening a second session
-    here would make it wait on the caller's lock while the caller waits for
-    this function to return.
+    Commit the marker before the external request.  Otherwise a slow WB
+    response leaves a SQLite write lock open and prevents a newer check of the
+    same order from reaching WB.  The committed timestamp is also the ordering
+    fence that keeps an older response from overwriting that newer result.
     """
     marker_stmt = (
         update(FbsOrder)
@@ -683,8 +682,12 @@ async def _record_wb_sync_started(
             ),
         )
         .values(metadata_last_checked_at=started_at)
+        # SQLite returns naive timestamps, while ``started_at`` is UTC-aware.
+        # Do not evaluate this SQL predicate against the caller's identity map.
+        .execution_options(synchronize_session=False)
     )
     await session.execute(marker_stmt)
+    await session.commit()
 
 
 async def _lock_current_marking_state(

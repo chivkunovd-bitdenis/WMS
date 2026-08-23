@@ -373,7 +373,9 @@ async def test_fbs_marking_sync_does_not_apply_stale_response(
     first_request = asyncio.create_task(sync_once())
     await first_request_waiting.wait()
     second_request = asyncio.create_task(sync_once())
-    await second_request_waiting.wait()
+    # A committed start marker must release the SQLite writer lock before the
+    # first WB call waits, so the newer check reaches WB promptly.
+    await asyncio.wait_for(second_request_waiting.wait(), timeout=2)
     if older_response_finishes_first:
         release_first_request.set()
         await first_request

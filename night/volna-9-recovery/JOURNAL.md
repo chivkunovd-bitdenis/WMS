@@ -201,3 +201,8 @@
 07:03   02-verdikt-screen · dev: фича 2/3 сохранена f9f57fabe44d
 07:06   02-verdikt-screen · screen-dev: готово
 07:06   02-verdikt-screen · dev: фича 3/3 сохранена 8f1c78b28373
+07:11   02-verdikt-screen · reviewer: готово
+07:11   02-verdikt-screen · reviewer: находки не закрыты — повторный Terra-ремонт
+07:11   02-verdikt-screen · reviewer: находки, круг 3 — назад к разработке
+07:13   02-verdikt-screen · splitter: готово
+07:18   02-verdikt-screen · backend-dev: готово
