@@ -2,6 +2,13 @@
 
 from app.models.background_job import BackgroundJob
 from app.models.base import Base
+from app.models.billing import (
+    BillingInvoice,
+    BillingLedgerEntry,
+    BillingProfile,
+    BillingRunIssue,
+    BillingTariffVersion,
+)
 from app.models.discrepancy_act import DiscrepancyAct, DiscrepancyActLine
 from app.models.document_sequence import DocumentDisplaySequence, DocumentSequence
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
@@ -69,6 +76,11 @@ from app.models.warehouse_storage_rack import WarehouseStorageRack
 __all__ = [
     "BackgroundJob",
     "Base",
+    "BillingInvoice",
+    "BillingLedgerEntry",
+    "BillingProfile",
+    "BillingRunIssue",
+    "BillingTariffVersion",
     "DiscrepancyAct",
     "DiscrepancyActLine",
     "DocumentDisplaySequence",

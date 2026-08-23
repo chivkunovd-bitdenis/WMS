@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, time
+from datetime import date, datetime, time
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, String, Time, Uuid, func
+from sqlalchemy import Boolean, Date, DateTime, String, Time, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -46,6 +46,10 @@ class Tenant(Base):
         Time(timezone=False),
         nullable=True,
     )
+    # None deliberately keeps billing off for existing tenants.  It is set
+    # when the tenant explicitly creates its first tariff version, rather
+    # than backfilling already-finalised warehouse documents.
+    billing_enabled_from: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
