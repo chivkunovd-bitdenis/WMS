@@ -1,38 +1,28 @@
-ФИЧ: 2
+ФИЧ: 1
 
 ## Фичи
 
-### 1. Включить Caddy-конфигурацию seller-портала в воспроизводимую сборку
+### 1. Собрать переходы пагинации отчёта в единый ActionGroup
 
-Оператор, открывший старую ссылку `/` или `/documents` на самостоятельном seller-хосте, попадает на канонический `/app/seller`; это поведение собирается из чистого checkout, а не зависит от локального игнорируемого файла разработчика.
-
-Файлы:
-
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/deploy/Caddyfile.seller`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/Dockerfile.seller.prod`
-
-Зависимости: нет.
-
-Проверка: в чистом checkout оба файла присутствуют в Git; `docker build -f frontend/Dockerfile.seller.prod .` завершается успешно. В собранном контейнере запросы `/` и `/documents` получают постоянный редирект под `/app/seller`, а `/app/seller/reports` отдаёт seller-bundle, не FF-bundle.
-
-### 2. Передать production-префикс seller-портала в Playwright worker
-
-Разработчик, запуская штатный `npm run test:e2e`, проверяет seller-сценарии по `/app/seller/*`: тот же префикс доступен и Vite-серверу, и Playwright worker, поэтому прямой маршрут отчётов не уходит в FF-bundle.
+Оператор под таблицей «Остатки и движения» видит переходы «Назад» и «Вперёд» как одну согласованную группу одинакового размера, а не как две случайно различающиеся второстепенные кнопки. Доступность переходов, их подписи, серверная пагинация и верхние агрегаты остаются без изменений. Это закрывает обе ещё не принятые находки DESIGN REVIEW: R-31 о самостоятельных второстепенных действиях и R-32 о разной ширине кнопок. Новый ui-kit не создаётся: подходящий `ActionGroup` уже есть.
 
 Файлы:
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/playwright.config.ts`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/tests-e2e/inbound-boxes-helpers.ts`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/tests-e2e/seller-reports.spec.ts`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/screens/ff/FfReportsPage.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/tests-e2e/ff-reports.spec.ts`
 
 Зависимости: нет.
 
-Проверка: `npm run test:e2e -- seller-reports.spec.ts` выполняет, а не только перечисляет, адресный сценарий. Его `sellerPath('/reports')` равен `/app/seller/reports`, браузер остаётся на этом пути, показывает seller-состояние доступа и не рендерит `ff-reports-*`.
+Проверка: открыть `/app/ff/reports`, получить больше 50 строк и убедиться, что строка пагинации показывает общий контрол «Назад»/«Вперёд» с одинаковыми габаритами; на первой странице «Назад» недоступна, «Вперёд» открывает вторую страницу, меняет таблицу и не меняет верхние показатели. E2E-сценарий с `TC-NEW-F07-013` проверяет эти видимые состояния и равную ширину двух кнопок через их bounding box.
 
 ## Порядок
 
-Фичи 1 и 2 независимы и могут выполняться параллельно разными frontend-исполнителями. После их объединения нужно повторно проверить чистую сборку seller-образа и адресный E2E-сценарий: первая фича подтверждает production-артефакт, вторая — что тесты действительно проходят его маршрут.
+1. Выполнить фичу 1 одним frontend-исполнителем: она самостоятельна, опирается на уже принятый `ActionGroup` и не требует backend-работы.
+
+Параллельных фич в этом перепланировании нет.
 
 ## Что осталось за бортом
 
-- Ничего нового: повторное планирование ограничено двумя незакрытыми находками из `REVIEW.md`; уже принятые API, экран отчёта и ui-kit намеренно не возвращены в разработку.
+- Уже принятые данные, API, ui-kit, экран, маршруты и seller-исправления не возвращаются в разработку: это перепланирование ограничено двумя незакрытыми находками из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/DESIGN-REVIEW.md`.
+- Нового reusable ui-kit-контрола нет: существующий `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/ui-kit/Actions.tsx` уже содержит `ActionGroup`, который закрывает R-31 и R-32.
+- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались и не изменялись.
