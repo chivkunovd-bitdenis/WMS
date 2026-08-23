@@ -7,6 +7,11 @@ import pytest
 
 from app.models.billing import BillingLedgerEntry
 from app.services.billing_ledger_service import (
+    POSTGRES_INTEGER_MAX,
+    POSTGRES_INTEGER_MIN,
+    BillingLedgerError,
+    postgres_integer,
+    postgres_numeric,
     record_operational_charge,
     record_operational_reversal,
 )
@@ -17,6 +22,26 @@ def _savepoint_session() -> AsyncMock:
     savepoint = AsyncMock()
     session.begin_nested = AsyncMock(return_value=savepoint)
     return session
+
+
+def test_postgres_numeric_validates_finite_precision_and_scale() -> None:
+    assert postgres_numeric(
+        Decimal("9999999999.99994"), precision=14, scale=4, field="billing_quantity"
+    ) == Decimal("9999999999.9999")
+    with pytest.raises(BillingLedgerError, match="billing_quantity_overflow"):
+        postgres_numeric(
+            Decimal("9999999999.99995"), precision=14, scale=4, field="billing_quantity"
+        )
+    with pytest.raises(BillingLedgerError, match="billing_quantity_overflow"):
+        postgres_numeric(Decimal("NaN"), precision=14, scale=4, field="billing_quantity")
+
+
+def test_postgres_integer_validates_rounding_and_int32_bounds() -> None:
+    assert postgres_integer(Decimal("2147483646.5"), field="amount") == POSTGRES_INTEGER_MAX
+    assert postgres_integer(Decimal("-2147483647.5"), field="amount") == POSTGRES_INTEGER_MIN
+    for value in (Decimal("2147483647.5"), Decimal("-2147483648.5"), Decimal("NaN")):
+        with pytest.raises(BillingLedgerError, match="amount_overflow"):
+            postgres_integer(value, field="amount")
 
 
 @pytest.mark.asyncio
