@@ -196,6 +196,18 @@ export function resolveTapeCounts(nextCz: number, nextWb: number, allowQrOnly: b
   }
 }
 
+export function resolveFbsFallbackLabelCopies(
+  hasHonestSignOrders: boolean,
+  printLayout: PrintLayout,
+  configuredCopies: number,
+  qrOnly: boolean,
+) {
+  if (qrOnly) return 0
+  return hasHonestSignOrders
+    ? Math.max(1, labelCopiesFromLayout(printLayout))
+    : configuredCopies
+}
+
 export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onClose }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [labelSize, setLabelSize] = useState<LabelSize>(() => resolveLabelSize(loadLabelSizeId()))
@@ -691,9 +703,12 @@ export function MarkingPrintDialog({ open, reprint, ctx, busy, onBusyChange, onC
     const orderById = new Map(ctx.fbsTape.orders.map((order) => [order.orderId, order]))
     const sections: string[] = []
     const qrAssetsToConfirm: FbsTapeAsset[] = []
-    const fallbackLabelCopies = fbsHonestSignOrders.length > 0
-      ? Math.max(1, labelCopiesFromLayout(printLayout))
-      : fbsLabelCopiesPerOrder
+    const fallbackLabelCopies = resolveFbsFallbackLabelCopies(
+      fbsHonestSignOrders.length > 0,
+      printLayout,
+      fbsLabelCopiesPerOrder,
+      printLayout.units.length === 0 && ctx.fbsTape.includeOrderQr,
+    )
     for (const [orderIndex, printedOrder] of result.orders.entries()) {
       const order = orderById.get(printedOrder.order_id)
       if (!order) continue

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveTapeCounts } from './MarkingPrintDialog'
+import { resolveFbsFallbackLabelCopies, resolveTapeCounts } from './MarkingPrintDialog'
 
 describe('resolveTapeCounts', () => {
   it('keeps zero ЧЗ and an empty tape when the order QR is printed', () => {
@@ -28,5 +28,15 @@ describe('resolveTapeCounts', () => {
       tape: ['label', 'label'],
       layout: { units: [{ block: 'label', copies: 2 }] },
     })
+  })
+})
+
+describe('resolveFbsFallbackLabelCopies', () => {
+  it('does not add product labels to ordinary orders in a mixed QR-only supply', () => {
+    expect(resolveFbsFallbackLabelCopies(true, { units: [] }, 1, true)).toBe(0)
+  })
+
+  it('keeps the existing fallback outside QR-only printing', () => {
+    expect(resolveFbsFallbackLabelCopies(true, { units: [{ block: 'cz', copies: 1 }] }, 1, false)).toBe(1)
   })
 })
