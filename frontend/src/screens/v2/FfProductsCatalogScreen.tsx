@@ -48,6 +48,7 @@ import {
 } from '../../types/wbProductCatalog'
 import { FfManualProductCreateDialog } from '../ff/FfManualProductCreateDialog'
 import { FfProductTzImportDialog } from '../ff/FfProductTzImportDialog'
+import { FfCatalogInboundPackages } from './FfCatalogInboundPackages'
 
 type SellerRow = { id: string; name: string }
 
@@ -1054,6 +1055,12 @@ export function FfProductsCatalogScreen({
             </TableBody>
           </Table>
         </TableContainer>
+
+        <FfCatalogInboundPackages
+          token={token}
+          authHeaders={authHeaders}
+          products={catalog}
+        />
 
         {canManageCatalog ? (
           <>
