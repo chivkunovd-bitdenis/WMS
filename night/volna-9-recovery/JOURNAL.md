@@ -120,3 +120,8 @@
 16:19   03-no-distribution-mode · tester: уже сделано, пропускаю
 16:21   03-no-distribution-mode · breaker: готово
 16:23   03-no-distribution-mode · splitter: готово
+16:25   03-no-distribution-mode · product: уже сделано, пропускаю
+16:25   03-no-distribution-mode · ux-architect: уже сделано, пропускаю
+16:25   03-no-distribution-mode · tester: уже сделано, пропускаю
+16:25   03-no-distribution-mode · breaker: уже сделано, пропускаю
+16:28   03-no-distribution-mode · splitter: готово
