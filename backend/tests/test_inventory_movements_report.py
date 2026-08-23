@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 from httpx import AsyncClient
@@ -32,6 +33,7 @@ async def _insert_movement(
     tenant_id: uuid.UUID,
     product_id: str,
     storage_location_id: str,
+    warehouse_id: str,
     quantity_delta: int,
     movement_type: str,
     created_at: datetime,
@@ -42,6 +44,7 @@ async def _insert_movement(
                 tenant_id=tenant_id,
                 product_id=uuid.UUID(product_id),
                 storage_location_id=uuid.UUID(storage_location_id),
+                warehouse_id=uuid.UUID(warehouse_id),
                 quantity_delta=quantity_delta,
                 movement_type=movement_type,
                 created_at=created_at,
@@ -50,7 +53,7 @@ async def _insert_movement(
         await session.commit()
 
 
-def _group(rows: list[dict], product_id: str) -> dict[str, dict]:
+def _group(rows: list[dict[str, Any]], product_id: str) -> dict[str, dict[str, Any]]:
     row = next(r for r in rows if r["product_id"] == product_id)
     return {g["key"]: g for g in row["groups"]}
 
@@ -136,6 +139,7 @@ async def test_inventory_movements_summary_groups_and_period_filter(
         tenant_id=tenant_id,
         product_id=pid1,
         storage_location_id=lid1,
+        warehouse_id=wid1,
         quantity_delta=10,
         movement_type=MOVEMENT_TYPE_INBOUND_INTAKE,
         created_at=in_window,
@@ -144,6 +148,7 @@ async def test_inventory_movements_summary_groups_and_period_filter(
         tenant_id=tenant_id,
         product_id=pid1,
         storage_location_id=lid1,
+        warehouse_id=wid1,
         quantity_delta=-3,
         movement_type=MOVEMENT_TYPE_STOCK_TRANSFER_OUT,
         created_at=in_window,
@@ -152,6 +157,7 @@ async def test_inventory_movements_summary_groups_and_period_filter(
         tenant_id=tenant_id,
         product_id=pid1,
         storage_location_id=lid2,
+        warehouse_id=wid1,
         quantity_delta=3,
         movement_type=MOVEMENT_TYPE_STOCK_TRANSFER_IN,
         created_at=in_window,
@@ -160,6 +166,7 @@ async def test_inventory_movements_summary_groups_and_period_filter(
         tenant_id=tenant_id,
         product_id=pid1,
         storage_location_id=lid2,
+        warehouse_id=wid1,
         quantity_delta=2,
         movement_type=_FBS_ORDER_PICK,
         created_at=in_window,
@@ -168,6 +175,7 @@ async def test_inventory_movements_summary_groups_and_period_filter(
         tenant_id=tenant_id,
         product_id=pid1,
         storage_location_id=lid2,
+        warehouse_id=wid1,
         quantity_delta=-2,
         movement_type=MOVEMENT_TYPE_FBS_SHIPMENT,
         created_at=in_window,
@@ -177,15 +185,17 @@ async def test_inventory_movements_summary_groups_and_period_filter(
         tenant_id=tenant_id,
         product_id=pid1,
         storage_location_id=lid1,
+        warehouse_id=wid1,
         quantity_delta=999,
         movement_type=MOVEMENT_TYPE_INBOUND_INTAKE,
         created_at=outside_window,
     )
-    # На другом складе — должно исключаться фильтром warehouse_id=wid1.  # noqa: RUF003
+    # На другом складе — должно исключаться фильтром warehouse_id=wid1.
     await _insert_movement(
         tenant_id=tenant_id,
         product_id=pid1,
         storage_location_id=lid_wh2,
+        warehouse_id=wid2,
         quantity_delta=4,
         movement_type=MOVEMENT_TYPE_INBOUND_INTAKE,
         created_at=in_window,
@@ -196,6 +206,7 @@ async def test_inventory_movements_summary_groups_and_period_filter(
         tenant_id=tenant_id,
         product_id=pid2,
         storage_location_id=lid1,
+        warehouse_id=wid1,
         quantity_delta=-5,
         movement_type=MOVEMENT_TYPE_MARKETPLACE_UNLOAD,
         created_at=in_window,
@@ -225,7 +236,7 @@ async def test_inventory_movements_summary_groups_and_period_filter(
     assert g1["fbs"]["label"] == "FBS"
 
     row1 = next(r for r in rows if r["product_id"] == pid1)
-    # intake (оба склада) 14 + transfer_in 3 + fbs pick 2 = 19 total_in;  # noqa: RUF003
+    # intake (оба склада) 14 + transfer_in 3 + fbs pick 2 = 19 total_in;
     # transfer_out 3 + fbs shipment 2 = 5 total_out.
     assert row1["total_in"] == 19
     assert row1["total_out"] == 5
