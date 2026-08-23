@@ -1,30 +1,25 @@
-# 09-billing — screen-dev, атом 5
+# 09-billing — screen-dev
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfBillingScreen.tsx` — действие повторного формирования имеет короткую подпись `Повторить формирование`, а объяснение `Причины устранены — повторите формирование` остаётся отдельным текстом рядом с ним.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/tests-e2e/billing-invoices.spec.ts` — сценарий `S-31-TC-006` проверяет короткую подпись, один POST формирования и появление сформированного счёта.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/night/volna-9-recovery/cards/09-billing/DEV.md` — этот отчёт.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfBillingScreen.tsx`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/night/volna-9-recovery/cards/09-billing/DEV.md`
 
-Изменения исходного кода и e2e уже сохранены в текущей ветке коммитом `5cab2f019f1ba10bd28e2ddafcd1c40f4c20ccdf` (`night(09-billing): atom 5/6`); при этой переделке дополнительный код не требовался.
+Экран использует закрытые словари отображаемых услуг и единиц: неизвестные значения API показываются как «—». Для начислений (в обоих режимах) и строк открытого счёта выводится `ErrorNotice`; технические коды не передаются в видимый интерфейс или печатную форму. Дополнительно устранены ошибки типизации в том же экране, не меняющие видимое поведение: отдельная типизация таблиц режимов и корректные MUI-свойства.
 
 ## Гейты
 
-- КОМАНДА: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npx tsc --noEmit -p tsconfig.app.json`
-  РЕЗУЛЬТАТ: КРАСНЫЙ. В экране счетов есть существующие ошибки типизации условного `DataTable` для `LedgerEntry`/`PerformerRow` и несовместимые MUI-пропсы. Вне границ атома ошибки есть также в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfSettingsScreen.tsx`, `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/v2/SellersScreen.tsx` и `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/ui-kit/PeriodPicker.tsx`. Атом 5 не разрешает исправлять их заодно.
-- КОМАНДА: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing && python3 scripts/ui/ui_guard.py`
-  РЕЗУЛЬТАТ: КРАСНЫЙ. Новые отступления: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/components/WbProductPickerDialog.tsx`, `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/ff/FfSettingsScreen.tsx`, `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx`, `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend/src/screens/v2/SellerInboundDraftScreen.tsx`. Базовая линия не менялась.
-- КОМАНДА: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npm run test:unit -- src/screens/ff/FfBillingScreen.test.ts`
-  РЕЗУЛЬТАТ: ЗЕЛЁНЫЙ — 1 файл, 4 теста.
-- КОМАНДА: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npm run test:e2e -- tests-e2e/billing-invoices.spec.ts --grep "billing invoice retry uses a short action label and keeps the visible formation result"`
-  РЕЗУЛЬТАТ: КРАСНЫЙ ДО ВЫПОЛНЕНИЯ КЕЙСА. Playwright webServer не смог привязать `127.0.0.1:18000`: `operation not permitted`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npx tsc --noEmit -p tsconfig.app.json` — красный из-за файлов вне границ атома: `FfSettingsScreen.tsx`, `SellersScreen.tsx`, `ui-kit/PeriodPicker.tsx`. Ошибок в `FfBillingScreen.tsx` после исправления нет.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing && python3 scripts/ui/ui_guard.py` — красный из-за ранее существующих новых нарушений вне границ атома: `WbProductPickerDialog.tsx`, `FfSettingsScreen.tsx`, `FfFbsSupplyWorkspace.tsx`, `SellerInboundDraftScreen.tsx`. Базовая линия не менялась.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npm run test:unit -- src/screens/ff/FfBillingScreen.test.ts` — зелёный: 1 файл, 4 теста.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npm run test:e2e -- tests-e2e/billing-ledger.spec.ts --grep "hides unknown service and unit codes in both modes"` — не стартовал: sandbox запретил привязку web-server к `127.0.0.1:18000` (`operation not permitted`).
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-09-billing/frontend && npm run test:e2e -- tests-e2e/billing-invoices.spec.ts --grep "hides unknown service and unit codes"` — не стартовал по той же причине до выполнения сценария.
 
 ## Не реализовано
 
-- Пункты атома реализованы буквально в уже сохранённом коммите `5cab2f019f1ba10bd28e2ddafcd1c40f4c20ccdf`: объяснение вынесено из подписи действия, сама кнопка называется `Повторить формирование`, а e2e подтверждает видимый сформированный счёт.
-- Зелёные общий `tsc` и `ui_guard.py` не получены из-за перечисленных существующих проблем вне границ этого атома. Базовую линию guard не обновлял.
-- Целевой Playwright-кейс не начал выполняться из-за запрета среды на локальный порт, а не из-за сценарной проверки.
+- Ничего в пределах атома 6 не оставлено. Точечные E2E-сценарии присутствуют в разрешённых файлах, но среда не разрешает поднять их локальный сервер.
 
 ## Находки
 
-- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались.
+- Секреты, ключи, токены, `.env` и кабинеты учётных данных не открывались.
+- Изменения не удалось сохранить отдельным Git-коммитом: Git не может создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-09-billing1/index.lock` из-за запрета среды (`operation not permitted`). Рабочее дерево содержит изменения экрана и этот артефакт; чужой `night/volna-9-recovery/JOURNAL.md` не добавлялся.
