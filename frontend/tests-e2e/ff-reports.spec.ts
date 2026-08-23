@@ -475,10 +475,22 @@ test('FF reports: section opens and shows movement summary for a product with in
     page.getByRole('option', { name: 'По товарам' }).click(),
   ])
   await expect(page.getByTestId('ff-reports-pagination')).toContainText('1–50 из 51')
-  await expect(page.getByTestId('ff-reports-next-page')).toBeEnabled()
+  // TC-NEW-F07-013 — Given a report with more than 50 rows, When the operator
+  // opens the first page, Then pagination is one equal-size navigation group:
+  // «Назад» explains that it is unavailable, while «Вперёд» opens page two
+  // without changing the upper aggregates.
+  const previousPage = page.getByTestId('ff-reports-previous-page')
+  const nextPage = page.getByTestId('ff-reports-next-page')
+  await expect(previousPage).toBeDisabled()
+  await expect(nextPage).toBeEnabled()
+  const previousBounds = await previousPage.boundingBox()
+  const nextBounds = await nextPage.boundingBox()
+  expect(previousBounds).not.toBeNull()
+  expect(nextBounds).not.toBeNull()
+  expect(previousBounds?.width).toBe(nextBounds?.width)
   await Promise.all([
     page.waitForResponse((response) => response.url().includes('/api/reports/inventory?') && new URL(response.url()).searchParams.get('page') === '2'),
-    page.getByTestId('ff-reports-next-page').click(),
+    nextPage.click(),
   ])
   await expect(page.getByTestId('ff-reports-pagination')).toContainText('51–51 из 51')
   await expect(page.getByTestId('ff-reports-table')).toContainText('REPORT-SKU-050')

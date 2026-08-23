@@ -203,3 +203,10 @@
 06:58   07-reporting · dev: фича 1/2 сохранена 2902524ea519
 07:00   07-reporting · screen-dev: готово
 07:00   07-reporting · dev: фича 2/2 сохранена eab80b9c23b9
+07:06   07-reporting · reviewer: готово
+07:09   07-reporting · ui-critic: готово
+07:09 07-reporting: отложено — ui-critic, эскалация не помогла
+07:21   07-reporting · repair-plan: новый вердикт дорезается до dev
+07:22   07-reporting · splitter: готово
+07:22   07-reporting · resume: поатомный rework Terra по сохранённым находкам
+07:25   07-reporting · screen-dev: готово
