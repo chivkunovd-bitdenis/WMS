@@ -466,6 +466,37 @@ def main() -> int:
             )
             проверь("браузерный BLOCKED не возвращает код в dev",
                     n.браузерный_блокер(t, "ux-judge"), True)
+            (t / "CLICKS.md").write_text(
+                "`BLOCKED`\n\n## Пройденные кейсы\nнет\n\n## Не прошло\n"
+                "Стенд не поднялся, не открыл ни одного экрана.\n", encoding="utf-8")
+            проверь("clicker BLOCKED останавливается до ux-judge",
+                    n.браузерный_блокер(t, "clicker"), True)
+            blocked_clicker = t / "blocked-clicker"
+            blocked_clicker.mkdir()
+            (blocked_clicker / "TYPE.txt").write_text("баг\n", encoding="utf-8")
+            вызовы_браузера = []
+
+            def fake_browser_step(_ид, роль, папка, *_args, **_kwargs):
+                вызовы_браузера.append(роль)
+                if роль == "clicker":
+                    (папка / "CLICKS.md").write_text(
+                        "`BLOCKED`\n\n## Пройденные кейсы\nнет\n\n## Не прошло\n"
+                        "Стенд не поднялся; не открыл экран.\n", encoding="utf-8")
+                return True, ""
+
+            blocked_work = n.РабочаяКарточка(
+                "blocked", 1, blocked_clicker, blocked_clicker, blocked_clicker, "branch")
+            with mock.patch.object(n, "снять_старую_браузерную_парковку", return_value=True), \
+                 mock.patch.object(n, "снять_устаревшую_парковку"), \
+                 mock.patch.object(n, "первый_непройденный", return_value=None), \
+                 mock.patch.object(n, "дифф_реализации", return_value=[]), \
+                 mock.patch.object(n, "шаг", side_effect=fake_browser_step), \
+                 mock.patch.object(n, "журнал"):
+                проверь("clicker BLOCKED паркует карточку",
+                        n.провести("blocked", blocked_clicker, blocked_work), "отложено")
+            проверь("clicker BLOCKED не запускает ux-judge", вызовы_браузера, ["clicker"])
+            проверь("clicker BLOCKED на resume снова выбирает clicker",
+                    n.снять_старую_браузерную_парковку(blocked_clicker), True)
             (t / "JUDGE.md").write_text(
                 "ВЕРДИКТ: НАХОДКИ 1\nSCREEN VERDICT: `BLOCKED`\n\n"
                 "## Находки\nЖивой стенд не поднялся.\n",
@@ -769,6 +800,38 @@ def main() -> int:
                 ошибка_фильтра = True
             проверь("resume: неизвестная карточка отклоняется", ошибка_фильтра, True)
 
+            visible = t / "visible-bug"
+            visible.mkdir()
+            (visible / "RAZBOR.md").write_text(
+                "ТИП: баг\n\n## Тип\nбаг\n\n## Экраны\nS-06\n", encoding="utf-8")
+            видимая_цепочка = n.цепочка_карточки(visible, "баг")
+            проверь("frontend-баг идёт через UX и breaker",
+                    "ux-architect" in видимая_цепочка and "breaker" in видимая_цепочка, True)
+            (visible / "CONTRACT.md").write_text(
+                "МАКЕТ: НЕ НУЖЕН\nUI-KIT: ХВАТАЕТ\n\n## Контракт\nx\n## Канон\nx\n"
+                "## Макет\nнет\n## Нехватка ui-kit\nнет\n", encoding="utf-8")
+            проверь("frontend-баг без MOCKUP не проходит",
+                    n.артефакт_готов(visible, "ux-architect")[0], False)
+            backend = t / "backend-bug"
+            backend.mkdir()
+            (backend / "RAZBOR.md").write_text(
+                "ТИП: баг\n\n## Тип\nбаг\n\n## Экраны\nнет\n", encoding="utf-8")
+            проверь("backend-баг не тащится в UX",
+                    "ux-architect" in n.цепочка_карточки(backend, "баг"), False)
+
+            prefix = t / "prefix"
+            prefix.mkdir()
+            (prefix / "RESHENIYA.md").write_text(
+                "ВЕРДИКТ: РЕШЕНО\n\n## Решения\nx\n## Открытых вопросов не осталось\nда\n", encoding="utf-8")
+            проверь("resume находит первую пропущенную стадию",
+                    n.первый_непройденный(
+                        prefix, ["product", "ux-architect", "tester"], 2), 1)
+
+            проверь("scope: соседний screen блокируется",
+                    "route/screen" in n.ошибка_scope(
+                        {"frontend/src/screens/Allowed.tsx", "frontend/src/screens/Extra.tsx"},
+                        {"frontend/src/screens/Allowed.tsx"}), True)
+
             волна_полосы = t / "stable-wave"
             (волна_полосы / "cards" / "card-x").mkdir(parents=True)
             старая_копия = t / "existing-lane-2"
@@ -807,6 +870,32 @@ def main() -> int:
             проверь("неизвестная роль не роняет цепочку", n.артефакт_готов(t, "выдуманная")[0], True)
     finally:
         n.subprocess.run = настоящий_вызов
+
+    with tempfile.TemporaryDirectory(prefix="check-night-checkpoint-") as временный:
+        repo = pathlib.Path(временный)
+        for аргументы in (("init",), ("config", "user.email", "night@test.local"),
+                           ("config", "user.name", "night-test")):
+            проверь("checkpoint: git prep", n._git(*аргументы, cwd=repo).returncode, 0)
+        (позволенный := repo / "frontend/src/screens/Allowed.tsx").parent.mkdir(parents=True)
+        позволенный.write_text("before\n", encoding="utf-8")
+        n._git("add", "--", "frontend/src/screens/Allowed.tsx", cwd=repo)
+        n._git("commit", "-m", "base", cwd=repo)
+        позволенный.write_text("after\n", encoding="utf-8")
+        папка_карточки = repo / "night/w/cards/x"
+        папка_карточки.mkdir(parents=True)
+        (папка_карточки / "DEV.md").write_text("## Изменённые файлы\nx\n## Гейты\nx\n", encoding="utf-8")
+        (папка_карточки / "CONTRACT.md").write_text("чужой этап\n", encoding="utf-8")
+        рабочая = n.РабочаяКарточка("x", 1, repo, repo / "night/w", папка_карточки, "branch")
+        ок, _ = n.сохранить_checkpoint(
+            рабочая, "atom", атом="### 1. x\n`frontend/src/screens/Allowed.tsx`")
+        проверь("checkpoint: точечный commit создан", ок, True)
+        в_коммите = set(n._git("show", "--pretty=", "--name-only", "HEAD", cwd=repo).stdout.splitlines())
+        проверь("checkpoint: только atom allowlist и DEV",
+                в_коммите, {"frontend/src/screens/Allowed.tsx", "night/w/cards/x/DEV.md"})
+        проверь("checkpoint: чужой стадийный файл не захвачен",
+                (папка_карточки / "CONTRACT.md").exists(), True)
+    проверь("checkpoint: git add -A удалён",
+            '"add", "-A"' in pathlib.Path(n.__file__).read_text(encoding="utf-8"), False)
 
     проверь("цепочки не изменились при переносе", n.ЦЕПОЧКИ, ОЖИДАЕМЫЕ_ЦЕПОЧКИ)
     проверь("product раньше UX в фиче",
