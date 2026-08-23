@@ -194,3 +194,7 @@
 01:01 04-warehouse-switch: отложено на шаге dev
 01:16   04-warehouse-switch · resume: поатомный rework Sol по сохранённым находкам
 01:20   04-warehouse-switch · backend-dev: готово
+01:20   04-warehouse-switch · dev: фича 1/4 сохранена 64340348b533
+01:24   04-warehouse-switch · screen-dev: готово
+04:16   04-warehouse-switch · resume: поатомный rework Sol по сохранённым находкам
+04:22   04-warehouse-switch · backend-dev: готово

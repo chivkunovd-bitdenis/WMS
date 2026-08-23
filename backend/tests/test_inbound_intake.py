@@ -1514,9 +1514,12 @@ async def test_patch_warehouse_id_rejected_after_submission(async_client: AsyncC
     assert reg.status_code == 200, reg.text
     ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
 
-    seller = await async_client.post("/sellers", headers=ah, json={"name": "S"})
-    assert seller.status_code in (200, 201), seller.text
-    sid = seller.json()["id"]
+    sh, sid = await _create_seller_headers(
+        async_client,
+        admin_headers=ah,
+        seller_name="S",
+        seller_email=f"whsub-seller-{suffix}@example.com",
+    )
 
     wh1 = await async_client.post(
         "/warehouses", headers=ah, json={"name": "Склад1", "code": f"sub-w1-{suffix}"}
@@ -1548,23 +1551,23 @@ async def test_patch_warehouse_id_rejected_after_submission(async_client: AsyncC
     lid = loc.json()["id"]
 
     base = "/operations/inbound-intake-requests"
-    cr = await async_client.post(base, headers=ah, json={"warehouse_id": wid1, "seller_id": sid})
+    cr = await async_client.post(base, headers=sh, json={"warehouse_id": wid1})
     assert cr.status_code == 201, cr.text
     rid = cr.json()["id"]
 
     await async_client.post(
         f"{base}/{rid}/lines",
-        headers=ah,
+        headers=sh,
         json={"product_id": pid, "expected_qty": 1, "storage_location_id": lid},
     )
-    await _set_planned_boxes(async_client, base, rid, ah)
+    await _set_planned_boxes(async_client, base, rid, sh)
 
-    sub = await async_client.post(f"{base}/{rid}/submit", headers=ah)
+    sub = await async_client.post(f"{base}/{rid}/submit", headers=sh)
     assert sub.status_code == 200, sub.text
     assert sub.json()["status"] == "submitted"
 
-    # Теперь пытаемся сменить склад — должен вернуть 409
-    patch = await async_client.patch(f"{base}/{rid}", headers=ah, json={"warehouse_id": wid2})
+    # Seller plan fields remain editable after submit, but the document warehouse is fixed.
+    patch = await async_client.patch(f"{base}/{rid}", headers=sh, json={"warehouse_id": wid2})
     assert patch.status_code == 409, patch.text
     assert patch.json()["detail"] == "not_draft"
 

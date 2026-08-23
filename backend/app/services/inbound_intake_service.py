@@ -445,6 +445,8 @@ async def patch_request_draft(
     )
     if req is None:
         raise InboundIntakeError("request_not_found")
+    if warehouse_id_set and req.status != STATUS_DRAFT:
+        raise InboundIntakeError("not_draft")
     if not _request_plan_editable(req, seller_product_owner_id=seller_product_owner_id):
         raise InboundIntakeError("not_draft")
     if planned_delivery_date_set:
