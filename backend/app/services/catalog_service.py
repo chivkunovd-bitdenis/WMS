@@ -36,7 +36,11 @@ SKIP = _SkipSentinel()
 
 
 async def list_warehouses(session: AsyncSession, tenant_id: uuid.UUID) -> list[Warehouse]:
-    stmt = select(Warehouse).where(Warehouse.tenant_id == tenant_id).order_by(Warehouse.name)
+    stmt = (
+        select(Warehouse)
+        .where(Warehouse.tenant_id == tenant_id, Warehouse.is_operational.is_(True))
+        .order_by(Warehouse.name)
+    )
     res = await session.execute(stmt)
     return list(res.scalars().all())
 
@@ -44,7 +48,12 @@ async def list_warehouses(session: AsyncSession, tenant_id: uuid.UUID) -> list[W
 async def create_warehouse(
     session: AsyncSession, tenant_id: uuid.UUID, *, name: str, code: str
 ) -> Warehouse:
-    wh = Warehouse(tenant_id=tenant_id, name=name.strip(), code=code.strip().lower())
+    wh = Warehouse(
+        tenant_id=tenant_id,
+        name=name.strip(),
+        code=code.strip().lower(),
+        barcode=f"WH-{uuid.uuid4().hex[:12].upper()}",
+    )
     session.add(wh)
     try:
         await session.commit()
@@ -56,6 +65,44 @@ async def create_warehouse(
     await session.commit()
     await session.refresh(wh)
     return wh
+
+
+async def resolve_warehouse_scan(
+    session: AsyncSession, tenant_id: uuid.UUID, raw_scan: str
+) -> tuple[str, Warehouse | StorageLocation]:
+    value = raw_scan.strip()
+    if not value:
+        raise CatalogError("barcode_empty")
+    warehouses = list(
+        (
+            await session.execute(
+                select(Warehouse).where(
+                    Warehouse.tenant_id == tenant_id,
+                    Warehouse.is_operational.is_(True),
+                    (func.lower(Warehouse.code) == value.lower()) | (Warehouse.barcode == value),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    locations = list(
+        (
+            await session.execute(
+                select(StorageLocation).where(
+                    StorageLocation.tenant_id == tenant_id,
+                    StorageLocation.deleted_at.is_(None),
+                    (func.lower(StorageLocation.code) == value.lower())
+                    | (StorageLocation.barcode == value),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if len(warehouses) + len(locations) != 1:
+        raise CatalogError("barcode_ambiguous" if warehouses or locations else "barcode_unknown")
+    return ("warehouse", warehouses[0]) if warehouses else ("location", locations[0])
 
 
 async def get_warehouse(
@@ -354,9 +401,7 @@ async def rename_location(
     *,
     code: str,
 ) -> StorageLocation:
-    loc = await get_storage_location_in_warehouse(
-        session, tenant_id, warehouse_id, location_id
-    )
+    loc = await get_storage_location_in_warehouse(session, tenant_id, warehouse_id, location_id)
     if loc is None:
         raise CatalogError("location_not_found")
     if sorting_loc_svc.is_sorting_location(loc):
@@ -385,9 +430,7 @@ async def delete_location(
     *,
     move_stock_to: str | None = None,
 ) -> None:
-    loc = await get_storage_location_in_warehouse(
-        session, tenant_id, warehouse_id, location_id
-    )
+    loc = await get_storage_location_in_warehouse(session, tenant_id, warehouse_id, location_id)
     if loc is None:
         raise CatalogError("location_not_found")
     if sorting_loc_svc.is_sorting_location(loc):
