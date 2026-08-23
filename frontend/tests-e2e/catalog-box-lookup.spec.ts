@@ -189,7 +189,7 @@ async function switchToCellsStaff(page: Page, adminToken: string, suffix: string
 }
 
 // TC-NEW-CATALOG-PACKAGES-001, TC-NEW-CATALOG-PACKAGES-002,
-// TC-NEW-CATALOG-PACKAGES-003, TC-NEW-CATALOG-PACKAGES-004, S-16-TC-015, S-16-TC-017.
+// TC-NEW-CATALOG-PACKAGES-003, TC-NEW-CATALOG-PACKAGES-004, S-16-TC-008, S-16-TC-015, S-16-TC-017.
 test('catalog scan follows a received box through partial and full putaway', async ({ page }) => {
   test.setTimeout(180_000)
   const seed = await seedFfSellerInbound(page, `catalog-package-${Date.now()}`)
@@ -208,7 +208,7 @@ test('catalog scan follows a received box through partial and full putaway', asy
   const requestId = String(((await inbound.json()) as { id: string }).id)
   const line = await page.request.post(`${INBOUND_API}/${requestId}/lines`, {
     headers,
-    data: { product_id: seed.productId, expected_qty: 4 },
+    data: { product_id: seed.productId, expected_qty: 8 },
   })
   expect(line.ok()).toBeTruthy()
   const submitted = await page.request.post(`${INBOUND_API}/${requestId}/submit`, { headers })
@@ -237,10 +237,30 @@ test('catalog scan follows a received box through partial and full putaway', asy
     waitForPostOk(page, INBOUND_API, (url) => url.endsWith('/boxes')),
     page.getByTestId('ff-inbound-add-to-box').click(),
   ])
-  const inboundBox = page.getByTestId('ff-inbound-box-row').first()
-  const boxBarcode = (await inboundBox.locator('code').textContent())?.trim()
+  const inboundBoxes = page.getByTestId('ff-inbound-box-row')
+  const firstInboundBox = inboundBoxes.first()
+  const boxBarcode = (await firstInboundBox.locator('code').textContent())?.trim()
   expect(boxBarcode).toMatch(/^INB-/)
-  await inboundBox.getByRole('button', { name: 'Наполнить' }).click()
+  await firstInboundBox.getByRole('button', { name: 'Наполнить' }).click()
+  await expect(page.getByTestId('ff-inbound-box-add-dialog')).toBeVisible()
+  for (let index = 0; index < 4; index += 1) {
+    await page.getByTestId('ff-inbound-box-add-scan-input').fill(seed.sku)
+    await Promise.all([
+      waitForPostOk(page, INBOUND_API, (url) => url.includes('/boxes/') && url.includes('/scan')),
+      page.getByTestId('ff-inbound-box-add-scan-submit').click(),
+    ])
+  }
+  await page.getByTestId('ff-inbound-box-add-dismiss').click()
+  await Promise.all([
+    waitForPostOk(page, INBOUND_API, (url) => url.endsWith('/boxes')),
+    page.getByTestId('ff-inbound-add-to-box').click(),
+  ])
+  await expect(inboundBoxes).toHaveCount(2)
+  const secondInboundBox = inboundBoxes.nth(1)
+  const secondBoxBarcode = (await secondInboundBox.locator('code').textContent())?.trim()
+  expect(secondBoxBarcode).toMatch(/^INB-/)
+  expect(secondBoxBarcode).not.toBe(boxBarcode)
+  await secondInboundBox.getByRole('button', { name: 'Наполнить' }).click()
   await expect(page.getByTestId('ff-inbound-box-add-dialog')).toBeVisible()
   for (let index = 0; index < 4; index += 1) {
     await page.getByTestId('ff-inbound-box-add-scan-input').fill(seed.sku)
@@ -279,7 +299,12 @@ test('catalog scan follows a received box through partial and full putaway', asy
   await page.goto('/app/ff/sorting')
   await page.locator(`[data-testid="ff-inbound-queue-row"][data-request-id="${requestId}"]`).click()
   await expect(page.getByTestId('ff-sorting-panel')).toBeVisible()
-  const partialRow = page.getByTestId('ff-sorting-product-card').first().getByTestId('ff-sorting-cell-row').first()
+  const sortingRows = page.getByTestId('ff-sorting-product-card').first().getByTestId('ff-sorting-cell-row')
+  await expect(sortingRows).toHaveCount(2)
+  const partialRow = sortingRows.filter({
+    has: page.getByTestId('ff-sorting-cell-source').filter({ hasText: 'Короб №1' }),
+  })
+  await expect(partialRow).toHaveCount(1)
   await partialRow.getByTestId('ff-sorting-cell-location').click()
   await page.getByRole('option', { name: /CATALOG-A-01/ }).click()
   await partialRow.getByTestId('ff-sorting-cell-qty').fill('2')
@@ -298,7 +323,12 @@ test('catalog scan follows a received box through partial and full putaway', asy
   await page.goto('/app/ff/sorting')
   await page.locator(`[data-testid="ff-inbound-queue-row"][data-request-id="${requestId}"]`).click()
   await expect(page.getByTestId('ff-sorting-panel')).toBeVisible()
-  const remainingRow = page.getByTestId('ff-sorting-product-card').first().getByTestId('ff-sorting-cell-row').first()
+  const remainingRow = page
+    .getByTestId('ff-sorting-product-card')
+    .first()
+    .getByTestId('ff-sorting-cell-row')
+    .filter({ has: page.getByTestId('ff-sorting-cell-source').filter({ hasText: 'Короб №1' }) })
+  await expect(remainingRow).toHaveCount(1)
   await remainingRow.getByTestId('ff-sorting-cell-location').click()
   await page.getByRole('option', { name: /CATALOG-A-01/ }).click()
   await remainingRow.getByTestId('ff-sorting-cell-qty').fill('4')
@@ -309,6 +339,11 @@ test('catalog scan follows a received box through partial and full putaway', asy
     ),
     page.getByTestId('ff-sorting-apply').click(),
   ])
+  await expect(page.getByTestId('ff-sorting-product-remaining')).toHaveText('4')
+
+  await page.goto('/app/ff/products')
+  await scanCatalogPackage(page, boxBarcode!)
+  await expect(catalogPackageByBarcode(page, boxBarcode!)).toContainText('Товар из короба уже разложен')
 
   await page.goto('/app/ff/products')
   let listRequestCount = 0
