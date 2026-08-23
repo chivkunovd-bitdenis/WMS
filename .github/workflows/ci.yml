@@ -84,6 +84,42 @@ jobs:
       - name: Pytest
         run: pytest
 
+  postgresql-concurrency:
+    name: PostgreSQL concurrency regression
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: wms_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d wms_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      WMS_TEST_DATABASE_URL: postgresql+psycopg_async://postgres:postgres@localhost:5432/wms_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/pyproject.toml
+      - name: Install deps
+        run: |
+          python -m pip install -U pip
+          pip install -e ".[dev]"
+      - name: Run PostgreSQL concurrency regression
+        run: pytest -m postgresql_concurrency tests/test_inbound_intake.py
+
   e2e:
     runs-on: ubuntu-latest
     defaults:
