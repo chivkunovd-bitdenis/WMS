@@ -247,7 +247,13 @@ async def sync_marking_statuses_for_assembling_supplies(
     synced = 0
     for order_id in order_ids:
         try:
-            await sync_order_marking_statuses(session, target.tenant_id, order_id, http_client)
+            await sync_order_marking_statuses(
+                session,
+                target.tenant_id,
+                order_id,
+                http_client,
+                persist_started_marker_outside_caller=False,
+            )
             synced += 1
         except FbsMarkingError as exc:
             logger.warning(
