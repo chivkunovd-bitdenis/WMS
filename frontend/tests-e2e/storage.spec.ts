@@ -59,6 +59,7 @@ test('S-11-TC-002 administrator saves a future warehouse rate and seller excepti
   const suffix = Date.now()
   const email = `storage-${suffix}@example.com`
   const moscowToday = moscowDate()
+  const yesterday = moscowDate(-1)
   const validFrom = moscowDate(1)
   const currentMonth = moscowToday.slice(0, 7)
 
@@ -115,20 +116,36 @@ test('S-11-TC-002 administrator saves a future warehouse rate and seller excepti
   })
 
   await page.getByTestId('storage-rate').click()
-  await expect(page.getByTestId('storage-rate-valid-from')).toHaveValue(moscowToday)
+  const warehouseValidFrom = page.getByTestId('storage-rate-valid-from')
+  const saveRate = page.getByTestId('storage-rate-save')
+  await expect(warehouseValidFrom).toHaveValue(moscowToday)
+  await expect(warehouseValidFrom).toHaveAttribute('min', moscowToday)
   await page.getByTestId('storage-rate-amount').fill('0,70')
-  await page.getByTestId('storage-rate-valid-from').fill('2000-01-01')
-  await expect(page.getByTestId('storage-rate-save')).toBeDisabled()
-  await page.getByTestId('storage-rate-valid-from').fill(validFrom)
+  await warehouseValidFrom.fill(yesterday)
+  await expect(saveRate).toBeDisabled()
+  await saveRate.evaluate((button) => (button as HTMLButtonElement).click())
+  expect(tariffPosts).toBe(0)
+  await warehouseValidFrom.fill(moscowToday)
+  await expect(saveRate).toBeEnabled()
   await page.getByText('Индивидуальная ставка селлера', { exact: true }).click()
   await page.getByLabel('Селлер').click()
   await page.getByRole('option', { name: 'Красотка' }).click()
   await page.getByLabel('Ставка, ₽/л·день').nth(1).fill('0,65')
-  await page.getByLabel('Дата начала').nth(1).fill(validFrom)
+  const sellerValidFrom = page.getByTestId('storage-seller-rate-valid-from')
+  await expect(sellerValidFrom).toHaveValue(moscowToday)
+  await expect(sellerValidFrom).toHaveAttribute('min', moscowToday)
+  await sellerValidFrom.fill(yesterday)
+  await expect(saveRate).toBeDisabled()
+  await saveRate.evaluate((button) => (button as HTMLButtonElement).click())
+  expect(tariffPosts).toBe(0)
+  await sellerValidFrom.fill(moscowToday)
+  await expect(saveRate).toBeEnabled()
+  await warehouseValidFrom.fill(validFrom)
+  await sellerValidFrom.fill(validFrom)
   const [tariffResponse] = await Promise.all([
     waitForPostOk(page, '/api/operations/storage/tariffs'),
     waitForPostOk(page, '/api/operations/storage/measurements/rebuild'),
-    page.getByTestId('storage-rate-save').click(),
+    saveRate.click(),
   ])
   expect(tariffResponse.status()).toBe(201)
   await expect(page.getByRole('dialog')).toHaveCount(0)

@@ -1,85 +1,100 @@
-# DEV · 08-storage · backend-dev · атом 3
+# DEV · 08-storage · screen-dev · атом 4
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/api/storage.py` — ответ `POST /operations/storage/tariffs` дополнен списком `recalculated_statements` с пересчитанными открытыми черновиками и новыми суммами.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/storage_statement_service.py` — сохранение тарифа теперь после успешного `flush` пересчитывает затронутые черновики выбранного склада и пересекающегося периода в той же транзакции; зафиксированные statements исключены из выборки.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_storage_tariff_api.py` — сценарий смены тарифа проверяет ответ POST, повторную загрузку, границы склада/даты, нулевой черновик, неизменность fixed-документа и финансовой строки, а также отказ сохранения до пересчёта.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/night/volna-9-recovery/cards/08-storage/DEV.md` — отчёт backend-dev по атому 3.
-
-## Что реализовано
-
-- Эндпоинт `POST /operations/storage/tariffs`: после атомарной записи тарифа возвращает только затронутые открытые черновики в `recalculated_statements`, уже с действующими ставками и суммами; fixed-документы в ответ не попадают.
-- Сервис `reprice_open_storage_drafts()`: выбирает draft-statements текущего tenant только по выбранному складу и периодам, пересекающим дату новой общей или индивидуальной ставки, и рассчитывает серверный preview без публикации финансовых строк.
-- Сервис `create_storage_tariff()`: выполняет INSERT-проверку через `flush`, затем пересчёт и только после этого `commit`; конфликт INSERT делает rollback до запуска пересчёта, ошибка пересчёта откатывает новые версии тарифа.
-
-## Миграции
-
-Нет.
-
-## Тесты
-
-- Расширен `test_new_tariff_reprices_open_draft_on_reload`: успешный POST возвращает два открытых черновика выбранного склада с новой суммой и ставкой, включая нулевой расчёт.
-- Тот же тест доказывает, что черновик другого склада, открытый черновик периода до даты действия и fixed-statement не пересчитываются.
-- Контрольная `BillingLedgerEntry` fixed-документа сохраняет прежние `rate=1.00` и `amount=1.00`; для draft-документов новые ledger-строки не создаются.
-- Повторная запись тарифа на конфликтующую дату получает 409, не создаёт вторую версию и не меняет доступный расчёт.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend/src/screens/ff/FfStoragePage.tsx` — общая проверка даты начала вынесена в тестируемую функцию; обе даты тарифа продолжают сравниваться с сегодняшним днём по Москве, а поле индивидуальной ставки получило стабильный `data-testid` для отдельной проверки.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend/src/screens/ff/FfStoragePage.test.ts` — точечные unit-тесты: вчера запрещено, сегодня и будущая дата разрешены.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend/tests-e2e/storage.spec.ts` — `S-11-TC-002` проверяет московское `min` и значение «сегодня» в обоих полях, недоступность сохранения и отсутствие POST для вчерашней даты отдельно у общей ставки и исключения селлера, повторное разрешение сохранения на сегодняшней дате и успешную отправку будущей даты.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/night/volna-9-recovery/cards/08-storage/DEV.md` — отчёт текущего атома.
 
 ## Гейты
 
-```text
-cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && ruff check app/api/storage.py app/services/storage_statement_service.py tests/test_storage_tariff_api.py
-```
-
-Результат: `All checks passed!`.
+Точный обязательный TypeScript-гейт:
 
 ```text
-cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && mypy --follow-imports=silent app/api/storage.py app/services/storage_statement_service.py tests/test_storage_tariff_api.py
+cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend && npx tsc --noEmit -p tsconfig.app.json
 ```
 
-Результат: `Success: no issues found in 3 source files`.
+Результат: зелёный, exit 0, ошибок нет.
+
+Точный обязательный UI-гейт:
 
 ```text
-cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && pytest -q tests/test_storage_tariff_api.py::test_new_tariff_reprices_open_draft_on_reload
+cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage && python3 scripts/ui/ui_guard.py
 ```
 
-Финальный результат целевого сценария: `1 passed in 1.00s`.
+Результат: красный, exit 1, только из-за уже существующих нарушений вне файлов и слоя атома:
 
 ```text
-cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && pytest -q tests/test_storage_tariff_api.py
+НОВОЕ НАРУШЕНИЕ  src/components/WbProductPickerDialog.tsx: экран-монолит 0 → 646
+НОВОЕ НАРУШЕНИЕ  src/screens/v2/FfFbsSupplyWorkspace.tsx: экран-монолит 2493 → 2498
+НОВОЕ НАРУШЕНИЕ  src/screens/v2/SellerInboundDraftScreen.tsx: экран-монолит 1111 → 1169
+стало лучше  src/App.tsx: экран-монолит 3492 → 3491
 ```
 
-Финальный результат назначенного файла: `11 passed in 10.47s`.
+`FfStoragePage.tsx` и новый тест в выводе нарушений отсутствуют. Baseline не обновлялся; несвязанные экраны не исправлялись, потому что роль `screen-dev` запрещает выходить за файлы атома.
+
+Точный финальный unit-гейт экрана и относящейся к нему московской даты:
 
 ```text
-cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage && git diff --check -- backend/app/api/storage.py backend/app/services/storage_statement_service.py backend/tests/test_storage_tariff_api.py night/volna-9-recovery/cards/08-storage/DEV.md
+cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend && npm run test:unit -- src/screens/ff/FfStoragePage.test.ts src/utils/moscowDate.test.ts
 ```
 
-Результат: exit 0, ошибок пробелов нет.
+Результат: зелёный — `2 passed` test files, `6 passed` tests.
 
-`python3 scripts/ci/back_guard.py` не запускался: атом не добавляет новый маршрут, а расширяет ответ существующего `POST /operations/storage/tariffs`.
-
-`python3 scripts/ci/check_migrations.py` не запускался: миграций нет.
-
-Полные `pytest`, `ruff check .` и `mypy .` не запускались: они прямо запрещены для этого атомарного шага.
-
-Попытка сохранить атом отдельным коммитом:
+Первая диагностическая попытка unit-гейта до исправления расширения тестового файла:
 
 ```text
-cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage && git add -- /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/api/storage.py /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/storage_statement_service.py /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_storage_tariff_api.py /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/night/volna-9-recovery/cards/08-storage/DEV.md
+cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend && npm run test:unit -- src/screens/ff/FfStoragePage.test.tsx src/utils/moscowDate.test.ts
 ```
 
-Результат: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-08-storage1/index.lock`: `Operation not permitted`. Файлы не попали в индекс; `night/volna-9-recovery/JOURNAL.md` не затрагивался и не включался.
+Результат: команда выполнила только `moscowDate.test.ts` (`4 passed`), потому что `vitest.config.ts` включает только `src/**/*.test.ts`. Тест экрана переименован в `.test.ts`, после чего финальный прогон выше выполнил оба файла.
+
+Проверка обнаружения ровно назначенного браузерного кейса:
+
+```text
+cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend && npx playwright test storage.spec.ts --grep 'S-11-TC-002' --list
+```
+
+Результат: зелёный — найден ровно `1 test in 1 file`.
+
+Точный атомарный браузерный прогон:
+
+```text
+cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend && npx playwright test storage.spec.ts --grep 'S-11-TC-002'
+```
+
+Результат: красный до старта браузерного сценария. Playwright поднял приложение до этапа открытия сокета, после чего песочница запретила локальному API привязаться к `127.0.0.1:18000`: `[Errno 1] ... operation not permitted`. Код кейса не исполнялся, продуктового падения тест не зафиксировал.
+
+Предварительная попытка с путём относительно корня testDir:
+
+```text
+cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/frontend && npx playwright test tests-e2e/storage.spec.ts --grep '^S-11-TC-002'
+```
+
+Результат: тот же запрет привязки `127.0.0.1:18000`; финальная команда выше приведена в правильном формате относительно `testDir`.
+
+Проверка пробелов:
+
+```text
+cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage && git diff --check -- frontend/src/screens/ff/FfStoragePage.tsx frontend/src/screens/ff/FfStoragePage.test.ts frontend/tests-e2e/storage.spec.ts
+```
+
+Результат: зелёный, exit 0.
+
+Полные frontend/backend-регрессии, полный `pytest`, `ruff check .` и `mypy .` не запускались: для атома разрешены только назначенный кейс и относящиеся к нему точечные тесты.
 
 ## Не реализовано
 
-- Атомы 4–6 из `FEATURES.md` не выполнялись.
-- Frontend, сквозной Playwright-сценарий, модели, миграции, внешние API, production и живой кабинет Wildberries не затрагивались.
-- Отдельные сохраняемые поля суммы или ставки в `StorageStatement` не добавлялись: по архитектурному контракту черновик остаётся вычисляемым preview, а неизменяемый денежный снимок существует только в `BillingLedgerEntry` после фиксации.
+- Живой браузерный проход `S-11-TC-002` не выполнен из-за запрета среды на локальный socket; требуется повторить точную команду в среде, где разрешён bind на loopback-порт.
+- Находки 1, 3 и 4 из `REVIEW.md` закрывались предыдущими backend-атомами и в этом экранном шаге не менялись. Находка 5 про сквозной живой API учтена в существующем `S-11-TC-002`; соседние продуктовые задачи и атомы 5–6 не выполнялись.
+- Несвязанные нарушения `ui_guard.py` не исправлялись и baseline не двигался: их файлы отсутствуют в разрешённом списке этого атома.
 
 ## Находки
 
-Нет. Секреты, ключи, токены, `.env`, кабинеты учётных данных и production не читались и не использовались.
+- Новых находок по файлам атома нет.
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных, production и живой кабинет Wildberries не читались и не использовались.
 
 ## Блокеры
 
-Backend-реализация и целевые тесты завершены без блокеров. Сохранение отдельного commit заблокировано правами среды на общий Git-каталог за пределами разрешённой рабочей копии; commit SHA не создан, изменения остаются только в рабочем дереве.
+- Полностью зелёный набор обязательных гейтов недостижим в этой рабочей копии: `ui_guard.py` падает на трёх несвязанных файлах, а Playwright не может открыть локальный порт из-за ограничений песочницы.
