@@ -55,7 +55,13 @@ export default defineConfig({
       reuseExistingServer: reuse,
     },
     {
-      command: `npm run dev -- --host 0.0.0.0 --port ${e2eWebPort}`,
+      // E2E_WEB_MODE=preview гоняет сценарии против ПРОДОВОЙ сборки.
+      // Дефект, который живёт только в собранном бандле (порядок инициализации
+      // модулей, минификация), на dev-сервере не воспроизводится и уезжает на прод.
+      command:
+        process.env.E2E_WEB_MODE === 'preview'
+          ? `npm run build && npm run preview -- --host 0.0.0.0 --port ${e2eWebPort} --strictPort`
+          : `npm run dev -- --host 0.0.0.0 --port ${e2eWebPort}`,
       env: {
         ...process.env,
         VITE_API_PROXY: `http://127.0.0.1:${e2eApiPort}`,

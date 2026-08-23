@@ -55,6 +55,17 @@ export default defineConfig({
       },
     },
   },
+  // Тот же прокси на preview: без него продовую сборку нечем прогнать браузерными
+  // тестами, и дефект, который живёт только в собранном бандле, уходит на прод.
+  preview: {
+    proxy: {
+      '/api': {
+        target: apiProxyTarget,
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api/, ''),
+      },
+    },
+  },
   build: {
     rollupOptions: {
       input: {
