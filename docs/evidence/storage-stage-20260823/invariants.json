@@ -1,7 +1,7 @@
 {
   "screen": "S-11",
   "checked_at": "2026-08-23",
-  "browser": "Chromium (Codex in-app browser)",
+  "browser": "Chromium (Playwright)",
   "viewport": {
     "width": 1280,
     "document_scroll_width": 1280
@@ -11,7 +11,20 @@
     "violations": [],
     "storage_sku_table": {
       "client_width": 934,
-      "scroll_width": 934
+      "scroll_width": 934,
+      "heading": "Расчёт селлера Норд за июль 2026 г.",
+      "warehouse_line": "Основной склад",
+      "tariff_action_count": 1,
+      "readable_headers": [
+        "Товар",
+        "Объём, л",
+        "Источник",
+        "Л-дни",
+        "Ставка, ₽/л·д.",
+        "Сумма, ₽",
+        "Статус",
+        "Действия"
+      ]
     }
   },
   "history_dialog": {

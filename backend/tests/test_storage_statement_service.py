@@ -23,13 +23,16 @@ from app.models.seller import Seller
 from app.models.storage_measurement import StorageMeasurement
 from app.models.storage_statement import StorageStatement
 from app.models.warehouse import Warehouse
+from app.services import storage_statement_service
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.staff_packaging_billing_service import rub_to_kopecks
 from app.services.storage_measurement_service import MOSCOW
 from app.services.storage_statement_service import (
+    StorageStatementError,
     _price_volume_segments,
     _statement_source_ids,
     _tariff_for_day,
+    normalize_storage_ledger_quantity,
 )
 
 
@@ -107,6 +110,29 @@ def test_print_row_uses_charged_ledger_quantity_instead_of_full_month_measuremen
     assert printed["liter_days"] == "22"
     assert printed["rate_snapshot"] == "2.00"
     assert printed["amount"] == "44.00"
+
+
+def test_storage_ledger_quantity_is_rounded_within_numeric_14_4() -> None:
+    assert normalize_storage_ledger_quantity(Decimal("1.23456")) == Decimal("1.2346")
+    assert normalize_storage_ledger_quantity(Decimal("9999999999.99994")) == Decimal(
+        "9999999999.9999"
+    )
+
+
+@pytest.mark.parametrize(
+    "quantity",
+    [
+        Decimal("9999999999.99995"),
+        Decimal("-0.0001"),
+        Decimal("Infinity"),
+        Decimal("NaN"),
+    ],
+)
+def test_storage_ledger_quantity_rejects_values_outside_numeric_14_4(
+    quantity: Decimal,
+) -> None:
+    with pytest.raises(StorageStatementError, match=r"^ledger_quantity_out_of_range$"):
+        normalize_storage_ledger_quantity(quantity)
 
 
 def test_tariff_starting_mid_month_prices_only_forward() -> None:
@@ -475,3 +501,53 @@ async def test_problem_current_month_and_zero_statement_fix_rules(
     )
     assert no_tariff.status_code == 409
     assert no_tariff.json()["detail"] == "tariff_not_found"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("quantity", "amount", "detail"),
+    [
+        (Decimal("10000000000"), Decimal("1"), "ledger_quantity_out_of_range"),
+        (Decimal("0.1"), Decimal("10000000"), "ledger_rate_out_of_range"),
+        (Decimal("10000000"), Decimal("30000000"), "ledger_amount_out_of_range"),
+    ],
+)
+async def test_fix_rejects_unrepresentable_ledger_values_without_partial_state(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    quantity: Decimal,
+    amount: Decimal,
+    detail: str,
+) -> None:
+    headers, statement_id, measurement_id = await _seed_storage_statement(async_client)
+    assert measurement_id is not None
+
+    async def invalid_pricing(
+        _session: object,
+        _statement: StorageStatement,
+        measurements: list[StorageMeasurement],
+        tariffs: list[BillingTariffVersion],
+    ) -> dict[uuid.UUID, tuple[Decimal, Decimal, BillingTariffVersion]]:
+        assert [row.id for row in measurements] == [measurement_id]
+        return {measurement_id: (quantity, amount, tariffs[0])}
+
+    monkeypatch.setattr(storage_statement_service, "_measurement_pricing", invalid_pricing)
+
+    response = await async_client.post(
+        f"/operations/storage/statements/{statement_id}/fix",
+        headers=headers,
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"] == detail
+    async with SessionLocal() as session:
+        statement = await session.get(StorageStatement, statement_id)
+        assert statement is not None
+        assert statement.status == "draft"
+        ledger_count = await session.scalar(
+            select(func.count(BillingLedgerEntry.id)).where(
+                BillingLedgerEntry.source_type == "storage_measurement",
+                BillingLedgerEntry.source_id == measurement_id,
+            )
+        )
+    assert ledger_count == 0

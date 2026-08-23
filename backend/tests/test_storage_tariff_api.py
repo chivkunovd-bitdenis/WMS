@@ -929,3 +929,32 @@ async def test_new_tariff_reprices_open_draft_on_reload(async_client: AsyncClien
     assert ledger_rows[0].amount == 100
     assert len(new_tariffs) == 1
     assert new_tariffs[0].amount == 1000
+
+
+@pytest.mark.asyncio
+async def test_tariff_rejects_rubles_above_postgres_kopeck_limit_without_write(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(time.time_ns())
+    headers = await _register_admin(async_client, suffix)
+    warehouse_id = await _create_warehouse(async_client, headers, suffix, "overflow")
+
+    response = await async_client.post(
+        "/operations/storage/tariffs",
+        headers=headers,
+        json={
+            "warehouse_id": str(warehouse_id),
+            "amount": "21474836.48",
+            "valid_from": datetime.now(MOSCOW).date().isoformat(),
+        },
+    )
+
+    assert response.status_code == 422, response.text
+    async with SessionLocal() as session:
+        tariff_count = await session.scalar(
+            select(func.count(BillingTariffVersion.id)).where(
+                BillingTariffVersion.warehouse_id == warehouse_id,
+                BillingTariffVersion.service_code == "storage_liter_day",
+            )
+        )
+    assert tariff_count == 0

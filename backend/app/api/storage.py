@@ -414,6 +414,7 @@ async def create_tariff(
                 if code
                 in {
                     "tariff_amount_must_be_positive",
+                    "tariff_amount_out_of_range",
                     "tariff_valid_from_in_past",
                     "warehouse_not_operational",
                 }
@@ -521,6 +522,13 @@ async def fix_statement(
                     "not_editable",
                     "period_not_closed",
                     "tariff_not_found",
+                }
+                else 422
+                if code
+                in {
+                    "ledger_quantity_out_of_range",
+                    "ledger_rate_out_of_range",
+                    "ledger_amount_out_of_range",
                 }
                 else 404
             ),

@@ -112,6 +112,15 @@ test('S-11-TC-002 blocks a rate that rounds to zero before saving', async ({ pag
   expect(tariffPosts).toBe(0)
 })
 
+test('S-11-TC-002 keeps one tariff action when any warehouse is still uncovered', async ({ page }) => {
+  await openStorage(page, 'fulfillment_admin', false, rows)
+
+  const action = page.getByRole('button', { name: 'Задать тариф' })
+  await expect(action).toHaveCount(1)
+  await action.click()
+  await expect(page.getByRole('dialog', { name: 'Тариф хранения' })).toBeVisible()
+})
+
 test('S-11-TC-021 blocks Moscow-past start dates with a visible explanation', async ({ page }) => {
   await openStorage(page, 'fulfillment_admin', false)
   const moscowToday = moscowDate()
@@ -416,15 +425,27 @@ test('S-11-TC-004 expands exactly one seller into SKU rows', async ({ page }) =>
   await expect(page.getByTestId('storage-sku-table')).toContainText('SKU-11890')
 })
 
-test('S-11-TC-004 keeps the full long SKU available without widening the table', async ({ page }) => {
+test('S-11-TC-004 keeps the full long SKU available without page overflow', async ({ page }) => {
   await openStorage(page)
   await page.getByTestId('storage-expand-draft-ready').click()
+  await expect(page.getByRole('heading', { name: 'Расчёт селлера Норд за июль 2026 г.' })).toBeVisible()
+  await expect(page.getByTestId('storage-detail').getByText('Основной склад', { exact: true })).toBeVisible()
+  await expect(page.getByTestId('storage-sku-table').getByRole('columnheader')).toHaveText([
+    'Товар', 'Объём, л', 'Источник', 'Л-дни', 'Ставка, ₽/л·д.', 'Сумма, ₽', 'Статус', 'Действия',
+  ])
   const sku = page.getByText('SKU-20001-VERY-LONG-UNIQUE-SUFFIX', { exact: true })
   await sku.hover()
   await expect(page.getByRole('tooltip', { name: 'SKU-20001-VERY-LONG-UNIQUE-SUFFIX' })).toBeVisible()
+  await expect(page.getByText('NRD-READY', { exact: true })).toBeVisible()
   const table = page.getByTestId('storage-sku-table')
-  const overflow = await table.evaluate((element) => ({ clientWidth: element.clientWidth, scrollWidth: element.scrollWidth }))
+  const overflow = await table.evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+    pageWidth: document.documentElement.scrollWidth,
+    viewportWidth: document.documentElement.clientWidth,
+  }))
   expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + 1)
+  expect(overflow.pageWidth).toBeLessThanOrEqual(overflow.viewportWidth + 1)
 })
 
 test('S-11-TC-005 saves a manual measurement through the product API', async ({ page }) => {
