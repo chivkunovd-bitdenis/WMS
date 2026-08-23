@@ -147,11 +147,10 @@ test('FF report keeps one table slice and distinguishes a table error from empty
   expect(netBounds).not.toBeNull()
   expect((netBounds?.x ?? 0) + (netBounds?.width ?? 0)).toBeLessThanOrEqual(1280)
 
-  await page.getByTestId('ff-reports-comparison').getByRole('combobox').click()
-  await page.getByRole('option', { name: 'Не показывать' }).click()
   await expect(page.getByTestId('ff-reports-metrics-comparison')).toHaveCount(0)
   await expect(page.getByTestId('ff-reports-metrics-net')).toContainText('3 шт.')
-  await expect(page.getByTestId('ff-reports-chart')).not.toContainText('Расход, прошлый период')
+  await expect(page.getByTestId('ff-reports-comparison')).toHaveCount(0)
+  await expect(page.getByTestId('ff-reports-chart')).toHaveCount(0)
 
   await page.getByTestId('ff-reports-next-page').click()
   await oldPageStarted
@@ -300,30 +299,30 @@ test('FF report upper slice updates atomically and keeps table on overview retry
 
   await page.getByTestId('nav-ff-reports').click()
   await expect(page.getByTestId('ff-reports-metrics-balance')).toContainText('12')
-  const initialOutboundPoints = await page.getByTestId('ff-reports-chart').locator('polyline').nth(1).getAttribute('points')
+  await expect(page.getByTestId('ff-reports-metrics-net')).toContainText('3 шт.')
 
   holdRequests = true
   held = new Promise<void>((resolve) => { releaseRequests = resolve })
   await page.getByTestId('ff-reports-period').click()
   await page.getByRole('option', { name: '7 дней' }).click()
   await expect(page.getByTestId('ff-reports-metrics-balance-skeleton')).toBeVisible()
-  await expect(page.getByTestId('ff-reports-chart-skeleton')).toBeVisible()
+  await expect(page.getByTestId('ff-reports-metrics-net-skeleton')).toBeVisible()
   await expect(page.getByTestId('ff-reports-table').locator('tbody .MuiSkeleton-root').first()).toBeVisible()
   releaseRequests?.()
   holdRequests = false
   await expect(page.getByTestId('ff-reports-metrics-balance')).toContainText('70')
-  await expect.poll(async () => page.getByTestId('ff-reports-chart').locator('polyline').nth(1).getAttribute('points')).not.toBe(initialOutboundPoints)
+  await expect(page.getByTestId('ff-reports-metrics-net')).toContainText('6 шт.')
   const sevenDayRequest = requestedOverviewUrls.at(-1)
   expect(sevenDayRequest?.searchParams.get('date_from')).toMatch(/T00:00:00\+03:00$/)
   expect(sevenDayRequest?.searchParams.get('date_to')).toMatch(/T00:00:00\+03:00$/)
 
   await page.getByTestId('filter-search').fill('empty')
   await expect(page.getByTestId('ff-reports-metrics-balance')).toContainText('9')
-  await expect(page.getByTestId('ff-reports-chart')).toContainText('За выбранный период движений нет')
+  await expect(page.getByTestId('ff-reports-metrics-net')).toContainText('0 шт.')
 
   await page.getByTestId('filter-search').fill('no-base')
-  await expect(page.getByTestId('ff-reports-metrics-comparison')).toContainText('—')
-  await expect(page.getByTestId('ff-reports-metrics-comparison')).toContainText('В прошлом периоде расхода не было')
+  await expect(page.getByTestId('ff-reports-metrics-comparison')).toHaveCount(0)
+  await expect(page.getByTestId('ff-reports-metrics-net')).toContainText('3 шт.')
 
   await page.getByTestId('filter-search').fill('stale')
   await expect(page.getByTestId('ff-reports-warning')).toHaveCount(2)
