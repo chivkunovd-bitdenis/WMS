@@ -69,10 +69,22 @@ export function ledgerDocumentTarget(entry: Pick<LedgerEntry, 'source_type' | 's
   return null
 }
 
-function currentMonth(): string {
-  const now = new Date()
-  const lastClosedMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-  return `${lastClosedMonth.getFullYear()}-${String(lastClosedMonth.getMonth() + 1).padStart(2, '0')}`
+type BillingTab = 'charges' | 'invoices'
+type BillingTabPeriods = Record<BillingTab, string>
+
+function formatMonth(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
+export function initialBillingTabPeriods(now = new Date()): BillingTabPeriods {
+  return {
+    charges: formatMonth(now),
+    invoices: formatMonth(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
+  }
+}
+
+export function updateBillingTabPeriod(periods: BillingTabPeriods, tab: BillingTab, period: string): BillingTabPeriods {
+  return { ...periods, [tab]: period }
 }
 
 function formatPeriod(period: string): string {
@@ -133,8 +145,10 @@ function ledgerDocumentLabel(entry: LedgerEntry): string {
 
 export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
   const navigate = useNavigate()
-  const [tab, setTab] = useState(0)
-  const [month, setMonth] = useState(currentMonth)
+  const [tab, setTab] = useState<BillingTab>('charges')
+  const [months, setMonths] = useState(initialBillingTabPeriods)
+  const month = months[tab]
+  const setMonth = (period: string) => setMonths((periods) => updateBillingTabPeriod(periods, tab, period))
   const [sellerId, setSellerId] = useState('all')
   const [service, setService] = useState('all')
   const [mode, setMode] = useState<'operations' | 'performers'>('operations')
@@ -158,7 +172,7 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
   const expandedInvoiceLine = selectedInvoice?.lines?.find((line) => line.id === expandedLine)
 
   useEffect(() => {
-    if (tab !== 0) return
+    if (tab !== 'charges') return
     const controller = new AbortController()
     setLoading(true)
     setError(false)
@@ -179,7 +193,7 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
   }, [month, mode, search, service, sellerId, tab, token])
 
   useEffect(() => {
-    if (tab !== 1) return
+    if (tab !== 'invoices') return
     const controller = new AbortController()
     setInvoiceLoading(true); setInvoiceError(false)
     setInvoices([])
@@ -311,7 +325,7 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
       } else {
         setInvoiceRefresh((value) => value + 1)
       }
-      setTab(1)
+      setTab('invoices')
     } catch {
       setInvoiceError(true)
     } finally {
@@ -340,22 +354,22 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
 
   return <Box data-testid="ff-billing-screen">
     <ScreenHeader title="Расчёты" purpose="Начисления за работу склада и автоматически выставленные счета селлерам." />
-    <Tabs value={tab} onChange={(_, value: number) => setTab(value)} aria-label="Расчёты">
-      <Tab label="Начисления" data-testid="billing-tab-charges" /><Tab label="Счета" data-testid="billing-tab-invoices" />
+    <Tabs value={tab} onChange={(_, value: BillingTab) => setTab(value)} aria-label="Расчёты">
+      <Tab label="Начисления" value="charges" data-testid="billing-tab-charges" /><Tab label="Счета" value="invoices" data-testid="billing-tab-invoices" />
     </Tabs>
-    <FilterBar search={tab === 0 ? search : invoiceSearch} onSearchChange={tab === 0 ? setSearch : setInvoiceSearch} searchPlaceholder={tab === 0 ? 'Номер документа' : 'Номер счёта'} testId="billing-filter-bar">
+    <FilterBar search={tab === 'charges' ? search : invoiceSearch} onSearchChange={tab === 'charges' ? setSearch : setInvoiceSearch} searchPlaceholder={tab === 'charges' ? 'Номер документа' : 'Номер счёта'} testId="billing-filter-bar">
       <PeriodPicker value={month} onChange={setMonth} testId="billing-period" />
       <Select size="small" value={sellerId} onChange={(event) => setSellerId(event.target.value)} inputProps={{ 'data-testid': 'billing-seller' }} sx={{ minWidth: 190 }} aria-label="Селлер">
         <MenuItem value="all">Все селлеры</MenuItem>{sellers.map((seller) => <MenuItem key={seller.id} value={seller.id}>{seller.name}</MenuItem>)}
       </Select>
-      {tab === 0 ? <Select size="small" value={service} onChange={(event) => setService(event.target.value)} inputProps={{ 'data-testid': 'billing-service' }} sx={{ minWidth: 160 }} aria-label="Услуга">
+      {tab === 'charges' ? <Select size="small" value={service} onChange={(event) => setService(event.target.value)} inputProps={{ 'data-testid': 'billing-service' }} sx={{ minWidth: 160 }} aria-label="Услуга">
         <MenuItem value="all">Все услуги</MenuItem><MenuItem value="inbound">Приёмка</MenuItem><MenuItem value="marketplace_outbound">Отгрузка</MenuItem><MenuItem value={STORAGE_SERVICE_CODE}>Хранение</MenuItem>
       </Select> : <Select size="small" value={invoiceStatus} onChange={(event) => setInvoiceStatus(event.target.value)} inputProps={{ 'data-testid': 'billing-status' }} sx={{ minWidth: 160 }} aria-label="Статус"><MenuItem value="all">Все статусы</MenuItem><MenuItem value="issued">Выставлен</MenuItem><MenuItem value="cancelled">Отменён</MenuItem></Select>}
-      {tab === 0 ? <Select size="small" value={mode} onChange={(event) => setMode(event.target.value as typeof mode)} inputProps={{ 'data-testid': 'billing-mode' }} sx={{ minWidth: 190 }} aria-label="Режим">
+      {tab === 'charges' ? <Select size="small" value={mode} onChange={(event) => setMode(event.target.value as typeof mode)} inputProps={{ 'data-testid': 'billing-mode' }} sx={{ minWidth: 190 }} aria-label="Режим">
         <MenuItem value="operations">По операциям</MenuItem><MenuItem value="performers">По исполнителям</MenuItem>
       </Select> : null}
     </FilterBar>
-    {tab === 0 ? <><>{error ? <ErrorNotice testId="billing-error">Не удалось загрузить начисления. Повторите попытку</ErrorNotice> : null}</>{hasUnknownLedgerCodes ? <ErrorNotice testId="billing-ledger-data-error">В некоторых начислениях не удалось распознать услугу или расчёт. Проверьте данные перед сверкой</ErrorNotice> : null}{hasUnpriced && mode === 'operations' ? <Stack direction="row" sx={{ mb: 2 }}><PrimaryAction onClick={() => navigate('/app/ff/settings')}>Открыть тарифы</PrimaryAction></Stack> : null}{mode === 'operations' ? <DataTable columns={operationColumns} rows={rows} loading={loading} getRowKey={(row) => row.id} testId="billing-ledger-table" empty={{ title: hasFilters ? 'По выбранным условиям начислений нет — измените фильтры' : 'За выбранный месяц начислений нет', hint: 'Начисления появятся после завершённой приёмки, отгрузки или фиксации хранения' }} /> : <DataTable columns={performerColumns} rows={performerRows} loading={loading} getRowKey={(row) => `${row.performer_name}-${row.service_code}-${row.unit}`} testId="billing-ledger-table" empty={{ title: 'За месяц нет завершённых операций с исполнителем' }} />}</> : <><>{invoiceError ? <ErrorNotice testId="billing-invoices-error">Не удалось загрузить счета. Повторите попытку</ErrorNotice> : null}</>{invoiceIssues.length ? <Stack spacing={1} sx={{ mb: 2 }} data-testid="billing-invoice-issues">{invoiceIssues.map((issue, index) => {
+    {tab === 'charges' ? <><>{error ? <ErrorNotice testId="billing-error">Не удалось загрузить начисления. Повторите попытку</ErrorNotice> : null}</>{hasUnknownLedgerCodes ? <ErrorNotice testId="billing-ledger-data-error">В некоторых начислениях не удалось распознать услугу или расчёт. Проверьте данные перед сверкой</ErrorNotice> : null}{hasUnpriced && mode === 'operations' ? <Stack direction="row" sx={{ mb: 2 }}><PrimaryAction onClick={() => navigate('/app/ff/settings')}>Открыть тарифы</PrimaryAction></Stack> : null}{mode === 'operations' ? <DataTable columns={operationColumns} rows={rows} loading={loading} getRowKey={(row) => row.id} testId="billing-ledger-table" empty={{ title: hasFilters ? 'По выбранным условиям начислений нет — измените фильтры' : 'За выбранный месяц начислений нет', hint: 'Начисления появятся после завершённой приёмки, отгрузки или фиксации хранения' }} /> : <DataTable columns={performerColumns} rows={performerRows} loading={loading} getRowKey={(row) => `${row.performer_name}-${row.service_code}-${row.unit}`} testId="billing-ledger-table" empty={{ title: 'За месяц нет завершённых операций с исполнителем' }} />}</> : <><>{invoiceError ? <ErrorNotice testId="billing-invoices-error">Не удалось загрузить счета. Повторите попытку</ErrorNotice> : null}</>{invoiceIssues.length ? <Stack spacing={1} sx={{ mb: 2 }} data-testid="billing-invoice-issues">{invoiceIssues.map((issue, index) => {
       const action = issueAction(issue)
       return <Stack key={`${issue.seller_name}-${issue.period}-${issue.reason}-${index}`} direction="row" spacing={1} sx={{ alignItems: 'center' }}><Typography>{issue.seller_name} · {issue.period}</Typography><StatusChip label={issueLabels[issue.reason] ?? 'Требуется исправление'} tone="stop" />{action ? <PrimaryAction data-testid={`billing-invoice-issue-action-${issue.id ?? index}`} onClick={() => navigate(action.to)}>{action.label}</PrimaryAction> : null}</Stack>
     })}<PrimaryAction disabledReason="Сначала устраните причины, перечисленные выше" onClick={retryFormation}>{'Повторить формирование'}</PrimaryAction></Stack> : canRetryFormation && !invoiceLoading ? <Stack direction="row" spacing={1} sx={{ mb: 2 }}><Typography>Причины устранены — повторите формирование</Typography><PrimaryAction disabledReason={forming ? 'Формирование уже выполняется' : undefined} onClick={retryFormation}>Повторить формирование</PrimaryAction></Stack> : null}<DataTable columns={invoiceColumns} rows={invoices} loading={invoiceLoading} getRowKey={(row) => row.id} testId="billing-invoices-table" empty={{ title: 'За этот месяц счета не выставлены', hint: 'Нет начислений для формирования' }} /></>}

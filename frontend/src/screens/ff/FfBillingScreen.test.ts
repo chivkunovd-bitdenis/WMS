@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildInvoicePrintHtml, buildLedgerSearchParams, formatMoscowDate, ledgerDocumentTarget, STORAGE_SERVICE_CODE } from './FfBillingScreen'
+import { buildInvoicePrintHtml, buildLedgerSearchParams, formatMoscowDate, initialBillingTabPeriods, ledgerDocumentTarget, STORAGE_SERVICE_CODE, updateBillingTabPeriod } from './FfBillingScreen'
 
 describe('FfBillingScreen billing contract', () => {
   it('requests the selected month through the period parameter', () => {
@@ -26,6 +26,19 @@ describe('FfBillingScreen billing contract', () => {
 
     expect(pacificResult).toBe('01.09.2026')
     expect(tokyoResult).toBe('01.09.2026')
+  })
+
+  it('opens charges and invoices with their contract months and preserves each manually selected month', () => {
+    const opened = initialBillingTabPeriods(new Date(2026, 7, 23))
+
+    expect(opened.charges).toBe('2026-08')
+    expect(opened.invoices).toBe('2026-07')
+
+    const afterChargesSelection = updateBillingTabPeriod(opened, 'charges', '2026-06')
+    const afterInvoicesSelection = updateBillingTabPeriod(afterChargesSelection, 'invoices', '2026-05')
+
+    expect(afterInvoicesSelection.charges).toBe('2026-06')
+    expect(afterInvoicesSelection.invoices).toBe('2026-05')
   })
 
   it('routes supported ledger sources to their existing documents', () => {
