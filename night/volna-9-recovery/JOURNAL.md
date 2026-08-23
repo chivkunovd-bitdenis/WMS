@@ -217,3 +217,4 @@
 07:34   07-reporting · ui-critic: находки, круг 3 — назад к разработке
 07:35   07-reporting · splitter: готово
 07:37   07-reporting · screen-dev: готово
+07:37   07-reporting · dev: фича 1/1 сохранена bb5c1769e0ba
