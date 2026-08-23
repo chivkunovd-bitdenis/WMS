@@ -246,3 +246,20 @@
 08:11   04-warehouse-switch · dev: фича 1/2 сохранена 939fe69e406f
 08:14   04-warehouse-switch · screen-dev: готово
 08:14   04-warehouse-switch · dev: фича 2/2 сохранена 20e0f9d2987d
+08:14   04-warehouse-switch · reviewer: уже сделано, пропускаю
+08:14   04-warehouse-switch · ui-critic: уже сделано, пропускаю
+08:18   04-warehouse-switch · clicker: готово
+08:24   04-warehouse-switch · ux-judge: готово
+08:24 04-warehouse-switch: отложено — браузерная среда, не дефект кода
+10:33   04-warehouse-switch · resume: повторяем clicker после недоступного стенда
+10:37   04-warehouse-switch · clicker: готово
+10:42   04-warehouse-switch · ux-judge: нет файла JUDGE.md (код 1, попытка 1)
+10:42   04-warehouse-switch · ux-judge: нет файла JUDGE.md (код 1, попытка 2)
+15:52   04-warehouse-switch · solution-architect: уже сделано, пропускаю
+15:52   04-warehouse-switch · product: уже сделано, пропускаю
+16:03   04-warehouse-switch · ux-architect: готово
+16:07   04-warehouse-switch · solution-architect: уже сделано, пропускаю
+16:15   04-warehouse-switch · product: готово
+16:15   04-warehouse-switch · solution-architect: уже сделано, пропускаю
+16:54   04-warehouse-switch · independent Sol reviewer: PASS, commit 404753461fbd
+16:54   04-warehouse-switch · live browser scope regression: PASS, evidence 19e043f8baa1
