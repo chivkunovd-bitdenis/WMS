@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildInvoicePrintHtml, buildLedgerSearchParams, ledgerDocumentTarget, STORAGE_SERVICE_CODE } from './FfBillingScreen'
+import { buildInvoicePrintHtml, buildLedgerSearchParams, formatMoscowDate, ledgerDocumentTarget, STORAGE_SERVICE_CODE } from './FfBillingScreen'
 
 describe('FfBillingScreen billing contract', () => {
   it('requests the selected month through the period parameter', () => {
@@ -12,6 +12,20 @@ describe('FfBillingScreen billing contract', () => {
 
   it('uses the shared storage ledger service code', () => {
     expect(STORAGE_SERVICE_CODE).toBe('storage_liter_day')
+  })
+
+  it('formats dates in Moscow time independently from the environment timezone', () => {
+    const timestamp = '2026-08-31T21:30:00Z'
+    const originalTimezone = process.env.TZ
+
+    process.env.TZ = 'America/Los_Angeles'
+    const pacificResult = formatMoscowDate(timestamp)
+    process.env.TZ = 'Asia/Tokyo'
+    const tokyoResult = formatMoscowDate(timestamp)
+    process.env.TZ = originalTimezone
+
+    expect(pacificResult).toBe('01.09.2026')
+    expect(tokyoResult).toBe('01.09.2026')
   })
 
   it('routes supported ledger sources to their existing documents', () => {
