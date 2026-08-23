@@ -211,3 +211,11 @@
 05:08   04-warehouse-switch · dev: фича 1/2 сохранена e2ca3ef6e59b
 05:28   04-warehouse-switch · backend-dev: готово
 05:28   04-warehouse-switch · dev: фича 2/2 сохранена e8da502ef0c4
+05:47   04-warehouse-switch · reviewer: готово
+05:47 04-warehouse-switch: отложено — reviewer, эскалация не помогла
+05:55   04-warehouse-switch · repair-plan: новый вердикт дорезается до dev
+05:57   04-warehouse-switch · splitter: готово
+05:57   04-warehouse-switch · resume: поатомный rework Terra по сохранённым находкам
+06:03   04-warehouse-switch · resume: поатомный rework Terra по сохранённым находкам
+06:10   04-warehouse-switch · resume: поатомный rework Terra по сохранённым находкам
+06:15   04-warehouse-switch · screen-dev: готово

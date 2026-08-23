@@ -1924,7 +1924,7 @@ export function FfPackagingPage({ token, warehouses, selectedWarehouseId, onWare
         title="Упаковка"
         description="Задания на маркировку и упаковку. Создайте из ячейки или сортировки, либо откройте из отгрузки на МП."
       />
-      <WarehouseContextSwitch options={warehouses} value={selectedWarehouseId} onChange={onWarehouseChange} testId="ff-packaging-warehouse" />
+      <WarehouseContextSwitch options={warehouses} value={selected?.warehouse_id ?? selectedWarehouseId} onChange={selected ? () => undefined : onWarehouseChange} disabledReason={selected ? 'Склад закреплён: открыто задание упаковки' : undefined} testId="ff-packaging-warehouse" />
       <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', mb: 2, alignItems: 'center' }}>
         <Badge badgeContent={pendingMarkingCount} color="warning" data-testid="ff-packaging-pending-badge">
           <Button

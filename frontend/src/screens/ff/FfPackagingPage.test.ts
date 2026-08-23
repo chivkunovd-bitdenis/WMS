@@ -6,7 +6,7 @@ import {
 } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WarehouseContextSwitch, WarehouseNoContextState } from '../../ui-kit'
-import { FfPackagingPage, type PackagingTask } from './FfPackagingPage'
+import { FfPackagingPage, FfPackagingTaskPanel, type PackagingTask } from './FfPackagingPage'
 
 const reactHarness = vi.hoisted(() => ({
   cursor: 0,
@@ -42,15 +42,22 @@ vi.mock('react', async (importOriginal) => {
 
 const routeHarness = vi.hoisted(() => ({
   navigate: vi.fn(),
+  taskId: null as string | null,
 }))
 
 vi.mock('react-router-dom', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react-router-dom')>()
   return {
     ...actual,
-    useLocation: () => ({ pathname: '/app/ff/packaging', search: '', hash: '', state: null, key: 'test' }),
+    useLocation: () => ({
+      pathname: routeHarness.taskId ? `/app/ff/packaging/${routeHarness.taskId}` : '/app/ff/packaging',
+      search: '',
+      hash: '',
+      state: null,
+      key: 'test',
+    }),
     useNavigate: () => routeHarness.navigate,
-    useParams: () => ({}),
+    useParams: () => routeHarness.taskId ? { taskId: routeHarness.taskId } : {},
   }
 })
 
@@ -59,6 +66,8 @@ type TestElementProps = {
   options?: Array<{ id: string; name: string }>
   value?: string | null
   onChange?: (warehouseId: string) => void
+  disabledReason?: string
+  task?: PackagingTask
 }
 
 const warehouses = [
@@ -163,6 +172,7 @@ describe('FfPackagingPage warehouse queue contract', () => {
   beforeEach(() => {
     reactHarness.states = []
     routeHarness.navigate.mockReset()
+    routeHarness.taskId = null
   })
 
   afterEach(() => {
@@ -218,6 +228,51 @@ describe('FfPackagingPage warehouse queue contract', () => {
     expect(queueUrls).toHaveLength(2)
     expect(new URL(queueUrls[0], 'http://wms.test').searchParams.get('warehouse_id')).toBe('north')
     expect(new URL(queueUrls[1], 'http://wms.test').searchParams.get('warehouse_id')).toBe('south')
+  })
+
+  it('S-14-TC-002 locks the direct-link task to its own warehouse without changing the session queue context', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('/operations/packaging-tasks/task-north')) {
+        return new Response(JSON.stringify(northTask), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      if (url.includes('/operations/packaging-tasks?')) {
+        return new Response(JSON.stringify([southTask]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      if (url.includes('/operations/marking-codes/pending-marking?')) {
+        return new Response(JSON.stringify({ rows: [], total: 0 }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      throw new Error(`Unexpected request: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    routeHarness.taskId = northTask.id
+    const onWarehouseChange = vi.fn()
+    renderPage('south', onWarehouseChange)
+    runEffects()
+    await vi.waitFor(() => expect(reactHarness.states[1]).toEqual(northTask))
+
+    const taskTree = renderPage('south', onWarehouseChange)
+    const warehouseSwitch = findByType(taskTree, WarehouseContextSwitch)
+    expect(warehouseSwitch?.props.value).toBe('north')
+    expect(warehouseSwitch?.props.disabledReason).toBe('Склад закреплён: открыто задание упаковки')
+
+    warehouseSwitch?.props.onChange?.('south')
+    expect(onWarehouseChange).not.toHaveBeenCalled()
+
+    const taskPanel = findByType(taskTree, FfPackagingTaskPanel)
+    expect(taskPanel?.props.task).toEqual(northTask)
+    expect(taskPanel?.props.task?.warehouse_name).toBe('Склад Север')
+    expect(taskPanel?.props.task?.lines[0]?.product_name).toBe('Товар Севера')
   })
 
   it('does not request the queue and shows the existing empty state without warehouse context', () => {
