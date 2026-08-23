@@ -55,7 +55,7 @@ def upgrade() -> None:
         sa.Column("seller_id", uuid, nullable=True),
         sa.Column("service_code", sa.String(64), nullable=False),
         sa.Column("unit", sa.String(16), nullable=False),
-        sa.Column("amount", sa.Numeric(14, 2), nullable=False),
+        sa.Column("amount", sa.Integer(), nullable=False),
         sa.Column("valid_from", sa.Date(), nullable=False),
         sa.Column("valid_to", sa.Date(), nullable=True),
         sa.Column(
@@ -112,8 +112,8 @@ def upgrade() -> None:
         sa.Column("source_id", uuid, nullable=False),
         sa.Column("unit", sa.String(16), nullable=False),
         sa.Column("quantity", sa.Numeric(14, 4), nullable=False),
-        sa.Column("rate", sa.Numeric(14, 2), nullable=True),
-        sa.Column("amount", sa.Numeric(14, 2), nullable=True),
+        sa.Column("rate", sa.Integer(), nullable=True),
+        sa.Column("amount", sa.Integer(), nullable=True),
         sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column(
             "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False

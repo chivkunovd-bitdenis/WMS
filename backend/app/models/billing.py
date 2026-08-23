@@ -12,6 +12,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     Numeric,
     String,
     UniqueConstraint,
@@ -100,7 +101,8 @@ class BillingTariffVersion(Base):
     )
     service_code: Mapped[str] = mapped_column(String(64), nullable=False)
     unit: Mapped[str] = mapped_column(String(16), nullable=False)
-    amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    # Monetary values are integer kopecks at every billing-core boundary.
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
     valid_from: Mapped[date] = mapped_column(Date, nullable=False)
     valid_to: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -162,8 +164,8 @@ class BillingLedgerEntry(Base):
     source_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     unit: Mapped[str] = mapped_column(String(16), nullable=False)
     quantity: Mapped[Decimal] = mapped_column(Numeric(14, 4), nullable=False)
-    rate: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
-    amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    rate: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    amount: Mapped[int | None] = mapped_column(Integer, nullable=True)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
