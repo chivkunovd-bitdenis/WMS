@@ -384,7 +384,7 @@ test('fbs workspace: accepted verdict does not paint order rows green', async ({
     }),
   )
 
-  const scanInput = page.getByTestId('fbs-kiz-scan-input')
+  const scanInput = page.getByTestId('fbs-kiz-scan-input').getByRole('textbox')
   await scanInput.fill('WB0000000003')
   await scanInput.press('Enter')
   await expect(page.getByTestId('fbs-kiz-row-active')).toContainText('заказ 3')
@@ -465,7 +465,7 @@ test('S-03-TC-018: a hidden workspace cannot send a supply with a stale WB appro
   await mockWorklist(page, [accepted])
 
   let serverVerdict: 'accepted' | 'rejected' = 'accepted'
-  let supplyStatus: 'assembling' | 'in_delivery' = 'assembling'
+  const supplyStatus: 'assembling' | 'in_delivery' = 'assembling'
   let workspaceRequests = 0
   let unexpectedDeliveryRequests = 0
   let releaseVisibleRefresh: (() => void) | null = null
@@ -502,9 +502,11 @@ test('S-03-TC-018: a hidden workspace cannot send a supply with a stale WB appro
   await page.getByTestId('nav-ff-fbs').click()
   await page.getByTestId('fbs-order-1').click()
   await expect(page.getByTestId('fbs-boxes')).toBeVisible()
+  await page.getByRole('tab', { name: 'Упаковка и маркировка' }).click()
+  await expect(page.getByTestId('fbs-wb-verdict-1')).toHaveText('WB: принято')
+  await page.getByRole('tab', { name: 'Короба' }).click()
   const deliver = page.getByRole('button', { name: 'Передать в WB' })
   await expect(deliver).toBeEnabled()
-  await expect(page.getByTestId('fbs-wb-verdict-1')).toHaveText('WB: принято')
 
   // The first tab remains open but hidden. WB saves a rejection while its visible refresh is paused.
   await page.evaluate(() => {
@@ -533,6 +535,7 @@ test('S-03-TC-018: a hidden workspace cannot send a supply with a stale WB appro
   await expect(page.getByTestId('fbs-wb-verdict-1')).toHaveText('WB не принял')
   await expect(page.getByText('неверный статус УИН')).toBeVisible()
 
+  await page.getByRole('tab', { name: 'Короба' }).click()
   await expect(deliver).toBeDisabled()
   expect(unexpectedDeliveryRequests).toBe(0)
   await expect(page.getByText('Поставка передана, QR получить не удалось')).toHaveCount(0)
