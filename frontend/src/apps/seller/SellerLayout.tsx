@@ -133,6 +133,11 @@ export function SellerLayout({
                 <ListItemText primary="Товары" />
               </ListItemButton>
             ) : null}
+            {permissions.products ? (
+              <ListItemButton component={NavLink} to={`${base}/reports`} data-testid="nav-seller-reports">
+                <ListItemText primary="Отчёты" />
+              </ListItemButton>
+            ) : null}
             {permissions.honest_sign ? (
               <ListItemButton component={NavLink} to={`${base}/honest-sign`} data-testid="nav-seller-honest-sign">
                 <ListItemText primary="Честный знак" />
