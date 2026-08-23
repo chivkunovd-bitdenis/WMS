@@ -60,6 +60,7 @@ import {
   deleteFbsPackingBox,
   deliverFbsSupply,
   FbsApiError,
+  preflightFbsDelivery,
   fetchFbsPrintBatch,
   fetchFbsWorklist,
   fetchFbsWorkspace,
@@ -81,6 +82,7 @@ import {
   type FbsPickLocation,
   type FbsPrintAsset,
   type FbsPrintBatch,
+  type FbsDeliveryPreflight,
   type FbsWorkspace,
   type FbsWorklistOrder,
 } from './fbsApi'
@@ -295,6 +297,9 @@ export function FfFbsSupplyWorkspace({
   const [deliveryKey, setDeliveryKey] = useState(createFbsIdempotencyKey)
   const [deliverySubmitted, setDeliverySubmitted] = useState(false)
   const [deliverConfirmOpen, setDeliverConfirmOpen] = useState(false)
+  const [deliveryPreflight, setDeliveryPreflight] = useState<FbsDeliveryPreflight | null>(null)
+  const [deliveryPreflightLoading, setDeliveryPreflightLoading] = useState(false)
+  const [deliveryPreflightError, setDeliveryPreflightError] = useState<string | null>(null)
   const [undoOrderId, setUndoOrderId] = useState<string | null>(null)
   const [retryAction, setRetryAction] = useState<(() => void) | null>(null)
   const [tzLine, setTzLine] = useState<PackagingTaskLine | null>(null)
@@ -865,6 +870,7 @@ export function FfFbsSupplyWorkspace({
       () =>
         deliverFbsSupply(token, authHeaders, workspace.supply.id, {
           idempotency_key: deliveryKey,
+          confirmed_preflight_version: deliveryPreflight?.version,
         }),
       '',
     )
@@ -873,6 +879,23 @@ export function FfFbsSupplyWorkspace({
       setDeliveryKey(createFbsIdempotencyKey())
       setDeliverySubmitted(true)
       setStage('boxes')
+    }
+  }
+
+  const openDeliveryConfirmation = async () => {
+    if (!workspace) return
+    setDeliverConfirmOpen(true)
+    setDeliveryPreflight(null)
+    setDeliveryPreflightError(null)
+    setDeliveryPreflightLoading(true)
+    try {
+      setDeliveryPreflight(await preflightFbsDelivery(token, authHeaders, workspace.supply.id))
+    } catch (cause) {
+      setDeliveryPreflightError(
+        cause instanceof Error ? cause.message : 'Не удалось получить ответ Wildberries.',
+      )
+    } finally {
+      setDeliveryPreflightLoading(false)
     }
   }
 
@@ -2161,7 +2184,7 @@ export function FfFbsSupplyWorkspace({
                     variant="contained"
                     size="large"
                     disabled={busy}
-                    onClick={() => setDeliverConfirmOpen(true)}
+                    onClick={() => void openDeliveryConfirmation()}
                     data-testid="fbs-deliver-open"
                   >
                     Передать в WB
@@ -2424,11 +2447,25 @@ export function FfFbsSupplyWorkspace({
           <Typography variant="body2">
             После передачи поставку нельзя будет отменить или вернуть в работу. Убедитесь, что все короба готовы к отгрузке.
           </Typography>
+          <Typography
+            variant="body2"
+            color={deliveryPreflightError || deliveryPreflight?.checks.some((check) => check.code === 'marking_not_allowed') ? 'error.main' : 'text.secondary'}
+            sx={{ mt: 1.5 }}
+            data-testid="fbs-delivery-marking-status"
+          >
+            {deliveryPreflightLoading
+              ? 'Проверяем маркировку в Wildberries…'
+              : deliveryPreflightError
+                ?? deliveryPreflight?.checks.find((check) => check.code === 'marking_not_allowed')?.message
+                ?? deliveryPreflight?.checks.find((check) => check.code === 'marking_allowed')?.message
+                ?? (deliveryPreflight ? 'WB: маркировка не требуется.' : '')}
+          </Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDeliverConfirmOpen(false)}>Не передавать</Button>
           <Button
             variant="contained"
+            disabled={deliveryPreflightLoading || !deliveryPreflight}
             onClick={() => {
               setDeliverConfirmOpen(false)
               void deliver()
