@@ -24,11 +24,12 @@
 
 ## Гейты
 
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && python3 -m pytest -q tests/test_storage_tariff_api.py` — успешно, `16 passed in 19.79s`.
 - `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && python3 -m ruff check app/api/storage.py app/services/storage_statement_service.py tests/test_storage_tariff_api.py` — успешно, `All checks passed!`.
 - `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && python3 -m mypy --follow-imports=silent app/api/storage.py app/services/storage_statement_service.py` — успешно, `Success: no issues found in 2 source files`.
-- `python3 scripts/ci/back_guard.py` не запускался: этот атом не добавляет маршрут.
-- `python3 scripts/ci/check_migrations.py` не запускался: миграций нет.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && python3 -m pytest -q tests/test_storage_tariff_api.py` — успешно, `16 passed`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && python3 -m pytest tests/test_storage_tariff_api.py` — успешно, `16 passed in 24.28s`.
+- `python3 /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/scripts/ci/back_guard.py` не запускался: этот атом не добавляет маршрут.
+- `python3 /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/scripts/ci/check_migrations.py` не запускался: миграций нет.
 
 ## Не реализовано
 
@@ -41,4 +42,4 @@
 
 ## Блокеры
 
-Нет.
+Обновлённый `DEV.md` остался локальным: `git add` / `git commit` не могут создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-08-storage1/index.lock` из-за ограничения прав. Реализация backend-атома сохранена ранее в commit `6f59b94fa792db672cbe8e0df76975956f3f71d9`.
