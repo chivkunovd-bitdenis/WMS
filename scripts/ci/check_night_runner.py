@@ -234,6 +234,40 @@ def регрессии_зависимостей(проверь) -> None:
             проверь("зависимости: сохранённая browser-парковка также снимает старые номера",
                     n.подготовить_зависимости(wave, workers), [])
 
+        # Точный owner-scope restart карточки 04 снимает старую FEATURES.md.
+        # Ссылки на прежние атомы 04 и чужие рубежи 02/05/06 не должны раньше
+        # ux-architect остановить `--карточки 04-warehouse-switch`.
+        owner_checkout = root / "04-warehouse-switch"
+        owner_folder = owner_checkout / "night" / "wave" / "cards" / "04-warehouse-switch"
+        owner_folder.mkdir(parents=True)
+        owner_workers = {
+            "04-warehouse-switch": n.РабочаяКарточка(
+                "04-warehouse-switch", 1, owner_checkout,
+                owner_checkout / "night" / "wave", owner_folder,
+                "night/wave/lane-1/04-warehouse-switch")
+        }
+        (wave / "DEPENDENCIES.json").write_text(json.dumps({
+            "milestones": {
+                "02-ready": {"card": "02-verdikt-screen", "feature": 5},
+                "05-ready": {"card": "05-prod-slow", "feature": 7},
+                "06-ready": {"card": "06-picking-list-order", "feature": 6},
+            },
+            "requires": {
+                "04-warehouse-switch#9": ["02-ready"],
+                "04-warehouse-switch#10": ["05-ready"],
+                "04-warehouse-switch#11": ["06-ready"],
+            },
+        }), encoding="utf-8")
+        with mock.patch.object(n, "_worktree_пути", return_value={}):
+            проверь(
+                "точечный resume 04 до splitter игнорирует старые атомы и чужие рубежи",
+                n.подготовить_зависимости(
+                    wave, owner_workers, точечный_resume=True),
+                [],
+            )
+        проверь("точечный resume 04 не активировал старые зависимости",
+                n.ЗАВИСИМОСТИ_АТОМОВ, {})
+
 
 def fake_e2e_smoke(проверь) -> None:
     """Детерминированный full-chain smoke без Codex, git и стенда.
