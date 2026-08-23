@@ -1,4 +1,3 @@
-import { memo } from 'react'
 import Typography from '@mui/material/Typography'
 import { productBarcodeColumnSubLines } from '../utils/productLabelText'
 
@@ -12,7 +11,7 @@ type Props = {
 }
 
 /** ШК column: barcode digits + compact size sub-line (fixed width, no layout shift). */
-function ProductBarcodeCellBase({
+export function ProductBarcodeCell({
   barcode,
   wb_size,
   wb_composition,
@@ -59,9 +58,3 @@ function ProductBarcodeCellBase({
     </Typography>
   )
 }
-
-/**
- * memo: компонент повторяется в каждой строке операционных таблиц.
- * Без него любое обновление состояния экрана перерисовывало его во всех строках сразу.
- */
-export const ProductBarcodeCell = memo(ProductBarcodeCellBase)

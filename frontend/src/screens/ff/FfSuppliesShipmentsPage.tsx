@@ -46,7 +46,7 @@ import { FfMpUnloadPickPanel } from './FfMpUnloadPickPanel'
 import { useWbProductCatalog } from '../../hooks/useWbProductCatalog'
 import { apiUrl } from '../../api'
 import { WmsDateField } from '../../components/WmsDateField'
-
+import { productDisplayMetaFromCatalog } from '../../types/wbProductCatalog'
 import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { PageHeader } from '../../ui/PageHeader'
@@ -330,7 +330,7 @@ export function FfSuppliesShipmentsPage({
   const [mpAttachOverPlanOpen, setMpAttachOverPlanOpen] = useState(false)
   const [pendingAttachBarcode, setPendingAttachBarcode] = useState<string | null>(null)
   const mpCatalogSellerId = unloadDetail?.seller_id ?? null
-  const { catalog, catalogById, getDisplayMeta, reload: reloadWbCatalog } = useWbProductCatalog(
+  const { catalog, catalogById, reload: reloadWbCatalog } = useWbProductCatalog(
     token,
     docModal === 'marketplace_unload',
     mpCatalogSellerId,
@@ -1322,7 +1322,7 @@ export function FfSuppliesShipmentsPage({
               </TableHead>
               <TableBody>
                 {box.lines.map((ln) => {
-                  const displayMeta = getDisplayMeta(ln.product_id, ln)
+                  const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
                   return (
                     <TableRow key={ln.id}>
                       <FfProductLineCells meta={displayMeta} showPrint={false} />
@@ -2615,7 +2615,11 @@ export function FfSuppliesShipmentsPage({
                           const remaining = ln.quantity - picked
                           const lineShowsDiscrepancy =
                             unloadDetail.status === 'shipped' && Boolean(ln.has_discrepancy)
-                          const displayMeta = getDisplayMeta(ln.product_id, ln)
+                          const displayMeta = productDisplayMetaFromCatalog(
+                            ln.product_id,
+                            ln,
+                            catalogById,
+                          )
                           return (
                             <TableRow
                               key={ln.id}
@@ -2969,7 +2973,7 @@ export function FfSuppliesShipmentsPage({
                   )
                 }
                 return lines.map((ln) => {
-                  const displayMeta = getDisplayMeta(ln.product_id, ln)
+                  const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
                   return (
                     <TableRow
                       key={ln.id}

@@ -1,7 +1,7 @@
 import { Avatar, Box } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
 import PersonIcon from '@mui/icons-material/Person'
-import { memo, useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 type Props = {
@@ -36,7 +36,7 @@ function clampPreviewPos(anchor: DOMRect, previewSize: number): PreviewPos {
   return { top, left }
 }
 
-function ProductPhotoThumbBase({
+export function ProductPhotoThumb({
   src,
   alt = '',
   size = 44,
@@ -166,9 +166,3 @@ function ProductPhotoThumbBase({
     </>
   )
 }
-
-/**
- * memo: компонент повторяется в каждой строке операционных таблиц.
- * Без него любое обновление состояния экрана перерисовывало его во всех строках сразу.
- */
-export const ProductPhotoThumb = memo(ProductPhotoThumbBase)
