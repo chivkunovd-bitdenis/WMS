@@ -185,6 +185,73 @@ async def test_form_invoice_returns_empty_for_a_month_without_charges(
 
 
 @pytest.mark.asyncio
+async def test_billing_ledger_reversal_keeps_original_document_reference(
+    async_client: AsyncClient,
+) -> None:
+    """S-31-TC-016: a reversal stays linked to the completed warehouse document."""
+    headers, tenant_id, seller_id, warehouse_id = await _billing_context(async_client)
+    source_id = uuid.uuid4()
+    original_id = uuid.uuid4()
+    async with SessionLocal() as session:
+        session.add(
+            InboundIntakeRequest(
+                id=source_id,
+                tenant_id=tenant_id,
+                warehouse_id=warehouse_id,
+                seller_id=seller_id,
+                status="done",
+                document_number="ПР-СТОРНО-101",
+            )
+        )
+        session.add_all(
+            [
+                BillingLedgerEntry(
+                    id=original_id,
+                    tenant_id=tenant_id,
+                    seller_id=seller_id,
+                    entry_type="charge",
+                    service_code="inbound",
+                    source="inbound",
+                    source_type="inbound_intake",
+                    source_id=source_id,
+                    unit="item",
+                    quantity=Decimal("14"),
+                    rate=4500,
+                    amount=63000,
+                    occurred_at=datetime(2026, 7, 15, 9, tzinfo=UTC),
+                ),
+                BillingLedgerEntry(
+                    tenant_id=tenant_id,
+                    seller_id=seller_id,
+                    reversal_of_id=original_id,
+                    entry_type="reversal",
+                    service_code="inbound",
+                    source="inbound",
+                    source_type="billing_reversal",
+                    source_id=original_id,
+                    event_kind=f"reversal:{original_id}",
+                    unit="item",
+                    quantity=Decimal("-14"),
+                    rate=4500,
+                    amount=-63000,
+                    occurred_at=datetime(2026, 7, 16, 9, tzinfo=UTC),
+                ),
+            ]
+        )
+        await session.commit()
+
+    ledger = await async_client.get("/billing/ledger?period=2026-07", headers=headers)
+
+    assert ledger.status_code == 200, ledger.text
+    reversal = next(entry for entry in ledger.json()["entries"] if entry["amount"] == -63000)
+    assert reversal["entry_type"] == "reversal"
+    assert reversal["source_type"] == "inbound_intake"
+    assert reversal["source_id"] == str(source_id)
+    assert reversal["source_type"] != "billing_reversal"
+    assert reversal["document_number"] == "ПР-СТОРНО-101"
+
+
+@pytest.mark.asyncio
 async def test_form_invoice_keeps_unpriced_charge_as_blocking_reason(
     async_client: AsyncClient,
 ) -> None:

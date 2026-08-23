@@ -257,10 +257,39 @@ async def get_billing_ledger(
     rows = (await session.execute(query.order_by(BillingLedgerEntry.occurred_at))).all()
     ledger_rows = [row for row, _seller_name, _performer_name in rows]
     source_numbers = await _source_numbers(session, ledger_rows, month)
+    source_refs = {
+        row.id: (row.source_type, row.source_id)
+        for row in ledger_rows
+    }
+    reversal_ids = {
+        row.reversal_of_id for row in ledger_rows if row.reversal_of_id is not None
+    }
+    if reversal_ids:
+        originals = await session.execute(
+            select(
+                BillingLedgerEntry.id,
+                BillingLedgerEntry.source_type,
+                BillingLedgerEntry.source_id,
+            ).where(
+                BillingLedgerEntry.tenant_id == user.tenant_id,
+                BillingLedgerEntry.id.in_(reversal_ids),
+            )
+        )
+        original_source_refs = {
+            entry_id: (source_type, source_id)
+            for entry_id, source_type, source_id in originals
+        }
+        source_refs.update(
+            {
+                row.id: original_source_refs[row.reversal_of_id]
+                for row in ledger_rows
+                if row.reversal_of_id in original_source_refs
+            }
+        )
     entries = [{
         "id": row.id, "seller_id": row.seller_id, "seller_name": seller_name or "Не указан",
-        "service_code": row.service_code,
-        "source_type": row.source_type, "source_id": row.source_id,
+        "entry_type": row.entry_type, "service_code": row.service_code,
+        "source_type": source_refs[row.id][0], "source_id": source_refs[row.id][1],
         "quantity": row.quantity, "unit": row.unit, "rate": row.rate,
         "amount": row.amount, "occurred_at": row.occurred_at,
         "performer_id": row.performer_id, "performer_name": performer_name,
