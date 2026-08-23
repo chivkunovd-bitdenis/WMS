@@ -59,6 +59,12 @@ function previousMoscowMonth(date = new Date()) {
   return `${previousYear}-${String(previousMonth).padStart(2, '0')}`
 }
 
+function russianMonthLabel(monthValue: string) {
+  const [year, month] = monthValue.split('-').map(Number)
+  return new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+    .format(new Date(Date.UTC(year, month - 1, 1)))
+}
+
 async function waitForLiveJob(page: Page, headers: Record<string, string>, jobId: string) {
   for (let attempt = 0; attempt < 60; attempt += 1) {
     const response = await page.request.get(`/api/operations/background-jobs/${jobId}`, { headers })
@@ -72,11 +78,12 @@ async function waitForLiveJob(page: Page, headers: Record<string, string>, jobId
 }
 
 test('S-11-TC-001 administrator opens the previous-month storage screen', async ({ page }) => {
-  await page.clock.install({ time: new Date('2026-08-31T21:30:00.000Z') })
+  await page.clock.install({ time: new Date('2026-08-20T12:00:00.000Z') })
   await openStorage(page)
   await expect(page.getByRole('heading', { name: 'Хранение' })).toBeVisible()
   await expect(page.getByTestId('nav-ff-storage')).toHaveText('Хранение')
-  await expect(page.getByTestId('storage-month')).toHaveValue('2026-08')
+  await expect(page.getByTestId('storage-month')).toHaveValue('июль 2026')
+  await expect(page.locator('.MuiPickersSectionList-sectionContent').first()).toHaveCSS('text-transform', 'capitalize')
 })
 
 // S-11-TC-022 — будущие месяцы объяснены сотруднику и остаются недоступны в календаре.
@@ -85,7 +92,10 @@ test('S-11-TC-022 staff sees why future storage months are unavailable', async (
   await openStorage(page, 'fulfillment_staff')
 
   await expect(page.getByText('Будущие месяцы недоступны: расчёт ещё не начался', { exact: true })).toBeVisible()
-  await expect(page.getByTestId('storage-month')).toHaveAttribute('max', '2026-08')
+  const monthInput = page.getByTestId('storage-month')
+  await monthInput.fill('сентябрь 2026')
+  await monthInput.press('Tab')
+  await expect(monthInput).toHaveValue('июль 2026')
 })
 
 test('S-11-TC-001 calculates December of the previous year after Moscow January', () => {
@@ -152,7 +162,7 @@ test('S-11-TC-002 keeps a previous month without a tariff after saving a later r
   let tariffBody: unknown = null
 
   await openStorage(page, 'fulfillment_admin', false)
-  await expect(page.getByTestId('storage-month')).toHaveValue(previousMonth)
+  await expect(page.getByTestId('storage-month')).toHaveValue('август 2026')
   expect(validFrom.slice(0, 7) > previousMonth).toBeTruthy()
 
   await page.route('**/api/operations/storage/statements?*', (route) => {
@@ -256,7 +266,7 @@ test('S-11-TC-002 administrator saves a future warehouse rate and seller excepti
   await expect(page.getByTestId('ff-storage-page')).toBeVisible()
   await Promise.all([
     page.waitForResponse((response) => response.request().method() === 'GET' && response.url().includes('/api/operations/storage/statements?') && response.ok()),
-    page.getByTestId('storage-month').fill(currentMonth),
+    page.getByTestId('storage-month').fill(russianMonthLabel(currentMonth)),
   ])
   await expect(page.getByTestId('storage-seller-table')).toContainText('Тариф хранения ещё не задан')
 

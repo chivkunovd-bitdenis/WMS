@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Box, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, MenuItem, Radio, RadioGroup, Stack, TextField, Typography } from '@mui/material'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined'
+import { DatePicker } from '@mui/x-date-pickers/DatePicker'
+import dayjs from 'dayjs'
 import { apiUrl } from '../../api'
 import { ActionGroup, DataTable, ErrorNotice, FilterBar, IconAction, PrimaryAction, PrintAction, ScreenHeader, SecondaryAction, StatusChip, TextCell } from '../../ui-kit'
 import { getMoscowDateString } from '../../utils/moscowDate'
@@ -258,7 +260,34 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
   return <Box data-testid="ff-storage-page" sx={{ minWidth: 0, width: { xs: 'calc(100vw - 48px)', md: 'calc(100vw - 308px)' }, maxWidth: '100%' }}>
     <ScreenHeader title="Хранение" purpose="Рассчитайте фактическое хранение по селлерам и зафиксируйте месяц для начисления" />
     <FilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Селлер, SKU или артикул продавца" testId="storage-filters">
-      <TextField label="Месяц" type="month" value={month} onChange={(event) => setMonth(event.target.value)} size="small" helperText="Будущие месяцы недоступны: расчёт ещё не начался" slotProps={{ htmlInput: { 'data-testid': 'storage-month', max: currentMonth() } }} />
+      <DatePicker
+        label="Месяц"
+        views={['year', 'month']}
+        openTo="month"
+        format="MMMM YYYY"
+        value={dayjs(`${month}-01`)}
+        maxDate={dayjs(`${currentMonth()}-01`)}
+        onChange={(next) => {
+          if (!next?.isValid()) return
+          const nextMonth = next.format('YYYY-MM')
+          if (nextMonth <= currentMonth()) setMonth(nextMonth)
+        }}
+        slotProps={{
+          textField: {
+            size: 'small',
+            helperText: 'Будущие месяцы недоступны: расчёт ещё не начался',
+            sx: {
+              '& .MuiPickersSectionList-sectionContent': { textTransform: 'capitalize' },
+            },
+            slotProps: {
+              htmlInput: {
+                'data-testid': 'storage-month',
+                style: { textTransform: 'capitalize' },
+              } as { 'data-testid': string; style: { textTransform: 'capitalize' } },
+            },
+          },
+        }}
+      />
       {(data?.warehouses.length ?? 0) >= 2 && <TextField select label="Склад" value={selectedWarehouse} onChange={(event) => setSelectedWarehouse(event.target.value)} size="small" slotProps={{ htmlInput: { 'data-testid': 'storage-warehouse' } }}>{data?.warehouses.map((warehouse) => <MenuItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</MenuItem>)}</TextField>}
     </FilterBar>
     {error && <ErrorNotice testId="storage-error">{error}</ErrorNotice>}

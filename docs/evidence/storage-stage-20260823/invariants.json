@@ -9,6 +9,12 @@
   "page": {
     "ok": true,
     "violations": [],
+    "active_tooltips": 0,
+    "month_control": {
+      "visible_text": "Июль 2026",
+      "state": "2026-07",
+      "browser_locale_independent": true
+    },
     "storage_sku_table": {
       "client_width": 934,
       "scroll_width": 934,
