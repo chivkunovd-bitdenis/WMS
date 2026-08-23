@@ -483,7 +483,7 @@ test('catalog ignores a late failed scan after the operator starts the next barc
   ])
 })
 
-// S-16-TC-014: two Enter events for one barcode must leave one addressed package and preserve scanner focus.
+// S-16-TC-014: a late repeated lookup must not replace the operator's next scanner input.
 test('catalog deduplicates repeated scans while the first lookup is pending', async ({ page }) => {
   const seed = await seedFfSellerInbound(page, `catalog-repeat-scan-${Date.now()}`)
   const headers = { Authorization: `Bearer ${seed.token}` }
@@ -564,6 +564,14 @@ test('catalog deduplicates repeated scans while the first lookup is pending', as
     barcode.length,
   ])
 
+  const nextBarcode = 'INB-NEXT-SCAN'
+  await search.pressSequentially(nextBarcode)
+  await expect(search).toHaveValue(nextBarcode)
+  await expect.poll(() => search.evaluate((input) => [input.selectionStart, input.selectionEnd])).toEqual([
+    nextBarcode.length,
+    nextBarcode.length,
+  ])
+
   const firstLookupResponse = page.waitForResponse(
     (response) =>
       response.request().method() === 'GET' &&
@@ -578,4 +586,12 @@ test('catalog deduplicates repeated scans while the first lookup is pending', as
   await expect(catalogPackageByBarcode(page, barcode)).toHaveCount(1)
   await expect(page.getByTestId('ff-catalog-inbound-packages-lookup-error')).toBeHidden()
   await expect(search).toBeFocused()
+  await expect(search).toHaveValue(nextBarcode)
+  await expect.poll(() => search.evaluate((input) => [input.selectionStart, input.selectionEnd])).toEqual([
+    nextBarcode.length,
+    nextBarcode.length,
+  ])
+
+  await search.pressSequentially('-CONTINUED')
+  await expect(search).toHaveValue(`${nextBarcode}-CONTINUED`)
 })
