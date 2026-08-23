@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react'
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FocusEvent,
+  type KeyboardEvent,
+} from 'react'
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
 import EditOutlined from '@mui/icons-material/EditOutlined'
 import ExpandMoreOutlined from '@mui/icons-material/ExpandMoreOutlined'
@@ -226,7 +235,13 @@ type InboundProductLineCellProps = {
   printTestId: string
 }
 
-function InboundProductLineCell({ meta, productId, printTestId }: InboundProductLineCellProps) {
+// memo обязателен: в заявке бывает под триста строк, и без него каждый скан
+// перерисовывал фото, штрихкоды и названия во всей таблице разом.
+const InboundProductLineCell = memo(function InboundProductLineCell({
+  meta,
+  productId,
+  printTestId,
+}: InboundProductLineCellProps) {
   const barcode = formatProductBarcodeDisplay(meta)
 
   return (
@@ -301,7 +316,7 @@ function InboundProductLineCell({ meta, productId, printTestId }: InboundProduct
       </Stack>
     </TableCell>
   )
-}
+})
 
 type InboundBoxContentLineProps = {
   meta: ProductLineDisplayMeta
@@ -309,7 +324,7 @@ type InboundBoxContentLineProps = {
 }
 
 /** Компактная строка товара в содержимом короба (фото, название, артикул+ШК, кол-во). */
-function InboundBoxContentLine({ meta, quantity }: InboundBoxContentLineProps) {
+const InboundBoxContentLine = memo(function InboundBoxContentLine({ meta, quantity }: InboundBoxContentLineProps) {
   const barcode = formatProductBarcodeDisplay(meta)
 
   return (
@@ -350,7 +365,7 @@ function InboundBoxContentLine({ meta, quantity }: InboundBoxContentLineProps) {
       </Typography>
     </Stack>
   )
-}
+})
 
 type InboundDetail = {
   id: string
@@ -934,6 +949,23 @@ export function FfInboundRequestView({
     () => buildInboundScanProductMap(detail?.lines ?? [], catalogById),
     [catalogById, detail?.lines],
   )
+
+  // Витрина строки считается один раз на состав заявки. Если пересчитывать её
+  // в рендере, meta каждый раз новый объект и memo у ячейки товара не работает.
+  const displayMetaByProductId = useMemo(() => {
+    const m = new Map<string, ReturnType<typeof productDisplayMetaFromCatalog>>()
+    for (const ln of detail?.lines ?? []) {
+      m.set(ln.product_id, productDisplayMetaFromCatalog(ln.product_id, ln, catalogById))
+    }
+    for (const b of detail?.boxes ?? []) {
+      for (const ln of b.lines ?? []) {
+        if (!m.has(ln.product_id)) {
+          m.set(ln.product_id, productDisplayMetaFromCatalog(ln.product_id, ln, catalogById))
+        }
+      }
+    }
+    return m
+  }, [catalogById, detail?.lines, detail?.boxes])
 
   const lineProductIds = useMemo(
     () => new Set(detail?.lines.map((l) => l.product_id) ?? []),
@@ -2349,7 +2381,9 @@ export function FfInboundRequestView({
                 </TableHead>
                 <TableBody>
                   {detail.lines.map((ln) => {
-                  const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
+                  const displayMeta =
+                    displayMetaByProductId.get(ln.product_id) ??
+                    productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
                   const boxes = detail.boxes ?? []
                   const effective = effectiveActualQty(ln, boxes, detail.status)
                   const hasDiscrepancy = effective !== ln.expected_qty
@@ -2832,7 +2866,10 @@ export function FfInboundRequestView({
                               {visibleLines.map((ln) => (
                                 <InboundBoxContentLine
                                   key={ln.id}
-                                  meta={productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)}
+                                  meta={
+                                    displayMetaByProductId.get(ln.product_id) ??
+                                    productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
+                                  }
                                   quantity={ln.quantity}
                                 />
                               ))}
