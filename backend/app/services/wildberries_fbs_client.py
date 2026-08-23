@@ -5,7 +5,11 @@ OpenAPI reference: dev.wildberries.ru/docs/openapi/orders-fbs (verified 2026-08-
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
+from math import isfinite
 from typing import Any, cast
 
 import httpx
@@ -36,6 +40,7 @@ class MarketplaceMetaDetail:
     key: str
     value: str | None
     decision: str
+    reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,7 +177,62 @@ def _parse_meta_detail(entry: dict[str, Any]) -> MarketplaceMetaDetail | None:
     value: str | None = None if value_raw is None else str(value_raw)
     decision_raw = entry.get("decision")
     decision = str(decision_raw) if decision_raw is not None else "unknown"
-    return MarketplaceMetaDetail(key=key, value=value, decision=decision)
+    reason_raw = entry.get("reason")
+    reason = str(reason_raw) if reason_raw is not None else None
+    return MarketplaceMetaDetail(
+        key=key, value=value, decision=decision, reason=reason
+    )
+
+
+def _retry_after_seconds(value: str | None) -> float:
+    if value is None:
+        return 0.0
+    try:
+        seconds = float(value)
+    except ValueError:
+        try:
+            retry_at = parsedate_to_datetime(value)
+        except (TypeError, ValueError, OverflowError):
+            return 0.0
+        if retry_at.tzinfo is None:
+            retry_at = retry_at.replace(tzinfo=UTC)
+        return max(0.0, (retry_at - datetime.now(UTC)).total_seconds())
+    if not isfinite(seconds):
+        return 0.0
+    return max(0.0, seconds)
+
+
+def _mock_meta_details(snapshot: dict[str, Any]) -> tuple[MarketplaceMetaDetail, ...]:
+    details: list[MarketplaceMetaDetail] = []
+    for source_key, kind in {
+        "sgtins": "sgtin",
+        "uin": "uin",
+        "imei": "imei",
+        "gtin": "gtin",
+    }.items():
+        entries = snapshot.get(source_key)
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            value = entry.get("value")
+            if not isinstance(value, str):
+                continue
+            check_status = entry.get("checkStatus")
+            decision = (
+                "pending"
+                if check_status in {None, "new", "checking"}
+                else str(check_status)
+            )
+            details.append(
+                MarketplaceMetaDetail(
+                    key=kind,
+                    value=value,
+                    decision=decision,
+                )
+            )
+    return tuple(details)
 
 
 def _extend_meta_validation_items(
@@ -572,7 +632,7 @@ async def fetch_marketplace_supplies_page(
     )
     # WB требует ОБА параметра. Без `next` ручка отвечает
     # 400 {"code":"IncorrectParameter"} — проверено живым запросом на боевом токене
-    # 19.08.2026. Первая страница запрашивается с next=0.  # noqa: RUF003
+    # 19.08.2026. Первая страница запрашивается с next=0.
     params: dict[str, str | int] = {"limit": 1000, "next": next_cursor or 0}
     response = await marketplace_request(
         client,
@@ -627,8 +687,7 @@ async def fetch_marketplace_orders_meta_batch(
         return [
             MarketplaceOrderMetaRow(
                 order_id=order_id,
-                meta_details=(),
-                meta=mock_order_meta_snapshot(order_id),
+                meta_details=_mock_meta_details(mock_order_meta_snapshot(order_id)),
             )
             for order_id in order_ids
         ]
@@ -643,6 +702,15 @@ async def fetch_marketplace_orders_meta_batch(
         api_token=api_token,
         json_body={"orders": order_ids},
     )
+    if response.status_code == 429:
+        await asyncio.sleep(_retry_after_seconds(response.headers.get("Retry-After")))
+        response = await marketplace_request(
+            client,
+            "POST",
+            url,
+            api_token=api_token,
+            json_body={"orders": order_ids},
+        )
     if response.status_code >= 400:
         raise map_upstream_error(response)
     try:

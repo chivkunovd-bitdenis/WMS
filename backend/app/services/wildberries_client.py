@@ -909,7 +909,7 @@ def mock_order_meta_snapshot(order_id: int) -> dict[str, Any]:
     """Снимок mock-меты заказа для batch-клиента (e2e_mock_wb_marketplace_marking).
 
     Batch-роут POST /api/marketplace/v3/orders/meta живёт в wildberries_fbs_client,
-    но обязан читать тот же mock-стор, что и одиночные PUT/GET здесь, иначе под
+    но обязан читать тот же mock-стор, что и одиночные PUT здесь, иначе под
     моком метаданные расходятся.
     """
     return _mock_order_meta_response(order_id)
@@ -948,34 +948,6 @@ async def put_marketplace_order_meta(
             "upstream_error",
             status_code=response.status_code,
         )
-
-
-async def fetch_marketplace_order_meta(
-    client: httpx.AsyncClient,
-    *,
-    api_token: str,
-    order_id: int,
-    marketplace_api_base: str | None = None,
-) -> dict[str, Any]:
-    """GET /api/v3/orders/{order_id}/meta — marking identifiers and check statuses."""
-    if settings.e2e_mock_wb_marketplace_marking:
-        return _mock_order_meta_response(order_id)
-    base = (marketplace_api_base or settings.wildberries_marketplace_api_base).rstrip("/")
-    url = f"{base}{MARKETPLACE_ORDER_META_PATH.format(order_id=order_id)}"
-    headers = {"Authorization": api_token}
-    try:
-        response = await client.get(url, headers=headers, timeout=60.0)
-    except httpx.HTTPError as exc:
-        raise WildberriesClientError("transport_error") from exc
-    if response.status_code >= 400:
-        raise WildberriesClientError(
-            "upstream_error",
-            status_code=response.status_code,
-        )
-    data = response.json()
-    if isinstance(data, dict):
-        return cast(dict[str, Any], data)
-    return {}
 
 
 _mock_trbx_counter = 0
