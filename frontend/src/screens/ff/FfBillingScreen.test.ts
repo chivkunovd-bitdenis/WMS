@@ -1,6 +1,8 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { buildInvoicePrintHtml, buildLedgerSearchParams, CANCEL_INVOICE_ERROR_MESSAGE, cancelInvoiceRequest, formatMoscowDate, initialBillingTabPeriods, ledgerDocumentTarget, STORAGE_SERVICE_CODE, updateBillingTabPeriod } from './FfBillingScreen'
+import { buildInvoicePrintHtml, buildLedgerSearchParams, CANCEL_INVOICE_ERROR_MESSAGE, cancelInvoiceRequest, formatMoscowDate, initialBillingTabPeriods, InvoiceDocumentDetails, ledgerDocumentTarget, STORAGE_SERVICE_CODE, updateBillingTabPeriod } from './FfBillingScreen'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -84,5 +86,20 @@ describe('FfBillingScreen billing contract', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/billing/invoices/invoice-1/cancel', expect.objectContaining({ method: 'POST' }))
     expect(result).toEqual({ ok: false, message: CANCEL_INVOICE_ERROR_MESSAGE })
     expect(originalStatus).toBe('issued')
+  })
+
+  it('renders expanded source document quantity and kopeck amount in separate cells', () => {
+    const markup = renderToStaticMarkup(createElement(InvoiceDocumentDetails, {
+      period: '2026-07',
+      line: {
+        id: 'line-1', service_code: 'inbound', unit: 'item', quantity: 84, rate: 1200, amount: 100800,
+        documents: [{ date: '2026-07-18T10:00:00Z', number: 'ПР-000141', quantity: 84, amount: 100800 }],
+      },
+    }))
+
+    expect(markup).toContain('ПР-000141')
+    expect(markup).toContain('>84</span>')
+    expect(markup).toContain('>1 008,00 ₽</span>')
+    expect(markup).not.toContain('100800')
   })
 })
