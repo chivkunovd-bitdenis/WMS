@@ -316,7 +316,7 @@ export function FfFbsSupplyWorkspace({
   const [kizScanHints, setKizScanHints] = useState<string[]>([])
   const [kizScanDebugOpen, setKizScanDebugOpen] = useState(false)
   const [kizConfirmTarget, setKizConfirmTarget] = useState<FbsKizLookup | null>(null)
-  const kizScanInputRef = useRef<HTMLInputElement | null>(null); const workspaceRefreshRequestRef = useRef(0)
+  const kizScanInputRef = useRef<HTMLInputElement | null>(null); const workspaceRefreshRequestRef = useRef(0); const deliveryRefreshPendingRef = useRef(false); const [deliveryRefreshPending, setDeliveryRefreshPending] = useState(false)
   const [addOrdersOpen, setAddOrdersOpen] = useState(false)
   const [addableOrders, setAddableOrders] = useState<FbsWorklistOrder[]>([])
   const [addableSelected, setAddableSelected] = useState<Set<string>>(() => new Set())
@@ -333,9 +333,9 @@ export function FfFbsSupplyWorkspace({
       try {
         const next = await fetchFbsWorkspace(token, authHeaders, supplyId)
         if (requestId !== workspaceRefreshRequestRef.current) return
-        setWorkspace(safeInitialWorkspace(next)); setRefreshError(null); if (!silent) setStage(visualStage(next.stage))
+        setWorkspace(safeInitialWorkspace(next)); setRefreshError(null); setDeliveryRefreshPending(false); deliveryRefreshPendingRef.current = false; if (!silent) setStage(visualStage(next.stage))
       } catch (cause) {
-        if (requestId !== workspaceRefreshRequestRef.current) return
+        if (requestId !== workspaceRefreshRequestRef.current) return; setDeliveryRefreshPending(false); deliveryRefreshPendingRef.current = false
         if (silent) setRefreshError('Не удалось обновить поставку. Передача в WB временно недоступна — ждём свежий ответ Wildberries.'); else setError(cause instanceof Error ? cause.message : 'Не удалось загрузить поставку.')
       } finally {
         if (!silent && requestId === workspaceRefreshRequestRef.current) setBusy(false)
@@ -347,7 +347,7 @@ export function FfFbsSupplyWorkspace({
   useEffect(() => {
     workspaceRefreshRequestRef.current += 1
     if (!open || !supplyId) return
-    setError(null); setRefreshError(null); setNotice(null)
+    setError(null); setRefreshError(null); setNotice(null); setDeliveryRefreshPending(false); deliveryRefreshPendingRef.current = false
     setWorkspace(safeInitialWorkspace(initialWorkspace))
     setStage(initialWorkspace ? visualStage(initialWorkspace.stage) : 'composition')
     setDeliveryKey(persistentOperationKey(supplyId, 'delivery'))
@@ -389,10 +389,9 @@ export function FfFbsSupplyWorkspace({
 
   useEffect(() => {
     if (!open || !supplyId || !['picking', 'boxes'].includes(stage)) return
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void load(true)
-    }, 15_000)
-    return () => window.clearInterval(timer)
+    const timer = window.setInterval(() => { if (document.visibilityState === 'visible') void load(true) }, 15_000)
+    const refreshWhenTabReturns = () => { if (document.visibilityState === 'visible') { deliveryRefreshPendingRef.current = true; setDeliveryRefreshPending(true); void load(true) } }
+    document.addEventListener('visibilitychange', refreshWhenTabReturns); return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', refreshWhenTabReturns) }
   }, [open, supplyId, stage, load])
 
   useEffect(() => {
@@ -860,7 +859,7 @@ export function FfFbsSupplyWorkspace({
   }
 
   const deliver = async () => {
-    if (!workspace || deliveryConfirmed || deliveryBlocker) return
+    if (!workspace || deliveryConfirmed || deliveryBlocker || deliveryRefreshPendingRef.current) return
     const next = await run(
       () =>
         deliverFbsSupply(token, authHeaders, workspace.supply.id, {
@@ -1265,12 +1264,13 @@ export function FfFbsSupplyWorkspace({
     (order) => order.pack.status === 'packed' && !assignedBoxOrderIds.has(order.id),
   )
   const deliveryBlocker = useMemo(() => {
+    if (deliveryRefreshPending) return 'Обновляем статус Wildberries'
     if (refreshError) return workspace?.orders[0] ? `Заказ №${workspace.orders[0].wb_order_id}: Ждём ответа Wildberries` : 'Ждём ответа Wildberries'
     const blockedOrder = workspace?.orders.find((order) => !order.metadata.verdict.delivery_allowed)
     if (!blockedOrder) return null
     const status = metaStatusView(blockedOrder.metadata.verdict)
     return `Заказ №${blockedOrder.wb_order_id}: ${status.disabledReason ?? status.label}`
-  }, [workspace, refreshError])
+  }, [workspace, refreshError, deliveryRefreshPending])
   const boxAssignName = workspace?.boxes.find((box) => box.id === boxAssignTarget)?.box_number
   const reprintOrder = workspace?.orders.find((order) => order.id === reprintMenu?.orderId) ?? null
   const reprintLine = reprintOrder?.product.id ? packLineByProduct.get(reprintOrder.product.id) : undefined
@@ -2150,7 +2150,7 @@ export function FfFbsSupplyWorkspace({
                 <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
                   <PrimaryAction
                     disabledReason={busy ? 'Идёт операция' : deliveryBlocker ?? undefined}
-                    onClick={() => setDeliverConfirmOpen(true)}
+                    onClick={() => { if (!deliveryRefreshPendingRef.current) setDeliverConfirmOpen(true) }}
                     data-testid="fbs-deliver-open"
                   >
                     Передать в WB
