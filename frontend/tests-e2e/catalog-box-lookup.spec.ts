@@ -67,6 +67,7 @@ function packageByBarcode(page: Page, barcode: string): Locator {
 }
 
 // TC-NEW-CATALOG-BOX-001: the printed box barcode opens the matching current contents.
+// TC-NEW-CATALOG-BOX-LOOKUP
 test('scan opens the received box and shows its current contents', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 900 })
   const seed = await seedFfSellerInbound(page, `catalog-package-${Date.now()}`)
