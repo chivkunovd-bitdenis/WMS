@@ -247,7 +247,7 @@ def fake_e2e_smoke(проверь) -> None:
             start = prompt.index(marker) + len(marker)
             return pathlib.Path(prompt[start:prompt.index("`", start)])
 
-        def fake_launch(role: str, prompt: str, профиль=None, cwd=n.КОРЕНЬ):
+        def fake_launch(role: str, prompt: str, профиль=None, cwd=n.КОРЕНЬ, модель=None):
             calls.append((role, prompt))
             if role == "intake":
                 queue_marker = "и общий `"
@@ -566,12 +566,12 @@ def main() -> int:
                 n.шаг("x", "backend-dev", t, t, круг=1)
                 n.шаг("x", "backend-dev", t, t, круг=n.КРУГОВ + 1)
                 n.шаг("x", "reviewer", t, t, круг=n.КРУГОВ + 1)
-            проверь("rework: первичный dev остаётся дешёвым",
-                    выбор_модели[0], (None, None))
+            проверь("rework: первичный dev идёт Terra",
+                    выбор_модели[0], ("sonnet", "terra"))
             проверь("rework: обычная переделка идёт Sonnet/Terra",
                     выбор_модели[1], ("sonnet", "terra"))
-            проверь("rework: финальная эскалация идёт Opus/Sol",
-                    выбор_модели[2], ("opus", "sol"))
+            проверь("rework: финальная переделка остаётся Terra",
+                    выбор_модели[2], ("sonnet", "terra"))
             проверь("rework: reviewer сохраняет свой штатный профиль",
                     выбор_модели[3], (None, None))
 
