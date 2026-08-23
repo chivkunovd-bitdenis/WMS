@@ -186,3 +186,9 @@
 06:16   07-reporting · dev: фича 2/3 сохранена 4b2dbd6513ac
 06:18   07-reporting · screen-dev: готово
 06:18   07-reporting · dev: фича 3/3 сохранена 14eafbb3f368
+06:27   07-reporting · reviewer: готово
+06:27 07-reporting: отложено — reviewer, эскалация не помогла
+06:37   07-reporting · repair-plan: новый вердикт дорезается до dev
+06:39   07-reporting · splitter: готово
+06:39   07-reporting · resume: поатомный rework Terra по сохранённым находкам
+06:43   07-reporting · screen-dev: готово

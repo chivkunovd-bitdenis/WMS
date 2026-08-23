@@ -1,42 +1,24 @@
-# Backend-dev · 07-reporting · атом 1 · повторная доработка
-
-## Что реализовано
-
-- Эндпоинты: существующие `GET /reports/overview`, `GET /reports/inventory` и `GET /reports/inventory/export.csv` отвечают `403 forbidden` сотруднику ФФ с `cells=true` и `inventory=false`; администратор ФФ, сотрудник с `inventory=true` и селлер с действующим `can_products` сохраняют доступ.
-- Сервисы: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/app/api/deps.py::assert_inventory_read_access` принимает у сотрудника ФФ для отчётов только `inventory`, без права ячеек.
-
-## Миграции
-
-Нет.
-
-## Тесты
-
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/tests/test_reports_inventory.py::test_reports_require_inventory_for_ff_staff_but_keep_allowed_roles` создаёт сотрудника ФФ с `cells=true, inventory=false` и проверяет `403` с `detail=forbidden` для сводки, строк и CSV. В том же сценарии закреплён `200` для администратора ФФ, сотрудника с `inventory=true` и селлера.
+# DEV · 07-reporting · атом 1
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/app/api/deps.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/tests/test_reports_inventory.py`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/DEV.md`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/deploy/Caddyfile.seller.local` — самостоятельный seller-Caddy обслуживает SPA только в канонической базе `/app/seller`, сохраняет доступ к ресурсам бандла и постоянным перенаправлением переносит корень и старые глубокие ссылки в эту базу.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/DEV.md` — отчёт этого шага.
 
 ## Гейты
 
-- ЗЕЛЁНЫЙ: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && ruff check app/api/deps.py tests/test_reports_inventory.py` — `All checks passed!`, код завершения 0.
-- ЗЕЛЁНЫЙ: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && mypy --follow-imports=silent app/api/deps.py tests/test_reports_inventory.py` — `Success: no issues found in 2 source files`, код завершения 0.
-- ЗЕЛЁНЫЙ: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && pytest -q tests/test_reports_inventory.py` — `5 passed in 18.03s`, код завершения 0.
-- ЗЕЛЁНЫЙ: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && git diff --check` — ошибок формата diff нет, код завершения 0.
-- `python3 scripts/ci/back_guard.py` не запускался: новый роут не добавлялся.
-- `python3 scripts/ci/check_migrations.py` не запускался: миграция не добавлялась.
-- Полные `pytest`/`pytest -q` без путей, `ruff check .` и `mypy .` не запускались: границы атома запрещают полный backend-регресс.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npx tsc --noEmit -p tsconfig.app.json` — зелёный, exit 0.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && python3 scripts/ui/ui_guard.py` — красный, exit 1: новые нарушения указаны только в не относящихся к атому файлах `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/App.tsx`, `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/components/WbProductPickerDialog.tsx`, `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx` и `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/screens/v2/SellerInboundDraftScreen.tsx`. Базовая линия не менялась.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npm run test:unit -- src/apps/seller/SellerApp.test.tsx` — зелёный, 2 passed.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && VITE_SELLER_ROUTER_BASENAME=/app/seller npm run build` — зелёный, seller production bundle собран.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && docker build --file frontend/Dockerfile.seller.prod --tag wms-seller-routing-07:local .` — не выполнен: Docker daemon недоступен (`permission denied` на `/Users/deniscivkunov/.docker/run/docker.sock`). Поэтому запросы `/`, `/documents` и `/app/seller/reports` через Caddy в контейнере этой средой не проверены.
 
 ## Не реализовано
 
-- Нет: атом из `FEATURES.md` и серверная находка №1 из `REVIEW.md` реализованы буквально. Находка №2 относится к маршрутизации самостоятельного frontend-приложения селлера и не менялась этой backend-ролью.
-
-## Блокеры
-
-- Обновлённый отчёт не удалось сохранить отдельным commit: команда `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && git add night/volna-9-recovery/cards/07-reporting/DEV.md && git diff --cached --check && git commit -m "docs(reporting): record backend atom gates"` завершилась с кодом 128, потому что sandbox запретил создание `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-07-reporting1/index.lock` (`Operation not permitted`). Реализация и тесты атома уже сохранены в commit `cb8e509aa148`; обновление `DEV.md` остаётся в рабочем дереве.
+- Живую проверку seller-образа через Caddy для `/`, `/documents` и `/app/seller/reports` нельзя выполнить без доступа к Docker daemon. Конфигурация этих путей реализована; production-сборка seller-бандла с basename `/app/seller` прошла.
+- E2E-конфигурация из второй находки `REVIEW.md` не менялась: она относится к следующему атому `FEATURES.md` и запрещена рамками текущего шага.
 
 ## Находки
 
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных, production `194.87.96.144` и живой кабинет Wildberries не читались и не затрагивались.
+- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались и не изменялись.
+- Git-индекс этого зарегистрированного worktree недоступен на запись: `git add` не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-07-reporting1/index.lock`. Поэтому изменения остаются локальными и не могут быть сохранены отдельным commit в этой среде.
