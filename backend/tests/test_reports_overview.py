@@ -164,6 +164,84 @@ async def test_reports_overview_uses_moscow_half_open_dates_and_fills_daily_gaps
 
 
 @pytest.mark.asyncio
+async def test_reports_overview_counts_internal_transfer_only_for_selected_warehouse(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(int(time.time() * 1000))
+    registered = await async_client.post("/auth/register", json={
+        "organization_name": "Overview transfer", "slug": f"overview-transfer-{suffix}",
+        "admin_email": f"overview-transfer-{suffix}@example.com", "password": "password123",
+    })
+    token = str(registered.json()["access_token"])
+    headers = {"Authorization": f"Bearer {token}"}
+    tenant_id = _tenant_id(token)
+    seller = await async_client.post("/sellers", headers=headers, json={"name": "Seller"})
+    seller_id = seller.json()["id"]
+    product = await async_client.post("/products", headers=headers, json={
+        "name": "Transfer product", "sku_code": f"TR-{suffix}", "seller_id": seller_id,
+        "length_mm": 1, "width_mm": 1, "height_mm": 1,
+    })
+    product_id = product.json()["id"]
+
+    warehouse_ids: list[str] = []
+    location_ids: list[str] = []
+    for index in (1, 2):
+        warehouse = await async_client.post("/warehouses", headers=headers, json={
+            "name": f"Warehouse {index}", "code": f"transfer-{index}-{suffix}",
+        })
+        warehouse_ids.append(warehouse.json()["id"])
+        location = await async_client.post(
+            f"/warehouses/{warehouse_ids[-1]}/locations",
+            headers=headers,
+            json={"code": f"A-{index}"},
+        )
+        location_ids.append(location.json()["id"])
+
+    transfer_group = uuid.uuid4()
+    for warehouse_id, location_id, quantity_delta in (
+        (warehouse_ids[0], location_ids[0], -5),
+        (warehouse_ids[1], location_ids[1], 5),
+    ):
+        await _seed_movement(
+            tenant_id=tenant_id,
+            product_id=product_id,
+            seller_id=seller_id,
+            warehouse_id=warehouse_id,
+            storage_location_id=location_id,
+            quantity_delta=quantity_delta,
+            created_at=datetime(2026, 8, 1, 12, tzinfo=UTC),
+            transfer_group_id=transfer_group,
+        )
+
+    params = {
+        "date_from": "2026-08-01T00:00:00Z",
+        "date_to": "2026-08-03T00:00:00Z",
+    }
+    all_warehouses = await async_client.get(
+        "/reports/overview", headers=headers, params=params,
+    )
+    selected_warehouse = await async_client.get(
+        "/reports/overview",
+        headers=headers,
+        params={**params, "warehouse_id": warehouse_ids[0]},
+    )
+
+    assert all_warehouses.status_code == 200
+    assert all_warehouses.json()["in_qty"] == 0
+    assert all_warehouses.json()["out_qty"] == 0
+    assert all_warehouses.json()["daily"] == []
+    assert selected_warehouse.status_code == 200
+    assert selected_warehouse.json()["in_qty"] == 0
+    assert selected_warehouse.json()["out_qty"] == 5
+    assert selected_warehouse.json()["daily"][0] == {
+        "date": "2026-08-01",
+        "in_qty": 0,
+        "out_qty": 5,
+        "previous_out_qty": 0,
+    }
+
+
+@pytest.mark.asyncio
 async def test_reports_overview_seller_scope_overrides_requested_seller(
     async_client: AsyncClient,
 ) -> None:

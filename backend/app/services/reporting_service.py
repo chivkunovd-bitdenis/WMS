@@ -465,9 +465,10 @@ async def build_overview(
         InventoryMovement.tenant_id == tenant_id,
         InventoryMovement.created_at >= date_from,
         InventoryMovement.created_at < date_to,
-        InventoryMovement.transfer_group_id.is_(None),
         Warehouse.is_operational.is_(True),
     ]
+    if warehouse_id is None:
+        movement_filter.append(InventoryMovement.transfer_group_id.is_(None))
     if warehouse_id is not None:
         movement_filter.append(InventoryMovement.warehouse_id == warehouse_id)
     if seller_id is not None:
@@ -520,9 +521,10 @@ async def build_overview(
         InventoryMovement.tenant_id == tenant_id,
         InventoryMovement.created_at >= previous_from,
         InventoryMovement.created_at < previous_to,
-        InventoryMovement.transfer_group_id.is_(None),
         Warehouse.is_operational.is_(True),
     ]
+    if warehouse_id is None:
+        previous_filter.append(InventoryMovement.transfer_group_id.is_(None))
     if seller_id is not None:
         previous_filter.append(InventoryMovement.seller_id == seller_id)
     if warehouse_id is not None:
