@@ -19,7 +19,7 @@ def upgrade() -> None:
         sa.Column("id", u, primary_key=True),
         sa.Column("tenant_id", u, nullable=False),
         sa.Column("seller_id", u, nullable=False),
-        sa.Column("number", sa.String(64), nullable=False, unique=True),
+        sa.Column("number", sa.String(64), nullable=False),
         sa.Column("period", sa.Date, nullable=False),
         sa.Column("status", sa.String(16), nullable=False),
         sa.Column(
@@ -32,6 +32,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["seller_id"], ["sellers.id"], ondelete="RESTRICT"),
         sa.UniqueConstraint("tenant_id", "seller_id", "period", name="uq_billing_invoice_period"),
+        sa.UniqueConstraint("tenant_id", "number", name="uq_billing_invoice_tenant_number"),
     )
     op.create_index("ix_billing_invoices_tenant_id", "billing_invoices", ["tenant_id"])
     op.create_index("ix_billing_invoices_seller_id", "billing_invoices", ["seller_id"])

@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { buildInvoicePrintHtml, buildLedgerSearchParams, CANCEL_INVOICE_ERROR_MESSAGE, cancelInvoiceRequest, formatMoscowDate, initialBillingTabPeriods, InvoiceDocumentDetails, ledgerDocumentTarget, STORAGE_SERVICE_CODE, updateBillingTabPeriod } from './FfBillingScreen'
+import { buildInvoicePrintHtml, buildLedgerSearchParams, CANCEL_INVOICE_ERROR_MESSAGE, cancelInvoiceRequest, formatMoscowDate, initialBillingTabPeriods, InvoiceDocumentDetails, ledgerDocumentTarget, parseApiDecimal, STORAGE_SERVICE_CODE, updateBillingTabPeriod } from './FfBillingScreen'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -18,6 +18,11 @@ describe('FfBillingScreen billing contract', () => {
 
   it('uses the shared storage ledger service code', () => {
     expect(STORAGE_SERVICE_CODE).toBe('storage_liter_day')
+  })
+
+  it('normalizes decimal strings returned by the invoice API', () => {
+    expect(parseApiDecimal('181900.000')).toBe(181900)
+    expect(parseApiDecimal('63000.00')).toBe(63000)
   })
 
   it('formats dates in Moscow time independently from the environment timezone', () => {
@@ -63,11 +68,11 @@ describe('FfBillingScreen billing contract', () => {
       period: '2026-07',
       seller_name: 'Луна',
       issued_at: '2026-08-01T00:00:00Z',
-      total_amount: 63000,
+      total_amount: '63000.00',
       status: 'issued',
       ff_profile: { legal_name: 'ООО «Фулфилмент Волна»', inn: '7701234567' },
       seller_profile: { legal_name: 'ООО «Луна Трейд»', inn: '7812345678' },
-      lines: [{ id: 'line-1', service_code: 'inbound', unit: 'item', quantity: 84, rate: 1200, amount: 63000 }],
+      lines: [{ id: 'line-1', service_code: 'inbound', unit: 'item', quantity: '84.000', rate: '1200', amount: '63000' }],
     })
 
     expect(html).toContain('Юридическое наименование')
@@ -93,8 +98,8 @@ describe('FfBillingScreen billing contract', () => {
     const markup = renderToStaticMarkup(createElement(InvoiceDocumentDetails, {
       period: '2026-07',
       line: {
-        id: 'line-1', service_code: 'inbound', unit: 'item', quantity: 84, rate: 1200, amount: 100800,
-        documents: [{ date: '2026-07-18T10:00:00Z', number: 'ПР-000141', quantity: 84, amount: 100800 }],
+        id: 'line-1', service_code: 'inbound', unit: 'item', quantity: '84.000', rate: '1200', amount: '100800',
+        documents: [{ date: '2026-07-18T10:00:00Z', number: 'ПР-000141', quantity: '84.000', amount: '100800' }],
       },
     }))
 

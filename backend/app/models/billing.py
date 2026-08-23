@@ -228,6 +228,7 @@ class BillingInvoice(Base):
     __tablename__ = "billing_invoices"
     __table_args__ = (
         UniqueConstraint("tenant_id", "seller_id", "period", name="uq_billing_invoice_period"),
+        UniqueConstraint("tenant_id", "number", name="uq_billing_invoice_tenant_number"),
     )
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(
@@ -239,7 +240,7 @@ class BillingInvoice(Base):
         nullable=False,
         index=True,
     )
-    number: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    number: Mapped[str] = mapped_column(String(64), nullable=False)
     period: Mapped[date] = mapped_column(Date, nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="issued")
     issued_at: Mapped[datetime] = mapped_column(

@@ -88,6 +88,32 @@ def test_billing_financial_core_migration_creates_only_shared_billing_tables(
     )
 
 
+def test_billing_invoice_number_is_unique_inside_tenant_only(monkeypatch: MonkeyPatch) -> None:
+    module: ModuleType = _script_directory().get_revision("20260822_09b").module
+    created_tables: dict[str, tuple[Any, ...]] = {}
+
+    monkeypatch.setattr(
+        module.op,
+        "create_table",
+        lambda name, *items, **_kwargs: created_tables.update({name: items}),
+    )
+    monkeypatch.setattr(module.op, "create_index", lambda *_args, **_kwargs: None)
+
+    module.upgrade()
+
+    invoice_items = created_tables["billing_invoices"]
+    number_column = next(
+        item for item in invoice_items if isinstance(item, Column) and item.name == "number"
+    )
+    assert number_column.unique is not True
+    assert any(
+        isinstance(item, UniqueConstraint)
+        and item.name == "uq_billing_invoice_tenant_number"
+        and list(item._pending_colargs) == ["tenant_id", "number"]
+        for item in invoice_items
+    )
+
+
 def test_billing_models_store_money_as_kopecks_and_format_it_as_rubles() -> None:
     assert isinstance(BillingTariffVersion.__table__.c.amount.type, Integer)
     assert isinstance(BillingLedgerEntry.__table__.c.rate.type, Integer)

@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 
-const invoice = { id: 'invoice-1', number: 'СЧ-2026-00041', period: '2026-07', seller_name: 'Луна', issued_at: '2026-08-01T00:00:00Z', total_amount: 2949200, status: 'issued', ff_profile: { legal_name: 'ООО «Фулфилмент Волна»', inn: '7701234567' }, seller_profile: { legal_name: 'ООО «Луна Трейд»', inn: '7812345678' }, lines: [{ id: 'line-1', service_code: 'inbound', unit: 'item', quantity: 1245, rate: 1200, amount: 1494000, documents: [{ date: '2026-07-20', number: 'ПР-000141', quantity: 1245, amount: 1494000 }] }, { id: 'line-storage', service_code: 'storage_liter_day', unit: 'liter_day', quantity: 181900, rate: 8, amount: 1455200, documents: [{ date: '2026-07-31', number: 'technical-storage-uuid', quantity: 181900, amount: 1455200 }] }] }
+const invoice = { id: 'invoice-1', number: 'СЧ-2026-00041', period: '2026-07', seller_name: 'Луна', issued_at: '2026-08-01T00:00:00Z', total_amount: '2949200.00', status: 'issued', ff_profile: { legal_name: 'ООО «Фулфилмент Волна»', inn: '7701234567' }, seller_profile: { legal_name: 'ООО «Луна Трейд»', inn: '7812345678' }, lines: [{ id: 'line-1', service_code: 'inbound', unit: 'item', quantity: '1245.000', rate: '1200', amount: '1494000', documents: [{ date: '2026-07-20', number: 'ПР-000141', quantity: '1245.000', amount: '1494000' }] }, { id: 'line-storage', service_code: 'storage_liter_day', unit: 'liter_day', quantity: '181900.000', rate: '8', amount: '1455200', documents: [{ date: '2026-07-31', number: 'technical-storage-uuid', quantity: '181900.000', amount: '1455200' }] }] }
 
 async function authenticateBillingAdmin(page: Page) {
   await page.addInitScript(() => localStorage.setItem('wms_token_ff', 'e2e-billing-admin'))
@@ -287,6 +287,8 @@ test('billing invoice opens, reveals documents and starts print', async ({ page 
   await page.locator('[aria-label="Показать документы"] button').nth(1).click()
   await expect(page.getByTestId('billing-invoice-documents')).toContainText('Расчёт хранения за июль 2026 г.')
   await expect(page.getByTestId('billing-invoice-documents')).not.toContainText('technical-storage-uuid')
+  await expect(page.getByTestId('billing-invoice-documents')).not.toContainText('· ·')
+  expect(((await page.getByTestId('billing-invoice-documents').textContent())?.match(/·/g) ?? []).length).toBe(3)
   const pageGeometry = await page.evaluate(() => ({
     contentWidth: document.documentElement.scrollWidth,
     viewportWidth: document.documentElement.clientWidth,

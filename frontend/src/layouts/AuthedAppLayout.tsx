@@ -290,7 +290,6 @@ export function AuthedAppLayout({
         component="main"
         sx={(theme) => ({
           flexGrow: 1,
-          minWidth: 0,
           p: 3,
           background: `linear-gradient(165deg, ${alpha(theme.palette.primary.main, 0.07)} 0%, ${theme.palette.background.default} 32%, ${theme.palette.background.default} 100%)`,
         })}

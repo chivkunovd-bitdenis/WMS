@@ -21,10 +21,12 @@ export function QtyCell({ value, muted = false }: { value: number | null | undef
 
 // Денежные значения приходят из billing API в целых копейках.
 // Сторно остаётся обычной отрицательной суммой без отдельной окраски.
-export function formatMoney(minor: number | null | undefined): string {
+export function formatMoney(minor: number | string | null | undefined): string {
   if (minor === null || minor === undefined) return '—'
+  const numericMinor = typeof minor === 'string' ? Number(minor) : minor
+  if (!Number.isFinite(numericMinor)) return '—'
 
-  const amount = (minor / 100).toLocaleString('ru-RU', {
+  const amount = (numericMinor / 100).toLocaleString('ru-RU', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
@@ -35,7 +37,7 @@ export function MoneyCell({
   minor,
   muted = false,
 }: {
-  minor: number | null | undefined
+  minor: number | string | null | undefined
   muted?: boolean
 }) {
   return (
