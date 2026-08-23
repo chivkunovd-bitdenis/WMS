@@ -19,6 +19,7 @@ DOC_TYPE_UNLOAD = "unload"
 DOC_TYPE_PACKAGING = "packaging"
 DOC_TYPE_MARKING_IMPORT = "marking_import"
 DOC_TYPE_REMARK = "remark"
+DOC_TYPE_INVOICE = "invoice"
 
 PREFIX_BY_DOC_TYPE: dict[str, str] = {
     DOC_TYPE_INBOUND: "ПРИЕМ",
@@ -26,6 +27,7 @@ PREFIX_BY_DOC_TYPE: dict[str, str] = {
     DOC_TYPE_PACKAGING: "УПАК",
     DOC_TYPE_MARKING_IMPORT: "ЗАГРКМ",
     DOC_TYPE_REMARK: "ПЕРЕМАРК",
+    DOC_TYPE_INVOICE: "СЧЕТ",
 }
 
 DISPLAY_NUMBER_PREFIX = "№"

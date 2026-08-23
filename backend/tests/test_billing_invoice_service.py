@@ -1,0 +1,456 @@
+import uuid
+from datetime import UTC, date, datetime
+from decimal import Decimal
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock, call
+
+import pytest
+from sqlalchemy import Boolean, Date, String, Uuid
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+from app.models.billing import BillingInvoice, BillingLedgerEntry, BillingProfile, BillingRunIssue
+from app.services import billing_invoice_service
+from app.services.billing_invoice_service import _storage_source_ids, form_invoice
+from app.services.document_number_service import DOC_TYPE_INVOICE
+
+
+def _result(values: list[object]) -> Mock:
+    return Mock(all=Mock(return_value=values))
+
+
+def _savepoint_session() -> AsyncMock:
+    session = AsyncMock()
+    session.add = Mock()
+    session.begin_nested = AsyncMock(return_value=AsyncMock())
+    return session
+
+
+@pytest.mark.asyncio
+async def test_form_invoice_blocks_unpriced_with_one_current_issue() -> None:
+    session = _savepoint_session()
+    seller_id = uuid.uuid4()
+    tenant_id = uuid.uuid4()
+    entry = BillingLedgerEntry(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        source_type="inbound_intake",
+        source_id=uuid.uuid4(),
+        service_code="inbound",
+        unit="document",
+        quantity=Decimal("1"),
+        amount=None,
+        occurred_at=datetime(2026, 7, 5, tzinfo=UTC),
+    )
+    ff_profile = BillingProfile(
+        tenant_id=tenant_id,
+        seller_id=None,
+        legal_name="FF",
+        inn="123",
+        bank_name="Bank",
+        bik="044525225",
+        settlement_account="40702810000000000001",
+        correspondent_account="30101810400000000225",
+    )
+    seller_profile = BillingProfile(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        legal_name="Seller",
+        inn="456",
+    )
+    session.scalar = AsyncMock(
+        side_effect=[object(), None, None, ff_profile, seller_profile, None]
+    )
+    session.scalars = AsyncMock(return_value=_result([entry]))
+
+    result = await form_invoice(
+        session,
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        period=date(2026, 7, 1),
+    )
+
+    assert result.reason == "unpriced"
+    assert session.add.call_count == 1
+    assert session.add.call_args.args[0] is result
+
+
+def _complete_ff_profile(tenant_id: uuid.UUID) -> BillingProfile:
+    return BillingProfile(
+        tenant_id=tenant_id,
+        seller_id=None,
+        legal_name="FF",
+        inn="123",
+        bank_name="Bank",
+        bik="044525225",
+        settlement_account="40702810000000000001",
+        correspondent_account="30101810400000000225",
+    )
+
+
+def _complete_seller_profile(tenant_id: uuid.UUID, seller_id: uuid.UUID) -> BillingProfile:
+    return BillingProfile(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        legal_name="Seller",
+        inn="456",
+    )
+
+
+def _priced_entry(tenant_id: uuid.UUID, seller_id: uuid.UUID) -> BillingLedgerEntry:
+    return BillingLedgerEntry(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        source_type="inbound_intake",
+        source_id=uuid.uuid4(),
+        service_code="inbound",
+        unit="document",
+        quantity=Decimal("1"),
+        rate=100,
+        amount=100,
+        occurred_at=datetime(2026, 7, 5, tzinfo=UTC),
+    )
+
+
+@pytest.mark.asyncio
+async def test_form_invoice_uses_shared_document_number_for_each_seller(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """S-31-TC-006: invoices use opaque shared-service numbers and remain idempotent."""
+    tenant_id = uuid.uuid4()
+    seller_a_id = uuid.uuid4()
+    seller_b_id = uuid.uuid4()
+    next_number = AsyncMock(side_effect=["СЧЕТ-26-08-23-1", "СЧЕТ-26-08-23-2"])
+    monkeypatch.setattr(billing_invoice_service, "next_document_number", next_number)
+
+    async def create(seller_id: uuid.UUID) -> tuple[AsyncMock, BillingInvoice]:
+        session = _savepoint_session()
+        entry = _priced_entry(tenant_id, seller_id)
+        entry.source_type = "storage_measurement"
+        session.scalar = AsyncMock(
+            side_effect=[
+                object(),
+                None,
+                None,
+                _complete_ff_profile(tenant_id),
+                _complete_seller_profile(tenant_id, seller_id),
+            ]
+        )
+        session.scalars = AsyncMock(return_value=_result([entry]))
+        invoice = await form_invoice(
+            session, tenant_id=tenant_id, seller_id=seller_id, period=date(2026, 7, 1)
+        )
+        assert isinstance(invoice, BillingInvoice)
+        return session, invoice
+
+    first_session, first_invoice = await create(seller_a_id)
+    second_session, second_invoice = await create(seller_b_id)
+
+    assert first_invoice.number == "СЧЕТ-26-08-23-1"
+    assert second_invoice.number == "СЧЕТ-26-08-23-2"
+    assert first_invoice.number != second_invoice.number
+    assert seller_a_id.hex[:8] not in first_invoice.number
+    assert seller_b_id.hex[:8] not in second_invoice.number
+    assert next_number.await_args_list == [
+        call(first_session, tenant_id, DOC_TYPE_INVOICE),
+        call(second_session, tenant_id, DOC_TYPE_INVOICE),
+    ]
+
+    first_session.scalar = AsyncMock(side_effect=[object(), first_invoice])
+    repeated = await form_invoice(
+        first_session, tenant_id=tenant_id, seller_id=seller_a_id, period=date(2026, 7, 1)
+    )
+
+    assert repeated is first_invoice
+    assert next_number.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_form_invoice_uses_moscow_date_for_invoice_line_documents(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """S-31-TC-006: invoice details keep the final fact's Moscow calendar date."""
+    tenant_id = uuid.uuid4()
+    seller_id = uuid.uuid4()
+    entry = _priced_entry(tenant_id, seller_id)
+    entry.source_type = "storage_measurement"
+    entry.occurred_at = datetime(2025, 6, 30, 21, 30, tzinfo=UTC)
+    session = _savepoint_session()
+    session.scalar = AsyncMock(
+        side_effect=[
+            object(),
+            None,
+            None,
+            _complete_ff_profile(tenant_id),
+            _complete_seller_profile(tenant_id, seller_id),
+        ]
+    )
+    session.scalars = AsyncMock(return_value=_result([entry]))
+    monkeypatch.setattr(
+        billing_invoice_service, "next_document_number", AsyncMock(return_value="СЧЕТ-1")
+    )
+
+    invoice = await form_invoice(
+        session,
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        period=date(2025, 7, 1),
+    )
+
+    assert isinstance(invoice, BillingInvoice)
+    assert invoice.period == date(2025, 7, 1)
+    assert invoice.lines[0]["documents"][0]["date"] == "2025-07-01"
+
+
+@pytest.mark.asyncio
+async def test_form_invoice_returns_incomplete_seller_profile_reason_without_ff_reason() -> None:
+    tenant_id = uuid.uuid4()
+    seller_id = uuid.uuid4()
+    incomplete_seller = BillingProfile(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        legal_name="Seller",
+        inn=" ",
+    )
+    session = _savepoint_session()
+    session.scalar = AsyncMock(
+        side_effect=[
+            object(),
+            None,
+            None,
+            _complete_ff_profile(tenant_id),
+            incomplete_seller,
+            None,
+        ]
+    )
+    session.scalars = AsyncMock(return_value=_result([_priced_entry(tenant_id, seller_id)]))
+
+    result = await form_invoice(
+        session, tenant_id=tenant_id, seller_id=seller_id, period=date(2026, 7, 1)
+    )
+
+    assert isinstance(result, BillingRunIssue)
+    assert result.reason == "missing_seller_profile"
+    assert result.reason != "missing_ff_profile"
+
+
+@pytest.mark.asyncio
+async def test_form_invoice_returns_ff_profile_reason_without_seller_reason() -> None:
+    tenant_id = uuid.uuid4()
+    seller_id = uuid.uuid4()
+    incomplete_ff = BillingProfile(
+        tenant_id=tenant_id,
+        seller_id=None,
+        legal_name="FF",
+        inn="123",
+        bank_name=None,
+        bik="044525225",
+        settlement_account="40702810000000000001",
+        correspondent_account="30101810400000000225",
+    )
+    session = _savepoint_session()
+    session.scalar = AsyncMock(
+        side_effect=[
+            object(),
+            None,
+            None,
+            incomplete_ff,
+            _complete_seller_profile(tenant_id, seller_id),
+            None,
+        ]
+    )
+    session.scalars = AsyncMock(return_value=_result([_priced_entry(tenant_id, seller_id)]))
+
+    result = await form_invoice(
+        session, tenant_id=tenant_id, seller_id=seller_id, period=date(2026, 7, 1)
+    )
+
+    assert isinstance(result, BillingRunIssue)
+    assert result.reason == "missing_ff_profile"
+    assert result.reason != "missing_seller_profile"
+
+
+@pytest.mark.asyncio
+async def test_form_invoice_returns_each_missing_profile_reason() -> None:
+    tenant_id = uuid.uuid4()
+    seller_id = uuid.uuid4()
+    session = _savepoint_session()
+    session.scalar = AsyncMock(side_effect=[object(), None, None, None, None, None, None])
+    session.scalars = AsyncMock(return_value=_result([_priced_entry(tenant_id, seller_id)]))
+
+    result = await form_invoice(
+        session, tenant_id=tenant_id, seller_id=seller_id, period=date(2026, 7, 1)
+    )
+
+    assert isinstance(result, list)
+    assert [issue.reason for issue in result] == [
+        "missing_ff_profile",
+        "missing_seller_profile",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_empty_month_is_not_persisted_as_blocking_issue() -> None:
+    session = _savepoint_session()
+    tenant_id = uuid.uuid4()
+    seller_id = uuid.uuid4()
+    session.scalar = AsyncMock(side_effect=[object(), None, None])
+    session.scalars = AsyncMock(return_value=_result([]))
+
+    result = await form_invoice(
+        session,
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        period=date(2026, 7, 1),
+    )
+
+    assert result is None
+    session.execute.assert_awaited_once()
+    session.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_existing_invoice_clears_stale_issues_without_duplicate() -> None:
+    session = AsyncMock()
+    session.add = Mock()
+    invoice = BillingInvoice(
+        tenant_id=uuid.uuid4(),
+        seller_id=uuid.uuid4(),
+        period=date(2026, 7, 1),
+        number="INV",
+        total_amount=Decimal("1"),
+        ff_profile_snapshot={},
+        seller_profile_snapshot={},
+        lines=[],
+    )
+    session.scalar = AsyncMock(side_effect=[object(), invoice])
+
+    result = await form_invoice(
+        session,
+        tenant_id=invoice.tenant_id,
+        seller_id=invoice.seller_id,
+        period=invoice.period,
+    )
+
+    assert result is invoice
+    session.execute.assert_awaited_once()
+    session.add.assert_not_called()
+
+
+class _StorageBase(DeclarativeBase):
+    pass
+
+
+class _Warehouse(_StorageBase):
+    __tablename__ = "test_invoice_warehouses"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    is_operational: Mapped[bool] = mapped_column(Boolean)
+
+
+class _Statement(_StorageBase):
+    __tablename__ = "test_invoice_statements"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    seller_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    warehouse_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    period_start: Mapped[date] = mapped_column(Date)
+    period_end: Mapped[date] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(String)
+
+
+class _Measurement(_StorageBase):
+    __tablename__ = "test_invoice_measurements"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    seller_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    warehouse_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    period_start: Mapped[date] = mapped_column(Date)
+    period_end: Mapped[date] = mapped_column(Date)
+
+
+@pytest.mark.asyncio
+async def test_storage_barrier_requires_fixed_published_statement_for_both_warehouses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """S-31-TC-013: one fixed warehouse never unlocks a two-warehouse invoice."""
+    tenant_id = uuid.uuid4()
+    seller_id = uuid.uuid4()
+    warehouse_a = uuid.uuid4()
+    warehouse_b = uuid.uuid4()
+    statement_a = SimpleNamespace(id=uuid.uuid4(), warehouse_id=warehouse_a)
+    measurement_a = uuid.uuid4()
+    session = AsyncMock()
+    session.scalar = AsyncMock(return_value=uuid.uuid4())
+    session.scalars = AsyncMock(
+        side_effect=[
+            _result([warehouse_a, warehouse_b]),
+            _result([statement_a]),
+        ]
+    )
+
+    modules = {
+        "app.models.storage_statement": SimpleNamespace(StorageStatement=_Statement),
+        "app.models.storage_measurement": SimpleNamespace(StorageMeasurement=_Measurement),
+        "app.models.warehouse": SimpleNamespace(Warehouse=_Warehouse),
+    }
+    monkeypatch.setattr(
+        billing_invoice_service.importlib,
+        "import_module",
+        lambda name: modules[name],
+    )
+
+    ready, source_ids = await _storage_source_ids(
+        session,
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        period=date(2026, 7, 1),
+    )
+
+    assert ready is False
+    assert source_ids == set()
+    assert measurement_a not in source_ids
+
+
+@pytest.mark.asyncio
+async def test_storage_barrier_accepts_zero_and_measured_published_statements(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """S-31-TC-006: every operational warehouse contributes an auditable source."""
+    tenant_id = uuid.uuid4()
+    seller_id = uuid.uuid4()
+    warehouse_a = uuid.uuid4()
+    warehouse_b = uuid.uuid4()
+    statement_a = SimpleNamespace(id=uuid.uuid4(), warehouse_id=warehouse_a)
+    statement_b = SimpleNamespace(id=uuid.uuid4(), warehouse_id=warehouse_b)
+    measurement_a = uuid.uuid4()
+    session = AsyncMock()
+    session.scalar = AsyncMock(return_value=uuid.uuid4())
+    session.scalars = AsyncMock(
+        side_effect=[
+            _result([warehouse_a, warehouse_b]),
+            _result([statement_a, statement_b]),
+            _result([measurement_a]),
+            _result([]),
+            _result([measurement_a, statement_b.id]),
+        ]
+    )
+    modules = {
+        "app.models.storage_statement": SimpleNamespace(StorageStatement=_Statement),
+        "app.models.storage_measurement": SimpleNamespace(StorageMeasurement=_Measurement),
+        "app.models.warehouse": SimpleNamespace(Warehouse=_Warehouse),
+    }
+    monkeypatch.setattr(
+        billing_invoice_service.importlib,
+        "import_module",
+        lambda name: modules[name],
+    )
+
+    ready, source_ids = await _storage_source_ids(
+        session,
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        period=date(2026, 7, 1),
+    )
+
+    assert ready is True
+    assert source_ids == {measurement_a, statement_b.id}
