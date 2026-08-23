@@ -723,6 +723,7 @@ async def _sync_order_meta_from_wb(
             signature=signature,
         ):
             _reset_stale_wb_verdict(locked_order, current_markings)
+            locked_order.metadata_last_checked_at = started_at
         await session.flush()
         raise
 
@@ -773,7 +774,10 @@ async def _sync_order_meta_from_wb(
     persisted_details.update(_meta_details_from_wb(tuple(details_by_kind.values())))
     order.meta_details_json = persisted_details
     order.metadata_delivery_allowed = compute_delivery_allowed(order, markings)
-    order.metadata_last_checked_at = datetime.now(tz=UTC)
+    # Store when this check started, rather than when its response arrived.
+    # The row lock can then compare concurrent results by request order even
+    # when an older response is persisted before a newer response returns.
+    order.metadata_last_checked_at = started_at
     await session.flush()
     return markings
 

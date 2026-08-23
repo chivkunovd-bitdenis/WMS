@@ -166,3 +166,8 @@
 04:41   02-verdikt-screen · dev: фича 3/4 сохранена 241df4466a6a
 04:49   02-verdikt-screen · screen-dev: готово
 04:49   02-verdikt-screen · dev: фича 4/4 сохранена 56b97fe43cf2
+05:04   02-verdikt-screen · reviewer: готово
+05:04   02-verdikt-screen · reviewer: Terra-rework не закрыл вердикт — эскалация Sol
+05:04   02-verdikt-screen · reviewer: находки, круг 3 — назад к разработке
+05:08   02-verdikt-screen · splitter: готово
+05:15   02-verdikt-screen · backend-dev: готово

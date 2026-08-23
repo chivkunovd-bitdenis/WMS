@@ -274,11 +274,17 @@ async def test_fbs_marking_sync_clears_stale_filled_verdict(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "older_response_finishes_first",
+    [True, False],
+    ids=["older-persists-first", "newer-persists-first"],
+)
 async def test_fbs_marking_sync_does_not_apply_stale_response(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
+    older_response_finishes_first: bool,
 ) -> None:
-    """S-03-TC-016: a late old WB acceptance cannot replace a newer rejection."""
+    """S-03-TC-016: the later-started WB check wins in either response order."""
     from app.models.fbs_order import FbsOrder
     from app.models.fbs_supply import (
         FBS_DELIVERY_TYPE_WAREHOUSE_SC,
@@ -319,7 +325,9 @@ async def test_fbs_marking_sync_does_not_apply_stale_response(
         await session.commit()
 
     first_request_waiting = asyncio.Event()
+    second_request_waiting = asyncio.Event()
     release_first_request = asyncio.Event()
+    release_second_request = asyncio.Event()
     call_count = 0
 
     async def fake_meta_batch(*args: object, **kwargs: object) -> list[object]:
@@ -331,6 +339,8 @@ async def test_fbs_marking_sync_does_not_apply_stale_response(
             await release_first_request.wait()
             reason = None
         else:
+            second_request_waiting.set()
+            await release_second_request.wait()
             reason = "uinBadStatus"
         return [
             MarketplaceOrderMetaRow(
@@ -362,9 +372,24 @@ async def test_fbs_marking_sync_does_not_apply_stale_response(
 
     first_request = asyncio.create_task(sync_once())
     await first_request_waiting.wait()
-    await sync_once()
-    release_first_request.set()
-    await first_request
+    second_request = asyncio.create_task(sync_once())
+    await second_request_waiting.wait()
+    if older_response_finishes_first:
+        release_first_request.set()
+        await first_request
+        async with SessionLocal() as session:
+            older_result = await session.get(FbsOrder, order_id)
+            assert older_result is not None
+            assert older_result.metadata_delivery_allowed is True
+            assert older_result.meta_details_json is not None
+            assert older_result.meta_details_json["sgtin"]["reason"] is None
+        release_second_request.set()
+        await second_request
+    else:
+        release_second_request.set()
+        await second_request
+        release_first_request.set()
+        await first_request
 
     async with SessionLocal() as session:
         order = await session.get(FbsOrder, order_id)
