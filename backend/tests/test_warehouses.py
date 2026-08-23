@@ -29,6 +29,18 @@ async def test_operational_warehouse_list_and_scan_resolver(async_client: AsyncC
     assert body["is_operational"] is True
     assert body["barcode"].startswith("WH-")
 
+    async with SessionLocal() as session:
+        stored_warehouse = await session.get(Warehouse, uuid.UUID(body["id"]))
+        assert stored_warehouse is not None
+        technical = Warehouse(
+            tenant_id=stored_warehouse.tenant_id,
+            name="FBS WB Legacy",
+            code="fbs-wb-legacy",
+            is_operational=False,
+        )
+        session.add(technical)
+        await session.commit()
+
     listed = await async_client.get("/warehouses", headers=headers)
     assert listed.status_code == 200
     assert [row["id"] for row in listed.json()] == [body["id"]]
