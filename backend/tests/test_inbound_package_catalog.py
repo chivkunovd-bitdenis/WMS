@@ -17,6 +17,7 @@ from app.models.inbound_intake import (
     InboundIntakeRequest,
 )
 from app.models.product import Product
+from app.models.seller import Seller
 from app.models.warehouse import Warehouse
 
 
@@ -80,11 +81,16 @@ async def _seed_packages(tenant_id: uuid.UUID) -> dict[str, uuid.UUID]:
     now = datetime.now(UTC)
     warehouse_one = Warehouse(id=uuid.uuid4(), tenant_id=tenant_id, name="Основной", code="main")
     warehouse_two = Warehouse(id=uuid.uuid4(), tenant_id=tenant_id, name="Резерв", code="reserve")
+    seller = Seller(id=uuid.uuid4(), tenant_id=tenant_id, name="Селлер короба")
     product = Product(
         id=uuid.uuid4(),
         tenant_id=tenant_id,
+        seller_id=seller.id,
         name="Товар в коробе",
         sku_code="PKG-CATALOG-SKU",
+        wb_vendor_code="SELLER-ARTICLE",
+        wb_barcode="2030000000012",
+        wb_size="46",
     )
     current_request = InboundIntakeRequest(
         id=uuid.uuid4(),
@@ -199,6 +205,7 @@ async def _seed_packages(tenant_id: uuid.UUID) -> dict[str, uuid.UUID]:
             [
                 warehouse_one,
                 warehouse_two,
+                seller,
                 product,
                 current_request,
                 old_request,
@@ -279,7 +286,24 @@ async def test_catalog_list_and_lookup_are_tenant_scoped_read_only(
     assert residual["kind"] == "box"
     assert residual["fully_distributed"] is False
     assert residual["remaining_qty"] == 6
-    assert residual["lines"] == [{"product_id": str(ids["product_id"]), "remaining_qty": 6}]
+    assert residual["lines"] == [
+        {
+            "product_id": str(ids["product_id"]),
+            "remaining_qty": 6,
+            "name": "Товар в коробе",
+            "sku_code": "PKG-CATALOG-SKU",
+            "wb_vendor_code": "SELLER-ARTICLE",
+            "wb_barcode": "2030000000012",
+            "wb_size": "46",
+            "seller_name": "Селлер короба",
+        }
+    ]
+    assert residual["source_document"] == {
+        "kind": "inbound_intake",
+        "id": str(ids["current_request_id"]),
+        "number": "№000002",
+        "date": residual["source_document"]["date"],
+    }
     assert residual["warehouse_name"] == "Основной"
     assert rows[1]["remaining_qty"] == 0
     assert rows[1]["fully_distributed"] is False
