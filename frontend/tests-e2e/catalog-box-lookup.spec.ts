@@ -115,7 +115,7 @@ async function switchToCellsStaff(page: Page, adminToken: string, suffix: string
 }
 
 // TC-NEW-CATALOG-PACKAGES-001, TC-NEW-CATALOG-PACKAGES-002,
-// TC-NEW-CATALOG-PACKAGES-003, TC-NEW-CATALOG-PACKAGES-004.
+// TC-NEW-CATALOG-PACKAGES-003, TC-NEW-CATALOG-PACKAGES-004, S-16-TC-015.
 test('catalog scan follows a received box through partial and full putaway', async ({ page }) => {
   test.setTimeout(180_000)
   const seed = await seedFfSellerInbound(page, `catalog-package-${Date.now()}`)
@@ -237,10 +237,38 @@ test('catalog scan follows a received box through partial and full putaway', asy
   ])
 
   await page.goto('/app/ff/products')
+  let listRequestCount = 0
+  let releaseFailedListRequest: (() => void) | undefined
+  const failedListRequestReleased = new Promise<void>((resolve) => {
+    releaseFailedListRequest = resolve
+  })
+  let markFailedListRequestStarted: (() => void) | undefined
+  const failedListRequestStarted = new Promise<void>((resolve) => {
+    markFailedListRequestStarted = resolve
+  })
+  await page.route(/\/api\/operations\/inbound-packages$/, async (route) => {
+    listRequestCount += 1
+    if (listRequestCount === 1) {
+      markFailedListRequestStarted?.()
+      await failedListRequestReleased
+      await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' })
+      return
+    }
+    await route.continue()
+  })
+  await page.getByTestId('ff-catalog-inbound-packages-toggle').click()
+  await failedListRequestStarted
+  await expect(page.getByTestId('ff-catalog-inbound-packages-skeleton')).toBeVisible()
   await scanCatalogPackage(page, boxBarcode!)
-  await expect(page.locator('[data-testid^="ff-catalog-inbound-package-"]').filter({ hasText: boxBarcode! })).toContainText(
-    'Товар из короба уже разложен',
-  )
+  const distributedBox = page.locator('[data-testid^="ff-catalog-inbound-package-"]').filter({ hasText: boxBarcode! })
+  await expect(distributedBox).toContainText('Товар из короба уже разложен')
+  await expect(page.getByTestId('ff-catalog-inbound-packages-skeleton')).toBeVisible()
+  releaseFailedListRequest?.()
+  await expect(page.getByTestId('ff-catalog-inbound-packages-error')).toBeVisible()
+  await expect(distributedBox).toContainText('Товар из короба уже разложен')
+  await page.getByTestId('ff-catalog-inbound-packages-retry').click()
+  await expect(distributedBox).toContainText('Товар из короба уже разложен')
+  await page.unroute(/\/api\/operations\/inbound-packages$/)
 
   await switchToCellsStaff(page, seed.token, seed.suffix)
   await page.goto('/app/ff/products')

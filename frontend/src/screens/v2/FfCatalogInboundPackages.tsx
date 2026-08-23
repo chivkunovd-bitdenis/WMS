@@ -29,6 +29,7 @@ type InboundPackage = {
   warehouse_name: string | null
   intake_status: string
   composition_tracked: boolean
+  fully_distributed: boolean
   remaining_qty: number | null
   lines: InboundPackageLine[]
 }
@@ -82,7 +83,7 @@ export const FfCatalogInboundPackages = forwardRef<CatalogInboundPackagesHandle,
       return listedPackages.map((item) => (item.id === addressedPackage.id ? addressedPackage : item))
     }, [addressedPackage, listedPackages])
 
-    const visiblePackages = listError
+    const visiblePackages = listLoading
       ? addressedPackage
         ? [addressedPackage]
         : []
@@ -98,7 +99,6 @@ export const FfCatalogInboundPackages = forwardRef<CatalogInboundPackagesHandle,
         if (!response.ok) throw new Error('inbound_packages_load_failed')
         setListedPackages((await response.json()) as InboundPackage[])
         setListLoaded(true)
-        setAddressedPackage(null)
       } catch {
         setListError(true)
       } finally {
@@ -230,14 +230,14 @@ export const FfCatalogInboundPackages = forwardRef<CatalogInboundPackagesHandle,
             />
           ) : null}
 
-          {!listLoading
-            ? visiblePackages.map((item) => {
-                const compositionRows: PackageCompositionRow[] = item.lines.flatMap((line) => {
-                  const product = productsById.get(line.product_id)
-                  return product ? [{ ...line, ...product }] : []
-                })
-                const completed = item.intake_status === 'done'
-                return (
+          {visiblePackages.map((item) => {
+            const compositionRows: PackageCompositionRow[] = item.lines.flatMap((line) => {
+              const product = productsById.get(line.product_id)
+              return product ? [{ ...line, ...product }] : []
+            })
+            const completed = item.intake_status === 'done'
+            const fullyDistributed = item.kind === 'box' && item.fully_distributed
+            return (
                   <Accordion
                     key={item.id}
                     id={`ff-catalog-inbound-package-${item.id}`}
@@ -284,7 +284,7 @@ export const FfCatalogInboundPackages = forwardRef<CatalogInboundPackagesHandle,
                           title={completed ? 'Приёмка завершена' : 'Состав по грузоместу не ведётся'}
                           hint={completed ? 'Состав по грузоместу не ведётся' : undefined}
                         />
-                      ) : completed ? (
+                      ) : fullyDistributed || completed ? (
                         <EmptyState
                           title="Товар из короба уже разложен"
                           hint="Исторический состав здесь не показывается."
@@ -308,9 +308,8 @@ export const FfCatalogInboundPackages = forwardRef<CatalogInboundPackagesHandle,
                       )}
                     </AccordionDetails>
                   </Accordion>
-                )
-              })
-            : null}
+            )
+          })}
         </AccordionDetails>
       </Accordion>
     )
