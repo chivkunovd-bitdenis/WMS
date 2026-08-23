@@ -1318,6 +1318,7 @@
         "src/screens/ff/FfManualProductCreateDialog.tsx",
         "src/screens/ff/FfProductTzImportDialog.tsx",
         "src/screens/ff/FfSellerCreateDialog.tsx",
+        "src/screens/v2/FfCatalogInboundPackages.tsx",
         "src/screens/v2/FfProductsCatalogScreen.tsx"
       ],
       "zones": [
