@@ -169,6 +169,7 @@ export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
     abortRef.current?.abort()
     tableAbortRef.current?.abort()
     tableAbortRef.current = null
+    setTableLoading(false)
     const controller = new AbortController()
     abortRef.current = controller
     setLoading(true); setSummaryLoading(false); setSummaryError(false); setTableError(false)

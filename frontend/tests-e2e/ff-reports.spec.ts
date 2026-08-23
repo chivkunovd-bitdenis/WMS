@@ -85,6 +85,7 @@ test('FF report keeps one table slice and distinguishes a table error from empty
   await oldPageStarted
   await page.getByTestId('filter-search').fill('fresh-slice')
   await expect(page.getByTestId('ff-reports-table')).toContainText('Fresh filtered result')
+  await expect(page.getByTestId('ff-reports-table').locator('tbody .MuiSkeleton-root')).toHaveCount(0)
   releaseOldPage?.()
   await oldPageHandled
   await page.waitForTimeout(100)
