@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.session import SessionLocal
@@ -26,7 +27,11 @@ from app.models.fbs_order import (
     FbsOrderMarking,
 )
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
-from app.models.fbs_supply import FBS_DELIVERY_TYPE_WAREHOUSE_SC, FbsSupply
+from app.models.fbs_supply import (
+    FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+    FBS_SUPPLY_STATUS_ASSEMBLING,
+    FbsSupply,
+)
 from app.models.marking_code import (
     EVENT_APPLIED,
     EVENT_VOIDED,
@@ -41,6 +46,7 @@ from app.models.marking_code import (
 from app.models.packaging_task import STATUS_IN_PROGRESS, PackagingTask, PackagingTaskLine
 from app.models.product import Product
 from app.models.storage_location import StorageLocation
+from app.services import fbs_autopoll_service as fbs_autopoll_svc
 from app.services import fbs_kiz_service as kiz_svc
 from app.services import fbs_marking_service as fbs_marking_svc
 from app.services import fbs_order_tape_print_service as tape_print_svc
@@ -2683,3 +2689,155 @@ async def test_fbs_marking_pool_counts_replacement_required_order_as_needing_cod
     assert marking_pool["available"] == 1
     assert marking_pool["shortage"] == 0
     assert marking_pool["orders_without_code"] == []
+
+
+@pytest.mark.asyncio
+async def test_fbs_autopoll_marking_sync_uses_status_transaction_for_wb_marker(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TC-NEW-FBS-KIZ-012: a status-locked order receives the fresh WB verdict."""
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
+        async_client, headers, suffix
+    )
+    supply_id = await _create_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        suffix=suffix,
+    )
+    order = await _create_order(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        supply_id=supply_id,
+        suffix=suffix,
+        wb_order_id=951001,
+        sticker_code="AUTOPOLL-MARKER",
+        wb_barcode="AUTOPOLL-MARKER-BAR",
+        with_packaging=True,
+    )
+    value = _cis("AUTOPOLLMARKER")
+    await _seed_active_marking(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        order=order,
+        value=value,
+        code_source="external_fbs",
+        marking_source="operator",
+        code_status=STATUS_APPLIED,
+        qty_marking_printed=0,
+        qty_marking_external=1,
+    )
+    async with SessionLocal() as session:
+        db_order = await session.get(FbsOrder, order.order_id)
+        supply = await session.get(FbsSupply, supply_id)
+        assert db_order is not None
+        assert supply is not None
+        db_order.required_meta_json = [MARKING_KIND_SGTIN]
+        supply.status = FBS_SUPPLY_STATUS_ASSEMBLING
+        await session.commit()
+
+    async def hold_status_lock(
+        session: AsyncSession,
+        tenant_id: uuid.UUID,
+        seller_id: uuid.UUID,
+        http_client: object,
+    ) -> int:
+        del seller_id, http_client
+        locked_order = (
+            await session.execute(
+                select(FbsOrder)
+                .where(
+                    FbsOrder.id == order.order_id,
+                    FbsOrder.tenant_id == tenant_id,
+                )
+                .with_for_update()
+            )
+        ).scalar_one()
+        assert locked_order.id == order.order_id
+        return 1
+
+    async def fake_token(
+        session: AsyncSession,
+        tenant_id: uuid.UUID,
+        seller_id: uuid.UUID,
+    ) -> str:
+        del session, tenant_id, seller_id
+        return "test-token"
+
+    async def fake_meta_batch(
+        client: object,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[MarketplaceOrderMetaRow]:
+        del client, api_token, marketplace_api_base
+        return [
+            MarketplaceOrderMetaRow(
+                order_id=order_ids[0],
+                meta_details=(
+                    MarketplaceMetaDetail(
+                        key=MARKING_KIND_SGTIN,
+                        value=value,
+                        decision="filled",
+                        reason="uinBadStatus",
+                    ),
+                ),
+                meta={
+                    MARKING_KIND_SGTIN: [{"value": value, "checkStatus": "ok"}]
+                },
+            )
+        ]
+
+    def forbid_marker_session() -> None:
+        raise AssertionError("WB marker must not open a competing SessionLocal")
+
+    monkeypatch.setattr(
+        fbs_autopoll_svc, "sync_seller_order_statuses", hold_status_lock
+    )
+    monkeypatch.setattr(fbs_marking_svc, "require_marketplace_token", fake_token)
+    monkeypatch.setattr(
+        fbs_marking_svc,
+        "fetch_marketplace_orders_meta_batch",
+        fake_meta_batch,
+    )
+    monkeypatch.setattr(
+        fbs_marking_svc,
+        "SessionLocal",
+        forbid_marker_session,
+        raising=False,
+    )
+
+    target = fbs_autopoll_svc.SellerPollTarget(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+    )
+    async with SessionLocal() as session:
+        updated = await fbs_autopoll_svc.sync_fbs_order_statuses_for_seller(
+            session,
+            target,
+            async_client,
+        )
+        await session.commit()
+
+    assert updated == 1
+    async with SessionLocal() as session:
+        db_order = await session.get(FbsOrder, order.order_id)
+        marking = (
+            await session.execute(
+                select(FbsOrderMarking).where(FbsOrderMarking.order_id == order.order_id)
+            )
+        ).scalar_one()
+
+    assert db_order is not None
+    assert db_order.metadata_last_checked_at is not None
+    assert db_order.metadata_delivery_allowed is False
+    assert marking.reason == "uinBadStatus"
+    assert marking.meta_details_json == {
+        "decision": "filled",
+        "value": value,
+        "reason": "uinBadStatus",
+    }

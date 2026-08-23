@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import set_committed_value
 
-from app.db.session import SessionLocal
 from app.models.fbs_order import (
     CHECK_STATUS_CHECKING,
     CHECK_STATUS_ERROR,
@@ -660,30 +659,32 @@ def _as_utc(value: datetime) -> datetime:
     return value.astimezone(UTC)
 
 
-async def _record_wb_sync_started(order: FbsOrder, started_at: datetime) -> None:
+async def _record_wb_sync_started(
+    session: AsyncSession,
+    order: FbsOrder,
+    started_at: datetime,
+) -> None:
     """Persist a request-order marker before waiting for Wildberries.
 
-    The caller's session can stay open while WB responds.  For a clean
-    read/sync session, a separate short transaction makes the newer request
-    visible to an older concurrent request before that older response is
-    allowed to write an operator-facing verdict.
-
+    The marker belongs to the caller's transaction. In particular, the FBS
+    autopoll first locks active orders while updating their WB statuses, then
+    synchronizes marking in that same transaction. Opening a second session
+    here would make it wait on the caller's lock while the caller waits for
+    this function to return.
     """
-    async with SessionLocal() as marker_session:
-        marker_stmt = (
-            update(FbsOrder)
-            .where(
-                FbsOrder.id == order.id,
-                FbsOrder.tenant_id == order.tenant_id,
-                or_(
-                    FbsOrder.metadata_last_checked_at.is_(None),
-                    FbsOrder.metadata_last_checked_at < started_at,
-                ),
-            )
-            .values(metadata_last_checked_at=started_at)
+    marker_stmt = (
+        update(FbsOrder)
+        .where(
+            FbsOrder.id == order.id,
+            FbsOrder.tenant_id == order.tenant_id,
+            or_(
+                FbsOrder.metadata_last_checked_at.is_(None),
+                FbsOrder.metadata_last_checked_at < started_at,
+            ),
         )
-        await marker_session.execute(marker_stmt)
-        await marker_session.commit()
+        .values(metadata_last_checked_at=started_at)
+    )
+    await session.execute(marker_stmt)
 
 
 async def _lock_current_marking_state(
@@ -744,7 +745,7 @@ async def _sync_order_meta_from_wb(
     started_at = datetime.now(tz=UTC)
     signature = _marking_sync_signature(order, markings)
     if record_started_marker:
-        await _record_wb_sync_started(order, started_at)
+        await _record_wb_sync_started(session, order, started_at)
     try:
         batch = await fetch_marketplace_orders_meta_batch(
             http_client,
