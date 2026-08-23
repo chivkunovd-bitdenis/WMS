@@ -128,3 +128,4 @@
 04:34   06-picking-list-order · screen-dev: готово
 04:34   06-picking-list-order · dev: фича 1/2 сохранена b76d255ae419
 04:39   06-picking-list-order · screen-dev: готово
+04:39   06-picking-list-order · dev: фича 2/2 сохранена 1e2aa106ade2
