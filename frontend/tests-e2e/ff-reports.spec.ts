@@ -32,10 +32,10 @@ const productReportFixture = (name = 'Report product') => ({
   }],
 })
 
-// S-33-TC-015 — Given an FF staff member with reception access but without
-// inventory/cells access, When they open the report route directly, Then the
-// visible access-denied state replaces the report and no reporting data is requested.
-test('FF staff without inventory access cannot open the direct reports route', async ({ page }) => {
+// S-33-TC-015 — Given an FF staff member with cells access but without inventory
+// access, When they open the report route directly, Then the visible access-denied
+// state replaces the report and no reporting data is requested.
+test('FF staff with cells access but without inventory access cannot open the direct reports route', async ({ page }) => {
   const suffix = `ff-reports-denied-${Date.now()}`
   const seed = await seedFfSellerInbound(page, suffix)
   const staffEmail = `${suffix}@example.com`
@@ -54,7 +54,7 @@ test('FF staff without inventory access cannot open the direct reports route', a
       settings: false,
       mp_shipments: false,
       reception: true,
-      cells: false,
+      cells: true,
       inventory: false,
       packaging: false,
       shift_lead: false,
