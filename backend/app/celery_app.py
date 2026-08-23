@@ -27,6 +27,10 @@ celery_app.conf.beat_schedule = {
         "task": "wms.fbs_orders_autopoll",
         "schedule": float(settings.fbs_poll_interval_sec),
     },
+    "fbs-orders-full-reconcile": {
+        "task": "wms.fbs_orders_full_reconcile",
+        "schedule": crontab(hour="*/6", minute=30),
+    },
     "fbs-order-statuses-autopoll": {
         "task": "wms.fbs_order_statuses_autopoll",
         "schedule": float(settings.fbs_statuses_sync_interval_sec),

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import threading
 import uuid
+from types import SimpleNamespace
 
 import fitz
 import pytest
@@ -658,6 +660,54 @@ async def test_label_artifact_tape_merges_pdfs_in_order(async_client: AsyncClien
         assert merged.page_count == 3
     finally:
         merged.close()
+
+
+@pytest.mark.asyncio
+async def test_label_artifact_tape_merges_outside_event_loop_thread(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services import marking_code_service, marking_label_artifact_service
+
+    tenant_id = uuid.uuid4()
+    loop_thread_id = threading.get_ident()
+    merge_thread_ids: list[int] = []
+
+    class FakeSession:
+        async def get(self, _model: object, _code_id: uuid.UUID) -> object:
+            return SimpleNamespace(
+                tenant_id=tenant_id,
+                label_artifact_pdf=b"label-pdf",
+                cis_code="cis",
+            )
+
+    def fake_merge(
+        parts: list[bytes],
+        page_width_mm: float | None,
+        page_height_mm: float | None,
+    ) -> bytes:
+        assert parts == [b"label-pdf"]
+        assert page_width_mm == 60
+        assert page_height_mm == 40
+        merge_thread_ids.append(threading.get_ident())
+        return b"merged-pdf"
+
+    monkeypatch.setattr(marking_code_service, "is_printable_label_artifact", lambda *_: True)
+    monkeypatch.setattr(
+        marking_label_artifact_service,
+        "merge_label_artifact_pdfs_for_print",
+        fake_merge,
+    )
+
+    result = await marking_code_service.build_label_artifact_tape_pdf(
+        FakeSession(),  # type: ignore[arg-type]
+        tenant_id,
+        [uuid.uuid4()],
+        60,
+        40,
+    )
+
+    assert result == b"merged-pdf"
+    assert merge_thread_ids and merge_thread_ids[0] != loop_thread_id
 
 
 def test_merge_label_artifact_pdfs_empty_raises() -> None:

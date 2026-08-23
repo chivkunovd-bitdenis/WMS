@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import csv
 import io
 import json
@@ -664,7 +665,14 @@ async def build_label_artifact_tape_pdf(
         if not pdf_bytes or not is_printable_label_artifact(pdf_bytes, code.cis_code):
             raise MarkingCodeServiceError("label_artifact_missing")
         parts.append(pdf_bytes)
-    return merge_label_artifact_pdfs_for_print(parts, page_width_mm, page_height_mm)
+    # PyMuPDF is CPU-bound. Keep it outside the API event-loop thread so a
+    # large tape does not pause unrelated operator requests.
+    return await asyncio.to_thread(
+        merge_label_artifact_pdfs_for_print,
+        parts,
+        page_width_mm,
+        page_height_mm,
+    )
 
 
 def _parse_pdf_text_rows(content: bytes) -> list[dict[str, str]]:
