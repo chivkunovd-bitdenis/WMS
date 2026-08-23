@@ -532,8 +532,8 @@ test('S-03-TC-018: a hidden workspace cannot send a supply with a stale WB appro
   await expect(page.getByTestId('fbs-18-supply-sup-1')).toHaveCount(0)
 })
 
-// S-03-TC-007 — a late successful refresh cannot reopen delivery after a newer refresh failed.
-test('fbs workspace: stale successful refresh preserves fail-closed WB error', async ({ page }) => {
+// S-03-TC-019 — a late successful refresh cannot reopen delivery after a newer refresh failed.
+test('S-03-TC-019: stale successful refresh preserves fail-closed WB error', async ({ page }) => {
   await page.clock.install()
   await registerFf(page, 'verdict-stale-refresh')
 
