@@ -1,13 +1,4 @@
-import {
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type FocusEvent,
-  type KeyboardEvent,
-} from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react'
 import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
 import CloseOutlined from '@mui/icons-material/CloseOutlined'
 import {
@@ -33,7 +24,6 @@ import { apiUrl } from '../../api'
 import { FfProductLineCells, FfProductTableHeadCells } from '../../components/FfProductLineCells'
 import {
   productDisplayMetaFromCatalog,
-  type ProductLineDisplayMeta,
   type WbProductCatalogRow,
 } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
@@ -61,100 +51,6 @@ type RequestLine = {
   product_name: string
   expected_qty: number
 }
-
-/**
- * Строка таблицы наполнения короба.
- *
- * Вынесена в memo-компонент осознанно: в заявке бывает под триста строк, в каждой
- * фото, ячейки товара и поле количества. Без этого любой скан перерисовывал всю
- * таблицу целиком, и один штрихкод занимал 15–20 секунд на живой приёмке.
- */
-const BoxFillRow = memo(function BoxFillRow({
-  line,
-  meta,
-  qtyInBox,
-  draftQty,
-  highlighted,
-  readOnly,
-  busy,
-  onQtyChange,
-  onQtySave,
-}: {
-  line: RequestLine
-  meta: ProductLineDisplayMeta
-  qtyInBox: number
-  draftQty: string
-  highlighted: boolean
-  readOnly: boolean
-  busy: boolean
-  onQtyChange: (productId: string, value: string) => void
-  onQtySave: (productId: string, value: string) => void
-}) {
-  return (
-    <TableRow
-      data-testid={`ff-inbound-box-add-line-row-${line.product_id}`}
-      sx={
-        highlighted
-          ? {
-              backgroundColor: (theme) => alpha(theme.palette.success.main, 0.16),
-              boxShadow: (theme) => `inset 0 0 0 1px ${alpha(theme.palette.success.main, 0.6)}`,
-            }
-          : undefined
-      }
-    >
-      <FfProductLineCells
-        meta={meta}
-        showPrint={false}
-        lineTestIdPrefix={`ff-inbound-box-add-product-${line.product_id}`}
-        nameExtra={
-          meta.wb_size ? (
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              data-testid={`ff-inbound-box-add-size-${line.product_id}`}
-              title={`Размер: ${meta.wb_size}`}
-            >
-              Размер: {meta.wb_size}
-            </Typography>
-          ) : null
-        }
-      />
-      <TableCell align="right" sx={{ px: 1, verticalAlign: 'top' }}>
-        {line.expected_qty}
-      </TableCell>
-      <TableCell align="right" sx={boxFillQtyCellSx}>
-        {readOnly ? (
-          <Typography variant="body2" data-testid="ff-inbound-box-add-qty">
-            {qtyInBox}
-          </Typography>
-        ) : (
-          <TextField
-            type="number"
-            size="small"
-            value={draftQty}
-            onChange={(e) => onQtyChange(line.product_id, e.target.value)}
-            slotProps={{
-              htmlInput: {
-                min: 0,
-                'data-testid': 'ff-inbound-box-add-manual-qty',
-                onBlur: (e: FocusEvent<HTMLInputElement>) =>
-                  onQtySave(line.product_id, e.currentTarget.value),
-                onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    onQtySave(line.product_id, e.currentTarget.value)
-                  }
-                },
-              },
-            }}
-            sx={{ width: 72 }}
-            disabled={busy}
-          />
-        )}
-      </TableCell>
-    </TableRow>
-  )
-})
 
 type Props = {
   open: boolean
@@ -208,16 +104,6 @@ export function FfInboundBoxAddDialog({
     () => buildInboundScanProductMap(requestLines, catalogById),
     [catalogById, requestLines],
   )
-
-  // Считаем витрину строки один раз на состав заявки, а не на каждый рендер:
-  // иначе memo у строки бесполезен — meta каждый раз новый объект.
-  const displayMetaByProductId = useMemo(() => {
-    const m = new Map<string, ProductLineDisplayMeta>()
-    for (const ln of requestLines) {
-      m.set(ln.product_id, productDisplayMetaFromCatalog(ln.product_id, ln, catalogById))
-    }
-    return m
-  }, [catalogById, requestLines])
 
   useEffect(() => {
     setLocalBoxLines(boxLines)
@@ -285,19 +171,6 @@ export function FfInboundBoxAddDialog({
       }
     },
     [authHeaders, boxId, onUpdated, qtyInBoxByProductId, readOnly, requestId],
-  )
-
-  // Стабильные обработчики — иначе memo у строки не срабатывает.
-  const handleQtyChange = useCallback((productId: string, value: string) => {
-    draftQtyRef.current = { ...draftQtyRef.current, [productId]: value }
-    setDraftQtyByProductId((prev) => ({ ...prev, [productId]: value }))
-  }, [])
-
-  const handleQtySave = useCallback(
-    (productId: string, value: string) => {
-      void saveQty(productId, value)
-    },
-    [saveQty],
   )
 
   const flushPendingQty = useCallback(async () => {
@@ -459,20 +332,86 @@ export function FfInboundBoxAddDialog({
                 </TableRow>
               </TableHead>
               <TableBody>
-                {requestLines.map((ln) => (
-                  <BoxFillRow
-                    key={ln.id}
-                    line={ln}
-                    meta={displayMetaByProductId.get(ln.product_id) as ProductLineDisplayMeta}
-                    qtyInBox={qtyInBoxByProductId.get(ln.product_id) ?? 0}
-                    draftQty={draftQtyByProductId[ln.product_id] ?? '0'}
-                    highlighted={lastScannedProductId === ln.product_id}
-                    readOnly={readOnly}
-                    busy={busy}
-                    onQtyChange={handleQtyChange}
-                    onQtySave={handleQtySave}
-                  />
-                ))}
+                {requestLines.map((ln) => {
+                  const displayMeta = productDisplayMetaFromCatalog(ln.product_id, ln, catalogById)
+                  return (
+                    <TableRow
+                      key={ln.id}
+                      data-testid={`ff-inbound-box-add-line-row-${ln.product_id}`}
+                      sx={
+                        lastScannedProductId === ln.product_id
+                          ? {
+                              backgroundColor: (theme) =>
+                                alpha(theme.palette.success.main, 0.16),
+                              boxShadow: (theme) =>
+                                `inset 0 0 0 1px ${alpha(theme.palette.success.main, 0.6)}`,
+                            }
+                          : undefined
+                      }
+                    >
+                      <FfProductLineCells
+                        meta={displayMeta}
+                        showPrint={false}
+                        lineTestIdPrefix={`ff-inbound-box-add-product-${ln.product_id}`}
+                        nameExtra={
+                          displayMeta.wb_size ? (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              data-testid={`ff-inbound-box-add-size-${ln.product_id}`}
+                              title={`Размер: ${displayMeta.wb_size}`}
+                            >
+                              Размер: {displayMeta.wb_size}
+                            </Typography>
+                          ) : null
+                        }
+                      />
+                      <TableCell align="right" sx={{ px: 1, verticalAlign: 'top' }}>
+                        {ln.expected_qty}
+                      </TableCell>
+                      <TableCell align="right" sx={boxFillQtyCellSx}>
+                        {readOnly ? (
+                          <Typography variant="body2" data-testid="ff-inbound-box-add-qty">
+                            {qtyInBoxByProductId.get(ln.product_id) ?? 0}
+                          </Typography>
+                        ) : (
+                          <TextField
+                            type="number"
+                            size="small"
+                            value={draftQtyByProductId[ln.product_id] ?? '0'}
+                            onChange={(e) => {
+                              const nextVal = e.target.value
+                              draftQtyRef.current = {
+                                ...draftQtyRef.current,
+                                [ln.product_id]: nextVal,
+                              }
+                              setDraftQtyByProductId((prev) => ({
+                                ...prev,
+                                [ln.product_id]: nextVal,
+                              }))
+                            }}
+                            slotProps={{
+                              htmlInput: {
+                                min: 0,
+                                'data-testid': 'ff-inbound-box-add-manual-qty',
+                                onBlur: (e: FocusEvent<HTMLInputElement>) =>
+                                  void saveQty(ln.product_id, e.currentTarget.value),
+                                onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault()
+                                    void saveQty(ln.product_id, e.currentTarget.value)
+                                  }
+                                },
+                              },
+                            }}
+                            sx={{ width: 72 }}
+                            disabled={busy}
+                          />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           </Box>
