@@ -426,9 +426,10 @@ test('fbs workspace: accepted verdict does not paint order rows green', async ({
     .toBe('rgb(27, 94, 32)')
 })
 
-// S-03-TC-018 — a WB rejection saved while the workspace is closed blocks delivery when the operator returns.
-test('S-03-TC-018: returning to a hidden workspace cannot send a supply with a stale WB approval', async ({ page }) => {
-  await registerFf(page, 'verdict-refresh-failure')
+// S-03-TC-018 — a hidden workspace refreshes the persisted WB rejection before it can send the supply.
+test('S-03-TC-018: a hidden workspace cannot send a supply with a stale WB approval', async ({ page }) => {
+  await page.clock.install()
+  await registerFf(page, 'verdict-hidden-tab')
 
   const accepted = order('1', {
     status: 'packed',
@@ -465,7 +466,8 @@ test('S-03-TC-018: returning to a hidden workspace cannot send a supply with a s
 
   let serverVerdict: 'accepted' | 'rejected' = 'accepted'
   let supplyStatus: 'assembling' | 'in_delivery' = 'assembling'
-  let deliveryRequests = 0
+  let workspaceRequests = 0
+  let unexpectedDeliveryRequests = 0
   await page.route('**/operations/fbs-supplies/worklist**', (route) =>
     route.request().method() === 'GET'
       ? json(route, {
@@ -475,6 +477,7 @@ test('S-03-TC-018: returning to a hidden workspace cannot send a supply with a s
       : route.fallback(),
   )
   await page.route('**/operations/fbs-supplies/sup-1/workspace', (route) => {
+    workspaceRequests += 1
     const orders = serverVerdict === 'rejected' ? [rejected] : [accepted]
     return json(route, workspace({
       stage: 'delivery',
@@ -487,9 +490,8 @@ test('S-03-TC-018: returning to a hidden workspace cannot send a supply with a s
     json(route, packagingTask([accepted])),
   )
   await page.route('**/operations/fbs-supplies/sup-1/deliver', async (route) => {
-    deliveryRequests += 1
-    supplyStatus = 'in_delivery'
-    await json(route, workspace({ stage: 'tracking', status: 'in_delivery', orders: [accepted] }))
+    unexpectedDeliveryRequests += 1
+    await json(route, { detail: 'WB не принял: неверный статус УИН' }, 409)
   })
 
   await page.getByTestId('nav-ff-fbs').click()
@@ -497,24 +499,33 @@ test('S-03-TC-018: returning to a hidden workspace cannot send a supply with a s
   await expect(page.getByTestId('fbs-boxes')).toBeVisible()
   const deliver = page.getByRole('button', { name: 'Передать в WB' })
   await expect(deliver).toBeEnabled()
+  await expect(page.getByTestId('fbs-wb-verdict-1')).toHaveText('WB: принято')
 
-  // The operator leaves the workspace; while it is hidden, WB saves a rejection on the server.
-  await page.getByRole('button', { name: 'Закрыть' }).click()
-  await expect(page.getByTestId('fbs-workspace')).toHaveCount(0)
+  // The first tab remains open but hidden. WB saves a rejection while its visible refresh is paused.
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
   serverVerdict = 'rejected'
+  await page.clock.fastForward(15_000)
+  expect(workspaceRequests).toBe(1)
 
-  // Reopening must read the persisted verdict before the operator can use the former approval.
-  await page.getByTestId('fbs-order-1').click()
-  await expect(page.getByTestId('fbs-workspace')).toBeVisible()
+  // Returning to the still-open tab receives the persisted verdict before the next operator action.
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await page.clock.fastForward(15_000)
+  await expect.poll(() => workspaceRequests).toBe(2)
   await expect(deliver).toBeDisabled()
   await page.getByRole('tab', { name: 'Упаковка и маркировка' }).click()
   await expect(page.getByTestId('fbs-wb-verdict-1')).toHaveText('WB не принял')
   await expect(page.getByText('неверный статус УИН')).toBeVisible()
 
-  // Even a direct immediate click cannot open confirmation or send the supply to WB.
+  // The rejected delivery mock protects this assertion if the disabled UI starts sending by mistake.
   await deliver.click({ force: true })
   await expect(page.getByRole('dialog', { name: 'Передать поставку в WB?' })).toHaveCount(0)
-  expect(deliveryRequests).toBe(0)
+  expect(unexpectedDeliveryRequests).toBe(0)
   await expect(page.getByText('Поставка передана, QR получить не удалось')).toHaveCount(0)
   await page.getByRole('button', { name: 'Закрыть' }).click()
   await page.getByRole('tab', { name: 'В доставке' }).click()
