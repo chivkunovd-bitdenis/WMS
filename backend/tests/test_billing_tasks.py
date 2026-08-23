@@ -23,9 +23,17 @@ from app.tasks import billing_tasks
 def test_billing_invoice_daily_schedule_is_0230_moscow() -> None:
     schedule = celery_app.conf.beat_schedule["billing-invoices-daily"]["schedule"]
 
-    assert celery_app.conf.timezone == "Europe/Moscow"
-    assert schedule._orig_hour == 2
+    assert celery_app.conf.timezone is None
+    assert celery_app.conf.enable_utc is True
+    assert schedule._orig_hour == 23
     assert schedule._orig_minute == 30
+
+
+def test_billing_schedule_keeps_existing_wb_crontab_semantics() -> None:
+    wb_schedule = celery_app.conf.beat_schedule["wb-mp-warehouses-daily"]["schedule"]
+
+    assert wb_schedule._orig_hour == 3
+    assert wb_schedule._orig_minute == 0
 
 
 class _August2026DateTime(datetime):

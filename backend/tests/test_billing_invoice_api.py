@@ -162,8 +162,13 @@ async def test_billing_http_parallel_form_uses_date_alias_and_keeps_document_sna
     invoice_id = uuid.UUID(first.json()["id"])
     detail = await async_client.get(f"/billing/invoices/{invoice_id}", headers=headers)
     assert detail.status_code == 200, detail.text
-    assert Decimal(str(detail.json()["total_amount"])) == Decimal("63000")
+    assert detail.json()["total_amount"] == "63000.00"
+    assert detail.json()["lines"][0]["quantity"] == "14.0000"
+    assert detail.json()["lines"][0]["rate"] == "4500"
+    assert detail.json()["lines"][0]["amount"] == "63000"
     assert detail.json()["lines"][0]["documents"][0]["number"] == "ПР-101"
+    assert detail.json()["lines"][0]["documents"][0]["quantity"] == "14.0000"
+    assert detail.json()["lines"][0]["documents"][0]["amount"] == "63000"
 
     first_cancel = await async_client.post(
         f"/billing/invoices/{invoice_id}/cancel",
@@ -189,6 +194,29 @@ async def test_billing_http_parallel_form_uses_date_alias_and_keeps_document_sna
         )
         assert len(invoices) == 1
         assert invoices[0].status == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_invoice_numbers_are_tenant_scoped_for_two_tenants(
+    async_client: AsyncClient,
+) -> None:
+    """S-31-TC-006: independent tenants may issue the same daily sequence number."""
+    first_headers, first_tenant, first_seller, _ = await _billing_context(async_client)
+    second_headers, second_tenant, second_seller, _ = await _billing_context(async_client)
+    await _add_priced_ledger_entry(tenant_id=first_tenant, seller_id=first_seller)
+    await _add_priced_ledger_entry(tenant_id=second_tenant, seller_id=second_seller)
+
+    first = await async_client.post(
+        f"/billing/invoices/{first_seller}/2026-07/form", headers=first_headers
+    )
+    second = await async_client.post(
+        f"/billing/invoices/{second_seller}/2026-07/form", headers=second_headers
+    )
+
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    assert first.json()["number"] == second.json()["number"]
+    assert first.json()["id"] != second.json()["id"]
 
 
 @pytest.mark.asyncio

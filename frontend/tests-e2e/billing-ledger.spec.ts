@@ -23,7 +23,7 @@ test('billing ledger preserves filters and month context', async ({ page }) => {
   let lastLedgerUrl = ''
   await page.route('**/api/billing/ledger**', async (route) => {
     lastLedgerUrl = route.request().url()
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ entries: [{ id: 'entry-1', occurred_at: '2026-08-18T00:00:00Z', seller_name: 'Луна', service_code: 'inbound', source_type: 'inbound_intake', source_id: 'inbound-1', document_number: 'ПР-000184', quantity: 38, unit: 'item', rate: 12, amount: 456, performer_name: 'Анна К.', problem: null }] }) })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ entries: [{ id: 'entry-1', occurred_at: '2026-08-18T00:00:00Z', seller_name: 'Луна', service_code: 'inbound', source_type: 'inbound_intake', source_id: 'inbound-1', document_number: 'ПР-000184', quantity: '38.0000', unit: 'item', rate: '12', amount: '456', performer_name: 'Анна К.', problem: null }] }) })
   })
   await page.goto('/app/ff/billing')
   await expect(page.getByTestId('ff-billing-screen')).toBeVisible()
@@ -44,6 +44,11 @@ test('billing ledger preserves filters and month context', async ({ page }) => {
   }))
   expect(pageGeometry.contentWidth, JSON.stringify(pageGeometry.offenders)).toBeLessThanOrEqual(pageGeometry.viewportWidth)
   await page.screenshot({ path: '../docs/evidence/20260823-billing-stage-finish/billing-charges.png', fullPage: true })
+  const ledgerTable = page.getByTestId('billing-ledger-table')
+  await ledgerTable.evaluate((element) => { element.scrollLeft = element.scrollWidth })
+  await expect(ledgerTable.getByRole('columnheader', { name: 'Проблема', exact: true })).toBeVisible()
+  await page.screenshot({ path: '../docs/evidence/20260823-billing-stage-finish/billing-charges-right.png', fullPage: true })
+  await ledgerTable.evaluate((element) => { element.scrollLeft = 0 })
   await expect.poll(() => new URL(lastLedgerUrl).searchParams.get('period')).toMatch(/^\d{4}-\d{2}$/)
   await expect.poll(() => new URL(lastLedgerUrl).searchParams.has('date')).toBe(false)
   await expect.poll(() => new URL(lastLedgerUrl).searchParams.has('seller_id')).toBe(false)

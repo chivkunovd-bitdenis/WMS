@@ -131,7 +131,7 @@ def _invoice_out(
     return {
         "id": invoice.id, "number": invoice.number, "period": invoice.period,
         "status": invoice.status, "issued_at": invoice.issued_at,
-        "total_amount": invoice.total_amount, "seller_id": invoice.seller_id,
+        "total_amount": str(invoice.total_amount), "seller_id": invoice.seller_id,
         "seller_name": seller_name, "ff_profile": invoice.ff_profile_snapshot,
         "seller_profile": invoice.seller_profile_snapshot, "lines": invoice.lines,
         "issues": issues or [],
@@ -403,7 +403,7 @@ async def form_billing_invoice(
             "status": result.status,
             "id": result.id,
             "number": result.number,
-            "total_amount": result.total_amount,
+            "total_amount": str(result.total_amount),
         }
     issues = result if isinstance(result, list) else [result]
     primary = issues[0]

@@ -7,6 +7,9 @@ import pytest
 
 from app.models.billing import BillingLedgerEntry
 from app.services.billing_ledger_service import (
+    POSTGRES_INTEGER_MAX,
+    BillingLedgerError,
+    postgres_numeric,
     record_operational_charge,
     record_operational_reversal,
 )
@@ -17,6 +20,18 @@ def _savepoint_session() -> AsyncMock:
     savepoint = AsyncMock()
     session.begin_nested = AsyncMock(return_value=savepoint)
     return session
+
+
+def test_postgres_numeric_validates_finite_precision_and_scale() -> None:
+    assert postgres_numeric(
+        Decimal("9999999999.99994"), precision=14, scale=4, field="billing_quantity"
+    ) == Decimal("9999999999.9999")
+    with pytest.raises(BillingLedgerError, match="billing_quantity_overflow"):
+        postgres_numeric(
+            Decimal("9999999999.99995"), precision=14, scale=4, field="billing_quantity"
+        )
+    with pytest.raises(BillingLedgerError, match="billing_quantity_overflow"):
+        postgres_numeric(Decimal("NaN"), precision=14, scale=4, field="billing_quantity")
 
 
 @pytest.mark.asyncio
@@ -103,6 +118,57 @@ async def test_tariff_period_uses_moscow_calendar_date() -> None:
 
     assert entry.tariff_version_id == tariff.id
     assert session.add.call_args.args[0] is entry
+
+
+@pytest.mark.asyncio
+async def test_operational_charge_accepts_max_postgres_integer_amount() -> None:
+    session = _savepoint_session()
+    session.add = Mock()
+    tariff = Mock(id=uuid.uuid4(), amount=POSTGRES_INTEGER_MAX, unit="item")
+    session.scalar = AsyncMock(side_effect=[date(2026, 1, 1), None, None, tariff])
+
+    entry = await record_operational_charge(
+        session,
+        tenant_id=uuid.uuid4(),
+        seller_id=uuid.uuid4(),
+        source_type="inbound_intake",
+        source_id=uuid.uuid4(),
+        source="inbound",
+        service_code="inbound",
+        quantity=Decimal("1"),
+        occurred_at=datetime(2026, 8, 20, tzinfo=UTC),
+        performer_id=None,
+    )
+
+    assert entry is not None
+    assert entry.amount == POSTGRES_INTEGER_MAX
+    session.add.assert_called_once_with(entry)
+
+
+@pytest.mark.asyncio
+async def test_operational_charge_rejects_rate_times_quantity_overflow_before_write() -> None:
+    session = _savepoint_session()
+    session.add = Mock()
+    tariff = Mock(id=uuid.uuid4(), amount=POSTGRES_INTEGER_MAX, unit="item")
+    session.scalar = AsyncMock(side_effect=[date(2026, 1, 1), None, None, tariff])
+
+    with pytest.raises(BillingLedgerError, match="billing_amount_overflow"):
+        await record_operational_charge(
+            session,
+            tenant_id=uuid.uuid4(),
+            seller_id=uuid.uuid4(),
+            source_type="inbound_intake",
+            source_id=uuid.uuid4(),
+            source="inbound",
+            service_code="inbound",
+            quantity=Decimal("2"),
+            occurred_at=datetime(2026, 8, 20, tzinfo=UTC),
+            performer_id=None,
+        )
+
+    session.add.assert_not_called()
+    session.flush.assert_not_awaited()
+    session.begin_nested.assert_not_awaited()
 
 
 @pytest.mark.asyncio
