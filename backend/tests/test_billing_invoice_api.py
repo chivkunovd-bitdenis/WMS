@@ -218,6 +218,7 @@ async def test_form_invoice_keeps_unpriced_charge_as_blocking_reason(
         "status": "blocked",
         "reason": "unpriced",
         "message": "Нет тарифа",
+        "reasons": [{"reason": "unpriced", "message": "Нет тарифа"}],
     }
 
 

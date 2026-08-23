@@ -32,7 +32,7 @@ from app.services.billing_invoice_service import (
     _month_bounds,
     _source_numbers,
     cancel_invoice,
-    current_blocking_reason,
+    current_blocking_reasons,
     form_invoice,
 )
 
@@ -310,13 +310,13 @@ async def get_billing_invoices(
     issue_rows = (await session.execute(issues_query)).all()
     issues = []
     for issue, seller_name in issue_rows:
-        live_reason = await current_blocking_reason(
+        live_reasons = await current_blocking_reasons(
             session,
             tenant_id=user.tenant_id,
             seller_id=issue.seller_id,
             period=issue.period,
         )
-        if live_reason != issue.reason:
+        if issue.reason not in live_reasons:
             continue
         issues.append(
             {
@@ -368,7 +368,17 @@ async def form_billing_invoice(
             "number": result.number,
             "total_amount": result.total_amount,
         }
-    return {"status": "blocked", "reason": result.reason, "message": result.message}
+    issues = result if isinstance(result, list) else [result]
+    primary = issues[0]
+    return {
+        "status": "blocked",
+        "reason": primary.reason,
+        "message": primary.message,
+        "reasons": [
+            {"reason": issue.reason, "message": issue.message}
+            for issue in issues
+        ],
+    }
 
 
 @router.post("/invoices/{invoice_id}/cancel")

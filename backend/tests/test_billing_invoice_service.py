@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import Boolean, Date, String, Uuid
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from app.models.billing import BillingInvoice, BillingLedgerEntry, BillingProfile
+from app.models.billing import BillingInvoice, BillingLedgerEntry, BillingProfile, BillingRunIssue
 from app.services import billing_invoice_service
 from app.services.billing_invoice_service import _storage_source_ids, form_invoice
 
@@ -40,7 +40,16 @@ async def test_form_invoice_blocks_unpriced_with_one_current_issue() -> None:
         amount=None,
         occurred_at=datetime(2026, 7, 5, tzinfo=UTC),
     )
-    ff_profile = BillingProfile(tenant_id=tenant_id, seller_id=None, legal_name="FF", inn="123")
+    ff_profile = BillingProfile(
+        tenant_id=tenant_id,
+        seller_id=None,
+        legal_name="FF",
+        inn="123",
+        bank_name="Bank",
+        bik="044525225",
+        settlement_account="40702810000000000001",
+        correspondent_account="30101810400000000225",
+    )
     seller_profile = BillingProfile(
         tenant_id=tenant_id,
         seller_id=seller_id,
@@ -62,6 +71,130 @@ async def test_form_invoice_blocks_unpriced_with_one_current_issue() -> None:
     assert result.reason == "unpriced"
     assert session.add.call_count == 1
     assert session.add.call_args.args[0] is result
+
+
+def _complete_ff_profile(tenant_id: uuid.UUID) -> BillingProfile:
+    return BillingProfile(
+        tenant_id=tenant_id,
+        seller_id=None,
+        legal_name="FF",
+        inn="123",
+        bank_name="Bank",
+        bik="044525225",
+        settlement_account="40702810000000000001",
+        correspondent_account="30101810400000000225",
+    )
+
+
+def _complete_seller_profile(tenant_id: uuid.UUID, seller_id: uuid.UUID) -> BillingProfile:
+    return BillingProfile(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        legal_name="Seller",
+        inn="456",
+    )
+
+
+def _priced_entry(tenant_id: uuid.UUID, seller_id: uuid.UUID) -> BillingLedgerEntry:
+    return BillingLedgerEntry(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        source_type="inbound_intake",
+        source_id=uuid.uuid4(),
+        service_code="inbound",
+        unit="document",
+        quantity=Decimal("1"),
+        rate=100,
+        amount=100,
+        occurred_at=datetime(2026, 7, 5, tzinfo=UTC),
+    )
+
+
+@pytest.mark.asyncio
+async def test_form_invoice_returns_incomplete_seller_profile_reason_without_ff_reason() -> None:
+    tenant_id = uuid.uuid4()
+    seller_id = uuid.uuid4()
+    incomplete_seller = BillingProfile(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        legal_name="Seller",
+        inn=" ",
+    )
+    session = _savepoint_session()
+    session.scalar = AsyncMock(
+        side_effect=[
+            object(),
+            None,
+            None,
+            _complete_ff_profile(tenant_id),
+            incomplete_seller,
+            None,
+        ]
+    )
+    session.scalars = AsyncMock(return_value=_result([_priced_entry(tenant_id, seller_id)]))
+
+    result = await form_invoice(
+        session, tenant_id=tenant_id, seller_id=seller_id, period=date(2026, 7, 1)
+    )
+
+    assert isinstance(result, BillingRunIssue)
+    assert result.reason == "missing_seller_profile"
+    assert result.reason != "missing_ff_profile"
+
+
+@pytest.mark.asyncio
+async def test_form_invoice_returns_ff_profile_reason_without_seller_reason() -> None:
+    tenant_id = uuid.uuid4()
+    seller_id = uuid.uuid4()
+    incomplete_ff = BillingProfile(
+        tenant_id=tenant_id,
+        seller_id=None,
+        legal_name="FF",
+        inn="123",
+        bank_name=None,
+        bik="044525225",
+        settlement_account="40702810000000000001",
+        correspondent_account="30101810400000000225",
+    )
+    session = _savepoint_session()
+    session.scalar = AsyncMock(
+        side_effect=[
+            object(),
+            None,
+            None,
+            incomplete_ff,
+            _complete_seller_profile(tenant_id, seller_id),
+            None,
+        ]
+    )
+    session.scalars = AsyncMock(return_value=_result([_priced_entry(tenant_id, seller_id)]))
+
+    result = await form_invoice(
+        session, tenant_id=tenant_id, seller_id=seller_id, period=date(2026, 7, 1)
+    )
+
+    assert isinstance(result, BillingRunIssue)
+    assert result.reason == "missing_ff_profile"
+    assert result.reason != "missing_seller_profile"
+
+
+@pytest.mark.asyncio
+async def test_form_invoice_returns_each_missing_profile_reason() -> None:
+    tenant_id = uuid.uuid4()
+    seller_id = uuid.uuid4()
+    session = _savepoint_session()
+    session.scalar = AsyncMock(side_effect=[object(), None, None, None, None, None, None])
+    session.scalars = AsyncMock(return_value=_result([_priced_entry(tenant_id, seller_id)]))
+
+    result = await form_invoice(
+        session, tenant_id=tenant_id, seller_id=seller_id, period=date(2026, 7, 1)
+    )
+
+    assert isinstance(result, list)
+    assert [issue.reason for issue in result] == [
+        "missing_ff_profile",
+        "missing_seller_profile",
+    ]
 
 
 @pytest.mark.asyncio

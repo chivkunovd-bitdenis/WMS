@@ -26,10 +26,11 @@ from app.models.seller import Seller
 
 REASONS = {
     "unpriced": "Нет тарифа",
-    "missing_profile": "Нет реквизитов",
+    "missing_ff_profile": "Нет реквизитов ФФ",
+    "missing_seller_profile": "Нет реквизитов селлера",
     "storage_period_not_closed": "Хранение не закрыто",
 }
-BLOCKING_REASONS = frozenset({"unpriced", "missing_profile", "storage_period_not_closed"})
+BLOCKING_REASONS = frozenset(REASONS)
 MSK = ZoneInfo("Europe/Moscow")
 
 
@@ -38,7 +39,7 @@ class _InvoiceInputs:
     entries: list[BillingLedgerEntry]
     ff_profile: BillingProfile | None
     seller_profile: BillingProfile | None
-    reason: str | None
+    reasons: tuple[str, ...]
 
 
 def _month_bounds(period: date) -> tuple[datetime, datetime]:
@@ -193,7 +194,7 @@ async def _invoice_inputs(
         ).all()
     )
     if not entries:
-        return _InvoiceInputs([], None, None, None)
+        return _InvoiceInputs([], None, None, ())
 
     ff_profile = await session.scalar(
         select(BillingProfile).where(
@@ -207,14 +208,40 @@ async def _invoice_inputs(
             BillingProfile.seller_id == seller_id,
         )
     )
-    reason: str | None = None
-    if ff_profile is None or seller_profile is None:
-        reason = "missing_profile"
-    elif any(entry.amount is None for entry in entries):
-        reason = "unpriced"
-    elif not storage_ready:
-        reason = "storage_period_not_closed"
-    return _InvoiceInputs(entries, ff_profile, seller_profile, reason)
+    reasons = _profile_blocking_reasons(ff_profile, seller_profile)
+    if not reasons and any(entry.amount is None for entry in entries):
+        reasons = ("unpriced",)
+    elif not reasons and not storage_ready:
+        reasons = ("storage_period_not_closed",)
+    return _InvoiceInputs(entries, ff_profile, seller_profile, reasons)
+
+
+def _profile_blocking_reasons(
+    ff_profile: BillingProfile | None,
+    seller_profile: BillingProfile | None,
+) -> tuple[str, ...]:
+    """Name every incomplete invoice party so each fix has its own destination."""
+    reasons: list[str] = []
+    if not _profile_has_fields(
+        ff_profile,
+        "legal_name",
+        "inn",
+        "bank_name",
+        "bik",
+        "settlement_account",
+        "correspondent_account",
+    ):
+        reasons.append("missing_ff_profile")
+    if not _profile_has_fields(seller_profile, "legal_name", "inn"):
+        reasons.append("missing_seller_profile")
+    return tuple(reasons)
+
+
+def _profile_has_fields(profile: BillingProfile | None, *fields: str) -> bool:
+    return profile is not None and all(
+        isinstance(value := getattr(profile, field), str) and bool(value.strip())
+        for field in fields
+    )
 
 
 async def current_blocking_reason(
@@ -224,70 +251,86 @@ async def current_blocking_reason(
     seller_id: uuid.UUID,
     period: date,
 ) -> str | None:
-    """Re-evaluate an old issue so the read model never exposes a stale blocker."""
-    reason = (await _invoice_inputs(
+    """Return the primary blocker for legacy callers; use the plural helper for lists."""
+    reasons = await current_blocking_reasons(
         session, tenant_id=tenant_id, seller_id=seller_id, period=period
-    )).reason
-    return reason if reason in BLOCKING_REASONS else None
+    )
+    return reasons[0] if reasons else None
 
 
-async def _replace_issue(
+async def current_blocking_reasons(
     session: AsyncSession,
     *,
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
     period: date,
-    reason: str | None,
-) -> BillingRunIssue | None:
+) -> tuple[str, ...]:
+    """Re-evaluate all old issues so the read model never exposes a stale blocker."""
+    reasons = (await _invoice_inputs(
+        session, tenant_id=tenant_id, seller_id=seller_id, period=period
+    )).reasons
+    return tuple(reason for reason in reasons if reason in BLOCKING_REASONS)
+
+
+async def _replace_issues(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    period: date,
+    reasons: tuple[str, ...],
+) -> list[BillingRunIssue]:
     issue_scope = (
         BillingRunIssue.tenant_id == tenant_id,
         BillingRunIssue.seller_id == seller_id,
         BillingRunIssue.period == period,
     )
-    if reason not in BLOCKING_REASONS:
+    if not reasons:
         await session.execute(delete(BillingRunIssue).where(*issue_scope))
-        return None
+        return []
     await session.execute(
         delete(BillingRunIssue).where(
             *issue_scope,
-            BillingRunIssue.reason != reason,
+            BillingRunIssue.reason.not_in(reasons),
         )
     )
-    existing = await session.scalar(
-        select(BillingRunIssue).where(
-            BillingRunIssue.tenant_id == tenant_id,
-            BillingRunIssue.seller_id == seller_id,
-            BillingRunIssue.period == period,
-            BillingRunIssue.reason == reason,
-        )
-    )
-    if existing is not None:
-        return existing
-    issue = BillingRunIssue(
-        tenant_id=tenant_id,
-        seller_id=seller_id,
-        period=period,
-        reason=reason,
-        message=REASONS[reason],
-    )
-    savepoint = await session.begin_nested()
-    try:
-        session.add(issue)
-        await session.flush()
-    except IntegrityError:
-        await savepoint.rollback()
-        concurrent = await session.scalar(
+    result: list[BillingRunIssue] = []
+    for reason in reasons:
+        existing = await session.scalar(
             select(BillingRunIssue).where(
                 *issue_scope,
                 BillingRunIssue.reason == reason,
             )
         )
-        if concurrent is None:
-            raise
-        return concurrent
-    else:
-        await savepoint.commit()
-        return issue
+        if existing is not None:
+            result.append(existing)
+            continue
+        issue = BillingRunIssue(
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            period=period,
+            reason=reason,
+            message=REASONS[reason],
+        )
+        savepoint = await session.begin_nested()
+        try:
+            session.add(issue)
+            await session.flush()
+        except IntegrityError:
+            await savepoint.rollback()
+            concurrent = await session.scalar(
+                select(BillingRunIssue).where(
+                    *issue_scope,
+                    BillingRunIssue.reason == reason,
+                )
+            )
+            if concurrent is None:
+                raise
+            result.append(concurrent)
+        else:
+            await savepoint.commit()
+            result.append(issue)
+    return result
 
 
 async def _source_numbers(
@@ -362,7 +405,7 @@ async def _source_numbers(
 
 async def form_invoice(
     session: AsyncSession, *, tenant_id: uuid.UUID, seller_id: uuid.UUID, period: date
-) -> BillingInvoice | BillingRunIssue | None:
+) -> BillingInvoice | BillingRunIssue | list[BillingRunIssue] | None:
     _month_bounds(period)
     today_msk = datetime.now(MSK).date()
     if period >= date(today_msk.year, today_msk.month, 1):
@@ -380,12 +423,12 @@ async def form_invoice(
         )
     )
     if existing is not None:
-        await _replace_issue(
+        await _replace_issues(
             session,
             tenant_id=tenant_id,
             seller_id=seller_id,
             period=period,
-            reason=None,
+            reasons=(),
         )
         return existing
 
@@ -393,30 +436,24 @@ async def form_invoice(
         session, tenant_id=tenant_id, seller_id=seller_id, period=period
     )
     if not inputs.entries:
-        await _replace_issue(
+        await _replace_issues(
             session,
             tenant_id=tenant_id,
             seller_id=seller_id,
             period=period,
-            reason=None,
+            reasons=(),
         )
         return None
 
-    issue = await _replace_issue(
+    issues = await _replace_issues(
         session,
         tenant_id=tenant_id,
         seller_id=seller_id,
         period=period,
-        reason=inputs.reason,
+        reasons=inputs.reasons,
     )
-    if inputs.reason is not None:
-        return issue or BillingRunIssue(
-            tenant_id=tenant_id,
-            seller_id=seller_id,
-            period=period,
-            reason=inputs.reason,
-            message=REASONS[inputs.reason],
-        )
+    if inputs.reasons:
+        return issues[0] if len(issues) == 1 else issues
 
     assert inputs.ff_profile is not None and inputs.seller_profile is not None
     source_numbers = await _source_numbers(session, inputs.entries, period)
