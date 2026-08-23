@@ -234,11 +234,11 @@ export function FfProductsCatalogScreen({
     setError(null)
     setBusy(true)
     try {
-      // seller_id можно передавать бэкенду только с роли фулфилмент-админа —
-      // для остальных ролей эндпоинт и так отдаёт каталог по всем селлерам,
-      // поэтому для них фильтрация по селлеру остаётся клиентской (см. filteredRows).
-      const qs = canManageCatalog && filterSellerId ? `?seller_id=${encodeURIComponent(filterSellerId)}` : ''
-      const res = await fetch(apiUrl(`/products/ff-catalog${qs}`), {
+      // Состав адресно найденного короба не зависит от фильтра основной таблицы:
+      // администратор должен видеть товар другого селлера, если он физически лежит
+      // в отсканированном коробе. Поэтому полный доступный каталог загружается один
+      // раз, а фильтр селлера применяется ниже только в filteredRows.
+      const res = await fetch(apiUrl('/products/ff-catalog'), {
         headers: { ...authHeaders(token) },
       })
       if (!res.ok) {
@@ -250,7 +250,7 @@ export function FfProductsCatalogScreen({
     } finally {
       setBusy(false)
     }
-  }, [authHeaders, token, canManageCatalog, filterSellerId])
+  }, [authHeaders, token])
 
   useEffect(() => {
     void load()
