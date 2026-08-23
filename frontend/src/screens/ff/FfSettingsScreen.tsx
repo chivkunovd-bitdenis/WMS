@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -98,6 +99,7 @@ export function FfSettingsScreen({
   // «раздельная печать ЧЗ/ШК» переехал на форму печати (MarkingPrintDialog, FBS-10).
   fbsShipmentCutoffTime = null,
 }: Props) {
+  const [searchParams] = useSearchParams()
   const [rows, setRows] = useState<StaffAccountRow[]>([])
   const [billingMonth, setBillingMonth] = useState(currentBillingMonth)
   const [busy, setBusy] = useState(false)
@@ -119,7 +121,9 @@ export function FfSettingsScreen({
   const [permSavedNotice, setPermSavedNotice] = useState<string | null>(null)
   const [rateSavedNotice, setRateSavedNotice] = useState<string | null>(null)
   const [highlightRowId, setHighlightRowId] = useState<string | null>(null)
-  const [section, setSection] = useState<'staff' | 'tariffs'>('staff')
+  const [section, setSection] = useState<'staff' | 'tariffs'>(() => (
+    isFulfillmentAdmin && searchParams.get('tab') === 'tariffs' ? 'tariffs' : 'staff'
+  ))
   const [profile, setProfile] = useState<FfProfile>({ legal_name: '', inn: '', kpp: '', bank_name: '', bik: '', settlement_account: '', correspondent_account: '' })
   const [tariffs, setTariffs] = useState<Tariff[]>([])
   const [sellers, setSellers] = useState<Seller[]>([])

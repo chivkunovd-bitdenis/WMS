@@ -36,23 +36,56 @@ test('billing invoice seller-profile issue opens the affected seller', async ({ 
   await expect(page).toHaveURL(/\/app\/ff\/sellers\?seller_id=seller-1$/)
 })
 
-// S-31-TC-013 — Given FF billing requisites block formation, When the admin opens the corrective action, Then it points to FF settings rather than a seller.
-test('billing invoice FF-profile issue opens FF settings', async ({ page }) => {
+// TC-NEW-016 — Given an invoice is blocked by a missing tariff, When the admin opens the corrective action, Then the FF tariff tab is active.
+test('billing invoice tariff issue opens the FF tariff tab', async ({ page }) => {
   await authenticateBillingAdmin(page)
   await page.route('**/api/billing/invoices?**', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify({
       invoices: [],
-      issues: [{ id: 'ff-profile-issue', seller_id: 'seller-1', seller_name: 'Луна', period: '2026-07', reason: 'missing_ff_profile', message: 'Заполните реквизиты ФФ' }],
+      issues: [{ id: 'unpriced-issue', seller_id: 'seller-1', seller_name: 'Луна', period: '2026-07', reason: 'unpriced', message: 'Нет тарифа' }],
     }),
   }))
   await page.goto('/app/ff/billing')
   await page.getByTestId('billing-tab-invoices').click()
   await expect(page.getByTestId('billing-invoice-issues')).toContainText('Луна')
-  await expect(page.getByRole('button', { name: 'Открыть селлера' })).toHaveCount(0)
-  await page.getByTestId('billing-invoice-issue-action-ff-profile-issue').click()
-  await expect(page).toHaveURL(/\/app\/ff\/settings$/)
+  await page.getByTestId('billing-invoice-issue-action-unpriced-issue').click()
+  await expect(page).toHaveURL(/\/app\/ff\/settings\?tab=tariffs$/)
+  await expect(page.getByTestId('ff-settings-tariffs-tab')).toHaveAttribute('aria-selected', 'true')
+})
+
+// TC-NEW-016 — Given a charge has no tariff, When the admin opens the corrective action, Then the FF tariff tab is active; a normal settings route keeps its staff tab.
+test('billing charge tariff issue opens tariffs while normal settings opens staff', async ({ page }) => {
+  await authenticateBillingAdmin(page)
+  await page.route('**/api/billing/ledger?**', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ entries: [{
+      id: 'unpriced-charge',
+      entry_type: 'charge',
+      occurred_at: '2026-08-20T10:00:00Z',
+      seller_name: 'Луна',
+      service_code: 'inbound',
+      source_type: 'inbound',
+      source_id: 'inbound-1',
+      document_number: 'ПР-000141',
+      quantity: 1,
+      unit: 'item',
+      rate: null,
+      amount: null,
+      performer_name: null,
+      problem: 'unpriced',
+    }] }),
+  }))
+
+  await page.goto('/app/ff/billing')
+  await page.getByRole('button', { name: 'Открыть тарифы', exact: true }).click()
+  await expect(page).toHaveURL(/\/app\/ff\/settings\?tab=tariffs$/)
+  await expect(page.getByTestId('ff-settings-tariffs-tab')).toHaveAttribute('aria-selected', 'true')
+
+  await page.goto('/app/ff/settings')
+  await expect(page.getByTestId('ff-settings-staff-tab')).toHaveAttribute('aria-selected', 'true')
 })
 
 // S-31-TC-006 — Given the seller's blocking causes are resolved, When the admin retries formation,
