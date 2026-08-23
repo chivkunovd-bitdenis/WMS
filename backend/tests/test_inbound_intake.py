@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from datetime import date, timedelta
@@ -7,10 +8,13 @@ from datetime import date, timedelta
 import pytest
 from httpx import AsyncClient
 from inbound_box_intake_helpers import fulfill_inbound_via_box_scans, post_primary_accept
+from sqlalchemy import select
 
 from app.db.session import SessionLocal
+from app.models.inbound_intake import InboundIntakeRequest
 from app.models.product import Product
 from app.models.warehouse import Warehouse
+from app.services import inbound_intake_service as inbound_svc
 
 
 async def _create_seller_headers(
@@ -1615,3 +1619,176 @@ async def test_patch_warehouse_id_non_operational_rejected(async_client: AsyncCl
     patch = await async_client.patch(f"{base}/{rid}", headers=ah, json={"warehouse_id": wid2})
     assert patch.status_code == 422, patch.text
     assert patch.json()["detail"] == "invalid_warehouse"
+
+
+@pytest.mark.asyncio
+async def test_patch_warehouse_id_foreign_tenant_rejected(
+    async_client: AsyncClient,
+) -> None:
+    """PATCH с warehouse_id другого tenant → 422 invalid_warehouse."""
+    suffix = uuid.uuid4().hex[:10]
+    owner = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": f"WH Owner {suffix}",
+            "slug": f"wh-owner-{suffix}",
+            "admin_email": f"wh-owner-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert owner.status_code == 200, owner.text
+    owner_headers = {"Authorization": f"Bearer {owner.json()['access_token']}"}
+    owner_warehouse = await async_client.post(
+        "/warehouses",
+        headers=owner_headers,
+        json={"name": "Север", "code": f"owner-north-{suffix}"},
+    )
+    assert owner_warehouse.status_code == 200, owner_warehouse.text
+
+    foreign = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": f"WH Foreign {suffix}",
+            "slug": f"wh-foreign-{suffix}",
+            "admin_email": f"wh-foreign-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert foreign.status_code == 200, foreign.text
+    foreign_headers = {"Authorization": f"Bearer {foreign.json()['access_token']}"}
+    foreign_warehouse = await async_client.post(
+        "/warehouses",
+        headers=foreign_headers,
+        json={"name": "Чужой Юг", "code": f"foreign-south-{suffix}"},
+    )
+    assert foreign_warehouse.status_code == 200, foreign_warehouse.text
+
+    base = "/operations/inbound-intake-requests"
+    created = await async_client.post(
+        base,
+        headers=owner_headers,
+        json={"warehouse_id": owner_warehouse.json()["id"]},
+    )
+    assert created.status_code == 201, created.text
+
+    patch = await async_client.patch(
+        f"{base}/{created.json()['id']}",
+        headers=owner_headers,
+        json={"warehouse_id": foreign_warehouse.json()["id"]},
+    )
+    assert patch.status_code == 422, patch.text
+    assert patch.json()["detail"] == "invalid_warehouse"
+
+
+@pytest.mark.asyncio
+@pytest.mark.postgresql_concurrency
+async def test_submit_serializes_concurrent_warehouse_patch(
+    async_client: AsyncClient,
+) -> None:
+    """Передача держит строку заявки; конкурентный PATCH видит submitted и проигрывает."""
+    async with SessionLocal() as probe_session:
+        if probe_session.get_bind().dialect.name != "postgresql":
+            pytest.skip("row-level FOR UPDATE locking requires PostgreSQL")
+
+    suffix = uuid.uuid4().hex[:10]
+    registered = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": f"WH Race {suffix}",
+            "slug": f"wh-race-{suffix}",
+            "admin_email": f"wh-race-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert registered.status_code == 200, registered.text
+    admin_headers = {"Authorization": f"Bearer {registered.json()['access_token']}"}
+    seller_headers, seller_id_raw = await _create_seller_headers(
+        async_client,
+        admin_headers=admin_headers,
+        seller_name="Race Seller",
+        seller_email=f"wh-race-seller-{suffix}@example.com",
+    )
+    north = await async_client.post(
+        "/warehouses",
+        headers=admin_headers,
+        json={"name": "Север", "code": f"race-north-{suffix}"},
+    )
+    south = await async_client.post(
+        "/warehouses",
+        headers=admin_headers,
+        json={"name": "Юг", "code": f"race-south-{suffix}"},
+    )
+    assert north.status_code == 200, north.text
+    assert south.status_code == 200, south.text
+    product = await async_client.post(
+        "/products",
+        headers=admin_headers,
+        json={
+            "name": "Товар гонки",
+            "sku_code": f"RACE-{suffix}",
+            "seller_id": seller_id_raw,
+        },
+    )
+    assert product.status_code == 200, product.text
+
+    base = "/operations/inbound-intake-requests"
+    created = await async_client.post(
+        base,
+        headers=seller_headers,
+        json={"warehouse_id": north.json()["id"]},
+    )
+    assert created.status_code == 201, created.text
+    request_id = uuid.UUID(created.json()["id"])
+    north_id = uuid.UUID(north.json()["id"])
+    seller_id = uuid.UUID(seller_id_raw)
+    line = await async_client.post(
+        f"{base}/{request_id}/lines",
+        headers=seller_headers,
+        json={"product_id": product.json()["id"], "expected_qty": 1},
+    )
+    assert line.status_code == 201, line.text
+    await _set_planned_boxes(async_client, base, str(request_id), seller_headers)
+
+    async with SessionLocal() as lookup_session:
+        stored = await lookup_session.get(InboundIntakeRequest, request_id)
+        assert stored is not None
+        tenant_id = stored.tenant_id
+
+    async with SessionLocal() as submit_session:
+        locked_request_id = await submit_session.scalar(
+            select(InboundIntakeRequest.id)
+            .where(
+                InboundIntakeRequest.id == request_id,
+                InboundIntakeRequest.tenant_id == tenant_id,
+            )
+            .with_for_update()
+        )
+        assert locked_request_id == request_id
+
+        patch_task = asyncio.create_task(
+            async_client.patch(
+                f"{base}/{request_id}",
+                headers=seller_headers,
+                json={"warehouse_id": south.json()["id"]},
+            )
+        )
+        await asyncio.sleep(0.05)
+        assert not patch_task.done()
+
+        submitted = await inbound_svc.submit_request(
+            submit_session,
+            tenant_id,
+            request_id,
+            seller_product_owner_id=seller_id,
+        )
+        assert submitted.status == inbound_svc.STATUS_SUBMITTED
+        patch_response = await asyncio.wait_for(patch_task, timeout=5)
+        assert patch_response.status_code == 409, patch_response.text
+        assert patch_response.json()["detail"] == "not_draft"
+
+    async with SessionLocal() as verify_session:
+        persisted = await verify_session.get(InboundIntakeRequest, request_id)
+        assert persisted is not None
+        assert persisted.status == inbound_svc.STATUS_SUBMITTED
+        assert persisted.submitted_at is not None
+        assert persisted.warehouse_id == north_id

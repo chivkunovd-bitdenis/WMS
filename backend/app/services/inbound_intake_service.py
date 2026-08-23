@@ -216,6 +216,7 @@ async def get_request(
     request_id: uuid.UUID,
     *,
     seller_product_owner_id: uuid.UUID | None = None,
+    for_update: bool = False,
 ) -> InboundIntakeRequest | None:
     stmt = (
         select(InboundIntakeRequest)
@@ -238,6 +239,8 @@ async def get_request(
             selectinload(InboundIntakeRequest.cargo_places),
         )
     )
+    if for_update:
+        stmt = stmt.with_for_update()
     res = await session.execute(stmt)
     req = res.scalar_one_or_none()
     if req is None:
@@ -442,6 +445,7 @@ async def patch_request_draft(
         tenant_id,
         request_id,
         seller_product_owner_id=seller_product_owner_id,
+        for_update=warehouse_id_set,
     )
     if req is None:
         raise InboundIntakeError("request_not_found")
@@ -449,14 +453,11 @@ async def patch_request_draft(
         raise InboundIntakeError("not_draft")
     if not _request_plan_editable(req, seller_product_owner_id=seller_product_owner_id):
         raise InboundIntakeError("not_draft")
-    if planned_delivery_date_set:
-        req.planned_delivery_date = planned_delivery_date
-    if planned_box_count_set:
-        if planned_box_count is not None and planned_box_count < 1:
-            raise InboundIntakeError("invalid_planned_box_count")
-        req.planned_box_count = planned_box_count
-    if waybill_number_set:
-        req.waybill_number = normalize_waybill_number(waybill_number)
+    if planned_box_count_set and planned_box_count is not None and planned_box_count < 1:
+        raise InboundIntakeError("invalid_planned_box_count")
+    normalized_waybill_number = (
+        normalize_waybill_number(waybill_number) if waybill_number_set else None
+    )
     if warehouse_id_set:
         wh = (
             await get_warehouse(session, tenant_id, warehouse_id)
@@ -465,7 +466,32 @@ async def patch_request_draft(
         )
         if wh is None or not wh.is_operational:
             raise InboundIntakeError("invalid_warehouse")
-        req.warehouse_id = wh.id
+
+        update_stmt = sa.update(InboundIntakeRequest).where(
+            InboundIntakeRequest.id == request_id,
+            InboundIntakeRequest.tenant_id == tenant_id,
+            InboundIntakeRequest.status == STATUS_DRAFT,
+        )
+        if planned_delivery_date_set:
+            update_stmt = update_stmt.values(
+                planned_delivery_date=planned_delivery_date
+            )
+        if planned_box_count_set:
+            update_stmt = update_stmt.values(planned_box_count=planned_box_count)
+        if waybill_number_set:
+            update_stmt = update_stmt.values(waybill_number=normalized_waybill_number)
+        update_result = await session.execute(update_stmt.values(warehouse_id=wh.id))
+        updated_count = int(getattr(update_result, "rowcount", 0) or 0)
+        if updated_count != 1:
+            await session.rollback()
+            raise InboundIntakeError("not_draft")
+    else:
+        if planned_delivery_date_set:
+            req.planned_delivery_date = planned_delivery_date
+        if planned_box_count_set:
+            req.planned_box_count = planned_box_count
+        if waybill_number_set:
+            req.waybill_number = normalized_waybill_number
     await session.commit()
     await session.refresh(req)
     return req
@@ -538,6 +564,7 @@ async def submit_request(
         tenant_id,
         request_id,
         seller_product_owner_id=seller_product_owner_id,
+        for_update=True,
     )
     if req is None:
         raise InboundIntakeError("request_not_found")
@@ -547,8 +574,19 @@ async def submit_request(
         raise InboundIntakeError("submit_empty")
     if req.planned_box_count is None or req.planned_box_count < 1:
         raise InboundIntakeError("planned_boxes_missing")
-    req.status = STATUS_SUBMITTED
-    req.submitted_at = datetime.now(UTC)
+    update_result = await session.execute(
+        sa.update(InboundIntakeRequest)
+        .where(
+            InboundIntakeRequest.id == request_id,
+            InboundIntakeRequest.tenant_id == tenant_id,
+            InboundIntakeRequest.status == STATUS_DRAFT,
+        )
+        .values(status=STATUS_SUBMITTED, submitted_at=datetime.now(UTC))
+    )
+    updated_count = int(getattr(update_result, "rowcount", 0) or 0)
+    if updated_count != 1:
+        await session.rollback()
+        raise InboundIntakeError("not_draft")
     await session.commit()
     await session.refresh(req)
     return req
