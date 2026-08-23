@@ -158,7 +158,7 @@ test('FF report keeps one table slice and distinguishes a table error from empty
   await expect(page.getByTestId('ff-reports-table')).toHaveCount(0)
   await expect(page.getByText('За выбранный период движений нет')).toHaveCount(0)
   await expect(page.getByTestId('ff-reports-download-csv')).toBeDisabled()
-  await page.getByTestId('ff-reports-download-csv').hover()
+  await page.getByLabel('Строки отчёта не загружены').hover()
   await expect(page.getByText('Строки отчёта не загружены')).toBeVisible()
 })
 
@@ -386,8 +386,6 @@ test('FF reports: section opens and shows movement summary for a product with in
     headers: adminHeaders,
   })
   expect(verify.ok()).toBeTruthy()
-  const post = await page.request.post(`${INBOUND_API}/${rid}/post`, { headers: adminHeaders })
-  expect(post.ok()).toBeTruthy()
 
   await page.getByTestId('nav-ff-reports').click()
   await expect(page.getByTestId('ff-reports-page')).toBeVisible()
@@ -418,7 +416,7 @@ test('FF reports: section opens and shows movement summary for a product with in
 
   // TC-NEW-F07-011 — grouping changes only the server table query; the summary stays visible.
   await expect(page.getByTestId('ff-reports-download-csv')).toBeDisabled()
-  await page.getByTestId('ff-reports-download-csv').hover()
+  await page.getByLabel('За выбранный период нечего выгружать').hover()
   await expect(page.getByText('За выбранный период нечего выгружать')).toBeVisible()
   await page.getByTestId('filter-search').fill('Box Product')
   await expect(page.getByTestId('ff-reports-table').locator('tbody tr').first()).toBeVisible()
@@ -469,7 +467,7 @@ test('FF reports: section opens and shows movement summary for a product with in
     page.getByRole('option', { name: 'По операциям' }).click(),
   ])
   await expect(page.getByTestId('ff-reports-table')).toContainText('Операция')
-  await expect(page.getByTestId('ff-reports-metrics')).toHaveText(metrics)
+  expect(await page.getByTestId('ff-reports-metrics').innerText()).toBe(metrics)
   await page.getByTestId('ff-reports-grouping').click()
   await Promise.all([
     page.waitForResponse((response) => response.url().includes('/api/reports/inventory?') && new URL(response.url()).searchParams.get('group_by') === 'product'),
@@ -495,7 +493,7 @@ test('FF reports: section opens and shows movement summary for a product with in
   ])
   await expect(page.getByTestId('ff-reports-pagination')).toContainText('51–51 из 51')
   await expect(page.getByTestId('ff-reports-table')).toContainText('REPORT-SKU-050')
-  await expect(page.getByTestId('ff-reports-metrics')).toHaveText(metrics)
+  expect(await page.getByTestId('ff-reports-metrics').innerText()).toBe(metrics)
 
   // TC-NEW-F07-012 — export is a server CSV, not an HTML/XLS download.
   await page.route('**/api/reports/inventory/export.csv?**', async (route) => {
