@@ -671,6 +671,15 @@ def main() -> int:
             проверь("resume: FEATURES новее review не перенарезается повторно",
                     n.ремонтный_план_устарел(repair), False)
 
+            blocked_judge = pathlib.Path(временный) / "blocked-judge"
+            blocked_judge.mkdir()
+            (blocked_judge / "JUDGE.md").write_text(
+                "ВЕРДИКТ: НАХОДКИ 1\n\n## Находки\n"
+                "Стенд не поднялся, поэтому проверить физически невозможно и "
+                "снимок отсутствует.\n", encoding="utf-8")
+            проверь("browser: старый environment-only verdict не идёт в code rework",
+                    n.браузерный_блокер(blocked_judge, "ux-judge"), True)
+
             проверь("resume: фильтр сохраняет порядок",
                     n.выбрать_карточки(["01", "02", "03"], "03,01"), ["01", "03"])
             try:
