@@ -201,3 +201,5 @@
 08:00   09-billing · screen-dev: готово
 08:00   09-billing · dev: фича 16/20 сохранена 960392cc7e37
 08:06   09-billing · screen-dev: готово
+08:06   09-billing · dev: фича 17/20 сохранена ea61c9bbdd2d
+08:11   09-billing · screen-dev: готово

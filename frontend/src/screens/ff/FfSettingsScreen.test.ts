@@ -1,14 +1,20 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   FfSettingsScreen,
   isTariffUnitAllowed,
+  saveFfProfileRequest,
+  saveTariffRequest,
   tariffRequestPayload,
   unitForTariffService,
 } from './FfSettingsScreen'
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 function openingTag(markup: string, testId: string): string {
   return markup.match(new RegExp(`<button[^>]*data-testid="${testId}"[^>]*>`))?.[0] ?? ''
@@ -66,5 +72,33 @@ describe('FfSettingsScreen tariff unit', () => {
     expect(outbound).toMatchObject({ service_code: 'marketplace_outbound', unit: 'item', seller_id: 'seller-1', amount: 12 })
     expect(invalidOperational).toBeNull()
     expect(isTariffUnitAllowed('outbound', 'liter_day')).toBe(false)
+  })
+})
+
+describe('FfSettingsScreen billing settings save failures', () => {
+  it('reports a rejected FF profile save without a success result', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error('Сеть недоступна'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await saveFfProfileRequest({
+      legal_name: 'ООО «Волна»', inn: '7701234567', kpp: '', bank_name: 'Банк', bik: '044525000', settlement_account: '40702810000000000001', correspondent_account: '30101810000000000001',
+    }, { Authorization: 'Bearer test' })
+
+    expect(result).toEqual({ ok: false, message: 'Сеть недоступна' })
+    expect(result.ok).toBe(false)
+    expect(fetchMock).toHaveBeenCalledWith('/api/billing/profiles/ff', expect.objectContaining({ method: 'PUT' }))
+  })
+
+  it('reports a rejected tariff save without a success result', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error('Сеть недоступна'))
+    vi.stubGlobal('fetch', fetchMock)
+    const payload = tariffRequestPayload({ service_code: 'inbound', seller_id: '', unit: 'document', amount: '45', valid_from: '2026-08-01' }, 45)
+
+    expect(payload).not.toBeNull()
+    const result = await saveTariffRequest(payload!, { Authorization: 'Bearer test' })
+
+    expect(result).toEqual({ ok: false, message: 'Сеть недоступна' })
+    expect(result.ok).toBe(false)
+    expect(fetchMock).toHaveBeenCalledWith('/api/billing/tariffs', expect.objectContaining({ method: 'POST' }))
   })
 })

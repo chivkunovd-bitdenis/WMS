@@ -70,6 +70,11 @@ type TariffDraft = {
   amount: string
   valid_from: string
 }
+type TariffRequestPayload = Omit<TariffDraft, 'service_code' | 'seller_id' | 'amount'> & {
+  service_code: 'inbound' | 'marketplace_outbound' | 'storage_liter_day'
+  seller_id: string | null
+  amount: number
+}
 
 export function unitForTariffService(serviceCode: TariffServiceCode, currentUnit: TariffUnit): TariffUnit {
   if (serviceCode === 'storage_liter_day') return 'liter_day'
@@ -80,7 +85,7 @@ export function isTariffUnitAllowed(serviceCode: TariffServiceCode, unit: Tariff
   return serviceCode === 'storage_liter_day' ? unit === 'liter_day' : unit === 'document' || unit === 'item'
 }
 
-export function tariffRequestPayload(draft: TariffDraft, amount: number) {
+export function tariffRequestPayload(draft: TariffDraft, amount: number): TariffRequestPayload | null {
   if (!isTariffUnitAllowed(draft.service_code, draft.unit)) return null
 
   return {
@@ -89,6 +94,58 @@ export function tariffRequestPayload(draft: TariffDraft, amount: number) {
     seller_id: draft.seller_id || null,
     amount,
   }
+}
+
+type BillingSettingsSaveResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; message: string }
+
+async function saveBillingSettings<T>(
+  url: string,
+  method: 'POST' | 'PUT',
+  body: unknown,
+  headers: Record<string, string>,
+  fallbackError: string,
+): Promise<BillingSettingsSaveResult<T>> {
+  try {
+    const res = await fetch(apiUrl(url), {
+      method,
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      return { ok: false, message: await readApiErrorMessage(res) }
+    }
+    return { ok: true, value: (await res.json()) as T }
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : fallbackError }
+  }
+}
+
+export function saveFfProfileRequest(
+  profile: FfProfile,
+  headers: Record<string, string>,
+): Promise<BillingSettingsSaveResult<unknown>> {
+  return saveBillingSettings(
+    '/billing/profiles/ff',
+    'PUT',
+    { ...profile, kpp: profile.kpp || null },
+    headers,
+    'Не удалось сохранить реквизиты ФФ.',
+  )
+}
+
+export function saveTariffRequest(
+  payload: TariffRequestPayload,
+  headers: Record<string, string>,
+): Promise<BillingSettingsSaveResult<Tariff>> {
+  return saveBillingSettings(
+    '/billing/tariffs',
+    'POST',
+    payload,
+    headers,
+    'Не удалось сохранить ставку.',
+  )
 }
 
 function humanStaffError(message: string): string {
@@ -416,19 +473,19 @@ export function FfSettingsScreen({
   async function saveProfile() {
     if (!isFulfillmentAdmin || profileBusy) return
     setTariffError(null)
+    setSuccess(null)
     setProfileBusy(true)
     try {
-      const res = await fetch(apiUrl('/billing/profiles/ff'), { method: 'PUT', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ ...profile, kpp: profile.kpp || null }) })
-      if (!res.ok) { setTariffError(await readApiErrorMessage(res)); return }
+      const result = await saveFfProfileRequest(profile, authHeaders(token))
+      if (!result.ok) { setTariffError(result.message); return }
       setSuccess('Реквизиты ФФ сохранены')
-    } catch (err) {
-      setTariffError(err instanceof Error ? err.message : 'Не удалось сохранить реквизиты ФФ.')
     } finally { setProfileBusy(false) }
   }
 
   async function saveTariff() {
     if (!isFulfillmentAdmin || tariffBusy) return
     setTariffError(null)
+    setSuccess(null)
     const amount = Number(tariffDraft.amount.replace(',', '.'))
     if (!Number.isFinite(amount) || amount < 0) { setTariffError('Ставка должна быть неотрицательным числом.'); return }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(tariffDraft.valid_from)) { setTariffError('Укажите дату начала действия ставки.'); return }
@@ -441,14 +498,12 @@ export function FfSettingsScreen({
     }
     setTariffBusy(true)
     try {
-      const res = await fetch(apiUrl('/billing/tariffs'), { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      if (!res.ok) { setTariffError(await readApiErrorMessage(res)); return }
-      const created = (await res.json()) as Tariff
+      const result = await saveTariffRequest(payload, authHeaders(token))
+      if (!result.ok) { setTariffError(result.message); return }
+      const created = result.value
       setTariffs((current) => [...current, created])
       setTariffOpen(false)
       setSuccess('Ставка сохранена новой версией')
-    } catch (err) {
-      setTariffError(err instanceof Error ? err.message : 'Не удалось сохранить ставку.')
     } finally { setTariffBusy(false) }
   }
 
