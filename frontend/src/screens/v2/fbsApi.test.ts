@@ -6,6 +6,7 @@ import {
   FbsApiError,
   fetchFbsSupplyWorklist,
   fetchFbsWorklist,
+  runLatestFbsOrdersLoad,
   retryFbsSupplyQr,
   validateFbsKiz,
 } from './fbsApi'
@@ -211,6 +212,36 @@ describe('FBS API client', () => {
     controller.abort()
 
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('S-03-TC-001 aborts the previous warehouse load and keeps the new warehouse state', async () => {
+    const controllerRef: { current: AbortController | null } = { current: null }
+    const state = { warehouseId: null as string | null, items: [] as string[] }
+    const errors: unknown[] = []
+    let northSignal: AbortSignal | null = null
+    const northFetch = vi.fn((signal: AbortSignal) => new Promise<void>((_, reject) => {
+      northSignal = signal
+      signal.addEventListener('abort', () => {
+        reject(new DOMException('The operation was aborted.', 'AbortError'))
+      })
+    }))
+    const southFetch = vi.fn(async () => {
+      state.warehouseId = 'warehouse-south'
+      state.items = ['south-order']
+    })
+    const settled = vi.fn()
+
+    const northLoad = runLatestFbsOrdersLoad(controllerRef, northFetch, (cause) => errors.push(cause), settled)
+    const southLoad = runLatestFbsOrdersLoad(controllerRef, southFetch, (cause) => errors.push(cause), settled)
+    await Promise.all([northLoad, southLoad])
+
+    expect(northFetch).toHaveBeenCalledOnce()
+    expect(southFetch).toHaveBeenCalledOnce()
+    expect(northSignal).not.toBeNull()
+    expect((northSignal as AbortSignal | null)?.aborted).toBe(true)
+    expect(state).toEqual({ warehouseId: 'warehouse-south', items: ['south-order'] })
+    expect(errors).toEqual([])
+    expect(settled).toHaveBeenCalledOnce()
   })
 
   it('calls delete cargo-places with wb ids and idempotency key', async () => {

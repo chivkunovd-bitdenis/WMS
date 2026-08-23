@@ -50,6 +50,7 @@ import {
   fetchFbsWorklist,
   addFbsOrdersToSupply,
   createFbsIdempotencyKey,
+  runLatestFbsOrdersLoad,
   runFbsOrdersSync,
   syncFbsOrderStatuses,
   type FbsSupplyWorklistItem,
@@ -573,21 +574,17 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     // Не запрашиваем общий список до готовности WMS-контекста: иначе первый ответ
     // всех складов успевает попасть под серверный limit ещё до выбора оператора.
     if (!wmsWarehouseId) {
+      abortControllerRef.current?.abort()
+      abortControllerRef.current = null
       setOrders([])
       setActiveSupplies([])
       setExternalActiveOrders([])
       setBusy(false)
       return
     }
-    // Прерываем предыдущий запрос и стартуем новый немедленно. Так смена склада
-    // не ждёт завершения предыдущего тика и не оставляет «слепое пятно».
-    abortControllerRef.current?.abort()
-    const controller = new AbortController()
-    abortControllerRef.current = controller
-    const { signal } = controller
     setBusy(true)
     setError(null)
-    try {
+    await runLatestFbsOrdersLoad(abortControllerRef, async (signal) => {
       if (isFbsSupplyGroup(statusGroup)) {
         // Задача 4 пула (HANDOFF-POLISH.md, решение П3): «В работе», «В доставке» и
         // «Завершённые» показывают поставки, не отдельные заказы; ordersPage тут нужен
@@ -653,28 +650,17 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       }
       setServerNow(page.server_now)
       setLastLoadedAt(new Date().toISOString())
-    } catch (cause) {
-      // AbortError означает, что запрос прерван сменой склада или новым тиком поллинга —
-      // это штатное поведение, не пишем в state.
-      if (cause instanceof DOMException && cause.name === 'AbortError') return
+    }, (cause) => {
       setError(cause instanceof Error ? cause.message : 'Не удалось загрузить заказы FBS.')
-    } finally {
-      // Снимаем индикатор только если этот экземпляр load() — последний запущенный;
-      // иначе параллельно стартовавший новый load() уже выставил busy=true.
-      if (abortControllerRef.current === controller) {
-        setBusy(false)
-      }
-    }
+    }, () => setBusy(false))
   }, [token, authHeaders, sellerId, statusGroup, wbWarehouseId, wmsWarehouseId])
 
   useEffect(() => {
     void load()
   }, [load])
 
-  // Задача 9 пула (HANDOFF-POLISH.md): список раньше не обновлялся сам никогда. Поллинг
-  // активной вкладки каждые 30 секунд; останавливается, когда вкладка браузера скрыта —
-  // обновлять то, что оператор не видит, незачем. AbortController внутри load() прерывает
-  // предыдущий запрос и стартует новый, не позволяя тикам наслаиваться или блокировать смену склада.
+  // Активная вкладка опрашивается каждые 30 секунд; новый тик через AbortController
+  // заменяет незавершённый запрос, а скрытая вкладка не опрашивается.
   useEffect(() => {
     const intervalId = window.setInterval(() => {
       if (document.hidden) return

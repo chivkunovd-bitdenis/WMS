@@ -1,79 +1,31 @@
-# DEV · 04-warehouse-switch · атом 4 (переделка)
+# DEV · 04-warehouse-switch · атом 4 · переделка по REVIEW.md
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/fbsApi.ts`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/FfFbsOrdersScreen.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/fbsApi.test.ts`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/FfFbsOrdersScreen.tsx` — `load()` переведён на единый механизм замены незавершённого запроса; при исчезновении складского контекста активный запрос также прерывается.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/fbsApi.ts` — добавлен тестируемый `runLatestFbsOrdersLoad`: новый запуск прерывает прежний `AbortController`, молча принимает `AbortError` и завершает индикатор только для актуального запроса. Ранее добавленные `signal` в `fetchFbsWorklist` и `fetchFbsSupplyWorklist` сохранены.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/v2/fbsApi.test.ts` — добавлен регрессионный `S-03-TC-001`: медленная загрузка «Севера» прерывается сменой на «Юг», второй запрос стартует немедленно, ошибки в state нет, итоговый state содержит только данные «Юга».
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md` — отчёт этого атомарного прохода.
 
-## Что сделано
-
-### fbsApi.ts
-Добавлен необязательный параметр `signal?: AbortSignal` в сигнатуры `fetchFbsWorklist` и `fetchFbsSupplyWorklist`. Сигнал условно передаётся в `fetch` через `...(params.signal !== undefined ? { signal: params.signal } : {})` — так существующие тесты, не передающие signal, остаются без изменений в ожидаемых аргументах.
-
-### FfFbsOrdersScreen.tsx
-- `const loadingRef = useRef(false)` заменён на `const abortControllerRef = useRef<AbortController | null>(null)`.
-- Охрана `if (loadingRef.current) return; loadingRef.current = true` заменена: в начале каждого `load()` предыдущий контроллер прерывается (`abortControllerRef.current?.abort()`), создаётся новый `AbortController`, его `signal` передаётся во все три fetch-вызова внутри `load` (`supplyParams`, `orderParams`, `params`).
-- В `catch`: если причина — `DOMException` с `name === 'AbortError'`, ошибка проглатывается молча (не записывается в state).
-- В `finally`: `setBusy(false)` вызывается только если `abortControllerRef.current === controller` (т.е. этот `load()` — последний запущенный). Это предотвращает сброс индикатора загрузки во время исполнения более нового запроса.
-- Комментарий у поллинга обновлён: убрана ссылка на `loadingRef`, добавлено объяснение об AbortController.
-
-### fbsApi.test.ts
-Добавлены три новых теста (итого 9, было 6):
-1. `fetchFbsWorklist` передаёт `signal` в `fetch` — проверяет, что `options.signal === controller.signal`.
-2. `fetchFbsSupplyWorklist` передаёт `signal` в `fetch` — аналогично.
-3. При срабатывании сигнала до разрешения fetch-промиса — `fetchFbsWorklist` режектит с `DOMException { name: 'AbortError' }`. Мок честно слушает событие `abort` на сигнале и отклоняет промис — воспроизводит реальное поведение нативного fetch.
+До начала прохода уже был изменён `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/JOURNAL.md`; это чужое изменение не редактировалось и в атом не входит.
 
 ## Гейты
 
-### tsc
-```
-npx tsc --noEmit -p tsconfig.app.json
-```
-Зелёный — нет вывода, код 0.
-
-### ui_guard.py
-```
-python3 scripts/ui/ui_guard.py
-```
-Вывод:
-```
-стало лучше  src/App.tsx: экран-монолит 3492 → 3491
-стало лучше  src/screens/v2/FbsSupplyCreateDialog.tsx: своя-кнопка 3 → 2
-стало лучше  src/screens/v2/InboundScreen.tsx: экран-монолит 691 → 690
-НОВОЕ НАРУШЕНИЕ  src/components/WbProductPickerDialog.tsx: экран-монолит 0 → 646
-НОВОЕ НАРУШЕНИЕ  src/screens/v2/FfFbsOrdersScreen.tsx: экран-монолит 1587 → 1690
-НОВОЕ НАРУШЕНИЕ  src/screens/v2/FfFbsStockSyncScreen.tsx: экран-монолит 1083 → 1121
-НОВОЕ НАРУШЕНИЕ  src/screens/v2/FfFbsSupplyWorkspace.tsx: экран-монолит 2493 → 2605
-НОВОЕ НАРУШЕНИЕ  src/screens/v2/SellerInboundDraftScreen.tsx: экран-монолит 1111 → 1267
-```
-
-**Все нарушения — pre-existing из предыдущих атомов этой волны, не из этого атома.**
-
-Детали для `FfFbsOrdersScreen.tsx`:
-- Baseline (до волны): 1587 строк
-- На HEAD перед правкой этого атома (`git show HEAD:...`): 1678 строк → нарушение уже было (+91 от атомов 1–3)
-- После правки этого атома: 1689 строк (+11 net: `git diff --stat HEAD` показал 20 insertions, 9 deletions)
-
-Файлы WbProductPickerDialog.tsx, FfFbsStockSyncScreen.tsx, FfFbsSupplyWorkspace.tsx, SellerInboundDraftScreen.tsx не входят в список файлов этого атома; трогать их запрещено.
-
-### test:unit
-```
-npm run test:unit -- src/screens/v2/fbsApi.test.ts
-```
-```
-✓ src/screens/v2/fbsApi.test.ts (9 tests) 7ms
-Test Files  1 passed (1)
-     Tests  9 passed (9)
-```
-Зелёный.
+- Рабочий каталог `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend`; команда `npm run test:unit -- src/screens/v2/fbsApi.test.ts` — зелёная, код 0: `1 passed` файл, `10 passed` тестов.
+- Рабочий каталог `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend`; команда `npx tsc --noEmit -p tsconfig.app.json` — зелёная, код 0, ошибок нет.
+- Рабочий каталог `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch`; команда `python3 scripts/ui/ui_guard.py` — красная, код 1. Скрипт повторно сообщает о накопленных до этого прохода монолитах: `WbProductPickerDialog.tsx` (`0 → 646`), `FfFbsOrdersScreen.tsx` (`1587 → 1676`), `FfFbsStockSyncScreen.tsx` (`1083 → 1121`), `FfFbsSupplyWorkspace.tsx` (`2493 → 2605`) и `SellerInboundDraftScreen.tsx` (`1111 → 1267`). Baseline не изменялся. Текущий атом не ухудшил целевой экран: в `HEAD` было 1689 строк, после переделки — 1675 строк.
+- Рабочий каталог `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch`; команда `git diff --check` — зелёная, ошибок пробелов нет.
+- Рабочий каталог `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch`; команда `git add frontend/src/screens/v2/FfFbsOrdersScreen.tsx frontend/src/screens/v2/fbsApi.ts frontend/src/screens/v2/fbsApi.test.ts night/volna-9-recovery/cards/04-warehouse-switch/DEV.md && git diff --cached --check && git commit -m "fix(fbs): cancel stale warehouse worklist loads"` — красная до стадии индексации: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-04-warehouse-switch/index.lock` (`Operation not permitted`). Чужой `JOURNAL.md` в команду не включался.
+- Полные frontend/backend regression suites, полный `pytest`, `ruff check .` и `mypy .` не запускались: для этого атома прямо разрешены только его тестовый файл и относящиеся к вердикту проверки.
 
 ## Не реализовано
 
-Все пункты контракта атома реализованы буквально:
-- `loadingRef` → `abortControllerRef` ✓
-- `if (loadingRef.current) return` заменён прерыванием предыдущего запроса ✓
-- `signal` передан в `fetchFbsSupplyWorklist`, `fetchFbsWorklist` (все три вызова) ✓
-- `AbortError` обрабатывается молча ✓
-- Поллинг-поведение сохранено (тик прерывает предыдущий) ✓
-- Unit-тест добавлен в `fbsApi.test.ts`, покрывает сигнал и AbortError ✓
+- Из требований атома 4 ничего не пропущено: прежний запрос прерывается, новый начинается без ожидания, все вызовы worklist внутри `load()` получают `signal`, `AbortError` не записывается в state, поллинг сохраняет семантику «последний тик побеждает», а гонка «Север → Юг» закреплена unit-тестом с проверкой итогового state.
+- Находки 1 (S-14 frontend) и 2 (S-28 backend) из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/REVIEW.md` не трогались: пользователь назначил только атом 4 и запретил переходить к соседним задачам.
+- `ui_guard.py` не удалось сделать зелёным буквально: он сравнивает всю ветку с baseline и видит пять накопленных монолитов, существовавших до текущего прохода. Разбиение этих экранов и обновление baseline запрещены границами роли и атома; новых отклонений в текущем diff нет.
+- Живой браузерный проход не выполнялся: роль `screen-dev` ограничена реализацией и атомарными техническими проверками; продуктовая браузерная приёмка выполняется отдельной ролью после разработки.
+- Отдельный commit и push не созданы: sandbox разрешает запись в worktree, но запрещает создание Git lock-файла в общем каталоге зарегистрированного worktree. Создавать второй checkout или временный клон запрещено правилами проекта, поэтому результат остаётся локально реализованным, но не сохранённым в новом Git-коммите.
+
+## Находки
+
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой production не открывались и не изменялись.

@@ -561,6 +561,25 @@ export type FbsWorkspace = {
 }
 
 type AuthHeaders = (token: string) => Record<string, string>
+type AbortControllerRef = { current: AbortController | null }
+
+export async function runLatestFbsOrdersLoad(
+  controllerRef: AbortControllerRef,
+  request: (signal: AbortSignal) => Promise<void>,
+  onError: (cause: unknown) => void,
+  onSettled: () => void,
+): Promise<void> {
+  controllerRef.current?.abort()
+  const controller = new AbortController()
+  controllerRef.current = controller
+  try {
+    await request(controller.signal)
+  } catch (cause) {
+    if (!(cause instanceof DOMException && cause.name === 'AbortError')) onError(cause)
+  } finally {
+    if (controllerRef.current === controller) onSettled()
+  }
+}
 
 function jsonHeaders(token: string, ah: AuthHeaders): Record<string, string> {
   return { ...ah(token), 'Content-Type': 'application/json' }
