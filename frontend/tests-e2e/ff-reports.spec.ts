@@ -317,7 +317,8 @@ test('FF report upper slice updates atomically and keeps table on overview retry
   await page.getByTestId('filter-search').fill('stale')
   await expect(page.getByTestId('ff-reports-warning')).toHaveCount(2)
   await expect(page.getByTestId('ff-reports-warning').first()).toContainText('Данные Wildberries могут быть неполными')
-  await expect(page.getByTestId('ff-reports-warning').nth(1)).toContainText('3 исторических записей')
+  await expect(page.getByTestId('ff-reports-warning').nth(1)).toHaveText('В отчёте есть исторические записи, восстановленные по доступным связям: 3')
+  await expect(page.getByTestId('ff-reports-warning').nth(1)).not.toContainText('legacy-данные')
 
   await page.getByTestId('filter-search').fill('summary-error')
   await expect(page.getByTestId('ff-reports-summary-error')).toBeVisible()

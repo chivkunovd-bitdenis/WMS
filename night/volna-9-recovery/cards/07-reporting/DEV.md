@@ -1,27 +1,23 @@
-# Фича 1
-
 # DEV · 07-reporting · атом 1
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/screens/ff/FfReportsPage.tsx`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/tests-e2e/ff-reports.spec.ts`
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/DEV.md`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/src/screens/ff/FfReportsPage.tsx` — пользовательское предупреждение о восстановленных исторических записях теперь говорит: «В отчёте есть исторические записи, восстановленные по доступным связям: N».
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend/tests-e2e/ff-reports.spec.ts` — сценарий проверяет точный текст для `count = 3`, отсутствие «legacy-данные» и сохраняет отдельную проверку предупреждения Wildberries.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/DEV.md` — отчёт шага.
 
 ## Гейты
 
-- ЗЕЛЁНЫЙ — `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npx tsc --noEmit -p tsconfig.app.json`.
-- КРАСНЫЙ вне границы атома — `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && python3 scripts/ui/ui_guard.py`: новые отступления только в `frontend/src/App.tsx`, `frontend/src/components/WbProductPickerDialog.tsx`, `frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx` и `frontend/src/screens/v2/SellerInboundDraftScreen.tsx`. Базовая линия не обновлялась; сам `FfReportsPage.tsx` отмечен как улучшенный (`своя-кнопка 1 → 0`, `своя-таблица 1 → 0`).
-- ЗЕЛЁНЫЙ — `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npm run test:unit -- src/screens/ff/FfReportsPage.test.tsx`: 1 файл, 1 тест.
-- ЗЕЛЁНЫЙ — `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npx playwright test tests-e2e/ff-reports.spec.ts --grep "FF reports: section opens and shows movement summary for a product with intake" --list`: выбран ровно 1 E2E-сценарий.
-- НЕ ЗАПУЩЕН ИЗ-ЗА ОГРАНИЧЕНИЯ СРЕДЫ — `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npx playwright test tests-e2e/ff-reports.spec.ts --grep "FF reports: section opens and shows movement summary for a product with intake"`: Playwright не смог запустить API, поскольку среда запретила bind `127.0.0.1:18000` (`[Errno 1] operation not permitted`).
-- ЗЕЛЁНЫЙ — `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && git diff --check`.
-- НЕ СОХРАНЕНО В GIT ИЗ-ЗА ОГРАНИЧЕНИЯ СРЕДЫ — попытка `git add frontend/src/screens/ff/FfReportsPage.tsx frontend/tests-e2e/ff-reports.spec.ts night/volna-9-recovery/cards/07-reporting/DEV.md && git commit -m "fix(reports): group pagination actions"` не смогла создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-07-reporting1/index.lock` (`Operation not permitted`).
+- ЗЕЛЁНЫЙ: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npx tsc --noEmit -p tsconfig.app.json`.
+- КРАСНЫЙ вне границы атома: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting && python3 scripts/ui/ui_guard.py`. Скрипт сообщил о новых монолитах в `frontend/src/App.tsx`, `frontend/src/components/WbProductPickerDialog.tsx`, `frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx` и `frontend/src/screens/v2/SellerInboundDraftScreen.tsx`; эти файлы не входят в разрешённую границу атома. Для `frontend/src/screens/ff/FfReportsPage.tsx` скрипт сообщил только улучшения: свои кнопка и таблица устранены.
+- ЗЕЛЁНЫЙ: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npm run test:unit -- src/screens/ff/FfReportsPage.test.tsx` — 1 файл, 1 тест.
+- ЗАПУСК НЕ СОСТОЯЛСЯ из-за изоляции среды: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/frontend && npx playwright test tests-e2e/ff-reports.spec.ts --grep 'FF report upper slice updates atomically and keeps table on overview retry'`. Playwright не смог запустить свой локальный webServer: `bind 127.0.0.1:18000: operation not permitted`; до выполнения сценария браузер не дошёл.
+- ЗЕЛЁНЫЙ: `git diff --check`.
 
 ## Не реализовано
 
-- Нет. Пагинация собрана из существующего `ActionGroup`; доступность «Назад»/«Вперёд», подписи, серверная пагинация и верхние агрегаты не изменены. Реальное browser-выполнение `TC-NEW-F07-013` не подтверждено только запретом среды на локальный порт; сам сценарий добавлен и проходит синтаксический отбор Playwright. Изменения остаются локальными и не восстановимы по commit SHA до снятия запрета на запись в Git metadata.
+Нет. Техническая проверка e2e не выполнилась только потому, что среда запретила привязку локального порта; код и сценарий не менялись за пределами атома.
 
 ## Находки
 
-- Секреты, ключи, токены, `.env` и кабинеты учётных данных не читались и не изменялись.
+Нет.

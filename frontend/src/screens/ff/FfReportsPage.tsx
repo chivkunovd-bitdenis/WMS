@@ -101,7 +101,7 @@ const moscowTimestamp = (value: string | null) => value
   : 'нет данных об обновлении'
 const warningText = (warning: ReportWarning) => warning.code === 'wildberries_stale'
   ? `Данные Wildberries могут быть неполными. Последнее обновление: ${moscowTimestamp(warning.last_updated_at)}.`
-  : `В отчёте есть legacy-данные: ${warning.count} исторических записей восстановлены по доступным связям.`
+  : `В отчёте есть исторические записи, восстановленные по доступным связям: ${warning.count}`
 
 export function FfReportsPage({ token, sellers = [], warehouses = [] }: Props) {
   const now = useMemo(() => moscowCalendarDate(new Date()), [])
