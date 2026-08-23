@@ -47,7 +47,10 @@ from app.models.warehouse import Warehouse
 from app.services.fbs_marking_service import apply_wb_meta_requirements_to_order
 from app.services.fbs_stock_availability_service import fbs_available_qty_for_product
 from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
-from app.services.fbs_warehouse_binding_service import is_auto_fbs_wms_warehouse
+from app.services.fbs_warehouse_binding_service import (
+    get_or_create_binding_for_sole_operational_warehouse,
+    is_auto_fbs_wms_warehouse,
+)
 from app.services.fbs_wb_seller_lock_service import wb_seller_lock
 from app.services.wildberries_client import (
     WildberriesClientError,
@@ -289,8 +292,25 @@ async def _resolve_wms_warehouse_from_binding(
     res = await session.execute(stmt)
     row = res.one_or_none()
     if row is None:
-        return None
-    binding, warehouse = row
+        binding = await get_or_create_binding_for_sole_operational_warehouse(
+            session, tenant_id, seller_id, wb_warehouse_id
+        )
+        if binding is None or not binding.is_active:
+            return None
+        warehouse = await session.get(Warehouse, binding.wms_warehouse_id)
+        if warehouse is None:
+            return None
+    else:
+        binding, warehouse = row
+        if is_auto_fbs_wms_warehouse(warehouse):
+            binding = await get_or_create_binding_for_sole_operational_warehouse(
+                session, tenant_id, seller_id, wb_warehouse_id
+            )
+            if binding is None or not binding.is_active:
+                return None
+            warehouse = await session.get(Warehouse, binding.wms_warehouse_id)
+            if warehouse is None:
+                return None
     if is_auto_fbs_wms_warehouse(warehouse):
         binding.stock_sync_enabled = False
         await session.flush()
@@ -352,7 +372,10 @@ async def _assign_wms_warehouse_from_binding(
     if resolved is None:
         if order.warehouse_id is not None:
             current_warehouse = await session.get(Warehouse, order.warehouse_id)
-            if current_warehouse is None or is_auto_fbs_wms_warehouse(current_warehouse):
+            if current_warehouse is not None and is_auto_fbs_wms_warehouse(current_warehouse):
+                order.reserve_status = RESERVE_STATUS_WAREHOUSE_REMAP_CONFLICT
+                return
+            if current_warehouse is None:
                 order.warehouse_id = None
         order.reserve_status = RESERVE_STATUS_WAREHOUSE_UNMAPPED
         return
@@ -368,7 +391,10 @@ async def _assign_wms_warehouse_from_binding(
     if reservation_wh is not None and reservation_wh != resolved:
         order.reserve_status = RESERVE_STATUS_WAREHOUSE_REMAP_CONFLICT
         return
-    order.warehouse_id = resolved
+    # An already assigned order is warehouse work in progress.  A later
+    # auto-binding (or a changed external WB route) may make another warehouse
+    # resolvable, but must not silently transfer the document.
+    return
 
 
 async def _map_product(
