@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -17,6 +18,19 @@ router = APIRouter(prefix="/operations/inbound-packages", tags=["operations"])
 class InboundPackageCatalogLineOut(BaseModel):
     product_id: str
     remaining_qty: int
+    name: str
+    sku_code: str
+    wb_vendor_code: str | None = None
+    wb_barcode: str | None = None
+    wb_size: str | None = None
+    seller_name: str | None = None
+
+
+class PackageSourceDocumentOut(BaseModel):
+    kind: str
+    id: str
+    number: str | None = None
+    date: datetime
 
 
 class InboundPackageCatalogItemOut(BaseModel):
@@ -32,6 +46,7 @@ class InboundPackageCatalogItemOut(BaseModel):
     fully_distributed: bool
     remaining_qty: int | None = None
     lines: list[InboundPackageCatalogLineOut] = Field(default_factory=list)
+    source_document: PackageSourceDocumentOut
 
 
 def _item_out(item: catalog_svc.InboundPackageCatalogItem) -> InboundPackageCatalogItemOut:
@@ -49,10 +64,23 @@ def _item_out(item: catalog_svc.InboundPackageCatalogItem) -> InboundPackageCata
         remaining_qty=item.remaining_qty,
         lines=[
             InboundPackageCatalogLineOut(
-                product_id=str(line.product_id), remaining_qty=line.remaining_qty
+                product_id=str(line.product_id),
+                remaining_qty=line.remaining_qty,
+                name=line.name,
+                sku_code=line.sku_code,
+                wb_vendor_code=line.wb_vendor_code,
+                wb_barcode=line.wb_barcode,
+                wb_size=line.wb_size,
+                seller_name=line.seller_name,
             )
             for line in item.lines
         ],
+        source_document=PackageSourceDocumentOut(
+            kind=item.source_document.kind,
+            id=str(item.source_document.id),
+            number=item.source_document.number,
+            date=item.source_document.date,
+        ),
     )
 
 

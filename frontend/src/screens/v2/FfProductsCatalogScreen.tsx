@@ -22,12 +22,14 @@ import {
   Paper,
   Select,
   Stack,
+  Tab,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
+  Tabs,
   TextField,
   Tooltip,
   Typography,
@@ -195,6 +197,7 @@ export function FfProductsCatalogScreen({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [catalog, setCatalog] = useState<FfCatalogRow[]>([])
+  const [packageProducts, setPackageProducts] = useState<FfCatalogRow[]>([])
   const [stock, setStock] = useState<StockSummaryRow[]>([])
   const [dialogSellers, setDialogSellers] = useState<SellerRow[]>(sellers)
   const [createOpen, setCreateOpen] = useState(false)
@@ -214,6 +217,7 @@ export function FfProductsCatalogScreen({
   const [filterSearch, setFilterSearch] = useState('')
   const [filterSellerId, setFilterSellerId] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
+  const [catalogView, setCatalogView] = useState<'products' | 'packages'>('products')
 
   // ── FBS-пул: направления остатка (перенесено из SellerProductsStockScreen) ──
   const [directionProductId, setDirectionProductId] = useState<string | null>(null)
@@ -237,7 +241,9 @@ export function FfProductsCatalogScreen({
       if (!res.ok) {
         throw new Error(humanFfCatalogError(await readApiErrorMessage(res)))
       }
-      setCatalog((await res.json()) as FfCatalogRow[])
+      const loadedCatalog = (await res.json()) as FfCatalogRow[]
+      setCatalog(loadedCatalog)
+      if (!filterSellerId) setPackageProducts(loadedCatalog)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось загрузить товары.')
     } finally {
@@ -653,8 +659,41 @@ export function FfProductsCatalogScreen({
           Каталог
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Карточки товаров селлеров: название, артикулы, ШК, размер, ТЗ упаковки и остаток на ФФ.
+          {catalogView === 'products'
+            ? 'Карточки товаров селлеров: название, артикулы, ШК, размер, ТЗ упаковки и остаток на ФФ.'
+            : 'Сканируйте короб или грузоместо и проверяйте его состав и документ прихода.'}
         </Typography>
+
+        <Tabs
+          value={catalogView}
+          onChange={(_, value: 'products' | 'packages') => setCatalogView(value)}
+          aria-label="Разделы каталога"
+          data-testid="ff-catalog-tabs"
+          sx={{ mb: 2, borderBottom: '1px solid', borderColor: 'divider' }}
+        >
+          <Tab
+            id="ff-catalog-tab-products"
+            aria-controls="ff-catalog-products-panel"
+            value="products"
+            label="Товары"
+            data-testid="ff-catalog-tab-products"
+          />
+          <Tab
+            id="ff-catalog-tab-packages"
+            aria-controls="ff-catalog-packages-panel"
+            value="packages"
+            label="Короба и грузоместа"
+            data-testid="ff-catalog-tab-packages"
+          />
+        </Tabs>
+
+        <Box
+          id="ff-catalog-products-panel"
+          role="tabpanel"
+          aria-labelledby="ff-catalog-tab-products"
+          hidden={catalogView !== 'products'}
+          data-testid="ff-catalog-products-panel"
+        >
 
         {error ? (
           <Alert severity="error" sx={{ mb: 2 }} data-testid="ff-products-error">
@@ -1056,11 +1095,17 @@ export function FfProductsCatalogScreen({
           </Table>
         </TableContainer>
 
-        <FfCatalogInboundPackages
-          token={token}
-          authHeaders={authHeaders}
-          products={catalog}
-        />
+        </Box>
+
+        {catalogView === 'packages' ? (
+          <Box id="ff-catalog-packages-panel" role="tabpanel" aria-labelledby="ff-catalog-tab-packages">
+            <FfCatalogInboundPackages
+              token={token}
+              authHeaders={authHeaders}
+              products={packageProducts}
+            />
+          </Box>
+        ) : null}
 
         {canManageCatalog ? (
           <>

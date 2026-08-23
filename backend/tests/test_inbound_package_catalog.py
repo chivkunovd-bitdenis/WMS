@@ -17,7 +17,9 @@ from app.models.inbound_intake import (
     InboundIntakeRequest,
 )
 from app.models.product import Product
+from app.models.seller import Seller
 from app.models.warehouse import Warehouse
+from app.services import inbound_package_catalog_service as package_catalog_svc
 
 
 async def _register_admin(async_client: AsyncClient, suffix: str) -> dict[str, str]:
@@ -77,14 +79,19 @@ async def _create_staff(
 
 
 async def _seed_packages(tenant_id: uuid.UUID) -> dict[str, uuid.UUID]:
-    now = datetime.now(UTC)
+    now = datetime(2026, 8, 23, 10, 15, tzinfo=UTC)
     warehouse_one = Warehouse(id=uuid.uuid4(), tenant_id=tenant_id, name="Основной", code="main")
     warehouse_two = Warehouse(id=uuid.uuid4(), tenant_id=tenant_id, name="Резерв", code="reserve")
+    seller = Seller(id=uuid.uuid4(), tenant_id=tenant_id, name="Селлер короба")
     product = Product(
         id=uuid.uuid4(),
         tenant_id=tenant_id,
+        seller_id=seller.id,
         name="Товар в коробе",
         sku_code="PKG-CATALOG-SKU",
+        wb_vendor_code="SELLER-ARTICLE",
+        wb_barcode="2030000000012",
+        wb_size="46",
     )
     current_request = InboundIntakeRequest(
         id=uuid.uuid4(),
@@ -199,6 +206,7 @@ async def _seed_packages(tenant_id: uuid.UUID) -> dict[str, uuid.UUID]:
             [
                 warehouse_one,
                 warehouse_two,
+                seller,
                 product,
                 current_request,
                 old_request,
@@ -279,7 +287,24 @@ async def test_catalog_list_and_lookup_are_tenant_scoped_read_only(
     assert residual["kind"] == "box"
     assert residual["fully_distributed"] is False
     assert residual["remaining_qty"] == 6
-    assert residual["lines"] == [{"product_id": str(ids["product_id"]), "remaining_qty": 6}]
+    assert residual["lines"] == [
+        {
+            "product_id": str(ids["product_id"]),
+            "remaining_qty": 6,
+            "name": "Товар в коробе",
+            "sku_code": "PKG-CATALOG-SKU",
+            "wb_vendor_code": "SELLER-ARTICLE",
+            "wb_barcode": "2030000000012",
+            "wb_size": "46",
+            "seller_name": "Селлер короба",
+        }
+    ]
+    assert residual["source_document"] == {
+        "kind": "inbound_intake",
+        "id": str(ids["current_request_id"]),
+        "number": "№000002",
+        "date": "2026-08-23T10:15:00",
+    }
     assert residual["warehouse_name"] == "Основной"
     assert rows[1]["remaining_qty"] == 0
     assert rows[1]["fully_distributed"] is False
@@ -413,6 +438,45 @@ async def test_catalog_list_loads_only_current_package_rows(
     )
     assert str(ids["distributed_box_id"]) not in str(line_parameters)
     assert str(ids["done_box_id"]) not in str(line_parameters)
+
+
+@pytest.mark.asyncio
+async def test_catalog_box_lookup_has_bounded_read_only_query_path(
+    async_client: AsyncClient,
+) -> None:
+    """TC-NEW-CATALOG-BOX-004: scan lookup never loads WB/full catalog or writes."""
+    suffix = uuid.uuid4().hex[:12]
+    admin_headers = await _register_admin(async_client, suffix)
+    tenant_id = await _tenant_id(async_client, admin_headers)
+    await _seed_packages(tenant_id)
+    statements: list[str] = []
+
+    def capture_sql(
+        _connection: object,
+        _cursor: object,
+        statement: str,
+        _parameters: object,
+        _context: object,
+        _executemany: object,
+    ) -> None:
+        statements.append(statement.strip().upper())
+
+    event.listen(engine.sync_engine, "before_cursor_execute", capture_sql)
+    try:
+        async with SessionLocal() as session:
+            item = await package_catalog_svc.lookup_package_by_barcode(
+                session, tenant_id, "INB-CURRENT-RESIDUAL"
+            )
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", capture_sql)
+
+    assert item is not None
+    assert item.internal_barcode == "INB-CURRENT-RESIDUAL"
+    assert len(statements) <= 6
+    assert all(statement.startswith("SELECT") for statement in statements)
+    sql = "\n".join(statements)
+    assert "SELLER_WILDBERRIES_IMPORTED_CARDS" not in sql
+    assert "FBS_STOCK_SYNC_ITEMS" not in sql
 
 
 @pytest.mark.asyncio
