@@ -35,10 +35,10 @@ type InboundSummaryRow = {
   created_at?: string
 }
 
-type WarehouseRow = { id: string; name: string; code: string; is_operational?: boolean }
+type WarehouseRow = { id: string; name: string; code: string; is_operational: boolean }
 export const reportWarehouseOptions = (warehouses: WarehouseRow[]) =>
   warehouses
-    .filter((warehouse) => warehouse.is_operational ?? !warehouse.name.startsWith('FBS WB '))
+    .filter((warehouse) => warehouse.is_operational)
     .map((warehouse) => ({ id: warehouse.id, name: warehouse.name }))
 
 type SellerAppProps = {

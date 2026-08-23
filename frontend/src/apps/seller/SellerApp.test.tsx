@@ -12,12 +12,12 @@ describe('reportWarehouseOptions', () => {
     ).toEqual([{ id: 'physical', name: 'Основной склад' }])
   })
 
-  it('hides the migrated FBS service warehouse for the legacy API response', () => {
+  it('uses only the API flag after a service warehouse is renamed', () => {
     expect(
       reportWarehouseOptions([
-        { id: 'physical', name: 'Основной склад', code: 'main' },
-        { id: 'service', name: 'FBS WB Архив', code: 'fbs-wb-archive' },
+        { id: 'physical', name: 'FBS WB Основной', code: 'main', is_operational: true },
+        { id: 'service', name: 'Архив', code: 'fbs-wb-archive', is_operational: false },
       ]),
-    ).toEqual([{ id: 'physical', name: 'Основной склад' }])
+    ).toEqual([{ id: 'physical', name: 'FBS WB Основной' }])
   })
 })

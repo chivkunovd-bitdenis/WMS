@@ -1,26 +1,113 @@
 import { expect, test } from '@playwright/test'
 
-import { loginSellerPortal, seedFfSellerInbound } from './inbound-boxes-helpers'
+import {
+  apiCreateSubmittedInbound,
+  beginInboundReceivingWithBoxes,
+  fulfillInboundViaBoxScans,
+  INBOUND_API,
+  loginSellerPortal,
+  seedFfSellerInbound,
+} from './inbound-boxes-helpers'
 
-// TC-NEW-F07-014 — the seller report keeps the shared report layout but never
-// exposes the FF-only seller scope or technical legacy-data warning.
-test('seller reports hide FF-only seller filter and technical warning', async ({ page }) => {
-  const seed = await seedFfSellerInbound(page, `seller-reports-${Date.now()}`)
+// S-33-TC-003 / S-33-TC-014 — only the API operational flag defines the seller
+// report warehouses, while the authenticated seller scope excludes other data.
+test('seller reports exclude non-operational warehouses and other seller data', async ({ page }) => {
+  test.setTimeout(90_000)
+  const suffix = `seller-reports-${Date.now()}`
+  const seed = await seedFfSellerInbound(page, suffix)
+  const adminHeaders = { Authorization: `Bearer ${seed.token}` }
+  const otherSellerEmail = `other-${suffix}@example.com`
+  const otherSku = `other-seller-sku-${suffix}`
+
+  const otherSellerResponse = await page.request.post('/api/sellers', {
+    headers: adminHeaders,
+    data: { name: 'Other report seller' },
+  })
+  expect(otherSellerResponse.ok()).toBeTruthy()
+  const otherSellerId = String(
+    ((await otherSellerResponse.json()) as { id: string }).id,
+  )
+  const otherAccountResponse = await page.request.post('/api/auth/seller-accounts', {
+    headers: adminHeaders,
+    data: {
+      seller_id: otherSellerId,
+      email: otherSellerEmail,
+      password: seed.password,
+    },
+  })
+  expect(otherAccountResponse.ok()).toBeTruthy()
+  const otherProductResponse = await page.request.post('/api/products', {
+    headers: adminHeaders,
+    data: {
+      name: 'Other seller report product',
+      sku_code: otherSku,
+      length_mm: 100,
+      width_mm: 100,
+      height_mm: 100,
+      seller_id: otherSellerId,
+    },
+  })
+  expect(otherProductResponse.ok()).toBeTruthy()
+  const otherProductId = String(
+    ((await otherProductResponse.json()) as { id: string }).id,
+  )
+
+  const reportSeeds = [
+    seed,
+    {
+      ...seed,
+      sellerEmail: otherSellerEmail,
+      sellerId: otherSellerId,
+      productId: otherProductId,
+      sku: otherSku,
+    },
+  ]
+  for (const [index, reportSeed] of reportSeeds.entries()) {
+    const requestId = await apiCreateSubmittedInbound(page.request, reportSeed, {
+      plannedBoxes: 1,
+      expectedQty: index + 2,
+    })
+    const { boxes } = await beginInboundReceivingWithBoxes(
+      page.request,
+      adminHeaders,
+      requestId,
+      { boxCount: 1 },
+    )
+    await fulfillInboundViaBoxScans(
+      page.request,
+      adminHeaders,
+      requestId,
+      boxes,
+      reportSeed.sku,
+      [index + 2],
+    )
+    const verifyResponse = await page.request.post(`${INBOUND_API}/${requestId}/verify`, {
+      headers: adminHeaders,
+    })
+    expect(verifyResponse.ok()).toBeTruthy()
+    const postResponse = await page.request.post(`${INBOUND_API}/${requestId}/post`, {
+      headers: adminHeaders,
+    })
+    expect(postResponse.ok()).toBeTruthy()
+  }
+
   await page.route('**/api/warehouses', async (route) => {
     if (route.request().method() !== 'GET') {
       await route.continue()
       return
     }
-    const response = await route.fetch()
-    const rows = (await response.json()) as { id: string; name: string; code: string }[]
     await route.fulfill({
-      response,
       contentType: 'application/json',
       body: JSON.stringify([
-        ...rows,
+        {
+          id: seed.warehouseId,
+          name: 'Основной склад',
+          code: 'main-reporting',
+          is_operational: true,
+        },
         {
           id: 'service-fbs-archive',
-          name: 'FBS WB Архив',
+          name: 'Архив',
           code: 'fbs-wb-archive',
           is_operational: false,
         },
@@ -34,8 +121,11 @@ test('seller reports hide FF-only seller filter and technical warning', async ({
   await expect(page).toHaveURL('/app/seller/reports')
   await expect(page.getByTestId('ff-reports-page')).toBeVisible()
   await expect(page.getByTestId('ff-reports-seller')).toHaveCount(0)
+  await expect(page.getByRole('option', { name: 'Архив' })).toHaveCount(0)
   await expect(page.getByTestId('ff-reports-warehouse')).toHaveCount(0)
   await expect(page.getByTestId('ff-reports-warning')).toHaveCount(0)
   await expect(page.getByTestId('ff-reports-metrics')).toBeVisible()
   await expect(page.getByTestId('ff-reports-chart')).toBeVisible()
+  await expect(page.getByTestId('ff-reports-table')).toContainText(seed.sku)
+  await expect(page.getByTestId('ff-reports-table')).not.toContainText(otherSku)
 })
