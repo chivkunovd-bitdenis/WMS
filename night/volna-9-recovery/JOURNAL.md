@@ -218,3 +218,22 @@
 07:35   07-reporting · splitter: готово
 07:37   07-reporting · screen-dev: готово
 07:37   07-reporting · dev: фича 1/1 сохранена bb5c1769e0ba
+07:41   07-reporting · reviewer: готово
+07:44   07-reporting · ui-critic: готово
+07:52   07-reporting · clicker: готово
+07:54   07-reporting · ux-judge: готово
+07:54 07-reporting: отложено — браузерная среда, не дефект кода
+08:09   07-reporting · resume: повторяем clicker после недоступного стенда
+08:11   07-reporting · clicker: готово
+08:16   07-reporting · ux-judge: готово
+08:16   07-reporting · ux-judge: находки, круг 1 — назад к разработке
+08:18   07-reporting · splitter: FEATURES.md: первый frontend-атом должен отдельно создать ui-kit (код 0, попытка 1)
+08:20   07-reporting · splitter: готово
+10:33   07-reporting · resume: повторяем clicker после недоступного стенда
+10:37   07-reporting · clicker: нет файла CLICKS.md (код 0, попытка 1)
+10:38   07-reporting · clicker: готово
+10:42   07-reporting · ux-judge: нет файла JUDGE.md (код 1, попытка 1)
+10:42   07-reporting · ux-judge: нет файла JUDGE.md (код 1, попытка 2)
+17:42   07-reporting · moderator: отвергнута повторная нарезка уже существующих ui-kit компонентов; accepted review восстановлен
+17:50   07-reporting · clicker: целевой браузерный файл 6/6, unit 1/1, product code без изменений
+17:52   07-reporting · ux-judge: живой экран принят, лишних контролов и визуальных регрессий нет
