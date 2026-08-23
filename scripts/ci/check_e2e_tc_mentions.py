@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 When e2e specs change, require each touched file to reference at least one TC-ID
-(TC-Sxx-yyy or TC-NEW) in a comment or test title — links automation to catalog.
+(S-xx-TC-yyy, TC-Sxx-yyy, or TC-NEW) in a comment or test title — links automation to catalog.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-TC_PATTERN = re.compile(r"TC-(?:S\d{2}-\d{3}|NEW[-\w]*)", re.IGNORECASE)
+TC_PATTERN = re.compile(r"(?:S-\d{2}-TC-\d{3}|TC-(?:S\d{2}-\d{3}|NEW[-\w]*))", re.IGNORECASE)
 REPO_ROOT = Path(__file__).resolve().parents[2]
 E2E_PREFIX = REPO_ROOT / "frontend" / "tests-e2e"
 
@@ -66,7 +66,7 @@ def main() -> int:
         rel = "\n".join(f"  - {p.relative_to(REPO_ROOT)}" for p in bad)
         print(
             "error: changed Playwright specs must mention at least one TC-ID "
-            "(TC-Sxx-yyy or TC-NEW-*) in a comment or test title:\n" + rel,
+            "(S-xx-TC-yyy, TC-Sxx-yyy, or TC-NEW-*) in a comment or test title:\n" + rel,
             file=sys.stderr,
         )
         return 1

@@ -19,6 +19,42 @@ export function QtyCell({ value, muted = false }: { value: number | null | undef
   )
 }
 
+// Денежные значения приходят из billing API в целых копейках.
+// Сторно остаётся обычной отрицательной суммой без отдельной окраски.
+export function formatMoney(minor: number | null | undefined): string {
+  if (minor === null || minor === undefined) return '—'
+
+  const amount = (minor / 100).toLocaleString('ru-RU', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+  return `${amount}\u00a0₽`
+}
+
+export function MoneyCell({
+  minor,
+  muted = false,
+}: {
+  minor: number | null | undefined
+  muted?: boolean
+}) {
+  return (
+    <Typography
+      component="span"
+      variant="body2"
+      sx={{
+        display: 'block',
+        textAlign: 'right',
+        fontVariantNumeric: 'tabular-nums',
+        color: muted ? 'text.secondary' : 'text.primary',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {formatMoney(minor)}
+    </Typography>
+  )
+}
+
 // Канон R-29: число читается как утверждение. Для превышения — отдельная формулировка,
 // а не «2 из 1 короба», которое выглядит как поломка при верных данных.
 export function PlanFactCell({ fact, plan }: { fact: number; plan: number }) {
