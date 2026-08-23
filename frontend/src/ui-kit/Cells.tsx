@@ -19,19 +19,28 @@ export function QtyCell({ value, muted = false }: { value: number | null | undef
   )
 }
 
-// Денежные значения всегда показываются в RUB с двумя знаками и табличными цифрами.
+// Денежные значения приходят в копейках и всегда показываются в RUB с двумя знаками.
 // Отрицательная сумма — обычное сторно, поэтому не получает сигнальную окраску.
-export function formatMoney(value: number | null | undefined): string {
-  if (value === null || value === undefined) return '—'
+export function formatMoney(minor: number | null | undefined): string {
+  if (minor === null || minor === undefined) return '—'
 
-  const amount = value.toLocaleString('ru-RU', {
+  const amount = (minor / 100).toLocaleString('ru-RU', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
   return `${amount}\u00a0₽`
 }
 
-export function MoneyCell({ value }: { value: number | null | undefined }) {
+type MoneyCellProps = {
+  minor?: number | null
+  value?: number | null
+  currency?: 'RUB'
+  muted?: boolean
+}
+
+export function MoneyCell({ minor, value, muted = false }: MoneyCellProps) {
+  const amount = minor ?? value
+
   return (
     <Typography
       component="span"
@@ -40,11 +49,11 @@ export function MoneyCell({ value }: { value: number | null | undefined }) {
         display: 'block',
         textAlign: 'right',
         fontVariantNumeric: 'tabular-nums',
-        color: 'text.primary',
+        color: muted ? 'text.secondary' : 'text.primary',
         whiteSpace: 'nowrap',
       }}
     >
-      {formatMoney(value)}
+      {formatMoney(amount)}
     </Typography>
   )
 }
