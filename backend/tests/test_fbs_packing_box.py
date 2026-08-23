@@ -350,6 +350,14 @@ async def test_legacy_without_distribution_create_retry_returns_existing_box(
         box = await session.get(FbsPackingBox, uuid.UUID(created_box_id))
         assert box is not None
         box.creation_idempotency_key = f"{stored_prefix}{idempotency_key}"
+        await session.flush()
+        await session.run_sync(
+            lambda sync_session: _migration._backfill_legacy_boxes_without_distribution(
+                sync_session.connection()
+            )
+        )
+        await session.refresh(box)
+        assert box.created_without_distribution is True
         await session.commit()
 
     retried = await async_client.post(
@@ -760,7 +768,9 @@ async def test_migration_moves_provable_legacy_marker_to_supply_before_empty_box
             )
         )
         await session.refresh(supply)
+        await session.refresh(box)
         assert supply.boxes_without_distribution_at is not None
+        assert box.created_without_distribution is True
         await session.commit()
 
     deleted = await async_client.request(

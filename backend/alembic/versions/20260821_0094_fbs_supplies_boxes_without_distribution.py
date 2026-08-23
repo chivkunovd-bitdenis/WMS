@@ -13,6 +13,7 @@ depends_on = None
 
 
 WITHOUT_DISTRIBUTION_KEY_PREFIX = "no-distribution:"
+RETIRED_WITHOUT_DISTRIBUTION_KEY_PREFIX = "retired-no-dist:"
 LEGACY_RAW_IDEMPOTENCY_KEY_MAX_LENGTH = 128 - len(WITHOUT_DISTRIBUTION_KEY_PREFIX)
 
 
@@ -37,12 +38,11 @@ def _backfill_legacy_boxes_without_distribution(bind: sa.Connection) -> None:
                  AND operation.operation_kind = 'cargo_places_create'
                  AND operation.local_entity_type = 'fbs_supply'
                  AND operation.local_entity_id = fbs_supplies.id
-                 AND box.creation_idempotency_key =
-                     :prefix || substr(
-                         operation.idempotency_key,
-                         1,
-                         :legacy_raw_key_max_length
-                     )
+                 AND box.creation_idempotency_key IN (
+                     :prefix || substr(operation.idempotency_key, 1, :legacy_raw_key_max_length),
+                     :retired_prefix
+                         || substr(operation.idempotency_key, 1, :legacy_raw_key_max_length)
+                 )
                 WHERE box.supply_id = fbs_supplies.id
             )
             WHERE boxes_without_distribution_at IS NULL
@@ -54,18 +54,46 @@ def _backfill_legacy_boxes_without_distribution(bind: sa.Connection) -> None:
                    AND operation.operation_kind = 'cargo_places_create'
                    AND operation.local_entity_type = 'fbs_supply'
                    AND operation.local_entity_id = fbs_supplies.id
-                   AND box.creation_idempotency_key =
-                       :prefix || substr(
-                           operation.idempotency_key,
-                           1,
-                           :legacy_raw_key_max_length
-                       )
+                   AND box.creation_idempotency_key IN (
+                       :prefix || substr(operation.idempotency_key, 1, :legacy_raw_key_max_length),
+                       :retired_prefix
+                           || substr(operation.idempotency_key, 1, :legacy_raw_key_max_length)
+                   )
                   WHERE box.supply_id = fbs_supplies.id
               )
             """
         ),
         {
             "prefix": WITHOUT_DISTRIBUTION_KEY_PREFIX,
+            "retired_prefix": RETIRED_WITHOUT_DISTRIBUTION_KEY_PREFIX,
+            "legacy_raw_key_max_length": LEGACY_RAW_IDEMPOTENCY_KEY_MAX_LENGTH,
+        },
+    )
+    bind.execute(
+        sa.text(
+            """
+            UPDATE fbs_packing_boxes AS box
+            SET created_without_distribution = TRUE
+            WHERE EXISTS (
+                SELECT 1
+                FROM fbs_supplies AS supply
+                JOIN fbs_wb_operations AS operation
+                  ON operation.seller_id = supply.seller_id
+                 AND operation.operation_kind = 'cargo_places_create'
+                 AND operation.local_entity_type = 'fbs_supply'
+                 AND operation.local_entity_id = supply.id
+                WHERE supply.id = box.supply_id
+                  AND box.creation_idempotency_key IN (
+                      :prefix || substr(operation.idempotency_key, 1, :legacy_raw_key_max_length),
+                      :retired_prefix
+                          || substr(operation.idempotency_key, 1, :legacy_raw_key_max_length)
+                  )
+            )
+            """
+        ),
+        {
+            "prefix": WITHOUT_DISTRIBUTION_KEY_PREFIX,
+            "retired_prefix": RETIRED_WITHOUT_DISTRIBUTION_KEY_PREFIX,
             "legacy_raw_key_max_length": LEGACY_RAW_IDEMPOTENCY_KEY_MAX_LENGTH,
         },
     )
@@ -80,6 +108,15 @@ def upgrade() -> None:
         "fbs_supplies",
         sa.Column("boxes_without_distribution_by_user_id", sa.Uuid(as_uuid=True), nullable=True),
     )
+    op.add_column(
+        "fbs_packing_boxes",
+        sa.Column(
+            "created_without_distribution",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.false(),
+        ),
+    )
     op.create_foreign_key(
         "fk_fbs_supplies_boxes_without_distribution_by_user_id",
         "fbs_supplies",
@@ -92,6 +129,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_column("fbs_packing_boxes", "created_without_distribution")
     op.drop_constraint(
         "fk_fbs_supplies_boxes_without_distribution_by_user_id",
         "fbs_supplies",
