@@ -1,52 +1,30 @@
-# DEV · 04-warehouse-switch · Атом Ф-3 (переделка по REVIEW.md)
+# DEV · 04-warehouse-switch · атом 3 (S-14)
 
 ## Изменённые файлы
 
-- `frontend/src/ui-kit/States.tsx` — добавлена функция `WarehouseNoContextState` (обёртка над `EmptyState`, Ф-2)
-- `frontend/src/ui-kit/index.ts` — добавлен реэкспорт `WarehouseNoContextState` из `./States`
-- `frontend/src/screens/ff/FfPackagingPage.tsx` — Ф-3: добавлены импорты `useWarehouseContext` и `WarehouseNoContextState`; в `FfPackagingPage` добавлен вызов `useWarehouseContext('fulfillment')`; функция `load` теперь при `!selectedWarehouseId` сбрасывает `tasks` и возвращается без запроса, при наличии — передаёт `warehouse_id` в `URLSearchParams`; зависимость `selectedWarehouseId` добавлена в `useCallback`; JSX показывает `<WarehouseNoContextState />` при нулевом складе
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/ff/FfPackagingPage.test.ts` — добавлен атомарный регрессионный unit-тест `S-14-TC-001`: он фиксирует передачу `warehouse_id`, перезагрузку при смене `selectedWarehouseId`, ранний выход без запроса и показ `WarehouseNoContextState` при нулевом складском контексте.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/night/volna-9-recovery/cards/04-warehouse-switch/DEV.md` — записан обязательный отчёт роли `screen-dev`.
 
-## Что реализовано
-
-### Ф-2: `WarehouseNoContextState` в ui-kit
-- `States.tsx`: новая функция без аргументов, возвращает `<EmptyState title="Нет рабочего склада" hint="Выберите склад в верхней части страницы." />`
-- `index.ts`: добавлена одной строкой в существующий реэкспорт из `./States`
-
-### Ф-3: FfPackagingPage — склад в запросе (находка 1 из REVIEW.md)
-- `useWarehouseContext('fulfillment')` даёт `selectedWarehouseId`
-- `load` начинается с `if (!selectedWarehouseId) { setTasks([]); return }` — ранняя блокировка до запроса
-- `URLSearchParams` построен с `{ status: statusFilter, warehouse_id: selectedWarehouseId }` — склад передаётся серверу
-- `selectedWarehouseId` добавлен в dep-массив `useCallback`
-- JSX: `selected ? ... : !selectedWarehouseId ? <WarehouseNoContextState /> : <Paper …>` — при нулевом складе показывается заглушка, а не пустой список
-
-## Компактность vs ui_guard
-
-Файл `FfPackagingPage.tsx` в baseline имел `экран-монолит: 2146` строк. Чтобы не создать новое нарушение, при добавлении кода одновременно убраны:
-- два пустых разделителя между хуками и колбэками внутри `FfPackagingPage`
-- многострочный блок `if (trimmedSearch) { … }` → однострочный
-- `warehouse_id` встроен прямо в конструктор `URLSearchParams` вместо отдельного `params.set`
-Итоговый размер файла — 2146 строк, на уровне baseline.
+Экранная реализация в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend/src/screens/ff/FfPackagingPage.tsx` уже находилась в текущей ветке: основная часть сохранена коммитом `44efc687e8cf22af71ea09db6d7c5485bcfe86b7`, а буквальная зависимость `selectedWarehouseId` в `useEffect` — коммитом `4a15595402a90d2b1518d057895e4632d2d1f2d7`. Повторно переписывать корректный экран не потребовалось.
 
 ## Гейты
 
-| Гейт | Команда | Результат |
-|---|---|---|
-| TypeScript | `npx tsc --noEmit -p tsconfig.app.json` (из `frontend/`) | ✅ no errors |
-| ui_guard | `python3 scripts/ui/ui_guard.py` (из корня) | ✅ `FfPackagingPage.tsx` не в списке нарушений; остальные «НОВОЕ НАРУШЕНИЕ» — pre-existing от других атомов этой волны, перечислены в FEATURES.md как «вне scope» |
-| unit tests | `npm run test:unit -- src/ui-kit/ src/utils/fbsWarehouse.test.ts src/utils/printShipmentPackagingSheet.test.ts src/utils/printPackagingInstructions.test.ts` | ✅ 40 tests passed |
-
-Команды выполнены из директории `frontend/` (tsc, test) и из корня worktree (ui_guard).
+- `npm run test:unit -- src/screens/ff/FfPackagingPage.test.ts` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend` — зелёный, код 0: 1 файл, 2 теста прошли.
+- `npx tsc --noEmit -p tsconfig.app.json` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend` — зелёный, код 0, ошибок нет.
+- `python3 scripts/ui/ui_guard.py` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch` — красный, код 1. Разрешённый экран `FfPackagingPage.tsx` и его тест среди новых нарушений не названы. Скрипт сообщает о ранее существующих монолитах вне атома: `WbProductPickerDialog.tsx` (0 → 646), `FfFbsOrdersScreen.tsx` (1587 → 1690), `FfFbsStockSyncScreen.tsx` (1083 → 1121), `FfFbsSupplyWorkspace.tsx` (2493 → 2605) и `SellerInboundDraftScreen.tsx` (1111 → 1267). Базовая линия не изменялась.
+- `npm run build` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/frontend` — зелёный, код 0; Vite собрал production bundle. Предупреждение о крупных чанках не является ошибкой.
+- `git diff --check` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch` — зелёный, ошибок пробелов нет.
+- `git add frontend/src/screens/ff/FfPackagingPage.test.ts night/volna-9-recovery/cards/04-warehouse-switch/DEV.md` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch` — красный: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-1-04-warehouse-switch/index.lock` (`Operation not permitted`). Поэтому новый commit и push этого прохода технически невозможны в текущем sandbox.
+- Полные backend `pytest`, `ruff check .` и `mypy .` не запускались согласно прямому запрету атомарной проверки.
 
 ## Не реализовано
 
-Все три пункта находки 1 из REVIEW.md закрыты:
-- `load` теперь не выполняется при нулевом складе ✅
-- `warehouse_id` добавлен к параметрам запроса ✅
-- при нулевом складе показан `WarehouseNoContextState` вместо молчаливо пустого списка ✅
-
-Находки 2 и 3 из REVIEW.md (PATCH inbound_intake + гонка AbortController в FfFbsOrdersScreen) закрыты атомами Ф-1 и Ф-4 соответственно — не затрагиваются этим атомом.
+- Все пункты атома в разрешённом экранном файле реализованы буквально: используется `useWarehouseContext('fulfillment')`; без `selectedWarehouseId` список очищается и запрос не выполняется; параметр `warehouse_id` передаётся в `/operations/packaging-tasks`; `selectedWarehouseId` входит в зависимости `useCallback` и `useEffect`; при нулевом контексте показан `WarehouseNoContextState`. Новых колонок, чипов и действий не добавлено.
+- Ручной браузерный сценарий «Север → Юг → ноль складов» не выполнялся: роль `screen-dev` реализует экран и технические проверки, а живая продуктовая браузерная приёмка должна выполняться отдельной ролью после разработки.
+- Общий `ui_guard.py` не зелёный из-за пяти чужих файлов вне разрешённой области этого атома; исправлять их или обновлять baseline роль `screen-dev` не имеет права.
+- Новый unit-тест и текущая версия `DEV.md` локально реализованы, но не сохранены новым коммитом и не опубликованы из-за запрета записи в общий Git-каталог worktree. Основная экранная реализация S-14 остаётся сохранённой в коммитах `44efc687e8cf22af71ea09db6d7c5485bcfe86b7` и `4a15595402a90d2b1518d057895e4632d2d1f2d7`.
 
 ## Находки
 
-- Pre-existing нарушения ui_guard для `WbProductPickerDialog.tsx`, `FfFbsOrdersScreen.tsx`, `FfFbsStockSyncScreen.tsx`, `FfFbsSupplyWorkspace.tsx`, `SellerInboundDraftScreen.tsx` — зафиксировано, работа продолжена; разбиение монолитов вне scope.
-- Прямых unit-тестов для `FfPackagingPage` в репозитории нет — поведение покрыто e2e-тестами в `tests-e2e/ff-packaging-page.spec.ts`; unit-тесты ui-kit и связанных утилит прошли зелёными.
+- Из трёх пунктов `REVIEW.md` к этому атому и разрешённому файлу относится только находка 1 по S-14. Находки 2 (S-28 backend) и 3 (гонка S-03) не затрагивались.
+- Секреты, ключи, токены, `.env`, кабинеты учётных данных и боевой production не открывались и не изменялись.
