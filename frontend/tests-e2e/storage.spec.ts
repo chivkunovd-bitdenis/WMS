@@ -24,7 +24,7 @@ async function openStorage(page: Page, role: 'fulfillment_admin' | 'fulfillment_
   await page.route('**/api/operations/background-jobs/job-1', (route) => route.fulfill({ json: { id: 'job-1', status: 'done', error_message: null } }))
   await page.route('**/api/products/product-missing/dimensions', (route) => route.fulfill({ json: {} }))
   await page.route('**/api/products/product-missing/dimensions/container', (route) => route.fulfill({ json: {} }))
-  await page.route('**/api/products/product-ready/dimensions/history', (route) => route.fulfill({ json: [{ id: 'event-1', created_at: '2026-07-18T10:42:00+03:00', source: 'manual', length_mm: 400, width_mm: 250, height_mm: 240, volume_liters: '24.00', author_name: 'Анна Константинопольская — старший специалист фулфилмента', is_current: true }] }))
+  await page.route('**/api/products/product-ready/dimensions/history', (route) => route.fulfill({ json: [{ id: 'event-1', created_at: '2026-07-18T10:42:00+03:00', source: 'manual', length_mm: 400, width_mm: 250, height_mm: 240, volume_liters: '24.00', author_name: 'АннаКонстантинопольскаяСтаршийСпециалистФулфилментаБезПробелов', is_current: true }] }))
   await page.route('**/api/products/product-ready/dimensions/restore-wb', (route) => route.fulfill({ json: {} }))
   await page.route('**/api/operations/storage/statements/draft-problem/fix', (route) => route.fulfill({ json: { ...rows[0], status: 'fixed', problem_count: 0, fixed_at: '2026-08-01T09:20:00+03:00' } }))
   await page.route('**/api/operations/storage/statements/draft-ready/fix', (route) => route.fulfill({ json: { ...rows[1], status: 'fixed', fixed_at: '2026-08-01T09:20:00+03:00' } }))
@@ -430,13 +430,31 @@ test('S-11-TC-006 requires a basis for a container-volume measurement', async ({
   await expect(page.getByRole('button', { name: 'Сохранить' })).toBeDisabled()
 })
 
-test('S-11-TC-007 opens dimension history and lets an administrator restore WB data', async ({ page }) => {
+test('S-11-TC-007 keeps history columns aligned with a long author name', async ({ page }) => {
   await openStorage(page)
-  await page.getByTestId('storage-expand-draft-problem').click(); await page.getByTitle('История габаритов').click()
+  await page.getByTestId('storage-expand-draft-ready').click(); await page.getByTitle('История габаритов').click()
   const historyDialog = page.getByRole('dialog', { name: 'История габаритов' })
   const historyHeaders = historyDialog.getByRole('columnheader')
   await expect(historyHeaders).toHaveText(['Дата', 'Источник', 'Габариты / объём', 'Автор', 'Применено'])
-  for (const [index, width] of [170, 140, 250, 180, 140].entries()) await expect(historyHeaders.nth(index)).toHaveAttribute('width', String(width))
+  const historyCells = historyDialog.getByRole('row').nth(1).getByRole('cell')
+  const historyTable = historyDialog.getByRole('table')
+  const [historyTableBox, authorHeaderBox, appliedHeaderBox, authorCellBox, appliedCellBox] = await Promise.all([
+    historyTable.boundingBox(),
+    historyHeaders.nth(3).boundingBox(),
+    historyHeaders.nth(4).boundingBox(),
+    historyCells.nth(3).boundingBox(),
+    historyCells.nth(4).boundingBox(),
+  ])
+  expect(historyTableBox).not.toBeNull()
+  expect(authorHeaderBox).not.toBeNull()
+  expect(appliedHeaderBox).not.toBeNull()
+  expect(authorCellBox).not.toBeNull()
+  expect(appliedCellBox).not.toBeNull()
+  if (!historyTableBox || !authorHeaderBox || !appliedHeaderBox || !authorCellBox || !appliedCellBox) throw new Error('history table geometry is unavailable')
+  expect(authorCellBox.x).toBeCloseTo(authorHeaderBox.x, 0)
+  expect(appliedCellBox.x).toBeCloseTo(appliedHeaderBox.x, 0)
+  expect(authorHeaderBox.x).toBeLessThan(appliedHeaderBox.x)
+  expect(appliedHeaderBox.x + appliedHeaderBox.width).toBeLessThanOrEqual(historyTableBox.x + historyTableBox.width + 1)
   await expect(historyDialog).toContainText('Анна')
   await expect(historyDialog).toContainText('Ручной обмер')
   await expect(historyDialog.getByText('Действует', { exact: true })).toBeVisible()
@@ -458,15 +476,33 @@ test('S-11-TC-009 opens a repeat print preview for a fixed document', async ({ p
   await expect(page.getByTestId('storage-print-preview')).toContainText('Итого: 0.00 ₽')
 })
 
-// TC-NEW-STORAGE-REVIEW-03 — зафиксированный расчёт печатается со снимком ставки и устойчивыми числовыми колонками.
-test('fixed storage print preview shows the rate snapshot in fixed-width columns', async ({ page }) => {
+// S-11-TC-009 — повторная печать сохраняет снимок ставки и позиции числовых колонок.
+test('S-11-TC-009 keeps rate and amount visible beside a long seller article in print preview', async ({ page }) => {
   await openStorage(page)
   await page.getByTestId('storage-print-fixed-rate').click()
 
   const preview = page.getByTestId('storage-print-preview')
   const headers = preview.getByRole('columnheader')
   await expect(headers).toHaveText(['SKU', 'Артикул продавца', 'Объём, л', 'Источник', 'Литро-дни', 'Ставка, ₽/л·день', 'Сумма, ₽'])
-  for (const [index, width] of [150, 180, 110, 150, 130, 150, 120].entries()) await expect(headers.nth(index)).toHaveAttribute('width', String(width))
+  const cells = preview.getByRole('row').nth(1).getByRole('cell')
+  const table = preview.getByRole('table')
+  const [tableBox, rateHeaderBox, amountHeaderBox, rateCellBox, amountCellBox] = await Promise.all([
+    table.boundingBox(),
+    headers.nth(5).boundingBox(),
+    headers.nth(6).boundingBox(),
+    cells.nth(5).boundingBox(),
+    cells.nth(6).boundingBox(),
+  ])
+  expect(tableBox).not.toBeNull()
+  expect(rateHeaderBox).not.toBeNull()
+  expect(amountHeaderBox).not.toBeNull()
+  expect(rateCellBox).not.toBeNull()
+  expect(amountCellBox).not.toBeNull()
+  if (!tableBox || !rateHeaderBox || !amountHeaderBox || !rateCellBox || !amountCellBox) throw new Error('print table geometry is unavailable')
+  expect(rateCellBox.x).toBeCloseTo(rateHeaderBox.x, 0)
+  expect(amountCellBox.x).toBeCloseTo(amountHeaderBox.x, 0)
+  expect(rateHeaderBox.x + rateHeaderBox.width).toBeCloseTo(amountHeaderBox.x, 0)
+  expect(amountHeaderBox.x + amountHeaderBox.width).toBeLessThanOrEqual(tableBox.x + tableBox.width + 1)
   await expect(preview).toContainText('KRS-44-BLK-VERY-LONG-SELLER-ARTICLE-FOR-PRINT-PREVIEW')
   await expect(preview).toContainText('0.70')
   await expect(preview).toContainText('Итого: 6249.60 ₽')

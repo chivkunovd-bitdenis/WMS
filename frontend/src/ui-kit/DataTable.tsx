@@ -50,7 +50,7 @@ export function DataTable<Row>({
     <TableContainer component={Paper} variant="outlined" data-testid={testId}>
       {/* stickyHeader по умолчанию: на двухстах строках без липкой шапки
           оператор читает число не из того столбца (канон R-05). */}
-      <Table stickyHeader size="small">
+      <Table stickyHeader size="small" sx={{ tableLayout: 'fixed' }}>
         <TableHead>
           <TableRow>
             {columns.map((column) => (
@@ -58,7 +58,7 @@ export function DataTable<Row>({
                 key={column.key}
                 align={column.align ?? 'left'}
                 width={column.width}
-                sx={{ whiteSpace: 'nowrap' }}
+                sx={{ width: column.width, whiteSpace: 'nowrap' }}
               >
                 {column.header}
               </TableCell>
@@ -80,7 +80,16 @@ export function DataTable<Row>({
                 }
               >
                 {columns.map((column) => (
-                  <TableCell key={column.key} align={column.align ?? 'left'}>
+                  <TableCell
+                    key={column.key}
+                    align={column.align ?? 'left'}
+                    sx={{
+                      width: column.width,
+                      maxWidth: column.width,
+                      overflow: 'hidden',
+                      overflowWrap: 'anywhere',
+                    }}
+                  >
                     {column.render(row)}
                   </TableCell>
                 ))}
