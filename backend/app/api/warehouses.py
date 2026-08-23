@@ -9,7 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_cells_access, require_fulfillment_admin
 from app.db.session import get_db
+from app.models.storage_location import StorageLocation
 from app.models.user import User
+from app.models.warehouse import Warehouse
 from app.services.catalog_service import (
     CatalogError,
     create_location,
@@ -21,6 +23,7 @@ from app.services.catalog_service import (
     list_racks,
     rename_location,
     rename_warehouse,
+    resolve_warehouse_scan,
     suggest_next_location_for_rack,
 )
 from app.services.catalog_service import (
@@ -50,6 +53,8 @@ class WarehouseOut(BaseModel):
     id: str
     name: str
     code: str
+    barcode: str
+    is_operational: bool
 
     model_config = {"from_attributes": False}
 
@@ -88,7 +93,14 @@ async def list_warehouses(
 ) -> list[WarehouseOut]:
     rows = await list_wh_svc(session, user.tenant_id)
     return [
-        WarehouseOut(id=str(w.id), name=w.name, code=w.code) for w in rows
+        WarehouseOut(
+            id=str(w.id),
+            name=w.name,
+            code=w.code,
+            barcode=w.barcode,
+            is_operational=w.is_operational,
+        )
+        for w in rows
     ]
 
 
@@ -112,7 +124,9 @@ async def post_warehouse(
             status_code=status.HTTP_409_CONFLICT,
             detail="warehouse_code_taken",
         ) from None
-    return WarehouseOut(id=str(w.id), name=w.name, code=w.code)
+    return WarehouseOut(
+        id=str(w.id), name=w.name, code=w.code, barcode=w.barcode, is_operational=w.is_operational
+    )
 
 
 @router.patch("/{warehouse_id}", response_model=WarehouseOut)
@@ -141,7 +155,42 @@ async def patch_warehouse(
                 detail="invalid_warehouse_name",
             ) from None
         raise
-    return WarehouseOut(id=str(w.id), name=w.name, code=w.code)
+    return WarehouseOut(
+        id=str(w.id), name=w.name, code=w.code, barcode=w.barcode, is_operational=w.is_operational
+    )
+
+
+class WarehouseScanOut(BaseModel):
+    type: str
+    id: str
+    warehouse_id: str
+    name: str | None = None
+    code: str
+
+
+@router.get("/resolve", response_model=WarehouseScanOut)
+async def resolve_scan(
+    barcode: Annotated[str, Query(min_length=1)],
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> WarehouseScanOut:
+    try:
+        kind, item = await resolve_warehouse_scan(session, user.tenant_id, barcode)
+    except CatalogError as exc:
+        code = (
+            status.HTTP_404_NOT_FOUND
+            if exc.code in {"barcode_unknown", "barcode_empty"}
+            else status.HTTP_409_CONFLICT
+        )
+        raise HTTPException(status_code=code, detail=exc.code) from None
+    if kind == "warehouse" and isinstance(item, Warehouse):
+        return WarehouseScanOut(
+            type=kind, id=str(item.id), warehouse_id=str(item.id), name=item.name, code=item.code
+        )
+    assert isinstance(item, StorageLocation)
+    return WarehouseScanOut(
+        type=kind, id=str(item.id), warehouse_id=str(item.warehouse_id), code=item.code
+    )
 
 
 @router.delete("/{warehouse_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -250,9 +299,7 @@ async def post_location(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     detail="code_required",
                 )
-            loc = await create_location(
-                session, user.tenant_id, warehouse_id, code=body.code
-            )
+            loc = await create_location(session, user.tenant_id, warehouse_id, code=body.code)
     except CatalogError as exc:
         if exc.code == "warehouse_not_found":
             raise HTTPException(
