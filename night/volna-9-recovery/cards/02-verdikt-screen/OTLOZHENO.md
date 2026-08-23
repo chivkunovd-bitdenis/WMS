@@ -1,1 +1,1 @@
-reviewer нашёл находки после 3 кругов правки и финальной эскалации
+Снято 23.08.2026: повторное reviewer-ревью — APPROVED, ui-critic — ЧИСТО, local browser judge — APPROVED. Блокеров нет.

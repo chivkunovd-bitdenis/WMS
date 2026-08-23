@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>S-03 · Вердикт WB в рабочем месте поставки</title>
+    <style>
+      :root {
+        color: #0f172a;
+        background: #e8ecf4;
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: #e8ecf4; }
+      .scope {
+        max-width: 1180px;
+        margin: 20px auto 0;
+        padding: 0 20px;
+        color: #475569;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .scope strong { color: #0f172a; }
+      .workspace {
+        max-width: 1180px;
+        margin: 10px auto 36px;
+        overflow: hidden;
+        border: 1px solid #d8dee9;
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, .07);
+      }
+      .workspace-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 17px 20px;
+        border-bottom: 1px solid #d8dee9;
+      }
+      h1 { margin: 0; font-size: 18px; line-height: 1.3; }
+      .sub { margin: 3px 0 0; color: #64748b; font-size: 13px; }
+      .stage { color: #4c1d95; font-size: 13px; font-weight: 650; }
+      .paper { margin: 20px; overflow: hidden; border: 1px solid #d8dee9; border-radius: 12px; }
+      .paper-head {
+        padding: 14px 16px;
+        border-bottom: 1px solid #d8dee9;
+        background: rgba(91, 33, 182, .08);
+        color: #312e81;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .order-row {
+        display: grid;
+        grid-template-columns: 40px minmax(270px, 1fr) 180px 174px;
+        gap: 12px;
+        align-items: center;
+        min-height: 92px;
+        padding: 13px 16px;
+        border-left: 4px solid transparent;
+        background: #fff;
+      }
+      .order-row + .order-row { border-top: 1px solid #e2e8f0; }
+      .photo {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, #ddd6fe, #f1f5f9 52%, #cbd5e1);
+        border: 1px solid #d8dee9;
+      }
+      .name { font-size: 14px; font-weight: 700; line-height: 1.35; }
+      .ids { margin-top: 4px; color: #64748b; font-size: 12px; line-height: 1.35; }
+      .marking { text-align: right; }
+      .marking-label { color: #64748b; font-size: 11px; line-height: 1; }
+      .tail { margin-top: 3px; color: #14603d; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 15px; font-weight: 700; }
+      .chip {
+        display: inline-flex;
+        margin-top: 7px;
+        padding: 3px 9px;
+        border-radius: 16px;
+        font-size: 12px;
+        font-weight: 650;
+        line-height: 1.35;
+        white-space: nowrap;
+      }
+      .chip.stop { background: rgba(163, 42, 32, .12); color: #8f241b; }
+      .reason { margin-top: 4px; color: #475569; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .controls { display: flex; justify-content: flex-end; align-items: center; gap: 6px; }
+      button {
+        min-height: 30px;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        background: #fff;
+        color: #334155;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: default;
+      }
+      .outline { padding: 0 10px; }
+      .icon { width: 30px; padding: 0; font-size: 16px; }
+      .actions { display: flex; justify-content: flex-end; padding: 0 20px 20px; }
+      .primary {
+        padding: 0 15px;
+        border-color: #5b21b6;
+        background: #5b21b6;
+        color: #fff;
+        box-shadow: 0 1px 2px rgba(91, 33, 182, .25);
+      }
+      .primary:disabled { cursor: not-allowed; opacity: .48; }
+      @media (max-width: 720px) {
+        .scope { padding: 0 12px; }
+        .workspace { margin: 10px 12px 28px; }
+        .workspace-head { align-items: flex-start; flex-direction: column; }
+        .paper { margin: 12px; }
+        .order-row { grid-template-columns: 40px minmax(0, 1fr); }
+        .marking { grid-column: 2; text-align: left; }
+        .controls { grid-column: 1 / -1; justify-content: flex-start; }
+        .actions { padding: 0 12px 12px; }
+      }
+    </style>
+  </head>
+  <body>
+    <aside class="scope" aria-label="Граница UX-артефакта">
+      <strong>Граница артефакта:</strong> 0 новых экранов, 0 новых колонок, 0 новых контролов.
+      Это узкое evidence существующей зоны S-03 «Рабочее место поставки»: редизайн и изменение соседних зон запрещены.
+    </aside>
+
+    <main class="workspace" aria-label="S-03, рабочее место поставки">
+      <header class="workspace-head">
+        <div>
+          <h1>Поставка WB</h1>
+          <p class="sub">Упаковка · заказы поставки</p>
+        </div>
+        <span class="stage">Упаковка</span>
+      </header>
+
+      <section class="paper" aria-label="Существующий блок упаковки">
+        <div class="paper-head">Заказы в упаковке</div>
+        <div class="order-row">
+          <div class="photo" aria-label="Фото товара"></div>
+          <div>
+            <div class="name">Футболка хлопковая, белая</div>
+            <div class="ids">ART-014 · 2036847102341 · заказ 12004567</div>
+          </div>
+          <div class="marking">
+            <div class="marking-label">ЧЗ</div>
+            <div class="tail">…93A1K7</div>
+            <span class="chip stop">WB не принял</span>
+            <div class="reason" title="неверный статус УИН">неверный статус УИН</div>
+          </div>
+          <div class="controls" aria-label="Существующие действия строки">
+            <button class="outline" type="button">ТЗ</button>
+            <button class="outline" type="button">QR</button>
+            <button class="icon" type="button" title="Печать ЧЗ и ШК" aria-label="Печать ЧЗ и ШК">⎙</button>
+            <button class="icon" type="button" title="Перепечатать" aria-label="Перепечатать">⋮</button>
+          </div>
+        </div>
+      </section>
+
+      <div class="actions">
+        <button class="primary" type="button" disabled title="Заказ №12004567: WB не принял: неверный статус УИН">
+          Передать в WB
+        </button>
+      </div>
+    </main>
+  </body>
+</html>

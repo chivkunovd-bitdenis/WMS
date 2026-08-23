@@ -1,0 +1,21 @@
+# Design review · 02-verdikt-screen
+
+ВЕРДИКТ: ЧИСТО
+
+## Находки
+
+Нарушений не найдено.
+
+## Проверено и нормально
+
+- Реестр S-03 в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/screens.registry.json` и контракт `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/night/volna-9-recovery/cards/02-verdikt-screen/CONTRACT.md` относят проверку к таблице FBS-заказов и панели действий рабочего места поставки.
+- R-04, R-05, R-07 и R-09: таблица заказов в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/FfFbsOrdersScreen.tsx:1175` остаётся `TableContainer` на `Paper variant=\"outlined\"`; в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/FfFbsOrdersScreen.tsx:1189` сохранены `stickyHeader`, `size=\"small\"` и устойчивые размеры колонок.
+- R-14, R-16, R-28 и R-30: в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/FfFbsOrdersScreen.tsx:1314` и `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:1957` вердикт показан согласованным `StatusChip` и `TextCell`. Словарь в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/utils/metaStatus.ts:44` переводит причины на язык склада и не выводит технические статусы WB.
+- R-11 и R-35: в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:1924` фон и бордер строки зависят только от активного сканера или напечатанной строки; вердикт WB не дублируется заливкой. В `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:1947` хвост ЧЗ выделен только типографикой.
+- R-18, R-20, R-31 и R-32: действие передачи во внешнюю систему использует `PrimaryAction` в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:2151`; причина блокировки формируется из серверного вердикта в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:1266` и передаётся как `disabledReason`.
+- R-23 и R-24: ошибка свежего ответа WB показана складским `Alert severity=\"error\"` в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:1564`; строки при такой ошибке получают блокирующий `Нет ответа WB` в `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx:1913`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/docs/product/ui-inventory.json` сверён после запуска инвентаря: все шесть подписей вердикта, причина и подпись действия в контракте существуют в фактическом коде; вымышленных названий колонки или статуса нет (R-10).
+
+## ui_guard.py
+
+Новые отступления есть вне S-03: `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/components/WbProductPickerDialog.tsx` и `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/SellerInboundDraftScreen.tsx` отмечены как экран-монолиты. Это не файлы карточки и не находки по текущей работе. Для S-03 новых отступлений нет; счётчики `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/FfFbsOrdersScreen.tsx` и `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-02-verdikt-screen/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx` улучшились.
