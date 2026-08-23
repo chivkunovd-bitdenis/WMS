@@ -1,3 +1,5 @@
+# Фича 1
+
 ## Изменённые файлы
 
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/catalog-box-lookup-20260823/lane-1-01-catalog-box-lookup/frontend/tests-e2e/catalog-box-lookup.spec.ts`
