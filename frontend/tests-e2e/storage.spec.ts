@@ -90,6 +90,36 @@ test('S-11-TC-002 blocks a rate that rounds to zero before saving', async ({ pag
   expect(tariffPosts).toBe(0)
 })
 
+test('S-11-TC-018 blocks Moscow-past start dates with a visible explanation', async ({ page }) => {
+  await openStorage(page, 'fulfillment_admin', false, rows)
+  const moscowToday = moscowDate()
+  const yesterday = moscowDate(-1)
+
+  await page.getByRole('button', { name: 'Задать тариф' }).click()
+  const saveRate = page.getByTestId('storage-rate-save')
+  await page.getByTestId('storage-rate-amount').fill('0,70')
+
+  await page.getByTestId('storage-rate-valid-from').fill(yesterday)
+  await expect(saveRate).toBeDisabled()
+  await saveRate.locator('..').hover()
+  await expect(page.getByRole('tooltip')).toHaveText('Дата начала не может быть в прошлом')
+
+  await page.getByTestId('storage-rate-valid-from').fill(moscowToday)
+  await expect(saveRate).toBeEnabled()
+
+  await page.getByText('Индивидуальная ставка селлера', { exact: true }).click()
+  await page.getByLabel('Селлер').click()
+  await page.getByRole('option', { name: 'Красотка' }).click()
+  await page.getByTestId('storage-seller-rate-amount').fill('0,65')
+  await page.getByTestId('storage-seller-rate-valid-from').fill(yesterday)
+  await expect(saveRate).toBeDisabled()
+  await saveRate.locator('..').hover()
+  await expect(page.getByRole('tooltip')).toHaveText('Дата индивидуальной ставки не может быть в прошлом')
+
+  await page.getByTestId('storage-seller-rate-valid-from').fill(moscowToday)
+  await expect(saveRate).toBeEnabled()
+})
+
 test('S-11-TC-002 administrator saves a future warehouse rate and seller exception in one request', async ({ page }) => {
   test.setTimeout(120_000)
   const seed = await seedFfSellerInbound(page, `storage-${Date.now()}`)
