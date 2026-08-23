@@ -70,9 +70,10 @@ async function waitForLiveJob(page: Page, headers: Record<string, string>, jobId
 }
 
 test('S-11-TC-001 administrator opens the previous-month storage screen', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-08-31T21:30:00.000Z') })
   await openStorage(page)
   await expect(page.getByRole('heading', { name: 'Хранение' })).toBeVisible()
-  await expect(page.getByTestId('storage-month')).toHaveValue(previousMoscowMonth())
+  await expect(page.getByTestId('storage-month')).toHaveValue('2026-08')
 })
 
 test('TC-NEW-STORAGE-REFRESH-01 calculates December of the previous year after Moscow January', () => {
@@ -122,8 +123,9 @@ test('S-11-TC-021 blocks Moscow-past start dates with a visible explanation', as
 
 // TC-NEW-STORAGE-REFRESH-01 — сохранённая поздняя ставка не подменяет серверное состояние закрытого месяца.
 test('administrator keeps a previous month without a tariff after saving a later rate', async ({ page }) => {
-  const validFrom = moscowDate()
-  const previousMonth = previousMoscowMonth()
+  await page.clock.install({ time: new Date('2026-08-31T21:30:00.000Z') })
+  const validFrom = '2026-09-01'
+  const previousMonth = '2026-08'
   let tariffSaved = false
   let refreshGets = 0
   let tariffBody: unknown = null
