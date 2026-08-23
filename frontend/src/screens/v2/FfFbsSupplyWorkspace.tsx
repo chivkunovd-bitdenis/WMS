@@ -268,7 +268,6 @@ function Metric({ label, value }: { label: string; value: string }) {
     </Box>
   )
 }
-
 export function FfFbsSupplyWorkspace({
   token,
   authHeaders,
@@ -308,7 +307,6 @@ export function FfFbsSupplyWorkspace({
   const [kizScanActive, setKizScanActive] = useState<FbsKizLookup | null>(null)
   const [kizScanValue, setKizScanValue] = useState('')
   const kizRowRefs = useRef<Record<string, HTMLDivElement | null>>({})
-
   useEffect(() => {
     if (!kizScanActive) return
     kizRowRefs.current[kizScanActive.order_id]?.scrollIntoView({ block: 'center', behavior: 'smooth' })
@@ -318,7 +316,7 @@ export function FfFbsSupplyWorkspace({
   const [kizScanHints, setKizScanHints] = useState<string[]>([])
   const [kizScanDebugOpen, setKizScanDebugOpen] = useState(false)
   const [kizConfirmTarget, setKizConfirmTarget] = useState<FbsKizLookup | null>(null)
-  const kizScanInputRef = useRef<HTMLInputElement | null>(null)
+  const kizScanInputRef = useRef<HTMLInputElement | null>(null); const workspaceRefreshRequestRef = useRef(0)
   const [addOrdersOpen, setAddOrdersOpen] = useState(false)
   const [addableOrders, setAddableOrders] = useState<FbsWorklistOrder[]>([])
   const [addableSelected, setAddableSelected] = useState<Set<string>>(() => new Set())
@@ -327,26 +325,27 @@ export function FfFbsSupplyWorkspace({
   const [skipHonestSignOpen, setSkipHonestSignOpen] = useState(false)
   const [skipHonestSignBusy, setSkipHonestSignBusy] = useState(false)
   const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
-
   const load = useCallback(
     async (silent = false) => {
       if (!supplyId) return
+      const requestId = ++workspaceRefreshRequestRef.current
       if (!silent) setBusy(true)
       try {
         const next = await fetchFbsWorkspace(token, authHeaders, supplyId)
-        setWorkspace(safeInitialWorkspace(next)); setRefreshError(null)
-        if (!silent) setStage(visualStage(next.stage))
+        if (requestId !== workspaceRefreshRequestRef.current) return
+        setWorkspace(safeInitialWorkspace(next)); setRefreshError(null); if (!silent) setStage(visualStage(next.stage))
       } catch (cause) {
-        if (silent) setRefreshError('Не удалось обновить поставку. Передача в WB временно недоступна — ждём свежий ответ Wildberries.')
-        else setError(cause instanceof Error ? cause.message : 'Не удалось загрузить поставку.')
+        if (requestId !== workspaceRefreshRequestRef.current) return
+        if (silent) setRefreshError('Не удалось обновить поставку. Передача в WB временно недоступна — ждём свежий ответ Wildberries.'); else setError(cause instanceof Error ? cause.message : 'Не удалось загрузить поставку.')
       } finally {
-        if (!silent) setBusy(false)
+        if (!silent && requestId === workspaceRefreshRequestRef.current) setBusy(false)
       }
     },
     [supplyId, token, authHeaders],
   )
 
   useEffect(() => {
+    workspaceRefreshRequestRef.current += 1
     if (!open || !supplyId) return
     setError(null); setRefreshError(null); setNotice(null)
     setWorkspace(safeInitialWorkspace(initialWorkspace))
@@ -377,6 +376,7 @@ export function FfFbsSupplyWorkspace({
     setKizScanDebugOpen(false)
     setKizConfirmTarget(null)
     if (!initialWorkspace) void load()
+    return () => { workspaceRefreshRequestRef.current += 1 }
   }, [open, supplyId, initialWorkspace, load])
 
   useEffect(() => {

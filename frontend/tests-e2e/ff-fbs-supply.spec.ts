@@ -511,6 +511,71 @@ test('S-03-TC-018: failed workspace refresh closes WB delivery', async ({ page }
   await expect(page.getByText('неверный статус УИН')).toBeVisible()
 })
 
+// S-03-TC-007 — a late successful refresh cannot reopen delivery after a newer refresh failed.
+test('fbs workspace: stale successful refresh preserves fail-closed WB error', async ({ page }) => {
+  await page.clock.install()
+  await registerFf(page, 'verdict-stale-refresh')
+
+  const accepted = order('1', {
+    status: 'packed',
+    supply_id: 'sup-1',
+    sticker: { status: 'applied', asset_url: null, applied_at: new Date().toISOString() },
+    pick: { status: 'picked', location_code: 'A-01', picked_at: new Date().toISOString() },
+    pack: { status: 'packed', packed_at: new Date().toISOString() },
+    metadata: {
+      required: ['sgtin'],
+      optional: [],
+      states: [{ kind: 'sgtin', status: 'accepted', value_tail: '…5678' }],
+      delivery_allowed: true,
+      verdict: { signature: 'WB: принято', tone: 'ok', reason: null, delivery_allowed: true },
+      last_checked_at: new Date().toISOString(),
+    },
+  })
+  await mockWorklist(page, [accepted])
+
+  let workspaceRequests = 0
+  let releaseFirstRefresh: (() => void) | null = null
+  const firstRefresh = new Promise<void>((resolve) => {
+    releaseFirstRefresh = resolve
+  })
+  await page.route('**/operations/fbs-supplies/sup-1/workspace', async (route) => {
+    workspaceRequests += 1
+    if (workspaceRequests === 2) {
+      await firstRefresh
+      await json(route, workspace({ stage: 'delivery', status: 'packed', orders: [accepted] }))
+      return
+    }
+    if (workspaceRequests === 3) {
+      await json(route, { detail: 'HTTP 503 from upstream' }, 503)
+      return
+    }
+    await json(route, workspace({ stage: 'delivery', status: 'packed', orders: [accepted] }))
+  })
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await page.getByTestId('fbs-order-1').click()
+  await expect(page.getByTestId('fbs-boxes')).toBeVisible()
+  const deliver = page.getByRole('button', { name: 'Передать в WB' })
+  await expect(deliver).toBeEnabled()
+
+  await page.clock.fastForward(15_000)
+  await expect.poll(() => workspaceRequests).toBe(2)
+  await page.clock.fastForward(15_000)
+
+  const refreshAlert = page.getByTestId('fbs-workspace-refresh-error')
+  await expect(refreshAlert).toBeVisible()
+  await expect(refreshAlert).not.toContainText('503')
+  await expect(deliver).toBeDisabled()
+
+  releaseFirstRefresh?.()
+
+  await expect(refreshAlert).toBeVisible()
+  await expect(deliver).toBeDisabled()
+  await page.getByRole('tab', { name: 'Упаковка и маркировка' }).click()
+  await expect(page.getByTestId('fbs-wb-verdict-1')).toHaveText('Нет ответа WB')
+  await expect(page.getByText('Сдача пока недоступна')).toBeVisible()
+})
+
 // TC-S17-006 — compatible selection creates one atomic supply and opens its workspace.
 test('fbs orders: create supply from selected orders', async ({ page }) => {
   await registerFf(page, 'create')
