@@ -399,7 +399,12 @@ async def create_tariff(
         raise HTTPException(
             status_code=(
                 422
-                if code in {"tariff_valid_from_in_past", "warehouse_not_operational"}
+                if code
+                in {
+                    "tariff_amount_must_be_positive",
+                    "tariff_valid_from_in_past",
+                    "warehouse_not_operational",
+                }
                 else 404
                 if code in {"warehouse_not_found", "seller_not_found"}
                 else 409

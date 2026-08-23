@@ -420,6 +420,12 @@ async def create_storage_tariff(
     SQLAlchemy unit-of-work so that a unique-constraint violation on the second
     INSERT leaves no partial state: either both rows are committed or neither is.
     """
+    amounts = [amount]
+    if seller_exception is not None:
+        amounts.append(seller_exception[1])
+    if any(candidate <= 0 for candidate in amounts):
+        raise StorageStatementError("tariff_amount_must_be_positive")
+
     today_moscow = datetime.now(MOSCOW).date()
     effective_dates = [valid_from]
     if seller_exception is not None:

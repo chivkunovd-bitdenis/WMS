@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from datetime import time as datetime_time
 from decimal import Decimal
 
@@ -110,6 +110,7 @@ async def test_admin_creates_warehouse_tariff(async_client: AsyncClient) -> None
     suffix = str(time.time_ns())
     headers = await _register_admin(async_client, suffix)
     warehouse_id = await _create_warehouse(async_client, headers, suffix, "common")
+    valid_from = datetime.now(MOSCOW).date()
 
     resp = await async_client.post(
         "/operations/storage/tariffs",
@@ -117,7 +118,7 @@ async def test_admin_creates_warehouse_tariff(async_client: AsyncClient) -> None
         json={
             "warehouse_id": str(warehouse_id),
             "amount": "5.00",
-            "valid_from": "2026-09-01",
+            "valid_from": valid_from.isoformat(),
         },
     )
     assert resp.status_code == 201, resp.text
@@ -126,7 +127,7 @@ async def test_admin_creates_warehouse_tariff(async_client: AsyncClient) -> None
     assert body["warehouse_tariff"]["seller_id"] is None
     assert body["warehouse_tariff"]["warehouse_id"] == str(warehouse_id)
     assert body["warehouse_tariff"]["amount"] == "5.00"
-    assert body["warehouse_tariff"]["valid_from"] == "2026-09-01"
+    assert body["warehouse_tariff"]["valid_from"] == valid_from.isoformat()
     assert body["seller_exception"] is None
 
     async with SessionLocal() as session:
@@ -151,6 +152,9 @@ async def test_admin_creates_tariff_with_seller_exception(async_client: AsyncCli
     suffix = str(time.time_ns())
     headers = await _register_admin(async_client, suffix)
     warehouse_id = await _create_warehouse(async_client, headers, suffix, "ex")
+    today = datetime.now(MOSCOW).date()
+    warehouse_valid_from = today + timedelta(days=1)
+    seller_valid_from = today + timedelta(days=2)
 
     # Resolve tenant_id and create a seller directly via DB
     seller_id: uuid.UUID
@@ -172,11 +176,11 @@ async def test_admin_creates_tariff_with_seller_exception(async_client: AsyncCli
         json={
             "warehouse_id": str(warehouse_id),
             "amount": "5.00",
-            "valid_from": "2026-09-01",
+            "valid_from": warehouse_valid_from.isoformat(),
             "seller_exception": {
                 "seller_id": str(seller_id),
                 "amount": "3.00",
-                "valid_from": "2026-09-01",
+                "valid_from": seller_valid_from.isoformat(),
             },
         },
     )
@@ -199,13 +203,15 @@ async def test_admin_creates_tariff_with_seller_exception(async_client: AsyncCli
     # --- Atomicity: pre-seed a conflicting seller tariff, then POST again ---
     # Use a fresh warehouse so the warehouse tariff INSERT itself is not a conflict.
     warehouse2_id = await _create_warehouse(async_client, headers, suffix, "atom")
+    atomic_warehouse_valid_from = today + timedelta(days=3)
+    atomic_seller_valid_from = today + timedelta(days=4)
 
     async with SessionLocal() as session:
         seller2 = Seller(tenant_id=tenant_id, name=f"AtomSeller {suffix}")
         session.add(seller2)
         await session.flush()
         seller2_id = seller2.id
-        # Pre-seed: seller tariff for 2026-10-01 — will conflict with the POST below.
+        # Pre-seed a dated seller tariff that will conflict with the POST below.
         session.add(
             BillingTariffVersion(
                 tenant_id=tenant_id,
@@ -214,24 +220,23 @@ async def test_admin_creates_tariff_with_seller_exception(async_client: AsyncCli
                 service_code="storage_liter_day",
                 unit="liter_day",
                 amount=Decimal("2.00"),
-                valid_from=date(2026, 10, 1),
+                valid_from=atomic_seller_valid_from,
             )
         )
         await session.commit()
 
-    # POST: warehouse tariff valid_from=2026-09-01 (no conflict) +
-    #       seller exception valid_from=2026-10-01 (conflicts with pre-seeded row)
+    # POST: the warehouse date is free, while the seller exception conflicts.
     conflict_resp = await async_client.post(
         "/operations/storage/tariffs",
         headers=headers,
         json={
             "warehouse_id": str(warehouse2_id),
             "amount": "5.00",
-            "valid_from": "2026-09-01",
+            "valid_from": atomic_warehouse_valid_from.isoformat(),
             "seller_exception": {
                 "seller_id": str(seller2_id),
                 "amount": "3.00",
-                "valid_from": "2026-10-01",  # triggers UniqueConstraint
+                "valid_from": atomic_seller_valid_from.isoformat(),
             },
         },
     )
@@ -244,7 +249,7 @@ async def test_admin_creates_tariff_with_seller_exception(async_client: AsyncCli
                 BillingTariffVersion.warehouse_id == warehouse2_id,
                 BillingTariffVersion.seller_id.is_(None),
                 BillingTariffVersion.service_code == "storage_liter_day",
-                BillingTariffVersion.valid_from == date(2026, 9, 1),
+                BillingTariffVersion.valid_from == atomic_warehouse_valid_from,
             )
         )
     assert wh2_common_count == 0, (
@@ -264,6 +269,7 @@ async def test_staff_inventory_cannot_set_tariff(async_client: AsyncClient) -> N
     admin_headers = await _register_admin(async_client, suffix)
     warehouse_id = await _create_warehouse(async_client, admin_headers, suffix, "auth")
     staff_headers = await _create_inventory_staff(async_client, admin_headers, suffix)
+    valid_from = datetime.now(MOSCOW).date().isoformat()
 
     resp = await async_client.post(
         "/operations/storage/tariffs",
@@ -271,33 +277,59 @@ async def test_staff_inventory_cannot_set_tariff(async_client: AsyncClient) -> N
         json={
             "warehouse_id": str(warehouse_id),
             "amount": "5.00",
-            "valid_from": "2026-09-01",
+            "valid_from": valid_from,
         },
     )
     assert resp.status_code == 403, resp.text
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("amount", ["0", "-0.01"])
+@pytest.mark.parametrize(
+    ("target", "amount"),
+    [
+        ("warehouse", "0"),
+        ("warehouse", "-0.01"),
+        ("seller_exception", "0"),
+        ("seller_exception", "-0.01"),
+    ],
+)
 async def test_tariff_amount_must_be_positive(
-    async_client: AsyncClient, amount: str
+    async_client: AsyncClient, target: str, amount: str
 ) -> None:
-    """The API rejects zero and negative rates before the database write."""
+    """The API rejects non-positive common and seller rates before any write."""
     suffix = str(time.time_ns())
     headers = await _register_admin(async_client, suffix)
     warehouse_id = await _create_warehouse(async_client, headers, suffix, "amount")
+    today = datetime.now(MOSCOW).date().isoformat()
+    payload: dict[str, object] = {
+        "warehouse_id": str(warehouse_id),
+        "amount": amount if target == "warehouse" else "5.00",
+        "valid_from": today,
+    }
+    expected_location = ["body", "amount"]
+    if target == "seller_exception":
+        async with SessionLocal() as session:
+            warehouse = await session.get(Warehouse, warehouse_id)
+            assert warehouse is not None
+            seller = Seller(tenant_id=warehouse.tenant_id, name=f"Amount seller {suffix}")
+            session.add(seller)
+            await session.commit()
+            await session.refresh(seller)
+        payload["seller_exception"] = {
+            "seller_id": str(seller.id),
+            "amount": amount,
+            "valid_from": today,
+        }
+        expected_location = ["body", "seller_exception", "amount"]
 
     response = await async_client.post(
         "/operations/storage/tariffs",
         headers=headers,
-        json={
-            "warehouse_id": str(warehouse_id),
-            "amount": amount,
-            "valid_from": datetime.now(MOSCOW).date().isoformat(),
-        },
+        json=payload,
     )
 
     assert response.status_code == 422, response.text
+    assert response.json()["detail"][0]["loc"] == expected_location
     async with SessionLocal() as session:
         count = await session.scalar(
             select(func.count(BillingTariffVersion.id)).where(
@@ -308,24 +340,51 @@ async def test_tariff_amount_must_be_positive(
 
 
 @pytest.mark.asyncio
-async def test_tariff_valid_from_cannot_be_in_the_past(async_client: AsyncClient) -> None:
-    """A storage rate starts today or later in Moscow, never retroactively."""
+@pytest.mark.parametrize("target", ["warehouse", "seller_exception"])
+async def test_tariff_valid_from_cannot_be_in_the_past(
+    async_client: AsyncClient, target: str
+) -> None:
+    """Neither common nor seller storage rates can start before Moscow today."""
     suffix = str(time.time_ns())
     headers = await _register_admin(async_client, suffix)
     warehouse_id = await _create_warehouse(async_client, headers, suffix, "past")
+    today = datetime.now(MOSCOW).date()
+    payload: dict[str, object] = {
+        "warehouse_id": str(warehouse_id),
+        "amount": "5.00",
+        "valid_from": (
+            today - timedelta(days=1) if target == "warehouse" else today
+        ).isoformat(),
+    }
+    if target == "seller_exception":
+        async with SessionLocal() as session:
+            warehouse = await session.get(Warehouse, warehouse_id)
+            assert warehouse is not None
+            seller = Seller(tenant_id=warehouse.tenant_id, name=f"Past seller {suffix}")
+            session.add(seller)
+            await session.commit()
+            await session.refresh(seller)
+        payload["seller_exception"] = {
+            "seller_id": str(seller.id),
+            "amount": "3.00",
+            "valid_from": (today - timedelta(days=1)).isoformat(),
+        }
 
     response = await async_client.post(
         "/operations/storage/tariffs",
         headers=headers,
-        json={
-            "warehouse_id": str(warehouse_id),
-            "amount": "5.00",
-            "valid_from": (datetime.now(MOSCOW).date() - timedelta(days=1)).isoformat(),
-        },
+        json=payload,
     )
 
     assert response.status_code == 422, response.text
     assert response.json()["detail"] == "tariff_valid_from_in_past"
+    async with SessionLocal() as session:
+        count = await session.scalar(
+            select(func.count(BillingTariffVersion.id)).where(
+                BillingTariffVersion.warehouse_id == warehouse_id
+            )
+        )
+    assert count == 0
 
 
 @pytest.mark.asyncio
