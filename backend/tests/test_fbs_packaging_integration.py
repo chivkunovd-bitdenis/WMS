@@ -1,6 +1,7 @@
 # ruff: noqa: RUF059
 from __future__ import annotations
 
+import base64
 import time
 import uuid
 from datetime import UTC, datetime
@@ -34,6 +35,7 @@ from app.models.fbs_trbx import FbsTrbx
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import MOVEMENT_TYPE_FBS_SHIPMENT, InventoryMovement
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
+from app.models.product import Product
 from app.models.warehouse_box import WarehouseBox
 from app.services import fbs_print_asset_service as print_asset_svc
 from app.services import inventory_service
@@ -196,6 +198,45 @@ async def _create_supply_with_orders(
         await session.commit()
 
     return supply_id, order_ids
+
+
+async def _set_full_tape_fixture(
+    order_ids: list[uuid.UUID],
+    *,
+    mixed_missing_size: bool,
+) -> list[uuid.UUID]:
+    """Arrange an intentionally shuffled canonical order for tape tests."""
+    async with SessionLocal() as session:
+        orders = {
+            order.id: order
+            for order in (
+                await session.execute(select(FbsOrder).where(FbsOrder.id.in_(order_ids)))
+            ).scalars()
+        }
+        product_a_id = orders[order_ids[0]].product_id
+        assert product_a_id is not None
+        product_a = await session.get(Product, product_a_id)
+        assert product_a is not None
+        product_a.wb_size = "M"
+
+        for order in orders.values():
+            order.wb_article = "ART-SHARED"
+        orders[order_ids[0]].wb_order_id = 100
+        orders[order_ids[1]].wb_order_id = 8
+        orders[order_ids[2]].wb_order_id = 12
+        if mixed_missing_size:
+            orders[order_ids[1]].product_id = None
+        else:
+            orders[order_ids[1]].product_id = product_a_id
+        await session.commit()
+
+    return [order_ids[1], order_ids[2], order_ids[0]]
+
+
+def _distinct_sticker_payload(order_id: int) -> str:
+    """Return an individually identifiable PNG payload for WB-order binding checks."""
+    png_bytes = base64.b64decode(_TINY_PNG_BASE64) + f"-order-{order_id}".encode()
+    return base64.b64encode(png_bytes).decode()
 
 
 async def _seed_picks_for_supply_orders(
@@ -1333,6 +1374,7 @@ async def test_full_tape_expands_picking_groups_in_stable_order(
         tenant_id,
     )
     assert order_ids
+    expected_order_ids = await _set_full_tape_fixture(order_ids, mixed_missing_size=True)
 
     picking = await async_client.get(
         f"/operations/fbs-supplies/{supply_id}/picking-list", headers=headers
@@ -1340,9 +1382,14 @@ async def test_full_tape_expands_picking_groups_in_stable_order(
     assert picking.status_code == 200, picking.text
     picking_total = sum(int(item["quantity"]) for item in picking.json()["items"])
     assert picking_total == len(order_ids), "лист подбора обязан покрывать все заказы поставки"
-    assert [item["article"] for item in picking.json()["items"]] == ["ART-A", "ART-B"]
-
-    expected_order_ids = [order_ids[0], order_ids[2], order_ids[1]]
+    picking_groups = [
+        (item["sku_code"], item["size"], item["quantity"])
+        for item in picking.json()["items"]
+    ]
+    assert picking_groups == [
+        (None, None, 1),
+        ("prod-a", "M", 2),
+    ]
 
     tape = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/order-print-tape",
@@ -1362,7 +1409,7 @@ async def test_full_tape_expands_picking_groups_in_stable_order(
     assert [order["order_id"] for order in tape_body["orders"]] == [
         str(order_id) for order_id in expected_order_ids
     ]
-    assert [order["wb_order_id"] for order in tape_body["orders"]] == [910001, 910003, 910002]
+    assert [order["wb_order_id"] for order in tape_body["orders"]] == [8, 12, 100]
 
     # Повторная полная печать должна воспроизводить порядок независимо от перестановки ID.
     again = await async_client.post(
@@ -1381,6 +1428,43 @@ async def test_full_tape_expands_picking_groups_in_stable_order(
     assert [order["order_id"] for order in again.json()["orders"]] == [
         str(order_id) for order_id in expected_order_ids
     ]
+
+
+# S-03-TC-003
+@pytest.mark.asyncio
+async def test_full_tape_orders_wb_ids_numerically_within_one_group(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    tenant_id = uuid.UUID((await async_client.get("/auth/me", headers=headers)).json()["tenant_id"])
+    supply_id, order_ids = await _create_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+    )
+    expected_order_ids = await _set_full_tape_fixture(order_ids, mixed_missing_size=False)
+
+    tape = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/order-print-tape",
+        headers=headers,
+        json={
+            "order_ids": [str(order_ids[0]), str(order_ids[2]), str(order_ids[1])],
+            "layout": None,
+            "allow_partial": False,
+            "include_order_qr": True,
+            "reprint": False,
+        },
+    )
+
+    assert tape.status_code == 200, tape.text
+    assert [order["order_id"] for order in tape.json()["orders"]] == [
+        str(order_id) for order_id in expected_order_ids
+    ]
+    assert [order["wb_order_id"] for order in tape.json()["orders"]] == [8, 12, 100]
 
 
 # S-03-TC-005
@@ -1455,7 +1539,7 @@ async def test_full_tape_keeps_canonical_order_when_wb_reverses_stickers(
                         "partA": order_id,
                         "partB": order_id + 1,
                         "barcode": f"MOCK-{order_id}",
-                        "file": _TINY_PNG_BASE64,
+                        "file": _distinct_sticker_payload(order_id),
                     }
                     for order_id in order_ids
                 ]
@@ -1482,6 +1566,13 @@ async def test_full_tape_keeps_canonical_order_when_wb_reverses_stickers(
         str(order_ids[2]),
         str(order_ids[1]),
     ]
+    for order in tape.json()["orders"]:
+        qr_asset = order["qr_asset"]
+        assert qr_asset is not None
+        content = await async_client.get(qr_asset["download_url"], headers=headers)
+        assert content.status_code == 200, content.text
+        expected = base64.b64decode(_distinct_sticker_payload(order["wb_order_id"]))
+        assert content.content == expected
 
 
 # S-03-TC-008

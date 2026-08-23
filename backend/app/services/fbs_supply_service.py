@@ -136,6 +136,7 @@ class PickingListItem:
 
 
 PickingListGroupKey = tuple[str, str | None, str | None, str]
+PickingListGroupSortKey = tuple[str, str, str, str]
 
 
 def picking_list_group_key(order: FbsOrder) -> PickingListGroupKey:
@@ -146,6 +147,21 @@ def picking_list_group_key(order: FbsOrder) -> PickingListGroupKey:
     size = product.wb_size if product is not None and product.wb_size else None
     product_name = product.name if product is not None else (order.wb_article or "Unknown")
     return article, sku_code, size, product_name
+
+
+def picking_list_group_sort_key(key: PickingListGroupKey) -> PickingListGroupSortKey:
+    """Make an optional picking-list group key safe for deterministic sorting."""
+    article, sku_code, size, product_name = key
+    return article, sku_code or "", size or "", product_name
+
+
+def picking_list_order_key(order: FbsOrder) -> tuple[PickingListGroupSortKey, int, uuid.UUID]:
+    """Return the canonical order for orders expanded from picking-list groups."""
+    return (
+        picking_list_group_sort_key(picking_list_group_key(order)),
+        int(order.wb_order_id),
+        order.id,
+    )
 
 
 @dataclass(frozen=True)
@@ -1605,7 +1621,9 @@ async def get_picking_list(
             product_name=product_name,
             quantity=qty,
         )
-        for (article, sku_code, size, product_name), qty in sorted(groups.items())
+        for (article, sku_code, size, product_name), qty in sorted(
+            groups.items(), key=lambda item: picking_list_group_sort_key(item[0])
+        )
     ]
     return items
 

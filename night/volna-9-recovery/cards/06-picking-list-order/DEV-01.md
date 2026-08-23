@@ -1,36 +1,29 @@
-# DEV · 06-picking-list-order
+# DEV · 06-picking-list-order · атом 1
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/app/services/fbs_supply_service.py` — единый ключ товарной группы вынесен в `picking_list_group_key` и продолжает использоваться листом подбора.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/app/services/fbs_order_tape_print_service.py` — для полного состава поставки сортирует заказы по ключу листа, числовому `wb_order_id` и `id`; в слой печатных активов передаёт вычисленную последовательность.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/tests/test_fbs_packaging_integration.py` — API-покрытие `S-03-TC-002`–`S-03-TC-008` для полного, повторного, выборочного, обратного ответа WB и частичного результата.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/night/volna-9-recovery/cards/06-picking-list-order/DEV.md` — отчёт атомарного шага.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/app/services/fbs_order_tape_print_service.py` — полная лента использует общий безопасный ключ порядка; выборочная и строковая печать не менялись.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/app/services/fbs_supply_service.py` — ключ групп листа подбора нормализует `None` только для сравнения, сохраняя исходные значения в ответе; общий ключ добавляет числовой `wb_order_id` и `id`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend/tests/test_fbs_packaging_integration.py` — добавлены проверки смешанного отсутствующего/строкового размера, групп, числового `8 → 12 → 100`, привязки различимых PNG к `orderId` и относительного порядка при неполном ответе WB.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/night/volna-9-recovery/cards/06-picking-list-order/DEV.md` — отчёт этого атома.
 
 ## Миграции
 
 Нет.
 
-## Тесты
-
-- `S-03-TC-002`, `S-03-TC-003`, `S-03-TC-004`, `S-03-TC-006`: перемешанный полный набор разворачивается в порядке товарных групп, затем по числовому WB ID; повторная полная печать воспроизводит его.
-- `S-03-TC-005`: выборочная печать сохраняет порядок ID, переданный оператором.
-- `S-03-TC-007`: обратный ответ Wildberries не переставляет ленту, а запрос к WB получает канонический порядок.
-- `S-03-TC-008`: при пропущенном WB-стикере фактически готовые наклейки сохраняют относительный канонический порядок.
-
 ## Гейты
 
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend && ruff check app/services/fbs_supply_service.py app/services/fbs_order_tape_print_service.py tests/test_fbs_packaging_integration.py` — успешно, `All checks passed!`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend && mypy app/services/fbs_supply_service.py app/services/fbs_order_tape_print_service.py` — не прошёл из-за 4 существующих ошибок в зависимостях вне атома: `wildberries_credentials_service.py:167`, `fbs_stock_sync_service.py:617`, `fbs_warehouse_binding_service.py:23,291`.
-- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend && pytest -q tests/test_fbs_packaging_integration.py -k 'full_tape_expands_picking_groups_in_stable_order or selected_tape_keeps_operator_requested_order or full_tape_keeps_canonical_order_when_wb_reverses_stickers or partial_full_tape_keeps_relative_canonical_order or tape_covers_every_order_and_matches_picking_list'` — успешно, `4 passed, 14 deselected`.
-- `python3 scripts/ci/back_guard.py` — не применимо: атом не добавляет маршрут.
-- `python3 scripts/ci/check_migrations.py` — не применимо: атом не добавляет миграцию.
-
-## Не реализовано
-
-Нет: публичный API, модели, миграции, frontend, WB-макет стикера и соседние QR-сценарии намеренно не менялись в соответствии с ограничениями атома.
+- `git diff --check` из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order` — пройден.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend && ruff check app/services/fbs_order_tape_print_service.py app/services/fbs_supply_service.py tests/test_fbs_packaging_integration.py` — пройден, `All checks passed!`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend && mypy app/services/fbs_order_tape_print_service.py app/services/fbs_supply_service.py` — в изменённых модулях ошибок нет, но команда завершилась с четырьмя уже существующими ошибками зависимостей вне атома: `app/services/wildberries_credentials_service.py:167`, `app/services/fbs_stock_sync_service.py:617`, `app/services/fbs_warehouse_binding_service.py:23,291`.
+- `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-3-06-picking-list-order/backend && pytest tests/test_fbs_packaging_integration.py` — пройдено, `19 passed in 25.36s`.
+- `python3 scripts/ci/back_guard.py` и `python3 scripts/ci/check_migrations.py` не запускались: этот атом не добавляет route или миграцию.
 
 ## Находки
 
-- Сценарий равного `wb_order_id` на уровне API не создаётся из-за действующего уникального ограничения `(seller_id, wb_order_id)`; сервисный ключ всё равно содержит `id` последним стабильным tie-breaker.
-- Изменения реализованы локально, но не сохранены Git-коммитом: песочница запрещает создание `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-3-06-picking-list-order1/index.lock`. Риск: без внешнего коммита результат нельзя надёжно восстановить из SHA.
+- В рабочем дереве до атома уже были несвязанные изменения и удалённые артефакты; они не изменялись.
+
+## Не реализовано
+
+- Существующий partial-путь `wb_stickers_incomplete` / `order_qr_missing`, включая число и тексты его ошибок, не менялся: это явно сохранённое поведение данного атома, а не результат новой сортировки.
+- Замечание ревью о расхождении frontend-предпросмотра и ленты не менялось: фронтенд не входит в allowlist атома и его переделка запрещена текущим scope-контрактом.

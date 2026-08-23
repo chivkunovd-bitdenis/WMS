@@ -31,7 +31,7 @@ from app.services.fbs_print_asset_service import (
     PrintBatchResult,
     request_supply_print_batch,
 )
-from app.services.fbs_supply_service import picking_list_group_key
+from app.services.fbs_supply_service import picking_list_order_key
 from app.services.print_template_service import PrintLayout, PrintTemplateServiceError, parse_layout
 
 
@@ -101,13 +101,7 @@ async def print_fbs_order_tape(
     if len(ordered) != len(dict.fromkeys(order_ids)):
         raise FbsOrderTapePrintError("order_not_in_supply")
     if set(order_ids) == {order.id for order in supply.orders}:
-        ordered.sort(
-            key=lambda order: (
-                picking_list_group_key(order),
-                int(order.wb_order_id),
-                order.id,
-            )
-        )
+        ordered.sort(key=picking_list_order_key)
     line_by_product = await _line_by_product(session, tenant_id, supply)
     if not reprint and not allow_partial:
         preflight_shortage = await _preflight_new_code_shortage(session, tenant_id, ordered)
