@@ -19,13 +19,43 @@ test('billing invoices show server-side formation issues separate from invoices'
   await expect(page.getByRole('button', { name: 'Открыть селлера' })).toBeVisible()
 })
 
-// S-31-TC-007 — Given an issued invoice, When the admin opens it, expands documents and prints, Then details are visible and print is started.
+// S-31-TC-007 — Given an issued invoice, When the admin opens it, Then the six fixed columns stay aligned and document details and print remain available.
 test('billing invoice opens, reveals documents and starts print', async ({ page }) => {
   await page.route('**/api/billing/invoices?**', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ invoices: [invoice] }) }))
   await page.goto('/app/ff/billing')
   await page.getByTestId('billing-tab-invoices').click()
   await page.getByTestId('billing-invoice-open-invoice-1').click()
   await expect(page.getByRole('dialog', { name: /Счёт СЧ-2026-00041/ })).toBeVisible()
+
+  const linesTable = page.getByTestId('billing-invoice-lines')
+  const fixedHeaders = [
+    ['Услуга', '180'],
+    ['Расчёт', '170'],
+    ['Количество', '120'],
+    ['Ставка', '130'],
+    ['Сумма', '140'],
+    ['Детализация', '70'],
+  ] as const
+  for (const [name, width] of fixedHeaders) {
+    await expect(linesTable.getByRole('columnheader', { name, exact: true })).toHaveAttribute('width', width)
+  }
+  for (const name of ['Количество', 'Ставка', 'Сумма']) {
+    await expect(linesTable.getByRole('columnheader', { name, exact: true })).toHaveCSS('text-align', 'right')
+  }
+  await expect(linesTable.getByRole('columnheader', { name: 'Детализация', exact: true })).toHaveCSS('text-align', 'center')
+
+  const firstLineCells = linesTable.locator('tbody tr').first().getByRole('cell')
+  await expect(firstLineCells).toHaveCount(6)
+  await expect(firstLineCells.nth(0)).toHaveText('Приёмка')
+  await expect(firstLineCells.nth(1)).toHaveText('За штуку')
+  await expect(firstLineCells.nth(2)).toHaveText('1 245')
+  await expect(firstLineCells.nth(3)).toHaveText('12,00 ₽')
+  await expect(firstLineCells.nth(4)).toHaveText('14 940,00 ₽')
+  for (const index of [2, 3, 4]) {
+    await expect(firstLineCells.nth(index)).toHaveCSS('text-align', 'right')
+  }
+  await expect(firstLineCells.nth(5)).toHaveCSS('text-align', 'center')
+
   await page.getByRole('button', { name: 'Показать документы' }).click()
   await expect(page.getByTestId('billing-invoice-documents')).toContainText('ПР-000141')
   await expect(page.getByTestId('billing-invoice-documents')).toContainText('84')
