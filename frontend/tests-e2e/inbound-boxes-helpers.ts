@@ -5,8 +5,8 @@ import { loginAsSeller, openFulfillmentRegistration } from './auth-flow';
 
 export const INBOUND_API = '/api/operations/inbound-intake-requests';
 
-/** `/seller` on unified Vite app; `` on dedicated seller portal (docker :15174). */
-export const SELLER_PATH_PREFIX = process.env.E2E_SELLER_PATH_PREFIX ?? '/seller';
+/** `/app/seller` is the production route on the unified Vite app. */
+export const SELLER_PATH_PREFIX = process.env.E2E_SELLER_PATH_PREFIX ?? '/app/seller';
 
 export function sellerPath(subpath: string): string {
   const sub = subpath.startsWith('/') ? subpath : `/${subpath}`;

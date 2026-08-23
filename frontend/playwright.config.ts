@@ -20,6 +20,11 @@ const e2eDbPath = path.isAbsolute(e2eDbFile) ? e2eDbFile : path.resolve(backendD
 const e2eDbUrlPath = e2eDbPath.replace(/\\/g, '/');
 // Use a non-default port to avoid colliding with a locally running `npm run dev`.
 const e2eWebPort = Number(process.env.E2E_WEB_PORT ?? 5174);
+// This value is read both by the spawned Vite server and by Playwright test
+// workers through `process.env`. Keep the production seller basename as the
+// default so direct seller routes exercise the seller bundle in `npm run test:e2e`.
+const e2eSellerPathPrefix = process.env.E2E_SELLER_PATH_PREFIX ?? '/app/seller';
+process.env.E2E_SELLER_PATH_PREFIX = e2eSellerPathPrefix;
 
 export default defineConfig({
   testDir: './tests-e2e',
@@ -61,9 +66,9 @@ export default defineConfig({
         VITE_API_PROXY: `http://127.0.0.1:${e2eApiPort}`,
         // Exercise the dedicated seller production routing contract, while the
         // Playwright Vite server keeps API access on this same origin.
-        VITE_SELLER_ROUTER_BASENAME: '/app/seller',
-        E2E_SELLER_PATH_PREFIX: '/app/seller',
-        VITE_SELLER_PORTAL_URL: `http://127.0.0.1:${e2eWebPort}/app/seller/`,
+        VITE_SELLER_ROUTER_BASENAME: e2eSellerPathPrefix,
+        E2E_SELLER_PATH_PREFIX: e2eSellerPathPrefix,
+        VITE_SELLER_PORTAL_URL: `http://127.0.0.1:${e2eWebPort}${e2eSellerPathPrefix}/`,
       },
       port: e2eWebPort,
       reuseExistingServer: reuse,
