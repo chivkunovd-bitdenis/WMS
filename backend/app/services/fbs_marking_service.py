@@ -632,6 +632,71 @@ def _reset_stale_wb_verdict(
     order.metadata_last_checked_at = datetime.now(tz=UTC)
 
 
+def _marking_sync_signature(
+    order: FbsOrder,
+    markings: list[FbsOrderMarking],
+) -> tuple[tuple[str, uuid.UUID | None, str | None], ...]:
+    """Identify the exact order metadata and codes covered by a WB request."""
+    requested = set(order.required_meta_json or []) | set(order.optional_meta_json or [])
+    signature: list[tuple[str, uuid.UUID | None, str | None]] = []
+    for kind in sorted(requested):
+        marking = current_order_marking(markings, kind, include_rejected=True)
+        signature.append(
+            (
+                kind,
+                marking.id if marking is not None else None,
+                marking.value if marking is not None else None,
+            )
+        )
+    return tuple(signature)
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+async def _lock_current_marking_state(
+    session: AsyncSession,
+    order: FbsOrder,
+) -> tuple[FbsOrder, list[FbsOrderMarking]]:
+    order_stmt = (
+        select(FbsOrder)
+        .where(
+            FbsOrder.id == order.id,
+            FbsOrder.tenant_id == order.tenant_id,
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    locked_order = (await session.execute(order_stmt)).scalar_one_or_none()
+    if locked_order is None:
+        raise FbsMarkingError("order_not_found")
+    markings_stmt = (
+        select(FbsOrderMarking)
+        .where(FbsOrderMarking.order_id == locked_order.id)
+        .order_by(FbsOrderMarking.kind, FbsOrderMarking.value)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    markings = list((await session.execute(markings_stmt)).scalars().all())
+    return locked_order, markings
+
+
+def _wb_sync_response_is_stale(
+    order: FbsOrder,
+    markings: list[FbsOrderMarking],
+    *,
+    started_at: datetime,
+    signature: tuple[tuple[str, uuid.UUID | None, str | None], ...],
+) -> bool:
+    last_checked_at = order.metadata_last_checked_at
+    if last_checked_at is not None and _as_utc(last_checked_at) > started_at:
+        return True
+    return _marking_sync_signature(order, markings) != signature
+
+
 async def _sync_order_meta_from_wb(
     session: AsyncSession,
     order: FbsOrder,
@@ -639,7 +704,8 @@ async def _sync_order_meta_from_wb(
     token: str,
 ) -> list[FbsOrderMarking]:
     markings = await list_order_markings(session, order.tenant_id, order.id)
-    _reset_stale_wb_verdict(order, markings)
+    started_at = datetime.now(tz=UTC)
+    signature = _marking_sync_signature(order, markings)
     try:
         batch = await fetch_marketplace_orders_meta_batch(
             http_client,
@@ -647,8 +713,29 @@ async def _sync_order_meta_from_wb(
             order_ids=[int(order.wb_order_id)],
         )
     except WildberriesClientError:
+        locked_order, current_markings = await _lock_current_marking_state(
+            session, order
+        )
+        if not _wb_sync_response_is_stale(
+            locked_order,
+            current_markings,
+            started_at=started_at,
+            signature=signature,
+        ):
+            _reset_stale_wb_verdict(locked_order, current_markings)
         await session.flush()
         raise
+
+    locked_order, markings = await _lock_current_marking_state(session, order)
+    if _wb_sync_response_is_stale(
+        locked_order,
+        markings,
+        started_at=started_at,
+        signature=signature,
+    ):
+        return markings
+    order = locked_order
+    _reset_stale_wb_verdict(order, markings)
     details_by_kind: dict[str, MarketplaceMetaDetail] = {}
     status_map: dict[tuple[str, str], str] = {}
     for row in batch:

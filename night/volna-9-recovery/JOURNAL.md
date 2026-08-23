@@ -149,3 +149,13 @@
 01:31   02-verdikt-screen · reviewer: находки, круг 2 — назад к разработке
 01:36   02-verdikt-screen · screen-dev: готово
 01:36   02-verdikt-screen · dev: фича 1/1 сохранена c0e1a6852374
+01:36   02-verdikt-screen · reviewer: готово
+01:36   02-verdikt-screen · reviewer: Terra-rework не закрыл вердикт — эскалация Sol
+01:36   02-verdikt-screen · reviewer: находки, круг 3 — назад к разработке
+01:36   02-verdikt-screen · screen-dev: нет файла DEV.md (код 1, попытка 1)
+01:36   02-verdikt-screen · screen-dev: нет файла DEV.md (код 1, попытка 2)
+01:36 02-verdikt-screen: отложено на шаге dev
+04:16   02-verdikt-screen · repair-plan: новый вердикт дорезается до dev
+04:19   02-verdikt-screen · splitter: готово
+04:19   02-verdikt-screen · resume: поатомный rework Sol по сохранённым находкам
+04:28   02-verdikt-screen · backend-dev: готово

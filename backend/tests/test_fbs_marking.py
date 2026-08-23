@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -269,6 +271,147 @@ async def test_fbs_marking_sync_clears_stale_filled_verdict(
         assert order.meta_details_json["sgtin"]["decision"] is None
         assert markings[0].meta_status == "unknown"
         assert markings[0].reason is None
+
+
+@pytest.mark.asyncio
+async def test_fbs_marking_sync_does_not_apply_stale_response(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """S-03-TC-016: a late old WB acceptance cannot replace a newer rejection."""
+    from app.models.fbs_order import FbsOrder
+    from app.models.fbs_supply import (
+        FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+        FBS_SUPPLY_STATUS_PACKED,
+    )
+    from app.services.fbs_marking_service import _sync_order_meta_from_wb
+    from app.services.fbs_shipment_service import _build_delivery_checks
+    from app.services.wildberries_fbs_client import (
+        MarketplaceMetaDetail,
+        MarketplaceOrderMetaRow,
+    )
+
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    wb_order_id = 920016
+    order_id = await _create_order(
+        tenant_id,
+        uuid.UUID(seller_id),
+        uuid.UUID(warehouse_id),
+        order_id=wb_order_id,
+        status=FBS_ORDER_STATUS_PACKED,
+        wb_row_extra={"requiredMeta": ["sgtin"]},
+    )
+    marking_value = "01CIS-S-03-TC-016"
+    async with SessionLocal() as session:
+        session.add(
+            FbsOrderMarking(
+                order_id=order_id,
+                tenant_id=tenant_id,
+                kind="sgtin",
+                value=marking_value,
+                check_status=CHECK_STATUS_NEW,
+                meta_status=META_STATUS_PENDING,
+            )
+        )
+        await session.commit()
+
+    first_request_waiting = asyncio.Event()
+    release_first_request = asyncio.Event()
+    call_count = 0
+
+    async def fake_meta_batch(*args: object, **kwargs: object) -> list[object]:
+        nonlocal call_count
+        del args, kwargs
+        call_count += 1
+        if call_count == 1:
+            first_request_waiting.set()
+            await release_first_request.wait()
+            reason = None
+        else:
+            reason = "uinBadStatus"
+        return [
+            MarketplaceOrderMetaRow(
+                order_id=wb_order_id,
+                meta_details=(
+                    MarketplaceMetaDetail(
+                        key="sgtin",
+                        value=marking_value,
+                        decision="filled",
+                        reason=reason,
+                    ),
+                ),
+            )
+        ]
+
+    monkeypatch.setattr(
+        "app.services.fbs_marking_service.fetch_marketplace_orders_meta_batch",
+        fake_meta_batch,
+    )
+
+    async def sync_once() -> None:
+        async with SessionLocal() as session:
+            order = await session.get(FbsOrder, order_id)
+            assert order is not None
+            await _sync_order_meta_from_wb(
+                session, order, async_client, "marketplace-token"
+            )
+            await session.commit()
+
+    first_request = asyncio.create_task(sync_once())
+    await first_request_waiting.wait()
+    await sync_once()
+    release_first_request.set()
+    await first_request
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        markings = list(
+            (
+                await session.execute(
+                    select(FbsOrderMarking).where(
+                        FbsOrderMarking.order_id == order_id
+                    )
+                )
+            ).scalars()
+        )
+        assert order.metadata_delivery_allowed is False
+        assert order.meta_details_json is not None
+        assert order.meta_details_json["sgtin"]["decision"] == "filled"
+        assert order.meta_details_json["sgtin"]["reason"] == "uinBadStatus"
+        assert markings[0].meta_status == META_STATUS_ACCEPTED
+        assert markings[0].reason == "uinBadStatus"
+
+        gate_order = SimpleNamespace(
+            id=order.id,
+            status=order.status,
+            wb_status=order.wb_status,
+            required_meta_json=order.required_meta_json,
+            optional_meta_json=order.optional_meta_json,
+            meta_details_json=order.meta_details_json,
+            product=None,
+            markings=markings,
+        )
+        gate_supply = SimpleNamespace(
+            status=FBS_SUPPLY_STATUS_PACKED,
+            delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+            trbxes=[],
+            honest_sign_skipped_at=None,
+        )
+        checks = _build_delivery_checks(
+            gate_supply,
+            [gate_order],
+            cargo_qr_ready=True,
+        )
+        failed = next(
+            check for check in checks if check.code == "marking_not_allowed"
+        )
+        assert failed.ok is False
+        assert failed.order_id == order.id
+        assert "uinBadStatus" in failed.message
 
 
 @pytest.mark.asyncio
