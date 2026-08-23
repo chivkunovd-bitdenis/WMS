@@ -679,6 +679,17 @@ def main() -> int:
                 "снимок отсутствует.\n", encoding="utf-8")
             проверь("browser: старый environment-only verdict не идёт в code rework",
                     n.браузерный_блокер(blocked_judge, "ux-judge"), True)
+            (blocked_judge / "OTLOZHENO.md").write_text(
+                "ux-judge: браузерная среда недоступна\n", encoding="utf-8")
+            (blocked_judge / "CLICKS.md").write_text("старый прогон\n", encoding="utf-8")
+            blocked_marker = blocked_judge / "marker"
+            blocked_marker.write_text("СТАТУС: ACTIVE\nКРУГ: 3\n", encoding="utf-8")
+            with mock.patch.object(n, "файл_эскалации", return_value=blocked_marker):
+                проверь("browser: resume снимает только устаревшие browser-артефакты",
+                        n.снять_старую_браузерную_парковку(blocked_judge), True)
+            проверь("browser: stale clicks/judge/marker удалены",
+                    any((blocked_judge / x).exists()
+                        for x in ("CLICKS.md", "JUDGE.md", "OTLOZHENO.md", "marker")), False)
 
             проверь("resume: фильтр сохраняет порядок",
                     n.выбрать_карточки(["01", "02", "03"], "03,01"), ["01", "03"])
