@@ -197,6 +197,7 @@ export function FfProductsCatalogScreen({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [catalog, setCatalog] = useState<FfCatalogRow[]>([])
+  const [packageProducts, setPackageProducts] = useState<FfCatalogRow[]>([])
   const [stock, setStock] = useState<StockSummaryRow[]>([])
   const [dialogSellers, setDialogSellers] = useState<SellerRow[]>(sellers)
   const [createOpen, setCreateOpen] = useState(false)
@@ -240,7 +241,9 @@ export function FfProductsCatalogScreen({
       if (!res.ok) {
         throw new Error(humanFfCatalogError(await readApiErrorMessage(res)))
       }
-      setCatalog((await res.json()) as FfCatalogRow[])
+      const loadedCatalog = (await res.json()) as FfCatalogRow[]
+      setCatalog(loadedCatalog)
+      if (!filterSellerId) setPackageProducts(loadedCatalog)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось загрузить товары.')
     } finally {
@@ -668,11 +671,29 @@ export function FfProductsCatalogScreen({
           data-testid="ff-catalog-tabs"
           sx={{ mb: 2, borderBottom: '1px solid', borderColor: 'divider' }}
         >
-          <Tab value="products" label="Товары" data-testid="ff-catalog-tab-products" />
-          <Tab value="packages" label="Короба и грузоместа" data-testid="ff-catalog-tab-packages" />
+          <Tab
+            id="ff-catalog-tab-products"
+            aria-controls="ff-catalog-products-panel"
+            value="products"
+            label="Товары"
+            data-testid="ff-catalog-tab-products"
+          />
+          <Tab
+            id="ff-catalog-tab-packages"
+            aria-controls="ff-catalog-packages-panel"
+            value="packages"
+            label="Короба и грузоместа"
+            data-testid="ff-catalog-tab-packages"
+          />
         </Tabs>
 
-        <Box hidden={catalogView !== 'products'} data-testid="ff-catalog-products-panel">
+        <Box
+          id="ff-catalog-products-panel"
+          role="tabpanel"
+          aria-labelledby="ff-catalog-tab-products"
+          hidden={catalogView !== 'products'}
+          data-testid="ff-catalog-products-panel"
+        >
 
         {error ? (
           <Alert severity="error" sx={{ mb: 2 }} data-testid="ff-products-error">
@@ -1077,11 +1098,13 @@ export function FfProductsCatalogScreen({
         </Box>
 
         {catalogView === 'packages' ? (
-          <FfCatalogInboundPackages
-            token={token}
-            authHeaders={authHeaders}
-            products={catalog}
-          />
+          <Box id="ff-catalog-packages-panel" role="tabpanel" aria-labelledby="ff-catalog-tab-packages">
+            <FfCatalogInboundPackages
+              token={token}
+              authHeaders={authHeaders}
+              products={packageProducts}
+            />
+          </Box>
         ) : null}
 
         {canManageCatalog ? (

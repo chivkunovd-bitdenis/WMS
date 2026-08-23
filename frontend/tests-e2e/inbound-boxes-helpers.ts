@@ -31,6 +31,9 @@ export type InboundBoxesSeed = {
   sellerEmail: string;
   password: string;
   sku: string;
+  vendorArticle: string;
+  barcode: string;
+  size: string;
   token: string;
   sellerId: string;
   warehouseId: string;
@@ -46,6 +49,9 @@ export async function seedFfSellerInbound(
   const sellerEmail = `seller-box-${suffix}@example.com`;
   const password = 'password123';
   const sku = `sku-box-${suffix}`;
+  const vendorArticle = `seller-article-${suffix}`;
+  const barcode = `box-product-${suffix}`;
+  const size = '46';
 
   await page.goto('/');
   await openFulfillmentRegistration(page);
@@ -88,6 +94,9 @@ export async function seedFfSellerInbound(
     data: {
       name: 'Box Product',
       sku_code: sku,
+      wb_vendor_code: vendorArticle,
+      wb_barcode: barcode,
+      wb_size: size,
       length_mm: 100,
       width_mm: 100,
       height_mm: 100,
@@ -105,6 +114,9 @@ export async function seedFfSellerInbound(
     sellerEmail,
     password,
     sku,
+    vendorArticle,
+    barcode,
+    size,
     token,
     sellerId,
     warehouseId,

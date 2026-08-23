@@ -22,6 +22,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiUrl } from '../../api'
 import { ProductBarcodeCell } from '../../components/ProductBarcodeCell'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
+import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 
 type SourceDocument = {
   kind: string
@@ -113,6 +114,14 @@ function sourceDocumentDate(source: SourceDocument): string {
   return Number.isNaN(value.getTime()) ? '—' : value.toLocaleDateString('ru-RU')
 }
 
+async function lookupErrorMessage(response: Response): Promise<string> {
+  if (response.status === 404) return 'Короб или грузоместо не найдено'
+  if (response.status === 401) return 'Сессия истекла. Войдите заново.'
+  if (response.status === 403) return 'Нет доступа к коробам и грузоместам.'
+  await readApiErrorMessage(response)
+  return 'Не удалось выполнить поиск. Повторите сканирование.'
+}
+
 export function FfCatalogInboundPackages({ token, authHeaders, products }: Props) {
   const [listLoading, setListLoading] = useState(false)
   const [listLoaded, setListLoaded] = useState(false)
@@ -122,7 +131,9 @@ export function FfCatalogInboundPackages({ token, authHeaders, products }: Props
   const [openPackageId, setOpenPackageId] = useState<string | null>(null)
   const [highlightedPackageId, setHighlightedPackageId] = useState<string | null>(null)
   const [scanValue, setScanValue] = useState('')
-  const [scanError, setScanError] = useState(false)
+  const [scanError, setScanError] = useState<string | null>(null)
+  const [scanLoading, setScanLoading] = useState(false)
+  const [scanAnnouncement, setScanAnnouncement] = useState('')
   const requestSequence = useRef(0)
   const scanInputRef = useRef<HTMLInputElement>(null)
 
@@ -168,7 +179,9 @@ export function FfCatalogInboundPackages({ token, authHeaders, products }: Props
   const lookup = useCallback(async (barcode: string): Promise<void> => {
     const sequence = requestSequence.current + 1
     requestSequence.current = sequence
-    setScanError(false)
+    setScanError(null)
+    setScanAnnouncement('')
+    setScanLoading(true)
     try {
       const response = await fetch(
         apiUrl(`/operations/inbound-packages/lookup?barcode=${encodeURIComponent(barcode)}`),
@@ -176,7 +189,7 @@ export function FfCatalogInboundPackages({ token, authHeaders, products }: Props
       )
       if (requestSequence.current !== sequence) return
       if (!response.ok) {
-        setScanError(true)
+        setScanError(await lookupErrorMessage(response))
         return
       }
       const item = (await response.json()) as InboundPackage
@@ -184,6 +197,7 @@ export function FfCatalogInboundPackages({ token, authHeaders, products }: Props
       setAddressedPackage(item)
       setOpenPackageId(item.id)
       setHighlightedPackageId(item.id)
+      setScanAnnouncement(`${packageTitle(item)} открыт`)
       window.setTimeout(() => {
         document.getElementById(`ff-catalog-inbound-package-${item.id}`)?.scrollIntoView({
           behavior: 'smooth',
@@ -191,11 +205,16 @@ export function FfCatalogInboundPackages({ token, authHeaders, products }: Props
         })
       }, 0)
     } catch {
-      if (requestSequence.current === sequence) setScanError(true)
+      if (requestSequence.current === sequence) {
+        setScanError('Нет связи с сервером. Повторите сканирование.')
+      }
     } finally {
       if (requestSequence.current === sequence) {
-        scanInputRef.current?.focus()
-        scanInputRef.current?.select()
+        setScanLoading(false)
+        window.setTimeout(() => {
+          scanInputRef.current?.focus()
+          scanInputRef.current?.select()
+        }, 0)
       }
     }
   }, [authHeaders, token])
@@ -218,27 +237,33 @@ export function FfCatalogInboundPackages({ token, authHeaders, products }: Props
         sx={{ p: 2, mb: 2, bgcolor: 'action.hover' }}
         data-testid="ff-catalog-inbound-packages-scanner"
       >
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
-          Сканер короба или грузоместа
-        </Typography>
         <TextField
           inputRef={scanInputRef}
           fullWidth
           size="small"
+          label="Сканер короба или грузоместа"
           value={scanValue}
           onChange={(event) => {
             setScanValue(event.target.value)
-            setScanError(false)
+            setScanError(null)
           }}
           onKeyDown={handleScanKeyDown}
           placeholder="Сканируйте внутренний ШК"
-          error={scanError}
-          helperText="После скана нужный короб раскроется и подсветится."
+          error={scanError !== null}
+          disabled={scanLoading}
+          helperText={scanLoading ? 'Ищем короб…' : 'После скана нужный короб раскроется и подсветится.'}
           slotProps={{ htmlInput: { 'data-testid': 'ff-catalog-inbound-packages-scan' } }}
         />
+        <Box
+          role="status"
+          aria-live="polite"
+          sx={{ position: 'absolute', width: 1, height: 1, p: 0, m: -1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}
+        >
+          {scanAnnouncement}
+        </Box>
         {scanError ? (
           <Alert severity="error" sx={{ mt: 1 }} data-testid="ff-catalog-inbound-packages-lookup-error">
-            Короб или грузоместо не найдено
+            {scanError}
           </Alert>
         ) : null}
       </Paper>
