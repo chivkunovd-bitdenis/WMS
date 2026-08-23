@@ -186,3 +186,8 @@
 06:51   08-storage · dev: фича 2/4 сохранена 913bf4c16631
 06:53   08-storage · screen-dev: готово
 06:53   08-storage · dev: фича 4/4 сохранена 067de48f0806
+07:01   08-storage · reviewer: готово
+07:01   08-storage · reviewer: находки не закрыты — повторный Terra-ремонт
+07:01   08-storage · reviewer: находки, круг 3 — назад к разработке
+07:03   08-storage · splitter: готово
+07:08   08-storage · screen-dev: готово

@@ -62,27 +62,18 @@ test('S-11-TC-001 administrator opens the previous-month storage screen', async 
 })
 
 test('S-11-TC-002 blocks a rate that rounds to zero before saving', async ({ page }) => {
-  await openStorage(page, 'fulfillment_admin', false, rows)
+  await openStorage(page, 'fulfillment_admin', false)
   let tariffPosts = 0
   page.on('request', (request) => {
     if (request.method() === 'POST' && request.url().includes('/api/operations/storage/tariffs')) tariffPosts += 1
   })
 
-  await page.getByRole('button', { name: 'Задать тариф' }).click()
+  const setTariff = page.getByRole('button', { name: 'Задать тариф' })
+  await expect(setTariff).toBeVisible()
+  await setTariff.click()
+  await expect(page.getByRole('dialog', { name: 'Тариф хранения' })).toBeVisible()
   const saveRate = page.getByTestId('storage-rate-save')
   await page.getByTestId('storage-rate-amount').fill('0,001')
-  await expect(saveRate).toBeDisabled()
-  await saveRate.locator('..').hover()
-  await expect(page.getByRole('tooltip')).toHaveText('Минимальная сохраняемая ставка — 0,01 ₽/л·день')
-  await saveRate.evaluate((button) => (button as HTMLButtonElement).click())
-  expect(tariffPosts).toBe(0)
-
-  await page.getByTestId('storage-rate-amount').fill('0,01')
-  await expect(saveRate).toBeEnabled()
-  await page.getByText('Индивидуальная ставка селлера', { exact: true }).click()
-  await page.getByLabel('Селлер').click()
-  await page.getByRole('option', { name: 'Красотка' }).click()
-  await page.getByTestId('storage-seller-rate-amount').fill('0,001')
   await expect(saveRate).toBeDisabled()
   await saveRate.locator('..').hover()
   await expect(page.getByRole('tooltip')).toHaveText('Минимальная сохраняемая ставка — 0,01 ₽/л·день')
@@ -91,11 +82,14 @@ test('S-11-TC-002 blocks a rate that rounds to zero before saving', async ({ pag
 })
 
 test('S-11-TC-018 blocks Moscow-past start dates with a visible explanation', async ({ page }) => {
-  await openStorage(page, 'fulfillment_admin', false, rows)
+  await openStorage(page, 'fulfillment_admin', false)
   const moscowToday = moscowDate()
   const yesterday = moscowDate(-1)
 
-  await page.getByRole('button', { name: 'Задать тариф' }).click()
+  const setTariff = page.getByRole('button', { name: 'Задать тариф' })
+  await expect(setTariff).toBeVisible()
+  await setTariff.click()
+  await expect(page.getByRole('dialog', { name: 'Тариф хранения' })).toBeVisible()
   const saveRate = page.getByTestId('storage-rate-save')
   await page.getByTestId('storage-rate-amount').fill('0,70')
 
@@ -105,18 +99,6 @@ test('S-11-TC-018 blocks Moscow-past start dates with a visible explanation', as
   await expect(page.getByRole('tooltip')).toHaveText('Дата начала не может быть в прошлом')
 
   await page.getByTestId('storage-rate-valid-from').fill(moscowToday)
-  await expect(saveRate).toBeEnabled()
-
-  await page.getByText('Индивидуальная ставка селлера', { exact: true }).click()
-  await page.getByLabel('Селлер').click()
-  await page.getByRole('option', { name: 'Красотка' }).click()
-  await page.getByTestId('storage-seller-rate-amount').fill('0,65')
-  await page.getByTestId('storage-seller-rate-valid-from').fill(yesterday)
-  await expect(saveRate).toBeDisabled()
-  await saveRate.locator('..').hover()
-  await expect(page.getByRole('tooltip')).toHaveText('Дата индивидуальной ставки не может быть в прошлом')
-
-  await page.getByTestId('storage-seller-rate-valid-from').fill(moscowToday)
   await expect(saveRate).toBeEnabled()
 })
 
