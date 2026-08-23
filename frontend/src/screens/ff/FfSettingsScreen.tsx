@@ -61,6 +61,35 @@ type Props = {
 type FfProfile = Record<'legal_name' | 'inn' | 'kpp' | 'bank_name' | 'bik' | 'settlement_account' | 'correspondent_account', string>
 type Tariff = { id: string; service_code: string; seller_id: string | null; unit: string; amount: string; valid_from: string }
 type Seller = { id: string; name: string }
+type TariffServiceCode = 'inbound' | 'outbound' | 'storage_liter_day'
+type TariffUnit = 'document' | 'item' | 'liter_day'
+type TariffDraft = {
+  service_code: TariffServiceCode
+  seller_id: string
+  unit: TariffUnit
+  amount: string
+  valid_from: string
+}
+
+export function unitForTariffService(serviceCode: TariffServiceCode, currentUnit: TariffUnit): TariffUnit {
+  if (serviceCode === 'storage_liter_day') return 'liter_day'
+  return currentUnit === 'document' || currentUnit === 'item' ? currentUnit : 'document'
+}
+
+export function isTariffUnitAllowed(serviceCode: TariffServiceCode, unit: TariffUnit): boolean {
+  return serviceCode === 'storage_liter_day' ? unit === 'liter_day' : unit === 'document' || unit === 'item'
+}
+
+export function tariffRequestPayload(draft: TariffDraft, amount: number) {
+  if (!isTariffUnitAllowed(draft.service_code, draft.unit)) return null
+
+  return {
+    ...draft,
+    service_code: draft.service_code === 'outbound' ? 'marketplace_outbound' : draft.service_code,
+    seller_id: draft.seller_id || null,
+    amount,
+  }
+}
 
 function humanStaffError(message: string): string {
   if (message.includes('email_taken')) return 'Этот сотрудник уже добавлен'
@@ -131,7 +160,7 @@ export function FfSettingsScreen({
   const [historyTariff, setHistoryTariff] = useState<Tariff | null>(null)
   const [profileBusy, setProfileBusy] = useState(false)
   const [tariffBusy, setTariffBusy] = useState(false)
-  const [tariffDraft, setTariffDraft] = useState({ service_code: 'inbound', seller_id: '', unit: 'document', amount: '', valid_from: currentBillingMonth() + '-01' }); const [tariffError, setTariffError] = useState<string | null>(null)
+  const [tariffDraft, setTariffDraft] = useState<TariffDraft>({ service_code: 'inbound', seller_id: '', unit: 'document', amount: '', valid_from: currentBillingMonth() + '-01' }); const [tariffError, setTariffError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isFulfillmentAdmin || section !== 'tariffs') return
@@ -403,10 +432,16 @@ export function FfSettingsScreen({
     const amount = Number(tariffDraft.amount.replace(',', '.'))
     if (!Number.isFinite(amount) || amount < 0) { setTariffError('Ставка должна быть неотрицательным числом.'); return }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(tariffDraft.valid_from)) { setTariffError('Укажите дату начала действия ставки.'); return }
-    if (tariffDraft.service_code === 'storage_liter_day' && tariffDraft.unit !== 'liter_day') { setTariffError('Для хранения доступен только расчёт «За литр-день».'); return }
+    const payload = tariffRequestPayload(tariffDraft, amount)
+    if (!payload) {
+      setTariffError(tariffDraft.service_code === 'storage_liter_day'
+        ? 'Для хранения доступен только расчёт «За литр-день».'
+        : 'Для приёмки и отгрузки доступен расчёт «За документ» или «За штуку».')
+      return
+    }
     setTariffBusy(true)
     try {
-      const res = await fetch(apiUrl('/billing/tariffs'), { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ ...tariffDraft, service_code: tariffDraft.service_code === 'outbound' ? 'marketplace_outbound' : tariffDraft.service_code, seller_id: tariffDraft.seller_id || null, amount }) })
+      const res = await fetch(apiUrl('/billing/tariffs'), { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       if (!res.ok) { setTariffError(await readApiErrorMessage(res)); return }
       const created = (await res.json()) as Tariff
       setTariffs((current) => [...current, created])
@@ -446,7 +481,10 @@ export function FfSettingsScreen({
           {tariffError ? <ErrorNotice>{tariffError}</ErrorNotice> : null}
           <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}><Typography variant="subtitle1">Действующие тарифы</Typography><PrimaryAction onClick={() => setTariffOpen(true)} data-testid="ff-tariff-new">Новая ставка</PrimaryAction></Stack>
           <DataTable columns={[{ key: 'service', header: 'Услуга', width: 180, render: (r: Tariff) => ({ inbound: 'Приёмка', outbound: 'Отгрузка', marketplace_outbound: 'Отгрузка', storage_liter_day: 'Хранение', storage: 'Хранение' }[r.service_code] ?? r.service_code) }, { key: 'for', header: 'Для кого', width: 240, render: (r: Tariff) => sellerName(r.seller_id) }, { key: 'unit', header: 'Расчёт', width: 170, render: (r: Tariff) => ({ document: 'За документ', item: 'За штуку', liter_day: 'За литр-день' }[r.unit] ?? r.unit) }, { key: 'amount', header: 'Ставка', width: 150, align: 'right', render: (r: Tariff) => <MoneyCell value={Number(r.amount)} /> }, { key: 'from', header: 'Действует с', width: 150, render: (r: Tariff) => r.valid_from }, { key: 'history', header: 'Действие', width: 64, align: 'center', render: (r: Tariff) => <IconAction title="Открыть историю ставок" testId="ff-tariff-history-open" onClick={() => setHistoryTariff(r)}><HistoryIcon fontSize="small" /></IconAction> }]} rows={activeTariffs} getRowKey={(r) => r.id} testId="ff-tariffs-table" empty={{ title: 'Тарифы ещё не заданы', hint: 'Добавьте общие ставки, чтобы завершённые работы попадали в счета', action: <PrimaryAction onClick={() => setTariffOpen(true)}>Новая ставка</PrimaryAction> }} />
-          {tariffOpen ? <Paper variant="outlined" sx={{ p: 2 }}><Typography variant="subtitle1" gutterBottom>Новая ставка</Typography><Stack spacing={1.5}><TextField select label="Услуга" value={tariffDraft.service_code} onChange={(e) => setTariffDraft((d) => ({ ...d, service_code: e.target.value, unit: e.target.value === 'storage_liter_day' ? 'liter_day' : d.unit === 'liter_day' ? 'document' : d.unit }))} slotProps={{ select: { native: true } }}><option value="inbound">Приёмка</option><option value="outbound">Отгрузка</option><option value="storage_liter_day">Хранение</option></TextField><TextField select label="Для кого" value={tariffDraft.seller_id} onChange={(e) => setTariffDraft((d) => ({ ...d, seller_id: e.target.value }))} slotProps={{ select: { native: true } }}><option value="">Все селлеры</option>{sellers.map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</TextField><TextField select label="Расчёт" value={tariffDraft.unit} onChange={(e) => setTariffDraft((d) => ({ ...d, unit: e.target.value }))} slotProps={{ select: { native: true } }} disabled={tariffDraft.service_code === 'storage_liter_day'}><option value="document">За документ</option><option value="item">За штуку</option><option value="liter_day">За литр-день</option></TextField><TextField label="Ставка, ₽" value={tariffDraft.amount} onChange={(e) => setTariffDraft((d) => ({ ...d, amount: e.target.value }))} /><TextField type="date" label="Действует с" value={tariffDraft.valid_from} onChange={(e) => setTariffDraft((d) => ({ ...d, valid_from: e.target.value }))} slotProps={{ inputLabel: { shrink: true } }} /><Stack direction="row" spacing={1}><PrimaryAction onClick={() => void saveTariff()} disabled={tariffBusy}>{tariffBusy ? 'Сохранение…' : 'Сохранить ставку'}</PrimaryAction><SecondaryAction onClick={() => setTariffOpen(false)}>Отмена</SecondaryAction></Stack></Stack></Paper> : null}
+          {tariffOpen ? <Paper variant="outlined" sx={{ p: 2 }}><Typography variant="subtitle1" gutterBottom>Новая ставка</Typography><Stack spacing={1.5}><TextField select label="Услуга" value={tariffDraft.service_code} onChange={(e) => setTariffDraft((d) => {
+            const serviceCode = e.target.value as TariffServiceCode
+            return { ...d, service_code: serviceCode, unit: unitForTariffService(serviceCode, d.unit) }
+          })} slotProps={{ select: { native: true }, htmlInput: { 'data-testid': 'ff-tariff-service' } }}><option value="inbound">Приёмка</option><option value="outbound">Отгрузка</option><option value="storage_liter_day">Хранение</option></TextField><TextField select label="Для кого" value={tariffDraft.seller_id} onChange={(e) => setTariffDraft((d) => ({ ...d, seller_id: e.target.value }))} slotProps={{ select: { native: true } }}><option value="">Все селлеры</option>{sellers.map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}</TextField><TextField select label="Расчёт" value={tariffDraft.unit} onChange={(e) => setTariffDraft((d) => ({ ...d, unit: e.target.value as TariffUnit }))} slotProps={{ select: { native: true }, htmlInput: { 'data-testid': 'ff-tariff-unit' } }} disabled={tariffDraft.service_code === 'storage_liter_day'}>{tariffDraft.service_code === 'storage_liter_day' ? <option value="liter_day">За литр-день</option> : <><option value="document">За документ</option><option value="item">За штуку</option></>}</TextField><TextField label="Ставка, ₽" value={tariffDraft.amount} onChange={(e) => setTariffDraft((d) => ({ ...d, amount: e.target.value }))} /><TextField type="date" label="Действует с" value={tariffDraft.valid_from} onChange={(e) => setTariffDraft((d) => ({ ...d, valid_from: e.target.value }))} slotProps={{ inputLabel: { shrink: true } }} /><Stack direction="row" spacing={1}><PrimaryAction onClick={() => void saveTariff()} disabled={tariffBusy}>{tariffBusy ? 'Сохранение…' : 'Сохранить ставку'}</PrimaryAction><SecondaryAction onClick={() => setTariffOpen(false)}>Отмена</SecondaryAction></Stack></Stack></Paper> : null}
           <Dialog open={Boolean(historyTariff)} onClose={() => setHistoryTariff(null)} fullWidth maxWidth="sm" aria-labelledby="ff-tariff-history-title" data-testid="ff-tariff-history"><DialogTitle id="ff-tariff-history-title"><Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}><Typography component="span" variant="h6">История ставок</Typography><IconAction title="Закрыть историю ставок" testId="ff-tariff-history-close" onClick={() => setHistoryTariff(null)}><CloseIcon fontSize="small" /></IconAction></Stack></DialogTitle><DialogContent dividers><Stack spacing={1}>{historyTariff ? tariffs.filter((item) => item.service_code === historyTariff.service_code && item.seller_id === historyTariff.seller_id).sort((a, b) => b.valid_from.localeCompare(a.valid_from)).map((item) => <Stack key={item.id} direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}><Typography variant="body2">{item.valid_from}</Typography><MoneyCell value={Number(item.amount)} /></Stack>) : null}</Stack></DialogContent></Dialog>
         </Stack>
       ) : null}
@@ -577,224 +615,26 @@ export function FfSettingsScreen({
               </Stack>
             ) : null}
 
-            {rows.length === 0 ? (
-              <Paper
-                variant="outlined"
-                sx={{ py: 2.5, px: 2, textAlign: 'center' }}
-                data-testid="ff-staff-empty"
-              >
-                <Typography variant="body2" color="text.secondary">
-                  Сотрудников пока нет.
-                </Typography>
-              </Paper>
-            ) : (
-              <TableContainer
-                component={Paper}
-                variant="outlined"
-                sx={{ width: '100%', overflowX: 'auto' }}
-                data-testid="ff-staff-table-wrap"
-              >
-                <Table size="small" data-testid="ff-staff-table">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ minWidth: 220 }}>Email</TableCell>
-                      {FF_STAFF_ACCESS_BLOCKS.map((block) => (
-                        <TableCell key={block.key} align="center" sx={{ minWidth: 116 }}>
-                          <Typography variant="caption" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
-                            {block.label}
-                          </Typography>
-                        </TableCell>
-                      ))}
-                      {isFulfillmentAdmin ? (
-                        <>
-                          <TableCell align="right" sx={{ minWidth: 120 }}>
-                            Ставка за ед., ₽
-                          </TableCell>
-                          <TableCell align="right" sx={{ minWidth: 110 }}>
-                            Упаковано, шт
-                          </TableCell>
-                          <TableCell align="right" sx={{ minWidth: 110 }}>
-                            Начислено, ₽
-                          </TableCell>
-                        </>
-                      ) : null}
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {rows.map((row) => {
-                      const access = ffPermissionsToStaffAccess(row.permissions)
-                      return (
-                        <TableRow
-                          key={row.id}
-                          hover
-                          data-testid="ff-staff-row"
-                          data-staff-id={row.id}
-                          sx={
-                            highlightRowId === row.id
-                              ? { bgcolor: 'action.selected' }
-                              : undefined
-                          }
-                        >
-                          <TableCell sx={{ maxWidth: 320 }}>
-                            <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
-                              {row.email}
-                            </Typography>
-                            <Typography
-                              variant="caption"
-                              color={row.must_set_password ? 'warning.main' : 'text.secondary'}
-                            >
-                              {row.must_set_password ? 'ожидает первый вход' : 'сотрудник'}
-                            </Typography>
-                          </TableCell>
-                          {FF_STAFF_ACCESS_BLOCKS.map((block) => (
-                            <TableCell key={block.key} align="center" padding="checkbox">
-                              <Checkbox
-                                size="small"
-                                checked={access[block.key]}
-                                disabled={permBusyId === row.id}
-                                slotProps={{
-                                  root: {
-                                    'data-testid': `ff-staff-access-${row.id}-${block.key}`,
-                                  } as React.HTMLAttributes<HTMLSpanElement>,
-                                  input: {
-                                    'aria-label': `${block.label} для ${row.email}`,
-                                  } as React.InputHTMLAttributes<HTMLInputElement>,
-                                }}
-                                onChange={(e) =>
-                                  void onTogglePermission(row, block.key, e.target.checked)
-                                }
-                              />
-                            </TableCell>
-                          ))}
-                          {isFulfillmentAdmin ? (
-                            <>
-                              <TableCell align="right">
-                                <TextField
-                                  size="small"
-                                  type="number"
-                                  inputMode="decimal"
-                                  value={rateDrafts[row.id] ?? row.packaging_rate_rub ?? '0.00'}
-                                  disabled={rateBusyId === row.id}
-                                  onChange={(e) =>
-                                    setRateDrafts((prev) => ({
-                                      ...prev,
-                                      [row.id]: e.target.value,
-                                    }))
-                                  }
-                                  onBlur={() => {
-                                    const draft = rateDrafts[row.id]
-                                    if (draft !== undefined && draft !== row.packaging_rate_rub) {
-                                      void savePackagingRate(row)
-                                    }
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault()
-                                      void savePackagingRate(row)
-                                    }
-                                  }}
-                                  slotProps={{
-                                    htmlInput: {
-                                      'data-testid': `ff-staff-rate-${row.id}`,
-                                      min: 0,
-                                      step: 0.01,
-                                      style: { textAlign: 'right' },
-                                    },
-                                  }}
-                                  sx={{ width: 108 }}
-                                />
-                              </TableCell>
-                              <TableCell align="right" data-testid={`ff-staff-units-${row.id}`}>
-                                {row.packaging_billing?.units_packed ?? 0}
-                              </TableCell>
-                              <TableCell align="right" data-testid={`ff-staff-earned-${row.id}`}>
-                                {formatRubDisplay(row.packaging_billing?.earned_rub ?? '0')}
-                              </TableCell>
-                            </>
-                          ) : null}
-                        </TableRow>
-                      )
-                    })}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+            {rows.length === 0 ? <Paper variant="outlined" sx={{ py: 2.5, px: 2, textAlign: 'center' }} data-testid="ff-staff-empty"><Typography variant="body2" color="text.secondary">Сотрудников пока нет.</Typography></Paper> : (
+              <TableContainer component={Paper} variant="outlined" sx={{ width: '100%', overflowX: 'auto' }} data-testid="ff-staff-table-wrap"><Table size="small" data-testid="ff-staff-table">
+                <TableHead><TableRow><TableCell sx={{ minWidth: 220 }}>Email</TableCell>{FF_STAFF_ACCESS_BLOCKS.map((block) => <TableCell key={block.key} align="center" sx={{ minWidth: 116 }}><Typography variant="caption" sx={{ fontWeight: 600, lineHeight: 1.2 }}>{block.label}</Typography></TableCell>)}
+                  {isFulfillmentAdmin ? <><TableCell align="right" sx={{ minWidth: 120 }}>Ставка за ед., ₽</TableCell><TableCell align="right" sx={{ minWidth: 110 }}>Упаковано, шт</TableCell><TableCell align="right" sx={{ minWidth: 110 }}>Начислено, ₽</TableCell></> : null}
+                </TableRow></TableHead>
+                <TableBody>{rows.map((row) => {
+                  const access = ffPermissionsToStaffAccess(row.permissions)
+                  return <TableRow key={row.id} hover data-testid="ff-staff-row" data-staff-id={row.id} sx={highlightRowId === row.id ? { bgcolor: 'action.selected' } : undefined}>
+                    <TableCell sx={{ maxWidth: 320 }}><Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>{row.email}</Typography><Typography variant="caption" color={row.must_set_password ? 'warning.main' : 'text.secondary'}>{row.must_set_password ? 'ожидает первый вход' : 'сотрудник'}</Typography></TableCell>
+                    {FF_STAFF_ACCESS_BLOCKS.map((block) => <TableCell key={block.key} align="center" padding="checkbox"><Checkbox size="small" checked={access[block.key]} disabled={permBusyId === row.id} slotProps={{ root: { 'data-testid': `ff-staff-access-${row.id}-${block.key}` } as React.HTMLAttributes<HTMLSpanElement>, input: { 'aria-label': `${block.label} для ${row.email}` } as React.InputHTMLAttributes<HTMLInputElement> }} onChange={(e) => void onTogglePermission(row, block.key, e.target.checked)} /></TableCell>)}
+                    {isFulfillmentAdmin ? <><TableCell align="right"><TextField size="small" type="number" inputMode="decimal" value={rateDrafts[row.id] ?? row.packaging_rate_rub ?? '0.00'} disabled={rateBusyId === row.id} onChange={(e) => setRateDrafts((prev) => ({ ...prev, [row.id]: e.target.value }))} onBlur={() => { const draft = rateDrafts[row.id]; if (draft !== undefined && draft !== row.packaging_rate_rub) void savePackagingRate(row) }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void savePackagingRate(row) } }} slotProps={{ htmlInput: { 'data-testid': `ff-staff-rate-${row.id}`, min: 0, step: 0.01, style: { textAlign: 'right' } } }} sx={{ width: 108 }} /></TableCell>
+                      <TableCell align="right" data-testid={`ff-staff-units-${row.id}`}>{row.packaging_billing?.units_packed ?? 0}</TableCell><TableCell align="right" data-testid={`ff-staff-earned-${row.id}`}>{formatRubDisplay(row.packaging_billing?.earned_rub ?? '0')}</TableCell></> : null}
+                  </TableRow>
+                })}</TableBody>
+              </Table></TableContainer>
             )}
-
-            <Paper
-              variant="outlined"
-              component="form"
-              noValidate
-              onSubmit={(e) => void onSubmit(e)}
-              sx={{ p: 2 }}
-              data-testid="ff-staff-create-panel"
-            >
-              <Typography variant="subtitle1" sx={{ fontWeight: 600 }} gutterBottom>
-                Добавить пользователя
-              </Typography>
-              <Stack
-                direction={{ xs: 'column', sm: 'row' }}
-                spacing={2}
-                sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' } }}
-              >
-                <TextField
-                  name="staff_email"
-                  label="Email для входа"
-                  type="email"
-                  required
-                  fullWidth
-                  size="small"
-                  autoComplete="off"
-                  helperText="Пароль задаётся при первом входе"
-                  slotProps={{ htmlInput: { 'data-testid': 'ff-staff-email' } }}
-                  sx={{ flex: 1 }}
-                />
-                <Button
-                  type="submit"
-                  variant="contained"
-                  disabled={busy}
-                  data-testid="ff-staff-submit"
-                  startIcon={busy ? <CircularProgress size={16} color="inherit" /> : null}
-                  sx={{ minWidth: { sm: 140 }, mt: { xs: 0, sm: 0.5 } }}
-                >
-                  {busy ? 'Сохранение…' : 'Добавить'}
-                </Button>
-              </Stack>
-            </Paper>
+            <Paper variant="outlined" component="form" noValidate onSubmit={(e) => void onSubmit(e)} sx={{ p: 2 }} data-testid="ff-staff-create-panel"><Typography variant="subtitle1" sx={{ fontWeight: 600 }} gutterBottom>Добавить пользователя</Typography><Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' } }}><TextField name="staff_email" label="Email для входа" type="email" required fullWidth size="small" autoComplete="off" helperText="Пароль задаётся при первом входе" slotProps={{ htmlInput: { 'data-testid': 'ff-staff-email' } }} sx={{ flex: 1 }} /><Button type="submit" variant="contained" disabled={busy} data-testid="ff-staff-submit" startIcon={busy ? <CircularProgress size={16} color="inherit" /> : null} sx={{ minWidth: { sm: 140 }, mt: { xs: 0, sm: 0.5 } }}>{busy ? 'Сохранение…' : 'Добавить'}</Button></Stack></Paper>
           </Stack>
-
-          <Snackbar
-            open={permSavedNotice !== null}
-            autoHideDuration={2500}
-            onClose={() => setPermSavedNotice(null)}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-          >
-            <Alert
-              severity="success"
-              variant="filled"
-              onClose={() => setPermSavedNotice(null)}
-              data-testid="ff-staff-perm-saved"
-              sx={{ width: '100%' }}
-            >
-              {permSavedNotice}
-            </Alert>
-          </Snackbar>
-
-          <Snackbar
-            open={rateSavedNotice !== null}
-            autoHideDuration={2500}
-            onClose={() => setRateSavedNotice(null)}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-          >
-            <Alert
-              severity="success"
-              variant="filled"
-              onClose={() => setRateSavedNotice(null)}
-              data-testid="ff-staff-rate-saved"
-              sx={{ width: '100%' }}
-            >
-              {rateSavedNotice}
-            </Alert>
-          </Snackbar>
+          <Snackbar open={permSavedNotice !== null} autoHideDuration={2500} onClose={() => setPermSavedNotice(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}><Alert severity="success" variant="filled" onClose={() => setPermSavedNotice(null)} data-testid="ff-staff-perm-saved" sx={{ width: '100%' }}>{permSavedNotice}</Alert></Snackbar>
+          <Snackbar open={rateSavedNotice !== null} autoHideDuration={2500} onClose={() => setRateSavedNotice(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}><Alert severity="success" variant="filled" onClose={() => setRateSavedNotice(null)} data-testid="ff-staff-rate-saved" sx={{ width: '100%' }}>{rateSavedNotice}</Alert></Snackbar>
         </Box>
       ))}
     </Box>
