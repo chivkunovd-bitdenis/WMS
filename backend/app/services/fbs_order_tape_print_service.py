@@ -26,6 +26,7 @@ from app.models.packaging_task import PackagingTaskLine
 from app.services import fbs_marking_service as marking_svc
 from app.services import fbs_packaging_integration_service as pack_int_svc
 from app.services import marking_code_service as mc_svc
+from app.services.fbs_picking_order_service import picking_list_order_key
 from app.services.fbs_print_asset_service import (
     FbsPrintAssetError,
     PrintBatchResult,
@@ -99,6 +100,8 @@ async def print_fbs_order_tape(
     ordered = _orders_in_requested_order(supply, order_ids)
     if len(ordered) != len(dict.fromkeys(order_ids)):
         raise FbsOrderTapePrintError("order_not_in_supply")
+    if set(order_ids) == {order.id for order in supply.orders}:
+        ordered.sort(key=picking_list_order_key)
     line_by_product = await _line_by_product(session, tenant_id, supply)
     if not reprint and not allow_partial:
         preflight_shortage = await _preflight_new_code_shortage(session, tenant_id, ordered)

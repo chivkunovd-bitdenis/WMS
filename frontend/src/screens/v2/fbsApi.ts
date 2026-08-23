@@ -483,7 +483,7 @@ export type FbsWorkspace = {
     order_id: string | null
     retryable: boolean
   }>
-  orders: FbsWorklistOrder[]
+  orders: Array<FbsWorklistOrder & { tape_order_index: number }>
   cargo_places: FbsCargoPlace[]
   boxes: FbsPackingBox[]
   marking_pool?: { required: number; available: number; shortage: number; orders_without_code: string[] }

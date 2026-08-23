@@ -128,12 +128,28 @@ function buildTapePageCss(size: LabelSize = DEFAULT_LABEL_SIZE): string {
     display: flex;
     align-items: center;
     justify-content: center;
+    position: relative;
   }
   .wb-qr-img {
     width: 100%;
     height: 100%;
     object-fit: contain;
     display: block;
+  }
+  .wb-qr-position {
+    position: absolute;
+    top: ${labelMm(1 * k.uniform)};
+    right: ${labelMm(1 * k.uniform)};
+    min-width: ${labelMm(7 * k.uniform)};
+    padding: ${labelMm(0.6 * k.uniform)} ${labelMm(1 * k.uniform)};
+    border: ${labelMm(0.3 * k.uniform)} solid #111;
+    border-radius: ${labelMm(0.8 * k.uniform)};
+    background: #fff;
+    color: #111;
+    font-size: ${labelPt(8 * k.font)};
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
   }
   .label:not(.label--cz):not(.label--wb-qr) {
     padding: ${labelMm(1.4 * k.uniform)} ${labelMm(1.8 * k.uniform)} ${labelMm(1 * k.uniform)};
@@ -227,9 +243,13 @@ export function buildCzArtifactLabelHtml(imageDataUrl: string): string {
 </section>`
 }
 
-export function buildWbOrderQrLabelHtml(imageDataUrl: string): string {
+export function buildWbOrderQrLabelHtml(imageDataUrl: string, position?: number): string {
+  const positionHtml = position == null
+    ? ''
+    : `<span class="wb-qr-position" data-testid="fbs-order-qr-position">№${position}</span>`
   return `<section class="label label--wb-qr" data-testid="fbs-order-qr-label" data-tape-block="wb_qr">
   <img class="wb-qr-img" src="${imageDataUrl}" alt="QR WB заказа" data-testid="fbs-order-qr-img" />
+  ${positionHtml}
 </section>`
 }
 

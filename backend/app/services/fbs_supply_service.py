@@ -53,6 +53,11 @@ from app.services import sorting_location_service as sorting_loc_svc
 from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.catalog_service import get_warehouse
 from app.services.fbs_packaging_integration_service import create_packaging_task_for_supply
+from app.services.fbs_picking_order_service import (
+    PickingListGroupKey,
+    picking_list_group_key,
+    picking_list_group_sort_key,
+)
 from app.services.fbs_print_asset_storage import decode_png_payload
 from app.services.fbs_sticker_code_service import (
     sticker_barcode_from_wb_row,
@@ -1580,15 +1585,9 @@ async def get_picking_list(
     if supply is None:
         raise FbsSupplyError("supply_not_found")
 
-    groups: dict[tuple[str, str | None, str | None, str], int] = defaultdict(int)
+    groups: dict[PickingListGroupKey, int] = defaultdict(int)
     for order in supply.orders:
-        product = order.product
-        article = order.wb_article or (product.sku_code if product is not None else "") or ""
-        sku_code = product.sku_code if product is not None else None
-        size = product.wb_size if product is not None and product.wb_size else None
-        product_name = product.name if product is not None else (order.wb_article or "Unknown")
-        key = (article, sku_code, size, product_name)
-        groups[key] += 1
+        groups[picking_list_group_key(order)] += 1
 
     items = [
         PickingListItem(
@@ -1598,7 +1597,9 @@ async def get_picking_list(
             product_name=product_name,
             quantity=qty,
         )
-        for (article, sku_code, size, product_name), qty in sorted(groups.items())
+        for (article, sku_code, size, product_name), qty in sorted(
+            groups.items(), key=lambda item: picking_list_group_sort_key(item[0])
+        )
     ]
     return items
 
