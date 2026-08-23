@@ -86,7 +86,10 @@ function workspace({
       total: orders.length,
     },
     blockers: [],
-    orders,
+    orders: orders.map((item, tape_order_index) => ({
+      ...item,
+      tape_order_index: item.tape_order_index ?? tape_order_index,
+    })),
     cargo_places: [],
     boxes: [],
     marking_pool: { required: 0, available: 0, shortage: 0, orders_without_code: [] },
@@ -446,7 +449,7 @@ test('fbs workspace: supply QR preview has copies control', async ({ page }) => 
 })
 
 // TC-NEW-006 — Given a full FBS tape, When it opens before printing, Then its preview and request use the picking-list order.
-test('fbs workspace: full tape preview and print request use article order', async ({ page }) => {
+test('fbs workspace: full tape keeps packing name order but previews server tape order', async ({ page }) => {
   await registerFf(page, 'full-tape-order')
   const alpha = order('100', {
     supply_id: 'sup-1',
@@ -474,6 +477,10 @@ test('fbs workspace: full tape preview and print request use article order', asy
       ...(workspace({ stage: 'packing', orders: [alpha, apple] }).supply as JsonObject),
       packaging_task_id: 'pack-1',
     },
+    orders: [
+      { ...alpha, tape_order_index: 1 },
+      { ...apple, tape_order_index: 0 },
+    ],
   }
   let printBody: JsonObject | null = null
 
@@ -491,16 +498,15 @@ test('fbs workspace: full tape preview and print request use article order', asy
   }))
   await page.route('**/operations/fbs-supplies/sup-1/order-print-tape', async (route) => {
     printBody = route.request().postDataJSON() as JsonObject
-    const orderIds = printBody.order_ids as string[]
     await json(route, {
-      orders: orderIds.map((orderId) => ({
-        order_id: orderId,
-        wb_order_id: orderId === apple.id ? apple.wb_order_id : alpha.wb_order_id,
+      orders: [apple, alpha].map((tapeOrder) => ({
+        order_id: tapeOrder.id,
+        wb_order_id: tapeOrder.wb_order_id,
         requires_honest_sign: false,
         qr_asset: {
-          id: `asset-${orderId}`,
+          id: `asset-${tapeOrder.id}`,
           status: 'ready',
-          preview_url: `/operations/fbs-print-assets/asset-${orderId}/content`,
+          preview_url: `/operations/fbs-print-assets/asset-${tapeOrder.id}/content`,
           applied_at: null,
         },
         printed_codes: [],
@@ -528,6 +534,11 @@ test('fbs workspace: full tape preview and print request use article order', asy
   await page.getByTestId('nav-ff-fbs').click()
   await page.getByTestId(`fbs-order-${alpha.id}`).click()
   await expect(page.getByRole('button', { name: 'Печать всего (2)' })).toBeVisible()
+  const packingRows = page.locator('[data-task-id="FBS-09"]').locator('xpath=../..')
+  await expect(packingRows).toHaveCount(2)
+  const packingRowsText = await packingRows.allTextContents()
+  expect(packingRowsText[0]).toContain('Альфа')
+  expect(packingRowsText[1]).toContain('Яблоко')
   await page.getByRole('button', { name: 'Печать всего (2)' }).click()
 
   const printDialog = page.getByTestId('marking-print-dialog')

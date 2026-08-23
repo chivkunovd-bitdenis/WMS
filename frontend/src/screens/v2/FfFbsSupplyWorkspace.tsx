@@ -1220,10 +1220,18 @@ export function FfFbsSupplyWorkspace({
     return map
   }, [packagingTask])
 
+  /** Строка упаковки — один заказ. Заказы одного товара идут подряд. */
   const packingOrders = useMemo(() => {
     if (!workspace) return []
-    const key = (order: FbsWorkspace['orders'][number]) => [order.product.seller_article ?? order.product.sku ?? '', order.product.sku ?? '', order.product.size ?? '', order.product.name].join('\u0000')
-    return [...workspace.orders].sort((a, b) => key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : a.wb_order_id - b.wb_order_id || a.id.localeCompare(b.id))
+    return [...workspace.orders].sort((a, b) => {
+      const byName = a.product.name.localeCompare(b.product.name, 'ru')
+      if (byName !== 0) return byName
+      return a.wb_order_id - b.wb_order_id
+    })
+  }, [workspace])
+  const fullTapeOrders = useMemo(() => {
+    if (!workspace) return []
+    return [...workspace.orders].sort((a, b) => a.tape_order_index - b.tape_order_index)
   }, [workspace])
   const orderPrintDone = useCallback(
     (order: FbsWorkspace['orders'][number]) =>
@@ -1774,7 +1782,7 @@ export function FfFbsSupplyWorkspace({
                             // бумаги) лента выходила короче листа подбора, и оператор об этом
                             // не знал. Коды Честного знака от этого не жгутся: у заказа, где
                             // код уже выпущен, сервер переиспользует его, а не берёт новый.
-                            packingOrders,
+                            fullTapeOrders,
                             unprintedPackingOrders.length === 0,
                           )}
                           data-task-id="FBS-21"

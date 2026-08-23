@@ -53,6 +53,11 @@ from app.services import sorting_location_service as sorting_loc_svc
 from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.catalog_service import get_warehouse
 from app.services.fbs_packaging_integration_service import create_packaging_task_for_supply
+from app.services.fbs_picking_order_service import (
+    PickingListGroupKey,
+    picking_list_group_key,
+    picking_list_group_sort_key,
+)
 from app.services.fbs_print_asset_storage import decode_png_payload
 from app.services.fbs_sticker_code_service import (
     sticker_barcode_from_wb_row,
@@ -133,35 +138,6 @@ class PickingListItem:
     size: str | None
     product_name: str
     quantity: int
-
-
-PickingListGroupKey = tuple[str, str | None, str | None, str]
-PickingListGroupSortKey = tuple[str, str, str, str]
-
-
-def picking_list_group_key(order: FbsOrder) -> PickingListGroupKey:
-    """Return the canonical product-group key used by the FBS picking list."""
-    product = order.product
-    article = order.wb_article or (product.sku_code if product is not None else "") or ""
-    sku_code = product.sku_code if product is not None else None
-    size = product.wb_size if product is not None and product.wb_size else None
-    product_name = product.name if product is not None else (order.wb_article or "Unknown")
-    return article, sku_code, size, product_name
-
-
-def picking_list_group_sort_key(key: PickingListGroupKey) -> PickingListGroupSortKey:
-    """Make an optional picking-list group key safe for deterministic sorting."""
-    article, sku_code, size, product_name = key
-    return article, sku_code or "", size or "", product_name
-
-
-def picking_list_order_key(order: FbsOrder) -> tuple[PickingListGroupSortKey, int, uuid.UUID]:
-    """Return the canonical order for orders expanded from picking-list groups."""
-    return (
-        picking_list_group_sort_key(picking_list_group_key(order)),
-        int(order.wb_order_id),
-        order.id,
-    )
 
 
 @dataclass(frozen=True)

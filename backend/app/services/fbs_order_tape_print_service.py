@@ -26,12 +26,12 @@ from app.models.packaging_task import PackagingTaskLine
 from app.services import fbs_marking_service as marking_svc
 from app.services import fbs_packaging_integration_service as pack_int_svc
 from app.services import marking_code_service as mc_svc
+from app.services.fbs_picking_order_service import picking_list_order_key
 from app.services.fbs_print_asset_service import (
     FbsPrintAssetError,
     PrintBatchResult,
     request_supply_print_batch,
 )
-from app.services.fbs_supply_service import picking_list_order_key
 from app.services.print_template_service import PrintLayout, PrintTemplateServiceError, parse_layout
 
 

@@ -5,6 +5,7 @@ import base64
 import time
 import uuid
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -40,6 +41,7 @@ from app.models.warehouse_box import WarehouseBox
 from app.services import fbs_print_asset_service as print_asset_svc
 from app.services import inventory_service
 from app.services.fbs_packaging_integration_service import create_packaging_task_for_supply
+from app.services.fbs_picking_order_service import picking_list_order_key
 from app.services.fbs_stock_availability_service import fbs_available_qty_for_product
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import (
@@ -56,6 +58,77 @@ _TINY_PNG_BASE64 = (
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAE"
     "hQGAhKmMIQAAAABJRU5ErkJggg=="
 )
+
+
+def _order_for_picking_order_key(
+    *,
+    article: str = "article",
+    sku_code: str = "sku",
+    size: str = "M",
+    product_name: str = "Product",
+    wb_order_id: int = 8,
+    order_id: str = "1",
+) -> Any:
+    return SimpleNamespace(
+        id=uuid.UUID(int=int(order_id)),
+        wb_order_id=wb_order_id,
+        wb_article=article,
+        product=SimpleNamespace(sku_code=sku_code, wb_size=size, name=product_name),
+    )
+
+
+@pytest.mark.parametrize(
+    ("changed_component", "first", "second", "component_index"),
+    [
+        ("article", "article-a", "article-b", 0),
+        ("sku_code", "sku-a", "sku-b", 1),
+        ("size", "S", "XL", 2),
+        ("product_name", "Alpha", "Zulu", 3),
+    ],
+)
+def test_picking_list_order_key_uses_each_product_group_component(
+    changed_component: str,
+    first: str,
+    second: str,
+    component_index: int,
+) -> None:
+    """Each group component independently changes the canonical order."""
+    common = {
+        "article": "article",
+        "sku_code": "sku",
+        "size": "M",
+        "product_name": "Product",
+    }
+    first_order = _order_for_picking_order_key(
+        **(common | {changed_component: first}), order_id="1"
+    )
+    second_order = _order_for_picking_order_key(
+        **(common | {changed_component: second}), order_id="2"
+    )
+
+    first_key = picking_list_order_key(first_order)
+    second_key = picking_list_order_key(second_order)
+
+    assert first_key[0][component_index] == first
+    assert second_key[0][component_index] == second
+    assert first_key[0][:component_index] == second_key[0][:component_index]
+    assert first_key[0][component_index + 1 :] == second_key[0][component_index + 1 :]
+    assert sorted([second_order, first_order], key=picking_list_order_key) == [
+        first_order,
+        second_order,
+    ]
+
+
+def test_picking_list_order_key_orders_wb_order_ids_numerically() -> None:
+    orders = [
+        _order_for_picking_order_key(wb_order_id=100, order_id="1"),
+        _order_for_picking_order_key(wb_order_id=8, order_id="2"),
+        _order_for_picking_order_key(wb_order_id=12, order_id="3"),
+    ]
+
+    assert [
+        order.wb_order_id for order in sorted(orders, key=picking_list_order_key)
+    ] == [8, 12, 100]
 
 
 async def _register_ff_admin(async_client: AsyncClient) -> tuple[dict[str, str], str]:
@@ -1391,6 +1464,16 @@ async def test_full_tape_expands_picking_groups_in_stable_order(
         ("prod-a", "M", 2),
     ]
 
+    workspace = await async_client.get(
+        f"/operations/fbs-supplies/{supply_id}/workspace", headers=headers
+    )
+    assert workspace.status_code == 200, workspace.text
+    workspace_order_ids = [
+        item["id"]
+        for item in sorted(workspace.json()["orders"], key=lambda item: item["tape_order_index"])
+    ]
+    assert workspace_order_ids == [str(order_id) for order_id in expected_order_ids]
+
     tape = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/order-print-tape",
         headers=headers,
@@ -1409,6 +1492,7 @@ async def test_full_tape_expands_picking_groups_in_stable_order(
     assert [order["order_id"] for order in tape_body["orders"]] == [
         str(order_id) for order_id in expected_order_ids
     ]
+    assert [order["order_id"] for order in tape_body["orders"]] == workspace_order_ids
     assert [order["wb_order_id"] for order in tape_body["orders"]] == [8, 12, 100]
 
     # Повторная полная печать должна воспроизводить порядок независимо от перестановки ID.
