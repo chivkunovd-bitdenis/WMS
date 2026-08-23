@@ -226,3 +226,5 @@
 08:16   08-storage · reviewer: находки, круг 3 — назад к разработке
 08:18   08-storage · splitter: готово
 08:22   08-storage · screen-dev: готово
+08:22   08-storage · dev: фича 1/3 сохранена fbf772984859
+08:25   08-storage · screen-dev: готово
