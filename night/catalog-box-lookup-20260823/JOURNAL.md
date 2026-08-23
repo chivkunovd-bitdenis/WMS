@@ -45,3 +45,8 @@
 07:46   01-catalog-box-lookup · dev: фича 3/4 сохранена dd78a35f627a
 07:49   01-catalog-box-lookup · screen-dev: готово
 07:49   01-catalog-box-lookup · dev: фича 4/4 сохранена c5d2a2021515
+07:55   01-catalog-box-lookup · reviewer: готово
+07:55   01-catalog-box-lookup · reviewer: находки не закрыты — повторный Terra-ремонт
+07:55   01-catalog-box-lookup · reviewer: находки, круг 3 — назад к разработке
+07:56   01-catalog-box-lookup · splitter: готово
+07:59   01-catalog-box-lookup · screen-dev: готово
