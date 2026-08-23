@@ -541,6 +541,8 @@ def браузерный_блокер(папка: Path, роль: str) -> bool:
     текст = файл.read_text(encoding="utf-8", errors="replace").lower()
     заблокировано = bool(re.search(
         r"screen[_\s-]*verdict:\s*`?blocked`?", текст,
+    )) or bool(re.search(
+        r"вердикт роли:\s*`?blocked`?", текст,
     )) or "итог: blocked" in текст or bool(re.search(r"^`?blocked`?\s*$", текст, re.M))
     нет_среды = any(причина in текст for причина in (
         "стенд не поднялся", "no browser is available", "браузер недоступен",

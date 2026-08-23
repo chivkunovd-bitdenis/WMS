@@ -708,8 +708,8 @@ def main() -> int:
                     n.снять_старую_браузерную_парковку(blocked_judge), True)
             (blocked_judge / "JUDGE.md").write_text(
                 "ВЕРДИКТ: НАХОДКИ 1\n\n## Находки\n"
-                "Стенд не поднялся, поэтому проверить физически невозможно и "
-                "снимок отсутствует.\n", encoding="utf-8")
+                "Вердикт роли: `BLOCKED`.\n\n"
+                "Стенд не поднялся, живой экран не был доступен.\n", encoding="utf-8")
             (blocked_judge / "OTLOZHENO.md").write_text(
                 "splitter не оставил ни одной читаемой фичи\n", encoding="utf-8")
             (blocked_judge / "CLICKS.md").write_text("старый прогон\n", encoding="utf-8")
