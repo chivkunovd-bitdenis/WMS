@@ -368,12 +368,26 @@ export function FfInboundBoxAddDialog({
     return next
   }
 
+  // Оператор должен видеть, что скан попал именно туда, куда он думает.
+  // Хотфикс 22.08 убрал эхо штрихкода в поле, а подсветка отсканированной строки
+  // в таблице на две-три сотни позиций почти всегда оказывается вне экрана —
+  // в итоге на складе скан перестал давать какой-либо видимый отклик.
   useBarcodeScanner({
     enabled: open && !readOnly,
     onScan: (code) => {
+      setScanBarcode(code)
       void enqueueScanIntoBox(code)
     },
   })
+
+  useEffect(() => {
+    if (!lastScannedProductId) {
+      return
+    }
+    document
+      .querySelector(`[data-testid="ff-inbound-box-add-line-row-${lastScannedProductId}"]`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [lastScannedProductId])
 
   return (
     <Dialog
