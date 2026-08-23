@@ -238,3 +238,8 @@
 06:56   04-warehouse-switch · dev: фича 1/2 сохранена 557ea2f5742e
 06:58   04-warehouse-switch · screen-dev: готово
 06:58   04-warehouse-switch · dev: фича 2/2 сохранена 9136dc952b23
+07:18   04-warehouse-switch · reviewer: нет файла REVIEW.md (код 124, попытка 1)
+07:23   04-warehouse-switch · reviewer: готово
+07:25   04-warehouse-switch · ui-critic: готово
+08:09   04-warehouse-switch · resume: поатомный rework Terra по сохранённым находкам
+08:11   04-warehouse-switch · screen-dev: готово

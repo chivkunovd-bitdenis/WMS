@@ -1,1 +1,1 @@
-ui-critic нашёл находки после 3 кругов правки и финальной эскалации
+исключение: Command '['docker', 'compose', '-p', 'wms-lane-1', '-f', '/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/docker-compose.yml', '-f', '/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-04-warehouse-switch/docker-compose.lane.yml', 'build']' timed out after 1500 seconds
