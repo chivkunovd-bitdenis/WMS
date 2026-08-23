@@ -46,7 +46,7 @@ async function createBox(
 async function scanCatalogPackage(page: Page, barcode: string): Promise<void> {
   const search = page.getByTestId('ff-catalog-inbound-packages-scan')
   if (!(await search.isVisible().catch(() => false))) {
-    await page.getByTestId('ff-catalog-inbound-packages-toggle').click()
+    await page.getByTestId('ff-catalog-tab-packages').click()
   }
   await search.fill(barcode)
   await Promise.all([
@@ -68,6 +68,7 @@ function packageByBarcode(page: Page, barcode: string): Locator {
 
 // TC-NEW-CATALOG-BOX-001: the printed box barcode opens the matching current contents.
 test('scan opens the received box and shows its current contents', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 })
   const seed = await seedFfSellerInbound(page, `catalog-package-${Date.now()}`)
   const { requestId, headers } = await createReceivingRequest(page, seed)
   const box = await createBox(page, requestId, headers)
@@ -86,24 +87,40 @@ test('scan opens the received box and shows its current contents', async ({ page
   await page.goto('/app/ff/products')
   await expect(page.getByTestId('ff-products-list')).toBeVisible()
   await expect(page.getByTestId('ff-products-list')).toContainText(seed.sku)
+  await expect(page.getByTestId('ff-catalog-tab-products')).toHaveAttribute('aria-selected', 'true')
+  await page.getByTestId('ff-catalog-tab-packages').click()
+  await expect(page.getByTestId('ff-catalog-products-panel')).toBeHidden()
+  await expect(page.getByTestId('ff-catalog-inbound-packages-scanner')).toBeVisible()
   await scanCatalogPackage(page, box.barcode)
 
   const packageItem = packageByBarcode(page, box.barcode)
   await expect(packageItem).toBeVisible()
   await expect(packageItem).toContainText('Короб № 1')
   await expect(packageItem).toContainText(seed.sku)
-  await expect(page.getByTestId('ff-products-list')).toContainText(seed.sku)
-  await expect(
-    packageItem.locator('[data-testid^="ff-catalog-inbound-composition-"] tbody tr').filter({
-      hasText: seed.sku,
-    }),
-  ).toContainText('1')
+  const composition = packageItem.locator('[data-testid^="ff-catalog-inbound-composition-"]')
+  await expect(composition.locator('thead')).toContainText('Название')
+  await expect(composition.locator('thead')).toContainText('Артикул продавца')
+  await expect(composition.locator('thead')).toContainText('SKU')
+  await expect(composition.locator('thead')).toContainText('ШК')
+  await expect(composition.locator('thead')).toContainText('Размер')
+  await expect(composition.locator('thead')).toContainText('Селлер')
+  await expect(composition.locator('thead')).toContainText('Документ прихода')
+  const productRow = composition.locator('tbody tr').filter({ hasText: seed.sku })
+  await expect(productRow).toContainText('Box Product')
+  await expect(productRow).toContainText('Box Seller')
+  await expect(productRow).toContainText('Приёмка')
+  await expect(productRow).toContainText('1')
 
   const evidencePath = process.env.CATALOG_BOX_EVIDENCE_PATH
   if (evidencePath) {
     await packageItem.scrollIntoViewIfNeeded()
     await page.screenshot({ path: evidencePath })
   }
+
+  await page.getByTestId('ff-catalog-tab-products').click()
+  await expect(page.getByTestId('ff-products-list')).toBeVisible()
+  await expect(page.getByTestId('ff-products-list')).toContainText(seed.sku)
+  await page.getByTestId('ff-catalog-tab-packages').click()
 
   await scanCatalogPackage(page, 'INB-UNKNOWN-CATALOG')
   await expect(page.getByTestId('ff-catalog-inbound-packages-lookup-error')).toHaveText(
@@ -137,7 +154,7 @@ test('a late failed scan cannot replace the next successful box', async ({ page 
   })
 
   await page.goto('/app/ff/products')
-  await page.getByTestId('ff-catalog-inbound-packages-toggle').click()
+  await page.getByTestId('ff-catalog-tab-packages').click()
   const search = page.getByTestId('ff-catalog-inbound-packages-scan')
   await search.fill(firstBox.barcode)
   const firstScan = search.press('Enter')

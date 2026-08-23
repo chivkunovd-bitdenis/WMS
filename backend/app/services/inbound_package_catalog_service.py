@@ -15,6 +15,7 @@ from app.models.inbound_intake import (
     InboundIntakeCargoPlace,
     InboundIntakeRequest,
 )
+from app.models.product import Product
 from app.models.warehouse import Warehouse
 
 PackageKind = Literal["box", "cargo_place"]
@@ -24,6 +25,22 @@ PackageKind = Literal["box", "cargo_place"]
 class InboundPackageCatalogLine:
     product_id: uuid.UUID
     remaining_qty: int
+    name: str
+    sku_code: str
+    wb_vendor_code: str | None
+    wb_barcode: str | None
+    wb_size: str | None
+    seller_name: str | None
+
+
+@dataclass(frozen=True)
+class PackageSourceDocument:
+    """Stable UI contract; each future stock-source type supplies its own adapter."""
+
+    kind: str
+    id: uuid.UUID
+    number: str | None
+    date: datetime
 
 
 @dataclass(frozen=True)
@@ -41,6 +58,7 @@ class InboundPackageCatalogItem:
     remaining_qty: int | None
     lines: tuple[InboundPackageCatalogLine, ...]
     request_created_at: datetime
+    source_document: PackageSourceDocument
 
 
 def _box_line_remaining_qty(line: InboundIntakeBoxLine) -> int:
@@ -51,6 +69,29 @@ def _request_display_number(request: InboundIntakeRequest) -> str | None:
     return request.display_number or request.document_number
 
 
+def _inbound_source_document(request: InboundIntakeRequest) -> PackageSourceDocument:
+    return PackageSourceDocument(
+        kind="inbound_intake",
+        id=request.id,
+        number=_request_display_number(request),
+        date=request.created_at,
+    )
+
+
+def _box_catalog_line(line: InboundIntakeBoxLine, remaining_qty: int) -> InboundPackageCatalogLine:
+    product = line.product
+    return InboundPackageCatalogLine(
+        product_id=line.product_id,
+        remaining_qty=remaining_qty,
+        name=product.name,
+        sku_code=product.sku_code,
+        wb_vendor_code=product.wb_vendor_code,
+        wb_barcode=product.wb_barcode,
+        wb_size=product.wb_size,
+        seller_name=product.seller.name if product.seller is not None else None,
+    )
+
+
 def _box_item(
     box: InboundIntakeBox,
     request: InboundIntakeRequest,
@@ -58,7 +99,7 @@ def _box_item(
     warehouse_name: str | None,
 ) -> InboundPackageCatalogItem:
     lines = tuple(
-        InboundPackageCatalogLine(product_id=line.product_id, remaining_qty=remaining)
+        _box_catalog_line(line, remaining)
         for line in box.lines
         if (remaining := _box_line_remaining_qty(line)) > 0
     )
@@ -78,6 +119,7 @@ def _box_item(
         remaining_qty=sum(line.remaining_qty for line in lines),
         lines=lines,
         request_created_at=request.created_at,
+        source_document=_inbound_source_document(request),
     )
 
 
@@ -101,6 +143,7 @@ def _cargo_place_item(
         remaining_qty=None,
         lines=(),
         request_created_at=request.created_at,
+        source_document=_inbound_source_document(request),
     )
 
 
@@ -138,7 +181,9 @@ async def _load_tenant_packages(
             ),
         )
         .options(
-            selectinload(InboundIntakeBox.lines),
+            selectinload(InboundIntakeBox.lines)
+            .selectinload(InboundIntakeBoxLine.product)
+            .selectinload(Product.seller),
             selectinload(InboundIntakeBox.request),
         )
     )
@@ -224,7 +269,12 @@ async def lookup_package_by_barcode(
             InboundIntakeBox.tenant_id == tenant_id,
             InboundIntakeBox.internal_barcode == normalized,
         )
-        .options(selectinload(InboundIntakeBox.lines), selectinload(InboundIntakeBox.request))
+        .options(
+            selectinload(InboundIntakeBox.lines)
+            .selectinload(InboundIntakeBoxLine.product)
+            .selectinload(Product.seller),
+            selectinload(InboundIntakeBox.request),
+        )
     )
     box = box_result.scalar_one_or_none()
     if box is not None and box.request is not None:

@@ -22,12 +22,14 @@ import {
   Paper,
   Select,
   Stack,
+  Tab,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
+  Tabs,
   TextField,
   Tooltip,
   Typography,
@@ -214,6 +216,7 @@ export function FfProductsCatalogScreen({
   const [filterSearch, setFilterSearch] = useState('')
   const [filterSellerId, setFilterSellerId] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
+  const [catalogView, setCatalogView] = useState<'products' | 'packages'>('products')
 
   // ── FBS-пул: направления остатка (перенесено из SellerProductsStockScreen) ──
   const [directionProductId, setDirectionProductId] = useState<string | null>(null)
@@ -653,8 +656,23 @@ export function FfProductsCatalogScreen({
           Каталог
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Карточки товаров селлеров: название, артикулы, ШК, размер, ТЗ упаковки и остаток на ФФ.
+          {catalogView === 'products'
+            ? 'Карточки товаров селлеров: название, артикулы, ШК, размер, ТЗ упаковки и остаток на ФФ.'
+            : 'Сканируйте короб или грузоместо и проверяйте его состав и документ прихода.'}
         </Typography>
+
+        <Tabs
+          value={catalogView}
+          onChange={(_, value: 'products' | 'packages') => setCatalogView(value)}
+          aria-label="Разделы каталога"
+          data-testid="ff-catalog-tabs"
+          sx={{ mb: 2, borderBottom: '1px solid', borderColor: 'divider' }}
+        >
+          <Tab value="products" label="Товары" data-testid="ff-catalog-tab-products" />
+          <Tab value="packages" label="Короба и грузоместа" data-testid="ff-catalog-tab-packages" />
+        </Tabs>
+
+        <Box hidden={catalogView !== 'products'} data-testid="ff-catalog-products-panel">
 
         {error ? (
           <Alert severity="error" sx={{ mb: 2 }} data-testid="ff-products-error">
@@ -1056,11 +1074,15 @@ export function FfProductsCatalogScreen({
           </Table>
         </TableContainer>
 
-        <FfCatalogInboundPackages
-          token={token}
-          authHeaders={authHeaders}
-          products={catalog}
-        />
+        </Box>
+
+        {catalogView === 'packages' ? (
+          <FfCatalogInboundPackages
+            token={token}
+            authHeaders={authHeaders}
+            products={catalog}
+          />
+        ) : null}
 
         {canManageCatalog ? (
           <>
