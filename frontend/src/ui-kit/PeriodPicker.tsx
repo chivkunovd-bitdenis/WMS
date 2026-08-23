@@ -29,17 +29,19 @@ export function PeriodPicker({
       type="month"
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      inputProps={{
-        min,
-        max,
-        'data-testid': testId,
-        'aria-invalid': Boolean(error),
-        'aria-describedby': helperTextId,
+      slotProps={{
+        htmlInput: {
+          min,
+          max,
+          'data-testid': testId,
+          'aria-invalid': Boolean(error),
+          'aria-describedby': helperTextId,
+        },
+        formHelperText: { id: helperTextId },
       }}
       disabled={disabled}
       error={Boolean(error)}
       helperText={error}
-      FormHelperTextProps={{ id: helperTextId }}
       size="small"
     />
   )

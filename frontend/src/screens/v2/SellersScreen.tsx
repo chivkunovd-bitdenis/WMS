@@ -299,9 +299,9 @@ export function SellersScreen({
                 {profileError ? <ErrorNotice testId="seller-profile-error">{profileError}</ErrorNotice> : null}
                 {profileSuccess ? <Typography color="success.main" sx={{ mb: 2 }} data-testid="seller-profile-success">Реквизиты сохранены</Typography> : null}
                 <Stack spacing={2}>
-                  <TextField name="legal_name" label="Юридическое наименование" required defaultValue={profiles[selectedSeller.id]?.legal_name ?? ''} fullWidth size="small" disabled={profileLoading} inputProps={{ 'data-testid': 'seller-legal-name' }} />
-                  <TextField name="inn" label="ИНН" required defaultValue={profiles[selectedSeller.id]?.inn ?? ''} fullWidth size="small" disabled={profileLoading} inputProps={{ 'data-testid': 'seller-inn' }} />
-                  <TextField name="kpp" label="КПП" defaultValue={profiles[selectedSeller.id]?.kpp ?? ''} fullWidth size="small" disabled={profileLoading} inputProps={{ 'data-testid': 'seller-kpp' }} />
+                  <TextField name="legal_name" label="Юридическое наименование" required defaultValue={profiles[selectedSeller.id]?.legal_name ?? ''} fullWidth size="small" disabled={profileLoading} slotProps={{ htmlInput: { 'data-testid': 'seller-legal-name' } }} />
+                  <TextField name="inn" label="ИНН" required defaultValue={profiles[selectedSeller.id]?.inn ?? ''} fullWidth size="small" disabled={profileLoading} slotProps={{ htmlInput: { 'data-testid': 'seller-inn' } }} />
+                  <TextField name="kpp" label="КПП" defaultValue={profiles[selectedSeller.id]?.kpp ?? ''} fullWidth size="small" disabled={profileLoading} slotProps={{ htmlInput: { 'data-testid': 'seller-kpp' } }} />
                   <PrimaryAction type="submit" disabled={profileBusy || profileLoading} data-testid="seller-profile-save">
                     {profileLoading ? 'Загрузка…' : profileBusy ? 'Сохранение…' : 'Сохранить реквизиты'}
                   </PrimaryAction>

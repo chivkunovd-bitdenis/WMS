@@ -163,3 +163,9 @@
 06:24   09-billing · dev: фича 5/6 сохранена 5cf1d00355de
 06:28   09-billing · screen-dev: готово
 06:28   09-billing · dev: фича 6/6 сохранена f6e67b3d780f
+06:43   09-billing · reviewer: готово
+06:43 09-billing: отложено — reviewer, эскалация не помогла
+06:51   09-billing · repair-plan: новый вердикт дорезается до dev
+06:55   09-billing · splitter: готово
+06:55   09-billing · resume: поатомный rework Terra по сохранённым находкам
+06:59   09-billing · screen-dev: готово
