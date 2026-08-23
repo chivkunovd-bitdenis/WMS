@@ -27,7 +27,9 @@ class Warehouse(Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     code: Mapped[str] = mapped_column(String(64), nullable=False)
-    is_operational: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_operational: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
     barcode: Mapped[str] = mapped_column(
         String(64),
         nullable=False,

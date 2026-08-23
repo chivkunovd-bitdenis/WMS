@@ -3,15 +3,18 @@ from __future__ import annotations
 import io
 import uuid
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.box_import_api_shared import read_xlsx_upload
 from app.api.deps import (
+    assert_inventory_read_access,
     assert_product_catalog_read_access,
     assert_seller_permission,
     get_current_user,
@@ -35,8 +38,11 @@ from app.services.catalog_service import (
     bulk_update_products_requires_honest_sign,
     create_product,
     get_product,
+    list_product_dimension_events,
     list_products,
+    restore_latest_wb_dimensions,
     update_packaging_instructions,
+    update_product_container_volume,
     update_product_dimensions,
     update_product_fbs_stock_sync,
     volume_liters_from_mm,
@@ -56,6 +62,7 @@ from app.services.seller_wb_catalog_service import (
     list_seller_wb_catalog_rows,
 )
 from app.services.staff_permissions_service import (
+    PERM_INVENTORY,
     PERM_RECEPTION,
     PERM_SHIFT_LEAD,
     get_staff_permissions,
@@ -162,6 +169,9 @@ class ProductOut(BaseModel):
     requires_honest_sign: bool = False
     is_manual: bool = False
     volume_liters: float | None = None
+    dimensions_source: str | None = None
+    dimensions_updated_at: datetime | None = None
+    dimensions_updated_by_user_id: str | None = None
 
 
 class ProductTzRowPreviewOut(BaseModel):
@@ -226,6 +236,51 @@ class ProductDimensionsPatch(BaseModel):
     width_mm: int | None = Field(default=None, ge=1, le=10_000_000)
     height_mm: int | None = Field(default=None, ge=1, le=10_000_000)
     weight_g: int | None = Field(default=None, ge=1, le=1_000_000_000)
+
+
+class ProductContainerDimensions(BaseModel):
+    volume_liters: float = Field(gt=0, le=1_000_000)
+    container_basis: str = Field(min_length=1, max_length=2000)
+
+
+class ProductDimensionEventOut(BaseModel):
+    id: str
+    source: str
+    created_at: datetime
+    author_name: str | None
+    length_mm: int | None
+    width_mm: int | None
+    height_mm: int | None
+    weight_g: int | None
+    volume_liters: float | None
+    container_basis: str | None
+    is_current: bool
+
+
+def _dimension_event_out(
+    event: object,
+    *,
+    author_name: str | None,
+) -> ProductDimensionEventOut:
+    from app.models.product_dimension_event import ProductDimensionEvent
+
+    assert isinstance(event, ProductDimensionEvent)
+    return ProductDimensionEventOut(
+        id=str(event.id),
+        source={"wb": "wildberries", "container_override": "container"}.get(
+            event.source,
+            event.source,
+        ),
+        created_at=event.observed_at,
+        author_name=author_name,
+        length_mm=event.length_mm,
+        width_mm=event.width_mm,
+        height_mm=event.height_mm,
+        weight_g=event.weight_g,
+        volume_liters=float(event.volume_liters) if event.volume_liters is not None else None,
+        container_basis=event.container_basis,
+        is_current=event.applied,
+    )
 
 
 class ProductHonestSignBulkPatch(BaseModel):
@@ -313,6 +368,13 @@ def _product_out(p: object) -> ProductOut:
             p.volume_liters
             if p.volume_liters is not None
             else volume_liters_from_mm(p.length_mm, p.width_mm, p.height_mm)
+        ),
+        dimensions_source=p.dimensions_source,
+        dimensions_updated_at=p.dimensions_updated_at,
+        dimensions_updated_by_user_id=(
+            str(p.dimensions_updated_by_user_id)
+            if p.dimensions_updated_by_user_id is not None
+            else None
         ),
     )
 
@@ -714,7 +776,11 @@ async def patch_product_dimensions(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     elif user.role == FULFILLMENT_STAFF:
         perms = await get_staff_permissions(session, user)
-        if not (perms.has(PERM_RECEPTION) or perms.has(PERM_SHIFT_LEAD)):
+        if not (
+            perms.has(PERM_RECEPTION)
+            or perms.has(PERM_SHIFT_LEAD)
+            or perms.has(PERM_INVENTORY)
+        ):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     elif user.role != FULFILLMENT_ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
@@ -733,6 +799,7 @@ async def patch_product_dimensions(
             height_mm=patch_fields.get("height_mm") if touched_dimensions else p.height_mm,
             weight_g=patch_fields.get("weight_g"),
             weight_g_set="weight_g" in patch_fields,
+            author_user_id=user.id,
         )
     except CatalogError as exc:
         if exc.code in ("invalid_dimensions", "invalid_weight"):
@@ -746,6 +813,97 @@ async def patch_product_dimensions(
                 detail="product_not_found",
             ) from None
         raise
+    return _product_out(updated)
+
+
+@router.get("/{product_id}/dimensions/history", response_model=list[ProductDimensionEventOut])
+async def get_product_dimension_history(
+    product_id: uuid.UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[ProductDimensionEventOut]:
+    await assert_inventory_read_access(session, user)
+    try:
+        product = await get_product(session, user.tenant_id, product_id)
+        if product is None:
+            raise CatalogError("product_not_found")
+        seller_scope: uuid.UUID | None = None
+        if user.role == FULFILLMENT_SELLER:
+            seller_scope = user.seller_id
+            if seller_scope is None or product.seller_id != seller_scope:
+                raise CatalogError("product_not_found")
+        events = await list_product_dimension_events(
+            session,
+            user.tenant_id,
+            product_id,
+            seller_id=seller_scope,
+        )
+    except CatalogError as exc:
+        raise HTTPException(status_code=404, detail=exc.code) from None
+    author_ids = {event.author_user_id for event in events if event.author_user_id is not None}
+    author_names: dict[uuid.UUID, str] = {}
+    if author_ids:
+        result = await session.execute(
+            select(User.id, User.email).where(
+                User.tenant_id == user.tenant_id,
+                User.id.in_(author_ids),
+            )
+        )
+        author_names = {
+            author_id: author_email
+            for author_id, author_email in result.tuples()
+        }
+    return [
+        _dimension_event_out(
+            event,
+            author_name=(
+                author_names.get(event.author_user_id)
+                if event.author_user_id is not None
+                else None
+            ),
+        )
+        for event in events
+    ]
+
+
+@router.post("/{product_id}/dimensions/container", response_model=ProductOut)
+async def post_product_container_dimensions(
+    product_id: uuid.UUID,
+    body: ProductContainerDimensions,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ProductOut:
+    if user.role != FULFILLMENT_ADMIN:
+        await assert_inventory_read_access(session, user)
+        if user.role != FULFILLMENT_STAFF:
+            raise HTTPException(status_code=403, detail="forbidden")
+        perms = await get_staff_permissions(session, user)
+        if not perms.has(PERM_INVENTORY):
+            raise HTTPException(status_code=403, detail="forbidden")
+    try:
+        product = await update_product_container_volume(
+            session, user.tenant_id, product_id,
+            volume_liters=body.volume_liters,
+            container_basis=body.container_basis,
+            author_user_id=user.id,
+        )
+    except CatalogError as exc:
+        code = 404 if exc.code == "product_not_found" else 422
+        raise HTTPException(status_code=code, detail=exc.code) from None
+    return _product_out(product)
+
+
+@router.post("/{product_id}/dimensions/restore-wb", response_model=ProductOut)
+async def restore_product_wb_dimensions(
+    product_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ProductOut:
+    try:
+        updated = await restore_latest_wb_dimensions(session, user.tenant_id, product_id)
+    except CatalogError as exc:
+        code = 404 if exc.code in ("product_not_found", "wb_dimensions_not_found") else 422
+        raise HTTPException(status_code=code, detail=exc.code) from None
     return _product_out(updated)
 
 

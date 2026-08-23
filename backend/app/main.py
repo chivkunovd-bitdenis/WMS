@@ -34,6 +34,7 @@ from app.api.seller_staff_accounts import router as seller_staff_accounts_router
 from app.api.sellers import router as sellers_router
 from app.api.staff_accounts import router as staff_accounts_router
 from app.api.stock_transfer import router as stock_transfer_router
+from app.api.storage import router as storage_router
 from app.api.tenant_settings import router as tenant_settings_router
 from app.api.warehouses import router as warehouses_router
 from app.api.wb_mp_warehouses import router as wb_mp_warehouses_router
@@ -120,6 +121,7 @@ def create_app() -> FastAPI:
     app.include_router(wb_mp_warehouses_router)
     app.include_router(discrepancy_acts_router)
     app.include_router(background_jobs_router)
+    app.include_router(storage_router)
     app.include_router(fbs_orders_router)
     app.include_router(fbs_marking_router)
     app.include_router(fbs_kiz_router)

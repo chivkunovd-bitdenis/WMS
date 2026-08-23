@@ -1,0 +1,35 @@
+{
+  "screen": "S-11",
+  "checked_at": "2026-08-23",
+  "browser": "Chromium (Codex in-app browser)",
+  "viewport": {
+    "width": 1280,
+    "document_scroll_width": 1280
+  },
+  "page": {
+    "ok": true,
+    "violations": [],
+    "storage_sku_table": {
+      "client_width": 934,
+      "scroll_width": 934
+    }
+  },
+  "history_dialog": {
+    "ok": true,
+    "violations": [],
+    "table_client_width": 850,
+    "table_scroll_width": 850
+  },
+  "print_preview": {
+    "ok": true,
+    "violations": [],
+    "table_client_width": 850,
+    "table_scroll_width": 850,
+    "financial_columns_visible": ["Ставка, ₽/л·день", "Сумма, ₽"]
+  },
+  "print_media_playwright": {
+    "viewport": "794x1123",
+    "media": "print",
+    "result": "passed"
+  }
+}

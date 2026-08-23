@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -8,7 +9,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.product import Product
-from app.services.catalog_service import DEFAULT_PRODUCT_DIM_MM
+from app.models.product_dimension_event import ProductDimensionEvent
+from app.services.catalog_service import (
+    DEFAULT_PRODUCT_DIM_MM,
+    _dimension_fingerprint,
+    _record_dimension_event,
+    volume_liters_from_mm,
+)
 from app.services.wb_card_enrichment import (
     WbSizeVariant,
     country_of_origin_from_card,
@@ -111,7 +118,7 @@ def _parse_title(card: dict[str, Any]) -> str | None:
     return None
 
 
-def _parse_dimensions_mm(item: dict) -> tuple[int | None, int | None, int | None]:
+def _parse_dimensions_mm(item: dict[str, Any]) -> tuple[int | None, int | None, int | None]:
     """Габариты из карточки WB. WB отдаёт сантиметры, храним миллиметры.
 
     Возвращает (length_mm, width_mm, height_mm); None там, где WB не дал значения.
@@ -126,7 +133,7 @@ def _parse_dimensions_mm(item: dict) -> tuple[int | None, int | None, int | None
             return None
         if value <= 0:
             return None
-        return int(round(value * 10))
+        return round(value * 10)
 
     return (one("length"), one("width"), one("height"))
 
@@ -256,6 +263,35 @@ async def upsert_products_from_wb_cards(
                     p = p2
                 else:
                     created += 1
+                    if (
+                        card_length_mm is not None
+                        and card_width_mm is not None
+                        and card_height_mm is not None
+                    ):
+                        p.volume_liters = volume_liters_from_mm(
+                            card_length_mm, card_width_mm, card_height_mm
+                        )
+                        p.dimensions_source = "wb"
+                        p.dimensions_updated_at = datetime.now(UTC)
+                        p.dimensions_updated_by_user_id = None
+                        await _record_dimension_event(
+                            session,
+                            p,
+                            source="wb",
+                            author_user_id=None,
+                            length_mm=card_length_mm,
+                            width_mm=card_width_mm,
+                            height_mm=card_height_mm,
+                            weight_g=p.weight_g,
+                            volume_liters=p.volume_liters,
+                            container_basis=None,
+                            fingerprint=_dimension_fingerprint(
+                                card_length_mm, card_width_mm, card_height_mm,
+                                p.weight_g, p.volume_liters, "wb", None,
+                            ),
+                            apply=True,
+                        )
+                        await session.commit()
                     continue
 
             if p.seller_id is not None and p.seller_id != seller_id:
@@ -287,6 +323,38 @@ async def upsert_products_from_wb_cards(
                 p.width_mm = card_width_mm
             if (p.height_mm is None or dims_are_stub) and card_height_mm is not None:
                 p.height_mm = card_height_mm
+            if (
+                card_length_mm is not None
+                and card_width_mm is not None
+                and card_height_mm is not None
+            ):
+                wb_volume_liters = volume_liters_from_mm(
+                    card_length_mm, card_width_mm, card_height_mm
+                )
+                active_event = await session.scalar(
+                    select(ProductDimensionEvent).where(
+                        ProductDimensionEvent.product_id == p.id,
+                        ProductDimensionEvent.applied.is_(True),
+                    )
+                )
+                protected_manual_measurement = active_event is not None and active_event.source in {
+                    "manual", "container_override", "container"
+                }
+                await _record_dimension_event(
+                    session, p, source="wb", author_user_id=None,
+                    length_mm=card_length_mm, width_mm=card_width_mm, height_mm=card_height_mm,
+                    weight_g=p.weight_g, volume_liters=wb_volume_liters, container_basis=None,
+                    fingerprint=_dimension_fingerprint(
+                        card_length_mm, card_width_mm, card_height_mm,
+                        p.weight_g, wb_volume_liters, "wb", None,
+                    ),
+                    apply=not protected_manual_measurement,
+                )
+                if not protected_manual_measurement:
+                    p.volume_liters = wb_volume_liters
+                    p.dimensions_source = "wb"
+                    p.dimensions_updated_at = datetime.now(UTC)
+                    p.dimensions_updated_by_user_id = None
             # Same rule for country of origin / shelf life: WB card fills the gap,
             # never overwrites a value already present (e.g. entered by hand).
             if p.wb_country_of_origin is None and card_country is not None:

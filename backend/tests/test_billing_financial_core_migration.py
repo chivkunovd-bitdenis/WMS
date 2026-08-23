@@ -21,15 +21,17 @@ def _script_directory() -> ScriptDirectory:
 def test_billing_financial_core_is_in_the_single_alembic_lineage() -> None:
     script = _script_directory()
 
-    assert script.get_heads() == ["20260822_09c"]
+    assert script.get_heads() == ["20260823_0100"]
 
     billing_core = script.get_revision("20260822_09a")
     billing_invoices = script.get_revision("20260822_09b")
     billing_activation = script.get_revision("20260822_09c")
+    storage_merge = script.get_revision("20260823_0097")
 
     assert billing_core.down_revision == "20260823_0095"
     assert billing_invoices.down_revision == billing_core.revision
     assert billing_activation.down_revision == billing_invoices.revision
+    assert set(storage_merge.down_revision) == {"20260822_09c", "20260823_0096"}
 
 
 def test_billing_financial_core_migration_creates_only_shared_billing_tables(

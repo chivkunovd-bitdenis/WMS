@@ -30,6 +30,7 @@ async def _create_ff_staff_headers(
     suffix: str,
     *,
     reception: bool = False,
+    inventory: bool = False,
     shift_lead: bool = False,
 ) -> dict[str, str]:
     staff_email = f"catalog-staff-{suffix}@example.com"
@@ -47,7 +48,7 @@ async def _create_ff_staff_headers(
             "mp_shipments": False,
             "reception": reception,
             "cells": False,
-            "inventory": False,
+            "inventory": inventory,
             "packaging": False,
             "shift_lead": shift_lead,
         },
@@ -174,7 +175,7 @@ async def test_catalog_flow(async_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_reception_and_shift_lead_staff_can_update_product_dimensions(
+async def test_reception_shift_lead_and_inventory_staff_can_update_product_dimensions(
     async_client: AsyncClient,
 ) -> None:
     suffix = str(time.time_ns())
@@ -222,6 +223,20 @@ async def test_reception_and_shift_lead_staff_can_update_product_dimensions(
     assert shift_lead_update.status_code == 200, shift_lead_update.text
     assert shift_lead_update.json()["volume_liters"] == pytest.approx(8.0)
 
+    inventory_headers = await _create_ff_staff_headers(
+        async_client,
+        admin_headers,
+        f"{suffix}-inventory",
+        inventory=True,
+    )
+    inventory_update = await async_client.patch(
+        f"/products/{product_id}/dimensions",
+        headers=inventory_headers,
+        json={"length_mm": 200, "width_mm": 200, "height_mm": 200},
+    )
+    assert inventory_update.status_code == 200, inventory_update.text
+    assert inventory_update.json()["volume_liters"] == pytest.approx(8.0)
+
 
 @pytest.mark.asyncio
 async def test_staff_product_dimensions_validation_rejects_zero_and_partial_body(
@@ -230,23 +245,23 @@ async def test_staff_product_dimensions_validation_rejects_zero_and_partial_body
     suffix = str(time.time_ns())
     admin_headers = await _register_catalog_admin(async_client, suffix)
     product_id = await _create_catalog_product(async_client, admin_headers, suffix)
-    reception_headers = await _create_ff_staff_headers(
+    inventory_headers = await _create_ff_staff_headers(
         async_client,
         admin_headers,
-        f"{suffix}-reception",
-        reception=True,
+        f"{suffix}-inventory",
+        inventory=True,
     )
 
     zero = await async_client.patch(
         f"/products/{product_id}/dimensions",
-        headers=reception_headers,
+        headers=inventory_headers,
         json={"length_mm": 0, "width_mm": 100, "height_mm": 100},
     )
     assert zero.status_code == 422
 
     partial = await async_client.patch(
         f"/products/{product_id}/dimensions",
-        headers=reception_headers,
+        headers=inventory_headers,
         json={"length_mm": 100, "width_mm": 100},
     )
     assert partial.status_code == 422

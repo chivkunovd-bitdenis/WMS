@@ -56,6 +56,7 @@ from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentR
 from app.models.packaging_task import PackagingTask, PackagingTaskEvent, PackagingTaskLine
 from app.models.print_template import PrintTemplate
 from app.models.product import Product
+from app.models.product_dimension_event import ProductDimensionEvent
 from app.models.product_tz_import import ProductTzImport
 from app.models.seller import Seller
 from app.models.seller_marking_credentials import SellerMarkingCredentials
@@ -66,6 +67,8 @@ from app.models.seller_wildberries_imported_card import SellerWildberriesImporte
 from app.models.seller_wildberries_imported_supply import SellerWildberriesImportedSupply
 from app.models.stock_direction import StockDirection, StockMonthlySnapshot
 from app.models.storage_location import StorageLocation
+from app.models.storage_measurement import StorageMeasurement
+from app.models.storage_statement import StorageStatement
 from app.models.tenant import Tenant
 from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
 from app.models.user import User
@@ -96,6 +99,7 @@ __all__ = [
     "FbsPackingBoxItem",
     "FbsPrintAsset",
     "FbsShipmentReversalLedger",
+    "FbsStockPoolDebit",
     "FbsStockSyncItem",
     "FbsSupply",
     "FbsTrbx",
@@ -130,6 +134,7 @@ __all__ = [
     "PackagingTaskLine",
     "PrintTemplate",
     "Product",
+    "ProductDimensionEvent",
     "ProductTzImport",
     "Seller",
     "SellerMarkingCredentials",
@@ -141,6 +146,8 @@ __all__ = [
     "StockDirection",
     "StockMonthlySnapshot",
     "StorageLocation",
+    "StorageMeasurement",
+    "StorageStatement",
     "Tenant",
     "TenantWbMpWarehouse",
     "User",
