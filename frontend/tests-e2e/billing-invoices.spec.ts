@@ -1,22 +1,58 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 
 const invoice = { id: 'invoice-1', number: 'СЧ-2026-00041', period: '2026-07', seller_name: 'Луна', issued_at: '2026-08-01T00:00:00Z', total_amount: 48392, status: 'issued', ff_profile: { legal_name: 'ООО «Фулфилмент Волна»', inn: '7701234567' }, seller_profile: { legal_name: 'ООО «Луна Трейд»', inn: '7812345678' }, lines: [{ id: 'line-1', service_code: 'inbound', unit: 'item', quantity: 1245, rate: 12, amount: 14940, documents: [{ date: '2026-07-20', number: 'ПР-000141', quantity: 84, amount: 1008 }] }, { id: 'line-storage', service_code: 'storage_liter_day', unit: 'liter_day', quantity: 181900, rate: 0.08, amount: 14552, documents: [{ date: '2026-07-31', number: 'technical-storage-uuid', quantity: 181900, amount: 14552 }] }] }
 
-// S-31-TC-013 — Given invoice formation is blocked, When the invoices endpoint returns its run issue, Then the admin sees the cause and its corrective action.
-test('billing invoices show server-side formation issues separate from invoices', async ({ page }) => {
+async function authenticateBillingAdmin(page: Page) {
+  await page.addInitScript(() => localStorage.setItem('wms_token_ff', 'e2e-billing-admin'))
+  await page.route('**/api/auth/me', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ email: 'billing-admin@example.test', organization_name: 'ФФ Волна', role: 'fulfillment_admin' }),
+  }))
+  await page.route('**/api/sellers', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify([{ id: 'seller-1', name: 'Луна' }]),
+  }))
+}
+
+// S-31-TC-013 — Given the seller billing profile blocks formation, When the admin opens the corrective action, Then it points to that seller rather than FF settings.
+test('billing invoice seller-profile issue opens the affected seller', async ({ page }) => {
+  await authenticateBillingAdmin(page)
   await page.route('**/api/billing/invoices?**', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify({
       invoices: [],
-      issues: [{ id: 'issue-1', seller_id: 'seller-1', seller_name: 'Луна', period: '2026-07', reason: 'missing_profile', message: 'Заполните реквизиты' }],
+      issues: [{ id: 'seller-profile-issue', seller_id: 'seller-1', seller_name: 'Луна', period: '2026-07', reason: 'missing_seller_profile', message: 'Заполните реквизиты селлера' }],
     }),
   }))
   await page.goto('/app/ff/billing')
   await page.getByTestId('billing-tab-invoices').click()
   await expect(page.getByTestId('billing-invoice-issues')).toContainText('Луна')
   await expect(page.getByTestId('billing-invoice-issues')).toContainText('Нет реквизитов')
-  await expect(page.getByRole('button', { name: 'Открыть селлера' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Открыть настройки' })).toHaveCount(0)
+  await page.getByTestId('billing-invoice-issue-action-seller-profile-issue').click()
+  await expect(page).toHaveURL(/\/app\/ff\/sellers\?seller_id=seller-1$/)
+})
+
+// S-31-TC-013 — Given FF billing requisites block formation, When the admin opens the corrective action, Then it points to FF settings rather than a seller.
+test('billing invoice FF-profile issue opens FF settings', async ({ page }) => {
+  await authenticateBillingAdmin(page)
+  await page.route('**/api/billing/invoices?**', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      invoices: [],
+      issues: [{ id: 'ff-profile-issue', seller_id: 'seller-1', seller_name: 'Луна', period: '2026-07', reason: 'missing_ff_profile', message: 'Заполните реквизиты ФФ' }],
+    }),
+  }))
+  await page.goto('/app/ff/billing')
+  await page.getByTestId('billing-tab-invoices').click()
+  await expect(page.getByTestId('billing-invoice-issues')).toContainText('Луна')
+  await expect(page.getByRole('button', { name: 'Открыть селлера' })).toHaveCount(0)
+  await page.getByTestId('billing-invoice-issue-action-ff-profile-issue').click()
+  await expect(page).toHaveURL(/\/app\/ff\/settings$/)
 })
 
 // S-31-TC-006 — Given the seller's blocking causes are resolved, When the admin retries formation,
