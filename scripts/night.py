@@ -570,12 +570,13 @@ def браузерная_парковка(папка: Path) -> bool:
 def снять_старую_браузерную_парковку(папка: Path) -> bool:
     """Старый BLOCKED требует нового clicker, а не code rework."""
     парковка = папка / "OTLOZHENO.md"
-    if not парковка.exists():
+    блокер_судьи = браузерный_блокер(папка, "ux-judge")
+    if not парковка.exists() and not блокер_судьи:
         return False
     причина_в_парковке = браузерная_парковка(папка)
     # Старый runner мог затем перезаписать OTLOZHENO ошибкой splitter/dev. Сам JUDGE
     # остаётся точнее парковки: если экран вообще не открывался, код чинить нельзя.
-    if not причина_в_парковке and not браузерный_блокер(папка, "ux-judge"):
+    if not причина_в_парковке and not блокер_судьи:
         return False
     (папка / "CLICKS.md").unlink(missing_ok=True)
     (папка / "JUDGE.md").unlink(missing_ok=True)
