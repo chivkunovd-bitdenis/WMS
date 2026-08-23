@@ -1,10 +1,10 @@
-# Backend-dev · 07-reporting · атом 1 · rework
+# Backend-dev · 07-reporting · атом 2 · rework
 
 ## Что реализовано
 
-- Эндпоинты: новых и изменённых эндпоинтов нет.
-- Сервисы: новых и изменённых сервисов нет.
-- Тестовый writer движений: `_insert_movement` принимает обязательный фактический `warehouse_id`, сохраняет его в `InventoryMovement`, а сценарий передаёт `wid1` для движений ячеек `A1`/`A2` и `wid2` для движения ячейки `B1`.
+- Эндпоинты: новых и изменённых эндпоинтов нет; существующий `GET /reports/inventory/export.csv` сохраняет контракт маршрута и параметров.
+- Сервис `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/app/services/reporting_service.py`: таблица и CSV используют одну проверку целостности transfer-пары; в CSV неполная операция получает явную пометку `(Ошибка)`, отсутствующая сторона выводится тире, а фактически записанная сторона и нетто сохраняются без достраивания.
+- Сервис `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/app/services/reporting_service.py`: полная transfer-пара, обычные операции, сортировка и порядок строк продолжают выгружаться прежними значениями.
 
 ## Миграции
 
@@ -12,27 +12,31 @@
 
 ## Тесты
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/tests/test_inventory_movements_report.py` — существующий сценарий `test_inventory_movements_summary_groups_and_period_filter` теперь создаёт все движения с обязательным складом, проходит без `NOT NULL constraint failed: inventory_movements.warehouse_id` и сохраняет проверку фильтра `warehouse_id=wid1`, исключающего движение склада `wid2`.
-- В том же файле уточнена типизация helper `_group` и удалены две неиспользуемые директивы `noqa`, чтобы адресные `ruff` и `mypy` были зелёными.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/tests/test_reports_csv_export.py`: добавлен `test_inventory_csv_marks_incomplete_transfer_like_visible_table` (`S-33-TC-013`) — единственный `stock_transfer_out = 3` в выбранном складе имеет `integrity_error=true` в таблице, а CSV содержит `Перемещение: ушло (Ошибка),—,3,-3` и не содержит обычную строку `Перемещение: ушло,0,3,-3`.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/tests/test_reports_csv_export.py`: добавлен `test_inventory_csv_keeps_complete_transfer_values_unchanged` (`S-33-TC-004`) — полная межскладская пара не получает ложную ошибку, и CSV повторяет значения таблицы.
+- В том же адресном файле сохранён и пройден `test_inventory_csv_matches_table_grouping_and_requested_order`, который проверяет неизменность обычных операций и их порядка.
+- Адресно пройден существующий регрессионный кейс `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/tests/test_reports_inventory.py::test_reports_inventory_hides_transfers_without_warehouse_and_flags_incomplete_pair`, поскольку общая проверка transfer-пары вынесена из табличной read-модели.
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/tests/test_inventory_movements_report.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/app/services/reporting_service.py`
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend/tests/test_reports_csv_export.py`
 - `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/DEV.md`
 
 ## Гейты
 
-- ЗЕЛЁНЫЙ: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && ruff check tests/test_inventory_movements_report.py` — `All checks passed!`, код завершения 0.
-- ЗЕЛЁНЫЙ: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && mypy tests/test_inventory_movements_report.py` — `Success: no issues found in 1 source file`, код завершения 0.
-- ЗЕЛЁНЫЙ: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && pytest tests/test_inventory_movements_report.py` — собрано 2 теста, `2 passed in 3.16s`, код завершения 0.
+- ИСХОДНО КРАСНЫЙ, ИСПРАВЛЕНО: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && ruff check app/services/reporting_service.py tests/test_reports_csv_export.py` — найден один `E501` в новой тестовой строке, код завершения 1; строка разбита без изменения поведения.
+- ЗЕЛЁНЫЙ: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && ruff check app/services/reporting_service.py tests/test_reports_csv_export.py` — `All checks passed!`, код завершения 0.
+- ЗЕЛЁНЫЙ: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && mypy app/services/reporting_service.py tests/test_reports_csv_export.py` — `Success: no issues found in 2 source files`, код завершения 0; команда повторно прошла после последней форматной правки с тем же результатом.
+- ЗЕЛЁНЫЙ: `cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/backend && pytest -q tests/test_reports_csv_export.py tests/test_reports_inventory.py::test_reports_inventory_hides_transfers_without_warehouse_and_flags_incomplete_pair` — `9 passed in 11.18s`, код завершения 0.
 - `python3 scripts/ci/back_guard.py` не запускался: атом не добавляет и не меняет роуты.
 - `python3 scripts/ci/check_migrations.py` не запускался: атом не добавляет миграцию.
 - Полные `pytest`/`pytest -q` без путей, `ruff check .` и `mypy .` не запускались: условия атома прямо запрещают полный backend-регресс на этом шаге.
 
 ## Не реализовано
 
-- Нет: пункт текущего атома реализован буквально.
-- Находки 2–5 из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/REVIEW.md` относятся к другим атомам и слоям; они намеренно не затрагивались.
+- Нет: находка №2 из `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-1-07-reporting/night/volna-9-recovery/cards/07-reporting/REVIEW.md` и текущий атом реализованы буквально.
+- Находки №1 и №3–5 относятся к другим атомам и файлам; в этом шаге они намеренно не затрагивались.
 
 ## Блокеры
 

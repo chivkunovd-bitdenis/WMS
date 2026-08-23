@@ -46,21 +46,26 @@ async def _seed_movement(
     sku: str, name: str, quantity_delta: int,
     movement_type: str = "inbound_intake",
     created_at: datetime | None = None,
-) -> None:
+    transfer_group_id: uuid.UUID | None = None,
+    product_id: uuid.UUID | None = None,
+) -> uuid.UUID:
     async with SessionLocal() as session:
-        product_id = uuid.uuid4()
-        session.add(Product(
-            id=product_id, tenant_id=tenant_id, seller_id=uuid.UUID(seller_id),
-            name=name, sku_code=sku, wb_vendor_code=f"ARTICLE-{sku}",
-            wb_barcode=f"BARCODE-{sku}",
-        ))
+        product_id = product_id or uuid.uuid4()
+        if await session.get(Product, product_id) is None:
+            session.add(Product(
+                id=product_id, tenant_id=tenant_id, seller_id=uuid.UUID(seller_id),
+                name=name, sku_code=sku, wb_vendor_code=f"ARTICLE-{sku}",
+                wb_barcode=f"BARCODE-{sku}",
+            ))
         session.add(InventoryMovement(
             tenant_id=tenant_id, product_id=product_id, seller_id=uuid.UUID(seller_id),
             warehouse_id=uuid.UUID(warehouse_id), storage_location_id=uuid.UUID(location_id),
             quantity_delta=quantity_delta, movement_type=movement_type,
+            transfer_group_id=transfer_group_id,
             created_at=created_at or datetime(2026, 8, 1, 12, tzinfo=UTC),
         ))
         await session.commit()
+        return product_id
 
 
 @pytest.mark.asyncio
@@ -146,6 +151,120 @@ async def test_inventory_csv_matches_table_grouping_and_requested_order(
         for row in table.json()["rows"]
     ]
     assert [row[0] for row in csv_rows[1:]] == ["Приёмка", "Отгрузка"]
+
+
+# S-33-TC-013: an incomplete transfer must not look like a valid zero in CSV.
+@pytest.mark.asyncio
+async def test_inventory_csv_marks_incomplete_transfer_like_visible_table(
+    async_client: AsyncClient,
+) -> None:
+    headers, tenant_id, seller_id, warehouse_id, location_id = await _report_context(async_client)
+    await _seed_movement(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        location_id=location_id,
+        sku="SKU-INCOMPLETE-TRANSFER",
+        name="Incomplete transfer",
+        quantity_delta=-3,
+        movement_type="stock_transfer_out",
+        transfer_group_id=uuid.uuid4(),
+    )
+    params = {
+        "date_from": "2026-08-01T00:00:00Z",
+        "date_to": "2026-08-02T00:00:00Z",
+        "group_by": "operation",
+        "warehouse_id": warehouse_id,
+    }
+
+    table = await async_client.get("/reports/inventory", headers=headers, params=params)
+    export = await async_client.get("/reports/inventory/export.csv", headers=headers, params=params)
+
+    assert table.status_code == 200
+    assert export.status_code == 200
+    table_row = table.json()["rows"][0]
+    assert table_row == {
+        "operation": "Перемещение: ушло",
+        "in_qty": 0,
+        "out_qty": 3,
+        "net": -3,
+        "integrity_error": True,
+    }
+    csv_rows = list(csv.reader(io.StringIO(export.content.decode("utf-8-sig"))))
+    assert csv_rows == [
+        ["Операция", "Приход", "Расход", "Нетто"],
+        [
+            f"{table_row['operation']} (Ошибка)",
+            "—",
+            str(table_row["out_qty"]),
+            str(table_row["net"]),
+        ],
+    ]
+    assert ["Перемещение: ушло", "0", "3", "-3"] not in csv_rows
+
+
+# S-33-TC-004: a complete pair keeps the ordinary table-shaped CSV values.
+@pytest.mark.asyncio
+async def test_inventory_csv_keeps_complete_transfer_values_unchanged(
+    async_client: AsyncClient,
+) -> None:
+    headers, tenant_id, seller_id, warehouse_id, location_id = await _report_context(async_client)
+    suffix = str(time.time_ns())
+    second_warehouse = await async_client.post(
+        "/warehouses",
+        headers=headers,
+        json={"name": "CSV destination", "code": f"csv-destination-{suffix}"},
+    )
+    second_location = await async_client.post(
+        f"/warehouses/{second_warehouse.json()['id']}/locations",
+        headers=headers,
+        json={"code": "CSV-02"},
+    )
+    transfer_group_id = uuid.uuid4()
+    product_id = await _seed_movement(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        location_id=location_id,
+        sku="SKU-COMPLETE-TRANSFER",
+        name="Complete transfer",
+        quantity_delta=-4,
+        movement_type="stock_transfer_out",
+        transfer_group_id=transfer_group_id,
+    )
+    await _seed_movement(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=second_warehouse.json()["id"],
+        location_id=second_location.json()["id"],
+        sku="SKU-COMPLETE-TRANSFER",
+        name="Complete transfer",
+        quantity_delta=4,
+        movement_type="stock_transfer_in",
+        transfer_group_id=transfer_group_id,
+        product_id=product_id,
+    )
+    params = {
+        "date_from": "2026-08-01T00:00:00Z",
+        "date_to": "2026-08-02T00:00:00Z",
+        "group_by": "operation",
+        "warehouse_id": warehouse_id,
+    }
+
+    table = await async_client.get("/reports/inventory", headers=headers, params=params)
+    export = await async_client.get("/reports/inventory/export.csv", headers=headers, params=params)
+
+    assert table.status_code == 200
+    assert export.status_code == 200
+    table_row = table.json()["rows"][0]
+    assert table_row["integrity_error"] is False
+    csv_rows = list(csv.reader(io.StringIO(export.content.decode("utf-8-sig"))))
+    assert csv_rows[1] == [
+        table_row["operation"],
+        str(table_row["in_qty"]),
+        str(table_row["out_qty"]),
+        str(table_row["net"]),
+    ]
 
 
 @pytest.mark.asyncio

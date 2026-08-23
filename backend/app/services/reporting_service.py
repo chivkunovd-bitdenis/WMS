@@ -73,6 +73,90 @@ def operation_group_expr() -> ColumnElement[str]:
     )
 
 
+async def incomplete_transfer_markers(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    date_from: datetime,
+    date_to: datetime,
+    warehouse_id: uuid.UUID | None,
+    seller_id: uuid.UUID | None,
+) -> tuple[set[uuid.UUID], set[str]]:
+    if warehouse_id is None:
+        return set(), set()
+
+    visible_transfer_group_ids = select(InventoryMovement.transfer_group_id).where(
+        InventoryMovement.tenant_id == tenant_id,
+        InventoryMovement.created_at >= date_from,
+        InventoryMovement.created_at < date_to,
+        InventoryMovement.warehouse_id == warehouse_id,
+        InventoryMovement.transfer_group_id.is_not(None),
+    )
+    integrity_filters = [
+        InventoryMovement.tenant_id == tenant_id,
+        InventoryMovement.transfer_group_id.in_(visible_transfer_group_ids),
+    ]
+    if seller_id is not None:
+        integrity_filters.append(InventoryMovement.seller_id == seller_id)
+
+    # Inspect both sides of every pair, even when the report is filtered to one
+    # warehouse. Applying warehouse_id here would make every valid
+    # cross-warehouse pair look incomplete because its other side is outside
+    # the selected slice.
+    transfer_rows = (
+        await session.execute(
+            select(
+                InventoryMovement.transfer_group_id,
+                InventoryMovement.product_id,
+                InventoryMovement.seller_id,
+                InventoryMovement.warehouse_id,
+                InventoryMovement.quantity_delta,
+                InventoryMovement.movement_type,
+            ).where(*integrity_filters)
+        )
+    ).all()
+    transfer_groups: dict[
+        uuid.UUID, list[tuple[uuid.UUID, uuid.UUID | None, uuid.UUID, int, str]]
+    ] = {}
+    for (
+        group_id,
+        product_id,
+        movement_seller_id,
+        movement_warehouse_id,
+        quantity,
+        movement_type,
+    ) in transfer_rows:
+        transfer_groups.setdefault(group_id, []).append(
+            (
+                product_id,
+                movement_seller_id,
+                movement_warehouse_id,
+                int(quantity),
+                movement_type,
+            )
+        )
+
+    incomplete_product_ids: set[uuid.UUID] = set()
+    incomplete_operations: set[str] = set()
+    for rows_for_group in transfer_groups.values():
+        is_complete = (
+            len(rows_for_group) == 2
+            and rows_for_group[0][0] == rows_for_group[1][0]
+            and rows_for_group[0][1] == rows_for_group[1][1]
+            and rows_for_group[0][2] != rows_for_group[1][2]
+            and {row[4] for row in rows_for_group} == TRANSFER_TYPES
+            and rows_for_group[0][3] != 0
+            and rows_for_group[1][3] != 0
+            and rows_for_group[0][3] * rows_for_group[1][3] < 0
+            and abs(rows_for_group[0][3]) == abs(rows_for_group[1][3])
+        )
+        if not is_complete:
+            incomplete_product_ids.update(row[0] for row in rows_for_group)
+            incomplete_operations.update(operation_label(row[4]) for row in rows_for_group)
+
+    return incomplete_product_ids, incomplete_operations
+
+
 def validated_sort(
     group_by: str, sort_by: str | None, sort_order: str
 ) -> tuple[str, str]:
@@ -181,56 +265,16 @@ async def build_inventory_report(
             product_id: int(quantity)
             for product_id, quantity in (await session.execute(balance_stmt)).all()
         }
-    incomplete_transfer_product_ids: set[uuid.UUID] = set()
-    incomplete_transfer_operations: set[str] = set()
-    if warehouse_id is not None:
-        visible_transfer_group_ids = select(InventoryMovement.transfer_group_id).where(
-            InventoryMovement.tenant_id == tenant_id,
-            InventoryMovement.created_at >= date_from,
-            InventoryMovement.created_at < date_to,
-            InventoryMovement.warehouse_id == warehouse_id,
-            InventoryMovement.transfer_group_id.is_not(None),
+    incomplete_transfer_product_ids, incomplete_transfer_operations = (
+        await incomplete_transfer_markers(
+            session,
+            tenant_id,
+            date_from=date_from,
+            date_to=date_to,
+            warehouse_id=warehouse_id,
+            seller_id=seller_id,
         )
-        integrity_filters = [InventoryMovement.tenant_id == tenant_id,
-            InventoryMovement.transfer_group_id.in_(visible_transfer_group_ids)]
-        if seller_id is not None:
-            integrity_filters.append(InventoryMovement.seller_id == seller_id)
-        # Inspect both sides of every pair, even when the report is filtered to
-        # one warehouse.  Applying warehouse_id here would make every valid
-        # cross-warehouse pair look incomplete because its other side is
-        # intentionally outside the selected slice.
-        transfer_rows = (await session.execute(select(InventoryMovement.transfer_group_id,
-            InventoryMovement.product_id, InventoryMovement.seller_id,
-            InventoryMovement.warehouse_id, InventoryMovement.quantity_delta,
-            InventoryMovement.movement_type).where(*integrity_filters))).all()
-        transfer_groups: dict[uuid.UUID, list[tuple[uuid.UUID, uuid.UUID | None,
-            uuid.UUID, int, str]]] = {}
-        for (
-            group_id, product_id, movement_seller_id, movement_warehouse_id, quantity, movement_type
-        ) in transfer_rows:
-            transfer_groups.setdefault(group_id, []).append(
-                (
-                    product_id, movement_seller_id, movement_warehouse_id,
-                    int(quantity), movement_type,
-                )
-            )
-        for rows_for_group in transfer_groups.values():
-            is_complete = (
-                len(rows_for_group) == 2
-                and rows_for_group[0][0] == rows_for_group[1][0]
-                and rows_for_group[0][1] == rows_for_group[1][1]
-                and rows_for_group[0][2] != rows_for_group[1][2]
-                and {row[4] for row in rows_for_group} == TRANSFER_TYPES
-                and rows_for_group[0][3] != 0
-                and rows_for_group[1][3] != 0
-                and rows_for_group[0][3] * rows_for_group[1][3] < 0
-                and abs(rows_for_group[0][3]) == abs(rows_for_group[1][3])
-            )
-            if not is_complete:
-                incomplete_transfer_product_ids.update(row[0] for row in rows_for_group)
-                incomplete_transfer_operations.update(
-                    operation_label(row[4]) for row in rows_for_group
-                )
+    )
     result: list[dict[str, object]] = []
     for row in rows:
         if group_by == "product":
@@ -350,6 +394,17 @@ async def build_inventory_csv(
     if (await session.execute(grouped.limit(1))).first() is None:
         raise ValueError("nothing to export for the selected period")
 
+    incomplete_transfer_operations: set[str] = set()
+    if group_by == "operation":
+        _, incomplete_transfer_operations = await incomplete_transfer_markers(
+            session,
+            tenant_id,
+            date_from=date_from,
+            date_to=date_to,
+            warehouse_id=warehouse_id,
+            seller_id=seller_id,
+        )
+
     def csv_line(values: Sequence[object]) -> bytes:
         output = io.StringIO(newline="")
         csv.writer(output, lineterminator="\n").writerow(values)
@@ -379,7 +434,17 @@ async def build_inventory_csv(
         yield b"\xef\xbb\xbf" + csv_line(["Операция", "Приход", "Расход", "Нетто"])
         result = await session.stream(grouped)
         async for operation, incoming, outgoing in result:
-            yield csv_line([operation, int(incoming), int(outgoing), int(incoming) - int(outgoing)])
+            incoming_value = int(incoming)
+            outgoing_value = int(outgoing)
+            integrity_error = operation in incomplete_transfer_operations
+            yield csv_line(
+                [
+                    f"{operation} (Ошибка)" if integrity_error else operation,
+                    "—" if integrity_error and incoming_value == 0 else incoming_value,
+                    "—" if integrity_error and outgoing_value == 0 else outgoing_value,
+                    incoming_value - outgoing_value,
+                ]
+            )
 
     return stream()
 
