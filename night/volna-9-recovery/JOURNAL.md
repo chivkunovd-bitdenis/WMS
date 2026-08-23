@@ -137,3 +137,11 @@
 01:35   08-storage · backend-dev: готово
 01:35   08-storage · dev: фича 1/4 сохранена 1769e34df857
 01:41   08-storage · screen-dev: готово
+01:41   08-storage · dev: фича 3/4 сохранена 3e231106cf57
+01:41   08-storage · screen-dev: нет файла DEV.md (код 1, попытка 1)
+01:41   08-storage · screen-dev: нет файла DEV.md (код 1, попытка 2)
+01:41 08-storage: отложено на шаге dev
+04:16   08-storage · repair-plan: новый вердикт дорезается до dev
+04:19   08-storage · splitter: готово
+04:19   08-storage · resume: поатомный rework Sol по сохранённым находкам
+04:30   08-storage · backend-dev: готово

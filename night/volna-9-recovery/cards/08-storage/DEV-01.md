@@ -1,18 +1,16 @@
-# DEV · 08-storage · атом 1 · переделка по REVIEW
+# DEV · 08-storage · backend-dev · атом 1
 
 ## Изменённые файлы
 
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/api/storage.py` — для `POST /operations/storage/tariffs` добавлена серверная проверка строго положительной ставки и точное сопоставление доменных ошибок HTTP-статусам; `GET /operations/storage/statements` теперь заново рассчитывает видимую предварительную сумму открытого черновика по актуальным датированным тарифам, не публикуя финансовые строки.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/storage_statement_service.py` — создание тарифа запрещает прошедшую по Москве дату, чужой tenant, неоперационный склад и чужого селлера; добавлен расчёт тарифного превью открытого черновика, ограниченный фактически прошедшей частью текущего месяца.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_storage_tariff_api.py` — к исходным сценариям добавлены проверки нулевой/отрицательной ставки, прошедшей даты, tenant-границ, служебного склада и обновления предварительной суммы после создания новой версии тарифа.
-- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/night/volna-9-recovery/cards/08-storage/DEV.md` — отчёт повторной backend-разработки атома.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/api/storage.py` — доменная ошибка `tariff_amount_must_be_positive` сопоставлена с HTTP 422; в схемах основная и индивидуальная ставки остаются строго положительными.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/app/services/storage_statement_service.py` — `create_storage_tariff()` теперь сам отклоняет нулевую и отрицательную основную или индивидуальную ставку до создания ORM-объектов; проверка обеих дат относительно сегодняшнего дня по Москве сохранена в одном доменном сервисе.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend/tests/test_storage_tariff_api.py` — проверки расширены на обе части атомарного запроса, доказывают отсутствие версий тарифа после 422 и используют динамические московские даты вместо скоро устаревающих констант 2026 года.
+- `/Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/night/volna-9-recovery/cards/08-storage/DEV.md` — артефакт backend-dev по текущему атому.
 
 ## Что реализовано
 
-- Эндпоинт `POST /operations/storage/tariffs`: атомарно создаёт общую ставку склада и необязательное исключение селлера, принимает только положительные суммы и даты не раньше текущего московского дня, проверяет tenant и операционный статус склада.
-- Эндпоинт `GET /operations/storage/statements`: для незакрытых документов возвращает заново рассчитанные `rate_snapshot`, `amount` и итоги по действующим версиям тарифа; ledger (неизменяемый журнал начислений) до фиксации не создаётся.
-- Сервис `create_storage_tariff()`: централизует инварианты даты, tenant, склада и селлера до обеих вставок.
-- Сервис `get_storage_draft_pricing()`: рассчитывает предварительную сумму открытого statement (месячного расчёта хранения) без изменения зафиксированных документов.
+- Эндпоинт `POST /operations/storage/tariffs`: основная ставка и необязательное исключение селлера принимаются только со строго положительной ставкой и датой не раньше текущего дня по МСК; отказ возвращает 422 до любой записи.
+- Сервис `create_storage_tariff()`: дублирует инвариант положительной ставки на доменном слое, чтобы не-HTTP вызов не мог обойти схему запроса.
 
 ## Миграции
 
@@ -20,10 +18,10 @@
 
 ## Тесты
 
-- Сохранены исходные тесты создания общей ставки, общей ставки с исключением и полного отката при конфликте второй вставки, а также запрета для `fulfillment_staff` с правом `inventory`.
-- Добавлены тесты HTTP 422 для нулевой/отрицательной ставки и прошедшей по Москве даты.
-- Добавлен тест HTTP 404/422 для чужого склада, чужого селлера и неоперационного склада с доказательством отсутствия записей тарифа.
-- Добавлен сценарий повторной загрузки открытого черновика после POST: предварительная сумма меняется по новой версии тарифа.
+- `test_tariff_amount_must_be_positive`: нуль и отрицательная ставка отклоняются отдельно для склада и исключения селлера; проверены HTTP 422, точный путь ошибочного поля и нулевое число созданных версий.
+- `test_tariff_valid_from_cannot_be_in_the_past`: вчерашняя дата по Москве отклоняется отдельно для основной ставки и исключения; проверены HTTP 422, `tariff_valid_from_in_past` и отсутствие версий.
+- `test_admin_creates_warehouse_tariff` и `test_admin_creates_tariff_with_seller_exception`: основная ставка с датой «сегодня» и атомарная пара с будущими датами создаются с HTTP 201.
+- Относящиеся к ручке регрессии атомарности и ролевого доступа также остались зелёными.
 
 ## Гейты
 
@@ -34,41 +32,43 @@ cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recover
 Результат: `All checks passed!`.
 
 ```text
+cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && mypy app/api/storage.py app/services/storage_statement_service.py
+```
+
+Результат: целевые модули проверены, но команда завершилась с кодом 1 из-за четырёх уже существующих ошибок в трёх импортируемых, но не затронутых атомом файлах: `app/services/wildberries_credentials_service.py:167`, `app/services/fbs_stock_sync_service.py:617`, `app/services/fbs_warehouse_binding_service.py:23,291`. В двух целевых модулях ошибок не выведено.
+
+```text
 cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && mypy --follow-imports=silent app/api/storage.py app/services/storage_statement_service.py
 ```
 
 Результат: `Success: no issues found in 2 source files`.
 
-Обычная целевая команда `mypy app/api/storage.py app/services/storage_statement_service.py` также запускалась и остановилась на четырёх уже существующих ошибках в импортируемых несвязанных модулях `wildberries_credentials_service.py`, `fbs_stock_sync_service.py` и `fbs_warehouse_binding_service.py`; в двух изменённых модулях ошибок не показала. Режим `--follow-imports=silent` проверил целевые модули с типами зависимостей, но не вывел ошибки самих импортированных модулей.
-
 ```text
 cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && pytest -q tests/test_storage_tariff_api.py
 ```
 
-Результат: `8 passed in 8.21s`.
+Финальный результат: `11 passed in 11.00s`.
 
 ```text
-cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage/backend && pytest -q tests/test_storage_tariff_api.py tests/test_storage_statement_service.py
+cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage && git diff --check -- backend/app/api/storage.py backend/app/services/storage_statement_service.py backend/tests/test_storage_tariff_api.py
 ```
 
-Результат относящейся к изменённому расчёту регрессии: `17 passed in 10.48s`.
+Результат: exit 0, ошибок пробелов нет.
 
-```text
-cd /Users/deniscivkunov/Projects/WMS/.worktrees/.night-worktrees/volna-9-recovery/lane-2-08-storage && python3 scripts/ci/back_guard.py
-```
+`python3 scripts/ci/back_guard.py` не запускался: в этом rework-атоме новый роут не добавлялся. `python3 scripts/ci/check_migrations.py` не запускался: миграций нет.
 
-Результат: скрипт отсутствует в этой рабочей копии (`scripts/ci/back_guard.py: No such file or directory`). Новый маршрут относительно исходного атома покрыт целевым API-тестом; в текущем ремонтном diff новый маршрут не добавлялся. `check_migrations.py` не применим, потому что миграций нет.
+Первая диагностическая попытка `./.venv/bin/pytest -q tests/test_storage_tariff_api.py` не запустила тесты, потому что в `backend/` нет `.venv`; целевой прогон затем успешно выполнен доступным `pytest`.
 
 ## Не реализовано
 
-- Находка 5 из `REVIEW.md` относится к `frontend/tests-e2e/storage.spec.ts` и живому Playwright-сценарию. Она намеренно не исправлялась: роль этого шага — только `backend-dev`, а разрешённый атом ограничен backend-файлами и их тестом.
-- Следующие атомы из `FEATURES.md` не выполнялись.
+- Атомы 2–6 из `FEATURES.md` не выполнялись.
+- Находки 1, 3 и 5 из `REVIEW.md` относятся к следующим backend/frontend-атомам и не менялись в этом шаге.
+- Frontend, миграции, внешние API, production и живой кабинет Wildberries не затрагивались.
 
 ## Находки
 
-- Секреты, ключи, токены, `.env`, кабинеты учётных данных и production не открывались и не использовались.
-- Команда сохранения `git add backend/app/api/storage.py backend/app/services/storage_statement_service.py backend/tests/test_storage_tariff_api.py night/volna-9-recovery/cards/08-storage/DEV.md && git diff --cached --check && git status --short && git commit -m "fix(storage): validate and reprice tariffs"` не дошла до индексации: Git не смог создать `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-08-storage1/index.lock` (`Operation not permitted`). Чужие изменения `night/volna-9-recovery/JOURNAL.md` и `night/volna-9-recovery/cards/08-storage/REVIEW.md` не индексировались.
+Нет. Секреты, ключи, токены, `.env`, кабинеты учётных данных и production не читались и не использовались.
 
 ## Блокеры
 
-- Среда запрещает запись в общий служебный каталог Git зарегистрированного worktree, поэтому отдельный commit этого ремонта создать невозможно. Реализация и отчёт находятся только в рабочем дереве и требуют сохранения из процесса с правом записи в `/Users/deniscivkunov/Projects/WMS/.git/worktrees/lane-2-08-storage1`.
+Нет на уровне backend-реализации и целевых тестов.
