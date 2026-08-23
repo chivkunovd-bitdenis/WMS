@@ -4,7 +4,7 @@
 
 - `python -m ruff check` по изменённым backend-файлам — успешно;
 - `python -m mypy` по изменённым backend-модулям — успешно;
-- `pytest -q backend/tests/test_inbound_package_catalog.py` — 3 passed;
+- `pytest -q backend/tests/test_inbound_package_catalog.py` — 4 passed;
 - `npm run build` — успешно;
 - ESLint по изменённым frontend-файлам и E2E — успешно;
 - `playwright test tests-e2e/catalog-box-lookup.spec.ts --project=chromium` — 2 passed.
@@ -16,6 +16,10 @@
 3. скан раскрывает и подсвечивает короб;
 4. состав показывает синхронные с каталогом товарные колонки, количество и документ прихода;
 5. возврат во вкладку «Товары» показывает прежнюю таблицу.
+
+Fast-path сканирования отдельно зафиксирован тестами: lookup выполняет не больше шести пакетных
+`SELECT`, не обращается к WB-карточкам/FBS-таблицам, ничего не записывает и в браузерном E2E
+укладывается в 1,5 секунды вместе с отображением результата.
 
 Снимок: `catalog-boxes-tab.png`.
 

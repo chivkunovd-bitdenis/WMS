@@ -91,7 +91,9 @@ test('scan opens the received box and shows its current contents', async ({ page
   await page.getByTestId('ff-catalog-tab-packages').click()
   await expect(page.getByTestId('ff-catalog-products-panel')).toBeHidden()
   await expect(page.getByTestId('ff-catalog-inbound-packages-scanner')).toBeVisible()
+  const lookupStartedAt = Date.now()
   await scanCatalogPackage(page, box.barcode)
+  expect(Date.now() - lookupStartedAt).toBeLessThan(1_500)
 
   const packageItem = packageByBarcode(page, box.barcode)
   await expect(packageItem).toBeVisible()
@@ -107,8 +109,12 @@ test('scan opens the received box and shows its current contents', async ({ page
   await expect(composition.locator('thead')).toContainText('Документ прихода')
   const productRow = composition.locator('tbody tr').filter({ hasText: seed.sku })
   await expect(productRow).toContainText('Box Product')
+  await expect(productRow).toContainText(seed.vendorArticle)
+  await expect(productRow).toContainText(seed.barcode)
+  await expect(productRow).toContainText(seed.size)
   await expect(productRow).toContainText('Box Seller')
-  await expect(productRow).toContainText('Приёмка')
+  await expect(productRow).toContainText('Приёмка №000001')
+  await expect(productRow).toContainText(/\d{2}\.\d{2}\.\d{4}/)
   await expect(productRow).toContainText('1')
 
   const evidencePath = process.env.CATALOG_BOX_EVIDENCE_PATH
@@ -117,19 +123,20 @@ test('scan opens the received box and shows its current contents', async ({ page
     await page.screenshot({ path: evidencePath })
   }
 
-  await page.getByTestId('ff-catalog-tab-products').click()
-  await expect(page.getByTestId('ff-products-list')).toBeVisible()
-  await expect(page.getByTestId('ff-products-list')).toContainText(seed.sku)
-  await page.getByTestId('ff-catalog-tab-packages').click()
-
   await scanCatalogPackage(page, 'INB-UNKNOWN-CATALOG')
   await expect(page.getByTestId('ff-catalog-inbound-packages-lookup-error')).toHaveText(
     'Короб или грузоместо не найдено',
   )
+  await expect(packageItem).toBeVisible()
+  await expect(composition).toBeVisible()
+
+  await page.getByTestId('ff-catalog-tab-products').click()
+  await expect(page.getByTestId('ff-products-list')).toBeVisible()
+  await expect(page.getByTestId('ff-products-list')).toContainText(seed.sku)
 })
 
-// TC-NEW-CATALOG-BOX-002: a stale response cannot overwrite the operator's next scan.
-test('a late failed scan cannot replace the next successful box', async ({ page }) => {
+// TC-NEW-CATALOG-BOX-002: one lookup owns the scanner until its fast read-only response returns.
+test('scanner shows lookup progress and accepts the next box after completion', async ({ page }) => {
   const seed = await seedFfSellerInbound(page, `catalog-race-${Date.now()}`)
   const { requestId, headers } = await createReceivingRequest(page, seed)
   const firstBox = await createBox(page, requestId, headers)
@@ -160,9 +167,8 @@ test('a late failed scan cannot replace the next successful box', async ({ page 
   const firstScan = search.press('Enter')
   await firstLookupStarted
 
-  await scanCatalogPackage(page, secondBox.barcode)
-  const nextBarcode = 'INB-NEXT-SCAN'
-  await search.fill(nextBarcode)
+  await expect(search).toBeDisabled()
+  await expect(page.getByText('Ищем короб…')).toBeVisible()
 
   const firstLookupFailed = page.waitForEvent(
     'requestfailed',
@@ -175,7 +181,12 @@ test('a late failed scan cannot replace the next successful box', async ({ page 
   await firstLookupFailed
   await firstScan
 
+  await expect(search).toBeEnabled()
+  await expect(page.getByTestId('ff-catalog-inbound-packages-lookup-error')).toHaveText(
+    'Нет связи с сервером. Повторите сканирование.',
+  )
+  await scanCatalogPackage(page, secondBox.barcode)
   await expect(packageByBarcode(page, secondBox.barcode)).toBeVisible()
   await expect(page.getByTestId('ff-catalog-inbound-packages-lookup-error')).toBeHidden()
-  await expect(search).toHaveValue(nextBarcode)
+  await expect(search).toHaveValue(secondBox.barcode)
 })
