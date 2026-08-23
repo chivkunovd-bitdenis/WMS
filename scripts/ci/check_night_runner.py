@@ -226,6 +226,13 @@ def регрессии_зависимостей(проверь) -> None:
         with mock.patch.object(n, "круг_из_парковки", return_value=0):
             проверь("зависимости: browser-resume не требует старой dev-нумерации",
                     n.подготовить_зависимости(wave, workers), [])
+        (upstream_folder / "JUDGE.md").unlink()
+        (upstream_folder / "OTLOZHENO.md").write_text(
+            "ux-judge: браузерная среда недоступна; код не возвращался\n",
+            encoding="utf-8")
+        with mock.patch.object(n, "круг_из_парковки", return_value=0):
+            проверь("зависимости: сохранённая browser-парковка также снимает старые номера",
+                    n.подготовить_зависимости(wave, workers), [])
 
 
 def fake_e2e_smoke(проверь) -> None:
