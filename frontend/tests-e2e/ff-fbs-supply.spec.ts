@@ -426,9 +426,8 @@ test('fbs workspace: accepted verdict does not paint order rows green', async ({
     .toBe('rgb(27, 94, 32)')
 })
 
-// S-03-TC-018 — a failed background refresh invalidates the old WB verdict until a fresh response arrives.
-test('S-03-TC-018: failed workspace refresh closes WB delivery', async ({ page }) => {
-  await page.clock.install()
+// S-03-TC-018 — a WB rejection saved while the workspace is closed blocks delivery when the operator returns.
+test('S-03-TC-018: returning to a hidden workspace cannot send a supply with a stale WB approval', async ({ page }) => {
   await registerFf(page, 'verdict-refresh-failure')
 
   const accepted = order('1', {
@@ -464,12 +463,19 @@ test('S-03-TC-018: failed workspace refresh closes WB delivery', async ({ page }
   })
   await mockWorklist(page, [accepted])
 
-  let refreshResult: 'accepted' | 'error' | 'rejected' = 'accepted'
+  let serverVerdict: 'accepted' | 'rejected' = 'accepted'
+  let supplyStatus: 'assembling' | 'in_delivery' = 'assembling'
+  let deliveryRequests = 0
+  await page.route('**/operations/fbs-supplies/worklist**', (route) =>
+    route.request().method() === 'GET'
+      ? json(route, {
+        items: supplyStatus === 'in_delivery' ? [supplyWorklistRow('sup-1', { status: supplyStatus })] : [],
+        server_now: new Date().toISOString(),
+      })
+      : route.fallback(),
+  )
   await page.route('**/operations/fbs-supplies/sup-1/workspace', (route) => {
-    if (refreshResult === 'error') {
-      return json(route, { detail: 'HTTP 503 from upstream' }, 503)
-    }
-    const orders = refreshResult === 'rejected' ? [rejected] : [accepted]
+    const orders = serverVerdict === 'rejected' ? [rejected] : [accepted]
     return json(route, workspace({
       stage: 'delivery',
       status: 'packed',
@@ -480,6 +486,11 @@ test('S-03-TC-018: failed workspace refresh closes WB delivery', async ({ page }
   await page.route('**/operations/packaging-tasks/task-verdict', (route) =>
     json(route, packagingTask([accepted])),
   )
+  await page.route('**/operations/fbs-supplies/sup-1/deliver', async (route) => {
+    deliveryRequests += 1
+    supplyStatus = 'in_delivery'
+    await json(route, workspace({ stage: 'tracking', status: 'in_delivery', orders: [accepted] }))
+  })
 
   await page.getByTestId('nav-ff-fbs').click()
   await page.getByTestId('fbs-order-1').click()
@@ -487,28 +498,27 @@ test('S-03-TC-018: failed workspace refresh closes WB delivery', async ({ page }
   const deliver = page.getByRole('button', { name: 'Передать в WB' })
   await expect(deliver).toBeEnabled()
 
-  refreshResult = 'error'
-  await page.clock.fastForward(15_000)
+  // The operator leaves the workspace; while it is hidden, WB saves a rejection on the server.
+  await page.getByRole('button', { name: 'Закрыть' }).click()
+  await expect(page.getByTestId('fbs-workspace')).toHaveCount(0)
+  serverVerdict = 'rejected'
 
-  const refreshAlert = page.getByTestId('fbs-workspace-refresh-error')
-  await expect(refreshAlert).toBeVisible()
-  await expect(refreshAlert).toContainText('Не удалось обновить поставку')
-  await expect(refreshAlert).not.toContainText('503')
-  await expect(deliver).toBeDisabled()
-
-  await page.getByRole('tab', { name: 'Упаковка и маркировка' }).click()
-  await expect(page.getByTestId('fbs-wb-verdict-1')).toHaveText('Нет ответа WB')
-  await expect(page.getByText('Сдача пока недоступна')).toBeVisible()
-
-  refreshResult = 'rejected'
-  await page.getByRole('tab', { name: 'Короба' }).click()
-  await page.clock.fastForward(15_000)
-
-  await expect(refreshAlert).toHaveCount(0)
+  // Reopening must read the persisted verdict before the operator can use the former approval.
+  await page.getByTestId('fbs-order-1').click()
+  await expect(page.getByTestId('fbs-workspace')).toBeVisible()
   await expect(deliver).toBeDisabled()
   await page.getByRole('tab', { name: 'Упаковка и маркировка' }).click()
   await expect(page.getByTestId('fbs-wb-verdict-1')).toHaveText('WB не принял')
   await expect(page.getByText('неверный статус УИН')).toBeVisible()
+
+  // Even a direct immediate click cannot open confirmation or send the supply to WB.
+  await deliver.click({ force: true })
+  await expect(page.getByRole('dialog', { name: 'Передать поставку в WB?' })).toHaveCount(0)
+  expect(deliveryRequests).toBe(0)
+  await expect(page.getByText('Поставка передана, QR получить не удалось')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Закрыть' }).click()
+  await page.getByRole('tab', { name: 'В доставке' }).click()
+  await expect(page.getByTestId('fbs-18-supply-sup-1')).toHaveCount(0)
 })
 
 // S-03-TC-007 — a late successful refresh cannot reopen delivery after a newer refresh failed.
