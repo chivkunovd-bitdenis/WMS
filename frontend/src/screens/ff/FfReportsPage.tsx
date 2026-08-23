@@ -6,7 +6,6 @@ import {
   DataTable,
   ErrorNotice,
   FilterBar,
-  MovementFlowChart,
   PrimaryAction,
   SecondaryAction,
   ProductCell,
@@ -116,7 +115,6 @@ export function FfReportsPage({ token, sellers = [], warehouses = [], contentIns
   const [sellerId, setSellerId] = useState('')
   const [warehouseId, setWarehouseId] = useState('')
   const [search, setSearch] = useState('')
-  const [comparison, setComparison] = useState('previous')
   const [overview, setOverview] = useState<Overview | null>(null)
   const [rows, setRows] = useState<Row[]>([])
   const [grouping, setGrouping] = useState<'product' | 'operation'>('product')
@@ -263,9 +261,7 @@ export function FfReportsPage({ token, sellers = [], warehouses = [], contentIns
     { key: 'balance', label: 'Остаток сейчас', value: overview?.current_balance ?? null },
     { key: 'inbound', label: 'Приход за период', value: overview?.in_qty ?? null },
     { key: 'outbound', label: 'Расход за период', value: overview?.out_qty ?? null },
-    comparison === 'previous'
-      ? { key: 'comparison', label: 'Расход к прошлому периоду', value: overview?.comparison.change_percent == null ? null : overview.comparison.change, delta: overview?.comparison.change_percent == null ? undefined : { value: overview.comparison.change_percent, unit: 'percent' as const, direction: overview.comparison.change_percent >= 0 ? 'up' as const : 'down' as const, a11yLabel: 'Процент изменения расхода' }, nullValueLabel: 'В прошлом периоде расхода не было' }
-      : { key: 'net', label: 'Нетто за период', value: overview == null ? null : overview.in_qty - overview.out_qty },
+    { key: 'net', label: 'Нетто за период', value: overview == null ? null : overview.in_qty - overview.out_qty },
   ]
   const hasIntegrityError = rows.some((row) => row.integrity_error)
   const csvDisabledReason = periodError
@@ -279,14 +275,12 @@ export function FfReportsPage({ token, sellers = [], warehouses = [], contentIns
       <TextField select size="small" label="Период" value={period} onChange={event => choosePeriod(event.target.value)} data-testid="ff-reports-period"><MenuItem value="7">7 дней</MenuItem><MenuItem value="30">30 дней</MenuItem><MenuItem value="month">Текущий месяц</MenuItem><MenuItem value="year">Текущий год</MenuItem><MenuItem value="custom">Другой период</MenuItem></TextField>
       {warehouses.length > 1 ? <TextField select size="small" label="Склад" value={warehouseId} onChange={event => setWarehouseId(event.target.value)} data-testid="ff-reports-warehouse"><MenuItem value="">Все склады</MenuItem>{warehouses.map(warehouse => <MenuItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</MenuItem>)}</TextField> : null}
       {sellers.length > 0 ? <TextField select size="small" label="Селлер" value={sellerId} onChange={event => setSellerId(event.target.value)} data-testid="ff-reports-seller"><MenuItem value="">Все селлеры</MenuItem>{sellers.map(seller => <MenuItem key={seller.id} value={seller.id}>{seller.name}</MenuItem>)}</TextField> : null}
-      <TextField select size="small" label="Сравнение" value={comparison} onChange={event => setComparison(event.target.value)} data-testid="ff-reports-comparison"><MenuItem value="previous">Предыдущий период</MenuItem><MenuItem value="none">Не показывать</MenuItem></TextField>
       {period === 'custom' ? <><TextField size="small" label="С" type="date" value={dateFrom} onChange={event => { setDateFrom(event.target.value) }} data-testid="ff-reports-date-from" slotProps={{ inputLabel: { shrink: true } }} /><TextField size="small" label="По" type="date" value={dateTo} onChange={event => { setDateTo(event.target.value) }} data-testid="ff-reports-date-to" slotProps={{ inputLabel: { shrink: true } }} /></> : null}
     </FilterBar>
     {overview?.warnings.map((warning, index) => <WarningNotice key={`${warning.code}-${index}`} testId="ff-reports-warning">{warningText(warning)}</WarningNotice>)}
     {periodError ? <ErrorNotice testId="ff-reports-period-error">{periodError}</ErrorNotice> : null}
     {summaryError ? <ErrorNotice testId="ff-reports-summary-error">Не удалось загрузить сводку. Повторите попытку. <PrimaryAction onClick={() => void retryOverview()}>Повторить</PrimaryAction></ErrorNotice> : <>
       <ReportMetricStrip items={metrics} loading={loading || summaryLoading} testId="ff-reports-metrics" />
-      <MovementFlowChart series={overview?.daily.map(day => ({ date: day.date, inbound: day.in_qty, outbound: day.out_qty, previousOutbound: day.previous_out_qty })) ?? []} showPrevious={comparison === 'previous'} loading={loading || summaryLoading} ariaDescription="Дневной приход и расход" testId="ff-reports-chart" />
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }} data-testid="ff-reports-freshness">Данные на {overview ? new Date(overview.generated_at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' }) : '—'} МСК</Typography>
     </>}
     {tableError ? <ErrorNotice testId="ff-reports-table-error">Не удалось загрузить строки отчёта. Повторите попытку.</ErrorNotice> : null}
