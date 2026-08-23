@@ -100,9 +100,9 @@ test('FF report keeps one table slice and distinguishes a table error from empty
   await expect(page.getByText('Строки отчёта не загружены')).toBeVisible()
 })
 
-// S-33-TC-003 / S-33-TC-014 — a technical FBS warehouse must not turn a
-// single physical warehouse into a visible report scope selector.
-test('FF reports exclude service warehouses from the warehouse filter', async ({ page }) => {
+// S-33-TC-003 / S-33-TC-014 — only the API operational flag defines which
+// warehouses belong to the report, even after a service warehouse is renamed.
+test('FF reports exclude non-operational warehouses from the warehouse filter', async ({ page }) => {
   await seedFfSellerInbound(page, `ff-reports-warehouse-${Date.now()}`)
   await page.route('**/api/warehouses', async (route) => {
     if (route.request().method() !== 'GET') {
@@ -110,13 +110,25 @@ test('FF reports exclude service warehouses from the warehouse filter', async ({
       return
     }
     const response = await route.fetch()
-    const rows = (await response.json()) as { id: string; name: string; code: string }[]
+    const rows = (await response.json()) as {
+      id: string
+      name: string
+      code: string
+      is_operational: boolean
+    }[]
+    const operationalWarehouse = rows.find((warehouse) => warehouse.is_operational)
+    if (!operationalWarehouse) throw new Error('Expected an operational warehouse fixture')
     await route.fulfill({
       response,
       contentType: 'application/json',
       body: JSON.stringify([
-        ...rows,
-        { id: 'service-fbs-archive', name: 'FBS WB Архив', code: 'fbs-wb-archive' },
+        operationalWarehouse,
+        {
+          id: 'service-fbs-archive',
+          name: 'Архив',
+          code: 'fbs-wb-archive',
+          is_operational: false,
+        },
       ]),
     })
   })
@@ -126,6 +138,7 @@ test('FF reports exclude service warehouses from the warehouse filter', async ({
 
   await expect(page).toHaveURL('/app/ff/reports')
   await expect(page.getByTestId('ff-reports-page')).toBeVisible()
+  await expect(page.getByRole('option', { name: 'Архив' })).toHaveCount(0)
   await expect(page.getByTestId('ff-reports-warehouse')).toHaveCount(0)
 })
 

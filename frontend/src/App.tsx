@@ -56,10 +56,10 @@ import {
 import { setSeparateMarkingPrintEnabled } from './utils/separateMarkingPrint'
 import type { InboundOperationType } from './utils/inboundOperationType'
 
-type WarehouseRow = { id: string; name: string; code: string; is_operational?: boolean }
+type WarehouseRow = { id: string; name: string; code: string; is_operational: boolean }
 const reportWarehouseOptions = (warehouses: WarehouseRow[]) =>
   warehouses
-    .filter((warehouse) => warehouse.is_operational ?? !warehouse.name.startsWith('FBS WB '))
+    .filter((warehouse) => warehouse.is_operational)
     .map((warehouse) => ({ id: warehouse.id, name: warehouse.name }))
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
 type ProductRow = {
