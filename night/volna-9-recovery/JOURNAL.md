@@ -124,3 +124,5 @@
 04:20   09-billing · splitter: готово
 04:20   09-billing · resume: поатомный rework Sol по сохранённым находкам
 04:28   09-billing · backend-dev: готово
+04:28   09-billing · dev: фича 1/2 сохранена 55781f530cac
+04:35   09-billing · backend-dev: готово

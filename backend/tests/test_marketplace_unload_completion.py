@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import time
 import uuid
-from datetime import date
+from datetime import UTC, datetime, tzinfo
+from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 import pytest
 from httpx import AsyncClient
@@ -22,6 +24,7 @@ from test_marketplace_unload_and_discrepancy_acts import (
 
 from app.db.session import SessionLocal
 from app.models.billing import BillingLedgerEntry
+from app.services import marketplace_unload_service
 from app.services.marketplace_unload_service import (
     MarketplaceUnloadError,
     complete_unload,
@@ -29,6 +32,22 @@ from app.services.marketplace_unload_service import (
     get_request,
     scan_barcode_into_box,
 )
+
+MSK = ZoneInfo("Europe/Moscow")
+
+
+def _freeze_marketplace_unload_time(
+    monkeypatch: pytest.MonkeyPatch,
+    value: datetime,
+) -> None:
+    class FrozenDateTime:
+        @staticmethod
+        def now(timezone: tzinfo | None = None) -> datetime:
+            if timezone is None:
+                return value.replace(tzinfo=None)
+            return value.astimezone(timezone)
+
+    monkeypatch.setattr(marketplace_unload_service, "datetime", FrozenDateTime)
 
 
 async def _confirmed_unload_with_stock(
@@ -172,7 +191,7 @@ async def test_ship_unload_without_discrepancy_http(
 async def test_cancel_shipped_unload_records_one_reversal_http(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """S-31-TC-016: late cancellation preserves shipped stock and reverses billing once."""
+    """S-31-TC-016: a next-month reversal never rewrites an issued invoice."""
     h, mid, loc_id = await _confirmed_unload_with_stock(
         async_client, monkeypatch, plan_qty=2
     )
@@ -183,6 +202,28 @@ async def test_cancel_shipped_unload_records_one_reversal_http(
     me = await async_client.get("/auth/me", headers=h)
     tenant_id = uuid.UUID(me.json()["tenant_id"])
     performer_id = uuid.UUID(me.json()["id"])
+    ff_profile = await async_client.put(
+        "/billing/profiles/ff",
+        headers=h,
+        json={
+            "legal_name": "ООО Фулфилмент",
+            "inn": "7707083893",
+            "bank_name": "Банк",
+            "bik": "044525225",
+            "settlement_account": "40702810000000000001",
+            "correspondent_account": "30101810400000000225",
+        },
+    )
+    assert ff_profile.status_code == 200, ff_profile.text
+    seller_profile = await async_client.put(
+        f"/billing/profiles/sellers/{seller_id}",
+        headers=h,
+        json={"legal_name": "ООО Селлер", "inn": "7707083893"},
+    )
+    assert seller_profile.status_code == 200, seller_profile.text
+
+    shipped_at_msk = datetime(2026, 6, 30, 23, 30, tzinfo=MSK)
+    reversed_at_msk = datetime(2026, 7, 1, 0, 15, tzinfo=MSK)
     tariff = await async_client.post(
         "/billing/tariffs",
         headers=h,
@@ -191,12 +232,13 @@ async def test_cancel_shipped_unload_records_one_reversal_http(
             "service_code": "marketplace_outbound",
             "unit": "item",
             "amount": "12.50",
-            "valid_from": date.today().isoformat(),
+            "valid_from": shipped_at_msk.date().isoformat(),
         },
     )
     assert tariff.status_code == 201, tariff.text
     await _collect_qty_via_scan(async_client, h, mid, loc_id=loc_id, qty=2)
 
+    _freeze_marketplace_unload_time(monkeypatch, shipped_at_msk)
     ship = await async_client.post(_ship_url(mid), headers=h)
     assert ship.status_code == 200, ship.text
     stock_after_ship = await async_client.get(
@@ -208,11 +250,64 @@ async def test_cancel_shipped_unload_records_one_reversal_http(
     assert len(stock_after_ship.json()) == 1
     assert stock_after_ship.json()[0]["quantity"] == 3
 
+    june_invoice = await async_client.post(
+        f"/billing/invoices/{seller_id}/2026-06/form",
+        headers=h,
+    )
+    assert june_invoice.status_code == 200, june_invoice.text
+    assert june_invoice.json()["status"] == "issued"
+    june_invoice_id = uuid.UUID(june_invoice.json()["id"])
+    june_detail_before = await async_client.get(
+        f"/billing/invoices/{june_invoice_id}", headers=h
+    )
+    assert june_detail_before.status_code == 200, june_detail_before.text
+    june_snapshot = {
+        "total_amount": june_detail_before.json()["total_amount"],
+        "lines": june_detail_before.json()["lines"],
+    }
+    assert Decimal(str(june_snapshot["total_amount"])) == Decimal("25.00")
+    assert len(june_snapshot["lines"]) == 1
+    assert Decimal(june_snapshot["lines"][0]["quantity"]) == Decimal("2")
+    assert Decimal(june_snapshot["lines"][0]["amount"]) == Decimal("25.00")
+    assert len(june_snapshot["lines"][0]["documents"]) == 1
+
+    _freeze_marketplace_unload_time(monkeypatch, reversed_at_msk)
     cancelled = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/cancel", headers=h
     )
     assert cancelled.status_code == 200, cancelled.text
     assert cancelled.json()["status"] == "shipped"
+
+    july_invoice = await async_client.post(
+        f"/billing/invoices/{seller_id}/2026-07/form",
+        headers=h,
+    )
+    assert july_invoice.status_code == 200, july_invoice.text
+    assert july_invoice.json()["status"] == "issued"
+    july_invoice_id = uuid.UUID(july_invoice.json()["id"])
+    july_detail_before = await async_client.get(
+        f"/billing/invoices/{july_invoice_id}", headers=h
+    )
+    assert july_detail_before.status_code == 200, july_detail_before.text
+    july_snapshot = {
+        "total_amount": july_detail_before.json()["total_amount"],
+        "lines": july_detail_before.json()["lines"],
+    }
+    assert Decimal(str(july_snapshot["total_amount"])) == Decimal("-25.00")
+    assert len(july_snapshot["lines"]) == 1
+    assert Decimal(july_snapshot["lines"][0]["quantity"]) == Decimal("-2")
+    assert Decimal(july_snapshot["lines"][0]["rate"]) == Decimal("12.50")
+    assert Decimal(july_snapshot["lines"][0]["amount"]) == Decimal("-25.00")
+    assert len(july_snapshot["lines"][0]["documents"]) == 1
+
+    june_detail_after_reversal = await async_client.get(
+        f"/billing/invoices/{june_invoice_id}", headers=h
+    )
+    assert june_detail_after_reversal.status_code == 200, june_detail_after_reversal.text
+    assert {
+        "total_amount": june_detail_after_reversal.json()["total_amount"],
+        "lines": june_detail_after_reversal.json()["lines"],
+    } == june_snapshot
 
     repeated = await async_client.post(
         f"/operations/marketplace-unload-requests/{mid}/cancel", headers=h
@@ -232,6 +327,23 @@ async def test_cancel_shipped_unload_records_one_reversal_http(
     )
     assert stock_after_repeated_cancel.status_code == 200, stock_after_repeated_cancel.text
     assert stock_after_repeated_cancel.json() == stock_after_ship.json()
+
+    june_detail_after_repeat = await async_client.get(
+        f"/billing/invoices/{june_invoice_id}", headers=h
+    )
+    july_detail_after_repeat = await async_client.get(
+        f"/billing/invoices/{july_invoice_id}", headers=h
+    )
+    assert june_detail_after_repeat.status_code == 200, june_detail_after_repeat.text
+    assert july_detail_after_repeat.status_code == 200, july_detail_after_repeat.text
+    assert {
+        "total_amount": june_detail_after_repeat.json()["total_amount"],
+        "lines": june_detail_after_repeat.json()["lines"],
+    } == june_snapshot
+    assert {
+        "total_amount": july_detail_after_repeat.json()["total_amount"],
+        "lines": july_detail_after_repeat.json()["lines"],
+    } == july_snapshot
 
     async with SessionLocal() as session:
         entries = list(
@@ -271,6 +383,10 @@ async def test_cancel_shipped_unload_records_one_reversal_http(
     assert reversal.quantity == -2
     assert reversal.rate == original.rate
     assert reversal.amount == -25
+    assert original.occurred_at.replace(tzinfo=UTC) == shipped_at_msk.astimezone(UTC)
+    assert reversal.occurred_at.replace(tzinfo=UTC) == reversed_at_msk.astimezone(UTC)
+    assert june_snapshot["lines"][0]["documents"][0]["id"] == str(original.id)
+    assert july_snapshot["lines"][0]["documents"][0]["id"] == str(reversal.id)
 
 
 @pytest.mark.asyncio
