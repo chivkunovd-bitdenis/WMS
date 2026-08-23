@@ -14,9 +14,10 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TextField,
   Typography,
 } from '@mui/material'
-import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 
@@ -49,10 +50,6 @@ export type CatalogInboundPackageProduct = {
   wb_barcodes: string[]
 }
 
-export type CatalogInboundPackagesHandle = {
-  lookup: (barcode: string) => Promise<boolean | null>
-}
-
 type Props = {
   token: string
   authHeaders: (token: string) => Record<string, string>
@@ -83,8 +80,7 @@ function intakeLabel(item: InboundPackage): string {
   return `Приёмка ${number.includes('№') ? number : `№ ${number}`}`
 }
 
-export const FfCatalogInboundPackages = forwardRef<CatalogInboundPackagesHandle, Props>(
-  function FfCatalogInboundPackages({ token, authHeaders, products }, ref) {
+export function FfCatalogInboundPackages({ token, authHeaders, products }: Props) {
     const [sectionOpen, setSectionOpen] = useState(false)
     const [listLoading, setListLoading] = useState(false)
     const [listLoaded, setListLoaded] = useState(false)
@@ -92,7 +88,11 @@ export const FfCatalogInboundPackages = forwardRef<CatalogInboundPackagesHandle,
     const [listedPackages, setListedPackages] = useState<InboundPackage[]>([])
     const [addressedPackage, setAddressedPackage] = useState<InboundPackage | null>(null)
     const [openPackageId, setOpenPackageId] = useState<string | null>(null)
+    const [highlightedPackageId, setHighlightedPackageId] = useState<string | null>(null)
+    const [scanValue, setScanValue] = useState('')
+    const [scanError, setScanError] = useState(false)
     const requestSequence = useRef(0)
+    const scanInputRef = useRef<HTMLInputElement>(null)
 
     const productsById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products])
 
@@ -126,21 +126,25 @@ export const FfCatalogInboundPackages = forwardRef<CatalogInboundPackagesHandle,
       }
     }, [authHeaders, token])
 
-    const lookup = useCallback(async (barcode: string): Promise<boolean | null> => {
+    const lookup = useCallback(async (barcode: string): Promise<void> => {
       const sequence = requestSequence.current + 1
       requestSequence.current = sequence
-      setAddressedPackage(null)
+      setScanError(false)
       try {
         const response = await fetch(
           apiUrl(`/operations/inbound-packages/lookup?barcode=${encodeURIComponent(barcode)}`),
           { headers: { ...authHeaders(token) } },
         )
-        if (requestSequence.current !== sequence) return null
-        if (!response.ok) return false
+        if (requestSequence.current !== sequence) return
+        if (!response.ok) {
+          setScanError(true)
+          return
+        }
         const item = (await response.json()) as InboundPackage
-        if (requestSequence.current !== sequence) return null
+        if (requestSequence.current !== sequence) return
         setAddressedPackage(item)
         setOpenPackageId(item.id)
+        setHighlightedPackageId(item.id)
         setSectionOpen(true)
         window.setTimeout(() => {
           document.getElementById(`ff-catalog-inbound-package-${item.id}`)?.scrollIntoView({
@@ -148,13 +152,26 @@ export const FfCatalogInboundPackages = forwardRef<CatalogInboundPackagesHandle,
             block: 'nearest',
           })
         }, 0)
-        return true
       } catch {
-        return requestSequence.current === sequence ? false : null
+        if (requestSequence.current === sequence) setScanError(true)
+      } finally {
+        if (requestSequence.current === sequence) {
+          scanInputRef.current?.focus()
+          scanInputRef.current?.select()
+        }
       }
     }, [authHeaders, token])
 
-    useImperativeHandle(ref, () => ({ lookup }), [lookup])
+    const handleScanKeyDown = useCallback(
+      (event: React.KeyboardEvent<HTMLInputElement>) => {
+        if (event.key !== 'Enter') return
+        const barcode = scanValue.trim().toUpperCase()
+        if (!barcode) return
+        event.preventDefault()
+        void lookup(barcode)
+      },
+      [lookup, scanValue],
+    )
 
     const handleSectionChange = useCallback(
       (_: React.SyntheticEvent, expanded: boolean) => {
@@ -188,6 +205,31 @@ export const FfCatalogInboundPackages = forwardRef<CatalogInboundPackagesHandle,
           </Typography>
         </AccordionSummary>
         <AccordionDetails id="ff-catalog-inbound-packages-content" sx={{ p: 0 }}>
+          <Box sx={{ p: 2, bgcolor: 'action.hover', borderTop: '1px solid', borderBottom: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+              Сканер короба или грузоместа
+            </Typography>
+            <TextField
+              inputRef={scanInputRef}
+              fullWidth
+              size="small"
+              value={scanValue}
+              onChange={(event) => {
+                setScanValue(event.target.value)
+                setScanError(false)
+              }}
+              onKeyDown={handleScanKeyDown}
+              placeholder="Сканируйте внутренний ШК"
+              error={scanError}
+              helperText="После скана нужный короб раскроется и подсветится."
+              slotProps={{ htmlInput: { 'data-testid': 'ff-catalog-inbound-packages-scan' } }}
+            />
+            {scanError ? (
+              <Alert severity="error" sx={{ mt: 1 }} data-testid="ff-catalog-inbound-packages-lookup-error">
+                Короб или грузоместо не найдено
+              </Alert>
+            ) : null}
+          </Box>
           {listLoading ? (
             <Stack
               direction="row"
@@ -237,7 +279,14 @@ export const FfCatalogInboundPackages = forwardRef<CatalogInboundPackagesHandle,
                     elevation={0}
                     square
                     data-testid={`ff-catalog-inbound-package-${item.id}`}
-                    sx={{ '&::before': { display: 'none' }, borderTop: '1px solid', borderColor: 'divider' }}
+                    sx={{
+                      '&::before': { display: 'none' },
+                      borderTop: '1px solid',
+                      borderColor: 'divider',
+                      ...(highlightedPackageId === item.id
+                        ? { bgcolor: 'rgba(46, 125, 50, 0.08)', borderLeft: '3px solid', borderLeftColor: 'success.main' }
+                        : {}),
+                    }}
                   >
                     <AccordionSummary
                       expandIcon={<ExpandMoreIcon />}
@@ -330,5 +379,4 @@ export const FfCatalogInboundPackages = forwardRef<CatalogInboundPackagesHandle,
         </AccordionDetails>
       </Accordion>
     )
-  },
-)
+}

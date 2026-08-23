@@ -44,7 +44,10 @@ async function createBox(
 }
 
 async function scanCatalogPackage(page: Page, barcode: string): Promise<void> {
-  const search = page.getByTestId('ff-catalog-search')
+  const search = page.getByTestId('ff-catalog-inbound-packages-scan')
+  if (!(await search.isVisible().catch(() => false))) {
+    await page.getByTestId('ff-catalog-inbound-packages-toggle').click()
+  }
   await search.fill(barcode)
   await Promise.all([
     page.waitForResponse(
@@ -82,12 +85,14 @@ test('scan opens the received box and shows its current contents', async ({ page
 
   await page.goto('/app/ff/products')
   await expect(page.getByTestId('ff-products-list')).toBeVisible()
+  await expect(page.getByTestId('ff-products-list')).toContainText(seed.sku)
   await scanCatalogPackage(page, box.barcode)
 
   const packageItem = packageByBarcode(page, box.barcode)
   await expect(packageItem).toBeVisible()
   await expect(packageItem).toContainText('Короб № 1')
   await expect(packageItem).toContainText(seed.sku)
+  await expect(page.getByTestId('ff-products-list')).toContainText(seed.sku)
   await expect(
     packageItem.locator('[data-testid^="ff-catalog-inbound-composition-"] tbody tr').filter({
       hasText: seed.sku,
@@ -132,7 +137,8 @@ test('a late failed scan cannot replace the next successful box', async ({ page 
   })
 
   await page.goto('/app/ff/products')
-  const search = page.getByTestId('ff-catalog-search')
+  await page.getByTestId('ff-catalog-inbound-packages-toggle').click()
+  const search = page.getByTestId('ff-catalog-inbound-packages-scan')
   await search.fill(firstBox.barcode)
   const firstScan = search.press('Enter')
   await firstLookupStarted

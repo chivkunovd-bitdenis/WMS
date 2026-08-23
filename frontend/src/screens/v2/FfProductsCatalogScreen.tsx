@@ -48,10 +48,7 @@ import {
 } from '../../types/wbProductCatalog'
 import { FfManualProductCreateDialog } from '../ff/FfManualProductCreateDialog'
 import { FfProductTzImportDialog } from '../ff/FfProductTzImportDialog'
-import {
-  FfCatalogInboundPackages,
-  type CatalogInboundPackagesHandle,
-} from './FfCatalogInboundPackages'
+import { FfCatalogInboundPackages } from './FfCatalogInboundPackages'
 
 type SellerRow = { id: string; name: string }
 
@@ -217,9 +214,6 @@ export function FfProductsCatalogScreen({
   const [filterSearch, setFilterSearch] = useState('')
   const [filterSellerId, setFilterSellerId] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
-  const [inboundPackageLookupError, setInboundPackageLookupError] = useState(false)
-  const catalogSearchRef = useRef<HTMLInputElement>(null)
-  const inboundPackagesRef = useRef<CatalogInboundPackagesHandle>(null)
 
   // ── FBS-пул: направления остатка (перенесено из SellerProductsStockScreen) ──
   const [directionProductId, setDirectionProductId] = useState<string | null>(null)
@@ -233,10 +227,11 @@ export function FfProductsCatalogScreen({
     setError(null)
     setBusy(true)
     try {
-      // Состав найденного по ШК короба не зависит от фильтра основной таблицы:
-      // товар из другого селлера тоже должен отобразиться внутри физического короба.
-      // Поэтому каталог загружается один раз, а фильтры применяются только к основной таблице.
-      const res = await fetch(apiUrl('/products/ff-catalog'), {
+      // seller_id можно передавать бэкенду только с роли фулфилмент-админа —
+      // для остальных ролей эндпоинт и так отдаёт каталог по всем селлерам,
+      // поэтому для них фильтрация по селлеру остаётся клиентской (см. filteredRows).
+      const qs = canManageCatalog && filterSellerId ? `?seller_id=${encodeURIComponent(filterSellerId)}` : ''
+      const res = await fetch(apiUrl(`/products/ff-catalog${qs}`), {
         headers: { ...authHeaders(token) },
       })
       if (!res.ok) {
@@ -248,7 +243,7 @@ export function FfProductsCatalogScreen({
     } finally {
       setBusy(false)
     }
-  }, [authHeaders, token])
+  }, [authHeaders, token, canManageCatalog, filterSellerId])
 
   useEffect(() => {
     void load()
@@ -457,23 +452,6 @@ export function FfProductsCatalogScreen({
           (!filterCategory || row.wb_subject_name === filterCategory),
       ),
     [rows, filterSearch, filterSellerId, filterCategory],
-  )
-
-  const handleCatalogSearchKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLInputElement>) => {
-      if (event.key !== 'Enter') return
-      const barcode = filterSearch.trim().toUpperCase()
-      if (!/^(INB|ICG)-.+$/.test(barcode)) return
-      event.preventDefault()
-      setInboundPackageLookupError(false)
-      void inboundPackagesRef.current?.lookup(barcode).then((found) => {
-        if (found === null) return
-        if (found === false) setInboundPackageLookupError(true)
-        catalogSearchRef.current?.focus()
-        catalogSearchRef.current?.select()
-      })
-    },
-    [filterSearch],
   )
 
   const markDirectionBusy = useCallback((productId: string, pending: boolean) => {
@@ -731,16 +709,10 @@ export function FfProductsCatalogScreen({
             sx={{ alignItems: { sm: 'center' }, flexWrap: 'wrap', rowGap: 2 }}
           >
             <TextField
-              inputRef={catalogSearchRef}
               size="small"
               placeholder="Поиск по названию, артикулу, SKU или ШК"
               value={filterSearch}
-              onChange={(e) => {
-                setFilterSearch(e.target.value)
-                setInboundPackageLookupError(false)
-              }}
-              onKeyDown={handleCatalogSearchKeyDown}
-              helperText="Для поиска короба или грузоместа отсканируйте его внутренний ШК и нажмите Enter."
+              onChange={(e) => setFilterSearch(e.target.value)}
               slotProps={{ htmlInput: { 'data-testid': 'ff-catalog-search' } }}
               sx={{ minWidth: 260 }}
             />
@@ -783,12 +755,6 @@ export function FfProductsCatalogScreen({
             </Typography>
           </Stack>
         </Paper>
-
-        {inboundPackageLookupError ? (
-          <Alert severity="error" sx={{ mb: 2 }} data-testid="ff-catalog-inbound-packages-lookup-error">
-            Короб или грузоместо не найдено
-          </Alert>
-        ) : null}
 
         <TableContainer
           component={Paper}
@@ -1091,7 +1057,6 @@ export function FfProductsCatalogScreen({
         </TableContainer>
 
         <FfCatalogInboundPackages
-          ref={inboundPackagesRef}
           token={token}
           authHeaders={authHeaders}
           products={catalog}
