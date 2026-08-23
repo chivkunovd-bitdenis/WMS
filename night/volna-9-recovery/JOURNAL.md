@@ -126,3 +126,5 @@
 04:26   06-picking-list-order · splitter: FEATURES.md: первый frontend-атом должен отдельно создать ui-kit (код 0, попытка 1)
 04:29   06-picking-list-order · splitter: готово
 04:34   06-picking-list-order · screen-dev: готово
+04:34   06-picking-list-order · dev: фича 1/2 сохранена b76d255ae419
+04:39   06-picking-list-order · screen-dev: готово
