@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 
 import { waitForPostOk } from './api-waits'
 import { openFulfillmentRegistration } from './auth-flow'
@@ -36,6 +36,80 @@ async function scanCatalogPackage(page: Page, barcode: string): Promise<void> {
     ),
     search.press('Enter'),
   ])
+}
+
+function catalogPackageByBarcode(page: Page, barcode: string): Locator {
+  return page
+    .locator('[data-testid^="ff-catalog-inbound-package-"]:not([data-testid="ff-catalog-inbound-packages"])')
+    .filter({ hasText: barcode })
+}
+
+function packageQtyCell(packageItem: Locator, sku: string): Locator {
+  return packageItem
+    .locator('[data-testid^="ff-catalog-inbound-composition-"] tbody tr')
+    .filter({ hasText: sku })
+    .locator('td')
+    .nth(3)
+}
+
+async function createOtherSellerBox(
+  page: Page,
+  seed: { token: string; warehouseId: string; suffix: string },
+): Promise<{ barcode: string; sku: string; name: string; productBarcode: string }> {
+  const headers = { Authorization: `Bearer ${seed.token}` }
+  const seller = await page.request.post('/api/sellers', {
+    headers,
+    data: { name: `Box Seller B ${seed.suffix}` },
+  })
+  expect(seller.ok()).toBeTruthy()
+  const sellerId = String(((await seller.json()) as { id: string }).id)
+  const sku = `sku-box-b-${seed.suffix}`
+  const name = `Box Product B ${seed.suffix}`
+  const productBarcode = `B-CATALOG-${seed.suffix}`
+  const product = await page.request.post('/api/products', {
+    headers,
+    data: {
+      name,
+      sku_code: sku,
+      wb_barcode: productBarcode,
+      seller_id: sellerId,
+      length_mm: 100,
+      width_mm: 100,
+      height_mm: 100,
+    },
+  })
+  expect(product.ok()).toBeTruthy()
+  const productId = String(((await product.json()) as { id: string }).id)
+  const inbound = await page.request.post(INBOUND_API, { headers, data: { warehouse_id: seed.warehouseId } })
+  expect(inbound.ok()).toBeTruthy()
+  const requestId = String(((await inbound.json()) as { id: string }).id)
+  const line = await page.request.post(`${INBOUND_API}/${requestId}/lines`, {
+    headers,
+    data: { product_id: productId, expected_qty: 1 },
+  })
+  expect(line.ok()).toBeTruthy()
+  expect((await page.request.post(`${INBOUND_API}/${requestId}/submit`, { headers })).ok()).toBeTruthy()
+  expect((await page.request.post(`${INBOUND_API}/${requestId}/begin-receiving`, { headers })).ok()).toBeTruthy()
+  const box = await page.request.post(`${INBOUND_API}/${requestId}/boxes`, { headers })
+  expect(box.ok()).toBeTruthy()
+  const boxPayload = (await box.json()) as { id: string; internal_barcode: string }
+  expect(
+    (
+      await page.request.post(`${INBOUND_API}/${requestId}/boxes/open`, {
+        headers,
+        data: { barcode: boxPayload.internal_barcode },
+      })
+    ).ok(),
+  ).toBeTruthy()
+  expect(
+    (
+      await page.request.post(`${INBOUND_API}/${requestId}/boxes/${boxPayload.id}/scan`, {
+        headers,
+        data: { barcode: sku },
+      })
+    ).ok(),
+  ).toBeTruthy()
+  return { barcode: boxPayload.internal_barcode, sku, name, productBarcode }
 }
 
 async function createForeignBoxBarcode(page: Page, suffix: string): Promise<string> {
@@ -115,7 +189,7 @@ async function switchToCellsStaff(page: Page, adminToken: string, suffix: string
 }
 
 // TC-NEW-CATALOG-PACKAGES-001, TC-NEW-CATALOG-PACKAGES-002,
-// TC-NEW-CATALOG-PACKAGES-003, TC-NEW-CATALOG-PACKAGES-004, S-16-TC-015.
+// TC-NEW-CATALOG-PACKAGES-003, TC-NEW-CATALOG-PACKAGES-004, S-16-TC-015, S-16-TC-017.
 test('catalog scan follows a received box through partial and full putaway', async ({ page }) => {
   test.setTimeout(180_000)
   const seed = await seedFfSellerInbound(page, `catalog-package-${Date.now()}`)
@@ -185,13 +259,13 @@ test('catalog scan follows a received box through partial and full putaway', asy
   await page.goto('/app/ff/products')
   await expect(page.getByTestId('ff-products-list')).toBeVisible()
   await scanCatalogPackage(page, boxBarcode!)
-  const scannedBox = page.locator('[data-testid^="ff-catalog-inbound-package-"]').filter({ hasText: boxBarcode! })
+  const scannedBox = catalogPackageByBarcode(page, boxBarcode!)
   await expect(scannedBox).toContainText('Короб № 1')
   await expect(scannedBox).toContainText(seed.sku)
-  await expect(scannedBox).toContainText('4')
+  await expect(packageQtyCell(scannedBox, seed.sku)).toHaveText('4')
 
   await scanCatalogPackage(page, cargoBarcode!)
-  const scannedCargo = page.locator('[data-testid^="ff-catalog-inbound-package-"]').filter({ hasText: cargoBarcode! })
+  const scannedCargo = catalogPackageByBarcode(page, cargoBarcode!)
   await expect(scannedCargo).toContainText('Состав по грузоместу не ведётся')
 
   const foreignBarcode = await createForeignBoxBarcode(page, seed.suffix)
@@ -219,7 +293,7 @@ test('catalog scan follows a received box through partial and full putaway', asy
 
   await page.goto('/app/ff/products')
   await scanCatalogPackage(page, boxBarcode!)
-  await expect(page.locator('[data-testid^="ff-catalog-inbound-package-"]').filter({ hasText: boxBarcode! })).toContainText('2')
+  await expect(packageQtyCell(catalogPackageByBarcode(page, boxBarcode!), seed.sku)).toHaveText('2')
 
   await page.goto('/app/ff/sorting')
   await page.locator(`[data-testid="ff-inbound-queue-row"][data-request-id="${requestId}"]`).click()
@@ -260,7 +334,7 @@ test('catalog scan follows a received box through partial and full putaway', asy
   await failedListRequestStarted
   await expect(page.getByTestId('ff-catalog-inbound-packages-skeleton')).toBeVisible()
   await scanCatalogPackage(page, boxBarcode!)
-  const distributedBox = page.locator('[data-testid^="ff-catalog-inbound-package-"]').filter({ hasText: boxBarcode! })
+  const distributedBox = catalogPackageByBarcode(page, boxBarcode!)
   await expect(distributedBox).toContainText('Товар из короба уже разложен')
   await expect(page.getByTestId('ff-catalog-inbound-packages-skeleton')).toBeVisible()
   releaseFailedListRequest?.()
@@ -269,6 +343,20 @@ test('catalog scan follows a received box through partial and full putaway', asy
   await page.getByTestId('ff-catalog-inbound-packages-retry').click()
   await expect(distributedBox).toContainText('Товар из короба уже разложен')
   await page.unroute(/\/api\/operations\/inbound-packages$/)
+
+  const otherSellerBox = await createOtherSellerBox(page, seed)
+  await page.goto('/app/ff/products')
+  await expect(page.getByTestId('ff-products-list')).toBeVisible()
+  await page.getByTestId('ff-catalog-seller-filter').click()
+  await page.getByRole('option', { name: `Box Seller ${seed.suffix}`, exact: true }).click()
+  await expect(page.getByTestId('ff-products-list')).toContainText(seed.sku)
+  await expect(page.getByTestId('ff-products-list')).not.toContainText(otherSellerBox.sku)
+  await scanCatalogPackage(page, otherSellerBox.barcode)
+  const otherSellerPackage = catalogPackageByBarcode(page, otherSellerBox.barcode)
+  await expect(otherSellerPackage).toContainText(otherSellerBox.sku)
+  await expect(otherSellerPackage).toContainText(otherSellerBox.name)
+  await expect(otherSellerPackage).toContainText(otherSellerBox.productBarcode)
+  await expect(packageQtyCell(otherSellerPackage, otherSellerBox.sku)).toHaveText('1')
 
   await switchToCellsStaff(page, seed.token, seed.suffix)
   await page.goto('/app/ff/products')
