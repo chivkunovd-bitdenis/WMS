@@ -158,3 +158,5 @@
 06:18   09-billing · screen-dev: готово
 06:18   09-billing · dev: фича 3/6 сохранена 806927b7f578
 06:21   09-billing · screen-dev: готово
+06:21   09-billing · dev: фича 4/6 сохранена 618b904c8f64
+06:24   09-billing · screen-dev: готово
