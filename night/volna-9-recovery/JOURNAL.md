@@ -209,3 +209,10 @@
 07:32   08-storage · splitter: готово
 07:35   08-storage · screen-dev: готово
 07:35   08-storage · dev: фича 1/1 сохранена 4b8f39c54411
+07:38   08-storage · reviewer: готово
+07:42   08-storage · ui-critic: готово
+07:42 08-storage: отложено — ui-critic, эскалация не помогла
+07:53   08-storage · repair-plan: новый вердикт дорезается до dev
+07:55   08-storage · splitter: готово
+07:55   08-storage · resume: поатомный rework Terra по сохранённым находкам
+07:58   08-storage · screen-dev: готово

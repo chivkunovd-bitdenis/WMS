@@ -258,7 +258,7 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
   return <Box data-testid="ff-storage-page">
     <ScreenHeader title="Хранение" purpose="Рассчитайте фактическое хранение по селлерам и зафиксируйте месяц для начисления" />
     <FilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Селлер, SKU или артикул продавца" testId="storage-filters">
-      <TextField label="Месяц" type="month" value={month} onChange={(event) => setMonth(event.target.value)} size="small" slotProps={{ htmlInput: { 'data-testid': 'storage-month', max: currentMonth() } }} />
+      <TextField label="Месяц" type="month" value={month} onChange={(event) => setMonth(event.target.value)} size="small" helperText="Будущие месяцы недоступны: расчёт ещё не начался" slotProps={{ htmlInput: { 'data-testid': 'storage-month', max: currentMonth() } }} />
       {(data?.warehouses.length ?? 0) >= 2 && <TextField select label="Склад" value={selectedWarehouse} onChange={(event) => setSelectedWarehouse(event.target.value)} size="small" slotProps={{ htmlInput: { 'data-testid': 'storage-warehouse' } }}>{data?.warehouses.map((warehouse) => <MenuItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</MenuItem>)}</TextField>}
     </FilterBar>
     {error && <ErrorNotice testId="storage-error">{error}</ErrorNotice>}

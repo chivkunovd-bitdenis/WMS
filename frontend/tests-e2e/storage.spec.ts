@@ -76,6 +76,15 @@ test('S-11-TC-001 administrator opens the previous-month storage screen', async 
   await expect(page.getByTestId('storage-month')).toHaveValue('2026-08')
 })
 
+// TC-NEW-STORAGE-REVIEW-01 — будущие месяцы объяснены сотруднику и остаются недоступны в календаре.
+test('staff sees why future storage months are unavailable', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-08-20T12:00:00.000Z') })
+  await openStorage(page, 'fulfillment_staff')
+
+  await expect(page.getByText('Будущие месяцы недоступны: расчёт ещё не начался', { exact: true })).toBeVisible()
+  await expect(page.getByTestId('storage-month')).toHaveAttribute('max', '2026-08')
+})
+
 test('TC-NEW-STORAGE-REFRESH-01 calculates December of the previous year after Moscow January', () => {
   expect(previousMoscowMonth(new Date('2027-01-15T12:00:00.000Z'))).toBe('2026-12')
 })
