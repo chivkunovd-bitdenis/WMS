@@ -318,7 +318,7 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
     if (issue.reason === 'missing_seller_profile' && issue.seller_id) {
       return { label: 'Открыть селлера', to: `/app/ff/sellers?seller_id=${encodeURIComponent(issue.seller_id)}` }
     }
-    if (issue.reason === 'missing_ff_profile') return { label: 'Открыть настройки', to: '/app/ff/settings' }
+    if (issue.reason === 'missing_ff_profile') return { label: 'Открыть настройки', to: '/app/ff/settings?tab=tariffs' }
     if (issue.reason === 'storage_period_not_closed') return { label: 'Открыть хранение', to: '/app/ff/inventory' }
     return null
   }

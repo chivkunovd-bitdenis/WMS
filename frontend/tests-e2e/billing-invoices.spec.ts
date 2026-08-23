@@ -49,9 +49,14 @@ test('billing charges display kopecks exactly once', async ({ page }) => {
   await expect(cells.nth(7)).not.toHaveText('63 000,00 ₽')
 })
 
-// S-31-TC-013 — Given the seller billing profile blocks formation, When the admin opens the corrective action, Then it points to that seller rather than FF settings.
-test('billing invoice seller-profile issue opens the affected seller', async ({ page }) => {
+// S-31-TC-013 — Given the seller billing profile blocks formation, When the admin opens the corrective action, Then the affected seller dialog and its billing details are visible.
+test('billing invoice seller-profile issue opens the affected seller billing details', async ({ page }) => {
   await authenticateBillingAdmin(page)
+  await page.route('**/api/billing/profiles/sellers/seller-1', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ legal_name: 'ООО «Луна Трейд»', inn: '7812345678', kpp: '781201001' }),
+  }))
   await page.route('**/api/billing/invoices?**', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -67,6 +72,44 @@ test('billing invoice seller-profile issue opens the affected seller', async ({ 
   await expect(page.getByRole('button', { name: 'Открыть настройки' })).toHaveCount(0)
   await page.getByTestId('billing-invoice-issue-action-seller-profile-issue').click()
   await expect(page).toHaveURL(/\/app\/ff\/sellers\?seller_id=seller-1$/)
+  const sellerDialog = page.getByRole('dialog', { name: 'Селлер: Луна' })
+  await expect(sellerDialog).toBeVisible()
+  await expect(sellerDialog.getByTestId('seller-billing-details')).toHaveAttribute('open', '')
+  await expect(sellerDialog.getByTestId('seller-legal-name')).toHaveValue('ООО «Луна Трейд»')
+  await expect(sellerDialog.getByTestId('seller-inn')).toHaveValue('7812345678')
+})
+
+// S-31-TC-013 — Given the FF billing profile blocks formation, When the admin opens the corrective action, Then the tariffs tab and FF profile fields are visible.
+test('billing invoice FF-profile issue opens tariff settings with FF details', async ({ page }) => {
+  await authenticateBillingAdmin(page)
+  await page.route('**/api/billing/profiles/ff', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ legal_name: 'ООО «Фулфилмент Волна»', inn: '7701234567', kpp: '', bank_name: 'АО «Банк»', bik: '044525000', settlement_account: '40702810000000000001', correspondent_account: '30101810400000000225' }),
+  }))
+  await page.route('**/api/billing/tariffs', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify([]),
+  }))
+  await page.route('**/api/billing/invoices?**', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      invoices: [],
+      issues: [{ id: 'ff-profile-issue', seller_id: 'seller-1', seller_name: 'Луна', period: '2026-07', reason: 'missing_ff_profile', message: 'Заполните реквизиты ФФ' }],
+    }),
+  }))
+
+  await page.goto('/app/ff/billing')
+  await page.getByTestId('billing-tab-invoices').click()
+  await expect(page.getByTestId('billing-invoice-issues')).toContainText('Нет реквизитов')
+  await page.getByTestId('billing-invoice-issue-action-ff-profile-issue').click()
+  await expect(page).toHaveURL(/\/app\/ff\/settings\?tab=tariffs$/)
+  await expect(page.getByTestId('ff-settings-tariffs-tab')).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByTestId('ff-settings-tariffs-panel')).toContainText('Реквизиты ФФ')
+  await expect(page.getByTestId('ff-profile-legal_name')).toHaveValue('ООО «Фулфилмент Волна»')
+  await expect(page.getByTestId('ff-profile-inn')).toHaveValue('7701234567')
 })
 
 // TC-NEW-016 — Given an invoice is blocked by a missing tariff, When the admin opens the corrective action, Then the FF tariff tab is active.

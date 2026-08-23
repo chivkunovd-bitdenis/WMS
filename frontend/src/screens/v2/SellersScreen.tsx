@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -42,6 +43,8 @@ export function SellersScreen({
   sellers,
   onRefresh,
 }: Props) {
+  const [searchParams] = useSearchParams()
+  const requestedSellerId = searchParams.get('seller_id')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -53,6 +56,17 @@ export function SellersScreen({
   const [profileSuccess, setProfileSuccess] = useState(false)
   const [profiles, setProfiles] = useState<Record<string, SellerProfile>>({})
   const [profileRevision, setProfileRevision] = useState(0)
+
+  useEffect(() => {
+    if (!requestedSellerId) return
+    const seller = sellers.find((candidate) => candidate.id === requestedSellerId)
+    if (!seller) return
+    setSelectedSeller(seller)
+    setProfileOpen(true)
+    setProfileError(null)
+    setProfileSuccess(false)
+    void loadSellerProfile(seller.id)
+  }, [requestedSellerId, sellers])
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
