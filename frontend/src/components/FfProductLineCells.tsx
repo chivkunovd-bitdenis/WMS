@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import type { ReactNode } from 'react'
 import PrintOutlined from '@mui/icons-material/PrintOutlined'
 import { IconButton, TableCell, Tooltip, Typography } from '@mui/material'
@@ -49,7 +50,7 @@ type CellsProps = {
   showComposition?: boolean
 }
 
-export function FfProductLineCells({
+function FfProductLineCellsBase({
   meta,
   showPrint = true,
   printTestId = 'ff-product-barcode-print',
@@ -146,3 +147,9 @@ export function FfProductLineCells({
     </>
   )
 }
+
+/**
+ * memo: компонент повторяется в каждой строке операционных таблиц.
+ * Без него любое обновление состояния экрана перерисовывало его во всех строках сразу.
+ */
+export const FfProductLineCells = memo(FfProductLineCellsBase)
