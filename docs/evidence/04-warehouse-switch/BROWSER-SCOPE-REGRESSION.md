@@ -34,6 +34,15 @@
 - `warehouses-technical-hidden.png`
 - `fbs-screen-scope-regression.png`
 
+## Живой browser verdict
+
+Root-agent отдельно прошёл стенд в открытом браузере и дал `PASS`:
+
+- на `/app/catalog` виден только `Основной склад (physical-main)`, технический
+  `FBS WB 777` отсутствует;
+- на `/app/ff/fbs` сохранён штатный S-03: нет нового переключателя физического
+  склада, новых колонок или посторонних контролов.
+
 ## Независимое ревью
 
 Независимый Sol-review: `PASS`, блокирующих findings нет. Reviewer отдельно
