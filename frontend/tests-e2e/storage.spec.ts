@@ -1,7 +1,13 @@
 import { expect, test, type Page } from '@playwright/test'
 
 import { waitForGetOk, waitForPostOk } from './api-waits'
-import { openFulfillmentRegistration } from './auth-flow'
+import {
+  apiCreateSubmittedInbound,
+  beginInboundReceivingWithBoxes,
+  fulfillInboundViaBoxScans,
+  INBOUND_API,
+  seedFfSellerInbound,
+} from './inbound-boxes-helpers'
 
 const rows = [
   { id: 'draft-problem', seller_id: 'seller-1', seller_name: 'Красотка', warehouse_id: 'warehouse-1', warehouse_name: 'Основной склад', status: 'draft', fixed_at: null, total_liter_days: '12840.50', total_amount: '8988.35', problem_count: 1, measurements: [{ product_id: 'product-missing', sku: 'SKU-11890', seller_article: 'NRD-2XL-LONG', volume_liters: null, dimensions_source: null, liter_days: '0', rate_snapshot: '0.70', amount: null, status: 'missing_dimensions' }, { product_id: 'product-ready', sku: 'SKU-10432', seller_article: 'KRS-44-BLK', volume_liters: '2.40', dimensions_source: 'manual', liter_days: '8928.00', rate_snapshot: '0.70', amount: '6249.60', status: 'calculated' }] },
@@ -56,45 +62,72 @@ test('S-11-TC-001 administrator opens the previous-month storage screen', async 
 })
 
 test('S-11-TC-002 administrator saves a future warehouse rate and seller exception in one request', async ({ page }) => {
-  const suffix = Date.now()
-  const email = `storage-${suffix}@example.com`
+  test.setTimeout(120_000)
+  const seed = await seedFfSellerInbound(page, `storage-${Date.now()}`)
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  expect(seed.warehouseId).toMatch(uuidPattern)
+  expect(seed.sellerId).toMatch(uuidPattern)
+  expect(seed.productId).toMatch(uuidPattern)
+
+  const headers = { Authorization: `Bearer ${seed.token}` }
   const moscowToday = moscowDate()
   const yesterday = moscowDate(-1)
   const validFrom = moscowDate(1)
   const currentMonth = moscowToday.slice(0, 7)
 
-  await page.goto('/')
-  await openFulfillmentRegistration(page)
-  await page.getByTestId('register-form').getByLabel('Организация').fill(`Storage ${suffix}`)
-  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email)
-  await page.getByTestId('register-form').getByLabel('Пароль').fill('password123')
-  const [registration] = await Promise.all([
-    waitForPostOk(page, '/api/auth/register'),
-    waitForGetOk(page, '/api/auth/me'),
-    page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
-  ])
-  const token = String(((await registration.json()) as { access_token: string }).access_token)
-  const headers = { Authorization: `Bearer ${token}` }
-  const warehouseResponse = await page.request.post('/api/warehouses', {
+  const dimensionsResponse = await page.request.patch(`/api/products/${seed.productId}/dimensions`, {
     headers,
-    data: { name: 'Основной склад', code: `storage-${suffix}` },
+    data: { length_mm: 10_000, width_mm: 10_000, height_mm: 10_000 },
   })
-  expect(warehouseResponse.ok()).toBeTruthy()
-  const warehouseId = String(((await warehouseResponse.json()) as { id: string }).id)
-  const sellerResponse = await page.request.post('/api/sellers', { headers, data: { name: 'Красотка' } })
-  expect(sellerResponse.ok()).toBeTruthy()
-  const sellerId = String(((await sellerResponse.json()) as { id: string }).id)
-  const initialTariff = await page.request.post('/api/operations/storage/tariffs', {
-    headers,
-    data: { warehouse_id: warehouseId, amount: 0.5, valid_from: moscowToday },
+  expect(dimensionsResponse.ok(), await dimensionsResponse.text()).toBeTruthy()
+
+  const inboundId = await apiCreateSubmittedInbound(page.request, seed, {
+    plannedBoxes: 1,
+    expectedQty: 1,
   })
-  expect(initialTariff.status()).toBe(201)
+  const { boxes } = await beginInboundReceivingWithBoxes(page.request, headers, inboundId, {
+    boxCount: 1,
+  })
+  await fulfillInboundViaBoxScans(page.request, headers, inboundId, boxes, seed.sku, [1])
+  const verifyResponse = await page.request.post(`${INBOUND_API}/${inboundId}/verify`, { headers })
+  expect(verifyResponse.ok(), await verifyResponse.text()).toBeTruthy()
+  const postResponse = await page.request.post(`${INBOUND_API}/${inboundId}/post`, { headers })
+  expect(postResponse.ok(), await postResponse.text()).toBeTruthy()
+
   const initialRebuild = await page.request.post('/api/operations/storage/measurements/rebuild', {
     headers,
-    data: { year: Number(currentMonth.slice(0, 4)), month: Number(currentMonth.slice(5, 7)), warehouse_id: warehouseId },
+    data: { year: Number(currentMonth.slice(0, 4)), month: Number(currentMonth.slice(5, 7)), warehouse_id: seed.warehouseId },
   })
   expect(initialRebuild.status()).toBe(202)
   await waitForLiveJob(page, headers, String(((await initialRebuild.json()) as { id: string }).id))
+
+  const draftResponse = await page.request.get('/api/operations/storage/statements', {
+    headers,
+    params: {
+      year: Number(currentMonth.slice(0, 4)),
+      month: Number(currentMonth.slice(5, 7)),
+      warehouse_id: seed.warehouseId,
+    },
+  })
+  expect(draftResponse.ok(), await draftResponse.text()).toBeTruthy()
+  const draftBody = await draftResponse.json() as {
+    tariff_configured: boolean
+    statements: Array<{
+      id: string
+      seller_id: string
+      warehouse_id: string
+      total_liter_days: string
+      total_amount: string
+    }>
+  }
+  expect(draftBody.tariff_configured).toBe(false)
+  const draft = draftBody.statements.find((statement) => statement.seller_id === seed.sellerId)
+  expect(draft).toBeDefined()
+  if (!draft) throw new Error('storage draft was not created for the seeded seller')
+  expect(draft.id).toMatch(uuidPattern)
+  expect(draft.warehouse_id).toBe(seed.warehouseId)
+  expect(Number(draft.total_liter_days)).toBeGreaterThan(0)
+  expect(Number(draft.total_amount)).toBe(0)
 
   await page.goto('/app/ff/inventory')
   await expect(page.getByTestId('ff-storage-page')).toBeVisible()
@@ -102,7 +135,7 @@ test('S-11-TC-002 administrator saves a future warehouse rate and seller excepti
     page.waitForResponse((response) => response.request().method() === 'GET' && response.url().includes('/api/operations/storage/statements?') && response.ok()),
     page.getByTestId('storage-month').fill(currentMonth),
   ])
-  await expect(page.getByTestId('storage-seller-table')).toContainText('Красотка')
+  await expect(page.getByTestId('storage-seller-table')).toContainText('Тариф хранения ещё не задан')
 
   let tariffPosts = 0
   let rebuildPosts = 0
@@ -115,7 +148,7 @@ test('S-11-TC-002 administrator saves a future warehouse rate and seller excepti
     if (request.method() === 'POST' && request.url().includes('/api/operations/storage/measurements/rebuild')) rebuildPosts += 1
   })
 
-  await page.getByTestId('storage-rate').click()
+  await page.getByRole('button', { name: 'Задать тариф' }).click()
   const warehouseValidFrom = page.getByTestId('storage-rate-valid-from')
   const saveRate = page.getByTestId('storage-rate-save')
   await expect(warehouseValidFrom).toHaveValue(moscowToday)
@@ -129,7 +162,7 @@ test('S-11-TC-002 administrator saves a future warehouse rate and seller excepti
   await expect(saveRate).toBeEnabled()
   await page.getByText('Индивидуальная ставка селлера', { exact: true }).click()
   await page.getByLabel('Селлер').click()
-  await page.getByRole('option', { name: 'Красотка' }).click()
+  await page.getByRole('option', { name: `Box Seller ${seed.suffix}` }).click()
   await page.getByLabel('Ставка, ₽/л·день').nth(1).fill('0,65')
   const sellerValidFrom = page.getByTestId('storage-seller-rate-valid-from')
   await expect(sellerValidFrom).toHaveValue(moscowToday)
@@ -141,56 +174,49 @@ test('S-11-TC-002 administrator saves a future warehouse rate and seller excepti
   await sellerValidFrom.fill(moscowToday)
   await expect(saveRate).toBeEnabled()
   await warehouseValidFrom.fill(validFrom)
-  await sellerValidFrom.fill(validFrom)
   const [tariffResponse] = await Promise.all([
     waitForPostOk(page, '/api/operations/storage/tariffs'),
     saveRate.click(),
   ])
   expect(tariffResponse.status()).toBe(201)
+  const tariffResult = await tariffResponse.json() as {
+    warehouse_tariff: { id: string; warehouse_id: string; amount: string; valid_from: string }
+    seller_exception: { id: string; seller_id: string; amount: string; valid_from: string } | null
+    recalculated_statements: Array<{
+      id: string
+      total_amount: string
+      measurements: Array<{ rate_snapshot: string | null; amount: string | null }>
+    }>
+  }
+  expect(tariffResult.warehouse_tariff.id).toMatch(uuidPattern)
+  expect(tariffResult.warehouse_tariff.warehouse_id).toBe(seed.warehouseId)
+  expect(tariffResult.seller_exception).not.toBeNull()
+  if (!tariffResult.seller_exception) throw new Error('seller exception was not created atomically')
+  expect(tariffResult.seller_exception.id).toMatch(uuidPattern)
+  expect(tariffResult.seller_exception.seller_id).toBe(seed.sellerId)
+  const recalculated = tariffResult.recalculated_statements.find((statement) => statement.id === draft.id)
+  expect(recalculated).toBeDefined()
+  if (!recalculated) throw new Error('tariff response did not contain the seeded draft')
+  const recalculatedMeasurement = recalculated.measurements[0]
+  expect(recalculatedMeasurement).toBeDefined()
+  if (!recalculatedMeasurement) throw new Error('recalculated draft did not contain a measurement')
+  expect(Number(recalculated.total_amount)).toBeGreaterThan(0)
+  expect(recalculatedMeasurement.rate_snapshot).toBe('0.65')
+  expect(recalculatedMeasurement.amount).not.toBeNull()
+  if (recalculatedMeasurement.amount === null) throw new Error('recalculated amount is missing')
   await expect(page.getByRole('dialog')).toHaveCount(0)
-  await expect(page.getByTestId('storage-generate')).toBeEnabled()
+  await expect(page.getByTestId('storage-seller-table')).toContainText(recalculated.total_amount)
+  await page.getByTestId(`storage-expand-${draft.id}`).click()
+  await expect(page.getByTestId('storage-sku-table')).toContainText('0.65')
+  await expect(page.getByTestId('storage-sku-table')).toContainText(recalculatedMeasurement.amount)
   expect(tariffPosts).toBe(1)
   expect(rebuildPosts).toBe(0)
   expect(tariffBody).toEqual({
-    warehouse_id: warehouseId,
+    warehouse_id: seed.warehouseId,
     amount: 0.7,
     valid_from: validFrom,
-    seller_exception: { seller_id: sellerId, amount: 0.65, valid_from: validFrom },
+    seller_exception: { seller_id: seed.sellerId, amount: 0.65, valid_from: moscowToday },
   })
-})
-
-test('S-11-TC-002 immediately shows the tariff-repriced draft without a manual rebuild', async ({ page }) => {
-  await openStorage(page)
-  let rebuildPosts = 0
-  page.on('request', (request) => {
-    if (request.method() === 'POST' && request.url().includes('/api/operations/storage/measurements/rebuild')) rebuildPosts += 1
-  })
-  await page.route('**/api/operations/storage/tariffs', (route) => route.fulfill({
-    status: 201,
-    json: {
-      warehouse_tariff: { id: 'tariff-new', warehouse_id: 'warehouse-1', seller_id: null, amount: '1.40', valid_from: moscowDate() },
-      seller_exception: null,
-      recalculated_statements: [{
-        ...rows[1],
-        total_amount: '9004.80',
-        measurements: [{ ...rows[1].measurements[0], rate_snapshot: '1.40', amount: '9004.80' }],
-      }],
-    },
-  }))
-
-  await page.getByTestId('storage-expand-draft-ready').click()
-  await page.getByTestId('storage-rate').click()
-  await page.getByTestId('storage-rate-amount').fill('1,40')
-  await Promise.all([
-    waitForPostOk(page, '/api/operations/storage/tariffs'),
-    page.getByTestId('storage-rate-save').click(),
-  ])
-
-  await expect(page.getByRole('dialog')).toHaveCount(0)
-  await expect(page.getByTestId('storage-seller-table')).toContainText('9004.80')
-  await expect(page.getByTestId('storage-sku-table')).toContainText('1.40')
-  await expect(page.getByTestId('storage-sku-table')).toContainText('9004.80')
-  expect(rebuildPosts).toBe(0)
 })
 
 test('S-11-TC-017 tariff repricing failure keeps the last successful summary', async ({ page }) => {
