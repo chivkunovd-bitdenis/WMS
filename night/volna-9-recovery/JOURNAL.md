@@ -149,3 +149,11 @@
 01:33   05-prod-slow · reviewer: Terra-rework не закрыл вердикт — эскалация Sol
 01:33   05-prod-slow · reviewer: находки, круг 2 — назад к разработке
 01:37   05-prod-slow · screen-dev: готово
+01:37   05-prod-slow · dev: фича 1/3 сохранена 8bdf373c895a
+01:37   05-prod-slow · screen-dev: нет файла DEV.md (код 1, попытка 1)
+01:37   05-prod-slow · screen-dev: нет файла DEV.md (код 1, попытка 2)
+01:37 05-prod-slow: отложено на шаге dev
+04:16   05-prod-slow · repair-plan: новый вердикт дорезается до dev
+04:19   05-prod-slow · splitter: готово
+04:19   05-prod-slow · resume: поатомный rework Sol по сохранённым находкам
+04:27   05-prod-slow · screen-dev: готово

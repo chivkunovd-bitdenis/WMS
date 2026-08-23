@@ -56,6 +56,7 @@ async function openCatalogArtifactTapeDialog(page: Page) {
 
 // S-03-TC-008 — ожидание подготовки и только явное открытие готового PDF.
 // S-03-TC-009 — повторное открытие тех же данных показывает существующее активное задание.
+// S-03-TC-018 — в состоянии подготовки нет действий, а диалог закрывается через backdrop.
 test('S-03 marking tape restores either of two background jobs and opens PDF explicitly', async ({ page }) => {
   test.setTimeout(180_000)
   const { firstPrintAction, secondPrintAction, productX } = await openCatalogArtifactTapeDialog(page)
@@ -116,26 +117,35 @@ test('S-03 marking tape restores either of two background jobs and opens PDF exp
   })
 
   await page.getByTestId('marking-print-confirm').click()
-  await expect(page.getByTestId('marking-print-preparing')).toContainText('Готовим ленту…')
-  await expect(page.getByTestId('marking-print-preparing')).toContainText('Готовим к печати')
-  await expect(page.getByTestId('marking-print-preparing')).toContainText('лента собирается в фоне')
+  const preparingStatus = page.getByTestId('marking-print-preparing')
+  const preparingActions = preparingStatus.locator(
+    'button, a[href], input, select, textarea, [role="button"], [role="link"], [tabindex]:not([tabindex="-1"])',
+  )
+  await expect(preparingStatus).toContainText('Готовим ленту…')
+  await expect(preparingStatus).toContainText('Готовим к печати')
+  await expect(preparingStatus).toContainText('лента собирается в фоне')
+  await expect(preparingStatus.getByRole('button', { name: 'Закрыть' })).toHaveCount(0)
+  await expect(preparingActions).toHaveCount(0)
   await expect(page.getByTestId('marking-print-confirm')).toHaveCount(0)
   expect(contentRequests).toBe(0)
 
-  // Закрываем через Esc — кнопки «Закрыть» в состоянии preparing нет (R-31)
-  await page.keyboard.press('Escape')
+  const dialog = page.getByTestId('marking-print-dialog')
+  const backdropRegion = dialog.locator('.MuiDialog-container')
+  await expect(backdropRegion).toBeVisible()
+  await backdropRegion.click({ position: { x: 8, y: 8 } })
   await expect(page.getByTestId('marking-print-dialog')).toBeHidden()
   await secondPrintAction.click()
   await expect(page.getByTestId('marking-print-preparing')).toHaveCount(0)
   await page.getByTestId('marking-print-confirm').click()
-  await expect(page.getByTestId('marking-print-preparing')).toBeVisible()
+  await expect(preparingStatus).toBeVisible()
+  await expect(preparingActions).toHaveCount(0)
   expect(tapeStarts).toBe(2)
 
-  // Закрываем через Esc — кнопки «Закрыть» в состоянии preparing нет (R-31)
-  await page.keyboard.press('Escape')
-  await expect(page.getByTestId('marking-print-dialog')).toBeHidden()
+  await expect(backdropRegion).toBeVisible()
+  await backdropRegion.click({ position: { x: 8, y: 8 } })
+  await expect(dialog).toBeHidden()
   await firstPrintAction.click()
-  await expect(page.getByTestId('marking-print-preparing')).toBeVisible()
+  await expect(preparingStatus).toBeVisible()
   expect(tapeStarts).toBe(2)
 
   releaseFirstJob = true
