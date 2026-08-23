@@ -32,6 +32,67 @@ const productReportFixture = (name = 'Report product') => ({
   }],
 })
 
+// S-33-TC-015 — Given an FF staff member with reception access but without
+// inventory/cells access, When they open the report route directly, Then the
+// visible access-denied state replaces the report and no reporting data is requested.
+test('FF staff without inventory access cannot open the direct reports route', async ({ page }) => {
+  const suffix = `ff-reports-denied-${Date.now()}`
+  const seed = await seedFfSellerInbound(page, suffix)
+  const staffEmail = `${suffix}@example.com`
+  const staffPassword = 'password123'
+  const adminHeaders = { Authorization: `Bearer ${seed.token}` }
+
+  const created = await page.request.post('/api/auth/staff-accounts', {
+    headers: adminHeaders,
+    data: { email: staffEmail },
+  })
+  expect(created.status()).toBe(201)
+  const staffId = String(((await created.json()) as { id: string }).id)
+  const permissions = await page.request.patch(`/api/auth/staff-accounts/${staffId}/permissions`, {
+    headers: adminHeaders,
+    data: {
+      settings: false,
+      mp_shipments: false,
+      reception: true,
+      cells: false,
+      inventory: false,
+      packaging: false,
+      shift_lead: false,
+    },
+  })
+  expect(permissions.status()).toBe(200)
+  const passwordSetup = await page.request.post('/api/auth/set-initial-password', {
+    data: { email: staffEmail, password: staffPassword },
+  })
+  expect(passwordSetup.status()).toBe(200)
+
+  await page.getByTestId('logout').click()
+  const loginForm = page.getByTestId('login-form')
+  await expect(loginForm).toBeVisible()
+  await loginForm.getByLabel('Email').fill(staffEmail)
+  await loginForm.getByLabel('Пароль').fill(staffPassword)
+  await Promise.all([
+    page.waitForResponse((response) => response.url().includes('/api/auth/login') && response.ok()),
+    page.waitForResponse((response) => response.url().includes('/api/auth/me') && response.ok()),
+    loginForm.getByRole('button', { name: 'Войти' }).click(),
+  ])
+
+  let reportRequests = 0
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname.startsWith('/api/reports/')) reportRequests += 1
+  })
+  await page.goto('/app/ff/reports')
+
+  await expect(page).toHaveURL('/app/ff/reports')
+  await expect(page.getByTestId('ff-access-denied')).toContainText('Нет доступа к этому разделу.')
+  await expect(page.getByTestId('nav-ff-reports')).toHaveCount(0)
+  await expect(page.getByTestId('ff-reports-page')).toHaveCount(0)
+  await expect(page.getByTestId('ff-reports-metrics')).toHaveCount(0)
+  await expect(page.getByTestId('ff-reports-chart')).toHaveCount(0)
+  await expect(page.getByTestId('ff-reports-table')).toHaveCount(0)
+  expect(reportRequests).toBe(0)
+})
+
 // S-33-TC-008 — a late page response cannot overwrite a freshly filtered
 // slice, and a table failure is not presented as a valid empty report.
 test('FF report keeps one table slice and distinguishes a table error from empty data', async ({ page }) => {

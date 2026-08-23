@@ -6,8 +6,65 @@ import {
   fulfillInboundViaBoxScans,
   INBOUND_API,
   loginSellerPortal,
+  sellerPath,
   seedFfSellerInbound,
 } from './inbound-boxes-helpers'
+import { loginAsSeller } from './auth-flow'
+
+// S-33-TC-016 — Given seller staff with documents access but without
+// can_products, When they open the report route directly, Then the seller
+// portal shows access denied and does not request or render reporting data.
+// The registry route is /app/seller/reports; local Playwright mounts the same
+// SellerApp under /seller, so sellerPath('/reports') resolves to /seller/reports.
+test('seller staff without products access cannot open the direct reports route', async ({ page }) => {
+  const suffix = `seller-reports-denied-${Date.now()}`
+  const seed = await seedFfSellerInbound(page, suffix)
+  const staffEmail = `${suffix}@example.com`
+
+  await page.getByTestId('logout').click()
+  await loginSellerPortal(page, seed.sellerEmail, seed.password)
+  await page.getByTestId('nav-seller-settings').click()
+  await expect(page.getByTestId('seller-staff-panel')).toBeVisible()
+  await page.getByTestId('seller-staff-email').fill(staffEmail)
+  await page.getByTestId('seller-staff-create-perm-products').click()
+  await page.getByTestId('seller-staff-create-perm-honest_sign').click()
+  await Promise.all([
+    page.waitForResponse((response) =>
+      response.url().includes('/api/auth/seller-staff-accounts') &&
+      response.request().method() === 'POST' &&
+      response.ok(),
+    ),
+    page.waitForResponse((response) =>
+      response.url().includes('/api/auth/seller-staff-accounts') &&
+      response.request().method() === 'GET' &&
+      response.ok(),
+    ),
+    page.getByTestId('seller-staff-submit').click(),
+  ])
+  await expect(page.getByTestId('seller-staff-row').filter({ hasText: staffEmail })).toBeVisible()
+
+  await page.getByTestId('logout').click()
+  await loginAsSeller(page, staffEmail, seed.password, { firstTime: true })
+  await expect(page.getByTestId('nav-seller-documents')).toBeVisible()
+  await expect(page.getByTestId('nav-seller-reports')).toHaveCount(0)
+
+  let reportRequests = 0
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname.startsWith('/api/reports/')) reportRequests += 1
+  })
+  const directReportsPath = sellerPath('/reports')
+  await page.goto(directReportsPath)
+
+  await expect.poll(() => new URL(page.url()).pathname).toBe(directReportsPath)
+  await expect(page.getByTestId('seller-access-denied')).toContainText(
+    'Нет доступа к этому разделу. Обратитесь к администратору селлера.',
+  )
+  await expect(page.getByTestId('ff-reports-page')).toHaveCount(0)
+  await expect(page.getByTestId('ff-reports-metrics')).toHaveCount(0)
+  await expect(page.getByTestId('ff-reports-chart')).toHaveCount(0)
+  await expect(page.getByTestId('ff-reports-table')).toHaveCount(0)
+  expect(reportRequests).toBe(0)
+})
 
 // S-33-TC-003 / S-33-TC-014 — only the API operational flag defines the seller
 // report warehouses, while the authenticated seller scope excludes other data.
