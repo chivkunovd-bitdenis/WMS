@@ -66,6 +66,108 @@ async def _seed_product_movement(
     return str(product_id)
 
 
+async def _ff_staff_report_headers(
+    async_client: AsyncClient,
+    admin_headers: dict[str, str],
+    *,
+    cells: bool,
+    inventory: bool,
+) -> dict[str, str]:
+    suffix = str(time.time_ns())
+    email = f"report-staff-{suffix}@example.com"
+    created = await async_client.post(
+        "/auth/staff-accounts", headers=admin_headers, json={"email": email}
+    )
+    assert created.status_code == 201, created.text
+    permissions = await async_client.patch(
+        f"/auth/staff-accounts/{created.json()['id']}/permissions",
+        headers=admin_headers,
+        json={
+            "settings": False,
+            "mp_shipments": False,
+            "reception": False,
+            "cells": cells,
+            "inventory": inventory,
+            "packaging": False,
+            "shift_lead": False,
+        },
+    )
+    assert permissions.status_code == 200, permissions.text
+    password = await async_client.post(
+        "/auth/set-initial-password",
+        json={"email": email, "password": "password123"},
+    )
+    assert password.status_code == 200, password.text
+    login = await async_client.post(
+        "/auth/login", json={"email": email, "password": "password123"}
+    )
+    assert login.status_code == 200, login.text
+    return {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+
+async def _seller_report_headers(
+    async_client: AsyncClient,
+    admin_headers: dict[str, str],
+    seller_id: str,
+) -> dict[str, str]:
+    suffix = str(time.time_ns())
+    email = f"report-seller-{suffix}@example.com"
+    created = await async_client.post(
+        "/auth/seller-accounts",
+        headers=admin_headers,
+        json={"seller_id": seller_id, "email": email, "password": "password123"},
+    )
+    assert created.status_code in (200, 201), created.text
+    login = await async_client.post(
+        "/auth/login", json={"email": email, "password": "password123"}
+    )
+    assert login.status_code == 200, login.text
+    return {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+
+@pytest.mark.asyncio
+async def test_reports_require_inventory_for_ff_staff_but_keep_allowed_roles(
+    async_client: AsyncClient,
+) -> None:
+    admin_headers, tenant_id, seller_id, warehouse_id, location_id = (
+        await _report_context(async_client)
+    )
+    await _seed_product_movement(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        location_id=location_id,
+        number=1,
+    )
+    cells_only_headers = await _ff_staff_report_headers(
+        async_client, admin_headers, cells=True, inventory=False
+    )
+    inventory_headers = await _ff_staff_report_headers(
+        async_client, admin_headers, cells=False, inventory=True
+    )
+    seller_headers = await _seller_report_headers(
+        async_client, admin_headers, seller_id
+    )
+    params = {
+        "date_from": "2026-08-01T00:00:00Z",
+        "date_to": "2026-08-02T00:00:00Z",
+    }
+    paths = (
+        "/reports/overview",
+        "/reports/inventory",
+        "/reports/inventory/export.csv",
+    )
+
+    for path in paths:
+        denied = await async_client.get(path, headers=cells_only_headers, params=params)
+        assert denied.status_code == 403, (path, denied.text)
+        assert denied.json() == {"detail": "forbidden"}
+
+        for allowed_headers in (admin_headers, inventory_headers, seller_headers):
+            allowed = await async_client.get(path, headers=allowed_headers, params=params)
+            assert allowed.status_code == 200, (path, allowed.text)
+
+
 @pytest.mark.asyncio
 async def test_reports_inventory_paginates_aggregates_and_searches_all_product_fields(
     async_client: AsyncClient,

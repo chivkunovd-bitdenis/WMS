@@ -169,3 +169,9 @@
 05:00   07-reporting · dev: фича 6/7 сохранена 8c9ecd9d4955
 05:11   07-reporting · screen-dev: готово
 05:11   07-reporting · dev: фича 7/7 сохранена 26ba4f7b5a4e
+05:26   07-reporting · reviewer: готово
+05:26   07-reporting · reviewer: Terra-rework не закрыл вердикт — эскалация Sol
+05:26   07-reporting · reviewer: находки, круг 3 — назад к разработке
+05:28   07-reporting · splitter: готово
+05:55   07-reporting · resume: поатомный rework Terra по сохранённым находкам
+05:58   07-reporting · backend-dev: готово
