@@ -27,6 +27,7 @@ test('billing ledger preserves filters and month context', async ({ page }) => {
   })
   await page.goto('/app/ff/billing')
   await expect(page.getByTestId('ff-billing-screen')).toBeVisible()
+  await expect(page.getByTestId('billing-period')).toHaveValue('август 2026')
   await expect(page.getByText('ПР-000184')).toBeVisible()
   const pageGeometry = await page.evaluate(() => ({
     contentWidth: document.documentElement.scrollWidth,
@@ -181,7 +182,10 @@ test('billing ledger clears stale rows on load error', async ({ page }) => {
   })
   await page.goto('/app/ff/billing')
   await expect(page.getByText('ПР-000184')).toBeVisible()
-  await page.getByTestId('billing-period').fill('2026-07')
+  const periodGroup = page.getByRole('group', { name: 'Месяц' })
+  await periodGroup.getByRole('spinbutton', { name: 'Month' }).fill('июль')
+  await periodGroup.getByRole('spinbutton', { name: 'Year' }).fill('2026')
+  await periodGroup.getByRole('spinbutton', { name: 'Year' }).press('Tab')
   await expect(page.getByTestId('billing-error')).toBeVisible()
   await expect(page.getByText('ПР-000184')).toHaveCount(0)
 })

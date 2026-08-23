@@ -211,12 +211,22 @@ async def _invoice_inputs(
             BillingProfile.seller_id == seller_id,
         )
     )
-    reasons = _profile_blocking_reasons(ff_profile, seller_profile)
+    persistent_issue = await session.scalar(
+        select(BillingRunIssue).where(
+            BillingRunIssue.tenant_id == tenant_id,
+            BillingRunIssue.seller_id == seller_id,
+            BillingRunIssue.period == period,
+            BillingRunIssue.reason.in_(PERSISTENT_OPERATIONAL_REASONS),
+        )
+    )
+    reasons = list(_profile_blocking_reasons(ff_profile, seller_profile))
+    if persistent_issue is not None:
+        reasons.insert(0, persistent_issue.reason)
     if not reasons and any(entry.amount is None for entry in entries):
-        reasons = ("unpriced",)
+        reasons.append("unpriced")
     elif not reasons and not storage_ready:
-        reasons = ("storage_period_not_closed",)
-    return _InvoiceInputs(entries, ff_profile, seller_profile, reasons)
+        reasons.append("storage_period_not_closed")
+    return _InvoiceInputs(entries, ff_profile, seller_profile, tuple(dict.fromkeys(reasons)))
 
 
 def _profile_blocking_reasons(
