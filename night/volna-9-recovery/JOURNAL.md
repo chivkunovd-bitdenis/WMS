@@ -224,3 +224,9 @@
 07:55   02-verdikt-screen · dev: фича 1/2 сохранена 2ee6d4529945
 07:58   02-verdikt-screen · backend-dev: готово
 07:58   02-verdikt-screen · dev: фича 2/2 сохранена 0688cb6b7531
+08:03   02-verdikt-screen · reviewer: готово
+08:03 02-verdikt-screen: отложено — reviewer, эскалация не помогла
+10:31   02-verdikt-screen · repair-plan: новый вердикт дорезается до dev
+10:33   02-verdikt-screen · splitter: готово
+10:33   02-verdikt-screen · resume: поатомный rework Terra по сохранённым находкам
+10:41   02-verdikt-screen · backend-dev: готово
