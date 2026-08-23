@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
+from decimal import Decimal
 
 import sqlalchemy as sa
 from sqlalchemy import select
@@ -24,6 +25,7 @@ from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.services import inventory_service as inv_svc
 from app.services import sorting_location_service as sorting_loc_svc
+from app.services.billing_ledger_service import record_operational_charge
 from app.services.catalog_service import (
     get_storage_location_in_warehouse,
     get_warehouse,
@@ -579,6 +581,28 @@ def _maybe_complete_request(req: InboundIntakeRequest) -> None:
             req.posted_at = datetime.now(UTC)
 
 
+async def _record_charge_if_done(
+    session: AsyncSession,
+    req: InboundIntakeRequest,
+    *,
+    performer_id: uuid.UUID | None,
+) -> None:
+    if req.status != STATUS_DONE:
+        return
+    await record_operational_charge(
+        session,
+        tenant_id=req.tenant_id,
+        seller_id=req.seller_id,
+        source_type="inbound_intake",
+        source_id=req.id,
+        source="inbound",
+        service_code="inbound",
+        quantity=Decimal(sum(line.posted_qty for line in req.lines)),
+        occurred_at=req.posted_at or datetime.now(UTC),
+        performer_id=performer_id,
+    )
+
+
 async def primary_accept_request(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -970,6 +994,7 @@ async def receive_line(
     line_id: uuid.UUID,
     *,
     quantity: int,
+    performer_id: uuid.UUID | None = None,
 ) -> InboundIntakeRequest:
     pair = await _line_on_request(session, tenant_id, request_id, line_id)
     if pair is None:
@@ -1004,6 +1029,7 @@ async def receive_line(
     )
     line.posted_qty += quantity
     _maybe_complete_request(req)
+    await _record_charge_if_done(session, req, performer_id=performer_id)
     await session.commit()
     await session.refresh(req)
     return req
@@ -1013,6 +1039,8 @@ async def post_all_remaining(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
+    *,
+    performer_id: uuid.UUID | None = None,
 ) -> InboundIntakeRequest:
     req = await get_request(session, tenant_id, request_id)
     if req is None:
@@ -1021,9 +1049,6 @@ async def post_all_remaining(
         raise InboundIntakeError("already_posted")
     if req.status != STATUS_SORTING:
         raise InboundIntakeError("not_verified")
-    sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
-        session, tenant_id, req.warehouse_id
-    )
     to_receive: list[tuple[InboundIntakeLine, int]] = []
     for line in req.lines:
         accepted = _accepted_qty_for_line(line)
@@ -1037,7 +1062,16 @@ async def post_all_remaining(
             raise InboundIntakeError("sorting_location_reserved")
         to_receive.append((line, rem))
     if not to_receive:
-        raise InboundIntakeError("nothing_to_receive")
+        _maybe_complete_request(req)
+        if req.status != STATUS_DONE:
+            raise InboundIntakeError("nothing_to_receive")
+        await _record_charge_if_done(session, req, performer_id=performer_id)
+        await session.commit()
+        await session.refresh(req)
+        return req
+    sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
+        session, tenant_id, req.warehouse_id
+    )
     for line, rem in to_receive:
         sid = line.storage_location_id
         assert sid is not None
@@ -1052,6 +1086,7 @@ async def post_all_remaining(
         )
         line.posted_qty += rem
     _maybe_complete_request(req)
+    await _record_charge_if_done(session, req, performer_id=performer_id)
     await session.commit()
     await session.refresh(req)
     return req
@@ -1186,6 +1221,7 @@ async def apply_box_putaway(
     *,
     storage_location_id: uuid.UUID,
     line_items: list[tuple[uuid.UUID, int]] | None = None,
+    performer_id: uuid.UUID | None = None,
 ) -> InboundIntakeRequest:
     """
     Разложить принятый по заявке товар из короба в ячейку хранения.
@@ -1271,6 +1307,7 @@ async def apply_box_putaway(
 
     _maybe_set_distribution_completed(req)
     _maybe_complete_request(req)
+    await _record_charge_if_done(session, req, performer_id=performer_id)
     await session.commit()
     reloaded = await get_request(session, tenant_id, request_id)
     if reloaded is None:
@@ -1577,6 +1614,8 @@ async def complete_distribution(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
+    *,
+    performer_id: uuid.UUID | None = None,
 ) -> InboundIntakeRequest:
     req = await get_request(session, tenant_id, request_id)
     if req is None:
@@ -1685,6 +1724,7 @@ async def complete_distribution(
 
     _maybe_set_distribution_completed(req)
     _maybe_complete_request(req)
+    await _record_charge_if_done(session, req, performer_id=performer_id)
     await session.commit()
     await session.refresh(req)
     return req

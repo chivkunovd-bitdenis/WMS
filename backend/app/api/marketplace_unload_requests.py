@@ -1067,7 +1067,12 @@ async def cancel_marketplace_unload(
     _require_ff_execution(user)
     await _get_visible_request(session, user, request_id, credentials)
     try:
-        r = await svc.cancel_request(session, user.tenant_id, request_id)
+        r = await svc.cancel_request(
+            session,
+            user.tenant_id,
+            request_id,
+            performer_id=user.id,
+        )
     except MarketplaceUnloadError as exc:
         raise _map_mu_err(exc) from None
     return _detail_out(
@@ -1339,6 +1344,7 @@ async def ship_marketplace_unload(
             user.tenant_id,
             request_id,
             acknowledge_discrepancy=bool(body.acknowledge_discrepancy) if body else False,
+            performer_id=user.id,
         )
     except MarketplaceUnloadPickError as exc:
         raise _map_pick_err(exc) from None
