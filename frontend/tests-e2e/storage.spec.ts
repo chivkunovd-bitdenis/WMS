@@ -144,20 +144,73 @@ test('S-11-TC-002 administrator saves a future warehouse rate and seller excepti
   await sellerValidFrom.fill(validFrom)
   const [tariffResponse] = await Promise.all([
     waitForPostOk(page, '/api/operations/storage/tariffs'),
-    waitForPostOk(page, '/api/operations/storage/measurements/rebuild'),
     saveRate.click(),
   ])
   expect(tariffResponse.status()).toBe(201)
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(page.getByTestId('storage-generate')).toBeEnabled()
   expect(tariffPosts).toBe(1)
-  expect(rebuildPosts).toBe(1)
+  expect(rebuildPosts).toBe(0)
   expect(tariffBody).toEqual({
     warehouse_id: warehouseId,
     amount: 0.7,
     valid_from: validFrom,
     seller_exception: { seller_id: sellerId, amount: 0.65, valid_from: validFrom },
   })
+})
+
+test('S-11-TC-002 immediately shows the tariff-repriced draft without a manual rebuild', async ({ page }) => {
+  await openStorage(page)
+  let rebuildPosts = 0
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && request.url().includes('/api/operations/storage/measurements/rebuild')) rebuildPosts += 1
+  })
+  await page.route('**/api/operations/storage/tariffs', (route) => route.fulfill({
+    status: 201,
+    json: {
+      warehouse_tariff: { id: 'tariff-new', warehouse_id: 'warehouse-1', seller_id: null, amount: '1.40', valid_from: moscowDate() },
+      seller_exception: null,
+      recalculated_statements: [{
+        ...rows[1],
+        total_amount: '9004.80',
+        measurements: [{ ...rows[1].measurements[0], rate_snapshot: '1.40', amount: '9004.80' }],
+      }],
+    },
+  }))
+
+  await page.getByTestId('storage-expand-draft-ready').click()
+  await page.getByTestId('storage-rate').click()
+  await page.getByTestId('storage-rate-amount').fill('1,40')
+  await Promise.all([
+    waitForPostOk(page, '/api/operations/storage/tariffs'),
+    page.getByTestId('storage-rate-save').click(),
+  ])
+
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(page.getByTestId('storage-seller-table')).toContainText('9004.80')
+  await expect(page.getByTestId('storage-sku-table')).toContainText('1.40')
+  await expect(page.getByTestId('storage-sku-table')).toContainText('9004.80')
+  expect(rebuildPosts).toBe(0)
+})
+
+test('S-11-TC-017 tariff repricing failure keeps the last successful summary', async ({ page }) => {
+  await openStorage(page)
+  let rebuildPosts = 0
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && request.url().includes('/api/operations/storage/measurements/rebuild')) rebuildPosts += 1
+  })
+  await page.route('**/api/operations/storage/tariffs', (route) => route.fulfill({
+    status: 500,
+    json: { detail: 'storage_recalculation_failed' },
+  }))
+
+  await page.getByTestId('storage-rate').click()
+  await page.getByTestId('storage-rate-amount').fill('1,40')
+  await page.getByTestId('storage-rate-save').click()
+
+  await expect(page.getByRole('dialog')).toContainText('Не удалось сохранить тариф и пересчитать хранение. Последний успешный расчёт сохранён.')
+  await expect(page.getByTestId('storage-seller-table')).toContainText('4502.40')
+  expect(rebuildPosts).toBe(0)
 })
 
 test('S-11-TC-003 forms only the selected month through the storage API', async ({ page }) => {

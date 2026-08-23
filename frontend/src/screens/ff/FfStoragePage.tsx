@@ -31,6 +31,7 @@ type Statement = {
   measurements: Measurement[]
 }
 type StorageResponse = { tariff_configured: boolean; warehouses: { id: string; name: string }[]; statements: Statement[] }
+type TariffCreateResponse = { recalculated_statements: Statement[] }
 type HistoryRow = { id: string; created_at: string; source: string; length_mm: number | null; width_mm: number | null; height_mm: number | null; volume_liters: string | null; author_name: string | null; is_current: boolean }
 type BackgroundJob = { id: string; status: string; error_message?: string | null }
 
@@ -48,6 +49,11 @@ const formatMonth = (month: string) => new Intl.DateTimeFormat('ru-RU', { month:
 
 export function isStorageRateStartDateAllowed(validFrom: string, moscowToday: string) {
   return Boolean(validFrom) && validFrom >= moscowToday
+}
+
+export function mergeRecalculatedStorageStatements<T extends { id: string }>(current: readonly T[], recalculated: readonly T[]) {
+  const recalculatedById = new Map(recalculated.map((statement) => [statement.id, statement]))
+  return current.map((statement) => recalculatedById.get(statement.id) ?? statement)
 }
 
 export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmin: boolean; token: string }) {
@@ -202,10 +208,15 @@ export function FfStoragePage({ isFulfillmentAdmin, token }: { isFulfillmentAdmi
       if (sellerRateEnabled) {
         tariffBody.seller_exception = { seller_id: rateSellerId, amount: parsedSellerRate, valid_from: sellerRateValidFrom }
       }
-      await request('/operations/storage/tariffs', { method: 'POST', body: JSON.stringify(tariffBody) })
+      const result = await request('/operations/storage/tariffs', { method: 'POST', body: JSON.stringify(tariffBody) }) as TariffCreateResponse
+      if (!Array.isArray(result?.recalculated_statements)) throw new Error('recalculation_result_missing')
+      setData((current) => current ? {
+        ...current,
+        tariff_configured: true,
+        statements: mergeRecalculatedStorageStatements(current.statements, result.recalculated_statements),
+      } : current)
       setRateOpen(false)
-      await generate()
-    } catch { setRateError('Не удалось сохранить тариф. Проверьте ставку и дату начала.') }
+    } catch { setRateError('Не удалось сохранить тариф и пересчитать хранение. Последний успешный расчёт сохранён.') }
     finally { setActionLoading(false) }
   }
 
