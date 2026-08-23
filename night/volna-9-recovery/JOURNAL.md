@@ -153,3 +153,21 @@
 01:35   01-wb-marking · dev: фича 4/5 сохранена eb107a31a4d3
 01:38   01-wb-marking · backend-dev: готово
 01:38   01-wb-marking · dev: фича 5/5 сохранена f59a3bbc93b2
+01:38   01-wb-marking · reviewer: уже сделано, пропускаю
+01:38   01-wb-marking · ui-critic: уже сделано, пропускаю
+01:38   01-wb-marking · clicker: уже сделано, пропускаю
+01:38   01-wb-marking · ux-judge: готово
+01:38 01-wb-marking: отложено — браузерная среда, не дефект кода
+04:16   01-wb-marking · repair-plan: новый вердикт дорезается до dev
+04:18   01-wb-marking · splitter: готово
+04:18   01-wb-marking · resume: поатомный rework Sol по сохранённым находкам
+04:20   01-wb-marking · screen-dev: нет файла DEV.md (код -15, попытка 1)
+04:24   01-wb-marking · screen-dev: нет файла DEV.md (код -15, попытка 2)
+04:24 01-wb-marking: отложено на шаге dev
+05:55   01-wb-marking · resume: поатомный rework Terra по сохранённым находкам
+05:58   01-wb-marking · screen-dev: нет файла DEV.md (код -15, попытка 1)
+06:03   01-wb-marking · resume: повторяем clicker после недоступного стенда
+17:03   01-wb-marking · independent-review: Sol PASS, findings 0
+17:06   01-wb-marking · stand: targeted Playwright 1/1 PASS, API health ok, FF web 200
+17:09   01-wb-marking · clicker: S-03/S-14/S-15 открыты, screenshots сохранены
+17:10   01-wb-marking · ux-judge: APPROVED, UI scope regression отсутствует
