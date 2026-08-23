@@ -19,6 +19,55 @@ test('billing invoices show server-side formation issues separate from invoices'
   await expect(page.getByRole('button', { name: 'Открыть селлера' })).toBeVisible()
 })
 
+// S-31-TC-006 — Given the seller's blocking causes are resolved, When the admin retries formation,
+// Then the primary action has a short label and the newly issued invoice becomes visible.
+test('billing invoice retry uses a short action label and keeps the visible formation result', async ({ page }) => {
+  const seller = { id: 'seller-1', name: 'Луна' }
+  let formed = false
+  let formationRequests = 0
+
+  await page.addInitScript(() => localStorage.setItem('wms_token_ff', 'e2e-billing-admin'))
+  await page.route('**/api/auth/me', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ email: 'billing-admin@example.test', organization_name: 'ФФ Волна', role: 'fulfillment_admin' }),
+  }))
+  await page.route('**/api/sellers', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify([seller]),
+  }))
+  await page.route('**/api/billing/invoices?**', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ invoices: formed ? [invoice] : [], issues: [] }),
+  }))
+  await page.route(`**/api/billing/invoices/${seller.id}/*/form`, async (route) => {
+    formationRequests += 1
+    formed = true
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'issued' }) })
+  })
+
+  await page.goto('/app/ff/billing')
+  await page.getByTestId('billing-tab-invoices').click()
+  await page.getByTestId('billing-seller').click()
+  await page.getByRole('option', { name: seller.name }).click()
+
+  await expect(page.getByText('Причины устранены — повторите формирование', { exact: true })).toBeVisible()
+  const retry = page.getByRole('button', { name: 'Повторить формирование', exact: true })
+  await expect(retry).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Причины устранены — повторите формирование', exact: true })).toHaveCount(0)
+
+  await Promise.all([
+    page.waitForResponse((response) => response.request().method() === 'POST' && response.url().includes(`/api/billing/invoices/${seller.id}/`) && response.url().endsWith('/form') && response.ok()),
+    retry.click(),
+  ])
+
+  await expect(page.getByTestId('billing-invoices-table')).toContainText(invoice.number)
+  await expect(page.getByTestId('billing-invoices-table')).toContainText('Выставлен')
+  expect(formationRequests).toBe(1)
+})
+
 // S-31-TC-007 — Given an issued invoice, When the admin opens it, Then the six fixed columns stay aligned and document details and print remain available.
 test('billing invoice opens, reveals documents and starts print', async ({ page }) => {
   await page.route('**/api/billing/invoices?**', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ invoices: [invoice] }) }))
