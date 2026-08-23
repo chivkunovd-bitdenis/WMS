@@ -63,15 +63,16 @@ describe('FfBillingScreen billing contract', () => {
       period: '2026-07',
       seller_name: 'Луна',
       issued_at: '2026-08-01T00:00:00Z',
-      total_amount: 48392,
+      total_amount: 63000,
       status: 'issued',
       ff_profile: { legal_name: 'ООО «Фулфилмент Волна»', inn: '7701234567' },
       seller_profile: { legal_name: 'ООО «Луна Трейд»', inn: '7812345678' },
-      lines: [{ id: 'line-1', service_code: 'inbound', unit: 'item', quantity: 1245, rate: 12, amount: 14940 }],
+      lines: [{ id: 'line-1', service_code: 'inbound', unit: 'item', quantity: 84, rate: 1200, amount: 63000 }],
     })
 
     expect(html).toContain('Юридическое наименование')
-    expect(html).toContain('48 392,00 ₽')
+    expect(html).toContain('12,00 ₽')
+    expect(html).toContain('630,00 ₽')
     expect(html).not.toContain('legal_name')
     expect(html).not.toContain('<button')
   })

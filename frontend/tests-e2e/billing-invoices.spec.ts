@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 
-const invoice = { id: 'invoice-1', number: 'СЧ-2026-00041', period: '2026-07', seller_name: 'Луна', issued_at: '2026-08-01T00:00:00Z', total_amount: 48392, status: 'issued', ff_profile: { legal_name: 'ООО «Фулфилмент Волна»', inn: '7701234567' }, seller_profile: { legal_name: 'ООО «Луна Трейд»', inn: '7812345678' }, lines: [{ id: 'line-1', service_code: 'inbound', unit: 'item', quantity: 1245, rate: 12, amount: 14940, documents: [{ date: '2026-07-20', number: 'ПР-000141', quantity: 84, amount: 1008 }] }, { id: 'line-storage', service_code: 'storage_liter_day', unit: 'liter_day', quantity: 181900, rate: 0.08, amount: 14552, documents: [{ date: '2026-07-31', number: 'technical-storage-uuid', quantity: 181900, amount: 14552 }] }] }
+const invoice = { id: 'invoice-1', number: 'СЧ-2026-00041', period: '2026-07', seller_name: 'Луна', issued_at: '2026-08-01T00:00:00Z', total_amount: 2949200, status: 'issued', ff_profile: { legal_name: 'ООО «Фулфилмент Волна»', inn: '7701234567' }, seller_profile: { legal_name: 'ООО «Луна Трейд»', inn: '7812345678' }, lines: [{ id: 'line-1', service_code: 'inbound', unit: 'item', quantity: 1245, rate: 1200, amount: 1494000, documents: [{ date: '2026-07-20', number: 'ПР-000141', quantity: 1245, amount: 1494000 }] }, { id: 'line-storage', service_code: 'storage_liter_day', unit: 'liter_day', quantity: 181900, rate: 8, amount: 1455200, documents: [{ date: '2026-07-31', number: 'technical-storage-uuid', quantity: 181900, amount: 1455200 }] }] }
 
 async function authenticateBillingAdmin(page: Page) {
   await page.addInitScript(() => localStorage.setItem('wms_token_ff', 'e2e-billing-admin'))
@@ -15,6 +15,39 @@ async function authenticateBillingAdmin(page: Page) {
     body: JSON.stringify([{ id: 'seller-1', name: 'Луна' }]),
   }))
 }
+
+// TC-NEW-017 — Given ledger values are returned in kopecks, When the administrator opens charges,
+// Then the rate and amount are shown in rubles once, without a 100-fold overstatement.
+test('billing charges display kopecks exactly once', async ({ page }) => {
+  await authenticateBillingAdmin(page)
+  await page.route('**/api/billing/ledger?**', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ entries: [{
+      id: 'ledger-kopecks',
+      entry_type: 'charge',
+      occurred_at: '2026-08-20T10:00:00Z',
+      seller_name: 'Луна',
+      service_code: 'inbound',
+      source_type: 'inbound_intake',
+      source_id: 'inbound-1',
+      document_number: 'ПР-000141',
+      quantity: 1,
+      unit: 'item',
+      rate: 1200,
+      amount: 63000,
+      performer_name: null,
+      problem: null,
+    }] }),
+  }))
+
+  await page.goto('/app/ff/billing')
+
+  const cells = page.getByTestId('billing-ledger-table').locator('tbody tr').first().getByRole('cell')
+  await expect(cells.nth(6)).toHaveText('12,00 ₽')
+  await expect(cells.nth(7)).toHaveText('630,00 ₽')
+  await expect(cells.nth(7)).not.toHaveText('63 000,00 ₽')
+})
 
 // S-31-TC-013 — Given the seller billing profile blocks formation, When the admin opens the corrective action, Then it points to that seller rather than FF settings.
 test('billing invoice seller-profile issue opens the affected seller', async ({ page }) => {
@@ -226,7 +259,8 @@ test('billing invoice opens, reveals documents and starts print', async ({ page 
 
   await page.getByRole('button', { name: 'Показать документы' }).click()
   await expect(page.getByTestId('billing-invoice-documents')).toContainText('ПР-000141')
-  await expect(page.getByTestId('billing-invoice-documents')).toContainText('84')
+  await expect(page.getByTestId('billing-invoice-documents')).toContainText('1 245')
+  await expect(page.getByTestId('billing-invoice-documents')).toContainText('14 940,00 ₽')
   await page.getByRole('button', { name: 'Показать документы' }).nth(1).click()
   await expect(page.getByTestId('billing-invoice-documents')).toContainText('Расчёт хранения за июль 2026 г.')
   await expect(page.getByTestId('billing-invoice-documents')).not.toContainText('technical-storage-uuid')
@@ -240,7 +274,7 @@ test('billing invoice opens, reveals documents and starts print', async ({ page 
   await expect(printed).toContainText('СЧ-2026-00041')
   await expect(printed).toContainText('ООО «Фулфилмент Волна»')
   await expect(printed).toContainText('ООО «Луна Трейд»')
-  await expect(printed).toContainText('48 392,00 ₽')
+  await expect(printed).toContainText('29 492,00 ₽')
   await expect(printed).not.toContainText('legal_name')
   await expect(printed.getByRole('button')).toHaveCount(0)
 })
