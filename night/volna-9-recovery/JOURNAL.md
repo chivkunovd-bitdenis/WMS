@@ -106,3 +106,8 @@
 23:43   03-no-distribution-mode · resume: поатомный rework Sol по сохранённым находкам
 23:47   03-no-distribution-mode · backend-dev: готово
 23:47   03-no-distribution-mode · dev: фича 2/4 сохранена 29dbf364cad9
+15:46   03-no-distribution-mode · product: уже сделано, пропускаю
+15:58   03-no-distribution-mode · ux-architect: CONTRACT.md: нужны машинные строки МАКЕТ и UI-KIT (код 0, попытка 1)
+15:59   03-no-distribution-mode · ux-architect: готово
+15:59   03-no-distribution-mode · tester: уже сделано, пропускаю
+15:59   03-no-distribution-mode · breaker: в CASES.md нет секций: Ломающие кейсы, Смежные кейсы (код 1, попытка 1)
