@@ -146,3 +146,13 @@
 01:31   07-reporting · dev: фича 1/2 сохранена dafb2583da4a
 01:35   07-reporting · screen-dev: готово
 01:35   07-reporting · dev: фича 2/2 сохранена e773e45061ec
+01:38   07-reporting · reviewer: готово
+01:38   07-reporting · reviewer: Terra-rework не закрыл вердикт — эскалация Sol
+01:38   07-reporting · reviewer: находки, круг 3 — назад к разработке
+01:38   07-reporting · screen-dev: нет файла DEV.md (код 1, попытка 1)
+01:38   07-reporting · screen-dev: нет файла DEV.md (код 1, попытка 2)
+01:38 07-reporting: отложено на шаге dev
+04:16   07-reporting · repair-plan: новый вердикт дорезается до dev
+04:20   07-reporting · splitter: готово
+04:20   07-reporting · resume: поатомный rework Sol по сохранённым находкам
+04:25   07-reporting · backend-dev: готово
