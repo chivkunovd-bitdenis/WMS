@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from itertools import pairwise
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -30,6 +31,19 @@ from app.services.storage_measurement_service import (
 
 class StorageStatementError(ValueError):
     pass
+
+
+StorageDraftPricing = dict[
+    uuid.UUID,
+    tuple[Decimal, Decimal, BillingTariffVersion],
+]
+
+
+@dataclass(frozen=True)
+class RepricedStorageDraft:
+    statement: StorageStatement
+    measurements: list[StorageMeasurement]
+    pricing: StorageDraftPricing
 
 
 def _statement_source_ids(
@@ -118,7 +132,7 @@ async def _measurement_pricing(
     statement: StorageStatement,
     measurements: list[StorageMeasurement],
     tariffs: list[BillingTariffVersion],
-) -> dict[uuid.UUID, tuple[Decimal, Decimal, BillingTariffVersion]]:
+) -> StorageDraftPricing:
     product_ids = {measurement.product_id for measurement in measurements}
     period_start_at = datetime.combine(statement.period_start, time.min, MOSCOW)
     period_end_at = calculation_end_exclusive(statement.period_start, statement.period_end)
@@ -159,7 +173,7 @@ async def _measurement_pricing(
     for event in events:
         events_by_product.setdefault(event.product_id, []).append(event)
 
-    result: dict[uuid.UUID, tuple[Decimal, Decimal, BillingTariffVersion]] = {}
+    result: StorageDraftPricing = {}
     for measurement in measurements:
         product = products[measurement.product_id]
         segments = _volume_segments(
@@ -171,6 +185,11 @@ async def _measurement_pricing(
         )
         charged_quantity, amount, last_tariff = _price_volume_segments(segments, tariffs)
         if last_tariff is None:
+            # The dated tariff can intersect the statement even when this SKU
+            # had no positive balance after the rate became effective.  Such a
+            # row is a valid zero preview, not a reason to reject the tariff.
+            last_tariff = _tariff_for_day(tariffs, statement.period_end)
+        if last_tariff is None:
             raise StorageStatementError("tariff_not_found")
         result[measurement.id] = (charged_quantity, amount, last_tariff)
     return result
@@ -180,7 +199,7 @@ async def get_storage_draft_pricing(
     session: AsyncSession,
     statement: StorageStatement,
     measurements: list[StorageMeasurement],
-) -> dict[uuid.UUID, tuple[Decimal, Decimal, BillingTariffVersion]]:
+) -> StorageDraftPricing:
     """Calculate the current preview for an editable statement from dated tariffs."""
     tariffs = list(
         (
@@ -206,6 +225,90 @@ async def get_storage_draft_pricing(
     if not tariffs:
         raise StorageStatementError("tariff_not_found")
     return await _measurement_pricing(session, statement, measurements, tariffs)
+
+
+async def reprice_open_storage_drafts(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    valid_from: date,
+    seller_exception: tuple[uuid.UUID, Decimal, date] | None = None,
+) -> list[RepricedStorageDraft]:
+    """Recalculate every open draft intersected by newly added tariff versions.
+
+    Draft amounts are deliberately not persisted: they are previews derived from
+    measurements and the current dated tariffs.  Returning the previews from the
+    tariff transaction makes the new values immediately available while keeping
+    fixed statements and their ledger snapshots immutable.
+    """
+    affected_period = StorageStatement.period_end >= valid_from
+    if seller_exception is not None:
+        seller_id, _, seller_valid_from = seller_exception
+        affected_period = or_(
+            affected_period,
+            and_(
+                StorageStatement.seller_id == seller_id,
+                StorageStatement.period_end >= seller_valid_from,
+            ),
+        )
+    statements = list(
+        (
+            await session.scalars(
+                select(StorageStatement)
+                .options(
+                    joinedload(StorageStatement.seller),
+                    joinedload(StorageStatement.warehouse),
+                )
+                .where(
+                    StorageStatement.tenant_id == tenant_id,
+                    StorageStatement.warehouse_id == warehouse_id,
+                    StorageStatement.status == "draft",
+                    affected_period,
+                )
+                .order_by(
+                    StorageStatement.period_start,
+                    StorageStatement.seller_id,
+                    StorageStatement.id,
+                )
+            )
+        ).unique().all()
+    )
+
+    repriced: list[RepricedStorageDraft] = []
+    for statement in statements:
+        measurements = list(
+            (
+                await session.scalars(
+                    select(StorageMeasurement)
+                    .options(
+                        joinedload(StorageMeasurement.product),
+                        joinedload(StorageMeasurement.dimension_event),
+                    )
+                    .where(
+                        StorageMeasurement.tenant_id == tenant_id,
+                        StorageMeasurement.seller_id == statement.seller_id,
+                        StorageMeasurement.warehouse_id == warehouse_id,
+                        StorageMeasurement.period_start == statement.period_start,
+                        StorageMeasurement.period_end == statement.period_end,
+                    )
+                    .order_by(StorageMeasurement.product_id)
+                )
+            ).unique().all()
+        )
+        priceable_rows = [row for row in measurements if row.status == "calculated"]
+        pricing = (
+            await get_storage_draft_pricing(session, statement, priceable_rows)
+            if priceable_rows
+            else {}
+        )
+        repriced.append(
+            RepricedStorageDraft(
+                statement=statement,
+                measurements=measurements,
+                pricing=pricing,
+            )
+        )
+    return repriced
 
 
 async def fix_storage_statement(
@@ -413,12 +516,16 @@ async def create_storage_tariff(
     amount: Decimal,
     valid_from: date,
     seller_exception: tuple[uuid.UUID, Decimal, date] | None = None,
-) -> tuple[BillingTariffVersion, BillingTariffVersion | None]:
+) -> tuple[
+    BillingTariffVersion,
+    BillingTariffVersion | None,
+    list[RepricedStorageDraft],
+]:
     """Create a warehouse storage tariff and an optional seller override atomically.
 
-    Both the warehouse tariff and the seller exception are added inside the same
-    SQLAlchemy unit-of-work so that a unique-constraint violation on the second
-    INSERT leaves no partial state: either both rows are committed or neither is.
+    Both tariff rows and the affected draft previews share one SQLAlchemy
+    unit-of-work.  A failed INSERT rolls back before repricing; a repricing error
+    also rolls back the new tariff versions.
     """
     amounts = [amount]
     if seller_exception is not None:
@@ -474,17 +581,29 @@ async def create_storage_tariff(
         )
         session.add(seller_tariff)
 
+    repriced_drafts: list[RepricedStorageDraft]
     try:
+        await session.flush()
+        repriced_drafts = await reprice_open_storage_drafts(
+            session,
+            tenant_id,
+            warehouse_id,
+            valid_from,
+            seller_exception,
+        )
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
         raise StorageStatementError("tariff_already_exists") from exc
+    except Exception:
+        await session.rollback()
+        raise
 
     await session.refresh(warehouse_tariff)
     if seller_tariff is not None:
         await session.refresh(seller_tariff)
 
-    return warehouse_tariff, seller_tariff
+    return warehouse_tariff, seller_tariff, repriced_drafts
 
 
 async def get_storage_ledger_rows(

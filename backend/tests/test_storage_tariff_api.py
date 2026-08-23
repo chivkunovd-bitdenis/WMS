@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from datetime import time as datetime_time
 from decimal import Decimal
 
@@ -20,7 +20,7 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 
 from app.db.session import SessionLocal
-from app.models.billing import BillingTariffVersion
+from app.models.billing import BillingLedgerEntry, BillingTariffVersion
 from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
 from app.models.seller import Seller
@@ -497,79 +497,217 @@ async def test_tariff_scope_must_belong_to_tenant_and_operational_warehouse(
 
 @pytest.mark.asyncio
 async def test_new_tariff_reprices_open_draft_on_reload(async_client: AsyncClient) -> None:
-    """Reloading statements after POST shows a preview calculated with the new dated rate."""
+    """POST reprices affected drafts but preserves fixed and unrelated statements."""
     suffix = str(time.time_ns())
     headers = await _register_admin(async_client, suffix)
     warehouse_id = await _create_warehouse(async_client, headers, suffix, "preview")
+    unrelated_warehouse_id = await _create_warehouse(
+        async_client, headers, suffix, "unrelated"
+    )
     today = datetime.now(MOSCOW).date()
     period_start, period_end = month_bounds(today.year, today.month)
+    previous_period_end = period_start - timedelta(days=1)
+    previous_period_start = previous_period_end.replace(day=1)
 
     async with SessionLocal() as session:
         warehouse = await session.get(Warehouse, warehouse_id)
         assert warehouse is not None
-        seller = Seller(tenant_id=warehouse.tenant_id, name=f"Preview seller {suffix}")
-        session.add(seller)
+        sellers = [
+            Seller(tenant_id=warehouse.tenant_id, name=f"Draft seller {suffix}"),
+            Seller(tenant_id=warehouse.tenant_id, name=f"Zero seller {suffix}"),
+            Seller(tenant_id=warehouse.tenant_id, name=f"Fixed seller {suffix}"),
+            Seller(tenant_id=warehouse.tenant_id, name=f"Unrelated seller {suffix}"),
+        ]
+        session.add_all(sellers)
         await session.flush()
-        product = Product(
+        draft_seller, zero_seller, fixed_seller, unrelated_seller = sellers
+        draft_product = Product(
             tenant_id=warehouse.tenant_id,
-            seller_id=seller.id,
-            name="Preview product",
-            sku_code=f"preview-{suffix}",
+            seller_id=draft_seller.id,
+            name="Draft product",
+            sku_code=f"draft-{suffix}",
             volume_liters=Decimal("1"),
             dimensions_source="manual",
         )
-        session.add(product)
+        zero_product = Product(
+            tenant_id=warehouse.tenant_id,
+            seller_id=zero_seller.id,
+            name="Zero product",
+            sku_code=f"zero-{suffix}",
+            volume_liters=Decimal("1"),
+            dimensions_source="manual",
+        )
+        fixed_product = Product(
+            tenant_id=warehouse.tenant_id,
+            seller_id=fixed_seller.id,
+            name="Fixed product",
+            sku_code=f"fixed-{suffix}",
+            volume_liters=Decimal("1"),
+            dimensions_source="manual",
+        )
+        session.add_all([draft_product, zero_product, fixed_product])
         await session.flush()
         location = await get_or_create_sorting_location(
             session, warehouse.tenant_id, warehouse.id
         )
-        movement = InventoryMovement(
+        draft_movement = InventoryMovement(
             tenant_id=warehouse.tenant_id,
-            seller_id=seller.id,
+            seller_id=draft_seller.id,
             warehouse_id=warehouse.id,
             storage_location_id=location.id,
-            product_id=product.id,
+            product_id=draft_product.id,
             quantity_delta=1,
             movement_type="storage_tariff_preview_test",
             created_at=datetime.combine(period_start, datetime_time.min, MOSCOW),
         )
-        session.add(movement)
+        fixed_movement = InventoryMovement(
+            tenant_id=warehouse.tenant_id,
+            seller_id=fixed_seller.id,
+            warehouse_id=warehouse.id,
+            storage_location_id=location.id,
+            product_id=fixed_product.id,
+            quantity_delta=1,
+            movement_type="storage_tariff_fixed_control_test",
+            created_at=datetime.combine(period_start, datetime_time.min, MOSCOW),
+        )
+        session.add_all([draft_movement, fixed_movement])
         await session.flush()
+        initial_tariff = BillingTariffVersion(
+            tenant_id=warehouse.tenant_id,
+            seller_id=None,
+            warehouse_id=warehouse.id,
+            service_code="storage_liter_day",
+            unit="liter_day",
+            amount=Decimal("1.00"),
+            valid_from=period_start - timedelta(days=1),
+        )
+        unrelated_tariff = BillingTariffVersion(
+            tenant_id=warehouse.tenant_id,
+            seller_id=None,
+            warehouse_id=unrelated_warehouse_id,
+            service_code="storage_liter_day",
+            unit="liter_day",
+            amount=Decimal("2.00"),
+            valid_from=period_start - timedelta(days=1),
+        )
+        session.add_all([initial_tariff, unrelated_tariff])
+        await session.flush()
+
+        draft_statement = StorageStatement(
+            tenant_id=warehouse.tenant_id,
+            seller_id=draft_seller.id,
+            warehouse_id=warehouse.id,
+            period_start=period_start,
+            period_end=period_end,
+            status="draft",
+        )
+        zero_statement = StorageStatement(
+            tenant_id=warehouse.tenant_id,
+            seller_id=zero_seller.id,
+            warehouse_id=warehouse.id,
+            period_start=period_start,
+            period_end=period_end,
+            status="draft",
+        )
+        fixed_statement = StorageStatement(
+            tenant_id=warehouse.tenant_id,
+            seller_id=fixed_seller.id,
+            warehouse_id=warehouse.id,
+            period_start=period_start,
+            period_end=period_end,
+            status="fixed",
+            fixed_at=datetime.now(UTC),
+        )
+        unrelated_statement = StorageStatement(
+            tenant_id=warehouse.tenant_id,
+            seller_id=unrelated_seller.id,
+            warehouse_id=unrelated_warehouse_id,
+            period_start=period_start,
+            period_end=period_end,
+            status="draft",
+        )
+        past_statement = StorageStatement(
+            tenant_id=warehouse.tenant_id,
+            seller_id=zero_seller.id,
+            warehouse_id=warehouse.id,
+            period_start=previous_period_start,
+            period_end=previous_period_end,
+            status="draft",
+        )
+        draft_measurement = StorageMeasurement(
+            tenant_id=warehouse.tenant_id,
+            seller_id=draft_seller.id,
+            warehouse_id=warehouse.id,
+            product_id=draft_product.id,
+            movement_start_id=draft_movement.id,
+            movement_end_id=draft_movement.id,
+            period_start=period_start,
+            period_end=period_end,
+            quantity_days=Decimal("1"),
+            liter_days=Decimal("1"),
+            status="calculated",
+        )
+        fixed_measurement = StorageMeasurement(
+            tenant_id=warehouse.tenant_id,
+            seller_id=fixed_seller.id,
+            warehouse_id=warehouse.id,
+            product_id=fixed_product.id,
+            movement_start_id=fixed_movement.id,
+            movement_end_id=fixed_movement.id,
+            period_start=period_start,
+            period_end=period_end,
+            quantity_days=Decimal("1"),
+            liter_days=Decimal("1"),
+            status="calculated",
+        )
+        zero_measurement = StorageMeasurement(
+            tenant_id=warehouse.tenant_id,
+            seller_id=zero_seller.id,
+            warehouse_id=warehouse.id,
+            product_id=zero_product.id,
+            period_start=period_start,
+            period_end=period_end,
+            quantity_days=Decimal("0"),
+            liter_days=Decimal("0"),
+            status="calculated",
+        )
         session.add_all(
             [
-                StorageStatement(
-                    tenant_id=warehouse.tenant_id,
-                    seller_id=seller.id,
-                    warehouse_id=warehouse.id,
-                    period_start=period_start,
-                    period_end=period_end,
-                    status="draft",
-                ),
-                StorageMeasurement(
-                    tenant_id=warehouse.tenant_id,
-                    seller_id=seller.id,
-                    warehouse_id=warehouse.id,
-                    product_id=product.id,
-                    movement_start_id=movement.id,
-                    movement_end_id=movement.id,
-                    period_start=period_start,
-                    period_end=period_end,
-                    quantity_days=Decimal("1"),
-                    liter_days=Decimal("1"),
-                    status="calculated",
-                ),
-                BillingTariffVersion(
-                    tenant_id=warehouse.tenant_id,
-                    seller_id=None,
-                    warehouse_id=warehouse.id,
-                    service_code="storage_liter_day",
-                    unit="liter_day",
-                    amount=Decimal("1.00"),
-                    valid_from=period_start,
-                ),
+                draft_statement,
+                zero_statement,
+                fixed_statement,
+                unrelated_statement,
+                past_statement,
+                draft_measurement,
+                fixed_measurement,
+                zero_measurement,
             ]
         )
+        await session.flush()
+        session.add(
+            BillingLedgerEntry(
+                tenant_id=warehouse.tenant_id,
+                seller_id=fixed_seller.id,
+                tariff_version_id=initial_tariff.id,
+                service_code="storage_liter_day",
+                source="storage_statement",
+                source_type="storage_measurement",
+                source_id=fixed_measurement.id,
+                unit="liter_day",
+                quantity=Decimal("1"),
+                rate=Decimal("1.00"),
+                amount=Decimal("1.00"),
+                occurred_at=datetime.now(UTC),
+            )
+        )
         await session.commit()
+        tenant_id = warehouse.tenant_id
+        draft_statement_id = draft_statement.id
+        zero_statement_id = zero_statement.id
+        fixed_statement_id = fixed_statement.id
+        unrelated_statement_id = unrelated_statement.id
+        past_statement_id = past_statement.id
+        fixed_measurement_id = fixed_measurement.id
 
     before = await async_client.get(
         "/operations/storage/statements",
@@ -577,7 +715,9 @@ async def test_new_tariff_reprices_open_draft_on_reload(async_client: AsyncClien
         params={"year": today.year, "month": today.month, "warehouse_id": str(warehouse_id)},
     )
     assert before.status_code == 200, before.text
-    before_amount = Decimal(before.json()["statements"][0]["total_amount"])
+    before_by_id = {item["id"]: item for item in before.json()["statements"]}
+    before_amount = Decimal(before_by_id[str(draft_statement_id)]["total_amount"])
+    assert before_by_id[str(fixed_statement_id)]["total_amount"] == "1.00"
 
     created = await async_client.post(
         "/operations/storage/tariffs",
@@ -589,6 +729,16 @@ async def test_new_tariff_reprices_open_draft_on_reload(async_client: AsyncClien
         },
     )
     assert created.status_code == 201, created.text
+    recalculated = {
+        item["id"]: item for item in created.json()["recalculated_statements"]
+    }
+    assert set(recalculated) == {str(draft_statement_id), str(zero_statement_id)}
+    assert Decimal(recalculated[str(draft_statement_id)]["total_amount"]) > before_amount
+    assert Decimal(recalculated[str(zero_statement_id)]["total_amount"]) == 0
+    assert recalculated[str(zero_statement_id)]["measurements"][0]["rate_snapshot"] == "10.00"
+    assert str(fixed_statement_id) not in recalculated
+    assert str(unrelated_statement_id) not in recalculated
+    assert str(past_statement_id) not in recalculated
 
     after = await async_client.get(
         "/operations/storage/statements",
@@ -596,6 +746,62 @@ async def test_new_tariff_reprices_open_draft_on_reload(async_client: AsyncClien
         params={"year": today.year, "month": today.month, "warehouse_id": str(warehouse_id)},
     )
     assert after.status_code == 200, after.text
-    after_statement = after.json()["statements"][0]
-    assert Decimal(after_statement["total_amount"]) > before_amount
-    assert after_statement["measurements"][0]["rate_snapshot"] is not None
+    after_by_id = {item["id"]: item for item in after.json()["statements"]}
+    assert Decimal(after_by_id[str(draft_statement_id)]["total_amount"]) >= Decimal(
+        recalculated[str(draft_statement_id)]["total_amount"]
+    )
+    assert after_by_id[str(draft_statement_id)]["measurements"][0]["rate_snapshot"] is not None
+    assert after_by_id[str(fixed_statement_id)]["total_amount"] == "1.00"
+    assert after_by_id[str(fixed_statement_id)]["measurements"][0]["rate_snapshot"] == "1.00"
+
+    failed = await async_client.post(
+        "/operations/storage/tariffs",
+        headers=headers,
+        json={
+            "warehouse_id": str(warehouse_id),
+            "amount": "20.00",
+            "valid_from": today.isoformat(),
+        },
+    )
+    assert failed.status_code == 409, failed.text
+    after_failed = await async_client.get(
+        "/operations/storage/statements",
+        headers=headers,
+        params={"year": today.year, "month": today.month, "warehouse_id": str(warehouse_id)},
+    )
+    assert after_failed.status_code == 200, after_failed.text
+    after_failed_by_id = {
+        item["id"]: item for item in after_failed.json()["statements"]
+    }
+    assert Decimal(after_failed_by_id[str(draft_statement_id)]["total_amount"]) >= Decimal(
+        after_by_id[str(draft_statement_id)]["total_amount"]
+    )
+
+    async with SessionLocal() as session:
+        ledger_rows = list(
+            (
+                await session.scalars(
+                    select(BillingLedgerEntry).where(
+                        BillingLedgerEntry.tenant_id == tenant_id,
+                        BillingLedgerEntry.service_code == "storage_liter_day",
+                    )
+                )
+            ).all()
+        )
+        new_tariffs = list(
+            (
+                await session.scalars(
+                    select(BillingTariffVersion).where(
+                        BillingTariffVersion.tenant_id == tenant_id,
+                        BillingTariffVersion.warehouse_id == warehouse_id,
+                        BillingTariffVersion.valid_from == today,
+                    )
+                )
+            ).all()
+        )
+    assert len(ledger_rows) == 1
+    assert ledger_rows[0].source_id == fixed_measurement_id
+    assert ledger_rows[0].rate == Decimal("1.00")
+    assert ledger_rows[0].amount == Decimal("1.00")
+    assert len(new_tariffs) == 1
+    assert new_tariffs[0].amount == Decimal("10.00")

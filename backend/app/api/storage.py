@@ -98,6 +98,7 @@ class TariffVersionOut(BaseModel):
 class TariffCreateOut(BaseModel):
     warehouse_tariff: TariffVersionOut
     seller_exception: TariffVersionOut | None = None
+    recalculated_statements: list[StorageStatementOut] = Field(default_factory=list)
 
 
 def _public_dimension_source(source: str | None) -> str | None:
@@ -229,8 +230,8 @@ def _apply_draft_pricing(
         row_pricing = pricing.get(measurement.id)
         if row_pricing is None:
             continue
-        quantity, amount, _ = row_pricing
-        effective_rate = amount / quantity if quantity else Decimal(0)
+        quantity, amount, tariff = row_pricing
+        effective_rate = amount / quantity if quantity else Decimal(tariff.amount)
         public_row["liter_days"] = str(quantity)
         public_row["rate_snapshot"] = _rate_snapshot(effective_rate)
         public_row["amount"] = str(amount)
@@ -386,7 +387,7 @@ async def create_tariff(
         else None
     )
     try:
-        wh_tariff, sel_tariff = await create_storage_tariff(
+        wh_tariff, sel_tariff, repriced_drafts = await create_storage_tariff(
             session,
             user.tenant_id,
             body.warehouse_id,
@@ -422,6 +423,12 @@ async def create_tariff(
             valid_from=sel_tariff.valid_from.isoformat(),
         )
 
+    recalculated_statements: list[StorageStatementOut] = []
+    for draft in repriced_drafts:
+        output = _statement_out(draft.statement, draft.measurements)
+        _apply_draft_pricing(output, draft.measurements, draft.pricing)
+        recalculated_statements.append(output)
+
     return TariffCreateOut(
         warehouse_tariff=TariffVersionOut(
             id=wh_tariff.id,
@@ -431,6 +438,7 @@ async def create_tariff(
             valid_from=wh_tariff.valid_from.isoformat(),
         ),
         seller_exception=seller_exception_out,
+        recalculated_statements=recalculated_statements,
     )
 
 
