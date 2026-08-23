@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import cast
 from zoneinfo import ZoneInfo
 
@@ -15,6 +15,45 @@ from app.models.billing import BillingLedgerEntry, BillingTariffVersion
 from app.models.tenant import Tenant
 
 MOSCOW = ZoneInfo("Europe/Moscow")
+POSTGRES_INTEGER_MIN = -(2**31)
+POSTGRES_INTEGER_MAX = 2**31 - 1
+
+
+class BillingLedgerError(ValueError):
+    """A billing fact cannot be represented without corrupting its source transaction."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
+def postgres_numeric(
+    value: Decimal, *, precision: int, scale: int, field: str
+) -> Decimal:
+    """Validate and normalize a Decimal before a PostgreSQL NUMERIC write."""
+    if precision <= 0 or scale < 0 or scale > precision or not value.is_finite():
+        raise BillingLedgerError(f"{field}_overflow")
+    quantum = Decimal(1).scaleb(-scale)
+    maximum = (Decimal(10) ** (precision - scale)) - quantum
+    try:
+        normalized = value.quantize(quantum, rounding=ROUND_HALF_UP)
+    except InvalidOperation as exc:
+        raise BillingLedgerError(f"{field}_overflow") from exc
+    if abs(normalized) > maximum:
+        raise BillingLedgerError(f"{field}_overflow")
+    return normalized
+
+
+def postgres_integer(value: Decimal, *, field: str) -> int:
+    if not value.is_finite():
+        raise BillingLedgerError(f"{field}_overflow")
+    try:
+        rounded = int(value.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    except (InvalidOperation, OverflowError, ValueError) as exc:
+        raise BillingLedgerError(f"{field}_overflow") from exc
+    if not POSTGRES_INTEGER_MIN <= rounded <= POSTGRES_INTEGER_MAX:
+        raise BillingLedgerError(f"{field}_overflow")
+    return rounded
 
 
 async def resolve_active_tariff(
