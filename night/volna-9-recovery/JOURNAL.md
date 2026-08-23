@@ -243,3 +243,5 @@
 07:25   04-warehouse-switch · ui-critic: готово
 08:09   04-warehouse-switch · resume: поатомный rework Terra по сохранённым находкам
 08:11   04-warehouse-switch · screen-dev: готово
+08:11   04-warehouse-switch · dev: фича 1/2 сохранена 939fe69e406f
+08:14   04-warehouse-switch · screen-dev: готово
