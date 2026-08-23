@@ -209,7 +209,7 @@ async def test_fbs_autopoll_iterates_multiple_sellers(
         for i in range(3)
     ]
 
-    calls: list[uuid.UUID] = []
+    calls: list[tuple[uuid.UUID, bool]] = []
 
     async def fake_sync(
         session: object,
@@ -218,8 +218,9 @@ async def test_fbs_autopoll_iterates_multiple_sellers(
         http_client: object,
         *,
         warehouse_id: uuid.UUID | None = None,
+        include_history: bool = True,
     ) -> dict[str, int]:
-        calls.append(sid)
+        calls.append((sid, include_history))
         return {
             "orders_upserted": 1,
             "orders_created": 1,
@@ -233,7 +234,8 @@ async def test_fbs_autopoll_iterates_multiple_sellers(
 
     result = await poll_fbs_orders_all_sellers()
     assert result.sellers_polled == 3
-    assert set(calls) == set(seller_ids)
+    assert {seller_id for seller_id, _include_history in calls} == set(seller_ids)
+    assert all(include_history is False for _seller_id, include_history in calls)
 
 
 # TC-NEW-FBS-AUTOPOLL-003
@@ -256,6 +258,7 @@ async def test_fbs_autopoll_continues_after_seller_error(
         http_client: object,
         *,
         warehouse_id: uuid.UUID | None = None,
+        include_history: bool = True,
     ) -> dict[str, int]:
         if sid == failing:
             raise WbMarketplaceOrdersError("wb_upstream_500")
@@ -687,6 +690,7 @@ async def test_fbs_autopoll_intake_success_skips_stock_sync_by_default(
         http_client: object,
         *,
         warehouse_id: uuid.UUID | None = None,
+        include_history: bool = True,
     ) -> dict[str, int]:
         return {
             "orders_upserted": 1,
@@ -740,6 +744,7 @@ async def test_fbs_autopoll_intake_success_can_opt_into_stock_sync(
         http_client: object,
         *,
         warehouse_id: uuid.UUID | None = None,
+        include_history: bool = True,
     ) -> dict[str, int]:
         return {
             "orders_upserted": 1,
@@ -843,6 +848,7 @@ async def test_fbs_autopoll_all_sellers_skips_stock_sync(
         http_client: object,
         *,
         warehouse_id: uuid.UUID | None = None,
+        include_history: bool = True,
     ) -> dict[str, int]:
         if sid == failing:
             raise WbMarketplaceOrdersError("wb_upstream_500")

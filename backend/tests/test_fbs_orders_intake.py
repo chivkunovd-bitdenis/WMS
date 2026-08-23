@@ -295,6 +295,41 @@ async def test_fbs_order_upsert_idempotent_and_deadline(
     assert len(listed2.json()) == 1
 
 
+@pytest.mark.asyncio
+async def test_frequent_intake_skips_full_history_and_status_calls(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, _warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
+    token = headers["Authorization"].removeprefix("Bearer ")
+    tenant_id = uuid.UUID(str(decode_access_token(token)["tenant_id"]))
+    seller_uuid = uuid.UUID(seller_id)
+
+    _patch_wb_order_fetches(
+        monkeypatch,
+        new_rows=[_wb_order_row(order_id=809901)],
+        page_raises=AssertionError("frequent intake requested full history"),
+        status_raises=AssertionError("frequent intake requested statuses"),
+    )
+
+    async with SessionLocal() as session:
+        import httpx
+
+        async with httpx.AsyncClient() as http_client:
+            result = await sync_seller_orders(
+                session,
+                tenant_id,
+                seller_uuid,
+                http_client,
+                include_history=False,
+            )
+
+    assert result["orders_received"] == 1
+    assert result["orders_created"] == 1
+    assert result["statuses_updated"] == 0
+
+
 # TC-NEW-FBS-INTAKE-002
 @pytest.mark.asyncio
 async def test_fbs_order_product_mapping_success_and_missing(

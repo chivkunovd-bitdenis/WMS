@@ -1453,7 +1453,9 @@ async def sync_seller_orders(
     http_client: httpx.AsyncClient,
     *,
     warehouse_id: uuid.UUID | None = None,
+    include_history: bool = True,
 ) -> dict[str, Any]:
+    """Fetch seller orders, optionally limiting the cycle to WB's new feed."""
     _ = warehouse_id  # ignored: WMS warehouse resolved per order via WB binding
     api_token = await _resolve_marketplace_api_token(session, tenant_id, seller_id)
 
@@ -1490,48 +1492,49 @@ async def sync_seller_orders(
     if orders_received:
         await session.commit()
 
-    next_token: int | None = None
-    for _page in range(MAX_ORDERS_PAGES):
-        try:
-            page_rows, next_token = await fetch_marketplace_orders_page(
-                http_client,
-                api_token=api_token,
-                next_token=next_token,
-            )
-        except WildberriesClientError as exc:
-            ref = wb_error_ref()
-            log_wb_client_error(
-                logger,
-                "fbs orders WB page failed",
-                exc,
-                tenant_id=tenant_id,
-                seller_id=seller_id,
-                ref=ref,
-            )
-            error = _wb_orders_error_from_client(exc, ref=ref)
-            code = error.code
-            if orders_received:
-                orders_page_error = code
-                await session.rollback()
-                break
-            raise error from exc
+    if include_history:
+        next_token: int | None = None
+        for _page in range(MAX_ORDERS_PAGES):
+            try:
+                page_rows, next_token = await fetch_marketplace_orders_page(
+                    http_client,
+                    api_token=api_token,
+                    next_token=next_token,
+                )
+            except WildberriesClientError as exc:
+                ref = wb_error_ref()
+                log_wb_client_error(
+                    logger,
+                    "fbs orders WB page failed",
+                    exc,
+                    tenant_id=tenant_id,
+                    seller_id=seller_id,
+                    ref=ref,
+                )
+                error = _wb_orders_error_from_client(exc, ref=ref)
+                code = error.code
+                if orders_received:
+                    orders_page_error = code
+                    await session.rollback()
+                    break
+                raise error from exc
 
-        if not page_rows:
-            break
-        for row in page_rows:
-            _order, was_created = await upsert_order_from_wb_row(
-                session, tenant_id, seller_id, row, pool_debit_totals=pool_debit_totals
-            )
-            upserted += 1
-            orders_received += 1
-            if was_created:
-                created += 1
-        await session.commit()
-        if next_token is None:
-            break
+            if not page_rows:
+                break
+            for row in page_rows:
+                _order, was_created = await upsert_order_from_wb_row(
+                    session, tenant_id, seller_id, row, pool_debit_totals=pool_debit_totals
+                )
+                upserted += 1
+                orders_received += 1
+                if was_created:
+                    created += 1
+            await session.commit()
+            if next_token is None:
+                break
 
     statuses_updated = 0
-    if orders_page_error is None:
+    if include_history and orders_page_error is None:
         try:
             statuses_updated = await sync_order_statuses(
                 session, tenant_id, seller_id, http_client, api_token

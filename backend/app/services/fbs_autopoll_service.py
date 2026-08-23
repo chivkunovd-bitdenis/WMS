@@ -195,12 +195,14 @@ async def poll_fbs_orders_for_seller(
     http_client: httpx.AsyncClient,
     *,
     sync_stocks_after_orders: bool = False,
+    include_history: bool = False,
 ) -> dict[str, int]:
     result = await sync_seller_orders(
         session,
         target.tenant_id,
         target.seller_id,
         http_client,
+        include_history=include_history,
     )
     stock_result = SellerStockSyncResult()
     if sync_stocks_after_orders:
@@ -286,7 +288,9 @@ async def sync_fbs_order_statuses_for_seller(
     return updated
 
 
-async def poll_fbs_orders_all_sellers() -> FbsAutopollCycleResult:
+async def poll_fbs_orders_all_sellers(
+    *, include_history: bool = False
+) -> FbsAutopollCycleResult:
     async with SessionLocal() as session:
         targets = await list_sellers_with_marketplace_token(session)
 
@@ -313,7 +317,12 @@ async def poll_fbs_orders_all_sellers() -> FbsAutopollCycleResult:
                             target.seller_id,
                         )
                         continue
-                    stats = await poll_fbs_orders_for_seller(session, target, http_client)
+                    stats = await poll_fbs_orders_for_seller(
+                        session,
+                        target,
+                        http_client,
+                        include_history=include_history,
+                    )
             except WbMarketplaceOrdersError as exc:
                 seller_errors += 1
                 logger.error(
@@ -359,6 +368,11 @@ async def poll_fbs_orders_all_sellers() -> FbsAutopollCycleResult:
         stocks_bindings_processed=stocks_bindings_processed,
         stock_errors=stock_errors,
     )
+
+
+async def reconcile_fbs_orders_all_sellers() -> FbsAutopollCycleResult:
+    """Rare full-history reconciliation; frequent polling reads only new orders."""
+    return await poll_fbs_orders_all_sellers(include_history=True)
 
 
 async def sync_fbs_order_statuses_all_sellers() -> FbsAutopollCycleResult:
