@@ -22,7 +22,7 @@
 - Storage backend после интеграционных исправлений: `54 passed`; отдельный набор реконструкции остатков: `12 passed`.
 - Frontend unit: `180 passed`; TypeScript и production build пройдены.
 - Storage Chromium после исправлений: `30 passed` одним прогоном; критические сценарии тарифа и парных движений повторены отдельно.
-- Reporting и billing Chromium в первом совместном прогоне прошли до storage-находок без ошибок; после финального integration commit выполняется полный повторный прогон всех пяти spec-файлов.
+- Финальный совместный Chromium-прогон пяти spec-файлов на integration commit: `55 passed` одним запуском, включая reporting FF/seller, billing ledger/invoices и полный storage flow.
 - Независимые финальные review: reporting `CLEAN`, billing `CLEAN`, storage `CLEAN`; отдельный повторный review интеграционного storage diff также `CLEAN`.
 
 Stage и production этим файлом не подтверждаются. Деплой считается выполненным только после сборки стенда из опубликованного integration SHA и живой проверки трёх маршрутов.
