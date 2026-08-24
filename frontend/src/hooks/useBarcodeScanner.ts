@@ -145,6 +145,18 @@ function setNativeInputValue(el: { tagName?: string; value?: string }, next: str
 export function createScannerListener(opts: ScannerListenerOptions) {
   let buffer: BufferChar[] = []
   let lastTime = -Infinity
+  // Сколько раз внутри пачки интервал превысил maxIntervalMs.
+  let slowGaps = 0
+
+  // Пачку начинаем заново только после долгого затишья. Раньше буфер очищался
+  // на ЛЮБОЙ заминке сканера, и на Enter уходил хвост: реальный `4630452635503`
+  // приезжал на сервер как `0452635503`, товар не находился, работа вставала.
+  const NEW_BURST_MS = 1000
+
+  const resetBurst = (): void => {
+    buffer = []
+    slowGaps = 0
+  }
 
   const handler = (e: EventLike): void => {
     // Meta/Alt-комбинации полностью игнорируем
@@ -155,9 +167,11 @@ export function createScannerListener(opts: ScannerListenerOptions) {
     // GS-разделитель КМ Честного знака (Ctrl+])
     if (e.ctrlKey && (e.code === 'BracketRight' || e.key === ']')) {
       e.preventDefault()
-      // Прерываем буфер по времени?
-      if (now - lastTime > opts.maxIntervalMs) {
-        buffer = []
+      const gsGap = now - lastTime
+      if (gsGap > NEW_BURST_MS) {
+        resetBurst()
+      } else if (gsGap > opts.maxIntervalMs) {
+        slowGaps += 1
       }
       buffer.push({ raw: '\x1D', code: e.code, shift: false })
       lastTime = now
@@ -168,7 +182,13 @@ export function createScannerListener(opts: ScannerListenerOptions) {
     if (e.ctrlKey) return
 
     if (e.key === 'Enter') {
-      if (buffer.length >= opts.minLength) {
+      // Сканер это или человек, решаем по всей пачке, а не по одной заминке:
+      // у сканера почти все интервалы короткие, у ручного ввода — все длинные.
+      const allowedSlowGaps = Math.max(1, Math.floor(buffer.length * 0.2))
+      const looksLikeScan =
+        buffer.length >= opts.minLength && slowGaps <= allowedSlowGaps
+
+      if (looksLikeScan) {
         e.preventDefault()
         e.stopPropagation()
 
@@ -194,10 +214,16 @@ export function createScannerListener(opts: ScannerListenerOptions) {
         }
 
         opts.onScan(normalized)
-        buffer = []
+        resetBurst()
         lastTime = -Infinity
+        return
       }
-      // Буфер короче minLength — Enter не трогаем (обычный сабмит)
+
+      // Не скан: Enter не трогаем — сработает обычный сабмит поля с его
+      // полным значением. Состояние обнуляем, чтобы остаток не приклеился
+      // к следующей пачке.
+      resetBurst()
+      lastTime = -Infinity
       return
     }
 
@@ -205,10 +231,12 @@ export function createScannerListener(opts: ScannerListenerOptions) {
     // но и не сбрасываем буфер
     if (e.key.length > 1) return
 
-    // Печатный символ: проверяем интервал
-    if (now - lastTime > opts.maxIntervalMs) {
-      // Пауза слишком большая — начинаем буфер заново
-      buffer = []
+    // Печатный символ: копим и считаем заминки, но пачку не рвём.
+    const gap = now - lastTime
+    if (gap > NEW_BURST_MS) {
+      resetBurst()
+    } else if (gap > opts.maxIntervalMs) {
+      slowGaps += 1
     }
 
     buffer.push({ raw: e.key, code: e.code, shift: e.shiftKey })
