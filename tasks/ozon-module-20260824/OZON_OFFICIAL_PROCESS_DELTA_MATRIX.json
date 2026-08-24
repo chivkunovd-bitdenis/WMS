@@ -1,0 +1,537 @@
+{
+  "schema_version": "1.0",
+  "call_id": "22-ozon-official-process-delta-proof-path-resolved",
+  "research_date": "2026-08-24",
+  "baseline": {
+    "application_sha": "af0779e1c425eede8d811da666822ff6ed178331",
+    "observed_date": "2026-08-24",
+    "source": "docs/evidence/ozon-module-20260824/baseline-current-product/BASELINE_INVARIANTS.md"
+  },
+  "decision_rule": "UI unchanged is the default. API or data differences do not justify UI changes. UNKNOWN means UI unchanged and the capability disabled. No new route, screen, tab, modal, workspace, document or stage is permitted.",
+  "source_registry": [
+    {
+      "id": "OZ-API-ROOT",
+      "url": "https://docs.ozon.ru/api/seller/",
+      "title": "Ozon Seller API",
+      "published_or_updated_date": null,
+      "access_date": "2026-08-24",
+      "access_note": "Official interactive page entered a redirect loop in the research fetcher; no Seller API endpoint was called."
+    },
+    {
+      "id": "OZ-API-FBS-WORKFLOW",
+      "url": "https://docs.ozon.ru/api/seller/#section/Upravlyajte-zakazami-FBO-FBS-i-rFBS/Shema-FBS-Standart",
+      "title": "Управляйте заказами FBO, FBS и rFBS → Схема FBS Стандарт",
+      "published_or_updated_date": null,
+      "access_date": "2026-08-24",
+      "access_note": "Section date not exposed."
+    },
+    {
+      "id": "OZ-API-FBO-WORKFLOW",
+      "url": "https://docs.ozon.ru/api/seller/#section/Upravlyajte-zakazami-FBO-FBS-i-rFBS/Shema-FBO",
+      "title": "Управляйте заказами FBO, FBS и rFBS → Схема FBO",
+      "published_or_updated_date": "2026-07-09",
+      "access_date": "2026-08-24",
+      "access_note": "Official API news states that transport-cargo distribution guidance was added on this date."
+    },
+    {
+      "id": "OZ-API-FBS-SHIP",
+      "url": "https://docs.ozon.ru/api/seller/#operation/PostingAPI_ShipFbsPostingV4",
+      "title": "Собрать заказ (версия 4)",
+      "published_or_updated_date": null,
+      "access_date": "2026-08-24",
+      "access_note": "Current operation anchor; page date not exposed."
+    },
+    {
+      "id": "OZ-API-FBS-PARTIAL",
+      "url": "https://docs.ozon.ru/api/seller/#operation/PostingAPI_ShipFbsPostingPackage",
+      "title": "Частичная сборка отправления (версия 4)",
+      "published_or_updated_date": null,
+      "access_date": "2026-08-24",
+      "access_note": "Current operation anchor; page date not exposed."
+    },
+    {
+      "id": "OZ-API-FBS-LABEL",
+      "url": "https://docs.ozon.ru/api/seller/#operation/PostingAPI_CreateLabelBatchV2",
+      "title": "Создать задание на формирование этикеток",
+      "published_or_updated_date": "2024-05-23",
+      "access_date": "2026-08-24",
+      "access_note": "Current v2 operation was announced on the stated date."
+    },
+    {
+      "id": "OZ-HELP-FBS-PACK",
+      "url": "https://seller-edu.ozon.ru/fbs/ozon-logistika/trebovaniya-k-upakovke",
+      "title": "Требования к упаковке",
+      "published_or_updated_date": null,
+      "access_date": "2026-08-24",
+      "access_note": "Current page update date not exposed."
+    },
+    {
+      "id": "OZ-HELP-FBS-PICK",
+      "url": "https://seller-edu.ozon.ru/fbs/ozon-logistika/sobrat-zakazy",
+      "title": "Собрать заказы",
+      "published_or_updated_date": null,
+      "access_date": "2026-08-24",
+      "access_note": "Current page update date not exposed."
+    },
+    {
+      "id": "OZ-HELP-FBS-HANDOVER",
+      "url": "https://seller-edu.ozon.ru/fbs/ozon-logistika/sobrat-zakazy-fbs",
+      "title": "Сборка заказов FBS",
+      "published_or_updated_date": null,
+      "access_date": "2026-08-24",
+      "access_note": "Current official guidance linked by Ozon; update date not exposed."
+    },
+    {
+      "id": "OZ-HELP-FBS-DOCS",
+      "url": "https://seller-edu.ozon.ru/fbs/ozon-logistika/logistics-docs",
+      "title": "Документы для отгрузки",
+      "published_or_updated_date": null,
+      "access_date": "2026-08-24",
+      "access_note": "Current page update date not exposed."
+    },
+    {
+      "id": "OZ-HELP-FBO-SUPPLY",
+      "url": "https://seller-edu.ozon.ru/fbo/process-details/fill-in-application-form",
+      "title": "Создать и заполнить заявку на поставку",
+      "published_or_updated_date": null,
+      "access_date": "2026-08-24",
+      "access_note": "Current page update date not exposed."
+    },
+    {
+      "id": "OZ-HELP-FBO-CANCEL",
+      "url": "https://seller-edu.ozon.ru/fbo/process-details/otmenit-zayavku-na-postavku/",
+      "title": "Отменить заявку на поставку",
+      "published_or_updated_date": null,
+      "access_date": "2026-08-24",
+      "access_note": "Current page update date not exposed."
+    },
+    {
+      "id": "OZ-DEV-FBO-TGM",
+      "url": "https://dev.ozon.ru/start/525-Rabota-s-transportnymi-gruzomestami-TGM-v-postavkakh-FBO/",
+      "title": "Работа с транспортными грузоместами (ТГМ) в поставках FBO",
+      "published_or_updated_date": "2026-06",
+      "access_date": "2026-08-24",
+      "access_note": "Official publication month exposed; day not exposed."
+    },
+    {
+      "id": "OZ-DEV-FBO-SCANNER",
+      "url": "https://dev.ozon.ru/start/526-Gaid-integratsiia-metodov-Seller-API-FBO-so-skanerom/",
+      "title": "Гайд: интеграция методов Seller API FBO со сканером",
+      "published_or_updated_date": "2026-06",
+      "access_date": "2026-08-24",
+      "access_note": "Official guide covers supply selection, GM/TGM distribution and label printing; day not exposed."
+    },
+    {
+      "id": "OZ-DEV-FBO-ACT",
+      "url": "https://dev.ozon.ru/news/781-Novye-beta-metody-dlia-raboty-s-aktami-FBO-v-Seller-API/",
+      "title": "Новые бета-методы для работы с актами FBO в Seller API",
+      "published_or_updated_date": "2026-08-11",
+      "access_date": "2026-08-24",
+      "access_note": "Official beta-method announcement."
+    },
+    {
+      "id": "OZ-NEWS-FBO-SCANNER",
+      "url": "https://seller.ozon.ru/media/news/fbo-zapolnyajte-gruzomesta-cherez-skaner/",
+      "title": "FBO: заполняйте грузоместа через сканер",
+      "published_or_updated_date": "2026-08",
+      "access_date": "2026-08-24",
+      "access_note": "Official news describes scanner filling as another way to fill cargo contents."
+    }
+  ],
+  "rows": [
+    {
+      "id": "FBS-01",
+      "scheme": "FBS",
+      "baseline_step": "Queue intake, filters, status tabs and one row-to-workspace action",
+      "wms_screen_zone_action": "/app/ff/fbs; current queue header/filters/status tabs/table; open existing workspace",
+      "official_ozon_step": "Read unfulfilled/list postings and track provider status/substatus/actions",
+      "official_evidence": [
+        {"source_id": "OZ-API-FBS-WORKFLOW", "paraphrase": "The FBS workflow begins from provider postings and their current fulfilment state."},
+        {"source_id": "OZ-API-ROOT", "paraphrase": "Current Seller API exposes FBS posting list/detail operations."}
+      ],
+      "classification": "compatible_via_data_adapter",
+      "why_existing_action_is_sufficient": "Posting identity and status can populate the current queue and open the same workspace.",
+      "hard_incompatibility_proof": null,
+      "allowed_delta_kind": "provider-neutral data mapping",
+      "ui_decision": "unchanged",
+      "unknowns": []
+    },
+    {
+      "id": "FBS-02",
+      "scheme": "FBS",
+      "baseline_step": "Composition table lines and quantities",
+      "wms_screen_zone_action": "Existing FBS workspace; Состав table product/order/quantity cells",
+      "official_ozon_step": "Represent posting product lines, quantities and package/split identity",
+      "official_evidence": [
+        {"source_id": "OZ-API-FBS-SHIP", "paraphrase": "Assembly operates on a posting and its product/package data."},
+        {"source_id": "OZ-API-FBS-PARTIAL", "paraphrase": "Partial assembly preserves posting/package distinctions."}
+      ],
+      "classification": "compatible_via_data_adapter",
+      "why_existing_action_is_sufficient": "Multiple current table rows and the existing quantity cell can show the work without replacing columns.",
+      "hard_incompatibility_proof": null,
+      "allowed_delta_kind": "provider-neutral data mapping",
+      "ui_decision": "unchanged",
+      "unknowns": []
+    },
+    {
+      "id": "FBS-03",
+      "scheme": "FBS",
+      "baseline_step": "Start local work",
+      "wms_screen_zone_action": "Состав; one Начать работу с поставкой action",
+      "official_ozon_step": "Begin local picking/packing before provider assembly confirmation",
+      "official_evidence": [
+        {"source_id": "OZ-HELP-FBS-PICK", "paraphrase": "Ozon provides picking-list/assembly guidance but does not prescribe a separate WMS start control."}
+      ],
+      "classification": "compatible_as_is",
+      "why_existing_action_is_sufficient": "The physical start of warehouse work is provider-neutral; provider ship confirmation is later adapter work.",
+      "hard_incompatibility_proof": null,
+      "allowed_delta_kind": "no UI change",
+      "ui_decision": "unchanged",
+      "unknowns": []
+    },
+    {
+      "id": "FBS-04",
+      "scheme": "FBS",
+      "baseline_step": "Warehouse/cell picking",
+      "wms_screen_zone_action": "Подбор; location scan, product scan and manual cell pick",
+      "official_ozon_step": "Physically pick products in the posting",
+      "official_evidence": [
+        {"source_id": "OZ-HELP-FBS-PICK", "paraphrase": "The official flow supports a picking list but does not impose a distinct cell-picking interface."},
+        {"source_id": "OZ-HELP-FBS-HANDOVER", "paraphrase": "Picking precedes preparation and handover of the posting."}
+      ],
+      "classification": "compatible_as_is",
+      "why_existing_action_is_sufficient": "Current WMS scans and stock movements perform the required physical work.",
+      "hard_incompatibility_proof": null,
+      "allowed_delta_kind": "no UI change",
+      "ui_decision": "unchanged",
+      "unknowns": []
+    },
+    {
+      "id": "FBS-05",
+      "scheme": "FBS",
+      "baseline_step": "Per-unit mandatory data and marking",
+      "wms_screen_zone_action": "Existing Маркировка column and existing Упаковка и маркировка row controls",
+      "official_ozon_step": "Provide required exemplar/marking data before assembly for products that demand it",
+      "official_evidence": [
+        {"source_id": "OZ-API-FBS-WORKFLOW", "paraphrase": "The FBS workflow includes product-specific mandatory exemplar/marking requirements before assembly."},
+        {"source_id": "OZ-API-FBS-SHIP", "paraphrase": "Assembly cannot complete when a posting-specific mandatory requirement is unmet."}
+      ],
+      "classification": "hard_incompatible_when_requirement_present",
+      "why_existing_action_is_sufficient": "The current marking zone is sufficient, but a generic WB value cannot satisfy a different Ozon-required exemplar value.",
+      "hard_incompatibility_proof": "Official FBS workflow blocks assembly when required exemplar/marking data is absent or invalid; applicability is product/posting-specific.",
+      "allowed_delta_kind": "conditional field in existing zone",
+      "ui_decision": "conditional_existing_zone",
+      "unknowns": ["Exact required fields for the owner's real postings are unknown without an authorised read-only posting."]
+    },
+    {
+      "id": "FBS-06",
+      "scheme": "FBS",
+      "baseline_step": "Pack selected quantities",
+      "wms_screen_zone_action": "Упаковка и маркировка; current pack controls and progression",
+      "official_ozon_step": "Confirm full or supported partial package",
+      "official_evidence": [
+        {"source_id": "OZ-API-FBS-SHIP", "paraphrase": "The current full assembly operation confirms a prepared posting."},
+        {"source_id": "OZ-API-FBS-PARTIAL", "paraphrase": "The current partial operation supports a package subset."},
+        {"source_id": "OZ-HELP-FBS-PACK", "paraphrase": "Physical packaging remains seller work before handover."}
+      ],
+      "classification": "compatible_via_data_adapter",
+      "why_existing_action_is_sufficient": "The physical pack action remains the same; provider package identity and mutation are adapter mechanics.",
+      "hard_incompatibility_proof": null,
+      "allowed_delta_kind": "provider-neutral data mapping",
+      "ui_decision": "unchanged",
+      "unknowns": []
+    },
+    {
+      "id": "FBS-07",
+      "scheme": "FBS",
+      "baseline_step": "Print and apply shipment label",
+      "wms_screen_zone_action": "Existing packing print zone and per-order print/apply flow",
+      "official_ozon_step": "Generate and apply the current Ozon posting label",
+      "official_evidence": [
+        {"source_id": "OZ-API-FBS-LABEL", "paraphrase": "Seller API provides the current task-based FBS label-generation operation."},
+        {"source_id": "OZ-HELP-FBS-HANDOVER", "paraphrase": "Ready postings are prepared with their labels for handover."}
+      ],
+      "classification": "hard_incompatible",
+      "why_existing_action_is_sufficient": "The same print zone is sufficient, but a WB sticker or internal WMS barcode is not an Ozon posting label.",
+      "hard_incompatibility_proof": "Official Ozon FBS handover requires the provider posting label and exposes a dedicated label-generation operation.",
+      "allowed_delta_kind": "conditional label/print asset in existing print zone",
+      "ui_decision": "conditional_existing_zone",
+      "unknowns": ["The concrete label size/format is account/method configuration and must not be guessed."]
+    },
+    {
+      "id": "FBS-08",
+      "scheme": "FBS",
+      "baseline_step": "WMS boxes and handover grouping",
+      "wms_screen_zone_action": "Короба; current WMS box creation/content and existing handover area",
+      "official_ozon_step": "Hand ready postings over one by one by posting barcode",
+      "official_evidence": [
+        {"source_id": "OZ-HELP-FBS-HANDOVER", "paraphrase": "Current guidance permits per-posting handover without mandatory common-shipment formation."}
+      ],
+      "classification": "compatible_via_data_adapter",
+      "why_existing_action_is_sufficient": "WMS boxes can remain physical grouping while posting/package identity is mapped separately.",
+      "hard_incompatibility_proof": null,
+      "allowed_delta_kind": "provider-neutral data mapping",
+      "ui_decision": "unchanged",
+      "unknowns": []
+    },
+    {
+      "id": "FBS-09",
+      "scheme": "FBS",
+      "baseline_step": "Optional common shipment/carriage documents",
+      "wms_screen_zone_action": "Existing handover/footer action; no separate carriage stage",
+      "official_ozon_step": "Form a common shipment/carriage and documents only for applicable methods/needs",
+      "official_evidence": [
+        {"source_id": "OZ-HELP-FBS-DOCS", "paraphrase": "Transport documents remain available for applicable handover cases."},
+        {"source_id": "OZ-HELP-FBS-HANDOVER", "paraphrase": "Per-posting handover is available, so common-shipment formation is not universal."}
+      ],
+      "classification": "unknown",
+      "why_existing_action_is_sufficient": "No current official proof makes carriage an unavoidable operator step for every posting.",
+      "hard_incompatibility_proof": null,
+      "allowed_delta_kind": "no UI change",
+      "ui_decision": "unchanged",
+      "unknowns": ["Whether the concrete delivery method requires an act, pass or carriage is unknown; capability remains disabled."]
+    },
+    {
+      "id": "FBS-10",
+      "scheme": "FBS",
+      "baseline_step": "Handover/status reconciliation",
+      "wms_screen_zone_action": "Current status tabs and row state",
+      "official_ozon_step": "Read provider state after physical handover and scanning",
+      "official_evidence": [
+        {"source_id": "OZ-API-FBS-WORKFLOW", "paraphrase": "The official workflow distinguishes provider fulfilment states after assembly/handover."}
+      ],
+      "classification": "compatible_via_data_adapter",
+      "why_existing_action_is_sufficient": "Provider state can map to the current groups while raw status remains internal.",
+      "hard_incompatibility_proof": null,
+      "allowed_delta_kind": "provider-neutral data mapping",
+      "ui_decision": "unchanged",
+      "unknowns": []
+    },
+    {
+      "id": "FBS-11",
+      "scheme": "FBS",
+      "baseline_step": "Cancellation and recovery",
+      "wms_screen_zone_action": "Current cancelled group and safe recovery paths",
+      "official_ozon_step": "Cancel/partially cancel or recover only when the posting state permits it",
+      "official_evidence": [
+        {"source_id": "OZ-API-FBS-WORKFLOW", "paraphrase": "Available recovery/cancellation depends on the concrete posting state and actions."}
+      ],
+      "classification": "unknown",
+      "why_existing_action_is_sufficient": "No universal extra action is proved; current state projection is sufficient until capability is known.",
+      "hard_incompatibility_proof": null,
+      "allowed_delta_kind": "no UI change",
+      "ui_decision": "unchanged",
+      "unknowns": ["Concrete cancellation/recovery action availability is unknown without an authorised entity read."]
+    },
+    {
+      "id": "FBO-01",
+      "scheme": "FBO",
+      "baseline_step": "Create marketplace shipment and external supply identity",
+      "wms_screen_zone_action": "/app/ff/mp-shipments create block; seller + one Создать отгрузку на МП action",
+      "official_ozon_step": "Create/read a supply order and select destination/route",
+      "official_evidence": [
+        {"source_id": "OZ-HELP-FBO-SUPPLY", "paraphrase": "The official flow creates and fills one FBO supply request."},
+        {"source_id": "OZ-API-FBO-WORKFLOW", "paraphrase": "FBO supply-order operations carry provider identity and route data."}
+      ],
+      "classification": "compatible_via_data_adapter",
+      "why_existing_action_is_sufficient": "The current marketplace-shipment document already owns this operator intent.",
+      "hard_incompatibility_proof": null,
+      "allowed_delta_kind": "provider-neutral data mapping",
+      "ui_decision": "unchanged",
+      "unknowns": []
+    },
+    {
+      "id": "FBO-02",
+      "scheme": "FBO",
+      "baseline_step": "Plan composition and quantities",
+      "wms_screen_zone_action": "Existing Товары stage, product picker, quantities and metrics",
+      "official_ozon_step": "Fill/edit/validate the supply product composition",
+      "official_evidence": [
+        {"source_id": "OZ-HELP-FBO-SUPPLY", "paraphrase": "A supply request contains the product composition and quantities."},
+        {"source_id": "OZ-API-FBO-WORKFLOW", "paraphrase": "Supply composition operations are provider data/validation."}
+      ],
+      "classification": "compatible_via_data_adapter",
+      "why_existing_action_is_sufficient": "Current lines and quantities represent the same physical plan; no replacement columns are needed.",
+      "hard_incompatibility_proof": null,
+      "allowed_delta_kind": "provider-neutral data mapping",
+      "ui_decision": "unchanged",
+      "unknowns": []
+    },
+    {
+      "id": "FBO-03",
+      "scheme": "FBO",
+      "baseline_step": "Destination, timeslot and approval progression",
+      "wms_screen_zone_action": "Current document header/date/destination and one approval/progression action",
+      "official_ozon_step": "Choose/update a timeslot and move the supply towards handover",
+      "official_evidence": [
+        {"source_id": "OZ-HELP-FBO-SUPPLY", "paraphrase": "The official supply request selects the destination and may select a timeslot later."},
+        {"source_id": "OZ-API-FBO-WORKFLOW", "paraphrase": "FBO draft/timeslot/supply operations are separate provider states."}
+      ],
+      "classification": "compatible_via_data_adapter",
+      "why_existing_action_is_sufficient": "The current header owns destination/date and current progression can be conditionally enabled.",
+      "hard_incompatibility_proof": null,
+      "allowed_delta_kind": "conditional enabled state/copy in existing action",
+      "ui_decision": "unchanged",
+      "unknowns": []
+    },
+    {
+      "id": "FBO-04",
+      "scheme": "FBO",
+      "baseline_step": "Warehouse/cell picking",
+      "wms_screen_zone_action": "Existing Подбор stage and FfMpUnloadPickPanel",
+      "official_ozon_step": "Physically pick supply units from WMS stock",
+      "official_evidence": [
+        {"source_id": "OZ-NEWS-FBO-SCANNER", "paraphrase": "Ozon calls scanner filling another way to fill cargo contents, not a separate mandatory warehouse-pick process."},
+        {"source_id": "OZ-DEV-FBO-SCANNER", "paraphrase": "The scanner guide covers cargo distribution after supply selection, not a replacement WMS pick stage."}
+      ],
+      "classification": "compatible_as_is",
+      "why_existing_action_is_sufficient": "Official evidence does not prescribe a different cell-picking action.",
+      "hard_incompatibility_proof": null,
+      "allowed_delta_kind": "no UI change",
+      "ui_decision": "unchanged",
+      "unknowns": []
+    },
+    {
+      "id": "FBO-05",
+      "scheme": "FBO",
+      "baseline_step": "Physical packaging into WMS boxes",
+      "wms_screen_zone_action": "Existing Упаковка stage, PackagingTask and WMS boxes",
+      "official_ozon_step": "Physically pack planned products into boxes/pallets before provider cargo declaration",
+      "official_evidence": [
+        {"source_id": "OZ-DEV-FBO-SCANNER", "paraphrase": "Official FBO flow distributes products into GM/TGM after supply selection; it does not eliminate physical packing."},
+        {"source_id": "OZ-API-FBO-WORKFLOW", "paraphrase": "Cargo declarations are children of the supply workflow."}
+      ],
+      "classification": "compatible_as_is",
+      "why_existing_action_is_sufficient": "Current PackagingTask and WMS boxes perform the physical work; external identities can be linked behind them.",
+      "hard_incompatibility_proof": null,
+      "allowed_delta_kind": "no UI change",
+      "ui_decision": "unchanged",
+      "unknowns": []
+    },
+    {
+      "id": "FBO-06",
+      "scheme": "FBO",
+      "baseline_step": "Ozon cargo identity/content mapping",
+      "wms_screen_zone_action": "Existing WMS box rows/cards and print menu",
+      "official_ozon_step": "Declare cargoes and contents according to supply-specific rules",
+      "official_evidence": [
+        {"source_id": "OZ-API-FBO-WORKFLOW", "paraphrase": "The official workflow has cargo rules, composition and asynchronous operations."},
+        {"source_id": "OZ-DEV-FBO-SCANNER", "paraphrase": "The guide covers distributing products into cargoes."}
+      ],
+      "classification": "unknown",
+      "why_existing_action_is_sufficient": "External cargo identity can map to current closed boxes; generic API existence does not prove a mandatory extra click.",
+      "hard_incompatibility_proof": null,
+      "allowed_delta_kind": "provider-neutral data mapping",
+      "ui_decision": "unchanged",
+      "unknowns": ["Supply-specific cargo rules were not available; explicit cargo action remains disabled."]
+    },
+    {
+      "id": "FBO-07",
+      "scheme": "FBO",
+      "baseline_step": "Transport-cargo grouping",
+      "wms_screen_zone_action": "Existing box grouping; no TGM stage/action",
+      "official_ozon_step": "For an applicable route, group cargoes into transport cargoes",
+      "official_evidence": [
+        {"source_id": "OZ-DEV-FBO-TGM", "paraphrase": "Ozon defines transport cargoes as a distinct FBO supply construct."},
+        {"source_id": "OZ-API-FBO-WORKFLOW", "paraphrase": "Transport-cargo distribution guidance is part of the current FBO section."}
+      ],
+      "classification": "unknown",
+      "why_existing_action_is_sufficient": "Distinct identity does not prove universal route applicability or a separate operator action.",
+      "hard_incompatibility_proof": null,
+      "allowed_delta_kind": "no UI change",
+      "ui_decision": "unchanged",
+      "unknowns": ["Concrete route/TGM requirement is unknown; TGM action remains disabled."]
+    },
+    {
+      "id": "FBO-08",
+      "scheme": "FBO",
+      "baseline_step": "Cargo/TGM label print and apply",
+      "wms_screen_zone_action": "Existing per-box print zone/menu in Упаковка",
+      "official_ozon_step": "Generate/apply Ozon cargo and transport-cargo labels for configured entities",
+      "official_evidence": [
+        {"source_id": "OZ-DEV-FBO-SCANNER", "paraphrase": "The official scanner guide covers label printing for configured GM/TGM."},
+        {"source_id": "OZ-DEV-FBO-TGM", "paraphrase": "TGM is a distinct provider entity in applicable supplies."}
+      ],
+      "classification": "hard_incompatible_when_entity_present",
+      "why_existing_action_is_sufficient": "The same print zone is sufficient, but internal WHB is not an Ozon cargo/TGM label.",
+      "hard_incompatibility_proof": "Official FBO flow includes provider label printing for configured GM/TGM; applicability and exact asset set are supply-specific.",
+      "allowed_delta_kind": "conditional label/print asset in existing print zone",
+      "ui_decision": "conditional_existing_zone",
+      "unknowns": ["Exact label set, format and TGM applicability remain unknown until concrete supply rules/entities are read."]
+    },
+    {
+      "id": "FBO-09",
+      "scheme": "FBO",
+      "baseline_step": "Handover at destination/timeslot",
+      "wms_screen_zone_action": "Existing document footer/handover completion",
+      "official_ozon_step": "Deliver the supply at the selected point/timeslot and read provider state afterward",
+      "official_evidence": [
+        {"source_id": "OZ-HELP-FBO-SUPPLY", "paraphrase": "The supply request determines destination/timeslot for handover."},
+        {"source_id": "OZ-API-FBO-WORKFLOW", "paraphrase": "Provider supply status is reconciled separately from local physical completion."}
+      ],
+      "classification": "compatible_via_data_adapter",
+      "why_existing_action_is_sufficient": "The current handover footer remains one physical action; provider confirmation is readback data.",
+      "hard_incompatibility_proof": null,
+      "allowed_delta_kind": "provider-neutral data mapping",
+      "ui_decision": "unchanged",
+      "unknowns": []
+    },
+    {
+      "id": "FBO-10",
+      "scheme": "FBO",
+      "baseline_step": "Acceptance/status/act reconciliation",
+      "wms_screen_zone_action": "Existing status/metrics and discrepancy/act area",
+      "official_ozon_step": "Read accepted/rejected quantities and, where capability exists, accept the FBO act",
+      "official_evidence": [
+        {"source_id": "OZ-DEV-FBO-ACT", "paraphrase": "Beta methods added on 2026-08-11 automate FBO acceptance-act reconciliation and acceptance."}
+      ],
+      "classification": "unknown",
+      "why_existing_action_is_sufficient": "Readback fits current metrics; beta method existence does not prove a universal manual WMS action.",
+      "hard_incompatibility_proof": null,
+      "allowed_delta_kind": "provider-neutral data mapping",
+      "ui_decision": "unchanged",
+      "unknowns": ["Manual act-acceptance necessity for a concrete supply is unknown; mutation remains disabled."]
+    },
+    {
+      "id": "FBO-11",
+      "scheme": "FBO",
+      "baseline_step": "Cancellation/edit/recovery",
+      "wms_screen_zone_action": "Existing cancel footer and status display",
+      "official_ozon_step": "Cancel/edit only when provider state/action permits and reconcile async status",
+      "official_evidence": [
+        {"source_id": "OZ-HELP-FBO-CANCEL", "paraphrase": "Official guidance constrains cancellation/editing by current supply state."},
+        {"source_id": "OZ-API-FBO-WORKFLOW", "paraphrase": "Supply edit/cancel operations have separate provider status/results."}
+      ],
+      "classification": "compatible_via_data_adapter",
+      "why_existing_action_is_sufficient": "The existing cancellation zone can be conditionally enabled; no new recovery panel is needed.",
+      "hard_incompatibility_proof": null,
+      "allowed_delta_kind": "conditional enabled state/copy in existing action",
+      "ui_decision": "unchanged",
+      "unknowns": ["Concrete available action is unknown until an authorised entity read."]
+    }
+  ],
+  "rejected_elements": [
+    {"id": "REJ-01", "element": "separate Ozon FBO pick panel", "decision": "remove", "reason": "No official hard incompatibility; existing pick panel performs the physical action and scanner filling is another method."},
+    {"id": "REJ-02", "element": "separate Ozon packaging panel", "decision": "remove", "reason": "Physical packing remains the existing PackagingTask/WMS-box flow."},
+    {"id": "REJ-03", "element": "Ozon replacement table columns", "decision": "remove", "reason": "Provider identities, lines and quantities fit existing cells through data mapping."},
+    {"id": "REJ-04", "element": "extra link-to-Ozon-cargo action", "decision": "remove_or_disable", "reason": "Endpoint/entity existence does not prove a mandatory operator click; supply-specific rules are unknown."},
+    {"id": "REJ-05", "element": "extra add-to-transport-cargo action", "decision": "remove_or_disable", "reason": "TGM is distinct but route-dependent; no concrete unavoidable physical action was proved."},
+    {"id": "REJ-06", "element": "Ozon-only FBS packaging panel", "decision": "remove", "reason": "Mandatory data/package state belongs in existing packing rows/actions."},
+    {"id": "REJ-07", "element": "Ozon-only FBS boxes/stage panel", "decision": "remove", "reason": "Existing boxes stage remains the physical flow; posting identity maps behind it."}
+  ],
+  "architect_handoff": [
+    "Remove REJ-01 through REJ-07 without replacing them with renamed panels.",
+    "Preserve current routes, modal roots, stage counts, table structures and single progression actions.",
+    "Keep provider posting/package/supply/cargo/TGM/label/act identities behind provider-neutral projections; never rename WMS box as Ozon cargo.",
+    "Allow only requirement-driven fields in existing marking controls and provider labels in existing print zones; hide or disable until concrete official entity data proves applicability.",
+    "Keep FBS carriage, explicit FBO cargo/TGM actions and act acceptance capability-off by default.",
+    "Carry UNKNOWN rows as blockers; resolving them requires a separately authorised read-only integration probe, not owner questions or credential access during architecture."
+  ],
+  "scope_attestation": {
+    "application_or_contract_files_edited": false,
+    "credentials_accessed": false,
+    "seller_api_called": false,
+    "products_or_stocks_published": false,
+    "owner_questions_asked": false
+  }
+}
