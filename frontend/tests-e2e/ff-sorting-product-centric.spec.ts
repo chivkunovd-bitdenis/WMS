@@ -42,8 +42,13 @@ test('ff sorting: box product rows and loose goods are separate', async ({ page 
     headers: h,
     data: { code: 'BOX-1' },
   });
+  const locStale = await page.request.post(`/api/warehouses/${wid}/locations`, {
+    headers: h,
+    data: { code: 'STALE-BOX-DRAFT' },
+  });
   expect(locLoose.ok()).toBeTruthy();
   expect(locBox.ok()).toBeTruthy();
+  expect(locStale.ok()).toBeTruthy();
 
   const pr = await page.request.post('/api/products', {
     headers: h,
@@ -82,6 +87,17 @@ test('ff sorting: box product rows and loose goods are separate', async ({ page 
 
   const complete = await page.request.post(`${base}/${rid}/complete-receiving`, { headers: h });
   expect(complete.ok()).toBeTruthy();
+
+  const staleDraft = await page.request.put(`${base}/${rid}/distribution-lines`, {
+    headers: { ...h, 'Content-Type': 'application/json' },
+    data: [{
+      box_id: boxId,
+      product_id: pid,
+      storage_location_id: ((await locStale.json()) as { id: string }).id,
+      quantity: 6,
+    }],
+  });
+  expect(staleDraft.ok()).toBeTruthy();
 
   await page.goto('/app/ff/sorting');
   const [distributionRes] = await Promise.all([
@@ -144,9 +160,13 @@ test('ff sorting: box product rows and loose goods are separate', async ({ page 
     storage_location_code: string;
     quantity: number;
   }[];
+  expect(distributionRows).toHaveLength(2);
   expect(distributionRows).toEqual(expect.arrayContaining([
     expect.objectContaining({ box_id: boxId, storage_location_code: 'BOX-1', quantity: 6 }),
     expect.objectContaining({ box_id: null, storage_location_code: 'LOOSE-1', quantity: 4 }),
+  ]));
+  expect(distributionRows).not.toEqual(expect.arrayContaining([
+    expect.objectContaining({ storage_location_code: 'STALE-BOX-DRAFT' }),
   ]));
 });
 

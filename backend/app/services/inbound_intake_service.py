@@ -1605,7 +1605,10 @@ async def replace_distribution_lines(
     existing_stmt = (
         select(InboundIntakeDistributionLine)
         .where(InboundIntakeDistributionLine.request_id == request_id)
-        .order_by(InboundIntakeDistributionLine.created_at, InboundIntakeDistributionLine.id)
+        .order_by(
+            InboundIntakeDistributionLine.created_at.desc(),
+            InboundIntakeDistributionLine.id.desc(),
+        )
     )
     existing_rows = list((await session.execute(existing_stmt)).scalars().all())
     preserved_box_rows: list[tuple[uuid.UUID, uuid.UUID, uuid.UUID, int]] = []
