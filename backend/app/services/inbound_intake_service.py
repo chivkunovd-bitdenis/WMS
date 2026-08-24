@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.models.inbound_intake import (
     InboundIntakeBox,
@@ -1175,23 +1176,42 @@ async def _get_box_for_putaway(
     request_id: uuid.UUID,
     box_id: uuid.UUID,
 ) -> tuple[InboundIntakeRequest, InboundIntakeBox]:
+    # Один запрос приёмки — одна транзакционная очередь раскладки. Это не даёт
+    # двум операторам одновременно списать общий остаток одного SKU из разных
+    # коробов и защищает повторный POST того же короба.
+    request_lock_stmt = (
+        select(InboundIntakeRequest.id)
+        .where(
+            InboundIntakeRequest.id == request_id,
+            InboundIntakeRequest.tenant_id == tenant_id,
+        )
+        .with_for_update()
+    )
+    locked_request_id = await session.scalar(request_lock_stmt)
+    if locked_request_id is None:
+        raise InboundIntakeError("request_not_found")
+
     req = await get_request(session, tenant_id, request_id)
     if req is None:
         raise InboundIntakeError("request_not_found")
     if req.status != STATUS_SORTING:
         raise InboundIntakeError("not_distributable")
-    box = await session.get(InboundIntakeBox, box_id)
-    if box is None or box.request_id != request_id or box.tenant_id != tenant_id:
-        raise InboundIntakeError("box_not_found")
-    if box.intake_closed_at is None:
-        raise InboundIntakeError("box_not_closed")
     stmt = (
         select(InboundIntakeBox)
-        .where(InboundIntakeBox.id == box_id)
+        .where(
+            InboundIntakeBox.id == box_id,
+            InboundIntakeBox.request_id == request_id,
+            InboundIntakeBox.tenant_id == tenant_id,
+        )
         .options(selectinload(InboundIntakeBox.lines).selectinload(InboundIntakeBoxLine.product))
+        .with_for_update()
     )
     res = await session.execute(stmt)
-    loaded = res.scalar_one()
+    loaded = res.scalar_one_or_none()
+    if loaded is None:
+        raise InboundIntakeError("box_not_found")
+    if loaded.intake_closed_at is None:
+        raise InboundIntakeError("box_not_closed")
     return req, loaded
 
 
@@ -1257,7 +1277,8 @@ async def apply_box_putaway(
     if sorting_loc_svc.is_sorting_location(loc):
         raise InboundIntakeError("sorting_location_reserved")
 
-    if line_items is None:
+    whole_box = line_items is None
+    if whole_box:
         line_items = [
             (bl.product_id, box_line_remaining_qty(bl))
             for bl in box.lines
@@ -1293,6 +1314,41 @@ async def apply_box_putaway(
             session, tenant_id, sorting_loc.id, line, product_id, qty
         )
 
+        # FOR UPDATE защищает PostgreSQL. Условные UPDATE ниже дополнительно
+        # делают операцию идемпотентной в SQLite-тестах и при повторе запроса:
+        # право на количество получает ровно одна транзакция.
+        box_claim = await session.execute(
+            sa.update(InboundIntakeBoxLine)
+            .where(
+                InboundIntakeBoxLine.id == bl.id,
+                InboundIntakeBoxLine.posted_qty == bl.posted_qty,
+                InboundIntakeBoxLine.quantity - InboundIntakeBoxLine.posted_qty >= qty,
+            )
+            .values(posted_qty=InboundIntakeBoxLine.posted_qty + qty)
+            .execution_options(synchronize_session=False)
+        )
+        if getattr(box_claim, "rowcount", 0) != 1:
+            await session.rollback()
+            raise InboundIntakeError(
+                "nothing_to_putaway" if whole_box else "qty_exceeds_box_remaining"
+            )
+
+        line_claim = await session.execute(
+            sa.update(InboundIntakeLine)
+            .where(
+                InboundIntakeLine.id == line.id,
+                InboundIntakeLine.posted_qty == line.posted_qty,
+                InboundIntakeLine.posted_qty + qty <= accepted,
+            )
+            .values(posted_qty=InboundIntakeLine.posted_qty + qty)
+            .execution_options(synchronize_session=False)
+        )
+        if getattr(line_claim, "rowcount", 0) != 1:
+            await session.rollback()
+            raise InboundIntakeError("qty_exceeds_accepted")
+        set_committed_value(bl, "posted_qty", bl.posted_qty + qty)
+        set_committed_value(line, "posted_qty", line.posted_qty + qty)
+
         try:
             await inv_svc.apply_putaway_from_sorting(
                 session,
@@ -1307,8 +1363,6 @@ async def apply_box_putaway(
             if str(exc) == "insufficient stock":
                 raise InboundIntakeError("qty_exceeds_accepted") from None
             raise
-        line.posted_qty += qty
-        bl.posted_qty += qty
         session.add(
             InboundIntakeDistributionLine(
                 request_id=request_id,

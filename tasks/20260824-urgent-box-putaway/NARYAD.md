@@ -20,6 +20,7 @@
 - `frontend/src/screens/ff/FfInboundSortingPanel.tsx`
 - `frontend/tests-e2e/ff-sorting-product-centric.spec.ts`
 - `backend/tests/test_inbound_distribution.py`
+- `backend/app/services/inbound_intake_service.py` — только транзакционная блокировка уже существующей операции размещения короба;
 - `frontend/src/sections/CatalogSection.tsx`
 - `frontend/src/screens/ff/FfInboundRequestView.tsx`
 - `frontend/src/utils/printBarcodeLabel.ts`
@@ -36,6 +37,8 @@
 - Скан короба сам по себе ничего не перемещает; перемещение происходит только после свежего скана ячейки либо явного ручного действия.
 
 ## Статус
+
+Раунд правок: 1 — закрыта найденная ревьюером гонка двойного размещения: синхронная блокировка интерфейса, транзакционная блокировка документа/короба и условное списание количества на сервере.
 
 - [x] арх-решение — не требуется
 - [x] контракт

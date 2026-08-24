@@ -496,6 +496,16 @@ test('ff sorting: whole boxes go to one cell by scan or one explicit row action'
   await expect(page.getByTestId('ff-sorting-box-putaway-row')).toHaveCount(2);
 
   const scanInput = page.getByTestId('ff-sorting-scan-input');
+  // Ранее выбранная ячейка не должна молча примениться к следующему коробу.
+  await scanInput.fill(scanLocation.barcode);
+  await scanInput.press('Enter');
+  await expect(page.getByTestId('ff-sorting-scan-message')).toContainText('Активная ячейка');
+
+  let scannedBoxPutawayPosts = 0;
+  await page.route(`**/boxes/${scannedBox.id}/putaway`, async (route) => {
+    scannedBoxPutawayPosts += 1;
+    await route.continue();
+  });
   await scanInput.fill(scannedBox.internal_barcode);
   await scanInput.press('Enter');
   await expect(page.getByTestId('ff-sorting-scan-message')).toContainText(
@@ -505,6 +515,10 @@ test('ff sorting: whole boxes go to one cell by scan or one explicit row action'
     .getByTestId('ff-sorting-box-putaway-row')
     .filter({ hasText: `Короб №${scannedBox.box_number}` });
   await expect(selectedBoxRow).toHaveAttribute('aria-selected', 'true');
+  expect(scannedBoxPutawayPosts).toBe(0);
+  const untouchedRows = await page.request.get(`${base}/${requestId}/distribution-lines`, { headers: h });
+  expect(untouchedRows.ok()).toBeTruthy();
+  expect(await untouchedRows.json()).toEqual([]);
 
   await scanInput.fill(scanLocation.barcode);
   await Promise.all([
@@ -520,12 +534,20 @@ test('ff sorting: whole boxes go to one cell by scan or one explicit row action'
     `Короб №${scannedBox.box_number} полностью размещён в ячейке SCAN-BOX-A-01`,
   );
   await expect(page.getByTestId('ff-sorting-box-putaway-row')).toHaveCount(1);
+  expect(scannedBoxPutawayPosts).toBe(1);
 
   const manualRow = page
     .getByTestId('ff-sorting-box-putaway-row')
     .filter({ hasText: `Короб №${manualBox.box_number}` });
   await manualRow.getByTestId('ff-sorting-box-location').getByRole('combobox').click();
   await page.getByRole('option', { name: 'MANUAL-BOX-A-02' }).click();
+  let manualBoxPutawayPosts = 0;
+  await page.route(`**/boxes/${manualBox.id}/putaway`, async (route) => {
+    manualBoxPutawayPosts += 1;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    await route.continue();
+  });
+  const manualSubmit = manualRow.getByTestId('ff-sorting-box-putaway-submit');
   await Promise.all([
     page.waitForResponse(
       (response) =>
@@ -533,9 +555,11 @@ test('ff sorting: whole boxes go to one cell by scan or one explicit row action'
         response.url().includes(`/boxes/${manualBox.id}/putaway`) &&
         response.ok(),
     ),
-    manualRow.getByTestId('ff-sorting-box-putaway-submit').click(),
+    manualSubmit.click(),
+    manualSubmit.click({ force: true }),
   ]);
   await expect(page.getByTestId('ff-sorting-posted-done')).toBeVisible();
+  expect(manualBoxPutawayPosts).toBe(1);
 
   const distribution = await page.request.get(`${base}/${requestId}/distribution-lines`, { headers: h });
   expect(distribution.ok()).toBeTruthy();
@@ -544,25 +568,16 @@ test('ff sorting: whole boxes go to one cell by scan or one explicit row action'
     storage_location_id: string;
     quantity: number;
   }[];
-  expect(rows).toEqual(
-    expect.arrayContaining([
-      expect.objectContaining({
-        product_id: products[0]!.id,
-        storage_location_id: scanLocation.id,
-        quantity: products[0]!.qty,
-      }),
-      expect.objectContaining({
-        product_id: products[1]!.id,
-        storage_location_id: scanLocation.id,
-        quantity: products[1]!.qty,
-      }),
-      expect.objectContaining({
-        product_id: products[2]!.id,
-        storage_location_id: manualLocation.id,
-        quantity: products[2]!.qty,
-      }),
-    ]),
-  );
+  expect(rows).toHaveLength(3);
+  expect(rows.map((row) => ({
+    product_id: row.product_id,
+    storage_location_id: row.storage_location_id,
+    quantity: row.quantity,
+  })).sort((a, b) => a.product_id.localeCompare(b.product_id))).toEqual([
+    { product_id: products[0]!.id, storage_location_id: scanLocation.id, quantity: products[0]!.qty },
+    { product_id: products[1]!.id, storage_location_id: scanLocation.id, quantity: products[1]!.qty },
+    { product_id: products[2]!.id, storage_location_id: manualLocation.id, quantity: products[2]!.qty },
+  ].sort((a, b) => a.product_id.localeCompare(b.product_id)));
 });
 
 // TC-NEW-SORT-04 — sorting draft close/cross asks before losing unsaved manual corrections.

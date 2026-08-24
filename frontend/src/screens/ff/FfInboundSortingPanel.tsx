@@ -322,6 +322,7 @@ export function FfInboundSortingPanel({
   const [rowOverflowByProduct, setRowOverflowByProduct] = useState<Record<string, string | null>>({})
   const [, setDirty] = useState(false)
   const scanInputRef = useRef<HTMLInputElement | null>(null)
+  const boxPutawayInFlightRef = useRef(false)
   const distributionLoadSeq = useRef(0)
   const distributionEditSeq = useRef(0)
   const dirtyRef = useRef(false)
@@ -755,7 +756,17 @@ export function FfInboundSortingPanel({
   }, [])
 
   const putawayWholeBox = async (box: SortingBox, location: LocationRow) => {
-    if (!distributionReady || !editable || scanBusy || busy) return
+    if (
+      !distributionReady ||
+      !editable ||
+      scanBusy ||
+      busy ||
+      boxPutawayInFlightRef.current
+    ) {
+      return
+    }
+    boxPutawayInFlightRef.current = true
+    setScanBusy(true)
     setError(null)
     setScanMessage(null)
     try {
@@ -786,6 +797,7 @@ export function FfInboundSortingPanel({
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось разместить короб в ячейку.')
     } finally {
+      boxPutawayInFlightRef.current = false
       setScanValue('')
       setScanBusy(false)
       focusScanner()

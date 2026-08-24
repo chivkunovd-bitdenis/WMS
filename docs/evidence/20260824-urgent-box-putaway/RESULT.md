@@ -14,10 +14,10 @@
 
 ## Автоматические проверки
 
-- `backend/tests/test_inbound_distribution.py`: 7 passed;
+- `backend/tests/test_inbound_distribution.py`: 8 passed, включая два конкурентных POST одного короба — ровно один применяется, остаток второго короба сохраняется;
 - `frontend/src/hooks/useBarcodeScanner.test.ts`: 26 passed;
 - production build: green;
-- Chromium production preview: 3 passed — крупная этикетка, прежний скан ячейка→товар, новый короб→ячейка и ручное размещение.
+- Chromium production preview: целевые сценарии зелёные — крупная этикетка, прежний скан ячейка→товар, новый короб→ячейка, блокировка повторного ручного действия.
 
 ## Живая проверка
 

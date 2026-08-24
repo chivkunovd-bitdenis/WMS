@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from datetime import UTC, datetime
@@ -287,6 +288,108 @@ async def test_whole_box_putaway_moves_every_product_to_one_location(
         (row["product_id"], row["storage_location_id"], row["quantity"])
         for row in rows.json()
     } == {(product_id, lid, qty) for product_id, qty in products}
+
+
+@pytest.mark.asyncio
+async def test_concurrent_same_box_putaway_is_applied_once(
+    async_client: AsyncClient,
+) -> None:
+    """Два оператора не могут дважды списать один короб из общего остатка SKU."""
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Concurrent Box Putaway",
+            "slug": f"concurrent-box-{suffix}",
+            "admin_email": f"concurrent-box-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+
+    wh = await async_client.post(
+        "/warehouses", headers=ah, json={"name": "W", "code": f"cb-{suffix}"}
+    )
+    wid = wh.json()["id"]
+    loc = await async_client.post(
+        f"/warehouses/{wid}/locations", headers=ah, json={"code": "RACK-LOCK"}
+    )
+    lid = loc.json()["id"]
+    product = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "Shared SKU",
+            "sku_code": f"SHARED-{suffix}",
+            "length_mm": 1,
+            "width_mm": 1,
+            "height_mm": 1,
+        },
+    )
+    pid = product.json()["id"]
+
+    base = "/operations/inbound-intake-requests"
+    request = await async_client.post(base, headers=ah, json={"warehouse_id": wid})
+    rid = request.json()["id"]
+    await async_client.post(
+        f"{base}/{rid}/lines",
+        headers=ah,
+        json={"product_id": pid, "expected_qty": 2},
+    )
+    await set_planned_boxes(async_client, base, rid, ah, count=2)
+    assert (await async_client.post(f"{base}/{rid}/submit", headers=ah)).status_code == 200
+    receiving = await post_primary_accept(
+        async_client, base, rid, ah, create_boxes=False
+    )
+    assert receiving.status_code == 200, receiving.text
+
+    box_ids: list[str] = []
+    for _ in range(2):
+        box = await async_client.post(f"{base}/{rid}/boxes", headers=ah)
+        box_id = box.json()["id"]
+        box_ids.append(box_id)
+        filled = await async_client.put(
+            f"{base}/{rid}/boxes/{box_id}/lines/{pid}",
+            headers=ah,
+            json={"quantity": 1},
+        )
+        assert filled.status_code == 200, filled.text
+        closed = await async_client.post(
+            f"{base}/{rid}/boxes/{box_id}/close", headers=ah
+        )
+        assert closed.status_code == 200, closed.text
+    verified = await async_client.post(f"{base}/{rid}/verify", headers=ah)
+    assert verified.status_code == 200, verified.text
+
+    url = f"{base}/{rid}/boxes/{box_ids[0]}/putaway"
+    first, second = await asyncio.gather(
+        async_client.post(url, headers=ah, json={"storage_location_id": lid}),
+        async_client.post(url, headers=ah, json={"storage_location_id": lid}),
+    )
+    assert sorted((first.status_code, second.status_code)) == [200, 422]
+    failed = first if first.status_code == 422 else second
+    assert failed.json()["detail"] == "nothing_to_putaway"
+
+    got = await async_client.get(f"{base}/{rid}", headers=ah)
+    assert got.status_code == 200, got.text
+    assert got.json()["sorting_remaining_qty"] == 1
+    remaining_by_box = {box["id"]: box["remaining_qty"] for box in got.json()["boxes"]}
+    assert remaining_by_box == {box_ids[0]: 0, box_ids[1]: 1}
+
+    rows = await async_client.get(f"{base}/{rid}/distribution-lines", headers=ah)
+    assert rows.status_code == 200, rows.text
+    assert [
+        (row["box_id"], row["product_id"], row["storage_location_id"], row["quantity"])
+        for row in rows.json()
+    ] == [(box_ids[0], pid, lid, 1)]
+
+    balances = await async_client.get(
+        "/operations/inventory-balances/summary", headers=ah
+    )
+    balance = next(row for row in balances.json() if row["product_id"] == pid)
+    assert balance["quantity_in_sorting"] == 1
+    assert balance["quantity_in_storage"] == 1
 
 
 @pytest.mark.asyncio
