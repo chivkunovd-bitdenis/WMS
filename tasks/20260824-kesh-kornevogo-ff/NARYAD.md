@@ -14,4 +14,5 @@
 ## Разрешённые файлы
 
 - `frontend/deploy/Caddyfile`
+- `deploy/Caddyfile.http`
 - `tasks/20260824-kesh-kornevogo-ff/NARYAD.md`
