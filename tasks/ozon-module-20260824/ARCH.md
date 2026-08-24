@@ -1,649 +1,509 @@
-# Stage 0. Архитектура модуля Ozon для WMS
+# Ozon в WMS: reuse-first архитектура после отклонения S0
 
-**Call ID:** `02-ozon-architecture`
-**Основание:** просьба владельца «Сделать модуль Ozon» и принятое исследование `docs/runs/ozon-module-20260824/01-ozon-domain-research.md` на commit `0c3abe3c31ba7b9216401eddd0e15971263eca15`
-**Статус:** архитектурное решение до BA/Product/Dev; production-код этим документом не разрешён
+**Call ID:** `09-ozon-architecture-reuse-rework`
+
 **Дата:** 24 августа 2026 года
 
-## 1. Решение в одном абзаце
+**Основание:** просьба владельца «Сделать модуль Ozon», исследование `docs/runs/ozon-module-20260824/01-ozon-domain-research.md` и обязательный verdict `tasks/ozon-module-20260824/S0_PRODUCT_VERDICT.md`
 
-Модуль строится рядом с действующим Wildberries-контуром, а не путём переименования WB FBS. Общими становятся только безопасные интеграционные механизмы: кабинет маркетплейса, обнаруженные возможности, account-scoped сопоставление товаров, внешние узлы и их связь с физическим складом, checkpoint синхронизации, inbox push-событий, журнал внешних операций, аудит и бинарные документы. Ozon получает собственные агрегаты FBS posting → line → unit/exemplar → package → optional carriage/act и FBO supply order → supply → cargo → transport cargo (ТГМ) → acceptance act. Существующие WB-модели, маршруты, jobs, экраны, печатная лента и publisher остатков не мигрируют и остаются регрессионной границей. Запись FBS-остатков Ozon отсутствует в разрешённых возможностях, клиенте, API, jobs и типах operation ledger, поэтому она невозможна по конструкции, а не только скрыта в интерфейсе.
+**Статус:** архитектурная коррекция до нового прототипа; production-код и prototype-код этим документом не разрешены
+**Историческое свидетельство:** prototype commit `937982c46f80b7e13642cc939a4c027e9b808db5` отклонён. Его browser acceptance прерван и не возобновляется.
 
-## 2. Что известно, что решено, что пока неизвестно
+## 1. Решение
+
+Ozon не становится отдельным UI-модулем. Он становится ещё одним adapter существующих складских процессов. FBS остаётся на `/app/ff/fbs` и использует нынешние очередь и modal-workspace; Ozon FBO остаётся документом «Отгрузка на МП» на `/app/ff/mp-shipments`; каталог Ozon связывается с WMS-товарами внутри `/app/ff/products`; кабинет подключается внутри `/seller/settings`; возврат создаёт обычную заявку `InboundIntakeRequest(operation_type="return")` и проходит текущую приёмку, сортировку и seller documents.
+
+Это не означает, что Ozon притворяется Wildberries. В backend сохраняются Ozon-сущности `posting → lines → units/exemplars → packages`, FBO `supply order → cargo → TGM → acceptance act`, сырые статусы, возможности и асинхронные операции. Adapter проецирует их в общий операторский контракт существующих экранов. Поэтому оператор не получает второй складской процесс, а Ozon-семантика не стирается.
+
+Целевой UI содержит **ноль новых top-level routes, экранов, отдельных workspaces и Ozon-разделов**. Все `/app/ff/ozon/*`, пункт навигации `Ozon`, отдельные Ozon FBS/FBO/catalog/connection/returns экраны и прежний prototype contract исключены из target design.
+
+## 2. Факты, решения и неизвестное
 
 ### Подтверждено исследованием и кодом
 
-- Для прямого Seller API Ozon нужна пара `Client-Id` + `Api-Key`; имеющийся тестовый маркер содержит только `Api-Key`, поэтому live probe сейчас невозможен.
-- Один Ozon FBS posting содержит несколько товарных строк и количества; он может быть разделён на postings/packages.
-- Для FBS доступна поштучная сдача по штрихкоду posting; общая carriage нужна не всегда.
-- FBO draft/supply, cargo и часть документов являются асинхронными операциями, успех HTTP-запроса не равен успеху бизнес-операции.
-- Push может запаздывать, поэтому polling остаётся обязательным механизмом восстановления.
-- Текущие WMS `FbsOrder`, `FbsSupply`, `FbsTrbx`, WB credentials, routes, jobs и print flow кодируют WB lifecycle. В частности, `FbsOrder` хранит один `product_id`, а WB stock publisher вызывается из общих событий движения остатка.
-- WMS уже имеет пригодные общие части: tenant/seller, `Product`, физический `Warehouse`/ячейки, inventory balance/movement, packaging task, marking pool, background job shell, роли/права, зашифрованное хранение интеграционных секретов и бинарные print assets.
+- Ozon FBS posting содержит `products[]`, количества и может делиться на packages/postings. Текущий `FbsOrder` хранит один `product_id` и WB-specific identifiers, поэтому прямое помещение Ozon в эту таблицу потеряет смысл строк и количеств.
+- Ozon package label создаётся асинхронно; FBO draft, supply, cargo, labels и часть act-операций также завершаются через status/readback. HTTP 200 не доказывает бизнес-успех.
+- FBS может сдаваться поштучно по barcode posting; общая carriage не является обязательным родителем каждого posting.
+- Push может запаздывать. Polling и entity readback остаются механизмами сходимости.
+- `/app/ff/fbs` уже содержит очередь, selection, текущий `FfFbsSupplyWorkspace`, подбор из ячеек, маркировку, упаковку, короба, печать и передачу.
+- `/app/ff/mp-shipments` уже содержит документ отгрузки на маркетплейс, строки, резерв, подбор, packaging task, физические короба и проведение.
+- `InboundIntakeRequest` уже поддерживает `operation_type="return"`, а физическая приёмка меняет остатки только отдельными действиями.
+- `SellerSettingsScreen` уже является местом marketplace credentials, но текущая заготовка `ozon` в marking credentials не реализует Seller API identity `Client-Id + Api-Key`, roles или expiry.
+- `FfProductsCatalogScreen` уже является общим каталогом товара и содержит действие-зону строки; отдельный Ozon-каталог дублирует пользовательскую работу.
 
-### Архитектурные решения этого документа
+### Решено этой архитектурой
 
-- Один seller может одновременно иметь WB и один или несколько Ozon accounts; любой внешний идентификатор всегда scoped через `marketplace_account_id`.
-- Каталог Ozon на этом этапе import-only: WMS читает карточки, атрибуты и остатки, но не создаёт и не изменяет карточки.
-- FBS stock publishing Ozon не входит в модуль и не существует как выключенный toggle. Его добавление потребует отдельного owner-approved research/product gate и отдельной миграции контракта.
-- Ozon mutating operations разрешаются не общей ролью «write», а пересечением трёх условий: возможность подтверждена Ozon, разрешена политикой проекта и доступна в `available_actions` конкретной сущности.
-- Внешний lifecycle и внутренний складской workflow хранятся раздельно. Неизвестный внешний status сохраняется raw и переводит сущность в `needs_attention`, но не ломает импорт.
-- Возврат сначала попадает в карантинную приёмку WMS; внешнее сообщение о возврате никогда само не увеличивает доступный остаток.
+- `MarketplaceAccount` является account-scoped identity. Все внешние IDs, mappings, checkpoints, operations и assets включают `marketplace_account_id`.
+- Ozon-каталог в этой программе import-only. Публикации карточек и записи остатков нет даже как выключенной кнопки.
+- Ozon provider-native data хранится additively; существующие WB-таблицы не переименовываются и не мигрируют в первой программе slices.
+- UI читает provider-neutral `FbsWorkItemView` и `FbsWorkspaceView`. WB adapter формирует тот же наблюдаемый результат, который формирует текущий код; Ozon adapter добавляет только capabilities и conditional fields.
+- Ozon FBO расширяет `MarketplaceUnloadRequest`: WMS document остаётся authority для локального плана, резерва, подбора, packaging task и коробов; внешние Ozon supply/cargo/TGM/act children не заменяют физические WMS-сущности.
+- Ozon return создаёт существующую inbound-заявку. Внешний return status не увеличивает доступный остаток; до решения осмотра товар остаётся в карантинной ячейке.
+- Любое Ozon mutating action разрешается только при одновременном наличии discovered capability, project allowlist и entity `available_actions`. Неизвестное выключает конкретное действие, а не весь процесс.
+
+### Неизвестное не превращается в выдумку
+
+- Реальный auth mode, roles и expiry конкретного account неизвестны без полной credential pair. Safe fallback: `pending_credentials`, без внешнего вызова.
+- Route modes, cargo/TGM rules, labels и available actions зависят от account и сущности. Safe fallback: read-only discovery/readback; локальная работа сохраняется, внешняя mutation блокируется.
+- Универсальный idempotency header для всех Ozon mutations не подтверждён. Safe fallback: operation ledger + readback before retry.
+- Форматы/размеры отдельных assets не зафиксированы. Safe fallback: binary pass-through без resize, версия/checksum и обязательный print sample до включения действия.
+- Политика решения по повреждённым returns не дана. Safe fallback: карантин и `needs_shift_lead`; auto-restock запрещён.
 
 ## 3. Primary user и его работа
 
-**Primary user — оператор фулфилмент-склада**, который отвечает не за «синхронизацию API», а за физически правильную единицу товара: увидеть работу к сроку, взять товар из правильной ячейки, просканировать нужные идентификаторы, упаковать допустимым способом, наклеить актуальную этикетку, передать Ozon и затем принять возврат без ложного прихода в доступный остаток.
+**Primary user — оператор фулфилмент-склада.** Его работа — вовремя найти нужные единицы в WMS, взять их из доказанной ячейки, выполнить требования конкретного marketplace posting/supply, упаковать физически и внешне корректно, напечатать актуальную этикетку, передать груз и не показать ложное завершение до подтверждения маркетплейса.
 
-Заметные элементы будущего процесса привязаны к этой работе:
+Каждый заметный элемент target process существует ради этой работы:
 
-- Очередь по сроку нужна оператору, чтобы сначала собирать то, что реально рискует опоздать, а не просматривать технические ID.
-- Количество строк и единиц показывается отдельно, потому что «2 товара / 5 штук» определяет объём подбора и число экземпляров маркировки.
-- Блокеры «не сопоставлен товар», «не связан склад», «не принят КИЗ» стоят рядом с недоступным действием, потому что оператор должен понимать, какую физическую работу нельзя продолжать и кто способен снять блокер.
-- Скан ячейки перед сканом товара доказывает, откуда взята единица, и защищает остаток от списания из другой ячейки.
-- Package и короб WMS показаны раздельно: оператор физически кладёт товар в короб, но Ozon определяет внешнюю упаковку/posting label; смешение даст неверную этикетку.
-- Состояние «передано WMS, Ozon ещё не подтвердил» остаётся видимым, потому что оператору и руководителю смены нужен путь арбитража, а не ложное «готово».
-- Возврат открывает осмотр и карантин, потому что сотрудник не может вернуть повреждённую или подменённую единицу в продажу только по внешнему статусу.
+- Компактный marketplace marker внутри существующей строки нужен, чтобы оператор не напечатал WB-стикер для Ozon и не выбрал несовместимый способ сдачи. Отдельная колонка для него не нужна.
+- Для Ozon строка показывает `N товаров · M единиц`, потому что оператор подбирает количество по product line, а не один абстрактный «заказ».
+- Раскрытие состава внутри текущей строки нужно до selection: shortage одной Ozon line должен блокировать только честно показанный posting, а не обнаруживаться после начала сборки.
+- Required fields показываются только для конкретной единицы, потому что KIZ, IMEI, GTIN, weight и country не являются одной общей «маркировкой» и не должны создавать лишние сканы.
+- `Локально принято` и `Ozon подтвердил` видны отдельно, потому что оператор может исправить rejected exemplar до необратимого ship.
+- WMS box, Ozon package, FBO cargo и TGM видны как разные связи внутри текущей упаковочной зоны, потому что один физический короб не доказывает правильную внешнюю container hierarchy.
+- `Операция выполняется` остаётся рядом с кнопкой, которая её запустила, потому что смене нужен truthful next action — дождаться/readback, а не повторить mutation и создать дубль.
+- Возврат ведёт в карантин и осмотр в текущей приёмке, потому что marketplace status не доказывает, что физическая единица годна к продаже.
 
 Secondary users:
 
-- **Администратор FF** подключает account, проверяет identity/roles/expiry, связывает Ozon товары и склады с WMS. Ему не нужны операционные кнопки упаковки.
-- **Планировщик FBO / руководитель смены** выбирает маршрут, таймслот, состав, cargo/ТГМ и разбирает uncertain operations и акты расхождений.
-- **Сотрудник приёмки** принимает Ozon returns, идентифицирует исходную единицу и фиксирует результат осмотра.
-- **Seller user** получает read-only видимость своих сопоставлений, postings/supplies/returns в рамках `effective_seller_id`; mutating кабинет Ozon из seller portal в первый релиз не переносится.
+- **Seller admin** подключает marketplace account в `/seller/settings`, видит identity, roles, expiry и sync health. Ему не нужны кнопки складской упаковки.
+- **FF admin** подтверждает account-scoped product mapping в `/app/ff/products` и разбирает unmapped/blocker states.
+- **Планировщик/руководитель смены** ведёт Ozon FBO в текущем документе MP shipment, выбирает доступный route/timeslot и разбирает uncertain operation/acceptance discrepancy.
+- **Сотрудник приёмки** принимает Ozon return в существующем inbound flow и фиксирует disposition после физического осмотра.
 
-## 4. Нормальный процесс end to end
+## 4. Жёсткая reuse-map процесса
 
-### 4.1 Подключение и подготовка общего контура
+Машинный источник — `tasks/ozon-module-20260824/REUSE_MAP.json`. Ниже человеческое объяснение той же границы.
 
-1. Администратор выбирает WMS seller и создаёт отдельный Ozon account. Если доступна прямая авторизация, вводятся оба значения `Client-Id` и `Api-Key`; если позднее подтверждён private-app OAuth, он создаёт другой credential record того же account, а не подменяет поля прямого ключа.
-2. WMS не считает account активным после сохранения секрета. Read-only discovery job вызывает сведения о продавце и ролях, фиксирует внешний account identity, expiry и capabilities. При несовпадении уже зафиксированной identity account блокируется как `identity_mismatch`.
-3. WMS импортирует товары, склады продавца, Ozon warehouses, delivery methods, clusters/placement zones и return points только теми read endpoints, которые доступны account. Каждая ресурсная синхронизация имеет свой checkpoint.
-4. Администратор связывает Ozon offer/product/SKU с WMS Product. Автопредложение по точному уникальному barcode или seller SKU разрешено, но превращается в active mapping только после явного подтверждения; неоднозначный матч остаётся `conflict`.
-5. Администратор связывает физический WMS warehouse с внешними узлами отдельно для FBS и FBO. На экране видны разные сущности: физический склад, seller warehouse, destination/cluster, delivery method и return point. Одно поле «склад маркетплейса» их не заменяет.
-6. После первой полной синхронизации account становится `active_read_only`. Каждая mutating capability включается только если прошла discovery, разрешена project allowlist и проверена contract fixture. Отсутствующая возможность не блокирует весь модуль: связанное действие показывается как manual/external fallback.
-
-### 4.2 Ozon FBS: от posting до возврата
-
-1. Push-событие ускоряет получение нового posting, но poll `/v4/posting/fbs/unfulfilled/list` гарантирует восстановление. Inbox дедуплицирует события, после чего detail readback создаёт или обновляет posting, строки и требования экземпляров.
-2. WMS проверяет account, mapping каждой строки и warehouse binding. Только затем резервирует количество по каждой line в выбранном физическом складе. Posting с двумя строками создаёт два резерва; shortage одной строки не скрывает готовность другой.
-3. Оператор открывает очередь Ozon FBS, видит срок, seller, маршрут сдачи, число строк/единиц и единственный следующий шаг. Он может собрать локальную рабочую партию для маршрута по ячейкам, но это не создаёт внешнюю Ozon carriage.
-4. В подборе оператор сканирует ячейку, затем товар. Каждая принятая единица фиксирует location, product, posting line, пользователя и время. Лишний скан, скан другого seller или другой line отклоняется до изменения количества.
-5. Если posting требует код маркировки, IMEI, GTIN, вес или страну происхождения, экран запрашивает только реально требуемые поля конкретной единицы. Локальный scan и внешний exemplar validation — два статуса. Ошибка Ozon оставляет единицу исправляемой до упаковки.
-6. PackagingTask остаётся authority физической упаковки: его line/events фиксируют работу с остатком. Ozon bridge связывает это событие с posting line/unit/package. Package composition хранит количества, поэтому partial package не превращает всю line в packed.
-7. Перед внешним ship WMS делает fresh detail/restrictions readback, проверяет `available_actions`, accepted exemplars, габариты/вес и package composition. Создаётся operation intent; бизнес-статус не меняется на `awaiting_deliver`, пока readback не подтвердит результат.
-8. После подтверждённого ship запускается асинхронная задача package label. Оператор печатает только `ready` asset актуальной версии. Старый asset помечен superseded и недоступен как основной.
-9. Handover выбирается по capability и delivery method:
-   - при one-by-one оператор сдаёт каждый posting по его barcode; WMS фиксирует ручное подтверждение передачи, затем ждёт внешний status;
-   - при carriage postings группируются только после проверки совместимости; approve/act/pass выполняются отдельными operations;
-   - если API-действие отсутствует, WMS показывает пошаговое ручное действие в кабинете Ozon и после него делает readback, не ставя внешний статус вручную.
-10. Состояния `handed_over_wms`, `delivering`, `delivered` и arbitration хранятся отдельно. Если Ozon не подтвердил скан, руководитель смены открывает recovery, прикладывает доступный act/discrepancy asset и ведёт арбитраж; обычный оператор не может нажать «доставлено».
-11. Отмена до подбора освобождает резерв. Отмена после подбора создаёт reverse work item: единицы возвращаются в подтверждённую ячейку или карантин, и только проведённое inventory movement освобождает физический остаток.
-12. `/v1/returns/list` создаёт отдельный return aggregate, связанный с posting/line/unit. При фактическом получении WMS создаёт `InboundIntakeRequest(operation_type=return)` в карантин. После осмотра сотрудник выбирает restock, quarantine, defect или return-to-seller; только проведённая приёмка меняет остаток.
-
-### 4.3 Ozon FBO: от плана до возврата
-
-1. Планировщик создаёт локальный FBO plan из WMS Products и количеств, выбирает физический склад-источник и один из обнаруженных вариантов direct/crossdock/multi-cluster. Недоступные варианты не показываются как активные.
-2. WMS читает clusters, destination nodes, placement zones и правила маршрута. Планировщик видит не технические справочники, а место сдачи, ожидаемый маршрут и ограничения, влияющие на физическую подготовку груза.
-3. Draft create создаёт operation ledger entry. `operation_id` сохраняется, status poll подтверждает результат. При timeout WMS сначала читает status/draft, а не создаёт второй draft.
-4. Планировщик выбирает предложенный таймслот. Создание supply order также проходит через async operation и readback. Локальный plan и внешний supply order остаются разными сущностями.
-5. После появления supply order WMS фиксирует supplies и состав. Любое изменение состава или таймслота создаёт новую operation revision; предыдущая версия остаётся в аудите.
-6. Для физической подготовки создаётся PackagingTask и резерв/подбор из WMS warehouse. Оператор видит по каждой line planned, picked, packed и externally accepted quantities. Требуемые данные товара берутся из Ozon response; неизвестное обязательное поле блокирует submit, но не теряется в raw snapshot.
-7. WMS читает cargo rules. Оператор создаёт WMS boxes, затем явно связывает их с Ozon cargo. Транспортные грузоместа (ТГМ) образуют следующий уровень и могут содержать несколько cargo. Нельзя автоматически считать WMS box cargo или ТГМ.
-8. Cargo create/delete и label generation являются async operations. После readback оператор печатает актуальные cargo/TGM labels и отмечает фактическое нанесение. Ошибка одной cargo остаётся частичным состоянием, не откатывая уже подтверждённые cargo.
-9. Перед сдачей preflight проверяет подтверждённый supply order, актуальный timeslot, полный состав, cargo rules, нанесённые labels и разрешённое внешнее действие. WMS фиксирует физическую передачу отдельно от внешней доставки.
-10. Poll/push ведёт supply lifecycle и FBO postings. `Отгружено WMS`, `доставлено Ozon`, `принято Ozon`, `остаток появился` и `акт согласован` не схлопываются в один статус.
-11. Acceptance act импортируется построчно. Расхождение planned/accepted/rejected требует решения руководителя смены. Если capability beta-act accept доступна, принятие акта идёт через ledger и status readback; иначе WMS показывает ручную работу в кабинете и продолжает read-only reconcile.
-12. FBO return импортируется тем же return aggregate, но хранит scheme=`fbo` и links на supply/posting/act line. Физическая приёмка и disposition совпадают с безопасным WMS return flow: quarantine по умолчанию, отсутствие автоматического restock.
-
-## 5. Ошибки, частичные состояния и восстановление
-
-| Ситуация | Что видит пользователь и почему | Машинное состояние | Восстановление |
+| Требование | Существующая поверхность | Минимальное изменение | Доказанная Ozon-необходимость |
 |---|---|---|---|
-| Нет `Client-Id` или только один credential | «Подключение не проверено; запросы в Ozon не выполнялись», чтобы администратор не принял наличие ключа за работающий кабинет | account `pending_credentials` | добавить полную пару или OAuth; затем discovery |
-| Identity/role/expiry изменились | Account banner и точная недоступная возможность, чтобы оператор не начал необратимую работу | `degraded` / `identity_mismatch` / `expired`; capabilities invalidated | admin reconnect; read-only data остаются видимыми как stale |
-| 429 или временная сеть | Последние успешные данные с временем и «повтор запланирован», чтобы очередь не становилась пустой | job `retry_scheduled`, checkpoint не продвинут | respect retry headers, jittered backoff, тот же page/intent |
-| Sync оборвался после части страниц | Строки помечены «обновлено частично», а не удаляются | run `partial`; checkpoint на последней committed page | повтор с того же cursor/window; tombstone только после полного прохода |
-| Push duplicate/out-of-order | Пользователь не видит двойных заказов и отката статуса | inbox duplicate/obsolete | detail readback является authority |
-| Product/warehouse не сопоставлен | Posting видим в блокерах без кнопки подбора, потому что физический товар/склад неизвестен | `blocked_mapping` / `blocked_binding` | admin link; затем deterministic re-evaluation/reserve |
-| Нехватка одной FBS line | Готовые строки видны отдельно, но ship заблокирован, чтобы не потерять дефицит | line `shortage`, posting `partial_ready` | пополнение, разрешённый split/partial package либо ручное решение |
-| Ozon отменил до/после pick | До pick резерв снимается; после pick появляется возврат в ячейку | `cancelled_unpicked` / `reverse_required` | scan destination, compensating inventory movement, audit |
-| Exemplar rejected | На конкретной единице код и Ozon error, потому что заменять весь posting не нужно | exemplar `rejected` | исправить/заменить до package freeze, validate повторно через новый intent |
-| Mutation timeout | Никакого «успешно» и активной кнопки повторить, чтобы не создать дубль | operation `uncertain` | обязательный readback; `confirmed`, `rejected` или shift-lead recovery |
-| Label task pending/failed | Упаковка сохранена, печать заблокирована только для неготового asset | asset `requesting` / `error` | poll task; safe new request лишь после readback предыдущей задачи |
-| Частично созданы FBO cargo | Подтверждённые cargo остаются, ошибочная строка подсвечена отдельно | cargo per-row state + operation failure | исправить только rejected cargo; не пересоздавать всё |
-| Ozon не подтвердил handover | «Передано складом, Ozon не подтвердил», чтобы не терять арбитраж | `handed_over_wms` + external unchanged | poll/readback, act/discrepancy, shift-lead escalation |
-| Return не сопоставлен | Приёмка разрешена только в quarantine, чтобы не потерять физический товар | return `unmatched`, inbound `return` | scan barcode, ручная связь с product/account, inspection |
-| Неизвестный status/field | Raw значение показывается в «Требует внимания», но импорт продолжается | `needs_attention`, raw snapshot retained | обновить adapter contract отдельным slice; оператор использует manual fallback |
+| FBS очередь | `/app/ff/fbs`, `FfFbsOrdersScreen` | marketplace filter/marker, multi-line summary, capability-derived blockers; без новой колонки и вкладки | Ozon posting имеет несколько lines/units и иной handover |
+| FBS рабочее место | Тот же modal `FfFbsSupplyWorkspace` | provider-neutral labels/actions; quantities, exemplar states, package composition и async label внутри текущих четырёх стадий | `FbsOrder=1 product` и WB sticker/trbx не выражают Ozon package |
+| FBO | `/app/ff/mp-shipments`, текущий `MarketplaceUnloadRequest` modal | marketplace/account/route fields в header, Ozon cargo/TGM/labels в существующей «Упаковке», acceptance inline после ship | Ozon supply/cargo/TGM/act — внешние children локальной отгрузки |
+| Каталог | `/app/ff/products`, product row/action zone | marketplace mapping status и confirm dialog в текущей строке; sync запускается из settings | Ozon offer_id/product_id/sku account-scoped и не помещаются в `Product.wb_*` |
+| Подключение | `/seller/settings`, существующий credentials card area | отдельная Ozon account card рядом с неизменённой WB card | Ozon требует Client-Id + Api-Key или OAuth, roles и expiry |
+| Возвраты | `/app/ff/reception`, `/app/ff/sorting`, `/seller/documents`, `/seller/inbound/:requestId` | imported return source/identifiers, quarantine scan и conditional inspection block внутри существующей карточки | Физическая единица может быть повреждена/подменена; auto-restock опасен |
+| Асинхронные состояния | Та кнопка/зона существующего документа, где действие запущено | `pending / uncertain / failed / confirmed` и safe readback action inline | Ozon operation status может содержать ошибку после HTTP success |
+| Акты/расхождения | Текущий MP shipment document и существующая discrepancy semantics | Ozon acceptance summary/act asset после ship; строковые discrepancies без нового документа | `shipped`, `accepted` и `act agreed` — разные факты |
 
-## 6. Граница ответственности
+Удаляется из target design:
+
+- `/app/ff/ozon`, `/app/ff/ozon/fbs`, `/app/ff/ozon/fbs/:postingId`;
+- `/app/ff/ozon/fbo`, `/app/ff/ozon/fbo/:supplyOrderId`;
+- `/app/ff/ozon/catalog`, `/app/ff/ozon/connection`;
+- `/app/ff/ozon/returns`, `/app/ff/ozon/returns/:id`;
+- `nav-ff-ozon`, отдельный Ozon dashboard, Ozon FBS/FBO/returns workspaces и их parallel navigation.
+
+## 5. Нормальный процесс end to end
+
+### 5.1 Подключение и каталог
+
+1. Seller admin открывает существующие настройки `/seller/settings`. В card area «Подключения маркетплейсов» WB card остаётся визуально и функционально прежней; рядом появляется Ozon account card для выбранного seller.
+2. Для direct auth форма требует оба поля `Client-Id` и `Api-Key`. Неполная пара сохраняет только локальный draft и не вызывает Ozon. Это защищает администратора от ложного «подключено» и от попытки угадать account identity.
+3. После `Проверить подключение` WMS читает seller info/roles, сравнивает external identity и показывает account state, roles, expiry и last successful discovery в той же card. Эти данные нужны администратору, чтобы понять, почему импорт или операция недоступны, а не читать технический лог.
+4. `Синхронизировать товары и справочники` запускает account-scoped background job. Card показывает last confirmed data, progress и partial error; при 429/timeout данные не исчезают.
+5. FF admin открывает существующий `/app/ff/products`. В текущей action zone строки видит `WB связан`, `Ozon не связан` или конфликт. Диалог связи показывает offer_id/product_id/sku/barcodes и причину кандидата. Явное подтверждение нужно, потому что одинаковый barcode у разных accounts не доказывает ownership.
+6. External warehouses, delivery methods, clusters и return points хранятся account-scoped. В Ozon account card текущих настроек компактный binding block связывает FBS seller warehouse с WMS warehouse и задаёт quarantine location для returns, потому что без этих двух физических назначений очередь и приёмка не могут безопасно начать работу. Переменный FBS delivery method показывается в текущем selection/preflight, а FBO destination/route выбирается в MP shipment header. Общий отдельный topology screen или tab не создаётся.
+
+### 5.2 FBS в существующей очереди и workspace
+
+1. Push ускоряет intake, polling `/v4/posting/fbs/unfulfilled/list` восстанавливает пропуски. После event WMS делает detail readback и атомарно upsert posting, lines, requirements и raw external state.
+2. Ozon adapter создаёт один `FbsWorkItemView` на posting, не на line. В `Товар` существующей строки показываются первые line items и `ещё N`; рядом totals `lines_count`/`units_count`. Это сохраняет один внешний posting как одну работу и не теряет количество.
+3. До selection сервис проверяет account, mapping каждой line, warehouse binding, inventory availability и current `available_actions`. Blocker показывается в той же строке рядом с disabled selection, чтобы оператор не начал физическую работу, которую нельзя завершить.
+4. Selection не смешивает marketplace accounts. Для WB существующее действие и copy остаются прежними. Для Ozon тот же selection bar запускает `Начать сборку`; backend создаёт локальный Ozon work batch, а не внешнюю carriage. Это даёт текущему modal-workspace стабильный ID, но не навязывает Ozon внешнюю поставку.
+5. В существующей стадии `Состав` Ozon posting разворачивается в lines и quantities. Никакой новой вкладки нет. Оператор сверяет полный объём перед подбором.
+6. В `Подбор` оператор сканирует ячейку, затем product barcode. Adapter находит line внутри posting и увеличивает picked quantity; excess/wrong seller/wrong line отклоняются до inventory mutation. Одна готовая line остаётся видимой, даже если соседняя line в shortage.
+7. В `Упаковка и маркировка` для каждой unit показываются только required exemplar fields. Локальный scan, отправка в Ozon, external validation и correction — отдельные состояния одной текущей строки. `Rejected` не переводит всю упаковку в completed.
+8. В той же стадии физическая `PackagingTask` остаётся authority работы с остатком. Additive Ozon package composition связывает package с line quantities. Partial package уменьшает remaining quantity и создаёт/обновляет external posting только после readback; исходный posting не считается целиком packed автоматически.
+9. Асинхронная package label отображается в текущей print zone как `Запрашивается`, `Готова`, `Ошибка`. Печать доступна только для ready/current asset; superseded version нельзя подтвердить как нанесённую.
+10. В текущей стадии `Короба` WMS box остаётся физической тарой. Для Ozon рядом с конкретным box/package видна связь с posting/package label. WB trbx controls не рендерятся для Ozon; это conditional replacement в той же zone, не новый workspace.
+11. Кнопка handover в этой же стадии строится из capability. One-by-one подтверждает фактическую передачу по posting barcode; carriage появляется только когда она разрешена и нужна для выбранного delivery method. Manual portal fallback не меняет внешний status: после ручной работы WMS делает readback.
+12. `handed_over_wms`, Ozon `delivering/delivered/cancelled/arbitration` и local reversal хранятся отдельно. Отмена после pick создаёт возврат единиц через текущий scan-to-location path; без проведённого movement резерв/остаток не «исправляется» статусом.
+
+### 5.3 FBO в существующем документе «Отгрузка на МП»
+
+1. Планировщик остаётся на `/app/ff/mp-shipments` и создаёт тот же локальный document. В существующей create zone появляется marketplace selector, потому что route/destination и external actions зависят от площадки. Default/fixture WB должен воспроизводить текущую кнопку и дальнейший процесс без отличий.
+2. Для Ozon в header созданного draft выбираются account, direct/crossdock/multi-cluster из discovered capabilities, destination и timeslot. Эти поля стоят здесь, потому что они определяют, куда физически готовится этот документ; отдельный wizard или FBO screen только разорвёт связь с WMS plan.
+3. Вкладка `Товары` остаётся планом состава. Account-scoped mapping blocks submit строки, но локальный draft можно сохранить. Ozon supply-order creation создаёт operation intent; document показывает pending/uncertain inline и не становится confirmed до readback.
+4. `Подбор` использует существующий scan location/product и allocations. Ozon не получает отдельный scanner flow, потому что физическое списание из WMS одинаково для marketplace shipments.
+5. `Упаковка` использует существующую PackagingTask и WMS boxes. После текущего блока коробов conditional section `Грузоместа Ozon` показывает правила, cargo и TGM hierarchy. Она нужна не «для удобства», а чтобы оператор связал уже закрытый физический короб с обязательным внешним cargo/TGM до печати.
+6. Cargo/TGM create/delete и labels имеют inline operation state. Retry доступен только после readback. Partial failure не стирает готовые cargo; проблемная строка остаётся с конкретной причиной.
+7. В document footer текущая `Отгрузить` сначала проверяет completed packaging, line distribution, cargo/TGM rules, current labels и fresh external state. Local `shipped_at` и Ozon handover/acceptance не сливаются.
+8. После ship тот же document показывает acceptance summary по lines: planned, accepted, rejected и reason. Act PDF и capability-dependent `Согласовать акт` живут здесь, потому что руководитель сверяет результат именно этой отгрузки. Новая вкладка/документ не создаётся.
+9. Если beta act capability отсутствует, document остаётся read-only и показывает ручную проверку в кабинете плюс `Проверить состояние`; WMS не подделывает согласование.
+
+### 5.4 Returns в существующей приёмке
+
+1. Poll `/v1/returns/list` создаёт или обновляет external return record и связывает его с account, FBS posting/FBO supply и product mapping. Duplicate events не создают второй inbound document.
+2. Когда возврат ожидается физически, WMS idempotently создаёт `InboundIntakeRequest(operation_type="return")`. Он появляется в существующей `/app/ff/reception` и seller `/seller/documents`; отдельной Ozon queue нет.
+3. В существующей inbound card показываются source `Ozon`, return/posting identifier, masked exemplar tail и expected quantity. Эти identifiers нужны сотруднику, чтобы не принять похожий товар к чужому seller/account.
+4. При скане сотрудник выбирает/сканирует карантинную location. Если quarantine binding отсутствует, фактическую единицу можно зафиксировать как received, но `post/restock` блокируется. Это безопаснее догадки о годности.
+5. Conditional block `Осмотр возврата Ozon` в той же line фиксирует identity match, packaging/condition и disposition: `restock`, `keep_quarantine`, `defect`, `return_to_seller`. Default не выбран, потому что решение должно следовать физическому осмотру.
+6. Только `restock` после подтверждённого осмотра проводит existing inbound inventory movement в доступную location. Остальные outcomes оставляют товар недоступным или запускают существующую ручную складскую работу; внешний status сам остаток не меняет.
+
+## 6. Ошибки и частичные состояния
+
+| Состояние | Что видит пользователь в текущей поверхности | Разрешённое восстановление |
+|---|---|---|
+| Нет Client-Id или Api-Key | Ozon card `Не заполнены данные`; sync/actions disabled | Заполнить пару; внешних calls до этого нет |
+| Identity mismatch | Account card показывает expected/observed identity без секретов | Shift lead/admin исправляет выбранный seller/account; автоматического relink нет |
+| Role/capability отсутствует | Конкретная action disabled с business reason | Manual portal fallback + readback либо capability остаётся off |
+| Частичная pagination/429 | Last confirmed rows остаются; card показывает partial sync и cursor resource | Background job продолжает с committed checkpoint и backoff |
+| Unknown external status | Строка остаётся в текущей вкладке как `Статус уточняется`; irreversible actions blocked | Detail readback; raw value сохраняется для аудита |
+| Multi-line shortage | Posting виден, готовые lines и shortage line различимы | Довнести остаток, remap или отменить работу; готовность не подделывается |
+| Exemplar rejected | Unit line показывает Ozon reason и correction до ship | Исправить только эту unit и revalidate |
+| Ship/cargo/label timeout | Inline `Результат не подтверждён`; повтор disabled | Readback operation/entity, затем resume/retry по ledger |
+| Label pending/failed | Print zone не открывает старый asset как current | Poll task; retry после confirmed failure; старый asset superseded |
+| Posting cancelled after pick | Current FBS workspace переводит единицы в reversal | Scan target location/quarantine и провести compensating movement |
+| FBO cargo partial error | Готовые cargo сохранены, проблемный cargo отмечен | Исправить rules/composition только проблемного cargo и readback |
+| Act discrepancy | Same MP document показывает planned/accepted/rejected | Shift lead принимает решение/ручной fallback; auto-accept отсутствует |
+| Return unmatched | Existing return inbound visible as `Не сопоставлен`, post disabled | Admin confirms mapping; физическая единица остаётся в quarantine |
+| Push delayed/duplicate/out-of-order | Пользователь не видит дублей; freshness остаётся честной | Poll authority + dedupe + entity version/readback |
+
+## 7. Границы ответственности
 
 ### WMS отвечает за
 
-- tenant/seller/account scope и разграничение пользователей;
-- физический WMS warehouse, ячейки, доступный остаток, резерв, подбор, упаковку и компенсирующие движения;
-- подтверждённые человеком scans, нанесение этикетки и факт физической передачи;
-- product mapping и warehouse/delivery binding;
-- job/checkpoint/inbox/operation ledger, readback-before-retry и аудит;
-- хранение версионированных документов и связь возврата с карантинной приёмкой;
-- нормализованный операторский workflow, но не за объявление внешнего статуса без Ozon.
+- tenant/seller/account isolation, roles и audit;
+- account-scoped mappings и bindings;
+- локальный резерв, ячейки, scans, PackagingTask, WMS boxes и inventory movements;
+- truthful projection внешнего состояния и допустимого next action;
+- operation ledger, checkpoints, dedupe, retry/readback и versioned assets;
+- quarantine и запрет auto-restock returns;
+- сохранение WB observable behavior.
 
 ### Ozon отвечает за
 
-- external account identity, roles, expiry и фактические capabilities;
-- offer/product/SKU, seller/Ozon warehouses, delivery methods, clusters, placement zones и return points;
-- posting/supply/cargo lifecycle, `available_actions`, restrictions, async task result;
-- package/cargo/TGM labels, acts, pass/giveout documents и внешнюю приёмку;
-- внешний FBS/FBO stock snapshot. WMS его читает, но в этой архитектуре не публикует FBS stock.
+- identity/roles/capabilities account;
+- posting/supply/cargo/TGM lifecycle, restrictions, `available_actions` и cancellation;
+- external validation exemplars;
+- выдачу package/cargo/TGM labels, barcodes, acts и acceptance result;
+- rate limits, API schema and operation results.
 
 ### Ручные действия остаются ручными
 
-- ввод/обновление credentials уполномоченным администратором;
-- подтверждение предложенного product mapping и warehouse binding;
-- scan ячейки, товара, экземпляра, коробки/cargo/ТГМ;
-- физическая упаковка, печать и нанесение этикетки;
-- передача в пункт/водителю и получение возврата;
-- осмотр возврата и disposition;
-- работа в Ozon seller portal, когда capability/API contract не подтверждён;
-- решение руководителя смены по uncertain operation, расхождению акта или арбитражу.
-
-## 7. Варианты архитектуры и цена
-
-Оценки ниже — относительная цена реализации одним устойчивым потоком разработки после утверждённого прототипа, а не календарное обещание.
-
-| Вариант | Суть | Цена реализации и миграции | Эксплуатационная цена | Вердикт |
-|---|---|---|---|---|
-| 1. Полностью отдельный Ozon silo | Скопировать auth/catalog/jobs/печать и создать только `ozon_*` контур | 11–15 инженерных недель; миграция WB отсутствует | Быстрый первый экран, но дублируются credentials, checkpoint, ledger, documents и permissions; третья площадка снова копирует всё | Не выбран: локально дешевле, системно дороже и увеличивает риск разных правил recovery |
-| 2. Малое marketplace integration core + Ozon-native lifecycles | Общие только account/mapping/nodes/sync/ledger/audit/assets/returns; FBS/FBO остаются Ozon-specific; WB не мигрирует | 16–21 инженерная неделя, включая emulator, contract fixtures и browser gates; additive migrations, без data rewrite WB | Новая площадка переиспользует безопасный каркас, но проходит свой domain research; Ozon и WB не притворяются одинаковыми | **Выбран**: минимизирует WB regression и одновременно не создаёт второй набор критической интеграционной инфраструктуры |
-| 3. Полная универсализация и миграция WB | Перевести WB и Ozon на один order/supply/package lifecycle | 28–40+ инженерных недель и сложная online data migration/dual-write | Самый высокий риск остановить работающий FBS; универсальная модель либо разрастается union-полями, либо теряет специфику | Отклонён: цена и риск не оправданы, совместимость не доказана |
-
-### Почему выбран вариант 2
-
-Пользовательская работа совпадает у площадок только в физическом ядре — найти, взять, упаковать и передать товар. Внешняя форма работы различается: WB order/supply/trbx против Ozon posting/line/package/optional carriage и FBO cargo/TGM. Поэтому выбранный seam заканчивается до lifecycle. Это позволяет одному seller безопасно видеть WB и Ozon одновременно, но не заставляет Ozon проходить через WB supply workspace и не подвергает WB data migration до отдельного доказательства.
-
-## 8. Целевая структура модулей
-
-```text
-WMS core (существует)
-  Tenant -> Seller -> Product
-  Warehouse -> StorageLocation -> InventoryBalance/Movement
-  PackagingTask / MarkingCode / User permissions
-
-Marketplace integration core (новый, additive)
-  MarketplaceAccount -> Credential -> CapabilitySnapshot
-  ExternalProduct -> ProductMappingHistory
-  ExternalNode -> WarehouseDeliveryBinding
-  SyncRun/Checkpoint + PushInbox
-  MarketplaceOperation -> Attempts/Readbacks
-  MarketplaceDocumentAsset + AuditEvent
-  MarketplaceReturn -> Lines/Units -> InboundIntake(return)
-
-Ozon adapter and native aggregates (новые)
-  Ozon FBS Posting -> Lines -> UnitExemplars -> Packages -> PackageLines
-                   -> optional Handover/Carriage -> Acts
-  Ozon FBO Plan -> SupplyOrder -> Supplies -> Lines
-                -> Cargo -> CargoLines -> TransportCargo(TGM)
-                -> TimeslotHistory -> AcceptanceAct/Lines
-
-WB boundary (без миграции)
-  SellerWildberriesCredentials / imported cards & supplies
-  FbsOrder / FbsSupply / FbsTrbx / FbsPrintAsset / FbsWbOperation
-  wildberries routes, clients, jobs, screens, stock publisher and tests
-```
-
-Папки backend следуют существующему контракту: routes в `backend/app/api`, orchestration/business rules в `backend/app/services`, models в `backend/app/models`, Celery entrypoints в `backend/app/tasks`. Внешний Ozon transport находится в services adapter, но не импортируется из inventory services.
-
-## 9. Данные и миграции
-
-Во всех новых таблицах есть UUID `id`, `tenant_id`, timestamps и индексы tenant/account/state. Все ссылки на account дополнительно проверяются сервисом на тот же tenant и seller; знание UUID не даёт cross-tenant access.
-
-### 9.1 Shared marketplace integration core
-
-| Таблица | Ключевые поля и ограничения | Семантика |
-|---|---|---|
-| `marketplace_accounts` | `tenant_id`, `seller_id`, `marketplace`; `external_account_key` nullable до discovery; `auth_mode`; `display_name`; `status`; `identity_fingerprint`; `last_discovered_at`; unique `(marketplace, external_account_key)` только для non-null, плюс unique active direct account `(seller_id, marketplace, external_account_key)` | Один конкретный кабинет. WB credentials пока не переносятся сюда; coexistence достигается независимыми строками Ozon рядом с WB legacy |
-| `marketplace_account_credentials` | PK/FK `account_id`; encrypted `client_id`, `api_key`, `oauth_access`, `oauth_refresh`; `expires_at`; `credential_version`; никаких plaintext response fields | Секреты читаются только adapter job. API отдаёт booleans, auth mode, expiry и last check |
-| `marketplace_capability_snapshots` | `account_id`, `revision`, `roles_json`, `raw_json_sanitized`, `observed_at`, `valid_until`; unique `(account_id, revision)` | Не перезаписываем историю ролей/expiry |
-| `marketplace_capabilities` | `snapshot_id`, `capability_key`, `observed_state`, `project_policy`, `reason`; unique `(snapshot_id, capability_key)` | Effective capability = observed allowed ∧ project allowlist ∧ entity action. `ozon.fbs.stock.write` не является допустимым key этой версии |
-| `marketplace_external_products` | `account_id`, `offer_id`, `product_id_external`, `sku_external`, name, barcodes JSON, attributes/requirements/stock snapshots, raw sanitized, `observed_at`, `missing_since`; unique account-scoped external identifiers | Импортированный внешний товар, не WMS Product |
-| `marketplace_product_mappings` | `account_id`, `external_product_id`, `product_id`, `status`, `match_method`, `valid_from/to`, `confirmed_by_user_id`, `replaced_by_id`; partial unique active `(account_id, external_product_id)` | История link/unlink; один Ozon SKU разных accounts не смешивается |
-| `marketplace_external_nodes` | `account_id`, `scheme`, `kind`, `external_id`, `parent_id`, name, raw sanitized, `active`, `observed_at`; unique `(account_id, kind, external_id)` | seller warehouse, Ozon warehouse, cluster, placement zone, delivery method, return point — разные kinds |
-| `marketplace_warehouse_bindings` | `account_id`, `scheme`, `wms_warehouse_id`, `seller_warehouse_node_id`, `destination_node_id`, `delivery_method_node_id`, `return_point_node_id`, `status`, `valid_from/to`; no stock-sync flag | Физическая топология. Для Ozon write policy всегда read-only и не настраивается |
-| `marketplace_sync_runs` | account/resource/version/filter hash, started/finished, status, page/item counters, error class/code | Видимый полный/partial результат одного запуска |
-| `marketplace_sync_checkpoints` | unique `(account_id, resource, api_version, filter_fingerprint)`; `cursor_kind`, `cursor_json`, `window_from/to`, `generation`, `last_success_at`, `resume_after`, `state` | Checkpoint формы не унифицируются до `page=1`; cursor JSON интерпретирует adapter resource |
-| `marketplace_push_inbox` | `account_id`, `event_type`, `external_event_id` nullable, `dedupe_hash`, external occurred/received time, sanitized payload, status; unique `(account_id, dedupe_hash)` | Push — hint. Business aggregate меняется после detail readback |
-| `marketplace_operations` | `account_id`, `operation_kind`, local/external entity refs, `intent_fingerprint`, `capability_snapshot_id`, `state`, external task/operation ID, request/response sanitized summaries, last readback, next attempt, error class/code, `supersedes_id`, actor; partial unique active `(account_id, operation_kind, intent_fingerprint)` | Единственный журнал mutating intents; stock write kind отсутствует |
-| `marketplace_operation_attempts` | operation, sequence, dispatched/finished, outcome, HTTP class/status, retry headers sanitized, request hash, response hash, readback flag | Неизменяемая история попыток без секретов и маркировочных кодов в открытом виде |
-| `marketplace_audit_events` | actor, account, entity, action, before/after hashes, reason, request correlation, occurred_at | Админские связи, operator scans, overrides, print/applied, recovery и disposition |
-| `marketplace_document_assets` | account, entity type/id, kind, status, source system/API/version/task, storage path, content type, checksum, dimensions, external/version time, expiry, supersedes, opened/printed/applied by/time, error | Общая безопасная оболочка; WB `FbsPrintAsset` остаётся без миграции |
-
-### 9.2 Ozon FBS data
-
-| Таблица | Ключевые поля |
-|---|---|
-| `ozon_fbs_postings` | `account_id`, `posting_number`, scheme=`fbs`, external `status/substatus/available_actions/raw`, delivery method/node refs, deadlines, `workflow_state`, `snapshot_version`, cancellation/arbitration JSON; unique `(account_id, posting_number)` |
-| `ozon_fbs_posting_lines` | posting, stable external line fingerprint, external product, mapped WMS product nullable, offer/sku, quantity ordered/reserved/picked/packed/handed_over/returned, requirements JSON, workflow state; unique `(posting_id, external_line_fingerprint)` |
-| `ozon_fbs_unit_exemplars` | line, ordinal, WMS marking_code nullable, kinds/values encrypted or hashed+masked according to compliance, local scan state, external set/validation state and errors, frozen_at; unique `(line_id, ordinal)` and unique active normalized code hash per tenant/kind |
-| `ozon_fbs_reservations` | line, warehouse/location nullable, quantity, state, acquired/released, movement refs; sum(active) ≤ line ordered and no cross-seller Product |
-| `ozon_fbs_work_batches` / `_postings` | local warehouse work grouping, route fingerprint, status, creator; membership does not imply Ozon carriage |
-| `ozon_fbs_packages` | posting, external package/posting ref, local WMS box nullable, state, restrictions snapshot/version, dimensions/weight, ship operation ref; unique active external ref account-scoped |
-| `ozon_fbs_package_lines` | package, posting line, quantity; sum(package quantity per line) ≤ picked quantity |
-| `ozon_fbs_packaging_fulfillments` | posting line/unit/package, PackagingTask/line/event, inventory movement, idempotency key, undone_at | Bridge reuses physical packaging without forcing Ozon into `FbsOrder` |
-| `ozon_fbs_handovers` | account, mode `one_by_one|carriage|manual_external`, delivery binding, state, external carriage ID nullable, physical confirmed actor/time, external confirmed time |
-| `ozon_fbs_handover_postings` | handover, posting, barcode asset, external state; a posting has at most one active handover |
-| `ozon_fbs_acts` | handover/posting scope, act kind/status, create operation, document asset, discrepancy state |
-
-### 9.3 Ozon FBO data
-
-| Таблица | Ключевые поля |
-|---|---|
-| `ozon_fbo_plans` | account, WMS source warehouse, mode `direct|crossdock|multi_cluster`, destination/cluster/placement refs, workflow state, active revision, creator |
-| `ozon_fbo_plan_lines` | plan, external product/mapping, WMS product, planned/picked/packed quantity, required data snapshot; unique `(plan, external_product)` |
-| `ozon_fbo_supply_orders` | plan, external supply order ID, external lifecycle/raw, local state, current timeslot and version; unique `(account_id, external_supply_order_id)` |
-| `ozon_fbo_supplies` / `_lines` | supply order, external supply ID; per-line planned/current/accepted/rejected quantities and raw requirements |
-| `ozon_fbo_timeslot_events` | supply order, proposal/selected interval, timezone, source revision, operation, status; immutable history |
-| `ozon_fbo_cargoes` | supply, external cargo ID nullable, cargo type, local WMS box/pallet nullable, state, rule snapshot/version, operation refs |
-| `ozon_fbo_cargo_lines` | cargo, supply line, quantity; sum cannot exceed packed quantity |
-| `ozon_fbo_transport_cargoes` | supply, external TGM ID/type, parent transport nullable, state, label asset |
-| `ozon_fbo_transport_cargo_members` | TGM, cargo; unique active cargo membership |
-| `ozon_fbo_acceptance_acts` / `_lines` | supply order, external act ID/version/status, operation/document; product line planned/accepted/rejected/reason |
-
-### 9.4 Returns data
-
-`marketplace_returns` хранит account, scheme `fbs|fbo`, external return ID, source posting/supply refs, location/giveout/pass refs, external lifecycle/raw, workflow `announced|ready_for_pickup|received_quarantine|inspecting|disposed|closed|needs_attention`, linked `inbound_intake_request_id`. `marketplace_return_lines` хранит external product, mapped product, expected/received quantity и reason. `marketplace_return_units` связывает исходный exemplar/barcode, inspection outcome и disposition. `marketplace_return_events` — неизменяемая история. Unique `(account_id, external_return_id)` не даёт смешать возвраты двух кабинетов.
-
-### 9.5 Порядок additive migrations
-
-1. **M1 integration foundation:** accounts, encrypted credentials, capability snapshots/entries, audit; seed отсутствует, WB rows не трогаются.
-2. **M2 import topology:** external products, mapping history, external nodes, bindings, indexes/tenant checks.
-3. **M3 reliability spine:** sync runs/checkpoints, push inbox, operations/attempts, document assets.
-4. **M4 Ozon FBS read model:** postings/lines/units/reservations/work batches; imports включаются feature flag только после backfill test.
-5. **M5 Ozon FBS execution:** packages/package lines/packaging bridge/handovers/acts.
-6. **M6 Ozon FBO:** plans/lines/supply orders/supplies/timeslots/cargo/TGM/acts.
-7. **M7 returns:** returns/lines/units/events и nullable link на существующую inbound return.
-8. **M8 UI availability flags only if needed:** per-tenant/account rollout flags. Existing permission columns do not migrate: settings/admin, packaging, mp_shipments, reception and shift_lead are reused.
-
-Каждая migration обязана пройти upgrade на копии схемы, downgrade там, где он не уничтожает уже созданные внешние факты, и schema-from-zero. Удаление/перенос WB колонок запрещено этой серией.
-
-## 10. API WMS
-
-Внешний Ozon endpoint/version живёт только внутри adapter operation matrix. Frontend вызывает стабильные WMS routes и не знает `v4/v6` Ozon.
-
-### 10.1 Зафиксированная граница Ozon adapter
-
-Ниже перечислены подтверждённые research dossier operation families. Перед реализацией соответствующего slice точная request/response schema замораживается sanitized fixture и датой; путь, помеченный beta/уточнением, не включается одной догадкой.
-
-| Ресурс | Ozon paths | Режим в WMS |
-|---|---|---|
-| Account | `/v1/seller/info`, `/v1/roles` | Только read discovery; identity/roles/expiry |
-| Products | `/v3/product/list`, `/v3/product/info/list`, `/v4/product/info/attributes`, `/v4/product/info/stocks` | Import-only; unknown fields retained |
-| Stock snapshots | `/v2/product/info/stocks-by-warehouse/fbs`, `/v1/product/info/stocks-by-warehouse/fbo`, `/v1/analytics/stocks` | Read-only observation. `/v2/products/stocks` отсутствует в adapter |
-| Product requirements | `/v1/description-category/*` | Read attributes, включая 22232 ТН ВЭД и 23536 «нужен код маркировки»; no product write |
-| Nodes/routes | `/v2/warehouse/list`, `/v2/delivery-method/list`, `/v2/carriage/delivery/list`, `/v1/warehouse/ozon/list` beta, `/v1/warehouse/fbo/seller/list`, `/v2/cluster/list` | Read topology and capability-dependent options |
-| Invalid FBS products | `/v1/warehouse/warehouses-with-invalid-products`, `/v1/warehouse/invalid-products/get` | Read blockers before reserve/ship |
-| FBS postings | `/v4/posting/fbs/unfulfilled/list`, `/v4/posting/fbs/list`, `/v3/posting/fbs/get` | Poll/list/detail authority; no deprecated v3 list |
-| FBS package rules | `/v1/posting/fbs/restrictions` | Fresh read in ship preflight |
-| FBS unit exemplars | `/v6/fbs/posting/product/exemplar/create-or-get`, `/v6/fbs/posting/product/exemplar/set`, `/v5/fbs/posting/product/exemplar/validate`, `/v5/fbs/posting/product/exemplar/status`, `/v1/fbs/posting/product/exemplar/update` | Granular mutating capabilities; ledger + validation readback; old v4/v5 create/set not used |
-| FBS split/ship | `/v1/posting/fbs/split`, `/v4/posting/fbs/ship`, `/v4/posting/fbs/ship/package` | Separate capability and intent kinds; allowed only by entity action/preflight |
-| FBS labels | `/v2/posting/fbs/package-label/create`, `/v1/posting/fbs/package-label/get` | Async asset task. Older binary path is not assumed without a frozen schema |
-| FBS carriage/acts | Confirmed carriage create/get/assign/approve/cancel/pass family, `/v2/posting/fbs/act/create`, `/check-status`, `/get-pdf`, `/get-postings`, `/v1/carriage/act-discrepancy/pdf` | Exact carriage paths/schemas frozen in S6; optional, never parent of every posting |
-| FBO draft | `/v1/draft/crossdock/create`, `/v1/draft/direct/create`, `/v1/draft/multi-cluster/create`, `/v2/draft/create/info`, `/v2/draft/timeslot/info` | Capability-dependent async draft and timeslot |
-| FBO supply order | `/v2/draft/supply/create`, `/v2/draft/supply/create/status`, `/v3/supply-order/list`, `/v3/supply-order/get` | Ledger task + list/get readback; old v1 draft status family not used |
-| FBO cargo | `/v1/cargoes/rules/get`, `/v1/cargoes/get`, `/v1/cargoes/create`, `/v2/cargoes/create/info` and confirmed delete/status family | Rules before mutation, per-cargo partial state. `delete_current_version` value explicit in intent |
-| FBO labels | Confirmed cargo-label create/get/file family; exact active versions and binary contract require S8 schema freeze | Capability remains off until fixture/print sample exists |
-| FBO postings | `/v3/posting/fbo/list`, `/v2/posting/fbo/get` | Read reconciliation; deprecated v2 list not used |
-| FBO acts | `/v1/supply-order/act/summary/get`, `/product/get`, `/accept`, `/accept/status` beta | Read always when available; accept separately gated and status-polled |
-| Returns | `/v1/returns/list`, `/v1/returns/company/fbs/info`, confirmed giveout barcode/PDF and pass family `/v1/return/pass/create|update|delete`, `/v1/pass/list` | Unified import; mutating pass/giveout only after exact schema/capability freeze |
-| Notifications | `/v1/notification/set|update|check|delete|enable|list|push-type/list` | Poll fallback is default; configuration write is a separate capability after ingress-auth contract is proven |
-
-Для каждой строки adapter хранит operation name, exact path/version, read/mutation class, required effective capability, pagination codec, timeout, retry/readback rule, sanitizer and fixture checksum. Дрейф path не меняет WMS API и не разрешает automatic fallback на старую версию.
-
-### 10.2 Accounts, discovery, catalog and bindings
-
-- `POST /integrations/ozon/accounts` — admin создаёт account shell для seller; credential values не возвращаются.
-- `GET /integrations/ozon/accounts?seller_id=` и `GET /accounts/{id}` — masked health, identity, expiry, latest capability snapshot.
-- `PUT /integrations/ozon/accounts/{id}/credentials` — admin заменяет полную direct pair или OAuth bundle; только отдельный явно разрешённый product slice.
-- `POST /integrations/ozon/accounts/{id}/discover` — read-only BackgroundJob; incomplete pair → `409 incomplete_credentials`, без сетевого вызова.
-- `POST /integrations/ozon/accounts/{id}/disable` — прекращает jobs/mutations, не удаляет audit/data.
-- `POST /integrations/ozon/accounts/{id}/sync/{resource}` — admin/manual sync для allowlisted `products|nodes|fbs_postings|fbo_supply_orders|returns`; возвращает job ID.
-- `GET /integrations/ozon/accounts/{id}/external-products`, `GET /external-nodes` — paginated local read models.
-- `PUT /integrations/ozon/accounts/{id}/product-mappings/{external_product_id}` и `DELETE .../active` — admin confirm/unlink with reason.
-- `PUT /integrations/ozon/accounts/{id}/warehouse-bindings/{scheme}` — admin creates versioned binding; request names each node kind separately.
-- `GET /operations/background-jobs/{job_id}` может быть переиспользован после добавления account-scope authorization; payload никогда не раскрывает secrets/raw marking codes.
-
-### 10.3 FBS routes
-
-- `GET /operations/ozon/fbs/postings` — filters account/seller, warehouse, workflow, deadline, blocker; cursor pagination.
-- `GET /operations/ozon/fbs/postings/{id}` — lines, units, packages, blockers, documents, external/local states and `next_action`.
-- `POST /operations/ozon/fbs/work-batches` и `POST /{batch_id}/postings` — local grouping only.
-- `POST /operations/ozon/fbs/postings/{id}/reserve|release` — internal inventory transaction; release after pick requires reversal path.
-- `POST /operations/ozon/fbs/postings/{id}/pick/scan-location` and `/pick/scan-product` — stable scan contract, idempotency key.
-- `PUT /operations/ozon/fbs/units/{unit_id}/identifiers` — local scan/update before freeze; values masked in response.
-- `POST /operations/ozon/fbs/units/{unit_id}/validate` — ledger-backed Ozon exemplar operation.
-- `POST /operations/ozon/fbs/postings/{id}/packages` and `PUT /packages/{id}/lines` — local composition with quantity invariants.
-- `POST /operations/ozon/fbs/postings/{id}/ship-preflight` — fresh readback/restrictions; no mutation.
-- `POST /operations/ozon/fbs/postings/{id}/ship` — creates operation intent, returns `202 operation_id`.
-- `POST /operations/ozon/fbs/packages/{id}/label` and `GET /documents/{asset_id}/content` — async request/read ready asset.
-- `POST /operations/ozon/fbs/handovers` — mode chosen from effective capability; postings validated server-side.
-- `POST /operations/ozon/fbs/handovers/{id}/physical-confirmation` — records manual fact, not external delivery.
-- `POST /operations/ozon/fbs/handovers/{id}/submit|approve|act` — separate intents only when supported.
-- `POST /operations/ozon/fbs/postings/{id}/reconcile` and `/reverse-pick` — recovery actions with reason and permission.
-
-### 10.4 FBO routes
-
-- `GET/POST /operations/ozon/fbo/plans`, `GET/PATCH /plans/{id}` — local draft and composition revision.
-- `POST /plans/{id}/draft-preflight`, `/draft`, `/timeslot` and `/supply-order` — one preflight and one ledger intent per external async stage.
-- `GET /operations/ozon/fbo/supply-orders` and `GET /supply-orders/{id}` — local read model with supply/line/timeslot/cargo/act details.
-- `POST /supply-orders/{id}/packaging-task` — creates/reuses PackagingTask after confirmed composition.
-- `POST /supply-orders/{id}/cargo-preflight`, `POST/PUT/DELETE /cargoes`, `POST /cargoes/{id}/label` — rules snapshot required.
-- `POST/PUT /supply-orders/{id}/transport-cargoes` and membership routes — explicit TGM layer.
-- `POST /supply-orders/{id}/handover-preflight` and `/physical-confirmation` — separate local facts.
-- `POST /supply-orders/{id}/reconcile` — reads external lifecycle, FBO postings and stock snapshots.
-- `GET /supply-orders/{id}/acceptance-act`; `POST /acceptance-act/accept` — latter only with effective beta capability and ledger readback.
-
-### 10.5 Returns, operations and recovery
-
-- `GET /operations/marketplace-returns?marketplace=ozon&scheme=` and `GET /{id}` — shared read view.
-- `POST /operations/marketplace-returns/{id}/receive` — creates/links quarantine inbound return, never increments inventory directly.
-- `POST /{id}/inspect` and `/dispose` — reception/shift-lead actions with unit outcomes; existing inbound posting remains inventory authority.
-- `GET /integrations/marketplace-operations?account_id=&state=` and `GET /{id}` — admin/shift-lead recovery queue.
-- `POST /integrations/marketplace-operations/{id}/readback` — always safe read operation.
-- `POST /{id}/resolve` with `confirmed|no_effect|abandon|supersede` — shift-lead/admin, mandatory reason; retry is a new linked operation, never mutation of history.
-
-All mutating routes require `Idempotency-Key`; server computes its own canonical intent fingerprint and rejects key reuse with a different payload (`409 idempotency_conflict`).
-
-## 11. Jobs, sync, limits and reconciliation
-
-### Job types
-
-- `ozon_capability_discovery_account`
-- `ozon_products_sync_account`
-- `ozon_nodes_sync_account`
-- `ozon_fbs_unfulfilled_poll_account`
-- `ozon_fbs_detail_reconcile_account`
-- `ozon_fbo_supply_orders_sync_account`
-- `ozon_fbo_postings_sync_account`
-- `ozon_returns_sync_account`
-- `ozon_operation_status_poll`
-- `ozon_document_status_poll`
-- `ozon_push_inbox_drain_account`
-
-Каждый payload содержит `marketplace_account_id` и ожидаемую `credential_version`; job прекращается до вызова Ozon, если account disabled, tenant mismatch или credentials сменились. Celery используется при наличии broker, существующий FastAPI `BackgroundTasks` — для локальной разработки/тестов. Periodic jobs выбирают только active accounts и берут per-account/resource lock.
-
-### Default cadence, не внешняя гарантия
-
-- FBS unfulfilled: каждые 2 минуты; active detail: каждые 5 минут; full bounded backfill: каждые 6 часов.
-- FBO supply orders/postings: каждые 10 минут; active async operation: 5, 10, 20, 30 секунд, затем adaptive до 5 минут.
-- Returns: каждые 15 минут; products/nodes/capabilities: nightly и manual.
-- 429 headers имеют приоритет; без них exponential backoff + jitter. Account-wide limiter разделяет budget по endpoint family, write queue не вытесняет order/return reads.
+- физический scan location/product/unit;
+- упаковка, нанесение label и передача в пункт/перевозчику;
+- действие в Ozon cabinet, когда API capability отсутствует;
+- print sample до включения неизвестного формата;
+- осмотр возврата и решение по damage/mismatch;
+- разбор arbitration/acceptance discrepancy руководителем смены.
 
-### Checkpoint semantics
+WMS не ставит `delivered`, `accepted`, `act_agreed` или `restocked` только потому, что оператор сообщил о ручном действии. Он фиксирует manual evidence отдельно и ждёт внешний readback или проведённое inventory movement.
 
-1. Adapter задаёт `resource + api_version + filter_fingerprint + cursor_kind`.
-2. Страница сохраняется и upsert-ится транзакционно; checkpoint продвигается только в той же committed transaction.
-3. `offset`, `cursor`, `last_id`, `has_next`, time window и `operation_id` не приводятся к ложному общему integer page.
-4. Удаление внешнего объекта никогда не выводится из одной пропущенной partial sync. `missing_since` ставится после полного прохода; inactive/tombstone — после второго полного прохода либо явного terminal/deleted status.
-5. Новый API version создаёт новый checkpoint namespace и backfill; старый остаётся для rollback/audit.
+## 8. Варианты и цена
 
-### Push semantics
+### Вариант A — разложить Ozon posting в текущие `FbsOrder`
 
-Receiver не включается, пока не зафиксирован официальный способ проверки подлинности текущей схемы Ozon. Без него fallback — polling. После фиксации схемы endpoint принимает событие в account-specific ingress, проверяет подпись/секрет согласно официальному контракту, сохраняет sanitized payload и быстро отвечает. Даже валидный push не меняет reserve, package, handover или inventory: он ставит detail reconcile. Duplicate определяется external event ID либо canonical payload hash; out-of-order event не откатывает newer external snapshot.
-
-## 12. Operation ledger: точная семантика
-
-Состояния: `created → dispatched → awaiting_external → reconciling → confirmed|rejected`; отдельные `rate_limited`, `uncertain`, `needs_action`, `abandoned`, `superseded`.
-
-Алгоритм mutating action:
-
-1. В одной DB transaction проверить tenant/account, permission, effective capability, fresh external snapshot/`available_actions`, локальные invariants и отсутствие active intent с тем же fingerprint.
-2. Создать immutable intent со ссылкой на capability revision и sanitized request summary. Бизнес-сущность получает `operation_pending`, но не внешний success status.
-3. Worker перед dispatch ещё раз проверяет account/credential version и записывает attempt. Secrets существуют только в headers transport call и не логируются.
-4. При получении external task/operation ID сохранить его до дальнейшего commit и перейти `awaiting_external`.
-5. При timeout, connection reset или ambiguous 5xx перейти `uncertain`. Автоматический повтор mutating request запрещён; сначала status/detail readback.
-6. Readback подтверждает фактический effect (`confirmed`), явный reject (`rejected`) или отсутствие доказательства (`needs_action`). Только confirmed переводит business aggregate дальше.
-7. 429 до доказанного dispatch сохраняет `rate_limited`/`next_attempt_at`; 429 после возможного dispatch считается `uncertain`, если эффект нельзя исключить.
-8. Ручной recovery не редактирует operation. Он фиксирует reason и либо закрывает её как no-effect/abandoned, либо создаёт новый intent с `supersedes_id`.
-
-Коды ошибок нормализуются в `auth`, `permission`, `rate_limit`, `validation`, `state_conflict`, `not_available`, `async_failure`, `transport_uncertain`, `unknown`; оригинальные безопасные Ozon code/message остаются в details.
-
-## 13. Права и аудит
-
-Используются существующие права, чтобы не раздувать настройки персонала:
-
-- `FULFILLMENT_ADMIN`: account/credentials/capability discovery, mappings, bindings, sync controls, all recovery.
-- `packaging`: FBS queue, reserve/pick/pack/exemplar/label/physical handover; не меняет credentials/bindings и не resolve uncertain mutation.
-- `mp_shipments`: FBO plan/composition/cargo/TGM/labels/physical handover.
-- `reception`: return receive/inspection; `dispose=restock|defect|seller_return` требует существующих правил проведения приёмки.
-- `shift_lead`: irreversible cancel/reversal, act discrepancy, handover arbitration and operation recovery.
-- seller `can_products`: read mappings/external catalog своего effective seller; `can_documents`: read postings/supplies/returns/documents; seller mutations Ozon отсутствуют в первом релизе.
-
-Каждый account-scoped query фильтруется server-side по tenant и seller/delegation. Audit обязателен для credential version change (без значений), discovery identity, capability change, mapping/binding version, reserve/release, scans, exemplar correction/freeze, package/cargo membership, print opened/applied, physical handover, operation recovery, act decision и return disposition.
-
-## 14. Print/document taxonomy
-
-Не существует общего `sticker_code`. Виды assets:
-
-- WMS: `product_barcode_label`, `marking_code_label`, `packing_sheet` — источник WMS/Честный знак, не Ozon.
-- Ozon FBS: `fbs_package_label`, `fbs_posting_barcode`, `fbs_carriage_barcode`, `fbs_act_pdf`, `fbs_discrepancy_act_pdf`, `return_giveout_barcode`, `return_document_pdf`, `pass_document`.
-- Ozon FBO: `fbo_supply_document`, `fbo_cargo_label`, `fbo_tgm_label`, `fbo_pass_document`, `fbo_acceptance_act_pdf`.
-
-Asset обязан знать entity, account, source API/version/task, content type, checksum, dimensions при подтверждении источником, generation time, expiry, version/supersession и факты opened/printed/applied. Формат 58×40 не навязывается Ozon: WMS отдаёт бинарник Ozon в исходном размере либо применяет отдельный утверждённый print transform с visual golden test. Печать старой/superseded версии требует shift-lead override и остаётся в audit.
-
-## 15. Deny-by-construction для Ozon FBS stock write
-
-Запрет доказывается пятью независимыми слоями:
-
-1. В project capability enum/allowlist нет `ozon.fbs.stock.write`; capability discovery может сохранить сырой role, но не превратить его в effective capability.
-2. `OzonSellerAdapter` этой версии не имеет метода изменения stocks и не содержит path `/v2/products/stocks`. Product import/update paths также отсутствуют.
-3. Нет WMS route, command, BackgroundJob/Celery task или operation kind для Ozon stock write. Warehouse binding не содержит `stock_sync_enabled` и всегда read-only.
-4. Общие inventory/catalog services продолжают импортировать только WB `schedule_seller_stock_publish`; они не знают MarketplaceAccount и не могут вызвать Ozon adapter. Существующий `fbs_stock_publish_seller` выбирает только legacy WB credentials/bindings.
-5. Outbound test transport для Ozon имеет endpoint allowlist и падает fail-closed на любой неизвестный mutating path. Contract/AST tests проверяют отсутствие stock path, route, job, capability и network call при любом inventory movement.
-
-Отрицательное доказательство в CI:
-
-- create Ozon account с fixture roles, где внешняя роль теоретически шире нужной; effective capabilities всё равно не содержат stock write;
-- выполнить inbound, transfer, reserve/release, FBS ship/cancel и FBO operations; recorder Ozon transport должен иметь zero requests к stock-write path;
-- попытки создать ledger operation `ozon_fbs_stock_write`, вызвать несуществующий route или передать binding `stock_sync_enabled=true` дают schema/404/422, а не hidden execution;
-- source contract check запрещает строку `/v2/products/stocks` вне research docs/negative fixtures.
-
-Будущее включение невозможно одной настройкой или DB row. Потребуются: отдельное owner approval, актуальное Ozon research, новый capability key и migration, adapter method, route/job/ledger kind, UX Product gate, availability formula, sandbox/emulator, readback and rollback design, negative cross-seller tests и новый browser acceptance. До merge всех этих изменений текущая система остаётся физически неспособной публиковать Ozon FBS stock.
-
-## 16. Интеграция frontend без широкого redesign
-
-Добавляется один пункт `Ozon` в существующий `AuthedAppLayout`, видимый администратору либо роли хотя бы с одним из `packaging|mp_shipments|reception`. Он ведёт в scoped module shell `/app/ff/ozon`. Остальная навигация, WB FBS routes, four-column WB table, `WildberriesScreen`, `FfFbsStockSyncScreen` и MP shipment layout не перестраиваются.
-
-Внутри Ozon shell вкладки показываются по работе пользователя:
-
-- `FBS` — оператор packaging;
-- `FBO` — planner/operator с mp_shipments;
-- `Возвраты` — reception;
-- `Каталог и связи` — admin;
-- `Подключение` — admin.
-
-Точечные изменения затронутых общих экранов:
-
-- В `FfProductsCatalogScreen` добавить компактный фильтр `Маркетплейс: Все / Wildberries / Ozon / Не сопоставлено`, потому что администратору нужно найти SKU без Ozon mapping. Он не добавляет в основную таблицу все внешние IDs; detail/dialog показывает mappings account-scoped.
-- В dashboard добавить Ozon work counts только после delivery slice: «FBS к сборке», «FBO к сдаче», «Возвраты к приёмке». Счётчики ведут в готовую очередь и нужны руководителю смены для распределения людей.
-- В существующем разделе «Отгрузки» добавить source badge/filter только для Ozon FBO documents, если выбранная продуктовая карточка интегрирует их туда. До этого Ozon FBO живёт в module shell; WB rows/columns не меняются.
-- WB FBS «Остатки WB» остаются WB-only. Ozon stock toggle, вкладка или кнопка не создаются.
-
-## 17. Точное задание на кликабельный React-прототип
-
-### Граница прототипа
-
-Создать отдельный prototype route set в существующем React/MUI приложении без production API, models, migrations и без изменения действующих WB screens. Использовать theme, `PageHeader`, `Paper variant="outlined"`, `Table`, `Tabs`, `TextField`, `Select`, `Alert`, `Dialog`, `Stepper`, `Button`, `LinearProgress`, `Skeleton`; не использовать legacy `frontend/src/ui`. Все основные зоны и действия получают стабильные `data-testid`. Fixtures локальные и детерминированные; prototype actions меняют только in-memory fixture state.
-
-Файловая граница задания: новые компоненты и fixtures живут только в `frontend/src/prototypes/ozon/**`; допускаются две малые интеграционные правки — регистрация prototype routes в `frontend/src/App.tsx` и один nav item в `frontend/src/layouts/AuthedAppLayout.tsx`. Нельзя править `FfFbsOrdersScreen`, `FfFbsSupplyWorkspace`, `FfFbsStockSyncScreen`, `WildberriesScreen` или их API clients. Минимальный набор selector contracts: `nav-ff-ozon`, `ozon-account-select`, `ozon-sync-health`, `ozon-module-tabs`, `ozon-fbs-queue`, `ozon-posting-next-action-{id}`, `ozon-scan-location`, `ozon-scan-product`, `ozon-unit-identifier-{id}`, `ozon-package-lines`, `ozon-label-status`, `ozon-handover-preflight`, `ozon-fbo-queue`, `ozon-cargo-zone`, `ozon-tgm-zone`, `ozon-acceptance-act`, `ozon-returns-queue`, `ozon-return-disposition`, `ozon-catalog-mappings`, `ozon-warehouse-binding` и `ozon-account-health`.
-
-### Routes и экраны
-
-1. **`/app/ff/ozon` → FBS queue.**
-   - Header: «Ozon», seller/account selector, freshness text и account health Alert. Selector нужен, чтобы сотрудник не смешал два кабинета одного seller.
-   - Tabs: `К сборке`, `В работе`, `К сдаче`, `Переданы`, `Проблемы`; filters deadline/warehouse/handover/blocker/search.
-   - Columns ровно: `Отправление и срок`, `Товары`, `Селлер и склад`, `Сдача`, `Следующий шаг`. В `Товары` показывать `2 позиции · 3 шт.`, а detail раскрывает lines; это сохраняет читаемую очередь и не прячет объём работы.
-   - Primary row action: только вычисленный next action (`Связать товар`, `Начать подбор`, `Продолжить маркировку`, `Печатать`, `Подтвердить передачу`, `Разобрать проблему`).
-   - States: loading skeleton, empty per tab, stale partial sync, no account, no mapping, shortage, cancelled after pick, unknown status.
-
-2. **`/app/ff/ozon/fbs/:postingId` → FBS workspace.**
-   - Sticky summary: posting number, deadline, route, external/local status, `2 позиции / 3 единицы`, last Ozon update.
-   - Stepper: `Проверка → Подбор → Данные единиц → Упаковка → Этикетка → Сдача → Подтверждение`. Stepper показывает физическую работу и не разрешает перескочить blocker.
-   - `Проверка`: lines with mapping, required qty, reserve and warehouse; admin-only mapping dialog.
-   - `Подбор`: scan location field with autofocus, then scan product; picked counters and last scan undo. Сначала ячейка, потому что movement должен иметь физический источник.
-   - `Данные единиц`: one card/row per unit; only required KIZ/IMEI/GTIN/weight/country inputs; local and Ozon validation statuses separately; correction dialog before freeze.
-   - `Упаковка`: WMS box selector, package composition table with per-line quantities, restrictions Alert, partial package dialog.
-   - `Этикетка`: async requesting/ready/error states, preview, `Печать`, `Этикетка нанесена`; superseded warning.
-   - `Сдача`: radio-like cards only for discovered modes one-by-one/carriage/manual; each explains required physical handover. Primary action always opens preflight dialog listing passed checks and blockers.
-   - `Подтверждение`: timeline `Передано WMS → Ozon сканирует → Доставляется → Доставлено`; arbitration action shift-lead only.
-
-3. **`/app/ff/ozon/fbo` → FBO plans/supplies.**
-   - Tabs: `Черновики`, `Таймслот`, `Готовим груз`, `К сдаче`, `Приёмка Ozon`, `Расхождения`, `Завершены`.
-   - Columns: `Заявка`, `Маршрут и таймслот`, `Состав`, `Грузоместа`, `Приёмка`, `Следующий шаг`. Отдельные planned/packed/accepted counts нужны для построчной сверки.
-   - Primary `Создать поставку FBO` открывает wizard: seller/account → source WMS warehouse → mode → destination → product quantities → capability summary. Недоступный mode виден disabled с конкретной причиной, чтобы планировщик не строил невозможный маршрут.
-   - Loading/empty/partial async/error/unknown state fixtures обязательны.
-
-4. **`/app/ff/ozon/fbo/:supplyOrderId` → FBO workspace.**
-   - Stepper: `Черновик → Таймслот → Состав → Подбор и упаковка → Грузоместа → ТГМ → Этикетки → Сдача → Приёмка и акт`.
-   - Draft/timeslot показывают operation pending/uncertain and readback action; кнопки не становятся success до result.
-   - Cargo zone: слева WMS boxes, справа Ozon cargo; drag/drop не нужен — checkbox dialog `Связать`, потому что сканер/клавиатура надёжнее для склада. TGM отдельная zone над cargo membership.
-   - Labels list per cargo/TGM with version/status and applied checkbox action.
-   - Acceptance act table: `Товар`, `План`, `Принято`, `Отклонено`, `Причина`; primary action `Согласовать акт` только при capability, иначе `Открыть инструкцию ручной проверки`.
-
-5. **`/app/ff/ozon/returns` and `/returns/:id` → returns queue/workspace.**
-   - Tabs: `Ожидаются`, `К получению`, `На осмотре`, `Решение`, `Закрыты`, `Не сопоставлены`.
-   - Columns: `Возврат`, `Источник FBS/FBO`, `Товар и количество`, `Точка/срок`, `Следующий шаг`.
-   - Workspace scan posting/return/product barcode, shows masked exemplar identity, creates quarantine inbound, then inspection dialog: packaging intact, product condition, marking match, photo placeholder, disposition. Default selected state отсутствует; сотрудник обязан осмотреть единицу.
-
-6. **`/app/ff/ozon/catalog` → catalog and bindings, admin.**
-   - Two tabs: `Товары` and `Склады и доставка`.
-   - Products columns: Ozon product/offer/SKU, barcode, Ozon status/requirements, WMS product, mapping state, action. Link dialog shows exact candidate reason and requires confirm.
-   - Topology is a labeled form, not one ambiguous dropdown: physical WMS warehouse, scheme, seller warehouse, destination/cluster, delivery method, return point. Summary sentence describes resulting physical route before save.
-
-7. **`/app/ff/ozon/connection` → account health, admin.**
-   - Account cards by seller with masked `Client-Id`, key present boolean, auth mode, external identity, roles, expiry, last discovery/sync, read-only/writes capability matrix.
-   - Dialog requires both direct credentials before `Проверить подключение`; incomplete fixture shows zero live calls.
-   - Capability matrix groups `Чтение`, `FBS операции`, `FBO операции`, `Документы`; строка stock publishing отсутствует целиком. Отдельный permanent Alert: «Остатки Ozon в этой версии только читаются; публикации из WMS нет» объясняет операционную границу администратору.
-
-### Realistic fixtures
-
-- Seller `Loviana`: действующий WB account (только summary badge) и Ozon account `Ozon Loviana`; этим доказывается одновременное сосуществование без смешения.
-- Account `Fashion`: только Api-Key, нет Client-Id, `pending_credentials`, discovery не выполнялся.
-- FBS `4829-0001-1`: two lines / three units, одна line mapped, одна unmapped.
-- FBS `4829-0002-1`: KIZ + IMEI required, один exemplar accepted, один rejected.
-- FBS `4829-0003-1`: partial package creates second posting/package, label task pending then ready.
-- FBS `4829-0004-1`: cancelled after pick and requires return-to-cell scan.
-- Один one-by-one handover и одна compatible carriage с act pending; один handed-over posting without Ozon scan for arbitration.
-- FBO direct plan: 3 lines, pending timeslot operation, 2 cargo inside 1 TGM, one failed cargo label.
-- FBO acceptance act: planned 10, accepted 9, rejected 1 with reason.
-- FBS linked return, FBO return and unmatched return; all enter quarantine.
-- 429 retry banner, partial pagination, expired credential, unknown external status and stale last-success data.
-
-### Prototype acceptance before implementation
-
-Product Agent must use a visible real browser and record URL, role, seller/account, clicks and visible outcomes for:
-
-1. Admin connects full fixture account, sees identity/capabilities, links a product and saves a full FBS binding.
-2. Operator processes multi-item FBS through scan, exemplar correction, partial package, label and one-by-one handover without seeing stock publication.
-3. Operator recovers cancelled-after-pick posting into a scanned location.
-4. Planner creates FBO plan, waits through async state, assigns cargo to TGM, prints labels and reviews a discrepancy act.
-5. Reception receives unmatched return into quarantine and cannot restock before inspection/mapping.
-6. Admin switches between seller with simultaneous WB+Ozon and incomplete Ozon account; no data leaks across account selector.
-7. Error/empty/loading/partial/uncertain states keep the last confirmed data and expose exactly one safe next action.
-
-Verdict must be `PRODUCT_BROWSER_APPROVED` for the prototype contract before BA cards for production implementation are frozen. Prototype approval is not production acceptance.
-
-## 18. Test architecture
-
-### Contract and adapter tests
-
-- Version-frozen sanitized request/response fixtures for every used endpoint family, including unknown fields/enums.
-- Pagination tests for cursor, offset/limit, `last_id/has_next`, time windows and page-resume after commit failure.
-- 401/403/429/5xx, retry headers, expiry, identity mismatch and schema drift.
-- Push duplicate/out-of-order/invalid-auth; poll-only fallback must converge to the same state.
-- Outbound recorder asserts secrets only in headers and sanitized logs contain no Api-Key, OAuth token or full marking code.
-
-### Domain/integration tests
-
-- Same seller with WB and two Ozon accounts: product IDs, checkpoints, operations and documents remain account-scoped.
-- FBS multi-line/quantity reservation, shortage, scan idempotency, exemplar correction/freeze, partial package quantity invariants, cancel before/after pick, label supersession, one-by-one vs carriage, uncertain ship readback, arbitration.
-- FBO draft/timeslot/supply async states, composition revisions, cargo rules, partial cargo failure, TGM membership, label versioning, physical/external handover split, acceptance discrepancy/act.
-- Returns linked/unmatched, duplicate external event, quarantine inbound, no inventory increase before posted disposition.
-- Existing WB backend and Playwright suites remain required regression gates; zero legacy table migration.
-
-### API/security tests
-
-- Tenant/seller/account IDOR attempts, delegated seller scope, permission matrix and disabled account.
-- Idempotency key conflict, active intent uniqueness, readback-before-retry and shift-lead-only recovery.
-- Document path is internal-only; content route validates tenant/entity and rejects superseded asset as primary print.
-- Deny-by-construction stock suite from section 15 runs on every Ozon-related PR.
-
-### UI/browser tests
-
-- Each production slice adds Playwright user-visible scenarios with `TC-Sxx-yyy`/`TC-NEW-*` traceability, stable `data-testid`, realistic local Ozon emulator, and no external network.
-- Playwright covers actions and visible outcome, but final Product Browser Review uses a visible real browser and is separately recorded.
-- Visual golden tests apply to generated/normalized print layouts only after source size is confirmed; binary pass-through documents use checksum/content-type tests and a manual print sample gate.
-
-## 19. Vertical slices: сумма равна полному модулю
-
-Каждый slice — отдельные BA feature cards и проходит `BA_READY → PRODUCT_APPROVED_FOR_DEV → DEV_DONE → CODE_REVIEW_PASSED → PRODUCT_BROWSER_APPROVED`. Общие machine gates каждого PR: backend `ruff check . && mypy . && pytest`, migration from zero/upgrade test, frontend `npm run build && npm run test:e2e` при UI, contract emulator without network, relevant WB regression suite, commit/push evidence. После всех slices нужны integration review и общий live-browser regression.
-
-| Slice | Пользовательский результат | Зависимости | Recovery/negative gate | Completion criteria |
-|---|---|---|---|---|
-| S0 Clickable prototype | Весь процесс можно пройти на fixtures до кода | Эта архитектура | Все states из задания, no production API | Prototype `PRODUCT_BROWSER_APPROVED` |
-| S1 Account and capability discovery | Admin безопасно подключает/проверяет Ozon account; incomplete pair не вызывает сеть | S0 | identity mismatch, expiry, missing role, no secret leakage | account health browser accepted; read-only live smoke only если позже есть полная пара и отдельное разрешение |
-| S2 Catalog, mappings and topology | Admin импортирует товары/nodes, подтверждает mapping и FBS/FBO bindings | S1 | ambiguous mapping, missing node, account isolation, partial pagination | full local backfill+resume; catalog/topology browser accepted |
-| S3 Reliability spine | Пользователь видит truthful job/partial/operation/document states | S1 | 429, timeout uncertain, duplicate push, readback-before-retry | emulator fault matrix green; push may remain disabled with poll fallback |
-| S4 FBS intake/reserve/pick | Operator receives multi-line postings, reserves by line and scans location/product | S2,S3 | shortage, cancel before/after pick, duplicate scan, unknown status | inventory invariants and FBS queue/workspace browser accepted |
-| S5 FBS exemplars/package/label | Operator submits required unit data, packs quantities and prints current label | S4 | rejected exemplar, partial package, incorrect dimensions, label pending/superseded | unit/package invariants, print sample and browser accepted |
-| S6 FBS handover/acts/recovery | One-by-one and capability-driven carriage reach confirmed external lifecycle | S5 | timeout uncertain, missing scan/arbitration, manual portal fallback | no false delivered state; recovery queue and browser accepted |
-| S7 FBO plan/draft/timeslot/supply | Planner creates supported FBO route through async supply order | S2,S3 | unsupported mode, operation timeout, timeslot conflict, revision | emulator async lifecycle and browser accepted |
-| S8 FBO packing/cargo/TGM/labels/handover | Warehouse prepares and transfers traceable cargo/TGM | S7 | partial cargo error, rules drift, failed/superseded label | per-cargo recovery, print sample and browser accepted |
-| S9 FBO acceptance act/reconciliation | Planner sees acceptance/stock appearance and resolves act discrepancy | S8 | beta capability absent, rejected act, manual fallback | no conflation of WMS handover/Ozon acceptance; browser accepted |
-| S10 Unified Ozon returns | Reception receives FBS/FBO returns into quarantine and disposes after inspection | S4,S7,S3 | unmatched/duplicate/damaged, no auto-restock | inbound+inventory invariants and returns browser accepted |
-| S11 Cross-module integration and hardening | Dashboard/catalog filters, audit/recovery, seller read-only views, full coexistence | S4–S10 | two accounts + WB regression, performance/backfill, kill switches | all gates green, integration review, final visible-browser regression, deployed SHA proof if release requested |
-
-Полный Ozon module означает завершённые S0–S11, а не ранний account/catalog slice. Если отдельная capability недоступна реальному account, модуль всё равно функционален через discovery и документированный manual/read-only fallback; нельзя называть недоступный внешний feature реализованным.
-
-## 20. Conscious non-goals
-
-- Не переписывать и не мигрировать `FbsOrder`, `FbsSupply`, `FbsTrbx`, WB credentials/routes/jobs/screens/print tape/stock sync.
-- Не делать общий lifecycle enum, в котором Ozon и WB обязаны пройти одинаковые stages.
-- Не создавать и не редактировать карточки Ozon (`product import/update`) в этой программе slices.
-- Не публиковать FBS-остатки Ozon и не создавать скрытую/disabled кнопку для этого.
-- Не исследовать сейчас Yandex Market API; будущая площадка переиспользует core только после своего research gate.
-- Не автоматизировать решения по качеству возврата, арбитражу или acceptance discrepancy.
-- Не гарантировать формат этикетки, cargo rule, таймслот или capability без version-frozen schema/real response.
-- Не redesign-ить dashboard, WB FBS, общий каталог или «Отгрузки» шире точечных фильтров/ссылок, перечисленных в section 16.
-- Не считать prototype, unit/Playwright tests, local URL или HTTP 200 доказательством production deployment или внешнего приёма Ozon.
-
-## 21. Риски и меры
+Каждая line или unit становится псевдо-заказом WB-типа. Цена кажется низкой: 2–4 недели backend/UI. Реальная цена высока: posting status/label дублируются, quantities и partial package распадаются, один mutation может быть повторён по нескольким rows, `wb_supply_id/trbx` начинают означать другое. Этот вариант стирает Ozon-семантику и создаёт риск WB regression. **Отклонён.**
+
+### Вариант B — additive Ozon aggregates + adapter-backed projection в текущий FBS UI
+
+Provider-native Ozon tables хранят lines/units/packages, а `FbsWorkItemView`/`FbsWorkspaceView` проецируют их в существующую очередь и modal-workspace. WB adapter читает текущие models без миграции. FBO и returns расширяют существующие documents. Оценка: 8–12 вертикальных slices, примерно 12–18 инженерных недель с emulator, миграциями, print gates и browser acceptance. UI-цена ограничена пятью существующими зонами. **Выбран.**
+
+### Вариант C — сразу мигрировать WB и Ozon на единый canonical marketplace domain
+
+Это чище на длинном горизонте, но требует backfill `FbsOrder/FbsSupply/FbsTrbx`, переключения всех jobs/actions и одновременной регрессии всего WB lifecycle. Оценка: 20–30+ инженерных недель и высокий release risk. **Отложен.** Общий projection contract из варианта B создаёт seam для будущей миграции без принуждения сейчас.
+
+### Почему B — наименьший безопасный
+
+Он добавляет данные только там, где Ozon доказанно сложнее текущего WB order, и переиспользует каждый физический процесс/экран. Он не делает WB migration prerequisite, не создаёт parallel UI и не превращает Ozon posting в ложный набор однотоварных заказов.
+
+## 9. Данные и инварианты
+
+Названия ниже — target model contract, не production patch.
+
+### 9.1 Общий integration spine
+
+- `marketplace_accounts`: `id`, `tenant_id`, `seller_id`, `marketplace`, `auth_mode`, encrypted credential references, `external_identity`, `status`, roles/capabilities JSON, expiry, discovery timestamps. Unique external identity scoped by marketplace; secret values никогда не возвращаются.
+- `marketplace_product_mappings`: account, external `offer_id/product_id/sku`, `product_id`, status, source, confirmed_by/at, raw snapshot. Unique external key inside account.
+- `marketplace_nodes` и `marketplace_node_bindings`: account/resource kind/external id/raw snapshot; binding к WMS warehouse и optional quarantine location. FBS warehouse, FBO destination, cluster, delivery method и return point не сливаются в одно поле.
+- `marketplace_sync_checkpoints`: account + resource + API version + filter fingerprint, committed cursor/last_id/window and last success.
+- `marketplace_event_inbox`: account + external event id/type/version/hash, received/processed state; duplicates idempotent.
+- `marketplace_operations`: account, entity kind/id, action, immutable intent fingerprint, external operation/task id, `pending|uncertain|confirmed|failed|manual_required`, request metadata sans secrets, last readback/error and actor. Unique active intent per entity/action/fingerprint.
+- `marketplace_assets`: account, entity kind/id, kind, source/version/task id, status, storage path, checksum, dimensions/content type, superseded/applied audit.
+
+Это новые backend seams, не новые UI surfaces. Existing `BackgroundJob`, encrypted secret service и print storage patterns переиспользуются, но WB-only fields не переименовываются в-place.
+
+### 9.2 Ozon FBS aggregate
+
+- `ozon_fbs_postings`: account, posting_number, WMS warehouse, external status/substatus/actions/raw, deadlines/delivery method, local workflow state, cancellation, sync version.
+- `ozon_fbs_posting_lines`: posting, stable external line key, offer/product/sku snapshot, mapped WMS product, ordered/picked/packed quantities and requirements.
+- `ozon_fbs_units`: line + ordinal, required fields, masked identifiers and local/external validation states. Full sensitive codes use encrypted/restricted storage and sanitized audit.
+- `ozon_fbs_packages`: posting/current external posting reference, package ordinal, status, restrictions version, label asset and supersession.
+- `ozon_fbs_package_lines`: package + line + positive quantity. Invariants: sum package quantities per line cannot exceed ordered quantity; ship requires accepted required units and fresh restrictions.
+- `ozon_fbs_work_batches` + membership: local grouping used only to open the existing modal-workspace for one or more compatible postings. It is not Ozon carriage/supply and never appears as a new document type or navigation entry.
+
+`FbsWorkItemView` has provider-neutral identifiers, seller/account, warehouse/route, deadline, `lines[]`, quantities, product preview, selection blockers, local/external status and capabilities. For WB, current one product becomes one line/one unit and existing copy/actions stay unchanged. For Ozon, posting stays one item with many lines.
+
+`FbsWorkspaceView` keeps the existing visual stages `composition`, `picking`, `packing`, `boxes`. Provider-specific zones are conditional payloads: `exemplar_requirements`, `packages`, `label_assets`, `handover_modes`, while WB keeps `wb_supply/trbx/supply_qr` fields.
+
+### 9.3 Ozon FBO extension
+
+`MarketplaceUnloadRequest` receives additive `marketplace_account_id`, `marketplace`, external process state/reference and route/timeslot snapshot. Existing lines, reservations, pick allocations, PackagingTask and boxes remain WMS authority.
+
+Children:
+
+- `ozon_fbo_supply_links`: document → supply order/supply, route type, destination, timeslot, external/local states;
+- `ozon_fbo_cargoes`: supply link, external cargo id, rules version, state;
+- `ozon_fbo_cargo_box_links`: cargo ↔ existing `MarketplaceUnloadBox` with quantities/validation;
+- `ozon_fbo_transport_cargoes` and membership: TGM hierarchy separate from WMS box/cargo;
+- acceptance line snapshots and act state/asset under the same document.
+
+No `OzonFboWorkspace`, no separate FBO document and no new route.
+
+### 9.4 Returns extension
+
+- `marketplace_returns`: account, external return id/type/status, source posting/supply, mapped product/unit, quantities, return point, raw snapshot and last sync.
+- link to one existing `InboundIntakeRequest(operation_type="return")` with unique constraint for idempotency;
+- `marketplace_return_inspections`: inbound line/unit, identity match, condition, disposition, actor/time and notes/assets where approved later.
+
+Inventory invariant: external return import and physical received scan do not increase available stock. Only the existing posted inbound movement after `restock` can do that.
+
+### 9.5 Migration order
+
+1. Integration spine and account isolation; no UI switch.
+2. Catalog/node snapshots and mappings; read-only jobs.
+3. Ozon FBS aggregate and projection behind disabled capability.
+4. Ozon FBO links/children on existing MP document.
+5. Return links/inspection on existing inbound document.
+6. Enable provider by seller/account after fixtures, regression and browser gate.
+
+No existing WB column becomes nullable/renamed for Ozon, no backfill of WB orders is required, and rollback disables Ozon capabilities without deleting operator evidence.
+
+## 10. Backend boundaries and reusable WMS parts
+
+### Reuse unchanged or behind a narrow facade
+
+- `Tenant`, `Seller`, `Product`, `Warehouse`, `StorageLocation` and inventory services;
+- `PackagingTask`, its lines/events and existing MP unload integration;
+- `MarketplaceUnloadRequest`, lines, reservations, pick allocations and boxes;
+- `InboundIntakeRequest`, box/cargo place, receive/verify/post/distribute flow;
+- `BackgroundJob` shell, job polling and current scheduler pattern;
+- FBS worklist/workspace, picking, packaging and print storage patterns;
+- MUI screens and current routes listed in the reuse map;
+- role/effective seller checks and audit conventions.
+
+### Do not reuse as generic truth
+
+- `FbsOrder.wb_*`, `FbsSupply.wb_supply_id`, `FbsTrbx`, WB status maps and WB stock publisher;
+- `Product.wb_*` as Ozon mapping;
+- one `mp_api_key` in marking credentials as Seller API account identity;
+- WB sticker/trbx/supply QR taxonomy for Ozon package/cargo/TGM assets;
+- one universal pagination or retry implementation.
+
+### Adapter contract
+
+`MarketplaceAdapter` exposes typed discovery/catalog/nodes and operation primitives. `FbsWorkflowAdapter` exposes projection, preflight, exemplar, package, label, handover and readback. `MarketplaceShipmentAdapter` exposes route/draft/timeslot/supply/cargo/TGM/label/act operations. Adapters return normalized capability/action results plus raw sanitized snapshots; they do not mutate inventory directly.
+
+WB adapter wraps current services and must be characterized before shared frontend switching. Ozon adapter is the only place with Ozon endpoint/version knowledge. Business services own DB transactions, ledger and inventory invariants.
+
+## 11. WMS API evolution
+
+The API changes are additive facades for existing routes, not new operator surfaces.
+
+### Accounts and catalog
+
+- `/integrations/marketplaces/self/accounts` list/create/patch selected seller accounts; existing `/integrations/wildberries/*` remains valid for WB compatibility.
+- `/integrations/marketplaces/self/accounts/{id}/discover` starts read-only discovery job.
+- `/integrations/marketplaces/self/accounts/{id}/sync` starts typed resource sync.
+- `/products/ff-catalog` adds `marketplace_mappings[]`; current fields remain.
+- `/products/{product_id}/marketplace-mappings` confirms/unlinks account-scoped mapping with role checks.
+
+### FBS facade on the existing UI path
+
+- `GET /operations/fbs-orders/worklist` gains optional `marketplace`/account filters and additive generic fields. Omitted filters and WB-only data preserve current response behavior.
+- `GET /operations/fbs-supplies/worklist` returns projected work batches. Legacy WB supply identifiers remain for WB rows.
+- `POST /operations/fbs-supplies/from-orders` accepts legacy `order_ids` for WB and additive homogeneous `work_item_ids`; Ozon creates a local batch only.
+- Existing `/operations/fbs-supplies/{id}/workspace`, pick scans, packing/boxes, print and deliver calls dispatch through workspace provider. A provider discriminator is server-resolved from the work batch and never trusted from client seller/account input.
+- Additive line/unit/package actions are under the same workspace resource; no `/ozon/fbs` API namespace is exposed to frontend.
+
+### MP shipment/FBO
+
+- Existing `/operations/marketplace-unload-requests` payload adds marketplace account/route fields and external operation summary.
+- Child endpoints for route/timeslot/cargo/TGM/assets/acceptance live under `/operations/marketplace-unload-requests/{id}/...`, so tenant/seller/document authorization is reused.
+- Existing confirm/pick/pack/ship endpoints call marketplace adapter only after local preflight and operation ledger creation.
+
+### Returns/inbound
+
+- Return sync is account job, not a UI route.
+- Existing inbound detail adds `marketplace_return` and `inspection` conditional blocks.
+- Inspection and disposition actions live under `/operations/inbound-intake-requests/{id}/lines/{line_id}/return-inspection`; posting stock still uses existing inbound post service.
+
+### Security and status rules
+
+- Every entity lookup scopes tenant first, then effective seller, then account.
+- Client cannot choose an account belonging to another seller by ID.
+- Secrets travel only in request headers to Ozon and never appear in job payload/result/logs.
+- Unknown enum values are stored raw and normalized to `needs_attention`; they do not crash list endpoints.
+- A mutating retry always reads operation/entity first. `Retry` without readback is not an API action.
+
+## 12. Async operations, reconciliation and print
+
+Operation state machine:
+
+`intent_created → sent → pending → confirmed | failed | uncertain | manual_required`.
+
+- `confirmed` requires operation status or authoritative entity readback matching the intent.
+- Network timeout after send produces `uncertain`, not failed. The same fingerprint cannot create another active intent.
+- Confirmed failure may create a new intent only after the user-visible cause changed or explicit safe retry.
+- Manual portal work records actor/time/note but does not forge external success.
+
+Sync checkpoints commit only after the entire page transaction succeeds. Push inbox deduplicates and schedules the same entity readback used by polling. Polling remains authoritative for convergence.
+
+Asset taxonomy keeps `product_barcode`, `marking_label`, `fbs_posting_package_label`, `fbs_posting_barcode`, `fbs_carriage_act`, `fbo_cargo_label`, `fbo_tgm_label`, `fbo_acceptance_act`, `return_giveout_barcode` distinct. Each asset has source/version/checksum/status/supersession. The existing preview/print/applied interaction is reused; unsupported dimensions are pass-through only.
+
+## 13. Точное задание на replacement clickable React prototype
+
+### 13.1 Жёсткая граница
+
+Prototype developer must not create a screen, route, top-level navigation item, tab, separate document type or second workspace. The obsolete `OzonModulePrototypeRoute` is not a base. Replacement prototype runs on realistic local fixtures through the **existing routes** below; a fixture flag/query may switch data, but URL topology remains current.
+
+`App.tsx` and `AuthedAppLayout.tsx` may be touched only to remove the rejected Ozon import/routes/nav. The historical standalone prototype component is deleted, not amended. Production APIs, DB migrations and external calls are forbidden in the prototype slice.
+
+### 13.2 `/app/ff/fbs` — bounded changed zones
+
+1. Existing filter row: add one `Маркетплейс` select. It exists so operator selection cannot mix incompatible labels/handover; it is not a new reporting filter. WB fixture selection must show current WB labels/actions unchanged.
+2. Existing worklist row: no new column. In current product/order cells, Ozon row shows marker, posting number, `2 товара · 3 шт`, first two product lines, deadline and mapping/blocker. Click/expand shows full lines inline; it does not navigate.
+3. Existing selection bar/dialog: Ozon homogeneous selection uses `Начать сборку`; mixed account/marketplace selection shows one blocking reason. WB copy remains current.
+4. Existing `FfFbsSupplyWorkspace` modal and four current stages only:
+   - `Состав`: multi-line quantities and requirements;
+   - `Подбор`: scan location/product and per-line progress;
+   - `Упаковка и маркировка`: unit KIZ/IMEI states, package quantities and async label in current print zone;
+   - `Короба`: WMS box ↔ Ozon package relation, posting label and capability-driven handover in the current bottom action area.
+5. No Ozon dashboard, FBS route, posting details screen, extra stage/tab or parallel workspace.
+
+Clickable fixture path: select Ozon → open posting `4829-0001-1` with two lines/three units → see one unmapped line blocker → use mapped fixture → scan location and two product barcodes → correct rejected exemplar → create partial package → label changes pending→ready → print/apply → choose discovered one-by-one handover → see `Передано WMS, Ozon ещё не подтвердил`.
+
+### 13.3 `/app/ff/mp-shipments` — bounded changed zones
+
+1. Existing create block: marketplace select next to seller. WB default/fixture must retain current create behavior.
+2. Existing document header: Ozon-only account, route, destination, timeslot and inline async state. No wizard.
+3. Existing tabs remain exactly `Товары`, `Подбор`, `Упаковка`.
+4. Existing `Упаковка` zone: after WMS boxes, conditional cargo/TGM hierarchy with link, label status/print and partial error. No separate FBO tab/workspace.
+5. Existing footer/post-ship body: handover preflight and acceptance/act reconciliation inline.
+
+Clickable fixture path: create Ozon MP shipment → choose direct route and timeslot → add three lines → confirm while external operation pending → readback success → use existing pick/pack → bind two WMS boxes to two cargo inside one TGM → recover one failed label → ship → see planned 10/accepted 9/rejected 1 and manual act fallback.
+
+### 13.4 `/app/ff/products` — bounded changed zones
+
+1. No new catalog tab/column. Existing product action zone shows marketplace mapping summary.
+2. Existing action dialog pattern opens account-scoped Ozon candidates with offer_id/product_id/sku/barcode and explicit candidate reason.
+3. Search matches Ozon identifiers only when Ozon mapping data is loaded; current WB/catalog behavior remains.
+
+Clickable fixture path: filter seller Loviana → open mapping for one product → reject ambiguous barcode candidate → confirm exact offer/SKU candidate → row shows both WB and Ozon links without changing WMS SKU.
+
+### 13.5 `/seller/settings` — bounded changed zones
+
+1. Existing WB card remains untouched in copy/actions. Add Ozon account card in the same settings section.
+2. Direct auth dialog has Client-Id and Api-Key, masked saved state, `Проверить подключение`, roles/expiry/capability result and sync action.
+3. Incomplete Fashion fixture shows `Client-Id не указан` and proves zero external call. Stock publication toggle/action is absent, not disabled.
+
+Clickable fixture path: open incomplete account → save draft without network → complete pair with fixture values → discover identity/roles → start partial catalog sync → retain last confirmed counts on 429.
+
+### 13.6 Existing returns/inbound routes — bounded changed zones
+
+Routes: `/app/ff/reception`, `/app/ff/sorting`, `/seller/documents`, `/seller/inbound/:requestId`.
+
+1. Existing queue row uses current document type `Возврат` and adds source marker/return id in existing extra text; no Ozon returns filter/tab.
+2. Existing inbound detail shows conditional identifiers and quarantine location scan.
+3. Existing line area shows inspection/disposition only for marketplace return. No default disposition and no stock post before restock decision.
+
+Clickable fixture path: open unmatched Ozon return → scan return barcode → keep in quarantine because mapping missing → confirm mapping fixture → inspect damaged unit → choose `Брак` → verify available stock unchanged. Second fixture chooses `Вернуть в остаток` and posts through existing inbound action.
+
+### 13.7 Required prototype states and evidence
+
+Fixtures must include two sellers, simultaneous WB+Ozon for Loviana, incomplete Fashion account, multi-line/partial-package/cancelled-after-pick FBS, one-by-one and carriage capability, FBO pending/partial cargo/acceptance discrepancy, matched/unmatched/damaged returns, 429, unknown status and stale last-success data.
+
+Product Browser Review uses a visible browser and records URL, role, clicks/scans and visible success/error/partial states for each changed route. It must explicitly re-run current WB FBS create/pick/pack/box/deliver and current WB MP shipment plan/pick/pack/ship. Verdict can only be `PRODUCT_BROWSER_APPROVED`, `PRODUCT_REWORK_REQUIRED` or `PRODUCT_BROWSER_BLOCKED`. The interrupted rejected prototype review is not evidence.
+
+## 14. Future CI reuse scope gate
+
+Create `scripts/ci/check_ozon_reuse_scope.py` in the implementation/prototype PR, reading `REUSE_MAP.json` and `git diff --name-status <merge-base>...HEAD`.
+
+The gate fails when:
+
+1. `policy != reuse_first`, JSON invalid, a visible row lacks any required field, or any `new_surface_required` is true without non-empty concrete `incompatibility_evidence` and explicit exception scope.
+2. An added/touched UI file under `frontend/src/screens`, `frontend/src/pages`, `frontend/src/prototypes`, routing or layout is not matched by at least one row's `allowed_files`.
+3. Diff adds a React route, navigation target, screen/page export, top-level tab, document kind or workspace not equal to a row's `existing_route`/`existing_surface`.
+4. Any added route/path/navigation text matches `/ozon`, `ozon/fbs`, `ozon/fbo`, `ozon/catalog`, `ozon/connection` or `ozon/returns`.
+5. `App.tsx`, `AuthedAppLayout.tsx` or the obsolete prototype are changed for anything except deletion of the rejected import/routes/nav/component.
+6. A changed existing screen falls outside the `minimal_delta` and `forbidden_scope` text for its mapped requirement; PR must declare requirement IDs in `### Ozon reuse scope` and the script compares them to files.
+7. A new frontend file exports a `*Screen`, `*Page`, route component, navigation config, workspace or top-level tabs. Helper/fixture components are also forbidden unless explicitly mapped and contain no route/screen registration.
+8. WB characterization snapshots/e2e listed by the architecture are absent when shared FBS or MP shipment UI/API is touched.
+
+CI outputs unmatched file, detected surface symbol/route and the nearest mapped requirement. This makes reuse-first a failing contract, not a reviewer preference.
+
+## 15. WB regression contract
+
+For `marketplace=wildberries` and current roles/data:
+
+- route and navigation topology is unchanged apart from removal of rejected Ozon nav;
+- current FBS tabs, worklist copy, selection, supply creation/add, workspace stages, pick, marking, print, boxes/trbx, supply QR, deliver/tracking and status grouping remain observable-identical;
+- current `/app/ff/mp-shipments` WB create, product plan, pick, PackagingTask, boxes and ship remain observable-identical;
+- WB credentials/sync card, catalog fields/mapping and stock sync do not call generic Ozon code paths;
+- full existing WB backend tests and FBS/MP Playwright suites are mandatory, plus characterization tests comparing old and adapter projections for the same fixtures.
+
+No shared switch ships until WB adapter projection equality is proven for current response fields and browser path.
+
+## 16. Vertical slices: вместе дают полный Ozon scope без parallel UI
+
+Each slice is one or more atomic feature cards through BA → Product Before Dev → Atomic Dev → Code Review → Product Browser Review. The slices are ordered to avoid changing all surfaces at once.
+
+| Slice | Existing surface | Complete user outcome | Negative/recovery proof |
+|---|---|---|---|
+| S0R Replacement reuse prototype | All bounded routes in §13 | Owner can click complete cross-process concept with zero Ozon routes | Rejected prototype absent; WB browser regression |
+| S1 Account/discovery/isolation | `/seller/settings` | Seller admin connects complete account, sees roles/expiry/capabilities; incomplete pair calls no network | identity mismatch, expired role, secret redaction, two sellers/two accounts |
+| S2 Import-only catalog/mapping | `/app/ff/products` | FF admin imports and confirms account-scoped mappings | ambiguous barcode, partial pagination, no product/stock write |
+| S3 Reliability spine | Inline states in same settings/documents | Jobs, checkpoints, inbox, ledger and assets recover truthfully | 429, timeout uncertain, duplicate/out-of-order push, readback-before-retry |
+| S4 FBS intake/projection/reserve | `/app/ff/fbs` queue | Multi-line postings appear once with line quantities/blockers and reserve | shortage, unmapped line, unknown status; WB projection equality |
+| S5 FBS pick/exemplars | Current FBS workspace composition/pick/packing | Operator scans by line/unit and fixes rejected required data | wrong location/product, duplicate scan, reject/correct, cancel-after-pick |
+| S6 FBS packages/labels/handover | Current workspace packing/boxes | Partial package, current label and one-by-one/carriage complete safely | incorrect dimensions, label pending/superseded, uncertain ship/arbitration |
+| S7 FBO route/supply async | Current MP shipment header/products | Planner creates supported Ozon supply from existing document | unsupported route, timeslot conflict, operation timeout/readback |
+| S8 FBO pick/pack/cargo/TGM/labels | Existing pick/packaging/boxes | Operator prepares physical boxes and binds required external cargo/TGM | rules drift, partial cargo failure, failed/superseded label |
+| S9 FBO handover/acceptance/reconciliation | Same MP document/footer | Planner sees distinct shipped/accepted/act states and resolves discrepancy | beta act absent, manual fallback, no false acceptance |
+| S10 Returns | Existing reception/sorting/seller documents | Matched/unmatched FBS/FBO returns enter quarantine and are inspected | duplicate/unmatched/damaged, no inventory before restock post |
+| S11 Integration/hardening | Same five zones | Full Ozon FBS/FBO/catalog/settings/returns/reconciliation with account isolation | WB full regression, load/backfill, kill switches, final visible-browser integration |
+
+S1–S11 sum to connection, catalog, FBS, FBO, packages/labels/documents, cargo/TGM, statuses, returns, reconciliation and account isolation. Completion of an early slice is not «модуль Ozon готов». If an external capability is absent, the slice completes only with discovered absence, manual/read-only fallback and truthful UI; it must not claim unavailable automation.
+
+## 17. Conscious non-goals
+
+- No standalone Ozon route, dashboard, nav section, FBS/FBO/returns/catalog/connection screen, tab, document or workspace.
+- No redesign of existing WB FBS or MP shipment flow.
+- No migration/rename of WB tables in the first program.
+- No Ozon product create/update/import mutation and no stock publication.
+- No universal marketplace status enum pretending WB and Ozon lifecycles are identical.
+- No automatic split/package/cancel/retry without current `available_actions` and readback.
+- No auto-restock or automatic quality decision for returns.
+- No guessed label size, cargo/TGM rule, timeslot, limit or idempotency guarantee.
+- No Yandex/other marketplace work in these slices.
+- No production implementation or acceptance based on this architecture alone.
+
+## 18. Риски и меры
 
 | Риск | Мера |
 |---|---|
-| Потерять quantity/unit при помещении Ozon в WB order | Ozon-native line/unit/package tables и quantity constraints |
-| Смешать accounts одного seller | `marketplace_account_id` во всех external keys/checkpoints/operations/assets + tenant checks |
-| Дважды создать draft/ship/cargo после timeout | immutable ledger, uncertain state, mandatory readback before any new intent |
-| Пропустить postings из-за push/pagination | poll authority, versioned checkpoint, transactional page commit and bounded backfill |
-| Ложно показать delivered/accepted | separate WMS physical and external states; transition only on readback |
-| Неверно списать/вернуть inventory | WMS inventory/packaging remain authority; compensating movements and quarantine returns |
-| Напечатать старую/неверную этикетку | taxonomy, source/version/checksum/supersession/applied audit, print sample gate |
-| Сломать WB | additive tables/routes, no legacy data rewrite, mandatory full WB regressions |
-| API drift/beta changes | operation matrix, version namespace, unknown enum tolerance, feature-specific kill switch |
-| Утечка credentials/marking codes | encryption, masked API, sanitized payloads, header-only secrets, audit hashes |
-| Operator overload | one next action, bounded columns, blockers attached to work, Product real-browser gates |
+| Multi-line posting flattened into false orders | Additive line/unit/package aggregate; one posting → one work item view |
+| Operator flow duplicated | REUSE_MAP + CI surface detection + zero new route rule |
+| Ozon semantics erased by generic DTO | Provider-specific conditional payloads and raw external state under shared workflow |
+| WB regression from facade | Existing WB models untouched, characterization equality, full backend/e2e/browser regression |
+| Account data leak | account on every external key; tenant→seller→account authorization order |
+| Duplicate mutation after timeout | immutable intent fingerprint, uncertain state, mandatory readback |
+| Push/pagination loss | resource/version/filter checkpoint, transactional commit, polling authority |
+| Wrong/stale label | taxonomy, version/checksum/supersession, ready/current-only print |
+| WMS box confused with package/cargo/TGM | explicit link tables and separate names in one current packaging zone |
+| False delivered/accepted | local physical and external lifecycle stored separately |
+| Return increases stock too early | quarantine + inspection + existing posted movement only |
+| Large existing screens become fragile | bounded zones, atomic slices, no adjacent redesign, per-surface browser gate |
+| External API drift/beta removal | version-frozen fixtures, capability off, raw enum tolerance, per-action kill switch |
 
-## 22. Вопросы владельцу
+## 19. Вопросы владельцу
 
-**Вопросов владельцу: 0.** Владелец делегировал решения ведущему и попросил не прерывать его. Архитектурные решения приняты выше; неизвестные внешние факты не превращаются в блокирующие вопросы.
+**Вопросов владельцу: 0.** Поручение требует безопасных fallback без остановки. Неизвестные auth mode, account capabilities, label formats, cargo/TGM rules и return disposition policy закрыты в §§2, 5 и 6 через `pending_credentials`, discovery, version-frozen fixtures, readback, binary pass-through, quarantine и `needs_shift_lead`.
 
-Остаются только пять внешних фактов, каждый имеет безопасный fallback:
+## 20. Передача следующему этапу
 
-1. **Фактическая identity/roles/expiry и поддерживаемый auth mode account.** Fallback: account `pending_credentials`/`active_read_only`; без полной пары нет live call, OAuth добавляется отдельным adapter slice после подтверждения.
-2. **Доступные конкретному account FBS handover modes и FBO route capabilities.** Fallback: использовать discovery + entity `available_actions`; недоступное действие заменяется manual portal instruction и readback.
-3. **Текущие точные OpenAPI schemas и размеры/форматы package/cargo/TGM/act assets.** Fallback: capability off до version-frozen fixture; binary pass-through без resize и ручной print sample.
-4. **Реальные cargo/TGM rules, destinations и limits для ассортимента/маршрута.** Fallback: читать rules после создания supply; до ответа сохранять local plan, но не submit cargo.
-5. **Операционная политика владельца по спорным/повреждённым returns.** Fallback: quarantine и `needs_shift_lead`; автоматический restock запрещён.
+Следующее допустимое действие ведущего — отдельный replacement prototype call строго по §13 и `REUSE_MAP.json`. Prototype developer first removes rejected standalone route/nav code, then changes only bounded zones of existing routes under fixture mode. После visible-browser approval BA режет S1–S11 на atomic cards. Production development до нового `PRODUCT_APPROVED_FOR_DEV` запрещён.
 
-## 23. Definition of architecture done и передача следующему этапу
-
-Этот документ считается Stage-0 архитектурным артефактом, когда он сохранён отдельным commit/push и ведущий подтвердил, что он покрывает owner request и accepted research. Он не создаёт `BA_READY` или `PRODUCT_APPROVED_FOR_DEV` автоматически.
-
-Следующее разрешённое действие ведущего — поручить bounded clickable React prototype из section 17. После visible-browser принятия прототипа BA Agent режет S1–S11 на атомарные feature cards; Product Agent принимает каждую карточку до разработки. Production implementation не должна начинаться с «универсального рефакторинга WB» или с live Ozon mutation.
+Architecture acceptance requires: valid `REUSE_MAP.json`; zero new UI surfaces; machine gate design; complete slices; separate Git commit/SHA. Push/deploy/browser acceptance are separate states and are not implied by this document.

@@ -1,0 +1,74 @@
+{
+  "acceptance": [
+    "All standalone Ozon top-level UI routes, parallel FBS/FBO workspaces and redundant catalog/connection/returns modules are removed from the target design",
+    "Existing FBS, marketplace shipment/FBO, catalog, seller settings and return/inbound processes each have an exact minimal-delta mapping",
+    "REUSE_MAP.json is valid, covers every visible requirement, defaults every entry to reuse and contains no unproved new surface",
+    "The architecture proves how multi-line postings, packages, labels, cargo/TGM, async operations and returns fit existing operator work without erasing Ozon semantics",
+    "A concrete future CI scope gate fails on any new or touched UI surface not allowed by REUSE_MAP.json",
+    "The replacement prototype contract is bounded to changed zones of existing routes and preserves WB behavior",
+    "Vertical slices still sum to the complete requested Ozon functionality and ask the owner zero questions"
+  ],
+  "agent": "architect",
+  "call_id": "09-ozon-architecture-reuse-rework",
+  "context_note": "This is architecture correction round 1 after direct owner rejection. The obsolete prototype commit remains historical evidence only and is not accepted. Browser acceptance of it was interrupted and must not resume.",
+  "expected_artifacts": [
+    {
+      "path": "tasks/ozon-module-20260824/ARCH.md",
+      "purpose": "Reworked reuse-first architecture and replacement prototype contract"
+    },
+    {
+      "path": "tasks/ozon-module-20260824/REUSE_MAP.json",
+      "purpose": "Machine-readable mapping from every Ozon requirement to an existing surface and minimal delta"
+    }
+  ],
+  "inputs": [
+    {
+      "purpose": "Exact owner request",
+      "ref": "docs/runs/ozon-module-20260824/REQUEST.txt"
+    },
+    {
+      "purpose": "Accepted Ozon facts and WMS baseline",
+      "ref": "docs/runs/ozon-module-20260824/01-ozon-domain-research.md"
+    },
+    {
+      "purpose": "Rejected standalone architecture to rework in place",
+      "ref": "tasks/ozon-module-20260824/ARCH.md"
+    },
+    {
+      "purpose": "Binding owner rejection and hard reuse-first contract",
+      "ref": "tasks/ozon-module-20260824/S0_PRODUCT_VERDICT.md"
+    },
+    {
+      "purpose": "Existing FBS queue to reuse",
+      "ref": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx"
+    },
+    {
+      "purpose": "Existing FBS operator workspace to reuse",
+      "ref": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx"
+    },
+    {
+      "purpose": "Existing FBO and marketplace shipment document/process to reuse",
+      "ref": "frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx"
+    },
+    {
+      "purpose": "Existing fulfillment catalog to extend minimally",
+      "ref": "frontend/src/screens/v2/FfProductsCatalogScreen.tsx"
+    },
+    {
+      "purpose": "Existing seller marketplace settings to extend minimally",
+      "ref": "frontend/src/screens/v2/SellerSettingsScreen.tsx"
+    },
+    {
+      "purpose": "Existing return/inbound document flow to reuse",
+      "ref": "frontend/src/screens/v2/SellerInboundDraftScreen.tsx"
+    },
+    {
+      "purpose": "Existing domain, inventory, packaging, shipment and integration seams",
+      "ref": "backend/app"
+    }
+  ],
+  "task": "Rework tasks/ozon-module-20260824/ARCH.md in place using the binding owner verdict tasks/ozon-module-20260824/S0_PRODUCT_VERDICT.md. Reuse-first is the default and a hard contract, not a preference. The target architecture must make the existing FBS flow marketplace-agnostic and add Ozon through adapters/capabilities plus only Ozon-specific fields, statuses, labels, packages or actions inside the existing queue/workspace. Ozon FBO must extend the existing marketplace shipment document/process in FfSuppliesShipmentsPage and its existing tabs/zones rather than introduce a separate Ozon FBO section or workspace. Ozon catalog mapping and account connection must extend the existing product catalog and seller settings surfaces rather than create Ozon-only catalog/connection routes. Ozon returns must enter the existing return/inbound document and physical acceptance flow, using conditional Ozon identifiers/quarantine steps rather than a standalone returns module. Preserve current WB observable behavior as a regression contract. Decide the minimal data and backend evolution needed for multi-line Ozon postings without forcing a new operator flow: compare additive line/package children and adapter-backed projection into current FBS work items versus other options, then select the smallest safe design. Remove every standalone `/app/ff/ozon/*` screen/route, separate FBO workspace and redundant navigation concept from the accepted architecture and prototype contract. A new screen, tab, document, workspace, route or operator step is forbidden unless you write concrete incompatibility evidence, show why adapter/capability/additional field/filter/conditional state cannot solve it, and scope the exception; after this owner verdict the expected result is zero new top-level UI routes. Produce an exact replacement prototype contract that modifies only bounded zones of the existing FBS queue/workspace, marketplace shipments document, product catalog and seller settings, plus the existing returns/inbound flow. Also create tasks/ozon-module-20260824/REUSE_MAP.json as valid structured evidence with `policy: reuse_first`, a row for every user-visible Ozon requirement, and fields `requirement_id`, `existing_surface`, `existing_route`, `minimal_delta`, `ozon_necessity`, `reuse_mechanism`, `new_surface_required`, `incompatibility_evidence`, `allowed_files`, `forbidden_scope`. `new_surface_required` must be false unless the strict exception proof is complete. Define a future CI gate that compares touched routes/screens/files to this map and fails on an unmapped new surface. Update vertical slices so their sum still delivers full Ozon FBS, FBO, catalog/connection, labels/documents, statuses, returns, reconciliation and account isolation without parallel UI. Ask the owner zero questions; use safe fallbacks for external capability unknowns. Do not write production or prototype code.",
+  "timeout_seconds": 14400,
+  "why_now": "The owner rejected the standalone Ozon prototype because it duplicated existing WMS FBS and shipment/FBO processes, so the architecture must be rewritten around a hard, machine-checkable reuse-first contract before any replacement prototype or implementation.",
+  "working_directory": "."
+}

@@ -1,0 +1,789 @@
+{
+  "schema_version": 1,
+  "policy": "reuse_first",
+  "default_new_surface_required": false,
+  "target_design": {
+    "new_top_level_routes": 0,
+    "new_screens": 0,
+    "new_workspaces": 0,
+    "new_top_level_tabs": 0,
+    "obsolete_routes_for_removal": [
+      "/app/ff/ozon",
+      "/app/ff/ozon/fbs",
+      "/app/ff/ozon/fbs/:postingId",
+      "/app/ff/ozon/fbo",
+      "/app/ff/ozon/fbo/:supplyOrderId",
+      "/app/ff/ozon/catalog",
+      "/app/ff/ozon/connection",
+      "/app/ff/ozon/returns",
+      "/app/ff/ozon/returns/:id"
+    ]
+  },
+  "requirements": [
+    {
+      "requirement_id": "UI-REMOVE-001",
+      "existing_surface": "Existing FF navigation and route table",
+      "existing_route": [
+        "/app/ff/fbs",
+        "/app/ff/mp-shipments",
+        "/app/ff/products",
+        "/app/ff/reception",
+        "/app/ff/sorting"
+      ],
+      "minimal_delta": "Delete the rejected Ozon navigation item, OzonModulePrototype import, every /app/ff/ozon* route registration, and the obsolete standalone prototype component. Do not add a replacement route.",
+      "ozon_necessity": "Owner verdict requires Ozon work to enter existing WMS routes and explicitly rejects parallel navigation.",
+      "reuse_mechanism": "route_removal_and_existing_route_reuse",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/App.tsx",
+        "frontend/src/layouts/AuthedAppLayout.tsx",
+        "frontend/src/prototypes/ozon/OzonModulePrototype.tsx"
+      ],
+      "forbidden_scope": [
+        "Any added route or navigation target containing ozon",
+        "Any replacement Ozon dashboard, screen, page, tab, document kind or workspace",
+        "Any non-removal change in App.tsx or AuthedAppLayout.tsx for this requirement"
+      ]
+    },
+    {
+      "requirement_id": "ACC-001",
+      "existing_surface": "SellerSettingsScreen marketplace credentials card area",
+      "existing_route": [
+        "/seller/settings"
+      ],
+      "minimal_delta": "Add an Ozon account card beside the unchanged WB card, with direct Client-Id plus Api-Key draft/save/check states and masked saved-secret indicators.",
+      "ozon_necessity": "Ozon direct Seller API identity requires Client-Id and Api-Key; the current single marking mp_api_key is not an account identity.",
+      "reuse_mechanism": "conditional_card_in_existing_settings",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/v2/SellerSettingsScreen.tsx",
+        "backend/app/api/marketplace_integrations.py",
+        "backend/app/services/marketplace_account_service.py",
+        "backend/app/models/marketplace_account.py"
+      ],
+      "forbidden_scope": [
+        "Ozon connection route or screen",
+        "Credential management outside /seller/settings",
+        "Changing existing WB card copy or behavior",
+        "Opening external credential-management pages"
+      ]
+    },
+    {
+      "requirement_id": "ACC-002",
+      "existing_surface": "Ozon account card in SellerSettingsScreen",
+      "existing_route": [
+        "/seller/settings"
+      ],
+      "minimal_delta": "Show external identity, roles, expiry, discovered capabilities, last successful discovery, pending/partial/error state and one safe check/sync action in the existing card.",
+      "ozon_necessity": "Operators and admins must know why a concrete Ozon action is unavailable; roles and expiry are account facts, not generic WMS settings.",
+      "reuse_mechanism": "inline_account_health_state",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/v2/SellerSettingsScreen.tsx",
+        "backend/app/api/marketplace_integrations.py",
+        "backend/app/services/marketplace_account_service.py",
+        "backend/app/services/ozon_adapter.py",
+        "backend/app/tasks/background_jobs.py"
+      ],
+      "forbidden_scope": [
+        "Integration dashboard",
+        "Technical payloads or secret values in UI",
+        "External call when the credential pair is incomplete"
+      ]
+    },
+    {
+      "requirement_id": "ACC-003",
+      "existing_surface": "SellerSettingsScreen account sync action",
+      "existing_route": [
+        "/seller/settings"
+      ],
+      "minimal_delta": "Run import-only catalog and reference sync from the existing account card; preserve last confirmed counts during pending, 429 or partial pagination.",
+      "ozon_necessity": "Ozon resources use different cursor forms and rate limits, so sync progress and partial state must be account and resource scoped.",
+      "reuse_mechanism": "existing_background_job_pattern_with_resource_checkpoints",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/v2/SellerSettingsScreen.tsx",
+        "backend/app/models/background_job.py",
+        "backend/app/models/marketplace_sync_checkpoint.py",
+        "backend/app/services/background_job_service.py",
+        "backend/app/services/marketplace_sync_service.py",
+        "backend/app/tasks/background_jobs.py"
+      ],
+      "forbidden_scope": [
+        "New jobs screen",
+        "One generic page counter for all Ozon resources",
+        "Product publication or stock write"
+      ]
+    },
+    {
+      "requirement_id": "ACC-004",
+      "existing_surface": "SellerSettingsScreen Ozon account card binding block",
+      "existing_route": [
+        "/seller/settings"
+      ],
+      "minimal_delta": "Show a compact account-scoped binding list inside the existing Ozon card for FBS seller warehouse to WMS warehouse and return point to quarantine location. Route-specific delivery method remains in FBS preflight and FBO destination remains in the shipment document.",
+      "ozon_necessity": "FBS picking needs a proven physical source warehouse and return intake needs a safe quarantine destination; Ozon warehouse, delivery method, destination and return point are not one interchangeable node.",
+      "reuse_mechanism": "inline_node_binding_in_existing_account_settings",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/v2/SellerSettingsScreen.tsx",
+        "backend/app/api/marketplace_integrations.py",
+        "backend/app/models/marketplace_node.py",
+        "backend/app/services/marketplace_node_binding_service.py",
+        "backend/app/services/ozon_adapter.py"
+      ],
+      "forbidden_scope": [
+        "Ozon topology route, page or tab",
+        "Reusing the WB stock-sync screen for Ozon",
+        "One ambiguous marketplace warehouse field for FBS, FBO and returns",
+        "Enabling stock publication as part of warehouse binding"
+      ]
+    },
+    {
+      "requirement_id": "SEC-001",
+      "existing_surface": "Existing tenant, seller and effective-seller authorization on all reused routes",
+      "existing_route": [
+        "/seller/settings",
+        "/app/ff/products",
+        "/app/ff/fbs",
+        "/app/ff/mp-shipments",
+        "/app/ff/reception"
+      ],
+      "minimal_delta": "Scope every Ozon external identifier, mapping, checkpoint, operation, asset and UI projection by marketplace_account_id after tenant and seller authorization.",
+      "ozon_necessity": "One seller may have WB and multiple Ozon accounts; identical external IDs across accounts must never collide or leak.",
+      "reuse_mechanism": "existing_auth_checks_plus_account_scope",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "backend/app/models/marketplace_account.py",
+        "backend/app/services/marketplace_account_service.py",
+        "backend/app/services/marketplace_authorization_service.py",
+        "backend/app/api/marketplace_integrations.py",
+        "backend/app/api/fbs_orders.py",
+        "backend/app/api/fbs_supplies.py",
+        "backend/app/api/marketplace_unload_requests.py",
+        "backend/app/api/inbound_intake.py"
+      ],
+      "forbidden_scope": [
+        "Global Ozon account or credential",
+        "Client-selected account without server-side seller ownership check",
+        "Cross-account mapping, checkpoint, operation or asset lookup"
+      ]
+    },
+    {
+      "requirement_id": "CAT-001",
+      "existing_surface": "FfProductsCatalogScreen product list and current action zone",
+      "existing_route": [
+        "/app/ff/products"
+      ],
+      "minimal_delta": "Expose marketplace mapping summaries in the existing product row action zone; do not add a catalog tab or column.",
+      "ozon_necessity": "Ozon offer_id, product_id and sku are distinct account-scoped identifiers and cannot be stored in Product.wb_* fields.",
+      "reuse_mechanism": "existing_catalog_row_action_extension",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/v2/FfProductsCatalogScreen.tsx",
+        "backend/app/api/products.py",
+        "backend/app/models/marketplace_product_mapping.py",
+        "backend/app/services/marketplace_product_mapping_service.py"
+      ],
+      "forbidden_scope": [
+        "Ozon catalog route, page or tab",
+        "New permanent table column",
+        "Writing Ozon identifiers into Product.wb_* fields"
+      ]
+    },
+    {
+      "requirement_id": "CAT-002",
+      "existing_surface": "FfProductsCatalogScreen existing row dialog/action pattern",
+      "existing_route": [
+        "/app/ff/products"
+      ],
+      "minimal_delta": "Open a bounded mapping dialog from the current action cell, showing account, offer_id/product_id/sku/barcodes, candidate reason, conflict state and explicit confirm/unlink.",
+      "ozon_necessity": "Barcode or seller SKU can be ambiguous across accounts; a human must confirm ownership before reserve and shipment work.",
+      "reuse_mechanism": "existing_dialog_pattern_for_account_scoped_mapping",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/v2/FfProductsCatalogScreen.tsx",
+        "backend/app/api/products.py",
+        "backend/app/services/marketplace_product_mapping_service.py"
+      ],
+      "forbidden_scope": [
+        "Automatic activation of ambiguous mapping",
+        "Bulk Ozon catalog redesign",
+        "Product create/update in Ozon"
+      ]
+    },
+    {
+      "requirement_id": "FBS-001",
+      "existing_surface": "FfFbsOrdersScreen existing worklist, filters and refresh zone",
+      "existing_route": [
+        "/app/ff/fbs"
+      ],
+      "minimal_delta": "Project Ozon postings into the current worklist, add one marketplace filter/compact marker, and keep current status tabs. Manual refresh becomes marketplace-contextual without changing WB behavior in the WB context.",
+      "ozon_necessity": "Ozon postings arrive through push plus polling and require marketplace-aware labels and actions in the same operator queue.",
+      "reuse_mechanism": "adapter_projection_into_existing_fbs_worklist",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+        "frontend/src/screens/v2/fbsApi.ts",
+        "backend/app/api/fbs_orders.py",
+        "backend/app/services/fbs_worklist_service.py",
+        "backend/app/services/ozon_fbs_projection_service.py",
+        "backend/app/services/ozon_fbs_sync_service.py",
+        "backend/app/models/marketplace_event_inbox.py",
+        "backend/app/tasks/background_jobs.py"
+      ],
+      "forbidden_scope": [
+        "Ozon FBS route, page, tab or queue",
+        "New top-level table column",
+        "Mixed-marketplace selection",
+        "Removal or rename of current FBS tabs"
+      ]
+    },
+    {
+      "requirement_id": "FBS-002",
+      "existing_surface": "FfFbsOrdersScreen current product and order cells",
+      "existing_route": [
+        "/app/ff/fbs"
+      ],
+      "minimal_delta": "Render one row per posting with line and unit totals, first-line previews and inline expandable full composition; keep selection and row opening in the same queue.",
+      "ozon_necessity": "One Ozon posting can contain multiple products and quantities; flattening creates false orders and duplicates posting state.",
+      "reuse_mechanism": "multi_line_work_item_view_in_existing_row",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+        "frontend/src/screens/v2/fbsApi.ts",
+        "backend/app/models/ozon_fbs.py",
+        "backend/app/services/ozon_fbs_projection_service.py"
+      ],
+      "forbidden_scope": [
+        "Posting detail route or screen",
+        "One pseudo-order per Ozon line or unit",
+        "Loss of line quantities or posting identity"
+      ]
+    },
+    {
+      "requirement_id": "FBS-003",
+      "existing_surface": "FfFbsOrdersScreen selection bar and FfFbsSupplyWorkspace Composition stage",
+      "existing_route": [
+        "/app/ff/fbs"
+      ],
+      "minimal_delta": "Use existing homogeneous selection to create a local Ozon work batch, then show posting lines and quantities in the current Composition stage. WB selection and supply creation remain unchanged.",
+      "ozon_necessity": "Ozon one-by-one handover does not require an external supply, but the existing modal needs a stable local work context for scanning and recovery.",
+      "reuse_mechanism": "local_batch_adapter_to_existing_workspace",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+        "frontend/src/screens/v2/FbsSupplyCreateDialog.tsx",
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "frontend/src/screens/v2/fbsApi.ts",
+        "backend/app/api/fbs_supplies.py",
+        "backend/app/models/ozon_fbs.py",
+        "backend/app/services/fbs_workspace_service.py",
+        "backend/app/services/ozon_fbs_workspace_service.py"
+      ],
+      "forbidden_scope": [
+        "Ozon supply document for one-by-one work",
+        "Second FBS workspace",
+        "Calling a local batch an Ozon carriage or supply"
+      ]
+    },
+    {
+      "requirement_id": "FBS-004",
+      "existing_surface": "FfFbsSupplyWorkspace existing Picking stage",
+      "existing_route": [
+        "/app/ff/fbs"
+      ],
+      "minimal_delta": "Reuse scan-location then scan-product interaction and update picked quantity on the matching Ozon line; show per-line remaining quantity and reject excess, wrong seller/account or wrong product before inventory mutation.",
+      "ozon_necessity": "A posting line can require quantity greater than one, so pick state must be line-quantity based rather than one order flag.",
+      "reuse_mechanism": "existing_scan_flow_with_line_quantity_adapter",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "frontend/src/screens/v2/fbsApi.ts",
+        "backend/app/api/fbs_supplies.py",
+        "backend/app/services/fbs_picking_service.py",
+        "backend/app/services/ozon_fbs_workspace_service.py",
+        "backend/app/services/inventory_service.py"
+      ],
+      "forbidden_scope": [
+        "Ozon-specific scanner screen",
+        "Pick without a verified WMS location",
+        "Boolean picked state that loses quantity"
+      ]
+    },
+    {
+      "requirement_id": "FBS-005",
+      "existing_surface": "FfFbsSupplyWorkspace existing Packaging and marking stage",
+      "existing_route": [
+        "/app/ff/fbs"
+      ],
+      "minimal_delta": "Show only required KIZ, IMEI, GTIN, weight or country fields per unit in current rows, with separate local scan, sending, external validation, rejected and correction states.",
+      "ozon_necessity": "Ozon exemplar requirements vary per posting/product and local scan success is not external validation success.",
+      "reuse_mechanism": "conditional_unit_requirements_in_existing_marking_zone",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "frontend/src/screens/v2/fbsApi.ts",
+        "backend/app/api/fbs_supplies.py",
+        "backend/app/models/ozon_fbs.py",
+        "backend/app/services/ozon_fbs_exemplar_service.py",
+        "backend/app/services/ozon_adapter.py"
+      ],
+      "forbidden_scope": [
+        "New marking tab or screen",
+        "Hardcoded universal requirement list",
+        "Treating local scan as Ozon acceptance"
+      ]
+    },
+    {
+      "requirement_id": "FBS-006",
+      "existing_surface": "FfFbsSupplyWorkspace existing Packaging stage and PackagingTask integration",
+      "existing_route": [
+        "/app/ff/fbs"
+      ],
+      "minimal_delta": "Add package composition by posting line quantity inside the current packaging zone and bridge existing PackagingTask events to Ozon packages; partial package leaves remaining quantities visible.",
+      "ozon_necessity": "Ozon ship/package operations can split a posting, while current one-order-one-box membership cannot represent partial line quantities.",
+      "reuse_mechanism": "additive_package_children_bridged_to_existing_packaging_task",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "frontend/src/screens/v2/fbsApi.ts",
+        "backend/app/models/ozon_fbs.py",
+        "backend/app/models/packaging_task.py",
+        "backend/app/services/fbs_packaging_integration_service.py",
+        "backend/app/services/ozon_fbs_package_service.py"
+      ],
+      "forbidden_scope": [
+        "Package screen or tab",
+        "Replacing PackagingTask as inventory authority",
+        "Marking the entire posting packed after a partial package"
+      ]
+    },
+    {
+      "requirement_id": "FBS-007",
+      "existing_surface": "FfFbsSupplyWorkspace existing print zone in Packaging and Boxes stages",
+      "existing_route": [
+        "/app/ff/fbs"
+      ],
+      "minimal_delta": "Render Ozon package label and posting barcode through the current preview/print/applied interaction with pending, ready, failed and superseded states.",
+      "ozon_necessity": "Ozon label generation is asynchronous and a posting barcode is not a WB order sticker, supply QR or cargo-place QR.",
+      "reuse_mechanism": "existing_print_interaction_with_extended_asset_taxonomy",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "frontend/src/screens/v2/fbsApi.ts",
+        "frontend/src/screens/v2/FbsPrintPreviewDialog.tsx",
+        "backend/app/api/fbs_print_assets.py",
+        "backend/app/models/marketplace_asset.py",
+        "backend/app/services/fbs_print_asset_storage.py",
+        "backend/app/services/ozon_fbs_label_service.py"
+      ],
+      "forbidden_scope": [
+        "Ozon print center",
+        "Treating all barcodes and labels as sticker_code",
+        "Printing a pending, failed or superseded asset as current"
+      ]
+    },
+    {
+      "requirement_id": "FBS-008",
+      "existing_surface": "FfFbsSupplyWorkspace existing Boxes stage and bottom handover action",
+      "existing_route": [
+        "/app/ff/fbs"
+      ],
+      "minimal_delta": "Replace WB-only trbx/supply controls conditionally for Ozon with WMS box-to-package relation and capability-derived one-by-one, carriage or manual handover in the same action area.",
+      "ozon_necessity": "Ozon one-by-one posting handover is common and carriage is optional; forcing every posting into a supply would add a false operator step.",
+      "reuse_mechanism": "capability_dispatch_in_existing_handover_zone",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "frontend/src/screens/v2/fbsApi.ts",
+        "backend/app/api/fbs_supplies.py",
+        "backend/app/services/ozon_fbs_handover_service.py",
+        "backend/app/services/marketplace_operation_service.py",
+        "backend/app/models/marketplace_operation.py"
+      ],
+      "forbidden_scope": [
+        "Ozon handover screen or stepper",
+        "Mandatory carriage creation",
+        "Blind mutation retry",
+        "Setting delivered from a local button"
+      ]
+    },
+    {
+      "requirement_id": "FBS-009",
+      "existing_surface": "FfFbsOrdersScreen current status tabs and FfFbsSupplyWorkspace current status/progress areas",
+      "existing_route": [
+        "/app/ff/fbs"
+      ],
+      "minimal_delta": "Project Ozon status, substatus, available_actions, cancellation and arbitration into current status groups while retaining raw values and separate local handed-over/reversal state.",
+      "ozon_necessity": "Ozon status alone does not define allowed action, and cancellation can arrive before or after physical picking.",
+      "reuse_mechanism": "normalized_status_projection_with_raw_provider_state",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "backend/app/services/ozon_fbs_projection_service.py",
+        "backend/app/services/ozon_fbs_cancellation_service.py",
+        "backend/app/services/fbs_cancellation_service.py"
+      ],
+      "forbidden_scope": [
+        "Ozon-only status tabs",
+        "Dropping unknown external status",
+        "Releasing picked inventory without a compensating movement"
+      ]
+    },
+    {
+      "requirement_id": "FBO-001",
+      "existing_surface": "FfSuppliesShipmentsPage existing create block and marketplace shipment document header",
+      "existing_route": [
+        "/app/ff/mp-shipments"
+      ],
+      "minimal_delta": "Add marketplace selection to the current create block and Ozon account, supported route, destination and timeslot fields to the current document header; use inline async operation state.",
+      "ozon_necessity": "Ozon direct, crossdock and multi-cluster routes and supply creation are account/capability dependent and asynchronous.",
+      "reuse_mechanism": "extend_existing_marketplace_unload_document_header",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx",
+        "backend/app/api/marketplace_unload_requests.py",
+        "backend/app/models/marketplace_unload.py",
+        "backend/app/models/ozon_fbo.py",
+        "backend/app/services/marketplace_unload_service.py",
+        "backend/app/services/ozon_fbo_supply_service.py",
+        "backend/app/services/marketplace_operation_service.py"
+      ],
+      "forbidden_scope": [
+        "Ozon FBO route, page, wizard, document kind or workspace",
+        "New top-level tab",
+        "Changing WB create flow when WB is selected",
+        "Treating HTTP success as supply creation success"
+      ]
+    },
+    {
+      "requirement_id": "FBO-002",
+      "existing_surface": "FfSuppliesShipmentsPage existing Products, Picking and Packaging tabs",
+      "existing_route": [
+        "/app/ff/mp-shipments"
+      ],
+      "minimal_delta": "Use existing document lines, reservation, scan picking, PackagingTask and WMS boxes for Ozon FBO without adding or renaming tabs.",
+      "ozon_necessity": "The physical warehouse work is already modeled; only external route and container semantics differ.",
+      "reuse_mechanism": "reuse_marketplace_unload_inventory_and_packaging_flow",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx",
+        "backend/app/api/marketplace_unload_requests.py",
+        "backend/app/models/marketplace_unload.py",
+        "backend/app/models/packaging_task.py",
+        "backend/app/services/marketplace_unload_pick_service.py",
+        "backend/app/services/marketplace_unload_collect_service.py",
+        "backend/app/services/packaging_task_service.py"
+      ],
+      "forbidden_scope": [
+        "Ozon-specific products, picking or packaging tab",
+        "Second reservation or inventory implementation",
+        "Replacing WMS boxes with Ozon cargo"
+      ]
+    },
+    {
+      "requirement_id": "FBO-003",
+      "existing_surface": "FfSuppliesShipmentsPage existing Packaging tab after the current WMS boxes block",
+      "existing_route": [
+        "/app/ff/mp-shipments"
+      ],
+      "minimal_delta": "Add a conditional inline Ozon cargo and TGM hierarchy linked to existing closed WMS boxes, with rules version, per-node operation state and quantities.",
+      "ozon_necessity": "Ozon distinguishes cargo and transport cargo from the physical WMS box; required hierarchy cannot be represented by MarketplaceUnloadBox alone.",
+      "reuse_mechanism": "conditional_external_container_section_in_existing_packaging_zone",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx",
+        "backend/app/api/marketplace_unload_requests.py",
+        "backend/app/models/ozon_fbo.py",
+        "backend/app/services/ozon_fbo_cargo_service.py",
+        "backend/app/services/marketplace_unload_box_service.py",
+        "backend/app/services/marketplace_operation_service.py"
+      ],
+      "forbidden_scope": [
+        "Cargo or TGM screen, tab or workspace",
+        "Calling a WMS box a cargo or TGM",
+        "Submitting cargo before current rules readback"
+      ]
+    },
+    {
+      "requirement_id": "FBO-004",
+      "existing_surface": "FfSuppliesShipmentsPage existing Packaging print controls and document footer",
+      "existing_route": [
+        "/app/ff/mp-shipments"
+      ],
+      "minimal_delta": "Show cargo/TGM label tasks and document assets next to their existing inline container rows, then run existing ship action through Ozon preflight and operation readback.",
+      "ozon_necessity": "Ozon cargo/TGM labels and handover documents are distinct versioned assets and may fail asynchronously per container.",
+      "reuse_mechanism": "existing_print_and_ship_interactions_with_ozon_assets",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx",
+        "backend/app/api/marketplace_unload_requests.py",
+        "backend/app/models/marketplace_asset.py",
+        "backend/app/services/ozon_fbo_label_service.py",
+        "backend/app/services/ozon_fbo_handover_service.py",
+        "backend/app/services/marketplace_operation_service.py"
+      ],
+      "forbidden_scope": [
+        "FBO documents center",
+        "Printing failed or superseded asset as current",
+        "Marking local shipped as Ozon accepted"
+      ]
+    },
+    {
+      "requirement_id": "FBO-005",
+      "existing_surface": "FfSuppliesShipmentsPage same marketplace shipment document after local ship",
+      "existing_route": [
+        "/app/ff/mp-shipments"
+      ],
+      "minimal_delta": "Render planned, accepted and rejected quantities, reasons, acceptance act asset and capability-dependent accept/manual-readback action inline in the shipped document.",
+      "ozon_necessity": "Local handover, Ozon receipt, acceptance result and act agreement are separate facts that must reconcile per product line.",
+      "reuse_mechanism": "inline_acceptance_reconciliation_in_existing_document",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx",
+        "backend/app/api/marketplace_unload_requests.py",
+        "backend/app/models/ozon_fbo.py",
+        "backend/app/services/ozon_fbo_acceptance_service.py",
+        "backend/app/services/marketplace_operation_service.py"
+      ],
+      "forbidden_scope": [
+        "Acceptance or reconciliation route, tab, page or document",
+        "Automatic act acceptance",
+        "Hiding rejected line quantities"
+      ]
+    },
+    {
+      "requirement_id": "RET-001",
+      "existing_surface": "Existing inbound return documents in FfInboundQueuePage and seller documents",
+      "existing_route": [
+        "/app/ff/reception",
+        "/seller/documents",
+        "/seller/inbound/:requestId"
+      ],
+      "minimal_delta": "Import /v1/returns/list into account-scoped return records and idempotently create one existing InboundIntakeRequest with operation_type=return; show Ozon source and return identifier in current row extra text.",
+      "ozon_necessity": "Ozon FBS and FBO returns share one external feed but still require the existing physical inbound document.",
+      "reuse_mechanism": "external_return_to_existing_inbound_return_document",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/ff/FfInboundQueuePage.tsx",
+        "frontend/src/screens/v2/SellerInboundDraftScreen.tsx",
+        "backend/app/api/inbound_intake.py",
+        "backend/app/models/inbound_intake.py",
+        "backend/app/models/marketplace_return.py",
+        "backend/app/services/inbound_intake_service.py",
+        "backend/app/services/ozon_return_sync_service.py",
+        "backend/app/tasks/background_jobs.py"
+      ],
+      "forbidden_scope": [
+        "Ozon returns route, queue, page, tab or workspace",
+        "Separate FBS and FBO return modules",
+        "Duplicate inbound document for a duplicate external event"
+      ]
+    },
+    {
+      "requirement_id": "RET-002",
+      "existing_surface": "FfInboundRequestView existing return intake, receiving, verification, posting and distribution flow",
+      "existing_route": [
+        "/app/ff/reception",
+        "/app/ff/sorting"
+      ],
+      "minimal_delta": "Add conditional Ozon return/posting identifiers, quarantine location requirement and per-line inspection/disposition block inside the existing inbound detail. Post to available stock only through the current inbound inventory movement after restock disposition.",
+      "ozon_necessity": "External return status does not prove physical identity or saleable condition; damaged or unmatched units must remain unavailable.",
+      "reuse_mechanism": "conditional_quarantine_and_inspection_in_existing_inbound_flow",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/ff/FfInboundRequestView.tsx",
+        "backend/app/api/inbound_intake.py",
+        "backend/app/models/marketplace_return.py",
+        "backend/app/services/inbound_intake_service.py",
+        "backend/app/services/marketplace_return_inspection_service.py",
+        "backend/app/services/inventory_service.py"
+      ],
+      "forbidden_scope": [
+        "Return inspection screen, route, tab or standalone document",
+        "Default disposition selection",
+        "Automatic available-stock increase from Ozon status or received scan"
+      ]
+    },
+    {
+      "requirement_id": "RET-003",
+      "existing_surface": "SellerInboundDraftScreen existing return document view",
+      "existing_route": [
+        "/seller/inbound/:requestId"
+      ],
+      "minimal_delta": "Show read-only Ozon source, masked identifiers and quarantine/inspection outcome in the current seller return document after submission; preserve existing edit locks.",
+      "ozon_necessity": "Seller needs traceability for the returned unit but must not bypass FF physical inspection or change marketplace state.",
+      "reuse_mechanism": "read_only_marketplace_metadata_in_existing_seller_document",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/v2/SellerInboundDraftScreen.tsx",
+        "backend/app/api/inbound_intake.py"
+      ],
+      "forbidden_scope": [
+        "Seller Ozon returns screen",
+        "Seller-side inventory posting or disposition override",
+        "Showing full sensitive exemplar codes"
+      ]
+    },
+    {
+      "requirement_id": "OPS-001",
+      "existing_surface": "Existing action area of the FBS workspace, marketplace shipment document, seller settings card or inbound document that started the operation",
+      "existing_route": [
+        "/app/ff/fbs",
+        "/app/ff/mp-shipments",
+        "/seller/settings",
+        "/app/ff/reception"
+      ],
+      "minimal_delta": "Display pending, uncertain, failed, confirmed or manual-required state inline beside the initiating action and offer readback before any retry.",
+      "ozon_necessity": "Ozon mutations can complete asynchronously and a network timeout does not establish success or failure.",
+      "reuse_mechanism": "inline_operation_ledger_state",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx",
+        "frontend/src/screens/v2/SellerSettingsScreen.tsx",
+        "frontend/src/screens/ff/FfInboundRequestView.tsx",
+        "backend/app/models/marketplace_operation.py",
+        "backend/app/services/marketplace_operation_service.py"
+      ],
+      "forbidden_scope": [
+        "Operations dashboard or recovery route",
+        "Blind retry button",
+        "Clearing last confirmed business data while an operation is pending"
+      ]
+    },
+    {
+      "requirement_id": "OPS-002",
+      "existing_surface": "Existing print preview and applied-confirmation controls in FBS and marketplace shipment documents",
+      "existing_route": [
+        "/app/ff/fbs",
+        "/app/ff/mp-shipments"
+      ],
+      "minimal_delta": "Extend asset taxonomy and status/version/checksum/supersession metadata while reusing current preview, print and applied interactions.",
+      "ozon_necessity": "Posting package, cargo, TGM and act assets are different objects and asynchronous versions can become stale.",
+      "reuse_mechanism": "existing_print_controls_with_versioned_marketplace_assets",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/v2/FbsPrintPreviewDialog.tsx",
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx",
+        "backend/app/models/marketplace_asset.py",
+        "backend/app/services/fbs_print_asset_storage.py",
+        "backend/app/api/fbs_print_assets.py"
+      ],
+      "forbidden_scope": [
+        "Ozon print page or center",
+        "One generic sticker_code for all asset kinds",
+        "Resizing an unverified external format"
+      ]
+    },
+    {
+      "requirement_id": "NO-STOCK-WRITE-001",
+      "existing_surface": "SellerSettingsScreen Ozon account card and existing catalog read-only mapping summary",
+      "existing_route": [
+        "/seller/settings",
+        "/app/ff/products"
+      ],
+      "minimal_delta": "Expose read-only stock/import status where useful and omit every Ozon stock publication action, capability, job and operation type.",
+      "ozon_necessity": "Research scope and owner safety boundary allow reading Ozon stock but do not authorize /v2/products/stocks writes.",
+      "reuse_mechanism": "deny_by_construction_read_only_catalog_scope",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/v2/SellerSettingsScreen.tsx",
+        "frontend/src/screens/v2/FfProductsCatalogScreen.tsx",
+        "backend/app/services/ozon_adapter.py",
+        "backend/app/services/marketplace_sync_service.py",
+        "backend/app/tasks/background_jobs.py"
+      ],
+      "forbidden_scope": [
+        "Ozon stock sync toggle or button, even disabled",
+        "Ozon stock write client method, route, job or operation action",
+        "Reusing WB fbs_stock_publish_service for Ozon"
+      ]
+    },
+    {
+      "requirement_id": "WB-REGRESSION-001",
+      "existing_surface": "Current Wildberries FBS, marketplace shipment, catalog and settings observable behavior",
+      "existing_route": [
+        "/app/ff/fbs",
+        "/app/ff/mp-shipments",
+        "/app/ff/products",
+        "/seller/settings"
+      ],
+      "minimal_delta": "Keep WB data models, service behavior, copy, current status tabs, selection/supply flow, workspace stages, print/trbx/supply QR, marketplace shipment flow and settings card unchanged when marketplace is Wildberries.",
+      "ozon_necessity": "Owner verdict makes Wildberries a regression contract of the shared operator flow, not a migration target.",
+      "reuse_mechanism": "wildberries_adapter_characterization_and_unchanged_default",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx",
+        "frontend/src/screens/v2/FfProductsCatalogScreen.tsx",
+        "frontend/src/screens/v2/SellerSettingsScreen.tsx",
+        "frontend/src/screens/v2/fbsApi.ts",
+        "backend/app/api/fbs_orders.py",
+        "backend/app/api/fbs_supplies.py",
+        "backend/app/services/fbs_worklist_service.py",
+        "backend/app/services/fbs_workspace_service.py",
+        "backend/app/services/marketplace_unload_service.py"
+      ],
+      "forbidden_scope": [
+        "WB table migration or field rename in the Ozon program",
+        "WB copy, status grouping, action or route change without a separate owner-approved requirement",
+        "Shipping shared UI/API without WB characterization, tests and visible browser regression"
+      ]
+    },
+    {
+      "requirement_id": "CI-SCOPE-001",
+      "existing_surface": "Repository CI and this REUSE_MAP.json",
+      "existing_route": [],
+      "minimal_delta": "Add a CI script that validates this map, maps every changed UI file to declared requirement IDs, rejects unlisted screen/page/prototype/layout/router changes, detects new routes/nav/screens/top-level tabs/document kinds/workspaces, and permits App/layout/prototype changes only for rejected Ozon surface removal.",
+      "ozon_necessity": "The rejected prototype proved that a prose reuse preference does not prevent parallel UI; the boundary must fail mechanically.",
+      "reuse_mechanism": "machine_checked_diff_to_reuse_map",
+      "new_surface_required": false,
+      "incompatibility_evidence": "",
+      "allowed_files": [
+        "tasks/ozon-module-20260824/REUSE_MAP.json",
+        "scripts/ci/check_ozon_reuse_scope.py",
+        ".github/workflows/ci.yml"
+      ],
+      "forbidden_scope": [
+        "Advisory-only warning",
+        "Allowing an unmapped new UI file or route",
+        "Allowing /app/ff/ozon*",
+        "Treating a test pass as Product Browser approval"
+      ]
+    }
+  ]
+}
