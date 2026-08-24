@@ -1,8 +1,10 @@
 # Ozon FBS/FBO: official-process delta matrix against current WMS
 
-**Call:** `22-ozon-official-process-delta-proof-path-resolved`  
-**Research/access date:** 24 August 2026  
-**Observed WMS baseline:** application SHA `af0779e1c425eede8d811da666822ff6ed178331`, observed 24 August 2026  
+**Call:** `22-ozon-official-process-delta-proof-path-resolved`
+
+**Research/access date:** 24 August 2026
+
+**Observed WMS baseline:** application SHA `af0779e1c425eede8d811da666822ff6ed178331`, observed 24 August 2026
 **Boundary:** research only. No application, contract, test or architecture edit; no credentials; no Seller API request; no product/stock publication.
 
 ## Decision rule
