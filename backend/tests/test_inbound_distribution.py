@@ -188,7 +188,7 @@ async def test_inbound_distribution_lines_validate_limits_and_lock(
 async def test_whole_box_putaway_moves_every_product_to_one_location(
     async_client: AsyncClient,
 ) -> None:
-    """Аварийная регрессия: один короб с разными SKU размещается целиком."""
+    """Открытый короб с разными SKU размещается целиком без лишнего блокера."""
     suffix = str(int(time.time() * 1000))
     reg = await async_client.post(
         "/auth/register",
@@ -267,10 +267,9 @@ async def test_whole_box_putaway_moves_every_product_to_one_location(
             json={"quantity": qty},
         )
         assert filled.status_code == 200, filled.text
-    closed = await async_client.post(f"{base}/{rid}/boxes/{box_id}/close", headers=ah)
-    assert closed.status_code == 200, closed.text
     verified = await async_client.post(f"{base}/{rid}/verify", headers=ah)
     assert verified.status_code == 200, verified.text
+    assert verified.json()["boxes"][0]["intake_closed_at"] is None
 
     placed = await async_client.post(
         f"{base}/{rid}/boxes/{box_id}/putaway",

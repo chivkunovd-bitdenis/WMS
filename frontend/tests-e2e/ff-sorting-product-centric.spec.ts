@@ -4,30 +4,13 @@ import { waitForGetOk, waitForPostOk } from './api-waits';
 import { openFulfillmentRegistration } from './auth-flow';
 import { beginInboundReceiving } from './inbound-boxes-helpers';
 
-async function sortingRowByIdentity(
-  card: Locator,
-  identity: { sourceText: string; locationText: string },
-): Promise<Locator> {
-  const rows = card.getByTestId('ff-sorting-cell-row');
-  const count = await rows.count();
-  for (let i = 0; i < count; i++) {
-    const row = rows.nth(i);
-    const sourceText = (await row.getByTestId('ff-sorting-cell-source').textContent())?.replace(/\s+/g, ' ').trim() ?? '';
-    const locationText = (await row.getByTestId('ff-sorting-cell-location').textContent())?.replace(/\s+/g, ' ').trim() ?? '';
-    if (sourceText.includes(identity.sourceText) && locationText.includes(identity.locationText)) return row;
-  }
-  throw new Error(
-    `sorting row with source "${identity.sourceText}" and location "${identity.locationText}" not found`,
-  );
-}
-
 async function selectSortingLocation(page: Page, row: Locator, name: RegExp): Promise<void> {
   await row.getByTestId('ff-sorting-cell-location').getByRole('combobox').click();
   await page.getByRole('option', { name }).click();
 }
 
-// TC-NEW-SORT-01 — mixed loose + box distribution has one final action and applies correct sources.
-test('ff sorting product-centric: loose and box sources apply with one final action', async ({ page }) => {
+// TC-NEW-SORT-01 — box contents stay under the box; only loose goods remain below.
+test('ff sorting: box product rows and loose goods are separate', async ({ page }) => {
   const email = `e2e-sort-mix-${Date.now()}@example.com`;
   const sku = `SKU-SORT-MIX-${Date.now()}`;
   const whCode = `wh-sort-mix-${Date.now()}`;
@@ -91,9 +74,6 @@ test('ff sorting product-centric: loose and box sources apply with one final act
     data: { quantity: 6 },
   });
   expect(putBox.ok()).toBeTruthy();
-  const closeBox = await page.request.post(`${base}/${rid}/boxes/${boxId}/close`, { headers: h });
-  expect(closeBox.ok()).toBeTruthy();
-
   const patchLoose = await page.request.patch(`${base}/${rid}/lines/${lineId}/actual`, {
     headers: { ...h, 'Content-Type': 'application/json' },
     data: { actual_qty: 4 },
@@ -112,26 +92,35 @@ test('ff sorting product-centric: loose and box sources apply with one final act
   ]);
   expect(distributionRes.ok()).toBeTruthy();
   await expect(page.getByTestId('ff-sorting-panel')).toBeVisible();
-  await expect(page.getByTestId('ff-sorting-product-accepted')).toHaveText('10');
+  const boxRow = page.getByTestId('ff-sorting-box-putaway-row').filter({ hasText: `Короб №${box.box_number}` });
+  await expect(boxRow).toBeVisible();
+  await expect(boxRow.getByTestId('ff-sorting-box-product-row')).toHaveCount(1);
+  await expect(boxRow.getByTestId('ff-sorting-box-product-sku')).toHaveText(sku);
+  await expect(boxRow.getByTestId('ff-sorting-box-product-qty')).toHaveText('6');
+  await expect(boxRow.getByTestId('ff-sorting-cell-location')).toHaveCount(0);
 
   const productCard = page.getByTestId('ff-sorting-product-card').first();
+  await expect(productCard.getByTestId('ff-sorting-product-accepted')).toHaveText('4');
+  await expect(productCard.getByTestId('ff-sorting-cell-row')).toHaveCount(1);
+  await expect(productCard).not.toContainText('Короб №');
+  await page.screenshot({
+    path: '../docs/evidence/20260824-box-contents-sorting/box-and-loose.png',
+    fullPage: true,
+  });
 
-  await expect(productCard.getByTestId('ff-sorting-cell-row')).toHaveCount(2);
-  let looseRow = productCard
-    .getByTestId('ff-sorting-cell-row')
-    .filter({ has: page.getByTestId('ff-sorting-cell-source').filter({ hasText: 'Россыпь' }) })
-    .first();
+  await boxRow.getByTestId('ff-sorting-box-location').getByRole('combobox').click();
+  await page.getByRole('option', { name: 'BOX-1' }).click();
+  await Promise.all([
+    page.waitForResponse(
+      (r) => r.request().method() === 'POST' && r.url().includes(`/boxes/${boxId}/putaway`) && r.ok(),
+    ),
+    boxRow.getByTestId('ff-sorting-box-putaway-submit').click(),
+  ]);
+  await expect(page.getByTestId('ff-sorting-box-putaway-row')).toHaveCount(0);
+
+  const looseRow = page.getByTestId('ff-sorting-product-card').first().getByTestId('ff-sorting-cell-row').first();
   await selectSortingLocation(page, looseRow, /LOOSE-1/);
   await looseRow.getByTestId('ff-sorting-cell-qty').fill('4');
-
-  const boxRow = productCard
-    .getByTestId('ff-sorting-cell-row')
-    .filter({ has: page.getByTestId('ff-sorting-cell-source').filter({ hasText: 'Короб' }) })
-    .first();
-  await selectSortingLocation(page, boxRow, /BOX-1/);
-  await expect(boxRow.getByTestId('ff-sorting-cell-qty')).toHaveValue('6');
-  await expect(looseRow.getByTestId('ff-sorting-cell-source')).toContainText('Россыпь');
-  await expect(boxRow.getByTestId('ff-sorting-cell-source')).toContainText('Короб');
   await expect(page.getByTestId('ff-sorting-save')).toHaveCount(0);
   await expect(page.getByTestId('ff-sorting-apply')).toBeEnabled();
 
@@ -151,15 +140,14 @@ test('ff sorting product-centric: loose and box sources apply with one final act
   const distributionReadback = await page.request.get(`${base}/${rid}/distribution-lines`, { headers: h });
   expect(distributionReadback.ok()).toBeTruthy();
   const distributionRows = (await distributionReadback.json()) as {
+    box_id: string | null;
     storage_location_code: string;
     quantity: number;
   }[];
-  expect(distributionRows).toEqual(
-    expect.arrayContaining([
-      expect.objectContaining({ storage_location_code: 'LOOSE-1', quantity: 4 }),
-      expect.objectContaining({ storage_location_code: 'BOX-1', quantity: 6 }),
-    ]),
-  );
+  expect(distributionRows).toEqual(expect.arrayContaining([
+    expect.objectContaining({ box_id: boxId, storage_location_code: 'BOX-1', quantity: 6 }),
+    expect.objectContaining({ box_id: null, storage_location_code: 'LOOSE-1', quantity: 4 }),
+  ]));
 });
 
 // TC-REV-SORT-FE-02 — failed GET distribution-lines shows error and blocks apply.
