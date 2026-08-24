@@ -1,0 +1,10 @@
+{
+  "base_sha": "d0cfab0abc3054183081925a860c27b15f2f4ebc",
+  "created_at": "2026-08-24T15:44:40.841628Z",
+  "ledger_id": "bb0094dd598110acd8802bdeb3c54f1ee9e2f4096cd6c6a7c94bca326e6d7cad",
+  "ledger_path": "/Users/deniscivkunov/Projects/WMS/.git/sol-pipeline-ledger/bb0094dd598110acd8802bdeb3c54f1ee9e2f4096cd6c6a7c94bca326e6d7cad",
+  "repo_common_git_dir": "/Users/deniscivkunov/Projects/WMS/.git",
+  "request_file": "/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-module-sol-20260824/tasks/ozon-module-20260824/OWNER_REQUEST.txt",
+  "request_sha256": "3e92b7a35d41cf1c382f73c72cb79e4d5cbaa26080ba035adcb1b7e2e406dc57",
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-module-sol-20260824"
+}

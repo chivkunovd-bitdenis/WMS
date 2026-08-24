@@ -1,0 +1,44 @@
+{
+  "acceptance": [
+    "The dossier cites current official Ozon sources directly and distinguishes verified facts from inference and unknowns",
+    "FBO and FBS are both traced end to end, including statuses, packaging, labels, barcodes, acts, returns, errors and recovery",
+    "The current WMS baseline is mapped to concrete backend, database, frontend, printing, job and test locations without proposing production code",
+    "Credential handling is sanitized, only read-only probes are allowed, and no FBS stock or other Ozon state is mutated",
+    "The handoff names exact architectural decisions and risk areas needed before a prototype"
+  ],
+  "agent": "researcher",
+  "call_id": "01-ozon-domain-research",
+  "context_note": "The owner explicitly wants a powerful research pass, a universal multi-marketplace scheme, minimal disturbance to existing WB workflows, maximum practical use of Ozon capabilities, no requests for owner decisions, and no FBS stock publication. The lead retains all decisions.",
+  "expected_artifacts": [
+    {
+      "path": "docs/runs/ozon-module-20260824/01-ozon-domain-research.md",
+      "purpose": "Primary-source Ozon research dossier and current-WMS gap map for architecture"
+    }
+  ],
+  "inputs": [
+    {
+      "purpose": "Exact owner request preserved by the dispatcher",
+      "ref": "docs/runs/ozon-module-20260824/REQUEST.txt"
+    },
+    {
+      "purpose": "Repository delivery rules and new-integration architecture gate",
+      "ref": "AGENTS.md"
+    },
+    {
+      "purpose": "Canonical checkout and verification requirements",
+      "ref": "CLAUDE.md"
+    },
+    {
+      "purpose": "Current data, service, API, integration, print and job baseline",
+      "ref": "backend/app"
+    },
+    {
+      "purpose": "Current seller, catalog, FBO and FBS operator UI baseline",
+      "ref": "frontend/src"
+    }
+  ],
+  "task": "Conduct a comprehensive, current, primary-source research pass for the owner request 'Сделать модуль Ozon'. Study official Ozon Seller API and process documentation for seller/account connectivity, multi-seller and multi-marketplace identity, product/card/catalog import and matching, warehouses, stock, FBO supply creation and lifecycle, FBS postings/orders and multi-item semantics, acceptance/cancellation/status transitions, packaging, posting and shipment creation, delivery methods, acts, labels, barcodes, QR codes, container/pallet requirements, mandatory product or marking data, printing formats, returns/cancellations, webhooks/polling, rate limits, pagination, idempotency, errors and recovery. Compare these facts with the current Wildberries-centric WMS code and operator flows, identify reusable generic boundaries and WB-only assumptions across backend, database, jobs, frontend filters, printing and tests. Locate the user-authorized Ozon test credential only enough to record its safe location/type/availability without copying or revealing its value; if safe read-only API probes are useful, use only non-mutating endpoints and record sanitized request classes and outcomes. Do not create or update FBS stock, do not publish products, do not mutate Ozon data, do not open any external credential-management page, and do not write production code or final UI design. Separate confirmed facts, code observations, inferences, unknowns and decisions that an architect must make. Use direct links to official Ozon documentation and note document dates/version or access date where possible. Cover future Yandex Market and other marketplaces only at the abstraction-boundary level, not by researching their full APIs.",
+  "timeout_seconds": 14400,
+  "why_now": "Ozon is a new external marketplace domain with materially different FBO and FBS workflows, so current official facts and the existing WMS baseline are required before any architecture or prototype decision.",
+  "working_directory": "."
+}
