@@ -128,7 +128,6 @@ export function FfInboundQueuePage({
   error = null,
   onRetry,
 }: Props) {
-  const ozonPrototype = new URLSearchParams(window.location.search).get('ozonPrototype') === '1'
   const [sellerFilter, setSellerFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
@@ -152,16 +151,8 @@ export function FfInboundQueuePage({
   }, [draftOperationType, draftSellerId, sellers])
 
   const baseRows = useMemo(
-    () => {
-      const fixture: InboundQueueRow = {
-        id: 'ozon-fixture-return-7783', status: 'receiving', operation_type: 'return', line_count: 1,
-        planned_delivery_date: '2026-08-24', seller_id: 'fixture-loviana', seller_name: 'Loviana',
-        document_number: 'RET-7783', waybill_number: 'Ozon posting 4829-0002-1', product_names: ['Ozon exemplar 01046••••89021'], goods_qty_total: 1, actual_box_count: 1,
-      }
-      const source = ozonPrototype && workspace === 'reception' ? [fixture, ...rows] : rows
-      return workspace === 'reception' ? filterReceptionQueue(source) : filterSortingQueue(source)
-    },
-    [rows, workspace, ozonPrototype],
+    () => (workspace === 'reception' ? filterReceptionQueue(rows) : filterSortingQueue(rows)),
+    [rows, workspace],
   )
   const statusOptions = useMemo(
     () => Array.from(new Set(baseRows.map((row) => row.status))),
@@ -225,6 +216,7 @@ export function FfInboundQueuePage({
   return (
     <Box data-testid={workspace === 'reception' ? 'ff-reception-page' : 'ff-sorting-page'}>
       <PageHeader title={title} description={subtitle} />
+
       {workspace === 'reception' && onCreateDraft ? (
         <Stack direction="row" spacing={1} sx={{ mb: 2, justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
           <Typography variant="body2" sx={{ fontWeight: 700 }} data-testid="ff-inbound-new-count">

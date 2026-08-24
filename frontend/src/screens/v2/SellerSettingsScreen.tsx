@@ -117,7 +117,6 @@ export function SellerSettingsScreen({
   permissions,
   onStaffChanged,
 }: Props) {
-  const ozonPrototype = new URLSearchParams(window.location.search).get('ozonPrototype') === '1'
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -125,11 +124,6 @@ export function SellerSettingsScreen({
   const [contentKey, setContentKey] = useState('')
   const [hasContentKey, setHasContentKey] = useState<boolean | null>(null)
   const [wbCardsCount, setWbCardsCount] = useState<number | null>(null)
-  const [ozonDialogOpen, setOzonDialogOpen] = useState(false)
-  const [ozonClientId, setOzonClientId] = useState('')
-  const [ozonApiKey, setOzonApiKey] = useState('')
-  const [ozonDiscovery, setOzonDiscovery] = useState<'idle' | 'incomplete' | 'ready'>('idle')
-  const [ozonSync, setOzonSync] = useState<'idle' | 'partial'>('idle')
 
   const [czCreds, setCzCreds] = useState<MarkingCredentialsState | null>(null)
   const [czDialogOpen, setCzDialogOpen] = useState(false)
@@ -690,8 +684,6 @@ export function SellerSettingsScreen({
         </Stack>
       </Paper>
 
-      {ozonPrototype ? <Paper variant="outlined" sx={{ p: 2, maxWidth: 720, mb: 2 }} data-testid="seller-settings-ozon-card"><Stack spacing={1.25}><Typography variant="h6">Ozon · account Loviana</Typography><Typography variant="body2" color="text.secondary">Client-Id: 1234•••• · Api-Key: сохранён и замаскирован · прямой account-scoped доступ.</Typography><Typography variant="body2">Identity: Loviana Ozon Store · roles: FBS, FBO · expiry: 31.12.2026</Typography><Typography variant="body2">Capabilities: postings, cargo/TGM, returns · last discovery 10:40 · last confirmed catalog: 124</Typography><Alert severity={ozonSync === 'partial' ? 'warning' : 'info'}>{ozonSync === 'partial' ? '429: частичная синхронизация. Последние подтверждённые 124 сохранены, курсор продолжит после backoff.' : 'Sync import-only: публикации остатков и товаров отсутствуют.'}</Alert><Stack direction="row" spacing={1}><Button variant="outlined" onClick={() => setOzonDialogOpen(true)}>Проверить подключение</Button><Button variant="contained" onClick={() => setOzonSync('partial')}>Запустить sync fixture</Button></Stack><Typography variant="caption">Bindings: FBS склад Loviana → Основной WMS; return point → QUARANTINE. FBO destination выбирается в текущей отгрузке.</Typography></Stack></Paper> : null}
-
       <Paper
         variant="outlined"
         sx={{ p: 2, maxWidth: 720 }}
@@ -729,8 +721,6 @@ export function SellerSettingsScreen({
           </Box>
         </Stack>
       </Paper>
-
-      {ozonPrototype ? <Dialog open={ozonDialogOpen} onClose={() => setOzonDialogOpen(false)} fullWidth maxWidth="sm"><DialogTitle>Проверить Ozon account</DialogTitle><DialogContent><Stack spacing={1.5} sx={{ pt: 1 }}><Alert severity="info">Local fixture: внешнего вызова и чтения credentials нет.</Alert><TextField label="Client-Id" value={ozonClientId} onChange={(e) => setOzonClientId(e.target.value)} /><TextField label="Api-Key" type="password" value={ozonApiKey} onChange={(e) => setOzonApiKey(e.target.value)} />{ozonDiscovery === 'incomplete' ? <Alert severity="warning">Client-Id не указан: draft сохранён локально, external calls: 0.</Alert> : null}{ozonDiscovery === 'ready' ? <Alert severity="success">Identity / roles / capabilities discovered in fixture. Partial FBS and FBO capabilities visible.</Alert> : null}</Stack></DialogContent><DialogActions><Button onClick={() => setOzonDiscovery('incomplete')}>Сохранить неполную пару</Button><Button variant="contained" disabled={!ozonClientId || !ozonApiKey} onClick={() => setOzonDiscovery('ready')}>Проверить fixture</Button><Button onClick={() => setOzonDialogOpen(false)}>Закрыть</Button></DialogActions></Dialog> : null}
 
       <Dialog
         open={open}

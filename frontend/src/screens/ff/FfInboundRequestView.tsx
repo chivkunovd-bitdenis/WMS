@@ -447,16 +447,6 @@ function inboundStatusChipColor(
   return 'primary'
 }
 
-function ozonFixtureReturnDetail(): InboundDetail {
-  return {
-    id: 'ozon-fixture-return-7783', document_number: 'RET-7783', waybill_number: 'Ozon posting 4829-0002-1', warehouse_id: 'fixture-wh',
-    status: 'receiving', operation_type: 'return', planned_delivery_date: '2026-08-24', planned_box_count: 1, actual_box_count: 1,
-    boxes_discrepancy: false, has_discrepancy: false, seller_id: 'fixture-loviana', seller_name: 'Loviana', created_at: '2026-08-24T10:42:00Z',
-    distribution_completed_at: null, boxes: [], cargo_places: [],
-    lines: [{ id: 'ozon-return-line-1', product_id: 'ozon-return-unmapped', sku_code: 'OZ-UNMAPPED', product_name: 'Ozon exemplar 01046••••89021', wb_barcode: '4829-0002-1', requires_honest_sign: false, length_mm: null, width_mm: null, height_mm: null, weight_g: null, volume_liters: null, added_by_fulfillment: false, expected_qty: 1, actual_qty: 0, posted_qty: 0, storage_location_id: null, storage_location_code: 'QUARANTINE' }],
-  }
-}
-
 type Props = {
   token: string
   requestId: string
@@ -478,8 +468,6 @@ export function FfInboundRequestView({
   addressStorageEnabled = true,
 }: Props) {
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
-  const ozonPrototype = new URLSearchParams(window.location.search).get('ozonPrototype') === '1'
-  const isOzonFixtureReturn = ozonPrototype && requestId === 'ozon-fixture-return-7783'
 
   const [detail, setDetail] = useState<InboundDetail | null>(null)
   const [catalog, setCatalog] = useState<WbCatalogRow[] | null>(null)
@@ -629,11 +617,6 @@ export function FfInboundRequestView({
   }
 
   const loadDetail = useCallback(async (): Promise<InboundDetail> => {
-    if (isOzonFixtureReturn) {
-      const data = ozonFixtureReturnDetail()
-      setDetail(data)
-      return data
-    }
     const seq = ++loadDetailSeq.current
     const res = await fetch(apiUrl(`/operations/inbound-intake-requests/${requestId}`), {
       headers: authHeaders,
@@ -646,7 +629,7 @@ export function FfInboundRequestView({
       setDetail(data)
     }
     return data
-  }, [authHeaders, requestId, isOzonFixtureReturn])
+  }, [authHeaders, requestId])
 
   const receivingScanReconciler = useMemo(
     () => createDebouncedInboundReconciler(loadDetail),
@@ -661,10 +644,6 @@ export function FfInboundRequestView({
   )
 
   const loadLinkedDiscrepancyActs = useCallback(async (): Promise<void> => {
-    if (isOzonFixtureReturn) {
-      setLinkedDiscrepancyActs([])
-      return
-    }
     if (!isFulfillmentAdmin) {
       setLinkedDiscrepancyActs([])
       setDiscrepancyActsError(null)
@@ -704,17 +683,16 @@ export function FfInboundRequestView({
     } finally {
       setDiscrepancyActsBusy(false)
     }
-  }, [authHeaders, isFulfillmentAdmin, requestId, isOzonFixtureReturn])
+  }, [authHeaders, isFulfillmentAdmin, requestId])
 
   const fetchCatalogRows = useCallback(async (): Promise<WbCatalogRow[]> => {
-    if (isOzonFixtureReturn) return []
     const query = detail?.seller_id ? `?seller_id=${detail.seller_id}` : ''
     const res = await fetch(apiUrl(`/products/linked-wb-catalog${query}`), { headers: authHeaders })
     if (!res.ok) {
       throw new Error(await readApiErrorMessage(res))
     }
     return (await res.json()) as WbCatalogRow[]
-  }, [authHeaders, detail?.seller_id, isOzonFixtureReturn])
+  }, [authHeaders, detail?.seller_id])
 
   const loadCatalog = useCallback(async () => {
     setCatalog(await fetchCatalogRows())
@@ -2485,25 +2463,6 @@ export function FfInboundRequestView({
                             </Tooltip>
                           ) : null}
                         </Stack>
-                        {isOzonFixtureReturn ? (
-                          <Stack spacing={0.5} sx={{ mt: 0.75, alignItems: 'flex-end' }} data-testid="ozon-return-line-disposition">
-                            <Typography variant="caption" color="text.secondary">Ozon · не сопоставлен · QUARANTINE</Typography>
-                            <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                              <Button size="small" onClick={() => setSaveSuccessMsg('Возврат оставлен в карантине; доступный остаток не изменён.')}>Карантин</Button>
-                              <Button size="small" onClick={() => setSaveSuccessMsg('Зафиксирован брак; доступный остаток не изменён.')}>Брак</Button>
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={() => {
-                                  setDetail((current) => current ? { ...current, lines: current.lines.map((line) => line.id === ln.id ? { ...line, actual_qty: 1, storage_location_code: 'RESTOCK' } : line) } : current)
-                                  setSaveSuccessMsg('Restock применён в существующей строке приёмки; fixture не вызывает stock API.')
-                                }}
-                              >
-                                Вернуть в остаток
-                              </Button>
-                            </Stack>
-                          </Stack>
-                        ) : null}
                       </TableCell>
                       <TableCell align="right" sx={{ width: 112, minWidth: 0 }}>
                         <Stack spacing={0.25} sx={{ alignItems: 'flex-end' }}>
