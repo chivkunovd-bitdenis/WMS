@@ -183,6 +183,7 @@ export function SellerInboundDraftScreen({
   onRefreshInboundList,
 }: Props) {
   const navigate = useNavigate()
+  const ozonPrototype = new URLSearchParams(window.location.search).get('ozonPrototype') === '1'
   const navigateToDocuments = useCallback(() => {
     navigate('../documents')
   }, [navigate])
@@ -714,6 +715,7 @@ export function SellerInboundDraftScreen({
       <Typography variant="h5" gutterBottom>
         {pageTitle}
       </Typography>
+      {ozonPrototype ? <Alert severity="info" sx={{ mb: 2 }} data-testid="ozon-seller-return-marker">Ozon return fixture: RET-7783 · account Loviana · quarantine inspection is required before any existing restock posting.</Alert> : null}
       {localError && !showLoadError ? (
         <Alert severity="error" sx={{ mb: 2 }} data-testid="seller-inbound-draft-error">
           {localError}

@@ -190,6 +190,9 @@ export function FfProductsCatalogScreen({
 }: Props) {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const ozonPrototype = searchParams.get('ozonPrototype') === '1'
+  const [ozonMappingOpen, setOzonMappingOpen] = useState(false)
+  const [ozonMapping, setOzonMapping] = useState<'unmapped' | 'ambiguous' | 'confirmed'>('unmapped')
   // Ширины колонок ужаты так, чтобы таблица целиком помещалась в контейнер —
   // тогда липкой колонке действий физически некуда сдвигаться, и она
   // не перекрывает соседей вовсе (тот же приём, что и в SellerInboundDraftScreen).
@@ -739,6 +742,7 @@ export function FfProductsCatalogScreen({
               </Button>
             </>
           ) : null}
+          {ozonPrototype ? <Button variant="outlined" onClick={() => setOzonMappingOpen(true)} data-testid="ozon-catalog-mapping-action">Ozon: {ozonMapping === 'confirmed' ? 'связь подтверждена' : 'проверить связь'}</Button> : null}
         </Stack>
 
         <Paper variant="outlined" sx={{ p: 2, mb: 2 }} data-testid="ff-catalog-filters">
@@ -899,7 +903,7 @@ export function FfProductsCatalogScreen({
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Box
+        <Box
                         sx={{
                           minWidth: 0,
                           maxWidth: '100%',
@@ -1140,6 +1144,8 @@ export function FfProductsCatalogScreen({
           fullWidth
           data-testid="ff-catalog-fbs-limit-dialog"
         >
+
+        {ozonPrototype ? <Alert severity="info" sx={{ mb: 2 }} data-testid="ozon-catalog-inline-summary">Loviana · Ozon mappings загружены локально: offer_id / product_id / SKU проверяются только в диалоге действия; новая колонка и вкладка не добавлены.</Alert> : null}
           <DialogTitle>Остаток FBS</DialogTitle>
           <DialogContent>
             {fbsLimitProduct ? (
@@ -1460,6 +1466,7 @@ export function FfProductsCatalogScreen({
           </DialogActions>
         </Dialog>
       </Box>
+      <Dialog open={ozonMappingOpen} onClose={() => setOzonMappingOpen(false)} maxWidth="sm" fullWidth><DialogTitle>Сопоставление Ozon · Loviana</DialogTitle><DialogContent><Stack spacing={1.5} sx={{ pt: 1 }}><Typography>Платье Margo · WMS SKU-204</Typography><Paper variant="outlined" sx={{ p: 1.5 }}><Typography variant="body2"><b>Кандидат 1</b> · offer_id OFFER-MARGO · product_id 2201 · SKU MARGO-42 · ШК 4601234567890</Typography><Typography variant="caption">Причина: точный уникальный seller SKU</Typography></Paper><Paper variant="outlined" sx={{ p: 1.5 }}><Typography variant="body2"><b>Кандидат 2</b> · ШК совпал, account Fashion</Typography><Typography variant="caption" color="error">Конфликт: barcode неоднозначен между account; auto-link запрещён.</Typography></Paper>{ozonMapping === 'ambiguous' ? <Alert severity="warning">Неоднозначный кандидат отклонён. Выберите точный offer/SKU.</Alert> : null}{ozonMapping === 'confirmed' ? <Alert severity="success">Связь Ozon Loviana подтверждена; WB-связь и WMS SKU не изменены.</Alert> : null}</Stack></DialogContent><DialogActions><Button onClick={() => setOzonMapping('ambiguous')}>Отклонить конфликт</Button><Button variant="contained" onClick={() => setOzonMapping('confirmed')}>Подтвердить точный offer/SKU</Button><Button onClick={() => setOzonMappingOpen(false)}>Закрыть</Button></DialogActions></Dialog>
     </FfProductMarkingPrintProvider>
   )
 }

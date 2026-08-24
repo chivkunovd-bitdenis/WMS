@@ -1,0 +1,39 @@
+{
+  "call_id": "12-ozon-reuse-prototype-correction",
+  "agent": "developer",
+  "why_now": "Lead inspection rejected call 11 because it recreated parallel screens/workspaces/documents inside allowed files and the reuse gate falsely passed them; a bounded correction is required before any commit or browser review.",
+  "task": "Correct only the findings in tasks/ozon-module-20260824/S0R_LEAD_VERDICT.md while preserving the accepted removal of standalone `/app/ff/ozon*` routes/nav/component and the bounded catalog/settings work that truly uses existing patterns. Work only in the already-authorized canonical worktree `/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-module-sol-20260824`; do not touch the dirty main checkout and do not block on the path wording. Delete `OzonQueueFixture` and the `if (ozonPrototype) return <OzonQueueFixture...>` screen replacement. Instead feed local Ozon fixture rows/state into the existing FfFbsOrdersScreen data/render pipeline so the actual current table, filters, selection bar and workspace-opening path render both WB and Ozon in the same component; add only the marketplace select and conditional content within existing cells/actions, with no new columns. Delete `OzonFbsWorkspaceFixture` and the prototype early return. Provide fixture workspace data through the existing FfFbsSupplyWorkspace state/render and branch only individual backend-mutating handlers in fixture mode so the actual existing STAGES tabs, composition, picking, packing and boxes zones are used; do not render a parallel dialog/workspace. Delete the Ozon-only `ozon-fbo-inline-document` modal and its copied tabs/header/footer. Extend the real existing MP shipment create control/dialog with marketplace selection and create a local fixture document in the page's existing document list/detail state; show conditional Ozon route/timeslot/async/cargo/TGM/label/acceptance controls inside the real existing header, real current `Товары`/`Подбор`/`Упаковка` tabs and real footer. The real tabs must be switchable and the required path must be clickable. Complete returns on the existing queue/detail/line/action flow; do not leave any required behavior as a future slice and do not add a standalone summary panel that bypasses existing lines/actions. Keep fixture mode strictly `?ozonPrototype=1`, with zero backend/provider/credential/stock calls and unchanged behavior without it. Strengthen scripts/ci/check_ozon_reuse_scope.py so it fails additions containing: (a) an ozonPrototype-conditioned early return of a screen/workspace; (b) an Ozon-named full-surface Queue/Screen/Workspace/Document fixture component; (c) an Ozon-only FBO document modal or copied top-level Tabs/Header/Footer. Its `--self-test` must include and reject all three exact anti-patterns, in addition to route and unmapped-file tests. Update docs/runs/ozon-module-20260824/10-replacement-prototype-report.md to describe the actual existing render/state seams and complete browser clicks; remove the false `next bounded fixture slice` claim. Run gate self-test, worktree diff gate from fa35e903, source scans for the forbidden patterns, `git diff --check`, and frontend build. Do not commit if sandbox blocks Git; return honest evidence for lead inspection.",
+  "working_directory": ".",
+  "inputs": [
+    {"ref": "tasks/ozon-module-20260824/S0R_LEAD_VERDICT.md", "purpose": "Binding lead rejection with three named findings"},
+    {"ref": "tasks/ozon-module-20260824/ARCH.md", "purpose": "Accepted bounded-zone contract"},
+    {"ref": "tasks/ozon-module-20260824/REUSE_MAP.json", "purpose": "Hard existing-surface and allowed-file contract"},
+    {"ref": "docs/runs/ozon-module-20260824/attempts/11-ozon-reuse-replacement-prototype/final-result.json", "purpose": "Rejected implementation report"},
+    {"ref": "docs/runs/ozon-module-20260824/10-replacement-prototype-report.md", "purpose": "Report to correct"},
+    {"ref": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx", "purpose": "Existing FBS render that must remain primary"},
+    {"ref": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx", "purpose": "Existing workspace render that must remain primary"},
+    {"ref": "frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx", "purpose": "Existing shipment document render that must remain primary"},
+    {"ref": "frontend/src/screens/ff/FfInboundQueuePage.tsx", "purpose": "Existing return queue"},
+    {"ref": "frontend/src/screens/ff/FfInboundRequestView.tsx", "purpose": "Existing return detail/line/actions"},
+    {"ref": "scripts/ci/check_ozon_reuse_scope.py", "purpose": "False-positive gate to strengthen"}
+  ],
+  "expected_artifacts": [
+    {"path": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx", "purpose": "One real FBS queue render for WB and Ozon fixtures"},
+    {"path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx", "purpose": "One real FBS workspace render and stages"},
+    {"path": "frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx", "purpose": "One real MP shipment document render and tabs"},
+    {"path": "frontend/src/screens/ff/FfInboundQueuePage.tsx", "purpose": "Return fixture in real queue rows"},
+    {"path": "frontend/src/screens/ff/FfInboundRequestView.tsx", "purpose": "Return fixture in real line/actions"},
+    {"path": "scripts/ci/check_ozon_reuse_scope.py", "purpose": "Gate rejecting semantic parallel-UI patterns"},
+    {"path": "docs/runs/ozon-module-20260824/10-replacement-prototype-report.md", "purpose": "Correct traceability and complete browser script"}
+  ],
+  "acceptance": [
+    "No ozonPrototype-conditioned early return replaces an existing screen or workspace",
+    "No Ozon-named full queue/screen/workspace/document component or Ozon-only shipment document modal exists",
+    "Actual existing FBS render/workspace stages and MP shipment document/tabs are reused and all required prototype transitions are clickable",
+    "Returns use existing queue row, detail line and disposition/restock actions and the report declares no future required slice",
+    "The strengthened gate self-test rejects all three lead anti-patterns plus route and unmapped-screen additions",
+    "Build, diff gate and source scans pass without backend/provider/credential/stock calls"
+  ],
+  "context_note": "This is S0R developer correction round 1. Do not redesign catalog/settings or add anything outside the named lead findings.",
+  "timeout_seconds": 14400
+}

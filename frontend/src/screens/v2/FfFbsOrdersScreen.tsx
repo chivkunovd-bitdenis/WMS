@@ -40,7 +40,7 @@ import { FbsStatusChip } from '../../components/fbs/FbsChips'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { FbsSupplyCreateDialog } from './FbsSupplyCreateDialog'
 import { FfFbsSectionNav } from './FfFbsSectionNav'
-import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
+import { FfFbsSupplyWorkspace, createOzonFixtureWorkspace } from './FfFbsSupplyWorkspace'
 import { ordersWord } from './fbsUx'
 import { plural } from '../../utils/plural'
 import {
@@ -64,6 +64,27 @@ type Props = {
   authHeaders: (token: string) => Record<string, string>
   sellers: SellerRow[]
   isAdmin?: boolean
+}
+
+const OZON_FIXTURE_ORDER_ID = 'ozon-fixture-4829'
+
+function isOzonFixtureOrder(order: FbsWorklistOrder) {
+  return order.id === OZON_FIXTURE_ORDER_ID
+}
+
+// Local data is injected into the same queue state as WB rows; it has no API or
+// storage side effect and disappears with ?ozonPrototype=1.
+const ozonFixtureOrder: FbsWorklistOrder = {
+  id: OZON_FIXTURE_ORDER_ID, wb_order_id: 48290001, status: 'new', wb_status: null, supplier_status: null,
+  seller: { id: 'fixture-loviana', name: 'Loviana' }, wb_warehouse: { id: 0, name: 'Ozon · direct' },
+  wms_warehouse: { id: 'fixture-wh', name: 'Основной склад' },
+  product: { id: 'fixture-margo', name: 'Платье Margo', image_url: null, seller_article: 'MARGO-42', wb_article: null, barcode: 'MARGO-42', sku: 'OZ-MARGO-42', chrt_id: null, category: 'Одежда', color: 'бордовый', size: 'M' },
+  inventory: { available_unpacked: 3, locations: [{ id: 'fixture-cell', code: 'A-01-02', available_unpacked: 3 }] },
+  buyer_type: 'individual', cargo_type: 'one-by-one', can_pvz: false,
+  metadata: { required: [], optional: [], states: [], delivery_allowed: true, last_checked_at: null },
+  sticker: { code: null, status: 'not_requested', asset_url: null, applied_at: null },
+  pick: { status: 'pending', location_code: null, picked_at: null }, pack: { status: 'pending', packed_at: null },
+  created_at_wb: '2026-08-24T09:30:00Z', deadline_at: '2026-08-24T16:00:00Z', supply_id: OZON_FIXTURE_ORDER_ID, selection_blockers: [],
 }
 
 // Порядок вкладок — единственный источник истины для UI; заказчик 16.08 попросил
@@ -228,6 +249,7 @@ const NewOrderRow = memo(function NewOrderRow({
   onGoToStockSync,
 }: NewOrderRowProps) {
   const blocked = order.selection_blockers.length > 0
+  const ozonFixture = isOzonFixtureOrder(order)
   return (
     <TableRow
       ref={(node) => registerRow(order.id, node)}
@@ -282,12 +304,18 @@ const NewOrderRow = memo(function NewOrderRow({
                 ))}
               </Stack>
             ) : null}
+            {ozonFixture ? (
+              <Stack sx={{ mt: 0.75 }} spacing={0.25} data-testid="ozon-fbs-posting-lines">
+                <Typography variant="caption" color="text.secondary">Платье Margo × 2 · Блуза Luna × 1</Typography>
+                <Typography variant="caption" color="error.main" sx={{ fontWeight: 650 }}>Блуза Luna не сопоставлена</Typography>
+              </Stack>
+            ) : null}
           </Box>
         </Stack>
       </TableCell>
       <TableCell>
         <Typography variant="body2" sx={{ fontWeight: 700 }}>
-          WB №{order.wb_order_id}
+          {ozonFixture ? 'Ozon posting 4829-0001-1' : `WB №${order.wb_order_id}`}
         </Typography>
         <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
           ШК: {order.product.barcode ?? '—'}
@@ -301,6 +329,11 @@ const NewOrderRow = memo(function NewOrderRow({
         ) : order.product.seller_article ? (
           <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
             Артикул: {order.product.seller_article}
+          </Typography>
+        ) : null}
+        {ozonFixture ? (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+            Ozon · 2 товара, 3 шт. · сдача по одному
           </Typography>
         ) : null}
       </TableCell>
@@ -486,7 +519,9 @@ function downloadOrdersExcel(rows: FbsWorklistOrder[]): void {
 export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false }: Props) {
   const location = useLocation()
   const navigate = useNavigate()
+  const ozonPrototype = new URLSearchParams(location.search).get('ozonPrototype') === '1'
   const [statusGroup, setStatusGroup] = useState<(typeof TABS)[number]['key']>('new')
+  const [marketplace, setMarketplace] = useState<'all' | 'wb' | 'ozon'>('all')
   const [sellerId, setSellerId] = useState('__all__')
   const [wbWarehouseId, setWbWarehouseId] = useState('__all__')
   const [search, setSearch] = useState('')
@@ -531,6 +566,19 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const [selectionBarHeight, setSelectionBarHeight] = useState(0)
 
   const load = useCallback(async () => {
+    if (ozonPrototype) {
+      // Keep the normal table, filters, selection bar and workspace-opening path.
+      // Fixture mode is intentionally local: no backend/provider/stock call occurs.
+      setBusy(true)
+      setOrders(statusGroup === 'new' && marketplace !== 'wb' ? [ozonFixtureOrder] : [])
+      setActiveSupplies([])
+      setExternalActiveOrders([])
+      setWarehouseOptions([])
+      setServerNow('2026-08-24T10:42:00Z')
+      setLastLoadedAt(new Date().toISOString())
+      setBusy(false)
+      return
+    }
     // Задача 9 пула (HANDOFF-POLISH.md): поллинг не должен наслаиваться сам на себя —
     // если предыдущий запрос ещё летит, новый тик пропускаем.
     if (loadingRef.current) return
@@ -589,7 +637,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       setBusy(false)
       loadingRef.current = false
     }
-  }, [token, authHeaders, sellerId, statusGroup, wbWarehouseId])
+  }, [token, authHeaders, sellerId, statusGroup, wbWarehouseId, ozonPrototype, marketplace])
 
   useEffect(() => {
     void load()
@@ -617,7 +665,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   useEffect(() => {
     let cancelled = false
     setSellerWarehouseNames({})
-    if (statusGroup !== 'new' || sellerId === '__all__') return
+    if (ozonPrototype || statusGroup !== 'new' || sellerId === '__all__') return
     void fetchFbsSellerWarehouses(token, authHeaders, sellerId)
       .then((warehouses) => {
         if (cancelled) return
@@ -631,7 +679,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         // WB names are optional for loading the worklist; IDs remain usable as fallback.
       })
     return () => { cancelled = true }
-  }, [token, authHeaders, sellerId, statusGroup])
+  }, [token, authHeaders, sellerId, statusGroup, ozonPrototype])
 
   // Ручной поход в Wildberries: тянем новые заказы и подтягиваем их статусы.
   // Автоопрос делает то же самое раз в минуту, но оператору нужна кнопка на случай,
@@ -841,10 +889,10 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
 
   const openWorkspace = useCallback((supplyId: string, seed?: FbsWorkspace) => {
     setWorkspaceId(supplyId)
-    setWorkspaceSeed(seed ?? null)
+    setWorkspaceSeed(seed ?? (ozonPrototype && supplyId === OZON_FIXTURE_ORDER_ID ? createOzonFixtureWorkspace() : null))
     setWorkspaceOpen(true)
     setError(null)
-  }, [])
+  }, [ozonPrototype])
 
   const hasNewSelection = statusGroup === 'new' && selected.size > 0
 
@@ -920,7 +968,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
           >
             Обновить
           </Button>
-          {isAdmin ? (
+          {isAdmin && !ozonPrototype ? (
             <Button
               variant="contained"
               startIcon={
@@ -986,6 +1034,22 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               ))}
             </Select>
           </FormControl>
+          {ozonPrototype ? (
+            <FormControl sx={{ minWidth: 190 }}>
+              <InputLabel id="fbs-worklist-marketplace-label">Маркетплейс</InputLabel>
+              <Select
+                labelId="fbs-worklist-marketplace-label"
+                label="Маркетплейс"
+                value={marketplace}
+                onChange={(event) => setMarketplace(event.target.value as 'all' | 'wb' | 'ozon')}
+                data-testid="ozon-fbs-marketplace-filter"
+              >
+                <MenuItem value="all">Все площадки</MenuItem>
+                <MenuItem value="wb">Wildberries</MenuItem>
+                <MenuItem value="ozon">Ozon</MenuItem>
+              </Select>
+            </FormControl>
+          ) : null}
           {statusGroup === 'new' ? (
             <FormControl sx={{ minWidth: 260 }}>
               <InputLabel id="fbs-worklist-warehouse-label">Склад селлера / WB</InputLabel>
@@ -1440,18 +1504,33 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               variant="outlined"
               size="large"
               disabled={selectionBlockers.length > 0 || selectedOrders.length !== selected.size}
-              onClick={() => void openAddExistingDialog()}
+              onClick={() => {
+                if (ozonPrototype && selectedOrderIds.every((id) => id === OZON_FIXTURE_ORDER_ID)) {
+                  setSelected(new Set())
+                  openWorkspace(OZON_FIXTURE_ORDER_ID, createOzonFixtureWorkspace())
+                  return
+                }
+                void openAddExistingDialog()
+              }}
               data-testid="fbs-05-add-existing-open"
             >
-              Добавить в существующую поставку
+              {ozonPrototype ? 'Открыть локальный workspace' : 'Добавить в существующую поставку'}
             </Button>
             <Button
               variant="contained"
               size="large"
               disabled={selectionBlockers.length > 0 || selectedOrders.length !== selected.size}
-              onClick={() => setCreateOpen(true)}
+              onClick={() => {
+                if (ozonPrototype && selectedOrderIds.every((id) => id === OZON_FIXTURE_ORDER_ID)) {
+                  setSelected(new Set())
+                  openWorkspace(OZON_FIXTURE_ORDER_ID, createOzonFixtureWorkspace())
+                  return
+                }
+                setCreateOpen(true)
+              }}
+              data-testid="ozon-fbs-selection-open"
             >
-              Сформировать поставку
+              {ozonPrototype ? 'Открыть workspace' : 'Сформировать поставку'}
             </Button>
           </Stack>
         </Paper>

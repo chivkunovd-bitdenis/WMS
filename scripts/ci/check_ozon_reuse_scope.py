@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+"""Fail a PR that turns the Ozon reuse-first prototype into a parallel UI."""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+MAP_PATH = ROOT / "tasks/ozon-module-20260824/REUSE_MAP.json"
+REPORT = ROOT / "docs/runs/ozon-module-20260824/10-replacement-prototype-report.md"
+SPECIAL = {str(MAP_PATH.relative_to(ROOT)), "scripts/ci/check_ozon_reuse_scope.py", str(REPORT.relative_to(ROOT))}
+
+
+def fail(errors: list[str]) -> int:
+    for error in errors:
+        print(f"Ozon reuse scope: {error}", file=sys.stderr)
+    return 1 if errors else 0
+
+
+def load_map() -> tuple[dict, set[str], list[str]]:
+    errors: list[str] = []
+    try:
+        mapping = json.loads(MAP_PATH.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        return {}, set(), [f"cannot read REUSE_MAP.json: {exc}"]
+    if mapping.get("policy") != "reuse_first":
+        errors.append("REUSE_MAP policy must be reuse_first")
+    allowed: set[str] = set()
+    required = {"requirement_id", "existing_surface", "existing_route", "minimal_delta", "allowed_files", "forbidden_scope", "new_surface_required"}
+    for index, row in enumerate(mapping.get("requirements", [])):
+        missing = required - set(row)
+        if missing:
+            errors.append(f"map row {index} is missing {', '.join(sorted(missing))}")
+        allowed.update(row.get("allowed_files", []))
+        if row.get("new_surface_required") and not row.get("incompatibility_evidence", "").strip():
+            errors.append(f"{row.get('requirement_id', index)} has a new surface without concrete incompatibility evidence")
+    return mapping, allowed, errors
+
+
+def diff(base: str, head: str) -> tuple[dict[str, str], str]:
+    revision = [base] if head == "WORKTREE" else [f"{base}...{head}"]
+    names = subprocess.check_output(["git", "diff", "--name-status", *revision], cwd=ROOT, text=True)
+    patch = subprocess.check_output(["git", "diff", "--unified=0", *revision], cwd=ROOT, text=True)
+    changed: dict[str, str] = {}
+    for line in names.splitlines():
+        parts = line.split("\t")
+        if not parts:
+            continue
+        changed[parts[-1]] = parts[0]
+    return changed, patch
+
+
+def evaluate(mapping: dict, allowed: set[str], changed: dict[str, str], patch: str) -> list[str]:
+    errors: list[str] = []
+    ui_prefixes = ("frontend/src/screens/", "frontend/src/pages/", "frontend/src/prototypes/", "frontend/src/layouts/", "frontend/src/App.tsx")
+    for path, status in changed.items():
+        if path.startswith(ui_prefixes) and path not in allowed and path not in SPECIAL:
+            errors.append(f"unmapped UI file {path}; map it to a requirement or keep the change inside an existing allowed surface")
+        if status.startswith("A") and path.startswith("frontend/src/") and path.endswith((".tsx", ".ts")) and path not in allowed:
+            errors.append(f"new frontend helper/screen file {path} is forbidden by reuse-first map")
+    additions = "\n".join(line[1:] for line in patch.splitlines() if line.startswith("+") and not line.startswith("+++"))
+    lowered = additions.lower()
+    forbidden = ("/app/ff/ozon", "ozon/fbs", "ozon/fbo", "ozon/catalog", "ozon/connection", "ozon/returns")
+    for token in forbidden:
+        if token in lowered:
+            errors.append(f"added forbidden Ozon route/navigation token {token}")
+    if "OzonModulePrototype" in additions:
+        errors.append("standalone OzonModulePrototype must be removed, not amended")
+    # Reuse-first is semantic, not merely a list of permitted paths.  These
+    # patterns catch a replacement UI hidden inside an otherwise allowed file.
+    if re.search(r"if\s*\(\s*ozonPrototype\s*\)\s*return\b", additions, re.I):
+        errors.append("ozonPrototype-conditioned early screen/workspace return is forbidden")
+    if re.search(r"(?:function|const)\s+Ozon\w*(?:Queue|Screen|Workspace|Document)\w*\b", additions):
+        errors.append("Ozon-named full-surface Queue/Screen/Workspace/Document component is forbidden")
+    added_lines = additions.splitlines()
+    has_ozon_fbo_modal = any(
+        "<dialog" in line.lower()
+        and "ozon-fbo" in "\n".join(added_lines[index:index + 4]).lower()
+        and re.search(r"(?:<Tabs\b|<DialogTitle\b|<DialogActions\b)", "\n".join(added_lines[index:index + 8]))
+        for index, line in enumerate(added_lines)
+    )
+    if has_ozon_fbo_modal:
+        errors.append("Ozon-only FBO document modal or copied top-level Tabs/Header/Footer is forbidden")
+    return errors
+
+
+def self_test() -> int:
+    mapping, allowed, errors = load_map()
+    errors += evaluate(mapping, allowed, {"frontend/src/screens/v2/FfFbsOrdersScreen.tsx": "M"}, "")
+    if errors:
+        return fail([f"self-test passing model failed: {item}" for item in errors])
+    route_errors = evaluate(mapping, allowed, {"frontend/src/App.tsx": "M"}, "+<Route path=\"/app/ff/ozon/fbs\" />")
+    screen_errors = evaluate(mapping, allowed, {"frontend/src/screens/v2/OzonDashboardScreen.tsx": "A"}, "")
+    early_return_errors = evaluate(mapping, allowed, {"frontend/src/screens/v2/FfFbsOrdersScreen.tsx": "M"}, "+if (ozonPrototype) return <Queue />")
+    component_errors = evaluate(mapping, allowed, {"frontend/src/screens/v2/FfFbsOrdersScreen.tsx": "M"}, "+function OzonQueueFixture() { return <div /> }")
+    modal_errors = evaluate(mapping, allowed, {"frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx": "M"}, "+<Dialog data-testid=\"ozon-fbo-inline-document\"><DialogTitle>Ozon</DialogTitle><Tabs /></Dialog>")
+    if not route_errors or not screen_errors or not early_return_errors or not component_errors or not modal_errors:
+        return fail(["self-test did not reject route, unmapped screen, early return, full-surface component, and Ozon FBO modal patterns"])
+    print("Ozon reuse scope self-test passed: mapped diff accepted; route, unmapped screen, early return, full-surface component and Ozon FBO modal rejected.")
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--base", default="origin/etalon")
+    parser.add_argument("--head", default="HEAD", help="commit/ref or WORKTREE to validate uncommitted current changes")
+    parser.add_argument("--self-test", action="store_true")
+    args = parser.parse_args()
+    if args.self_test:
+        return self_test()
+    mapping, allowed, errors = load_map()
+    try:
+        changed, patch = diff(args.base, args.head)
+    except subprocess.CalledProcessError as exc:
+        return fail([f"cannot compare {args.base}...{args.head}: {exc}"])
+    errors += evaluate(mapping, allowed, changed, patch)
+    if errors:
+        return fail(errors)
+    print(f"Ozon reuse scope passed for {args.base}...{args.head}: {len(changed)} changed files are mapped or contract artifacts.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -105,6 +105,43 @@ const STAGES = [
 
 type StageKey = (typeof STAGES)[number]['key']
 
+/** Local data for the existing workspace renderer. It never reaches an API. */
+export function createOzonFixtureWorkspace(): FbsWorkspace {
+  const shared = {
+    wb_order_id: 48290001, status: 'assembling', wb_status: null, supplier_status: null,
+    seller: { id: 'fixture-loviana', name: 'Loviana' }, wb_warehouse: { id: 0, name: 'Ozon · direct' },
+    wms_warehouse: { id: 'fixture-wh', name: 'Основной склад' },
+    inventory: { available_unpacked: 3, locations: [{ id: 'fixture-cell', code: 'A-01-02', available_unpacked: 3 }] },
+    buyer_type: 'individual' as const, cargo_type: 'one-by-one', can_pvz: false,
+    sticker: { code: null, status: 'not_requested' as const, asset_url: null, applied_at: null },
+    pick: { status: 'pending' as const, location_code: null, picked_at: null }, pack: { status: 'pending' as const, packed_at: null },
+    created_at_wb: '2026-08-24T09:30:00Z', deadline_at: '2026-08-24T16:00:00Z', supply_id: 'ozon-fixture-4829', selection_blockers: [],
+  }
+  const orders: FbsWorkspace['orders'] = [
+    {
+      ...shared, id: 'ozon-fixture-4829-margo-1', tape_order_index: 1,
+      product: { id: 'fixture-margo', name: 'Платье Margo', image_url: null, seller_article: 'MARGO-42', wb_article: null, barcode: 'MARGO-42', sku: 'OZ-MARGO-42', chrt_id: null, category: 'Одежда', color: 'бордовый', size: 'M' },
+      metadata: { required: [], optional: [], states: [], delivery_allowed: true, last_checked_at: null },
+    },
+    {
+      ...shared, id: 'ozon-fixture-4829-margo-2', tape_order_index: 2,
+      product: { id: 'fixture-margo', name: 'Платье Margo', image_url: null, seller_article: 'MARGO-42', wb_article: null, barcode: 'MARGO-42', sku: 'OZ-MARGO-42', chrt_id: null, category: 'Одежда', color: 'бордовый', size: 'M' },
+      metadata: { required: [], optional: [], states: [], delivery_allowed: true, last_checked_at: null },
+    },
+    {
+      ...shared, id: 'ozon-fixture-4829-luna-1', tape_order_index: 3,
+      product: { id: null, name: 'Блуза Luna', image_url: null, seller_article: 'LUNA-38', wb_article: null, barcode: 'LUNA-38', sku: 'OZ-LUNA-38', chrt_id: null, category: 'Одежда', color: 'молочный', size: 'S' },
+      metadata: { required: ['exemplar'], optional: [], states: [{ kind: 'exemplar', status: 'rejected', reason: 'Ozon отклонил exemplar: нужна коррекция.', source: 'operator' }], delivery_allowed: false, last_checked_at: null },
+    },
+  ]
+  return {
+    supply: { id: 'ozon-fixture-4829', wb_supply_id: '', name: 'FBS · Ozon 4829-0001-1', status: 'assembling', delivery_type: 'warehouse_sc', seller: shared.seller, wb_warehouse: shared.wb_warehouse, wms_warehouse: shared.wms_warehouse, planned_destination: null, planned_shipment_date: '2026-08-24', nearest_deadline_at: shared.deadline_at, packaging_task_id: null, barcode_asset: null },
+    stage: 'composition', progress: { picked: 0, packed: 0, metadata_ready: 0, stickers_ready: 0, total: 3 },
+    blockers: [{ stage: 'composition', code: 'ozon_line_unmapped', message: 'Линия «Блуза Luna» не сопоставлена с WMS-товаром.', order_id: 'ozon-fixture-4829-luna-1', retryable: false }],
+    orders, cargo_places: [], boxes: [], delivery_preflight: null, last_wb_sync_at: null, server_now: '2026-08-24T10:42:00Z',
+  }
+}
+
 function operationKeyStorageName(supplyId: string, action: 'box-create' | 'box-delete' | 'delivery', fingerprint = '') {
   return `wms:fbs:${supplyId}:${action}:${fingerprint}`
 }
@@ -275,6 +312,7 @@ export function FfFbsSupplyWorkspace({
   open,
   onClose,
 }: Props) {
+  const ozonPrototype = new URLSearchParams(window.location.search).get('ozonPrototype') === '1'
   const [workspace, setWorkspace] = useState<FbsWorkspace | null>(initialWorkspace ?? null)
   const [stage, setStage] = useState<StageKey>('composition')
   const [busy, setBusy] = useState(false)
@@ -320,6 +358,11 @@ export function FfFbsSupplyWorkspace({
   const [kizScanHints, setKizScanHints] = useState<string[]>([])
   const [kizScanDebugOpen, setKizScanDebugOpen] = useState(false)
   const [kizConfirmTarget, setKizConfirmTarget] = useState<FbsKizLookup | null>(null)
+  const [ozonFixtureMapped, setOzonFixtureMapped] = useState(false)
+  const [ozonFixtureExemplarAccepted, setOzonFixtureExemplarAccepted] = useState(false)
+  const [ozonFixturePartialPacked, setOzonFixturePartialPacked] = useState(false)
+  const [ozonFixtureLabel, setOzonFixtureLabel] = useState<'pending' | 'ready' | 'applied'>('pending')
+  const [ozonFixtureHandedOver, setOzonFixtureHandedOver] = useState(false)
   const kizScanInputRef = useRef<HTMLInputElement | null>(null)
   const [addOrdersOpen, setAddOrdersOpen] = useState(false)
   const [addableOrders, setAddableOrders] = useState<FbsWorklistOrder[]>([])
@@ -332,6 +375,9 @@ export function FfFbsSupplyWorkspace({
 
   const load = useCallback(
     async (silent = false) => {
+      if (ozonPrototype) {
+        return
+      }
       if (!supplyId) return
       if (!silent) setBusy(true)
       try {
@@ -344,14 +390,14 @@ export function FfFbsSupplyWorkspace({
         if (!silent) setBusy(false)
       }
     },
-    [supplyId, token, authHeaders],
+    [supplyId, token, authHeaders, ozonPrototype],
   )
 
   useEffect(() => {
     if (!open || !supplyId) return
     setError(null)
     setNotice(null)
-    setWorkspace(initialWorkspace ?? null)
+    setWorkspace(ozonPrototype ? createOzonFixtureWorkspace() : initialWorkspace ?? null)
     setStage(initialWorkspace ? visualStage(initialWorkspace.stage) : 'composition')
     setDeliveryKey(persistentOperationKey(supplyId, 'delivery'))
     setPrintBatch(null)
@@ -378,8 +424,13 @@ export function FfFbsSupplyWorkspace({
     setKizScanHints([])
     setKizScanDebugOpen(false)
     setKizConfirmTarget(null)
-    if (!initialWorkspace) void load()
-  }, [open, supplyId, initialWorkspace, load])
+    setOzonFixtureMapped(false)
+    setOzonFixtureExemplarAccepted(false)
+    setOzonFixturePartialPacked(false)
+    setOzonFixtureLabel('pending')
+    setOzonFixtureHandedOver(false)
+    if (!initialWorkspace && !ozonPrototype) void load()
+  }, [open, supplyId, initialWorkspace, load, ozonPrototype])
 
   useEffect(() => {
     setNotice(null)
@@ -399,7 +450,7 @@ export function FfFbsSupplyWorkspace({
 
   useEffect(() => {
     const taskId = workspace?.supply.packaging_task_id
-    if (!open || stage !== 'packing' || !taskId) {
+    if (ozonPrototype || !open || stage !== 'packing' || !taskId) {
       setPackagingTask(null)
       return
     }
@@ -417,9 +468,15 @@ export function FfFbsSupplyWorkspace({
     return () => {
       active = false
     }
-  }, [open, stage, workspace?.supply.packaging_task_id, workspace?.orders.length, token, authHeaders])
+  }, [open, stage, workspace?.supply.packaging_task_id, workspace?.orders.length, token, authHeaders, ozonPrototype])
 
   const run = async (operation: () => Promise<FbsWorkspace>, success: string) => {
+    if (ozonPrototype) {
+      // Mutating controls remain in their ordinary zones, but fixture mode must
+      // not mutate WMS/Ozon state. The visible acknowledgement is local only.
+      setNotice(success || 'Локальное fixture-действие выполнено; внешних вызовов нет.')
+      return workspace
+    }
     setBusy(true)
     setError(null)
     setNotice(null)
@@ -496,6 +553,23 @@ export function FfFbsSupplyWorkspace({
 
   const scanLocation = async () => {
     if (!workspace || !locationBarcode.trim()) return
+    if (ozonPrototype) {
+      if (locationBarcode.trim() !== 'A-01-02') {
+        setError('Локальный fixture: ожидается ячейка A-01-02.')
+        return
+      }
+      setError(null)
+      setPickLocation({
+        id: 'fixture-cell', code: 'A-01-02', warehouse_id: 'fixture-wh', warehouse_name: 'Основной склад',
+        expected_products: [
+          { product_id: 'fixture-margo', name: 'Платье Margo', barcode: 'MARGO-42', remaining_qty: 2, nearest_deadline_at: workspace.supply.nearest_deadline_at },
+          { product_id: 'fixture-luna', name: 'Блуза Luna', barcode: 'LUNA-38', remaining_qty: 1, nearest_deadline_at: workspace.supply.nearest_deadline_at },
+        ],
+      })
+      setProductBarcode('')
+      setNotice('Ячейка A-01-02 подтверждена локально; WMS-остатки и провайдер не запрашивались.')
+      return
+    }
     setBusy(true)
     setError(null)
     try {
@@ -516,6 +590,33 @@ export function FfFbsSupplyWorkspace({
 
   const scanProduct = async () => {
     if (!workspace || !pickLocation || !productBarcode.trim()) return
+    if (ozonPrototype) {
+      const barcode = productBarcode.trim()
+      const order = workspace.orders.find((candidate) => candidate.product.barcode === barcode && candidate.pick.status !== 'picked')
+      if (!order) {
+        const known = workspace.orders.some((candidate) => candidate.product.barcode === barcode)
+        setError(known ? `Локальный fixture: ${barcode} уже подобран в нужном количестве.` : `Локальный fixture: ${barcode} не относится к posting 4829-0001-1.`)
+        return
+      }
+      const pickedAt = '2026-08-24T10:35:00Z'
+      const picked = workspace.progress.picked + 1
+      const complete = picked === workspace.progress.total
+      setWorkspace((current) => current ? {
+        ...current,
+        stage: complete ? 'packing' : 'picking',
+        progress: { ...current.progress, picked },
+        orders: current.orders.map((candidate) => candidate.id === order.id
+          ? { ...candidate, pick: { status: 'picked', location_code: 'A-01-02', picked_at: pickedAt } }
+          : candidate),
+      } : current)
+      setStage(complete ? 'packing' : 'picking')
+      setProductBarcode('')
+      setError(null)
+      setNotice(complete
+        ? 'Подобрана третья единица. Локальный workspace переведён к упаковке; внешних вызовов нет.'
+        : `Подобрано локально: ${order.product.name}.`)
+      return
+    }
     const key = createFbsIdempotencyKey()
     const next = await run(
       () =>
@@ -527,6 +628,52 @@ export function FfFbsSupplyWorkspace({
       'Товар подобран. Прогресс синхронизирован для всех операторов.',
     )
     if (next) setProductBarcode('')
+  }
+
+  const confirmOzonFixtureMapping = () => {
+    setOzonFixtureMapped(true)
+    setWorkspace((current) => current ? {
+      ...current,
+      blockers: [],
+      orders: current.orders.map((order) => order.id === 'ozon-fixture-4829-luna-1'
+        ? { ...order, product: { ...order.product, id: 'fixture-luna' } }
+        : order),
+    } : current)
+    setNotice('Линия «Блуза Luna» сопоставлена локально. Теперь можно начать подбор.')
+    setError(null)
+  }
+
+  const startOzonFixtureWork = () => {
+    setWorkspace((current) => current ? { ...current, stage: 'picking' } : current)
+    setStage('picking')
+    setNotice('Локальное задание подбора начато. Сканируйте ячейку A-01-02.')
+    setError(null)
+  }
+
+  const createOzonFixturePartialPackage = () => {
+    setOzonFixturePartialPacked(true)
+    setWorkspace((current) => current ? {
+      ...current,
+      progress: { ...current.progress, packed: 2, metadata_ready: 1 },
+      orders: current.orders.map((order) => order.id === 'ozon-fixture-4829-luna-1'
+        ? order
+        : { ...order, pack: { status: 'packed', packed_at: '2026-08-24T10:40:00Z' } }),
+    } : current)
+    setNotice('Создана частичная упаковка: 2 из 3. Posting ещё не завершён.')
+    setError(null)
+  }
+
+  const completeOzonFixturePackage = () => {
+    setWorkspace((current) => current ? {
+      ...current,
+      stage: 'handoff_prep',
+      progress: { ...current.progress, packed: 3, metadata_ready: 1 },
+      orders: current.orders.map((order) => ({ ...order, pack: { status: 'packed', packed_at: '2026-08-24T10:42:00Z' } })),
+      boxes: [{ id: 'ozon-fixture-box-1', box_number: 1, barcode: 'WMS-BOX-4829-01', assigned_order_ids: current.orders.map((order) => order.id), trbx_id: null, wb_trbx_id: null, qr_asset: null, without_distribution: false }],
+    } : current)
+    setStage('boxes')
+    setNotice('Третья единица упакована. Локальный workspace переведён к коробам.')
+    setError(null)
   }
 
   // KIZ-01: сканер стреляет в активное поле; пока запрос идёт, поле disabled и фокус
@@ -1476,7 +1623,7 @@ export function FfFbsSupplyWorkspace({
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   {workspace
-                    ? `${workspace.supply.seller.name}${workspace.supply.wb_supply_id ? ` · № WB ${workspace.supply.wb_supply_id}` : ''}`
+                    ? `${workspace.supply.seller.name}${ozonPrototype ? ' · Ozon · локальный fixture' : workspace.supply.wb_supply_id ? ` · № WB ${workspace.supply.wb_supply_id}` : ''}`
                     : 'Загружаем данные поставки…'}
                 </Typography>
               </Box>
@@ -1497,7 +1644,7 @@ export function FfFbsSupplyWorkspace({
                       size="small"
                       value={plannedShipmentDateDraft}
                       onChange={(event) => setPlannedShipmentDateDraft(event.target.value)}
-                      disabled={busy}
+                      disabled={busy || ozonPrototype}
                       slotProps={{
                         inputLabel: { shrink: true },
                         htmlInput: { 'data-testid': 'cal-02-fbs-shipment-date' },
@@ -1509,7 +1656,7 @@ export function FfFbsSupplyWorkspace({
                       size="small"
                       variant="outlined"
                       onClick={() => void savePlannedShipmentDate()}
-                      disabled={busy || plannedShipmentDateDraft === (workspace.supply.planned_shipment_date ?? '')}
+                      disabled={busy || ozonPrototype || plannedShipmentDateDraft === (workspace.supply.planned_shipment_date ?? '')}
                       data-testid="cal-02-fbs-shipment-date-save"
                       data-task-id="CAL-02"
                     >
@@ -1526,7 +1673,7 @@ export function FfFbsSupplyWorkspace({
                             'Дата отгрузки очищена.',
                           )
                         }}
-                        disabled={busy}
+                        disabled={busy || ozonPrototype}
                         data-testid="cal-02-fbs-shipment-date-clear"
                         data-task-id="CAL-02"
                       >
@@ -1607,6 +1754,11 @@ export function FfFbsSupplyWorkspace({
             </Alert>
           ) : null}
           {partialRejectionAlert}
+          {workspace && ozonPrototype ? (
+            <Alert severity="info" sx={{ mb: 2 }} data-testid="ozon-fbs-workspace-context">
+              Ozon posting 4829-0001-1: две товарные линии, три unit-проекции. Fixture работает только локально: WMS-остатки, Ozon и provider API не вызываются.
+            </Alert>
+          ) : null}
 
           {!workspace ? (
             <Stack spacing={2} sx={{ alignItems: 'center', justifyContent: 'center', py: 10 }}>
@@ -1622,18 +1774,20 @@ export function FfFbsSupplyWorkspace({
                   <Box>
                     <Typography variant="h6">Состав поставки</Typography>
                     <Typography variant="body2" color="text.secondary">
-                      {workspace.orders.length} {ordersWord(workspace.orders.length)} в поставке
+                      {ozonPrototype ? '2 товарные линии · 3 unit-проекции в posting 4829-0001-1' : `${workspace.orders.length} ${ordersWord(workspace.orders.length)} в поставке`}
                     </Typography>
                   </Box>
                   <Stack direction="row" spacing={1}>
-                    <Button
-                      variant="outlined"
-                      onClick={() => void openAddOrders()}
-                      disabled={!['draft', 'assembling'].includes(workspace.supply.status)}
-                      data-testid="fbs-05-workspace-add-orders"
-                    >
-                      Добавить заказы
-                    </Button>
+                    {!ozonPrototype ? (
+                      <Button
+                        variant="outlined"
+                        onClick={() => void openAddOrders()}
+                        disabled={!['draft', 'assembling'].includes(workspace.supply.status)}
+                        data-testid="fbs-05-workspace-add-orders"
+                      >
+                        Добавить заказы
+                      </Button>
+                    ) : null}
                     <Button variant="outlined" startIcon={<PrintOutlinedIcon />} onClick={printPickingList} data-testid="fbs-pick-list-print">
                       Печать листа подбора
                     </Button>
@@ -1641,12 +1795,12 @@ export function FfFbsSupplyWorkspace({
                 </Stack>
                 <Divider sx={{ my: 2 }} />
                 <Table size="small">
-                  <TableHead><TableRow><TableCell>Фото</TableCell><TableCell>Заказ WB</TableCell><TableCell>Товар и идентификаторы</TableCell><TableCell>Количество</TableCell><TableCell>Маркировка</TableCell><TableCell>Подбор</TableCell></TableRow></TableHead>
+                  <TableHead><TableRow><TableCell>Фото</TableCell><TableCell>{ozonPrototype ? 'Ozon posting' : 'Заказ WB'}</TableCell><TableCell>Товар и идентификаторы</TableCell><TableCell>Количество</TableCell><TableCell>Маркировка</TableCell><TableCell>Подбор</TableCell></TableRow></TableHead>
                   <TableBody>
                     {workspace.orders.map((order) => (
                       <TableRow key={order.id}>
                         <TableCell><ProductPhotoThumb src={order.product.image_url} alt={order.product.name} size={42} previewSize={280} testId={`fbs-composition-photo-${order.id}`} /></TableCell>
-                        <TableCell>№{order.wb_order_id}</TableCell>
+                        <TableCell>{ozonPrototype ? '4829-0001-1' : `№${order.wb_order_id}`}</TableCell>
                         <TableCell><Typography variant="body2" sx={{ fontWeight: 700 }}>{order.product.name}</Typography><Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Артикул: {order.product.seller_article ?? '—'}{order.product.barcode ? ` · ШК: ${order.product.barcode}` : ''}</Typography></TableCell>
                         <TableCell>1 шт.</TableCell>
                         <TableCell>{order.metadata.required.length ? order.metadata.required.join(', ') : 'Не требуется'}</TableCell>
@@ -1661,7 +1815,20 @@ export function FfFbsSupplyWorkspace({
                   сразу в assembling, минуя draft: раньше кнопка им не показывалась
                   вовсе, задание не создавалось, и вкладка упаковки на них навсегда
                   оставалась заглушкой «Сначала начните работу с поставкой». */}
-              {!workspace.supply.packaging_task_id ? (
+              {ozonPrototype && !ozonFixtureMapped ? (
+                <Alert severity="warning" data-testid="ozon-fbs-composition-blocker">
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
+                    <Typography>Блуза Luna не сопоставлена с WMS-товаром. Подбор пока заблокирован.</Typography>
+                    <Button variant="contained" onClick={confirmOzonFixtureMapping} data-testid="ozon-fbs-confirm-mapped-fixture">Подтвердить mapped fixture</Button>
+                  </Stack>
+                </Alert>
+              ) : ozonPrototype ? (
+                <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
+                  <Button variant="contained" size="large" onClick={startOzonFixtureWork} data-testid="fbs-start-work">
+                    Начать работу с поставкой
+                  </Button>
+                </Stack>
+              ) : !workspace.supply.packaging_task_id ? (
                 <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
                   <Button variant="contained" size="large" onClick={() => void run(() => startFbsSupplyWork(token, authHeaders, workspace.supply.id), 'Задание создано. Можно переходить к следующему этапу.')}>
                     Начать работу с поставкой
@@ -1681,7 +1848,9 @@ export function FfFbsSupplyWorkspace({
                   <Box>
                     <Typography variant="h6">Сканирование подбора</Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Сначала подтвердите ячейку, затем сканируйте товары. Прогресс хранится на сервере.
+                      {ozonPrototype
+                        ? 'Сначала подтвердите ячейку A-01-02, затем MARGO-42 дважды и LUNA-38 один раз. Прогресс fixture хранится только в этом workspace.'
+                        : 'Сначала подтвердите ячейку, затем сканируйте товары. Прогресс хранится на сервере.'}
                     </Typography>
                   </Box>
                   <Button variant="outlined" startIcon={<PrintOutlinedIcon />} onClick={printPickingList} data-testid="fbs-pick-list-print">
@@ -1697,6 +1866,7 @@ export function FfFbsSupplyWorkspace({
                 {pickLocation ? <Alert severity="success" sx={{ mt: 2 }}>Ячейка {pickLocation.code} подтверждена · {pickLocation.warehouse_name}</Alert> : null}
                 {allPicked ? <Alert severity="success" sx={{ mt: 2 }}>Все товары подобраны. Перейдите к упаковке.</Alert> : null}
               </Paper>
+              {!ozonPrototype ? (
               <Paper variant="outlined" sx={{ p: 2 }} data-testid="fbs-manual-picking">
                 <Typography variant="h6">Подбор из ячеек</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>Сканер остаётся доступен выше. Здесь можно снять требуемое количество из конкретной ячейки вручную.</Typography>
@@ -1770,12 +1940,54 @@ export function FfFbsSupplyWorkspace({
                   </Stack>
                 )}
               </Paper>
+              ) : null}
               {nextStageControl('picking')}
             </Stack>
           ) : null}
 
           {workspace && stage === 'packing' ? (
             <Stack spacing={2}>
+              {ozonPrototype ? (
+                <Paper variant="outlined" sx={{ overflow: 'hidden' }} data-testid="ozon-fbs-packing">
+                  <Box sx={{ px: 2, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
+                    <Typography variant="h6">Упаковка и маркировка</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Posting 4829-0001-1 · упаковано {workspace.progress.packed} из 3 · частичная упаковка не завершает posting.
+                    </Typography>
+                  </Box>
+                  <Stack spacing={1.5} sx={{ p: 2 }}>
+                    <Alert severity={ozonFixtureExemplarAccepted ? 'success' : 'error'} data-testid="ozon-fbs-exemplar-state">
+                      Exemplar для «Блуза Luna»: {ozonFixtureExemplarAccepted ? 'принят после коррекции.' : 'отклонён; нужна коррекция.'}
+                    </Alert>
+                    {!ozonFixtureExemplarAccepted ? (
+                      <Button variant="outlined" sx={{ alignSelf: 'flex-start' }} onClick={() => {
+                        setOzonFixtureExemplarAccepted(true)
+                        setWorkspace((current) => current ? {
+                          ...current,
+                          orders: current.orders.map((order) => order.id === 'ozon-fixture-4829-luna-1'
+                            ? { ...order, metadata: { ...order.metadata, delivery_allowed: true, states: [{ kind: 'exemplar', status: 'accepted', reason: null, source: 'operator' }] } }
+                            : order),
+                        } : current)
+                        setNotice('Exemplar исправлен и принят локально; Ozon readback не выполнялся.')
+                      }} data-testid="ozon-fbs-exemplar-correct">
+                        Исправить exemplar
+                      </Button>
+                    ) : null}
+                    <Divider />
+                    <Typography variant="body2">Ozon package №1: {ozonFixturePartialPacked ? '2 из 3 единиц; Luna остаётся к упаковке.' : 'ещё не создан.'}</Typography>
+                    {!ozonFixturePartialPacked ? (
+                      <Button variant="contained" sx={{ alignSelf: 'flex-start' }} disabled={!ozonFixtureExemplarAccepted} onClick={createOzonFixturePartialPackage} data-testid="ozon-fbs-create-partial-package">
+                        Создать частичную упаковку 2 из 3
+                      </Button>
+                    ) : (
+                      <Button variant="contained" sx={{ alignSelf: 'flex-start' }} onClick={completeOzonFixturePackage} data-testid="ozon-fbs-complete-third-unit">
+                        Упаковать третью единицу и перейти к коробам
+                      </Button>
+                    )}
+                  </Stack>
+                </Paper>
+              ) : (
+                <>
               {!packagingEditable ? <Alert severity="success">Поставка уже передана в WB. Упаковка доступна только для просмотра.</Alert> : null}
               {packagingTask ? (
                 <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
@@ -2024,11 +2236,58 @@ export function FfFbsSupplyWorkspace({
                 <Alert severity="info">{workspace.supply.packaging_task_id ? 'Загружаем существующее задание упаковки…' : 'Сначала начните работу с поставкой — сервер создаст единственное задание упаковки.'}</Alert>
               )}
               {nextStageControl('packing')}
+                </>
+              )}
             </Stack>
           ) : null}
 
           {workspace && stage === 'boxes' ? (
             <Stack spacing={2}>
+              {ozonPrototype ? (
+                <Paper variant="outlined" sx={{ overflow: 'hidden' }} data-testid="ozon-fbs-boxes">
+                  <Box sx={{ px: 2, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
+                    <Typography variant="h6">Короба · сдача Ozon</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      WMS короб №1 (WMS-BOX-4829-01) → Ozon package №1 → posting 4829-0001-1 (3 из 3 единиц).
+                    </Typography>
+                  </Box>
+                  <Stack spacing={1.5} sx={{ p: 2 }}>
+                    <Typography variant="body2" data-testid="ozon-fbs-label-state">
+                      Label Ozon: {ozonFixtureLabel === 'pending' ? 'pending — ещё не готов.' : ozonFixtureLabel === 'ready' ? 'ready — можно нанести на package.' : 'applied — нанесён на package №1.'}
+                    </Typography>
+                    {ozonFixtureLabel === 'pending' ? (
+                      <Button variant="outlined" sx={{ alignSelf: 'flex-start' }} onClick={() => {
+                        setOzonFixtureLabel('ready')
+                        setNotice('Label Ozon готов локально; внешнее создание label не выполнялось.')
+                      }} data-testid="ozon-fbs-label-ready">
+                        Подготовить label
+                      </Button>
+                    ) : null}
+                    {ozonFixtureLabel === 'ready' ? (
+                      <Button variant="contained" sx={{ alignSelf: 'flex-start' }} onClick={() => {
+                        setOzonFixtureLabel('applied')
+                        setWorkspace((current) => current ? { ...current, progress: { ...current.progress, stickers_ready: 1 } } : current)
+                        setNotice('Label отмечен как applied на Ozon package №1.')
+                      }} data-testid="ozon-fbs-label-applied">
+                        Нанести label на package
+                      </Button>
+                    ) : null}
+                    <Divider />
+                    <Typography variant="body2" color="text.secondary">Обнаруженная capability: сдача по одному доступна. Carriage — альтернативная возможность, не отдельный шаг.</Typography>
+                    {!ozonFixtureHandedOver ? (
+                      <Button variant="contained" size="large" sx={{ alignSelf: 'flex-start' }} disabled={ozonFixtureLabel !== 'applied'} onClick={() => {
+                        setOzonFixtureHandedOver(true)
+                        setNotice('Передано WMS, Ozon ещё не подтвердил')
+                      }} data-testid="ozon-fbs-handover-one-by-one">
+                        Передать posting по одному
+                      </Button>
+                    ) : (
+                      <Alert severity="info" data-testid="ozon-fbs-handover-pending">Передано WMS, Ozon ещё не подтвердил</Alert>
+                    )}
+                  </Stack>
+                </Paper>
+              ) : (
+                <>
               <Paper variant="outlined" sx={{ overflow: 'hidden' }} data-testid="fbs-boxes">
                 <Box sx={{ px: 2.5, py: 2, borderBottom: 1, borderColor: 'divider' }}>
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
@@ -2236,6 +2495,8 @@ export function FfFbsSupplyWorkspace({
                   QR поставки печатается отдельно (см. блок выше) и едет вместе с грузом.
                 </Alert>
               ) : null}
+                </>
+              )}
             </Stack>
           ) : null}
         </Box>

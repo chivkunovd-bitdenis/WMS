@@ -1,0 +1,61 @@
+{
+  "acceptance": [
+    "One current FBS table and one current FBS workspace render both WB and Ozon; no early replacement or parallel component exists",
+    "The Ozon fixture contains two real product lines and three unit projections and starts with an unmapped-line composition blocker",
+    "Mapping, location scan, three product scans, exemplar correction, partial package, completion, label pending-ready-applied and one-by-one handover are all clickable in the real existing stage zones",
+    "Every fixture action is local and no backend/provider/credential/stock call can execute",
+    "The final visible state says WMS handed over but Ozon is not yet confirmed",
+    "The exact browser script, reuse gate, source scans, diff check and frontend build pass"
+  ],
+  "agent": "developer",
+  "call_id": "13-ozon-fbs-prototype-state-machine",
+  "context_note": "S0R correction round 2 of 2. No new scope and no redesign. A third product correction is not authorized.",
+  "expected_artifacts": [
+    {
+      "path": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+      "purpose": "Actual shared queue with two-line/three-unit Ozon posting fixture"
+    },
+    {
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+      "purpose": "Actual shared workspace with complete local Ozon state machine"
+    },
+    {
+      "path": "docs/runs/ozon-module-20260824/10-replacement-prototype-report.md",
+      "purpose": "Exact complete FBS browser click path"
+    }
+  ],
+  "inputs": [
+    {
+      "purpose": "Binding second-round FBS finding and exact acceptance",
+      "ref": "tasks/ozon-module-20260824/S0R_LEAD_VERDICT.md"
+    },
+    {
+      "purpose": "Original exact FBS clickable path and reuse boundary",
+      "ref": "tasks/ozon-module-20260824/ARCH.md"
+    },
+    {
+      "purpose": "FBS allowed files and forbidden surfaces",
+      "ref": "tasks/ozon-module-20260824/REUSE_MAP.json"
+    },
+    {
+      "purpose": "Current shared queue render",
+      "ref": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx"
+    },
+    {
+      "purpose": "Current shared workspace and four real stages",
+      "ref": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx"
+    },
+    {
+      "purpose": "Incomplete browser script to correct",
+      "ref": "docs/runs/ozon-module-20260824/10-replacement-prototype-report.md"
+    },
+    {
+      "purpose": "Existing semantic reuse gate",
+      "ref": "scripts/ci/check_ozon_reuse_scope.py"
+    }
+  ],
+  "task": "Correct only S0R-LEAD-004 in tasks/ozon-module-20260824/S0R_LEAD_VERDICT.md. Preserve the accepted route/nav/component deletion, FBO existing-document integration, return line integration, catalog/settings work and strengthened gate unchanged unless a build-only import adjustment is unavoidable. Work only in the authorized canonical worktree and do not touch the dirty main checkout. Keep one real `FfFbsOrdersScreen` render, one real `FfFbsSupplyWorkspace` dialog and the existing `STAGES`; no new screen/workspace/modal/helper file and no prototype-conditioned early return. Change the local FBS fixture so its initial workspace is `composition`, with two genuine product lines and three unit/order projections: two Margo units plus one Luna unit under posting 4829-0001-1, with the Luna line explicitly unmapped. In the existing composition zone add the minimal Ozon-only inline blocker and `Подтвердить mapped fixture` action; it must visibly map Luna and then use the existing start/next progression into picking. In fixture mode branch `scanLocation` and `scanProduct` before any API function: location A-01-02 becomes locally confirmed, valid Margo scans pick two Margo units, valid Luna scan picks one Luna unit, wrong/duplicate scans show a local error, and the third unit advances the same workspace state to packing. No fixture scan may call backend/provider/stock functions. In the existing packing zone, add only Ozon-required conditional controls/state: one exemplar begins rejected, `Исправить exemplar` makes it accepted, `Создать частичную упаковку 2 из 3` records a partial package without declaring the posting complete, then completing the third unit advances the same workspace to boxes. In the existing boxes/print zone, show WMS box to Ozon package relation and implement label `pending → ready → applied` through explicit clickable actions, then a discovered one-by-one handover action that ends at the truthful visible state `Передано WMS, Ozon ещё не подтвердил`; carriage capability may be shown as an alternative but must not create a new step/tab. All these controls must be in the actual current stage panels, not a summary alert. Normal behavior without `ozonPrototype=1` stays byte-for-behavior unchanged. Update the FBS row/cells so the real table visibly shows both product lines/three units and the blocker without a new column, while selection still uses the existing selection bar/open-workspace path. Update docs/runs/ozon-module-20260824/10-replacement-prototype-report.md with the original exact click sequence and data-testid or visible label for every transition; do not weaken it to viewing tabs. Add or strengthen gate self-test only if needed to prevent reintroduction of a parallel component/early return. Run source scans proving no forbidden full-surface patterns, the gate self-test and worktree diff gate, `git diff --check`, and `npm run build`. Do not call APIs or inspect credentials. Do not commit if sandbox blocks metadata; return exact evidence.",
+  "timeout_seconds": 14400,
+  "why_now": "Correction round 1 removed the parallel UI but left FBS as a pre-completed decorative fixture, so the final bounded correction must implement the exact required Ozon click path through the real existing FBS queue/workspace before browser review.",
+  "working_directory": "."
+}

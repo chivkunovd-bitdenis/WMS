@@ -1,0 +1,74 @@
+{
+  "acceptance": [
+    "Every acceptance item in call 10 is satisfied without creating a new UI surface",
+    "The allowed in-repository worktree is used and the dirty main checkout is untouched",
+    "The agent reports actual reuse-gate self-test, branch-scope result and frontend build result"
+  ],
+  "agent": "developer",
+  "call_id": "11-ozon-reuse-replacement-prototype",
+  "context_note": "This is a protocol retry of S0 replacement prototype round 1, not a correction round and not permission to change scope.",
+  "expected_artifacts": [
+    {
+      "path": "frontend/src/App.tsx",
+      "purpose": "Rejected standalone Ozon routes removed"
+    },
+    {
+      "path": "frontend/src/layouts/AuthedAppLayout.tsx",
+      "purpose": "Rejected standalone Ozon navigation removed"
+    },
+    {
+      "path": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+      "purpose": "Replacement FBS prototype inside current queue"
+    },
+    {
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+      "purpose": "Replacement Ozon interactions inside current FBS workspace"
+    },
+    {
+      "path": "frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx",
+      "purpose": "Replacement Ozon FBO interactions inside current MP shipment"
+    },
+    {
+      "path": "frontend/src/screens/v2/FfProductsCatalogScreen.tsx",
+      "purpose": "Replacement Ozon mapping interaction inside current catalog"
+    },
+    {
+      "path": "frontend/src/screens/v2/SellerSettingsScreen.tsx",
+      "purpose": "Replacement Ozon connection interaction inside current settings"
+    },
+    {
+      "path": "scripts/ci/check_ozon_reuse_scope.py",
+      "purpose": "Machine-enforced reuse-first scope gate"
+    },
+    {
+      "path": "docs/runs/ozon-module-20260824/10-replacement-prototype-report.md",
+      "purpose": "Traceability and browser acceptance script on existing URLs"
+    }
+  ],
+  "inputs": [
+    {
+      "purpose": "Full unchanged implementation and acceptance contract",
+      "ref": "docs/runs/ozon-module-20260824/calls/10-ozon-reuse-replacement-prototype.json"
+    },
+    {
+      "purpose": "Protocol-only failed attempt to avoid repeating its path misinterpretation",
+      "ref": "docs/runs/ozon-module-20260824/attempts/10-ozon-reuse-replacement-prototype/final-result.json"
+    },
+    {
+      "purpose": "Canonical project rules including explicit `.worktrees/` isolation permission",
+      "ref": "CLAUDE.md"
+    },
+    {
+      "purpose": "Accepted reuse-first architecture and prototype zones",
+      "ref": "tasks/ozon-module-20260824/ARCH.md"
+    },
+    {
+      "purpose": "Hard allowed-file and no-new-surface contract",
+      "ref": "tasks/ozon-module-20260824/REUSE_MAP.json"
+    }
+  ],
+  "task": "Execute the complete task and acceptance contract in docs/runs/ozon-module-20260824/calls/10-ozon-reuse-replacement-prototype.json without reducing or expanding scope. Path clarification: `/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-module-sol-20260824` is the lead-created permanent Git worktree inside the canonical `/Users/deniscivkunov/Projects/WMS/.worktrees/` directory, exactly the isolation mechanism allowed by CLAUDE.md line 14 and AGENTS.md. It is not a clone, Desktop copy, Downloads copy or temporary checkout. The lead has verified its base, named branch, remote and canonical parent, and explicitly authorizes this call to edit this worktree only. Do not edit the dirty main checkout and do not block again on the working-directory wording. Start by reading the call-10 JSON, ARCH section 13, REUSE_MAP and current target files, then implement, self-test, build and report exactly as requested. Git commit may still be left to the lead if sandbox metadata is blocked.",
+  "timeout_seconds": 14400,
+  "why_now": "Call 10 made no changes because it misread the canonical in-repository worktree as a forbidden second copy; the repository rules explicitly prescribe `.worktrees/` for isolation, so the same bounded replacement prototype must be retried with the path clarified.",
+  "working_directory": "."
+}

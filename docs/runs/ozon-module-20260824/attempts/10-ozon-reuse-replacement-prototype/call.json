@@ -1,0 +1,122 @@
+{
+  "acceptance": [
+    "There are zero /app/ff/ozon* routes, zero Ozon navigation entries, and the rejected standalone prototype component is deleted",
+    "All Ozon prototype behavior lives only in bounded zones of existing routes and is active only with ozonPrototype=1",
+    "Normal non-fixture Wildberries behavior remains unchanged and no backend/Ozon/credential call is made",
+    "FBS, FBO, catalog, settings and returns required click paths visibly traverse success, partial, error, pending and unknown states without a parallel UI",
+    "No stock-publication control, action or call exists",
+    "The reuse scope gate validates REUSE_MAP, self-tests pass, and the branch diff contains no unmapped new UI surface",
+    "The frontend build passes and the report maps exact URLs, actions, results, requirement IDs and changed files without claiming browser approval"
+  ],
+  "agent": "developer",
+  "call_id": "10-ozon-reuse-replacement-prototype",
+  "context_note": "This is S0 replacement prototype round 1 after direct owner rejection. It is not production Ozon implementation. The historical prototype SHA 937982c4 remains rejected evidence and must be removed from the working tree, not used as a base.",
+  "expected_artifacts": [
+    {
+      "path": "frontend/src/App.tsx",
+      "purpose": "Rejected standalone Ozon routes removed"
+    },
+    {
+      "path": "frontend/src/layouts/AuthedAppLayout.tsx",
+      "purpose": "Rejected standalone Ozon navigation removed"
+    },
+    {
+      "path": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+      "purpose": "Replacement FBS prototype inside current queue"
+    },
+    {
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+      "purpose": "Replacement Ozon interactions inside current FBS workspace"
+    },
+    {
+      "path": "frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx",
+      "purpose": "Replacement Ozon FBO interactions inside current MP shipment"
+    },
+    {
+      "path": "frontend/src/screens/v2/FfProductsCatalogScreen.tsx",
+      "purpose": "Replacement Ozon mapping interaction inside current catalog"
+    },
+    {
+      "path": "frontend/src/screens/v2/SellerSettingsScreen.tsx",
+      "purpose": "Replacement Ozon connection interaction inside current settings"
+    },
+    {
+      "path": "scripts/ci/check_ozon_reuse_scope.py",
+      "purpose": "Machine-enforced reuse-first scope gate"
+    },
+    {
+      "path": "docs/runs/ozon-module-20260824/10-replacement-prototype-report.md",
+      "purpose": "Traceability and browser acceptance script on existing URLs"
+    }
+  ],
+  "inputs": [
+    {
+      "purpose": "Exact owner request",
+      "ref": "docs/runs/ozon-module-20260824/REQUEST.txt"
+    },
+    {
+      "purpose": "Binding rejection and strict reuse-first rule",
+      "ref": "tasks/ozon-module-20260824/S0_PRODUCT_VERDICT.md"
+    },
+    {
+      "purpose": "Accepted corrected architecture and exact replacement prototype contract",
+      "ref": "tasks/ozon-module-20260824/ARCH.md"
+    },
+    {
+      "purpose": "Dated lead authorization",
+      "ref": "tasks/ozon-module-20260824/ARCH_APPROVAL.md"
+    },
+    {
+      "purpose": "Machine-readable allowed surfaces, files and forbidden scope",
+      "ref": "tasks/ozon-module-20260824/REUSE_MAP.json"
+    },
+    {
+      "purpose": "Remove rejected routes only",
+      "ref": "frontend/src/App.tsx"
+    },
+    {
+      "purpose": "Remove rejected navigation only",
+      "ref": "frontend/src/layouts/AuthedAppLayout.tsx"
+    },
+    {
+      "purpose": "Existing FBS queue",
+      "ref": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx"
+    },
+    {
+      "purpose": "Existing four-stage FBS workspace",
+      "ref": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx"
+    },
+    {
+      "purpose": "Existing marketplace shipment/FBO document",
+      "ref": "frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx"
+    },
+    {
+      "purpose": "Existing catalog",
+      "ref": "frontend/src/screens/v2/FfProductsCatalogScreen.tsx"
+    },
+    {
+      "purpose": "Existing seller settings",
+      "ref": "frontend/src/screens/v2/SellerSettingsScreen.tsx"
+    },
+    {
+      "purpose": "Existing inbound/return queue",
+      "ref": "frontend/src/screens/ff/FfInboundQueuePage.tsx"
+    },
+    {
+      "purpose": "Existing inbound/return details",
+      "ref": "frontend/src/screens/ff/FfInboundRequestView.tsx"
+    },
+    {
+      "purpose": "Existing seller inbound document",
+      "ref": "frontend/src/screens/v2/SellerInboundDraftScreen.tsx"
+    },
+    {
+      "purpose": "Existing UI components and visual language",
+      "ref": "frontend/src/ui-kit"
+    }
+  ],
+  "task": "Build the replacement clickable React prototype defined by section 13 of tasks/ozon-module-20260824/ARCH.md and strictly enforce tasks/ozon-module-20260824/REUSE_MAP.json. First remove the rejected Ozon navigation item, all /app/ff/ozon* route registrations/imports, and delete frontend/src/prototypes/ozon/OzonModulePrototype.tsx; App.tsx and AuthedAppLayout.tsx may change only for that removal. Do not create any screen, page, route, navigation target, top-level tab, document type, workspace, or new frontend helper/fixture file. Add a local fixture mode, activated only by query parameter `ozonPrototype=1`, directly inside the existing allowed screen files; normal behavior without that parameter, especially Wildberries behavior, must remain unchanged. On existing `/app/ff/fbs`, implement the bounded marketplace filter, Ozon multi-line row content without a new column, homogeneous-selection/mixed-selection feedback, and the four existing workspace stages with clickable fixture transitions for mapping, scans, exemplar correction, partial package, pending-to-ready label, print/apply and one-by-one handover. On existing `/app/ff/mp-shipments`, use only the existing create/header/three tabs/packaging/footer zones for marketplace choice, Ozon route/timeslot async confirmation, cargo/TGM binding, label recovery, ship and acceptance discrepancy. On existing `/app/ff/products`, use the existing action/dialog pattern for account-scoped Ozon candidate mapping without new tab/column. On existing `/seller/settings`, keep WB behavior/copy intact and add the Ozon account card/dialog with incomplete-pair no-call proof, masked fixture credentials, capability discovery and partial sync state; absolutely no stock-publication control or action. On existing return/inbound screens/routes, add only conditional Ozon marker/ids/quarantine/inspection/disposition fixture states and prove inventory stays unchanged until the existing restock action. Include the required Loviana/Fashion, WB+Ozon, 429, stale-success, unknown and partial fixtures from ARCH section 13. Use only realistic local data; make no backend or Ozon API call, do not inspect credentials, and do not change DB/backend code. Every meaningful prototype action must visibly change state. Implement `scripts/ci/check_ozon_reuse_scope.py` from ARCH section 14: validate the map, compare a supplied base/head diff, reject unmapped UI files and any added Ozon route/nav/screen/page/workspace/top-level tab/document kind, allow App/layout/obsolete prototype changes only as removal, and emit actionable failures. Add an `--self-test` mode inside that script because REUSE_MAP does not permit a separate new test file; it must exercise at least one passing mapped diff model and failures for an Ozon route and an unmapped screen. Add `### Ozon reuse scope` with exact requirement IDs/files to the prototype report. Write `docs/runs/ozon-module-20260824/10-replacement-prototype-report.md` mapping each required click path/state to an existing URL and describing how normal non-fixture WB behavior remains unchanged. Run the gate self-test, run it against the branch diff using the appropriate base, and run the frontend build. Report actual results and do not claim live-browser acceptance. If Git metadata is sandbox-blocked, return completed once artifacts and checks are honestly recorded; the lead will inspect and commit.",
+  "timeout_seconds": 14400,
+  "why_now": "The owner rejected the standalone Ozon module and the corrected Stage-0 architecture is committed with a hard machine-readable reuse-first map, so the next bounded action is a replacement prototype inside existing WMS screens only.",
+  "working_directory": "."
+}

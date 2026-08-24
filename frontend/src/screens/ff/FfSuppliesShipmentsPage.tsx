@@ -288,6 +288,14 @@ export function FfSuppliesShipmentsPage({
   addressStorageEnabled = true,
 }: Props) {
   const [searchParams, setSearchParams] = useSearchParams()
+  const ozonPrototype = searchParams.get('ozonPrototype') === '1'
+  const [mpCreateMarketplace, setMpCreateMarketplace] = useState<'wb' | 'ozon'>('wb')
+  const [ozonRoute, setOzonRoute] = useState('')
+  const [ozonTimeslot, setOzonTimeslot] = useState('')
+  const [ozonReadback, setOzonReadback] = useState(false)
+  const [ozonCargo, setOzonCargo] = useState(false)
+  const [ozonLabelRecovered, setOzonLabelRecovered] = useState(false)
+  const [ozonShipped, setOzonShipped] = useState(false)
   const isMpShipmentsPage = pageVariant === 'mp-shipments'
   const [kind, setKind] = useState<QuickFilterKind>(isMpShipmentsPage ? 'marketplace_unload' : 'all')
   const [sellerFilter, setSellerFilter] = useState<string>('all')
@@ -347,6 +355,7 @@ export function FfSuppliesShipmentsPage({
   // (например «Утверждено» → «На сборке» как побочный эффект скана/создания короба).
   const prevMpStatusRef = useRef<{ id: string; status: string } | null>(null)
   const [statusChangeMsg, setStatusChangeMsg] = useState<string | null>(null)
+  const isOzonFixtureDocument = ozonPrototype && docModalId === 'ozon-fixture-fbo'
 
   const authHeaders = useMemo(
     () => (token ? { Authorization: `Bearer ${token}` } : null),
@@ -387,6 +396,10 @@ export function FfSuppliesShipmentsPage({
 
   const loadDocDetail = useCallback(async () => {
     const docDetailRequestId = docDetailRequests.current.next()
+    if (ozonPrototype && docModal === 'marketplace_unload' && docModalId === 'ozon-fixture-fbo') {
+      setModalBusy(false)
+      return
+    }
     if (!token || !authHeaders || !docModal || !docModalId) {
       setUnloadDetail(null)
       setDivergeDetail(null)
@@ -633,7 +646,7 @@ export function FfSuppliesShipmentsPage({
         setModalBusy(false)
       }
     }
-  }, [token, authHeaders, docModal, docModalId])
+  }, [token, authHeaders, docModal, docModalId, ozonPrototype])
 
   useEffect(() => {
     void loadDocDetail()
@@ -789,6 +802,26 @@ export function FfSuppliesShipmentsPage({
   const createAndOpenMpShipment = async () => {
     if (!mpCreateSellerId) {
       setModalError('Выберите селлера (ИП) для отгрузки.')
+      return
+    }
+    if (ozonPrototype && mpCreateMarketplace === 'ozon') {
+      const sellerName = sellers.find((seller) => seller.id === mpCreateSellerId)?.name ?? 'Loviana'
+      setUnloadDetail({
+        id: 'ozon-fixture-fbo', document_number: 'OZ-FBO-4829', display_number: 'OZ-FBO-4829', public_number: null, human_number: null,
+        warehouse_id: 'fixture-wh', warehouse_name: 'Основной склад', status: 'collecting', ff_modified: false,
+        seller_id: mpCreateSellerId, seller_name: sellerName, wb_mp_warehouse_id: 0, planned_shipment_date: '2026-08-24', created_at: '2026-08-24T10:42:00Z',
+        lines: [
+          { id: 'ozon-line-1', product_id: 'fixture-margo', sku_code: 'OZ-MARGO-42', product_name: 'Платье Margo', quantity: 6, picked_qty: 6 },
+          { id: 'ozon-line-2', product_id: 'fixture-luna', sku_code: 'OZ-LUNA-01', product_name: 'Сумка Luna', quantity: 4, picked_qty: 4 },
+        ],
+        boxes: [{ id: 'ozon-box-201', box_preset: '60_40_40', internal_barcode: 'BOX-201', closed_at: null, lines: [{ id: 'ozon-box-line-1', product_id: 'fixture-margo', sku_code: 'OZ-MARGO-42', product_name: 'Платье Margo', quantity: 6 }] }, { id: 'ozon-box-202', box_preset: '30_20_30', internal_barcode: 'BOX-202', closed_at: null, lines: [{ id: 'ozon-box-line-2', product_id: 'fixture-luna', sku_code: 'OZ-LUNA-01', product_name: 'Сумка Luna', quantity: 4 }] }],
+        pick_allocations: [], linked_packaging_task: { task_id: 'ozon-local-pack', status: 'completed', qty_done: 10, qty_total: 10, is_complete: true },
+      })
+      setConfirmDate('2026-08-24')
+      setDocModal('marketplace_unload')
+      setDocModalId('ozon-fixture-fbo')
+      setMpUnloadTab('plan')
+      setModalError(null)
       return
     }
     const created = await onCreateMpShipment(mpCreateSellerId)
@@ -1406,6 +1439,14 @@ export function FfSuppliesShipmentsPage({
   }
 
   const requestShipMpUnload = () => {
+    if (isOzonFixtureDocument) {
+      if (!ozonLabelRecovered) {
+        setModalError('Сначала восстановите label C-02 после readback.')
+        return
+      }
+      setOzonShipped(true)
+      return
+    }
     if (!token || !authHeaders || !docModalId) {
       return
     }
@@ -1425,6 +1466,11 @@ export function FfSuppliesShipmentsPage({
   }
 
   const cancelMpUnload = async () => {
+    if (isOzonFixtureDocument) {
+      setModalError(null)
+      setStatusChangeMsg('Локальный Ozon fixture отменён; внешних вызовов нет.')
+      return
+    }
     if (!token || !authHeaders || !docModalId) {
       return
     }
@@ -2093,6 +2139,21 @@ export function FfSuppliesShipmentsPage({
                   ))}
                 </Select>
               </FormControl>
+              {ozonPrototype ? (
+                <FormControl size="small" sx={{ minWidth: 180 }}>
+                  <InputLabel id="ff-mp-create-marketplace-label">Маркетплейс</InputLabel>
+                  <Select
+                    labelId="ff-mp-create-marketplace-label"
+                    label="Маркетплейс"
+                    value={mpCreateMarketplace}
+                    onChange={(e) => setMpCreateMarketplace(String(e.target.value) as 'wb' | 'ozon')}
+                    data-testid="ozon-fbo-marketplace-select"
+                  >
+                    <MenuItem value="wb">Wildberries</MenuItem>
+                    <MenuItem value="ozon">Ozon</MenuItem>
+                  </Select>
+                </FormControl>
+              ) : null}
               <Button
                 variant="contained"
                 color="primary"
@@ -2326,6 +2387,28 @@ export function FfSuppliesShipmentsPage({
                   sx={{ mb: 1.5, flexWrap: 'wrap', alignItems: { sm: 'center' } }}
                   data-testid="ff-mp-doc-header-fields"
                 >
+                  {isOzonFixtureDocument ? (
+                    <>
+                      <FormControl size="small" sx={{ minWidth: 150 }}>
+                        <InputLabel id="ozon-fbo-header-marketplace">Маркетплейс</InputLabel>
+                        <Select labelId="ozon-fbo-header-marketplace" label="Маркетплейс" value="ozon" disabled>
+                          <MenuItem value="ozon">Ozon</MenuItem>
+                        </Select>
+                      </FormControl>
+                      <FormControl size="small" sx={{ minWidth: 160 }}>
+                        <InputLabel id="ozon-fbo-route">Маршрут</InputLabel>
+                        <Select labelId="ozon-fbo-route" label="Маршрут" value={ozonRoute} onChange={(e) => setOzonRoute(String(e.target.value))} data-testid="ozon-fbo-route">
+                          <MenuItem value="direct">Direct</MenuItem>
+                          <MenuItem value="crossdock">Crossdock</MenuItem>
+                          <MenuItem value="multi">Multi-cluster</MenuItem>
+                        </Select>
+                      </FormControl>
+                      <TextField size="small" label="Таймслот" value={ozonTimeslot} onChange={(e) => setOzonTimeslot(e.target.value)} data-testid="ozon-fbo-timeslot" />
+                      <Button variant="outlined" disabled={!ozonRoute || !ozonTimeslot} onClick={() => setOzonReadback(true)} data-testid="ozon-fbo-readback">
+                        {ozonReadback ? 'Readback подтверждён' : 'Подтвердить readback'}
+                      </Button>
+                    </>
+                  ) : null}
                   {mpDateEditable ? (
                     <Box sx={{ maxWidth: 280 }}>
                       <WmsDateField
@@ -2510,6 +2593,11 @@ export function FfSuppliesShipmentsPage({
               </Tabs>
               {mpUnloadTab === 'plan' ? (
                 <Stack spacing={2} data-testid="ff-mp-tab-plan-panel">
+                  {isOzonFixtureDocument ? (
+                    <Alert severity={ozonReadback ? 'success' : 'info'} data-testid="ozon-fbo-plan-context">
+                      Ozon supply order: 10 шт. · {ozonReadback ? 'readback success' : 'pending / uncertain'}; локальный документ не вызывает provider API.
+                    </Alert>
+                  ) : null}
                   {unloadDetail.seller_name ? (
                     <Typography variant="body2" color="text.secondary">
                       Селлер: <strong>{unloadDetail.seller_name}</strong>
@@ -2673,6 +2761,7 @@ export function FfSuppliesShipmentsPage({
               ) : null}
               {mpUnloadTab === 'pick' && unloadDetail && token && authHeaders ? (
                 <Box data-testid="ff-mp-tab-pick-panel">
+                  {isOzonFixtureDocument ? <Alert severity="info" sx={{ mb: 2 }}>Подбор Ozon подтверждён в существующей зоне: 10 из 10 шт.</Alert> : null}
                   <FfMpUnloadPickPanel
                     token={token}
                     authHeaders={authHeaders}
@@ -2685,6 +2774,17 @@ export function FfSuppliesShipmentsPage({
               ) : null}
               {mpUnloadTab === 'packaging' ? (
                 <Box data-testid="ff-mp-tab-packaging-panel">
+                  {isOzonFixtureDocument ? (
+                    <Paper variant="outlined" sx={{ p: 1.5, mb: 2 }} data-testid="ozon-fbo-packaging-context">
+                      <Typography variant="subtitle2">WMS короба → Ozon Cargo / TGM</Typography>
+                      <Typography variant="body2">BOX-201 → C-01 (6 шт.), BOX-202 → C-02 (4 шт.) внутри TGM-01.</Typography>
+                      <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' }}>
+                        <Button variant="outlined" disabled={!ozonReadback} onClick={() => setOzonCargo(true)}>Связать cargo и TGM</Button>
+                        <Button variant="outlined" disabled={!ozonCargo} onClick={() => setOzonLabelRecovered(true)}>Восстановить label C-02</Button>
+                      </Stack>
+                      {ozonCargo ? <Alert severity="warning" sx={{ mt: 1 }}>C-01 label ready; C-02 label failed (partial). Готовый cargo сохранён.</Alert> : null}
+                    </Paper>
+                  ) : null}
                   {packagingTaskError ? (
                     <Alert severity="error" sx={{ mb: 2 }}>
                       {packagingTaskError}
@@ -3187,6 +3287,11 @@ export function FfSuppliesShipmentsPage({
                   >
                     Отменить отгрузку
                   </Button>
+                ) : null}
+                {isOzonFixtureDocument && ozonShipped ? (
+                  <Alert severity="warning" data-testid="ozon-fbo-acceptance">
+                    Приёмка: план 10 · принято 9 · отклонено 1. Act beta недоступен: ручная проверка, auto-accept отсутствует.
+                  </Alert>
                 ) : null}
               </>
             ) : null}
