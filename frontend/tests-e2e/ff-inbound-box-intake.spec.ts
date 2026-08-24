@@ -1,4 +1,13 @@
 import { test, expect } from '@playwright/test';
+import {
+  BarcodeFormat,
+  BinaryBitmap,
+  DecodeHintType,
+  HybridBinarizer,
+  MultiFormatReader,
+  RGBLuminanceSource,
+} from '@zxing/library';
+import { PNG } from 'pngjs';
 
 import { waitForPatchOk, waitForPostOk, waitForPutOk } from './api-waits';
 import {
@@ -6,12 +15,39 @@ import {
   apiCreateSubmittedInbound,
   beginInboundReceiving,
   beginInboundReceivingWithBoxes,
+  createInboundBoxes,
   expandInboundPackages,
   ffInboundBoxAddManualQty,
   loginFfAdmin,
   openFfInboundDoc,
   seedFfSellerInbound,
 } from './inbound-boxes-helpers';
+
+function decodeCode128FromDataUrl(dataUrl: string): string {
+  const encoded = dataUrl.match(/^data:image\/png;base64,(.+)$/)?.[1];
+  if (!encoded) throw new Error('Ожидался PNG Code 128 в data URL.');
+  const png = PNG.sync.read(Buffer.from(encoded, 'base64'));
+  const pixels = new Int32Array(png.width * png.height);
+  for (let index = 0; index < pixels.length; index += 1) {
+    const offset = index * 4;
+    pixels[index] = (
+      (png.data[offset + 3]! << 24)
+      | (png.data[offset]! << 16)
+      | (png.data[offset + 1]! << 8)
+      | png.data[offset + 2]!
+    );
+  }
+  const source = new RGBLuminanceSource(
+    pixels,
+    png.width,
+    png.height,
+  );
+  const hints = new Map();
+  hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.CODE_128]);
+  return new MultiFormatReader()
+    .decode(new BinaryBitmap(new HybridBinarizer(source)), hints)
+    .getText();
+}
 
 // TC-NEW-C01 — поштучная приёмка: модал «Добавить в короб» → ручное кол-во → завершить приёмку.
 test.describe('FF inbound box piece intake', () => {
@@ -153,6 +189,104 @@ test.describe('FF inbound box piece intake', () => {
     expect(verifyRes.ok()).toBeTruthy();
     await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('В сортировке');
   });
+});
+
+// TC-NEW-INTERNAL-LABEL-01 — все внутренние ШК коробов печатаются одной лентой;
+// PNG из реального print HTML декодируется обратно в исходный Code 128.
+test('TC-NEW-INTERNAL-LABEL-01 bulk box labels are large, decodable and one print job', async ({ page }, testInfo) => {
+  const seed = await seedFfSellerInbound(page, `bulk-box-label-${Date.now()}`);
+  const requestId = await apiCreateSubmittedInbound(page.request, seed, {
+    plannedBoxes: 2,
+    expectedQty: 2,
+  });
+  const headers = { Authorization: `Bearer ${seed.token}` };
+  await beginInboundReceiving(page.request, headers, requestId);
+  const boxes = await createInboundBoxes(page.request, headers, requestId, 2);
+
+  await loginFfAdmin(page, seed.adminEmail, seed.password);
+  await openFfInboundDoc(page, seed, { skipLogin: true });
+  await expandInboundPackages(page);
+  await expect(page.getByTestId('ff-inbound-boxes-print-all')).toBeEnabled();
+
+  await page.evaluate(() => {
+    const capture = window as unknown as {
+      __WMS_CAPTURE_PRINT_HTML__?: boolean;
+      __WMS_LAST_PRINT_HTML__?: string;
+      __WMS_PRINT_JOB_COUNT__?: number;
+      __WMS_PRINT_CLEANUP_EVENTS__?: string[];
+    };
+    capture.__WMS_CAPTURE_PRINT_HTML__ = true;
+    capture.__WMS_LAST_PRINT_HTML__ = '';
+    capture.__WMS_PRINT_JOB_COUNT__ = 0;
+    capture.__WMS_PRINT_CLEANUP_EVENTS__ = [];
+  });
+
+  await page.getByTestId('ff-inbound-boxes-print-all').click();
+  const dialog = page.getByTestId('ff-inbound-box-print-dialog');
+  await expect(dialog).toBeVisible();
+  await dialog.getByTestId('ff-inbound-box-print-dialog-size').click();
+  await page.getByTestId('ff-inbound-box-print-dialog-size-option-60x40').click();
+  await dialog.getByTestId('ff-inbound-box-print-dialog-confirm').click();
+
+  await expect.poll(async () => page.evaluate(() => {
+    const capture = window as unknown as { __WMS_LAST_PRINT_HTML__?: string };
+    return capture.__WMS_LAST_PRINT_HTML__ ?? '';
+  })).toContain(boxes[0]!.internal_barcode);
+
+  const printHtml = await page.evaluate(() => {
+    const capture = window as unknown as {
+      __WMS_LAST_PRINT_HTML__?: string;
+      __WMS_PRINT_JOB_COUNT__?: number;
+    };
+    return { html: capture.__WMS_LAST_PRINT_HTML__ ?? '', jobs: capture.__WMS_PRINT_JOB_COUNT__ ?? 0 };
+  });
+  expect(printHtml.html).toContain(`@page { size: 60mm 40mm; margin: 0; }`);
+  expect(printHtml.html).toContain('.barcode { width: 100%; max-width: none;');
+  expect(printHtml.html).toContain('page-break-after: always;');
+  for (const box of boxes) expect(printHtml.html).toContain(`data-barcode="${box.internal_barcode}"`);
+  expect((printHtml.html.match(/class="label/g) ?? []).length).toBe(2);
+
+  // Живой Chromium рендерит сам print HTML с PNG, а не подменённый макет.
+  const preview = await page.context().newPage({ viewport: { width: 600, height: 500 } });
+  await preview.setContent(printHtml.html);
+  const barcodeImage = preview.locator('img.barcode').first();
+  await expect(barcodeImage).toBeVisible();
+  const barcodeBox = await barcodeImage.boundingBox();
+  expect(barcodeBox?.width).toBeGreaterThan(200);
+  await preview.screenshot({ path: testInfo.outputPath('internal-box-label-preview.png') });
+  await preview.close();
+
+  await expect.poll(async () => page.evaluate(() => {
+    const capture = window as unknown as { __WMS_PRINT_JOB_COUNT__?: number };
+    return capture.__WMS_PRINT_JOB_COUNT__ ?? 0;
+  })).toBe(1);
+  expect(printHtml.jobs).toBeLessThanOrEqual(1);
+  await expect.poll(async () => page.evaluate(() => {
+    const capture = window as unknown as { __WMS_PRINT_CLEANUP_EVENTS__?: string[] };
+    return capture.__WMS_PRINT_CLEANUP_EVENTS__ ?? [];
+  })).toEqual(['afterprint']);
+
+  const firstPng = printHtml.html.match(/<img class="barcode" src="([^"]+)"/)?.[1];
+  expect(firstPng).toBeTruthy();
+  expect(decodeCode128FromDataUrl(firstPng!)).toBe(boxes[0]!.internal_barcode);
+  await expect(dialog).toHaveCount(0);
+
+  // Приёмка уже проведена, но оператор может открыть её в общем списке и
+  // перепечатать внутренние этикетки: кнопка зависит только от наличия коробов.
+  for (const box of boxes) {
+    const line = await page.request.put(
+      `${INBOUND_API}/${requestId}/boxes/${box.id}/lines/${seed.productId}`,
+      { headers: { ...headers, 'Content-Type': 'application/json' }, data: { quantity: 1 } },
+    );
+    expect(line.ok()).toBeTruthy();
+  }
+  const completed = await page.request.post(`${INBOUND_API}/${requestId}/complete-receiving`, { headers });
+  expect(completed.ok()).toBeTruthy();
+  await page.getByTestId('ff-doc-dialog-close').click();
+  await openFfInboundDoc(page, seed, { skipLogin: true });
+  await expandInboundPackages(page);
+  await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('В сортировке');
+  await expect(page.getByTestId('ff-inbound-boxes-print-all')).toBeEnabled();
 });
 
 // TC-NEW-STAB-IN-FE-03 — модалка «Добавить в короб»: фото/название/артикул/размер, hover, qty только в выбранный короб.
