@@ -111,12 +111,7 @@ export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[]): voi
   iframe.style.border = '0'
   document.body.appendChild(iframe)
 
-  let fallbackCleanupTimer: ReturnType<typeof setTimeout> | null = null
-  const cleanup = (reason: 'afterprint' | 'fallback' | 'image-error') => {
-    if (fallbackCleanupTimer != null) {
-      clearTimeout(fallbackCleanupTimer)
-      fallbackCleanupTimer = null
-    }
+  const cleanup = (reason: 'afterprint' | 'image-error') => {
     if (window.__WMS_CAPTURE_PRINT_HTML__) {
       window.__WMS_PRINT_CLEANUP_EVENTS__ = [
         ...(window.__WMS_PRINT_CLEANUP_EVENTS__ ?? []),
@@ -143,10 +138,9 @@ export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[]): voi
     }
     setTimeout(() => {
       // Нельзя удалять iframe сразу после print(): системное окно предпросмотра
-      // ещё читает data URL из этого документа. afterprint — нормальный конец;
-      // fallback только защищает от браузера, который событие не прислал.
+      // ещё читает data URL из этого документа. afterprint — единственный
+      // успешный конец печати; до него источник этикетки обязан оставаться жив.
       w.addEventListener('afterprint', () => cleanup('afterprint'), { once: true })
-      fallbackCleanupTimer = setTimeout(() => cleanup('fallback'), 30_000)
       try {
         if (window.__WMS_CAPTURE_PRINT_HTML__) {
           window.__WMS_PRINT_JOB_COUNT__ = (window.__WMS_PRINT_JOB_COUNT__ ?? 0) + 1

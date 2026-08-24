@@ -20,6 +20,7 @@
 - `frontend/src/screens/ff/FfInboundRequestView.tsx`;
 - `frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx`;
 - `frontend/tests-e2e/ff-inbound-box-intake.spec.ts`;
+- `frontend/package.json` and `frontend/package-lock.json` — test-only decoder dependencies;
 - файлы этого наряда и доказательства.
 
 ## Запрещено
