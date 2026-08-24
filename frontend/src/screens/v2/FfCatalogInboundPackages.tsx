@@ -7,6 +7,7 @@ import {
   Box,
   Button,
   CircularProgress,
+  MenuItem,
   Paper,
   Stack,
   Table,
@@ -23,40 +24,14 @@ import { apiUrl } from '../../api'
 import { ProductBarcodeCell } from '../../components/ProductBarcodeCell'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
-
-type SourceDocument = {
-  kind: string
-  id: string
-  number: string | null
-  date: string
-}
-
-type InboundPackageLine = {
-  product_id: string
-  remaining_qty: number
-  name: string
-  sku_code: string
-  wb_vendor_code: string | null
-  wb_barcode: string | null
-  wb_size: string | null
-  seller_name: string | null
-}
-
-type InboundPackage = {
-  id: string
-  kind: 'box' | 'cargo_place'
-  number: number
-  internal_barcode: string
-  request_id: string
-  request_display_number: string | null
-  warehouse_name: string | null
-  intake_status: string
-  composition_tracked: boolean
-  fully_distributed: boolean
-  remaining_qty: number | null
-  lines: InboundPackageLine[]
-  source_document: SourceDocument
-}
+import {
+  filterInboundPackages,
+  lineMatchesFilters,
+  normalizePackageProductSearch,
+  type InboundPackage,
+  type InboundPackageLine,
+  type SourceDocument,
+} from './FfCatalogInboundPackageFilters'
 
 export type CatalogInboundPackageProduct = {
   id: string
@@ -127,6 +102,8 @@ type PackageAccordionProps = {
   productsById: Map<string, CatalogInboundPackageProduct>
   expanded: boolean
   highlighted: boolean
+  selectedSeller: string
+  normalizedProductSearch: string
   onExpandedChange: (packageId: string, expanded: boolean) => void
 }
 
@@ -135,11 +112,13 @@ const PackageAccordion = memo(function PackageAccordion({
   productsById,
   expanded,
   highlighted,
+  selectedSeller,
+  normalizedProductSearch,
   onExpandedChange,
 }: PackageAccordionProps) {
   const compositionRows = useMemo<PackageCompositionRow[]>(
     () =>
-      item.lines.map((line) => {
+      item.lines.filter((line) => lineMatchesFilters(line, selectedSeller, normalizedProductSearch)).map((line) => {
         const product = productsById.get(line.product_id)
         return {
           ...line,
@@ -153,7 +132,7 @@ const PackageAccordion = memo(function PackageAccordion({
           wb_barcodes: line.wb_barcode ? [line.wb_barcode] : (product?.wb_barcodes ?? []),
         }
       }),
-    [item.lines, productsById],
+    [item.lines, normalizedProductSearch, productsById, selectedSeller],
   )
   const completed = item.intake_status === 'done'
   const fullyDistributed = item.kind === 'box' && item.fully_distributed
@@ -353,8 +332,10 @@ export function FfCatalogInboundPackages({ token, authHeaders, products }: Props
   const [listError, setListError] = useState(false)
   const [listedPackages, setListedPackages] = useState<InboundPackage[]>([])
   const [addressedPackage, setAddressedPackage] = useState<InboundPackage | null>(null)
-  const [openPackageId, setOpenPackageId] = useState<string | null>(null)
+  const [openPackageIds, setOpenPackageIds] = useState<Set<string>>(() => new Set())
   const [highlightedPackageId, setHighlightedPackageId] = useState<string | null>(null)
+  const [selectedSeller, setSelectedSeller] = useState('')
+  const [productSearch, setProductSearch] = useState('')
   const [scanValue, setScanValue] = useState('')
   const [scanError, setScanError] = useState<string | null>(null)
   const [scanLoading, setScanLoading] = useState(false)
@@ -371,7 +352,30 @@ export function FfCatalogInboundPackages({ token, authHeaders, products }: Props
     return listedPackages.map((item) => (item.id === addressedPackage.id ? addressedPackage : item))
   }, [addressedPackage, listedPackages])
 
-  const visiblePackages = listLoading ? (addressedPackage ? [addressedPackage] : []) : packages
+  const normalizedProductSearch = useMemo(() => normalizePackageProductSearch(productSearch), [productSearch])
+
+  const sellerOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          packages.flatMap((item) =>
+            item.lines
+              .map((line) => line.seller_name?.trim() ?? '')
+              .filter((sellerName): sellerName is string => sellerName.length > 0),
+          ),
+        ),
+      ).sort((left, right) => left.localeCompare(right, 'ru-RU')),
+    [packages],
+  )
+
+  const visiblePackages = useMemo(
+    () => {
+      const packageSource = listLoading ? (addressedPackage ? [addressedPackage] : []) : packages
+      return filterInboundPackages(packageSource, selectedSeller, normalizedProductSearch)
+    },
+    [addressedPackage, listLoading, normalizedProductSearch, packages, selectedSeller],
+  )
+  const filtersActive = selectedSeller.length > 0 || normalizedProductSearch.length > 0
 
   const loadList = useCallback(async () => {
     setListLoading(true)
@@ -414,15 +418,24 @@ export function FfCatalogInboundPackages({ token, authHeaders, products }: Props
         const item = (await response.json()) as InboundPackage
         if (requestSequence.current !== sequence) return
         setAddressedPackage(item)
-        setOpenPackageId(item.id)
+        setOpenPackageIds((current) => new Set(current).add(item.id))
         setHighlightedPackageId(item.id)
-        setScanAnnouncement(`${packageTitle(item)} открыт`)
-        window.setTimeout(() => {
-          document.getElementById(`ff-catalog-inbound-package-${item.id}`)?.scrollIntoView({
-            behavior: 'smooth',
-            block: 'nearest',
-          })
-        }, 0)
+        const isVisibleWithFilters = item.lines.some((line) =>
+          lineMatchesFilters(line, selectedSeller, normalizedProductSearch),
+        )
+        if (!item.lines.length) {
+          setScanAnnouncement(`${packageTitle(item)} не содержит товаров и скрыт из списка.`)
+        } else if (!isVisibleWithFilters) {
+          setScanAnnouncement(`${packageTitle(item)} не соответствует текущему фильтру.`)
+        } else {
+          setScanAnnouncement(`${packageTitle(item)} открыт`)
+          window.setTimeout(() => {
+            document.getElementById(`ff-catalog-inbound-package-${item.id}`)?.scrollIntoView({
+              behavior: 'smooth',
+              block: 'nearest',
+            })
+          }, 0)
+        }
       } catch {
         if (requestSequence.current === sequence) {
           setScanError('Нет связи с сервером. Повторите сканирование.')
@@ -437,7 +450,7 @@ export function FfCatalogInboundPackages({ token, authHeaders, products }: Props
         }
       }
     },
-    [authHeaders, token],
+    [authHeaders, normalizedProductSearch, selectedSeller, token],
   )
 
   const handleScanKeyDown = useCallback(
@@ -452,8 +465,24 @@ export function FfCatalogInboundPackages({ token, authHeaders, products }: Props
   )
 
   const handlePackageExpandedChange = useCallback((packageId: string, expanded: boolean) => {
-    setOpenPackageId(expanded ? packageId : null)
+    setOpenPackageIds((current) => {
+      const next = new Set(current)
+      if (expanded) {
+        next.add(packageId)
+      } else {
+        next.delete(packageId)
+      }
+      return next
+    })
   }, [])
+
+  const expandVisiblePackages = useCallback(() => {
+    setOpenPackageIds((current) => {
+      const next = new Set(current)
+      visiblePackages.forEach((item) => next.add(item.id))
+      return next
+    })
+  }, [visiblePackages])
 
   return (
     <Box data-testid="ff-catalog-inbound-packages">
@@ -503,6 +532,50 @@ export function FfCatalogInboundPackages({ token, authHeaders, products }: Props
         ) : null}
       </Paper>
 
+      <Stack
+        direction={{ xs: 'column', md: 'row' }}
+        spacing={1}
+        sx={{ mb: 2, alignItems: { md: 'center' } }}
+        data-testid="ff-catalog-inbound-packages-filters"
+      >
+        <Box data-testid="ff-catalog-inbound-packages-seller-filter">
+          <TextField
+            select
+            size="small"
+            label="Селлер"
+            value={selectedSeller}
+            onChange={(event) => setSelectedSeller(event.target.value)}
+            sx={{ width: { xs: '100%', md: 260 } }}
+          >
+            <MenuItem value="">Все селлеры</MenuItem>
+            {sellerOptions.map((sellerName) => (
+              <MenuItem key={sellerName} value={sellerName}>
+                {sellerName}
+              </MenuItem>
+            ))}
+          </TextField>
+        </Box>
+        <TextField
+          size="small"
+          label="Товар"
+          value={productSearch}
+          onChange={(event) => setProductSearch(event.target.value)}
+          placeholder="Название, артикул или ШК"
+          slotProps={{ htmlInput: { 'data-testid': 'ff-catalog-inbound-packages-product-search' } }}
+          sx={{ width: { xs: '100%', md: 320 } }}
+        />
+        <Button
+          variant="outlined"
+          size="small"
+          onClick={expandVisiblePackages}
+          disabled={visiblePackages.length === 0}
+          data-testid="ff-catalog-inbound-packages-expand-all"
+          sx={{ alignSelf: { xs: 'flex-start', md: 'center' }, whiteSpace: 'nowrap' }}
+        >
+          Раскрыть все
+        </Button>
+      </Stack>
+
       {listLoading ? (
         <Stack
           direction="row"
@@ -532,13 +605,22 @@ export function FfCatalogInboundPackages({ token, authHeaders, products }: Props
         <EmptyPanel title="Коробов и грузомест пока нет" hint="Создайте короб или грузоместо в разделе «Приёмка»." />
       ) : null}
 
+      {listLoaded && !listLoading && !listError && packages.length > 0 && visiblePackages.length === 0 ? (
+        <EmptyPanel
+          title={filtersActive ? 'По текущим условиям коробов с товарами не найдено' : 'Коробов с товарами пока нет'}
+          hint={filtersActive ? 'Измените селлера или запрос поиска.' : 'Пустые короба и грузоместа здесь не показываются.'}
+        />
+      ) : null}
+
       {visiblePackages.map((item) => (
         <PackageAccordion
           key={item.id}
           item={item}
           productsById={productsById}
-          expanded={openPackageId === item.id}
+          expanded={openPackageIds.has(item.id)}
           highlighted={highlightedPackageId === item.id}
+          selectedSeller={selectedSeller}
+          normalizedProductSearch={normalizedProductSearch}
           onExpandedChange={handlePackageExpandedChange}
         />
       ))}

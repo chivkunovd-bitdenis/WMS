@@ -5,6 +5,7 @@ import { INBOUND_API, seedFfSellerInbound, type InboundBoxesSeed } from './inbou
 async function createReceivingRequest(
   page: Page,
   seed: InboundBoxesSeed,
+  options: { productIds?: string[]; plannedBoxCount?: number; expectedQty?: number } = {},
 ): Promise<{ requestId: string; headers: { Authorization: string } }> {
   const headers = { Authorization: `Bearer ${seed.token}` }
   const created = await page.request.post(INBOUND_API, {
@@ -16,15 +17,17 @@ async function createReceivingRequest(
 
   const planned = await page.request.patch(`${INBOUND_API}/${requestId}`, {
     headers,
-    data: { planned_box_count: 1 },
+    data: { planned_box_count: options.plannedBoxCount ?? 1 },
   })
   expect(planned.ok()).toBeTruthy()
 
-  const line = await page.request.post(`${INBOUND_API}/${requestId}/lines`, {
-    headers,
-    data: { product_id: seed.productId, expected_qty: 1 },
-  })
-  expect(line.ok()).toBeTruthy()
+  for (const productId of options.productIds ?? [seed.productId]) {
+    const line = await page.request.post(`${INBOUND_API}/${requestId}/lines`, {
+      headers,
+      data: { product_id: productId, expected_qty: options.expectedQty ?? 1 },
+    })
+    expect(line.ok()).toBeTruthy()
+  }
   expect((await page.request.post(`${INBOUND_API}/${requestId}/submit`, { headers })).ok()).toBeTruthy()
   expect(
     (await page.request.post(`${INBOUND_API}/${requestId}/begin-receiving`, { headers })).ok(),
@@ -64,6 +67,63 @@ function packageByBarcode(page: Page, barcode: string): Locator {
   return page
     .locator('[data-testid^="ff-catalog-inbound-package-"]:not([data-testid="ff-catalog-inbound-packages"])')
     .filter({ hasText: barcode })
+}
+
+async function createSecondSellerProduct(
+  page: Page,
+  seed: InboundBoxesSeed,
+): Promise<{ productId: string; sku: string; barcode: string; sellerName: string }> {
+  const headers = { Authorization: `Bearer ${seed.token}` }
+  const sellerName = `Second filter seller ${seed.suffix}`
+  const seller = await page.request.post('/api/sellers', { headers, data: { name: sellerName } })
+  expect(seller.ok()).toBeTruthy()
+  const sellerId = String(((await seller.json()) as { id: string }).id)
+  const sku = `second-filter-sku-${seed.suffix}`
+  const barcode = `second-filter-barcode-${seed.suffix}`
+  const product = await page.request.post('/api/products', {
+    headers,
+    data: {
+      name: `Second filter product ${seed.suffix}`,
+      sku_code: sku,
+      wb_vendor_code: `second-filter-article-${seed.suffix}`,
+      wb_barcode: barcode,
+      wb_size: '42',
+      length_mm: 100,
+      width_mm: 100,
+      height_mm: 100,
+      seller_id: sellerId,
+    },
+  })
+  expect(product.ok()).toBeTruthy()
+  return { productId: String(((await product.json()) as { id: string }).id), sku, barcode, sellerName }
+}
+
+async function createSameSellerProduct(
+  page: Page,
+  seed: InboundBoxesSeed,
+): Promise<{ productId: string; sku: string }> {
+  const headers = { Authorization: `Bearer ${seed.token}` }
+  const sku = `same-seller-filter-sku-${seed.suffix}`
+  const product = await page.request.post('/api/products', {
+    headers,
+    data: {
+      name: `Other first seller product ${seed.suffix}`,
+      sku_code: sku,
+      wb_vendor_code: `same-seller-filter-article-${seed.suffix}`,
+      wb_barcode: `same-seller-filter-barcode-${seed.suffix}`,
+      wb_size: '42',
+      length_mm: 100,
+      width_mm: 100,
+      height_mm: 100,
+      seller_id: seed.sellerId,
+    },
+  })
+  expect(product.ok()).toBeTruthy()
+  return { productId: String(((await product.json()) as { id: string }).id), sku }
+}
+
+function packageHeader(page: Page, packageId: string): Locator {
+  return page.locator(`#ff-catalog-inbound-package-header-${packageId}`)
 }
 
 // TC-NEW-CATALOG-BOX-001: the printed box barcode opens the matching current contents.
@@ -169,9 +229,27 @@ test('scan opens the received box and shows its current contents', async ({ page
 // TC-NEW-CATALOG-BOX-002: one lookup owns the scanner until its fast read-only response returns.
 test('scanner shows lookup progress and accepts the next box after completion', async ({ page }) => {
   const seed = await seedFfSellerInbound(page, `catalog-race-${Date.now()}`)
-  const { requestId, headers } = await createReceivingRequest(page, seed)
+  const { requestId, headers } = await createReceivingRequest(page, seed, { expectedQty: 2 })
   const firstBox = await createBox(page, requestId, headers)
   const secondBox = await createBox(page, requestId, headers)
+  for (const box of [firstBox, secondBox]) {
+    expect(
+      (
+        await page.request.post(`${INBOUND_API}/${requestId}/boxes/open`, {
+          headers,
+          data: { barcode: box.barcode },
+        })
+      ).ok(),
+    ).toBeTruthy()
+    expect(
+      (
+        await page.request.post(`${INBOUND_API}/${requestId}/boxes/${box.id}/scan`, {
+          headers,
+          data: { barcode: seed.sku },
+        })
+      ).ok(),
+    ).toBeTruthy()
+  }
 
   let releaseFirstLookup: (() => void) | undefined
   const firstLookupReleased = new Promise<void>((resolve) => {
@@ -220,4 +298,126 @@ test('scanner shows lookup progress and accepts the next box after completion', 
   await expect(packageByBarcode(page, secondBox.barcode)).toBeVisible()
   await expect(page.getByTestId('ff-catalog-inbound-packages-lookup-error')).toBeHidden()
   await expect(search).toHaveValue(secondBox.barcode)
+})
+
+// TC-CATALOG-BOX-FILTER-001: filters stay inside the boxes tab, apply as AND to composition rows,
+// hide empty packages, and do not make independent accordions mutually exclusive.
+test('filters boxes by seller and product, hides empty boxes, and keeps multiple boxes open', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 })
+  const seed = await seedFfSellerInbound(page, `catalog-filters-${Date.now()}`)
+  const sameSellerProduct = await createSameSellerProduct(page, seed)
+  const secondProduct = await createSecondSellerProduct(page, seed)
+
+  const mixedRequest = await createReceivingRequest(page, seed, {
+    productIds: [seed.productId, sameSellerProduct.productId],
+    plannedBoxCount: 2,
+  })
+  const mixedBox = await createBox(page, mixedRequest.requestId, mixedRequest.headers)
+  const emptyBox = await createBox(page, mixedRequest.requestId, mixedRequest.headers)
+  expect(
+    (
+      await page.request.post(`${INBOUND_API}/${mixedRequest.requestId}/boxes/open`, {
+        headers: mixedRequest.headers,
+        data: { barcode: mixedBox.barcode },
+      })
+    ).ok(),
+  ).toBeTruthy()
+  expect(
+    (
+      await page.request.post(`${INBOUND_API}/${mixedRequest.requestId}/boxes/${mixedBox.id}/scan`, {
+        headers: mixedRequest.headers,
+        data: { barcode: seed.sku },
+      })
+    ).ok(),
+  ).toBeTruthy()
+  expect(
+    (
+      await page.request.post(`${INBOUND_API}/${mixedRequest.requestId}/boxes/${mixedBox.id}/scan`, {
+        headers: mixedRequest.headers,
+        data: { barcode: sameSellerProduct.sku },
+      })
+    ).ok(),
+  ).toBeTruthy()
+
+  const secondRequest = await createReceivingRequest(page, seed, { productIds: [secondProduct.productId] })
+  const secondBox = await createBox(page, secondRequest.requestId, secondRequest.headers)
+  expect(
+    (
+      await page.request.post(`${INBOUND_API}/${secondRequest.requestId}/boxes/open`, {
+        headers: secondRequest.headers,
+        data: { barcode: secondBox.barcode },
+      })
+    ).ok(),
+  ).toBeTruthy()
+  expect(
+    (
+      await page.request.post(`${INBOUND_API}/${secondRequest.requestId}/boxes/${secondBox.id}/scan`, {
+        headers: secondRequest.headers,
+        data: { barcode: secondProduct.sku },
+      })
+    ).ok(),
+  ).toBeTruthy()
+
+  await page.goto('/app/ff/products')
+  await page.getByTestId('ff-catalog-tab-packages').click()
+  const mixedPackage = page.getByTestId(`ff-catalog-inbound-package-${mixedBox.id}`)
+  const secondPackage = page.getByTestId(`ff-catalog-inbound-package-${secondBox.id}`)
+  await expect(mixedPackage).toBeVisible()
+  await expect(secondPackage).toBeVisible()
+  await expect(page.getByTestId(`ff-catalog-inbound-package-${emptyBox.id}`)).toHaveCount(0)
+
+  await packageHeader(page, mixedBox.id).click()
+  await expect(mixedPackage.locator('[data-testid^="ff-catalog-inbound-composition-"]')).toBeVisible()
+  await packageHeader(page, secondBox.id).click()
+  await expect(mixedPackage.locator('[data-testid^="ff-catalog-inbound-composition-"]')).toBeVisible()
+  await expect(secondPackage.locator('[data-testid^="ff-catalog-inbound-composition-"]')).toBeVisible()
+
+  await packageHeader(page, mixedBox.id).click()
+  await expect(mixedPackage.locator('[data-testid^="ff-catalog-inbound-composition-"]')).toBeHidden()
+  await page.getByTestId('ff-catalog-inbound-packages-expand-all').click()
+  await expect(mixedPackage.locator('[data-testid^="ff-catalog-inbound-composition-"]')).toBeVisible()
+  await expect(secondPackage.locator('[data-testid^="ff-catalog-inbound-composition-"]')).toBeVisible()
+
+  const sellerFilter = page.getByTestId('ff-catalog-inbound-packages-seller-filter').getByRole('combobox')
+  await sellerFilter.click()
+  await page.getByRole('option', { name: `Box Seller ${seed.suffix}`, exact: true }).click()
+  await expect(page.getByRole('listbox')).toBeHidden()
+  const productSearch = page.getByTestId('ff-catalog-inbound-packages-product-search')
+  await productSearch.fill('bOx PrOdUcT')
+  await expect(mixedPackage).toBeVisible()
+  await expect(secondPackage).toHaveCount(0)
+  const mixedRows = mixedPackage.locator('[data-testid^="ff-catalog-inbound-composition-"] tbody tr')
+  await expect(mixedRows).toHaveCount(1)
+  await expect(mixedRows).toContainText(seed.sku)
+  await expect(mixedRows).not.toContainText(secondProduct.sku)
+
+  await productSearch.fill(seed.sku.toUpperCase())
+  await expect(mixedPackage).toBeVisible()
+  await expect(mixedRows).toHaveCount(1)
+  await productSearch.fill('bOx PrOdUcT')
+
+  const evidencePath = process.env.CATALOG_BOX_FILTERS_EVIDENCE_PATH
+  if (evidencePath) {
+    await page.waitForTimeout(250)
+    await page.screenshot({ path: evidencePath, fullPage: true })
+  }
+
+  await productSearch.fill(secondProduct.barcode.toUpperCase())
+  await expect(mixedPackage).toHaveCount(0)
+  await expect(secondPackage).toHaveCount(0)
+
+  await sellerFilter.click()
+  await page.getByRole('option', { name: 'Все селлеры', exact: true }).click()
+  await expect(page.getByRole('listbox')).toBeHidden()
+  await expect(mixedPackage).toHaveCount(0)
+  await expect(secondPackage).toBeVisible()
+  await expect(page.getByTestId('ff-catalog-inbound-package-' + emptyBox.id)).toHaveCount(0)
+  await page.getByTestId('ff-catalog-inbound-packages-expand-all').click()
+  const searchFilteredSecondRows = secondPackage.locator('[data-testid^="ff-catalog-inbound-composition-"] tbody tr')
+  await expect(searchFilteredSecondRows).toHaveCount(1)
+  await expect(searchFilteredSecondRows).toContainText(secondProduct.sku)
+
+  await productSearch.fill('')
+  await expect(mixedPackage).toBeVisible()
+  await expect(secondPackage).toBeVisible()
 })
