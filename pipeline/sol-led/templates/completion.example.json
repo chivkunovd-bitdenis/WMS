@@ -1,0 +1,33 @@
+{
+  "lead_verdict": "Ведущий Sol лично проверил содержательные результаты и подтверждает соответствие исходной просьбе.",
+  "prototype": {
+    "status": "passed",
+    "why": "Точный интерактивный прототип принят ведущим до полной реализации.",
+    "evidence": ["docs/runs/example/attempts/prototype/final-result.json"]
+  },
+  "test_plan": {
+    "status": "passed",
+    "why": "Terra-тестировщик подготовил обязательные обычные, отрицательные и стрессовые сценарии.",
+    "evidence": ["docs/runs/example/attempts/test-plan/final-result.json"]
+  },
+  "review": {
+    "status": "passed",
+    "why": "Независимый Sol-ревьюер проверил код и тесты без блокирующих находок.",
+    "evidence": ["docs/runs/example/attempts/review/final-result.json"]
+  },
+  "test_execution": {
+    "status": "passed",
+    "why": "Обязательные проверки реально выполнены на текущем итоговом SHA.",
+    "evidence": ["docs/runs/example/checks/candidate-tests/metadata.json"]
+  },
+  "browser_acceptance": {
+    "status": "passed",
+    "why": "Terra-clicker прошёл назначенные сценарии на живом экране.",
+    "evidence": ["docs/runs/example/attempts/browser-acceptance/final-result.json"]
+  },
+  "git_saved": {
+    "status": "passed",
+    "why": "Текущий HEAD сохранён отдельным commit, а рабочее дерево чисто вне артефактов запуска.",
+    "evidence": ["docs/runs/example/git-evidence.txt"]
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Task completion evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["lead_verdict", "prototype", "test_plan", "review", "test_execution", "browser_acceptance", "git_saved"],
+  "properties": {
+    "lead_verdict": {"type": "string", "minLength": 20},
+    "prototype": {"$ref": "#/$defs/optional_gate"},
+    "test_plan": {"$ref": "#/$defs/required_gate"},
+    "review": {"$ref": "#/$defs/required_gate"},
+    "test_execution": {"$ref": "#/$defs/required_gate"},
+    "browser_acceptance": {"$ref": "#/$defs/optional_gate"},
+    "git_saved": {"$ref": "#/$defs/required_gate"}
+  },
+  "$defs": {
+    "required_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "why", "evidence"],
+      "properties": {
+        "status": {"enum": ["passed"]},
+        "why": {"type": "string", "minLength": 15},
+        "evidence": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+      }
+    },
+    "optional_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "why", "evidence"],
+      "properties": {
+        "status": {"enum": ["passed", "not_applicable"]},
+        "why": {"type": "string", "minLength": 15},
+        "evidence": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+      }
+    }
+  }
+}

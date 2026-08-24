@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sol-led agent call",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["call_id", "agent", "why_now", "task", "working_directory", "inputs", "expected_artifacts", "acceptance"],
+  "properties": {
+    "call_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{2,80}$"},
+    "agent": {"enum": ["researcher", "architect", "developer", "tester", "reviewer", "clicker"]},
+    "why_now": {"type": "string", "minLength": 20},
+    "task": {"type": "string", "minLength": 30},
+    "working_directory": {"type": "string", "minLength": 1},
+    "inputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ref", "purpose"],
+        "properties": {
+          "ref": {"type": "string", "minLength": 1},
+          "purpose": {"type": "string", "minLength": 5}
+        }
+      }
+    },
+    "expected_artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "purpose"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "purpose": {"type": "string", "minLength": 5}
+        }
+      }
+    },
+    "acceptance": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 8}},
+    "context_note": {"type": "string"},
+    "timeout_seconds": {"type": "integer", "minimum": 60, "maximum": 14400}
+  }
+}

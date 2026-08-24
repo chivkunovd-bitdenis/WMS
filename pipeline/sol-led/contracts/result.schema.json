@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sol-led agent result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "summary", "rationale", "actions", "artifacts", "changed_files", "evidence", "unknowns", "recommended_next"],
+  "properties": {
+    "status": {"enum": ["completed", "blocked", "failed"]},
+    "summary": {"type": "string", "minLength": 20},
+    "rationale": {"type": "string", "minLength": 20},
+    "actions": {"type": "array", "items": {"type": "string"}},
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "description"],
+        "properties": {
+          "path": {"type": "string"},
+          "description": {"type": "string"}
+        }
+      }
+    },
+    "changed_files": {"type": "array", "items": {"type": "string"}},
+    "evidence": {"type": "array", "items": {"type": "string"}},
+    "unknowns": {"type": "array", "items": {"type": "string"}},
+    "recommended_next": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agent", "why"],
+      "properties": {
+        "agent": {"enum": ["none", "researcher", "architect", "developer", "tester", "reviewer", "clicker"]},
+        "why": {"type": "string"}
+      }
+    }
+  }
+}
