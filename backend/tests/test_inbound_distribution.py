@@ -184,6 +184,112 @@ async def test_inbound_distribution_lines_validate_limits_and_lock(
 
 
 @pytest.mark.asyncio
+async def test_whole_box_putaway_moves_every_product_to_one_location(
+    async_client: AsyncClient,
+) -> None:
+    """Аварийная регрессия: один короб с разными SKU размещается целиком."""
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Whole Box Putaway",
+            "slug": f"whole-box-{suffix}",
+            "admin_email": f"whole-box-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+
+    wh = await async_client.post(
+        "/warehouses",
+        headers=ah,
+        json={"name": "W", "code": f"whole-{suffix}"},
+    )
+    assert wh.status_code == 200, wh.text
+    wid = wh.json()["id"]
+    loc = await async_client.post(
+        f"/warehouses/{wid}/locations",
+        headers=ah,
+        json={"code": "RACK-01"},
+    )
+    assert loc.status_code == 200, loc.text
+    lid = loc.json()["id"]
+
+    products: list[tuple[str, int]] = []
+    for idx, qty in ((1, 2), (2, 3)):
+        product = await async_client.post(
+            "/products",
+            headers=ah,
+            json={
+                "name": f"Product {idx}",
+                "sku_code": f"WHOLE-{idx}-{suffix}",
+                "length_mm": 1,
+                "width_mm": 1,
+                "height_mm": 1,
+            },
+        )
+        assert product.status_code == 200, product.text
+        products.append((product.json()["id"], qty))
+
+    base = "/operations/inbound-intake-requests"
+    created = await async_client.post(base, headers=ah, json={"warehouse_id": wid})
+    assert created.status_code == 201, created.text
+    rid = created.json()["id"]
+    for product_id, qty in products:
+        line = await async_client.post(
+            f"{base}/{rid}/lines",
+            headers=ah,
+            json={"product_id": product_id, "expected_qty": qty},
+        )
+        assert line.status_code == 201, line.text
+
+    await set_planned_boxes(async_client, base, rid, ah)
+    submitted = await async_client.post(f"{base}/{rid}/submit", headers=ah)
+    assert submitted.status_code == 200, submitted.text
+    receiving = await post_primary_accept(
+        async_client,
+        base,
+        rid,
+        ah,
+        create_boxes=False,
+    )
+    assert receiving.status_code == 200, receiving.text
+
+    box = await async_client.post(f"{base}/{rid}/boxes", headers=ah)
+    assert box.status_code == 201, box.text
+    box_id = box.json()["id"]
+    for product_id, qty in products:
+        filled = await async_client.put(
+            f"{base}/{rid}/boxes/{box_id}/lines/{product_id}",
+            headers=ah,
+            json={"quantity": qty},
+        )
+        assert filled.status_code == 200, filled.text
+    closed = await async_client.post(f"{base}/{rid}/boxes/{box_id}/close", headers=ah)
+    assert closed.status_code == 200, closed.text
+    verified = await async_client.post(f"{base}/{rid}/verify", headers=ah)
+    assert verified.status_code == 200, verified.text
+
+    placed = await async_client.post(
+        f"{base}/{rid}/boxes/{box_id}/putaway",
+        headers=ah,
+        json={"storage_location_id": lid},
+    )
+    assert placed.status_code == 200, placed.text
+    assert placed.json()["status"] == "done"
+    assert placed.json()["sorting_remaining_qty"] == 0
+    assert placed.json()["boxes"][0]["remaining_qty"] == 0
+
+    rows = await async_client.get(f"{base}/{rid}/distribution-lines", headers=ah)
+    assert rows.status_code == 200, rows.text
+    assert {
+        (row["product_id"], row["storage_location_id"], row["quantity"])
+        for row in rows.json()
+    } == {(product_id, lid, qty) for product_id, qty in products}
+
+
+@pytest.mark.asyncio
 async def test_resync_sorting_stock_idempotent(async_client: AsyncClient) -> None:
     suffix = str(int(time.time() * 1000))
     reg = await async_client.post(

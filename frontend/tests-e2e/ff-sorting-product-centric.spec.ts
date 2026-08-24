@@ -395,6 +395,176 @@ test('ff sorting scanner-first: cell barcode then product scans apply distributi
   expect(row).toMatchObject({ quantity_in_sorting: 0, quantity_in_storage: 2 });
 });
 
+// TC-URG-SORT-BOX-01 — scan box -> cell places every SKU; second box is placed manually.
+test('ff sorting: whole boxes go to one cell by scan or one explicit row action', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const suffix = String(Date.now());
+  const email = `e2e-whole-box-${suffix}@example.com`;
+
+  await page.goto('/');
+  await openFulfillmentRegistration(page);
+  await page.getByTestId('register-form').getByLabel('Организация').fill('E2E Whole Box');
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email);
+  await page.getByTestId('register-form').getByLabel('Пароль').fill('password123');
+  const [regRes] = await Promise.all([
+    waitForPostOk(page, '/api/auth/register'),
+    waitForGetOk(page, '/api/auth/me'),
+    page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
+  ]);
+  const token = ((await regRes.json()) as { access_token: string }).access_token;
+  const h = { Authorization: `Bearer ${token}` };
+
+  const warehouse = await page.request.post('/api/warehouses', {
+    headers: h,
+    data: { name: 'Склад коробов', code: `whole-box-${suffix}` },
+  });
+  expect(warehouse.ok()).toBeTruthy();
+  const warehouseId = ((await warehouse.json()) as { id: string }).id;
+  const scanLocationRes = await page.request.post(`/api/warehouses/${warehouseId}/locations`, {
+    headers: h,
+    data: { code: 'SCAN-BOX-A-01' },
+  });
+  const manualLocationRes = await page.request.post(`/api/warehouses/${warehouseId}/locations`, {
+    headers: h,
+    data: { code: 'MANUAL-BOX-A-02' },
+  });
+  expect(scanLocationRes.ok()).toBeTruthy();
+  expect(manualLocationRes.ok()).toBeTruthy();
+  const scanLocation = (await scanLocationRes.json()) as { id: string; barcode: string };
+  const manualLocation = (await manualLocationRes.json()) as { id: string; barcode: string };
+
+  const products: { id: string; qty: number }[] = [];
+  for (const [index, qty] of [[1, 2], [2, 3], [3, 4]] as const) {
+    const product = await page.request.post('/api/products', {
+      headers: h,
+      data: {
+        name: `Товар короба ${index}`,
+        sku_code: `WHOLE-BOX-${index}-${suffix}`,
+        length_mm: 10,
+        width_mm: 10,
+        height_mm: 10,
+      },
+    });
+    expect(product.ok()).toBeTruthy();
+    products.push({ id: ((await product.json()) as { id: string }).id, qty });
+  }
+
+  const base = '/api/operations/inbound-intake-requests';
+  const request = await page.request.post(base, {
+    headers: h,
+    data: { warehouse_id: warehouseId },
+  });
+  expect(request.ok()).toBeTruthy();
+  const requestId = ((await request.json()) as { id: string }).id;
+  for (const product of products) {
+    const line = await page.request.post(`${base}/${requestId}/lines`, {
+      headers: { ...h, 'Content-Type': 'application/json' },
+      data: { product_id: product.id, expected_qty: product.qty },
+    });
+    expect(line.ok()).toBeTruthy();
+  }
+  await page.request.post(`${base}/${requestId}/submit`, { headers: h });
+  await beginInboundReceiving(page.request, h, requestId);
+
+  const createFilledBox = async (contents: { id: string; qty: number }[]) => {
+    const boxResponse = await page.request.post(`${base}/${requestId}/boxes`, { headers: h });
+    expect(boxResponse.ok()).toBeTruthy();
+    const box = (await boxResponse.json()) as {
+      id: string;
+      box_number: number;
+      internal_barcode: string;
+    };
+    for (const product of contents) {
+      const filled = await page.request.put(`${base}/${requestId}/boxes/${box.id}/lines/${product.id}`, {
+        headers: { ...h, 'Content-Type': 'application/json' },
+        data: { quantity: product.qty },
+      });
+      expect(filled.ok()).toBeTruthy();
+    }
+    const closed = await page.request.post(`${base}/${requestId}/boxes/${box.id}/close`, { headers: h });
+    expect(closed.ok()).toBeTruthy();
+    return box;
+  };
+
+  const scannedBox = await createFilledBox(products.slice(0, 2));
+  const manualBox = await createFilledBox(products.slice(2));
+  const completed = await page.request.post(`${base}/${requestId}/complete-receiving`, { headers: h });
+  expect(completed.ok()).toBeTruthy();
+
+  await page.goto('/app/ff/sorting');
+  await page.getByTestId('ff-inbound-queue-row').first().click();
+  await expect(page.getByTestId('ff-sorting-box-putaway-row')).toHaveCount(2);
+
+  const scanInput = page.getByTestId('ff-sorting-scan-input');
+  await scanInput.fill(scannedBox.internal_barcode);
+  await scanInput.press('Enter');
+  await expect(page.getByTestId('ff-sorting-scan-message')).toContainText(
+    `Короб №${scannedBox.box_number} выбран`,
+  );
+  const selectedBoxRow = page
+    .getByTestId('ff-sorting-box-putaway-row')
+    .filter({ hasText: `Короб №${scannedBox.box_number}` });
+  await expect(selectedBoxRow).toHaveAttribute('aria-selected', 'true');
+
+  await scanInput.fill(scanLocation.barcode);
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        response.url().includes(`/boxes/${scannedBox.id}/putaway`) &&
+        response.ok(),
+    ),
+    scanInput.press('Enter'),
+  ]);
+  await expect(page.getByTestId('ff-sorting-scan-message')).toContainText(
+    `Короб №${scannedBox.box_number} полностью размещён в ячейке SCAN-BOX-A-01`,
+  );
+  await expect(page.getByTestId('ff-sorting-box-putaway-row')).toHaveCount(1);
+
+  const manualRow = page
+    .getByTestId('ff-sorting-box-putaway-row')
+    .filter({ hasText: `Короб №${manualBox.box_number}` });
+  await manualRow.getByTestId('ff-sorting-box-location').getByRole('combobox').click();
+  await page.getByRole('option', { name: 'MANUAL-BOX-A-02' }).click();
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        response.url().includes(`/boxes/${manualBox.id}/putaway`) &&
+        response.ok(),
+    ),
+    manualRow.getByTestId('ff-sorting-box-putaway-submit').click(),
+  ]);
+  await expect(page.getByTestId('ff-sorting-posted-done')).toBeVisible();
+
+  const distribution = await page.request.get(`${base}/${requestId}/distribution-lines`, { headers: h });
+  expect(distribution.ok()).toBeTruthy();
+  const rows = (await distribution.json()) as {
+    product_id: string;
+    storage_location_id: string;
+    quantity: number;
+  }[];
+  expect(rows).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        product_id: products[0]!.id,
+        storage_location_id: scanLocation.id,
+        quantity: products[0]!.qty,
+      }),
+      expect.objectContaining({
+        product_id: products[1]!.id,
+        storage_location_id: scanLocation.id,
+        quantity: products[1]!.qty,
+      }),
+      expect.objectContaining({
+        product_id: products[2]!.id,
+        storage_location_id: manualLocation.id,
+        quantity: products[2]!.qty,
+      }),
+    ]),
+  );
+});
+
 // TC-NEW-SORT-04 — sorting draft close/cross asks before losing unsaved manual corrections.
 test('ff sorting: unsaved manual correction asks before close', async ({ page }) => {
   const email = `e2e-sort-dirty-${Date.now()}@example.com`;

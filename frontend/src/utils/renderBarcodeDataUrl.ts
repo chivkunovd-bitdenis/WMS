@@ -1,13 +1,14 @@
 import JsBarcode from 'jsbarcode'
 
-type BarcodeVariant = 'default' | 'thermal58'
+type BarcodeVariant = 'default' | 'thermal58' | 'storageCell'
 
 const VARIANTS: Record<
   BarcodeVariant,
-  { width: number; height: number; barHeight: number; margin: number }
+  { width: number; height: number; barHeight: number; margin: number; moduleWidth?: number }
 > = {
   default: { width: 320, height: 80, barHeight: 64, margin: 8 },
   thermal58: { width: 248, height: 56, barHeight: 44, margin: 4 },
+  storageCell: { width: 1200, height: 300, barHeight: 240, margin: 24, moduleWidth: 5 },
 }
 
 export function renderBarcodeDataUrl(
@@ -32,6 +33,7 @@ export function renderBarcodeDataUrl(
     displayValue: false,
     height: size.barHeight,
     margin: size.margin,
+    width: size.moduleWidth,
     lineColor: '#111',
     background: '#fff',
   })

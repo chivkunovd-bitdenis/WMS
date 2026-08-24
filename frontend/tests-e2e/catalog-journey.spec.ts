@@ -74,4 +74,28 @@ test('register then create warehouse and location with barcode print preview', a
   await expect(page.getByTestId('location-print-preview')).toBeVisible();
   await expect(page.getByTestId('location-print-preview')).toContainText(`Ячейка № ${locCode}`);
   await expect(page.getByTestId('location-print-preview')).toContainText(locBarcode);
+  const barcodeImage = page.getByTestId('barcode-image');
+  await expect(barcodeImage).toBeVisible();
+  const barcodeGeometry = await barcodeImage.evaluate((node) => {
+    const image = node as HTMLImageElement;
+    return {
+      naturalWidth: image.naturalWidth,
+      naturalHeight: image.naturalHeight,
+      renderedWidth: image.getBoundingClientRect().width,
+    };
+  });
+  expect(barcodeGeometry.naturalWidth).toBeGreaterThanOrEqual(1000);
+  expect(barcodeGeometry.naturalHeight).toBeGreaterThanOrEqual(250);
+  expect(barcodeGeometry.renderedWidth).toBeGreaterThan(480);
+
+  await page.evaluate(() => {
+    (window as Window & { __WMS_CAPTURE_PRINT_HTML__?: boolean }).__WMS_CAPTURE_PRINT_HTML__ = true;
+  });
+  await page.getByTestId('location-print-action').click();
+  const printHtml = await page.evaluate(
+    () => (window as Window & { __WMS_LAST_PRINT_HTML__?: string }).__WMS_LAST_PRINT_HTML__ ?? '',
+  );
+  expect(printHtml).toContain('font-size: 24pt');
+  expect(printHtml).toContain('height: 48mm');
+  expect(printHtml).toContain('width: 96%');
 });

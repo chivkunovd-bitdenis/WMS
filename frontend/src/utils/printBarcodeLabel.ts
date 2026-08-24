@@ -22,18 +22,26 @@ export function printBarcodeLabel(options: {
   barcodeDataUrl: string
   /** Физический размер этикетки (см. utils/labelSize.ts). Без него — прежнее поведение (авто-размер листа браузера). */
   labelSize?: LabelSize
+  /** Ячейки печатаются на крупной складской этикетке, а не на товарном термоформате. */
+  layout?: 'default' | 'storageCell'
 }): void {
-  const { title, barcode, barcodeDataUrl, labelSize } = options
+  const { title, barcode, barcodeDataUrl, labelSize, layout = 'default' } = options
   const safeTitle = escapeHtml(title)
   const safeBarcode = escapeHtml(barcode)
   const safeBarcodeDataUrl = escapeHtml(barcodeDataUrl)
-  const pageStyle = labelSize
-    ? `@page { size: ${labelSize.widthMm}mm ${labelSize.heightMm}mm; margin: 0; }
+  const pageStyle = layout === 'storageCell'
+    ? `@page { margin: 4mm; }
+      .wrap { min-height: calc(100vh - 8mm); padding: 2mm; box-sizing: border-box; }
+      .title { font-size: 24pt; }
+      .code { font-size: 18pt; }
+      img { width: 96%; max-width: 190mm; height: 48mm; object-fit: fill; }`
+    : labelSize
+      ? `@page { size: ${labelSize.widthMm}mm ${labelSize.heightMm}mm; margin: 0; }
       html, body { width: ${labelSize.widthMm}mm; height: ${labelSize.heightMm}mm; }
       .wrap { width: 100%; height: 100%; box-sizing: border-box; padding: 2mm; }
       img { width: auto; max-width: 90%; max-height: 55%; }`
-    : `@page { margin: 10mm; }
-      img { width: 320px; height: auto; }`
+      : `@page { margin: 10mm; }
+        img { width: 320px; height: auto; }`
   const html = `<!doctype html>
 <html>
   <head>

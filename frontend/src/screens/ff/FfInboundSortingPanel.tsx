@@ -266,11 +266,14 @@ function sortingErrorMessageRu(code: string): string {
   const messages: Record<string, string> = {
     active_location_required: 'Сначала отсканируйте ячейку, потом товар.',
     barcode_empty: 'Отсканируйте ячейку или товар.',
+    box_not_closed: 'Сначала закройте короб в приёмке.',
+    box_not_found: 'Короб не найден в этой приёмке.',
     distribution_completed: 'Раскладка уже применена, документ больше не редактируется.',
     distribution_incomplete: 'Разложите всё принятое количество перед применением.',
     insufficient_sorting_stock: 'В зоне сортировки не хватает остатка для этой раскладки. Обновите документ и проверьте количество.',
     invalid_qty: 'Количество должно быть целым числом больше нуля.',
     location_not_found: 'Ячейка не найдена на складе этой приёмки.',
+    nothing_to_putaway: 'В этом коробе уже не осталось товара для размещения.',
     not_distributable: 'Документ ещё не находится в сортировке.',
     product_not_accepted: 'Этот товар не принят по документу.',
     product_not_on_request: 'Этот товар не относится к этой приёмке.',
@@ -313,6 +316,8 @@ export function FfInboundSortingPanel({
   const [scanMessage, setScanMessage] = useState<string | null>(null)
   const [activeLocationId, setActiveLocationId] = useState<string | null>(null)
   const [activeLocationCode, setActiveLocationCode] = useState<string | null>(null)
+  const [pendingBoxId, setPendingBoxId] = useState<string | null>(null)
+  const [boxLocationById, setBoxLocationById] = useState<Record<string, string>>({})
   const [highlightedProductId, setHighlightedProductId] = useState<string | null>(null)
   const [rowOverflowByProduct, setRowOverflowByProduct] = useState<Record<string, string | null>>({})
   const [, setDirty] = useState(false)
@@ -357,6 +362,20 @@ export function FfInboundSortingPanel({
     }
     return m
   }, [boxes])
+
+  const pendingBox = useMemo(
+    () => sortableBoxes.find((box) => box.id === pendingBoxId) ?? null,
+    [pendingBoxId, sortableBoxes],
+  )
+
+  const boxByBarcode = useMemo(() => {
+    const map = new Map<string, SortingBox>()
+    for (const box of sortableBoxes) {
+      const barcode = box.internal_barcode.trim().toUpperCase()
+      if (barcode) map.set(barcode, box)
+    }
+    return map
+  }, [sortableBoxes])
 
   const acceptedByProductId = useMemo(() => {
     const m = new Map<string, number>()
@@ -528,9 +547,19 @@ export function FfInboundSortingPanel({
     }
     setDistributionLoaded(false)
     setDistributionLoadError(null)
-    setScanMessage(null)
     setHighlightedProductId(null)
   }, [lines, boxes, requestId])
+
+  useEffect(() => {
+    setScanMessage(null)
+    setPendingBoxId(null)
+  }, [requestId])
+
+  useEffect(() => {
+    if (pendingBoxId != null && !sortableBoxes.some((box) => box.id === pendingBoxId)) {
+      setPendingBoxId(null)
+    }
+  }, [pendingBoxId, sortableBoxes])
 
   const retryDistributionLoad = () => {
     setDistributionLoadError(null)
@@ -725,6 +754,44 @@ export function FfInboundSortingPanel({
     window.setTimeout(focus, 0)
   }, [])
 
+  const putawayWholeBox = async (box: SortingBox, location: LocationRow) => {
+    if (!distributionReady || !editable || scanBusy || busy) return
+    setError(null)
+    setScanMessage(null)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/inbound-intake-requests/${requestId}/boxes/${box.id}/putaway`),
+        {
+          method: 'POST',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ storage_location_id: location.id }),
+        },
+      )
+      if (!res.ok) {
+        setError(sortingErrorMessageRu(await readApiErrorMessage(res)))
+        return
+      }
+      setPendingBoxId(null)
+      setBoxLocationById((prev) => {
+        const next = { ...prev }
+        delete next[box.id]
+        return next
+      })
+      setActiveLocationId(location.id)
+      setActiveLocationCode(location.code)
+      markDirty(false)
+      await onReload()
+      setDistributionLoaded(false)
+      setScanMessage(`Короб №${box.box_number} полностью размещён в ячейке ${location.code}.`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Не удалось разместить короб в ячейку.')
+    } finally {
+      setScanValue('')
+      setScanBusy(false)
+      focusScanner()
+    }
+  }
+
   useEffect(() => {
     if (!editable || !distributionReady || locations.length === 0 || busy || scanBusy) {
       return
@@ -749,6 +816,34 @@ export function FfInboundSortingPanel({
     setScanMessage(null)
     distributionEditSeq.current += 1
     try {
+      const scannedBox = boxByBarcode.get(barcode.toUpperCase())
+      if (scannedBox != null) {
+        setPendingBoxId(scannedBox.id)
+        // Для короба всегда требуем свежий скан ячейки: ранее выбранный адрес нельзя
+        // молча переиспользовать для физически другого короба.
+        setActiveLocationId(null)
+        setActiveLocationCode(null)
+        setScanMessage(`Короб №${scannedBox.box_number} выбран. Теперь отсканируйте ячейку.`)
+        setScanValue('')
+        return
+      }
+
+      if (pendingBox != null) {
+        const location = locations.find((row) => {
+          const raw = barcode.toUpperCase()
+          return row.barcode.trim().toUpperCase() === raw || row.code.trim().toUpperCase() === raw
+        })
+        if (location == null) {
+          setError('После короба отсканируйте ячейку этого склада.')
+          setScanValue('')
+          return
+        }
+        await putawayWholeBox(pendingBox, location)
+        return
+      }
+
+      setScanBusy(true)
+      distributionEditSeq.current += 1
       const res = await fetch(
         apiUrl(`/operations/inbound-intake-requests/${requestId}/distribution-scan`),
         {
@@ -917,11 +1012,97 @@ export function FfInboundSortingPanel({
           >
             {scanMessage
               ? scanMessage
+              : pendingBox != null
+                ? `Короб №${pendingBox.box_number} выбран — отсканируйте ячейку.`
               : activeLocationId == null
-                ? 'Ячейка не выбрана — отсканируйте ячейку.'
+                ? 'Отсканируйте короб или ячейку.'
                 : `Активная ячейка: ${activeLocationCode}.`}
           </Typography>
         </Box>
+      ) : null}
+
+      {editable && sortableBoxes.length > 0 ? (
+        <Paper variant="outlined" sx={{ mb: 2, p: 1.5 }} data-testid="ff-sorting-box-putaway">
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            Короба
+          </Typography>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Короб</TableCell>
+                  <TableCell align="right">Осталось</TableCell>
+                  <TableCell sx={{ width: 260 }}>Ячейка</TableCell>
+                  <TableCell align="right" sx={{ width: 120 }} />
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {sortableBoxes.map((box) => {
+                  const remaining = box.lines.reduce((sum, line) => sum + boxLineRemaining(line), 0)
+                  const locationId = boxLocationById[box.id] ?? ''
+                  const selectedLocation = locations.find((row) => row.id === locationId) ?? null
+                  return (
+                    <TableRow
+                      key={box.id}
+                      selected={box.id === pendingBoxId}
+                      aria-selected={box.id === pendingBoxId}
+                      data-testid="ff-sorting-box-putaway-row"
+                      data-box-id={box.id}
+                    >
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          Короб №{box.box_number}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {box.internal_barcode}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">{remaining} шт.</TableCell>
+                      <TableCell>
+                        <FormControl size="small" fullWidth>
+                          <Select
+                            displayEmpty
+                            value={locationId}
+                            disabled={scanBusy || busy || locations.length === 0}
+                            onChange={(event) =>
+                              setBoxLocationById((prev) => ({
+                                ...prev,
+                                [box.id]: String(event.target.value),
+                              }))
+                            }
+                            data-testid="ff-sorting-box-location"
+                          >
+                            <MenuItem value="">
+                              <em>Выберите ячейку</em>
+                            </MenuItem>
+                            {locations.map((location) => (
+                              <MenuItem key={location.id} value={location.id}>
+                                {location.code}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled={scanBusy || busy || selectedLocation == null}
+                          onClick={() => {
+                            if (selectedLocation != null) void putawayWholeBox(box, selectedLocation)
+                          }}
+                          data-testid="ff-sorting-box-putaway-submit"
+                        >
+                          Разместить
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
       ) : null}
 
       <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>

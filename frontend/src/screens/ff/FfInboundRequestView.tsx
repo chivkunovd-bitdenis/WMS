@@ -1547,11 +1547,12 @@ export function FfInboundRequestView({
   const printDistributionLocationLabel = (locationId: string) => {
     const loc = locations.find((l) => l.id === locationId)
     if (!loc) return
-    const dataUrl = renderBarcodeDataUrl(loc.barcode)
+    const dataUrl = renderBarcodeDataUrl(loc.barcode, { variant: 'storageCell' })
     printBarcodeLabel({
       title: `Ячейка № ${loc.code}`,
       barcode: loc.barcode,
       barcodeDataUrl: dataUrl,
+      layout: 'storageCell',
     })
   }
 
