@@ -1,0 +1,40 @@
+{
+  "acceptance": [
+    "The exact provisioned browser ID and matching handed-off tab are claimed without generic discovery",
+    "If claim succeeds, the complete connection, catalog, FBS, FBO, returns, recovery and state route is manually clicked",
+    "Desktop and narrow geometry are inspected and actionable defects are tied to broken operator work",
+    "The evidence directory contains an updated explicit PRODUCT_BROWSER verdict and screenshots when UI was reachable",
+    "No application code, Ozon data, credentials, external Ozon endpoint or stock publication is touched"
+  ],
+  "agent": "clicker",
+  "call_id": "08-prototype-browser-acceptance",
+  "context_note": "This is the third and final infrastructure recovery attempt for S0 browser acceptance. The local servers remain running on 5184/18124 and the exact tab was marked for handoff by the lead.",
+  "expected_artifacts": [
+    {
+      "path": "docs/evidence/ozon-module-20260824/prototype-browser",
+      "purpose": "Visible-browser screenshots, observations and explicit prototype verdict"
+    }
+  ],
+  "inputs": [
+    {
+      "purpose": "Accepted UX and process contract",
+      "ref": "tasks/ozon-module-20260824/ARCH.md"
+    },
+    {
+      "purpose": "Exact routes, roles, clicks and visible outcomes",
+      "ref": "docs/runs/ozon-module-20260824/03-prototype-report.md"
+    },
+    {
+      "purpose": "Existing blocked verdict to replace with the handoff attempt result",
+      "ref": "docs/evidence/ozon-module-20260824/prototype-browser/VERDICT_RU.md"
+    },
+    {
+      "purpose": "Prior empty-discovery evidence superseded by direct browser handoff",
+      "ref": "docs/runs/ozon-module-20260824/attempts/07-prototype-browser-acceptance/final-result.json"
+    }
+  ],
+  "task": "Perform the full visible-browser acceptance of the fixture-only Ozon S0 prototype at commit 937982c46f80b7e13642cc939a4c027e9b808db5. A real in-app browser was provisioned and marked for handoff by the lead: browser ID `-4ac4-49dc-965a-344c0ab6faf6`, title `WMS · Фулфилмент`, URL `http://127.0.0.1:5184/app`. Bootstrap with `/Users/deniscivkunov/.codex/plugins/cache/openai-bundled/browser/26.818.22352/scripts/browser-client.mjs`, then request that exact browser ID directly; use `browser.user.openTabs()` and claim the exact tab whose title and URL match. Do not call generic browser discovery first. If the handoff is available, register a fresh fulfillment-admin test organization through visible UI (harmless test values; add a suffix if needed) and execute the acceptance map in docs/runs/ozon-module-20260824/03-prototype-report.md: connection/account isolation and no stock-publication action; product mapping/topology; multi-line FBS location-before-product; exemplar correction; partial package/async label/preflight; cancellation recovery; arbitration; FBO intent/readback/cargo/TGM/labels/10-9-1 act; unmatched return quarantine/no default disposition; loading/empty/error/partial/429/unknown/uncertain states. Check desktop and narrow viewport geometry. Replace the existing blocked verdict under docs/evidence/ozon-module-20260824/prototype-browser/ with a new verdict for Call 08 and save screenshots there. Record exact SHA, URL, role, clicks, observed results, geometry, screenshot paths, console/network errors and one of PRODUCT_BROWSER_APPROVED, PRODUCT_REWORK_REQUIRED or PRODUCT_BROWSER_BLOCKED. If the exact handoff still cannot be claimed, update the verdict with the new exact failure and do not substitute Playwright test code, curl, headless automation or source reading. Do not edit application code, access Ozon credentials, call external Ozon or claim production/deploy evidence. Return status completed and explicitly list the evidence directory artifact.",
+  "timeout_seconds": 14400,
+  "why_now": "The main app session has now provisioned and preserved a real in-app browser tab for the local prototype, so the clicker can claim that exact handoff instead of performing empty browser discovery in its isolated session.",
+  "working_directory": "."
+}

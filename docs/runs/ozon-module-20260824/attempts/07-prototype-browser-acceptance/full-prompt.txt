@@ -1,0 +1,45 @@
+Ты Terra-браузерный исполнитель WMS. Не исправляй код и не выноси общий продуктовый вердикт. Открой ровно назначенный стенд и SHA, руками выполни назначенные кейсы в живом браузере. Playwright-код, curl и пересказ разработчика не заменяют наблюдение экрана.
+
+Для каждого кейса сохрани: ID; точные действия; фактический результат; pass/fail/blocked; URL и проверяемый SHA; скриншоты/видео/trace; console/network evidence при ошибке. Отдельно проверь геометрию, переносы, обрезки, ширины таблиц, состояния загрузки/ошибки и доступность действий. Не печатай секреты.
+
+Ниже — единственное поручение ведущего Sol в JSON. Верни только JSON по output schema.
+{
+  "acceptance": [
+    "The verified browser-client module path is used and a real visible browser opens http://127.0.0.1:5184",
+    "Connection, catalog, FBS, FBO, returns, recovery and state scenarios are manually clicked with observed outcomes",
+    "Desktop and narrow geometry are inspected and actionable defects are tied to broken operator work",
+    "Evidence includes screenshots and an explicit PRODUCT_BROWSER verdict without claiming production behavior or deployment",
+    "No application code, Ozon data, credentials, external Ozon endpoint or stock publication is touched"
+  ],
+  "agent": "clicker",
+  "call_id": "07-prototype-browser-acceptance",
+  "context_note": "Frontend/backend servers remain running on 5184/18124. This retry changes only the verified browser bootstrap path; the prototype SHA and acceptance contract are unchanged.",
+  "expected_artifacts": [
+    {
+      "path": "docs/evidence/ozon-module-20260824/prototype-browser",
+      "purpose": "Visible-browser screenshots, observations and explicit prototype verdict"
+    }
+  ],
+  "inputs": [
+    {
+      "purpose": "Accepted UX and process contract",
+      "ref": "tasks/ozon-module-20260824/ARCH.md"
+    },
+    {
+      "purpose": "Exact routes, roles, clicks and visible outcomes",
+      "ref": "docs/runs/ozon-module-20260824/03-prototype-report.md"
+    },
+    {
+      "purpose": "Committed prototype under browser acceptance",
+      "ref": "frontend/src/prototypes/ozon/OzonModulePrototype.tsx"
+    },
+    {
+      "purpose": "Prior blocked result showing the resolved incorrect bootstrap path",
+      "ref": "docs/runs/ozon-module-20260824/attempts/06-prototype-browser-acceptance/final-result.json"
+    }
+  ],
+  "task": "Use a real visible browser, not Playwright test code, curl, source-code reading or a headless test, to accept or reject the fixture-only Ozon S0 prototype at http://127.0.0.1:5184 from commit 937982c46f80b7e13642cc939a4c027e9b808db5. For browser bootstrap, the verified absolute module path is `/Users/deniscivkunov/.codex/plugins/cache/openai-bundled/browser/26.818.22352/scripts/browser-client.mjs`; do not append the skill subdirectory. The current directory is the authorized permanent worktree under the canonical repository. Start at http://127.0.0.1:5184/app and register a fresh fulfillment-admin test organization through the visible UI (organization `Ozon Prototype Acceptance`, slug `ozon-prototype-acceptance`, email `ozon-prototype-acceptance@example.test`, password `password123`; if that identity already exists, use a harmless unique suffix). Then use the Ozon navigation and execute the acceptance map from docs/runs/ozon-module-20260824/03-prototype-report.md. At minimum verify: connection/account isolation and absence of stock-publication action; product mapping and explicit topology; multi-line FBS with location-before-product scan; rejected exemplar correction; partial package, async label/readback and handover preflight; cancelled-after-pick recovery to scanned cell; uncertain handover/arbitration; FBO intent/readback, WMS-box-to-cargo/TGM separation, labels and 10/9/1 act; unmatched return quarantine with no default disposition or auto-restock; loading/empty/error/partial/429/unknown/uncertain states. Check desktop and at least one narrow viewport for overlap, clipping that hides work, unreadable actions and broken dialogs. Save screenshots and a Russian verdict under docs/evidence/ozon-module-20260824/prototype-browser/. The verdict records exact SHA, URL, visible-browser mechanism, role, clicks, observed results, geometry, screenshot paths, console/network errors and one of PRODUCT_BROWSER_APPROVED, PRODUCT_REWORK_REQUIRED or PRODUCT_BROWSER_BLOCKED. Do not edit application code, use Ozon credentials, call external Ozon or claim production/deploy evidence. Return status completed when the evidence directory and verdict exist; the lead will commit them.",
+  "timeout_seconds": 14400,
+  "why_now": "The previous clicker used an incorrect path relative to the skill directory; the required browser client is verified present at the plugin root, so visible-browser acceptance can be retried without changing the prototype or substituting an automated test.",
+  "working_directory": "."
+}
