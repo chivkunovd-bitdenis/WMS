@@ -1,0 +1,62 @@
+Ты Sol-архитектор WMS. Прочитай исходную просьбу, исследование и релевантный код. Не выдумывай неизвестное и не пиши production-код.
+
+Обязательный Markdown-артефакт должен содержать: primary user и его работу; пошаговый нормальный процесс; ошибки и частичные состояния; границу WMS, внешней системы и ручных действий; данные и API; переиспользуемые части WMS; два-три варианта с ценой; выбранное решение и почему; сознательные non-goals; риски; вопросы владельцу; точное задание на кликабельный React-прототип. Каждый заметный элемент будущего процесса объясняй пользовательской работой, а не общей фразой «так удобнее».
+
+Ниже — единственное поручение ведущего Sol в JSON. Верни только JSON по output schema.
+{
+  "acceptance": [
+    "The artifact traces the normal, error, partial and recovery paths for both Ozon FBS and FBO from connection through returns",
+    "It compares two or three viable designs, selects one with reasons, and explicitly separates shared marketplace core from Ozon and preserved WB specifics",
+    "It specifies data, API, jobs, permissions, migrations, print assets, sync and operation-ledger semantics precisely enough for implementation",
+    "It contains a bounded exact React prototype assignment on the existing UI kit and avoids a broad redesign of unaffected WMS screens",
+    "It turns unknown account capabilities into discovery and safe fallback behavior, asks the owner no questions, and proves Ozon FBS stock publishing is deny-by-construction",
+    "It defines vertical slices whose combined completion is the full requested Ozon module, with test and live-browser acceptance gates"
+  ],
+  "agent": "architect",
+  "call_id": "02-ozon-architecture",
+  "context_note": "The research stage is committed and pushed at 0c3abe3c31ba7b9216401eddd0e15971263eca15. The lead has accepted its substantive findings. The test credential marker has only Api-Key and no Client-Id, so no live probe is currently possible; architecture must remain functional through capability discovery rather than blocking on it.",
+  "expected_artifacts": [
+    {
+      "path": "tasks/ozon-module-20260824/ARCH.md",
+      "purpose": "Chosen universal Ozon architecture, full process, prototype contract and phased delivery gates"
+    }
+  ],
+  "inputs": [
+    {
+      "purpose": "Exact owner request",
+      "ref": "docs/runs/ozon-module-20260824/REQUEST.txt"
+    },
+    {
+      "purpose": "Accepted primary-source Ozon research and WMS gap map",
+      "ref": "docs/runs/ozon-module-20260824/01-ozon-domain-research.md"
+    },
+    {
+      "purpose": "Project delivery, architecture-gate and acceptance rules",
+      "ref": "AGENTS.md"
+    },
+    {
+      "purpose": "Existing product and tenant decisions",
+      "ref": "docs/MVP_DECISIONS_RU.md"
+    },
+    {
+      "purpose": "Existing product gate and isolated-role requirements",
+      "ref": "docs/WMS_FEATURE_GATE_PROTOCOL_RU.md"
+    },
+    {
+      "purpose": "Existing UI system and screen composition rules",
+      "ref": "docs/UI_DESIGN_SYSTEM_RU.md"
+    },
+    {
+      "purpose": "Current backend baseline to preserve and extend",
+      "ref": "backend/app"
+    },
+    {
+      "purpose": "Current operator UI and UI kit baseline",
+      "ref": "frontend/src"
+    }
+  ],
+  "task": "Design the complete architecture for the owner request 'Сделать модуль Ozon' using the accepted research dossier as evidence. Produce the project Stage-0 architecture artifact at tasks/ozon-module-20260824/ARCH.md. Make the substantive choices yourself because the owner delegated all decisions to the lead and explicitly asked not to be interrupted for questions. The design must cover coexistence of one seller using Wildberries and Ozon simultaneously, future marketplace extensibility without pretending Ozon and WB share identical lifecycles, account/auth/capability boundaries, account-scoped external product mappings, catalog import and linking, physical/external warehouse and delivery bindings, sync checkpoints and push/poll reconciliation, operation ledger and recovery, FBS order/posting/line/unit-exemplar/package/handover/act/return semantics, FBO draft/timeslot/supply-order/cargo/TGM/label/handover/acceptance-act/return semantics, marking and required product data, print/document taxonomy, permissions/audit, rate limits/errors/idempotency, migrations, jobs, routes, frontend integration and marketplace filters across affected screens. Select one approach after comparing two or three concrete variants with delivery and migration cost. Preserve all existing WB models/routes/jobs/screens as a regression boundary unless a specific adapter seam is demonstrably safe; no broad frontend redesign. Define an incremental implementation plan whose sum is the fully functional Ozon module, with exact vertical slices, dependencies, machine gates, recovery paths and completion criteria. Define a precise clickable React prototype assignment on the existing UI kit: screens, zones, columns, actions, states, dialogs, realistic fixtures, and what must be accepted before implementation. Define the test architecture and explicit negative proof that Ozon FBS stock write is impossible in this project unless a future separately approved capability is introduced. Do not write production code. Do not ask the owner questions: turn external unknowns into capability discovery, safe defaults or documented assumptions. List at most five unresolved external facts, each with a non-blocking fallback.",
+  "timeout_seconds": 14400,
+  "why_now": "The accepted domain dossier establishes the actual Ozon and WMS constraints, so the next necessary decision is a universal architecture and operator process before any clickable prototype or production code.",
+  "working_directory": "."
+}
