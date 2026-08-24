@@ -1,6 +1,6 @@
 import JsBarcode from 'jsbarcode'
 
-type BarcodeVariant = 'default' | 'thermal58' | 'storageCell'
+type BarcodeVariant = 'default' | 'thermal58' | 'storageCell' | 'internalBox'
 
 const VARIANTS: Record<
   BarcodeVariant,
@@ -9,6 +9,9 @@ const VARIANTS: Record<
   default: { width: 320, height: 80, barHeight: 64, margin: 8 },
   thermal58: { width: 248, height: 56, barHeight: 44, margin: 4 },
   storageCell: { width: 1200, height: 300, barHeight: 240, margin: 24, moduleWidth: 5 },
+  // Внутренние короба и грузоместа сканируют издалека на складе. У длинного
+  // Code 128 достаточно крупный модуль только на полном полотне этикетки.
+  internalBox: { width: 1200, height: 380, barHeight: 300, margin: 28, moduleWidth: 5 },
 }
 
 export function renderBarcodeDataUrl(
