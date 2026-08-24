@@ -473,6 +473,7 @@ export function FfInboundRequestView({
   const [catalog, setCatalog] = useState<WbCatalogRow[] | null>(null)
   const [locations, setLocations] = useState<LocationRow[]>([])
   const [busy, setBusy] = useState(false)
+  const [sortingToolbarElement, setSortingToolbarElement] = useState<HTMLDivElement | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [actualDraftByLineId, setActualDraftByLineId] = useState<Record<string, string>>({})
   const [actualDraftErrorByLineId, setActualDraftErrorByLineId] = useState<Record<string, string>>({})
@@ -2144,6 +2145,13 @@ export function FfInboundRequestView({
                 flexWrap: 'wrap',
               }}
             >
+              {sortingView && receptionClosed ? (
+                <Box
+                  ref={setSortingToolbarElement}
+                  data-testid="ff-sorting-toolbar-controls"
+                  sx={{ display: 'flex', alignItems: 'center' }}
+                />
+              ) : null}
               {isFulfillmentAdmin &&
               workspace !== 'sorting' &&
               receivingActive ? (
@@ -2333,6 +2341,7 @@ export function FfInboundRequestView({
                   await loadDetail()
                 }}
                 onDirtyChange={onDirtyChange}
+                toolbarElement={sortingToolbarElement}
               />
             </>
           ) : null}

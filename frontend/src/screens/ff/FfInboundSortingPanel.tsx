@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { createPortal } from 'react-dom'
 import AddIcon from '@mui/icons-material/Add'
+import ExpandLessOutlined from '@mui/icons-material/ExpandLessOutlined'
+import ExpandMoreOutlined from '@mui/icons-material/ExpandMoreOutlined'
 import QrCodeScannerOutlined from '@mui/icons-material/QrCodeScannerOutlined'
 import {
   Alert,
@@ -66,6 +69,7 @@ type DistributionLineOut = {
   storage_location_id: string
   storage_location_code: string
   quantity: number
+  created_at: string
 }
 
 type DistributionScanOut = {
@@ -102,6 +106,7 @@ type Props = {
   completed?: boolean
   onReload: () => Promise<void>
   onDirtyChange?: (dirty: boolean) => void
+  toolbarElement?: HTMLElement | null
 }
 
 let draftRowSeq = 0
@@ -252,6 +257,7 @@ export function FfInboundSortingPanel({
   completed = false,
   onReload,
   onDirtyChange,
+  toolbarElement = null,
 }: Props) {
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
   const { catalogById } = useWbProductCatalog(token)
@@ -268,6 +274,9 @@ export function FfInboundSortingPanel({
   const [activeLocationCode, setActiveLocationCode] = useState<string | null>(null)
   const [pendingBoxId, setPendingBoxId] = useState<string | null>(null)
   const [boxLocationById, setBoxLocationById] = useState<Record<string, string>>({})
+  const [distributionRows, setDistributionRows] = useState<DistributionLineOut[]>([])
+  const [boxesExpanded, setBoxesExpanded] = useState(true)
+  const [looseExpanded, setLooseExpanded] = useState(true)
   const [highlightedProductId, setHighlightedProductId] = useState<string | null>(null)
   const [rowOverflowByProduct, setRowOverflowByProduct] = useState<Record<string, string | null>>({})
   const [, setDirty] = useState(false)
@@ -293,6 +302,11 @@ export function FfInboundSortingPanel({
     [onDirtyChange],
   )
 
+  const displayBoxes = useMemo(
+    () => boxes.filter((box) => box.lines.length > 0).sort((a, b) => a.box_number - b.box_number),
+    [boxes],
+  )
+
   const sortableBoxes = useMemo(
     () =>
       boxes
@@ -305,6 +319,35 @@ export function FfInboundSortingPanel({
         .sort((a, b) => a.box_number - b.box_number),
     [boxes],
   )
+
+  const boxLocationCodesById = useMemo(() => {
+    const result = new Map<string, string[]>()
+    for (const box of displayBoxes) {
+      const postedByProduct = new Map(
+        box.lines.map((line) => [line.product_id, line.posted_qty ?? 0]),
+      )
+      const countedByProduct = new Map<string, number>()
+      const newestRows = distributionRows
+        .filter((row) => row.box_id === box.id)
+        .sort((a, b) => {
+          const byCreatedAt = b.created_at.localeCompare(a.created_at)
+          return byCreatedAt !== 0 ? byCreatedAt : b.id.localeCompare(a.id)
+        })
+      const codes: string[] = []
+      for (const row of newestRows) {
+        const alreadyCounted = countedByProduct.get(row.product_id) ?? 0
+        const postedQty = postedByProduct.get(row.product_id) ?? 0
+        const backedQty = Math.min(row.quantity, Math.max(0, postedQty - alreadyCounted))
+        if (backedQty <= 0) continue
+        countedByProduct.set(row.product_id, alreadyCounted + backedQty)
+        if (!codes.includes(row.storage_location_code)) {
+          codes.push(row.storage_location_code)
+        }
+      }
+      result.set(box.id, codes)
+    }
+    return result
+  }, [displayBoxes, distributionRows])
 
   const pendingBox = useMemo(
     () => sortableBoxes.find((box) => box.id === pendingBoxId) ?? null,
@@ -408,6 +451,7 @@ export function FfInboundSortingPanel({
 
   const hydrateDistributionRows = useCallback(
     (rows: DistributionLineOut[]) => {
+      setDistributionRows(rows)
       const byProduct = new Map<string, DistributionLineOut[]>()
       for (const r of rows) {
         const list = byProduct.get(r.product_id) ?? []
@@ -878,7 +922,7 @@ export function FfInboundSortingPanel({
     }
   }
 
-  if (sortableProducts.length === 0 && sortableBoxes.length === 0) {
+  if (sortableProducts.length === 0 && displayBoxes.length === 0) {
     if (sortingRemainingQty > 0) {
       return (
         <Alert severity="warning" data-testid="ff-sorting-products-loading-gap">
@@ -979,12 +1023,21 @@ export function FfInboundSortingPanel({
         </Box>
       ) : null}
 
-      {editable && sortableBoxes.length > 0 ? (
+      {displayBoxes.length > 0 ? (
         <Paper variant="outlined" sx={{ mb: 2, p: 1.5 }} data-testid="ff-sorting-box-putaway">
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>
-            Короба
-          </Typography>
-          <TableContainer>
+          <Button
+            color="inherit"
+            onClick={() => setBoxesExpanded((expanded) => !expanded)}
+            startIcon={boxesExpanded ? <ExpandLessOutlined /> : <ExpandMoreOutlined />}
+            aria-expanded={boxesExpanded}
+            data-testid="ff-sorting-boxes-toggle"
+            sx={{ p: 0, mb: boxesExpanded ? 1 : 0, minWidth: 0, textTransform: 'none' }}
+          >
+            <Typography variant="h6" component="span" sx={{ fontWeight: 800 }}>
+              Короба
+            </Typography>
+          </Button>
+          {boxesExpanded ? <TableContainer>
             <Table size="small">
               <TableHead>
                 <TableRow>
@@ -995,11 +1048,12 @@ export function FfInboundSortingPanel({
                 </TableRow>
               </TableHead>
               <TableBody>
-                {sortableBoxes.map((box) => {
+                {displayBoxes.map((box) => {
                   const remaining = box.lines.reduce((sum, line) => sum + boxLineRemaining(line), 0)
+                  const placed = remaining <= 0
                   const locationId = boxLocationById[box.id] ?? ''
                   const selectedLocation = locations.find((row) => row.id === locationId) ?? null
-                  const visibleLines = box.lines.filter((line) => boxLineRemaining(line) > 0)
+                  const locationCodes = boxLocationCodesById.get(box.id) ?? []
                   return (
                     <TableRow
                       key={box.id}
@@ -1007,6 +1061,7 @@ export function FfInboundSortingPanel({
                       aria-selected={box.id === pendingBoxId}
                       data-testid="ff-sorting-box-putaway-row"
                       data-box-id={box.id}
+                      data-placed={placed ? 'true' : 'false'}
                     >
                       <TableCell colSpan={4} sx={{ p: 0 }}>
                         <Table size="small">
@@ -1022,7 +1077,15 @@ export function FfInboundSortingPanel({
                               </TableCell>
                               <TableCell align="right" sx={{ width: 120 }}>{remaining} шт.</TableCell>
                               <TableCell sx={{ width: 260 }}>
-                        <FormControl size="small" fullWidth>
+                        {placed ? (
+                          <Typography
+                            variant="body2"
+                            sx={{ fontWeight: 700 }}
+                            data-testid="ff-sorting-box-placed-location"
+                          >
+                            {locationCodes.join(', ') || 'Ячейка не указана'}
+                          </Typography>
+                        ) : <FormControl size="small" fullWidth>
                           <Select
                             displayEmpty
                             value={locationId}
@@ -1044,10 +1107,12 @@ export function FfInboundSortingPanel({
                               </MenuItem>
                             ))}
                           </Select>
-                        </FormControl>
+                        </FormControl>}
                               </TableCell>
                               <TableCell align="right" sx={{ width: 120 }}>
-                        <Button
+                        {placed ? (
+                          <Chip label="Разложен" color="success" size="small" data-testid="ff-sorting-box-placed" />
+                        ) : <Button
                           size="small"
                           variant="outlined"
                           disabled={scanBusy || busy || selectedLocation == null}
@@ -1057,7 +1122,7 @@ export function FfInboundSortingPanel({
                           data-testid="ff-sorting-box-putaway-submit"
                         >
                           Разместить
-                        </Button>
+                        </Button>}
                               </TableCell>
                             </TableRow>
                             <TableRow>
@@ -1071,7 +1136,7 @@ export function FfInboundSortingPanel({
                                       </TableRow>
                                     </TableHead>
                                     <TableBody>
-                                      {visibleLines.map((line) => {
+                                      {box.lines.map((line) => {
                                         const meta = productDisplayMetaFromCatalog(
                                           line.product_id,
                                           line,
@@ -1092,7 +1157,7 @@ export function FfInboundSortingPanel({
                                               align="right"
                                               data-testid="ff-sorting-box-product-qty"
                                             >
-                                              {boxLineRemaining(line)}
+                                              {line.quantity}
                                             </TableCell>
                                           </TableRow>
                                         )
@@ -1110,61 +1175,64 @@ export function FfInboundSortingPanel({
                 })}
               </TableBody>
             </Table>
-          </TableContainer>
+          </TableContainer> : null}
         </Paper>
       ) : null}
 
-      <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-        <Typography variant="body2" color="text.secondary">
-          Осталось разложить:
-        </Typography>
-        <Chip
-          label={
-            draftAwareRemainingTotal < 0
-              ? `Превышение на ${Math.abs(draftAwareRemainingTotal)} шт`
-              : `${draftAwareRemainingTotal} шт`
-          }
-          color={
-            draftAwareRemainingTotal > 0
-              ? 'warning'
-              : draftAwareRemainingTotal < 0
-                ? 'error'
-                : 'success'
-          }
-          size="small"
-          data-testid="ff-sorting-remaining-total"
-        />
-        {editable ? (
-          <Tooltip
-            title={
-              hasValidationError
-                ? 'Есть строки, где указано больше, чем доступно для раскладки. Уменьшите количество, чтобы применить.'
-                : !hasSelectableRows
-                  ? 'Выберите ячейку и укажите количество хотя бы в одной строке, чтобы применить раскладку.'
-                  : ''
-            }
-          >
-            <span>
-              <Button
-                variant="contained"
-                size="small"
-                disabled={
-                  busy ||
-                  scanBusy ||
-                  hasValidationError ||
-                  !hasSelectableRows ||
-                  sortingRemainingQty <= 0 ||
-                  !distributionReady
+      {toolbarElement
+        ? createPortal(
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+              <Chip
+                label={
+                  draftAwareRemainingTotal < 0
+                    ? `Превышение на ${Math.abs(draftAwareRemainingTotal)} шт`
+                    : `Осталось: ${draftAwareRemainingTotal} шт`
                 }
-                onClick={() => void applyDistribution()}
-                data-testid="ff-sorting-apply"
-              >
-                Применить раскладку
-              </Button>
-            </span>
-          </Tooltip>
-        ) : null}
-      </Stack>
+                color={
+                  draftAwareRemainingTotal > 0
+                    ? 'warning'
+                    : draftAwareRemainingTotal < 0
+                      ? 'error'
+                      : 'success'
+                }
+                size="small"
+                sx={{ fontWeight: 800 }}
+                data-testid="ff-sorting-remaining-total"
+              />
+              {editable ? (
+                <Tooltip
+                  title={
+                    hasValidationError
+                      ? 'Есть строки, где указано больше, чем доступно для раскладки. Уменьшите количество, чтобы применить.'
+                      : !hasSelectableRows
+                        ? 'Выберите ячейку и укажите количество хотя бы в одной строке, чтобы применить раскладку.'
+                        : ''
+                  }
+                >
+                  <span>
+                    <Button
+                      variant="contained"
+                      size="small"
+                      disabled={
+                        busy ||
+                        scanBusy ||
+                        hasValidationError ||
+                        !hasSelectableRows ||
+                        sortingRemainingQty <= 0 ||
+                        !distributionReady
+                      }
+                      onClick={() => void applyDistribution()}
+                      data-testid="ff-sorting-apply"
+                    >
+                      Применить раскладку
+                    </Button>
+                  </span>
+                </Tooltip>
+              ) : null}
+            </Stack>,
+            toolbarElement,
+          )
+        : null}
 
       {locations.length === 0 ? (
         <Alert severity="warning" sx={{ mb: 2 }} data-testid="ff-sorting-no-locations">
@@ -1173,12 +1241,21 @@ export function FfInboundSortingPanel({
       ) : null}
 
       {sortableProducts.length > 0 ? (
-        <Typography variant="subtitle2" sx={{ mb: 1 }}>
-          Россыпь
-        </Typography>
+        <Button
+          color="inherit"
+          onClick={() => setLooseExpanded((expanded) => !expanded)}
+          startIcon={looseExpanded ? <ExpandLessOutlined /> : <ExpandMoreOutlined />}
+          aria-expanded={looseExpanded}
+          data-testid="ff-sorting-loose-toggle"
+          sx={{ p: 0, mb: looseExpanded ? 1 : 0, minWidth: 0, textTransform: 'none' }}
+        >
+          <Typography variant="h6" component="span" sx={{ fontWeight: 800 }}>
+            Россыпь
+          </Typography>
+        </Button>
       ) : null}
 
-      <Stack spacing={2}>
+      {looseExpanded ? <Stack spacing={2}>
         {productStates.map((product) => {
           const displayMeta = productDisplayMetaFromCatalog(product.product_id, product, catalogById)
           const effectiveDistributed = effectiveDistributedByProductId.get(product.product_id) ?? 0
@@ -1391,7 +1468,7 @@ export function FfInboundSortingPanel({
             </Paper>
           )
         })}
-      </Stack>
+      </Stack> : null}
 
       {sortingRemainingQty <= 0 ? (
         <Alert severity="success" sx={{ mt: 2 }} data-testid="ff-sorting-all-done">

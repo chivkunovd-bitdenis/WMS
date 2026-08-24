@@ -114,11 +114,24 @@ test('ff sorting: box product rows and loose goods are separate', async ({ page 
   await expect(boxRow.getByTestId('ff-sorting-box-product-sku')).toHaveText(sku);
   await expect(boxRow.getByTestId('ff-sorting-box-product-qty')).toHaveText('6');
   await expect(boxRow.getByTestId('ff-sorting-cell-location')).toHaveCount(0);
+  await expect(page.getByTestId('ff-sorting-toolbar-controls').getByTestId('ff-sorting-remaining-total'))
+    .toHaveText('Осталось: 10 шт');
+  await expect(page.getByTestId('ff-sorting-toolbar-controls').getByTestId('ff-sorting-apply'))
+    .toBeVisible();
+
+  await page.getByTestId('ff-sorting-boxes-toggle').click();
+  await expect(page.getByTestId('ff-sorting-box-putaway-row')).toHaveCount(0);
+  await page.getByTestId('ff-sorting-boxes-toggle').click();
+  await expect(boxRow).toBeVisible();
 
   const productCard = page.getByTestId('ff-sorting-product-card').first();
   await expect(productCard.getByTestId('ff-sorting-product-accepted')).toHaveText('4');
   await expect(productCard.getByTestId('ff-sorting-cell-row')).toHaveCount(1);
   await expect(productCard).not.toContainText('Короб №');
+  await page.getByTestId('ff-sorting-loose-toggle').click();
+  await expect(page.getByTestId('ff-sorting-product-card')).toHaveCount(0);
+  await page.getByTestId('ff-sorting-loose-toggle').click();
+  await expect(productCard).toBeVisible();
   await page.screenshot({
     path: '../docs/evidence/20260824-box-contents-sorting/box-and-loose.png',
     fullPage: true,
@@ -132,7 +145,17 @@ test('ff sorting: box product rows and loose goods are separate', async ({ page 
     ),
     boxRow.getByTestId('ff-sorting-box-putaway-submit').click(),
   ]);
-  await expect(page.getByTestId('ff-sorting-box-putaway-row')).toHaveCount(0);
+  await expect(page.getByTestId('ff-sorting-box-putaway-row')).toHaveCount(1);
+  await expect(boxRow).toHaveAttribute('data-placed', 'true');
+  await expect(boxRow.getByTestId('ff-sorting-box-placed')).toHaveText('Разложен');
+  await expect(boxRow.getByTestId('ff-sorting-box-placed-location')).toHaveText('BOX-1');
+  await expect(boxRow.getByTestId('ff-sorting-box-product-row')).toHaveCount(1);
+  await expect(boxRow.getByTestId('ff-sorting-box-product-qty')).toHaveText('6');
+  await expect(page.getByTestId('ff-sorting-remaining-total')).toHaveText('Осталось: 4 шт');
+  await page.screenshot({
+    path: '../docs/evidence/20260824-box-contents-sorting/box-placed-visible.png',
+    fullPage: true,
+  });
 
   const looseRow = page.getByTestId('ff-sorting-product-card').first().getByTestId('ff-sorting-cell-row').first();
   await selectSortingLocation(page, looseRow, /LOOSE-1/);
@@ -541,7 +564,11 @@ test('ff sorting: whole boxes go to one cell by scan or one explicit row action'
   await expect(page.getByTestId('ff-sorting-scan-message')).toContainText(
     `Короб №${scannedBox.box_number} полностью размещён в ячейке SCAN-BOX-A-01`,
   );
-  await expect(page.getByTestId('ff-sorting-box-putaway-row')).toHaveCount(1);
+  await expect(page.getByTestId('ff-sorting-box-putaway-row')).toHaveCount(2);
+  await expect(selectedBoxRow).toHaveAttribute('data-placed', 'true');
+  await expect(selectedBoxRow.getByTestId('ff-sorting-box-placed-location')).toHaveText(
+    'SCAN-BOX-A-01',
+  );
   expect(scannedBoxPutawayPosts).toBe(1);
 
   const manualRow = page
