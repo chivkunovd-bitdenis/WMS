@@ -1,0 +1,54 @@
+{
+  "observed_at": "2026-08-24",
+  "application_sha": "af0779e1c425eede8d811da666822ff6ed178331",
+  "prototype_query_present": false,
+  "desktop": {
+    "viewport": {"width": 1600, "height": 1111},
+    "fbs_queue": {
+      "body": {"scroll_width": 1600, "scroll_height": 1111},
+      "main": {"x": 260, "y": 0, "width": 1340, "height": 1111},
+      "table": {"x": 284.55, "y": 345.16, "width": 1290.89, "height": 291.06}
+    },
+    "fbs_workspace": {
+      "dialog": {"x": 50, "y": 33.33, "width": 1500, "height": 1044.44, "scroll_height": 1044, "client_height": 1044}
+    },
+    "fbo_document": {
+      "dialog": {"x": 0, "y": 0, "width": 1600, "height": 1111.11, "scroll_height": 1111, "client_height": 1111}
+    },
+    "return_card": {
+      "dialog": {"x": 0, "y": 0, "width": 1600, "height": 1111.11, "scroll_height": 1111, "client_height": 1111}
+    },
+    "catalog": {
+      "body": {"scroll_width": 1600, "scroll_height": 1111},
+      "table": {"x": 284.55, "y": 384.58, "width": 1290.89, "height": 91.82}
+    },
+    "seller_settings": {
+      "body": {"scroll_width": 1600, "scroll_height": 1111}
+    }
+  },
+  "narrow": {
+    "viewport": {"width": 433, "height": 938},
+    "fbs_workspace": {
+      "body": {"scroll_width": 433, "scroll_height": 938},
+      "dialog": {"x": 32, "y": 32, "width": 369.33, "height": 873.78, "scroll_width": 369, "client_width": 369, "scroll_height": 874, "client_height": 874}
+    },
+    "fbo_document": {
+      "body": {"scroll_width": 960, "scroll_height": 938},
+      "dialog": {"x": 0, "y": 0, "width": 433.33, "height": 937.78, "scroll_width": 433, "client_width": 433, "scroll_height": 938, "client_height": 938}
+    },
+    "return_card": {
+      "body": {"scroll_width": 433, "scroll_height": 938},
+      "dialog": {"x": 0, "y": 0, "width": 433.33, "height": 937.78, "scroll_width": 433, "client_width": 433, "scroll_height": 938, "client_height": 938}
+    },
+    "catalog": {
+      "body": {"scroll_width": 433, "scroll_height": 944},
+      "main": {"x": 260, "y": 0, "width": 173.33, "height": 943.91},
+      "table": {"x": 284.55, "y": 791.83, "width": 1283.99, "height": 127.53}
+    },
+    "seller_settings": {
+      "body": {"scroll_width": 1084, "scroll_height": 1077},
+      "main": {"x": 240, "y": 0, "width": 843.81, "height": 1077.18},
+      "staff_table": {"x": 281.10, "y": 205.52, "width": 761.61, "height": 115.26}
+    }
+  }
+}
