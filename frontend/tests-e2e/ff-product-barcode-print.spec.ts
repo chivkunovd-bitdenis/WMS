@@ -114,6 +114,17 @@ test('ff sorting opens unified marking print dialog for product line', async ({ 
   await expect(dialog).toContainText('Брюки коричневые');
   await expect(page.getByTestId('marking-print-wb-qty')).toBeVisible();
   await expect(page.getByTestId('marking-print-qty')).toContainText('К упаковке: 2');
+  const previewBarcode = page
+    .frameLocator('[data-testid="marking-print-wb-only-preview"] iframe')
+    .locator('img[alt="barcode"]');
+  await expect(previewBarcode).not.toHaveCount(0);
+  await expect.poll(() =>
+    previewBarcode.evaluateAll((images) =>
+      images.every((image) =>
+        image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0,
+      ),
+    ),
+  ).toBe(true);
 
   // TC-NEW-PRINT-SIZE-01 — выбор размера этикетки применяется к физическому листу печати.
   const sizeSelect = page.getByTestId('marking-print-label-size');

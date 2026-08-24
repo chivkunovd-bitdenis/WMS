@@ -36,7 +36,7 @@ export function renderBarcodeDataUrl(
     displayValue: false,
     height: size.barHeight,
     margin: size.margin,
-    width: size.moduleWidth,
+    ...(size.moduleWidth === undefined ? {} : { width: size.moduleWidth }),
     lineColor: '#111',
     background: '#fff',
   })

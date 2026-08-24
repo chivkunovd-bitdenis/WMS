@@ -49,6 +49,7 @@ test('FF settings: separate marking print shows split print sections', async ({ 
     data: JSON.stringify({
       name: 'E2E Sep Product',
       sku_code: sku,
+      wb_barcode: '2053875123143',
       length_mm: 10,
       width_mm: 10,
       height_mm: 10,
@@ -145,6 +146,16 @@ test('FF settings: separate marking print shows split print sections', async ({ 
   await expect(page.getByTestId('marking-print-separate-close')).toBeVisible()
   await expect(page.getByTestId('marking-print-cz-label-size')).toContainText('58 × 40')
   await expect(page.getByTestId('marking-print-wb-label-size')).toContainText('58 × 40')
+  for (const previewTestId of ['marking-print-sep-cz-preview', 'marking-print-sep-wb-preview']) {
+    const previewIframe = page.locator(`[data-testid="${previewTestId}"] iframe`)
+    const previewImages = previewIframe.contentFrame().locator('img')
+    await expect(previewImages).not.toHaveCount(0)
+    await expect.poll(async () =>
+      previewImages.evaluateAll((images) =>
+        images.every((image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0),
+      ),
+    ).toBe(true)
+  }
 
   await Promise.all([separatePrintWait, page.getByTestId('marking-print-sep-cz-print').click()])
   await expect(page.getByTestId('marking-print-sep-cz-print')).toContainText('ЧЗ напечатаны ✓')
