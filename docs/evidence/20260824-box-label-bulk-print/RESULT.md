@@ -6,9 +6,12 @@
   этикетками.
 - Вызван ровно один `window.print()`; iframe очищен событием `afterprint`, а не
   фиксированной задержкой.
-- PNG первой фактически сформированной этикетки обратным декодером ZXing
-  прочитан как исходный внутренний код короба.
-- Скриншот Chromium-рендера этого же print HTML:
+- Вырезанный с device scale factor 4 PNG штрихкода, фактически отрисованный
+  Chromium из print HTML, обратным декодером ZXing прочитан как исходный
+  внутренний код короба.
+- Фактический Chromium-crop штрихкода:
+  [`internal-box-label-chromium-crop.png`](internal-box-label-chromium-crop.png).
+- Полный Chromium-рендер той же ленты:
   [`internal-box-label-preview.png`](internal-box-label-preview.png).
 
 Команда:

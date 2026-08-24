@@ -23,10 +23,8 @@ import {
   seedFfSellerInbound,
 } from './inbound-boxes-helpers';
 
-function decodeCode128FromDataUrl(dataUrl: string): string {
-  const encoded = dataUrl.match(/^data:image\/png;base64,(.+)$/)?.[1];
-  if (!encoded) throw new Error('Ожидался PNG Code 128 в data URL.');
-  const png = PNG.sync.read(Buffer.from(encoded, 'base64'));
+function decodeCode128FromPng(pngBytes: Buffer): string {
+  const png = PNG.sync.read(pngBytes);
   const pixels = new Int32Array(png.width * png.height);
   for (let index = 0; index < pixels.length; index += 1) {
     const offset = index * 4;
@@ -247,14 +245,24 @@ test('TC-NEW-INTERNAL-LABEL-01 bulk box labels are large, decodable and one prin
   expect((printHtml.html.match(/class="label/g) ?? []).length).toBe(2);
 
   // Живой Chromium рендерит сам print HTML с PNG, а не подменённый макет.
-  const preview = await page.context().newPage({ viewport: { width: 600, height: 500 } });
+  const browser = page.context().browser();
+  if (!browser) throw new Error('Chromium browser недоступен для проверки печати.');
+  const printContext = await browser.newContext({
+    viewport: { width: 600, height: 500 },
+    deviceScaleFactor: 4,
+  });
+  const preview = await printContext.newPage();
   await preview.setContent(printHtml.html);
   const barcodeImage = preview.locator('img.barcode').first();
   await expect(barcodeImage).toBeVisible();
   const barcodeBox = await barcodeImage.boundingBox();
   expect(barcodeBox?.width).toBeGreaterThan(200);
-  await preview.screenshot({ path: testInfo.outputPath('internal-box-label-preview.png') });
+  const renderedBarcodePng = await barcodeImage.screenshot({
+    path: testInfo.outputPath('internal-box-label-chromium-crop.png'),
+    scale: 'device',
+  });
   await preview.close();
+  await printContext.close();
 
   await expect.poll(async () => page.evaluate(() => {
     const capture = window as unknown as { __WMS_PRINT_JOB_COUNT__?: number };
@@ -266,9 +274,7 @@ test('TC-NEW-INTERNAL-LABEL-01 bulk box labels are large, decodable and one prin
     return capture.__WMS_PRINT_CLEANUP_EVENTS__ ?? [];
   })).toEqual(['afterprint']);
 
-  const firstPng = printHtml.html.match(/<img class="barcode" src="([^"]+)"/)?.[1];
-  expect(firstPng).toBeTruthy();
-  expect(decodeCode128FromDataUrl(firstPng!)).toBe(boxes[0]!.internal_barcode);
+  expect(decodeCode128FromPng(renderedBarcodePng)).toBe(boxes[0]!.internal_barcode);
   await expect(dialog).toHaveCount(0);
 
   // Приёмка уже проведена, но оператор может открыть её в общем списке и
