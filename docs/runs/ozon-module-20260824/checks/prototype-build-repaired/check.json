@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "npm",
+    "run",
+    "build"
+  ],
+  "check_id": "prototype-build-repaired",
+  "env_refs": [],
+  "expected_exit_codes": [
+    0
+  ],
+  "timeout_seconds": 1800,
+  "why_now": "The bounded developer repair reports success, so the dispatcher must independently execute the real frontend build before the prototype can be saved or opened for browser acceptance.",
+  "working_directory": "frontend"
+}

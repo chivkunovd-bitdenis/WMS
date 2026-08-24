@@ -48,6 +48,7 @@ import { FfInboundQueuePage } from './screens/ff/FfInboundQueuePage'
 import { FfProductsCatalogScreen } from './screens/v2/FfProductsCatalogScreen'
 import { FfFbsOrdersScreen } from './screens/v2/FfFbsOrdersScreen'
 import { FfFbsStockSyncScreen } from './screens/v2/FfFbsStockSyncScreen'
+import { OzonModulePrototypeRoute } from './prototypes/ozon/OzonModulePrototype'
 import { FfSettingsScreen } from './screens/ff/FfSettingsScreen'
 import { FfBillingScreen } from './screens/ff/FfBillingScreen'
 import {
@@ -2992,6 +2993,43 @@ export default function App() {
                 ffAccessDenied
               )
             }
+          />
+
+          <Route
+            path="ff/ozon"
+            element={token && (isFulfillmentAdmin || canPackagingOps || canMpShipmentOps || canReceptionOps) ? <OzonModulePrototypeRoute /> : ffAccessDenied}
+          />
+          <Route
+            path="ff/ozon/fbs"
+            element={token && (isFulfillmentAdmin || canPackagingOps || canMpShipmentOps || canReceptionOps) ? <OzonModulePrototypeRoute /> : ffAccessDenied}
+          />
+          <Route
+            path="ff/ozon/fbs/:postingId"
+            element={token && (isFulfillmentAdmin || canPackagingOps || canMpShipmentOps || canReceptionOps) ? <OzonModulePrototypeRoute /> : ffAccessDenied}
+          />
+          <Route
+            path="ff/ozon/fbo"
+            element={token && (isFulfillmentAdmin || canPackagingOps || canMpShipmentOps || canReceptionOps) ? <OzonModulePrototypeRoute /> : ffAccessDenied}
+          />
+          <Route
+            path="ff/ozon/fbo/:supplyOrderId"
+            element={token && (isFulfillmentAdmin || canPackagingOps || canMpShipmentOps || canReceptionOps) ? <OzonModulePrototypeRoute /> : ffAccessDenied}
+          />
+          <Route
+            path="ff/ozon/returns"
+            element={token && (isFulfillmentAdmin || canPackagingOps || canMpShipmentOps || canReceptionOps) ? <OzonModulePrototypeRoute /> : ffAccessDenied}
+          />
+          <Route
+            path="ff/ozon/returns/:id"
+            element={token && (isFulfillmentAdmin || canPackagingOps || canMpShipmentOps || canReceptionOps) ? <OzonModulePrototypeRoute /> : ffAccessDenied}
+          />
+          <Route
+            path="ff/ozon/catalog"
+            element={token && (isFulfillmentAdmin || canPackagingOps || canMpShipmentOps || canReceptionOps) ? <OzonModulePrototypeRoute /> : ffAccessDenied}
+          />
+          <Route
+            path="ff/ozon/connection"
+            element={token && (isFulfillmentAdmin || canPackagingOps || canMpShipmentOps || canReceptionOps) ? <OzonModulePrototypeRoute /> : ffAccessDenied}
           />
 
           <Route

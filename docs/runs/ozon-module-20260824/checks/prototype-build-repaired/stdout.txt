@@ -1,0 +1,19 @@
+
+> frontend@0.0.0 build
+> tsc -b && vite build
+
+vite v8.0.8 building client environment for production...
+[2K
+transforming...✓ 12018 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/seller/index.html                             0.58 kB │ gzip:   0.36 kB
+dist/index.html                                    0.65 kB │ gzip:   0.38 kB
+dist/assets/ff-C8Lao7a-.css                        5.91 kB │ gzip:   1.45 kB
+dist/assets/WmsDatePickersProvider-Cy6VBLR9.css    6.07 kB │ gzip:   1.82 kB
+dist/assets/seller-C-JeG1c_.js                    93.60 kB │ gzip:  23.39 kB
+dist/assets/ff-Cfgi44KI.js                       733.48 kB │ gzip: 179.23 kB
+dist/assets/bwip-js-vUEP4hpo.js                  932.62 kB │ gzip: 255.75 kB
+dist/assets/WmsDatePickersProvider-C5ZnsDZ5.js   960.79 kB │ gzip: 285.75 kB
+
+✓ built in 1.24s

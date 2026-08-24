@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "python3",
+    "scripts/ui/ui_guard.py"
+  ],
+  "check_id": "prototype-ui-guard",
+  "env_refs": [],
+  "expected_exit_codes": [
+    0
+  ],
+  "timeout_seconds": 1800,
+  "why_now": "The frontend build passes, so the repository UI-kit guard must verify that the new fixture-only prototype did not increase forbidden custom interface deviations before Git save and browser acceptance.",
+  "working_directory": "."
+}

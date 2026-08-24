@@ -217,6 +217,11 @@ export function AuthedAppLayout({
                 <ListItemText primary="FBS" />
               </ListItemButton>
             ) : null}
+            {(isAdmin || canPackaging || canMpShipments || can('reception')) ? (
+              <ListItemButton component={NavLink} to={`${base}/ozon`} data-testid="nav-ff-ozon">
+                <ListItemText primary="Ozon" />
+              </ListItemButton>
+            ) : null}
             {canMpShipments ? (
               <ListItemButton
                 component={NavLink}

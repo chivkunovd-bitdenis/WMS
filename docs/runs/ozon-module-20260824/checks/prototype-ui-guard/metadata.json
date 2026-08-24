@@ -1,0 +1,16 @@
+{
+  "check_id": "prototype-ui-guard",
+  "command": [
+    "python3",
+    "scripts/ui/ui_guard.py"
+  ],
+  "cwd": "/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-module-sol-20260824",
+  "env_refs": [],
+  "exit_code": 2,
+  "finished_at": "2026-08-24T16:34:55.375545Z",
+  "head_after": "22e74d3f24d3eb508507daac3d4561be1769ec58",
+  "head_before": "22e74d3f24d3eb508507daac3d4561be1769ec58",
+  "started_at": "2026-08-24T16:34:55.332797Z",
+  "status": "failed",
+  "timed_out": false
+}

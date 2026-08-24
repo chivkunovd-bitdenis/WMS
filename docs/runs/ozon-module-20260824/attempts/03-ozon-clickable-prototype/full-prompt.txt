@@ -1,0 +1,60 @@
+Ты Terra-разработчик WMS. Выполняй только конкретный call JSON ведущего. Не меняй исходную просьбу, архитектурные решения, соседние процессы и обязательные тестовые сценарии. Если поручение недостаточно — верни точную нехватку, а не расширяй задачу сам.
+
+Если режим prototype: собери точный кликабельный React-интерфейс на существующем UI kit с реальными размерами, колонками, фиктивными реалистичными данными, действиями, модалками, пустотой, загрузкой и ошибками. Не подменяй это картинкой или приблизительным HTML.
+
+Если режим implementation: реализуй утверждённый процесс и прототип, добавь относящиеся к изменению модульные/интеграционные тесты и сохрани работу commit. Обязательный артефакт: что реализовано; почему появились существенные элементы; изменённые файлы; тесты; выполненные команды; SHA; отклонения от входов; неизвестные и блокеры.
+
+Ниже — единственное поручение ведущего Sol в JSON. Верни только JSON по output schema.
+{
+  "acceptance": [
+    "All prototype routes and acceptance scenarios from ARCH section 17 are reachable and clickable in the existing authenticated application",
+    "The prototype uses realistic local fixtures only, changes visible state for meaningful actions, and covers loading, empty, error, partial, unknown and uncertain states",
+    "Existing WB screens and workflows are not redesigned or behaviorally changed, while simultaneous WB and Ozon account context is visibly demonstrated",
+    "No Ozon stock-publication control, route, API call or hidden capability exists in the prototype",
+    "The existing UI system is reused and the report maps every required ARCH scenario to an exact URL, role, action and visible result",
+    "A real frontend build is attempted and its result is reported without claiming live-browser acceptance"
+  ],
+  "agent": "developer",
+  "call_id": "03-ozon-clickable-prototype",
+  "context_note": "This is S0 only. Production models, routes, migrations, jobs and external calls are out of scope. The lead will inspect, commit and run a separate live-browser clicker after the prototype implementation call.",
+  "expected_artifacts": [
+    {
+      "path": "frontend/src/prototypes/ozon/OzonModulePrototype.tsx",
+      "purpose": "Primary clickable fixture-only Ozon prototype"
+    },
+    {
+      "path": "docs/runs/ozon-module-20260824/03-prototype-report.md",
+      "purpose": "Traceability, route/state/action map and browser acceptance instructions"
+    }
+  ],
+  "inputs": [
+    {
+      "purpose": "Exact owner request",
+      "ref": "docs/runs/ozon-module-20260824/REQUEST.txt"
+    },
+    {
+      "purpose": "Accepted Stage-0 architecture and exact prototype contract",
+      "ref": "tasks/ozon-module-20260824/ARCH.md"
+    },
+    {
+      "purpose": "Dated lead acceptance and prototype authorization",
+      "ref": "tasks/ozon-module-20260824/ARCH_APPROVAL.md"
+    },
+    {
+      "purpose": "Existing UI system rules",
+      "ref": "docs/UI_DESIGN_SYSTEM_RU.md"
+    },
+    {
+      "purpose": "Existing reusable UI components",
+      "ref": "frontend/src/ui-kit"
+    },
+    {
+      "purpose": "Existing route and authenticated shell integration point",
+      "ref": "frontend/src/App.tsx"
+    }
+  ],
+  "task": "Work in prototype mode only. Build the exact clickable Ozon module prototype specified by section 17 of tasks/ozon-module-20260824/ARCH.md using the existing React application and existing UI system/components. Create the primary implementation under frontend/src/prototypes/ozon/OzonModulePrototype.tsx, with focused support files under frontend/src/prototypes/ozon/ as needed, and wire only the prototype routes required by ARCH into the existing app so a signed-in admin/operator can navigate them. Cover /app/ff/ozon/fbs, /fbs/:postingNumber, /fbo, /fbo/:supplyOrderId, /returns, /returns/:id, /catalog and /connection using realistic local fixtures; every meaningful action must be clickable and visibly change state. Include the exact loading, empty, partial, error, unknown, pending/uncertain and account-isolation cases; demonstrate a seller with simultaneous WB and Ozon without altering the current WB screens. Include multi-line/quantity FBS, location/product scans, marking exemplar rejection/correction, partial package, async/superseded label, one-by-one versus carriage, cancellation recovery, FBO async draft/timeslot, cargo/TGM linkage, labels, acceptance discrepancy, linked/unmatched returns and quarantine/no-auto-restock. The account screen must show read-only/capability discovery and must contain no Ozon stock-publication toggle or route. Use existing typography, tables, spacing, buttons, dialogs and status components; do not redesign the app shell or unaffected screens and do not introduce a second design system. Do not call Ozon or any backend endpoint, do not inspect credentials, do not write production integration code, and do not modify WB behavior. Add a concise prototype report at docs/runs/ozon-module-20260824/03-prototype-report.md mapping routes/states/actions to ARCH and listing the exact browser URLs and roles for acceptance. Run frontend build or the narrowest available equivalent and report the actual result; do not claim browser acceptance yourself. If your sandbox cannot commit, still return status completed when the requested prototype artifacts and report exist and the build result is honestly recorded, because the lead will inspect and save this intermediate prototype before a separate committed validation call.",
+  "timeout_seconds": 14400,
+  "why_now": "The Stage-0 architecture is accepted and explicitly requires a precise clickable React prototype before production implementation, so the next bounded action is to build that fixture-only operator experience on the existing UI system.",
+  "working_directory": "."
+}

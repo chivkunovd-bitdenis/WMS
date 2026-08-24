@@ -1,0 +1,47 @@
+{
+  "acceptance": [
+    "npm run build completes successfully using the installed locked dependencies",
+    "Only the prototype build defects and verification text are changed; routes, fixtures, actions and scope boundaries remain intact",
+    "No backend, Ozon network, credentials, stock publication path or WB behavior is introduced",
+    "The report records the actual build command and success without claiming live-browser acceptance"
+  ],
+  "agent": "developer",
+  "call_id": "04-prototype-build-repair",
+  "context_note": "This is prototype correction round 1 and is limited to the concrete build findings. Browser acceptance has not started.",
+  "expected_artifacts": [
+    {
+      "path": "frontend/src/prototypes/ozon/OzonModulePrototype.tsx",
+      "purpose": "Buildable prototype implementation with unchanged accepted behavior"
+    },
+    {
+      "path": "docs/runs/ozon-module-20260824/03-prototype-report.md",
+      "purpose": "Prototype report with truthful current build result"
+    }
+  ],
+  "inputs": [
+    {
+      "purpose": "Accepted prototype behavior and scope boundary",
+      "ref": "tasks/ozon-module-20260824/ARCH.md"
+    },
+    {
+      "purpose": "Prototype implementation containing the build defects",
+      "ref": "frontend/src/prototypes/ozon/OzonModulePrototype.tsx"
+    },
+    {
+      "purpose": "Captured failing build output",
+      "ref": "docs/runs/ozon-module-20260824/checks/prototype-build-initial/stdout.txt"
+    },
+    {
+      "purpose": "Captured failing build diagnostics",
+      "ref": "docs/runs/ozon-module-20260824/checks/prototype-build-initial/stderr.txt"
+    },
+    {
+      "purpose": "Prototype traceability and verification report",
+      "ref": "docs/runs/ozon-module-20260824/03-prototype-report.md"
+    }
+  ],
+  "task": "Repair only the TypeScript/MUI build defects reported by checks/prototype-build-initial in frontend/src/prototypes/ozon/OzonModulePrototype.tsx. Remove the unused import and express layout/typography styling through props supported by this repository's installed MUI types, normally `sx`, without changing the accepted prototype routes, fixtures, actions, visible states, account isolation, no-network boundary, no-stock-publication boundary or existing WB behavior. Do not redesign, refactor unrelated code, add APIs, access credentials or touch backend. Run `npm run build` from frontend after the repair and update docs/runs/ozon-module-20260824/03-prototype-report.md Technical verification with the actual successful or failed result. Return status completed if the requested files exist and the build passes; do not claim browser acceptance. Git save remains the lead's responsibility for this intermediate rework.",
+  "timeout_seconds": 7200,
+  "why_now": "The first real frontend build now proves local TypeScript defects in the fixture-only prototype, so a bounded developer rework is required before Git save or browser acceptance.",
+  "working_directory": "."
+}

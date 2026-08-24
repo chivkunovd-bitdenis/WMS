@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "npm",
+    "run",
+    "build"
+  ],
+  "check_id": "prototype-build-initial",
+  "env_refs": [],
+  "expected_exit_codes": [
+    0
+  ],
+  "timeout_seconds": 1800,
+  "why_now": "Frontend dependencies are now installed, so the previously unavailable TypeScript and Vite build must be executed to distinguish an environment issue from prototype code defects.",
+  "working_directory": "frontend"
+}

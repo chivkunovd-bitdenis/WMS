@@ -1,0 +1,17 @@
+{
+  "check_id": "prototype-build-initial",
+  "command": [
+    "npm",
+    "run",
+    "build"
+  ],
+  "cwd": "/Users/deniscivkunov/Projects/WMS/.worktrees/ozon-module-sol-20260824/frontend",
+  "env_refs": [],
+  "exit_code": 2,
+  "finished_at": "2026-08-24T16:29:28.245938Z",
+  "head_after": "22e74d3f24d3eb508507daac3d4561be1769ec58",
+  "head_before": "22e74d3f24d3eb508507daac3d4561be1769ec58",
+  "started_at": "2026-08-24T16:29:21.625665Z",
+  "status": "failed",
+  "timed_out": false
+}
