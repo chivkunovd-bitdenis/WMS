@@ -1,12 +1,23 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "policy": "reuse_first",
+  "semantic_policy": "semantic_reuse_first",
+  "baseline_commit": "2af800d5846d351904cab050860356038b6d282e",
+  "baseline_evidence_root": "docs/evidence/ozon-module-20260824/baseline-current-product",
+  "binding_contract": "tasks/ozon-module-20260824/S0R_REWORK_CONTRACT.md",
   "default_new_surface_required": false,
   "target_design": {
+    "new_routes": 0,
     "new_top_level_routes": 0,
     "new_screens": 0,
+    "new_pages": 0,
     "new_workspaces": 0,
+    "new_tabs": 0,
     "new_top_level_tabs": 0,
+    "new_documents": 0,
+    "new_modals": 0,
+    "new_navigation_items": 0,
+    "new_redundant_operator_steps": 0,
     "obsolete_routes_for_removal": [
       "/app/ff/ozon",
       "/app/ff/ozon/fbs",
@@ -19,6 +30,157 @@
       "/app/ff/ozon/returns/:id"
     ]
   },
+  "fixture_urls": [
+    "/app/ff/fbs?ozonFixture=fbs-main",
+    "/app/ff/fbs?ozonFixture=fbs-auto-pass",
+    "/app/ff/mp-shipments?ozonFixture=fbo-main",
+    "/app/ff/reception?ozonFixture=return-main",
+    "/app/ff/products?ozonFixture=catalog-main",
+    "/seller/settings?ozonFixture=settings-main"
+  ],
+  "global_assertions": [
+    "Fixture adapter is selected before existing screen effects schedule and feeds the same render tree; no early whole-screen return or replacement component is allowed.",
+    "After request interception is armed and fixture URL is mounted through history, every observed browser request fails and the final request counter equals zero.",
+    "After mount and every action: integer plan >= 0, 0 <= packed <= picked <= plan, remaining = plan - picked; auto-pass has a visible reason and picked = plan.",
+    "Return restock is disabled and rejected server-side until per-unit identity and condition inspection is complete and explicit restock disposition exists.",
+    "Every visible changed-zone control declares one action intent; the count for any zone plus intent is at most one.",
+    "Every geometry field present in BASELINE_GEOMETRY.json is not worsened; existing narrow overflow never increases.",
+    "With marketplace Wildberries and no fixture query, visible copy, action intents, enabled states, stage transitions, request method/path/payload snapshots and geometry equal baseline."
+  ],
+  "surface_contracts": [
+    {
+      "surface_id": "FBS-QUEUE",
+      "requirement_ids": ["FBS-001", "FBS-002", "FBS-003", "FBS-009"],
+      "route": "/app/ff/fbs",
+      "baseline_screenshots": ["01-fbs-queue.png", "02-fbs-queue-desktop.png"],
+      "baseline_invariant": "One Заказы FBS screen, current top/status tabs, current filters/tables and one row-to-existing-workspace path; desktop body 1600, main 1340, table 1290.89.",
+      "minimal_ozon_delta": "One Маркетплейс filter; Ozon posting line totals in current cells; Получить отправления Ozon and exactly one Начать сборку action in Ozon context.",
+      "ozon_necessity": "One Ozon posting can contain multiple lines and quantities and uses different labels and handover semantics.",
+      "wb_regression_invariant": "Забрать заказы из WB, Остатки WB, all status groups, table columns, selection, supply creation and row opening remain unchanged for WB.",
+      "executable_assertions": ["root data-testid remains fbs-orders-screen", "no new route tab or column", "open-fbs-workspace intent count equals one", "Ozon root contains no WB copy or forbidden jargon", "WB DOM and request snapshot equal baseline", "desktop geometry is at most baseline and narrow body is at most 433"]
+    },
+    {
+      "surface_id": "FBS-COMPOSITION",
+      "requirement_ids": ["FBS-003"],
+      "route": "/app/ff/fbs",
+      "baseline_screenshots": ["12-fbs-workspace-composition-desktop.png"],
+      "baseline_invariant": "Same modal workspace and Состав stage, current header, rows and one Начать работу с поставкой; desktop dialog 1500 by 1044.",
+      "minimal_ozon_delta": "Same stage renders posting lines and quantities; header says Отправление Ozon and the one primary action says Начать сборку.",
+      "ozon_necessity": "Posting lines and quantities must be visible without pretending a one-by-one posting is a WB supply.",
+      "wb_regression_invariant": "WB header, Заказ WB, composition rows, action and stage order remain unchanged.",
+      "executable_assertions": ["same fbs-workspace root", "stage labels equal Состав Подбор Упаковка и маркировка Короба", "primary action count equals one", "plan equals sum of visible line quantities", "dialog bounds do not exceed baseline"]
+    },
+    {
+      "surface_id": "FBS-PICKING",
+      "requirement_ids": ["FBS-004", "FBS-009"],
+      "route": "/app/ff/fbs",
+      "baseline_screenshots": ["14-fbs-workspace-picking-readonly-desktop.png", "15-fbs-workspace-picking-narrow.png"],
+      "baseline_invariant": "Same Подбор stage with location/product scanners and current read-only auto-pass; narrow dialog 369 by 874 with no internal horizontal overflow.",
+      "minimal_ozon_delta": "Line-quantity picking and an explicit auto-pass reason with Подготовлено N из N and picked equal plan.",
+      "ozon_necessity": "A line can require more than one unit; auto-pass must not permit packed greater than picked.",
+      "wb_regression_invariant": "WB scan order, read-only explanation and transition remain unchanged.",
+      "executable_assertions": ["progress formula holds after every scan", "wrong excess and repeated scans leave counts unchanged", "auto-pass requires reason and picked equals plan", "narrow dialog scrollWidth equals clientWidth and is at most 369"]
+    },
+    {
+      "surface_id": "FBS-PACKING",
+      "requirement_ids": ["FBS-005", "FBS-006", "FBS-007"],
+      "route": "/app/ff/fbs",
+      "baseline_screenshots": ["13-fbs-workspace-packing-desktop.png"],
+      "baseline_invariant": "Same Упаковка и маркировка stage, current print/bulk/scan actions and one row per order.",
+      "minimal_ozon_delta": "Required per-unit fields, correction, package quantities and Russian label states inside current rows and print zone.",
+      "ozon_necessity": "Ozon validates required unit data and allows partial package while label creation is asynchronous.",
+      "wb_regression_invariant": "WB ЧЗ, order stickers, bulk packing and print interactions remain unchanged.",
+      "executable_assertions": ["rejected unit blocks package completion", "corrected unit enables completion", "partial 2 of 3 does not complete stage", "packed never exceeds picked", "forbidden jargon count is zero"]
+    },
+    {
+      "surface_id": "FBS-BOXES",
+      "requirement_ids": ["FBS-007", "FBS-008", "OPS-001", "OPS-002"],
+      "route": "/app/ff/fbs",
+      "baseline_screenshots": ["12-fbs-workspace-composition-desktop.png", "15-fbs-workspace-picking-narrow.png"],
+      "baseline_invariant": "Fourth stage is the same Короба stage inside the existing modal and bottom handover action zone.",
+      "minimal_ozon_delta": "WMS box to Ozon package relation, current label states and one capability-derived handover action in the existing zone.",
+      "ozon_necessity": "Ozon package label and one-by-one handover are not WB trbx, supply QR or mandatory carriage.",
+      "wb_regression_invariant": "WB box/trbx/supply QR/deliver behavior and copy remain unchanged.",
+      "executable_assertions": ["handover intent count equals one", "label state order is preparing ready applied", "local handover does not render delivered", "no fifth stage or second workspace", "modal geometry does not exceed baseline"]
+    },
+    {
+      "surface_id": "FBO-LIST-CREATE",
+      "requirement_ids": ["FBO-001"],
+      "route": "/app/ff/mp-shipments",
+      "baseline_screenshots": ["03-mp-shipments-list-desktop.png"],
+      "baseline_invariant": "One current create block with seller and one Создать отгрузку на МП action plus the seven-column list.",
+      "minimal_ozon_delta": "One marketplace select in the current create block; existing create action and document type remain.",
+      "ozon_necessity": "Ozon account and route rules must be selected before external supply work.",
+      "wb_regression_invariant": "Selecting WB preserves create payload, list columns, action copy and document opening.",
+      "executable_assertions": ["create-mp-shipment intent count equals one", "no new route document or modal", "seven list columns remain", "WB request snapshot equals baseline", "horizontal geometry is not worsened"]
+    },
+    {
+      "surface_id": "FBO-DOCUMENT",
+      "requirement_ids": ["FBO-001", "FBO-002", "FBO-003", "FBO-004", "FBO-005", "OPS-001", "OPS-002"],
+      "route": "/app/ff/mp-shipments",
+      "baseline_screenshots": ["04-fbo-document-empty-desktop.png", "05-fbo-product-picker-empty-desktop.png", "16-fbo-document-narrow.png"],
+      "baseline_invariant": "Same fullscreen Отгрузка на маркетплейс document, header, four metrics, Товары Подбор Упаковка tabs, product picker and footer; narrow internal width 433.",
+      "minimal_ozon_delta": "Conditional Ozon warehouse/scheme/interval and labels in current header/cells; cargo/TGM after WMS boxes; external acceptance facts in the same body/footer.",
+      "ozon_necessity": "Ozon supply creation is asynchronous and cargo, transport cargo and acceptance are distinct from WMS boxes and local ship.",
+      "wb_regression_invariant": "WB warehouse fields, picker fields/categories, plan/pick/pack, boxes and footer lifecycle remain unchanged.",
+      "executable_assertions": ["exactly three real switching tabs", "progress formula holds", "Ozon root contains no WB copy or jargon", "every cargo links to a closed WMS box", "local finish does not imply Ozon accepted", "narrow dialog internal scrollWidth is at most 433 and body overflow at most 960"]
+    },
+    {
+      "surface_id": "RETURN-QUEUE",
+      "requirement_ids": ["RET-001"],
+      "route": "/app/ff/reception",
+      "baseline_screenshots": ["06-reception-list-desktop.png"],
+      "baseline_invariant": "One reception queue with Создать приёмку and Создать возврат, current seller/status/search filters and row opening the current document modal.",
+      "minimal_ozon_delta": "Ozon return identifier in existing extra text only.",
+      "ozon_necessity": "Unified external returns still require the existing physical inbound document.",
+      "wb_regression_invariant": "Current manual inbound/return creation, filters, queue and row opening remain unchanged.",
+      "executable_assertions": ["no new filter tab route or document", "same queue row opens ff-doc-dialog", "duplicate external return produces one row", "current create action intents remain unique"]
+    },
+    {
+      "surface_id": "RETURN-CARD",
+      "requirement_ids": ["RET-002", "OPS-001"],
+      "route": "/app/ff/reception",
+      "baseline_screenshots": ["07-return-product-picker-empty-desktop.png", "08-return-card-empty-desktop.png", "17-return-card-narrow.png"],
+      "baseline_invariant": "Same card/header/draft actions/table/boxes and current picker; desktop 1600 by 1111 and narrow dialog 433 with no internal horizontal overflow.",
+      "minimal_ozon_delta": "Ozon identifiers and mandatory per-unit identity/condition inspection plus one disposition in the current row.",
+      "ozon_necessity": "External return state does not prove that the physical unit matches or is saleable.",
+      "wb_regression_invariant": "Non-Ozon inbound and return card copy, actions, picker and lifecycle remain unchanged.",
+      "executable_assertions": ["restock is disabled before inspection", "direct restock handler rejects before inspection", "exactly one disposition after inspection", "damaged or mismatch never increases available stock", "narrow internal scrollWidth is at most 433"]
+    },
+    {
+      "surface_id": "CATALOG-TABLE",
+      "requirement_ids": ["CAT-001", "CAT-002"],
+      "route": "/app/ff/products",
+      "baseline_screenshots": ["09-catalog-desktop.png", "18-catalog-narrow.png"],
+      "baseline_invariant": "Same two tabs, actions, filters, twelve-column table and current row action zone; desktop table 1290.89 and narrow table 1283.99.",
+      "minimal_ozon_delta": "One Связь с Ozon row action with inline row expansion for account-scoped candidates; no new dialog, tab or column.",
+      "ozon_necessity": "Offer, product and SKU are separate account-scoped identities and barcode can be ambiguous.",
+      "wb_regression_invariant": "WMS/WB fields, tabs, import/create actions, filters and row actions remain unchanged.",
+      "executable_assertions": ["confirm-product-mapping intent count equals one", "WMS SKU never changes", "no new tab column or dialog", "desktop table is at most 1290.89", "narrow table is at most 1283.99 and body at most 433"]
+    },
+    {
+      "surface_id": "CATALOG-CREATE-DIALOG",
+      "requirement_ids": ["CAT-001"],
+      "route": "/app/ff/products",
+      "baseline_screenshots": ["10-catalog-create-dialog-desktop.png"],
+      "baseline_invariant": "Existing Создать товар dialog owns WMS seller/name/SKU/article/size/barcode/dimensions/packaging fields and save/cancel actions.",
+      "minimal_ozon_delta": "One explanatory sentence; no Ozon identifier field or action.",
+      "ozon_necessity": "Operator must preserve WMS product identity and link Ozon only after local product creation.",
+      "wb_regression_invariant": "All current fields, validation, save/cancel and geometry remain unchanged.",
+      "executable_assertions": ["no new modal", "field and action list equals baseline", "one additional text node only when an Ozon account exists"]
+    },
+    {
+      "surface_id": "SELLER-SETTINGS",
+      "requirement_ids": ["ACC-001", "ACC-002", "ACC-003", "ACC-004", "NO-STOCK-WRITE-001"],
+      "route": "/seller/settings",
+      "baseline_screenshots": ["11-seller-settings-desktop.png", "19-seller-settings-narrow.png"],
+      "baseline_invariant": "Same vertical flow: staff, WB card with replace/sync actions, Honest Mark card; desktop body 1600, narrow body 1084 and main 843.81.",
+      "minimal_ozon_delta": "One neighboring Ozon card using the current credentials-dialog pattern with exact Russian connection/sync status and no stock publication action.",
+      "ozon_necessity": "Direct Seller API needs Client-Id plus API key and account roles/expiry/capabilities.",
+      "wb_regression_invariant": "WB card order, copy, actions, enabled states and requests remain unchanged.",
+      "executable_assertions": ["no new route tab or modal", "Ozon card and shared dialog contain no WB copy or jargon", "save-ozon-credentials intent count equals one", "incomplete pair observes zero requests", "WB DOM and request snapshot equal baseline", "narrow body is at most 1084 and main at most 843.81"]
+    }
+  ],
   "requirements": [
     {
       "requirement_id": "UI-REMOVE-001",
@@ -200,13 +362,13 @@
     },
     {
       "requirement_id": "CAT-002",
-      "existing_surface": "FfProductsCatalogScreen existing row dialog/action pattern",
+      "existing_surface": "FfProductsCatalogScreen existing row action zone and inline row expansion",
       "existing_route": [
         "/app/ff/products"
       ],
-      "minimal_delta": "Open a bounded mapping dialog from the current action cell, showing account, offer_id/product_id/sku/barcodes, candidate reason, conflict state and explicit confirm/unlink.",
+      "minimal_delta": "Use one Связь с Ozon action in the current action cell and expand account, offer_id/product_id/sku/barcodes, candidate reason, conflict state and explicit confirm/unlink inline under the same row; do not add a dialog.",
       "ozon_necessity": "Barcode or seller SKU can be ambiguous across accounts; a human must confirm ownership before reserve and shipment work.",
-      "reuse_mechanism": "existing_dialog_pattern_for_account_scoped_mapping",
+      "reuse_mechanism": "inline_expansion_in_existing_catalog_row",
       "new_surface_required": false,
       "incompatibility_evidence": "",
       "allowed_files": [
@@ -216,6 +378,7 @@
       ],
       "forbidden_scope": [
         "Automatic activation of ambiguous mapping",
+        "New mapping dialog or modal",
         "Bulk Ozon catalog redesign",
         "Product create/update in Ozon"
       ]
