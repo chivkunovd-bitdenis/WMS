@@ -1,0 +1,23 @@
+{
+  "call_id": "14-ozon-reuse-gate-committed-diff-repair",
+  "agent": "developer",
+  "why_now": "The replacement prototype is committed, and the required post-commit reuse gate now falsely treats its own self-test literals and run documentation as frontend additions; the gate must distinguish UI code from evidence without weakening UI checks.",
+  "task": "Repair only scripts/ci/check_ozon_reuse_scope.py. Keep whole-diff changed-file mapping validation, but derive route/navigation/full-surface semantic additions exclusively from changed files under `frontend/src/`; do not scan docs/runs, tasks, call JSON, reports, raw agent output or the gate script itself as UI source. Preserve all existing failures for forbidden Ozon routes, unmapped UI files, prototype-conditioned early screen/workspace returns, Ozon full-surface components and Ozon-only FBO modals. Add self-test coverage proving a documentation patch containing every forbidden literal is ignored while the same literals in a frontend patch still fail. The committed replacement range `fa35e903..HEAD` must pass after the repair, and existing negative self-tests must still pass. Do not touch frontend/product files, architecture, reports or REUSE_MAP. Run `python3 scripts/ci/check_ozon_reuse_scope.py --self-test`, `python3 scripts/ci/check_ozon_reuse_scope.py --base fa35e903 --head HEAD`, and `git diff --check`. The authorized worktree path is valid; do not edit the main checkout. If Git metadata is sandbox-blocked, leave the one-file repair for the lead to commit.",
+  "working_directory": ".",
+  "inputs": [
+    {"ref": "scripts/ci/check_ozon_reuse_scope.py", "purpose": "Gate with committed-diff false positive"},
+    {"ref": "tasks/ozon-module-20260824/REUSE_MAP.json", "purpose": "Unchanged hard scope contract"},
+    {"ref": "docs/runs/ozon-module-20260824/attempts/13-ozon-fbs-prototype-state-machine/final-result.json", "purpose": "Committed prototype evidence"}
+  ],
+  "expected_artifacts": [
+    {"path": "scripts/ci/check_ozon_reuse_scope.py", "purpose": "Gate that scans semantic additions only in frontend source while validating mapped files across the diff"}
+  ],
+  "acceptance": [
+    "Committed range fa35e903..HEAD passes because evidence/self-test text is not treated as UI source",
+    "Forbidden patterns in frontend source and unmapped UI files still fail",
+    "Self-test explicitly proves docs are ignored and equivalent frontend additions are rejected",
+    "Only the gate script changes and git diff --check passes"
+  ],
+  "context_note": "Mechanical S0R gate repair after commit; no product correction round and no scope change.",
+  "timeout_seconds": 7200
+}

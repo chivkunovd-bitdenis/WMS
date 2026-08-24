@@ -54,7 +54,22 @@ def diff(base: str, head: str) -> tuple[dict[str, str], str]:
     return changed, patch
 
 
-def evaluate(mapping: dict, allowed: set[str], changed: dict[str, str], patch: str) -> list[str]:
+def frontend_source_additions(patch: str) -> str:
+    """Return additions from frontend source files, excluding evidence and gate text."""
+    additions: list[str] = []
+    is_frontend_source = False
+    for line in patch.splitlines():
+        if line.startswith("+++ "):
+            path = line[4:]
+            if path.startswith("b/"):
+                path = path[2:]
+            is_frontend_source = path.startswith("frontend/src/")
+        elif is_frontend_source and line.startswith("+") and not line.startswith("+++"):
+            additions.append(line[1:])
+    return "\n".join(additions)
+
+
+def evaluate(mapping: dict, allowed: set[str], changed: dict[str, str], additions: str) -> list[str]:
     errors: list[str] = []
     ui_prefixes = ("frontend/src/screens/", "frontend/src/pages/", "frontend/src/prototypes/", "frontend/src/layouts/", "frontend/src/App.tsx")
     for path, status in changed.items():
@@ -62,7 +77,6 @@ def evaluate(mapping: dict, allowed: set[str], changed: dict[str, str], patch: s
             errors.append(f"unmapped UI file {path}; map it to a requirement or keep the change inside an existing allowed surface")
         if status.startswith("A") and path.startswith("frontend/src/") and path.endswith((".tsx", ".ts")) and path not in allowed:
             errors.append(f"new frontend helper/screen file {path} is forbidden by reuse-first map")
-    additions = "\n".join(line[1:] for line in patch.splitlines() if line.startswith("+") and not line.startswith("+++"))
     lowered = additions.lower()
     forbidden = ("/app/ff/ozon", "ozon/fbs", "ozon/fbo", "ozon/catalog", "ozon/connection", "ozon/returns")
     for token in forbidden:
@@ -93,14 +107,39 @@ def self_test() -> int:
     errors += evaluate(mapping, allowed, {"frontend/src/screens/v2/FfFbsOrdersScreen.tsx": "M"}, "")
     if errors:
         return fail([f"self-test passing model failed: {item}" for item in errors])
-    route_errors = evaluate(mapping, allowed, {"frontend/src/App.tsx": "M"}, "+<Route path=\"/app/ff/ozon/fbs\" />")
+    forbidden_literals = "\n".join((
+        "/app/ff/ozon",
+        "ozon/fbs",
+        "ozon/fbo",
+        "ozon/catalog",
+        "ozon/connection",
+        "ozon/returns",
+        "OzonModulePrototype",
+        "if (ozonPrototype) return <Queue />",
+        "function OzonQueueFixture() { return <div /> }",
+        "<Dialog data-testid=\"ozon-fbo-inline-document\"><DialogTitle>Ozon</DialogTitle><Tabs /></Dialog>",
+    ))
+    docs_patch = f"+++ b/docs/runs/evidence.md\n+{''.join(f'+{line}\\n' for line in forbidden_literals.splitlines())}"
+    documentation_errors = evaluate(mapping, allowed, {"docs/runs/evidence.md": "M"}, frontend_source_additions(docs_patch))
+    if documentation_errors:
+        return fail([f"self-test documentation evidence was treated as UI source: {item}" for item in documentation_errors])
+    frontend_patch = f"+++ b/frontend/src/App.tsx\n+{''.join(f'+{line}\\n' for line in forbidden_literals.splitlines())}"
+    frontend_additions = frontend_source_additions(frontend_patch)
+    route_errors = evaluate(mapping, allowed, {"frontend/src/App.tsx": "M"}, frontend_additions)
     screen_errors = evaluate(mapping, allowed, {"frontend/src/screens/v2/OzonDashboardScreen.tsx": "A"}, "")
-    early_return_errors = evaluate(mapping, allowed, {"frontend/src/screens/v2/FfFbsOrdersScreen.tsx": "M"}, "+if (ozonPrototype) return <Queue />")
-    component_errors = evaluate(mapping, allowed, {"frontend/src/screens/v2/FfFbsOrdersScreen.tsx": "M"}, "+function OzonQueueFixture() { return <div /> }")
-    modal_errors = evaluate(mapping, allowed, {"frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx": "M"}, "+<Dialog data-testid=\"ozon-fbo-inline-document\"><DialogTitle>Ozon</DialogTitle><Tabs /></Dialog>")
-    if not route_errors or not screen_errors or not early_return_errors or not component_errors or not modal_errors:
+    early_return_errors = evaluate(mapping, allowed, {"frontend/src/screens/v2/FfFbsOrdersScreen.tsx": "M"}, frontend_additions)
+    component_errors = evaluate(mapping, allowed, {"frontend/src/screens/v2/FfFbsOrdersScreen.tsx": "M"}, frontend_additions)
+    modal_errors = evaluate(mapping, allowed, {"frontend/src/screens/ff/FfSuppliesShipmentsPage.tsx": "M"}, frontend_additions)
+    expected_errors = (
+        (route_errors, "added forbidden Ozon route/navigation token /app/ff/ozon"),
+        (screen_errors, "unmapped UI file frontend/src/screens/v2/OzonDashboardScreen.tsx"),
+        (early_return_errors, "ozonPrototype-conditioned early screen/workspace return is forbidden"),
+        (component_errors, "Ozon-named full-surface Queue/Screen/Workspace/Document component is forbidden"),
+        (modal_errors, "Ozon-only FBO document modal or copied top-level Tabs/Header/Footer is forbidden"),
+    )
+    if any(not any(error.startswith(expected) for error in result) for result, expected in expected_errors):
         return fail(["self-test did not reject route, unmapped screen, early return, full-surface component, and Ozon FBO modal patterns"])
-    print("Ozon reuse scope self-test passed: mapped diff accepted; route, unmapped screen, early return, full-surface component and Ozon FBO modal rejected.")
+    print("Ozon reuse scope self-test passed: documentation evidence ignored; frontend route, unmapped screen, early return, full-surface component and Ozon FBO modal rejected.")
     return 0
 
 
@@ -117,7 +156,7 @@ def main() -> int:
         changed, patch = diff(args.base, args.head)
     except subprocess.CalledProcessError as exc:
         return fail([f"cannot compare {args.base}...{args.head}: {exc}"])
-    errors += evaluate(mapping, allowed, changed, patch)
+    errors += evaluate(mapping, allowed, changed, frontend_source_additions(patch))
     if errors:
         return fail(errors)
     print(f"Ozon reuse scope passed for {args.base}...{args.head}: {len(changed)} changed files are mapped or contract artifacts.")
