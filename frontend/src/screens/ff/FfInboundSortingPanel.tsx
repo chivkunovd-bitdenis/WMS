@@ -903,7 +903,12 @@ export function FfInboundSortingPanel({
   }
 
   const applyDistribution = async () => {
-    if (!distributionReady) {
+    if (
+      !distributionReady ||
+      busy ||
+      scanBusy ||
+      boxPutawayInFlightRef.current
+    ) {
       return
     }
     if (hasValidationError) {
@@ -1153,6 +1158,7 @@ export function FfInboundSortingPanel({
                 size="small"
                 disabled={
                   busy ||
+                  scanBusy ||
                   hasValidationError ||
                   !hasSelectableRows ||
                   sortingRemainingQty <= 0 ||
