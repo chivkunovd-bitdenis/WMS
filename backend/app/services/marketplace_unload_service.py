@@ -40,6 +40,11 @@ from app.services.document_number_service import (
     assign_document_number_if_missing,
 )
 from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
+from app.services.marketplace_provider import (
+    FakeMarketplaceTransport,
+    MarketplaceProviderError,
+    OzonMarketplaceProvider,
+)
 from app.services.marketplace_unload_status import (
     BILLING_REVERSIBLE_STATUSES as BILLING_REVERSIBLE_STATUSES,
 )
@@ -107,6 +112,15 @@ class MarketplaceUnloadAvailableProduct:
 class MarketplaceUnloadAvailability:
     available: int
     uses_free_fbo_pool: bool
+
+
+def _blocked_ozon_unload_provider() -> OzonMarketplaceProvider:
+    """Current Ozon account state is a provider response, never a local shipment success."""
+    return OzonMarketplaceProvider(
+        transport=FakeMarketplaceTransport(
+            errors={"dispatch_unload": MarketplaceProviderError("ozon", 403, {"code": 7})}
+        )
+    )
 
 
 def assert_request_visible(
@@ -196,6 +210,8 @@ async def set_wb_mp_warehouse(
         raise MarketplaceUnloadError("not_found")
     if req.status not in SELLER_EDITABLE_STATUSES:
         raise MarketplaceUnloadError("not_editable")
+    if req.marketplace != "wb":
+        raise MarketplaceUnloadError("wb_mp_warehouse_not_supported")
     mpw = await get_cached_mp_warehouse(session, tenant_id, wb_mp_warehouse_id)
     if mpw is None:
         raise MarketplaceUnloadError("wb_mp_warehouse_unknown")
@@ -224,6 +240,8 @@ async def patch_request(
     assert_request_visible(user, req)
 
     if wb_mp_warehouse_id is not None:
+        if req.marketplace != "wb":
+            raise MarketplaceUnloadError("wb_mp_warehouse_not_supported")
         if req.status not in SELLER_EDITABLE_STATUSES:
             raise MarketplaceUnloadError("not_editable")
         if user.role == FULFILLMENT_SELLER and req.status != STATUS_DRAFT:
@@ -982,6 +1000,7 @@ async def complete_unload(
     *,
     acknowledge_discrepancy: bool = False,
     performer_id: uuid.UUID | None = None,
+    ozon_provider: OzonMarketplaceProvider | None = None,
 ) -> MarketplaceUnloadRequest:
     """Single completion op: ship unload; set has_discrepancy when plan ≠ fact."""
     req = await get_request(session, tenant_id, request_id)
@@ -1014,6 +1033,19 @@ async def complete_unload(
         if not acknowledge_discrepancy:
             raise MarketplaceUnloadError("distribution_incomplete")
         req.ff_modified = True
+
+    if req.marketplace == "ozon":
+        try:
+            provider = ozon_provider or _blocked_ozon_unload_provider()
+            await provider.dispatch_unload(
+                client_id="",
+                api_key="",
+                document_id=str(req.id),
+            )
+        except MarketplaceProviderError as exc:
+            if exc.is_account_blocked:
+                raise MarketplaceUnloadError("provider_dispatch_blocked") from None
+            raise MarketplaceUnloadError("provider_dispatch_failed") from None
 
     req.has_discrepancy = has_discrepancy
     await delete_empty_boxes_for_ship(session, req)

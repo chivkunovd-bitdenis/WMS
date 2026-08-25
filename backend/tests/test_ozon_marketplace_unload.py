@@ -20,6 +20,27 @@ async def _register(async_client: AsyncClient, suffix: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
+async def _seller_headers(
+    async_client: AsyncClient,
+    admin_headers: dict[str, str],
+    seller_id: str,
+    suffix: str,
+) -> dict[str, str]:
+    email = f"ozon-seller-{suffix}@example.com"
+    account = await async_client.post(
+        "/auth/seller-accounts",
+        headers=admin_headers,
+        json={"seller_id": seller_id, "email": email, "password": "password123"},
+    )
+    assert account.status_code == 201, account.text
+    login = await async_client.post(
+        "/auth/login",
+        json={"email": email, "password": "password123"},
+    )
+    assert login.status_code == 200, login.text
+    return {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+
 @pytest.mark.asyncio
 async def test_ozon_unload_keeps_marketplace_scope_without_wb_warehouse(
     async_client: AsyncClient,
@@ -55,6 +76,26 @@ async def test_ozon_unload_keeps_marketplace_scope_without_wb_warehouse(
     assert created.json()["wb_mp_warehouse_id"] is None
 
     request_id = created.json()["id"]
+    plan = await async_client.post(
+        f"/operations/marketplace-unload-requests/{request_id}/plan",
+        headers=owner_headers,
+    )
+    assert plan.status_code == 409, plan.text
+    assert plan.json()["detail"] == "no_lines"
+    confirm = await async_client.post(
+        f"/operations/marketplace-unload-requests/{request_id}/confirm",
+        headers=owner_headers,
+        json={},
+    )
+    assert confirm.status_code == 409, confirm.text
+    assert confirm.json()["detail"] == "no_lines"
+    ship = await async_client.post(
+        f"/operations/marketplace-unload-requests/{request_id}/ship",
+        headers=owner_headers,
+        json={},
+    )
+    assert ship.status_code == 409, ship.text
+    assert ship.json()["detail"] == "bad_status"
     detail = await async_client.get(
         f"/operations/marketplace-unload-requests/{request_id}",
         headers=owner_headers,
@@ -79,6 +120,24 @@ async def test_ozon_unload_keeps_marketplace_scope_without_wb_warehouse(
     )
     assert hidden.status_code == 404, hidden.text
 
+    other_seller = await async_client.post(
+        "/sellers",
+        headers=owner_headers,
+        json={"name": "Other seller"},
+    )
+    assert other_seller.status_code == 201, other_seller.text
+    other_seller_headers = await _seller_headers(
+        async_client,
+        owner_headers,
+        other_seller.json()["id"],
+        suffix,
+    )
+    hidden_same_tenant = await async_client.get(
+        f"/operations/marketplace-unload-requests/{request_id}",
+        headers=other_seller_headers,
+    )
+    assert hidden_same_tenant.status_code == 404, hidden_same_tenant.text
+
     wb_default = await async_client.post(
         "/operations/marketplace-unload-requests",
         headers=owner_headers,
@@ -100,3 +159,22 @@ async def test_ozon_unload_keeps_marketplace_scope_without_wb_warehouse(
         },
     )
     assert invalid.status_code == 422, invalid.text
+
+    ozon_with_wb_warehouse = await async_client.post(
+        "/operations/marketplace-unload-requests",
+        headers=owner_headers,
+        json={
+            "warehouse_id": warehouse.json()["id"],
+            "seller_id": seller.json()["id"],
+            "marketplace": "ozon",
+            "wb_mp_warehouse_id": 1,
+        },
+    )
+    assert ozon_with_wb_warehouse.status_code == 422, ozon_with_wb_warehouse.text
+
+    patch_wb_warehouse = await async_client.patch(
+        f"/operations/marketplace-unload-requests/{request_id}",
+        headers=owner_headers,
+        json={"wb_mp_warehouse_id": 1},
+    )
+    assert patch_wb_warehouse.status_code == 422, patch_wb_warehouse.text

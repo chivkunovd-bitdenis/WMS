@@ -16,7 +16,7 @@ from fastapi import (
     status,
 )
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.box_import_api_shared import (
@@ -67,11 +67,23 @@ class MarketplaceUnloadRequestCreate(BaseModel):
     marketplace: Literal["wb", "ozon"] = "wb"
     wb_mp_warehouse_id: int | None = Field(default=None, ge=1, le=2_000_000_000)
 
+    @model_validator(mode="after")
+    def wb_warehouse_matches_marketplace(self) -> MarketplaceUnloadRequestCreate:
+        if self.marketplace != "wb" and self.wb_mp_warehouse_id is not None:
+            raise ValueError("wb_mp_warehouse_id is only supported for Wildberries")
+        return self
+
 
 class SellerMarketplaceUnloadRequestCreate(BaseModel):
     warehouse_id: uuid.UUID
     marketplace: Literal["wb", "ozon"] = "wb"
     wb_mp_warehouse_id: int | None = Field(default=None, ge=1, le=2_000_000_000)
+
+    @model_validator(mode="after")
+    def wb_warehouse_matches_marketplace(self) -> SellerMarketplaceUnloadRequestCreate:
+        if self.marketplace != "wb" and self.wb_mp_warehouse_id is not None:
+            raise ValueError("wb_mp_warehouse_id is only supported for Wildberries")
+        return self
 
 
 class MarketplaceUnloadRequestUpdate(BaseModel):
@@ -555,6 +567,11 @@ def _map_mu_err(exc: MarketplaceUnloadError) -> HTTPException:
             status_code=status.HTTP_409_CONFLICT,
             detail="wb_mp_warehouse_required",
         )
+    if exc.code == "wb_mp_warehouse_not_supported":
+        return HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="wb_mp_warehouse_not_supported",
+        )
     if exc.code == "planned_shipment_date_required":
         return HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -579,6 +596,8 @@ def _map_mu_err(exc: MarketplaceUnloadError) -> HTTPException:
         )
     if exc.code == "no_lines":
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail="no_lines")
+    if exc.code in {"provider_dispatch_blocked", "provider_dispatch_failed"}:
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
     if exc.code == "packaging_instructions_required":
         return HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -591,6 +610,8 @@ def _map_pick_err(exc: MarketplaceUnloadPickError) -> HTTPException:
     if exc.code == "not_found":
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="not_found")
     if exc.code in ("not_editable", "bad_status", "open_box_exists"):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
+    if exc.code in {"provider_dispatch_blocked", "provider_dispatch_failed"}:
         return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.code)
     if exc.code in (
         "invalid_quantity",

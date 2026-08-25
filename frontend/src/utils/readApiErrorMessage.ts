@@ -53,6 +53,11 @@ const API_DETAIL_MESSAGES_RU: Record<string, string> = {
   pick_required: 'Сначала подберите товар.',
   no_lines: 'В документе нет строк.',
   wb_mp_warehouse_required: 'Выберите склад Wildberries для отгрузки.',
+  wb_mp_warehouse_not_supported: 'Склад Wildberries нельзя указать для этого маркетплейса.',
+  provider_dispatch_blocked:
+    'Передача в Ozon заблокирована: кабинет Ozon недоступен. Документ и остатки не изменены.',
+  provider_dispatch_failed:
+    'Передача в Ozon не выполнена. Документ и остатки не изменены.',
   seller_required: 'У документа не указан селлер.',
   open_box_required: 'Нет открытого короба.',
   box_not_found: 'Короб не найден.',
