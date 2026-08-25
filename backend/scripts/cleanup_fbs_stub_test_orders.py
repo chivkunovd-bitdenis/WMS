@@ -43,10 +43,13 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import delete, func, select
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -67,8 +70,8 @@ from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
 
 
 async def count_related_records(
-    session: AsyncSession, fbs_order_ids: list[int]
-) -> dict:
+    session: AsyncSession, fbs_order_ids: list[UUID]
+) -> dict[str, int]:
     """Count related records for each FBS order by type."""
     counts = {
         "markings": 0,
@@ -86,7 +89,7 @@ async def count_related_records(
 
     # Count FbsOrderMarking
     stmt = select(func.count(FbsOrderMarking.id)).where(
-        FbsOrderMarking.fbs_order_id.in_(fbs_order_ids)
+        FbsOrderMarking.order_id.in_(fbs_order_ids)
     )
     counts["markings"] = (await session.scalar(stmt)) or 0
 
@@ -138,7 +141,7 @@ async def report_orders(
     session: AsyncSession,
     wb_order_ids: list[int],
     tenant_id: UUID | None,
-) -> tuple[list, int]:
+) -> tuple[Sequence[FbsOrder], int]:
     """Find and report FBS orders by wb_order_id.
 
     Returns:
@@ -247,7 +250,7 @@ async def report_orders(
 
 async def delete_orders(
     session: AsyncSession,
-    orders: list,
+    orders: Sequence[FbsOrder],
 ) -> int:
     """Delete FBS orders and all related records in the correct order.
 
@@ -285,7 +288,7 @@ async def delete_orders(
         # 1. Delete FbsPrintAsset
         stmt = delete(FbsPrintAsset).where(FbsPrintAsset.fbs_order_id.in_(order_ids))
         result = await session.execute(stmt)
-        count = result.rowcount
+        count = cast(CursorResult[Any], result).rowcount
         if count > 0:
             print(f"  ✓ Deleted {count} FbsPrintAsset record(s)")
             total_deleted += count
@@ -295,7 +298,7 @@ async def delete_orders(
             FbsShipmentReversalLedger.fbs_order_id.in_(order_ids)
         )
         result = await session.execute(stmt)
-        count = result.rowcount
+        count = cast(CursorResult[Any], result).rowcount
         if count > 0:
             print(f"  ✓ Deleted {count} FbsShipmentReversalLedger record(s)")
             total_deleted += count
@@ -305,7 +308,7 @@ async def delete_orders(
             FbsPackingBoxItem.fbs_order_id.in_(order_ids)
         )
         result = await session.execute(stmt)
-        count = result.rowcount
+        count = cast(CursorResult[Any], result).rowcount
         if count > 0:
             print(f"  ✓ Deleted {count} FbsPackingBoxItem record(s)")
             total_deleted += count
@@ -315,7 +318,7 @@ async def delete_orders(
             FbsPackagingFulfillment.fbs_order_id.in_(order_ids)
         )
         result = await session.execute(stmt)
-        count = result.rowcount
+        count = cast(CursorResult[Any], result).rowcount
         if count > 0:
             print(f"  ✓ Deleted {count} FbsPackagingFulfillment record(s)")
             total_deleted += count
@@ -323,7 +326,7 @@ async def delete_orders(
         # 5. Delete FbsOrderPick
         stmt = delete(FbsOrderPick).where(FbsOrderPick.fbs_order_id.in_(order_ids))
         result = await session.execute(stmt)
-        count = result.rowcount
+        count = cast(CursorResult[Any], result).rowcount
         if count > 0:
             print(f"  ✓ Deleted {count} FbsOrderPick record(s)")
             total_deleted += count
@@ -333,7 +336,7 @@ async def delete_orders(
             FbsOrderReservation.fbs_order_id.in_(order_ids)
         )
         result = await session.execute(stmt)
-        count = result.rowcount
+        count = cast(CursorResult[Any], result).rowcount
         if count > 0:
             print(f"  ✓ Deleted {count} FbsOrderReservation record(s) "
                   f"[warehouse reserves freed]")
@@ -341,10 +344,10 @@ async def delete_orders(
 
         # 7. Delete FbsOrderMarking
         stmt = delete(FbsOrderMarking).where(
-            FbsOrderMarking.fbs_order_id.in_(order_ids)
+            FbsOrderMarking.order_id.in_(order_ids)
         )
         result = await session.execute(stmt)
-        count = result.rowcount
+        count = cast(CursorResult[Any], result).rowcount
         if count > 0:
             print(f"  ✓ Deleted {count} FbsOrderMarking record(s)")
             total_deleted += count
@@ -352,7 +355,7 @@ async def delete_orders(
         # 8. Delete FbsOrder (parent)
         stmt = delete(FbsOrder).where(FbsOrder.id.in_(order_ids))
         result = await session.execute(stmt)
-        count = result.rowcount
+        count = cast(CursorResult[Any], result).rowcount
         if count > 0:
             print(f"  ✓ Deleted {count} FbsOrder record(s)")
             total_deleted += count
