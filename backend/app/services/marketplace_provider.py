@@ -73,6 +73,14 @@ class MarketplaceTransport(Protocol):
         order_ids: Sequence[str],
     ) -> list[dict[str, Any]]: ...
 
+    async def fetch_order_labels(
+        self,
+        *,
+        client_id: str,
+        api_key: str,
+        posting_numbers: Sequence[str],
+    ) -> list[dict[str, Any]]: ...
+
     async def publish_stocks(
         self,
         *,
@@ -86,6 +94,7 @@ class MarketplaceTransport(Protocol):
 class FakeMarketplaceTransport:
     orders: list[dict[str, Any]] = field(default_factory=list)
     statuses: list[dict[str, Any]] = field(default_factory=list)
+    order_labels: list[dict[str, Any]] = field(default_factory=list)
     errors: dict[str, MarketplaceProviderError] = field(default_factory=dict)
     calls: list[tuple[str, str]] = field(default_factory=list)
 
@@ -120,6 +129,19 @@ class FakeMarketplaceTransport:
         self.calls.append(("publish_stocks", client_id))
         if error := self.errors.get("publish_stocks"):
             raise error
+
+    async def fetch_order_labels(
+        self,
+        *,
+        client_id: str,
+        api_key: str,
+        posting_numbers: Sequence[str],
+    ) -> list[dict[str, Any]]:
+        _ = api_key, posting_numbers
+        self.calls.append(("fetch_order_labels", client_id))
+        if error := self.errors.get("fetch_order_labels"):
+            raise error
+        return list(self.order_labels)
 
 
 class OzonMarketplaceProvider:
@@ -176,6 +198,24 @@ class OzonMarketplaceProvider:
                 client_id=client_id,
                 api_key=api_key,
                 stocks=stocks,
+            )
+        except MarketplaceProviderError as error:
+            self._remember_blocked(error)
+            raise
+
+    async def fetch_order_labels(
+        self,
+        *,
+        client_id: str,
+        api_key: str,
+        posting_numbers: Sequence[str],
+    ) -> list[dict[str, Any]]:
+        self._raise_if_blocked()
+        try:
+            return await self.transport.fetch_order_labels(
+                client_id=client_id,
+                api_key=api_key,
+                posting_numbers=posting_numbers,
             )
         except MarketplaceProviderError as error:
             self._remember_blocked(error)

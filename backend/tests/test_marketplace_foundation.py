@@ -190,6 +190,23 @@ async def test_ozon_provider_uses_injected_fake_transport_only() -> None:
 
 
 @pytest.mark.asyncio
+async def test_ozon_order_labels_use_dedicated_fake_transport_contract() -> None:
+    transport = FakeMarketplaceTransport(
+        order_labels=[{"posting_number": "ozon-posting-1", "file": "png"}],
+    )
+    provider = OzonMarketplaceProvider(transport=transport)
+
+    rows = await provider.fetch_order_labels(
+        client_id="client-id",
+        api_key="api-key",
+        posting_numbers=["ozon-posting-1"],
+    )
+
+    assert rows == [{"posting_number": "ozon-posting-1", "file": "png"}]
+    assert transport.calls == [("fetch_order_labels", "client-id")]
+
+
+@pytest.mark.asyncio
 async def test_ozon_blocked_response_stops_remaining_cycle_calls() -> None:
     transport = FakeMarketplaceTransport(
         errors={"fetch_orders": MarketplaceProviderError("ozon", 403, {"code": 7})},
