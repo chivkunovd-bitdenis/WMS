@@ -18,6 +18,7 @@
 
 - `backend/app/api/document_events.py`
 - `backend/app/main.py`
+- `backend/app/models/__init__.py`
 - `backend/app/models/document_event.py`
 - `backend/app/services/document_event_service.py`
 - `backend/app/services/fbs_supply_service.py`

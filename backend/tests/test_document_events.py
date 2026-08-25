@@ -1,14 +1,20 @@
 from __future__ import annotations
 
+import importlib.util
 import logging
+import os
 import time
 import uuid
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 
 import pytest
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
 from fastapi import BackgroundTasks, FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
+from sqlalchemy import create_engine, select, text
+from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -24,7 +30,7 @@ from app.models.document_event import (
     SOURCE_USER,
     DocumentEvent,
 )
-from app.models.fbs_order import FBS_ORDER_STATUS_DONE, FbsOrder
+from app.models.fbs_order import FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DONE, FbsOrder
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_PACKED,
@@ -807,3 +813,276 @@ async def test_background_service_status_transition_is_system_authored(
     assert rows[0].payload_json == {"from": "draft", "to": "submitted"}
     assert rows[0].source == SOURCE_SYSTEM
     assert rows[0].actor_user_id is None
+
+
+# TC-NEW-DOCUMENT-JOURNAL-008 — direct start and reopen edges use the real inbound API.
+@pytest.mark.asyncio
+async def test_inbound_direct_receiving_and_reopen_status_edges(
+    async_client: AsyncClient,
+) -> None:
+    headers, _ = await _register_admin(async_client)
+    data = await _seed_document_data(async_client, headers)
+    base = "/operations/inbound-intake-requests"
+
+    direct_id, _ = await _create_inbound_draft(async_client, headers, data)
+    direct = await async_client.post(f"{base}/{direct_id}/begin-receiving", headers=headers)
+    assert direct.status_code == 200, direct.text
+    assert direct.json()["status"] == "receiving"
+
+    reopen_id, line_id = await _create_inbound_draft(async_client, headers, data)
+    planned = await async_client.patch(
+        f"{base}/{reopen_id}", headers=headers, json={"planned_box_count": 1}
+    )
+    assert planned.status_code == 200, planned.text
+    submitted = await async_client.post(f"{base}/{reopen_id}/submit", headers=headers)
+    assert submitted.status_code == 200, submitted.text
+    receiving = await async_client.post(f"{base}/{reopen_id}/begin-receiving", headers=headers)
+    assert receiving.status_code == 200, receiving.text
+    actual = await async_client.patch(
+        f"{base}/{reopen_id}/lines/{line_id}/actual",
+        headers=headers,
+        json={"actual_qty": 5},
+    )
+    assert actual.status_code == 200, actual.text
+    sorting = await async_client.post(f"{base}/{reopen_id}/verify", headers=headers)
+    assert sorting.status_code == 200, sorting.text
+    reopened = await async_client.post(f"{base}/{reopen_id}/reopen-receiving", headers=headers)
+    assert reopened.status_code == 200, reopened.text
+    assert reopened.json()["status"] == "receiving"
+
+    async with SessionLocal() as session:
+        rows = list(
+            (
+                await session.scalars(
+                    select(DocumentEvent).where(
+                        DocumentEvent.document_id.in_([uuid.UUID(direct_id), uuid.UUID(reopen_id)]),
+                        DocumentEvent.event_type == EVENT_STATUS_CHANGED,
+                    )
+                )
+            ).all()
+        )
+    edges = [
+        (str(row.document_id), row.payload_json["from"], row.payload_json["to"], row.qty)
+        for row in rows
+    ]
+    assert (direct_id, "draft", "receiving", 0) in edges
+    assert (reopen_id, "sorting", "receiving", 5) in edges
+
+
+# TC-NEW-DOCUMENT-JOURNAL-009 — cancellation detaches drive all FBS reverse edges.
+@pytest.mark.asyncio
+async def test_fbs_detach_reverse_status_edges(async_client: AsyncClient) -> None:
+    headers, token_payload = await _register_admin(async_client)
+    data = await _seed_document_data(async_client, headers)
+    tenant_id = uuid.UUID(str(token_payload["tenant_id"]))
+    actor_id = uuid.UUID(str(token_payload["sub"]))
+    seller_id = uuid.UUID(data["seller_id"])
+    warehouse_id = uuid.UUID(data["warehouse_id"])
+    product_id = uuid.UUID(data["product_id"])
+
+    async with SessionLocal() as session:
+        supplies: list[FbsSupply] = []
+        cancel_orders: list[FbsOrder] = []
+        for index, (status, order_count) in enumerate(
+            (("packed", 2), ("assembling", 1), ("packed", 1)), start=1
+        ):
+            supply = FbsSupply(
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                warehouse_id=warehouse_id,
+                wb_supply_id=f"journal-reverse-{index}",
+                name=f"Journal reverse {index}",
+                delivery_type="warehouse_sc",
+                status=status,
+            )
+            session.add(supply)
+            await session.flush()
+            for order_index in range(order_count):
+                order = FbsOrder(
+                    tenant_id=tenant_id,
+                    seller_id=seller_id,
+                    warehouse_id=warehouse_id,
+                    product_id=product_id,
+                    wb_order_id=988000000 + index * 10 + order_index,
+                    supply_id=supply.id,
+                    status=status,
+                    created_at_wb=datetime.now(UTC),
+                    deadline_at=datetime.now(UTC) + timedelta(days=1),
+                    mapping_status="mapped",
+                    reserve_status="reserved",
+                )
+                session.add(order)
+                if order_index == 0:
+                    cancel_orders.append(order)
+            supplies.append(supply)
+        await session.commit()
+
+        with document_event_actor(actor_id):
+            for order in cancel_orders:
+                order.status = FBS_ORDER_STATUS_CANCELLED
+                await fbs_packaging_svc.detach_cancelled_order_from_supply(
+                    session, tenant_id, order
+                )
+                await session.commit()
+
+        supply_ids = [supply.id for supply in supplies]
+
+    async with SessionLocal() as session:
+        rows = list(
+            (
+                await session.scalars(
+                    select(DocumentEvent)
+                    .where(
+                        DocumentEvent.document_id.in_(supply_ids),
+                        DocumentEvent.event_type == EVENT_STATUS_CHANGED,
+                    )
+                    .order_by(DocumentEvent.occurred_at)
+                )
+            ).all()
+        )
+    assert [(row.payload_json["from"], row.payload_json["to"], row.qty) for row in rows] == [
+        ("packed", "assembling", 1),
+        ("assembling", "draft", 0),
+        ("packed", "draft", 0),
+    ]
+    assert all(row.actor_user_id == actor_id and row.source == SOURCE_USER for row in rows)
+
+
+# TC-NEW-DOCUMENT-JOURNAL-010 — both cancellable unload execution states are journalled.
+@pytest.mark.asyncio
+async def test_unload_confirmed_and_collecting_cancel_status_edges(
+    async_client: AsyncClient,
+) -> None:
+    headers, token_payload = await _register_admin(async_client)
+    data = await _seed_document_data(async_client, headers)
+    tenant_id = uuid.UUID(str(token_payload["tenant_id"]))
+    actor_id = uuid.UUID(str(token_payload["sub"]))
+
+    async with SessionLocal() as session:
+        requests = [
+            MarketplaceUnloadRequest(
+                tenant_id=tenant_id,
+                warehouse_id=uuid.UUID(data["warehouse_id"]),
+                seller_id=uuid.UUID(data["seller_id"]),
+                marketplace="ozon",
+                status=status,
+            )
+            for status in ("confirmed", "collecting")
+        ]
+        session.add_all(requests)
+        await session.commit()
+        with document_event_actor(actor_id):
+            for request in requests:
+                await unload_svc.cancel_request(
+                    session, tenant_id, request.id, performer_id=actor_id
+                )
+        request_ids = [request.id for request in requests]
+
+    async with SessionLocal() as session:
+        rows = list(
+            (
+                await session.scalars(
+                    select(DocumentEvent)
+                    .where(
+                        DocumentEvent.document_id.in_(request_ids),
+                        DocumentEvent.event_type == EVENT_STATUS_CHANGED,
+                    )
+                    .order_by(DocumentEvent.occurred_at)
+                )
+            ).all()
+        )
+    assert [(row.payload_json["from"], row.payload_json["to"]) for row in rows] == [
+        ("confirmed", "cancelled"),
+        ("collecting", "cancelled"),
+    ]
+    assert all(row.actor_user_id == actor_id and row.source == SOURCE_USER for row in rows)
+
+
+# TC-NEW-DOCUMENT-JOURNAL-011 — execute the migration trigger on real PostgreSQL.
+@pytest.mark.postgresql_concurrency
+def test_postgresql_trigger_is_system_authored_and_failure_isolated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    raw_url = os.environ.get("WMS_TEST_DATABASE_URL")
+    if raw_url is None or raw_url.startswith("sqlite"):
+        pytest.skip("PostgreSQL WMS_TEST_DATABASE_URL required for trigger execution")
+    sync_url = make_url(raw_url).set(drivername="postgresql+psycopg")
+    engine = create_engine(sync_url)
+    schema = f"journal_trigger_{uuid.uuid4().hex}"
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "20260825_0107_document_event.py"
+    )
+    spec = importlib.util.spec_from_file_location("document_event_migration_test", migration_path)
+    assert spec is not None and spec.loader is not None
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+
+    try:
+        with engine.begin() as connection:
+            connection.execute(text(f'CREATE SCHEMA "{schema}"'))
+            connection.execute(text(f'SET LOCAL search_path TO "{schema}"'))
+            connection.execute(text("CREATE TABLE tenants (id uuid PRIMARY KEY)"))
+            connection.execute(text("CREATE TABLE users (id uuid PRIMARY KEY)"))
+            connection.execute(text("CREATE TABLE products (id uuid PRIMARY KEY)"))
+            connection.execute(
+                text(
+                    "CREATE TABLE fbs_supplies ("
+                    "id uuid PRIMARY KEY, tenant_id uuid NOT NULL, status text NOT NULL)"
+                )
+            )
+            connection.execute(
+                text("CREATE TABLE fbs_orders (id uuid PRIMARY KEY, supply_id uuid)")
+            )
+            operations = Operations(MigrationContext.configure(connection))
+            monkeypatch.setattr(migration, "op", operations)
+            migration.upgrade()
+
+            tenant_id = uuid.uuid4()
+            supply_id = uuid.uuid4()
+            connection.execute(text("INSERT INTO tenants (id) VALUES (:id)"), {"id": tenant_id})
+            connection.execute(
+                text(
+                    "INSERT INTO fbs_supplies (id, tenant_id, status) "
+                    "VALUES (:id, :tenant_id, 'draft')"
+                ),
+                {"id": supply_id, "tenant_id": tenant_id},
+            )
+            connection.execute(
+                text(
+                    "ALTER TABLE document_event ADD CONSTRAINT reject_system_event "
+                    "CHECK (source <> 'system')"
+                )
+            )
+            connection.execute(
+                text("UPDATE fbs_supplies SET status = 'assembling' WHERE id = :id"),
+                {"id": supply_id},
+            )
+            assert (
+                connection.scalar(
+                    text("SELECT status FROM fbs_supplies WHERE id = :id"), {"id": supply_id}
+                )
+                == "assembling"
+            )
+            assert connection.scalar(text("SELECT count(*) FROM document_event")) == 0
+
+            connection.execute(
+                text("ALTER TABLE document_event DROP CONSTRAINT reject_system_event")
+            )
+            connection.execute(
+                text("UPDATE fbs_supplies SET status = 'packed' WHERE id = :id"),
+                {"id": supply_id},
+            )
+            event_row = connection.execute(
+                text(
+                    "SELECT source, actor_user_id, payload_json->>'from', "
+                    "payload_json->>'to', qty FROM document_event"
+                )
+            ).one()
+            assert tuple(event_row) == ("system", None, "assembling", "packed", 0)
+    finally:
+        with engine.begin() as connection:
+            connection.execute(text(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE'))
+        engine.dispose()

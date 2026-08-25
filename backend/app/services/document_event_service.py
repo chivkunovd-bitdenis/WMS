@@ -4,7 +4,7 @@ import logging
 import uuid
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
-from contextvars import ContextVar, Token
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Any, cast
@@ -14,7 +14,8 @@ from sqlalchemy import Connection, event, func, insert, inspect, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session, selectinload
-from starlette.types import ASGIApp, Message, Receive, Scope, Send
+from starlette.background import BackgroundTask
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.models.document_event import (
     DOCUMENT_EVENT_SOURCES,
@@ -89,6 +90,14 @@ def system_document_events() -> Iterator[None]:
         _actor_context.reset(token)
 
 
+_original_background_task_call = BackgroundTask.__call__
+
+
+async def _run_system_document_background_task(task: BackgroundTask) -> None:
+    with system_document_events():
+        await _original_background_task_call(task)
+
+
 class DocumentEventActorMiddleware:
     """Extract the already validated JWT identity for transaction-level auditing."""
 
@@ -101,25 +110,9 @@ class DocumentEventActorMiddleware:
             return
         actor = _actor_from_scope(scope)
         token = _actor_context.set(actor)
-        background_token: Token[DocumentEventActor] | None = None
-
-        async def send_with_system_background(message: Message) -> None:
-            nonlocal background_token
-            if (
-                background_token is None
-                and message["type"] == "http.response.body"
-                and not message.get("more_body", False)
-            ):
-                # Starlette starts BackgroundTasks after the final response body.
-                # Provider polling and publication must not inherit the request user.
-                background_token = _actor_context.set(_SYSTEM_ACTOR)
-            await send(message)
-
         try:
-            await self.app(scope, receive, send_with_system_background)
+            await self.app(scope, receive, send)
         finally:
-            if background_token is not None:
-                _actor_context.reset(background_token)
             _actor_context.reset(token)
 
 
@@ -347,8 +340,6 @@ def _request_qty(
 
 
 def _supply_qty(connection: Connection, supply: FbsSupply) -> int:
-    if "orders" not in inspect(supply).unloaded:
-        return len(supply.orders)
     return int(
         connection.scalar(select(func.count(FbsOrder.id)).where(FbsOrder.supply_id == supply.id))
         or 0
@@ -780,3 +771,5 @@ def install_document_event_tracking() -> None:
     """Install the transaction observer once for all sync and async ORM sessions."""
     if not event.contains(Session, "before_flush", _before_flush):
         event.listen(Session, "before_flush", _before_flush)
+    if BackgroundTask.__call__ is not _run_system_document_background_task:
+        BackgroundTask.__call__ = _run_system_document_background_task  # type: ignore[assignment]
