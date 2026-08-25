@@ -52,9 +52,11 @@ async function fillViaCalendar(
   await root.getByRole('button', { name: 'Choose date' }).click();
   const calendar = page.locator('.MuiDateCalendar-root').last();
   await calendar.waitFor({ state: 'visible' });
+  const headerLabel = calendar.locator('.MuiPickersCalendarHeader-label:visible');
+  await expect(headerLabel).toHaveCount(1);
 
   for (let step = 0; step < 36; step += 1) {
-    const header = ((await calendar.locator('.MuiPickersCalendarHeader-label').textContent()) ?? '')
+    const header = ((await headerLabel.textContent()) ?? '')
       .toLowerCase()
       .replace(/\s+/g, ' ');
     if (header.includes(yearStr) && header.includes(monthHint)) {

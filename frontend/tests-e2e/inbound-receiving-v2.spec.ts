@@ -62,7 +62,7 @@ test('inbound receiving v2 — scan, manual edit, finish with discrepancy', asyn
   await startFfReceivingFromSubmitted(page);
   await expect(page.getByTestId('ff-inbound-doc-root').getByRole('tab', { name: /упаковка/i })).toHaveCount(0);
   await expect(page.getByTestId('ff-inbound-planned-date')).toHaveCount(0);
-  await expect(page.getByTestId('ff-inbound-print-waybill')).toHaveCount(0);
+  await expect(page.getByTestId('ff-inbound-print-waybill')).toBeVisible();
   await expandInboundPackages(page);
   await expect(page.getByText('Короба ещё не созданы.')).toHaveCount(0);
   await expect(page.getByText('Грузоместа ещё не созданы.')).toHaveCount(0);

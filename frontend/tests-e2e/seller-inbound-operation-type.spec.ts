@@ -305,5 +305,5 @@ test('seller chooses supply or return before inbound draft creation', async ({ p
     (await page.getByTestId('ff-inbound-document-number').textContent())?.trim() ?? '';
   expect(returnDocumentNumber).toContain('№');
 
-  await expect(page.getByTestId('ff-inbound-print-waybill')).toHaveCount(0);
+  await expect(page.getByTestId('ff-inbound-print-waybill')).toBeVisible();
 });
