@@ -24,6 +24,10 @@ def _exemplar_id(marking: FbsOrderMarking) -> int | None:
     return value if isinstance(value, int) else None
 
 
+def _created_at_key(marking: FbsOrderMarking) -> float:
+    return marking.created_at.timestamp() if marking.created_at is not None else float("-inf")
+
+
 def current_markings(
     order: FbsOrder,
     markings: list[FbsOrderMarking],
@@ -50,11 +54,13 @@ def current_markings(
     selected: list[FbsOrderMarking] = []
     for (kind, position_id), rows in grouped.items():
         del kind
-        rows.sort(
-            key=lambda marking: (str(marking.created_at), str(marking.id)),
-            reverse=True,
-        )
-        selected.extend(rows[: positions[position_id]])
+        rows.sort(key=_created_at_key, reverse=True)
+        expected = positions[position_id]
+        if len(rows) <= expected:
+            selected.extend(rows)
+            continue
+        cutoff = _created_at_key(rows[expected - 1])
+        selected.extend(row for row in rows if _created_at_key(row) >= cutoff)
     return selected
 
 

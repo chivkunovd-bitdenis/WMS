@@ -1683,6 +1683,7 @@ async def test_ozon_gate_requires_each_kind_and_rejects_duplicate_exemplar(
     )
     position = order.product_positions[0]
     order.required_meta_json = ["sgtin", "imei"]
+    current_created_at = datetime.now(UTC)
     markings = [
         FbsOrderMarking(
             tenant_id=order.tenant_id,
@@ -1693,6 +1694,7 @@ async def test_ozon_gate_requires_each_kind_and_rejects_duplicate_exemplar(
             meta_status=META_STATUS_ACCEPTED,
             check_status=CHECK_STATUS_OK,
             meta_details_json={"status": "ship_available", "exemplar_id": 81},
+            created_at=current_created_at,
         )
         for kind, value in [
             ("sgtin", "code-1"),
@@ -1719,6 +1721,7 @@ async def test_ozon_gate_requires_each_kind_and_rejects_duplicate_exemplar(
         meta_status=META_STATUS_ACCEPTED,
         check_status=CHECK_STATUS_OK,
         meta_details_json={"status": "ship_available", "exemplar_id": 82},
+        created_at=current_created_at,
     )
     db_session.add(duplicate)
     await db_session.flush()
