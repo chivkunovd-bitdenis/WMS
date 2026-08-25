@@ -37,6 +37,7 @@ from app.api.tenant_settings import router as tenant_settings_router
 from app.api.warehouses import router as warehouses_router
 from app.api.wb_mp_warehouses import router as wb_mp_warehouses_router
 from app.api.wildberries_integration import router as wildberries_integration_router
+from app.core.logging_setup import setup_outbound_http_logging
 from app.core.roles import FULFILLMENT_ADMIN
 from app.core.settings import settings
 from app.db.session import SessionLocal, engine
@@ -51,6 +52,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _ = app
+    setup_outbound_http_logging()
     if os.environ.get("WMS_AUTO_CREATE_SCHEMA") == "1":
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)

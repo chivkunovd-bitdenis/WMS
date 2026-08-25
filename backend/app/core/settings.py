@@ -36,6 +36,14 @@ class Settings(BaseSettings):
         description="Redis URL for Celery (e.g. redis://redis:6379/0). "
         "Unset: API runs background jobs via FastAPI BackgroundTasks.",
     )
+    log_outbound_http: bool = Field(
+        default=True,
+        description=(
+            "Log every outbound HTTP call to marketplaces (method, URL, status). "
+            "Authorization headers and bodies are never logged. Needed to prove "
+            "what WMS did or did not send to WB."
+        ),
+    )
     wildberries_content_api_base: str = Field(
         default="https://content-api.wildberries.ru",
         description="WB Content API host (override in tests/mocks).",

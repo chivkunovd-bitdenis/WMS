@@ -1,3 +1,4 @@
+# ruff: noqa: RUF003
 """Celery application (broker from settings; worker: `celery -A app.celery_app worker`)."""
 
 from __future__ import annotations
@@ -5,6 +6,7 @@ from __future__ import annotations
 from celery import Celery
 from celery.schedules import crontab
 
+from app.core.logging_setup import setup_outbound_http_logging
 from app.core.settings import settings
 
 _broker = settings.celery_broker_url or "memory://"
@@ -14,6 +16,10 @@ celery_app = Celery(
     include=["app.tasks.background_jobs"],
 )
 celery_app.conf.task_ignore_result = True
+
+# Автоопрос ходит в WB из воркера, а не из API, — там lifespan не выполняется,
+# поэтому лог исходящих включаем и здесь.
+setup_outbound_http_logging()
 celery_app.conf.beat_schedule = {
     "wb-mp-warehouses-daily": {
         "task": "wms.wb_mp_warehouses_daily_sync",
