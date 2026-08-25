@@ -143,8 +143,10 @@ test('admin creates seller user; seller sees filtered catalog and inbound', asyn
   await expect(page.getByTestId('seller-inbound-draft-form')).toBeVisible();
   await page.getByTestId('seller-inbound-add-products').click();
   await expect(page.getByTestId('seller-inbound-picker')).toBeVisible();
+  await expect(page.getByTestId('seller-inbound-picker-apply')).toBeDisabled();
   await page.getByTestId('seller-inbound-picker-search').fill(skuA);
   await page.getByTestId('seller-inbound-picker-qty').first().fill('3');
+  await expect(page.getByTestId('seller-inbound-picker-apply')).toBeEnabled();
   await Promise.all([
     waitForPostOk(page, baseIn, (u) => u.includes('/lines')),
     page.getByTestId('seller-inbound-picker-apply').click(),

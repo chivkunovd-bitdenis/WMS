@@ -224,6 +224,9 @@ export function MarketplaceProductPickerDialog({
     },
     [catalog, filterRow, lastScannedProductId, pickerCategories, pickerSearch],
   )
+  const hasSelectedQuantity = Object.values(pickerQtyByProduct).some(
+    (qty) => Number.isFinite(qty) && qty > 0,
+  )
 
   const setPickerQty = (productId: string, qty: number) => {
     setPickerQtyByProduct((prev) => ({ ...prev, [productId]: qty }))
@@ -635,7 +638,7 @@ export function MarketplaceProductPickerDialog({
         <Button
           variant="contained"
           onClick={() => void handleApply()}
-          disabled={busy}
+          disabled={busy || !hasSelectedQuantity}
           data-testid={`${testIdPrefix}-apply`}
         >
           {applyLabel}
