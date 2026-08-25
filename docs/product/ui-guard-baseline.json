@@ -1,18 +1,27 @@
 {
   "src/App.tsx": {
-    "экран-монолит": 3072
+    "экран-монолит": 3544
+  },
+  "src/apps/seller/SellerApp.tsx": {
+    "своя-кнопка": 1
   },
   "src/components/BoxImportDialog.tsx": {
     "своя-кнопка": 3,
     "своя-таблица": 1
   },
+  "src/components/BoxLabelPrintDialog.tsx": {
+    "своя-кнопка": 2
+  },
   "src/components/DashboardCard.tsx": {
     "своя-кнопка": 1
   },
+  "src/components/MarkingLabelPreview.tsx": {
+    "свой-цвет": 1
+  },
   "src/components/MarkingPrintDialog.tsx": {
     "свой-чип": 2,
-    "своя-кнопка": 9,
-    "экран-монолит": 1429
+    "своя-кнопка": 8,
+    "экран-монолит": 1729
   },
   "src/components/NotificationBell.tsx": {
     "своя-кнопка": 1
@@ -23,11 +32,12 @@
   "src/components/SellerMarketplaceUnloadDialog.tsx": {
     "своя-кнопка": 5,
     "своя-таблица": 2,
-    "экран-монолит": 816
+    "экран-монолит": 821
   },
   "src/components/WbProductPickerDialog.tsx": {
-    "своя-кнопка": 2,
-    "своя-таблица": 1
+    "своя-кнопка": 4,
+    "своя-таблица": 1,
+    "экран-монолит": 656
   },
   "src/components/fbs/FbsChips.tsx": {
     "свой-чип": 9
@@ -37,9 +47,6 @@
   },
   "src/screens/PublicAuthScreen.tsx": {
     "своя-кнопка": 7
-  },
-  "src/screens/ff/FfDashboard.tsx": {
-    "своя-таблица": 2
   },
   "src/screens/ff/FfHonestSignReprintsPage.tsx": {
     "своя-кнопка": 5,
@@ -51,19 +58,20 @@
   },
   "src/screens/ff/FfInboundQueuePage.tsx": {
     "свой-чип": 1,
+    "своя-кнопка": 5,
     "своя-таблица": 1
   },
   "src/screens/ff/FfInboundRequestView.tsx": {
-    "свой-чип": 2,
-    "своя-кнопка": 25,
-    "своя-таблица": 2,
-    "экран-монолит": 2310
+    "свой-чип": 6,
+    "своя-кнопка": 36,
+    "своя-таблица": 4,
+    "экран-монолит": 3680
   },
   "src/screens/ff/FfInboundSortingPanel.tsx": {
     "свой-чип": 1,
     "своя-кнопка": 4,
     "своя-таблица": 2,
-    "экран-монолит": 868
+    "экран-монолит": 1226
   },
   "src/screens/ff/FfManualProductCreateDialog.tsx": {
     "своя-кнопка": 2
@@ -72,13 +80,18 @@
     "свой-чип": 1,
     "своя-кнопка": 6,
     "своя-таблица": 1,
-    "экран-монолит": 758
+    "экран-монолит": 840
+  },
+  "src/screens/ff/FfMpUnloadPickPanel.tsx": {
+    "свой-чип": 2,
+    "своя-кнопка": 2,
+    "своя-таблица": 2
   },
   "src/screens/ff/FfPackagingPage.tsx": {
-    "свой-чип": 4,
-    "своя-кнопка": 16,
+    "свой-чип": 2,
+    "своя-кнопка": 20,
     "своя-таблица": 3,
-    "экран-монолит": 1475
+    "экран-монолит": 2149
   },
   "src/screens/ff/FfPendingMarkingPage.tsx": {
     "свой-чип": 1,
@@ -86,22 +99,22 @@
     "своя-таблица": 1
   },
   "src/screens/ff/FfProductTzImportDialog.tsx": {
-    "своя-кнопка": 3,
+    "своя-кнопка": 4,
     "своя-таблица": 1
   },
   "src/screens/ff/FfSellerCreateDialog.tsx": {
     "своя-кнопка": 2
   },
   "src/screens/ff/FfSettingsScreen.tsx": {
-    "своя-кнопка": 1,
+    "своя-кнопка": 3,
     "своя-таблица": 1,
-    "экран-монолит": 650
+    "экран-монолит": 701
   },
   "src/screens/ff/FfSuppliesShipmentsPage.tsx": {
-    "свой-чип": 1,
-    "своя-кнопка": 28,
+    "свой-чип": 3,
+    "своя-кнопка": 30,
     "своя-таблица": 4,
-    "экран-монолит": 3105
+    "экран-монолит": 3556
   },
   "src/screens/ff/FfWeekCalendar.tsx": {
     "свой-цвет": 4
@@ -121,13 +134,13 @@
     "свой-чип": 3,
     "своя-кнопка": 2,
     "своя-таблица": 4,
-    "экран-монолит": 748
+    "экран-монолит": 782
   },
   "src/screens/shared/HonestSignScreen.tsx": {
     "свой-чип": 1,
     "своя-кнопка": 5,
     "своя-таблица": 2,
-    "экран-монолит": 814
+    "экран-монолит": 818
   },
   "src/screens/shared/MarkingImportDialog.tsx": {
     "свой-чип": 2,
@@ -152,18 +165,30 @@
     "свой-чип": 1,
     "своя-кнопка": 1
   },
+  "src/screens/v2/FbsKizScanDialog.tsx": {
+    "своя-кнопка": 4
+  },
   "src/screens/v2/FbsPrintPreviewDialog.tsx": {
     "свой-чип": 3,
     "своя-кнопка": 4
   },
+  "src/screens/v2/FbsStockAllocationDialog.tsx": {
+    "своя-кнопка": 2,
+    "своя-таблица": 1
+  },
   "src/screens/v2/FbsSupplyCreateDialog.tsx": {
     "свой-чип": 1,
-    "своя-кнопка": 2
+    "своя-кнопка": 3
+  },
+  "src/screens/v2/FfCatalogInboundPackages.tsx": {
+    "своя-кнопка": 1,
+    "своя-таблица": 1
   },
   "src/screens/v2/FfFbsOrdersScreen.tsx": {
-    "свой-чип": 3,
-    "своя-кнопка": 5,
-    "своя-таблица": 1
+    "свой-чип": 2,
+    "своя-кнопка": 12,
+    "своя-таблица": 2,
+    "экран-монолит": 1642
   },
   "src/screens/v2/FfFbsPickList.tsx": {
     "свой-чип": 1,
@@ -171,34 +196,36 @@
     "своя-таблица": 1
   },
   "src/screens/v2/FfFbsStockSyncScreen.tsx": {
-    "свой-чип": 2,
-    "своя-кнопка": 11,
+    "свой-чип": 3,
+    "своя-кнопка": 6,
     "своя-таблица": 2,
-    "экран-монолит": 627
-  },
-  "src/screens/v2/FfFbsSupplyDrawer.tsx": {
-    "свой-чип": 2,
-    "своя-кнопка": 12,
-    "своя-таблица": 3,
-    "экран-монолит": 613
+    "экран-монолит": 1099
   },
   "src/screens/v2/FfFbsSupplyWorkspace.tsx": {
     "свой-цвет": 4,
-    "своя-кнопка": 21,
-    "своя-таблица": 1,
-    "экран-монолит": 1482
+    "свой-чип": 1,
+    "своя-кнопка": 37,
+    "своя-таблица": 2,
+    "экран-монолит": 2551
+  },
+  "src/screens/v2/FfInventorySnapshotScreen.tsx": {
+    "своя-кнопка": 1,
+    "своя-таблица": 1
   },
   "src/screens/v2/FfProductsCatalogScreen.tsx": {
-    "свой-чип": 2,
-    "своя-кнопка": 7,
-    "своя-таблица": 1
+    "свой-чип": 1,
+    "своя-кнопка": 16,
+    "своя-таблица": 1,
+    "экран-монолит": 1592
   },
   "src/screens/v2/InboundScreen.tsx": {
     "своя-кнопка": 12,
-    "экран-монолит": 680
+    "экран-монолит": 691
   },
   "src/screens/v2/MovementsScreen.tsx": {
-    "своя-кнопка": 2
+    "свой-чип": 1,
+    "своя-кнопка": 2,
+    "своя-таблица": 1
   },
   "src/screens/v2/OutboundScreen.tsx": {
     "своя-кнопка": 9
@@ -207,23 +234,25 @@
     "своя-кнопка": 1
   },
   "src/screens/v2/SellerDocumentsScreen.tsx": {
-    "своя-кнопка": 3,
+    "своя-кнопка": 7,
     "своя-таблица": 1
   },
   "src/screens/v2/SellerInboundDraftScreen.tsx": {
     "свой-чип": 1,
-    "своя-кнопка": 4,
-    "своя-таблица": 1,
-    "экран-монолит": 697
-  },
-  "src/screens/v2/SellerProductsStockScreen.tsx": {
-    "свой-чип": 3,
     "своя-кнопка": 7,
     "своя-таблица": 1,
-    "экран-монолит": 649
+    "экран-монолит": 1169
+  },
+  "src/screens/v2/SellerProductsStockScreen.tsx": {
+    "свой-чип": 1,
+    "своя-кнопка": 8,
+    "своя-таблица": 1,
+    "экран-монолит": 980
   },
   "src/screens/v2/SellerSettingsScreen.tsx": {
-    "своя-кнопка": 7
+    "своя-кнопка": 15,
+    "своя-таблица": 1,
+    "экран-монолит": 1143
   },
   "src/screens/v2/SellersScreen.tsx": {
     "своя-кнопка": 1,
@@ -236,8 +265,8 @@
     "своя-кнопка": 5
   },
   "src/sections/CatalogSection.tsx": {
-    "своя-таблица": 2,
-    "экран-монолит": 796
+    "своя-таблица": 3,
+    "экран-монолит": 1157
   },
   "src/sections/OperationsSection.tsx": {
     "своя-кнопка": 18,

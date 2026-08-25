@@ -3,20 +3,20 @@
     "роут-без-теста": 1
   },
   "backend/app/api/fbs_supplies.py": {
-    "роут-без-теста": 3,
-    "файл-монолит": 1798
+    "роут-без-теста": 2,
+    "файл-монолит": 2049
   },
   "backend/app/api/inbound_intake.py": {
-    "роут-без-теста": 17,
-    "файл-монолит": 1768
+    "роут-без-теста": 19,
+    "файл-монолит": 2056
   },
   "backend/app/api/marketplace_unload_requests.py": {
-    "роут-без-теста": 5,
-    "файл-монолит": 1616
+    "роут-без-теста": 4,
+    "файл-монолит": 1744
   },
   "backend/app/api/marking_codes.py": {
     "роут-без-теста": 1,
-    "файл-монолит": 1754
+    "файл-монолит": 1782
   },
   "backend/app/api/notifications.py": {
     "роут-без-теста": 1
@@ -24,8 +24,15 @@
   "backend/app/api/outbound_shipment.py": {
     "роут-без-теста": 3
   },
+  "backend/app/api/ozon_integration.py": {
+    "роут-без-теста": 1
+  },
   "backend/app/api/packaging_tasks.py": {
     "роут-без-теста": 1
+  },
+  "backend/app/api/products.py": {
+    "роут-без-теста": 1,
+    "файл-монолит": 1271
   },
   "backend/app/api/sellers.py": {
     "роут-без-теста": 1
@@ -33,42 +40,79 @@
   "backend/app/api/warehouses.py": {
     "роут-без-теста": 2
   },
+  "backend/app/schemas/ozon_fbs_api.py": {
+    "файл-монолит": 1668
+  },
+  "backend/app/services/catalog_service.py": {
+    "файл-монолит": 1278
+  },
+  "backend/app/services/fbs_autopoll_service.py": {
+    "голый-except": 3,
+    "файл-монолит": 806
+  },
+  "backend/app/services/fbs_kiz_service.py": {
+    "файл-монолит": 1102
+  },
   "backend/app/services/fbs_marking_service.py": {
-    "файл-монолит": 856
+    "файл-монолит": 891
+  },
+  "backend/app/services/fbs_packaging_integration_service.py": {
+    "файл-монолит": 906
+  },
+  "backend/app/services/fbs_print_asset_service.py": {
+    "файл-монолит": 883
   },
   "backend/app/services/fbs_shipment_pvz_service.py": {
-    "файл-монолит": 1062
+    "файл-монолит": 1065
   },
   "backend/app/services/fbs_shipment_service.py": {
-    "файл-монолит": 1092
+    "файл-монолит": 1384
   },
   "backend/app/services/fbs_stock_publish_service.py": {
     "голый-except": 1
   },
+  "backend/app/services/fbs_stock_sync_service.py": {
+    "файл-монолит": 868
+  },
   "backend/app/services/fbs_supply_service.py": {
-    "файл-монолит": 982
+    "файл-монолит": 1747
+  },
+  "backend/app/services/fbs_worklist_service.py": {
+    "файл-монолит": 863
   },
   "backend/app/services/inbound_intake_service.py": {
-    "файл-монолит": 1305
+    "файл-монолит": 1823
   },
   "backend/app/services/inventory_service.py": {
-    "файл-монолит": 1182
+    "файл-монолит": 1276
+  },
+  "backend/app/services/marketplace_unload_collect_service.py": {
+    "файл-монолит": 858
   },
   "backend/app/services/marketplace_unload_service.py": {
-    "файл-монолит": 1005
+    "файл-монолит": 1205
   },
   "backend/app/services/marking_code_service.py": {
     "голый-except": 2,
-    "файл-монолит": 3293
+    "файл-монолит": 3414
+  },
+  "backend/app/services/packaging_task_service.py": {
+    "файл-монолит": 1270
   },
   "backend/app/services/product_tz_import_service.py": {
     "голый-except": 1,
-    "файл-монолит": 841
+    "файл-монолит": 872
+  },
+  "backend/app/services/storage_statement_service.py": {
+    "голый-except": 1
   },
   "backend/app/services/wb_marketplace_orders_service.py": {
-    "файл-монолит": 1382
+    "файл-монолит": 1622
   },
   "backend/app/services/wildberries_client.py": {
-    "файл-монолит": 1182
+    "файл-монолит": 1178
+  },
+  "backend/app/services/wildberries_fbs_client.py": {
+    "файл-монолит": 884
   }
 }
