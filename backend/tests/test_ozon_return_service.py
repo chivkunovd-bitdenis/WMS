@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal, engine
 from app.models import Base
-from app.models.inbound_intake import InboundIntakeRequest
+from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
 from app.models.marketplace_account import MarketplaceAccount
 from app.models.ozon_return import InboundOzonReturnGiveout
 from app.models.product import Product
@@ -22,8 +22,13 @@ from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller import Seller
 from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
+from app.services import ozon_return_backoff
 from app.services.integration_fernet import encrypt_secret
-from app.services.marketplace_provider import MarketplaceProviderError, OzonMarketplaceProvider
+from app.services.marketplace_provider import (
+    MarketplaceBackoff,
+    MarketplaceProviderError,
+    OzonMarketplaceProvider,
+)
 from app.services.ozon_return_service import (
     OzonReturnError,
     build_preview,
@@ -50,6 +55,7 @@ class FakeOzonReturnsTransport:
     returns_by_warehouse: dict[int, list[dict[str, object]]] = field(default_factory=dict)
     errors: dict[str, MarketplaceProviderError] = field(default_factory=dict)
     pdf_response: dict[str, object] = field(default_factory=dict)
+    endpoint_calls: list[str] = field(default_factory=list)
 
     async def call(
         self,
@@ -60,6 +66,7 @@ class FakeOzonReturnsTransport:
         payload: Mapping[str, object],
     ) -> object:
         _ = client_id, api_key
+        self.endpoint_calls.append(path)
         if error := self.errors.get(path):
             raise error
         if path == "/v1/return/giveout/is-enabled":
@@ -352,6 +359,73 @@ async def test_imported_giveouts_are_isolated_by_request_and_tenant(
     assert await imported_groups(db_session, other_scope.tenant_id, other_scope.request_id) == []
     with pytest.raises(OzonReturnError, match="request_not_found"):
         await build_preview(db_session, other_scope.tenant_id, first_scope.request_id, provider)
+
+
+@pytest.mark.asyncio
+async def test_same_product_from_two_giveouts_keeps_both_source_groups(
+    db_session: AsyncSession,
+) -> None:
+    scope = await _create_scope(db_session)
+    product = await _add_product_link(db_session, scope, external_offer_id="shared-offer")
+    transport = FakeOzonReturnsTransport(
+        giveouts=[_giveout(11, 711), _giveout(22, 722)],
+        returns_by_warehouse={
+            711: [_return_item(1101, offer_id="shared-offer", sku=101, quantity=2)],
+            722: [_return_item(2201, offer_id="shared-offer", sku=101, quantity=3)],
+        },
+    )
+
+    imported = await import_selected_giveouts(
+        db_session, scope.tenant_id, scope.request_id, _provider(transport), [11, 22]
+    )
+    groups = await imported_groups(db_session, scope.tenant_id, scope.request_id)
+    lines = list(
+        (
+            await db_session.execute(
+                select(InboundIntakeLine).where(InboundIntakeLine.request_id == scope.request_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    assert imported["giveouts_imported"] == 2
+    assert len(lines) == 1
+    assert lines[0].product_id == product.id
+    assert lines[0].expected_qty == 5
+    assert [group["giveout_id"] for group in groups] == [11, 22]
+    assert [group["items"][0]["inbound_line_id"] for group in groups] == [
+        str(lines[0].id),
+        str(lines[0].id),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_return_rate_limit_blocks_follow_up_calls_without_hitting_provider(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scope = await _create_scope(db_session)
+    backoff = MarketplaceBackoff()
+    monkeypatch.setattr(ozon_return_backoff, "_BACKOFF", backoff)
+    transport = FakeOzonReturnsTransport(
+        errors={
+            "/v1/return/giveout/is-enabled": MarketplaceProviderError(
+                "ozon", 429, {"retry_after_seconds": 30}
+            )
+        }
+    )
+    provider = _provider(transport)
+
+    with pytest.raises(MarketplaceProviderError) as first:
+        await build_preview(db_session, scope.tenant_id, scope.request_id, provider)
+    assert first.value.status_code == 429
+    transport.errors.clear()
+
+    with pytest.raises(MarketplaceProviderError) as second:
+        await build_preview(db_session, scope.tenant_id, scope.request_id, provider)
+    assert second.value.code == "ozon_rate_limited"
+    assert transport.endpoint_calls == ["/v1/return/giveout/is-enabled"]
 
 
 @pytest.mark.asyncio

@@ -5,6 +5,7 @@ import {
   formatOzonUtilizationDate,
   isOzonReturnUrgent,
   ozonGiveoutStatus,
+  ozonReturnUnrepresentedGroups,
 } from './ozonReturnPickerHelpers'
 
 const groups: OzonReturnPreviewGroup[] = [
@@ -82,5 +83,16 @@ describe('OzonReturnPickerDialog helpers', () => {
       tone: 'stop',
     })
     expect(formatOzonUtilizationDate('2026-08-28')).toBe('28.08')
+  })
+
+  it('keeps the second pickup point visible when both points contain the same WMS line', () => {
+    const sameLineGroups = groups.map((group) => ({
+      ...group,
+      items: group.items.map((item) => ({ ...item, inbound_line_id: 'line-1' })),
+    }))
+
+    expect(ozonReturnUnrepresentedGroups(sameLineGroups, [{ id: 'line-1' }])).toEqual([
+      expect.objectContaining({ giveout_id: 20 }),
+    ])
   })
 })

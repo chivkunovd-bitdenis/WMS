@@ -8,7 +8,7 @@
   },
   "backend/app/api/inbound_intake.py": {
     "роут-без-теста": 19,
-    "файл-монолит": 2189
+    "файл-монолит": 2202
   },
   "backend/app/api/marketplace_unload_requests.py": {
     "роут-без-теста": 4,

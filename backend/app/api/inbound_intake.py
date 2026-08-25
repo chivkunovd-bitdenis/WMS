@@ -65,10 +65,10 @@ def _local_ozon_return_provider() -> OzonMarketplaceProvider:
 async def _refresh_ozon_return_statuses_after_posting(
     session: AsyncSession,
     request: InboundIntakeRequest,
-) -> None:
+) -> str | None:
     """A provider read must never undo a completed local inbound document."""
     if request.operation_type != svc.OPERATION_TYPE_RETURN or request.marketplace != "ozon":
-        return
+        return None
     from app.services import ozon_return_service
 
     try:
@@ -77,23 +77,25 @@ async def _refresh_ozon_return_statuses_after_posting(
             request,
             _local_ozon_return_provider(),
         )
+        return None
     except Exception:
         logger.warning(
             "Ozon return giveout status refresh failed after posting request %s",
             request.id,
             exc_info=True,
         )
+        return "Документ проведён, но статусы выдач Ozon обновить не удалось. Повторите позже."
 
 
 async def _refresh_completed_ozon_return(
     session: AsyncSession,
     request: InboundIntakeRequest,
-) -> InboundIntakeRequest:
+) -> tuple[InboundIntakeRequest, str | None]:
     if request.status != svc.STATUS_DONE:
-        return request
-    await _refresh_ozon_return_statuses_after_posting(session, request)
+        return request, None
+    warning = await _refresh_ozon_return_statuses_after_posting(session, request)
     reloaded = await svc.get_request(session, request.tenant_id, request.id)
-    return reloaded if reloaded is not None else request
+    return (reloaded if reloaded is not None else request), warning
 
 
 class InboundIntakeRequestCreate(BaseModel):
@@ -267,6 +269,7 @@ class InboundIntakeRequestOut(BaseModel):
     status: str
     operation_type: str = svc.OPERATION_TYPE_INBOUND
     marketplace: Literal["wildberries", "ozon"] | None = None
+    marketplace_warning: str | None = None
     planned_delivery_date: str | None = None
     planned_box_count: int | None = None
     actual_box_count: int | None = None
@@ -441,6 +444,7 @@ def _request_out(
     r: InboundIntakeRequest,
     lines: list[InboundIntakeLineOut] | None = None,
     boxes: list[InboundIntakeBoxOut] | None = None,
+    marketplace_warning: str | None = None,
 ) -> InboundIntakeRequestOut:
     lines_out = lines
     if lines_out is None:
@@ -463,6 +467,7 @@ def _request_out(
         status=r.status,
         operation_type=r.operation_type,
         marketplace=cast(Literal["wildberries", "ozon"] | None, r.marketplace),
+        marketplace_warning=marketplace_warning,
         planned_delivery_date=r.planned_delivery_date.isoformat()
         if r.planned_delivery_date is not None
         else None,
@@ -489,6 +494,14 @@ def _request_out(
         else [],
         lines=lines_out,
     )
+
+
+async def _request_out_after_completion(
+    session: AsyncSession,
+    request: InboundIntakeRequest,
+) -> InboundIntakeRequestOut:
+    refreshed, warning = await _refresh_completed_ozon_return(session, request)
+    return _request_out(refreshed, marketplace_warning=warning)
 
 
 def _line_out_from_orm(
@@ -1351,7 +1364,7 @@ async def putaway_inbound_box(
                 detail=exc.code,
             ) from None
         raise
-    return _request_out(await _refresh_completed_ozon_return(session, r))
+    return await _request_out_after_completion(session, r)
 
 
 @router.post(
@@ -1526,7 +1539,7 @@ async def complete_inbound_verification(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return _request_out(await _refresh_completed_ozon_return(session, r2))
+    return await _request_out_after_completion(session, r2)
 
 
 @router.get(
@@ -1865,7 +1878,7 @@ async def receive_inbound_line(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return _request_out(await _refresh_completed_ozon_return(session, r2))
+    return await _request_out_after_completion(session, r2)
 
 
 @router.post("/{request_id}/submit", response_model=InboundIntakeRequestOut)
@@ -1966,7 +1979,7 @@ async def post_inbound_request(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return _request_out(await _refresh_completed_ozon_return(session, r2))
+    return await _request_out_after_completion(session, r2)
 
 
 @router.get(
@@ -2154,7 +2167,7 @@ async def complete_distribution(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return _request_out(await _refresh_completed_ozon_return(session, r2))
+    return await _request_out_after_completion(session, r2)
 
 
 @router.post(

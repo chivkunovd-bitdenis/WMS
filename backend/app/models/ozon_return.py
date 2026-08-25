@@ -55,6 +55,9 @@ class InboundOzonReturnGiveout(Base):
     warehouse_address: Mapped[str] = mapped_column(String(512), nullable=False)
     approved_articles_count: Mapped[int] = mapped_column(Integer, nullable=False)
     total_articles_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    route_position: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     storage_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     utilization_forecast_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     provider_created_at: Mapped[datetime | None] = mapped_column(

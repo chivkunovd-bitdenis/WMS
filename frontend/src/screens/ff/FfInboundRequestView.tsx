@@ -56,7 +56,7 @@ import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { WbProductPickerDialog } from '../../components/WbProductPickerDialog'
 import { WmsDateField } from '../../components/WmsDateField'
 import { OzonReturnActions, OzonReturnGroupRow, OzonReturnOrphanGroupRows, ReturnDefectiveQtyCell } from '../../components/OzonReturnDocumentUi'
-import { ozonReturnGroupAt } from '../../components/ozonReturnPickerHelpers'
+import { ozonReturnGroupAt, ozonReturnUnrepresentedGroups } from '../../components/ozonReturnPickerHelpers'
 import { MarketplaceChip } from '../../ui-kit'
 import {
   formatProductBarcodeDisplay,
@@ -341,6 +341,7 @@ type InboundDetail = {
   status: string
   operation_type: 'inbound' | 'return'
   marketplace?: 'wildberries' | 'ozon' | null
+  marketplace_warning?: string | null
   planned_delivery_date: string | null
   planned_box_count: number | null
   actual_box_count: number | null
@@ -1197,7 +1198,7 @@ export function FfInboundRequestView({
         setDistError(code)
         return
       }
-      await loadDetail()
+      setDetail((await res.json()) as InboundDetail)
       await loadDistribution()
       setDistOpen(true)
     } catch (e) {
@@ -1801,7 +1802,7 @@ export function FfInboundRequestView({
         setError(scanErrorMessageRu(await readApiErrorMessage(res)))
         return
       }
-      await loadDetail()
+      setDetail((await res.json()) as InboundDetail)
       setDistOpen(true)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось завершить приёмку.')
@@ -1989,6 +1990,11 @@ export function FfInboundRequestView({
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }} data-testid="ff-inbound-doc-error">
           {error}
+        </Alert>
+      ) : null}
+      {detail?.marketplace_warning ? (
+        <Alert severity="warning" sx={{ mb: 2 }} data-testid="ff-inbound-marketplace-warning">
+          {detail.marketplace_warning}
         </Alert>
       ) : null}
 
@@ -2580,7 +2586,7 @@ export function FfInboundRequestView({
                     </Fragment>
                   )
                 })}
-                {isOzonReturn ? <OzonReturnOrphanGroupRows groups={ozonReturn.groups} documentDone={isDoneStatus(detail.status)} colSpan={isReturnOperation ? 5 : 4} /> : null}
+                {isOzonReturn ? <OzonReturnOrphanGroupRows groups={ozonReturnUnrepresentedGroups(ozonReturn.groups, detail.lines)} documentDone={isDoneStatus(detail.status)} colSpan={isReturnOperation ? 5 : 4} /> : null}
                 {detail.lines.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={isReturnOperation ? 5 : 4}>

@@ -72,3 +72,19 @@ export function ozonReturnGroupAt(
   const previousGroup = findGroup(lines[index - 1]?.id)
   return { group, showHeader: group != null && group.giveout_id !== previousGroup?.giveout_id }
 }
+
+export function ozonReturnUnrepresentedGroups(
+  groups: OzonReturnPreviewGroup[],
+  lines: { id: string }[],
+): OzonReturnPreviewGroup[] {
+  const represented = new Set(
+    lines
+      .map((line) =>
+        groups.find((group) =>
+          group.items.some((item) => item.inbound_line_id === line.id),
+        )?.giveout_id,
+      )
+      .filter((giveoutId): giveoutId is number => giveoutId != null),
+  )
+  return groups.filter((group) => !represented.has(group.giveout_id))
+}

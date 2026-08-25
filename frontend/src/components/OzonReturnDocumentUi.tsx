@@ -121,6 +121,9 @@ export function OzonReturnGroupRow({ group, documentDone, colSpan }: GroupRowPro
                 .join(' · ')}
             </Typography>
           ) : null}
+          <Typography variant="caption" color="text.secondary">
+            {group.items.map((item) => `${item.product_name} × ${item.quantity}`).join(' · ')}
+          </Typography>
           {statusMismatch ? (
             <Typography
               variant="caption"
@@ -146,9 +149,7 @@ export function OzonReturnOrphanGroupRows({
   documentDone: boolean
   colSpan: number
 }) {
-  return groups
-    .filter((group) => group.items.every((item) => item.inbound_line_id == null))
-    .map((group) => (
+  return groups.map((group) => (
       <OzonReturnGroupRow
         key={group.giveout_id}
         group={group}

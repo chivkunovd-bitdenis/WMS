@@ -341,9 +341,9 @@ async def test_posted_ozon_return_refresh_is_best_effort_and_uses_fake_provider(
         calls.append(provider.transport)
 
     monkeypatch.setattr(ozon_return_service, "refresh_giveout_statuses", recorded_refresh)
-    await _refresh_ozon_return_statuses_after_posting(
+    assert await _refresh_ozon_return_statuses_after_posting(
         cast(AsyncSession, None), request
-    )
+    ) is None
     assert len(calls) == 1
     assert isinstance(calls[0], FakeMarketplaceTransport)
 
@@ -355,6 +355,9 @@ async def test_posted_ozon_return_refresh_is_best_effort_and_uses_fake_provider(
         raise ozon_return_service.OzonReturnError("ozon_unavailable", "Ozon недоступен")
 
     monkeypatch.setattr(ozon_return_service, "refresh_giveout_statuses", failing_refresh)
-    await _refresh_ozon_return_statuses_after_posting(
+    warning = await _refresh_ozon_return_statuses_after_posting(
         cast(AsyncSession, None), request
+    )
+    assert warning == (
+        "Документ проведён, но статусы выдач Ozon обновить не удалось. Повторите позже."
     )

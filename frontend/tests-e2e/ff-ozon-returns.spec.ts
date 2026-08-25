@@ -98,6 +98,15 @@ test('Ozon return keeps the live reception flow and adds picker, defect and prin
       },
     ],
   }
+  const sameProductGroup = {
+    ...importedGroup,
+    giveout_id: 303,
+    warehouse_name: 'Пункт Сокол',
+    warehouse_address: 'Москва, Ленинградский проспект, 1',
+    approved_articles_count: 1,
+    total_articles_count: 1,
+    items: [{ ...importedGroup.items[0], return_id: 5003, quantity: 1 }],
+  }
   let secondGroupImported = false
 
   await page.route(`**${INBOUND_API}/${requestId}/ozon-returns/groups`, async (route) => {
@@ -106,8 +115,8 @@ test('Ozon return keeps the live reception flow and adds picker, defect and prin
       contentType: 'application/json',
       body: JSON.stringify(
         secondGroupImported
-          ? [importedGroup, { ...newGroup, already_imported: true }]
-          : [importedGroup],
+          ? [importedGroup, sameProductGroup, { ...newGroup, already_imported: true }]
+          : [importedGroup, sameProductGroup],
       ),
     })
   })
@@ -118,8 +127,12 @@ test('Ozon return keeps the live reception flow and adds picker, defect and prin
       body: JSON.stringify({
         enabled: true,
         message: null,
-        imported_giveout_ids: secondGroupImported ? [101, 202] : [101],
-        groups: [importedGroup, { ...newGroup, already_imported: secondGroupImported }],
+        imported_giveout_ids: secondGroupImported ? [101, 202, 303] : [101, 303],
+        groups: [
+          importedGroup,
+          sameProductGroup,
+          { ...newGroup, already_imported: secondGroupImported },
+        ],
       }),
     })
   })
@@ -166,7 +179,8 @@ test('Ozon return keeps the live reception flow and adds picker, defect and prin
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible()
   await expect(page.getByTestId('ff-inbound-marketplace-chip')).toHaveText('Ozon')
   await expect(page.getByTestId('ff-inbound-lines-table')).toContainText('Брак')
-  await expect(page.getByTestId('ff-inbound-ozon-return-group')).toContainText('Пункт Тверская')
+  await expect(page.getByTestId('ff-inbound-ozon-return-group')).toHaveCount(2)
+  await expect(page.getByTestId('ff-inbound-ozon-return-group').nth(1)).toContainText('Пункт Сокол')
   await expect(page.getByTestId('ff-inbound-ozon-return-picker-open')).toBeVisible()
   await expect(page.getByTestId('ff-inbound-ozon-return-pass')).toBeVisible()
   await expect(page.getByTestId('ff-inbound-ozon-return-reconciliation')).toBeVisible()
@@ -178,21 +192,22 @@ test('Ozon return keeps the live reception flow and adds picker, defect and prin
   await page.getByTestId('ff-inbound-ozon-return-picker-open').click()
   await expect(page.getByTestId('ozon-return-picker')).toBeVisible()
   await expect(page.getByTestId('ozon-return-picker-selected-count')).toHaveText(
-    'Выбрано пунктов: 1 · товаров: 2',
+    'Выбрано пунктов: 2 · товаров: 3',
   )
   await page.getByTestId('ozon-return-picker-select-all').click()
   await expect(page.getByTestId('ozon-return-picker-selected-count')).toHaveText(
-    'Выбрано пунктов: 2 · товаров: 3',
+    'Выбрано пунктов: 3 · товаров: 4',
   )
   const groups = page.getByTestId('ozon-return-picker-group')
   await groups.nth(0).locator('.MuiAccordionSummary-root').click()
   await groups.nth(1).locator('.MuiAccordionSummary-root').click()
-  await expect(page.getByTestId('ozon-return-picker-items-table')).toHaveCount(2)
+  await groups.nth(2).locator('.MuiAccordionSummary-root').click()
+  await expect(page.getByTestId('ozon-return-picker-items-table')).toHaveCount(3)
   await expect(page.getByTestId('ozon-return-picker-unmatched')).toHaveText(
     'Товар не сопоставлен с каталогом',
   )
-  await expect(page.getByText('ждёт 4 дн.')).toBeVisible()
-  await expect(page.getByText('утилизация 29.08')).toBeVisible()
+  await expect(page.getByText('ждёт 4 дн.').first()).toBeVisible()
+  await expect(page.getByText('утилизация 29.08').first()).toBeVisible()
   await page.screenshot({
     path: path.join(evidenceDir, 'picker-1600.png'),
     fullPage: true,
@@ -201,8 +216,8 @@ test('Ozon return keeps the live reception flow and adds picker, defect and prin
   await page.getByTestId('ozon-return-picker-apply').click()
   await expect(page.getByTestId('ozon-return-picker')).toHaveCount(0)
   await expect(page.getByText(/Несопоставленные товары остались в документе/)).toBeVisible()
-  await expect(page.getByTestId('ff-inbound-ozon-return-group')).toHaveCount(2)
-  await expect(page.getByTestId('ff-inbound-ozon-return-group').nth(1)).toContainText(
+  await expect(page.getByTestId('ff-inbound-ozon-return-group')).toHaveCount(3)
+  await expect(page.getByTestId('ff-inbound-ozon-return-group').nth(2)).toContainText(
     'Несопоставленный товар × 1',
   )
 

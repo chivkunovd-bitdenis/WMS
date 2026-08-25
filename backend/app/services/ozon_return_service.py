@@ -6,11 +6,10 @@ import asyncio
 import base64
 import uuid
 from collections import Counter
-from datetime import UTC, date, datetime
 from typing import TypeVar, cast
 
 from pydantic import BaseModel, ValidationError
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -39,6 +38,8 @@ from app.schemas.ozon_returns_api import (
 )
 from app.services.marketplace_account_service import MarketplaceAccountService
 from app.services.marketplace_provider import MarketplaceProviderError, OzonMarketplaceProvider
+from app.services.ozon_return_backoff import raise_if_blocked, record_rate_limit
+from app.services.ozon_return_values import parse_date, parse_datetime, status_text
 
 TResponse = TypeVar("TResponse", bound=BaseModel)
 PAGE_LIMIT = 100
@@ -52,10 +53,6 @@ class OzonReturnError(Exception):
         super().__init__(code)
 
 
-def _payload(request: BaseModel) -> dict[str, object]:
-    return request.model_dump(by_alias=True, exclude_none=True)
-
-
 async def _call(
     provider: OzonMarketplaceProvider,
     *,
@@ -65,21 +62,24 @@ async def _call(
     request: BaseModel,
     response_type: type[TResponse],
 ) -> TResponse:
+    raise_if_blocked()
     for attempt in range(3):
         try:
             raw = await provider.call(
                 client_id=client_id,
                 api_key=api_key,
                 path=path,
-                payload=_payload(request),
+                payload=request.model_dump(by_alias=True, exclude_none=True),
             )
             if raw is None:
                 raise OzonReturnError("ozon_empty_response", "Ozon вернул пустой ответ.")
             return response_type.model_validate(raw)
         except MarketplaceProviderError as exc:
+            if exc.status_code == 429:
+                record_rate_limit(exc)
+                raise
             retryable = (
-                exc.status_code == 429
-                or (exc.status_code is not None and exc.status_code >= 500)
+                (exc.status_code is not None and exc.status_code >= 500)
                 or exc.code == "transport_error"
             )
             if not retryable or attempt == 2:
@@ -103,12 +103,18 @@ async def _call_once(
     response_type: type[TResponse],
 ) -> TResponse:
     """Call a mutation once; Ozon does not document idempotency keys."""
-    raw = await provider.call(
-        client_id=client_id,
-        api_key=api_key,
-        path=path,
-        payload=_payload(request),
-    )
+    raise_if_blocked()
+    try:
+        raw = await provider.call(
+            client_id=client_id,
+            api_key=api_key,
+            path=path,
+            payload=request.model_dump(by_alias=True, exclude_none=True),
+        )
+    except MarketplaceProviderError as exc:
+        if exc.status_code == 429:
+            record_rate_limit(exc)
+        raise
     if raw is None:
         raise OzonReturnError("ozon_empty_response", "Ozon вернул пустой ответ.")
     try:
@@ -162,30 +168,6 @@ async def _credentials(
                 "Сначала подключите кабинет Ozon для этого селлера.",
             ) from exc
         raise
-
-
-def _status_text(value: object) -> str:
-    root = getattr(value, "root", value)
-    return str(root or "GIVEOUT_STATUS_UNSPECIFIED")
-
-
-def _parse_datetime(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
-
-
-def _parse_date(value: str | None) -> date | None:
-    if not value:
-        return None
-    try:
-        return date.fromisoformat(value[:10])
-    except ValueError:
-        return None
 
 
 async def _all_giveouts(
@@ -426,7 +408,7 @@ async def build_preview(
         groups.append(
             {
                 "giveout_id": giveout.giveout_id,
-                "giveout_status": _status_text(info.giveout_status or giveout.giveout_status),
+                "giveout_status": status_text(info.giveout_status or giveout.giveout_status),
                 "warehouse_id": giveout.warehouse_id,
                 "warehouse_name": info.warehouse_name or giveout.warehouse_name,
                 "warehouse_address": info.warehouse_address or giveout.warehouse_address,
@@ -488,6 +470,16 @@ async def import_selected_giveouts(
     imported_groups = 0
     imported_items = 0
     unmatched_items = 0
+    next_route_position = int(
+        (
+            await session.scalar(
+                select(func.max(InboundOzonReturnGiveout.route_position)).where(
+                    InboundOzonReturnGiveout.request_id == request_id
+                )
+            )
+        )
+        or -1
+    ) + 1
     for giveout_id in giveout_ids:
         if giveout_id in existing:
             continue
@@ -502,12 +494,14 @@ async def import_selected_giveouts(
             warehouse_address=str(group["warehouse_address"]),
             approved_articles_count=int(group["approved_articles_count"] or 0),
             total_articles_count=int(group["total_articles_count"] or 0),
+            route_position=next_route_position,
             storage_days=int(group["storage_days"] or 0),
-            utilization_forecast_date=_parse_date(str(group["utilization_forecast_date"] or "")),
-            provider_created_at=_parse_datetime(str(group["created_at"] or "")),
+            utilization_forecast_date=parse_date(str(group["utilization_forecast_date"] or "")),
+            provider_created_at=parse_datetime(str(group["created_at"] or "")),
         )
         session.add(giveout)
         await session.flush()
+        next_route_position += 1
         for raw_item in group["items"]:
             assert isinstance(raw_item, dict)
             quantity = int(raw_item["quantity"] or 0)
@@ -587,7 +581,11 @@ async def imported_groups(
                     )
                 )
                 .where(InboundOzonReturnGiveout.request_id == request_id)
-                .order_by(InboundOzonReturnGiveout.provider_created_at, InboundOzonReturnGiveout.id)
+                .order_by(
+                    InboundOzonReturnGiveout.route_position,
+                    InboundOzonReturnGiveout.provider_created_at,
+                    InboundOzonReturnGiveout.giveout_id,
+                )
             )
         )
         .scalars()
@@ -787,5 +785,5 @@ async def refresh_giveout_statuses(
             response_type=OzonV1GiveoutInfoResponse,
         )
         if info.giveout_status is not None:
-            giveout.giveout_status = _status_text(info.giveout_status)
+            giveout.giveout_status = status_text(info.giveout_status)
     await session.commit()
