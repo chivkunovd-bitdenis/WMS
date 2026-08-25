@@ -38,10 +38,7 @@ from app.models.fbs_supply import (
     FbsSupply,
 )
 from app.models.fbs_trbx import FbsTrbx
-from app.models.inventory_balance import InventoryBalance
 from app.models.packaging_task import STATUS_DRAFT, PackagingTask, PackagingTaskLine
-from app.models.product import Product
-from app.models.storage_location import StorageLocation
 from app.models.warehouse_box import WarehouseBox
 from app.services import inventory_service as inv_svc
 from app.services import sorting_location_service as sorting_loc_svc
@@ -49,6 +46,30 @@ from app.services.document_number_service import (
     DOC_TYPE_PACKAGING,
     assign_display_number_if_missing,
     assign_document_number_if_missing,
+)
+from app.services.fbs_ozon_packaging_service import (
+    OzonPackagingError,
+)
+from app.services.fbs_ozon_packaging_service import (
+    order_pack_complete as _ozon_order_pack_complete,
+)
+from app.services.fbs_ozon_packaging_service import (
+    packed_units as _ozon_packed_units,
+)
+from app.services.fbs_ozon_packaging_service import (
+    record_pack_unit as _record_ozon_pack_unit,
+)
+from app.services.fbs_ozon_packaging_service import (
+    resolve_order_for_pack_unit as _resolve_ozon_order_for_pack_unit,
+)
+from app.services.fbs_ozon_packaging_service import (
+    write_off_order as _write_off_ozon_order,
+)
+from app.services.fbs_packaging_stock_service import (
+    insufficient_stock_message as _insufficient_stock_message,
+)
+from app.services.fbs_packaging_stock_service import (
+    try_deduct_from_alternative_sorting_location as _try_deduct_from_alternative_sorting_location,
 )
 from app.services.packaging_task_service import get_task, is_task_complete, qty_done
 
@@ -77,8 +98,7 @@ class FbsPackUnitResult:
 @dataclass(frozen=True)
 class FbsPackProgressResult:
     units: list[FbsPackUnitResult]
-    # Предупреждения оператору: упаковка больше не падает из-за остатка, но нельзя
-    # молчать, когда списали не из той ячейки или не списали вовсе.
+    # Warn when stock was deducted elsewhere or not deducted.
     warnings: list[str] = field(default_factory=list)
 
 
@@ -98,6 +118,7 @@ async def _load_supply(
     if with_orders:
         stmt = stmt.options(
             selectinload(FbsSupply.orders).selectinload(FbsOrder.product),
+            selectinload(FbsSupply.orders).selectinload(FbsOrder.product_positions),
             selectinload(FbsSupply.orders).selectinload(FbsOrder.markings),
         )
     if with_trbxes:
@@ -183,10 +204,16 @@ async def detach_cancelled_order_from_supply(
         order.trbx_id = None
         return None
 
-    if order.product_id is not None:
-        await _decrement_packaging_line_for_product(
-            session, tenant_id, supply, order.product_id
-        )
+    if order.marketplace == "ozon" and order.product_positions:
+        for position in order.product_positions:
+            if position.product_id is None:
+                continue
+            for _ in range(int(position.quantity)):
+                await _decrement_packaging_line_for_product(
+                    session, tenant_id, supply, position.product_id
+                )
+    elif order.product_id is not None:
+        await _decrement_packaging_line_for_product(session, tenant_id, supply, order.product_id)
 
     order.supply_id = None
     order.trbx_id = None
@@ -242,15 +269,22 @@ async def create_packaging_task_for_supply(
     )
     session.add(task)
     await session.flush()
-    await assign_document_number_if_missing(
-        session, tenant_id, DOC_TYPE_PACKAGING, task
-    )
-    await assign_display_number_if_missing(
-        session, tenant_id, DOC_TYPE_PACKAGING, task
-    )
+    await assign_document_number_if_missing(session, tenant_id, DOC_TYPE_PACKAGING, task)
+    await assign_display_number_if_missing(session, tenant_id, DOC_TYPE_PACKAGING, task)
 
     qty_by_product: dict[uuid.UUID, int] = defaultdict(int)
     for order in supply.orders:
+        if order.marketplace == "ozon" and order.product_positions:
+            for position in order.product_positions:
+                if position.product_id is None:
+                    logger.warning(
+                        "fbs packaging: Ozon position %s in order %s has no mapped product",
+                        position.id,
+                        order.id,
+                    )
+                    continue
+                qty_by_product[position.product_id] += int(position.quantity)
+            continue
         if order.product_id is None:
             logger.warning(
                 "fbs packaging: order %s in supply %s has no mapped product",
@@ -444,97 +478,6 @@ async def _resolve_order_for_pack_unit(
     return eligible[0]
 
 
-async def _insufficient_stock_message(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    line: PackagingTaskLine,
-) -> str:
-    """Собрать понятный текст: чего не хватает и где оператор смотрел."""
-    product = await session.get(Product, line.product_id)
-    loc = await session.get(StorageLocation, line.storage_location_id)
-    product_label = (
-        f"«{product.name}» (арт. {product.sku_code})" if product is not None else "товара"
-    )
-    if loc is not None and sorting_loc_svc.is_sorting_location(loc):
-        location_label = f"ячейке сортировки склада (код {loc.barcode})"
-    elif loc is not None:
-        location_label = f"ячейке «{loc.code}»"
-    else:
-        location_label = "указанной ячейке"
-    on_hand = await session.scalar(
-        select(InventoryBalance.quantity).where(
-            InventoryBalance.tenant_id == tenant_id,
-            InventoryBalance.product_id == line.product_id,
-            InventoryBalance.storage_location_id == line.storage_location_id,
-        )
-    )
-    on_hand_int = int(on_hand or 0)
-    return (
-        f"Недостаточно {product_label} в {location_label}: по остатку числится "
-        f"{on_hand_int} шт., а нужна как минимум 1. Проверьте фактическое наличие "
-        "товара на складе — возможно, он лежит в другой ячейке или ещё не подобран."
-    )
-
-
-async def _try_deduct_from_alternative_sorting_location(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    product_id: uuid.UUID,
-    primary_location_id: uuid.UUID,
-) -> tuple[bool, str | None]:
-    """
-    Попытаться списать товар из другой ячейки сортировки этого же тенанта.
-
-    Возвращает (успешно, название_ячейки_если_успешно).
-    """
-    # Получить склад первичной ячейки
-    primary_loc = await session.get(StorageLocation, primary_location_id)
-    if primary_loc is None:
-        return False, None
-
-    # Ячейки сортировки других складов этого же тенанта, где остаток товара больше нуля
-    sorting_locs = await session.execute(
-        select(
-            StorageLocation.id,
-            StorageLocation.barcode,
-            InventoryBalance.quantity,
-        )
-        .join(
-            InventoryBalance,
-            InventoryBalance.storage_location_id == StorageLocation.id,
-        )
-        .where(
-            StorageLocation.tenant_id == tenant_id,
-            StorageLocation.warehouse_id != primary_loc.warehouse_id,
-            StorageLocation.code == sorting_loc_svc.SORTING_LOCATION_CODE,
-            InventoryBalance.tenant_id == tenant_id,
-            InventoryBalance.product_id == product_id,
-            InventoryBalance.quantity > 0,
-        )
-        .order_by(InventoryBalance.quantity.desc())
-    )
-
-    for alt_loc_id, alt_barcode, _ in sorting_locs.all():
-        # Попробовать списать из найденной ячейки
-        try:
-            await inv_svc.apply_packaging_convert(
-                session,
-                tenant_id=tenant_id,
-                product_id=product_id,
-                storage_location_id=alt_loc_id,
-                quantity=1,
-                require_unpacked=False,
-            )
-            return True, f"{alt_barcode}"
-        except ValueError as exc:
-            # Если оттуда тоже не вышло (может быть race condition), пробуем следующую
-            if str(exc) != "insufficient_stock":
-                raise
-            continue
-
-    return False, None
-
-
 async def record_fbs_pack_progress(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -549,8 +492,6 @@ async def record_fbs_pack_progress(
     """Link each packed unit to one picked FBS order and convert sorting stock."""
     if qty < 1:
         raise FbsPackagingIntegrationError("invalid_qty")
-    if order_id is not None and qty > 1:
-        raise FbsPackagingIntegrationError("invalid_qty")
 
     supply = await _load_supply_by_packaging_task(
         session,
@@ -561,6 +502,8 @@ async def record_fbs_pack_progress(
     )
     if supply is None:
         raise FbsPackagingIntegrationError("supply_not_found")
+    if supply.marketplace != "ozon" and order_id is not None and qty > 1:
+        raise FbsPackagingIntegrationError("invalid_qty")
 
     units: list[FbsPackUnitResult] = []
     warnings: list[str] = []
@@ -575,18 +518,55 @@ async def record_fbs_pack_progress(
             )
             .options(selectinload(FbsPackagingFulfillment.order))
         )
+        if existing is None and supply.marketplace == "ozon":
+            active_fulfillments = list(
+                (
+                    await session.execute(
+                        select(FbsPackagingFulfillment)
+                        .where(
+                            FbsPackagingFulfillment.packaging_task_id == task.id,
+                            FbsPackagingFulfillment.undone_at.is_(None),
+                        )
+                        .options(selectinload(FbsPackagingFulfillment.order))
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            existing = next(
+                (
+                    fulfillment
+                    for fulfillment in active_fulfillments
+                    if any(
+                        unit.get("idempotency_key") == unit_key
+                        for unit in _ozon_packed_units(fulfillment)
+                    )
+                ),
+                None,
+            )
         if existing is not None:
             units.append(FbsPackUnitResult(existing, existing.order))
             continue
 
-        target_order = await _resolve_order_for_pack_unit(
-            session,
-            supply,
-            line.product_id,
-            explicit_order_id=order_id if index == 0 else None,
-        )
+        ozon_fulfillment: FbsPackagingFulfillment | None = None
+        if supply.marketplace == "ozon":
+            try:
+                target_order, ozon_fulfillment = await _resolve_ozon_order_for_pack_unit(
+                    session,
+                    supply,
+                    line.product_id,
+                    explicit_order_id=order_id,
+                )
+            except OzonPackagingError as exc:
+                raise FbsPackagingIntegrationError(str(exc)) from exc
+        else:
+            target_order = await _resolve_order_for_pack_unit(
+                session,
+                supply,
+                line.product_id,
+                explicit_order_id=order_id if index == 0 else None,
+            )
 
-        # Попробовать списать из основной ячейки
         try:
             await inv_svc.apply_packaging_convert(
                 session,
@@ -594,15 +574,11 @@ async def record_fbs_pack_progress(
                 product_id=line.product_id,
                 storage_location_id=line.storage_location_id,
                 quantity=1,
-                # Упаковке всё равно, числится товар «упакованным» или «неупакованным» —
-                # важен только общий остаток в ячейке. Деление между статусами остаётся
-                # учётной операцией и переносит столько, сколько реально есть в
-                # «не упаковано»; оно больше не блокирует упаковку.
+                # Packaging uses the total physical balance in the cell.
                 require_unpacked=False,
             )
         except ValueError as exc:
             if str(exc) == "insufficient_stock":
-                # Попробовать найти и списать из другой ячейки сортировки тенанта
                 success, alt_location_code = await _try_deduct_from_alternative_sorting_location(
                     session,
                     tenant_id,
@@ -613,9 +589,6 @@ async def record_fbs_pack_progress(
                     warnings.append(
                         f"Товар списан из другой ячейки сортировки: {alt_location_code}"
                     )
-                    # Остаток одного склада уменьшился, чтобы закрыть недостачу на
-                    # другом, физического перемещения не было. Без записи в журнал это
-                    # расхождение потом нечем объяснить: тост оператор увидит один раз.
                     logger.warning(
                         "fbs packing cross-location deduction: tenant=%s product=%s "
                         "line_location=%s alt_location=%s order=%s",
@@ -626,14 +599,8 @@ async def record_fbs_pack_progress(
                         target_order.id,
                     )
                 else:
-                    # Товара нет нигде, но упаковка продолжается
-                    insufficient_msg = await _insufficient_stock_message(
-                        session, tenant_id, line
-                    )
-                    warnings.append(
-                        "Упаковка продолжена, остаток не списан. " + insufficient_msg
-                    )
-                    # След в журнале: без него расхождение остатка потом не объяснить.
+                    insufficient_msg = await _insufficient_stock_message(session, tenant_id, line)
+                    warnings.append("Упаковка продолжена, остаток не списан. " + insufficient_msg)
                     logger.warning(
                         "fbs packing without stock: tenant=%s product=%s location=%s order=%s",
                         tenant_id,
@@ -645,18 +612,32 @@ async def record_fbs_pack_progress(
                 raise
 
         now = datetime.now(UTC)
-        fulfillment = FbsPackagingFulfillment(
-            tenant_id=tenant_id,
-            fbs_order_id=target_order.id,
-            packaging_task_id=task.id,
-            packaging_task_line_id=line.id,
-            fulfilled_by_user_id=acting_user_id,
-            fulfilled_at=now,
-            pack_idempotency_key=unit_key,
-        )
-        session.add(fulfillment)
-        target_order.pack_status = PACK_STATUS_PACKED
-        target_order.packed_at = now
+        if supply.marketplace == "ozon":
+            fulfillment = _record_ozon_pack_unit(
+                tenant_id=tenant_id,
+                target_order=target_order,
+                fulfillment=ozon_fulfillment,
+                task=task,
+                line=line,
+                acting_user_id=acting_user_id,
+                unit_key=unit_key,
+                packed_at=now,
+            )
+            if ozon_fulfillment is None:
+                session.add(fulfillment)
+        else:
+            fulfillment = FbsPackagingFulfillment(
+                tenant_id=tenant_id,
+                fbs_order_id=target_order.id,
+                packaging_task_id=task.id,
+                packaging_task_line_id=line.id,
+                fulfilled_by_user_id=acting_user_id,
+                fulfilled_at=now,
+                pack_idempotency_key=unit_key,
+            )
+            session.add(fulfillment)
+            target_order.pack_status = PACK_STATUS_PACKED
+            target_order.packed_at = now
         line.qty_packed_in_task = int(line.qty_packed_in_task) + 1
         units.append(FbsPackUnitResult(fulfillment, target_order))
 
@@ -670,6 +651,10 @@ async def _all_active_orders_fulfilled(
 ) -> bool:
     for order in supply.orders:
         if order.status == FBS_ORDER_STATUS_CANCELLED:
+            continue
+        if order.marketplace == "ozon":
+            if not await _ozon_order_pack_complete(session, order):
+                return False
             continue
         if order.product_id is None:
             return False
@@ -685,7 +670,11 @@ async def _write_off_active_orders_once(
     task: PackagingTask,
 ) -> None:
     """Write off each packed order once and leave an auditable reversal unit."""
-    order_ids = [order.id for order in supply.orders if order.product_id is not None]
+    order_ids = [
+        order.id
+        for order in supply.orders
+        if order.product_id is not None or order.marketplace == "ozon"
+    ]
     fulfillment_rows = (
         await session.execute(
             select(
@@ -721,9 +710,17 @@ async def _write_off_active_orders_once(
         ).scalars()
     )
     for order in supply.orders:
-        if order.status == FBS_ORDER_STATUS_CANCELLED or order.product_id is None:
+        if order.status == FBS_ORDER_STATUS_CANCELLED:
             continue
         if order.id in existing_ids:
+            continue
+        if order.marketplace == "ozon":
+            try:
+                await _write_off_ozon_order(session, tenant_id=tenant_id, order=order)
+            except OzonPackagingError as exc:
+                raise FbsPackagingIntegrationError(str(exc)) from exc
+            continue
+        if order.product_id is None:
             continue
         fulfillment = fulfillment_by_order.get(order.id)
         if fulfillment is None:
@@ -844,6 +841,7 @@ async def _load_supply_by_packaging_task(
     if with_orders:
         stmt = stmt.options(
             selectinload(FbsSupply.orders).selectinload(FbsOrder.product),
+            selectinload(FbsSupply.orders).selectinload(FbsOrder.product_positions),
             selectinload(FbsSupply.orders).selectinload(FbsOrder.markings),
         )
     if for_update:

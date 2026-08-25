@@ -82,25 +82,41 @@ async def reverse_fbs_shipment_if_needed(
     ledger = (await session.execute(stmt)).scalar_one_or_none()
     if ledger is None or ledger.reversed_at is not None:
         return False
-    reversal_movement = await inv_svc.record_movement_and_adjust_balance(
-        session,
-        tenant_id=order.tenant_id,
-        product_id=ledger.product_id,
-        storage_location_id=ledger.storage_location_id,
-        quantity_delta=int(ledger.quantity),
-        movement_type=MOVEMENT_TYPE_FBS_SHIPMENT,
-    )
     from app.services import stock_direction_service
 
-    await stock_direction_service.restore_fbs_pool(
-        session,
-        order.tenant_id,
-        ledger.product_id,
-        int(ledger.quantity),
-    )
+    positions = list(ledger.ozon_positions_json or [])
+    if not positions:
+        positions = [
+            {
+                "product_id": str(ledger.product_id),
+                "storage_location_id": str(ledger.storage_location_id),
+                "quantity": int(ledger.quantity),
+            }
+        ]
+    reversal_movement = None
+    for position in positions:
+        product_id = uuid.UUID(str(position["product_id"]))
+        storage_location_id = uuid.UUID(str(position["storage_location_id"]))
+        quantity = int(str(position["quantity"]))
+        movement = await inv_svc.record_movement_and_adjust_balance(
+            session,
+            tenant_id=order.tenant_id,
+            product_id=product_id,
+            storage_location_id=storage_location_id,
+            quantity_delta=quantity,
+            movement_type=MOVEMENT_TYPE_FBS_SHIPMENT,
+        )
+        if reversal_movement is None:
+            reversal_movement = movement
+        await stock_direction_service.restore_fbs_pool(
+            session,
+            order.tenant_id,
+            product_id,
+            quantity,
+        )
     ledger.reversed_at = datetime.now(UTC)
     await session.flush()
-    ledger.reversal_movement_id = reversal_movement.id
+    ledger.reversal_movement_id = reversal_movement.id if reversal_movement is not None else None
     await session.flush()
     return True
 
@@ -109,9 +125,7 @@ def penalty_band_for_order(created_at_wb: datetime) -> str:
     """WB cancel penalty window band (logged only in MVP)."""
     now = datetime.now(tz=UTC)
     created = (
-        created_at_wb
-        if created_at_wb.tzinfo is not None
-        else created_at_wb.replace(tzinfo=UTC)
+        created_at_wb if created_at_wb.tzinfo is not None else created_at_wb.replace(tzinfo=UTC)
     )
     hours = (now - created).total_seconds() / 3600.0
     if hours < 13:
@@ -154,9 +168,7 @@ async def cancel_order(
     )
 
     try:
-        api_token = await _resolve_marketplace_api_token(
-            session, tenant_id, order.seller_id
-        )
+        api_token = await _resolve_marketplace_api_token(session, tenant_id, order.seller_id)
     except WbMarketplaceOrdersError as exc:
         raise FbsCancellationError(
             exc.code,
@@ -224,9 +236,7 @@ async def sync_seller_order_statuses(
             retryable=exc.retryable,
         ) from exc
     try:
-        updated = await sync_order_statuses(
-            session, tenant_id, seller_id, http_client, api_token
-        )
+        updated = await sync_order_statuses(session, tenant_id, seller_id, http_client, api_token)
         await session.flush()
         return updated
     except WbMarketplaceOrdersError as exc:

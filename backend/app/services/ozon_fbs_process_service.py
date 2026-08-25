@@ -15,6 +15,7 @@ from typing import TypeVar
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.fbs_order import FbsOrder, FbsOrderMarking, FbsOrderProduct
 from app.models.fbs_supply import FbsSupply
@@ -35,9 +36,15 @@ from app.schemas.ozon_fbs_api import (
     OzonV1CreateLabelBatchRequest,
     OzonV1GetLabelBatchRequest,
     OzonV1GetLabelBatchResponse,
+    OzonV1GetRestrictionsRequest,
+    OzonV1GetRestrictionsResponse,
     OzonV1SetPostingsRequest,
     OzonV1SetPostingsResponse,
     OzonV2CreateLabelBatchResponse,
+    OzonV2FbsPostingProductCountryListRequest,
+    OzonV2FbsPostingProductCountryListResponse,
+    OzonV2FbsPostingProductCountrySetRequest,
+    OzonV2FbsPostingProductCountrySetResponse,
     OzonV2MovePostingToAwaitingDeliveryRequest,
     OzonV2PostingFBSGetBarcodeRequest,
     OzonV2PostingFBSGetBarcodeResponse,
@@ -450,6 +457,107 @@ async def _labels(
     return _decode_file(file_response.file_content)
 
 
+def _required_country_skus(response: OzonV3GetFbsPostingResponseV3) -> set[str]:
+    result = response.result
+    requirements = result.requirements if result is not None else None
+    if requirements is None:
+        return set()
+    return {
+        *[str(value) for value in (requirements.products_requiring_country or [])],
+        *[str(value) for value in (requirements.products_requiring_change_country or [])],
+    }
+
+
+async def _set_required_countries(
+    session: AsyncSession,
+    order: FbsOrder,
+    provider: OzonMarketplaceProvider,
+    *,
+    client_id: str,
+    api_key: str,
+    posting_number: str,
+    posting: OzonV3GetFbsPostingResponseV3,
+) -> None:
+    required_skus = _required_country_skus(posting)
+    if not required_skus:
+        return
+    positions = list(
+        (
+            await session.execute(
+                select(FbsOrderProduct)
+                .where(FbsOrderProduct.order_id == order.id)
+                .options(selectinload(FbsOrderProduct.product))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    positions_by_sku = {
+        str(position.ozon_sku): position for position in positions if position.ozon_sku is not None
+    }
+    countries = await _call(
+        provider,
+        client_id=client_id,
+        api_key=api_key,
+        path="/v2/posting/fbs/product/country/list",
+        request=OzonV2FbsPostingProductCountryListRequest(name_search=""),
+        response_type=OzonV2FbsPostingProductCountryListResponse,
+        read=True,
+    )
+    allowed_iso_codes = {
+        country.country_iso_code.upper()
+        for country in (countries.result or [])
+        if country.country_iso_code
+    }
+    for sku in sorted(required_skus):
+        position = positions_by_sku.get(sku)
+        country_iso_code = (
+            position.product.country_of_origin_iso_code.upper()
+            if position is not None
+            and position.product is not None
+            and position.product.country_of_origin_iso_code
+            else None
+        )
+        if position is None or position.ozon_sku is None or country_iso_code is None:
+            raise OzonFbsProcessError(
+                "ozon_country_required",
+                f"Для Ozon SKU {sku} укажите страну изготовления в каталоге.",
+                status_code=409,
+            )
+        if country_iso_code not in allowed_iso_codes:
+            raise OzonFbsProcessError(
+                "ozon_country_invalid",
+                f"Страна {country_iso_code} недоступна для Ozon SKU {sku}.",
+                status_code=409,
+            )
+        await _call(
+            provider,
+            client_id=client_id,
+            api_key=api_key,
+            path="/v2/posting/fbs/product/country/set",
+            request=OzonV2FbsPostingProductCountrySetRequest(
+                posting_number=posting_number,
+                product_id=int(position.ozon_sku),
+                country_iso_code=country_iso_code,
+            ),
+            response_type=OzonV2FbsPostingProductCountrySetResponse,
+            read=False,
+        )
+    verified = await _posting_readback(
+        provider,
+        client_id=client_id,
+        api_key=api_key,
+        posting_number=posting_number,
+    )
+    remaining = _required_country_skus(verified)
+    if remaining:
+        raise OzonFbsProcessError(
+            "ozon_country_unconfirmed",
+            "Ozon не подтвердил страну изготовления; отправление не собрано.",
+            status_code=409,
+        )
+
+
 async def handoff_supply(
     session: AsyncSession,
     *,
@@ -464,6 +572,36 @@ async def handoff_supply(
         posting_number = order.external_order_id or ""
         if not posting_number:
             raise OzonFbsProcessError("ozon_posting_number_missing", "Нет номера отправления Ozon.")
+        posting = await _posting_readback(
+            provider,
+            client_id=client_id,
+            api_key=api_key,
+            posting_number=posting_number,
+        )
+        restrictions = await _call(
+            provider,
+            client_id=client_id,
+            api_key=api_key,
+            path="/v1/posting/fbs/restrictions",
+            request=OzonV1GetRestrictionsRequest(posting_number=posting_number),
+            response_type=OzonV1GetRestrictionsResponse,
+            read=True,
+        )
+        if restrictions.result is None:
+            raise OzonFbsProcessError(
+                "ozon_restrictions_missing",
+                "Ozon не вернул ограничения отправления; сборка остановлена.",
+                status_code=409,
+            )
+        await _set_required_countries(
+            session,
+            order,
+            provider,
+            client_id=client_id,
+            api_key=api_key,
+            posting_number=posting_number,
+            posting=posting,
+        )
         products = await _ship_products(session, order)
         await _call(
             provider,

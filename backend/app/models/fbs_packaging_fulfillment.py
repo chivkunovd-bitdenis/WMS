@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    JSON,
     DateTime,
     ForeignKey,
     Index,
@@ -44,9 +45,7 @@ class FbsPackagingFulfillment(Base):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), index=True
     )
@@ -80,9 +79,8 @@ class FbsPackagingFulfillment(Base):
         nullable=True,
     )
     pack_idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
-    undone_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    ozon_packed_units_json: Mapped[list[dict[str, str]] | None] = mapped_column(JSON, nullable=True)
+    undone_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -96,6 +94,4 @@ class FbsPackagingFulfillment(Base):
         "PackagingTaskLine", back_populates="fbs_fulfillments"
     )
     fulfilled_by_user: Mapped[User | None] = relationship("User")
-    inventory_movement: Mapped[InventoryMovement | None] = relationship(
-        "InventoryMovement"
-    )
+    inventory_movement: Mapped[InventoryMovement | None] = relationship("InventoryMovement")

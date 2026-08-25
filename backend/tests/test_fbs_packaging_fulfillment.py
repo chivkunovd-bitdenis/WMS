@@ -13,14 +13,25 @@ from sqlalchemy import func, select
 
 from app.db.session import SessionLocal
 from app.models.fbs_order import (
+    FBS_ORDER_STATUS_ASSEMBLING,
     FBS_ORDER_STATUS_IN_SUPPLY,
+    FBS_ORDER_STATUS_PACKED,
+    MAPPING_STATUS_MAPPED,
     PACK_STATUS_PACKED,
+    PACK_STATUS_PENDING,
     PICK_STATUS_PICKED,
+    RESERVE_STATUS_RESERVED,
     FbsOrder,
+    FbsOrderProduct,
 )
 from app.models.fbs_order_pick import FbsOrderPick
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
-from app.models.fbs_supply import FBS_SUPPLY_STATUS_PACKED
+from app.models.fbs_supply import (
+    FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+    FBS_SUPPLY_STATUS_DRAFT,
+    FBS_SUPPLY_STATUS_PACKED,
+    FbsSupply,
+)
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import MOVEMENT_TYPE_FBS_SHIPMENT, InventoryMovement
 from app.services import inventory_service
@@ -743,14 +754,185 @@ async def test_fbs_pack_continues_when_location_has_no_stock_at_all(
 
     async with SessionLocal() as session:
         balances = (
-            await session.execute(
-                select(InventoryBalance).where(
-                    InventoryBalance.tenant_id == tenant_id,
-                    InventoryBalance.product_id == product_id,
+            (
+                await session.execute(
+                    select(InventoryBalance).where(
+                        InventoryBalance.tenant_id == tenant_id,
+                        InventoryBalance.product_id == product_id,
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
     for balance in balances:
         assert balance.quantity >= 0, "остаток не должен уходить в минус"
         assert balance.quantity_unpacked >= 0
         assert balance.quantity_packed >= 0
+
+
+@pytest.mark.asyncio
+async def test_ozon_multi_product_packaging_requires_all_posting_units(
+    async_client: AsyncClient,
+) -> None:
+    """One Ozon posting is packed only after every imported product unit is packed."""
+    headers, suffix, tenant_id = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, source_location_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    first_product_id = await _create_product(
+        async_client, headers, seller_id, sku=f"ozon-first-{suffix}"
+    )
+    second_product_id = await _create_product(
+        async_client, headers, seller_id, sku=f"ozon-second-{suffix}"
+    )
+    quantities = {first_product_id: 2, second_product_id: 3}
+
+    async with SessionLocal() as session:
+        supply = FbsSupply(
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            warehouse_id=warehouse_id,
+            marketplace="ozon",
+            external_supply_id=f"ozon-packaging-{suffix}",
+            wb_supply_id=f"PENDING-{suffix}",
+            name="Ozon multi-product packaging",
+            status=FBS_SUPPLY_STATUS_DRAFT,
+            delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+        )
+        session.add(supply)
+        await session.flush()
+        now = datetime.now(UTC)
+        order = FbsOrder(
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            warehouse_id=warehouse_id,
+            product_id=first_product_id,
+            supply_id=supply.id,
+            marketplace="ozon",
+            external_order_id=f"ozon-posting-{suffix}",
+            wb_order_id=930040,
+            created_at_wb=now - timedelta(hours=1),
+            deadline_at=now + timedelta(hours=24),
+            mapping_status=MAPPING_STATUS_MAPPED,
+            reserve_status=RESERVE_STATUS_RESERVED,
+            status=FBS_ORDER_STATUS_IN_SUPPLY,
+        )
+        session.add(order)
+        await session.flush()
+        session.add_all(
+            [
+                FbsOrderProduct(
+                    order_id=order.id,
+                    product_id=first_product_id,
+                    ozon_sku=101,
+                    offer_id="first-offer",
+                    name="First Ozon product",
+                    quantity=quantities[first_product_id],
+                    reserved_quantity=quantities[first_product_id],
+                    position_index=0,
+                ),
+                FbsOrderProduct(
+                    order_id=order.id,
+                    product_id=second_product_id,
+                    ozon_sku=202,
+                    offer_id="second-offer",
+                    name="Second Ozon product",
+                    quantity=quantities[second_product_id],
+                    reserved_quantity=quantities[second_product_id],
+                    position_index=1,
+                ),
+            ]
+        )
+        for product_id, quantity in quantities.items():
+            await inventory_service.record_movement_and_adjust_balance(
+                session,
+                tenant_id=tenant_id,
+                product_id=product_id,
+                storage_location_id=source_location_id,
+                quantity_delta=quantity,
+                movement_type="inbound_intake",
+            )
+        await session.commit()
+        supply_id = supply.id
+        order_id = order.id
+
+    assembling = await async_client.put(
+        f"/operations/fbs-supplies/{supply_id}/status",
+        headers=headers,
+        json={"status": "assembling"},
+    )
+    assert assembling.status_code == 200, assembling.text
+    task_id = assembling.json()["packaging_task_id"]
+
+    for product_id, quantity in quantities.items():
+        for unit in range(quantity):
+            picked = await async_client.post(
+                f"/operations/fbs-supplies/{supply_id}/pick/manual",
+                headers=headers,
+                json={
+                    "location_id": str(source_location_id),
+                    "product_id": str(product_id),
+                    "order_id": str(order_id),
+                    "idempotency_key": f"ozon-pick-{product_id}-{unit}",
+                },
+            )
+            assert picked.status_code == 200, picked.text
+
+    task = await async_client.get(f"/operations/packaging-tasks/{task_id}", headers=headers)
+    assert task.status_code == 200, task.text
+    lines_by_product = {uuid.UUID(line["product_id"]): line for line in task.json()["lines"]}
+    assert {
+        product_id: line["qty_total"] for product_id, line in lines_by_product.items()
+    } == quantities
+
+    partial = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/lines/{lines_by_product[first_product_id]['id']}/pack",
+        headers=headers,
+        json={"quantity": 1, "idempotency_key": "ozon-pack-first-partial"},
+    )
+    assert partial.status_code == 200, partial.text
+    assert partial.json()["fulfilled_order"] == {
+        "id": str(order_id),
+        "wb_order_id": 930040,
+        "pack_status": PACK_STATUS_PENDING,
+        "marking_status": None,
+        "sticker_status": "not_requested",
+    }
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        assert order.status == FBS_ORDER_STATUS_ASSEMBLING
+        assert order.pack_status == PACK_STATUS_PENDING
+
+    remaining_first = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/lines/{lines_by_product[first_product_id]['id']}/pack",
+        headers=headers,
+        json={"quantity": 1, "idempotency_key": "ozon-pack-first-rest"},
+    )
+    assert remaining_first.status_code == 200, remaining_first.text
+    complete_posting = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/lines/{lines_by_product[second_product_id]['id']}/pack",
+        headers=headers,
+        json={"quantity": 3, "idempotency_key": "ozon-pack-second-all"},
+    )
+    assert complete_posting.status_code == 200, complete_posting.text
+    assert complete_posting.json()["fulfilled_order"]["pack_status"] == PACK_STATUS_PACKED
+
+    complete_task = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/complete",
+        headers=headers,
+        json={"acknowledge_all_packed": False},
+    )
+    assert complete_task.status_code == 200, complete_task.text
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        assert order.status == FBS_ORDER_STATUS_PACKED
+        assert order.pack_status == PACK_STATUS_PACKED
+
+    supply = await async_client.get(f"/operations/fbs-supplies/{supply_id}", headers=headers)
+    assert supply.status_code == 200, supply.text
+    assert supply.json()["status"] == FBS_SUPPLY_STATUS_PACKED

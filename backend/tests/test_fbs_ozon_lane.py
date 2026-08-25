@@ -60,6 +60,7 @@ from app.services.fbs_autopoll_service import (
     SellerPollTarget,
     poll_marketplace_orders_for_target,
     sync_marketplace_order_statuses_for_target,
+    sync_marketplace_stocks_for_target,
     sync_marking_statuses_for_assembling_supplies,
 )
 from app.services.fbs_print_asset_service import fetch_order_label_rows_for_marketplace
@@ -348,6 +349,34 @@ async def test_ozon_autopoll_positive_fake_upserts_shared_order_and_status(
     assert [call[0] for call in transport.calls] == ["fetch_orders", "fetch_statuses"]
 
 
+@pytest.mark.asyncio
+async def test_ozon_autopoll_does_not_publish_fbs_stocks(db_session: AsyncSession) -> None:
+    """TC-S03-OZON-030: Ozon polling imports orders/statuses but never publishes FBS stock."""
+    tenant = Tenant(name="Ozon no stock publish", slug=f"ozon-no-stock-{uuid.uuid4().hex[:8]}")
+    seller = Seller(tenant=tenant, name="Seller")
+    db_session.add_all([tenant, seller])
+    await db_session.commit()
+    transport = FakeMarketplaceTransport(
+        errors={
+            "publish_stocks": MarketplaceProviderError(
+                "ozon",
+                500,
+                {"code": "must_not_be_called"},
+            )
+        }
+    )
+
+    result = await sync_marketplace_stocks_for_target(
+        db_session,
+        SellerPollTarget(tenant.id, seller.id, "ozon"),
+        AsyncMock(),
+        ozon_provider=OzonMarketplaceProvider(transport=transport),
+    )
+
+    assert result.bindings_processed == 0
+    assert transport.calls == []
+
+
 async def _sync_ozon_posting_with_products(
     db_session: AsyncSession,
     *,
@@ -479,9 +508,7 @@ async def test_ozon_repeat_sync_replaces_changed_quantity_and_rereserves(
     """TC-S03-OZON-026: changed Ozon composition replaces its exact reserve without duplicates."""
     order, products = await _sync_ozon_posting_with_products(
         db_session,
-        positions=[
-            {"sku": 4001, "offer_id": "offer-1", "name": "Футболка", "quantity": 1}
-        ],
+        positions=[{"sku": 4001, "offer_id": "offer-1", "name": "Футболка", "quantity": 1}],
     )
     await db_session.refresh(order, attribute_names=["product_positions"])
     assert order.warehouse_id is not None
@@ -651,6 +678,138 @@ async def test_ozon_multi_position_ship_keeps_complete_posting_composition(
             ]
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_ozon_handoff_sets_required_product_country_before_ship(
+    db_session: AsyncSession,
+) -> None:
+    """TC-S03-OZON-028: a required country is set and read back before /ship."""
+    tenant, _, _, product, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    assert supply is not None
+    product.country_of_origin_iso_code = "RU"
+    db_session.add(
+        FbsOrderProduct(
+            order_id=order.id,
+            product_id=product.id,
+            ozon_sku=3001,
+            offer_id="offer-1",
+            name="Product",
+            quantity=1,
+            position_index=0,
+            provider_data_json={"sku": 3001, "quantity": 1},
+        )
+    )
+    await db_session.commit()
+    responses = _ozon_handoff_responses()
+    responses["/v2/posting/fbs/product/country/list"] = {
+        "result": [{"name": "Россия", "country_iso_code": "RU"}]
+    }
+    responses["/v2/posting/fbs/product/country/set"] = {
+        "product_id": 3001,
+        "is_gtd_needed": False,
+    }
+    transport = FakeMarketplaceTransport(
+        endpoint_responses=responses,
+        endpoint_response_queues={
+            "/v3/posting/fbs/get": [
+                {
+                    "result": {
+                        "posting_number": order.external_order_id,
+                        "status": "awaiting_deliver",
+                        "requirements": {"products_requiring_country": ["3001"]},
+                    }
+                },
+                {
+                    "result": {
+                        "posting_number": order.external_order_id,
+                        "status": "awaiting_deliver",
+                        "requirements": {"products_requiring_country": []},
+                    }
+                },
+                responses["/v3/posting/fbs/get"],
+            ]
+        },
+    )
+
+    await shipment_svc.deliver_supply(
+        db_session,
+        tenant.id,
+        supply.id,
+        AsyncMock(),
+        idempotency_key=f"ozon-country-{uuid.uuid4()}",
+        ozon_provider=OzonMarketplaceProvider(transport=transport),
+    )
+
+    paths = [path for path, _ in transport.endpoint_calls]
+    assert (
+        paths.index("/v2/posting/fbs/product/country/list")
+        < paths.index("/v2/posting/fbs/product/country/set")
+        < paths.index("/v4/posting/fbs/ship")
+    )
+    country_payload = next(
+        payload
+        for path, payload in transport.endpoint_calls
+        if path == "/v2/posting/fbs/product/country/set"
+    )
+    assert country_payload == {
+        "posting_number": order.external_order_id,
+        "product_id": 3001,
+        "country_iso_code": "RU",
+    }
+
+
+@pytest.mark.asyncio
+async def test_ozon_handoff_blocks_when_required_product_country_is_missing(
+    db_session: AsyncSession,
+) -> None:
+    """TC-S03-OZON-029: missing catalog country is explicit and /ship is not called."""
+    tenant, _, _, product, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    assert supply is not None
+    db_session.add(
+        FbsOrderProduct(
+            order_id=order.id,
+            product_id=product.id,
+            ozon_sku=3001,
+            offer_id="offer-1",
+            name="Product",
+            quantity=1,
+            position_index=0,
+            provider_data_json={"sku": 3001, "quantity": 1},
+        )
+    )
+    await db_session.commit()
+    responses = _ozon_handoff_responses()
+    responses["/v2/posting/fbs/product/country/list"] = {
+        "result": [{"name": "Россия", "country_iso_code": "RU"}]
+    }
+    transport = FakeMarketplaceTransport(
+        endpoint_responses=responses,
+        endpoint_response_queues={
+            "/v3/posting/fbs/get": [
+                {
+                    "result": {
+                        "posting_number": order.external_order_id,
+                        "status": "awaiting_deliver",
+                        "requirements": {"products_requiring_country": ["3001"]},
+                    }
+                }
+            ]
+        },
+    )
+
+    with pytest.raises(shipment_svc.FbsShipmentError, match="ozon_country_required") as caught:
+        await shipment_svc.deliver_supply(
+            db_session,
+            tenant.id,
+            supply.id,
+            AsyncMock(),
+            idempotency_key=f"ozon-country-missing-{uuid.uuid4()}",
+            ozon_provider=OzonMarketplaceProvider(transport=transport),
+        )
+
+    assert caught.value.message == "Для Ozon SKU 3001 укажите страну изготовления в каталоге."
+    assert all(path != "/v4/posting/fbs/ship" for path, _ in transport.endpoint_calls)
 
 
 @pytest.mark.asyncio
@@ -891,6 +1050,7 @@ def test_ozon_without_distribution_does_not_require_physical_boxes() -> None:
 def _ozon_handoff_responses(*, substatus: str = "posting_in_carriage") -> dict[str, object]:
     png = print_asset_svc._FAKE_OZON_LABEL_PNG_BASE64
     return {
+        "/v1/posting/fbs/restrictions": {"result": {"posting_number": "ozon-posting-dispatch"}},
         "/v4/posting/fbs/ship": {"result": ["ozon-posting-dispatch"]},
         "/v3/posting/fbs/get": {
             "result": {
@@ -961,6 +1121,8 @@ async def test_ozon_supply_handoff_ships_rechecks_and_creates_carriage_without_w
     assert delivered.status == FBS_SUPPLY_STATUS_IN_DELIVERY
     assert delivered.external_supply_id == "901"
     assert [call[0] for call in transport.endpoint_calls] == [
+        "/v3/posting/fbs/get",
+        "/v1/posting/fbs/restrictions",
         "/v4/posting/fbs/ship",
         "/v3/posting/fbs/get",
         "/v2/posting/fbs/package-label/create",
@@ -1024,6 +1186,8 @@ async def test_ozon_ship_failed_readback_stays_visible_and_blocks_handoff(
     assert order.meta_details_json is not None
     assert "сборка" in str(order.meta_details_json).lower()
     assert [call[0] for call in transport.endpoint_calls] == [
+        "/v3/posting/fbs/get",
+        "/v1/posting/fbs/restrictions",
         "/v4/posting/fbs/ship",
         "/v3/posting/fbs/get",
     ]

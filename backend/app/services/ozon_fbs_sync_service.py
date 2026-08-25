@@ -18,7 +18,6 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_CANCELLED,
     FBS_ORDER_STATUS_DONE,
@@ -370,67 +369,3 @@ async def sync_ozon_order_statuses(
             updated += int(await _apply_status(session, order, _text(row, "status", "substatus")))
     await session.commit()
     return updated
-
-
-async def sync_ozon_stocks(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    seller_id: uuid.UUID,
-    provider: OzonMarketplaceProvider,
-    _http_client: httpx.AsyncClient,
-) -> int:
-    client_id, api_key = await _credentials(session, tenant_id, seller_id)
-    bindings = list(
-        (
-            await session.execute(
-                select(FbsWarehouseBinding).where(
-                    FbsWarehouseBinding.tenant_id == tenant_id,
-                    FbsWarehouseBinding.seller_id == seller_id,
-                    FbsWarehouseBinding.marketplace == "ozon",
-                    FbsWarehouseBinding.is_active.is_(True),
-                    FbsWarehouseBinding.stock_sync_enabled.is_(True),
-                )
-            )
-        )
-        .scalars()
-        .all()
-    )
-    processed = 0
-    for binding in bindings:
-        rows = (
-            await session.execute(
-                select(
-                    ProductMarketplaceLink.external_sku,
-                    ProductMarketplaceLink.external_offer_id,
-                    FbsBindingStockPool.quantity,
-                )
-                .join(
-                    ProductMarketplaceLink,
-                    ProductMarketplaceLink.product_id == FbsBindingStockPool.product_id,
-                )
-                .where(
-                    FbsBindingStockPool.tenant_id == tenant_id,
-                    FbsBindingStockPool.binding_id == binding.id,
-                    ProductMarketplaceLink.tenant_id == tenant_id,
-                    ProductMarketplaceLink.seller_id == seller_id,
-                    ProductMarketplaceLink.marketplace == "ozon",
-                    ProductMarketplaceLink.is_active.is_(True),
-                )
-            )
-        ).all()
-        stocks = [
-            {
-                "warehouse_id": binding.external_warehouse_id,
-                "sku": external_sku,
-                "offer_id": external_offer_id,
-                "amount": quantity,
-            }
-            for external_sku, external_offer_id, quantity in rows
-        ]
-        await provider.publish_stocks(client_id=client_id, api_key=api_key, stocks=stocks)
-        binding.last_sync_status = "confirmed"
-        binding.last_sync_at = datetime.now(tz=UTC)
-        binding.last_error_code = None
-        processed += 1
-    await session.commit()
-    return processed

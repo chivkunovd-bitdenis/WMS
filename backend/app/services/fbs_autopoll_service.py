@@ -34,7 +34,6 @@ from app.services.marketplace_seller_lock_service import marketplace_seller_lock
 from app.services.ozon_fbs_sync_service import (
     sync_ozon_order_statuses,
     sync_ozon_orders,
-    sync_ozon_stocks,
 )
 from app.services.wb_marketplace_orders_service import (
     WbMarketplaceOrdersError,
@@ -391,7 +390,10 @@ async def sync_marking_statuses_for_assembling_supplies(
             returned_rows = rows_by_wb_order_id.get(int(order.wb_order_id), [])
             try:
                 await _sync_order_meta_from_wb(
-                    session, order, http_client, token,
+                    session,
+                    order,
+                    http_client,
+                    token,
                     meta_batch=returned_rows,
                 )
                 # A partial WB batch must clear a stale positive verdict, but it
@@ -468,20 +470,14 @@ async def sync_marketplace_stocks_for_target(
             target.seller_id,
             http_client,
         )
-    provider = ozon_provider or _blocked_ozon_provider("publish_stocks")
-    processed = await sync_ozon_stocks(
-        session,
-        target.tenant_id,
-        target.seller_id,
-        provider,
-        http_client,
-    )
-    return SellerStockSyncResult(bindings_processed=processed)
+    # Ozon FBS stocks are intentionally never published by WMS.  The account
+    # stays in the polling set for orders/statuses only; WB keeps its existing
+    # stock publication path above.
+    del session, http_client, ozon_provider
+    return SellerStockSyncResult()
 
 
-async def poll_fbs_orders_all_sellers(
-    *, include_history: bool = False
-) -> FbsAutopollCycleResult:
+async def poll_fbs_orders_all_sellers(*, include_history: bool = False) -> FbsAutopollCycleResult:
     async with SessionLocal() as session:
         targets = await list_marketplace_poll_targets(session)
 
@@ -535,8 +531,7 @@ async def poll_fbs_orders_all_sellers(
                 bucket["errors"] += 1
                 log = logger.warning if exc.is_account_blocked else logger.error
                 log(
-                    "fbs autopoll orders failed for seller %s marketplace %s "
-                    "(tenant %s): %s",
+                    "fbs autopoll orders failed for seller %s marketplace %s (tenant %s): %s",
                     target.seller_id,
                     target.marketplace,
                     target.tenant_id,
@@ -547,8 +542,7 @@ async def poll_fbs_orders_all_sellers(
                 seller_errors += 1
                 bucket["errors"] += 1
                 logger.error(
-                    "fbs autopoll orders failed for seller %s marketplace %s "
-                    "(tenant %s): %s",
+                    "fbs autopoll orders failed for seller %s marketplace %s (tenant %s): %s",
                     target.seller_id,
                     target.marketplace,
                     target.tenant_id,
@@ -651,8 +645,7 @@ async def sync_fbs_order_statuses_all_sellers() -> FbsAutopollCycleResult:
                 bucket["errors"] += 1
                 log = logger.warning if exc.is_account_blocked else logger.error
                 log(
-                    "fbs autopoll statuses failed for seller %s marketplace %s "
-                    "(tenant %s): %s",
+                    "fbs autopoll statuses failed for seller %s marketplace %s (tenant %s): %s",
                     target.seller_id,
                     target.marketplace,
                     target.tenant_id,
@@ -663,8 +656,7 @@ async def sync_fbs_order_statuses_all_sellers() -> FbsAutopollCycleResult:
                 seller_errors += 1
                 bucket["errors"] += 1
                 logger.error(
-                    "fbs autopoll statuses failed for seller %s marketplace %s "
-                    "(tenant %s): %s",
+                    "fbs autopoll statuses failed for seller %s marketplace %s (tenant %s): %s",
                     target.seller_id,
                     target.marketplace,
                     target.tenant_id,
@@ -757,8 +749,7 @@ async def reconcile_fbs_stocks_all_sellers() -> FbsAutopollCycleResult:
                 bucket["errors"] += 1
                 log = logger.warning if exc.is_account_blocked else logger.error
                 log(
-                    "fbs stock reconcile failed for seller %s marketplace %s "
-                    "(tenant %s): %s",
+                    "fbs stock reconcile failed for seller %s marketplace %s (tenant %s): %s",
                     target.seller_id,
                     target.marketplace,
                     target.tenant_id,
@@ -769,8 +760,7 @@ async def reconcile_fbs_stocks_all_sellers() -> FbsAutopollCycleResult:
                 seller_errors += 1
                 bucket["errors"] += 1
                 logger.exception(
-                    "fbs stock reconcile failed for seller %s marketplace %s "
-                    "(tenant %s)",
+                    "fbs stock reconcile failed for seller %s marketplace %s (tenant %s)",
                     target.seller_id,
                     target.marketplace,
                     target.tenant_id,
@@ -785,8 +775,7 @@ async def reconcile_fbs_stocks_all_sellers() -> FbsAutopollCycleResult:
             bucket["errors"] += result.binding_errors
 
     logger.info(
-        "fbs stock reconcile done: sellers=%s bindings=%s stock_errors=%s "
-        "errors=%s marketplace=%s",
+        "fbs stock reconcile done: sellers=%s bindings=%s stock_errors=%s errors=%s marketplace=%s",
         sellers_polled,
         bindings_processed,
         stock_errors,
