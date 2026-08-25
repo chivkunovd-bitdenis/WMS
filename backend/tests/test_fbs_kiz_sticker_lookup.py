@@ -1,4 +1,3 @@
-# ruff: noqa: RUF002, RUF003
 """Скан стикера WB находит заказ по техническому коду с этикетки."""
 
 from __future__ import annotations

@@ -20,7 +20,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import SessionLocal
 from app.models.fbs_order import FBS_ORDER_STATUS_ASSEMBLING, FbsOrder
 from app.models.fbs_supply import (
-    FBS_SUPPLY_SOURCE_WB,
     FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_DONE,
     FbsSupply,

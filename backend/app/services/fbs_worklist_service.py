@@ -1,4 +1,3 @@
-# ruff: noqa: RUF001, RUF003
 """FBS operator worklist: batched read model for orders (no N+1)."""
 
 from __future__ import annotations

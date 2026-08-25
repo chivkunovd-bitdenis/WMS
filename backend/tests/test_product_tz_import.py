@@ -1,6 +1,5 @@
 """Product TZ xlsx import parser and apply."""
 
-# ruff: noqa: RUF001
 
 from __future__ import annotations
 

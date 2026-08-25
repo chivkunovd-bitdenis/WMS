@@ -164,6 +164,7 @@ async def patch_seller_tokens(
         row.marketplace_token_encrypted = row.content_token_encrypted
 
     if marketplace_scope_ok is not SKIP:
+        assert isinstance(marketplace_scope_ok, bool)
         row.marketplace_scope_ok = marketplace_scope_ok
         row.marketplace_scope_checked_at = now
 

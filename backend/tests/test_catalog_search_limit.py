@@ -1,4 +1,3 @@
-# ruff: noqa: RUF002, RUF003
 """Каталог селлера ищет и ограничивает выборку в БД, а не в памяти."""
 
 from __future__ import annotations

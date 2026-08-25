@@ -1,4 +1,3 @@
-# ruff: noqa: RUF003
 """FBS KIZ manual binding lookup by WB order sticker."""
 
 from __future__ import annotations

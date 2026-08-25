@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-
 REVISION_PATH = Path(__file__).parents[1] / "alembic/versions/20260825_0101_marketplace_accounts.py"
 
 

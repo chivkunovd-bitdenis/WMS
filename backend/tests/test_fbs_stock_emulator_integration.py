@@ -44,7 +44,7 @@ from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.marketplace_unload import MarketplaceUnloadLine, MarketplaceUnloadRequest
 from app.models.marketplace_unload_reservation import MarketplaceUnloadReservation
 from app.models.product import Product
-from app.services import inventory_service, stock_direction_service
+from app.services import inventory_service
 from app.services.fbs_autopoll_service import SellerStockSyncResult, sync_seller_stocks
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import sync_seller_orders
