@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { apiUrl } from '../api'
 import {
-  productDisplayMetaFromCatalog,
+  productDisplayMetaFromMarketplaceCatalog,
+  type MarketplaceProductCatalogRow,
   type ProductLineDisplayMeta,
-  type WbProductCatalogRow,
 } from '../types/wbProductCatalog'
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
 
-async function fetchWbProductCatalogRows(
+async function fetchMarketplaceProductCatalogRows(
   authHeaders: Record<string, string>,
   sellerId?: string | null,
-): Promise<WbProductCatalogRow[]> {
+): Promise<MarketplaceProductCatalogRow[]> {
   const qs =
     sellerId && sellerId.trim()
       ? `?seller_id=${encodeURIComponent(sellerId.trim())}`
@@ -19,14 +19,14 @@ async function fetchWbProductCatalogRows(
   if (!res.ok) {
     throw new Error(await readApiErrorMessage(res))
   }
-  return (await res.json()) as WbProductCatalogRow[]
+  return (await res.json()) as MarketplaceProductCatalogRow[]
 }
 
 type MetaSourceLine = { sku_code: string; product_name?: string; name?: string }
 
-type UseWbProductCatalogResult = {
-  catalog: WbProductCatalogRow[]
-  catalogById: Map<string, WbProductCatalogRow>
+type UseMarketplaceProductCatalogResult = {
+  catalog: MarketplaceProductCatalogRow[]
+  catalogById: Map<string, MarketplaceProductCatalogRow>
   /**
    * Витрина строки товара с постоянной ссылкой на объект.
    *
@@ -41,15 +41,15 @@ type UseWbProductCatalogResult = {
   getDisplayMeta: (productId: string, line: MetaSourceLine) => ProductLineDisplayMeta
   loading: boolean
   error: string | null
-  reload: () => Promise<WbProductCatalogRow[]>
+  reload: () => Promise<MarketplaceProductCatalogRow[]>
 }
 
-export function useWbProductCatalog(
+export function useMarketplaceProductCatalog(
   token: string | null | undefined,
   enabled = true,
   sellerId?: string | null,
-): UseWbProductCatalogResult {
-  const [rows, setRows] = useState<WbProductCatalogRow[]>([])
+): UseMarketplaceProductCatalogResult {
+  const [rows, setRows] = useState<MarketplaceProductCatalogRow[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -66,7 +66,7 @@ export function useWbProductCatalog(
     setLoading(true)
     setError(null)
     try {
-      const next = await fetchWbProductCatalogRows(authHeaders, sellerId)
+      const next = await fetchMarketplaceProductCatalogRows(authHeaders, sellerId)
       setRows(next)
       return next
     } catch (e) {
@@ -94,7 +94,7 @@ export function useWbProductCatalog(
       if (hit) {
         return hit
       }
-      const meta = productDisplayMetaFromCatalog(productId, line, catalogById)
+      const meta = productDisplayMetaFromMarketplaceCatalog(productId, line, catalogById)
       cache.set(productId, meta)
       return meta
     }
@@ -102,3 +102,6 @@ export function useWbProductCatalog(
 
   return { catalog: rows, catalogById, getDisplayMeta, loading, error, reload }
 }
+
+/** @deprecated Use useMarketplaceProductCatalog. */
+export const useWbProductCatalog = useMarketplaceProductCatalog

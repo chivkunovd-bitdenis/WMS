@@ -15,6 +15,7 @@ from app.models.fbs_order import FbsOrder
 from app.models.fbs_stock_sync_item import FbsStockSyncItem
 from app.models.fbs_supply import FBS_SUPPLY_STATUS_ASSEMBLING, FbsSupply
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+from app.models.marketplace_account import MarketplaceAccount
 from app.models.seller import Seller
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.models.warehouse import Warehouse
@@ -22,7 +23,8 @@ from app.services.fbs_cancellation_service import FbsCancellationError, sync_sel
 from app.services.fbs_stock_sync_service import FbsStockSyncError, sync_binding_stocks
 from app.services.fbs_tracking_service import FbsTrackingError, sync_in_delivery_supplies
 from app.services.fbs_warehouse_binding_service import is_auto_fbs_wms_warehouse
-from app.services.fbs_wb_seller_lock_service import wb_seller_lock
+from app.services.marketplace_provider import MarketplaceProviderError
+from app.services.marketplace_seller_lock_service import marketplace_seller_lock
 from app.services.wb_marketplace_orders_service import (
     WbMarketplaceOrdersError,
     sync_seller_orders,
@@ -35,6 +37,7 @@ logger = logging.getLogger(__name__)
 class SellerPollTarget:
     tenant_id: uuid.UUID
     seller_id: uuid.UUID
+    marketplace: str = "wb"
 
 
 @dataclass(frozen=True)
@@ -78,6 +81,39 @@ async def list_sellers_with_marketplace_token(
     )
     rows = (await session.execute(stmt)).all()
     return [SellerPollTarget(tenant_id=row[0], seller_id=row[1]) for row in rows]
+
+
+async def list_marketplace_poll_targets(
+    session: AsyncSession,
+) -> list[SellerPollTarget]:
+    """Return active seller/provider pairs; one provider never owns another's cycle."""
+    targets = await list_sellers_with_marketplace_token(session)
+    ozon_stmt = (
+        select(
+            MarketplaceAccount.tenant_id,
+            MarketplaceAccount.seller_id,
+            MarketplaceAccount.marketplace,
+        )
+        .where(
+            MarketplaceAccount.marketplace == "ozon",
+            MarketplaceAccount.is_active.is_(True),
+            MarketplaceAccount.external_account_id.isnot(None),
+            MarketplaceAccount.secret_encrypted.isnot(None),
+        )
+        .order_by(
+            MarketplaceAccount.tenant_id,
+            MarketplaceAccount.seller_id,
+            MarketplaceAccount.marketplace,
+        )
+    )
+    targets.extend(
+        SellerPollTarget(tenant_id=row[0], seller_id=row[1], marketplace=row[2])
+        for row in (await session.execute(ozon_stmt)).all()
+    )
+    return sorted(
+        targets,
+        key=lambda target: (str(target.tenant_id), str(target.seller_id), target.marketplace),
+    )
 
 
 async def list_active_stock_sync_bindings(
@@ -221,6 +257,25 @@ async def poll_fbs_orders_for_seller(
     }
 
 
+async def poll_marketplace_orders_for_target(
+    session: AsyncSession,
+    target: SellerPollTarget,
+    http_client: httpx.AsyncClient,
+    *,
+    include_history: bool = False,
+) -> dict[str, int]:
+    if target.marketplace == "wb":
+        return await poll_fbs_orders_for_seller(
+            session,
+            target,
+            http_client,
+            include_history=include_history,
+        )
+    # Live Ozon traffic is intentionally disabled while the account returns 403/code 7.
+    # The Ozon lane injects the fake transport into this boundary for contract/e2e runs.
+    raise MarketplaceProviderError("ozon", 403, {"code": 7})
+
+
 MARKING_SYNC_BATCH_SIZE = 100
 
 
@@ -319,11 +374,36 @@ async def sync_fbs_order_statuses_for_seller(
     return updated
 
 
+async def sync_marketplace_order_statuses_for_target(
+    session: AsyncSession,
+    target: SellerPollTarget,
+    http_client: httpx.AsyncClient,
+) -> int:
+    if target.marketplace == "wb":
+        return await sync_fbs_order_statuses_for_seller(session, target, http_client)
+    raise MarketplaceProviderError("ozon", 403, {"code": 7})
+
+
+async def sync_marketplace_stocks_for_target(
+    session: AsyncSession,
+    target: SellerPollTarget,
+    http_client: httpx.AsyncClient,
+) -> SellerStockSyncResult:
+    if target.marketplace == "wb":
+        return await sync_seller_stocks(
+            session,
+            target.tenant_id,
+            target.seller_id,
+            http_client,
+        )
+    raise MarketplaceProviderError("ozon", 403, {"code": 7})
+
+
 async def poll_fbs_orders_all_sellers(
     *, include_history: bool = False
 ) -> FbsAutopollCycleResult:
     async with SessionLocal() as session:
-        targets = await list_sellers_with_marketplace_token(session)
+        targets = await list_marketplace_poll_targets(session)
 
     sellers_polled = 0
     orders_upserted = 0
@@ -333,32 +413,38 @@ async def poll_fbs_orders_all_sellers(
     stocks_bindings_processed = 0
     stock_errors = 0
 
-    logger.info("fbs autopoll orders: starting cycle for %s sellers", len(targets))
+    logger.info("fbs autopoll orders: starting cycle for %s seller/provider pairs", len(targets))
 
     async with httpx.AsyncClient() as http_client:
         for target in targets:
             try:
                 async with (
                     SessionLocal() as session,
-                    wb_seller_lock(session, target.seller_id) as wb_lock_acquired,
+                    marketplace_seller_lock(
+                        session,
+                        target.seller_id,
+                        target.marketplace,
+                    ) as provider_lock_acquired,
                 ):
-                    if not wb_lock_acquired:
+                    if not provider_lock_acquired:
                         logger.info(
-                            "fbs autopoll orders skipped busy seller %s",
+                            "fbs autopoll orders skipped busy seller %s marketplace %s",
                             target.seller_id,
+                            target.marketplace,
                         )
                         continue
-                    stats = await poll_fbs_orders_for_seller(
+                    stats = await poll_marketplace_orders_for_target(
                         session,
                         target,
                         http_client,
                         include_history=include_history,
                     )
-            except WbMarketplaceOrdersError as exc:
+            except (WbMarketplaceOrdersError, MarketplaceProviderError) as exc:
                 seller_errors += 1
                 logger.error(
-                    "fbs autopoll orders failed for seller %s (tenant %s): %s",
+                    "fbs autopoll orders failed for seller %s marketplace %s (tenant %s): %s",
                     target.seller_id,
+                    target.marketplace,
                     target.tenant_id,
                     exc.code,
                 )
@@ -366,8 +452,9 @@ async def poll_fbs_orders_all_sellers(
             except Exception:
                 seller_errors += 1
                 logger.exception(
-                    "fbs autopoll orders failed for seller %s (tenant %s)",
+                    "fbs autopoll orders failed for seller %s marketplace %s (tenant %s)",
                     target.seller_id,
+                    target.marketplace,
                     target.tenant_id,
                 )
                 continue
@@ -408,7 +495,7 @@ async def reconcile_fbs_orders_all_sellers() -> FbsAutopollCycleResult:
 
 async def sync_fbs_order_statuses_all_sellers() -> FbsAutopollCycleResult:
     async with SessionLocal() as session:
-        targets = await list_sellers_with_marketplace_token(session)
+        targets = await list_marketplace_poll_targets(session)
 
     sellers_polled = 0
     statuses_updated = 0
@@ -421,23 +508,33 @@ async def sync_fbs_order_statuses_all_sellers() -> FbsAutopollCycleResult:
             try:
                 async with (
                     SessionLocal() as session,
-                    wb_seller_lock(session, target.seller_id) as wb_lock_acquired,
+                    marketplace_seller_lock(
+                        session,
+                        target.seller_id,
+                        target.marketplace,
+                    ) as provider_lock_acquired,
                 ):
-                    if not wb_lock_acquired:
+                    if not provider_lock_acquired:
                         logger.info(
-                            "fbs autopoll statuses skipped busy seller %s",
+                            "fbs autopoll statuses skipped busy seller %s marketplace %s",
                             target.seller_id,
+                            target.marketplace,
                         )
                         continue
-                    updated = await sync_fbs_order_statuses_for_seller(
+                    updated = await sync_marketplace_order_statuses_for_target(
                         session, target, http_client
                     )
                     await session.commit()
-            except (WbMarketplaceOrdersError, FbsCancellationError) as exc:
+            except (
+                WbMarketplaceOrdersError,
+                FbsCancellationError,
+                MarketplaceProviderError,
+            ) as exc:
                 seller_errors += 1
                 logger.error(
-                    "fbs autopoll statuses failed for seller %s (tenant %s): %s",
+                    "fbs autopoll statuses failed for seller %s marketplace %s (tenant %s): %s",
                     target.seller_id,
+                    target.marketplace,
                     target.tenant_id,
                     exc.code,
                 )
@@ -478,7 +575,7 @@ async def reconcile_fbs_stocks_all_sellers() -> FbsAutopollCycleResult:
     so the cost of a periodic full pass is worth paying.
     """
     async with SessionLocal() as session:
-        targets = await list_sellers_with_marketplace_token(session)
+        targets = await list_marketplace_poll_targets(session)
 
     sellers_polled = 0
     bindings_processed = 0
@@ -492,18 +589,22 @@ async def reconcile_fbs_stocks_all_sellers() -> FbsAutopollCycleResult:
             try:
                 async with (
                     SessionLocal() as session,
-                    wb_seller_lock(session, target.seller_id) as wb_lock_acquired,
+                    marketplace_seller_lock(
+                        session,
+                        target.seller_id,
+                        target.marketplace,
+                    ) as provider_lock_acquired,
                 ):
-                    if not wb_lock_acquired:
+                    if not provider_lock_acquired:
                         logger.info(
-                            "fbs stock reconcile skipped busy seller %s",
+                            "fbs stock reconcile skipped busy seller %s marketplace %s",
                             target.seller_id,
+                            target.marketplace,
                         )
                         continue
-                    result = await sync_seller_stocks(
+                    result = await sync_marketplace_stocks_for_target(
                         session,
-                        target.tenant_id,
-                        target.seller_id,
+                        target,
                         http_client,
                     )
                     await session.commit()

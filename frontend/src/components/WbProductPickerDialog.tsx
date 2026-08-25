@@ -29,11 +29,11 @@ import { ProductPhotoThumb } from './ProductPhotoThumb'
 import { ProductBarcodeCell } from './ProductBarcodeCell'
 import {
   productDisplayMetaFromCatalog,
-  type WbProductCatalogRow,
+  type MarketplaceProductCatalogRow,
 } from '../types/wbProductCatalog'
 import { resolveProductIdByBarcode } from '../utils/resolveProductByBarcode'
 
-export type WbProductPickerCatalogRow = {
+export type MarketplaceProductPickerCatalogRow = {
   id: string
   name: string
   sku_code: string
@@ -46,7 +46,11 @@ export type WbProductPickerCatalogRow = {
   wb_size?: string | null
   wb_composition?: string | null
   seller_name?: string | null
+  marketplace_bindings?: MarketplaceProductCatalogRow['marketplace_bindings']
 }
+
+/** @deprecated Use MarketplaceProductPickerCatalogRow. */
+export type WbProductPickerCatalogRow = MarketplaceProductPickerCatalogRow
 
 /** @deprecated use WbProductPickerCatalogRow */
 export type SellerWbCatalogRow = WbProductPickerCatalogRow
@@ -136,7 +140,7 @@ function inDraftCaption(message: string): ReactNode {
   )
 }
 
-export function WbProductPickerDialog({
+export function MarketplaceProductPickerDialog({
   open,
   busy,
   catalogLoading = false,
@@ -182,10 +186,10 @@ export function WbProductPickerDialog({
   }, [initialSearch, open])
 
   const catalogById = useMemo(() => {
-    const m = new Map<string, WbProductCatalogRow>()
+    const m = new Map<string, MarketplaceProductCatalogRow>()
     if (catalog) {
       for (const r of catalog) {
-        m.set(r.id, r as WbProductCatalogRow)
+        m.set(r.id, r as MarketplaceProductCatalogRow)
       }
     }
     return m
@@ -640,6 +644,9 @@ export function WbProductPickerDialog({
     </Dialog>
   )
 }
+
+/** @deprecated Use MarketplaceProductPickerDialog. */
+export const WbProductPickerDialog = MarketplaceProductPickerDialog
 
 /** @deprecated use WbProductPickerDialog */
 export const SellerWbProductPickerDialog = WbProductPickerDialog

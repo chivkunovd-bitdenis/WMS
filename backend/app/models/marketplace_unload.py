@@ -52,6 +52,10 @@ class MarketplaceUnloadRequest(Base):
         nullable=True,
         index=True,
     )
+    marketplace: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="wb", server_default="wb", index=True
+    )
+    external_supply_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     wb_mp_warehouse_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     planned_shipment_date: Mapped[date | None] = mapped_column(Date, nullable=True)

@@ -1,4 +1,3 @@
-# ruff: noqa: RUF002, RUF003
 from __future__ import annotations
 
 import uuid
@@ -152,6 +151,12 @@ class FbsOrder(Base):
     __tablename__ = "fbs_orders"
     __table_args__ = (
         UniqueConstraint("seller_id", "wb_order_id", name="uq_fbs_orders_seller_wb_order"),
+        UniqueConstraint(
+            "seller_id",
+            "marketplace",
+            "external_order_id",
+            name="uq_fbs_orders_seller_marketplace_external_order",
+        ),
         Index(
             "ix_fbs_orders_tenant_seller_status_deadline",
             "tenant_id",
@@ -188,6 +193,10 @@ class FbsOrder(Base):
         nullable=True,
         index=True,
     )
+    marketplace: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="wb", server_default="wb", index=True
+    )
+    external_order_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     wb_order_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
     wb_rid: Mapped[str | None] = mapped_column(String(128), nullable=True)
     wb_nm_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)

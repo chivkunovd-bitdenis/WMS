@@ -1,31 +1,22 @@
-"""Per-seller WB Marketplace advisory locks."""
+"""Backward-compatible WB names for marketplace-scoped advisory locks."""
 
 from __future__ import annotations
 
-import asyncio
-import hashlib
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from time import monotonic
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-_LOCK_NAMESPACE = b"wms:fbs:wb:seller:"
-
-
-async def _session_uses_postgresql(session: AsyncSession) -> bool:
-    connection = await session.connection()
-    return connection.dialect.name == "postgresql"
+from app.services.marketplace_seller_lock_service import (
+    acquire_marketplace_seller_lock,
+    marketplace_seller_lock_key,
+    release_marketplace_seller_lock,
+)
 
 
 def wb_seller_lock_key(seller_id: uuid.UUID) -> int:
-    digest = hashlib.blake2b(_LOCK_NAMESPACE + seller_id.bytes, digest_size=8).digest()
-    raw = int.from_bytes(digest, "big", signed=False)
-    if raw >= 1 << 63:
-        return raw - (1 << 64)
-    return raw
+    return marketplace_seller_lock_key(seller_id, "wb")
 
 
 async def acquire_wb_seller_lock(
@@ -35,30 +26,17 @@ async def acquire_wb_seller_lock(
     wait_timeout_sec: float = 0.0,
     poll_interval_sec: float = 0.25,
 ) -> int | None:
-    lock_key = wb_seller_lock_key(seller_id)
-    if not await _session_uses_postgresql(session):
-        return lock_key
-    deadline = monotonic() + max(wait_timeout_sec, 0.0)
-    while True:
-        acquired = await session.scalar(
-            text("select pg_try_advisory_lock(:lock_key)"),
-            {"lock_key": lock_key},
-        )
-        if acquired:
-            return lock_key
-        remaining = deadline - monotonic()
-        if remaining <= 0:
-            return None
-        await asyncio.sleep(min(poll_interval_sec, remaining))
+    return await acquire_marketplace_seller_lock(
+        session,
+        seller_id,
+        "wb",
+        wait_timeout_sec=wait_timeout_sec,
+        poll_interval_sec=poll_interval_sec,
+    )
 
 
 async def release_wb_seller_lock(session: AsyncSession, lock_key: int) -> None:
-    if not await _session_uses_postgresql(session):
-        return
-    await session.scalar(
-        text("select pg_advisory_unlock(:lock_key)"),
-        {"lock_key": lock_key},
-    )
+    await release_marketplace_seller_lock(session, lock_key)
 
 
 @asynccontextmanager

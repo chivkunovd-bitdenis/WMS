@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Uuid, func
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, UniqueConstraint, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -35,6 +35,14 @@ FBS_SUPPLY_SOURCE_WB = "wb"
 
 class FbsSupply(Base):
     __tablename__ = "fbs_supplies"
+    __table_args__ = (
+        UniqueConstraint(
+            "seller_id",
+            "marketplace",
+            "external_supply_id",
+            name="uq_fbs_supplies_seller_marketplace_external_supply",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -48,6 +56,10 @@ class FbsSupply(Base):
     warehouse_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("warehouses.id", ondelete="CASCADE"), index=True
     )
+    marketplace: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="wb", server_default="wb", index=True
+    )
+    external_supply_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     wb_supply_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     source: Mapped[str] = mapped_column(

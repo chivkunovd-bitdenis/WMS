@@ -35,6 +35,12 @@ class FbsWarehouseBinding(Base):
             "wb_warehouse_id",
             name="uq_fbs_warehouse_bindings_seller_wb_warehouse",
         ),
+        UniqueConstraint(
+            "seller_id",
+            "marketplace",
+            "external_warehouse_id",
+            name="uq_fbs_warehouse_bindings_seller_marketplace_external",
+        ),
         # No uniqueness on (seller_id, wms_warehouse_id): one physical WMS
         # warehouse now feeds every WB warehouse address for a seller
         # (pool 1, item 5 of docs/agent-orders/HANDOFF-POLISH.md).
@@ -48,6 +54,12 @@ class FbsWarehouseBinding(Base):
     )
     seller_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("sellers.id", ondelete="CASCADE"), index=True
+    )
+    marketplace: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="wb", server_default="wb", index=True
+    )
+    external_warehouse_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, index=True
     )
     wb_warehouse_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
     wms_warehouse_id: Mapped[uuid.UUID] = mapped_column(

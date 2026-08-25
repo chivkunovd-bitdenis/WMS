@@ -1,4 +1,14 @@
-export type WbProductCatalogRow = {
+export type MarketplaceCode = 'wb' | 'ozon'
+
+export type MarketplaceProductBinding = {
+  marketplace: MarketplaceCode
+  external_product_id?: string | null
+  external_offer_id?: string | null
+  external_sku?: string | null
+  external_barcodes?: string[]
+}
+
+export type MarketplaceProductCatalogRow = {
   id: string
   name: string
   sku_code: string
@@ -14,7 +24,11 @@ export type WbProductCatalogRow = {
   wb_brand?: string | null
   wb_composition?: string | null
   packaging_instructions?: string | null
+  marketplace_bindings?: MarketplaceProductBinding[]
 }
+
+/** @deprecated Use MarketplaceProductCatalogRow. */
+export type WbProductCatalogRow = MarketplaceProductCatalogRow
 
 export type ProductLineDisplayMeta = {
   sku_code: string
@@ -31,12 +45,13 @@ export type ProductLineDisplayMeta = {
   wb_composition?: string | null
   packaging_instructions?: string | null
   units_in_pack?: number | null
+  marketplace_bindings?: MarketplaceProductBinding[]
 }
 
-export function productDisplayMetaFromCatalog(
+export function productDisplayMetaFromMarketplaceCatalog(
   productId: string,
   line: { sku_code: string; product_name?: string; name?: string },
-  catalogById: Map<string, WbProductCatalogRow>,
+  catalogById: Map<string, MarketplaceProductCatalogRow>,
 ): ProductLineDisplayMeta {
   const cat = catalogById.get(productId)
   const productName = line.product_name ?? line.name ?? cat?.name ?? line.sku_code
@@ -55,6 +70,7 @@ export function productDisplayMetaFromCatalog(
       wb_brand: cat.wb_brand ?? null,
       wb_composition: cat.wb_composition ?? null,
       packaging_instructions: cat.packaging_instructions ?? null,
+      marketplace_bindings: cat.marketplace_bindings ?? [],
     }
   }
   return {
@@ -70,8 +86,12 @@ export function productDisplayMetaFromCatalog(
     wb_color: null,
     wb_brand: null,
     wb_composition: null,
+    marketplace_bindings: [],
   }
 }
+
+/** @deprecated Use productDisplayMetaFromMarketplaceCatalog. */
+export const productDisplayMetaFromCatalog = productDisplayMetaFromMarketplaceCatalog
 
 export function catalogRowToDisplayMeta(row: {
   name: string
@@ -88,6 +108,7 @@ export function catalogRowToDisplayMeta(row: {
   wb_composition?: string | null
   packaging_instructions?: string | null
   units_in_pack?: number | null
+  marketplace_bindings?: MarketplaceProductBinding[]
 }): ProductLineDisplayMeta {
   return {
     sku_code: row.sku_code,
@@ -104,6 +125,7 @@ export function catalogRowToDisplayMeta(row: {
     wb_composition: row.wb_composition ?? null,
     packaging_instructions: row.packaging_instructions ?? null,
     units_in_pack: row.units_in_pack ?? null,
+    marketplace_bindings: row.marketplace_bindings ?? [],
   }
 }
 

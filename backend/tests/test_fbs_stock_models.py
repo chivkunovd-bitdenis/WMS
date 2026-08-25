@@ -32,9 +32,14 @@ from app.models.fbs_stock_sync_item import (
     FbsStockSyncItem,
 )
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+from app.models.product import Product
 from app.models.seller import Seller
 from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
+from app.services.fbs_warehouse_binding_service import (
+    FbsWarehouseBindingError,
+    set_binding_stock_pool_quantity,
+)
 
 
 @pytest_asyncio.fixture
@@ -154,6 +159,59 @@ async def test_binding_allows_one_wms_warehouse_for_many_wb_warehouses(
     ).scalars().all()
     assert {row.wb_warehouse_id for row in rows} == {501001, 501002}
     assert all(row.wms_warehouse_id == wh_a.id for row in rows)
+
+
+@pytest.mark.asyncio
+async def test_one_physical_unit_cannot_be_allocated_to_wb_and_ozon(
+    db_session: AsyncSession,
+) -> None:
+    """TC-NEW-OZON-STOCK-001: marketplace bindings share one physical FBS pool."""
+    tenant, seller, wh_a, _wh_b = await _seed_tenant_seller_warehouses(db_session)
+    product = Product(
+        tenant_id=tenant.id,
+        seller_id=seller.id,
+        name="Shared unit",
+        sku_code=f"SHARED-{uuid.uuid4().hex[:8]}",
+        fbs_stock_sync_enabled=True,
+        fbs_stock_limit=1,
+    )
+    wb_binding = _binding(
+        tenant_id=tenant.id,
+        seller_id=seller.id,
+        wb_warehouse_id=501101,
+        wms_warehouse_id=wh_a.id,
+    )
+    ozon_binding = _binding(
+        tenant_id=tenant.id,
+        seller_id=seller.id,
+        wb_warehouse_id=501102,
+        wms_warehouse_id=wh_a.id,
+    )
+    ozon_binding.marketplace = "ozon"
+    ozon_binding.external_warehouse_id = "ozon-warehouse-1"
+    db_session.add_all([product, wb_binding, ozon_binding])
+    await db_session.commit()
+
+    await set_binding_stock_pool_quantity(
+        db_session,
+        tenant.id,
+        seller.id,
+        wb_binding.id,
+        product.id,
+        1,
+    )
+
+    with pytest.raises(FbsWarehouseBindingError) as error:
+        await set_binding_stock_pool_quantity(
+            db_session,
+            tenant.id,
+            seller.id,
+            ozon_binding.id,
+            product.id,
+            1,
+        )
+
+    assert error.value.code == "pool_quota_exceeded"
 
 
 @pytest.mark.asyncio

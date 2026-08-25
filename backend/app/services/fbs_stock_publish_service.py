@@ -1,4 +1,4 @@
-"""Event-driven publication of FBS availability to Wildberries.
+"""Event-driven publication of FBS availability to connected marketplaces.
 
 WMS owns the number in the seller's cabinet: `PUT /api/v3/stocks/{warehouseId}` overwrites
 whatever WB had. So every movement that changes availability — intake, shipment, write-off,
@@ -34,26 +34,50 @@ async def publish_seller_stocks_now(
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
 ) -> None:
-    """Republish availability for one seller in a fresh session."""
-    from app.services.fbs_autopoll_service import sync_seller_stocks
-
-    try:
-        async with SessionLocal() as session, httpx.AsyncClient() as http_client:
-            result = await sync_seller_stocks(session, tenant_id, seller_id, http_client)
-            await session.commit()
-    except Exception:
-        # Swallow: the periodic reconcile sweep is the safety net, and a failed publish
-        # must not surface as an error on the warehouse operation that triggered it.
-        logger.exception("fbs stock publish failed for seller %s (tenant %s)", seller_id, tenant_id)
-        return
-    logger.info(
-        "fbs stock publish done: seller=%s bindings=%s targeted=%s confirmed=%s errors=%s",
-        seller_id,
-        result.bindings_processed,
-        result.products_targeted,
-        result.products_confirmed,
-        result.binding_errors,
+    """Republish independently for every connected provider after movement commit."""
+    from app.services.fbs_autopoll_service import (
+        list_marketplace_poll_targets,
+        sync_marketplace_stocks_for_target,
     )
+
+    async with SessionLocal() as target_session:
+        all_targets = await list_marketplace_poll_targets(target_session)
+    targets = [
+        target
+        for target in all_targets
+        if target.tenant_id == tenant_id and target.seller_id == seller_id
+    ]
+
+    async with httpx.AsyncClient() as http_client:
+        for target in targets:
+            try:
+                async with SessionLocal() as session:
+                    result = await sync_marketplace_stocks_for_target(
+                        session,
+                        target,
+                        http_client,
+                    )
+                    await session.commit()
+            except Exception:
+                # One provider must never roll back the physical movement or suppress
+                # publication to another provider. Periodic reconcile remains the safety net.
+                logger.exception(
+                    "fbs stock publish failed for seller %s marketplace %s (tenant %s)",
+                    seller_id,
+                    target.marketplace,
+                    tenant_id,
+                )
+                continue
+            logger.info(
+                "fbs stock publish done: seller=%s marketplace=%s bindings=%s "
+                "targeted=%s confirmed=%s errors=%s",
+                seller_id,
+                target.marketplace,
+                result.bindings_processed,
+                result.products_targeted,
+                result.products_confirmed,
+                result.binding_errors,
+            )
 
 
 def _dispatch(tenant_id: uuid.UUID, seller_id: uuid.UUID) -> None:
