@@ -147,7 +147,8 @@ async def create_request(
     *,
     warehouse_id: uuid.UUID,
     seller_id: uuid.UUID,
-    wb_mp_warehouse_id: int | None,
+    marketplace: str = "wb",
+    wb_mp_warehouse_id: int | None = None,
 ) -> MarketplaceUnloadRequest:
     wh = await get_warehouse(session, tenant_id, warehouse_id)
     if wh is None:
@@ -155,7 +156,7 @@ async def create_request(
     sl = await session.get(Seller, seller_id)
     if sl is None or sl.tenant_id != tenant_id:
         raise MarketplaceUnloadError("seller_not_found")
-    if wb_mp_warehouse_id is not None:
+    if marketplace == "wb" and wb_mp_warehouse_id is not None:
         mpw = await get_cached_mp_warehouse(session, tenant_id, wb_mp_warehouse_id)
         if mpw is None:
             raise MarketplaceUnloadError("wb_mp_warehouse_unknown")
@@ -163,6 +164,7 @@ async def create_request(
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
         seller_id=seller_id,
+        marketplace=marketplace,
         wb_mp_warehouse_id=wb_mp_warehouse_id,
         status=STATUS_DRAFT,
         ff_modified=False,
@@ -760,15 +762,17 @@ async def plan_request(
         raise MarketplaceUnloadError("not_found")
     if req.status != STATUS_DRAFT:
         raise MarketplaceUnloadError("bad_status")
-    if req.wb_mp_warehouse_id is None:
+    if req.marketplace == "wb" and req.wb_mp_warehouse_id is None:
         raise MarketplaceUnloadError("wb_mp_warehouse_required")
     if not req.lines:
         raise MarketplaceUnloadError("no_lines")
     if req.planned_shipment_date is None:
         raise MarketplaceUnloadError("planned_shipment_date_required")
-    mpw = await get_cached_mp_warehouse(session, tenant_id, int(req.wb_mp_warehouse_id))
-    if mpw is None:
-        raise MarketplaceUnloadError("wb_mp_warehouse_unknown")
+    if req.marketplace == "wb":
+        assert req.wb_mp_warehouse_id is not None
+        mpw = await get_cached_mp_warehouse(session, tenant_id, int(req.wb_mp_warehouse_id))
+        if mpw is None:
+            raise MarketplaceUnloadError("wb_mp_warehouse_unknown")
     for ln in req.lines:
         await _assert_available_for_unload_quantity(
             session,
@@ -816,13 +820,15 @@ async def confirm_request(
         raise MarketplaceUnloadError("not_found")
     if req.status not in (STATUS_DRAFT, STATUS_SUBMITTED):
         raise MarketplaceUnloadError("bad_status")
-    if req.wb_mp_warehouse_id is None:
+    if req.marketplace == "wb" and req.wb_mp_warehouse_id is None:
         raise MarketplaceUnloadError("wb_mp_warehouse_required")
     if not req.lines:
         raise MarketplaceUnloadError("no_lines")
-    mpw = await get_cached_mp_warehouse(session, tenant_id, int(req.wb_mp_warehouse_id))
-    if mpw is None:
-        raise MarketplaceUnloadError("wb_mp_warehouse_unknown")
+    if req.marketplace == "wb":
+        assert req.wb_mp_warehouse_id is not None
+        mpw = await get_cached_mp_warehouse(session, tenant_id, int(req.wb_mp_warehouse_id))
+        if mpw is None:
+            raise MarketplaceUnloadError("wb_mp_warehouse_unknown")
     effective_date = (
         planned_shipment_date if planned_shipment_date is not None else req.planned_shipment_date
     )
@@ -987,7 +993,7 @@ async def complete_unload(
         raise MarketplaceUnloadError("no_lines")
     if req.planned_shipment_date is None:
         raise MarketplaceUnloadError("planned_shipment_date_required")
-    if req.wb_mp_warehouse_id is None:
+    if req.marketplace == "wb" and req.wb_mp_warehouse_id is None:
         raise MarketplaceUnloadError("wb_mp_warehouse_required")
 
     from app.services import packaging_task_service as pkg_svc

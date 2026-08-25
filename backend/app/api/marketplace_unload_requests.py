@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import (
     APIRouter,
@@ -64,11 +64,13 @@ _bearer = HTTPBearer(auto_error=False)
 class MarketplaceUnloadRequestCreate(BaseModel):
     warehouse_id: uuid.UUID
     seller_id: uuid.UUID
+    marketplace: Literal["wb", "ozon"] = "wb"
     wb_mp_warehouse_id: int | None = Field(default=None, ge=1, le=2_000_000_000)
 
 
 class SellerMarketplaceUnloadRequestCreate(BaseModel):
     warehouse_id: uuid.UUID
+    marketplace: Literal["wb", "ozon"] = "wb"
     wb_mp_warehouse_id: int | None = Field(default=None, ge=1, le=2_000_000_000)
 
 
@@ -189,6 +191,7 @@ class MarketplaceUnloadRequestSummaryOut(BaseModel):
     goods_qty_total: int = Field(default=0, ge=0)
     seller_id: str | None = None
     seller_name: str | None = None
+    marketplace: str = "wb"
     wb_mp_warehouse_id: int | None = None
     planned_shipment_date: str | None = None
     ff_modified: bool = False
@@ -285,6 +288,7 @@ class MarketplaceUnloadRequestDetailOut(BaseModel):
     status: str
     seller_id: str | None = None
     seller_name: str | None = None
+    marketplace: str = "wb"
     wb_mp_warehouse_id: int | None = None
     planned_shipment_date: str | None = None
     ff_modified: bool = False
@@ -396,6 +400,7 @@ def _summary_out(
         goods_qty_total=sum(int(ln.quantity) for ln in r.lines),
         seller_id=str(r.seller_id) if r.seller_id is not None else None,
         seller_name=seller_name,
+        marketplace=r.marketplace,
         wb_mp_warehouse_id=int(r.wb_mp_warehouse_id) if r.wb_mp_warehouse_id is not None else None,
         planned_shipment_date=r.planned_shipment_date.isoformat()
         if r.planned_shipment_date is not None
@@ -460,6 +465,7 @@ def _detail_out(
         status=r.status,
         seller_id=str(r.seller_id) if r.seller_id is not None else None,
         seller_name=seller_name,
+        marketplace=r.marketplace,
         wb_mp_warehouse_id=int(r.wb_mp_warehouse_id) if r.wb_mp_warehouse_id is not None else None,
         planned_shipment_date=r.planned_shipment_date.isoformat()
         if r.planned_shipment_date is not None
@@ -818,6 +824,7 @@ async def create_marketplace_unload(
             user.tenant_id,
             warehouse_id=body.warehouse_id,
             seller_id=body.seller_id,
+            marketplace=body.marketplace,
             wb_mp_warehouse_id=body.wb_mp_warehouse_id,
         )
     except MarketplaceUnloadError as exc:
@@ -866,6 +873,7 @@ async def create_seller_marketplace_unload(
             user.tenant_id,
             warehouse_id=body.warehouse_id,
             seller_id=effective_seller_id,
+            marketplace=body.marketplace,
             wb_mp_warehouse_id=body.wb_mp_warehouse_id,
         )
     except MarketplaceUnloadError as exc:
