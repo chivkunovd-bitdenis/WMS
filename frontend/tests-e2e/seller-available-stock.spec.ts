@@ -213,13 +213,14 @@ test('seller products table and next MP picker show current stock after MP plan'
 
   const row = page.getByTestId('seller-product-row').filter({ hasText: sku });
   await expect(row).toBeVisible();
-  await expect(row).toContainText('424242');
-  await expect(row.getByTestId('seller-stock-on-hand')).toHaveText('На ФФ 10');
-  await expect(row.getByTestId('seller-stock-in-storage')).toHaveText('В ячейках 10');
-  await expect(row.getByTestId('seller-stock-free-fbo')).toHaveText('Свободный FBO 10');
-  const distribution = row.getByTestId(`seller-stock-distribution-${productId}`);
-  await expect(distribution).toContainText('FBS 0 шт');
-  await expect(distribution).toContainText('резервы 0 шт');
+  await expect(row.getByTestId(`seller-catalog-stock-on-hand-${productId}`)).toHaveText('На ФФ 10');
+  await expect(row.getByTestId(`seller-catalog-stock-in-storage-${productId}`)).toHaveText(
+    'В ячейках 10',
+  );
+  await expect(row.getByTestId(`seller-catalog-stock-free-fbo-${productId}`)).toHaveText(
+    'Свободный FBO 10',
+  );
+  await expect(row.getByTestId(`seller-catalog-reserves-${productId}`)).toHaveText('Резервы');
 
   await page.getByTestId('nav-seller-documents').click();
   await expect(page.getByTestId('seller-documents-table')).toBeVisible();
