@@ -21,6 +21,16 @@ export function fbsBoxOperationsDisabled(marketplace: FbsMarketplace): boolean {
   return marketplace === 'ozon'
 }
 
+export function orderStatusForChip(order: {
+  marketplace: FbsMarketplace
+  status: string
+  wb_status: string | null
+}): string {
+  return order.marketplace === 'ozon' && order.status === 'external_processing'
+    ? order.wb_status || order.status
+    : order.status
+}
+
 export function ordersWord(count: number) {
   const lastTwo = Math.abs(count) % 100
   if (lastTwo >= 11 && lastTwo <= 14) return 'заказов'

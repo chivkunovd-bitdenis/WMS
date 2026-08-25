@@ -323,6 +323,7 @@ async def sync_in_delivery_supplies(
         .where(
             FbsSupply.tenant_id == tenant_id,
             FbsSupply.seller_id == seller_id,
+            FbsSupply.marketplace == "wb",
             FbsSupply.status == FBS_SUPPLY_STATUS_IN_DELIVERY,
         )
         .options(selectinload(FbsSupply.orders))

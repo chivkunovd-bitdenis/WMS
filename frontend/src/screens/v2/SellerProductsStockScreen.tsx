@@ -42,6 +42,8 @@ type WbCatalogRow = {
   wb_nm_id: number | null
   ozon_sku: string | null
   ozon_offer_id: string | null
+  wb_connected: boolean
+  ozon_connected: boolean
   wb_subject_name: string | null
   wb_primary_image_url: string | null
   wb_barcodes: string[]
@@ -50,14 +52,6 @@ type WbCatalogRow = {
   packaging_instructions: string | null
   requires_honest_sign: boolean
   has_packaging_instructions: boolean
-}
-
-type OzonAccountStatus = {
-  connected: boolean
-}
-
-type WildberriesTokenStatus = {
-  has_marketplace_token: boolean
 }
 
 // Остаток на ФФ по товару — из /operations/inventory-balances/summary. Тот же
@@ -137,8 +131,6 @@ export function SellerProductsStockScreen({
   const [editBusy, setEditBusy] = useState(false)
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set())
   const [bulkHonestSignBusy, setBulkHonestSignBusy] = useState(false)
-  const [ozonConnected, setOzonConnected] = useState(false)
-  const [wbConnected, setWbConnected] = useState(false)
 
   // ── Фильтры над таблицей (перенесены из каталога фулфилмента, CAT-20) ─────
   const [filterSearch, setFilterSearch] = useState('')
@@ -154,25 +146,14 @@ export function SellerProductsStockScreen({
     setError(null)
     setBusy(true)
     try {
-      const [catalogRes, ozonStatusRes, wbStatusRes] = await Promise.all([
-        fetch(apiUrl('/products/wb-catalog'), { headers: { ...authHeaders(token) } }),
-        fetch(apiUrl('/integrations/ozon/self/account'), { headers: { ...authHeaders(token) } }),
-        fetch(apiUrl('/integrations/wildberries/self/tokens'), {
-          headers: { ...authHeaders(token) },
-        }),
-      ])
+      const catalogRes = await fetch(apiUrl('/products/wb-catalog'), {
+        headers: { ...authHeaders(token) },
+      })
       if (!catalogRes.ok) {
         setError(await readApiErrorMessage(catalogRes))
         return
       }
       setCatalog((await catalogRes.json()) as WbCatalogRow[])
-      setOzonConnected(
-        ozonStatusRes.ok && ((await ozonStatusRes.json()) as OzonAccountStatus).connected,
-      )
-      setWbConnected(
-        wbStatusRes.ok &&
-          ((await wbStatusRes.json()) as WildberriesTokenStatus).has_marketplace_token,
-      )
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось загрузить товары.')
     } finally {
@@ -226,7 +207,7 @@ export function SellerProductsStockScreen({
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'ru'))
   }, [rows])
 
-  const hasMixedMarketplaces = ozonConnected && wbConnected
+  const hasMixedMarketplaces = rows.some((row) => row.wb_connected && row.ozon_connected)
 
   useEffect(() => {
     if (!hasMixedMarketplaces) setFilterMarketplace('')

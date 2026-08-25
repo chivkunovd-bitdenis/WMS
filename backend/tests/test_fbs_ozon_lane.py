@@ -25,6 +25,7 @@ from app.models.fbs_order import (
 from app.models.fbs_print_asset import PRINT_ASSET_STATUS_READY
 from app.models.fbs_supply import (
     FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+    FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_IN_DELIVERY,
     FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
@@ -38,10 +39,12 @@ from app.models.warehouse import Warehouse
 from app.services import fbs_print_asset_service as print_asset_svc
 from app.services import fbs_shipment_service as shipment_svc
 from app.services import fbs_supply_service as supply_svc
+from app.services import fbs_tracking_service as tracking_svc
 from app.services.fbs_autopoll_service import (
     SellerPollTarget,
     poll_marketplace_orders_for_target,
     sync_marketplace_order_statuses_for_target,
+    sync_marking_statuses_for_assembling_supplies,
 )
 from app.services.fbs_print_asset_service import fetch_order_label_rows_for_marketplace
 from app.services.fbs_supply_validator_service import (
@@ -483,3 +486,59 @@ async def test_ozon_supply_delivery_and_qr_never_call_wb(
     wb_deliver.assert_not_awaited()
     wb_qr.assert_not_awaited()
     wb_sync.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_wb_background_marking_ignores_ozon_orders(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant, seller, _, _, order, supply = await _seed_ozon_supply_case(
+        db_session,
+        packed=True,
+    )
+    assert supply is not None
+    supply.status = FBS_SUPPLY_STATUS_ASSEMBLING
+    order.status = "assembling"
+    await db_session.commit()
+    forbidden = AsyncMock(side_effect=AssertionError("WB marking fetch must not receive Ozon"))
+    monkeypatch.setattr(
+        "app.services.wildberries_fbs_client.fetch_marketplace_orders_meta_batch",
+        forbidden,
+    )
+
+    synced = await sync_marking_statuses_for_assembling_supplies(
+        db_session,
+        SellerPollTarget(tenant.id, seller.id, "wb"),
+        AsyncMock(),
+    )
+
+    assert synced == 0
+    forbidden.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_wb_background_tracking_ignores_ozon_supplies(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant, seller, _, _, _, supply = await _seed_ozon_supply_case(
+        db_session,
+        packed=True,
+    )
+    assert supply is not None
+    supply.status = FBS_SUPPLY_STATUS_IN_DELIVERY
+    await db_session.commit()
+    forbidden = AsyncMock(side_effect=AssertionError("WB tracking must not receive Ozon"))
+    monkeypatch.setattr(tracking_svc, "sync_supply_tracking", forbidden)
+
+    result = await tracking_svc.sync_in_delivery_supplies(
+        db_session,
+        tenant.id,
+        seller.id,
+        AsyncMock(),
+    )
+
+    assert result.supplies_synced == 0
+    assert result.orders_updated == 0
+    forbidden.assert_not_awaited()

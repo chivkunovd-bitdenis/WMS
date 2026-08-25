@@ -25,6 +25,8 @@ from app.api.deps import (
 )
 from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER, FULFILLMENT_STAFF
 from app.db.session import get_db
+from app.models.marketplace_account import MarketplaceAccount
+from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.models.stock_direction import StockDirection
 from app.models.user import User
 from app.services import marking_code_service as mc_svc
@@ -107,6 +109,8 @@ class SellerWbCatalogOut(BaseModel):
     wb_vendor_code: str | None = None
     ozon_sku: str | None = None
     ozon_offer_id: str | None = None
+    wb_connected: bool = False
+    ozon_connected: bool = False
     wb_subject_name: str | None = None
     wb_primary_image_url: str | None = None
     wb_barcodes: list[str]
@@ -541,9 +545,32 @@ async def get_seller_wb_catalog(
     rows = await list_seller_wb_catalog_rows(
         session, user.tenant_id, catalog_seller_id, search=search, limit=limit
     )
+    wb_connected = (
+        await session.scalar(
+            select(SellerWildberriesCredentials.seller_id).where(
+                SellerWildberriesCredentials.seller_id == catalog_seller_id,
+                SellerWildberriesCredentials.marketplace_token_encrypted.isnot(None),
+            )
+        )
+        is not None
+    )
+    ozon_connected = (
+        await session.scalar(
+            select(MarketplaceAccount.id).where(
+                MarketplaceAccount.tenant_id == user.tenant_id,
+                MarketplaceAccount.seller_id == catalog_seller_id,
+                MarketplaceAccount.marketplace == "ozon",
+                MarketplaceAccount.account_slot == "primary",
+                MarketplaceAccount.is_active.is_(True),
+            )
+        )
+        is not None
+    )
     return [
         SellerWbCatalogOut(
             **r.as_dict(),
+            wb_connected=wb_connected,
+            ozon_connected=ozon_connected,
             has_packaging_instructions=bool((r.packaging_instructions or "").strip()),
         )
         for r in rows

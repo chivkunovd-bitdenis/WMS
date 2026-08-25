@@ -9,6 +9,8 @@ from httpx import AsyncClient
 from app.db.session import SessionLocal
 from app.models.marketplace_account import MarketplaceAccount
 from app.models.seller import Seller
+from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
+from app.services.integration_fernet import encrypt_secret
 
 
 async def _register_admin(async_client: AsyncClient, suffix: str) -> dict[str, str]:
@@ -370,6 +372,37 @@ async def test_seller_catalog_keeps_ozon_marker_without_connected_account(
     row = next(item for item in response.json() if item["id"] == product["id"])
     assert row["ozon_sku"] == f"OZON-VISIBLE-{suffix}"
     assert row["ozon_offer_id"] == f"OFFER-VISIBLE-{suffix}"
+    assert row["wb_connected"] is False
+    assert row["ozon_connected"] is False
+
+    async with SessionLocal() as session:
+        connected_seller = await session.get(Seller, uuid.UUID(seller_id))
+        assert connected_seller is not None
+        session.add_all(
+            [
+                SellerWildberriesCredentials(
+                    seller_id=connected_seller.id,
+                    marketplace_token_encrypted=encrypt_secret("wb-token"),
+                ),
+                MarketplaceAccount(
+                    tenant_id=connected_seller.tenant_id,
+                    seller_id=connected_seller.id,
+                    marketplace="ozon",
+                    account_slot="primary",
+                    is_active=True,
+                    validation_status="valid",
+                ),
+            ]
+        )
+        await session.commit()
+
+    connected_response = await async_client.get("/products/wb-catalog", headers=seller_headers)
+    assert connected_response.status_code == 200, connected_response.text
+    connected_row = next(
+        item for item in connected_response.json() if item["id"] == product["id"]
+    )
+    assert connected_row["wb_connected"] is True
+    assert connected_row["ozon_connected"] is True
 
 
 @pytest.mark.asyncio

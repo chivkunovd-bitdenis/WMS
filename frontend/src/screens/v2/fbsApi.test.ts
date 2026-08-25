@@ -9,6 +9,7 @@ import {
   runFbsOrdersSync,
   validateFbsKiz,
 } from './fbsApi'
+import { orderStatusForChip } from './fbsUx'
 
 const authHeaders = (token: string) => ({ Authorization: `Bearer ${token}` })
 
@@ -17,6 +18,19 @@ afterEach(() => {
 })
 
 describe('FBS API client', () => {
+  it('keeps the original unknown Ozon status in the existing status chip', () => {
+    expect(
+      orderStatusForChip({
+        marketplace: 'ozon',
+        status: 'external_processing',
+        wb_status: 'awaiting_registration',
+      }),
+    ).toBe('awaiting_registration')
+    expect(
+      orderStatusForChip({ marketplace: 'wb', status: 'external_processing', wb_status: 'waiting' }),
+    ).toBe('external_processing')
+  })
+
   it('sends marketplace identity and treats an unconnected provider as skipped', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ id: '', status: 'skipped' }), {

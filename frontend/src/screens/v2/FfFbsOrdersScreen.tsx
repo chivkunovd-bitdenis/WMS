@@ -41,7 +41,12 @@ import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { FbsSupplyCreateDialog } from './FbsSupplyCreateDialog'
 import { FfFbsSectionNav } from './FfFbsSectionNav'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
-import { buildFbsSyncTargets, mixedMarketplaceSelectionMessage, ordersWord } from './fbsUx'
+import {
+  buildFbsSyncTargets,
+  mixedMarketplaceSelectionMessage,
+  orderStatusForChip,
+  ordersWord,
+} from './fbsUx'
 import { plural } from '../../utils/plural'
 import {
   fetchFbsSellerWarehouses,
@@ -1378,7 +1383,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                         ) : statusGroup !== 'expired' ? (
                           // «Отменённые»: заказ уже закрыт, состояние маркировки для решения
                           // не нужно — главное здесь то, чем закончился заказ (Отменён/Дефект).
-                          <FbsStatusChip status={order.status} />
+                          <FbsStatusChip status={orderStatusForChip(order)} />
                         ) : null}
                         {localSupplyMissing ? (
                           <Tooltip title={externalSupplyHint(order)}>

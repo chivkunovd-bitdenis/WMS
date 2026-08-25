@@ -359,6 +359,8 @@ async def sync_marking_statuses_for_assembling_supplies(
         .where(
             FbsOrder.tenant_id == target.tenant_id,
             FbsOrder.seller_id == target.seller_id,
+            FbsOrder.marketplace == "wb",
+            FbsSupply.marketplace == "wb",
             FbsSupply.status == FBS_SUPPLY_STATUS_ASSEMBLING,
         )
         .order_by(FbsOrder.created_at_wb.asc(), FbsOrder.id.asc())
