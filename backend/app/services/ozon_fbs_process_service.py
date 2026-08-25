@@ -1,8 +1,4 @@
-"""Ozon-specific mutations behind the existing WMS FBS operator flow.
-
-Every request/response is validated by models generated from the official
-Seller API 2.1 snapshot. Mutations are issued once and followed by a readback.
-"""
+"""Ozon FBS mutations validated by official Seller API 2.1 models and readbacks."""
 
 from __future__ import annotations
 
