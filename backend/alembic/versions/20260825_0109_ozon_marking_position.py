@@ -1,15 +1,15 @@
 """link Ozon marking codes to their posting positions
 
-Revision ID: 20260825_0108
-Revises: 20260825_0107
+Revision ID: 20260825_0109
+Revises: 20260825_0108
 """
 
 import sqlalchemy as sa
 
 from alembic import op
 
-revision = "20260825_0108"
-down_revision = "20260825_0107"
+revision = "20260825_0109"
+down_revision = "20260825_0108"
 branch_labels = None
 depends_on = None
 
