@@ -1238,6 +1238,8 @@ export async function fetchFbsSellerOffices(
 
 export type FbsWarehouseBinding = {
   id: string
+  marketplace: 'wb' | 'ozon'
+  external_warehouse_id: string | null
   wb_warehouse_id: number
   wms_warehouse_id: string
   is_active: boolean

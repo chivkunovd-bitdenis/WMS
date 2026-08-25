@@ -15,8 +15,8 @@ from app.api.fbs_errors import envelope_from_exc, raise_fbs_http
 from app.core.settings import settings
 from app.db.session import get_db
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
-from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.fbs_stock_sync_item import STOCK_SYNC_STATUS_PENDING
+from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.user import User
@@ -78,6 +78,8 @@ def _raise_from_service(exc: wh_svc.FbsSellerWarehouseError) -> None:
 
 class FbsWarehouseBindingOut(BaseModel):
     id: str
+    marketplace: str = "wb"
+    external_warehouse_id: str | None = None
     wb_warehouse_id: int
     wms_warehouse_id: str
     is_active: bool
@@ -96,6 +98,8 @@ class FbsWarehouseBindingUpsert(BaseModel):
 def _binding_out(row: FbsWarehouseBinding, allocated_pool_total: int = 0) -> FbsWarehouseBindingOut:
     return FbsWarehouseBindingOut(
         id=str(row.id),
+        marketplace=row.marketplace,
+        external_warehouse_id=row.external_warehouse_id,
         wb_warehouse_id=row.wb_warehouse_id,
         wms_warehouse_id=str(row.wms_warehouse_id),
         is_active=row.is_active,

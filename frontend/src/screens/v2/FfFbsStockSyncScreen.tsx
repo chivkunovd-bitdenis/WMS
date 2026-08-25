@@ -65,6 +65,7 @@ type Props = {
 
 type SellerWarehouseView = {
   wbId: number
+  marketplace: 'wb' | 'ozon'
   name: string
   address: string | null
   city: string
@@ -137,6 +138,12 @@ function stockErrorText(code: string | null): string | null {
       'Остаток не опубликован: защита не даёт обнулить остаток в кабинете продавца. Проверьте наличие товара на складе и запустите синхронизацию заново.',
     unsafe_stock_unknown:
       'Остаток не опубликован: не удалось надёжно посчитать доступное количество для этого товара.',
+    ozon_account_blocked:
+      'Кабинет Ozon заблокирован. Обратитесь в поддержку Ozon.',
+    ozon_auth_failed:
+      'Ozon отклонил данные подключения.',
+    ozon_rate_limited:
+      'Ozon временно ограничил частоту запросов.',
   }
   return labels[code] ?? 'Синхронизация завершилась с ошибкой'
 }
@@ -311,6 +318,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
       .sort(([a], [b]) => a - b)
       .map(([wbId, wb]) => {
         const binding = bindingsByWbId.get(wbId) ?? null
+        const marketplace = binding?.marketplace ?? 'wb'
         const wms = binding ? wmsById.get(binding.wms_warehouse_id) : undefined
         const technical = Boolean(binding && isTechnicalWmsWarehouse(wms))
         const mapped = Boolean(binding?.is_active && wms && !technical)
@@ -318,7 +326,12 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
           wb?.officeId != null ? officeCityById.get(wb.officeId) : undefined
         return {
           wbId,
-          name: wb?.name?.trim() || `WB ${wbId}`,
+          marketplace,
+          name: wb?.name?.trim() || (
+            marketplace === 'ozon'
+              ? `Ozon ${binding?.external_warehouse_id ?? wbId}`
+              : `WB ${wbId}`
+          ),
           address: wb?.address?.trim() || null,
           city: city || 'город не определён',
           wbStatus: warehouseStatus(wb),
@@ -663,7 +676,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
         FBS
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        Склады селлера WB, сопоставление с физическими складами WMS и публикация остатков.
+        Склады маркетплейсов селлера, сопоставление с физическими складами WMS и публикация остатков.
       </Typography>
 
       <FfFbsSectionNav showStockSync />
@@ -692,7 +705,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
 
       {physicalWarehouses.length === 0 ? (
         <Alert severity="warning" sx={{ mb: 2 }} data-testid="fbs-stock-no-wms">
-          Создайте WMS-склад перед сопоставлением складов WB.
+          Создайте WMS-склад перед сопоставлением складов маркетплейса.
         </Alert>
       ) : null}
 
@@ -759,7 +772,7 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
         >
           <TableHead>
             <TableRow>
-              <TableCell sx={{ width: '18%' }}>Склад WB</TableCell>
+              <TableCell sx={{ width: '18%' }}>Склад маркетплейса</TableCell>
               <TableCell sx={{ width: '24%' }}>Склад WMS</TableCell>
               <TableCell align="right" sx={{ width: '8%' }}>Остаток WMS</TableCell>
               <TableCell sx={{ width: '25%' }}>Публикация</TableCell>
@@ -787,9 +800,12 @@ export function FfFbsStockSyncScreen({ token, authHeaders, sellers }: Props) {
                 <TableRow key={row.wbId} data-testid="fbs-stock-binding-row">
                   <TableCell sx={{ overflow: 'hidden' }}>
                     <Tooltip title={row.name}>
-                      <Typography variant="body2" noWrap sx={{ fontWeight: 650 }}>
-                        {row.name}
-                      </Typography>
+                      <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+                        <Typography variant="body2" noWrap sx={{ fontWeight: 650 }}>
+                          {row.name}
+                        </Typography>
+                        <Chip size="small" variant="outlined" label={row.marketplace === 'ozon' ? 'Ozon' : 'WB'} />
+                      </Stack>
                     </Tooltip>
                     {row.city !== 'город не определён' ? (
                       <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
