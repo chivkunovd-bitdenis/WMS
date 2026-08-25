@@ -20,6 +20,8 @@ type ProductRow = {
   seller_name: string | null
   wb_nm_id?: number | null
   wb_vendor_code?: string | null
+  ozon_sku?: string | null
+  ozon_offer_id?: string | null
 }
 
 type Props = {
@@ -40,6 +42,7 @@ export function ProductsScreen({
   onCreateProduct,
 }: Props) {
   const [q, setQ] = useState('')
+  const [marketplace, setMarketplace] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const filtered = useMemo(() => {
@@ -48,10 +51,15 @@ export function ProductsScreen({
       return products
     }
     return products.filter((p) => {
-      const hay = `${p.name} ${p.sku_code} ${p.seller_name ?? ''} ${p.wb_vendor_code ?? ''}`.toLowerCase()
-      return hay.includes(s)
+      const hay = `${p.name} ${p.sku_code} ${p.seller_name ?? ''} ${p.wb_vendor_code ?? ''} ${p.ozon_sku ?? ''} ${p.ozon_offer_id ?? ''}`.toLowerCase()
+      const matchesMarketplace = marketplace === 'ozon'
+        ? Boolean(p.ozon_sku || p.ozon_offer_id)
+        : marketplace === 'wildberries'
+          ? Boolean(p.wb_nm_id != null || p.wb_vendor_code)
+          : true
+      return matchesMarketplace && hay.includes(s)
     })
-  }, [products, q])
+  }, [products, q, marketplace])
 
   const selected = useMemo(
     () => (selectedId ? products.find((p) => p.id === selectedId) ?? null : null),
@@ -80,6 +88,16 @@ export function ProductsScreen({
                   aria-label="Поиск SKU"
                 />
               </div>
+              <Select
+                aria-label="Фильтр маркетплейса"
+                data-testid="products-marketplace-filter"
+                value={marketplace}
+                onChange={(e) => setMarketplace(e.target.value)}
+              >
+                <option value="">Все</option>
+                <option value="wildberries">Wildberries</option>
+                <option value="ozon">Ozon</option>
+              </Select>
               <div className="ui-badge" aria-label="Количество результатов">
                 {filtered.length}
               </div>
@@ -105,7 +123,10 @@ export function ProductsScreen({
                   data-product-id={p.id}
                 >
                   <td data-testid="product-sku-cell">{p.sku_code}</td>
-                  <td>{p.name}</td>
+                  <td>
+                    {p.name}
+                    {p.ozon_sku || p.ozon_offer_id ? <span className="ui-badge" data-testid="product-marketplace-ozon">Ozon</span> : null}
+                  </td>
                   <td>
                     <span data-testid="product-volume">
                       {p.volume_liters == null ? '—' : `${p.volume_liters.toFixed(1)} л`}
@@ -146,6 +167,9 @@ export function ProductsScreen({
                         · WB nmID {selected.wb_nm_id}
                         {selected.wb_vendor_code ? ` (${selected.wb_vendor_code})` : ''}
                       </span>
+                    ) : null}
+                    {selected.ozon_sku || selected.ozon_offer_id ? (
+                      <span data-testid="product-ozon-link"> · Ozon {selected.ozon_sku ?? '—'}{selected.ozon_offer_id ? ` (${selected.ozon_offer_id})` : ''}</span>
                     ) : null}
                   </div>
                 </div>
@@ -228,6 +252,14 @@ export function ProductsScreen({
                     </Select>
                   </label>
                 ) : null}
+                <label>
+                  SKU Ozon
+                  <Input name="product_ozon_sku" data-testid="product-ozon-sku" autoComplete="off" />
+                </label>
+                <label>
+                  Предложение Ozon
+                  <Input name="product_ozon_offer_id" data-testid="product-ozon-offer" autoComplete="off" />
+                </label>
                 <Button type="submit" data-testid="product-submit" disabled={catalogBusy}>
                   {catalogBusy ? '…' : 'Добавить товар'}
                 </Button>
@@ -239,4 +271,3 @@ export function ProductsScreen({
     </Screen>
   )
 }
-

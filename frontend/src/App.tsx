@@ -76,6 +76,8 @@ type ProductRow = {
   seller_name: string | null
   wb_nm_id?: number | null
   wb_vendor_code?: string | null
+  ozon_sku?: string | null
+  ozon_offer_id?: string | null
   wb_barcodes?: string[]
   wb_primary_barcode?: string | null
 }
@@ -1318,6 +1320,8 @@ export default function App() {
       const width_mm = Number(fd.get('product_width_mm'))
       const height_mm = Number(fd.get('product_height_mm'))
       const seller_raw = String(fd.get('product_seller_id') ?? '').trim()
+      const ozon_sku = String(fd.get('product_ozon_sku') ?? '').trim()
+      const ozon_offer_id = String(fd.get('product_ozon_offer_id') ?? '').trim()
       const body: Record<string, unknown> = {
         name,
         sku_code,
@@ -1328,6 +1332,8 @@ export default function App() {
       if (seller_raw) {
         body.seller_id = seller_raw
       }
+      if (ozon_sku) body.ozon_sku = ozon_sku
+      if (ozon_offer_id) body.ozon_offer_id = ozon_offer_id
       const res = await fetch(apiUrl('/products'), {
         method: 'POST',
         headers: {
