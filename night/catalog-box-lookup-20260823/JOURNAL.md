@@ -58,3 +58,11 @@
 10:33   01-catalog-box-lookup · resume: поатомный rework Terra по сохранённым находкам
 10:36   01-catalog-box-lookup · screen-dev: готово
 10:36   01-catalog-box-lookup · dev: фича 1/1 сохранена c6777966034f
+10:40   01-catalog-box-lookup · reviewer: готово
+10:45   01-catalog-box-lookup · ui-critic: готово
+10:45   01-catalog-box-lookup · clicker: готово
+10:51   01-catalog-box-lookup · ux-judge: готово
+10:51   01-catalog-box-lookup · ux-judge: находки не закрыты — повторный Terra-ремонт
+10:51   01-catalog-box-lookup · ux-judge: находки, круг 3 — назад к разработке
+10:52   01-catalog-box-lookup · splitter: готово
+10:52 01-catalog-box-lookup: отложено на шаге dev
