@@ -20,6 +20,7 @@ const e2eDbPath = path.isAbsolute(e2eDbFile) ? e2eDbFile : path.resolve(backendD
 const e2eDbUrlPath = e2eDbPath.replace(/\\/g, '/');
 // Use a non-default port to avoid colliding with a locally running `npm run dev`.
 const e2eWebPort = Number(process.env.E2E_WEB_PORT ?? 5174);
+const runRegressLive = process.env.RUN_REGRESS_LIVE === '1';
 
 export default defineConfig({
   testDir: './tests-e2e',
@@ -73,5 +74,23 @@ export default defineConfig({
       reuseExistingServer: reuse,
     },
   ],
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    {
+      name: 'chromium',
+      testIgnore: [
+        '**/ff-fbs-full-flow.spec.ts',
+        '**/regress/**/*.spec.ts',
+      ],
+      use: { ...devices['Desktop Chrome'] },
+    },
+    ...(runRegressLive
+      ? [
+          {
+            name: 'regress-live',
+            testMatch: '**/regress/**/*.spec.ts',
+            use: { ...devices['Desktop Chrome'] },
+          },
+        ]
+      : []),
+  ],
 });
