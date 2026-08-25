@@ -794,6 +794,7 @@ async def update_ozon_product_link(
         raise CatalogError("product_not_found")
     if product.seller_id is None:
         raise CatalogError("ozon_link_requires_seller")
+    seller_id = product.seller_id
     normalized_sku = (ozon_sku or "").strip() or None
     normalized_offer = (ozon_offer_id or "").strip() or None
     if normalized_sku is None and normalized_offer is None:
@@ -802,7 +803,7 @@ async def update_ozon_product_link(
         existing_product_id = await session.scalar(
             select(ProductMarketplaceLink.product_id).where(
                 ProductMarketplaceLink.tenant_id == tenant_id,
-                ProductMarketplaceLink.seller_id == product.seller_id,
+                ProductMarketplaceLink.seller_id == seller_id,
                 ProductMarketplaceLink.marketplace == "ozon",
                 ProductMarketplaceLink.external_sku == normalized_sku,
                 ProductMarketplaceLink.product_id != product_id,
@@ -815,7 +816,7 @@ async def update_ozon_product_link(
         await session.execute(
             select(ProductMarketplaceLink).where(
                 ProductMarketplaceLink.tenant_id == tenant_id,
-                ProductMarketplaceLink.seller_id == product.seller_id,
+                ProductMarketplaceLink.seller_id == seller_id,
                 ProductMarketplaceLink.product_id == product_id,
                 ProductMarketplaceLink.marketplace == "ozon",
             )
@@ -824,7 +825,7 @@ async def update_ozon_product_link(
     if link is None:
         link = ProductMarketplaceLink(
             tenant_id=tenant_id,
-            seller_id=product.seller_id,
+            seller_id=seller_id,
             product_id=product_id,
             marketplace="ozon",
         )
@@ -832,7 +833,23 @@ async def update_ozon_product_link(
     link.external_sku = normalized_sku
     link.external_offer_id = normalized_offer
     link.is_active = True
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        if normalized_sku is not None:
+            conflicting_product_id = await session.scalar(
+                select(ProductMarketplaceLink.product_id).where(
+                    ProductMarketplaceLink.tenant_id == tenant_id,
+                    ProductMarketplaceLink.seller_id == seller_id,
+                    ProductMarketplaceLink.marketplace == "ozon",
+                    ProductMarketplaceLink.external_sku == normalized_sku,
+                    ProductMarketplaceLink.product_id != product_id,
+                )
+            )
+            if conflicting_product_id is not None:
+                raise CatalogError("ozon_sku_taken") from None
+        raise
     await session.refresh(product, attribute_names=["seller"])
     return product
 

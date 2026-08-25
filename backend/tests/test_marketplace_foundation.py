@@ -186,6 +186,10 @@ def test_product_marketplace_link_is_generic_and_multi_provider() -> None:
     }
     assert expected <= set(columns.keys())
     assert "ozon" not in ProductMarketplaceLink.__tablename__
+    constraint_names = {
+        constraint.name for constraint in ProductMarketplaceLink.__table__.constraints
+    }
+    assert "uq_product_marketplace_links_external_sku" in constraint_names
 
 
 def test_lock_key_is_scoped_by_seller_and_marketplace() -> None:

@@ -703,3 +703,43 @@ async def test_fbs_stock_sync_ignores_auto_technical_warehouse(
             seller.id,
         )
     assert rows == []
+
+
+@pytest.mark.asyncio
+async def test_wb_stock_sync_does_not_publish_ozon_binding(
+    async_client: AsyncClient,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id = await _create_seller(async_client, headers, suffix)
+
+    async with SessionLocal() as session:
+        seller = await session.get(Seller, uuid.UUID(seller_id))
+        assert seller is not None
+        warehouse = Warehouse(
+            tenant_id=seller.tenant_id,
+            name="Ozon physical",
+            code=f"ozon-physical-{suffix[-8:]}",
+        )
+        session.add(warehouse)
+        await session.flush()
+        session.add(
+            FbsWarehouseBinding(
+                tenant_id=seller.tenant_id,
+                seller_id=seller.id,
+                marketplace="ozon",
+                external_warehouse_id="ozon-warehouse",
+                wb_warehouse_id=-777888,
+                wms_warehouse_id=warehouse.id,
+                stock_sync_enabled=True,
+                is_active=True,
+            )
+        )
+        await session.commit()
+
+        rows = await list_active_stock_sync_bindings(
+            session,
+            seller.tenant_id,
+            seller.id,
+        )
+
+    assert rows == []

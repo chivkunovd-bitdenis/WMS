@@ -24,11 +24,18 @@ from app.services.fbs_stock_sync_service import FbsStockSyncError, sync_binding_
 from app.services.fbs_tracking_service import FbsTrackingError, sync_in_delivery_supplies
 from app.services.fbs_warehouse_binding_service import is_auto_fbs_wms_warehouse
 from app.services.marketplace_provider import (
+    FakeMarketplaceTransport,
     MarketplaceBackoff,
     MarketplaceProviderError,
+    OzonMarketplaceProvider,
     provider_error_message,
 )
 from app.services.marketplace_seller_lock_service import marketplace_seller_lock
+from app.services.ozon_fbs_sync_service import (
+    sync_ozon_order_statuses,
+    sync_ozon_orders,
+    sync_ozon_stocks,
+)
 from app.services.wb_marketplace_orders_service import (
     WbMarketplaceOrdersError,
     sync_seller_orders,
@@ -95,6 +102,15 @@ def _record_provider_backoff(error: MarketplaceProviderError) -> None:
     _MARKETPLACE_BACKOFF.record_rate_limit(
         error.marketplace,
         retry_after_seconds=delay,
+    )
+
+
+def _blocked_ozon_provider(operation: str) -> OzonMarketplaceProvider:
+    """Current-account fake: no live Ozon call is made while code 7 is confirmed."""
+    return OzonMarketplaceProvider(
+        transport=FakeMarketplaceTransport(
+            errors={operation: MarketplaceProviderError("ozon", 403, {"code": 7})}
+        )
     )
 
 
@@ -165,6 +181,7 @@ async def list_active_stock_sync_bindings(
         .where(
             FbsWarehouseBinding.tenant_id == tenant_id,
             FbsWarehouseBinding.seller_id == seller_id,
+            FbsWarehouseBinding.marketplace == "wb",
             FbsWarehouseBinding.is_active.is_(True),
             FbsWarehouseBinding.stock_sync_enabled.is_(True),
             Warehouse.tenant_id == tenant_id,
@@ -299,6 +316,7 @@ async def poll_marketplace_orders_for_target(
     http_client: httpx.AsyncClient,
     *,
     include_history: bool = False,
+    ozon_provider: OzonMarketplaceProvider | None = None,
 ) -> dict[str, int]:
     if target.marketplace == "wb":
         return await poll_fbs_orders_for_seller(
@@ -307,9 +325,14 @@ async def poll_marketplace_orders_for_target(
             http_client,
             include_history=include_history,
         )
-    # Live Ozon traffic is intentionally disabled while the account returns 403/code 7.
-    # The Ozon lane injects the fake transport into this boundary for contract/e2e runs.
-    raise MarketplaceProviderError("ozon", 403, {"code": 7})
+    provider = ozon_provider or _blocked_ozon_provider("fetch_orders")
+    return await sync_ozon_orders(
+        session,
+        target.tenant_id,
+        target.seller_id,
+        provider,
+        http_client,
+    )
 
 
 MARKING_SYNC_BATCH_SIZE = 100
@@ -414,16 +437,27 @@ async def sync_marketplace_order_statuses_for_target(
     session: AsyncSession,
     target: SellerPollTarget,
     http_client: httpx.AsyncClient,
+    *,
+    ozon_provider: OzonMarketplaceProvider | None = None,
 ) -> int:
     if target.marketplace == "wb":
         return await sync_fbs_order_statuses_for_seller(session, target, http_client)
-    raise MarketplaceProviderError("ozon", 403, {"code": 7})
+    provider = ozon_provider or _blocked_ozon_provider("fetch_statuses")
+    return await sync_ozon_order_statuses(
+        session,
+        target.tenant_id,
+        target.seller_id,
+        provider,
+        http_client,
+    )
 
 
 async def sync_marketplace_stocks_for_target(
     session: AsyncSession,
     target: SellerPollTarget,
     http_client: httpx.AsyncClient,
+    *,
+    ozon_provider: OzonMarketplaceProvider | None = None,
 ) -> SellerStockSyncResult:
     if target.marketplace == "wb":
         return await sync_seller_stocks(
@@ -432,7 +466,15 @@ async def sync_marketplace_stocks_for_target(
             target.seller_id,
             http_client,
         )
-    raise MarketplaceProviderError("ozon", 403, {"code": 7})
+    provider = ozon_provider or _blocked_ozon_provider("publish_stocks")
+    processed = await sync_ozon_stocks(
+        session,
+        target.tenant_id,
+        target.seller_id,
+        provider,
+        http_client,
+    )
+    return SellerStockSyncResult(bindings_processed=processed)
 
 
 async def poll_fbs_orders_all_sellers(

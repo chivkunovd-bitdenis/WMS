@@ -44,6 +44,13 @@ class ProductMarketplaceLink(Base):
             "external_product_id",
             name="uq_product_marketplace_links_external_product",
         ),
+        UniqueConstraint(
+            "tenant_id",
+            "seller_id",
+            "marketplace",
+            "external_sku",
+            name="uq_product_marketplace_links_external_sku",
+        ),
         Index(
             "ix_product_marketplace_links_lookup",
             "tenant_id",

@@ -116,14 +116,12 @@ test('S-31: seller sees Ozon chip in Name and never receives binding controls', 
   const ozonRow = page.getByTestId('seller-product-row').filter({ hasText: 'Ozon visible item' })
   await expect(ozonRow).toContainText('Ozon visible item')
   await expect(ozonRow.getByTestId('seller-catalog-marketplace-ozon')).toHaveText('Ozon')
-  await expect(page.getByTestId('seller-catalog-marketplace-filter')).toBeVisible()
+  // A durable product link keeps its chip even when the Ozon cabinet is not
+  // connected. The marketplace filter, unlike the chip, requires two live
+  // connections and therefore stays hidden in this scenario.
+  await expect(page.getByTestId('seller-catalog-marketplace-filter')).toHaveCount(0)
   await expect(page.getByText('Сохранить Ozon', { exact: true })).toHaveCount(0)
   await expect(page.getByLabel('SKU Ozon')).toHaveCount(0)
-
-  await page.getByTestId('seller-catalog-marketplace-filter').click()
-  await page.getByRole('option', { name: 'Ozon', exact: true }).click()
-  await expect(ozonRow).toBeVisible()
-  await expect(page.getByTestId('seller-product-row').filter({ hasText: 'WB visible item' })).toHaveCount(0)
   await page.screenshot({
     path: '../docs/evidence/ozon-integration-20260825/S-31/live-browser-corrected.png',
     fullPage: true,

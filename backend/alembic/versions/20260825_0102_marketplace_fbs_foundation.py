@@ -123,6 +123,13 @@ def upgrade() -> None:
             "external_product_id",
             name="uq_product_marketplace_links_external_product",
         ),
+        sa.UniqueConstraint(
+            "tenant_id",
+            "seller_id",
+            "marketplace",
+            "external_sku",
+            name="uq_product_marketplace_links_external_sku",
+        ),
     )
     op.create_index(
         "ix_product_marketplace_links_tenant_id", "product_marketplace_links", ["tenant_id"]

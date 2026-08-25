@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock
 import pytest
 import pytest_asyncio
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.fbs_orders import _run_blocked_ozon_fake
@@ -30,12 +31,18 @@ from app.models.fbs_supply import (
 )
 from app.models.marketplace_account import MarketplaceAccount
 from app.models.product import Product
+from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller import Seller
 from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
 from app.services import fbs_print_asset_service as print_asset_svc
 from app.services import fbs_shipment_service as shipment_svc
 from app.services import fbs_supply_service as supply_svc
+from app.services.fbs_autopoll_service import (
+    SellerPollTarget,
+    poll_marketplace_orders_for_target,
+    sync_marketplace_order_statuses_for_target,
+)
 from app.services.fbs_print_asset_service import fetch_order_label_rows_for_marketplace
 from app.services.fbs_supply_validator_service import (
     SupplyPreflightResult,
@@ -224,6 +231,102 @@ async def test_manual_sync_fake_returns_human_ozon_403_code7() -> None:
     assert caught.value.detail["message"] == (
         "Кабинет Ozon заблокирован. Обратитесь в поддержку Ozon."
     )
+
+
+@pytest.mark.asyncio
+async def test_ozon_autopoll_positive_fake_upserts_shared_order_and_status(
+    db_session: AsyncSession,
+) -> None:
+    tenant = Tenant(name="Ozon poll test", slug=f"ozon-poll-{uuid.uuid4().hex[:8]}")
+    seller = Seller(tenant=tenant, name="Seller")
+    warehouse = Warehouse(
+        tenant=tenant,
+        name="FBS",
+        code=f"ozon-poll-{uuid.uuid4().hex[:8]}",
+    )
+    product = Product(
+        tenant=tenant,
+        seller=seller,
+        name="Product",
+        sku_code=f"sku-{uuid.uuid4().hex[:8]}",
+    )
+    db_session.add_all([tenant, seller, warehouse, product])
+    await db_session.flush()
+    db_session.add_all(
+        [
+            MarketplaceAccount(
+                tenant_id=tenant.id,
+                seller_id=seller.id,
+                marketplace="ozon",
+                account_slot="primary",
+                external_account_id="client-id",
+                secret_encrypted=encrypt_secret("api-key"),
+                is_active=True,
+                validation_status="valid",
+            ),
+            ProductMarketplaceLink(
+                tenant_id=tenant.id,
+                seller_id=seller.id,
+                product_id=product.id,
+                marketplace="ozon",
+                external_sku="ozon-sku-1",
+            ),
+        ]
+    )
+    from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+
+    db_session.add(
+        FbsWarehouseBinding(
+            tenant_id=tenant.id,
+            seller_id=seller.id,
+            marketplace="ozon",
+            external_warehouse_id="ozon-wh-1",
+            wb_warehouse_id=-101,
+            wms_warehouse_id=warehouse.id,
+        )
+    )
+    await db_session.commit()
+
+    transport = FakeMarketplaceTransport(
+        orders=[
+            {
+                "posting_number": "ozon-posting-1",
+                "status": "awaiting_packaging",
+                "sku": "ozon-sku-1",
+                "warehouse_id": "ozon-wh-1",
+                "created_at": datetime.now(UTC).isoformat(),
+            }
+        ],
+        statuses=[{"posting_number": "ozon-posting-1", "status": "delivering"}],
+    )
+    provider = OzonMarketplaceProvider(transport=transport)
+    target = SellerPollTarget(tenant.id, seller.id, "ozon")
+
+    result = await poll_marketplace_orders_for_target(
+        db_session,
+        target,
+        AsyncMock(),
+        ozon_provider=provider,
+    )
+    statuses_updated = await sync_marketplace_order_statuses_for_target(
+        db_session,
+        target,
+        AsyncMock(),
+        ozon_provider=provider,
+    )
+
+    order = (
+        await db_session.execute(
+            select(FbsOrder).where(FbsOrder.external_order_id == "ozon-posting-1")
+        )
+    ).scalar_one()
+    assert result["orders_created"] == 1
+    assert statuses_updated == 1
+    assert order.marketplace == "ozon"
+    assert order.product_id == product.id
+    assert order.warehouse_id == warehouse.id
+    assert order.status == "in_delivery"
+    assert [call[0] for call in transport.calls] == ["fetch_orders", "fetch_statuses"]
 
 
 async def _seed_ozon_supply_case(
