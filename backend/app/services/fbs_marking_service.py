@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.fbs_order import (
     CHECK_STATUS_CHECKING,
@@ -39,6 +40,7 @@ from app.models.marking_code import (
     MarkingCode,
     MarkingCodeEvent,
 )
+from app.services import ozon_fbs_marking_gate_service as ozon_gate_svc
 from app.services.marketplace_account_service import (
     MarketplaceAccountError,
     MarketplaceAccountService,
@@ -291,6 +293,9 @@ def compute_delivery_allowed(
     order: FbsOrder,
     markings: list[FbsOrderMarking],
 ) -> bool:
+    if getattr(order, "marketplace", "wb") == "ozon":
+        return ozon_gate_svc.compute_delivery_allowed(order, markings)
+
     required = list(order.required_meta_json or [])
     if not required:
         return True
@@ -321,6 +326,9 @@ def delivery_marking_message(
     markings: list[FbsOrderMarking],
 ) -> str:
     """One short WB status for the existing final delivery confirmation."""
+    if getattr(order, "marketplace", "wb") == "ozon":
+        return ozon_gate_svc.delivery_message(order, markings)
+
     if not order.required_meta_json:
         return "WB: маркировка не требуется."
     for kind in order.required_meta_json:
@@ -444,7 +452,7 @@ async def _get_order(
     stmt = select(FbsOrder).where(
         FbsOrder.id == order_id,
         FbsOrder.tenant_id == tenant_id,
-    )
+    ).options(selectinload(FbsOrder.product_positions))
     if for_update:
         stmt = stmt.with_for_update()
     result = await session.execute(stmt)
@@ -842,23 +850,14 @@ async def sync_order_marking_statuses(
             )
         except (MarketplaceAccountError, MarketplaceProviderError, OzonFbsProcessError) as exc:
             raise FbsMarkingError(getattr(exc, "code", "ozon_upstream_error")) from exc
-        for marking in markings:
-            marking.meta_details_json = result.details
-            marking.reason = result.reason
-            marking.meta_status = (
-                META_STATUS_ACCEPTED
-                if result.accepted
-                else META_STATUS_PENDING
-                if result.pending
-                else META_STATUS_REJECTED
-            )
-            marking.check_status = (
-                CHECK_STATUS_OK
-                if result.accepted
-                else CHECK_STATUS_CHECKING
-                if result.pending
-                else CHECK_STATUS_ERROR
-            )
+        ozon_gate_svc.apply_status(
+            order,
+            markings,
+            details=result.details,
+            reason=result.reason,
+            accepted=result.accepted,
+            pending=result.pending,
+        )
         order.metadata_delivery_allowed = compute_delivery_allowed(order, markings)
         order.metadata_last_checked_at = datetime.now(tz=UTC)
         await session.flush()

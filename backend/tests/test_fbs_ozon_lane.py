@@ -1582,16 +1582,317 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
         .scalars()
         .all()
     )
-    assert [marking.order_product_id for marking in markings] == [
-        order.product_positions[0].id,
-        order.product_positions[1].id,
-        order.product_positions[1].id,
-    ]
-    assert [marking.meta_details_json["exemplar_id"] for marking in markings] == [81, 82, 83]
+    assert {
+        position.id: sum(marking.order_product_id == position.id for marking in markings)
+        for position in order.product_positions
+    } == {
+        order.product_positions[0].id: 1,
+        order.product_positions[1].id: 2,
+    }
+    assert sorted(marking.meta_details_json["exemplar_id"] for marking in markings) == [81, 82, 83]
     assert [line.qty_marking_external for line in lines] == [1, 2]
     assert order.metadata_delivery_allowed is True
+
+    supply.status = FBS_SUPPLY_STATUS_PACKED
+    order.status = FBS_ORDER_STATUS_PACKED
+    tenant_id = order.tenant_id
+    supply_id = supply.id
+    await db_session.commit()
+    async with SessionLocal() as preflight_session:
+        preflight = await shipment_svc.preflight_delivery(
+            preflight_session,
+            tenant_id,
+            supply_id,
+            AsyncMock(),
+        )
+    assert preflight.can_deliver is True
+    assert all(check.code != "marking_not_allowed" for check in preflight.checks)
+
+    first_position_id = markings[0].order_product_id
+    markings[0].order_product_id = None
+    await db_session.commit()
+    async with SessionLocal() as preflight_session:
+        incomplete = await shipment_svc.preflight_delivery(
+            preflight_session,
+            tenant_id,
+            supply_id,
+            AsyncMock(),
+        )
+    assert incomplete.can_deliver is False
+    assert any(
+        check.code == "marking_not_allowed" and not check.ok for check in incomplete.checks
+    )
+
+    markings[0].order_product_id = first_position_id
+    first_details = dict(markings[0].meta_details_json or {})
+    markings[0].meta_details_json = {**first_details, "status": "ship_not_available"}
+    await db_session.commit()
+    async with SessionLocal() as preflight_session:
+        blocked = await shipment_svc.preflight_delivery(
+            preflight_session,
+            tenant_id,
+            supply_id,
+            AsyncMock(),
+        )
+    assert blocked.can_deliver is False
+    assert any(
+        check.code == "marking_not_allowed" and not check.ok for check in blocked.checks
+    )
     wb_token.assert_not_awaited()
     wb_delete.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_ozon_preflight_blocks_required_marking_without_product_positions(
+    db_session: AsyncSession,
+) -> None:
+    tenant, _, _, _, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    assert supply is not None
+    order.required_meta_json = ["sgtin"]
+    db_session.add(
+        FbsOrderMarking(
+            tenant_id=tenant.id,
+            order_id=order.id,
+            kind="sgtin",
+            value="legacy-code",
+            meta_status=META_STATUS_ACCEPTED,
+            check_status=CHECK_STATUS_OK,
+            meta_details_json={"status": "ship_available", "exemplar_id": 81},
+        )
+    )
+    await db_session.commit()
+
+    result = await shipment_svc.preflight_delivery(
+        db_session,
+        tenant.id,
+        supply.id,
+        AsyncMock(),
+    )
+
+    assert result.can_deliver is False
+    assert any(check.code == "marking_not_allowed" for check in result.checks)
+
+
+@pytest.mark.asyncio
+async def test_ozon_gate_requires_each_kind_and_rejects_duplicate_exemplar(
+    db_session: AsyncSession,
+) -> None:
+    order, _ = await _sync_ozon_posting_with_products(
+        db_session,
+        positions=[{"sku": 4001, "offer_id": "offer-1", "name": "Товар", "quantity": 2}],
+    )
+    position = order.product_positions[0]
+    order.required_meta_json = ["sgtin", "imei"]
+    markings = [
+        FbsOrderMarking(
+            tenant_id=order.tenant_id,
+            order_id=order.id,
+            order_product_id=position.id,
+            kind=kind,
+            value=value,
+            meta_status=META_STATUS_ACCEPTED,
+            check_status=CHECK_STATUS_OK,
+            meta_details_json={"status": "ship_available", "exemplar_id": 81},
+        )
+        for kind, value in [
+            ("sgtin", "code-1"),
+            ("sgtin", "code-2"),
+            ("imei", "imei-1"),
+            ("imei", "imei-2"),
+        ]
+    ]
+    for index, marking in enumerate(markings):
+        marking.meta_details_json = {
+            "status": "ship_available",
+            "exemplar_id": 81 + index % 2,
+        }
+    db_session.add_all(markings)
+    await db_session.flush()
+    assert marking_svc.compute_delivery_allowed(order, markings) is True
+
+    duplicate = FbsOrderMarking(
+        tenant_id=order.tenant_id,
+        order_id=order.id,
+        order_product_id=position.id,
+        kind="sgtin",
+        value="code-duplicate",
+        meta_status=META_STATUS_ACCEPTED,
+        check_status=CHECK_STATUS_OK,
+        meta_details_json={"status": "ship_available", "exemplar_id": 82},
+    )
+    db_session.add(duplicate)
+    await db_session.flush()
+    assert marking_svc.compute_delivery_allowed(order, [*markings, duplicate]) is False
+
+
+@pytest.mark.asyncio
+async def test_ozon_status_sync_updates_only_current_rows_and_preserves_exemplars(
+    db_session: AsyncSession,
+) -> None:
+    order, _ = await _sync_ozon_posting_with_products(
+        db_session,
+        positions=[{"sku": 4001, "offer_id": "offer-1", "name": "Товар", "quantity": 2}],
+    )
+    position = order.product_positions[0]
+    order.required_meta_json = ["sgtin"]
+    now = datetime.now(UTC)
+
+    def marking(
+        value: str,
+        exemplar_id: int,
+        *,
+        created_at: datetime,
+        meta_status: str = META_STATUS_ACCEPTED,
+    ) -> FbsOrderMarking:
+        return FbsOrderMarking(
+            tenant_id=order.tenant_id,
+            order_id=order.id,
+            order_product_id=position.id,
+            kind="sgtin",
+            value=value,
+            meta_status=meta_status,
+            check_status=CHECK_STATUS_ERROR,
+            meta_details_json={"status": "validation_in_process", "exemplar_id": exemplar_id},
+            created_at=created_at,
+        )
+
+    historical = marking("old", 80, created_at=now - timedelta(minutes=2))
+    current = [
+        marking("current-1", 81, created_at=now - timedelta(seconds=2)),
+        marking("current-2", 82, created_at=now - timedelta(seconds=1)),
+    ]
+    rejected = marking(
+        "rejected",
+        79,
+        created_at=now - timedelta(minutes=3),
+        meta_status=META_STATUS_REJECTED,
+    )
+    db_session.add_all([historical, *current, rejected])
+    await db_session.commit()
+    provider = OzonMarketplaceProvider(
+        transport=FakeMarketplaceTransport(
+            endpoint_responses={
+                "/v5/fbs/posting/product/exemplar/status": {
+                    "posting_number": order.external_order_id,
+                    "status": "ship_available",
+                    "products": [],
+                }
+            }
+        )
+    )
+
+    await marking_svc.sync_order_marking_statuses(
+        db_session,
+        order.tenant_id,
+        order.id,
+        AsyncMock(),
+        ozon_provider=provider,
+    )
+
+    assert [row.meta_details_json["exemplar_id"] for row in current] == [81, 82]
+    assert all(row.meta_details_json["status"] == "ship_available" for row in current)
+    assert historical.meta_details_json == {
+        "status": "validation_in_process",
+        "exemplar_id": 80,
+    }
+    assert rejected.meta_status == META_STATUS_REJECTED
+    assert rejected.meta_details_json == {
+        "status": "validation_in_process",
+        "exemplar_id": 79,
+    }
+    assert order.metadata_delivery_allowed is True
+
+
+@pytest.mark.asyncio
+async def test_ozon_negative_sync_does_not_fall_back_to_accepted_history(
+    db_session: AsyncSession,
+) -> None:
+    order, _ = await _sync_ozon_posting_with_products(
+        db_session,
+        positions=[{"sku": 4001, "offer_id": "offer-1", "name": "Товар", "quantity": 1}],
+    )
+    position = order.product_positions[0]
+    supply = FbsSupply(
+        tenant_id=order.tenant_id,
+        seller_id=order.seller_id,
+        warehouse_id=order.warehouse_id,
+        marketplace="ozon",
+        name="Ozon negative sync",
+        status=FBS_SUPPLY_STATUS_PACKED,
+        delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+    )
+    db_session.add(supply)
+    await db_session.flush()
+    order.supply_id = supply.id
+    order.status = FBS_ORDER_STATUS_PACKED
+    order.required_meta_json = ["sgtin"]
+    now = datetime.now(UTC)
+    historical = FbsOrderMarking(
+        tenant_id=order.tenant_id,
+        order_id=order.id,
+        order_product_id=position.id,
+        kind="sgtin",
+        value="historical-accepted",
+        meta_status=META_STATUS_ACCEPTED,
+        check_status=CHECK_STATUS_OK,
+        meta_details_json={"status": "ship_available", "exemplar_id": 80},
+        created_at=now - timedelta(minutes=1),
+    )
+    current = FbsOrderMarking(
+        tenant_id=order.tenant_id,
+        order_id=order.id,
+        order_product_id=position.id,
+        kind="sgtin",
+        value="current-negative",
+        meta_status=META_STATUS_ACCEPTED,
+        check_status=CHECK_STATUS_OK,
+        meta_details_json={"status": "validation_in_process", "exemplar_id": 81},
+        created_at=now,
+    )
+    db_session.add_all([historical, current])
+    await db_session.commit()
+    provider = OzonMarketplaceProvider(
+        transport=FakeMarketplaceTransport(
+            endpoint_responses={
+                "/v5/fbs/posting/product/exemplar/status": {
+                    "posting_number": order.external_order_id,
+                    "status": "ship_not_available",
+                    "products": [],
+                }
+            }
+        )
+    )
+
+    for _ in range(2):
+        await marking_svc.sync_order_marking_statuses(
+            db_session,
+            order.tenant_id,
+            order.id,
+            AsyncMock(),
+            ozon_provider=provider,
+        )
+        assert current.meta_status == META_STATUS_REJECTED
+        assert current.meta_details_json == {
+            "status": "ship_not_available",
+            "exemplar_id": 81,
+        }
+        assert historical.meta_status == META_STATUS_ACCEPTED
+        assert historical.meta_details_json == {
+            "status": "ship_available",
+            "exemplar_id": 80,
+        }
+        assert order.metadata_delivery_allowed is False
+
+    await db_session.commit()
+    async with SessionLocal() as preflight_session:
+        preflight = await shipment_svc.preflight_delivery(
+            preflight_session,
+            order.tenant_id,
+            supply.id,
+            AsyncMock(),
+        )
+    assert preflight.can_deliver is False
+    assert any(check.code == "marking_not_allowed" for check in preflight.checks)
 
 
 @pytest.mark.asyncio

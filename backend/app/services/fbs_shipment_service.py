@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -254,24 +254,30 @@ async def _get_supply_for_update(
     return result.scalar_one_or_none()
 
 
-async def _load_locked_supply_orders(
-    session: AsyncSession,
+def _supply_orders_stmt(
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
-) -> list[FbsOrder]:
-    stmt = (
+) -> Select[tuple[FbsOrder]]:
+    return (
         select(FbsOrder)
         .where(
             FbsOrder.supply_id == supply_id,
             FbsOrder.tenant_id == tenant_id,
         )
-        .with_for_update()
         .options(
             selectinload(FbsOrder.product),
+            selectinload(FbsOrder.product_positions),
             selectinload(FbsOrder.markings),
         )
     )
-    result = await session.execute(stmt)
+
+
+async def _load_locked_supply_orders(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+) -> list[FbsOrder]:
+    result = await session.execute(_supply_orders_stmt(tenant_id, supply_id).with_for_update())
     return list(result.scalars().all())
 
 
@@ -280,18 +286,7 @@ async def _load_supply_orders_read(
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
 ) -> list[FbsOrder]:
-    stmt = (
-        select(FbsOrder)
-        .where(
-            FbsOrder.supply_id == supply_id,
-            FbsOrder.tenant_id == tenant_id,
-        )
-        .options(
-            selectinload(FbsOrder.product),
-            selectinload(FbsOrder.markings),
-        )
-    )
-    result = await session.execute(stmt)
+    result = await session.execute(_supply_orders_stmt(tenant_id, supply_id))
     return list(result.scalars().all())
 
 
