@@ -166,30 +166,36 @@ async def test_ozon_return_endpoints_use_all_return_operations_through_fake_tran
     app = async_client._transport.app  # type: ignore[attr-defined]
     app.dependency_overrides[get_ozon_return_provider] = lambda: provider
 
-    preview = await async_client.get(f"{BASE}/{request_id}/ozon-returns/preview", headers=headers)
+    preview = await async_client.get(
+        f"/operations/inbound-intake-requests/{request_id}/ozon-returns/preview", headers=headers
+    )
     assert preview.status_code == 200, preview.text
     assert preview.json()["groups"][0]["items"][0]["warning"] == "Товар не сопоставлен с каталогом"
 
     imported = await async_client.post(
-        f"{BASE}/{request_id}/ozon-returns/import",
+        f"/operations/inbound-intake-requests/{request_id}/ozon-returns/import",
         headers=headers,
         json={"giveout_ids": [42]},
     )
     assert imported.status_code == 200, imported.text
     assert imported.json() == {"giveouts_imported": 1, "items_imported": 1, "unmatched_items": 1}
 
-    groups = await async_client.get(f"{BASE}/{request_id}/ozon-returns/groups", headers=headers)
+    groups = await async_client.get(
+        f"/operations/inbound-intake-requests/{request_id}/ozon-returns/groups", headers=headers
+    )
     assert groups.status_code == 200, groups.text
     assert groups.json()[0]["giveout_status"] == "GIVEOUT_STATUS_COMPLETED"
 
     refreshed = await async_client.post(
-        f"{BASE}/{request_id}/ozon-returns/refresh-statuses", headers=headers
+        f"/operations/inbound-intake-requests/{request_id}/ozon-returns/refresh-statuses",
+        headers=headers,
     )
     assert refreshed.status_code == 200, refreshed.text
     assert refreshed.json()[0]["giveout_status"] == "GIVEOUT_STATUS_COMPLETED"
 
     points = await async_client.get(
-        f"{BASE}/{request_id}/ozon-returns/fbs-return-points", headers=headers
+        f"/operations/inbound-intake-requests/{request_id}/ozon-returns/fbs-return-points",
+        headers=headers,
     )
     assert points.status_code == 200, points.text
     assert points.json() == [
@@ -207,14 +213,21 @@ async def test_ozon_return_endpoints_use_all_return_operations_through_fake_tran
         }
     ]
 
-    barcode = await async_client.get(f"{BASE}/{request_id}/ozon-returns/barcode", headers=headers)
+    barcode = await async_client.get(
+        f"/operations/inbound-intake-requests/{request_id}/ozon-returns/barcode", headers=headers
+    )
     assert barcode.json() == {"barcode": "seller-pass"}
-    pdf = await async_client.get(f"{BASE}/{request_id}/ozon-returns/pass.pdf", headers=headers)
+    pdf = await async_client.get(
+        f"/operations/inbound-intake-requests/{request_id}/ozon-returns/pass.pdf", headers=headers
+    )
     assert pdf.status_code == 200 and pdf.content == b"pdf-pass"
-    png = await async_client.get(f"{BASE}/{request_id}/ozon-returns/pass.png", headers=headers)
+    png = await async_client.get(
+        f"/operations/inbound-intake-requests/{request_id}/ozon-returns/pass.png", headers=headers
+    )
     assert png.status_code == 200 and png.content == b"png-pass"
     reset = await async_client.post(
-        f"{BASE}/{request_id}/ozon-returns/barcode/reset.png", headers=headers
+        f"/operations/inbound-intake-requests/{request_id}/ozon-returns/barcode/reset.png",
+        headers=headers,
     )
     assert reset.status_code == 200 and reset.content == b"png-pass"
     assert [path for path, _payload in transport.endpoint_calls].count(
@@ -293,14 +306,14 @@ async def test_return_defective_quantity_uses_the_inbound_service_constraint(
     assert accepted.status_code == 200, accepted.text
 
     defective = await async_client.patch(
-        f"{BASE}/{request_id}/lines/{line_id}/defective",
+        f"/operations/inbound-intake-requests/{request_id}/lines/{line_id}/defective",
         headers=headers,
         json={"defective_qty": 1},
     )
     assert defective.status_code == 200, defective.text
     assert defective.json()["defective_qty"] == 1
     exceeds_accepted = await async_client.patch(
-        f"{BASE}/{request_id}/lines/{line_id}/defective",
+        f"/operations/inbound-intake-requests/{request_id}/lines/{line_id}/defective",
         headers=headers,
         json={"defective_qty": 3},
     )

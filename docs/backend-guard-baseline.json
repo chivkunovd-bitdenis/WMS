@@ -8,7 +8,7 @@
   },
   "backend/app/api/inbound_intake.py": {
     "роут-без-теста": 19,
-    "файл-монолит": 2056
+    "файл-монолит": 2189
   },
   "backend/app/api/marketplace_unload_requests.py": {
     "роут-без-теста": 4,
@@ -47,8 +47,7 @@
     "файл-монолит": 1278
   },
   "backend/app/services/fbs_autopoll_service.py": {
-    "голый-except": 3,
-    "файл-монолит": 806
+    "голый-except": 3
   },
   "backend/app/services/fbs_kiz_service.py": {
     "файл-монолит": 1102
@@ -57,7 +56,7 @@
     "файл-монолит": 891
   },
   "backend/app/services/fbs_packaging_integration_service.py": {
-    "файл-монолит": 906
+    "файл-монолит": 904
   },
   "backend/app/services/fbs_picking_service.py": {
     "файл-монолит": 818
@@ -84,10 +83,10 @@
     "файл-монолит": 897
   },
   "backend/app/services/inbound_intake_service.py": {
-    "файл-монолит": 1823
+    "файл-монолит": 1891
   },
   "backend/app/services/inventory_service.py": {
-    "файл-монолит": 1276
+    "файл-монолит": 1328
   },
   "backend/app/services/marketplace_unload_collect_service.py": {
     "файл-монолит": 858

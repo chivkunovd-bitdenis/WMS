@@ -56,3 +56,19 @@ export function filterOzonReturnGroups(
     }))
     .filter((group) => group.items.length > 0)
 }
+
+export function ozonReturnGroupAt(
+  groups: OzonReturnPreviewGroup[],
+  lines: { id: string }[],
+  index: number,
+): { group?: OzonReturnPreviewGroup; showHeader: boolean } {
+  const findGroup = (lineId?: string) =>
+    lineId
+      ? groups.find((group) =>
+          group.items.some((item) => item.inbound_line_id === lineId),
+        )
+      : undefined
+  const group = findGroup(lines[index]?.id)
+  const previousGroup = findGroup(lines[index - 1]?.id)
+  return { group, showHeader: group != null && group.giveout_id !== previousGroup?.giveout_id }
+}

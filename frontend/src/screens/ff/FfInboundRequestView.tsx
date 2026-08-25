@@ -55,12 +55,9 @@ import { ProductBarcodePrintButton } from '../../components/ProductBarcodePrintB
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { WbProductPickerDialog } from '../../components/WbProductPickerDialog'
 import { WmsDateField } from '../../components/WmsDateField'
-import {
-  OzonReturnPickerDialog,
-  type OzonReturnPreviewGroup,
-} from '../../components/OzonReturnPickerDialog'
-import { ozonGiveoutStatus } from '../../components/ozonReturnPickerHelpers'
-import { MarketplaceChip, StatusChip } from '../../ui-kit'
+import { OzonReturnActions, OzonReturnGroupRow, OzonReturnOrphanGroupRows, ReturnDefectiveQtyCell } from '../../components/OzonReturnDocumentUi'
+import { ozonReturnGroupAt } from '../../components/ozonReturnPickerHelpers'
+import { MarketplaceChip } from '../../ui-kit'
 import {
   formatProductBarcodeDisplay,
   productDisplayMetaFromCatalog,
@@ -71,7 +68,6 @@ import { printBarcodeLabel } from '../../utils/printBarcodeLabel'
 import { BoxLabelPrintDialog } from '../../components/BoxLabelPrintDialog'
 import type { LabelSize } from '../../utils/labelSize'
 import { printInboundReceivingSheet } from '../../utils/printInboundReceivingSheet'
-import { printOzonReturnReconciliation } from '../../utils/printOzonReturnReconciliation'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { inboundOperationTypeReceptionLabel } from '../../utils/inboundOperationType'
 import { FfInboundBoxAddDialog } from './FfInboundBoxAddDialog'
@@ -96,6 +92,8 @@ import { suggestNextLocationCode } from '../../utils/suggestNextLocationCode'
 import { renderBarcodeDataUrl } from '../../utils/renderBarcodeDataUrl'
 import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
 import { formatHumanDocumentNumber } from './documentDisplay'
+import { useOzonReturnWorkflow } from './useOzonReturnWorkflow'
+import { applyScannedInboundLine, createDebouncedInboundReconciler, createSerialScanQueue, isLatestScannedInboundLine } from './inboundReceivingRuntime'
 
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
 type WarehouseRow = { id: string; name: string; code: string }
@@ -151,50 +149,6 @@ type InboundLine = {
   posted_qty: number
   storage_location_id: string | null
   storage_location_code: string | null
-}
-
-export function applyScannedInboundLine<T extends { id: string }>(
-  lines: T[],
-  scannedLine: T,
-): T[] {
-  const exists = lines.some((line) => line.id === scannedLine.id)
-  return exists
-    ? lines.map((line) => (line.id === scannedLine.id ? scannedLine : line))
-    : [...lines, scannedLine]
-}
-
-// eslint-disable-next-line react-refresh/only-export-components
-export function createDebouncedInboundReconciler(
-  reload: () => Promise<unknown>,
-  delayMs = 2500,
-) {
-  let timer: ReturnType<typeof setTimeout> | null = null
-  return {
-    schedule(): void {
-      if (timer !== null) clearTimeout(timer)
-      timer = setTimeout(() => {
-        timer = null
-        void reload().catch(() => undefined)
-      }, delayMs)
-    },
-    cancel(): void {
-      if (timer !== null) clearTimeout(timer)
-      timer = null
-    },
-  }
-}
-
-export function isLatestScannedInboundLine(lineId: string, lastScannedLineId: string | null): boolean {
-  return lineId === lastScannedLineId
-}
-
-export function createSerialScanQueue() {
-  let tail = Promise.resolve()
-  return (scan: () => Promise<void>): Promise<void> => {
-    const next = tail.then(scan, scan)
-    tail = next.catch(() => undefined)
-    return next
-  }
 }
 
 type DiscrepancyActLine = {
@@ -501,14 +455,6 @@ export function FfInboundRequestView({
   const [dimensionDraft, setDimensionDraft] = useState({ length: '', width: '', height: '', weight: '' })
   const [dimensionError, setDimensionError] = useState<string | null>(null)
   const [returnAutoPrint, setReturnAutoPrint] = useState(false)
-  const [ozonReturnPickerOpen, setOzonReturnPickerOpen] = useState(false)
-  const [ozonReturnPreview, setOzonReturnPreview] = useState<{
-    groups: OzonReturnPreviewGroup[]
-    message: string | null
-  }>({ groups: [], message: null })
-  const [ozonReturnPreviewLoading, setOzonReturnPreviewLoading] = useState(false)
-  const [ozonReturnPreviewError, setOzonReturnPreviewError] = useState<string | null>(null)
-  const [ozonReturnGroups, setOzonReturnGroups] = useState<OzonReturnPreviewGroup[]>([])
 
   const [plannedDateDraft, setPlannedDateDraft] = useState<string>('')
   const [manualEditLineId, setManualEditLineId] = useState<string | null>(null)
@@ -650,26 +596,6 @@ export function FfInboundRequestView({
     }
     return data
   }, [authHeaders, requestId])
-
-  const fetchOzonReturnGroups = useCallback(async (): Promise<OzonReturnPreviewGroup[]> => {
-    const response = await fetch(
-      apiUrl(`/operations/inbound-intake-requests/${requestId}/ozon-returns/groups`),
-      { headers: authHeaders },
-    )
-    if (!response.ok) {
-      throw new Error(await readApiErrorMessage(response))
-    }
-    return (await response.json()) as OzonReturnPreviewGroup[]
-  }, [authHeaders, requestId])
-
-  const loadOzonReturnGroups = useCallback(async (): Promise<void> => {
-    try {
-      setOzonReturnGroups(await fetchOzonReturnGroups())
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось загрузить состав возврата Ozon.')
-      setOzonReturnGroups([])
-    }
-  }, [fetchOzonReturnGroups])
 
   const receivingScanReconciler = useMemo(
     () => createDebouncedInboundReconciler(loadDetail),
@@ -882,14 +808,6 @@ export function FfInboundRequestView({
   }, [detail?.planned_delivery_date])
 
   useEffect(() => {
-    if (!isOzonReturn) {
-      setOzonReturnGroups([])
-      return
-    }
-    void loadOzonReturnGroups()
-  }, [isOzonReturn, loadOzonReturnGroups])
-
-  useEffect(() => {
     if (!detail) {
       setActualDraftByLineId({})
       return
@@ -992,6 +910,9 @@ export function FfInboundRequestView({
     }
     return m
   }, [catalog])
+  const ozonReturn = useOzonReturnWorkflow({ requestId, authHeaders, isOzonReturn, catalogById,
+    documentNumber: displayDocumentNumber, sellerName: detail?.seller_name ?? null, loadDetail,
+    setBusy, setError, setSuccessMessage: setImportSuccessMsg })
 
   const scanProductByBarcode = useMemo(
     () => buildInboundScanProductMap(detail?.lines ?? [], catalogById),
@@ -1943,157 +1864,6 @@ export function FfInboundRequestView({
     }
   }
 
-  const openOzonReturnPicker = async () => {
-    setOzonReturnPickerOpen(true)
-    setOzonReturnPreviewLoading(true)
-    setOzonReturnPreviewError(null)
-    try {
-      const res = await fetch(
-        apiUrl(`/operations/inbound-intake-requests/${requestId}/ozon-returns/preview`),
-        { headers: authHeaders },
-      )
-      if (!res.ok) {
-        setOzonReturnPreviewError(await readApiErrorMessage(res))
-        return
-      }
-      const preview = (await res.json()) as {
-        groups: OzonReturnPreviewGroup[]
-        message: string | null
-      }
-      setOzonReturnPreview({
-        ...preview,
-        groups: preview.groups.map((group) => ({
-          ...group,
-          items: group.items.map((item) => ({
-            ...item,
-            image_url:
-              item.image_url ??
-              (item.product_id ? catalogById.get(item.product_id)?.wb_primary_image_url : null) ??
-              null,
-          })),
-        })),
-      })
-    } catch (e) {
-      setOzonReturnPreviewError(
-        e instanceof Error ? e.message : 'Не удалось получить возвраты Ozon.',
-      )
-    } finally {
-      setOzonReturnPreviewLoading(false)
-    }
-  }
-
-  const importOzonReturnGiveouts = async (giveoutIds: number[]) => {
-    setBusy(true)
-    setOzonReturnPreviewError(null)
-    try {
-      const res = await fetch(
-        apiUrl(`/operations/inbound-intake-requests/${requestId}/ozon-returns/import`),
-        {
-          method: 'POST',
-          headers: { ...authHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ giveout_ids: giveoutIds }),
-        },
-      )
-      if (!res.ok) {
-        setOzonReturnPreviewError(await readApiErrorMessage(res))
-        return
-      }
-      const imported = (await res.json()) as { giveouts_imported: number; unmatched_items: number }
-      setImportSuccessMsg(
-        imported.unmatched_items > 0
-          ? `Добавлено пунктов: ${imported.giveouts_imported}. Несопоставленные товары остались в документе.`
-          : `Добавлено пунктов: ${imported.giveouts_imported}.`,
-      )
-      setOzonReturnPickerOpen(false)
-      await loadDetail()
-      await loadOzonReturnGroups()
-    } catch (e) {
-      setOzonReturnPreviewError(
-        e instanceof Error ? e.message : 'Не удалось добавить возвраты Ozon.',
-      )
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const downloadOzonReturnPass = async () => {
-    setBusy(true)
-    setError(null)
-    try {
-      const res = await fetch(
-        apiUrl(`/operations/inbound-intake-requests/${requestId}/ozon-returns/pass.pdf`),
-        { headers: authHeaders },
-      )
-      if (!res.ok) {
-        setError(await readApiErrorMessage(res))
-        return
-      }
-      const url = URL.createObjectURL(await res.blob())
-      const link = document.createElement('a')
-      link.href = url
-      link.download = 'ozon-return-pass.pdf'
-      link.click()
-      URL.revokeObjectURL(url)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось получить пропуск Ozon.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const printOzonReturnReconciliationSheet = async () => {
-    setBusy(true)
-    setError(null)
-    try {
-      const groups = await fetchOzonReturnGroups()
-      setOzonReturnGroups(groups)
-      printOzonReturnReconciliation({
-        documentNumber: displayDocumentNumber,
-        sellerName: detail?.seller_name ?? null,
-        groups: groups.map((group) => ({
-          giveout_id: group.giveout_id,
-          giveout_status: ozonGiveoutStatus(group.giveout_status).label,
-          warehouse_name: group.warehouse_name,
-          warehouse_address: group.warehouse_address,
-          items: group.items,
-        })),
-      })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось напечатать лист сверки Ozon.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const setLineDefective = async (lineId: string, raw: string, accepted: number) => {
-    const qty = raw.trim() === '' ? 0 : Number(raw)
-    if (!Number.isInteger(qty) || qty < 0 || qty > accepted) {
-      setError('Брак не может быть больше принятого количества.')
-      return
-    }
-    setBusy(true)
-    setError(null)
-    try {
-      const res = await fetch(
-        apiUrl(`/operations/inbound-intake-requests/${requestId}/lines/${lineId}/defective`),
-        {
-          method: 'PATCH',
-          headers: { ...authHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ defective_qty: qty }),
-        },
-      )
-      if (!res.ok) {
-        setError(await readApiErrorMessage(res))
-        return
-      }
-      await loadDetail()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось сохранить брак.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
   const saveManualLineActual = async (lineId: string, rawOverride?: string) => {
     const raw =
       rawOverride ??
@@ -2278,12 +2048,7 @@ export function FfInboundRequestView({
                 <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-operation-type">
                   Тип: <strong>{operationTypeLabel}</strong>
                 </Typography>
-                {detail.marketplace ? (
-                  <MarketplaceChip
-                    marketplace={detail.marketplace === 'wildberries' ? 'wb' : 'ozon'}
-                    testId="ff-inbound-marketplace-chip"
-                  />
-                ) : null}
+                {detail.marketplace ? <MarketplaceChip marketplace={detail.marketplace === 'wildberries' ? 'wb' : 'ozon'} testId="ff-inbound-marketplace-chip" /> : null}
                 <Typography variant="body2" color="text.secondary" data-testid="ff-inbound-seller-name">
                   Селлер: <strong>{detail.seller_name ?? '—'}</strong>
                 </Typography>
@@ -2406,16 +2171,6 @@ export function FfInboundRequestView({
 
               {detail.status === 'draft' ? (
                 <>
-                  {isFulfillmentAdmin && isOzonReturn ? (
-                    <Button
-                      variant="contained"
-                      disabled={busy}
-                      onClick={() => void openOzonReturnPicker()}
-                      data-testid="ff-inbound-ozon-return-picker-open"
-                    >
-                      Получить возврат
-                    </Button>
-                  ) : null}
                   <Button
                     variant="contained"
                     disabled={draftLocked || busy}
@@ -2446,28 +2201,7 @@ export function FfInboundRequestView({
                 </>
               ) : null}
 
-              {isFulfillmentAdmin && isOzonReturn ? (
-                <>
-                  <Button
-                    variant="outlined"
-                    startIcon={<PrintOutlined />}
-                    disabled={busy}
-                    onClick={() => void downloadOzonReturnPass()}
-                    data-testid="ff-inbound-ozon-return-pass"
-                  >
-                    Печать пропуска
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    startIcon={<PrintOutlined />}
-                    disabled={busy || ozonReturnGroups.length === 0}
-                    onClick={() => void printOzonReturnReconciliationSheet()}
-                    data-testid="ff-inbound-ozon-return-reconciliation"
-                  >
-                    Печать листа сверки
-                  </Button>
-                </>
-              ) : null}
+              {isFulfillmentAdmin && isOzonReturn ? <OzonReturnActions busy={busy} showPickerAction={detail.status === 'draft'} workflow={ozonReturn} /> : null}
 
               {isFulfillmentAdmin && workspace !== 'sorting' && waitingForFfStart ? (
                 <Button
@@ -2619,11 +2353,7 @@ export function FfInboundRequestView({
                     <TableCell align="right" sx={{ width: 200 }}>
                       Принято
                     </TableCell>
-                    {isReturnOperation ? (
-                      <TableCell align="right" sx={{ width: 120 }}>
-                        Брак
-                      </TableCell>
-                    ) : null}
+                    {isReturnOperation ? <TableCell align="right" sx={{ width: 120 }}>Брак</TableCell> : null}
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -2642,73 +2372,11 @@ export function FfInboundRequestView({
                       ? 'ff-inbound-line-row-discrepancy'
                       : 'ff-inbound-line-row'
                   const manualOpen = manualEditLineId === ln.id
-                  const ozonGroup = isOzonReturn
-                    ? ozonReturnGroups.find((group) =>
-                        group.items.some((item) => item.inbound_line_id === ln.id),
-                      )
-                    : undefined
-                  const previousLineId = lineIndex > 0 ? detail.lines[lineIndex - 1]?.id : undefined
-                  const previousGroup = previousLineId
-                    ? ozonReturnGroups.find((group) =>
-                        group.items.some((item) => item.inbound_line_id === previousLineId),
-                      )
-                    : undefined
-                  const showOzonGroupHeader =
-                    ozonGroup != null && ozonGroup.giveout_id !== previousGroup?.giveout_id
-                  const groupStatus = ozonGroup
-                    ? ozonGiveoutStatus(ozonGroup.giveout_status)
-                    : null
-                  const unmatchedItems = ozonGroup?.items.filter((item) => !item.matched) ?? []
-                  const statusMismatch = Boolean(
-                    ozonGroup &&
-                      isDoneStatus(detail.status) &&
-                      ozonGroup.giveout_status !== 'GIVEOUT_STATUS_COMPLETED' &&
-                      ozonGroup.giveout_status !== 'completed',
-                  )
+                  const { group: ozonGroup, showHeader: showOzonGroupHeader } =
+                    ozonReturnGroupAt(ozonReturn.groups, detail.lines, lineIndex)
                   return (
                     <Fragment key={ln.id}>
-                      {showOzonGroupHeader && ozonGroup && groupStatus ? (
-                        <TableRow data-testid="ff-inbound-ozon-return-group">
-                          <TableCell
-                            colSpan={isReturnOperation ? 5 : 4}
-                            sx={{ bgcolor: 'action.hover', py: 1 }}
-                          >
-                            <Stack
-                              direction={{ xs: 'column', sm: 'row' }}
-                              spacing={1}
-                              useFlexGap
-                              sx={{ alignItems: { sm: 'center' } }}
-                            >
-                              <Box sx={{ flex: 1, minWidth: 0 }}>
-                                <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                                  {ozonGroup.warehouse_name}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  {ozonGroup.warehouse_address}
-                                </Typography>
-                              </Box>
-                              {unmatchedItems.length > 0 ? (
-                                <Typography variant="caption" color="warning.dark">
-                                  Не сопоставлено с каталогом:{' '}
-                                  {unmatchedItems
-                                    .map((item) => `${item.product_name} × ${item.quantity}`)
-                                    .join(' · ')}
-                                </Typography>
-                              ) : null}
-                              {statusMismatch ? (
-                                <Typography
-                                  variant="caption"
-                                  color="warning.dark"
-                                  data-testid="ff-inbound-ozon-status-mismatch"
-                                >
-                                  Товар принят, но выдача в Ozon ещё не завершена.
-                                </Typography>
-                              ) : null}
-                              <StatusChip label={groupStatus.label} tone={groupStatus.tone} />
-                            </Stack>
-                          </TableCell>
-                        </TableRow>
-                      ) : null}
+                      {showOzonGroupHeader && ozonGroup ? <OzonReturnGroupRow group={ozonGroup} documentDone={isDoneStatus(detail.status)} colSpan={isReturnOperation ? 5 : 4} /> : null}
                     <TableRow
                       hover
                       data-testid={rowTestId}
@@ -2907,89 +2575,12 @@ export function FfInboundRequestView({
                           ) : null}
                         </Stack>
                       </TableCell>
-                      {isReturnOperation ? (
-                        <TableCell align="right" sx={{ width: 120, minWidth: 0 }}>
-                          <TextField
-                            key={`defective-${ln.id}-${ln.defective_qty ?? 0}`}
-                            type="number"
-                            size="small"
-                            defaultValue={ln.defective_qty || ''}
-                            disabled={busy || ln.posted_qty > 0 || isDoneStatus(detail.status)}
-                            onBlur={(event) =>
-                              void setLineDefective(ln.id, event.currentTarget.value, effective)
-                            }
-                            slotProps={{
-                              htmlInput: {
-                                min: 0,
-                                max: effective,
-                                inputMode: 'numeric',
-                                'data-testid': 'ff-inbound-line-defective',
-                              },
-                            }}
-                            sx={{ width: 96 }}
-                          />
-                        </TableCell>
-                      ) : null}
+                      {isReturnOperation ? <ReturnDefectiveQtyCell lineId={ln.id} defectiveQty={ln.defective_qty ?? 0} acceptedQty={effective} disabled={busy || ln.posted_qty > 0 || isDoneStatus(detail.status)} onSave={ozonReturn.saveDefective} /> : null}
                     </TableRow>
                     </Fragment>
                   )
                 })}
-                {isOzonReturn
-                  ? ozonReturnGroups
-                      .filter((group) =>
-                        group.items.every((item) => item.inbound_line_id == null),
-                      )
-                      .map((group) => {
-                        const groupStatus = ozonGiveoutStatus(group.giveout_status)
-                        const statusMismatch =
-                          isDoneStatus(detail.status) &&
-                          group.giveout_status !== 'GIVEOUT_STATUS_COMPLETED' &&
-                          group.giveout_status !== 'completed'
-                        return (
-                          <TableRow
-                            key={`ozon-group-${group.giveout_id}`}
-                            data-testid="ff-inbound-ozon-return-group"
-                          >
-                            <TableCell
-                              colSpan={isReturnOperation ? 5 : 4}
-                              sx={{ bgcolor: 'action.hover', py: 1 }}
-                            >
-                              <Stack
-                                direction={{ xs: 'column', sm: 'row' }}
-                                spacing={1}
-                                useFlexGap
-                                sx={{ alignItems: { sm: 'center' } }}
-                              >
-                                <Box sx={{ flex: 1, minWidth: 0 }}>
-                                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                                    {group.warehouse_name}
-                                  </Typography>
-                                  <Typography variant="caption" color="text.secondary">
-                                    {group.warehouse_address}
-                                  </Typography>
-                                </Box>
-                                <Typography variant="caption" color="warning.dark">
-                                  Не сопоставлено с каталогом:{' '}
-                                  {group.items
-                                    .map((item) => `${item.product_name} × ${item.quantity}`)
-                                    .join(' · ')}
-                                </Typography>
-                                {statusMismatch ? (
-                                  <Typography
-                                    variant="caption"
-                                    color="warning.dark"
-                                    data-testid="ff-inbound-ozon-status-mismatch"
-                                  >
-                                    Товар принят, но выдача в Ozon ещё не завершена.
-                                  </Typography>
-                                ) : null}
-                                <StatusChip label={groupStatus.label} tone={groupStatus.tone} />
-                              </Stack>
-                            </TableCell>
-                          </TableRow>
-                        )
-                      })
-                  : null}
+                {isOzonReturn ? <OzonReturnOrphanGroupRows groups={ozonReturn.groups} documentDone={isDoneStatus(detail.status)} colSpan={isReturnOperation ? 5 : 4} /> : null}
                 {detail.lines.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={isReturnOperation ? 5 : 4}>
@@ -3716,22 +3307,6 @@ export function FfInboundRequestView({
         onClose={() => setPickerOpen(false)}
         onApply={applyPicker}
       />
-
-      {ozonReturnPickerOpen ? (
-        <OzonReturnPickerDialog
-          key={ozonReturnPreview.groups
-            .map((group) => `${group.giveout_id}:${group.already_imported}`)
-            .join('|')}
-          open
-          busy={busy}
-          loading={ozonReturnPreviewLoading}
-          groups={ozonReturnPreview.groups}
-          error={ozonReturnPreviewError}
-          message={ozonReturnPreview.message}
-          onClose={() => setOzonReturnPickerOpen(false)}
-          onApply={importOzonReturnGiveouts}
-        />
-      ) : null}
 
       <Dialog
         open={dimensionsLine != null}

@@ -5,7 +5,6 @@ import {
   AccordionDetails,
   AccordionSummary,
   Box,
-  Button,
   Checkbox,
   CircularProgress,
   Dialog,
@@ -13,19 +12,12 @@ import {
   DialogContent,
   DialogTitle,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material'
 import ExpandMoreOutlined from '@mui/icons-material/ExpandMoreOutlined'
 import { ProductPhotoThumb } from './ProductPhotoThumb'
-import { StatusChip } from '../ui-kit'
+import { DataTable, PrimaryAction, SecondaryAction, StatusChip, type Column } from '../ui-kit'
 import {
   filterOzonReturnGroups,
   formatOzonUtilizationDate,
@@ -112,6 +104,51 @@ export function OzonReturnPickerDialog({
   const selectedPointsCount = selectedGiveoutIds.size
   const selectedArticlesCount = selectedItemsCount(groups, selectedGiveoutIds)
   const canApply = newSelectedGiveoutIds.length > 0
+  const itemColumns = useMemo<Column<OzonReturnPreviewItem>[]>(
+    () => [
+      {
+        key: 'photo',
+        header: 'Фото',
+        width: 56,
+        render: (item) => <ProductPhotoThumb src={item.image_url ?? null} alt={item.product_name} />,
+      },
+      { key: 'sku', header: 'Артикул', render: (item) => item.wms_sku ?? '—' },
+      { key: 'barcode', header: 'ШК', render: (item) => item.wms_barcode ?? '—' },
+      { key: 'offer', header: 'Артикул продавца', render: (item) => item.offer_id ?? '—' },
+      { key: 'ozon', header: 'Артикул Ozon', render: (item) => item.ozon_sku ?? '—' },
+      {
+        key: 'name',
+        header: 'Наименование',
+        width: 220,
+        render: (item) => (
+          <Box>
+            <Typography variant="body2">{item.product_name}</Typography>
+            {!item.matched ? (
+              <Typography
+                variant="caption"
+                color="warning.dark"
+                data-testid="ozon-return-picker-unmatched"
+              >
+                {item.warning ?? 'Товар не сопоставлен с каталогом'}
+              </Typography>
+            ) : null}
+          </Box>
+        ),
+      },
+      {
+        key: 'reason',
+        header: 'Причина возврата',
+        render: (item) => item.return_reason_name ?? '—',
+      },
+      {
+        key: 'quantity',
+        header: 'Количество',
+        align: 'right',
+        render: (item) => item.quantity,
+      },
+    ],
+    [],
+  )
 
   const toggleGiveout = (group: OzonReturnPreviewGroup, checked: boolean) => {
     if (group.already_imported) return
@@ -158,6 +195,7 @@ export function OzonReturnPickerDialog({
           <Stack
             direction={{ xs: 'column', md: 'row' }}
             spacing={1}
+            useFlexGap
             sx={{ alignItems: { md: 'center' } }}
           >
             <TextField
@@ -166,19 +204,25 @@ export function OzonReturnPickerDialog({
               onChange={(event) => setSearch(event.target.value)}
               size="small"
               fullWidth
+              sx={{ flex: '1 1 320px', minWidth: 0 }}
               disabled={loading || busy}
               slotProps={{
                 htmlInput: { 'data-testid': 'ozon-return-picker-search' },
               }}
             />
-            <Button
-              variant="outlined"
-              disabled={loading || busy || groups.length === 0}
+            <SecondaryAction
+              disabledReason={
+                loading || busy
+                  ? 'Дождитесь загрузки возвратов'
+                  : groups.length === 0
+                    ? 'Нет доступных пунктов'
+                    : undefined
+              }
               onClick={selectAll}
               data-testid="ozon-return-picker-select-all"
             >
               Выбрать все пункты
-            </Button>
+            </SecondaryAction>
             <Typography
               variant="body2"
               sx={{ whiteSpace: 'nowrap', fontWeight: 700 }}
@@ -291,56 +335,15 @@ export function OzonReturnPickerDialog({
                   </Stack>
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 0 }}>
-                  <TableContainer>
-                    <Table size="small" data-testid="ozon-return-picker-items-table">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={{ width: 56 }}>Фото</TableCell>
-                          <TableCell>Артикул</TableCell>
-                          <TableCell>ШК</TableCell>
-                          <TableCell>Артикул продавца</TableCell>
-                          <TableCell>Артикул Ozon</TableCell>
-                          <TableCell>Наименование</TableCell>
-                          <TableCell>Причина возврата</TableCell>
-                          <TableCell align="right">Количество</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {group.items.map((item, index) => (
-                          <TableRow
-                            key={`${item.return_id ?? item.product_name}-${index}`}
-                            hover
-                            data-testid="ozon-return-picker-item"
-                          >
-                            <TableCell>
-                              <ProductPhotoThumb
-                                src={item.image_url ?? null}
-                                alt={item.product_name}
-                              />
-                            </TableCell>
-                            <TableCell>{item.wms_sku ?? '—'}</TableCell>
-                            <TableCell>{item.wms_barcode ?? '—'}</TableCell>
-                            <TableCell>{item.offer_id ?? '—'}</TableCell>
-                            <TableCell>{item.ozon_sku ?? '—'}</TableCell>
-                            <TableCell sx={{ minWidth: 220 }}>
-                              <Typography variant="body2">{item.product_name}</Typography>
-                              {!item.matched ? (
-                                <Typography
-                                  variant="caption"
-                                  color="warning.dark"
-                                  data-testid="ozon-return-picker-unmatched"
-                                >
-                                  {item.warning ?? 'Товар не сопоставлен с каталогом'}
-                                </Typography>
-                              ) : null}
-                            </TableCell>
-                            <TableCell>{item.return_reason_name ?? '—'}</TableCell>
-                            <TableCell align="right">{item.quantity}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                  <DataTable
+                    columns={itemColumns}
+                    rows={group.items}
+                    getRowKey={(item) =>
+                      `${item.return_id}-${item.ozon_sku}-${item.return_barcode ?? item.product_name}`
+                    }
+                    testId="ozon-return-picker-items-table"
+                    empty={{ title: 'В этом пункте нет товаров' }}
+                  />
                 </AccordionDetails>
               </Accordion>
             )
@@ -348,21 +351,26 @@ export function OzonReturnPickerDialog({
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={close} disabled={busy} data-testid="ozon-return-picker-cancel">
+        <SecondaryAction
+          onClick={close}
+          disabledReason={busy ? 'Дождитесь добавления возвратов' : undefined}
+          data-testid="ozon-return-picker-cancel"
+        >
           Отмена
-        </Button>
-        <Tooltip title={canApply ? '' : 'Выберите хотя бы один новый пункт выдачи'}>
-          <span>
-            <Button
-              variant="contained"
-              disabled={busy || !canApply}
-              onClick={() => void onApply(newSelectedGiveoutIds)}
-              data-testid="ozon-return-picker-apply"
-            >
-              Добавить в возврат
-            </Button>
-          </span>
-        </Tooltip>
+        </SecondaryAction>
+        <PrimaryAction
+          disabledReason={
+            busy
+              ? 'Дождитесь добавления возвратов'
+              : canApply
+                ? undefined
+                : 'Выберите хотя бы один новый пункт выдачи'
+          }
+          onClick={() => void onApply(newSelectedGiveoutIds)}
+          data-testid="ozon-return-picker-apply"
+        >
+          Добавить в возврат
+        </PrimaryAction>
       </DialogActions>
     </Dialog>
   )

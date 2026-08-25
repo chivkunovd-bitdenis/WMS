@@ -2643,9 +2643,7 @@ export default function App() {
   ])
 
   const onCreateFfInboundDraft = useCallback(async (
-    operationType: InboundOperationType,
-    sellerId: string,
-    marketplace?: 'wildberries' | 'ozon',
+    operationType: InboundOperationType, sellerId: string, marketplace?: 'wildberries' | 'ozon',
   ): Promise<{ id: string } | null> => {
     if (!token) {
       return null

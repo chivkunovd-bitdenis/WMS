@@ -4,7 +4,7 @@ import {
   createDebouncedInboundReconciler,
   createSerialScanQueue,
   isLatestScannedInboundLine,
-} from './FfInboundRequestView'
+} from './inboundReceivingRuntime'
 
 describe('inbound scan fast path', () => {
   it('replaces the just scanned row, then moves the visible row state to the next scan', () => {
