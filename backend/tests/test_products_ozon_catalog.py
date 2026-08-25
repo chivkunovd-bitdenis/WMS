@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import time
+import uuid
 
 import pytest
 from httpx import AsyncClient
+
+from app.db.session import SessionLocal
+from app.models.marketplace_account import MarketplaceAccount
+from app.models.seller import Seller
 
 
 async def _register_admin(async_client: AsyncClient, suffix: str) -> dict[str, str]:
@@ -48,6 +53,27 @@ async def _create_product(
     )
     assert response.status_code == 200, response.text
     return response.json()
+
+
+async def _create_seller_account(
+    async_client: AsyncClient,
+    headers: dict[str, str],
+    *,
+    seller_id: str,
+    email: str,
+) -> dict[str, str]:
+    account = await async_client.post(
+        "/auth/seller-accounts",
+        headers=headers,
+        json={"seller_id": seller_id, "email": email, "password": "password123"},
+    )
+    assert account.status_code == 201, account.text
+    login = await async_client.post(
+        "/auth/login",
+        json={"email": email, "password": "password123"},
+    )
+    assert login.status_code == 200, login.text
+    return {"Authorization": f"Bearer {login.json()['access_token']}"}
 
 
 @pytest.mark.asyncio
@@ -162,3 +188,150 @@ async def test_ozon_catalog_links_do_not_cross_seller_or_tenant_boundaries(
     )
     assert other_products.status_code == 200, other_products.text
     assert other_products.json() == []
+
+
+@pytest.mark.asyncio
+async def test_ozon_link_requires_seller_with_explicit_422(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(time.time_ns())
+    headers = await _register_admin(async_client, suffix)
+
+    response = await async_client.post(
+        "/products",
+        headers=headers,
+        json={
+            "name": "Ozon without seller",
+            "sku_code": f"NO-SELLER-{suffix}",
+            "length_mm": 10,
+            "width_mm": 10,
+            "height_mm": 10,
+            "ozon_sku": f"OZON-{suffix}",
+        },
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"] == "ozon_link_requires_seller"
+
+    product = await async_client.post(
+        "/products",
+        headers=headers,
+        json={
+            "name": "Existing SKU without seller",
+            "sku_code": f"EXISTING-NO-SELLER-{suffix}",
+            "length_mm": 10,
+            "width_mm": 10,
+            "height_mm": 10,
+        },
+    )
+    assert product.status_code == 200, product.text
+    update = await async_client.patch(
+        f"/products/{product.json()['id']}/ozon-link",
+        headers=headers,
+        json={"ozon_sku": f"OZON-UPDATE-{suffix}"},
+    )
+    assert update.status_code == 422, update.text
+    assert update.json()["detail"] == "ozon_link_requires_seller"
+
+
+@pytest.mark.asyncio
+async def test_existing_product_ozon_link_update_is_tenant_and_seller_scoped(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(time.time_ns())
+    owner_headers = await _register_admin(async_client, f"update-{suffix}")
+    seller_a = await async_client.post("/sellers", headers=owner_headers, json={"name": "A"})
+    seller_b = await async_client.post("/sellers", headers=owner_headers, json={"name": "B"})
+    assert seller_a.status_code == seller_b.status_code == 201
+    seller_a_id = seller_a.json()["id"]
+    seller_b_id = seller_b.json()["id"]
+    product = await _create_product(
+        async_client,
+        owner_headers,
+        name="Existing WMS SKU",
+        sku_code=f"EXISTING-{suffix}",
+        seller_id=seller_a_id,
+    )
+    seller_a_headers = await _create_seller_account(
+        async_client,
+        owner_headers,
+        seller_id=seller_a_id,
+        email=f"update-a-{suffix}@example.com",
+    )
+    seller_b_headers = await _create_seller_account(
+        async_client,
+        owner_headers,
+        seller_id=seller_b_id,
+        email=f"update-b-{suffix}@example.com",
+    )
+
+    added = await async_client.patch(
+        f"/products/{product['id']}/ozon-link",
+        headers=seller_a_headers,
+        json={"ozon_sku": f"OZON-1-{suffix}", "ozon_offer_id": f"OFFER-1-{suffix}"},
+    )
+    assert added.status_code == 200, added.text
+    assert added.json()["ozon_sku"] == f"OZON-1-{suffix}"
+
+    changed = await async_client.patch(
+        f"/products/{product['id']}/ozon-link",
+        headers=owner_headers,
+        json={"ozon_sku": f"OZON-2-{suffix}", "ozon_offer_id": f"OFFER-2-{suffix}"},
+    )
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["ozon_offer_id"] == f"OFFER-2-{suffix}"
+    listed = await async_client.get(
+        f"/products?search=OZON-2-{suffix}", headers=owner_headers
+    )
+    assert [row["id"] for row in listed.json()] == [product["id"]]
+
+    wrong_seller = await async_client.patch(
+        f"/products/{product['id']}/ozon-link",
+        headers=seller_b_headers,
+        json={"ozon_sku": "FORBIDDEN"},
+    )
+    assert wrong_seller.status_code == 403, wrong_seller.text
+
+    other_headers = await _register_admin(async_client, f"update-other-{suffix}")
+    other_tenant = await async_client.patch(
+        f"/products/{product['id']}/ozon-link",
+        headers=other_headers,
+        json={"ozon_sku": "FOREIGN"},
+    )
+    assert other_tenant.status_code == 404, other_tenant.text
+
+
+@pytest.mark.asyncio
+async def test_seller_catalog_status_marks_only_connected_ozon_account(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(time.time_ns())
+    headers = await _register_admin(async_client, f"status-{suffix}")
+    connected = await async_client.post(
+        "/sellers", headers=headers, json={"name": "Ozon connected"}
+    )
+    wb_only = await async_client.post(
+        "/sellers", headers=headers, json={"name": "WB only"}
+    )
+    assert connected.status_code == wb_only.status_code == 201
+
+    async with SessionLocal() as session:
+        connected_seller = await session.get(Seller, uuid.UUID(connected.json()["id"]))
+        assert connected_seller is not None
+        session.add(
+            MarketplaceAccount(
+                tenant_id=connected_seller.tenant_id,
+                seller_id=uuid.UUID(connected.json()["id"]),
+                marketplace="ozon",
+                account_slot="primary",
+                is_active=True,
+                validation_status="valid",
+            )
+        )
+        await session.commit()
+
+    response = await async_client.get("/sellers", headers=headers)
+    assert response.status_code == 200, response.text
+    by_id = {row["id"]: row for row in response.json()}
+    assert by_id[connected.json()["id"]]["ozon_connected"] is True
+    assert by_id[wb_only.json()["id"]]["ozon_connected"] is False

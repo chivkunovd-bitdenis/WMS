@@ -82,7 +82,7 @@ type ProductRow = {
   wb_primary_barcode?: string | null
 }
 
-type SellerRow = { id: string; name: string }
+type SellerRow = { id: string; name: string; ozon_connected?: boolean | null }
 
 type InboundSummaryRow = {
   id: string
@@ -1322,6 +1322,10 @@ export default function App() {
       const seller_raw = String(fd.get('product_seller_id') ?? '').trim()
       const ozon_sku = String(fd.get('product_ozon_sku') ?? '').trim()
       const ozon_offer_id = String(fd.get('product_ozon_offer_id') ?? '').trim()
+      if ((ozon_sku || ozon_offer_id) && !seller_raw) {
+        setCatalogError('Для привязки Ozon выберите селлера.')
+        return
+      }
       const body: Record<string, unknown> = {
         name,
         sku_code,
@@ -1353,6 +1357,54 @@ export default function App() {
         e instanceof Error
           ? e.message
           : 'Сеть: не удалось создать товар.',
+      )
+    } finally {
+      setCatalogBusy(false)
+    }
+  }
+
+  async function onUpdateOzonLink(
+    productId: string,
+    e: React.FormEvent<HTMLFormElement>,
+  ) {
+    e.preventDefault()
+    if (!token) {
+      return
+    }
+    const product = products.find((row) => row.id === productId)
+    const fd = new FormData(e.currentTarget)
+    const ozon_sku = String(fd.get('product_link_ozon_sku') ?? '').trim()
+    const ozon_offer_id = String(fd.get('product_link_ozon_offer_id') ?? '').trim()
+    setCatalogError(null)
+    if (!product?.seller_id) {
+      setCatalogError('Для привязки Ozon у товара должен быть селлер.')
+      return
+    }
+    if (!ozon_sku && !ozon_offer_id) {
+      setCatalogError('Укажите SKU или предложение Ozon.')
+      return
+    }
+    setCatalogBusy(true)
+    try {
+      const res = await fetch(apiUrl(`/products/${productId}/ozon-link`), {
+        method: 'PATCH',
+        headers: {
+          ...authHeaders(token),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ozon_sku: ozon_sku || null,
+          ozon_offer_id: ozon_offer_id || null,
+        }),
+      })
+      if (!res.ok) {
+        setCatalogError(await readApiErrorMessage(res))
+        return
+      }
+      await refreshProducts(token)
+    } catch (error) {
+      setCatalogError(
+        error instanceof Error ? error.message : 'Сеть: не удалось сохранить привязку Ozon.',
       )
     } finally {
       setCatalogBusy(false)
@@ -3286,6 +3338,7 @@ export default function App() {
                   sellers={sellers}
                   products={products}
                   onCreateProduct={(e) => void onCreateProduct(e)}
+                  onUpdateOzonLink={(productId, e) => void onUpdateOzonLink(productId, e)}
                 />
               ) : (
                 ffAccessDenied

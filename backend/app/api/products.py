@@ -42,6 +42,7 @@ from app.services.catalog_service import (
     list_product_dimension_events,
     list_products,
     restore_latest_wb_dimensions,
+    update_ozon_product_link,
     update_packaging_instructions,
     update_product_container_volume,
     update_product_dimensions,
@@ -243,6 +244,13 @@ class ProductDimensionsPatch(BaseModel):
     width_mm: int | None = Field(default=None, ge=1, le=10_000_000)
     height_mm: int | None = Field(default=None, ge=1, le=10_000_000)
     weight_g: int | None = Field(default=None, ge=1, le=1_000_000_000)
+
+
+class ProductOzonLinkPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ozon_sku: str | None = Field(default=None, max_length=255)
+    ozon_offer_id: str | None = Field(default=None, max_length=255)
 
 
 class ProductContainerDimensions(BaseModel):
@@ -614,6 +622,11 @@ async def post_product(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="seller_not_found",
             ) from None
+        if exc.code == "ozon_link_requires_seller":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="ozon_link_requires_seller",
+            ) from None
         raise
     await session.refresh(p, attribute_names=["seller"])
     ozon_links = await list_ozon_product_links(session, user.tenant_id, {p.id})
@@ -622,6 +635,38 @@ async def post_product(
         p,
         ozon_sku=ozon_link.external_sku if ozon_link is not None else None,
         ozon_offer_id=ozon_link.external_offer_id if ozon_link is not None else None,
+    )
+
+
+@router.patch("/{product_id}/ozon-link", response_model=ProductOut)
+async def patch_product_ozon_link(
+    product_id: uuid.UUID,
+    body: ProductOzonLinkPatch,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> ProductOut:
+    await assert_seller_permission(session, user, PERM_PRODUCTS)
+    await _product_seller_scope_for_write(user, session, product_id, effective_seller_id)
+    try:
+        product = await update_ozon_product_link(
+            session,
+            user.tenant_id,
+            product_id,
+            ozon_sku=body.ozon_sku,
+            ozon_offer_id=body.ozon_offer_id,
+        )
+    except CatalogError as exc:
+        if exc.code == "product_not_found":
+            raise HTTPException(status_code=404, detail=exc.code) from None
+        if exc.code in {"ozon_link_requires_seller", "ozon_link_required"}:
+            raise HTTPException(status_code=422, detail=exc.code) from None
+        raise
+    link = (await list_ozon_product_links(session, user.tenant_id, {product.id})).get(product.id)
+    return _product_out(
+        product,
+        ozon_sku=link.external_sku if link is not None else None,
+        ozon_offer_id=link.external_offer_id if link is not None else None,
     )
 
 
