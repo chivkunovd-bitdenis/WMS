@@ -89,22 +89,31 @@ async def fetch_order_label_rows_for_marketplace(
     )
 
 
-async def _blocked_ozon_order_label_fetch(
+_FAKE_OZON_LABEL_PNG_BASE64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAE"
+    "hQGAhKmMIQAAAABJRU5ErkJggg=="
+)
+
+
+async def _fake_ozon_order_label_fetch(
     external_order_ids: list[str],
 ) -> list[dict[str, Any]]:
     provider = OzonMarketplaceProvider(
         transport=FakeMarketplaceTransport(
-            errors={
-                "fetch_statuses": MarketplaceProviderError(
-                    "ozon", 403, {"code": 7}
-                )
-            }
+            order_labels=[
+                {
+                    "posting_number": external_order_id,
+                    "file": _FAKE_OZON_LABEL_PNG_BASE64,
+                    "barcode": external_order_id,
+                }
+                for external_order_id in external_order_ids
+            ]
         )
     )
-    return await provider.fetch_statuses(
+    return await provider.fetch_order_labels(
         client_id="fake",
         api_key="fake",
-        order_ids=external_order_ids,
+        posting_numbers=external_order_ids,
     )
 
 
@@ -609,7 +618,7 @@ async def request_supply_print_batch(
                     marketplace,
                     external_order_ids=external_order_ids,
                     wb_fetch=wb_fetch,
-                    ozon_fetch=_blocked_ozon_order_label_fetch,
+                    ozon_fetch=_fake_ozon_order_label_fetch,
                 )
             except WildberriesClientError as exc:
                 suffix = f"_{exc.status_code}" if exc.status_code else ""
