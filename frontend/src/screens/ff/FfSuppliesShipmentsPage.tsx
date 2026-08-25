@@ -77,6 +77,7 @@ export type FfMarketplaceUnloadSummary = {
   line_count: number
   seller_id: string | null
   seller_name: string | null
+  marketplace?: string
   planned_shipment_date?: string | null
   ff_modified?: boolean
   created_at: string
@@ -149,6 +150,7 @@ type MarketplaceUnloadDetail = {
   ff_modified: boolean
   seller_id: string | null
   seller_name: string | null
+  marketplace: string
   wb_mp_warehouse_id: number | null
   planned_shipment_date: string | null
   created_at: string | null
@@ -181,6 +183,7 @@ type UnifiedRow = {
   status: string
   lineCount: number
   sellerName: string | null
+  marketplace: string | null
   extraLabel: string | null
   ffModified: boolean
 }
@@ -211,6 +214,10 @@ function kindRu(kind: DocKind): string {
   if (kind === 'outbound') return 'Отгрузка'
   if (kind === 'marketplace_unload') return 'Отгрузка на МП'
   return 'Расхождение'
+}
+
+function marketplaceLabel(marketplace: string | null | undefined): string {
+  return marketplace === 'ozon' ? 'Ozon' : 'Wildberries'
 }
 
 function formatSignedQty(value: number): string {
@@ -423,6 +430,7 @@ export function FfSuppliesShipmentsPage({
           ff_modified?: boolean
           seller_id?: string | null
           seller_name?: string | null
+          marketplace?: string
           wb_mp_warehouse_id?: number | null
           planned_shipment_date?: string | null
           created_at?: string
@@ -485,6 +493,7 @@ export function FfSuppliesShipmentsPage({
           ff_modified: Boolean(j.ff_modified),
           seller_id: j.seller_id ?? null,
           seller_name: j.seller_name ?? null,
+          marketplace: j.marketplace ?? 'wb',
           wb_mp_warehouse_id: j.wb_mp_warehouse_id ?? null,
           planned_shipment_date: j.planned_shipment_date ?? null,
           created_at: j.created_at ?? null,
@@ -1629,6 +1638,7 @@ export function FfSuppliesShipmentsPage({
           status: r.status,
           lineCount: r.line_count,
           sellerName: r.seller_name ?? null,
+          marketplace: r.marketplace ?? 'wb',
           extraLabel: r.warehouse_name,
           ffModified: Boolean(r.ff_modified),
         }))
@@ -1642,6 +1652,7 @@ export function FfSuppliesShipmentsPage({
             status: r.status,
             lineCount: r.line_count,
             sellerName: r.seller_name ?? null,
+            marketplace: null,
             extraLabel: null,
             ffModified: false,
           })),
@@ -1654,6 +1665,7 @@ export function FfSuppliesShipmentsPage({
             status: r.status,
             lineCount: r.line_count,
             sellerName: r.seller_name ?? null,
+            marketplace: null,
             extraLabel: null,
             ffModified: false,
           })),
@@ -1666,6 +1678,7 @@ export function FfSuppliesShipmentsPage({
             status: r.status,
             lineCount: r.line_count,
             sellerName: r.seller_name ?? null,
+            marketplace: null,
             extraLabel: r.inbound_intake_request_id
               ? `приёмка ${r.inbound_intake_request_id.slice(0, 8)}…`
               : null,
@@ -2266,7 +2279,18 @@ export function FfSuppliesShipmentsPage({
                   ) : null}
                 </TableCell>
                 <TableCell>{row.sellerName ?? '—'}</TableCell>
-                <TableCell sx={{ color: 'text.secondary', maxWidth: 200 }}>{row.extraLabel ?? '—'}</TableCell>
+                <TableCell sx={{ color: 'text.secondary', maxWidth: 200 }}>
+                  {row.kind === 'marketplace_unload' ? (
+                    <Chip
+                      size="small"
+                      label={marketplaceLabel(row.marketplace)}
+                      variant="outlined"
+                      data-testid="ff-mp-marketplace-chip"
+                    />
+                  ) : (
+                    row.extraLabel ?? '—'
+                  )}
+                </TableCell>
                 <TableCell align="right">{row.lineCount}</TableCell>
               </TableRow>
             ))
@@ -2342,17 +2366,17 @@ export function FfSuppliesShipmentsPage({
                       Дата отгрузки: {unloadDetail.planned_shipment_date}
                     </Typography>
                   ) : null}
-                  {mpLineDraft ? (
+                  {mpLineDraft && unloadDetail.marketplace === 'wb' ? (
                     <>
                       <FormControl
                         size="small"
                         sx={{ minWidth: 280, width: { xs: '100%', sm: 'auto' } }}
                         disabled={modalBusy || wbMpWarehousesBusy}
                       >
-                        <InputLabel id="ff-mp-wb-warehouse-header">Склад WB (маркетплейс)</InputLabel>
+                        <InputLabel id="ff-mp-wb-warehouse-header">Склад маркетплейса</InputLabel>
                         <Select
                           labelId="ff-mp-wb-warehouse-header"
-                          label="Склад WB (маркетплейс)"
+                          label="Склад маркетплейса"
                           value={unloadDetail.wb_mp_warehouse_id ?? ''}
                           onChange={(e) => {
                             const v = Number(e.target.value)
@@ -2379,9 +2403,17 @@ export function FfSuppliesShipmentsPage({
                         </Typography>
                       ) : null}
                     </>
+                  ) : unloadDetail.marketplace === 'ozon' ? (
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      data-testid="ff-mp-marketplace-warehouse-blocked"
+                    >
+                      Склад маркетплейса: Ozon определяет для конкретной поставки. Связь коробов с грузоместами и ТГМ заблокирована: кабинет недоступен.
+                    </Typography>
                   ) : (
                     <Typography variant="body2" color="text.secondary" data-testid="ff-mp-wb-warehouse-readonly">
-                      Склад WB:{' '}
+                      Склад маркетплейса:{' '}
                       {wbMpWarehouses.find(
                         (w) => w.wb_warehouse_id === unloadDetail.wb_mp_warehouse_id,
                       )?.name ?? unloadDetail.wb_mp_warehouse_id ?? '—'}
