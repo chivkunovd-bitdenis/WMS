@@ -40,6 +40,8 @@ from app.models.product import Product
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.services import fbs_marking_service as marking_svc
 from app.services import marking_code_service as marking_code_svc
+from app.services.ozon_kiz_service import OzonKizError
+from app.services.ozon_kiz_service import commit_ozon_kiz as commit_ozon
 from app.services.wb_card_enrichment import first_photo_url_from_card
 from app.services.wildberries_client import put_marketplace_order_meta
 from app.services.wildberries_errors import WildberriesClientError
@@ -928,22 +930,23 @@ async def _commit_one_kiz_pair(
         check_marking_code_occupancy=False,
     )
     order = validated.order
+    if order.marketplace == "ozon":
+        try:
+            await commit_ozon(
+                session, order, validated.value, pair.confirmed, actor_user_id, http_client
+            )
+        except OzonKizError as exc:
+            raise FbsKizError(exc.code, message=exc.message) from exc
+        return
     current = await _current_sgtin_marking_for_update(session, order.id)
     if (
         current is not None
         and current.value == validated.value
         and current.meta_status != META_STATUS_REJECTED
     ):
-        # Idempotent replay: this exact pair is already bound, e.g. the client retried
-        # after a network timeout. Re-binding it would void a healthy code and ask the
-        # operator to confirm a change that is not a change.
         return
     if current is not None and not pair.confirmed:
-        raise FbsKizError(
-            "needs_confirmation",
-            context={"current_kiz": _mask_kiz(current.value)},
-        )
-
+        raise FbsKizError("needs_confirmation", context={"current_kiz": _mask_kiz(current.value)})
     line_ref = await _packaging_line_for_order(session, tenant_id, order)
     code, from_pool = await _prepare_code_for_binding(
         session,
@@ -952,9 +955,7 @@ async def _commit_one_kiz_pair(
         validated.value,
         line_ref.line,
     )
-    token = await marking_svc.require_marketplace_token(
-        session, tenant_id, order.seller_id
-    )
+    token = await marking_svc.require_marketplace_token(session, tenant_id, order.seller_id)
     await marking_code_svc.record_event(
         session,
         code=code,
@@ -977,7 +978,6 @@ async def _commit_one_kiz_pair(
     )
     session.add(marking)
     await session.flush()
-
     new_error: FbsKizError | None = None
     try:
         if current is not None:
@@ -1023,7 +1023,6 @@ async def _commit_one_kiz_pair(
                 persist_failure_state=True,
             ) from restore_error
         raise new_error
-
     if current is not None:
         await _void_existing_sgtin_marking_locally(
             session,
@@ -1031,7 +1030,6 @@ async def _commit_one_kiz_pair(
             actor_user_id=actor_user_id,
             reason=_VOID_REPLACED_REASON,
         )
-
     previous_was_pool = current is not None and current.source == _POOL_MARKING_SOURCE
     if from_pool:
         if not previous_was_pool:

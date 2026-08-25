@@ -63,6 +63,7 @@ from app.services.ozon_fbs_errors import OzonFbsProcessError
 from app.services.ozon_fbs_errors import decode_file as _decode_file
 from app.services.ozon_marking_position_service import (
     OzonMarkingPositionError,
+    choose_exemplar_id,
     marking_position_sku,
 )
 
@@ -142,7 +143,6 @@ async def _ozon_product_id(
             raise OzonFbsProcessError(error.code, error.message) from error
         if position_sku is not None:
             return position_sku
-
     details = order.meta_details_json or {}
     direct = details.get("ozon_product_id")
     if direct is not None and str(direct).isdigit():
@@ -226,8 +226,9 @@ async def submit_marking(
         read=False,
     )
     product = next((item for item in exemplars.products if item.product_id == product_id), None)
-    exemplar = product.exemplars[0] if product is not None and product.exemplars else None
-    if exemplar is None or not exemplar.exemplar_id:
+    ids = [item.exemplar_id for item in product.exemplars if item.exemplar_id] if product else []
+    exemplar_id = await choose_exemplar_id(session, marking, ids)
+    if exemplar_id is None:
         raise OzonFbsProcessError("ozon_exemplar_missing", "Ozon не вернул экземпляр товара.")
 
     mark = OzonV5FbsPostingProductExemplarValidateV5RequestProductExemplarMark(
@@ -270,7 +271,7 @@ async def submit_marking(
             False,
             False,
             reason,
-            {"validation_errors": list(dict.fromkeys(errors))},
+            {"exemplar_id": exemplar_id, "validation_errors": list(dict.fromkeys(errors))},
         )
 
     set_request = OzonV6FbsPostingProductExemplarSetV6Request.model_validate(
@@ -281,7 +282,7 @@ async def submit_marking(
                     "product_id": product_id,
                     "exemplars": [
                         {
-                            "exemplar_id": exemplar.exemplar_id,
+                            "exemplar_id": exemplar_id,
                             "marks": [{"mark": marking.value, "mark_type": mark_type}],
                         }
                     ],
@@ -304,12 +305,13 @@ async def submit_marking(
         response_type=OzonV5FbsPostingProductExemplarStatusV5Response,
         read=True,
     )
+    details = {"status": status.status, "exemplar_id": exemplar_id}
     if status.status == "ship_available":
-        return OzonMarkingResult(True, False, None, {"status": status.status})
+        return OzonMarkingResult(True, False, None, details)
     if status.status == "validation_in_process":
-        return OzonMarkingResult(False, True, None, {"status": status.status})
+        return OzonMarkingResult(False, True, None, details)
     if status.status in {"ship_not_available", "update_not_available"}:
-        return OzonMarkingResult(False, False, status.status, {"status": status.status})
+        return OzonMarkingResult(False, False, status.status, details)
     raise OzonFbsProcessError(
         "ozon_exemplar_unknown_status",
         f"Ozon вернул неизвестный статус маркировки: {status.status or 'пусто'}.",

@@ -42,12 +42,14 @@ from app.models.fbs_supply import (
 )
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.marketplace_account import MarketplaceAccount
+from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
 from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
+from app.services import fbs_kiz_service as kiz_svc
 from app.services import fbs_marking_service as marking_svc
 from app.services import fbs_packing_box_service as box_svc
 from app.services import fbs_print_asset_service as print_asset_svc
@@ -58,6 +60,7 @@ from app.services import fbs_worklist_service as worklist_svc
 from app.services import fbs_workspace_service as workspace_svc
 from app.services import inventory_service
 from app.services import ozon_fbs_sync_service as ozon_sync_svc
+from app.services import ozon_kiz_service as ozon_kiz_svc
 from app.services.fbs_autopoll_service import (
     SellerPollTarget,
     poll_marketplace_orders_for_target,
@@ -505,6 +508,7 @@ async def _sync_ozon_posting_with_products(
             seller=seller,
             name=str(position["name"]),
             sku_code=f"sku-{position['sku']}",
+            wb_barcode=(str(position["barcode"]) if position.get("barcode") else None),
         )
         for position in positions
     ]
@@ -1448,6 +1452,146 @@ async def test_ozon_marking_targets_its_exact_multi_product_position(
     set_payload = transport.endpoint_calls[2][1]
     assert validate_payload["products"][0]["product_id"] == 4002
     assert set_payload["products"][0]["product_id"] == 4002
+
+
+@pytest.mark.asyncio
+async def test_ozon_scanner_binds_every_required_code_without_wb_path(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TC-S03-OZON-033: scanner maps positions and quantity while WB stays untouched."""
+    first_gtin = "04601234567890"
+    second_gtin = "04601234567801"
+    order, products = await _sync_ozon_posting_with_products(
+        db_session,
+        positions=[
+            {
+                "sku": 4001,
+                "offer_id": "offer-1",
+                "name": "Футболка",
+                "quantity": 1,
+                "barcode": first_gtin,
+            },
+            {
+                "sku": 4002,
+                "offer_id": "offer-2",
+                "name": "Носки",
+                "quantity": 2,
+                "barcode": second_gtin,
+            },
+        ],
+    )
+    assert order.warehouse_id is not None
+    location = StorageLocation(
+        tenant_id=order.tenant_id,
+        warehouse_id=order.warehouse_id,
+        code="PACK-OZON",
+        barcode="PACK-OZON",
+    )
+    task = PackagingTask(
+        tenant_id=order.tenant_id,
+        warehouse_id=order.warehouse_id,
+        status="in_progress",
+        document_number="PK-OZON-1",
+    )
+    supply = FbsSupply(
+        tenant_id=order.tenant_id,
+        seller_id=order.seller_id,
+        warehouse_id=order.warehouse_id,
+        marketplace="ozon",
+        name="Ozon marking",
+        status=FBS_SUPPLY_STATUS_ASSEMBLING,
+        delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+    )
+    db_session.add_all([location, task, supply])
+    await db_session.flush()
+    lines = [
+        PackagingTaskLine(
+            task_id=task.id,
+            product_id=product.id,
+            storage_location_id=location.id,
+            qty_total=quantity,
+        )
+        for product, quantity in zip(products, [1, 2], strict=True)
+    ]
+    db_session.add_all(lines)
+    supply.packaging_task_id = task.id
+    order.supply_id = supply.id
+    order.required_meta_json = ["sgtin"]
+    await db_session.commit()
+
+    transport = FakeMarketplaceTransport(
+        endpoint_responses={
+            "/v6/fbs/posting/product/exemplar/create-or-get": {
+                "posting_number": order.external_order_id,
+                "products": [
+                    {"product_id": 4001, "exemplars": [{"exemplar_id": 81}]},
+                    {
+                        "product_id": 4002,
+                        "exemplars": [{"exemplar_id": 82}, {"exemplar_id": 83}],
+                    },
+                ],
+            },
+            "/v5/fbs/posting/product/exemplar/validate": {
+                "products": [
+                    {"product_id": 4001, "valid": True, "exemplars": []},
+                    {"product_id": 4002, "valid": True, "exemplars": []},
+                ]
+            },
+            "/v6/fbs/posting/product/exemplar/set": {},
+            "/v5/fbs/posting/product/exemplar/status": {
+                "posting_number": order.external_order_id,
+                "status": "ship_available",
+                "products": [],
+            },
+        }
+    )
+    provider = OzonMarketplaceProvider(transport=transport)
+    real_commit = ozon_kiz_svc.commit_ozon_kiz
+
+    async def injected_commit(*args: object) -> None:
+        await real_commit(*args, provider=provider)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(kiz_svc, "commit_ozon", injected_commit)
+    wb_token = AsyncMock(side_effect=AssertionError("WB token must not be read for Ozon"))
+    wb_delete = AsyncMock(side_effect=AssertionError("WB marking must not be deleted for Ozon"))
+    monkeypatch.setattr(marking_svc, "require_marketplace_token", wb_token)
+    monkeypatch.setattr(kiz_svc, "_delete_sgtin_from_wb", wb_delete)
+    values = [
+        f"01{first_gtin}21FIRST",
+        f"01{second_gtin}21SECOND-A",
+        f"01{second_gtin}21SECOND-B",
+    ]
+    for value in values:
+        await kiz_svc._commit_one_kiz_pair(
+            db_session,
+            order.tenant_id,
+            None,
+            kiz_svc.FbsKizCommitPair(order.id, value, False),
+            AsyncMock(),
+        )
+
+    markings = list(
+        (
+            await db_session.execute(
+                select(FbsOrderMarking)
+                .where(FbsOrderMarking.order_id == order.id)
+                .order_by(FbsOrderMarking.created_at, FbsOrderMarking.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert [marking.order_product_id for marking in markings] == [
+        order.product_positions[0].id,
+        order.product_positions[1].id,
+        order.product_positions[1].id,
+    ]
+    assert [marking.meta_details_json["exemplar_id"] for marking in markings] == [81, 82, 83]
+    assert [line.qty_marking_external for line in lines] == [1, 2]
+    assert order.metadata_delivery_allowed is True
+    wb_token.assert_not_awaited()
+    wb_delete.assert_not_awaited()
 
 
 @pytest.mark.asyncio
