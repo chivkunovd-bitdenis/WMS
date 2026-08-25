@@ -16,8 +16,12 @@ import {
 } from '@mui/material'
 import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import {
+  sellerHasOzonConnection,
+  type ManualProductSeller,
+} from './ffManualProductOzon'
 
-type SellerRow = { id: string; name: string }
+type SellerRow = ManualProductSeller
 type CreatedProduct = { id: string }
 
 type Props = {
@@ -63,6 +67,7 @@ export function FfManualProductCreateDialog({
   const [widthMm, setWidthMm] = useState('')
   const [heightMm, setHeightMm] = useState('')
   const [createdProduct, setCreatedProduct] = useState<CreatedProduct | null>(null)
+  const ozonConnected = sellerHasOzonConnection(sellers, sellerId)
 
   useEffect(() => {
     if (open && createdProduct == null) {
@@ -121,8 +126,8 @@ export function FfManualProductCreateDialog({
         if (size.trim()) body.wb_size = size.trim()
         if (barcode.trim()) body.wb_barcode = barcode.trim()
         if (vendor.trim()) body.wb_vendor_code = vendor.trim()
-        if (ozonSku.trim()) body.ozon_sku = ozonSku.trim()
-        if (ozonOfferId.trim()) body.ozon_offer_id = ozonOfferId.trim()
+        if (ozonConnected && ozonSku.trim()) body.ozon_sku = ozonSku.trim()
+        if (ozonConnected && ozonOfferId.trim()) body.ozon_offer_id = ozonOfferId.trim()
         if (tz.trim()) body.packaging_instructions = tz.trim()
         if (lengthMm.trim()) body.length_mm = Math.floor(Number(lengthMm))
         if (widthMm.trim()) body.width_mm = Math.floor(Number(widthMm))
@@ -168,7 +173,11 @@ export function FfManualProductCreateDialog({
                 labelId="ff-manual-seller-label"
                 label="Селлер"
                 value={sellerId}
-                onChange={(e) => setSellerId(String(e.target.value))}
+                onChange={(e) => {
+                  setSellerId(String(e.target.value))
+                  setOzonSku('')
+                  setOzonOfferId('')
+                }}
                 data-testid="ff-manual-product-seller"
               >
                 {sellers.map((s) => (
@@ -201,24 +210,26 @@ export function FfManualProductCreateDialog({
               onChange={(e) => setVendor(e.target.value)}
               slotProps={{ htmlInput: { 'data-testid': 'ff-manual-product-vendor' } }}
             />
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-              <TextField
-                size="small"
-                label="SKU Ozon"
-                value={ozonSku}
-                onChange={(e) => setOzonSku(e.target.value)}
-                fullWidth
-                slotProps={{ htmlInput: { 'data-testid': 'ff-manual-product-ozon-sku' } }}
-              />
-              <TextField
-                size="small"
-                label="Предложение Ozon"
-                value={ozonOfferId}
-                onChange={(e) => setOzonOfferId(e.target.value)}
-                fullWidth
-                slotProps={{ htmlInput: { 'data-testid': 'ff-manual-product-ozon-offer' } }}
-              />
-            </Stack>
+            {ozonConnected ? (
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                <TextField
+                  size="small"
+                  label="SKU Ozon"
+                  value={ozonSku}
+                  onChange={(e) => setOzonSku(e.target.value)}
+                  fullWidth
+                  slotProps={{ htmlInput: { 'data-testid': 'ff-manual-product-ozon-sku' } }}
+                />
+                <TextField
+                  size="small"
+                  label="Предложение Ozon"
+                  value={ozonOfferId}
+                  onChange={(e) => setOzonOfferId(e.target.value)}
+                  fullWidth
+                  slotProps={{ htmlInput: { 'data-testid': 'ff-manual-product-ozon-offer' } }}
+                />
+              </Stack>
+            ) : null}
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
               <TextField
                 size="small"

@@ -243,6 +243,8 @@ test('ff products: manual create adds a catalog product', async ({ page }) => {
   await expect(page.getByTestId('ff-manual-product-dialog')).toBeVisible()
   await page.getByTestId('ff-manual-product-seller').click()
   await page.getByRole('listbox').getByText('Manual Seller', { exact: true }).click()
+  await expect(page.getByTestId('ff-manual-product-ozon-sku')).toHaveCount(0)
+  await expect(page.getByTestId('ff-manual-product-ozon-offer')).toHaveCount(0)
   const sku = `MAN-E2E-${Date.now()}`
   const barcode = `204${String(Date.now()).slice(-10)}`
   await page.getByTestId('ff-manual-product-name').fill('Ручной E2E товар')
