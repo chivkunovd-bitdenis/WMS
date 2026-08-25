@@ -56,7 +56,7 @@ import {
   type FbsWorklistWarehouseOption,
   type FbsWorkspace,
 } from './fbsApi'
-import { EmptyState, ErrorNotice, SecondaryAction, TableLoadMore, TableSkeletonBody } from '../../ui-kit'
+import { TableLoadMore } from '../../ui-kit'
 
 type SellerRow = { id: string; name: string }
 
@@ -208,6 +208,8 @@ function LazyProductPhotoThumb({
 type NewOrderRowProps = {
   order: FbsWorklistOrder
   selected: boolean
+  highlighted: boolean
+  serverNow: string | null
   registerRow: (id: string, node: HTMLTableRowElement | null) => void
   onToggle: (order: FbsWorklistOrder) => void
   onOpenWorkspace: (supplyId: string) => void
@@ -219,6 +221,8 @@ type NewOrderRowProps = {
 const NewOrderRow = memo(function NewOrderRow({
   order,
   selected,
+  highlighted,
+  serverNow,
   registerRow,
   onToggle,
   onOpenWorkspace,
@@ -235,6 +239,12 @@ const NewOrderRow = memo(function NewOrderRow({
         cursor: order.supply_id ? 'pointer' : 'default',
         scrollMarginBottom: '220px',
         '& > td': { py: 0.9 },
+        ...(highlighted
+          ? {
+              bgcolor: 'rgba(255, 214, 102, 0.24)',
+              '&:hover': { bgcolor: 'rgba(255, 214, 102, 0.32)' },
+            }
+          : {}),
       }}
       onClick={() => order.supply_id && onOpenWorkspace(order.supply_id)}
       data-testid={`fbs-order-${order.id}`}
@@ -277,6 +287,25 @@ const NewOrderRow = memo(function NewOrderRow({
         </Stack>
       </TableCell>
       <TableCell>
+        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+          WB №{order.wb_order_id}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
+          ШК: {order.product.barcode ?? '—'}
+        </Typography>
+        {order.product.sku ? (
+          <Tooltip title={order.product.sku}>
+            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
+              SKU {order.product.sku}
+            </Typography>
+          </Tooltip>
+        ) : order.product.seller_article ? (
+          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
+            Артикул: {order.product.seller_article}
+          </Typography>
+        ) : null}
+      </TableCell>
+      <TableCell>
         <Tooltip title={order.seller.name ?? '—'}>
           <Typography variant="body2" noWrap sx={{ maxWidth: 100 }}>{order.seller.name ?? '—'}</Typography>
         </Tooltip>
@@ -297,7 +326,10 @@ const NewOrderRow = memo(function NewOrderRow({
         </Typography>
       </TableCell>
       <TableCell>
-        <Typography variant="body2">{formatDateTime(order.deadline_at)}</Typography>
+        <Typography variant="body2">{formatDateTime(order.created_at_wb)}</Typography>
+        <Typography variant="caption" color="text.secondary">
+          В сборке: {elapsedSince(order.created_at_wb, serverNow)}
+        </Typography>
       </TableCell>
     </TableRow>
   )
@@ -529,7 +561,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         const params = {
           seller_id: sellerId === '__all__' ? null : sellerId,
           status_group: statusGroup,
-          limit: 100,
+          limit: 500,
         }
         const [suppliesPage, ordersPage] = await Promise.all([
           fetchFbsSupplyWorklist(token, authHeaders, params),
@@ -548,7 +580,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         seller_id: sellerId === '__all__' ? null : sellerId,
         status_group: statusGroup,
         wb_warehouse_id: statusGroup === 'new' && wbWarehouseId !== '__all__' ? wbWarehouseId : null,
-        limit: statusGroup === 'new' ? NEW_ORDERS_PAGE_LIMIT : 100,
+        limit: statusGroup === 'new' ? NEW_ORDERS_PAGE_LIMIT : 500,
       })
       if (requestId !== loadRequestRef.current) return
       if (backgroundRefresh) {
@@ -589,7 +621,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       setServerNow(page.server_now)
       setLastLoadedAt(new Date().toISOString())
     } catch (cause) {
-      setError('Не удалось получить список заказов')
+      setError(cause instanceof Error ? cause.message : 'Не удалось загрузить заказы FBS.')
     } finally {
       if (requestId === loadRequestRef.current) {
         if (!backgroundRefresh) setBusy(false)
@@ -786,6 +818,10 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const matchingOrders = useMemo(
     () => (searchTerm ? orders.filter((order) => orderSearchText(order).includes(searchTerm)) : []),
     [orders, searchTerm],
+  )
+  const matchingIds = useMemo(
+    () => new Set(matchingOrders.map((order) => order.id)),
+    [matchingOrders],
   )
   const exportRows = selected.size > 0 ? selectedOrders : searchTerm ? matchingOrders : orders
 
@@ -1118,16 +1154,9 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       </Paper>
 
       {error ? (
-        <Box sx={{ mt: 2 }}>
-          <ErrorNotice testId="fbs-orders-error">
-            <Stack direction="row" spacing={2} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
-              <Typography variant="body2">{error}</Typography>
-              <SecondaryAction onClick={() => void load()} disabled={busy}>
-                Повторить
-              </SecondaryAction>
-            </Stack>
-          </ErrorNotice>
-        </Box>
+        <Alert severity="error" sx={{ mt: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
       ) : null}
 
       {syncNote ? (
@@ -1275,12 +1304,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
           transition: 'max-height 0.15s ease',
         }}
       >
-        <Table
-          stickyHeader
-          size="small"
-          data-testid="fbs-worklist-table"
-          sx={statusGroup === 'new' ? { tableLayout: 'fixed', width: 713 } : undefined}
-        >
+        <Table stickyHeader size="small" data-testid="fbs-worklist-table">
           <TableHead>
             <TableRow>
               <TableCell padding="checkbox">
@@ -1294,10 +1318,11 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               </TableCell>
               {statusGroup === 'new' ? (
                 <>
-                  <TableCell sx={{ width: 210, whiteSpace: 'nowrap' }}>Товар</TableCell>
-                  <TableCell sx={{ width: 135, whiteSpace: 'nowrap' }}>Селлер</TableCell>
-                  <TableCell sx={{ width: 180, whiteSpace: 'nowrap' }}>Маршрут сдачи</TableCell>
-                  <TableCell sx={{ width: 140, whiteSpace: 'nowrap' }}>Отгрузить до</TableCell>
+                  <TableCell sx={{ minWidth: 210 }}>Товар</TableCell>
+                  <TableCell sx={{ minWidth: 210 }}>Заказ и сканирование</TableCell>
+                  <TableCell sx={{ minWidth: 135 }}>Селлер</TableCell>
+                  <TableCell sx={{ minWidth: 180 }}>Склад селлера / WB</TableCell>
+                  <TableCell sx={{ minWidth: 140 }}>Создан WB / в сборке</TableCell>
                 </>
               ) : (
                 <>
@@ -1310,7 +1335,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               )}
             </TableRow>
           </TableHead>
-          {busy && orders.length === 0 ? <TableSkeletonBody columns={5} rows={5} /> : <TableBody>
+          <TableBody>
             {orders.map((order) => {
               if (statusGroup === 'new') {
                 return (
@@ -1318,6 +1343,8 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                     key={order.id}
                     order={order}
                     selected={selected.has(order.id)}
+                    highlighted={Boolean(searchTerm && matchingIds.has(order.id))}
+                    serverNow={serverNow}
                     registerRow={registerRow}
                     onToggle={toggle}
                     onOpenWorkspace={openWorkspace}
@@ -1438,21 +1465,29 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                 ) : row
               )
             })}
-            {!busy && !error && orders.length === 0 ? (
+            {!busy && orders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5}>
-                  <EmptyState
-                    title={statusGroup === 'new' ? 'Новых заказов пока нет' : 'Заказов в этой группе нет'}
-                    hint={statusGroup === 'new'
-                      ? 'Заказы появятся здесь автоматически после загрузки из Wildberries'
-                      : 'Измените фильтры или обновите синхронизацию с WB.'}
-                    testId={statusGroup === 'new' ? 'fbs-orders-empty' : 'fbs-orders-group-empty'}
-                  />
+                <TableCell colSpan={6}>
+                  <Box sx={{ py: 8, textAlign: 'center' }}>
+                    <Inventory2OutlinedIcon sx={{ fontSize: 42, color: 'text.disabled' }} />
+                    <Typography variant="subtitle1" sx={{ mt: 1 }}>
+                      Заказов в этой группе нет
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Измените фильтры или обновите синхронизацию с WB.
+                    </Typography>
+                  </Box>
                 </TableCell>
               </TableRow>
             ) : null}
-          </TableBody>}
+          </TableBody>
         </Table>
+        {busy ? (
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'center', py: 2 }}>
+            <CircularProgress size={20} />
+            <Typography variant="body2">Обновляем рабочий список…</Typography>
+          </Stack>
+        ) : null}
       </TableContainer>
       )}
 
