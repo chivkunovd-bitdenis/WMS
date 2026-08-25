@@ -24,9 +24,7 @@ class MarketplaceProviderError(Exception):
     @property
     def is_account_blocked(self) -> bool:
         return (
-            self.marketplace == "ozon"
-            and self.status_code == 403
-            and self.payload.get("code") == 7
+            self.marketplace == "ozon" and self.status_code == 403 and self.payload.get("code") == 7
         )
 
 
@@ -63,6 +61,15 @@ class MarketplaceBackoff:
 
 
 class MarketplaceTransport(Protocol):
+    async def call(
+        self,
+        *,
+        client_id: str,
+        api_key: str,
+        path: str,
+        payload: Mapping[str, object],
+    ) -> object: ...
+
     async def fetch_orders(self, *, client_id: str, api_key: str) -> list[dict[str, Any]]: ...
 
     async def fetch_statuses(
@@ -132,6 +139,29 @@ class FakeMarketplaceTransport:
     supply_qr: bytes = b""
     errors: dict[str, MarketplaceProviderError] = field(default_factory=dict)
     calls: list[tuple[str, str]] = field(default_factory=list)
+    endpoint_responses: dict[str, object] = field(default_factory=dict)
+    endpoint_response_queues: dict[str, list[object]] = field(default_factory=dict)
+    endpoint_calls: list[tuple[str, dict[str, object]]] = field(default_factory=list)
+
+    async def call(
+        self,
+        *,
+        client_id: str,
+        api_key: str,
+        path: str,
+        payload: Mapping[str, object],
+    ) -> object:
+        _ = client_id, api_key
+        self.endpoint_calls.append((path, dict(payload)))
+        if error := self.errors.get(path):
+            raise error
+        queue = self.endpoint_response_queues.get(path)
+        if queue:
+            value = queue.pop(0)
+            if isinstance(value, MarketplaceProviderError):
+                raise value
+            return value
+        return self.endpoint_responses.get(path, {})
 
     async def fetch_orders(self, *, client_id: str, api_key: str) -> list[dict[str, Any]]:
         _ = api_key
@@ -244,6 +274,31 @@ class OzonMarketplaceProvider:
     def _remember_blocked(self, error: MarketplaceProviderError) -> None:
         if error.is_account_blocked:
             self._blocked_error = error
+
+    async def call(
+        self,
+        *,
+        client_id: str,
+        api_key: str,
+        path: str,
+        payload: Mapping[str, object],
+    ) -> object:
+        """Call one typed Seller API operation through the provider boundary.
+
+        Mutations are deliberately never retried here. Read retry policy belongs
+        to the Ozon FBS process service, where the operation semantics are known.
+        """
+        self._raise_if_blocked()
+        try:
+            return await self.transport.call(
+                client_id=client_id,
+                api_key=api_key,
+                path=path,
+                payload=payload,
+            )
+        except MarketplaceProviderError as error:
+            self._remember_blocked(error)
+            raise
 
     async def fetch_orders(self, *, client_id: str, api_key: str) -> list[dict[str, Any]]:
         self._raise_if_blocked()

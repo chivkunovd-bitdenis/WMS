@@ -46,6 +46,7 @@ import { FfMpUnloadPickPanel } from './FfMpUnloadPickPanel'
 import { useWbProductCatalog } from '../../hooks/useWbProductCatalog'
 import { apiUrl } from '../../api'
 import { WmsDateField } from '../../components/WmsDateField'
+import { MarketplaceChip } from '../../ui-kit'
 
 import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
@@ -214,10 +215,6 @@ function kindRu(kind: DocKind): string {
   if (kind === 'outbound') return 'Отгрузка'
   if (kind === 'marketplace_unload') return 'Отгрузка на МП'
   return 'Расхождение'
-}
-
-function marketplaceLabel(marketplace: string | null | undefined): string {
-  return marketplace === 'ozon' ? 'Ozon' : 'Wildberries'
 }
 
 function formatSignedQty(value: number): string {
@@ -2249,6 +2246,7 @@ export function FfSuppliesShipmentsPage({
                 hover
                 sx={{
                   cursor: busy ? 'default' : 'pointer',
+                  ...(row.kind === 'marketplace_unload' ? { height: 59 } : {}),
                 }}
                 onClick={() => {
                   if (busy) {
@@ -2300,21 +2298,23 @@ export function FfSuppliesShipmentsPage({
                 <TableCell>{row.sellerName ?? '—'}</TableCell>
                 <TableCell sx={{ color: 'text.secondary', maxWidth: 200 }}>
                   {row.kind === 'marketplace_unload' ? (
-                    <Stack
-                      direction="row"
-                      spacing={0.75}
-                      sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 0.75,
+                        minWidth: 0,
+                        minHeight: 45,
+                      }}
                     >
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant="body2" color="text.secondary" sx={{ minWidth: 0 }}>
                         {row.extraLabel ?? '—'}
                       </Typography>
-                      <Chip
-                        size="small"
-                        label={marketplaceLabel(row.marketplace)}
-                        variant="outlined"
-                        data-testid="ff-mp-marketplace-chip"
+                      <MarketplaceChip
+                        marketplace={row.marketplace === 'ozon' ? 'ozon' : 'wb'}
+                        testId="ff-mp-marketplace-chip"
                       />
-                    </Stack>
+                    </Box>
                   ) : (
                     row.extraLabel ?? '—'
                   )}

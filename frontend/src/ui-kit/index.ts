@@ -2,6 +2,8 @@
 // своя вёрстка таблиц, чипов и кнопок — дефект (docs/product/UX_CANON_RU.md).
 export { StatusChip, MarkChip } from './StatusChip'
 export type { StatusTone } from './StatusChip'
+export { MarketplaceChip } from './MarketplaceChip'
+export type { MarketplaceKind } from './MarketplaceChip'
 export { PrimaryAction, SecondaryAction, DangerAction, IconAction, ActionGroup, PrintAction } from './Actions'
 export type { Printable } from './Actions'
 export { DataTable } from './DataTable'

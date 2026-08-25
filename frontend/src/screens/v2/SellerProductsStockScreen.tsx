@@ -33,6 +33,7 @@ import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { printPackagingInstructions } from '../../utils/printPackagingInstructions'
+import { MarketplaceChip } from '../../ui-kit'
 
 type WbCatalogRow = {
   id: string
@@ -573,6 +574,7 @@ export function SellerProductsStockScreen({
             },
             '& .MuiTableCell-head': {
               fontWeight: 600,
+              fontSize: '0.7rem',
               lineHeight: 1.2,
               whiteSpace: 'normal',
             },
@@ -583,17 +585,17 @@ export function SellerProductsStockScreen({
           }}
         >
           <colgroup>
-            <col style={{ width: '4%' }} />
-            <col style={{ width: '7%' }} />
-            <col style={{ width: '15%' }} />
-            <col style={{ width: '10%' }} />
-            <col style={{ width: '9%' }} />
-            <col style={{ width: '11%' }} />
-            <col style={{ width: '6%' }} />
-            <col style={{ width: '13%' }} />
+            <col style={{ width: '5%' }} />
+            <col style={{ width: '5%' }} />
+            <col style={{ width: '10.5%' }} />
+            <col style={{ width: '17.5%' }} />
+            <col style={{ width: '17%' }} />
+            <col style={{ width: '10.5%' }} />
             <col style={{ width: '8%' }} />
-            <col style={{ width: '7%' }} />
             <col style={{ width: '10%' }} />
+            <col style={{ width: '6%' }} />
+            <col style={{ width: '4%' }} />
+            <col style={{ width: '7.5%' }} />
           </colgroup>
           <TableHead>
             <TableRow>
@@ -642,33 +644,50 @@ export function SellerProductsStockScreen({
                   <ProductPhotoThumb src={p.wb_primary_image_url} />
                 </TableCell>
                 <TableCell>
-                  <Stack spacing={0.5} sx={{ alignItems: 'flex-start', minWidth: 0 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }} title={p.name} noWrap>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        minWidth: 0,
+                        fontWeight: 600,
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                      }}
+                      title={p.name}
+                    >
                       {p.name}
                     </Typography>
                     {p.ozon_sku || p.ozon_offer_id ? (
-                      <Chip
-                        size="small"
-                        label="Ozon"
-                        variant="outlined"
-                        data-testid="seller-catalog-marketplace-ozon"
-                      />
+                      <MarketplaceChip marketplace="ozon" testId="seller-catalog-marketplace-ozon" />
                     ) : null}
-                  </Stack>
+                  </Box>
                 </TableCell>
                 <TableCell>
-                  <Typography variant="body2" title={p.wb_vendor_code ?? '—'} noWrap>
+                  <Typography
+                    variant="caption"
+                    sx={{ fontSize: '0.7rem' }}
+                    title={p.wb_vendor_code ?? '—'}
+                    noWrap
+                  >
                     {p.wb_vendor_code ?? '—'}
                   </Typography>
                 </TableCell>
                 <TableCell>
-                  <Typography variant="body2" sx={{ fontWeight: 600 }} title={p.sku_code} noWrap>
+                  <Typography
+                    variant="caption"
+                    sx={{ fontSize: '0.7rem', fontWeight: 600 }}
+                    title={p.sku_code}
+                    noWrap
+                  >
                     {p.sku_code}
                   </Typography>
                 </TableCell>
                 <TableCell>
                   <Typography
-                    variant="body2"
+                    variant="caption"
+                    sx={{ fontSize: '0.7rem' }}
                     title={p.wb_primary_barcode ?? p.wb_barcodes[0] ?? '—'}
                     noWrap
                   >
@@ -684,6 +703,7 @@ export function SellerProductsStockScreen({
                   <Stack spacing={0.15} sx={{ minWidth: 0, alignItems: 'flex-end' }}>
                     <Typography
                       variant="caption"
+                      sx={{ fontSize: '0.65rem' }}
                       data-testid={`seller-catalog-stock-in-storage-${p.id}`}
                       title={`В ячейках ${p.stock_in_storage}`}
                       noWrap
@@ -693,6 +713,7 @@ export function SellerProductsStockScreen({
                     <Typography
                       variant="caption"
                       color="text.secondary"
+                      sx={{ fontSize: '0.65rem' }}
                       data-testid={`seller-catalog-stock-on-hand-${p.id}`}
                       title={`На ФФ ${p.stock_on_hand}`}
                       noWrap
@@ -702,9 +723,9 @@ export function SellerProductsStockScreen({
                     <Typography
                       variant="caption"
                       color="text.secondary"
+                      sx={{ fontSize: '0.65rem' }}
                       data-testid={`seller-catalog-stock-free-fbo-${p.id}`}
                       title={`Свободный FBO ${p.stock_free_fbo}`}
-                      noWrap
                     >
                       Свободный FBO {p.stock_free_fbo}
                     </Typography>
@@ -720,7 +741,8 @@ export function SellerProductsStockScreen({
                     aria-label={p.has_packaging_instructions ? 'Редактировать ТЗ' : 'Добавить ТЗ'}
                     title={p.has_packaging_instructions ? 'Редактировать ТЗ' : 'Добавить ТЗ'}
                     sx={{
-                      minWidth: 64,
+                      minWidth: 56,
+                      px: 1,
                       ...(p.has_packaging_instructions
                         ? {}
                         : { color: 'text.secondary', borderColor: 'divider' }),
@@ -746,6 +768,7 @@ export function SellerProductsStockScreen({
                     variant="outlined"
                     onClick={() => void openReserves(p.id)}
                     data-testid={`seller-catalog-reserves-${p.id}`}
+                    sx={{ minWidth: 0, px: 1 }}
                   >
                     Резервы
                   </Button>

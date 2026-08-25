@@ -45,6 +45,7 @@ class SellerWbCatalogRow:
     wb_brand: str | None = None
     wb_composition: str | None = None
     packaging_instructions: str | None = None
+    country_of_origin_iso_code: str | None = None
     requires_honest_sign: bool = False
     fbs_stock_sync_enabled: bool = False
     fbs_stock_limit: int | None = None
@@ -69,6 +70,7 @@ class SellerWbCatalogRow:
             "wb_brand": self.wb_brand,
             "wb_composition": self.wb_composition,
             "packaging_instructions": self.packaging_instructions,
+            "country_of_origin_iso_code": self.country_of_origin_iso_code,
             "requires_honest_sign": self.requires_honest_sign,
             "fbs_stock_sync_enabled": self.fbs_stock_sync_enabled,
             "fbs_stock_limit": self.fbs_stock_limit,
@@ -146,12 +148,10 @@ def _is_preferred_fbs_sync_state(
     if current is None:
         return True
     candidate_confirmed = (
-        candidate.status == STOCK_SYNC_STATUS_CONFIRMED
-        and candidate.published_amount is not None
+        candidate.status == STOCK_SYNC_STATUS_CONFIRMED and candidate.published_amount is not None
     )
     current_confirmed = (
-        current.status == STOCK_SYNC_STATUS_CONFIRMED
-        and current.published_amount is not None
+        current.status == STOCK_SYNC_STATUS_CONFIRMED and current.published_amount is not None
     )
     if candidate_confirmed != current_confirmed:
         return candidate_confirmed
@@ -282,9 +282,7 @@ async def list_seller_wb_catalog_rows(
                 wb_nm_id=nm,
                 wb_vendor_code=p.wb_vendor_code,
                 ozon_sku=ozon_links[p.id].external_sku if p.id in ozon_links else None,
-                ozon_offer_id=(
-                    ozon_links[p.id].external_offer_id if p.id in ozon_links else None
-                ),
+                ozon_offer_id=(ozon_links[p.id].external_offer_id if p.id in ozon_links else None),
                 wb_subject_name=subj,
                 wb_primary_image_url=img,
                 wb_barcodes=barcodes,
@@ -294,6 +292,7 @@ async def list_seller_wb_catalog_rows(
                 wb_brand=wb_brand,
                 wb_composition=wb_composition,
                 packaging_instructions=p.packaging_instructions,
+                country_of_origin_iso_code=p.country_of_origin_iso_code,
                 requires_honest_sign=bool(p.requires_honest_sign),
                 fbs_stock_sync_enabled=bool(p.fbs_stock_sync_enabled),
                 fbs_stock_limit=p.fbs_stock_limit,
@@ -328,6 +327,7 @@ class FfCatalogRow:
     wb_brand: str | None = None
     wb_composition: str | None = None
     packaging_instructions: str | None = None
+    country_of_origin_iso_code: str | None = None
     requires_honest_sign: bool = False
     fbs_stock_sync_enabled: bool = False
     fbs_stock_limit: int | None = None
@@ -354,6 +354,7 @@ class FfCatalogRow:
             "wb_brand": self.wb_brand,
             "wb_composition": self.wb_composition,
             "packaging_instructions": self.packaging_instructions,
+            "country_of_origin_iso_code": self.country_of_origin_iso_code,
             "requires_honest_sign": self.requires_honest_sign,
             "fbs_stock_sync_enabled": self.fbs_stock_sync_enabled,
             "fbs_stock_limit": self.fbs_stock_limit,
@@ -457,6 +458,7 @@ async def list_linked_wb_catalog_rows(
                 wb_brand=wb_brand,
                 wb_composition=wb_composition,
                 packaging_instructions=p.packaging_instructions,
+                country_of_origin_iso_code=p.country_of_origin_iso_code,
                 requires_honest_sign=bool(p.requires_honest_sign),
                 fbs_stock_sync_enabled=bool(p.fbs_stock_sync_enabled),
                 fbs_stock_limit=p.fbs_stock_limit,

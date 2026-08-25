@@ -38,6 +38,7 @@ import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined'
 import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined'
 import { FbsStatusChip } from '../../components/fbs/FbsChips'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
+import { MarketplaceChip } from '../../ui-kit'
 import { FbsSupplyCreateDialog } from './FbsSupplyCreateDialog'
 import { FfFbsSectionNav } from './FfFbsSectionNav'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
@@ -321,10 +322,12 @@ const NewOrderRow = memo(function NewOrderRow({
         ) : null}
       </TableCell>
       <TableCell>
-        <Tooltip title={order.seller.name ?? '—'}>
-          <Typography variant="body2" noWrap sx={{ maxWidth: 100 }}>{order.seller.name ?? '—'}</Typography>
-        </Tooltip>
-        <Chip size="small" variant="outlined" label={marketplaceLabel(order.marketplace)} sx={{ mt: 0.5 }} />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0, minHeight: 45 }}>
+          <Tooltip title={order.seller.name ?? '—'}>
+            <Typography variant="body2" noWrap sx={{ minWidth: 0, maxWidth: 100 }}>{order.seller.name ?? '—'}</Typography>
+          </Tooltip>
+          <MarketplaceChip marketplace={order.marketplace} />
+        </Box>
         {order.buyer_type === 'legal' ? (
           <Typography variant="caption" color="text.secondary">
             Юридическое лицо

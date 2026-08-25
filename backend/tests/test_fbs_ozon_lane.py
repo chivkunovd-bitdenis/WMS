@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import base64
+import json
 import uuid
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
@@ -17,10 +17,15 @@ from app.api.fbs_orders import _run_blocked_ozon_fake
 from app.db.session import SessionLocal, engine
 from app.models import Base
 from app.models.fbs_order import (
+    CHECK_STATUS_ERROR,
+    CHECK_STATUS_OK,
     FBS_ORDER_STATUS_PACKED,
     MAPPING_STATUS_MAPPED,
+    META_STATUS_ACCEPTED,
+    META_STATUS_REJECTED,
     RESERVE_STATUS_RESERVED,
     FbsOrder,
+    FbsOrderMarking,
 )
 from app.models.fbs_print_asset import PRINT_ASSET_STATUS_READY
 from app.models.fbs_supply import (
@@ -36,6 +41,8 @@ from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller import Seller
 from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
+from app.services import fbs_marking_service as marking_svc
+from app.services import fbs_packing_box_service as box_svc
 from app.services import fbs_print_asset_service as print_asset_svc
 from app.services import fbs_shipment_service as shipment_svc
 from app.services import fbs_supply_service as supply_svc
@@ -356,8 +363,8 @@ async def _seed_ozon_supply_case(
             seller=seller,
             warehouse=warehouse,
             marketplace="ozon",
-            external_supply_id="ozon-supply-existing",
-            wb_supply_id="ozon-supply-existing",
+            external_supply_id=None,
+            wb_supply_id=None,
             name="Ozon FBS",
             status=FBS_SUPPLY_STATUS_PACKED,
             delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
@@ -375,6 +382,7 @@ async def _seed_ozon_supply_case(
         marketplace="ozon",
         external_order_id="ozon-posting-dispatch",
         wb_order_id=2001,
+        wb_nm_id=3001,
         wb_warehouse_id=11,
         status=FBS_ORDER_STATUS_PACKED if packed else "new",
         mapping_status=MAPPING_STATUS_MAPPED,
@@ -432,7 +440,7 @@ async def test_ozon_supply_creation_never_calls_wb(
     wb_add = AsyncMock(side_effect=AssertionError("WB add must not run for Ozon"))
     monkeypatch.setattr(supply_svc, "create_marketplace_supply", wb_create)
     monkeypatch.setattr(supply_svc, "_execute_wb_batch_add", wb_add)
-    transport = FakeMarketplaceTransport(created_supply_id="ozon-supply-created")
+    transport = FakeMarketplaceTransport()
 
     workspace = await supply_svc.create_supply_from_orders(
         db_session,
@@ -447,13 +455,87 @@ async def test_ozon_supply_creation_never_calls_wb(
     )
 
     assert workspace["supply"]["marketplace"] == "ozon"
-    assert transport.calls == [("create_supply", "client-id")]
+    assert transport.calls == []
+    assert workspace["supply"]["wb_supply_id"] is None
+    assert workspace["supply"]["external_supply_id"] is None
+    assert workspace["supply"]["boxes_without_distribution"] is True
     wb_create.assert_not_awaited()
     wb_add.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_ozon_supply_delivery_and_qr_never_call_wb(
+async def test_ozon_boxes_mode_is_automatic_and_cannot_be_disabled(
+    db_session: AsyncSession,
+) -> None:
+    tenant, _, _, _, _, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    assert supply is not None
+    supply.boxes_without_distribution_at = datetime.now(UTC)
+    await db_session.commit()
+
+    with pytest.raises(box_svc.FbsPackingBoxError, match="ozon_boxes_managed_automatically"):
+        await box_svc.create_boxes(
+            db_session,
+            tenant.id,
+            supply.id,
+            1,
+            "ozon-box",
+            AsyncMock(),
+        )
+    with pytest.raises(box_svc.FbsPackingBoxError, match="ozon_boxes_managed_automatically"):
+        await box_svc.set_boxes_without_distribution(
+            db_session,
+            tenant.id,
+            supply.id,
+            False,
+            actor_user_id=None,
+        )
+
+
+def _ozon_handoff_responses(*, substatus: str = "posting_in_carriage") -> dict[str, object]:
+    png = print_asset_svc._FAKE_OZON_LABEL_PNG_BASE64
+    return {
+        "/v4/posting/fbs/ship": {"result": ["ozon-posting-dispatch"]},
+        "/v3/posting/fbs/get": {
+            "result": {
+                "posting_number": "ozon-posting-dispatch",
+                "status": "awaiting_deliver",
+                "substatus": substatus,
+                "related_postings": {"related_posting_numbers": []},
+            }
+        },
+        "/v2/posting/fbs/package-label/create": {
+            "result": {"tasks": [{"task_id": 71, "task_type": "big_label"}]}
+        },
+        "/v1/posting/fbs/package-label/get": {
+            "result": {"status": "completed", "file_url": "https://example.invalid/labels"}
+        },
+        "/v2/posting/fbs/package-label": {
+            "file_content": png,
+            "file_name": "labels.pdf",
+            "content_type": "application/pdf",
+        },
+        "/v1/carriage/create": {"carriage_id": 901},
+        "/v1/carriage/set-postings": {
+            "result": [{"posting_number": "ozon-posting-dispatch", "result": True}]
+        },
+        "/v1/carriage/approve": {},
+        "/v1/carriage/get": {"carriage_id": 901, "status": "sended"},
+        "/v2/posting/fbs/act/get-barcode": {
+            "file_content": png,
+            "file_name": "barcode.png",
+            "content_type": "image/png",
+        },
+        "/v2/posting/fbs/act/get-barcode/text": {"result": "OZON-ACT-901"},
+        "/v2/posting/fbs/digital/act/get-pdf": {
+            "file_content": png,
+            "file_name": "shipping-list.pdf",
+            "content_type": "application/pdf",
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_ozon_supply_handoff_ships_rechecks_and_creates_carriage_without_wb(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -468,9 +550,7 @@ async def test_ozon_supply_delivery_and_qr_never_call_wb(
     monkeypatch.setattr(shipment_svc, "deliver_marketplace_supply", wb_deliver)
     monkeypatch.setattr(shipment_svc, "fetch_marketplace_supply_barcode", wb_qr)
     monkeypatch.setattr(shipment_svc, "_sync_supply_orders_from_wb", wb_sync)
-    transport = FakeMarketplaceTransport(
-        supply_qr=base64.b64decode(print_asset_svc._FAKE_OZON_LABEL_PNG_BASE64)
-    )
+    transport = FakeMarketplaceTransport(endpoint_responses=_ozon_handoff_responses())
 
     delivered = await shipment_svc.deliver_supply(
         db_session,
@@ -482,10 +562,157 @@ async def test_ozon_supply_delivery_and_qr_never_call_wb(
     )
 
     assert delivered.status == FBS_SUPPLY_STATUS_IN_DELIVERY
-    assert [call[0] for call in transport.calls] == ["deliver_supply", "fetch_supply_qr"]
+    assert delivered.external_supply_id == "901"
+    assert [call[0] for call in transport.endpoint_calls] == [
+        "/v4/posting/fbs/ship",
+        "/v3/posting/fbs/get",
+        "/v2/posting/fbs/package-label/create",
+        "/v1/posting/fbs/package-label/get",
+        "/v2/posting/fbs/package-label",
+        "/v1/carriage/create",
+        "/v1/carriage/get",
+        "/v1/carriage/set-postings",
+        "/v1/carriage/get",
+        "/v1/carriage/approve",
+        "/v1/carriage/get",
+        "/v2/posting/fbs/act/get-barcode",
+        "/v2/posting/fbs/act/get-barcode/text",
+        "/v2/posting/fbs/digital/act/get-pdf",
+    ]
     wb_deliver.assert_not_awaited()
     wb_qr.assert_not_awaited()
     wb_sync.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_ozon_ship_failed_readback_stays_visible_and_blocks_handoff(
+    db_session: AsyncSession,
+) -> None:
+    tenant, _, _, _, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    assert supply is not None
+    responses = _ozon_handoff_responses(substatus="ship_failed")
+    transport = FakeMarketplaceTransport(endpoint_responses=responses)
+
+    with pytest.raises(shipment_svc.FbsShipmentError, match="ozon_ship_failed"):
+        await shipment_svc.deliver_supply(
+            db_session,
+            tenant.id,
+            supply.id,
+            AsyncMock(),
+            idempotency_key=f"ozon-failed-{uuid.uuid4()}",
+            ozon_provider=OzonMarketplaceProvider(transport=transport),
+        )
+
+    assert order.supplier_status == "ship_failed"
+    assert order.meta_details_json is not None
+    assert "сборка" in str(order.meta_details_json).lower()
+    assert [call[0] for call in transport.endpoint_calls] == [
+        "/v4/posting/fbs/ship",
+        "/v3/posting/fbs/get",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_ozon_marking_uses_exemplar_flow_and_preserves_gs(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant, _, _, _, order, _ = await _seed_ozon_supply_case(db_session, packed=True)
+    marking = FbsOrderMarking(
+        tenant_id=tenant.id,
+        order_id=order.id,
+        kind="sgtin",
+        value="010460123456789021ABC\x1d91XYZ",
+    )
+    db_session.add(marking)
+    await db_session.flush()
+    wb_put = AsyncMock(side_effect=AssertionError("WB marking must not run for Ozon"))
+    monkeypatch.setattr(marking_svc, "put_marketplace_order_meta", wb_put)
+    transport = FakeMarketplaceTransport(
+        endpoint_responses={
+            "/v6/fbs/posting/product/exemplar/create-or-get": {
+                "posting_number": order.external_order_id,
+                "products": [{"product_id": 3001, "exemplars": [{"exemplar_id": 81}]}],
+            },
+            "/v5/fbs/posting/product/exemplar/validate": {
+                "products": [{"product_id": 3001, "valid": True, "exemplars": []}]
+            },
+            "/v6/fbs/posting/product/exemplar/set": {},
+            "/v5/fbs/posting/product/exemplar/status": {
+                "posting_number": order.external_order_id,
+                "status": "ship_available",
+                "products": [],
+            },
+        }
+    )
+
+    rows = await marking_svc.attach_order_meta_to_wb_and_sync(
+        db_session,
+        tenant.id,
+        order,
+        marking,
+        AsyncMock(),
+        ozon_provider=OzonMarketplaceProvider(transport=transport),
+    )
+
+    assert rows[0].meta_status == META_STATUS_ACCEPTED
+    assert rows[0].check_status == CHECK_STATUS_OK
+    validate_payload = transport.endpoint_calls[1][1]
+    sent_mark = validate_payload["products"][0]["exemplars"][0]["marks"][0]["mark"]
+    assert "\x1d" in sent_mark
+    assert "\\u001d" in json.dumps(validate_payload)
+    wb_put.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_ozon_marking_rejection_uses_existing_visible_status(
+    db_session: AsyncSession,
+) -> None:
+    tenant, _, _, _, order, _ = await _seed_ozon_supply_case(db_session, packed=True)
+    marking = FbsOrderMarking(
+        tenant_id=tenant.id,
+        order_id=order.id,
+        kind="sgtin",
+        value="bad-code",
+    )
+    db_session.add(marking)
+    await db_session.flush()
+    transport = FakeMarketplaceTransport(
+        endpoint_responses={
+            "/v6/fbs/posting/product/exemplar/create-or-get": {
+                "posting_number": order.external_order_id,
+                "products": [{"product_id": 3001, "exemplars": [{"exemplar_id": 82}]}],
+            },
+            "/v5/fbs/posting/product/exemplar/validate": {
+                "products": [
+                    {
+                        "product_id": 3001,
+                        "valid": False,
+                        "error": "not_in_circulation",
+                        "exemplars": [{"valid": False, "errors": ["not_in_circulation"]}],
+                    }
+                ]
+            },
+        }
+    )
+
+    with pytest.raises(marking_svc.FbsMarkingError, match="meta_validation_fail"):
+        await marking_svc.attach_order_meta_to_wb_and_sync(
+            db_session,
+            tenant.id,
+            order,
+            marking,
+            AsyncMock(),
+            ozon_provider=OzonMarketplaceProvider(transport=transport),
+        )
+
+    assert marking.meta_status == META_STATUS_REJECTED
+    assert marking.check_status == CHECK_STATUS_ERROR
+    assert "not_in_circulation" in (marking.reason or "")
+    assert [call[0] for call in transport.endpoint_calls] == [
+        "/v6/fbs/posting/product/exemplar/create-or-get",
+        "/v5/fbs/posting/product/exemplar/validate",
+    ]
 
 
 @pytest.mark.asyncio

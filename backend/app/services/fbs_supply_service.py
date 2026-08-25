@@ -81,15 +81,8 @@ from app.services.fbs_supply_validator_service import (
 )
 from app.services.fbs_wb_seller_lock_service import wb_seller_lock
 from app.services.fbs_workspace_service import get_supply_workspace
-from app.services.marketplace_account_service import (
-    MarketplaceAccountError,
-    MarketplaceAccountService,
-)
 from app.services.marketplace_provider import (
-    FakeMarketplaceTransport,
-    MarketplaceProviderError,
     OzonMarketplaceProvider,
-    provider_error_message,
 )
 from app.services.marketplace_seller_lock_service import marketplace_seller_lock
 from app.services.wildberries_client import (
@@ -209,8 +202,7 @@ def _fbs_supply_error_from_wb(
         message=wb_operator_message(exc),
         context=wb_error_context(exc, ref=ref, extra=extra),
         retryable=exc.code == "transport_error" if retryable is None else retryable,
-        http_status=http_status
-        or (504 if exc.code == "transport_error" else 502),
+        http_status=http_status or (504 if exc.code == "transport_error" else 502),
     )
 
 
@@ -237,9 +229,7 @@ async def _get_supply(
         FbsSupply.tenant_id == tenant_id,
     )
     if with_orders:
-        stmt = stmt.options(
-            selectinload(FbsSupply.orders).selectinload(FbsOrder.product)
-        )
+        stmt = stmt.options(selectinload(FbsSupply.orders).selectinload(FbsOrder.product))
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
 
@@ -355,11 +345,7 @@ async def _sync_existing_packaging_task_for_added_orders(
     sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
         session, tenant_id, supply.warehouse_id
     )
-    existing_lines = {
-        line.product_id: line
-        for line in task.lines
-        if line.product_id is not None
-    }
+    existing_lines = {line.product_id: line for line in task.lines if line.product_id is not None}
     qty_by_product: dict[uuid.UUID, int] = defaultdict(int)
     for order in orders:
         if order.product_id is not None:
@@ -393,9 +379,7 @@ def _partial_from_orders_summary(
             "order_id": str(order.id),
             "wb_order_id": int(order.wb_order_id),
             "tracking_label": (
-                "accepted"
-                if int(order.wb_order_id) in confirmed_wb_order_ids
-                else "not_confirmed"
+                "accepted" if int(order.wb_order_id) in confirmed_wb_order_ids else "not_confirmed"
             ),
             "wb_status": order.wb_status,
             "local_status": order.status,
@@ -449,9 +433,7 @@ async def _complete_partial_from_orders(
         response_summary={
             "partial_confirmation": True,
             "requested_wb_order_ids": sorted(int(order.wb_order_id) for order in orders),
-            "accepted_wb_order_ids": sorted(
-                int(order.wb_order_id) for order in accepted_orders
-            ),
+            "accepted_wb_order_ids": sorted(int(order.wb_order_id) for order in accepted_orders),
             "rejected_wb_order_ids": sorted(
                 int(order.wb_order_id)
                 for order in orders
@@ -651,7 +633,7 @@ async def create_supply_from_orders(
             seller_id=seller_id,
             warehouse_id=summary.wms_warehouse_id,
             marketplace=marketplace,
-            wb_supply_id=f"PENDING-{operation.id}",
+            wb_supply_id=None if marketplace == "ozon" else f"PENDING-{operation.id}",
             name=name,
             source=FBS_SUPPLY_SOURCE_WMS,
             status=FBS_SUPPLY_STATUS_DRAFT,
@@ -662,6 +644,7 @@ async def create_supply_from_orders(
             planned_destination_name=dest_name,
             planned_destination_zone=dest_zone,
             planned_shipment_date=planned_shipment_date,
+            boxes_without_distribution_at=(datetime.now(UTC) if marketplace == "ozon" else None),
         )
         session.add(supply)
         await session.flush()
@@ -670,71 +653,14 @@ async def create_supply_from_orders(
         await session.flush()
 
         if marketplace == "ozon":
-            try:
-                client_id, api_key = await MarketplaceAccountService(
-                    session
-                ).stored_credentials(tenant_id, seller_id)
-            except MarketplaceAccountError as exc:
-                await mark_operation_failed(
-                    session,
-                    operation,
-                    error_code=exc.code,
-                    local_supply_id=supply.id,
-                )
-                raise FbsSupplyError(
-                    exc.code,
-                    message="Кабинет Ozon не подключён.",
-                    retryable=False,
-                    http_status=409,
-                ) from exc
-
-            provider = ozon_provider or OzonMarketplaceProvider(
-                transport=FakeMarketplaceTransport(
-                    created_supply_id=f"ozon-{operation.id}",
-                )
-            )
             posting_numbers = [
                 order.external_order_id or str(order.wb_order_id) for order in orders
             ]
-            try:
-                provider_row = await provider.create_supply(
-                    client_id=client_id,
-                    api_key=api_key,
-                    name=name,
-                    posting_numbers=posting_numbers,
-                )
-            except MarketplaceProviderError as exc:
-                await mark_operation_failed(
-                    session,
-                    operation,
-                    error_code=exc.code,
-                    local_supply_id=supply.id,
-                )
-                raise FbsSupplyError(
-                    exc.code,
-                    message=provider_error_message(exc),
-                    retryable=exc.status_code in {429, 500, 502, 503, 504},
-                    http_status=exc.status_code or 502,
-                ) from exc
-
-            external_supply_id = str(provider_row.get("id") or "").strip()
-            if not external_supply_id:
-                await mark_operation_failed(
-                    session,
-                    operation,
-                    error_code="ozon_invalid_response",
-                    local_supply_id=supply.id,
-                )
-                raise FbsSupplyError("ozon_invalid_response", http_status=502)
-            supply.external_supply_id = external_supply_id
-            supply.wb_supply_id = external_supply_id
-            operation.wb_object_id = external_supply_id
-            operation.wb_object_kind = "supply"
             await _bind_orders_to_supply(session, supply, orders)
             await mark_operation_confirmed(
                 session,
                 operation,
-                wb_supply_id=external_supply_id,
+                wb_supply_id=None,
                 local_supply_id=supply.id,
                 response_summary={"external_order_ids": posting_numbers},
             )
@@ -781,9 +707,7 @@ async def create_supply_from_orders(
             settings.e2e_mock_wb_marketplace_supply_add_error_once = None
             if mock_error is not None:
                 if mock_error == "transport_error":
-                    settings.e2e_mock_wb_marketplace_supply_readback_error_once = (
-                        "transport_error"
-                    )
+                    settings.e2e_mock_wb_marketplace_supply_readback_error_once = "transport_error"
                 raise WildberriesClientError(mock_error)
             await _execute_wb_batch_add(
                 http_client,
@@ -1191,9 +1115,7 @@ async def start_supply_work(
             if order.status == FBS_ORDER_STATUS_IN_SUPPLY:
                 order.status = FBS_ORDER_STATUS_ASSEMBLING
         await session.flush()
-    await _auto_pass_picking_if_needed(
-        session, tenant_id, supply, actor_user_id=actor_user_id
-    )
+    await _auto_pass_picking_if_needed(session, tenant_id, supply, actor_user_id=actor_user_id)
     if http_client is not None:
         await _request_order_stickers_for_picking(session, tenant_id, supply, http_client)
     return await get_supply_workspace(session, tenant_id, supply_id)
@@ -1368,9 +1290,7 @@ async def list_supply_worklist(
         orders = list(supply.orders)
         first_order = orders[0] if orders else None
         wb_id = (
-            int(first_order.wb_warehouse_id)
-            if first_order and first_order.wb_warehouse_id
-            else 0
+            int(first_order.wb_warehouse_id) if first_order and first_order.wb_warehouse_id else 0
         )
         items.append(
             {
@@ -1660,9 +1580,7 @@ async def add_orders_to_existing_supply(
             wb_supply_id=supply.wb_supply_id,
             expected_wb_order_ids=existing_wb_order_ids.union(requested_wb_order_ids),
         )
-    accepted_orders = [
-        order for order in orders if int(order.wb_order_id) in confirmed
-    ]
+    accepted_orders = [order for order in orders if int(order.wb_order_id) in confirmed]
     if not accepted_orders and state != WB_OPERATION_STATE_CONFIRMED:
         raise FbsSupplyError(
             "wb_pending_confirmation",
@@ -1805,9 +1723,7 @@ async def fetch_and_cache_stickers(
             )
 
         still_missing = [
-            order
-            for order in orders_to_fetch
-            if not order.sticker_file and not order.sticker_code
+            order for order in orders_to_fetch if not order.sticker_file and not order.sticker_code
         ]
         if still_missing:
             raise FbsSupplyError("wb_stickers_incomplete")

@@ -144,13 +144,13 @@ async def mark_cargo_delete_operation_confirmed(
     session: AsyncSession,
     operation: FbsWbOperation,
     *,
-    wb_supply_id: str,
+    wb_supply_id: str | None,
     local_supply_id: uuid.UUID,
     response_summary: dict[str, Any] | None = None,
 ) -> None:
     operation.state = WB_OPERATION_STATE_CONFIRMED
     operation.wb_object_id = wb_supply_id
-    operation.wb_object_kind = "supply"
+    operation.wb_object_kind = "supply" if wb_supply_id is not None else None
     operation.local_entity_type = "fbs_supply"
     operation.local_entity_id = local_supply_id
     operation.confirmed_at = datetime.now(tz=UTC)
@@ -219,12 +219,12 @@ async def mark_deliver_operation_confirmed(
     session: AsyncSession,
     operation: FbsWbOperation,
     *,
-    wb_supply_id: str,
+    wb_supply_id: str | None,
     local_supply_id: uuid.UUID,
 ) -> None:
     operation.state = WB_OPERATION_STATE_CONFIRMED
     operation.wb_object_id = wb_supply_id
-    operation.wb_object_kind = "supply"
+    operation.wb_object_kind = "supply" if wb_supply_id is not None else None
     operation.local_entity_type = "fbs_supply"
     operation.local_entity_id = local_supply_id
     operation.confirmed_at = datetime.now(tz=UTC)
@@ -306,13 +306,13 @@ async def mark_operation_confirmed(
     session: AsyncSession,
     operation: FbsWbOperation,
     *,
-    wb_supply_id: str,
+    wb_supply_id: str | None,
     local_supply_id: uuid.UUID,
     response_summary: dict[str, Any] | None = None,
 ) -> None:
     operation.state = WB_OPERATION_STATE_CONFIRMED
     operation.wb_object_id = wb_supply_id
-    operation.wb_object_kind = "supply"
+    operation.wb_object_kind = "supply" if wb_supply_id is not None else None
     operation.local_entity_type = "fbs_supply"
     operation.local_entity_id = local_supply_id
     operation.confirmed_at = datetime.now(tz=UTC)

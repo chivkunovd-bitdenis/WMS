@@ -102,6 +102,8 @@ async def create_boxes(
         raise FbsPackingBoxError("missing_idempotency_key")
     supply = await _get_supply(session, tenant_id, supply_id, for_update=True)
     _assert_supply_mutable(supply)
+    if supply.marketplace == "ozon":
+        raise FbsPackingBoxError("ozon_boxes_managed_automatically")
     # The mode now belongs to the supply.  Keep the complete API idempotency
     # key on every newly created box; a client key is never a mode marker.
     stored_key = idempotency_key.strip()
@@ -183,6 +185,10 @@ async def set_boxes_without_distribution(
     """Change the supply mode while no order is assigned to its boxes."""
     supply = await _get_supply(session, tenant_id, supply_id, for_update=True)
     _assert_supply_mutable(supply)
+    if supply.marketplace == "ozon":
+        if enabled and supply.boxes_without_distribution_at is not None:
+            return True
+        raise FbsPackingBoxError("ozon_boxes_managed_automatically")
 
     assigned_count = await session.scalar(
         select(func.count(FbsPackingBoxItem.id))
@@ -381,9 +387,7 @@ async def get_boxes_for_workspace(
     ]
 
 
-async def _supply_without_distribution(
-    session: AsyncSession, supply: FbsSupply
-) -> bool:
+async def _supply_without_distribution(session: AsyncSession, supply: FbsSupply) -> bool:
     _ = session
     return supply.boxes_without_distribution_at is not None
 
@@ -461,9 +465,7 @@ async def _get_supply(
     *,
     for_update: bool = False,
 ) -> FbsSupply:
-    statement = select(FbsSupply).where(
-        FbsSupply.id == supply_id, FbsSupply.tenant_id == tenant_id
-    )
+    statement = select(FbsSupply).where(FbsSupply.id == supply_id, FbsSupply.tenant_id == tenant_id)
     if for_update:
         statement = statement.with_for_update()
     result = await session.execute(statement)
@@ -502,15 +504,11 @@ async def _boxes_by_creation_key(
     seller_id: uuid.UUID,
     key: str,
 ) -> list[FbsPackingBox]:
-    exact_boxes = await _boxes_by_stored_creation_keys(
-        session, tenant_id, supply_id, [key]
-    )
+    exact_boxes = await _boxes_by_stored_creation_keys(session, tenant_id, supply_id, [key])
     if exact_boxes:
         return exact_boxes
 
-    max_legacy_raw_len = CREATION_IDEMPOTENCY_KEY_MAX_LENGTH - len(
-        WITHOUT_DISTRIBUTION_KEY_PREFIX
-    )
+    max_legacy_raw_len = CREATION_IDEMPOTENCY_KEY_MAX_LENGTH - len(WITHOUT_DISTRIBUTION_KEY_PREFIX)
     # The legacy prefix consumed part of the 128-character column and old
     # writes therefore truncated longer raw keys.  The durable WB operation
     # journal kept the complete API key, so use it to distinguish a retry of

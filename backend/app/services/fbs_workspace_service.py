@@ -98,9 +98,7 @@ async def get_supply_workspace(
         raise FbsWorkspaceError("supply_not_found")
     server_now = datetime.now(tz=UTC)
     orders = list(supply.orders)
-    worklist_items = await build_worklist_items(
-        session, tenant_id, orders, server_now=server_now
-    )
+    worklist_items = await build_worklist_items(session, tenant_id, orders, server_now=server_now)
     tape_order_index_by_id = {
         order.id: index for index, order in enumerate(sorted(orders, key=picking_list_order_key))
     }
@@ -109,9 +107,7 @@ async def get_supply_workspace(
     await _inject_order_pick_fallback(session, tenant_id, supply, worklist_items)
     cargo_places = await _build_cargo_places(session, tenant_id, supply)
     boxes = await _build_boxes(session, tenant_id, supply_id)
-    boxes_without_distribution = await packing_box_svc._supply_without_distribution(
-        session, supply
-    )
+    boxes_without_distribution = await packing_box_svc._supply_without_distribution(session, supply)
     marking_pool = await _build_marking_pool(session, tenant_id, orders)
     progress = _compute_progress(orders)
     picking_auto_passed_reason = await _picking_auto_passed_reason(
@@ -152,6 +148,7 @@ async def get_supply_workspace(
             "id": str(supply.id),
             "marketplace": supply.marketplace,
             "wb_supply_id": supply.wb_supply_id,
+            "external_supply_id": supply.external_supply_id,
             "name": supply.name,
             "status": supply.status,
             "delivery_type": supply.delivery_type,
@@ -195,9 +192,7 @@ async def get_supply_workspace(
         "boxes": boxes,
         "marking_pool": marking_pool,
         "delivery_preflight": None,
-        "last_wb_sync_at": (
-            supply.last_wb_sync_at.isoformat() if supply.last_wb_sync_at else None
-        ),
+        "last_wb_sync_at": (supply.last_wb_sync_at.isoformat() if supply.last_wb_sync_at else None),
         "tracking_summary": tracking_summary,
         "partial_rejection": partial_rejection,
         "picking_auto_passed_reason": picking_auto_passed_reason,
@@ -217,8 +212,7 @@ async def _picking_auto_passed_reason(
     address_enabled = await tenant_settings_svc.is_address_storage_enabled(session, tenant_id)
     if not address_enabled:
         return (
-            "Адресное хранение выключено: подбор отмечен пройденным, "
-            "можно переходить к упаковке."
+            "Адресное хранение выключено: подбор отмечен пройденным, можно переходить к упаковке."
         )
     product_ids = {order.product_id for order in orders if order.product_id is not None}
     if not product_ids:
@@ -252,9 +246,7 @@ async def _inject_order_pick_fallback(
 ) -> None:
     if not worklist_items:
         return
-    sorting_location = await get_or_create_sorting_location(
-        session, tenant_id, supply.warehouse_id
-    )
+    sorting_location = await get_or_create_sorting_location(session, tenant_id, supply.warehouse_id)
     orders_by_id = {str(order.id): order for order in supply.orders}
     for item in worklist_items:
         order = orders_by_id.get(str(item.get("id")))
@@ -267,9 +259,7 @@ async def _inject_order_pick_fallback(
             continue
         if inventory.get("locations"):
             continue
-        inventory["available_unpacked"] = max(
-            int(inventory.get("available_unpacked") or 0), 1
-        )
+        inventory["available_unpacked"] = max(int(inventory.get("available_unpacked") or 0), 1)
         inventory["locations"] = [
             {
                 "id": str(sorting_location.id),
@@ -596,9 +586,7 @@ async def _build_marking_pool(
         return {"required": 0, "available": 0, "shortage": 0, "orders_without_code": []}
 
     product_ids = {order.product_id for order in needing_orders if order.product_id is not None}
-    available_by_product = await count_available_for_products_batch(
-        session, tenant_id, product_ids
-    )
+    available_by_product = await count_available_for_products_batch(session, tenant_id, product_ids)
     total_available = sum(available_by_product.get(pid, 0) for pid in product_ids)
 
     # Deterministic allocation: give the earliest-deadline orders first crack at
@@ -641,11 +629,7 @@ def _map_cargo_place(trbx: FbsTrbx, qr_asset: FbsPrintAsset | None) -> dict[str,
 def _map_print_asset(asset: FbsPrintAsset | None) -> dict[str, Any] | None:
     if asset is None:
         return None
-    url = (
-        print_asset_content_url(asset.id)
-        if asset.status == PRINT_ASSET_STATUS_READY
-        else None
-    )
+    url = print_asset_content_url(asset.id) if asset.status == PRINT_ASSET_STATUS_READY else None
     return {
         "id": str(asset.id),
         "kind": asset.kind,

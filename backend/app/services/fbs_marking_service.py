@@ -39,7 +39,21 @@ from app.models.marking_code import (
     MarkingCode,
     MarkingCodeEvent,
 )
+from app.services.marketplace_account_service import (
+    MarketplaceAccountError,
+    MarketplaceAccountService,
+)
+from app.services.marketplace_provider import (
+    FakeMarketplaceTransport,
+    MarketplaceProviderError,
+    OzonMarketplaceProvider,
+)
 from app.services.marking_code_service import normalize_cis, record_event
+from app.services.ozon_fbs_process_service import (
+    OzonFbsProcessError,
+    read_marking_status,
+    submit_marking,
+)
 from app.services.wildberries_client import (
     WildberriesClientError,
     put_marketplace_order_meta,
@@ -213,9 +227,7 @@ def parse_wb_meta_statuses(meta: dict[str, Any]) -> dict[tuple[str, str], str]:
                 continue
             value = item.get("value")
             if isinstance(value, str) and value.strip():
-                status = normalize_check_status(
-                    item.get("checkStatus") or item.get("check_status")
-                )
+                status = normalize_check_status(item.get("checkStatus") or item.get("check_status"))
                 if status:
                     out[(kind, value.strip())] = status
         return out
@@ -257,9 +269,7 @@ def _collect_meta_entries(
         value = item.get("value")
         if not isinstance(value, str) or not value.strip():
             continue
-        status = normalize_check_status(
-            item.get("checkStatus") or item.get("check_status")
-        )
+        status = normalize_check_status(item.get("checkStatus") or item.get("check_status"))
         out[(kind, value.strip())] = status or CHECK_STATUS_NEW
 
 
@@ -388,9 +398,7 @@ def build_order_metadata(
         "states": states,
         "delivery_allowed": delivery_allowed,
         "last_checked_at": (
-            order.metadata_last_checked_at.isoformat()
-            if order.metadata_last_checked_at
-            else None
+            order.metadata_last_checked_at.isoformat() if order.metadata_last_checked_at else None
         ),
     }
 
@@ -483,11 +491,7 @@ async def _claim_pool_code_if_present(
         and code.product_id != order.product_id
     ):
         raise FbsMarkingError("code_product_mismatch")
-    stmt = (
-        select(MarkingCode)
-        .where(MarkingCode.id == code.id)
-        .with_for_update()
-    )
+    stmt = select(MarkingCode).where(MarkingCode.id == code.id).with_for_update()
     locked = (await session.execute(stmt)).scalar_one_or_none()
     if locked is None:
         return None
@@ -525,9 +529,7 @@ def _check_status_for_meta_detail(
     meta_status: str,
 ) -> str:
     """Keep the legacy status consistent with the authoritative WB decision."""
-    normalized_decision = (
-        decision.strip().lower().replace("-", "_").replace(" ", "_")
-    )
+    normalized_decision = decision.strip().lower().replace("-", "_").replace(" ", "_")
     if normalized_decision == "required":
         return CHECK_STATUS_NEW
     if meta_status == META_STATUS_ACCEPTED:
@@ -556,9 +558,7 @@ async def _record_wb_orphaned_once(
     # Serialize event creation on the code row.  A check-then-insert without this
     # lock allows two concurrent WB polls to produce duplicate audit facts.
     code = await session.scalar(
-        select(MarkingCode)
-        .where(MarkingCode.id == marking.marking_code_id)
-        .with_for_update()
+        select(MarkingCode).where(MarkingCode.id == marking.marking_code_id).with_for_update()
     )
     if code is None:
         return
@@ -616,7 +616,9 @@ async def _sync_order_meta_from_wb(
                 .order_by(FbsOrderMarking.kind, FbsOrderMarking.value)
                 .with_for_update()
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
     details_by_kind: dict[str, MarketplaceMetaDetail] = {}
     returned_kinds: set[str] = set()
@@ -652,10 +654,7 @@ async def _sync_order_meta_from_wb(
             decision = meta_detail.decision.strip().lower()
             if decision == "required" and not meta_detail.value:
                 marking.meta_status = META_STATUS_MISSING
-            elif (
-                meta_detail.value
-                and meta_detail.value != marking.value
-            ):
+            elif meta_detail.value and meta_detail.value != marking.value:
                 marking.meta_status = META_STATUS_REPLACEMENT_REQUIRED
             elif map_wb_decision_to_meta_status(meta_detail.decision) is None:
                 marking.meta_status = META_STATUS_UNKNOWN
@@ -699,13 +698,56 @@ async def attach_order_meta_to_wb_and_sync(
     http_client: httpx.AsyncClient,
     *,
     api_token: str | None = None,
+    ozon_provider: OzonMarketplaceProvider | None = None,
 ) -> list[FbsOrderMarking]:
     marking.meta_status = META_STATUS_SENDING
     await session.flush()
 
-    token = api_token or await require_marketplace_token(
-        session, tenant_id, order.seller_id
-    )
+    if order.marketplace == "ozon":
+        try:
+            client_id, api_key = await MarketplaceAccountService(session).stored_credentials(
+                tenant_id, order.seller_id
+            )
+            provider = ozon_provider or OzonMarketplaceProvider(
+                transport=FakeMarketplaceTransport()
+            )
+            result = await submit_marking(
+                session,
+                order=order,
+                marking=marking,
+                provider=provider,
+                client_id=client_id,
+                api_key=api_key,
+            )
+        except (MarketplaceAccountError, MarketplaceProviderError, OzonFbsProcessError) as exc:
+            marking.meta_status = META_STATUS_ASSIGNED
+            await session.flush()
+            raise FbsMarkingError(getattr(exc, "code", "ozon_upstream_error")) from exc
+        marking.meta_details_json = result.details
+        marking.reason = result.reason
+        if result.accepted:
+            marking.meta_status = META_STATUS_ACCEPTED
+            marking.check_status = CHECK_STATUS_OK
+        elif result.pending:
+            marking.meta_status = META_STATUS_PENDING
+            marking.check_status = CHECK_STATUS_CHECKING
+        else:
+            marking.meta_status = META_STATUS_REJECTED
+            marking.check_status = CHECK_STATUS_ERROR
+            await session.flush()
+            raise FbsMarkingError(
+                "meta_validation_fail",
+                context={"reasons": [result.reason or "Ozon отклонил код"]},
+            )
+        order.metadata_delivery_allowed = compute_delivery_allowed(
+            order, await list_order_markings(session, tenant_id, order.id)
+        )
+        order.metadata_last_checked_at = datetime.now(tz=UTC)
+        await session.flush()
+        await _notify_supply_marking_update(session, tenant_id, order.id)
+        return await list_order_markings(session, tenant_id, order.id)
+
+    token = api_token or await require_marketplace_token(session, tenant_id, order.seller_id)
     try:
         await put_marketplace_order_meta(
             http_client,
@@ -775,6 +817,8 @@ async def sync_order_marking_statuses(
     tenant_id: uuid.UUID,
     order_id: uuid.UUID,
     http_client: httpx.AsyncClient,
+    *,
+    ozon_provider: OzonMarketplaceProvider | None = None,
 ) -> list[FbsOrderMarking]:
     order = await _get_order(session, tenant_id, order_id)
     if order is None:
@@ -782,6 +826,43 @@ async def sync_order_marking_statuses(
 
     markings = await list_order_markings(session, tenant_id, order_id)
     if not markings:
+        return markings
+
+    if order.marketplace == "ozon":
+        try:
+            client_id, api_key = await MarketplaceAccountService(session).stored_credentials(
+                tenant_id, order.seller_id
+            )
+            result = await read_marking_status(
+                posting_number=order.external_order_id or "",
+                provider=ozon_provider
+                or OzonMarketplaceProvider(transport=FakeMarketplaceTransport()),
+                client_id=client_id,
+                api_key=api_key,
+            )
+        except (MarketplaceAccountError, MarketplaceProviderError, OzonFbsProcessError) as exc:
+            raise FbsMarkingError(getattr(exc, "code", "ozon_upstream_error")) from exc
+        for marking in markings:
+            marking.meta_details_json = result.details
+            marking.reason = result.reason
+            marking.meta_status = (
+                META_STATUS_ACCEPTED
+                if result.accepted
+                else META_STATUS_PENDING
+                if result.pending
+                else META_STATUS_REJECTED
+            )
+            marking.check_status = (
+                CHECK_STATUS_OK
+                if result.accepted
+                else CHECK_STATUS_CHECKING
+                if result.pending
+                else CHECK_STATUS_ERROR
+            )
+        order.metadata_delivery_allowed = compute_delivery_allowed(order, markings)
+        order.metadata_last_checked_at = datetime.now(tz=UTC)
+        await session.flush()
+        await _notify_supply_marking_update(session, tenant_id, order_id)
         return markings
 
     token = await require_marketplace_token(session, tenant_id, order.seller_id)

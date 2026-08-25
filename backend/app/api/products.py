@@ -149,6 +149,7 @@ class FfCatalogOut(BaseModel):
     wb_brand: str | None = None
     wb_composition: str | None = None
     packaging_instructions: str | None = None
+    country_of_origin_iso_code: str | None = None
     requires_honest_sign: bool = False
     fbs_stock_sync_enabled: bool = False
     fbs_stock_limit: int | None = None
@@ -176,6 +177,7 @@ class ProductOut(BaseModel):
     wb_barcode: str | None = None
     wb_size: str | None = None
     wb_country_of_origin: str | None = None
+    country_of_origin_iso_code: str | None = None
     wb_shelf_life: str | None = None
     packaging_instructions: str | None = None
     requires_honest_sign: bool = False
@@ -241,6 +243,7 @@ class ProductTzImportApplyOut(BaseModel):
 class PackagingInstructionsPatch(BaseModel):
     packaging_instructions: str | None = Field(default=None, max_length=8000)
     requires_honest_sign: bool | None = None
+    country_of_origin_iso_code: str | None = Field(default=None, pattern=r"^[A-Za-z]{2}$")
 
 
 class ProductDimensionsPatch(BaseModel):
@@ -385,6 +388,7 @@ def _product_out(
         wb_barcode=p.wb_barcode,
         wb_size=p.wb_size,
         wb_country_of_origin=p.wb_country_of_origin,
+        country_of_origin_iso_code=p.country_of_origin_iso_code,
         wb_shelf_life=p.wb_shelf_life,
         packaging_instructions=p.packaging_instructions,
         requires_honest_sign=bool(p.requires_honest_sign),
@@ -759,9 +763,7 @@ async def get_product_tz_import_template(
 ) -> StreamingResponse:
     del user
     content = build_product_tz_template_xlsx()
-    headers = {
-        "Content-Disposition": 'attachment; filename="wms-product-catalog-template.xlsx"'
-    }
+    headers = {"Content-Disposition": 'attachment; filename="wms-product-catalog-template.xlsx"'}
     return StreamingResponse(
         io.BytesIO(content),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -887,9 +889,7 @@ async def patch_product_dimensions(
     elif user.role == FULFILLMENT_STAFF:
         perms = await get_staff_permissions(session, user)
         if not (
-            perms.has(PERM_RECEPTION)
-            or perms.has(PERM_SHIFT_LEAD)
-            or perms.has(PERM_INVENTORY)
+            perms.has(PERM_RECEPTION) or perms.has(PERM_SHIFT_LEAD) or perms.has(PERM_INVENTORY)
         ):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     elif user.role != FULFILLMENT_ADMIN:
@@ -959,17 +959,12 @@ async def get_product_dimension_history(
                 User.id.in_(author_ids),
             )
         )
-        author_names = {
-            author_id: author_email
-            for author_id, author_email in result.tuples()
-        }
+        author_names = {author_id: author_email for author_id, author_email in result.tuples()}
     return [
         _dimension_event_out(
             event,
             author_name=(
-                author_names.get(event.author_user_id)
-                if event.author_user_id is not None
-                else None
+                author_names.get(event.author_user_id) if event.author_user_id is not None else None
             ),
         )
         for event in events
@@ -992,7 +987,9 @@ async def post_product_container_dimensions(
             raise HTTPException(status_code=403, detail="forbidden")
     try:
         product = await update_product_container_volume(
-            session, user.tenant_id, product_id,
+            session,
+            user.tenant_id,
+            product_id,
             volume_liters=body.volume_liters,
             container_basis=body.container_basis,
             author_user_id=user.id,
@@ -1044,6 +1041,7 @@ async def patch_product_packaging_instructions(
             product_id,
             packaging_instructions=body.packaging_instructions,
             requires_honest_sign=body.requires_honest_sign,
+            country_of_origin_iso_code=body.country_of_origin_iso_code,
         )
     except CatalogError as exc:
         if exc.code == "product_not_found":

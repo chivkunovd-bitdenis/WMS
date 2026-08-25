@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import uuid
-from base64 import b64decode
+from base64 import b64decode, b64encode
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -65,6 +65,7 @@ from app.services.marketplace_provider import (
     OzonMarketplaceProvider,
     provider_error_message,
 )
+from app.services.ozon_fbs_process_service import OzonFbsProcessError, handoff_supply
 from app.services.wb_marketplace_orders_service import (
     _apply_wb_status_to_order,
     _supplier_status_from_row,
@@ -93,9 +94,7 @@ _DELIVER_READY_ORDER_STATUSES = frozenset({FBS_ORDER_STATUS_PACKED})
 _PACKAGING_PENDING_ORDER_STATUSES = frozenset(
     {FBS_ORDER_STATUS_IN_SUPPLY, FBS_ORDER_STATUS_ASSEMBLING}
 )
-_DELIVER_ALLOWED_DELIVERY_TYPES = frozenset(
-    {FBS_DELIVERY_TYPE_WAREHOUSE_SC, FBS_DELIVERY_TYPE_PVZ}
-)
+_DELIVER_ALLOWED_DELIVERY_TYPES = frozenset({FBS_DELIVERY_TYPE_WAREHOUSE_SC, FBS_DELIVERY_TYPE_PVZ})
 _DELIVER_BLOCKED_SUPPLY_STATUSES = frozenset(
     {
         FBS_SUPPLY_STATUS_IN_DELIVERY,
@@ -348,11 +347,7 @@ async def _sync_supply_orders_from_wb(
                 event="fbs shipment WB supply status sync failed",
                 extra_context={"wb_order_ids": batch},
             ) from exc
-        by_id = {
-            int(row["id"]): row
-            for row in status_rows
-            if row.get("id") is not None
-        }
+        by_id = {int(row["id"]): row for row in status_rows if row.get("id") is not None}
         for order in orders:
             row = by_id.get(int(order.wb_order_id))
             if row is None:
@@ -369,9 +364,7 @@ async def _sync_supply_orders_from_wb(
 
     for order in orders:
         with suppress(marking_svc.FbsMarkingError):
-            await marking_svc.sync_order_marking_statuses(
-                session, tenant_id, order.id, http_client
-            )
+            await marking_svc.sync_order_marking_statuses(session, tenant_id, order.id, http_client)
 
     supply.last_wb_sync_at = datetime.now(UTC)
     await session.flush()
@@ -615,14 +608,10 @@ async def _sync_and_validate_deliver(
     *,
     confirmed_preflight_version: str | None = None,
 ) -> tuple[list[FbsOrder], bool]:
-    orders = await _sync_supply_orders_from_wb(
-        session, tenant_id, supply, http_client, token
-    )
+    orders = await _sync_supply_orders_from_wb(session, tenant_id, supply, http_client, token)
     cargo_qr_ready = True
     if supply.delivery_type == FBS_DELIVERY_TYPE_PVZ:
-        cargo_qr_ready = await pvz_svc.supply_has_ready_cargo_place_qrs(
-            session, tenant_id, supply
-        )
+        cargo_qr_ready = await pvz_svc.supply_has_ready_cargo_place_qrs(session, tenant_id, supply)
     box_readiness = await packing_box_svc.get_delivery_box_readiness(
         session, tenant_id, supply.id, orders
     )
@@ -711,9 +700,7 @@ async def preflight_delivery(
     orders = await _sync_supply_orders_from_wb(session, tenant_id, supply, http_client, token)
     cargo_qr_ready = True
     if supply.delivery_type == FBS_DELIVERY_TYPE_PVZ:
-        cargo_qr_ready = await pvz_svc.supply_has_ready_cargo_place_qrs(
-            session, tenant_id, supply
-        )
+        cargo_qr_ready = await pvz_svc.supply_has_ready_cargo_place_qrs(session, tenant_id, supply)
     box_readiness = await packing_box_svc.get_delivery_box_readiness(
         session, tenant_id, supply.id, orders
     )
@@ -910,21 +897,10 @@ async def _deliver_ozon_supply(
         tenant_id,
         supply.seller_id,
     )
-    selected_provider = provider or OzonMarketplaceProvider(
-        transport=FakeMarketplaceTransport(supply_qr=_FAKE_OZON_SUPPLY_QR)
-    )
     if existing is not None:
         if existing.request_hash and existing.request_hash != request_hash:
             raise FbsShipmentError("idempotency_key_reused", http_status=409)
         if existing.state == WB_OPERATION_STATE_CONFIRMED:
-            if supply.barcode_asset_id is None:
-                await _store_ozon_supply_qr(
-                    session,
-                    supply,
-                    selected_provider,
-                    client_id=client_id,
-                    api_key=api_key,
-                )
             return supply
         if existing.state == WB_OPERATION_STATE_PENDING:
             raise FbsShipmentError(
@@ -933,6 +909,11 @@ async def _deliver_ozon_supply(
                 retryable=True,
                 http_status=503,
             )
+        raise FbsShipmentError(
+            existing.error_code or "operation_failed",
+            message="Предыдущая передача Ozon завершилась ошибкой; слепой повтор запрещён.",
+            http_status=409,
+        )
 
     if supply.status in _DELIVER_BLOCKED_SUPPLY_STATUSES:
         raise FbsShipmentError("supply_bad_status", http_status=409)
@@ -954,20 +935,83 @@ async def _deliver_ozon_supply(
         local_supply_id=supply.id,
         confirmed_preflight_version=None,
     )
-    external_supply_id = supply.external_supply_id or supply.wb_supply_id
+    if provider is None:
+        posting_numbers = [order.external_order_id or str(order.wb_order_id) for order in orders]
+        label = b64encode(_FAKE_OZON_SUPPLY_QR).decode()
+        provider = OzonMarketplaceProvider(
+            transport=FakeMarketplaceTransport(
+                endpoint_responses={
+                    "/v4/posting/fbs/ship": {"result": posting_numbers},
+                    "/v3/posting/fbs/get": {
+                        "result": {
+                            "posting_number": posting_numbers[0] if posting_numbers else "",
+                            "status": "awaiting_deliver",
+                            "substatus": "posting_in_carriage",
+                            "related_postings": {"related_posting_numbers": []},
+                        }
+                    },
+                    "/v2/posting/fbs/package-label/create": {
+                        "result": {"tasks": [{"task_id": 1, "task_type": "big_label"}]}
+                    },
+                    "/v1/posting/fbs/package-label/get": {
+                        "result": {"status": "completed", "file_url": "mock://labels"}
+                    },
+                    "/v2/posting/fbs/package-label": {
+                        "file_content": label,
+                        "file_name": "labels.pdf",
+                        "content_type": "application/pdf",
+                    },
+                    "/v1/carriage/create": {"carriage_id": 1},
+                    "/v1/carriage/set-postings": {
+                        "result": [
+                            {"posting_number": number, "result": True} for number in posting_numbers
+                        ]
+                    },
+                    "/v1/carriage/approve": {},
+                    "/v1/carriage/get": {"carriage_id": 1, "status": "sended"},
+                    "/v2/posting/fbs/act/get-barcode": {
+                        "file_content": label,
+                        "file_name": "barcode.png",
+                        "content_type": "image/png",
+                    },
+                    "/v2/posting/fbs/act/get-barcode/text": {"result": "OZON-MOCK-1"},
+                    "/v2/posting/fbs/digital/act/get-pdf": {
+                        "file_content": label,
+                        "file_name": "shipping-list.pdf",
+                        "content_type": "application/pdf",
+                    },
+                }
+            )
+        )
     try:
-        await selected_provider.deliver_supply(
+        result = await handoff_supply(
+            session,
+            supply=supply,
+            orders=orders,
+            provider=provider,
             client_id=client_id,
             api_key=api_key,
-            supply_id=external_supply_id,
         )
+    except OzonFbsProcessError as exc:
+        await session.flush()
+        await mark_operation_failed(
+            session,
+            operation,
+            error_code=exc.code,
+            local_supply_id=supply.id,
+        )
+        raise FbsShipmentError(
+            exc.code,
+            message=exc.message,
+            retryable=False,
+            http_status=exc.status_code or 502,
+        ) from exc
     except MarketplaceProviderError as exc:
         await mark_operation_failed(
             session,
             operation,
             error_code=exc.code,
             local_supply_id=supply.id,
-            wb_supply_id=external_supply_id,
         )
         raise FbsShipmentError(
             exc.code,
@@ -976,14 +1020,20 @@ async def _deliver_ozon_supply(
             http_status=exc.status_code or 502,
         ) from exc
 
+    supply.external_supply_id = str(result.carriage_id) if result.carriage_id is not None else None
+    supply.document_number = str(result.carriage_id) if result.carriage_id is not None else None
+    supply.display_number = result.barcode_text
+    if result.barcode_bytes:
+        try:
+            await upsert_supply_qr_asset_from_bytes(
+                session,
+                tenant_id=supply.tenant_id,
+                supply=supply,
+                png_bytes=result.barcode_bytes,
+            )
+        except FbsPrintAssetStorageError as exc:
+            raise FbsShipmentError(exc.code) from exc
     await _persist_confirmed_delivery(session, supply, orders, operation)
-    await _store_ozon_supply_qr(
-        session,
-        supply,
-        selected_provider,
-        client_id=client_id,
-        api_key=api_key,
-    )
     return supply
 
 
@@ -1038,9 +1088,7 @@ async def deliver_supply(
                 )
                 # A prior QR failure is recoverable through the same idempotent
                 # request and must never trigger another WB deliver mutation.
-                await _fetch_supply_qr_after_deliver(
-                    session, confirmed_supply, http_client, token
-                )
+                await _fetch_supply_qr_after_deliver(session, confirmed_supply, http_client, token)
                 return confirmed_supply
         if existing.state == WB_OPERATION_STATE_PENDING:
             raise FbsShipmentError(
@@ -1050,17 +1098,13 @@ async def deliver_supply(
                 http_status=503,
             )
         if existing.state == WB_OPERATION_STATE_PENDING_CONFIRMATION:
-            token = await _require_marketplace_token(
-                session, tenant_id, supply_read.seller_id
-            )
+            token = await _require_marketplace_token(session, tenant_id, supply_read.seller_id)
             reconcile_state = await reconcile_supply_delivered(
                 http_client,
                 api_token=token,
                 wb_supply_id=supply_read.wb_supply_id,
             )
-            supply = await _get_supply_for_update(
-                session, tenant_id, supply_id, with_trbxes=True
-            )
+            supply = await _get_supply_for_update(session, tenant_id, supply_id, with_trbxes=True)
             if supply is None:
                 raise FbsShipmentError("supply_not_found")
             await _sync_and_validate_deliver(
@@ -1074,9 +1118,7 @@ async def deliver_supply(
             if reconcile_state == WB_OPERATION_STATE_CONFIRMED:
                 orders = await _load_locked_supply_orders(session, tenant_id, supply.id)
                 await _persist_confirmed_delivery(session, supply, orders, existing)
-                await _fetch_supply_qr_after_deliver(
-                    session, supply, http_client, token
-                )
+                await _fetch_supply_qr_after_deliver(session, supply, http_client, token)
                 return supply
 
             try:
@@ -1264,9 +1306,7 @@ async def deliver_supply(
     orders = await _load_locked_supply_orders(session, tenant_id, supply.id)
     cargo_qr_ready = True
     if supply.delivery_type == FBS_DELIVERY_TYPE_PVZ:
-        cargo_qr_ready = await pvz_svc.supply_has_ready_cargo_place_qrs(
-            session, tenant_id, supply
-        )
+        cargo_qr_ready = await pvz_svc.supply_has_ready_cargo_place_qrs(session, tenant_id, supply)
     _validate_checks_pass(
         _build_delivery_checks(
             supply,

@@ -51,6 +51,7 @@ import {
 import { FfManualProductCreateDialog } from '../ff/FfManualProductCreateDialog'
 import { FfProductTzImportDialog } from '../ff/FfProductTzImportDialog'
 import { FfCatalogInboundPackages } from './FfCatalogInboundPackages'
+import { MarketplaceChip } from '../../ui-kit'
 
 type SellerRow = { id: string; name: string }
 
@@ -73,6 +74,7 @@ type FfCatalogRow = {
   wb_brand: string | null
   wb_composition: string | null
   packaging_instructions: string | null
+  country_of_origin_iso_code?: string | null
   requires_honest_sign: boolean
   has_packaging_instructions: boolean
   marking_available_count?: number
@@ -223,6 +225,7 @@ export function FfProductsCatalogScreen({
   const [editProduct, setEditProduct] = useState<FfCatalogRow | null>(null)
   const [editText, setEditText] = useState('')
   const [editRequiresHonestSign, setEditRequiresHonestSign] = useState(false)
+  const [editCountryIso, setEditCountryIso] = useState('')
   const [editOzonSku, setEditOzonSku] = useState('')
   const [editOzonOfferId, setEditOzonOfferId] = useState('')
   const [editOzonError, setEditOzonError] = useState<string | null>(null)
@@ -402,6 +405,7 @@ export function FfProductsCatalogScreen({
     setEditProduct(p)
     setEditText(p.packaging_instructions ?? '')
     setEditRequiresHonestSign(Boolean(p.requires_honest_sign))
+    setEditCountryIso(p.country_of_origin_iso_code ?? '')
     setEditOzonSku(p.ozon_sku ?? '')
     setEditOzonOfferId(p.ozon_offer_id ?? '')
     setEditOzonError(null)
@@ -458,6 +462,7 @@ export function FfProductsCatalogScreen({
         body: JSON.stringify({
           packaging_instructions: editText.trim() || null,
           requires_honest_sign: editRequiresHonestSign,
+          country_of_origin_iso_code: editCountryIso.trim().toUpperCase() || null,
         }),
       })
       if (!res.ok) {
@@ -891,8 +896,8 @@ export function FfProductsCatalogScreen({
           >
             <colgroup>
               <col style={{ width: 56 }} />
-              <col style={{ width: 200 }} />
-              <col style={{ width: 130 }} />
+              <col style={{ width: 160 }} />
+              <col style={{ width: 170 }} />
               <col style={{ width: 118 }} />
               <col style={{ width: 130 }} />
               <col style={{ width: 64 }} />
@@ -940,36 +945,38 @@ export function FfProductsCatalogScreen({
                       <ProductPhotoThumb src={p.wb_primary_image_url} />
                     </TableCell>
                     <TableCell>
-                      <Typography
-                        component="span"
-                        variant="body2"
-                        title={p.name}
-                        sx={{
-                          minWidth: 0,
-                          display: '-webkit-box',
-                          WebkitBoxOrient: 'vertical',
-                          WebkitLineClamp: 2,
-                          overflow: 'hidden',
-                          lineHeight: 1.25,
-                        }}
-                      >
-                        {p.name}
-                      </Typography>
+                      <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+                        <Typography
+                          component="span"
+                          variant="body2"
+                          title={p.name}
+                          sx={{
+                            minWidth: 0,
+                            display: '-webkit-box',
+                            WebkitBoxOrient: 'vertical',
+                            WebkitLineClamp: 2,
+                            overflow: 'hidden',
+                            lineHeight: 1.25,
+                          }}
+                        >
+                          {p.name}
+                        </Typography>
+                        {p.country_of_origin_iso_code ? (
+                          <Typography variant="caption" color="text.secondary" noWrap>
+                            Страна: {p.country_of_origin_iso_code}
+                          </Typography>
+                        ) : null}
+                      </Stack>
                     </TableCell>
                     <TableCell>
-                      <Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}>
-                        <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0, minHeight: 45 }}>
+                        <Typography variant="body2" sx={{ flex: '1 1 0', minWidth: 0, wordBreak: 'break-word' }}>
                           {p.wb_vendor_code ?? '—'}
                         </Typography>
                         {p.ozon_sku || p.ozon_offer_id ? (
-                          <Chip
-                            size="small"
-                            label="Ozon"
-                            variant="outlined"
-                            data-testid="ff-catalog-marketplace-ozon"
-                          />
+                          <MarketplaceChip marketplace="ozon" testId="ff-catalog-marketplace-ozon" />
                         ) : null}
-                      </Stack>
+                      </Box>
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>
@@ -1305,6 +1312,14 @@ export function FfProductsCatalogScreen({
                   slotProps={{ htmlInput: { 'data-testid': 'ff-product-ozon-offer' } }}
                 />
               </Stack>
+              <TextField
+                fullWidth
+                size="small"
+                label="Страна изготовления (ISO, 2 буквы)"
+                value={editCountryIso}
+                onChange={(event) => setEditCountryIso(event.target.value.toUpperCase().slice(0, 2))}
+                slotProps={{ htmlInput: { 'data-testid': 'ff-product-country-iso' } }}
+              />
             </Stack>
             <Divider sx={{ mb: 1 }} />
             <FormControlLabel

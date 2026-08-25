@@ -208,7 +208,7 @@ test('seller products table and next MP picker show current stock after MP plan'
   await page.getByTestId('nav-seller-products').click();
   await expect(page.getByTestId('seller-products-table')).toBeVisible();
   const tableHead = page.getByTestId('seller-products-table').locator('thead');
-  await expect(tableHead).toContainText('Артикул WB');
+  await expect(tableHead).toContainText('Артикул продавца');
   await expect(tableHead).not.toContainText(/WB nm|nmID|nm_id/);
 
   const row = page.getByTestId('seller-product-row').filter({ hasText: sku });
