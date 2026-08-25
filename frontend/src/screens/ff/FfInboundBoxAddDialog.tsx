@@ -310,6 +310,10 @@ export function FfInboundBoxAddDialog({
   }, [readOnly, requestLines, saveQty])
 
   const handleDismiss = async () => {
+    // A click on the header close button may happen immediately after a scan.
+    // Wait for the serialized scan request before reconciling the parent card,
+    // otherwise the closed box can still render as empty until a page reload.
+    await scanQueueRef.current
     await flushPendingQty()
     await onUpdated()
     onClose()
@@ -392,7 +396,7 @@ export function FfInboundBoxAddDialog({
   return (
     <Dialog
       open={open}
-      onClose={onClose}
+      onClose={() => void handleDismiss()}
       maxWidth={false}
       fullWidth
       data-testid="ff-inbound-box-add-dialog"
@@ -411,7 +415,7 @@ export function FfInboundBoxAddDialog({
         </Typography>
         <IconButton
           aria-label="Скрыть окно"
-          onClick={onClose}
+          onClick={() => void handleDismiss()}
           sx={{ position: 'absolute', right: 8, top: 8 }}
           data-testid="ff-inbound-box-add-close"
         >
