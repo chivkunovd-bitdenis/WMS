@@ -35,16 +35,18 @@ USAGE EXAMPLES:
       --apply
 """
 
+# Imports below ROOT setup are intentional: this standalone script must add the backend path first.
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 import argparse
 import asyncio
 import sys
 from pathlib import Path
-from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import select, func, delete
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -60,8 +62,8 @@ from app.models.fbs_order import (
 from app.models.fbs_order_pick import FbsOrderPick
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
 from app.models.fbs_packing_box import FbsPackingBoxItem
-from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
 from app.models.fbs_print_asset import FbsPrintAsset
+from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
 
 
 async def count_related_records(
@@ -135,7 +137,7 @@ async def count_related_records(
 async def report_orders(
     session: AsyncSession,
     wb_order_ids: list[int],
-    tenant_id: Optional[UUID],
+    tenant_id: UUID | None,
 ) -> tuple[list, int]:
     """Find and report FBS orders by wb_order_id.
 
@@ -183,9 +185,9 @@ async def report_orders(
         supply_indicator = "✓" if order.supply_id else "—"
 
         print(
-            f"{str(order.id):<38} | "
-            f"{str(order.tenant_id):<38} | "
-            f"{str(order.seller_id):<38} | "
+            f"{order.id!s:<38} | "
+            f"{order.tenant_id!s:<38} | "
+            f"{order.seller_id!s:<38} | "
             f"{order.wb_order_id:<15} | "
             f"{(order.status or 'unknown'):<15} | "
             f"{deadline_str:<26} | "
@@ -200,7 +202,7 @@ async def report_orders(
     print(f"  FbsOrderMarking:                  {related_counts['markings']}")
     print(f"  FbsOrderReservation:              {related_counts['reservations']} "
           f"(qty: {related_counts['reserved_qty']})")
-    print(f"    ⚠️  Warehouse reserve will be freed when these are deleted")
+    print("    ⚠️  Warehouse reserve will be freed when these are deleted")
     print(f"  FbsOrderPick:                     {related_counts['picks']}")
     print(f"  FbsPackagingFulfillment:          {related_counts['packaging']}")
     print(f"  FbsPackingBoxItem:                {related_counts['packing_boxes']}")
@@ -225,10 +227,10 @@ async def report_orders(
 
     # Marking codes warning
     if related_counts['markings'] > 0:
-        print(f"\n⚠️  Marking code pools will NOT be deleted or freed:")
+        print("\n⚠️  Marking code pools will NOT be deleted or freed:")
         print(f"    Only {related_counts['markings']} marking association(s) will be removed.")
-        print(f"    The marking_codes table itself is not touched.")
-        print(f"    Manual cleanup may be needed if codes should not stay in 'used' state.")
+        print("    The marking_codes table itself is not touched.")
+        print("    Manual cleanup may be needed if codes should not stay in 'used' state.")
 
     total_related = (
         related_counts['markings']
@@ -356,7 +358,7 @@ async def delete_orders(
             total_deleted += count
 
         await session.commit()
-        print(f"\n✓ Transaction committed successfully.")
+        print("\n✓ Transaction committed successfully.")
         print(f"  Total records deleted: {total_deleted}")
         print(f"  Orders deleted: {len(orders)}")
 
@@ -420,7 +422,7 @@ async def main() -> None:
     args = parser.parse_args()
 
     # Parse optional tenant_id
-    tenant_id_obj: Optional[UUID] = None
+    tenant_id_obj: UUID | None = None
     if args.tenant_id:
         try:
             tenant_id_obj = UUID(args.tenant_id)
@@ -441,7 +443,7 @@ async def main() -> None:
 
     async with SessionLocal() as session:
         # PHASE 1: Report (always run)
-        found_orders, total_related = await report_orders(
+        found_orders, _total_related = await report_orders(
             session, wb_order_ids, tenant_id_obj
         )
 
@@ -452,7 +454,7 @@ async def main() -> None:
 
         # PHASE 2: Optional deletion
         if args.apply:
-            print(f"\n✓ --apply flag detected. Proceeding with deletion...\n")
+            print("\n✓ --apply flag detected. Proceeding with deletion...\n")
             try:
                 await delete_orders(session, found_orders)
                 print("\n" + "=" * 385)
@@ -466,9 +468,10 @@ async def main() -> None:
             print("  No changes were made to the database.")
             print(f"\n  To actually delete these {len(found_orders)} order(s), "
                   f"re-run with --apply flag:")
-            print(f"\n  python backend/scripts/cleanup_fbs_stub_test_orders.py \\")
-            print(f"      --wb-order-id {' --wb-order-id '.join(map(str, sorted(wb_order_ids)))} \\")
-            print(f"      --apply\n")
+            print("\n  python backend/scripts/cleanup_fbs_stub_test_orders.py \\")
+            joined_order_ids = " --wb-order-id ".join(map(str, sorted(wb_order_ids)))
+            print(f"      --wb-order-id {joined_order_ids} \\")
+            print("      --apply\n")
 
 
 if __name__ == "__main__":

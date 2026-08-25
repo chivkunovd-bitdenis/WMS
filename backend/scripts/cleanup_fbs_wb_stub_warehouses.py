@@ -13,16 +13,17 @@ then decide manually which warehouses to delete. DO NOT run this automatically.
 Requires explicit operator review and approval.
 """
 
+# Imports below ROOT setup are intentional: this standalone script must add the backend path first.
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 import asyncio
 import sys
 from pathlib import Path
-from datetime import datetime
-from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -30,10 +31,10 @@ if str(ROOT / "backend") not in sys.path:
     sys.path.insert(0, str(ROOT / "backend"))
 
 from app.db.session import SessionLocal
-from app.models.warehouse import Warehouse
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.inventory_balance import InventoryBalance
 from app.models.storage_location import StorageLocation
+from app.models.warehouse import Warehouse
 
 
 def is_auto_fbs_wms_warehouse(warehouse: Warehouse) -> bool:
@@ -54,7 +55,7 @@ async def count_active_bindings(
     """Count active FbsWarehouseBinding records for a warehouse."""
     stmt = select(func.count(FbsWarehouseBinding.id)).where(
         FbsWarehouseBinding.wms_warehouse_id == warehouse_id,
-        FbsWarehouseBinding.is_active == True,
+        FbsWarehouseBinding.is_active.is_(True),
     )
     result = await session.scalar(stmt)
     return result or 0
@@ -126,8 +127,8 @@ async def main() -> None:
             )
 
             print(
-                f"{str(wh.id):<38} | "
-                f"{str(wh.tenant_id):<38} | "
+                f"{wh.id!s:<38} | "
+                f"{wh.tenant_id!s:<38} | "
                 f"{wh.code:<30} | "
                 f"{wh.name:<30} | "
                 f"{created_at_str:<26} | "
@@ -136,17 +137,17 @@ async def main() -> None:
             )
 
         print("\n" + "=" * 215)
-        print(f"\nSummary:")
+        print("\nSummary:")
         print(f"  Total FBS stub warehouses:        {len(stub_warehouses)}")
         print(f"  Warehouses with active bindings:  {warehouses_with_bindings}")
         print(
-            f"    ⚠️  Cannot be deleted until bindings are reassigned "
-            f"to normal warehouses"
+            "    ⚠️  Cannot be deleted until bindings are reassigned "
+            "to normal warehouses"
         )
         print(f"  Orphaned warehouses (safe):       {warehouses_orphaned}")
         print(
-            f"    ✓ No active bindings or inventory — could be candidates "
-            f"for deletion"
+            "    ✓ No active bindings or inventory — could be candidates "
+            "for deletion"
         )
         print()
         print("⚠️  This is a read-only report. No database changes were made.")
