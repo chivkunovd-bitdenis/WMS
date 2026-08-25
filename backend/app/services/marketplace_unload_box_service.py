@@ -79,9 +79,14 @@ async def _barcode_index_for_seller(
 async def _request_for_picking(
     session: AsyncSession, tenant_id: uuid.UUID, request_id: uuid.UUID
 ) -> MarketplaceUnloadRequest:
-    stmt = select(MarketplaceUnloadRequest).where(
-        MarketplaceUnloadRequest.id == request_id,
-        MarketplaceUnloadRequest.tenant_id == tenant_id,
+    stmt = (
+        select(MarketplaceUnloadRequest)
+        .where(
+            MarketplaceUnloadRequest.id == request_id,
+            MarketplaceUnloadRequest.tenant_id == tenant_id,
+        )
+        .options(selectinload(MarketplaceUnloadRequest.lines))
+        .execution_options(populate_existing=True)
     )
     req = (await session.execute(stmt)).scalar_one_or_none()
     if req is None:
@@ -241,9 +246,7 @@ async def collect_ready_box_into_open_box(
                 picks_added += 1
                 total_qty += qty
         else:
-            stmt = select(InboundIntakeBoxLine).where(
-                InboundIntakeBoxLine.box_id == inb_box.id
-            )
+            stmt = select(InboundIntakeBoxLine).where(InboundIntakeBoxLine.box_id == inb_box.id)
             res = await session.execute(stmt)
             for bl in res.scalars().all():
                 qty = int(bl.posted_qty) if int(bl.posted_qty) > 0 else int(bl.quantity)
@@ -446,9 +449,7 @@ async def attach_existing_box_by_barcode(
                     raise _map_collect_err(exc) from None
                 picks_added += 1
         else:
-            stmt = select(InboundIntakeBoxLine).where(
-                InboundIntakeBoxLine.box_id == inb_box.id
-            )
+            stmt = select(InboundIntakeBoxLine).where(InboundIntakeBoxLine.box_id == inb_box.id)
             res = await session.execute(stmt)
             for bl in res.scalars().all():
                 qty = int(bl.posted_qty) if int(bl.posted_qty) > 0 else int(bl.quantity)
@@ -520,9 +521,7 @@ async def list_boxes_with_lines(
         select(MarketplaceUnloadBox)
         .where(MarketplaceUnloadBox.request_id == request_id)
         .options(
-            selectinload(MarketplaceUnloadBox.lines).selectinload(
-                MarketplaceUnloadBoxLine.product
-            ),
+            selectinload(MarketplaceUnloadBox.lines).selectinload(MarketplaceUnloadBoxLine.product),
             selectinload(MarketplaceUnloadBox.warehouse_box),
         )
         .order_by(MarketplaceUnloadBox.created_at.asc())
@@ -576,6 +575,7 @@ async def delete_box(
     )
     if box is None:
         raise MarketplaceUnloadBoxError("box_not_found")
+    await session.refresh(box, attribute_names=["lines"])
     await _request_for_picking(session, tenant_id, box.request_id)
     if _box_total_qty(box) > 0:
         raise MarketplaceUnloadBoxError("box_not_empty")
@@ -603,6 +603,7 @@ async def copy_box(
     )
     if src is None:
         raise MarketplaceUnloadBoxError("box_not_found")
+    await session.refresh(src, attribute_names=["lines"])
     req = await _request_for_picking(session, tenant_id, src.request_id)
     if not src.lines:
         raise MarketplaceUnloadBoxError("box_empty")
@@ -678,9 +679,7 @@ async def copy_box(
         select(MarketplaceUnloadBox)
         .where(MarketplaceUnloadBox.id == new_box.id)
         .options(
-            selectinload(MarketplaceUnloadBox.lines).selectinload(
-                MarketplaceUnloadBoxLine.product
-            ),
+            selectinload(MarketplaceUnloadBox.lines).selectinload(MarketplaceUnloadBoxLine.product),
             selectinload(MarketplaceUnloadBox.warehouse_box),
         )
     )

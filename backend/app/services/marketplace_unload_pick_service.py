@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.marketplace_unload import (
+    MarketplaceUnloadLine,
     MarketplaceUnloadPickAllocation,
     MarketplaceUnloadRequest,
 )
@@ -110,9 +111,16 @@ async def _barcode_index_for_seller(
 async def _request_for_picking(
     session: AsyncSession, tenant_id: uuid.UUID, request_id: uuid.UUID
 ) -> MarketplaceUnloadRequest:
-    stmt = select(MarketplaceUnloadRequest).where(
-        MarketplaceUnloadRequest.id == request_id,
-        MarketplaceUnloadRequest.tenant_id == tenant_id,
+    stmt = (
+        select(MarketplaceUnloadRequest)
+        .where(
+            MarketplaceUnloadRequest.id == request_id,
+            MarketplaceUnloadRequest.tenant_id == tenant_id,
+        )
+        .options(
+            selectinload(MarketplaceUnloadRequest.lines).selectinload(MarketplaceUnloadLine.product)
+        )
+        .execution_options(populate_existing=True)
     )
     req = (await session.execute(stmt)).scalar_one_or_none()
     if req is None:
@@ -195,9 +203,7 @@ async def get_pick_options(
         loc = await session.get(StorageLocation, loc_id)
         if loc is None:
             continue
-        available = await inventory_service.available_at_location(
-            session, tenant_id, pid, loc_id
-        )
+        available = await inventory_service.available_at_location(session, tenant_id, pid, loc_id)
         reserved = await inventory_service.total_reserved_at_location(
             session, tenant_id, pid, loc_id
         )
