@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.fbs_sellers import _binding_out
 from app.db.session import SessionLocal, engine
 from app.models import Base
 from app.models.fbs_order import (
@@ -91,6 +92,26 @@ def _binding(
         wb_warehouse_id=wb_warehouse_id,
         wms_warehouse_id=wms_warehouse_id,
     )
+
+
+def test_ozon_binding_api_output_keeps_provider_identity() -> None:
+    """TC-NEW-OZON-STOCK-002: UI gets Ozon identity without WB inference."""
+    binding = FbsWarehouseBinding(
+        id=uuid.uuid4(),
+        tenant_id=uuid.uuid4(),
+        seller_id=uuid.uuid4(),
+        marketplace="ozon",
+        external_warehouse_id="ozon-warehouse-1",
+        wb_warehouse_id=501001,
+        wms_warehouse_id=uuid.uuid4(),
+        is_active=True,
+        stock_sync_enabled=True,
+    )
+
+    result = _binding_out(binding)
+
+    assert result.marketplace == "ozon"
+    assert result.external_warehouse_id == "ozon-warehouse-1"
 
 
 @pytest.mark.asyncio
