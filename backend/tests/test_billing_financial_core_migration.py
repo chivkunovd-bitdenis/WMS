@@ -21,7 +21,10 @@ def _script_directory() -> ScriptDirectory:
 def test_billing_financial_core_is_in_the_single_alembic_lineage() -> None:
     script = _script_directory()
 
-    assert script.get_heads() == ["20260823_0100"]
+    # Проверяем именно единственность линии, а не конкретную голову: смысл теста —
+    # что ветка биллинга не отпочковалась, а пришпиленный номер ревизии приходилось
+    # бы править каждой новой миграцией.
+    assert len(script.get_heads()) == 1
 
     billing_core = script.get_revision("20260822_09a")
     billing_invoices = script.get_revision("20260822_09b")
