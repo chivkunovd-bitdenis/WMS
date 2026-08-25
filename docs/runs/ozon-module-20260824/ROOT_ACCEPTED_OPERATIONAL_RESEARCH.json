@@ -1,0 +1,36 @@
+{
+  "verdict": "ROOT_ACCEPTED_OPERATIONAL_RESEARCH",
+  "recorded_at_utc": "2026-08-24T22:03:37Z",
+  "recorded_by": "wms_lead",
+  "verdict_source": "/root",
+  "scope": "operational research only",
+  "accepted_artifacts": [
+    "tasks/ozon-module-20260824/operational-research/OZON_EXACT_OPERATIONAL_CONTRACT.md",
+    "tasks/ozon-module-20260824/operational-research/OZON_EXACT_OPERATIONAL_CONTRACT.json",
+    "tasks/ozon-module-20260824/operational-research/OZON_OFFICIAL_SOURCE_LEDGER.md",
+    "tasks/ozon-module-20260824/operational-research/OZON_READ_ONLY_CAPABILITY_EVIDENCE.json",
+    "tasks/ozon-module-20260824/operational-research/OZON_RESEARCH_UNKNOWN_LEDGER.md",
+    "tasks/ozon-module-20260824/operational-research/OZON_PRIOR_RESEARCH_AUDIT.md"
+  ],
+  "verified_invariants": {
+    "artifact_count": 6,
+    "operation_rows": 90,
+    "rule_rows": 10,
+    "operation_identity_method_path_confirmed_official": 90,
+    "complete_nested_contracts_conflict": 90,
+    "account_reads_not_run_client_id_missing": 61,
+    "mutations_skipped_denylist": 29,
+    "stale_credential_result_count": 0,
+    "executed_provider_calls": 0,
+    "credential_secret_output": false,
+    "frontend_backend_diff_count": 0,
+    "concrete_unknown_count": 4
+  },
+  "binding_constraints": [
+    "Complete nested contracts and schema pointers remain CONFLICT and are not implementation-ready facts.",
+    "Any control depending on CONFLICT nested fields or account capability remains BLOCKED or conditional.",
+    "Do not invent request payloads, UI controls, screens, tabs, modals, workspaces or flows.",
+    "Proceed only to master screen-readiness coverage and blocker normalization, then independent reviewer and tester recalculation and sole-lead 32/32 validation.",
+    "No Ozon FBS stock write or other provider mutation is authorised."
+  ]
+}

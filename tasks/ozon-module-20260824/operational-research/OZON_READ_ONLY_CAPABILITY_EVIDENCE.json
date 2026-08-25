@@ -1,0 +1,2727 @@
+{
+  "schema_version": "1.0",
+  "call_id": "35-ozon-operational-research-live-evidence-correction-path-authorized",
+  "generated_at_utc": "2026-08-24T21:23:47Z",
+  "safety_boundary": {
+    "base_host": "api-seller.ozon.ru",
+    "allowed": "Only explicitly authorised, independently classified read-only calls after a complete Client-Id + Api-Key pair and concrete existing entity inputs are provided.",
+    "forbidden": "All provider mutations, stock write, ship/package, handover, cancel, draft/supply/cargo/TGM/label task creation, act accept, settings changes and guessed credential identifiers.",
+    "secret_handling": "Only marker existence, variable name OZON_TEST_API_KEY and nonempty state were recorded. No secret/header/client/account/address/personal values are present.",
+    "call35_result": "ZERO_PROVIDER_CALLS"
+  },
+  "credential_location_discovery": {
+    "designated_marker": "$(git rev-parse --git-common-dir)/codex-secrets/ozon-test.env",
+    "marker_file_exists": true,
+    "inspected_scope": "Existence, variable names and nonempty state only; no secret value was printed, copied or stored.",
+    "value_output": false,
+    "value_recorded": false,
+    "observed_variable_names": [
+      "OZON_TEST_API_KEY"
+    ],
+    "ozon_test_api_key_nonempty": true,
+    "client_id_present": false,
+    "result": "API_KEY_LOCATION_FOUND_CLIENT_ID_MISSING",
+    "notes": [
+      "The marker defines only OZON_TEST_API_KEY.",
+      "Ozon Seller API requires both Client-Id and Api-Key headers.",
+      "Missing Client-Id prevents forming an authenticated account request; no Client-Id was guessed or searched in credential-management pages.",
+      "No secret value appears in this artifact."
+    ]
+  },
+  "network_capability": {
+    "lead_live_official_docs_evidence": "AVAILABLE_90_OF_90_METHOD_PATH_MATCHES",
+    "lead_live_core_sections_evidence": "AVAILABLE_41_OF_41",
+    "lead_live_process_pages_evidence": "AVAILABLE_3_OF_3",
+    "api_seller_authenticated_call_attempted": false,
+    "provider_calls_executed": 0,
+    "reason_not_attempted": "OZON_TEST_API_KEY marker exists, but Client-Id is missing. Both required headers cannot be formed. Public live documentation evidence does not authorise or substitute for an account call."
+  },
+  "read_only_call_allowlist": [
+    {
+      "method": "POST",
+      "path": "/v4/posting/fbs/unfulfilled/list",
+      "operation_id": "PostingFbsUnfulfilledList",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "cursor",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter",
+          "type": "object",
+          "required": false
+        },
+        {
+          "field": "filter.cutoff_from",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter.cutoff_to",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter.delivering_date_from",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter.delivering_date_to",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter.delivery_method_ids",
+          "type": "array",
+          "required": false,
+          "max_items": 1000
+        },
+        {
+          "field": "filter.last_changed_status_date",
+          "type": "object",
+          "required": false
+        },
+        {
+          "field": "filter.last_changed_status_date.from",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter.last_changed_status_date.to",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter.provider_ids",
+          "type": "array",
+          "required": false,
+          "max_items": 1000
+        },
+        {
+          "field": "filter.statuses",
+          "type": "array",
+          "required": false
+        },
+        {
+          "field": "filter.warehouse_ids",
+          "type": "array",
+          "required": false,
+          "max_items": 1000
+        },
+        {
+          "field": "limit",
+          "type": "integer",
+          "required": false,
+          "min": 1,
+          "max": 100
+        },
+        {
+          "field": "sort_dir",
+          "type": "string",
+          "required": false,
+          "enum": [
+            "ASC",
+            "DESC"
+          ]
+        },
+        {
+          "field": "translit",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "field": "with",
+          "type": "object",
+          "required": false
+        },
+        {
+          "field": "with.analytics_data",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "field": "with.barcodes",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "field": "with.financial_data",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "field": "with.legal_info",
+          "type": "boolean",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v4/posting/fbs/list",
+      "operation_id": "PostingFbsList",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "cursor",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter",
+          "type": "object",
+          "required": true
+        },
+        {
+          "field": "filter.delivery_method_ids",
+          "type": "array",
+          "required": false,
+          "max_items": 1000
+        },
+        {
+          "field": "filter.integration_type_flow",
+          "type": "array",
+          "required": false
+        },
+        {
+          "field": "filter.is_blr_traceable",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "field": "filter.last_changed_status_date",
+          "type": "object",
+          "required": false
+        },
+        {
+          "field": "filter.last_changed_status_date.from",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter.last_changed_status_date.to",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter.order_id",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "field": "filter.order_numbers",
+          "type": "array",
+          "required": false,
+          "max_items": 100
+        },
+        {
+          "field": "filter.provider_ids",
+          "type": "array",
+          "required": false,
+          "max_items": 1000
+        },
+        {
+          "field": "filter.since",
+          "type": "string",
+          "required": true
+        },
+        {
+          "field": "filter.statuses",
+          "type": "array",
+          "required": false
+        },
+        {
+          "field": "filter.to",
+          "type": "string",
+          "required": true
+        },
+        {
+          "field": "filter.warehouse_ids",
+          "type": "array",
+          "required": false,
+          "max_items": 1000
+        },
+        {
+          "field": "limit",
+          "type": "integer",
+          "required": true,
+          "min": 1,
+          "max": 100
+        },
+        {
+          "field": "sort_dir",
+          "type": "string",
+          "required": false,
+          "enum": [
+            "ASC",
+            "DESC"
+          ]
+        },
+        {
+          "field": "translit",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "field": "with",
+          "type": "object",
+          "required": false
+        },
+        {
+          "field": "with.analytics_data",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "field": "with.barcodes",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "field": "with.financial_data",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "field": "with.legal_info",
+          "type": "boolean",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v3/posting/fbs/get",
+      "operation_id": "PostingAPI_GetFbsPostingV3",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "posting_number",
+          "type": "string",
+          "required": true
+        },
+        {
+          "field": "with",
+          "type": "object",
+          "required": false
+        },
+        {
+          "field": "with.analytics_data",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "field": "with.barcodes",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "field": "with.financial_data",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "field": "with.legal_info",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "field": "with.product_exemplars",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "field": "with.related_postings",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "field": "with.translit",
+          "type": "boolean",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v5/fbs/posting/product/exemplar/validate",
+      "operation_id": "PostingAPI_FbsPostingProductExemplarValidateV5",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "posting_number",
+          "type": "string",
+          "required": true
+        },
+        {
+          "field": "products",
+          "type": "array",
+          "required": true
+        },
+        {
+          "field": "products[].exemplars",
+          "type": "array",
+          "required": true
+        },
+        {
+          "field": "products[].exemplars[].gtd",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "products[].exemplars[].marks",
+          "type": "array",
+          "required": false
+        },
+        {
+          "field": "products[].exemplars[].marks[].mark",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "products[].exemplars[].marks[].mark_type",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "products[].exemplars[].rnpt",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "products[].exemplars[].weight",
+          "type": "number",
+          "required": false
+        },
+        {
+          "field": "products[].product_id",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v5/fbs/posting/product/exemplar/status",
+      "operation_id": "PostingAPI_FbsPostingProductExemplarStatusV5",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "posting_number",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/posting/fbs/product/country/list",
+      "operation_id": "PostingAPI_ListCountryProductFbsPostingV2",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "name_search",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/posting/fbs/restrictions",
+      "operation_id": "PostingAPI_GetRestrictions",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "posting_number",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/posting/fbs/package-label/get",
+      "operation_id": "PostingAPI_GetLabelBatch",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "task_id",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/posting/fbs/package-label",
+      "operation_id": "PostingAPI_PostingFBSPackageLabel",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "posting_number",
+          "type": "array",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/posting/fbs/act/check-status",
+      "operation_id": "PostingAPI_PostingFBSActCheckStatus",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "id",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/posting/fbs/act/get-barcode",
+      "operation_id": "PostingAPI_PostingFBSGetBarcode",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "id",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/posting/fbs/act/get-barcode/text",
+      "operation_id": "PostingAPI_PostingFBSGetBarcodeText",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "id",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/posting/fbs/act/get-pdf",
+      "operation_id": "PostingAPI_PostingFBSGetAct",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "id",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/posting/fbs/act/get-container-labels",
+      "operation_id": "PostingAPI_PostingFBSActGetContainerLabels",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "id",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/carriage/get",
+      "operation_id": "CarriageGet",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "carriage_id",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/carriage/delivery/list",
+      "operation_id": "CarriageAPI_CarriageDeliveryListV2",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "cursor",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter",
+          "type": "object",
+          "required": false
+        },
+        {
+          "field": "filter.delivery_method_id",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "field": "filter.departure_date",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "limit",
+          "type": "integer",
+          "required": true,
+          "max": 1000
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/assembly/fbs/posting/list",
+      "operation_id": "AssemblyFbsPostingList",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "cursor",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter",
+          "type": "object",
+          "required": true
+        },
+        {
+          "field": "filter.cutoff_from",
+          "type": "string",
+          "required": true
+        },
+        {
+          "field": "filter.cutoff_to",
+          "type": "string",
+          "required": true
+        },
+        {
+          "field": "filter.delivery_method_id",
+          "type": "integer",
+          "required": false,
+          "max": 1000
+        },
+        {
+          "field": "limit",
+          "type": "integer",
+          "required": true,
+          "max": 1000
+        },
+        {
+          "field": "sort_dir",
+          "type": "string",
+          "required": true,
+          "enum": [
+            "ASC",
+            "DESC"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/cluster/list",
+      "operation_id": "DraftClusterList",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/warehouse/fbo/list",
+      "operation_id": "SupplyDraftAPI_DraftGetWarehouseFboList",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "filter_by_supply_type",
+          "type": "array",
+          "required": true
+        },
+        {
+          "field": "search",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/draft/create/info",
+      "operation_id": "DraftCreateInfo",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "draft_id",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/draft/timeslot/info",
+      "operation_id": "DraftTimeslotInfo",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "date_from",
+          "type": "string",
+          "required": true
+        },
+        {
+          "field": "date_to",
+          "type": "string",
+          "required": true
+        },
+        {
+          "field": "draft_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "supply_type",
+          "type": "string",
+          "required": true,
+          "enum": [
+            "CROSSDOCK",
+            "DIRECT",
+            "MULTI_CLUSTER"
+          ]
+        },
+        {
+          "field": "selected_cluster_warehouses",
+          "type": "array",
+          "required": true,
+          "max_items": 20
+        },
+        {
+          "field": "selected_cluster_warehouses[].macrolocal_cluster_id",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "field": "selected_cluster_warehouses[].storage_warehouse_id",
+          "type": "integer",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/draft/supply/create/status",
+      "operation_id": "DraftSupplyCreateStatus",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "draft_id",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v3/supply-order/list",
+      "operation_id": "SupplyOrderList",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "filter",
+          "type": "object",
+          "required": true
+        },
+        {
+          "field": "filter.dropoff_warehouse_ids",
+          "type": "array",
+          "required": false
+        },
+        {
+          "field": "filter.order_number_search",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter.states",
+          "type": "array",
+          "required": true
+        },
+        {
+          "field": "filter.timeslot_from_range",
+          "type": "object",
+          "required": false
+        },
+        {
+          "field": "filter.timeslot_from_range.from",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter.timeslot_from_range.timeslot_filter_type",
+          "type": "string",
+          "required": false,
+          "enum": [
+            "BY_LOCAL_TIME",
+            "BY_UTC_TIME"
+          ]
+        },
+        {
+          "field": "filter.timeslot_from_range.to",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "last_id",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "limit",
+          "type": "integer",
+          "required": true,
+          "min": 1,
+          "max": 100
+        },
+        {
+          "field": "sort_by",
+          "type": "string",
+          "required": true,
+          "enum": [
+            "ORDER_CREATION",
+            "ORDER_STATE_UPDATED_AT",
+            "TIMESLOT_FROM_UTC",
+            "TIMESLOT_FROM_LOCAL"
+          ]
+        },
+        {
+          "field": "sort_dir",
+          "type": "string",
+          "required": false,
+          "enum": [
+            "ASC",
+            "DESC"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v3/supply-order/get",
+      "operation_id": "SupplyOrderGet",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "order_ids",
+          "type": "array",
+          "required": true,
+          "max_items": 50
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/supply-order/bundle",
+      "operation_id": "SupplyOrderBundle",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "bundle_ids",
+          "type": "array",
+          "required": true,
+          "min_items": 1,
+          "max_items": 100
+        },
+        {
+          "field": "is_asc",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "field": "item_tags_calculation",
+          "type": "object",
+          "required": false
+        },
+        {
+          "field": "item_tags_calculation.dropoff_warehouse_id",
+          "type": "string",
+          "required": true
+        },
+        {
+          "field": "item_tags_calculation.storage_warehouse_ids",
+          "type": "array",
+          "required": true
+        },
+        {
+          "field": "last_id",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "limit",
+          "type": "integer",
+          "required": true,
+          "min": 1,
+          "max": 100
+        },
+        {
+          "field": "query",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "sort_field",
+          "type": "string",
+          "required": false,
+          "enum": [
+            "SKU",
+            "NAME",
+            "QUANTITY",
+            "TOTAL_VOLUME_IN_LITRES"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/supply-order/content/update/validation",
+      "operation_id": "SupplyOrderContentUpdateValidation",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "new_bundle_id",
+          "type": "string",
+          "required": true
+        },
+        {
+          "field": "supply_id",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/supply-order/content/update/status",
+      "operation_id": "SupplyOrderAPI_SupplyOrderContentUpdateStatus",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "operation_id",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/supply-order/cancel/status",
+      "operation_id": "SupplyOrderAPI_SupplyOrderCancelStatus",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "operation_id",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/supply-order/timeslot/get",
+      "operation_id": "SupplyOrderAPI_GetSupplyOrderTimeslots",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "supply_order_id",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/supply-order/timeslot/status",
+      "operation_id": "SupplyOrderAPI_GetSupplyOrderTimeslotStatus",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "operation_id",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/supply-order/pass/status",
+      "operation_id": "SupplyOrderAPI_SupplyOrderPassStatus",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "operation_id",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/cargoes/rules/get",
+      "operation_id": "CargoesAPI_CargoesRulesGet",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "supply_ids",
+          "type": "array",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/cargoes/create/info",
+      "operation_id": "CargoesCreateInfoV2",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "operation_id",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/cargoes/get",
+      "operation_id": "CargoesGetV2",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "supplies",
+          "type": "array",
+          "required": true,
+          "max_items": 100
+        },
+        {
+          "field": "supplies[].cargo_ids",
+          "type": "array",
+          "required": true
+        },
+        {
+          "field": "supplies[].supply_id",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/cargoes/delete/status",
+      "operation_id": "CargoesDeleteStatusV2",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "operation_id",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/cargoes-label/get",
+      "operation_id": "CargoesAPI_CargoesLabelGet",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "operation_id",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/cargoes/transport/activate/status",
+      "operation_id": "CargoesTransportActivateStatus",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "operation_id",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/cargoes/transport/create/status",
+      "operation_id": "CargoesTransportCreateStatus",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "operation_id",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/cargoes/transport/bind/status",
+      "operation_id": "CargoesTransportBindStatus",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "operation_id",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/cargoes/label/transport/status",
+      "operation_id": "CargoesLabelTransportStatus",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "operation_id",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/cargoes/label/transport-by-order/status",
+      "operation_id": "CargoesLabelTransportByOrderStatus",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "operation_id",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/supply-order/act/summary/get",
+      "operation_id": "SupplyOrderActSummaryGet",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "order_id",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/supply-order/act/product/get",
+      "operation_id": "SupplyOrderActProductGet",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "supply_id",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/supply-order/act/accept/status",
+      "operation_id": "SupplyOrderActAcceptStatus",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "operation_id",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/returns/list",
+      "operation_id": "returnsList",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "filter",
+          "type": "object",
+          "required": false
+        },
+        {
+          "field": "filter.logistic_return_date",
+          "type": "object",
+          "required": false
+        },
+        {
+          "field": "filter.logistic_return_date.time_from",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter.logistic_return_date.time_to",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter.storage_tariffication_start_date",
+          "type": "object",
+          "required": false
+        },
+        {
+          "field": "filter.storage_tariffication_start_date.time_from",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter.storage_tariffication_start_date.time_to",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter.visual_status_change_moment",
+          "type": "object",
+          "required": false
+        },
+        {
+          "field": "filter.visual_status_change_moment.time_from",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter.visual_status_change_moment.time_to",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter.order_id",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "field": "filter.posting_numbers",
+          "type": "array",
+          "required": false
+        },
+        {
+          "field": "filter.product_name",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter.offer_id",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter.visual_status_name",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter.warehouse_id",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "field": "filter.barcode",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter.return_schema",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter.compensation_status_id",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "field": "limit",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "last_id",
+          "type": "integer",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/return/giveout/is-enabled",
+      "operation_id": "ReturnAPI_GiveoutIsEnabled",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/return/giveout/list",
+      "operation_id": "ReturnAPI_GiveoutList",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "last_id",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "field": "limit",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/return/giveout/info",
+      "operation_id": "ReturnAPI_GiveoutInfo",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "giveout_id",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/return/giveout/barcode",
+      "operation_id": "ReturnAPI_GiveoutGetBarcode",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/return/giveout/get-pdf",
+      "operation_id": "ReturnAPI_GiveoutGetPDF",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/return/giveout/get-png",
+      "operation_id": "ReturnAPI_GiveoutGetPNG",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": []
+    },
+    {
+      "method": "POST",
+      "path": "/v1/seller/info",
+      "operation_id": "SellerAPI_SellerInfo",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": []
+    },
+    {
+      "method": "POST",
+      "path": "/v3/product/list",
+      "operation_id": "ProductAPI_GetProductList",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "filter",
+          "type": "object",
+          "required": false
+        },
+        {
+          "field": "filter.offer_id",
+          "type": "array",
+          "required": false,
+          "min_items": 1,
+          "max_items": 1000
+        },
+        {
+          "field": "filter.product_id",
+          "type": "array",
+          "required": false,
+          "min_items": 1,
+          "max_items": 1000
+        },
+        {
+          "field": "filter.skus",
+          "type": "array",
+          "required": false,
+          "min_items": 1,
+          "max_items": 1000
+        },
+        {
+          "field": "filter.visibility",
+          "type": "string",
+          "required": false,
+          "enum": [
+            "ALL",
+            "VISIBLE",
+            "INVISIBLE",
+            "EMPTY_STOCK",
+            "NOT_MODERATED",
+            "MODERATED",
+            "DISABLED",
+            "STATE_FAILED",
+            "READY_TO_SUPPLY",
+            "VALIDATION_STATE_PENDING",
+            "VALIDATION_STATE_FAIL",
+            "VALIDATION_STATE_SUCCESS",
+            "TO_SUPPLY",
+            "IN_SALE",
+            "REMOVED_FROM_SALE",
+            "OVERPRICED",
+            "CRITICALLY_OVERPRICED",
+            "EMPTY_BARCODE",
+            "BARCODE_EXISTS",
+            "QUARANTINE",
+            "ARCHIVED",
+            "OVERPRICED_WITH_STOCK",
+            "PARTIAL_APPROVED",
+            "AUTO_ARCHIVED",
+            "MANUAL_ARCHIVED",
+            "SEASONAL_AUTO_ARCHIVED",
+            "VISIBLE_WITH_FBO_STOCK"
+          ]
+        },
+        {
+          "field": "last_id",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "limit",
+          "type": "integer",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v3/product/info/list",
+      "operation_id": "ProductAPI_GetProductInfoList",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "offer_id",
+          "type": "array",
+          "required": false
+        },
+        {
+          "field": "product_id",
+          "type": "array",
+          "required": false
+        },
+        {
+          "field": "sku",
+          "type": "array",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v4/product/info/attributes",
+      "operation_id": "ProductAPI_GetProductAttributesV4",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "filter",
+          "type": "object",
+          "required": false
+        },
+        {
+          "field": "filter.offer_id",
+          "type": "array",
+          "required": false
+        },
+        {
+          "field": "filter.product_id",
+          "type": "array",
+          "required": false
+        },
+        {
+          "field": "filter.sku",
+          "type": "array",
+          "required": false
+        },
+        {
+          "field": "filter.visibility",
+          "type": "string",
+          "required": false,
+          "enum": [
+            "ALL",
+            "VISIBLE",
+            "INVISIBLE",
+            "EMPTY_STOCK",
+            "NOT_MODERATED",
+            "MODERATED",
+            "DISABLED",
+            "STATE_FAILED",
+            "READY_TO_SUPPLY",
+            "VALIDATION_STATE_PENDING",
+            "VALIDATION_STATE_FAIL",
+            "VALIDATION_STATE_SUCCESS",
+            "TO_SUPPLY",
+            "IN_SALE",
+            "REMOVED_FROM_SALE",
+            "OVERPRICED",
+            "CRITICALLY_OVERPRICED",
+            "EMPTY_BARCODE",
+            "BARCODE_EXISTS",
+            "QUARANTINE",
+            "ARCHIVED",
+            "OVERPRICED_WITH_STOCK",
+            "PARTIAL_APPROVED",
+            "AUTO_ARCHIVED",
+            "MANUAL_ARCHIVED",
+            "SEASONAL_AUTO_ARCHIVED",
+            "VISIBLE_WITH_FBO_STOCK"
+          ]
+        },
+        {
+          "field": "last_id",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "limit",
+          "type": "integer",
+          "required": false,
+          "min": 1,
+          "max": 1000
+        },
+        {
+          "field": "sort_by",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "sort_dir",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/warehouse/list",
+      "operation_id": "WarehouseListV2",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "limit",
+          "type": "integer",
+          "required": true,
+          "max": 200
+        },
+        {
+          "field": "cursor",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "warehouse_ids",
+          "type": "array",
+          "required": false,
+          "max": 200
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/delivery-method/list",
+      "operation_id": "WarehouseAPI_DeliveryMethodListV2",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "cursor",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter",
+          "type": "object",
+          "required": false
+        },
+        {
+          "field": "filter.delivery_method_ids",
+          "type": "array",
+          "required": false,
+          "max_items": 100
+        },
+        {
+          "field": "filter.provider_ids",
+          "type": "array",
+          "required": false,
+          "max_items": 100
+        },
+        {
+          "field": "filter.status",
+          "type": "array",
+          "required": false
+        },
+        {
+          "field": "filter.warehouse_ids",
+          "type": "array",
+          "required": false,
+          "max_items": 100
+        },
+        {
+          "field": "limit",
+          "type": "integer",
+          "required": true,
+          "min": 1,
+          "max": 100
+        },
+        {
+          "field": "sort_dir",
+          "type": "string",
+          "required": false,
+          "enum": [
+            "ASC",
+            "DESC"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/warehouse/fbo/seller/list",
+      "operation_id": "WarehouseFboSellerList",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": []
+    },
+    {
+      "method": "POST",
+      "path": "/v2/product/info/stocks-by-warehouse/fbs",
+      "operation_id": "ProductAPI_GetProductInfoStocksByWarehouseFbsV2",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "<variant1>",
+          "type": null,
+          "required": true
+        },
+        {
+          "field": "<variant2>",
+          "type": null,
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/product/info/stocks-by-warehouse/fbo",
+      "operation_id": "GetProductInfoStocksByWarehouseFbo",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "cursor",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "limit",
+          "type": "integer",
+          "required": true,
+          "max": 1000
+        },
+        {
+          "field": "offer_ids",
+          "type": "array",
+          "required": false,
+          "max": 1000
+        },
+        {
+          "field": "skus",
+          "type": "array",
+          "required": false,
+          "max": 1000
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v4/product/info/stocks",
+      "operation_id": "ProductAPI_GetProductInfoStocks",
+      "semantic_classification": "READ_ONLY",
+      "sanitized_request_shape": [
+        {
+          "field": "cursor",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "filter",
+          "type": "object",
+          "required": true
+        },
+        {
+          "field": "filter.offer_id",
+          "type": "array",
+          "required": false
+        },
+        {
+          "field": "filter.product_id",
+          "type": "array",
+          "required": false
+        },
+        {
+          "field": "filter.visibility",
+          "type": "string",
+          "required": false,
+          "enum": [
+            "ALL",
+            "VISIBLE",
+            "INVISIBLE",
+            "EMPTY_STOCK",
+            "NOT_MODERATED",
+            "MODERATED",
+            "DISABLED",
+            "STATE_FAILED",
+            "READY_TO_SUPPLY",
+            "VALIDATION_STATE_PENDING",
+            "VALIDATION_STATE_FAIL",
+            "VALIDATION_STATE_SUCCESS",
+            "TO_SUPPLY",
+            "IN_SALE",
+            "REMOVED_FROM_SALE",
+            "BANNED",
+            "OVERPRICED",
+            "CRITICALLY_OVERPRICED",
+            "EMPTY_BARCODE",
+            "BARCODE_EXISTS",
+            "QUARANTINE",
+            "ARCHIVED",
+            "OVERPRICED_WITH_STOCK",
+            "PARTIAL_APPROVED",
+            "AUTO_ARCHIVED",
+            "MANUAL_ARCHIVED",
+            "SEASONAL_AUTO_ARCHIVED",
+            "VISIBLE_WITH_FBO_STOCK"
+          ]
+        },
+        {
+          "field": "filter.with_quant",
+          "type": "object",
+          "required": false
+        },
+        {
+          "field": "filter.with_quant.created",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "field": "filter.with_quant.exists",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "field": "limit",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    }
+  ],
+  "mutation_denylist": [
+    {
+      "method": "POST",
+      "path": "/v4/posting/fbs/ship",
+      "operation_id": "PostingAPI_ShipFbsPostingV4",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "packages",
+          "type": "array",
+          "required": true
+        },
+        {
+          "field": "packages[].products",
+          "type": "array",
+          "required": true
+        },
+        {
+          "field": "packages[].products[].product_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "packages[].products[].quantity",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "posting_number",
+          "type": "string",
+          "required": true
+        },
+        {
+          "field": "with",
+          "type": "object",
+          "required": false
+        },
+        {
+          "field": "with.additional_data",
+          "type": "boolean",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v4/posting/fbs/ship/package",
+      "operation_id": "PostingAPI_ShipFbsPostingPackage",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "posting_number",
+          "type": "string",
+          "required": true
+        },
+        {
+          "field": "products",
+          "type": "array",
+          "required": false
+        },
+        {
+          "field": "products[].exemplarsIds",
+          "type": "array",
+          "required": false
+        },
+        {
+          "field": "products[].product_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "products[].quantity",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v6/fbs/posting/product/exemplar/create-or-get",
+      "operation_id": "PostingAPI_FbsPostingProductExemplarCreateOrGetV6",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "posting_number",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v6/fbs/posting/product/exemplar/set",
+      "operation_id": "PostingAPI_FbsPostingProductExemplarSetV6",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "multi_box_qty",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "field": "posting_number",
+          "type": "string",
+          "required": true
+        },
+        {
+          "field": "products",
+          "type": "array",
+          "required": true
+        },
+        {
+          "field": "products[].exemplars",
+          "type": "array",
+          "required": true
+        },
+        {
+          "field": "products[].exemplars[].exemplar_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "products[].exemplars[].gtd",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "products[].exemplars[].is_gtd_absent",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "field": "products[].exemplars[].is_rnpt_absent",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "field": "products[].exemplars[].marks",
+          "type": "array",
+          "required": false
+        },
+        {
+          "field": "products[].exemplars[].marks[].mark",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "products[].exemplars[].marks[].mark_type",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "products[].exemplars[].rnpt",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "products[].exemplars[].weight",
+          "type": "number",
+          "required": false
+        },
+        {
+          "field": "products[].product_id",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/posting/fbs/product/country/set",
+      "operation_id": "PostingAPI_SetCountryProductFbsPostingV2",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "posting_number",
+          "type": "string",
+          "required": true
+        },
+        {
+          "field": "product_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "country_iso_code",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v3/posting/multiboxqty/set",
+      "operation_id": "PostingAPI_PostingMultiBoxQtySetV3",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "posting_number",
+          "type": "string",
+          "required": true
+        },
+        {
+          "field": "multi_box_qty",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/posting/fbs/package-label/create",
+      "operation_id": "PostingAPI_CreateLabelBatchV2",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "posting_number",
+          "type": "array",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/posting/fbs/act/create",
+      "operation_id": "PostingAPI_PostingFBSActCreate",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "containers_count",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "field": "delivery_method_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "departure_date",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/carriage/create",
+      "operation_id": "CarriageAPI_CarriageCreate",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "all_blr_traceable",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "field": "delivery_method_id",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "field": "departure_date",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/carriage/approve",
+      "operation_id": "CarriageAPI_CarriageApprove",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "carriage_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "containers_count",
+          "type": "integer",
+          "required": false
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/posting/fbs/awaiting-delivery",
+      "operation_id": "PostingAPI_MoveFbsPostingToAwaitingDelivery",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "posting_number",
+          "type": "array",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/draft/direct/create",
+      "operation_id": "DraftDirectCreate",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "cluster_info",
+          "type": "object",
+          "required": true
+        },
+        {
+          "field": "cluster_info.items",
+          "type": "array",
+          "required": true,
+          "max_items": 5000
+        },
+        {
+          "field": "cluster_info.items[].quantity",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "cluster_info.items[].sku",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "cluster_info.macrolocal_cluster_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "deletion_sku_mode",
+          "type": "string",
+          "required": true,
+          "enum": [
+            "FULL",
+            "PARTIAL"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/draft/crossdock/create",
+      "operation_id": "DraftCrossdockCreate",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "cluster_info",
+          "type": "object",
+          "required": true
+        },
+        {
+          "field": "cluster_info.items",
+          "type": "array",
+          "required": true,
+          "max_items": 5000
+        },
+        {
+          "field": "cluster_info.items[].quantity",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "cluster_info.items[].sku",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "cluster_info.macrolocal_cluster_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "deletion_sku_mode",
+          "type": "string",
+          "required": true,
+          "enum": [
+            "FULL",
+            "PARTIAL"
+          ]
+        },
+        {
+          "field": "delivery_info",
+          "type": "object",
+          "required": true
+        },
+        {
+          "field": "delivery_info.drop_off_warehouse",
+          "type": "object",
+          "required": false
+        },
+        {
+          "field": "delivery_info.drop_off_warehouse.warehouse_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "delivery_info.drop_off_warehouse.warehouse_type",
+          "type": "string",
+          "required": true,
+          "enum": [
+            "DELIVERY_POINT",
+            "SORTING_CENTER",
+            "CROSS_DOCK",
+            "ORDERS_RECEIVING_POINT",
+            "FULL_FILLMENT"
+          ]
+        },
+        {
+          "field": "delivery_info.seller_warehouse_id",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "field": "delivery_info.type",
+          "type": "string",
+          "required": true,
+          "enum": [
+            "DROPOFF",
+            "PICKUP"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/draft/multi-cluster/create",
+      "operation_id": "DraftMultiClusterCreate",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "clusters_info",
+          "type": "array",
+          "required": true,
+          "max_items": 20
+        },
+        {
+          "field": "clusters_info[].items",
+          "type": "array",
+          "required": true,
+          "max_items": 5000
+        },
+        {
+          "field": "clusters_info[].items[].quantity",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "clusters_info[].items[].sku",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "clusters_info[].macrolocal_cluster_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "deletion_sku_mode",
+          "type": "string",
+          "required": true,
+          "enum": [
+            "FULL",
+            "PARTIAL"
+          ]
+        },
+        {
+          "field": "delivery_info",
+          "type": "object",
+          "required": true
+        },
+        {
+          "field": "delivery_info.drop_off_warehouse",
+          "type": "object",
+          "required": false
+        },
+        {
+          "field": "delivery_info.drop_off_warehouse.warehouse_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "delivery_info.drop_off_warehouse.warehouse_type",
+          "type": "string",
+          "required": true,
+          "enum": [
+            "DELIVERY_POINT",
+            "SORTING_CENTER",
+            "CROSS_DOCK",
+            "ORDERS_RECEIVING_POINT",
+            "FULL_FILLMENT"
+          ]
+        },
+        {
+          "field": "delivery_info.seller_warehouse_id",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "field": "delivery_info.type",
+          "type": "string",
+          "required": true,
+          "enum": [
+            "DROPOFF",
+            "PICKUP"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/draft/supply/create",
+      "operation_id": "DraftSupplyCreate",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "draft_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "selected_cluster_warehouses",
+          "type": "array",
+          "required": true
+        },
+        {
+          "field": "selected_cluster_warehouses[].macrolocal_cluster_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "selected_cluster_warehouses[].storage_warehouse_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "timeslot",
+          "type": "object",
+          "required": false
+        },
+        {
+          "field": "timeslot.from_in_timezone",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "timeslot.to_in_timezone",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "supply_type",
+          "type": "string",
+          "required": true,
+          "enum": [
+            "CROSSDOCK",
+            "DIRECT",
+            "MULTI_CLUSTER"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/supply-order/content/update",
+      "operation_id": "SupplyOrderAPI_SupplyOrderContentUpdate",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "items",
+          "type": "array",
+          "required": true
+        },
+        {
+          "field": "items[].quant",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "items[].quantity",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "items[].sku",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "order_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "supply_id",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/supply-order/cancel",
+      "operation_id": "SupplyOrderAPI_SupplyOrderCancel",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "order_id",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/supply-order/timeslot/update",
+      "operation_id": "SupplyOrderAPI_UpdateSupplyOrderTimeslot",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "supply_order_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "timeslot",
+          "type": "object",
+          "required": true
+        },
+        {
+          "field": "timeslot.from",
+          "type": "string",
+          "required": true
+        },
+        {
+          "field": "timeslot.to",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/supply-order/pass/create",
+      "operation_id": "SupplyOrderAPI_SupplyOrderPassCreate",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "supply_order_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "vehicle",
+          "type": "object",
+          "required": true
+        },
+        {
+          "field": "vehicle.driver_name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "field": "vehicle.driver_phone",
+          "type": "string",
+          "required": true
+        },
+        {
+          "field": "vehicle.vehicle_model",
+          "type": "string",
+          "required": true
+        },
+        {
+          "field": "vehicle.vehicle_number",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/cargoes/create",
+      "operation_id": "CargoesAPI_CargoesCreate",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "cargoes",
+          "type": "array",
+          "required": true
+        },
+        {
+          "field": "cargoes[].key",
+          "type": "string",
+          "required": true
+        },
+        {
+          "field": "cargoes[].value",
+          "type": "object",
+          "required": true
+        },
+        {
+          "field": "cargoes[].value.items",
+          "type": "array",
+          "required": false,
+          "max_items": 5000
+        },
+        {
+          "field": "cargoes[].value.items[].barcode",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "cargoes[].value.items[].expires_at",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "cargoes[].value.items[].offer_id",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "cargoes[].value.items[].quant",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "field": "cargoes[].value.items[].quantity",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "field": "cargoes[].value.type",
+          "type": "string",
+          "required": true,
+          "enum": [
+            "BOX",
+            "PALLET"
+          ]
+        },
+        {
+          "field": "delete_current_version",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "field": "supply_id",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/cargoes/delete",
+      "operation_id": "CargoesDeleteV2",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "<variant1>",
+          "type": null,
+          "required": true
+        },
+        {
+          "field": "<variant2>",
+          "type": null,
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/cargoes-label/create",
+      "operation_id": "CargoesAPI_CargoesLabelCreate",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "cargoes",
+          "type": "array",
+          "required": false
+        },
+        {
+          "field": "cargoes[].cargo_id",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "field": "supply_id",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/cargoes/transport/activate",
+      "operation_id": "CargoesTransportActivate",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "is_transport",
+          "type": "boolean",
+          "required": true
+        },
+        {
+          "field": "supply_id",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/cargoes/transport/create",
+      "operation_id": "CargoesTransportCreate",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "supply_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "transport_cargoes",
+          "type": "array",
+          "required": true
+        },
+        {
+          "field": "transport_cargoes[].count",
+          "type": "integer",
+          "required": true,
+          "max": 40
+        },
+        {
+          "field": "transport_cargoes[].type",
+          "type": "string",
+          "required": true,
+          "enum": [
+            "PALLET"
+          ]
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/cargoes/transport/bind",
+      "operation_id": "CargoesTransportBind",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "<variant1>",
+          "type": null,
+          "required": true
+        },
+        {
+          "field": "<variant2>",
+          "type": null,
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/cargoes/label/transport/create",
+      "operation_id": "CargoesLabelTransportCreate",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "supply_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "transport_cargo_ids",
+          "type": "array",
+          "required": false,
+          "max_items": 40
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/cargoes/label/transport-by-order/create",
+      "operation_id": "CargoesLabelTransportByOrderCreate",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "order_id",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v1/supply-order/act/accept",
+      "operation_id": "SupplyOrderActAccept",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "act_id",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/v2/products/stocks",
+      "operation_id": "ProductAPI_ProductsStocksV2",
+      "semantic_classification": "MUTATING_OR_TASK_CREATING",
+      "sanitized_request_shape": [
+        {
+          "field": "stocks",
+          "type": "array",
+          "required": true
+        },
+        {
+          "field": "stocks[].offer_id",
+          "type": "string",
+          "required": false
+        },
+        {
+          "field": "stocks[].product_id",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "stocks[].stock",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "field": "stocks[].warehouse_id",
+          "type": "integer",
+          "required": true
+        }
+      ]
+    }
+  ],
+  "executed_calls": [],
+  "capability_conclusions": [
+    {
+      "capability": "auth",
+      "result": "UNKNOWN_ACCOUNT_CLIENT_ID_MISSING",
+      "basis": "A nonempty OZON_TEST_API_KEY marker exists; Client-Id is absent; provider calls executed = 0."
+    },
+    {
+      "capability": "FBS posting read",
+      "result": "NOT_TESTED_CLIENT_ID_MISSING",
+      "basis": "Live public method/path exists; account capability cannot be read without Client-Id."
+    },
+    {
+      "capability": "FBS handover mode",
+      "result": "CAPABILITY_CONDITIONAL_NOT_ACCOUNT_TESTED",
+      "basis": "Official process distinguishes point one-by-one, piecewise courier and entrusted acceptance; concrete delivery method cannot be read without Client-Id."
+    },
+    {
+      "capability": "FBO supply/cargo/TGM read",
+      "result": "NOT_TESTED_CLIENT_ID_MISSING",
+      "basis": "TGM is an activated pallet/large-volume flow; concrete GM/TGM rules are supply/account specific."
+    },
+    {
+      "capability": "returns/giveout read",
+      "result": "NOT_TESTED_CLIENT_ID_MISSING",
+      "basis": "Read/giveout operations are official-confirmed; concrete return eligibility cannot be read."
+    },
+    {
+      "capability": "provider mutations",
+      "result": "SKIPPED_FORBIDDEN",
+      "basis": "All 29 mutating or task-creating calls remain denylisted; zero calls attempted."
+    }
+  ],
+  "redaction_assertion": {
+    "secret_values_printed_or_recorded": 0,
+    "header_values": 0,
+    "client_ids": 0,
+    "api_key_values": 0,
+    "account_ids": 0,
+    "addresses": 0,
+    "personal_values": 0,
+    "response_payload_values": 0
+  }
+}
