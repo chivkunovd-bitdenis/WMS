@@ -34,6 +34,7 @@ from app.models.inbound_intake import (
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_movement import InventoryMovement
 from app.models.inventory_reservation import InventoryReservation
+from app.models.marketplace_account import MarketplaceAccount
 from app.models.marketplace_unload import (
     MarketplaceUnloadBox,
     MarketplaceUnloadBoxLine,
@@ -113,6 +114,7 @@ __all__ = [
     "InventoryBalance",
     "InventoryMovement",
     "InventoryReservation",
+    "MarketplaceAccount",
     "MarketplaceUnloadBox",
     "MarketplaceUnloadBoxLine",
     "MarketplaceUnloadLine",

@@ -47,6 +47,7 @@ export default defineConfig({
         DATABASE_URL: `sqlite+aiosqlite:///${e2eDbUrlPath}`,
         JWT_SECRET_KEY: 'ci-jwt-secret-key-minimum-32-characters-long',
         E2E_MOCK_WB_CARDS: '1',
+        E2E_MOCK_OZON_VALIDATION: '1',
         E2E_MOCK_WB_SUPPLIES: '1',
         E2E_MOCK_WB_WAREHOUSES: '1',
         E2E_MOCK_WB_MARKETPLACE_WAREHOUSES: '1',

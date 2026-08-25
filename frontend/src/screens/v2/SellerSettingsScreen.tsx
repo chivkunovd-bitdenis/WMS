@@ -64,6 +64,17 @@ type SellerStaffAccountRow = {
   permissions: SellerPermissions
 }
 
+type OzonAccountStatus = {
+  marketplace: 'ozon'
+  connected: boolean
+  validation_status: 'not_configured' | 'valid' | 'invalid' | 'unavailable'
+  last_validated_at: string | null
+  last_validation_error: string | null
+  credentials_updated_at: string | null
+  last_synced_at: string | null
+  last_sync_error: string | null
+}
+
 const DEFAULT_STAFF_PERMISSIONS: SellerPermissions = {
   documents: true,
   products: true,
@@ -124,6 +135,14 @@ export function SellerSettingsScreen({
   const [contentKey, setContentKey] = useState('')
   const [hasContentKey, setHasContentKey] = useState<boolean | null>(null)
   const [wbCardsCount, setWbCardsCount] = useState<number | null>(null)
+  const [ozonStatus, setOzonStatus] = useState<OzonAccountStatus | null>(null)
+  const [ozonClientId, setOzonClientId] = useState('')
+  const [ozonApiKey, setOzonApiKey] = useState('')
+  const [ozonBusy, setOzonBusy] = useState(false)
+  const [ozonEditing, setOzonEditing] = useState(false)
+  const [ozonDisconnectConfirm, setOzonDisconnectConfirm] = useState(false)
+  const [ozonError, setOzonError] = useState<string | null>(null)
+  const [ozonOk, setOzonOk] = useState<string | null>(null)
 
   const [czCreds, setCzCreds] = useState<MarkingCredentialsState | null>(null)
   const [czDialogOpen, setCzDialogOpen] = useState(false)
@@ -171,6 +190,117 @@ export function SellerSettingsScreen({
       cancelled = true
     }
   }, [authHeaders, permissions.settings, token])
+
+  async function loadOzonStatus(): Promise<void> {
+    try {
+      const res = await fetch(apiUrl('/integrations/ozon/self/account'), {
+        headers: { ...authHeaders(token) },
+      })
+      if (res.ok) {
+        setOzonStatus((await res.json()) as OzonAccountStatus)
+      }
+    } catch {
+      // Status remains unavailable until the user explicitly performs an action.
+    }
+  }
+
+  useEffect(() => {
+    if (!permissions.settings) {
+      return
+    }
+    void loadOzonStatus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when token changes
+  }, [permissions.settings, token])
+
+  function ozonErrorText(code: string): string {
+    if (code.includes('client_id_required')) return 'Введите Client-Id.'
+    if (code.includes('api_key_required')) return 'Введите Api-Key.'
+    if (code.includes('ozon_credentials_invalid')) {
+      return 'Ozon не подтвердил Client-Id и Api-Key. Проверьте оба значения.'
+    }
+    if (code.includes('ozon_validation_unavailable')) {
+      return 'Не удалось проверить подключение Ozon. Сохранённые данные не изменены; попробуйте ещё раз.'
+    }
+    if (code.includes('ozon_validation_failed')) {
+      return 'Ozon вернул неожиданный ответ. Сохранённые данные не изменены; попробуйте позже.'
+    }
+    if (code.includes('ozon_not_connected')) return 'Сначала подключите Ozon.'
+    return 'Не удалось сохранить подключение Ozon. Повторите попытку.'
+  }
+
+  async function saveOzon(): Promise<void> {
+    setOzonError(null)
+    setOzonOk(null)
+    const clientId = ozonClientId.trim()
+    const apiKey = ozonApiKey.trim()
+    if (!clientId || !apiKey) {
+      setOzonError(`${!clientId ? 'Введите Client-Id.' : ''}${!clientId && !apiKey ? ' ' : ''}${!apiKey ? 'Введите Api-Key.' : ''}`)
+      return
+    }
+    setOzonBusy(true)
+    try {
+      const res = await fetch(apiUrl('/integrations/ozon/self/account'), {
+        method: 'PUT',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: clientId, api_key: apiKey }),
+      })
+      if (!res.ok) {
+        setOzonError(ozonErrorText(await readApiErrorMessage(res)))
+        return
+      }
+      setOzonStatus((await res.json()) as OzonAccountStatus)
+      setOzonClientId('')
+      setOzonApiKey('')
+      setOzonEditing(false)
+    } catch {
+      setOzonError('Не удалось сохранить подключение Ozon. Повторите попытку.')
+    } finally {
+      setOzonBusy(false)
+    }
+  }
+
+  async function testOzon(): Promise<void> {
+    setOzonError(null)
+    setOzonOk(null)
+    setOzonBusy(true)
+    try {
+      const res = await fetch(apiUrl('/integrations/ozon/self/account/test-connection'), {
+        method: 'POST', headers: { ...authHeaders(token) },
+      })
+      if (!res.ok) {
+        setOzonError(ozonErrorText(await readApiErrorMessage(res)))
+        await loadOzonStatus()
+        return
+      }
+      setOzonStatus((await res.json()) as OzonAccountStatus)
+    } catch {
+      setOzonError('Не удалось проверить подключение Ozon. Сохранённые данные не изменены; попробуйте ещё раз.')
+    } finally {
+      setOzonBusy(false)
+    }
+  }
+
+  async function disconnectOzon(): Promise<void> {
+    setOzonError(null)
+    setOzonBusy(true)
+    try {
+      const res = await fetch(apiUrl('/integrations/ozon/self/account'), {
+        method: 'DELETE', headers: { ...authHeaders(token) },
+      })
+      if (!res.ok && res.status !== 204) {
+        setOzonError('Не удалось сохранить подключение Ozon. Повторите попытку.')
+        return
+      }
+      setOzonStatus({ marketplace: 'ozon', connected: false, validation_status: 'not_configured', last_validated_at: null, last_validation_error: null, credentials_updated_at: null, last_synced_at: null, last_sync_error: null })
+      setOzonDisconnectConfirm(false)
+      setOzonEditing(false)
+      setOzonOk('Ozon отключён.')
+    } catch {
+      setOzonError('Не удалось сохранить подключение Ozon. Повторите попытку.')
+    } finally {
+      setOzonBusy(false)
+    }
+  }
 
   async function loadMarkingCredentials(): Promise<void> {
     try {
@@ -681,6 +811,110 @@ export function SellerSettingsScreen({
               Синхронизировать товары
             </Button>
           </Box>
+        </Stack>
+      </Paper>
+
+      <Paper
+        variant="outlined"
+        sx={{ p: 2, maxWidth: 720, mb: 2 }}
+        data-testid="seller-settings-ozon-card"
+      >
+        <Stack spacing={1.5}>
+          <Typography variant="h6">Ozon</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Подключение кабинета Ozon для этого селлера.
+          </Typography>
+          <Divider />
+          {ozonError ? (
+            <Alert severity="error" data-testid="seller-settings-ozon-error">
+              {ozonError}
+            </Alert>
+          ) : null}
+          {!ozonError && ozonStatus?.validation_status === 'invalid' ? (
+            <Alert severity="error" data-testid="seller-settings-ozon-error">
+              Ozon не подтвердил Client-Id и Api-Key. Проверьте оба значения.
+            </Alert>
+          ) : null}
+          {!ozonError && ozonStatus?.validation_status === 'unavailable' ? (
+            <Alert severity="warning" data-testid="seller-settings-ozon-error">
+              Не удалось проверить подключение Ozon. Сохранённые данные не изменены; попробуйте ещё раз.
+            </Alert>
+          ) : null}
+          {ozonOk ? <Alert severity="success">{ozonOk}</Alert> : null}
+          {ozonStatus?.connected && !ozonEditing ? (
+            <>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                <Typography data-testid="seller-settings-ozon-status" variant="body2">
+                  {ozonStatus.validation_status === 'valid'
+                    ? 'Подключено'
+                    : ozonStatus.validation_status === 'invalid'
+                      ? 'Подключение требует проверки'
+                      : 'Проверка подключения недоступна'}
+                </Typography>
+                {ozonStatus.last_validated_at ? (
+                  <Typography variant="body2" color="text.secondary">
+                    Последняя проверка: {new Date(ozonStatus.last_validated_at).toLocaleString('ru-RU')}
+                  </Typography>
+                ) : null}
+              </Stack>
+              {ozonDisconnectConfirm ? (
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }} data-testid="seller-settings-ozon-disconnect-confirm">
+                  <Typography variant="body2">Отключить Ozon от этого селлера?</Typography>
+                  <Button variant="contained" color="error" disabled={ozonBusy} onClick={() => void disconnectOzon()}>
+                    Отключить
+                  </Button>
+                  <Button disabled={ozonBusy} onClick={() => setOzonDisconnectConfirm(false)}>Отмена</Button>
+                </Stack>
+              ) : (
+                <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+                  <Button variant="outlined" disabled={ozonBusy} onClick={() => void testOzon()} data-testid="seller-settings-ozon-test">
+                    {ozonBusy ? 'Проверяем…' : 'Проверить подключение'}
+                  </Button>
+                  <Button disabled={ozonBusy} onClick={() => { setOzonEditing(true); setOzonError(null); setOzonOk(null) }} data-testid="seller-settings-ozon-edit">
+                    Заменить данные
+                  </Button>
+                  <Button color="error" disabled={ozonBusy} onClick={() => setOzonDisconnectConfirm(true)} data-testid="seller-settings-ozon-disconnect">
+                    Отключить
+                  </Button>
+                </Stack>
+              )}
+            </>
+          ) : (
+            <Stack spacing={1.5} component="form" onSubmit={(e) => { e.preventDefault(); void saveOzon() }} noValidate>
+              <TextField
+                label="Client-Id"
+                value={ozonClientId}
+                onChange={(e) => setOzonClientId(e.target.value)}
+                disabled={ozonBusy}
+                fullWidth
+                slotProps={{ htmlInput: { 'data-testid': 'seller-settings-ozon-client-id' } }}
+              />
+              <TextField
+                label="Api-Key"
+                type="password"
+                value={ozonApiKey}
+                onChange={(e) => setOzonApiKey(e.target.value)}
+                disabled={ozonBusy}
+                fullWidth
+                slotProps={{ htmlInput: { 'data-testid': 'seller-settings-ozon-api-key' } }}
+              />
+              <Stack direction="row" spacing={1}>
+                <Button
+                  type="submit"
+                  variant="contained"
+                  disabled={ozonBusy}
+                  data-testid="seller-settings-ozon-connect"
+                >
+                  {ozonBusy ? 'Проверяем…' : ozonEditing ? 'Сохранить новые данные' : 'Подключить'}
+                </Button>
+                {ozonEditing ? (
+                  <Button disabled={ozonBusy} onClick={() => { setOzonEditing(false); setOzonError(null); setOzonClientId(''); setOzonApiKey('') }}>
+                    Отмена
+                  </Button>
+                ) : null}
+              </Stack>
+            </Stack>
+          )}
         </Stack>
       </Paper>
 

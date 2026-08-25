@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 
-import { waitForGetOk, waitForPostOk } from './api-waits';
+import { waitForDeleteOk, waitForGetOk, waitForPostOk, waitForPutOk } from './api-waits';
 import { loginAsSeller, openFulfillmentRegistration } from './auth-flow';
 import { createSellerAccountViaApi } from './seller-account-helpers';
 
@@ -93,7 +93,7 @@ test('seller settings: Ozon card connects inline and exposes only safe states', 
   await card.getByTestId('seller-settings-ozon-client-id').fill('client-handle');
   await card.getByTestId('seller-settings-ozon-api-key').fill('key-handle');
   await Promise.all([
-    waitForPostOk(page, '/api/integrations/ozon/self/account'),
+    waitForPutOk(page, '/api/integrations/ozon/self/account'),
     card.getByRole('button', { name: 'Подключить' }).click(),
   ]);
   await expect(card).toContainText('Подключено');
@@ -110,6 +110,29 @@ test('seller settings: Ozon blocks blank fields and disconnect confirmation is i
   await expect(card).toContainText('Введите Client-Id.');
   await expect(card).toContainText('Введите Api-Key.');
   await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  await card.getByTestId('seller-settings-ozon-client-id').fill('client-handle');
+  await card.getByTestId('seller-settings-ozon-api-key').fill('key-handle');
+  await Promise.all([
+    waitForPutOk(page, '/api/integrations/ozon/self/account'),
+    card.getByRole('button', { name: 'Подключить' }).click(),
+  ]);
+  await card.getByTestId('seller-settings-ozon-disconnect').click();
+  await expect(card.getByTestId('seller-settings-ozon-disconnect-confirm')).toBeVisible();
+  await card.getByRole('button', { name: 'Отмена' }).click();
+  await expect(card).toContainText('Подключено');
+  await card.getByTestId('seller-settings-ozon-disconnect').click();
+  await Promise.all([
+    waitForDeleteOk(page, '/api/integrations/ozon/self/account'),
+    card.getByTestId('seller-settings-ozon-disconnect-confirm').getByRole('button', { name: 'Отключить' }).click(),
+  ]);
+  await expect(card).toContainText('Ozon отключён.');
+  const sellerToken = await page.evaluate(() => localStorage.getItem('wms_token_seller'));
+  expect(sellerToken).toBeTruthy();
+  const response = await page.request.delete('/api/integrations/ozon/self/account', {
+    headers: { Authorization: `Bearer ${sellerToken}` },
+  });
+  expect(response.status()).toBe(204);
 });
 
 // TC-S32-OZON-012 — Ozon is one inline addition; existing integrations remain intact.

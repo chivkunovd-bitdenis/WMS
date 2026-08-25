@@ -10,6 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
+    from app.models.marketplace_account import MarketplaceAccount
     from app.models.product import Product
     from app.models.seller_marking_credentials import SellerMarkingCredentials
     from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
@@ -40,6 +41,11 @@ class Seller(Base):
         "SellerWildberriesCredentials",
         back_populates="seller",
         uselist=False,
+        cascade="all, delete-orphan",
+    )
+    marketplace_accounts: Mapped[list[MarketplaceAccount]] = relationship(
+        "MarketplaceAccount",
+        back_populates="seller",
         cascade="all, delete-orphan",
     )
     marking_credentials: Mapped[SellerMarkingCredentials | None] = relationship(

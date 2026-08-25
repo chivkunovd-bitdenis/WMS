@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from httpx import AsyncClient
 
 from app.api.ozon_integration import OzonValidationResult
-
 
 ACCOUNT = "/integrations/ozon/self/account"
 
@@ -27,7 +28,9 @@ async def _seller_headers(async_client: AsyncClient) -> dict[str, str]:
     )
     assert registered.status_code == 200
     admin_headers = {"Authorization": f"Bearer {registered.json()['access_token']}"}
-    seller = await async_client.post("/sellers", headers=admin_headers, json={"name": "Ozon seller"})
+    seller = await async_client.post(
+        "/sellers", headers=admin_headers, json={"name": "Ozon seller"}
+    )
     assert seller.status_code == 201
     account = await async_client.post(
         "/auth/seller-accounts",
@@ -49,8 +52,15 @@ async def _seller_headers(async_client: AsyncClient) -> dict[str, str]:
 
 @pytest.mark.asyncio
 async def test_tc_s32_ozon_006_self_account_requires_auth(async_client: AsyncClient) -> None:
-    for method, path in (("get", ACCOUNT), ("put", ACCOUNT), ("post", f"{ACCOUNT}/test-connection"), ("delete", ACCOUNT)):
-        response = await getattr(async_client, method)(path, json={} if method == "put" else None)
+    for method, path in (
+        ("get", ACCOUNT),
+        ("put", ACCOUNT),
+        ("post", f"{ACCOUNT}/test-connection"),
+        ("delete", ACCOUNT),
+    ):
+        response = await async_client.request(
+            method.upper(), path, json={} if method == "put" else None
+        )
         assert response.status_code == 401
 
 
@@ -59,7 +69,10 @@ async def test_tc_s32_ozon_006_self_account_requires_auth(async_client: AsyncCli
     ("payload", "code"),
     [
         ({}, "client_id_required"),
+        ({"client_id": None, "api_key": "x"}, "client_id_required"),
         ({"client_id": "   ", "api_key": "x"}, "client_id_required"),
+        ({"client_id": "x"}, "api_key_required"),
+        ({"client_id": "x", "api_key": None}, "api_key_required"),
         ({"client_id": "x", "api_key": "   "}, "api_key_required"),
         ({"client_id": 7, "api_key": "x"}, None),
         ({"client_id": "x", "api_key": 7}, None),
@@ -77,11 +90,56 @@ async def test_tc_s32_ozon_002_invalid_payload_never_reaches_provider(
         raise AssertionError("validation must not receive invalid input")
 
     monkeypatch.setattr("app.api.ozon_integration.validate_ozon_credentials", forbidden_validator)
-    response = await async_client.put(ACCOUNT, headers=await _seller_headers(async_client), json=payload)
+    response = await async_client.put(
+        ACCOUNT, headers=await _seller_headers(async_client), json=payload
+    )
     assert response.status_code == 422
     if code is not None:
         assert response.json()["code"] == code
     assert calls == 0
+
+
+@pytest.mark.asyncio
+async def test_tc_s32_ozon_002_put_request_schema_is_strict_and_documented(
+    async_client: AsyncClient,
+) -> None:
+    openapi = (await async_client.get("/openapi.json")).json()
+    request_schema = openapi["paths"][ACCOUNT]["put"]["requestBody"]["content"][
+        "application/json"
+    ]["schema"]
+    schema_name = request_schema["$ref"].rsplit("/", 1)[-1]
+    schema = openapi["components"]["schemas"][schema_name]
+
+    assert schema["additionalProperties"] is False
+    assert schema["required"] == ["client_id", "api_key"]
+    assert schema["properties"]["client_id"]["minLength"] == 1
+    assert schema["properties"]["client_id"]["maxLength"] == 255
+    assert schema["properties"]["api_key"]["minLength"] == 1
+    assert schema["properties"]["api_key"]["maxLength"] == 4096
+
+
+@pytest.mark.asyncio
+async def test_tc_s32_ozon_009_ordinary_validator_path_uses_the_adapter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.services.ozon_client as ozon_client
+
+    calls: list[tuple[object, str, str]] = []
+
+    async def recorded_adapter(
+        *, transport: object, client_id: str, api_key: str
+    ) -> OzonValidationResult:
+        calls.append((transport, client_id, api_key))
+        return OzonValidationResult.success()
+
+    monkeypatch.delenv("E2E_MOCK_OZON_VALIDATION", raising=False)
+    monkeypatch.setattr(ozon_client, "validate_seller_info", recorded_adapter)
+
+    result = await ozon_client.validate_ozon_credentials("ordinary-client", "ordinary-key")
+
+    assert result.status_code == 204
+    assert len(calls) == 1
+    assert calls[0][1:] == ("ordinary-client", "ordinary-key")
 
 
 @pytest.mark.asyncio
@@ -123,11 +181,116 @@ async def test_tc_s32_ozon_003_004_provider_failure_contract(
 
 
 @pytest.mark.asyncio
+async def test_tc_s32_ozon_003_invalid_candidate_keeps_disconnected_status(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def invalid_validator(*_args: object, **_kwargs: object) -> OzonValidationResult:
+        return OzonValidationResult.http(401)
+
+    monkeypatch.setattr("app.api.ozon_integration.validate_ozon_credentials", invalid_validator)
+    headers = await _seller_headers(async_client)
+    rejected = await async_client.put(
+        ACCOUNT, headers=headers, json={"client_id": "candidate-client", "api_key": "candidate-key"}
+    )
+    assert rejected.status_code == 422
+    current = await async_client.get(ACCOUNT, headers=headers)
+    assert current.status_code == 200
+    assert current.json()["connected"] is False
+    assert "candidate-client" not in current.text
+    assert "candidate-key" not in current.text
+
+
+@pytest.mark.asyncio
+async def test_tc_s32_ozon_003_invalid_replacement_preserves_working_public_status(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def valid_validator(*_args: object, **_kwargs: object) -> OzonValidationResult:
+        return OzonValidationResult.success()
+
+    headers = await _seller_headers(async_client)
+    monkeypatch.setattr("app.api.ozon_integration.validate_ozon_credentials", valid_validator)
+    created = await async_client.put(
+        ACCOUNT, headers=headers, json={"client_id": "working-client", "api_key": "working-key"}
+    )
+    assert created.status_code == 200
+    public_before = created.json()
+
+    async def invalid_validator(*_args: object, **_kwargs: object) -> OzonValidationResult:
+        return OzonValidationResult.http(403)
+
+    monkeypatch.setattr("app.api.ozon_integration.validate_ozon_credentials", invalid_validator)
+    rejected = await async_client.put(
+        ACCOUNT, headers=headers, json={"client_id": "candidate-client", "api_key": "candidate-key"}
+    )
+    assert rejected.status_code == 422
+    assert rejected.json()["code"] == "ozon_credentials_invalid"
+    current = await async_client.get(ACCOUNT, headers=headers)
+    assert current.status_code == 200
+    assert current.json() == public_before
+    for sensitive in ("working-client", "working-key", "candidate-client", "candidate-key"):
+        assert sensitive not in rejected.text
+        assert sensitive not in current.text
+
+
+@pytest.mark.asyncio
+async def test_tc_s32_ozon_005_parallel_equal_puts_are_both_successful_and_leave_one_status(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def valid_validator(*_args: object, **_kwargs: object) -> OzonValidationResult:
+        await asyncio.sleep(0)
+        return OzonValidationResult.success()
+
+    monkeypatch.setattr("app.api.ozon_integration.validate_ozon_credentials", valid_validator)
+    headers = await _seller_headers(async_client)
+    first, second = await asyncio.gather(
+        async_client.put(
+            ACCOUNT,
+            headers=headers,
+            json={"client_id": "parallel-client", "api_key": "parallel-key"},
+        ),
+        async_client.put(
+            ACCOUNT,
+            headers=headers,
+            json={"client_id": "parallel-client", "api_key": "parallel-key"},
+        ),
+    )
+    assert first.status_code == 200
+    assert second.status_code == 200
+    current = await async_client.get(ACCOUNT, headers=headers)
+    assert current.status_code == 200
+    assert current.json()["connected"] is True
+    assert "parallel-client" not in current.text
+    assert "parallel-key" not in current.text
+
+
+@pytest.mark.asyncio
+async def test_tc_s32_ozon_010_manual_check_uses_safe_status_only(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def valid_validator(*_args: object, **_kwargs: object) -> OzonValidationResult:
+        return OzonValidationResult.success()
+
+    monkeypatch.setattr("app.api.ozon_integration.validate_ozon_credentials", valid_validator)
+    headers = await _seller_headers(async_client)
+    saved = await async_client.put(
+        ACCOUNT, headers=headers, json={"client_id": "private-client", "api_key": "private-key"}
+    )
+    assert saved.status_code == 200
+    checked = await async_client.post(f"{ACCOUNT}/test-connection", headers=headers)
+    assert checked.status_code == 200
+    assert checked.json()["validation_status"] == "valid"
+    assert "private-client" not in checked.text
+    assert "private-key" not in checked.text
+
+
+@pytest.mark.asyncio
 async def test_tc_s32_ozon_009_no_body_is_allowed_for_manual_check(
     async_client: AsyncClient,
 ) -> None:
     headers = await _seller_headers(async_client)
-    response = await async_client.post(f"{ACCOUNT}/test-connection", headers=headers, json={"extra": True})
+    response = await async_client.post(
+        f"{ACCOUNT}/test-connection", headers=headers, json={"extra": True}
+    )
     assert response.status_code == 422
 
 
@@ -138,9 +301,58 @@ async def test_tc_s32_ozon_014_public_schema_hides_account_identity_and_future_f
     response = await async_client.get(ACCOUNT, headers=await _seller_headers(async_client))
     assert response.status_code == 200
     assert set(response.json()) == {
-        "marketplace", "connected", "validation_status", "last_validated_at",
-        "last_validation_error", "credentials_updated_at", "last_synced_at", "last_sync_error",
+        "marketplace",
+        "connected",
+        "validation_status",
+        "last_validated_at",
+        "last_validation_error",
+        "credentials_updated_at",
+        "last_synced_at",
+        "last_sync_error",
     }
-    schema = (await async_client.get("/openapi.json")).text
-    for prohibited in ("account_slot", "external_account_id", "client_id", "api_key", "expires_at", "capabilities"):
-        assert prohibited not in schema
+    openapi = (await async_client.get("/openapi.json")).json()
+    account_operations = openapi["paths"][ACCOUNT]
+    public_schema_ref = account_operations["get"]["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"]["$ref"]
+    public_schema_name = public_schema_ref.rsplit("/", 1)[-1]
+    public_schema = openapi["components"]["schemas"][public_schema_name]
+    public_fields = set(public_schema["properties"])
+    assert public_fields == {
+        "marketplace",
+        "connected",
+        "validation_status",
+        "last_validated_at",
+        "last_validation_error",
+        "credentials_updated_at",
+        "last_synced_at",
+        "last_sync_error",
+    }
+    # Only Ozon *public response* schemas belong to this secrecy assertion.  Existing
+    # WMS request schemas legitimately use client_id, and this route's PUT input must
+    # accept it; neither fact may weaken the Ozon status-output contract.
+    for path, method in (
+        (ACCOUNT, "get"),
+        (ACCOUNT, "put"),
+        (f"{ACCOUNT}/test-connection", "post"),
+    ):
+        response_schema_ref = openapi["paths"][path][method]["responses"]["200"]["content"][
+            "application/json"
+        ]["schema"]["$ref"]
+        response_schema_name = response_schema_ref.rsplit("/", 1)[-1]
+        response_fields = set(openapi["components"]["schemas"][response_schema_name]["properties"])
+        assert not response_fields & {
+            "id",
+            "account_slot",
+            "seller_id",
+            "tenant_id",
+            "external_account_id",
+            "client_id",
+            "api_key",
+            "secret",
+            "secret_encrypted",
+            "ciphertext",
+            "provider_response",
+            "expires_at",
+            "capabilities",
+        }

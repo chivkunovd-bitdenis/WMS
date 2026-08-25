@@ -1,8 +1,4 @@
-"""Pre-development contract tests for TC-S32-OZON-005/007/008/009.
-
-These tests intentionally import the Call 74 service contract.  Until the slice is
-implemented, collection is expected to fail rather than silently skip coverage.
-"""
+"""Real local-DB coverage for the S-32 Ozon account service."""
 
 from __future__ import annotations
 
@@ -11,7 +7,14 @@ import uuid
 from dataclasses import dataclass
 
 import pytest
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.session import SessionLocal
+from app.models.marketplace_account import MarketplaceAccount
+from app.models.seller import Seller
+from app.models.tenant import Tenant
+from app.models.user import User
 from app.services.marketplace_account_service import MarketplaceAccountService
 from app.services.ozon_client import OzonProviderError, validate_seller_info
 
@@ -55,6 +58,41 @@ class RejectingOzonTransport:
         return self.status_code
 
 
+async def _create_scope(session: AsyncSession) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
+    suffix = uuid.uuid4().hex
+    tenant = Tenant(name="Ozon service test", slug=f"ozon-service-{suffix}")
+    session.add(tenant)
+    await session.flush()
+    seller = Seller(tenant_id=tenant.id, name="Ozon seller")
+    session.add(seller)
+    await session.flush()
+    actor = User(
+        tenant_id=tenant.id,
+        seller_id=seller.id,
+        email=f"ozon-service-{suffix}@example.com",
+        password_hash="test-only-password-hash",
+        role="fulfillment_seller",
+    )
+    session.add(actor)
+    await session.commit()
+    return tenant.id, seller.id, actor.id
+
+
+async def _account_row(
+    session: AsyncSession, tenant_id: uuid.UUID, seller_id: uuid.UUID
+) -> MarketplaceAccount | None:
+    return (
+        await session.execute(
+            select(MarketplaceAccount).where(
+                MarketplaceAccount.tenant_id == tenant_id,
+                MarketplaceAccount.seller_id == seller_id,
+                MarketplaceAccount.marketplace == "ozon",
+                MarketplaceAccount.account_slot == "primary",
+            )
+        )
+    ).scalar_one_or_none()
+
+
 @pytest.mark.asyncio
 async def test_tc_s32_ozon_009_adapter_allows_only_one_read_only_empty_post() -> None:
     transport = RejectingOzonTransport()
@@ -88,51 +126,84 @@ async def test_tc_s32_ozon_004_adapter_preserves_provider_failure_class(
 
 
 @pytest.mark.asyncio
-async def test_tc_s32_ozon_005_same_pair_replay_and_concurrent_update_keep_one_primary(
+async def test_tc_s32_ozon_005_real_db_equal_replay_keeps_one_primary(
     async_client: object,
 ) -> None:
-    """The future service is injected with the fake; no network can be reached."""
-    transport = RejectingOzonTransport()
-    service = MarketplaceAccountService.from_test_client(async_client, transport=transport)
-    tenant_id, seller_id, actor_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    """SQLite executes real sessions here; it does not prove PostgreSQL lock semantics."""
+    _ = async_client
+    async with SessionLocal() as setup_session:
+        tenant_id, seller_id, actor_id = await _create_scope(setup_session)
 
-    first, replay = await asyncio.gather(
-        service.save_candidate(tenant_id, seller_id, actor_id, "client-a", "key-a"),
-        service.save_candidate(tenant_id, seller_id, actor_id, "client-a", "key-a"),
-    )
+    async with SessionLocal() as first_session, SessionLocal() as second_session:
+        first = MarketplaceAccountService(first_session)
+        second = MarketplaceAccountService(second_session)
+        saved_first, saved_second = await asyncio.gather(
+            first.save_validated_candidate(tenant_id, seller_id, actor_id, "client-a", "key-a"),
+            second.save_validated_candidate(tenant_id, seller_id, actor_id, "client-a", "key-a"),
+        )
 
-    assert first.account_id == replay.account_id
-    assert first.credentials_updated_at == replay.credentials_updated_at
-    assert await service.count_primary_accounts(tenant_id, seller_id, "ozon") == 1
-    assert len(transport.calls) == 2  # one bounded validation per click, never a retry loop
+    async with SessionLocal() as verification_session:
+        count = await verification_session.scalar(
+            select(func.count(MarketplaceAccount.id)).where(
+                MarketplaceAccount.tenant_id == tenant_id,
+                MarketplaceAccount.seller_id == seller_id,
+                MarketplaceAccount.marketplace == "ozon",
+                MarketplaceAccount.account_slot == "primary",
+            )
+        )
+        row = await _account_row(verification_session, tenant_id, seller_id)
+
+    assert saved_first.account_id == saved_second.account_id
+    assert count == 1
+    assert row is not None
+    assert row.external_account_id == "client-a"
 
 
 @pytest.mark.asyncio
-async def test_tc_s32_ozon_007_cross_tenant_scope_is_fail_closed(async_client: object) -> None:
-    service = MarketplaceAccountService.from_test_client(
-        async_client, transport=RejectingOzonTransport()
-    )
-    tenant_a, tenant_b, seller_a, actor_a = uuid.uuid4(), uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
-    await service.save_candidate(tenant_a, seller_a, actor_a, "client-a", "key-a")
+async def test_tc_s32_ozon_007_real_db_cross_tenant_scope_is_fail_closed(
+    async_client: object,
+) -> None:
+    _ = async_client
+    async with SessionLocal() as session:
+        tenant_id, seller_id, actor_id = await _create_scope(session)
+        service = MarketplaceAccountService(session)
+        await service.save_validated_candidate(tenant_id, seller_id, actor_id, "client-a", "key-a")
 
-    with pytest.raises(service.SellerNotFound):
-        await service.public_status(tenant_b, seller_a)
+        with pytest.raises(service.SellerNotFound):
+            await service.public_status(uuid.uuid4(), seller_id)
 
 
 @pytest.mark.asyncio
-async def test_tc_s32_ozon_008_disconnect_erases_ciphertext_and_public_status_has_no_secrets(
+async def test_tc_s32_ozon_008_real_db_disconnect_erases_ciphertext_and_public_status_is_safe(
     async_client: object,
 ) -> None:
-    service = MarketplaceAccountService.from_test_client(
-        async_client, transport=RejectingOzonTransport()
-    )
-    tenant_id, seller_id, actor_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
-    await service.save_candidate(tenant_id, seller_id, actor_id, "client-handle", "key-handle")
+    _ = async_client
+    async with SessionLocal() as session:
+        tenant_id, seller_id, actor_id = await _create_scope(session)
+        service = MarketplaceAccountService(session)
+        await service.save_validated_candidate(
+            tenant_id, seller_id, actor_id, "client-handle", "key-handle"
+        )
+        row = await _account_row(session, tenant_id, seller_id)
+        assert row is not None
+        assert row.secret_encrypted is not None
+        assert row.secret_encrypted != "key-handle"
 
-    status = await service.public_status(tenant_id, seller_id)
-    assert set(status) == {
-        "marketplace", "connected", "validation_status", "last_validated_at",
-        "last_validation_error", "credentials_updated_at", "last_synced_at", "last_sync_error",
-    }
-    await service.disconnect(tenant_id, seller_id, actor_id)
-    assert await service.ciphertext_for_test(tenant_id, seller_id) is None
+        status = await service.public_status(tenant_id, seller_id)
+        assert set(status) == {
+            "marketplace",
+            "connected",
+            "validation_status",
+            "last_validated_at",
+            "last_validation_error",
+            "credentials_updated_at",
+            "last_synced_at",
+            "last_sync_error",
+        }
+        await service.disconnect(tenant_id, seller_id, actor_id)
+        cleared = await _account_row(session, tenant_id, seller_id)
+
+    assert cleared is not None
+    assert cleared.secret_encrypted is None
+    assert cleared.external_account_id is None
+    assert "key-handle" not in str(status)

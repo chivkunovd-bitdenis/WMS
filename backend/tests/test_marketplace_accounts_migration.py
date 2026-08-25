@@ -26,7 +26,9 @@ def test_tc_s32_ozon_013_revision_is_additive_and_has_the_required_parent() -> N
 def test_tc_s32_ozon_013_migration_contains_no_wb_backfill_or_provider_code() -> None:
     source = REVISION_PATH.read_text(encoding="utf-8").lower()
     assert "marketplace_accounts" in source
-    for forbidden in ("seller_wildberries_credentials", "decrypt", "encrypt", "http", "requests"):
+    # ``secret_encrypted`` is the required storage column; prohibit operational
+    # crypto/network calls, not that schema name.
+    for forbidden in ("seller_wildberries_credentials", "decrypt(", "encrypt(", "http", "requests"):
         assert forbidden not in source
 
 
