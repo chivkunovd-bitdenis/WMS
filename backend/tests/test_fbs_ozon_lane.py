@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -47,6 +48,7 @@ from app.services import fbs_print_asset_service as print_asset_svc
 from app.services import fbs_shipment_service as shipment_svc
 from app.services import fbs_supply_service as supply_svc
 from app.services import fbs_tracking_service as tracking_svc
+from app.services import fbs_workspace_service as workspace_svc
 from app.services.fbs_autopoll_service import (
     SellerPollTarget,
     poll_marketplace_orders_for_target,
@@ -491,6 +493,40 @@ async def test_ozon_boxes_mode_is_automatic_and_cannot_be_disabled(
         )
 
 
+def test_ozon_without_distribution_does_not_require_physical_boxes() -> None:
+    supply = SimpleNamespace(
+        status=FBS_SUPPLY_STATUS_PACKED,
+        delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+        trbxes=[],
+    )
+    progress = workspace_svc.WorkspaceProgress(
+        picked=1,
+        packed=1,
+        metadata_ready=1,
+        stickers_ready=1,
+        total=1,
+    )
+
+    stage = workspace_svc._compute_stage(
+        supply,
+        [SimpleNamespace()],
+        progress,
+        has_physical_boxes=False,
+        without_distribution=True,
+    )
+    blockers = workspace_svc._compute_workspace_blockers(
+        supply,
+        [],
+        stage,
+        progress,
+        has_physical_boxes=False,
+        without_distribution=True,
+    )
+
+    assert stage == "delivery"
+    assert all(item["code"] != "physical_boxes_required" for item in blockers)
+
+
 def _ozon_handoff_responses(*, substatus: str = "posting_in_carriage") -> dict[str, object]:
     png = print_asset_svc._FAKE_OZON_LABEL_PNG_BASE64
     return {
@@ -582,6 +618,26 @@ async def test_ozon_supply_handoff_ships_rechecks_and_creates_carriage_without_w
     wb_deliver.assert_not_awaited()
     wb_qr.assert_not_awaited()
     wb_sync.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_ozon_live_handoff_never_falls_back_to_fake_success(
+    db_session: AsyncSession,
+) -> None:
+    tenant, _, _, _, _, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    assert supply is not None
+
+    with pytest.raises(shipment_svc.FbsShipmentError, match="ozon_live_handoff_blocked"):
+        await shipment_svc.deliver_supply(
+            db_session,
+            tenant.id,
+            supply.id,
+            AsyncMock(),
+            idempotency_key=f"ozon-live-blocked-{uuid.uuid4()}",
+        )
+
+    assert supply.status != FBS_SUPPLY_STATUS_IN_DELIVERY
+    assert supply.external_supply_id is None
 
 
 @pytest.mark.asyncio

@@ -376,7 +376,9 @@ def _compute_stage(
         return "packing"
     if progress.stickers_ready < progress.total:
         return "order_stickers"
-    if not has_physical_boxes or (unassigned_packed_order_ids and not without_distribution):
+    if (not has_physical_boxes and not without_distribution) or (
+        unassigned_packed_order_ids and not without_distribution
+    ):
         return "handoff_prep"
     if supply.delivery_type == FBS_DELIVERY_TYPE_PVZ and not supply.trbxes:
         return "handoff_prep"
@@ -452,7 +454,11 @@ def _compute_workspace_blockers(
                 "retryable": True,
             }
         )
-    if stage in {"handoff_prep", "delivery"} and not has_physical_boxes:
+    if (
+        stage in {"handoff_prep", "delivery"}
+        and not has_physical_boxes
+        and not without_distribution
+    ):
         blockers.append(
             {
                 "stage": "handoff_prep",

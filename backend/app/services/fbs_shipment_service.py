@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import uuid
-from base64 import b64decode, b64encode
+from base64 import b64decode
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -936,52 +936,19 @@ async def _deliver_ozon_supply(
         confirmed_preflight_version=None,
     )
     if provider is None:
-        posting_numbers = [order.external_order_id or str(order.wb_order_id) for order in orders]
-        label = b64encode(_FAKE_OZON_SUPPLY_QR).decode()
-        provider = OzonMarketplaceProvider(
-            transport=FakeMarketplaceTransport(
-                endpoint_responses={
-                    "/v4/posting/fbs/ship": {"result": posting_numbers},
-                    "/v3/posting/fbs/get": {
-                        "result": {
-                            "posting_number": posting_numbers[0] if posting_numbers else "",
-                            "status": "awaiting_deliver",
-                            "substatus": "posting_in_carriage",
-                            "related_postings": {"related_posting_numbers": []},
-                        }
-                    },
-                    "/v2/posting/fbs/package-label/create": {
-                        "result": {"tasks": [{"task_id": 1, "task_type": "big_label"}]}
-                    },
-                    "/v1/posting/fbs/package-label/get": {
-                        "result": {"status": "completed", "file_url": "mock://labels"}
-                    },
-                    "/v2/posting/fbs/package-label": {
-                        "file_content": label,
-                        "file_name": "labels.pdf",
-                        "content_type": "application/pdf",
-                    },
-                    "/v1/carriage/create": {"carriage_id": 1},
-                    "/v1/carriage/set-postings": {
-                        "result": [
-                            {"posting_number": number, "result": True} for number in posting_numbers
-                        ]
-                    },
-                    "/v1/carriage/approve": {},
-                    "/v1/carriage/get": {"carriage_id": 1, "status": "sended"},
-                    "/v2/posting/fbs/act/get-barcode": {
-                        "file_content": label,
-                        "file_name": "barcode.png",
-                        "content_type": "image/png",
-                    },
-                    "/v2/posting/fbs/act/get-barcode/text": {"result": "OZON-MOCK-1"},
-                    "/v2/posting/fbs/digital/act/get-pdf": {
-                        "file_content": label,
-                        "file_name": "shipping-list.pdf",
-                        "content_type": "application/pdf",
-                    },
-                }
-            )
+        await mark_operation_failed(
+            session,
+            operation,
+            error_code="ozon_live_handoff_blocked",
+            local_supply_id=supply.id,
+        )
+        raise FbsShipmentError(
+            "ozon_live_handoff_blocked",
+            message=(
+                "Реальная передача в Ozon заблокирована: кабинет недоступен. "
+                "Локальная складская операция сохранена."
+            ),
+            http_status=503,
         )
     try:
         result = await handoff_supply(

@@ -323,7 +323,7 @@ class FbsWorkspacePrintAssetOut(BaseModel):
 class FbsWorkspaceSupplyOut(BaseModel):
     id: str
     marketplace: str = "wb"
-    wb_supply_id: str
+    wb_supply_id: str | None
     name: str
     status: str
     delivery_type: str
