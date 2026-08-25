@@ -16,7 +16,7 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.fbs_order import FbsOrder, FbsOrderMarking
+from app.models.fbs_order import FbsOrder, FbsOrderMarking, FbsOrderProduct
 from app.models.fbs_supply import FbsSupply
 from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.schemas.ozon_fbs_api import (
@@ -163,6 +163,37 @@ async def _ozon_product_id(session: AsyncSession, order: FbsOrder) -> int:
         "ozon_product_id_missing",
         "У товара нет числового Ozon SKU — сборка отправления невозможна.",
     )
+
+
+async def _ship_products(session: AsyncSession, order: FbsOrder) -> list[dict[str, int]]:
+    positions = list(
+        (
+            await session.execute(
+                select(FbsOrderProduct)
+                .where(FbsOrderProduct.order_id == order.id)
+                .order_by(FbsOrderProduct.position_index)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not positions:
+        return [{"product_id": await _ozon_product_id(session, order), "quantity": 1}]
+
+    products: list[dict[str, int]] = []
+    for position in positions:
+        if position.ozon_sku is None:
+            raise OzonFbsProcessError(
+                "ozon_product_id_missing",
+                "В составе отправления нет числового Ozon SKU — сборка невозможна.",
+            )
+        if position.quantity <= 0:
+            raise OzonFbsProcessError(
+                "ozon_product_quantity_invalid",
+                "В составе отправления Ozon указано некорректное количество товара.",
+            )
+        products.append({"product_id": position.ozon_sku, "quantity": position.quantity})
+    return products
 
 
 async def submit_marking(
@@ -433,7 +464,7 @@ async def handoff_supply(
         posting_number = order.external_order_id or ""
         if not posting_number:
             raise OzonFbsProcessError("ozon_posting_number_missing", "Нет номера отправления Ozon.")
-        product_id = await _ozon_product_id(session, order)
+        products = await _ship_products(session, order)
         await _call(
             provider,
             client_id=client_id,
@@ -442,7 +473,7 @@ async def handoff_supply(
             request=OzonFbsv4FbsPostingShipV4Request.model_validate(
                 {
                     "posting_number": posting_number,
-                    "packages": [{"products": [{"product_id": product_id, "quantity": 1}]}],
+                    "packages": [{"products": products}],
                     "with": {"additional_data": True},
                 }
             ),

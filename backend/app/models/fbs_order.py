@@ -98,9 +98,7 @@ FBS_MARKING_CHECK_STATUSES = frozenset(
 PICK_STATUS_PENDING = "pending"
 PICK_STATUS_PICKED = "picked"
 PICK_STATUS_RETURNED = "returned"
-FBS_PICK_STATUSES = frozenset(
-    {PICK_STATUS_PENDING, PICK_STATUS_PICKED, PICK_STATUS_RETURNED}
-)
+FBS_PICK_STATUSES = frozenset({PICK_STATUS_PENDING, PICK_STATUS_PICKED, PICK_STATUS_RETURNED})
 
 PACK_STATUS_PENDING = "pending"
 PACK_STATUS_PACKED = "packed"
@@ -172,9 +170,7 @@ class FbsOrder(Base):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), index=True
     )
@@ -248,18 +244,14 @@ class FbsOrder(Base):
         default=PICK_STATUS_PENDING,
         server_default=PICK_STATUS_PENDING,
     )
-    picked_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    picked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     pack_status: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
         default=PACK_STATUS_PENDING,
         server_default=PACK_STATUS_PENDING,
     )
-    packed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    packed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     sticker_status: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
@@ -276,9 +268,7 @@ class FbsOrder(Base):
     metadata_last_checked_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    last_wb_sync_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_wb_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -293,6 +283,12 @@ class FbsOrder(Base):
     seller: Mapped[Seller] = relationship("Seller")
     warehouse: Mapped[Warehouse | None] = relationship("Warehouse")
     product: Mapped[Product | None] = relationship("Product")
+    product_positions: Mapped[list[FbsOrderProduct]] = relationship(
+        "FbsOrderProduct",
+        back_populates="order",
+        cascade="all, delete-orphan",
+        order_by="FbsOrderProduct.position_index",
+    )
     supply: Mapped[FbsSupply | None] = relationship("FbsSupply", back_populates="orders")
     trbx: Mapped[FbsTrbx | None] = relationship("FbsTrbx", back_populates="orders")
     markings: Mapped[list[FbsOrderMarking]] = relationship(
@@ -323,6 +319,125 @@ class FbsOrder(Base):
     )
 
 
+class FbsOrderProduct(Base):
+    """One Ozon posting position; WB continues to use FbsOrder.product_id."""
+
+    __tablename__ = "fbs_order_products"
+    __table_args__ = (
+        UniqueConstraint("order_id", "position_index", name="uq_fbs_order_products_position"),
+        Index("ix_fbs_order_products_order_id", "order_id"),
+        Index("ix_fbs_order_products_product_id", "product_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    order_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("fbs_orders.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    product_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("products.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    ozon_sku: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    offer_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    name: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    position_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    reserved_quantity: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    picked_quantity: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    provider_data_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    order: Mapped[FbsOrder] = relationship("FbsOrder", back_populates="product_positions")
+    product: Mapped[Product | None] = relationship("Product")
+
+
+class FbsOrderProductReservation(Base):
+    """Per-position reserve for multi-product Ozon postings."""
+
+    __tablename__ = "fbs_order_product_reservations"
+    __table_args__ = (
+        UniqueConstraint("order_product_id", name="uq_fbs_order_product_reservation"),
+        Index("ix_fbs_order_product_reservations_product", "product_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), index=True
+    )
+    order_product_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("fbs_order_products.id", ondelete="CASCADE"), nullable=False
+    )
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False
+    )
+    warehouse_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=False
+    )
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    tenant: Mapped[Tenant] = relationship("Tenant")
+    order_product: Mapped[FbsOrderProduct] = relationship("FbsOrderProduct")
+    product: Mapped[Product] = relationship("Product")
+    warehouse: Mapped[Warehouse] = relationship("Warehouse")
+
+
+class FbsOrderProductPick(Base):
+    """One physical unit picked for a position of a multi-product Ozon posting."""
+
+    __tablename__ = "fbs_order_product_picks"
+    __table_args__ = (
+        UniqueConstraint(
+            "fbs_supply_id", "scan_idempotency_key", name="uq_fbs_order_product_picks_scan"
+        ),
+        UniqueConstraint(
+            "fbs_supply_id", "undo_idempotency_key", name="uq_fbs_order_product_picks_undo"
+        ),
+        Index("ix_fbs_order_product_picks_position", "order_product_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), index=True
+    )
+    order_product_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("fbs_order_products.id", ondelete="CASCADE"), nullable=False
+    )
+    fbs_supply_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("fbs_supplies.id", ondelete="CASCADE"), nullable=False
+    )
+    source_storage_location_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("storage_locations.id", ondelete="RESTRICT"), nullable=False
+    )
+    sorting_storage_location_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("storage_locations.id", ondelete="RESTRICT"), nullable=False
+    )
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False
+    )
+    inventory_movement_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("inventory_movements.id", ondelete="SET NULL"), nullable=True
+    )
+    scan_idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    undo_idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    picked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    undone_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class FbsOrderMarking(Base):
     __tablename__ = "fbs_order_markings"
     __table_args__ = (
@@ -347,9 +462,7 @@ class FbsOrderMarking(Base):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     order_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("fbs_orders.id", ondelete="CASCADE"),
@@ -405,9 +518,7 @@ def current_order_marking(
 ) -> FbsOrderMarking | None:
     """Return the newest active marking, with rejected rows used only as fallback."""
     matching = [marking for marking in markings if marking.kind == kind]
-    active = [
-        marking for marking in matching if marking.meta_status != META_STATUS_REJECTED
-    ]
+    active = [marking for marking in matching if marking.meta_status != META_STATUS_REJECTED]
     candidates = active or (matching if include_rejected else [])
     if not candidates:
         return None
@@ -424,13 +535,9 @@ class FbsOrderReservation(Base):
     """Warehouse-level reserve for an FBS order (1:1)."""
 
     __tablename__ = "fbs_order_reservations"
-    __table_args__ = (
-        UniqueConstraint("fbs_order_id", name="uq_fbs_order_reservation_order"),
-    )
+    __table_args__ = (UniqueConstraint("fbs_order_id", name="uq_fbs_order_reservation_order"),)
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), index=True
     )

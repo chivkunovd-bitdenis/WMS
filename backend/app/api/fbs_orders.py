@@ -170,6 +170,16 @@ class FbsWorklistBlockerOut(BaseModel):
     message: str
 
 
+class FbsWorklistPositionOut(BaseModel):
+    product_id: str | None
+    name: str
+    seller_article: str | None
+    sku: str | None
+    quantity: int
+    reserved_quantity: int
+    picked_quantity: int
+
+
 class FbsWorklistOrderOut(BaseModel):
     id: str
     marketplace: str = "wb"
@@ -182,6 +192,7 @@ class FbsWorklistOrderOut(BaseModel):
     wb_warehouse: FbsWorklistWarehouseOut
     wms_warehouse: FbsWorklistWarehouseOut
     product: FbsWorklistProductOut
+    positions: list[FbsWorklistPositionOut]
     inventory: FbsWorklistInventoryOut
     buyer_type: str
     cargo_type: str
@@ -308,9 +319,7 @@ async def start_fbs_orders_sync(
 
         run_wildberries_marketplace_orders_sync_task.delay(str(job.id))
     else:
-        background_tasks.add_task(
-            job_svc.run_wildberries_marketplace_orders_sync_job, job.id
-        )
+        background_tasks.add_task(job_svc.run_wildberries_marketplace_orders_sync_job, job.id)
     return FbsOrderSyncOut(id=str(job.id), status=job.status)
 
 

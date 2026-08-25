@@ -16,6 +16,7 @@ from typing import Any
 import httpx
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_order import (
@@ -30,9 +31,11 @@ from app.models.fbs_order import (
     RESERVE_STATUS_SKIPPED_NO_PRODUCT,
     RESERVE_STATUS_WAREHOUSE_UNMAPPED,
     FbsOrder,
+    FbsOrderProduct,
 )
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product_marketplace_link import ProductMarketplaceLink
+from app.schemas.ozon_fbs_api import OzonPostingV4PostingFbsUnfulfilledListResponsePostingsProducts
 from app.services.marketplace_account_service import MarketplaceAccountService
 from app.services.marketplace_provider import OzonMarketplaceProvider
 from app.services.wb_marketplace_orders_service import _release_reservation, _try_reserve_order
@@ -140,6 +143,59 @@ async def _binding_for_row(
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
+async def _posting_products_for_row(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    row: dict[str, Any],
+) -> list[FbsOrderProduct]:
+    raw_products = row.get("products")
+    if not isinstance(raw_products, list):
+        return []
+
+    positions: list[FbsOrderProduct] = []
+    for position_index, raw_product in enumerate(raw_products):
+        product_row = OzonPostingV4PostingFbsUnfulfilledListResponsePostingsProducts.model_validate(
+            raw_product
+        )
+        provider_data = product_row.model_dump(mode="json", exclude_none=True)
+        positions.append(
+            FbsOrderProduct(
+                product_id=await _product_id_for_row(session, tenant_id, seller_id, provider_data),
+                ozon_sku=product_row.sku,
+                offer_id=product_row.offer_id,
+                name=product_row.name,
+                quantity=int(product_row.quantity or 0),
+                position_index=position_index,
+                provider_data_json=provider_data,
+            )
+        )
+    return positions
+
+
+def _primary_product_id(
+    positions: list[FbsOrderProduct], fallback_product_id: uuid.UUID | None
+) -> uuid.UUID | None:
+    return next(
+        (position.product_id for position in positions if position.product_id is not None),
+        fallback_product_id,
+    )
+
+
+def _positions_are_mapped(
+    positions: list[FbsOrderProduct], fallback_product_id: uuid.UUID | None
+) -> bool:
+    return (
+        all(position.product_id is not None for position in positions)
+        if positions
+        else fallback_product_id is not None
+    )
+
+
+def _position_signature(position: FbsOrderProduct) -> tuple[int | None, int, dict[str, Any] | None]:
+    return position.ozon_sku, position.quantity, position.provider_data_json
+
+
 async def _apply_status(session: AsyncSession, order: FbsOrder, raw_status: str | None) -> bool:
     normalized = (raw_status or "").strip().lower() or None
     local = _local_status(normalized)
@@ -170,7 +226,9 @@ async def sync_ozon_orders(
             continue
         existing = (
             await session.execute(
-                select(FbsOrder).where(
+                select(FbsOrder)
+                .options(selectinload(FbsOrder.product_positions))
+                .where(
                     FbsOrder.tenant_id == tenant_id,
                     FbsOrder.seller_id == seller_id,
                     FbsOrder.marketplace == "ozon",
@@ -179,18 +237,47 @@ async def sync_ozon_orders(
             )
         ).scalar_one_or_none()
         raw_status = _text(row, "status", "substatus")
+        fallback_product_id = await _product_id_for_row(session, tenant_id, seller_id, row)
+        positions = await _posting_products_for_row(session, tenant_id, seller_id, row)
+        has_positions_payload = isinstance(row.get("products"), list)
+        product_id = _primary_product_id(positions, fallback_product_id)
+        positions_mapped = _positions_are_mapped(positions, fallback_product_id)
         if existing is not None:
+            composition_changed = has_positions_payload and [
+                _position_signature(position) for position in existing.product_positions
+            ] != [_position_signature(position) for position in positions]
+            if composition_changed:
+                await _release_reservation(session, existing)
+                existing.product_positions.clear()
+                await session.flush()
+                existing.product_id = product_id
+                if positions:
+                    existing.product_positions.extend(positions)
+                    existing.wb_nm_id = positions[0].ozon_sku
+                    existing.wb_article = positions[0].offer_id
+                existing.mapping_status = (
+                    MAPPING_STATUS_MAPPED if positions_mapped else MAPPING_STATUS_MISSING
+                )
+                details = dict(existing.meta_details_json or {})
+                details["ozon_products"] = [
+                    position.provider_data_json
+                    for position in positions
+                    if position.provider_data_json
+                ]
+                existing.meta_details_json = details
             statuses_updated += int(await _apply_status(session, existing, raw_status))
+            if composition_changed and positions:
+                await session.flush()
+                await _try_reserve_order(session, existing)
             upserted += 1
             continue
 
-        product_id = await _product_id_for_row(session, tenant_id, seller_id, row)
         binding = await _binding_for_row(session, tenant_id, seller_id, row)
         created_at = _parse_datetime(row.get("created_at") or row.get("createdAt"))
         deadline_at = _parse_datetime(row.get("shipment_date") or row.get("shipmentDate"))
         if deadline_at <= created_at:
             deadline_at = created_at + timedelta(hours=OZON_FBS_DEADLINE_HOURS)
-        if product_id is None:
+        if not positions_mapped:
             reserve_status = RESERVE_STATUS_SKIPPED_NO_PRODUCT
         elif binding is None:
             reserve_status = RESERVE_STATUS_WAREHOUSE_UNMAPPED
@@ -205,16 +292,24 @@ async def sync_ozon_orders(
             external_order_id=external_order_id,
             wb_order_id=_legacy_numeric_order_id(external_order_id),
             wb_warehouse_id=binding.wb_warehouse_id if binding is not None else None,
-            wb_article=_text(row, "offer_id", "offerId"),
+            wb_article=(positions[0].offer_id if positions else _text(row, "offer_id", "offerId")),
+            wb_nm_id=positions[0].ozon_sku if positions else None,
             wb_barcode=_text(row, "barcode"),
             price=int(row["price"]) if isinstance(row.get("price"), int) else None,
             created_at_wb=created_at,
             deadline_at=deadline_at,
-            mapping_status=MAPPING_STATUS_MAPPED
-            if product_id is not None
-            else MAPPING_STATUS_MISSING,
+            mapping_status=MAPPING_STATUS_MAPPED if positions_mapped else MAPPING_STATUS_MISSING,
             reserve_status=reserve_status,
         )
+        if positions:
+            order.product_positions.extend(positions)
+            order.meta_details_json = {
+                "ozon_products": [
+                    position.provider_data_json
+                    for position in positions
+                    if position.provider_data_json
+                ]
+            }
         await _apply_status(session, order, raw_status)
         session.add(order)
         await session.flush()

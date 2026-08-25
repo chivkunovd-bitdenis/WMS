@@ -109,7 +109,7 @@ async def get_supply_workspace(
     boxes = await _build_boxes(session, tenant_id, supply_id)
     boxes_without_distribution = await packing_box_svc._supply_without_distribution(session, supply)
     marking_pool = await _build_marking_pool(session, tenant_id, orders)
-    progress = _compute_progress(orders)
+    progress = _compute_progress(orders, worklist_items)
     picking_auto_passed_reason = await _picking_auto_passed_reason(
         session, tenant_id, supply, orders
     )
@@ -316,17 +316,37 @@ def _planned_destination(supply: FbsSupply) -> dict[str, Any] | None:
     }
 
 
-def _compute_progress(orders: list[FbsOrder]) -> WorkspaceProgress:
-    total = len(orders)
-    picked = sum(1 for o in orders if o.pick_status == PICK_STATUS_PICKED)
-    packed = sum(1 for o in orders if o.pack_status == PACK_STATUS_PACKED)
-    metadata_ready = sum(1 for o in orders if _metadata_ready(o))
-    stickers_ready = sum(
-        1
-        for o in orders
-        if o.sticker_status
-        in {STICKER_STATUS_READY, STICKER_STATUS_PRINT_OPENED, STICKER_STATUS_APPLIED}
-    )
+def _compute_progress(
+    orders: list[FbsOrder], worklist_items: list[dict[str, Any]] | None = None
+) -> WorkspaceProgress:
+    positions_by_order = {
+        str(item["id"]): list(item.get("positions") or []) for item in worklist_items or []
+    }
+    total = 0
+    picked = 0
+    packed = 0
+    metadata_ready = 0
+    stickers_ready = 0
+    for order in orders:
+        positions = positions_by_order.get(str(order.id), [])
+        units = sum(int(position["quantity"]) for position in positions) if positions else 1
+        total += units
+        picked += (
+            sum(int(position["picked_quantity"]) for position in positions)
+            if positions
+            else int(order.pick_status == PICK_STATUS_PICKED)
+        )
+        packed += (
+            units if order.pack_status == PACK_STATUS_PACKED else 0
+        )
+        if _metadata_ready(order):
+            metadata_ready += units
+        if order.sticker_status in {
+            STICKER_STATUS_READY,
+            STICKER_STATUS_PRINT_OPENED,
+            STICKER_STATUS_APPLIED,
+        }:
+            stickers_ready += units
     return WorkspaceProgress(
         picked=picked,
         packed=packed,

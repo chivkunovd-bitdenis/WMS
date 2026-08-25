@@ -17,6 +17,8 @@ from app.models.fbs_order import (
     PICK_STATUS_PICKED,
     RESERVE_STATUS_RESERVED,
     FbsOrder,
+    FbsOrderProduct,
+    FbsOrderProductPick,
     FbsOrderReservation,
 )
 from app.models.fbs_order_pick import (
@@ -110,12 +112,12 @@ async def _pick_location_payload(
     location: StorageLocation,
 ) -> dict[str, Any]:
 
-    pending_by_product = _pending_orders_by_product(supply.orders)
+    pending_by_product = _pending_positions_by_product(supply.orders)
     product_ids = list(pending_by_product.keys())
     products = await _load_products(session, tenant_id, product_ids)
 
     expected: list[dict[str, Any]] = []
-    for product_id, orders in pending_by_product.items():
+    for product_id, positions in pending_by_product.items():
         product = products.get(product_id)
         if product is None:
             continue
@@ -127,14 +129,16 @@ async def _pick_location_payload(
         )
         if available <= 0:
             continue
-        remaining_orders = len(orders)
+        remaining_units = sum(
+            position.quantity - position.picked_quantity for _, position in positions
+        )
         expected.append(
             {
                 "product_id": str(product_id),
                 "name": product.name,
-                "barcode": product.wb_barcode or orders[0].wb_barcode,
-                "remaining_qty": min(remaining_orders, available),
-                "nearest_deadline_at": min(o.deadline_at for o in orders).isoformat(),
+                "barcode": product.wb_barcode or positions[0][0].wb_barcode,
+                "remaining_qty": min(remaining_units, available),
+                "nearest_deadline_at": min(order.deadline_at for order, _ in positions).isoformat(),
             }
         )
     expected.sort(key=lambda row: row["nearest_deadline_at"])
@@ -161,13 +165,22 @@ async def scan_pick_product(
     order_id: uuid.UUID | None = None,
     product_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
-    existing = await _find_pick_by_scan_idempotency(
-        session, tenant_id, supply_id, idempotency_key
-    )
+    existing = await _find_pick_by_scan_idempotency(session, tenant_id, supply_id, idempotency_key)
     if existing is not None:
         return await get_supply_workspace(session, tenant_id, supply_id)
 
     supply = await _load_supply(session, tenant_id, supply_id)
+    if supply.marketplace == "ozon":
+        existing_position_pick = await session.scalar(
+            select(FbsOrderProductPick.id).where(
+                FbsOrderProductPick.tenant_id == tenant_id,
+                FbsOrderProductPick.fbs_supply_id == supply_id,
+                FbsOrderProductPick.scan_idempotency_key == idempotency_key,
+                FbsOrderProductPick.undone_at.is_(None),
+            )
+        )
+        if existing_position_pick is not None:
+            return await get_supply_workspace(session, tenant_id, supply_id)
     location = await session.get(StorageLocation, location_id)
     if (
         location is None
@@ -200,8 +213,15 @@ async def scan_pick_product(
             context={"product_id": str(product.id), "seller_id": str(product.seller_id)},
         )
 
+    eligible_positions = _eligible_positions_for_product(supply.orders, product.id)
     eligible_orders = _eligible_orders_for_product(supply.orders, product.id)
-    if not eligible_orders:
+    if supply.marketplace == "ozon" and not eligible_positions:
+        raise FbsPickingError(
+            "product_not_in_supply",
+            "Товар не входит в состав поставки или уже подобран.",
+            context={"product_id": str(product.id)},
+        )
+    if supply.marketplace != "ozon" and not eligible_orders:
         raise FbsPickingError(
             "product_not_in_supply",
             "Товар не входит в состав поставки или уже подобран.",
@@ -209,12 +229,33 @@ async def scan_pick_product(
         )
 
     target_order: FbsOrder | None = None
-    if order_id is not None:
+    target_position: FbsOrderProduct | None = None
+    if supply.marketplace == "ozon":
+        if order_id is not None:
+            matched = next(
+                (
+                    (order, position)
+                    for order, position in eligible_positions
+                    if order.id == order_id
+                ),
+                None,
+            )
+            if matched is None:
+                raise FbsPickingError(
+                    "product_not_in_supply",
+                    "Заказ не относится к этому товару в поставке.",
+                    context={"order_id": str(order_id), "product_id": str(product.id)},
+                )
+            target_order, target_position = matched
+        else:
+            target_order, target_position = min(
+                eligible_positions, key=lambda row: row[0].deadline_at
+            )
+    elif order_id is not None:
         target_order = next((o for o in eligible_orders if o.id == order_id), None)
         if target_order is None:
             picked = any(
-                o.id == order_id and o.pick_status == PICK_STATUS_PICKED
-                for o in supply.orders
+                o.id == order_id and o.pick_status == PICK_STATUS_PICKED for o in supply.orders
             )
             if picked:
                 raise FbsPickingError(
@@ -244,9 +285,7 @@ async def scan_pick_product(
         product.id,
         location.id,
     )
-    sorting_location = await get_or_create_sorting_location(
-        session, tenant_id, supply.warehouse_id
-    )
+    sorting_location = await get_or_create_sorting_location(session, tenant_id, supply.warehouse_id)
     movement_id: uuid.UUID | None = None
     if available >= 1 and location.id != sorting_location.id:
         try:
@@ -288,10 +327,36 @@ async def scan_pick_product(
             quantity_delta=1,
             movement_type="fbs_order_pick",
         )
-        await _ensure_order_reservation(session, target_order, supply)
+        if supply.marketplace != "ozon":
+            await _ensure_order_reservation(session, target_order, supply)
         await session.flush()
         movement_id = movement.id
     picked_at = datetime.now(tz=UTC)
+    if supply.marketplace == "ozon":
+        assert target_position is not None
+        session.add(
+            FbsOrderProductPick(
+                tenant_id=tenant_id,
+                order_product_id=target_position.id,
+                fbs_supply_id=supply.id,
+                source_storage_location_id=location.id,
+                sorting_storage_location_id=sorting_location.id,
+                product_id=product.id,
+                inventory_movement_id=movement_id,
+                scan_idempotency_key=idempotency_key,
+                picked_at=picked_at,
+            )
+        )
+        target_position.picked_quantity += 1
+        if all(
+            position.picked_quantity >= position.quantity
+            for position in target_order.product_positions
+        ):
+            target_order.pick_status = PICK_STATUS_PICKED
+            target_order.picked_at = picked_at
+        await session.flush()
+        return await get_supply_workspace(session, tenant_id, supply_id)
+
     pick = FbsOrderPick(
         tenant_id=tenant_id,
         fbs_order_id=target_order.id,
@@ -336,9 +401,7 @@ async def manual_pick_product(
     actor: User,
 ) -> dict[str, Any]:
     """Pick the product already assigned to one explicit order without scanning."""
-    existing = await _find_pick_by_scan_idempotency(
-        session, tenant_id, supply_id, idempotency_key
-    )
+    existing = await _find_pick_by_scan_idempotency(session, tenant_id, supply_id, idempotency_key)
     if existing is not None:
         if (
             existing.fbs_order_id != order_id
@@ -388,6 +451,86 @@ async def undo_pick(
             "Отмена подбора недоступна после упаковки.",
             context={"order_id": str(order_id)},
         )
+
+    if supply.marketplace == "ozon":
+        replayed_undo = (
+            await session.execute(
+                select(FbsOrderProductPick, FbsOrderProduct.order_id)
+                .join(
+                    FbsOrderProduct,
+                    FbsOrderProduct.id == FbsOrderProductPick.order_product_id,
+                )
+                .where(
+                    FbsOrderProductPick.tenant_id == tenant_id,
+                    FbsOrderProductPick.fbs_supply_id == supply_id,
+                    FbsOrderProductPick.undo_idempotency_key == idempotency_key,
+                )
+            )
+        ).one_or_none()
+        if replayed_undo is not None:
+            _, replayed_order_id = replayed_undo
+            if replayed_order_id != order_id:
+                raise FbsPickingError(
+                    "idempotency_key_reused",
+                    "Ключ идемпотентности уже использован для другого подбора.",
+                    context={"idempotency_key": idempotency_key},
+                )
+            return await get_supply_workspace(session, tenant_id, supply_id)
+        position_pick = await session.scalar(
+            select(FbsOrderProductPick)
+            .join(
+                FbsOrderProduct,
+                FbsOrderProduct.id == FbsOrderProductPick.order_product_id,
+            )
+            .where(
+                FbsOrderProductPick.tenant_id == tenant_id,
+                FbsOrderProductPick.fbs_supply_id == supply_id,
+                FbsOrderProduct.order_id == order.id,
+                FbsOrderProductPick.undone_at.is_(None),
+            )
+            .order_by(FbsOrderProductPick.picked_at.desc())
+        )
+        if position_pick is None:
+            raise FbsPickingError(
+                "order_not_picked",
+                "Заказ ещё не подобран.",
+                context={"order_id": str(order_id)},
+            )
+        original_movement_type = None
+        if position_pick.inventory_movement_id is not None:
+            original_movement_type = await session.scalar(
+                select(InventoryMovement.movement_type).where(
+                    InventoryMovement.id == position_pick.inventory_movement_id,
+                    InventoryMovement.tenant_id == tenant_id,
+                )
+            )
+        if original_movement_type == "fbs_order_pick":
+            await inventory_service.record_movement_and_adjust_balance(
+                session,
+                tenant_id=tenant_id,
+                product_id=position_pick.product_id,
+                storage_location_id=position_pick.sorting_storage_location_id,
+                quantity_delta=-1,
+                movement_type="fbs_order_pick_undo",
+            )
+        elif position_pick.inventory_movement_id is not None:
+            await inventory_service.transfer_on_hand_between_locations(
+                session,
+                tenant_id,
+                from_storage_location_id=position_pick.sorting_storage_location_id,
+                to_storage_location_id=position_pick.source_storage_location_id,
+                product_id=position_pick.product_id,
+                quantity=1,
+            )
+        position_pick.undo_idempotency_key = idempotency_key
+        position_pick.undone_at = datetime.now(tz=UTC)
+        position = await session.get(FbsOrderProduct, position_pick.order_product_id)
+        assert position is not None
+        position.picked_quantity = max(0, position.picked_quantity - 1)
+        order.pick_status = PICK_STATUS_PENDING
+        order.picked_at = None
+        await session.flush()
+        return await get_supply_workspace(session, tenant_id, supply_id)
 
     pick = await _load_active_pick_for_order(session, tenant_id, order_id)
     if pick is None:
@@ -498,7 +641,7 @@ async def _load_supply(
     stmt = (
         select(FbsSupply)
         .options(
-            selectinload(FbsSupply.orders),
+            selectinload(FbsSupply.orders).selectinload(FbsOrder.product_positions),
             selectinload(FbsSupply.warehouse),
         )
         .where(FbsSupply.id == supply_id, FbsSupply.tenant_id == tenant_id)
@@ -535,16 +678,30 @@ async def _resolve_storage_location(
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
-def _pending_orders_by_product(
+def _pending_positions_by_product(
     orders: list[FbsOrder],
-) -> dict[uuid.UUID, list[FbsOrder]]:
-    out: dict[uuid.UUID, list[FbsOrder]] = {}
+) -> dict[uuid.UUID, list[tuple[FbsOrder, FbsOrderProduct]]]:
+    out: dict[uuid.UUID, list[tuple[FbsOrder, FbsOrderProduct]]] = {}
     for order in orders:
-        if order.pick_status == PICK_STATUS_PICKED or order.product_id is None:
+        if order.product_positions:
+            for position in order.product_positions:
+                if position.product_id is not None and position.picked_quantity < position.quantity:
+                    out.setdefault(position.product_id, []).append((order, position))
             continue
-        out.setdefault(order.product_id, []).append(order)
-    for product_orders in out.values():
-        product_orders.sort(key=lambda o: o.deadline_at)
+        if order.pick_status != PICK_STATUS_PICKED and order.product_id is not None:
+            out.setdefault(order.product_id, []).append(
+                (
+                    order,
+                    FbsOrderProduct(
+                        product_id=order.product_id,
+                        quantity=1,
+                        reserved_quantity=0,
+                        picked_quantity=0,
+                    ),
+                )
+            )
+    for positions in out.values():
+        positions.sort(key=lambda row: row[0].deadline_at)
     return out
 
 
@@ -571,8 +728,11 @@ async def _resolve_product_for_supply(
     product_barcode: str,
 ) -> Product | None:
     supply_product_ids = {
-        o.product_id for o in supply.orders if o.product_id is not None
-    }
+        position.product_id
+        for order in supply.orders
+        for position in order.product_positions
+        if position.product_id is not None
+    } or {o.product_id for o in supply.orders if o.product_id is not None}
     if not supply_product_ids:
         return None
 
@@ -589,11 +749,7 @@ async def _resolve_product_for_supply(
         return product
 
     order_match = next(
-        (
-            o
-            for o in supply.orders
-            if o.wb_barcode == product_barcode and o.product_id is not None
-        ),
+        (o for o in supply.orders if o.wb_barcode == product_barcode and o.product_id is not None),
         None,
     )
     if order_match is None:
@@ -606,9 +762,19 @@ def _eligible_orders_for_product(
     product_id: uuid.UUID,
 ) -> list[FbsOrder]:
     return [
-        o
-        for o in orders
-        if o.product_id == product_id and o.pick_status == PICK_STATUS_PENDING
+        o for o in orders if o.product_id == product_id and o.pick_status == PICK_STATUS_PENDING
+    ]
+
+
+def _eligible_positions_for_product(
+    orders: list[FbsOrder], product_id: uuid.UUID
+) -> list[tuple[FbsOrder, FbsOrderProduct]]:
+    return [
+        (order, position)
+        for order in orders
+        if order.pick_status == PICK_STATUS_PENDING
+        for position in order.product_positions
+        if position.product_id == product_id and position.picked_quantity < position.quantity
     ]
 
 

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.fbs_order import FbsOrderReservation
+from app.models.fbs_order import FbsOrderProductReservation, FbsOrderReservation
 from app.models.inventory_balance import InventoryBalance
 from app.models.storage_location import StorageLocation
 from app.services import stock_direction_service
@@ -28,22 +28,48 @@ async def fbs_reserved_by_product(
 ) -> dict[uuid.UUID, int]:
     if not product_ids:
         return {}
-    stmt = (
+    legacy_stmt = (
         select(
-            FbsOrderReservation.product_id,
-            func.coalesce(func.sum(FbsOrderReservation.quantity), 0),
+            FbsOrderReservation.product_id.label("product_id"),
+            FbsOrderReservation.quantity.label("quantity"),
         )
         .where(
             FbsOrderReservation.tenant_id == tenant_id,
             FbsOrderReservation.warehouse_id == warehouse_id,
             FbsOrderReservation.product_id.in_(product_ids),
         )
-        .group_by(FbsOrderReservation.product_id)
     )
     if exclude_fbs_order_ids:
-        stmt = stmt.where(FbsOrderReservation.fbs_order_id.notin_(exclude_fbs_order_ids))
-    res = await session.execute(stmt)
-    return {pid: int(qty) for pid, qty in res.all()}
+        legacy_stmt = legacy_stmt.where(
+            FbsOrderReservation.fbs_order_id.notin_(exclude_fbs_order_ids)
+        )
+    positions_stmt = (
+        select(
+            FbsOrderProductReservation.product_id.label("product_id"),
+            FbsOrderProductReservation.quantity.label("quantity"),
+        )
+        .where(
+            FbsOrderProductReservation.tenant_id == tenant_id,
+            FbsOrderProductReservation.warehouse_id == warehouse_id,
+            FbsOrderProductReservation.product_id.in_(product_ids),
+        )
+    )
+    if exclude_fbs_order_ids:
+        from app.models.fbs_order import FbsOrderProduct
+
+        positions_stmt = positions_stmt.join(
+            FbsOrderProduct,
+            FbsOrderProduct.id == FbsOrderProductReservation.order_product_id,
+        ).where(FbsOrderProduct.order_id.notin_(exclude_fbs_order_ids))
+    combined = union_all(legacy_stmt, positions_stmt).subquery()
+    stmt = select(
+        combined.c.product_id,
+        func.coalesce(func.sum(combined.c.quantity), 0),
+    ).group_by(combined.c.product_id)
+    return {
+        product_id: int(quantity)
+        for product_id, quantity in (await session.execute(stmt)).all()
+    }
 
 
 async def fbs_reserved_qty_for_product(
@@ -54,9 +80,7 @@ async def fbs_reserved_qty_for_product(
     *,
     exclude_order_id: uuid.UUID | None = None,
 ) -> int:
-    exclude_ids = (
-        frozenset({exclude_order_id}) if exclude_order_id is not None else None
-    )
+    exclude_ids = frozenset({exclude_order_id}) if exclude_order_id is not None else None
     reserved = await fbs_reserved_by_product(
         session,
         tenant_id,
@@ -116,9 +140,7 @@ async def _storage_and_sorting_on_hand_by_product(
         .group_by(InventoryBalance.product_id)
     )
     res = await session.execute(stmt)
-    return {
-        pid: (int(storage or 0), int(sorting or 0)) for pid, storage, sorting in res.all()
-    }
+    return {pid: (int(storage or 0), int(sorting or 0)) for pid, storage, sorting in res.all()}
 
 
 async def fbs_available_qty_by_product(
@@ -184,9 +206,7 @@ async def fbs_available_qty_for_product(
     *,
     exclude_fbs_order_id: uuid.UUID | None = None,
 ) -> int:
-    exclude_ids = (
-        frozenset({exclude_fbs_order_id}) if exclude_fbs_order_id is not None else None
-    )
+    exclude_ids = frozenset({exclude_fbs_order_id}) if exclude_fbs_order_id is not None else None
     result = await fbs_available_qty_by_product(
         session,
         tenant_id,

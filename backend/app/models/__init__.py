@@ -12,7 +12,14 @@ from app.models.billing import (
 from app.models.discrepancy_act import DiscrepancyAct, DiscrepancyActLine
 from app.models.document_sequence import DocumentDisplaySequence, DocumentSequence
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
-from app.models.fbs_order import FbsOrder, FbsOrderMarking, FbsOrderReservation
+from app.models.fbs_order import (
+    FbsOrder,
+    FbsOrderMarking,
+    FbsOrderProduct,
+    FbsOrderProductPick,
+    FbsOrderProductReservation,
+    FbsOrderReservation,
+)
 from app.models.fbs_order_pick import FbsOrderPick, FbsOrderPickEvent
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
 from app.models.fbs_packing_box import FbsPackingBox, FbsPackingBoxItem
@@ -95,6 +102,9 @@ __all__ = [
     "FbsOrderMarking",
     "FbsOrderPick",
     "FbsOrderPickEvent",
+    "FbsOrderProduct",
+    "FbsOrderProductPick",
+    "FbsOrderProductReservation",
     "FbsOrderReservation",
     "FbsPackagingFulfillment",
     "FbsPackingBox",

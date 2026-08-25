@@ -27,6 +27,8 @@ from app.models.fbs_order import (
     RESERVE_STATUS_RESERVED,
     FbsOrder,
     FbsOrderMarking,
+    FbsOrderProduct,
+    FbsOrderProductReservation,
 )
 from app.models.fbs_print_asset import PRINT_ASSET_STATUS_READY
 from app.models.fbs_supply import (
@@ -41,6 +43,7 @@ from app.models.marketplace_account import MarketplaceAccount
 from app.models.product import Product
 from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller import Seller
+from app.models.storage_location import StorageLocation
 from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
 from app.services import fbs_marking_service as marking_svc
@@ -49,7 +52,10 @@ from app.services import fbs_print_asset_service as print_asset_svc
 from app.services import fbs_shipment_service as shipment_svc
 from app.services import fbs_supply_service as supply_svc
 from app.services import fbs_tracking_service as tracking_svc
+from app.services import fbs_worklist_service as worklist_svc
 from app.services import fbs_workspace_service as workspace_svc
+from app.services import inventory_service
+from app.services import ozon_fbs_sync_service as ozon_sync_svc
 from app.services.fbs_autopoll_service import (
     SellerPollTarget,
     poll_marketplace_orders_for_target,
@@ -340,6 +346,341 @@ async def test_ozon_autopoll_positive_fake_upserts_shared_order_and_status(
     assert order.warehouse_id == warehouse.id
     assert order.status == "in_delivery"
     assert [call[0] for call in transport.calls] == ["fetch_orders", "fetch_statuses"]
+
+
+async def _sync_ozon_posting_with_products(
+    db_session: AsyncSession,
+    *,
+    positions: list[dict[str, object]],
+) -> tuple[FbsOrder, list[Product]]:
+    tenant = Tenant(name="Ozon positions", slug=f"ozon-positions-{uuid.uuid4().hex[:8]}")
+    seller = Seller(tenant=tenant, name="Seller")
+    warehouse = Warehouse(tenant=tenant, name="FBS", code=f"fbs-{uuid.uuid4().hex[:8]}")
+    products = [
+        Product(
+            tenant=tenant,
+            seller=seller,
+            name=str(position["name"]),
+            sku_code=f"sku-{position['sku']}",
+        )
+        for position in positions
+    ]
+    db_session.add_all([tenant, seller, warehouse, *products])
+    await db_session.flush()
+    db_session.add_all(
+        [
+            MarketplaceAccount(
+                tenant_id=tenant.id,
+                seller_id=seller.id,
+                marketplace="ozon",
+                account_slot="primary",
+                external_account_id="client-id",
+                secret_encrypted=encrypt_secret("api-key"),
+                is_active=True,
+                validation_status="valid",
+            ),
+            *[
+                ProductMarketplaceLink(
+                    tenant_id=tenant.id,
+                    seller_id=seller.id,
+                    product_id=product.id,
+                    marketplace="ozon",
+                    external_sku=str(position["sku"]),
+                    external_offer_id=str(position["offer_id"]),
+                )
+                for product, position in zip(products, positions, strict=True)
+            ],
+        ]
+    )
+    from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+
+    db_session.add(
+        FbsWarehouseBinding(
+            tenant_id=tenant.id,
+            seller_id=seller.id,
+            marketplace="ozon",
+            external_warehouse_id="ozon-wh-1",
+            wb_warehouse_id=-101,
+            wms_warehouse_id=warehouse.id,
+        )
+    )
+    await db_session.commit()
+
+    provider = OzonMarketplaceProvider(
+        transport=FakeMarketplaceTransport(
+            orders=[
+                {
+                    "posting_number": "ozon-posting-products",
+                    "status": "awaiting_packaging",
+                    "warehouse_id": "ozon-wh-1",
+                    "created_at": datetime.now(UTC).isoformat(),
+                    "products": positions,
+                }
+            ]
+        )
+    )
+    await ozon_sync_svc.sync_ozon_orders(
+        db_session,
+        tenant.id,
+        seller.id,
+        provider,
+        AsyncMock(),
+    )
+    order = (
+        await db_session.execute(
+            select(FbsOrder).where(FbsOrder.external_order_id == "ozon-posting-products")
+        )
+    ).scalar_one()
+    await db_session.refresh(order, attribute_names=["product_positions"])
+    return order, products
+
+
+@pytest.mark.asyncio
+async def test_ozon_import_persists_single_product_position(db_session: AsyncSession) -> None:
+    """TC-S03-OZON-021: one Ozon posting retains its sole imported position."""
+    order, products = await _sync_ozon_posting_with_products(
+        db_session,
+        positions=[{"sku": 4001, "offer_id": "offer-1", "name": "Футболка", "quantity": 1}],
+    )
+
+    assert order.product_id == products[0].id
+    assert [
+        (position.ozon_sku, position.product_id, position.quantity, position.name)
+        for position in order.product_positions
+    ] == [(4001, products[0].id, 1, "Футболка")]
+
+
+@pytest.mark.asyncio
+async def test_ozon_import_persists_all_product_positions(db_session: AsyncSession) -> None:
+    """TC-S03-OZON-022: no position is lost when Ozon posting has several products."""
+    order, products = await _sync_ozon_posting_with_products(
+        db_session,
+        positions=[
+            {"sku": 4001, "offer_id": "offer-1", "name": "Футболка", "quantity": 1},
+            {"sku": 4002, "offer_id": "offer-2", "name": "Носки", "quantity": 1},
+        ],
+    )
+
+    assert [
+        (position.ozon_sku, position.product_id, position.quantity)
+        for position in order.product_positions
+    ] == [(4001, products[0].id, 1), (4002, products[1].id, 1)]
+    worklist = await worklist_svc.build_worklist_items(db_session, order.tenant_id, [order])
+    assert [(row["name"], row["quantity"]) for row in worklist[0]["positions"]] == [
+        ("Футболка", 1),
+        ("Носки", 1),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_ozon_repeat_sync_replaces_changed_quantity_and_rereserves(
+    db_session: AsyncSession,
+) -> None:
+    """TC-S03-OZON-026: changed Ozon composition replaces its exact reserve without duplicates."""
+    order, products = await _sync_ozon_posting_with_products(
+        db_session,
+        positions=[
+            {"sku": 4001, "offer_id": "offer-1", "name": "Футболка", "quantity": 1}
+        ],
+    )
+    await db_session.refresh(order, attribute_names=["product_positions"])
+    assert order.warehouse_id is not None
+    location = StorageLocation(
+        tenant_id=order.tenant_id,
+        warehouse_id=order.warehouse_id,
+        code="A-01",
+        barcode="LOC-OZON-RERESERVE",
+    )
+    db_session.add(location)
+    await db_session.flush()
+    await inventory_service.record_movement_and_adjust_balance(
+        db_session,
+        tenant_id=order.tenant_id,
+        product_id=products[0].id,
+        storage_location_id=location.id,
+        quantity_delta=10,
+        movement_type="inbound_intake",
+    )
+    await ozon_sync_svc._try_reserve_order(db_session, order)
+    await db_session.commit()
+    assert order.reserve_status == "reserved"
+    changed_provider = OzonMarketplaceProvider(
+        transport=FakeMarketplaceTransport(
+            orders=[
+                {
+                    "posting_number": "ozon-posting-products",
+                    "status": "awaiting_packaging",
+                    "warehouse_id": "ozon-wh-1",
+                    "created_at": datetime.now(UTC).isoformat(),
+                    "products": [
+                        {
+                            "sku": 4001,
+                            "offer_id": "offer-1",
+                            "name": "Футболка",
+                            "quantity": 3,
+                        }
+                    ],
+                }
+            ]
+        )
+    )
+
+    await ozon_sync_svc.sync_ozon_orders(
+        db_session,
+        order.tenant_id,
+        order.seller_id,
+        changed_provider,
+        AsyncMock(),
+    )
+    await ozon_sync_svc.sync_ozon_orders(
+        db_session,
+        order.tenant_id,
+        order.seller_id,
+        changed_provider,
+        AsyncMock(),
+    )
+
+    await db_session.refresh(order, attribute_names=["product_positions"])
+    reservations = list(
+        (
+            await db_session.execute(
+                select(FbsOrderProductReservation)
+                .join(
+                    FbsOrderProduct,
+                    FbsOrderProduct.id == FbsOrderProductReservation.order_product_id,
+                )
+                .where(FbsOrderProduct.order_id == order.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert [(position.ozon_sku, position.quantity) for position in order.product_positions] == [
+        (4001, 3)
+    ]
+    assert [reservation.quantity for reservation in reservations] == [3]
+    assert order.reserve_status == "reserved"
+
+
+@pytest.mark.asyncio
+async def test_ozon_ship_keeps_quantity_above_one(db_session: AsyncSession) -> None:
+    """TC-S03-OZON-023: /ship receives quantity from the imported Ozon composition."""
+    tenant, _, _, product, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    assert supply is not None
+    db_session.add(
+        FbsOrderProduct(
+            order_id=order.id,
+            product_id=product.id,
+            ozon_sku=3001,
+            offer_id="offer-1",
+            name="Product",
+            quantity=2,
+            position_index=0,
+            provider_data_json={"sku": 3001, "quantity": 2},
+        )
+    )
+    await db_session.commit()
+    transport = FakeMarketplaceTransport(endpoint_responses=_ozon_handoff_responses())
+
+    await shipment_svc.deliver_supply(
+        db_session,
+        tenant.id,
+        supply.id,
+        AsyncMock(),
+        idempotency_key=f"ozon-quantity-{uuid.uuid4()}",
+        ozon_provider=OzonMarketplaceProvider(transport=transport),
+    )
+
+    ship_payload = next(
+        payload for path, payload in transport.endpoint_calls if path == "/v4/posting/fbs/ship"
+    )
+    assert ship_payload["packages"] == [{"products": [{"product_id": 3001, "quantity": 2}]}]
+
+
+@pytest.mark.asyncio
+async def test_ozon_multi_position_ship_keeps_complete_posting_composition(
+    db_session: AsyncSession,
+) -> None:
+    """TC-S03-OZON-027: /ship receives every position rather than only the first one."""
+    tenant, _, _, product, order, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    assert supply is not None
+    db_session.add_all(
+        [
+            FbsOrderProduct(
+                order_id=order.id,
+                product_id=product.id,
+                ozon_sku=3001,
+                offer_id="offer-1",
+                name="Product",
+                quantity=1,
+                position_index=0,
+                provider_data_json={"sku": 3001, "quantity": 1},
+            ),
+            FbsOrderProduct(
+                order_id=order.id,
+                product_id=None,
+                ozon_sku=3002,
+                offer_id="offer-2",
+                name="Second product",
+                quantity=3,
+                position_index=1,
+                provider_data_json={"sku": 3002, "quantity": 3},
+            ),
+        ]
+    )
+    await db_session.commit()
+    transport = FakeMarketplaceTransport(endpoint_responses=_ozon_handoff_responses())
+
+    await shipment_svc.deliver_supply(
+        db_session,
+        tenant.id,
+        supply.id,
+        AsyncMock(),
+        idempotency_key=f"ozon-partial-{uuid.uuid4()}",
+        ozon_provider=OzonMarketplaceProvider(transport=transport),
+    )
+
+    ship_payload = next(
+        payload for path, payload in transport.endpoint_calls if path == "/v4/posting/fbs/ship"
+    )
+    assert ship_payload["packages"] == [
+        {
+            "products": [
+                {"product_id": 3001, "quantity": 1},
+                {"product_id": 3002, "quantity": 3},
+            ]
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_wb_order_keeps_legacy_single_product_shape(db_session: AsyncSession) -> None:
+    """TC-S03-OZON-025: the additive Ozon relation does not change WB orders."""
+    tenant = Tenant(name="WB regression", slug=f"wb-regression-{uuid.uuid4().hex[:8]}")
+    seller = Seller(tenant=tenant, name="Seller")
+    warehouse = Warehouse(tenant=tenant, name="FBS", code=f"fbs-{uuid.uuid4().hex[:8]}")
+    product = Product(tenant=tenant, seller=seller, name="Product", sku_code="wb-product")
+    db_session.add_all([tenant, seller, warehouse, product])
+    await db_session.flush()
+    now = datetime.now(UTC)
+    order = FbsOrder(
+        tenant_id=tenant.id,
+        seller_id=seller.id,
+        warehouse_id=warehouse.id,
+        product_id=product.id,
+        marketplace="wb",
+        wb_order_id=7001,
+        mapping_status=MAPPING_STATUS_MAPPED,
+        reserve_status=RESERVE_STATUS_RESERVED,
+        created_at_wb=now,
+        deadline_at=now + timedelta(days=1),
+    )
+    db_session.add(order)
+    await db_session.commit()
+    await db_session.refresh(order, attribute_names=["product_positions"])
+
+    assert order.product_id == product.id
+    assert order.product_positions == []
 
 
 async def _seed_ozon_supply_case(

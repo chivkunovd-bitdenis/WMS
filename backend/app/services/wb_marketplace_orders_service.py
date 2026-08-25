@@ -31,6 +31,8 @@ from app.models.fbs_order import (
     RESERVE_STATUS_SKIPPED_NO_PRODUCT,
     RESERVE_STATUS_WAREHOUSE_UNMAPPED,
     FbsOrder,
+    FbsOrderProduct,
+    FbsOrderProductReservation,
     FbsOrderReservation,
 )
 from app.models.fbs_stock_pool_debit import FbsStockPoolDebit
@@ -324,9 +326,7 @@ async def _resolve_wms_warehouse_for_wb(
     seller_id: uuid.UUID,
     wb_warehouse_id: int | None,
 ) -> uuid.UUID | None:
-    return await _resolve_wms_warehouse_from_binding(
-        session, tenant_id, seller_id, wb_warehouse_id
-    )
+    return await _resolve_wms_warehouse_from_binding(session, tenant_id, seller_id, wb_warehouse_id)
 
 
 async def _get_reservation_warehouse_id(
@@ -366,9 +366,7 @@ async def _assign_wms_warehouse_from_binding(
     wb_warehouse_id: int | None,
 ) -> None:
     """Map WB warehouse to local WMS warehouse only through an explicit active binding."""
-    resolved = await _resolve_wms_warehouse_for_wb(
-        session, tenant_id, seller_id, wb_warehouse_id
-    )
+    resolved = await _resolve_wms_warehouse_for_wb(session, tenant_id, seller_id, wb_warehouse_id)
     if resolved is None:
         if order.warehouse_id is not None:
             current_warehouse = await session.get(Warehouse, order.warehouse_id)
@@ -454,9 +452,20 @@ async def _get_order_by_wb_id(
 
 
 async def _order_has_reservation(session: AsyncSession, order_id: uuid.UUID) -> bool:
-    stmt = select(FbsOrderReservation.id).where(FbsOrderReservation.fbs_order_id == order_id)
-    res = await session.execute(stmt)
-    return res.scalar_one_or_none() is not None
+    legacy = await session.scalar(
+        select(FbsOrderReservation.id).where(FbsOrderReservation.fbs_order_id == order_id)
+    )
+    if legacy is not None:
+        return True
+    return (
+        await session.scalar(
+            select(FbsOrderProductReservation.id)
+            .join(
+                FbsOrderProduct, FbsOrderProduct.id == FbsOrderProductReservation.order_product_id
+            )
+            .where(FbsOrderProduct.order_id == order_id)
+        )
+    ) is not None
 
 
 async def _lock_product_for_fbs_reserve(
@@ -505,6 +514,58 @@ async def _try_reserve_order(
         and order.supplier_status.strip().lower() != FBS_ORDER_STATUS_NEW
     ):
         return
+    positions = list(
+        (await session.execute(select(FbsOrderProduct).where(FbsOrderProduct.order_id == order.id)))
+        .scalars()
+        .all()
+    )
+    if order.marketplace == "ozon" and positions:
+        if order.warehouse_id is None:
+            order.reserve_status = RESERVE_STATUS_WAREHOUSE_UNMAPPED
+            return
+        if any(position.product_id is None or position.quantity < 1 for position in positions):
+            order.reserve_status = RESERVE_STATUS_SKIPPED_NO_PRODUCT
+            return
+        if await _order_has_reservation(session, order.id):
+            return
+        required_by_product: dict[uuid.UUID, int] = {}
+        for position in positions:
+            assert position.product_id is not None
+            required_by_product[position.product_id] = (
+                required_by_product.get(position.product_id, 0) + position.quantity
+            )
+        for product_id, quantity in required_by_product.items():
+            await _lock_product_for_fbs_reserve(session, order.tenant_id, product_id)
+            await _lock_fbs_reservations_for_product(
+                session, order.tenant_id, order.warehouse_id, product_id
+            )
+            available = await available_qty_for_fbs_reserve(
+                session,
+                order.tenant_id,
+                order.warehouse_id,
+                product_id,
+                exclude_order_id=order.id,
+            )
+            if available < quantity:
+                order.reserve_status = RESERVE_STATUS_NO_STOCK
+                return
+        async with session.begin_nested():
+            for position in positions:
+                assert position.product_id is not None
+                session.add(
+                    FbsOrderProductReservation(
+                        tenant_id=order.tenant_id,
+                        order_product_id=position.id,
+                        product_id=position.product_id,
+                        warehouse_id=order.warehouse_id,
+                        quantity=position.quantity,
+                    )
+                )
+                position.reserved_quantity = position.quantity
+            order.reserve_status = RESERVE_STATUS_RESERVED
+            await session.flush()
+        schedule_seller_stock_publish(session, order.tenant_id, order.seller_id)
+        return
     if order.product_id is None:
         order.reserve_status = RESERVE_STATUS_SKIPPED_NO_PRODUCT
         return
@@ -551,9 +612,29 @@ async def _release_reservation(session: AsyncSession, order: FbsOrder) -> None:
     stmt = select(FbsOrderReservation).where(FbsOrderReservation.fbs_order_id == order.id)
     res = await session.execute(stmt)
     reservation = res.scalar_one_or_none()
-    if reservation is None:
+    position_reservations = list(
+        (
+            await session.execute(
+                select(FbsOrderProductReservation)
+                .join(
+                    FbsOrderProduct,
+                    FbsOrderProduct.id == FbsOrderProductReservation.order_product_id,
+                )
+                .where(FbsOrderProduct.order_id == order.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if reservation is None and not position_reservations:
         return
-    await session.delete(reservation)
+    if reservation is not None:
+        await session.delete(reservation)
+    for position_reservation in position_reservations:
+        position = await session.get(FbsOrderProduct, position_reservation.order_product_id)
+        if position is not None:
+            position.reserved_quantity = 0
+        await session.delete(position_reservation)
     order.reserve_status = RESERVE_STATUS_RELEASED
     # Снятый резерв возвращает товар в доступное — публикуем увеличенную цифру.
     schedule_seller_stock_publish(session, order.tenant_id, order.seller_id)
@@ -614,9 +695,7 @@ async def _debit_stock_pool_for_order(
     # чтобы валить всю синхронизацию заказов, поэтому короткий повтор.
     for attempt in range(_POOL_DEBIT_ATTEMPTS):
         try:
-            return await _debit_stock_pool_once(
-                session, tenant_id, order, binding_id, empty
-            )
+            return await _debit_stock_pool_once(session, tenant_id, order, binding_id, empty)
         except IntegrityError:
             # Параллельный синк (ручная кнопка + автоопрос) успел списать первым;
             # UNIQUE(order_id) в fbs_stock_pool_debits гарантирует это на уровне БД.
@@ -1203,9 +1282,7 @@ async def _get_or_create_wb_origin_supply(
     api_token: str | None = None,
     supplies_dict: dict[str, tuple[str | None, bool]] | None = None,
 ) -> FbsSupply | None:
-    existing = await _get_existing_supply_by_wb_id(
-        session, tenant_id, seller_id, wb_supply_id
-    )
+    existing = await _get_existing_supply_by_wb_id(session, tenant_id, seller_id, wb_supply_id)
     if existing is not None:
         return existing
 
@@ -1390,9 +1467,7 @@ async def link_confirmed_orders_to_wb_supplies(
 
         for wb_supply_id, matching_orders in candidates_by_supply_id.items():
             existed_before = (
-                await _get_existing_supply_by_wb_id(
-                    session, tenant_id, seller_id, wb_supply_id
-                )
+                await _get_existing_supply_by_wb_id(session, tenant_id, seller_id, wb_supply_id)
                 is not None
             )
             supply = await _get_or_create_wb_origin_supply(

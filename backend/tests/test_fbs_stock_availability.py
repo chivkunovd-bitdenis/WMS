@@ -429,16 +429,16 @@ async def test_fbs_availability_batch_query_count_bounded(
         query_count += 1
 
     sync_engine = engine.sync_engine
-    event.listen(sync_engine, "before_cursor_execute", _count_query)
-    try:
-        async with SessionLocal() as session:
-            first = await session.get(Product, product_ids[0])
-            assert first is not None
+    async with SessionLocal() as session:
+        first = await session.get(Product, product_ids[0])
+        assert first is not None
+        event.listen(sync_engine, "before_cursor_execute", _count_query)
+        try:
             await fbs_available_qty_by_product(
                 session, first.tenant_id, warehouse_id, product_ids
             )
-    finally:
-        event.remove(sync_engine, "before_cursor_execute", _count_query)
+        finally:
+            event.remove(sync_engine, "before_cursor_execute", _count_query)
 
     assert query_count <= 6, f"expected <=6 queries, got {query_count}"
 

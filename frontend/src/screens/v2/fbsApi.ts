@@ -223,6 +223,15 @@ export type FbsWorklistOrder = {
     packaging_instructions?: string | null
     has_packaging_instructions?: boolean
   }
+  positions: Array<{
+    product_id: string | null
+    name: string
+    seller_article: string | null
+    sku: string | null
+    quantity: number
+    reserved_quantity: number
+    picked_quantity: number
+  }>
   inventory: {
     available_unpacked: number
     locations: Array<{ id: string; code: string; available_unpacked: number }>

@@ -19,6 +19,7 @@ from app.models.fbs_order import (
     PACK_STATUS_PACKED,
     RESERVE_STATUS_RESERVED,
     FbsOrder,
+    FbsOrderProduct,
 )
 from app.models.fbs_order_pick import FbsOrderPick
 from app.models.fbs_supply import (
@@ -117,6 +118,8 @@ async def _seed_pick_supply(
     stock_qty: int,
     order_specs: list[tuple[int, timedelta]],
     barcode: str,
+    marketplace: str = "wb",
+    position_quantity: int = 1,
 ) -> tuple[uuid.UUID, list[uuid.UUID], str]:
     """Create supply with orders; order_specs = (wb_order_id offset, deadline delta)."""
     suffix = str(time.time_ns())
@@ -145,6 +148,7 @@ async def _seed_pick_supply(
             name="Pick supply",
             status=FBS_SUPPLY_STATUS_DRAFT,
             delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+            marketplace=marketplace,
         )
         session.add(supply)
         await session.flush()
@@ -157,6 +161,8 @@ async def _seed_pick_supply(
                 warehouse_id=warehouse_id,
                 product_id=product_id,
                 supply_id=supply.id,
+                marketplace=marketplace,
+                external_order_id=(f"ozon-{wb_no}" if marketplace == "ozon" else None),
                 wb_order_id=700_000 + wb_no,
                 wb_barcode=barcode,
                 created_at_wb=now - timedelta(hours=1),
@@ -167,6 +173,19 @@ async def _seed_pick_supply(
             )
             session.add(order)
             await session.flush()
+            if marketplace == "ozon":
+                session.add(
+                    FbsOrderProduct(
+                        order_id=order.id,
+                        product_id=product_id,
+                        ozon_sku=wb_no,
+                        offer_id=f"offer-{wb_no}",
+                        name="Pick product",
+                        quantity=position_quantity,
+                        position_index=0,
+                        reserved_quantity=position_quantity,
+                    )
+                )
             order_ids.append(order.id)
         await session.commit()
         loc = await session.get(StorageLocation, location_id)
@@ -442,6 +461,83 @@ async def test_fbs_pick_undo_before_pack_returns_to_source(async_client: AsyncCl
         )
         assert int(source_bal or 0) == 1
         assert int(sorting_bal or 0) == 0
+
+
+@pytest.mark.asyncio
+async def test_ozon_multi_product_quantity_partial_pick_manual_finish_and_idempotent_undo(
+    async_client: AsyncClient,
+) -> None:
+    """TC-S03-OZON-024: Ozon units remain partial until every imported quantity is picked."""
+    headers, suffix, tenant_id = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, location_id = await _create_seller_and_warehouse(
+        async_client, headers, suffix
+    )
+    barcode = f"BAR-OZON-PARTIAL-{suffix[-8:]}"
+    product_id = await _create_product(
+        async_client, headers, seller_id, sku=f"SKU-OZON-{suffix}", barcode=barcode
+    )
+    supply_id, order_ids, _ = await _seed_pick_supply(
+        async_client,
+        headers,
+        tenant_id,
+        seller_id,
+        warehouse_id,
+        location_id,
+        product_id,
+        stock_qty=3,
+        order_specs=[(1, timedelta(hours=24))],
+        barcode=barcode,
+        marketplace="ozon",
+        position_quantity=3,
+    )
+
+    first = await _scan_product(
+        async_client,
+        headers,
+        supply_id,
+        location_id=location_id,
+        barcode=barcode,
+        idempotency_key=str(uuid.uuid4()),
+    )
+    assert first.status_code == 200, first.text
+    assert first.json()["progress"]["picked"] == 1
+    assert first.json()["progress"]["total"] == 3
+    assert first.json()["orders"][0]["pick"]["status"] == "pending"
+    assert first.json()["orders"][0]["positions"][0]["picked_quantity"] == 1
+
+    undo_key = str(uuid.uuid4())
+    undo = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/pick/{order_ids[0]}/undo",
+        headers=headers,
+        json={"idempotency_key": undo_key},
+    )
+    assert undo.status_code == 200, undo.text
+    assert undo.json()["progress"]["picked"] == 0
+
+    replay = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/pick/{order_ids[0]}/undo",
+        headers=headers,
+        json={"idempotency_key": undo_key},
+    )
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["progress"]["picked"] == 0
+
+    for expected in (1, 2, 3):
+        picked = await async_client.post(
+            f"/operations/fbs-supplies/{supply_id}/pick/manual",
+            headers=headers,
+            json={
+                "location_id": str(location_id),
+                "product_id": str(product_id),
+                "order_id": str(order_ids[0]),
+                "idempotency_key": str(uuid.uuid4()),
+            },
+        )
+        assert picked.status_code == 200, picked.text
+        assert picked.json()["progress"]["picked"] == expected
+
+    assert picked.json()["orders"][0]["pick"]["status"] == "picked"
+    assert picked.json()["orders"][0]["positions"][0]["picked_quantity"] == 3
 
 
 @pytest.mark.asyncio

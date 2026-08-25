@@ -28,6 +28,7 @@ from app.models.fbs_order import (
     MAPPING_STATUS_MISSING,
     FbsOrder,
     FbsOrderMarking,
+    FbsOrderProduct,
     current_order_marking,
 )
 from app.models.fbs_order_pick import FbsOrderPick
@@ -309,9 +310,7 @@ async def _fetch_warehouse_options(
         wb_id_int = int(wb_id)
         key = str(wb_id_int)
         label = (
-            wb_name.strip()
-            if isinstance(wb_name, str) and wb_name.strip()
-            else f"WB {wb_id_int}"
+            wb_name.strip() if isinstance(wb_name, str) and wb_name.strip() else f"WB {wb_id_int}"
         )
         options.setdefault(
             key,
@@ -359,11 +358,16 @@ async def _load_worklist_context(
     sellers = await _load_sellers(session, tenant_id, seller_ids)
     warehouses = await _load_warehouses(session, tenant_id, warehouse_ids)
     wb_names = await _load_wb_warehouse_names(session, tenant_id, wb_wh_ids)
+    positions = await _load_order_positions(session, order_ids)
+    product_ids.update(
+        position.product_id
+        for order_positions in positions.values()
+        for position in order_positions
+        if position.product_id is not None
+    )
     products = await _load_products(session, tenant_id, product_ids)
     cards = await _load_imported_cards(session, tenant_id, seller_nm_pairs)
-    availability = await _load_availability_by_warehouse_product(
-        session, tenant_id, orders
-    )
+    availability = await _load_availability_by_warehouse_product(session, tenant_id, orders)
     locations = await _load_location_balances(session, tenant_id, orders)
     markings = await _load_markings(session, order_ids)
     picks = await _load_active_picks(session, tenant_id, order_ids)
@@ -373,6 +377,7 @@ async def _load_worklist_context(
         "warehouses": warehouses,
         "wb_names": wb_names,
         "products": products,
+        "positions": positions,
         "cards": cards,
         "availability": availability,
         "locations": locations,
@@ -440,6 +445,29 @@ async def _load_products(
     )
     res = await session.execute(stmt)
     return {p.id: p for p in res.scalars().all()}
+
+
+async def _load_order_positions(
+    session: AsyncSession,
+    order_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, list[FbsOrderProduct]]:
+    if not order_ids:
+        return {}
+    rows = list(
+        (
+            await session.execute(
+                select(FbsOrderProduct)
+                .where(FbsOrderProduct.order_id.in_(order_ids))
+                .order_by(FbsOrderProduct.order_id, FbsOrderProduct.position_index)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    positions: dict[uuid.UUID, list[FbsOrderProduct]] = {}
+    for row in rows:
+        positions.setdefault(row.order_id, []).append(row)
+    return positions
 
 
 async def _load_imported_cards(
@@ -643,9 +671,7 @@ def compute_selection_blockers(
 ) -> list[dict[str, str]]:
     blockers: list[dict[str, str]] = []
     if order.status in {FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DEFECT}:
-        blockers.append(
-            {"code": "order_cancelled", "message": "Заказ отменён или брак."}
-        )
+        blockers.append({"code": "order_cancelled", "message": "Заказ отменён или брак."})
     if not _is_supplier_status_new(order.supplier_status):
         blockers.append(
             {
@@ -654,9 +680,7 @@ def compute_selection_blockers(
             }
         )
     if order.supply_id is not None:
-        blockers.append(
-            {"code": "already_in_supply", "message": "Заказ уже в поставке."}
-        )
+        blockers.append({"code": "already_in_supply", "message": "Заказ уже в поставке."})
     if order.mapping_status == MAPPING_STATUS_MISSING or order.product_id is None:
         blockers.append(
             {"code": "product_not_mapped", "message": "Товар не сопоставлен с карточкой."}
@@ -669,17 +693,13 @@ def compute_selection_blockers(
             }
         )
     if _as_utc(order.deadline_at) < _as_utc(server_now):
-        blockers.append(
-            {"code": "deadline_passed", "message": "Срок сборки истёк."}
-        )
+        blockers.append({"code": "deadline_passed", "message": "Срок сборки истёк."})
     return blockers
 
 
 def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> dict[str, Any]:
     seller = ctx["sellers"].get(order.seller_id)
-    warehouse = (
-        ctx["warehouses"].get(order.warehouse_id) if order.warehouse_id else None
-    )
+    warehouse = ctx["warehouses"].get(order.warehouse_id) if order.warehouse_id else None
     wb_wh_id = int(order.wb_warehouse_id) if order.wb_warehouse_id is not None else 0
     wb_name = ctx["wb_names"].get(wb_wh_id) if wb_wh_id else None
     product = ctx["products"].get(order.product_id) if order.product_id else None
@@ -705,12 +725,9 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
     markings = ctx["markings"].get(order.id, [])
     pick_row = ctx["picks"].get(order.id)
     sticker_asset = ctx["sticker_assets"].get(order.id)
-    sticker_url = (
-        print_asset_content_url(sticker_asset.id) if sticker_asset is not None else None
-    )
-    applied_at = order.sticker_applied_at or (
-        sticker_asset.applied_at if sticker_asset else None
-    )
+    positions = ctx["positions"].get(order.id, [])
+    sticker_url = print_asset_content_url(sticker_asset.id) if sticker_asset is not None else None
+    applied_at = order.sticker_applied_at or (sticker_asset.applied_at if sticker_asset else None)
     pick_location = None
     if pick_row and pick_row.source_storage_location is not None:
         pick_location = pick_row.source_storage_location.code
@@ -740,9 +757,7 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
             "name": product.name if product else MISSING_PRODUCT,
             "image_url": image_url,
             "seller_article": (
-                product.wb_vendor_code
-                if product and product.wb_vendor_code
-                else order.wb_article
+                product.wb_vendor_code if product and product.wb_vendor_code else order.wb_article
             ),
             "wb_article": int(order.wb_nm_id) if order.wb_nm_id is not None else None,
             "barcode": barcode,
@@ -764,6 +779,27 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
                 and product.packaging_instructions.strip()
             ),
         },
+        "positions": [
+            {
+                "product_id": str(position.product_id) if position.product_id else None,
+                "name": (
+                    ctx["products"][position.product_id].name
+                    if position.product_id in ctx["products"]
+                    else position.name or MISSING_PRODUCT
+                ),
+                "seller_article": (
+                    ctx["products"][position.product_id].wb_vendor_code
+                    if position.product_id in ctx["products"]
+                    and ctx["products"][position.product_id].wb_vendor_code
+                    else position.offer_id
+                ),
+                "sku": str(position.ozon_sku) if position.ozon_sku is not None else None,
+                "quantity": position.quantity,
+                "reserved_quantity": position.reserved_quantity,
+                "picked_quantity": position.picked_quantity,
+            }
+            for position in positions
+        ],
         "inventory": {
             "available_unpacked": available,
             "locations": [
@@ -855,8 +891,6 @@ def _build_metadata(
         "states": states,
         "delivery_allowed": delivery_allowed,
         "last_checked_at": (
-            order.metadata_last_checked_at.isoformat()
-            if order.metadata_last_checked_at
-            else None
+            order.metadata_last_checked_at.isoformat() if order.metadata_last_checked_at else None
         ),
     }

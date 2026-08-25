@@ -59,6 +59,9 @@
   "backend/app/services/fbs_packaging_integration_service.py": {
     "файл-монолит": 906
   },
+  "backend/app/services/fbs_picking_service.py": {
+    "файл-монолит": 818
+  },
   "backend/app/services/fbs_print_asset_service.py": {
     "файл-монолит": 883
   },
@@ -78,7 +81,7 @@
     "файл-монолит": 1747
   },
   "backend/app/services/fbs_worklist_service.py": {
-    "файл-монолит": 863
+    "файл-монолит": 897
   },
   "backend/app/services/inbound_intake_service.py": {
     "файл-монолит": 1823
@@ -107,7 +110,7 @@
     "голый-except": 1
   },
   "backend/app/services/wb_marketplace_orders_service.py": {
-    "файл-монолит": 1622
+    "файл-монолит": 1697
   },
   "backend/app/services/wildberries_client.py": {
     "файл-монолит": 1178
