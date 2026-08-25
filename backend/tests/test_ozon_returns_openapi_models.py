@@ -6,7 +6,7 @@ from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from typing import Any, cast, get_args
 
-from pydantic import BaseModel
+from pydantic import BaseModel, RootModel
 
 from app.schemas.ozon_returns_api import MODEL_BY_OPENAPI_NAME
 
@@ -67,6 +67,12 @@ def test_all_openapi_components_have_exact_model_fields_and_requiredness() -> No
             assert isinstance(model, type)
             assert issubclass(model, Enum)
             assert {member.value for member in model} == set(openapi_schema["enum"])
+            continue
+
+        if openapi_schema.get("type") != "object" and "properties" not in openapi_schema:
+            assert isinstance(model, type)
+            assert issubclass(model, RootModel)
+            assert model.model_json_schema().get("type") == openapi_schema.get("type")
             continue
 
         assert isinstance(model, type)

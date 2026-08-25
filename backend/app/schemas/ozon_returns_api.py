@@ -10,7 +10,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, cast
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, RootModel
 
 _OPTIONAL_FIELD_DEFAULT = cast(Any, None)
 
@@ -315,10 +315,9 @@ class OzonGiveoutListResponseGiveoutDetails(OzonReturnsModel):
     warehouse_name: str = Field(_OPTIONAL_FIELD_DEFAULT, description='Название склада.')
 
 
-class OzonV1GiveoutStatus(OzonReturnsModel):
+class OzonV1GiveoutStatus(RootModel[str]):
     __openapi_name__ = 'v1GiveoutStatus'
     'Статусы возвратной отгрузки:\n - `GIVEOUT_STATUS_UNSPECIFIED` — не определён, напишите в поддержку.\n - `GIVEOUT_STATUS_CREATED` — создана.\n - `GIVEOUT_STATUS_APPROVED` — одобрена.\n - `GIVEOUT_STATUS_COMPLETED` — завершена.\n - `GIVEOUT_STATUS_CANCELLED` — отменена.\n'
-    pass
 
 
 class OzonV1GiveoutInfoRequest(OzonReturnsModel):
@@ -343,10 +342,9 @@ class OzonGiveoutInfoResponseArticleDetails(OzonReturnsModel):
     seller_id: int = Field(_OPTIONAL_FIELD_DEFAULT, description='Идентификатор продавца.', json_schema_extra={'format': 'int64'})
 
 
-class OzonV1GiveoutDeliverySchema(OzonReturnsModel):
+class OzonV1GiveoutDeliverySchema(RootModel[str]):
     __openapi_name__ = 'v1GiveoutDeliverySchema'
     'Cхема доставки:\n - `GIVEOUT_DELIVERY_SCHEMA_UNSPECIFIED` — не определёна, напишите в поддержку.\n - `GIVEOUT_DELIVERY_SCHEMA_FBO` — FBO.\n - `GIVEOUT_DELIVERY_SCHEMA_FBS` — FBS.\n'
-    pass
 
 
 class OzonV1GiveoutGetBarcodeResponse(OzonReturnsModel):

@@ -145,7 +145,7 @@ def generate() -> str:
         enum_import,
         "from typing import Any, cast",
         "",
-        "from pydantic import BaseModel, ConfigDict, Field",
+        "from pydantic import BaseModel, ConfigDict, Field, RootModel",
         "",
         "_OPTIONAL_FIELD_DEFAULT = cast(Any, None)",
         "",
@@ -169,6 +169,15 @@ def generate() -> str:
             for index, value in enumerate(schema["enum"]):
                 member = _enum_member_name(value, index, used)
                 lines.append(f"    {member} = {value!r}")
+            lines.extend(["", ""])
+            continue
+
+        if schema.get("type") != "object" and "properties" not in schema:
+            root_type = _type_expression(schema, names)
+            lines.append(f"class {class_name}(RootModel[{root_type}]):")
+            lines.append(f"    __openapi_name__ = {schema_name!r}")
+            if description:
+                lines.append(f"    {description!r}")
             lines.extend(["", ""])
             continue
 
