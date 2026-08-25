@@ -6,8 +6,11 @@ import uuid
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
-from httpx import AsyncClient
+from fastapi import BackgroundTasks, FastAPI
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.db.session import SessionLocal
 from app.models.document_event import (
@@ -21,15 +24,14 @@ from app.models.document_event import (
     SOURCE_USER,
     DocumentEvent,
 )
-from app.models.fbs_order import FbsOrder
+from app.models.fbs_order import FBS_ORDER_STATUS_DONE, FbsOrder
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_ASSEMBLING,
-    FBS_SUPPLY_STATUS_DONE,
-    FBS_SUPPLY_STATUS_IN_DELIVERY,
     FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
 )
 from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
+from app.models.inventory_balance import InventoryBalance
 from app.models.marketplace_unload import (
     MarketplaceUnloadBox,
     MarketplaceUnloadBoxLine,
@@ -37,12 +39,19 @@ from app.models.marketplace_unload import (
     MarketplaceUnloadRequest,
 )
 from app.services import document_event_service as event_svc
+from app.services import fbs_packaging_integration_service as fbs_packaging_svc
+from app.services import fbs_shipment_service as fbs_shipment_svc
+from app.services import fbs_tracking_service as fbs_tracking_svc
+from app.services import inbound_intake_service as inbound_svc
+from app.services import marketplace_unload_service as unload_svc
 from app.services.document_event_service import (
+    DocumentEventActorMiddleware,
     DocumentEventError,
     document_event_actor,
     record_document_event,
     system_document_events,
 )
+from app.services.marketplace_provider import FakeMarketplaceTransport, OzonMarketplaceProvider
 from app.services.tokens import decode_access_token
 
 
@@ -105,12 +114,20 @@ async def _create_inbound_draft(
     async_client: AsyncClient,
     headers: dict[str, str],
     data: dict[str, str],
+    *,
+    operation_type: str = "inbound",
+    marketplace: str | None = None,
 ) -> tuple[str, str]:
     base = "/operations/inbound-intake-requests"
     request = await async_client.post(
         base,
         headers=headers,
-        json={"warehouse_id": data["warehouse_id"], "seller_id": data["seller_id"]},
+        json={
+            "warehouse_id": data["warehouse_id"],
+            "seller_id": data["seller_id"],
+            "operation_type": operation_type,
+            "marketplace": marketplace,
+        },
     )
     assert request.status_code == 201, request.text
     request_id = request.json()["id"]
@@ -238,6 +255,7 @@ async def test_inbound_status_chain_is_visible_through_document_events_api(
 @pytest.mark.asyncio
 async def test_event_write_contract_and_repeated_quantity_changes(
     async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     headers, token_payload = await _register_admin(async_client)
     data = await _seed_document_data(async_client, headers)
@@ -271,6 +289,34 @@ async def test_event_write_contract_and_repeated_quantity_changes(
         await session.commit()
     assert inserted is True
     assert duplicate is False
+
+    original_execute = AsyncConnection.execute
+    execute_calls = 0
+
+    async def fail_first_execute(
+        connection: AsyncConnection, *args: object, **kwargs: object
+    ) -> object:
+        nonlocal execute_calls
+        execute_calls += 1
+        if execute_calls == 1:
+            raise IntegrityError("insert document_event", {}, RuntimeError("foreign key"))
+        return await original_execute(connection, *args, **kwargs)  # type: ignore[call-overload]
+
+    with monkeypatch.context() as patch:
+        patch.setattr(AsyncConnection, "execute", fail_first_execute)
+        async with SessionLocal() as session:
+            with pytest.raises(IntegrityError, match="foreign key"):
+                await record_document_event(
+                    session,
+                    tenant_id=tenant_id,
+                    document_type=DOCUMENT_TYPE_INBOUND_INTAKE,
+                    document_id=uuid.UUID(request_id),
+                    event_type=EVENT_PLANNED_DATE_CHANGED,
+                    source=SOURCE_USER,
+                    actor_user_id=actor_id,
+                    payload_json={"field": "manual"},
+                    idempotency_key=f"{request_id}:not-a-duplicate",
+                )
 
     async with SessionLocal() as session:
         for _ in range(2):
@@ -351,6 +397,7 @@ async def test_event_write_contract_and_repeated_quantity_changes(
 @pytest.mark.asyncio
 async def test_fbs_and_marketplace_unload_status_sequences(
     async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     headers, token_payload = await _register_admin(async_client)
     data = await _seed_document_data(async_client, headers)
@@ -385,23 +432,42 @@ async def test_fbs_and_marketplace_unload_status_sequences(
         )
         session.add(order)
         await session.commit()
+
+        async def fulfillment_ready(*_args: object, **_kwargs: object) -> bool:
+            return True
+
+        monkeypatch.setattr(fbs_packaging_svc, "_all_active_orders_fulfilled", fulfillment_ready)
         with document_event_actor(actor_id):
-            for status in (
+            supply = await fbs_packaging_svc.update_supply_status(
+                session,
+                tenant_id,
+                supply.id,
                 FBS_SUPPLY_STATUS_ASSEMBLING,
-                FBS_SUPPLY_STATUS_PACKED,
-                FBS_SUPPLY_STATUS_IN_DELIVERY,
-                FBS_SUPPLY_STATUS_DONE,
-            ):
-                supply.status = status
-                await session.commit()
+            )
+            await session.commit()
+            supply.packaging_task_id = None
+            await session.flush()
+            promoted = await fbs_packaging_svc.try_promote_fbs_supply_if_ready(
+                session, tenant_id, supply.id
+            )
+            assert promoted is not None
+            assert promoted.status == FBS_SUPPLY_STATUS_PACKED
+            await session.commit()
+            await session.refresh(supply, attribute_names=["orders"])
+            await fbs_shipment_svc._apply_local_delivered(session, supply, list(supply.orders))
+            await session.commit()
+            order.status = FBS_ORDER_STATUS_DONE
+            await fbs_tracking_svc._maybe_complete_supply(session, supply)
+            await session.commit()
         supply_id = supply.id
 
         unload = MarketplaceUnloadRequest(
             tenant_id=tenant_id,
             warehouse_id=warehouse_id,
             seller_id=seller_id,
-            marketplace="wb",
+            marketplace="ozon",
             status="draft",
+            planned_shipment_date=date(2026, 8, 29),
         )
         session.add(unload)
         await session.flush()
@@ -416,23 +482,59 @@ async def test_fbs_and_marketplace_unload_status_sequences(
         session.add(box)
         await session.flush()
         session.add(MarketplaceUnloadBoxLine(box_id=box.id, product_id=product_id, quantity=3))
+        session.add(
+            InventoryBalance(
+                tenant_id=tenant_id,
+                storage_location_id=uuid.UUID(data["location_id"]),
+                product_id=product_id,
+                quantity=10,
+            )
+        )
         await session.commit()
         with document_event_actor(actor_id):
-            for status in ("submitted", "draft", "confirmed", "collecting", "shipped"):
-                unload.status = status
-                await session.commit()
+            await unload_svc.plan_request(session, tenant_id, unload.id)
+            await unload_svc.unplan_request(session, tenant_id, unload.id)
+            await unload_svc.plan_request(session, tenant_id, unload.id)
+            await unload_svc.confirm_request(session, tenant_id, unload.id)
+            unload_svc.enter_collecting_if_needed(unload)
+            await session.commit()
+
+            async def packaging_done(*_args: object, **_kwargs: object) -> None:
+                return None
+
+            monkeypatch.setattr(
+                "app.services.packaging_task_service.assert_unload_packaging_done",
+                packaging_done,
+            )
+            await unload_svc.complete_unload(
+                session,
+                tenant_id,
+                unload.id,
+                acknowledge_discrepancy=True,
+                performer_id=actor_id,
+                ozon_provider=OzonMarketplaceProvider(transport=FakeMarketplaceTransport()),
+            )
         cancelled = MarketplaceUnloadRequest(
             tenant_id=tenant_id,
             warehouse_id=warehouse_id,
             seller_id=seller_id,
-            marketplace="wb",
+            marketplace="ozon",
             status="draft",
+            planned_shipment_date=date(2026, 8, 30),
         )
         session.add(cancelled)
+        await session.flush()
+        session.add(
+            MarketplaceUnloadLine(
+                request_id=cancelled.id,
+                product_id=product_id,
+                quantity=1,
+            )
+        )
         await session.commit()
         with document_event_actor(actor_id):
-            cancelled.status = "cancelled"
-            await session.commit()
+            await unload_svc.plan_request(session, tenant_id, cancelled.id)
+            await unload_svc.cancel_request(session, tenant_id, cancelled.id, performer_id=actor_id)
         unload_id = unload.id
         cancelled_id = cancelled.id
 
@@ -483,13 +585,15 @@ async def test_fbs_and_marketplace_unload_status_sequences(
     assert [(row.payload_json["from"], row.payload_json["to"]) for row in unload_events] == [
         ("draft", "submitted"),
         ("submitted", "draft"),
-        ("draft", "confirmed"),
+        ("draft", "submitted"),
+        ("submitted", "confirmed"),
         ("confirmed", "collecting"),
         ("collecting", "shipped"),
     ]
-    assert [row.qty for row in unload_events] == [3, 3, 3, 3, 3]
+    assert [row.qty for row in unload_events] == [3, 3, 3, 3, 3, 3]
     assert [(row.payload_json["from"], row.payload_json["to"]) for row in cancelled_events] == [
-        ("draft", "cancelled")
+        ("draft", "submitted"),
+        ("submitted", "cancelled"),
     ]
 
 
@@ -586,3 +690,120 @@ async def test_all_inbound_document_data_event_types(
         "value_before": 0,
         "value_after": 1,
     }
+
+
+# TC-NEW-DOCUMENT-JOURNAL-006 — a real return route keeps the same complete status journal.
+@pytest.mark.asyncio
+async def test_return_status_chain_and_defect_are_recorded_through_api(
+    async_client: AsyncClient,
+) -> None:
+    headers, _ = await _register_admin(async_client)
+    data = await _seed_document_data(async_client, headers)
+    request_id, line_id = await _create_inbound_draft(
+        async_client,
+        headers,
+        data,
+        operation_type="return",
+        marketplace="ozon",
+    )
+    base = "/operations/inbound-intake-requests"
+
+    planned = await async_client.patch(
+        f"{base}/{request_id}", headers=headers, json={"planned_box_count": 1}
+    )
+    assert planned.status_code == 200, planned.text
+    submitted = await async_client.post(f"{base}/{request_id}/submit", headers=headers)
+    assert submitted.status_code == 200, submitted.text
+    receiving = await async_client.post(f"{base}/{request_id}/begin-receiving", headers=headers)
+    assert receiving.status_code == 200, receiving.text
+    actual = await async_client.patch(
+        f"{base}/{request_id}/lines/{line_id}/actual",
+        headers=headers,
+        json={"actual_qty": 5},
+    )
+    assert actual.status_code == 200, actual.text
+    defect = await async_client.patch(
+        f"{base}/{request_id}/lines/{line_id}/defective",
+        headers=headers,
+        json={"defective_qty": 1},
+    )
+    assert defect.status_code == 200, defect.text
+    sorting = await async_client.post(f"{base}/{request_id}/verify", headers=headers)
+    assert sorting.status_code == 200, sorting.text
+    done = await async_client.post(f"{base}/{request_id}/post", headers=headers)
+    assert done.status_code == 200, done.text
+
+    async with SessionLocal() as session:
+        rows = list(
+            (
+                await session.scalars(
+                    select(DocumentEvent)
+                    .where(DocumentEvent.document_id == uuid.UUID(request_id))
+                    .order_by(DocumentEvent.occurred_at)
+                )
+            ).all()
+        )
+    statuses = [row for row in rows if row.event_type == EVENT_STATUS_CHANGED]
+    assert [(row.payload_json["from"], row.payload_json["to"]) for row in statuses] == [
+        ("draft", "submitted"),
+        ("submitted", "receiving"),
+        ("receiving", "sorting"),
+        ("sorting", "done"),
+    ]
+    assert [row.qty for row in statuses] == [0, 0, 5, 5]
+    defects = [row for row in rows if row.event_type == "defect_qty_changed"]
+    assert len(defects) == 1
+    assert defects[0].payload_json["value_after"] == 1
+
+
+# TC-NEW-DOCUMENT-JOURNAL-007 — Starlette background work drops the request actor.
+@pytest.mark.asyncio
+async def test_background_service_status_transition_is_system_authored(
+    async_client: AsyncClient,
+) -> None:
+    headers, _ = await _register_admin(async_client)
+    data = await _seed_document_data(async_client, headers)
+    request_id, _ = await _create_inbound_draft(async_client, headers, data)
+    base = "/operations/inbound-intake-requests"
+    planned = await async_client.patch(
+        f"{base}/{request_id}", headers=headers, json={"planned_box_count": 1}
+    )
+    assert planned.status_code == 200, planned.text
+
+    background_app = FastAPI()
+    background_app.add_middleware(DocumentEventActorMiddleware)
+
+    @background_app.post("/run")
+    async def run_in_background(background_tasks: BackgroundTasks) -> dict[str, bool]:
+        async def submit_document() -> None:
+            async with SessionLocal() as session:
+                await inbound_svc.submit_request(
+                    session,
+                    uuid.UUID(data["tenant_id"]),
+                    uuid.UUID(request_id),
+                )
+
+        background_tasks.add_task(submit_document)
+        return {"scheduled": True}
+
+    data["tenant_id"] = str(decode_access_token(headers["Authorization"].split()[1])["tenant_id"])
+    transport = ASGITransport(app=background_app)
+    async with AsyncClient(transport=transport, base_url="http://journal.test") as client:
+        response = await client.post("/run", headers=headers)
+    assert response.status_code == 200, response.text
+
+    async with SessionLocal() as session:
+        rows = list(
+            (
+                await session.scalars(
+                    select(DocumentEvent).where(
+                        DocumentEvent.document_id == uuid.UUID(request_id),
+                        DocumentEvent.event_type == EVENT_STATUS_CHANGED,
+                    )
+                )
+            ).all()
+        )
+    assert len(rows) == 1
+    assert rows[0].payload_json == {"from": "draft", "to": "submitted"}
+    assert rows[0].source == SOURCE_SYSTEM
+    assert rows[0].actor_user_id is None

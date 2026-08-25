@@ -4,7 +4,7 @@ import logging
 import uuid
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Any, cast
@@ -14,7 +14,7 @@ from sqlalchemy import Connection, event, func, insert, inspect, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session, selectinload
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.models.document_event import (
     DOCUMENT_EVENT_SOURCES,
@@ -101,9 +101,25 @@ class DocumentEventActorMiddleware:
             return
         actor = _actor_from_scope(scope)
         token = _actor_context.set(actor)
+        background_token: Token[DocumentEventActor] | None = None
+
+        async def send_with_system_background(message: Message) -> None:
+            nonlocal background_token
+            if (
+                background_token is None
+                and message["type"] == "http.response.body"
+                and not message.get("more_body", False)
+            ):
+                # Starlette starts BackgroundTasks after the final response body.
+                # Provider polling and publication must not inherit the request user.
+                background_token = _actor_context.set(_SYSTEM_ACTOR)
+            await send(message)
+
         try:
-            await self.app(scope, receive, send)
+            await self.app(scope, receive, send_with_system_background)
         finally:
+            if background_token is not None:
+                _actor_context.reset(background_token)
             _actor_context.reset(token)
 
 
@@ -224,9 +240,17 @@ async def record_document_event(
     except IntegrityError:
         await savepoint.rollback()
         if idempotency_key is not None:
-            return False
+            existing_id = await connection.scalar(
+                select(DocumentEvent.id).where(
+                    DocumentEvent.tenant_id == tenant_id,
+                    DocumentEvent.idempotency_key == idempotency_key,
+                )
+            )
+            if existing_id is not None:
+                return False
         raise
     except Exception:
+        logger.exception("document event insert failed")
         await savepoint.rollback()
         raise
     else:

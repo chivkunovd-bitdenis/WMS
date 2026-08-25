@@ -81,36 +81,43 @@ def upgrade() -> None:
                        current_setting('wms.document_event_writer', true), ''
                    ) <> 'application'
                 THEN
-                    INSERT INTO document_event (
-                        id,
-                        tenant_id,
-                        document_type,
-                        document_id,
-                        event_type,
-                        actor_user_id,
-                        source,
-                        occurred_at,
-                        qty,
-                        product_id,
-                        payload_json,
-                        idempotency_key,
-                        created_at
-                    )
-                    VALUES (
-                        gen_random_uuid(),
-                        NEW.tenant_id,
-                        'fbs_supply',
-                        NEW.id,
-                        'status_changed',
-                        NULL,
-                        'system',
-                        CURRENT_TIMESTAMP,
-                        (SELECT COUNT(*) FROM fbs_orders WHERE supply_id = NEW.id),
-                        NULL,
-                        jsonb_build_object('from', OLD.status, 'to', NEW.status),
-                        NULL,
-                        CURRENT_TIMESTAMP
-                    );
+                    BEGIN
+                        INSERT INTO document_event (
+                            id,
+                            tenant_id,
+                            document_type,
+                            document_id,
+                            event_type,
+                            actor_user_id,
+                            source,
+                            occurred_at,
+                            qty,
+                            product_id,
+                            payload_json,
+                            idempotency_key,
+                            created_at
+                        )
+                        VALUES (
+                            gen_random_uuid(),
+                            NEW.tenant_id,
+                            'fbs_supply',
+                            NEW.id,
+                            'status_changed',
+                            NULL,
+                            'system',
+                            CURRENT_TIMESTAMP,
+                            (SELECT COUNT(*) FROM fbs_orders WHERE supply_id = NEW.id),
+                            NULL,
+                            jsonb_build_object('from', OLD.status, 'to', NEW.status),
+                            NULL,
+                            CURRENT_TIMESTAMP
+                        );
+                    EXCEPTION WHEN OTHERS THEN
+                        RAISE WARNING
+                            'document event write failed for fbs supply %: %',
+                            NEW.id,
+                            SQLERRM;
+                    END;
                 END IF;
                 RETURN NEW;
             END;
