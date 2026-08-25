@@ -7,7 +7,7 @@ import { beginInboundReceiving, beginInboundReceivingWithBoxes, fulfillInboundVi
 // TC-NEW-MP-006 — TASK-011: модалка «Добавить товары» напротив короба; лимит по плану.
 test('FF marketplace unload: box add-products modal respects plan limit', async ({ page }) => {
   const email = `e2e-mp-box-modal-${Date.now()}@example.com`
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
   const barcode = 'E2E-MOCK-BARCODE'
 
   await page.goto('/')
@@ -227,7 +227,7 @@ test('FF marketplace unload: two single-box batch creates both allow add product
   page,
 }) => {
   const email = `e2e-mp-batch1x2-${Date.now()}@example.com`
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
   const barcode = 'E2E-MOCK-BARCODE'
 
   await page.goto('/')
@@ -440,7 +440,7 @@ test('FF marketplace unload: two single-box batch creates both allow add product
 // TC-NEW-MP-018 — MP-018: ручной выбор ячейки + scan товара в модалке короба.
 test('FF marketplace unload: box modal manual location and product scan', async ({ page }) => {
   const email = `e2e-mp018-${Date.now()}@example.com`
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
   const barcode = 'E2E-MOCK-BARCODE'
 
   await page.goto('/')
@@ -620,7 +620,7 @@ test('FF marketplace unload: box modal manual location and product scan', async 
 // TC-NEW-OUT-FE-01 — STAB-OUT-FE-01: товар только в зоне сортировки — без выбора ячейки.
 test('FF marketplace unload: sorting buffer pick without cell selection', async ({ page }) => {
   const email = `e2e-mp-sortbuf-${Date.now()}@example.com`
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
   const barcode = 'E2E-MOCK-BARCODE'
 
   await page.goto('/')

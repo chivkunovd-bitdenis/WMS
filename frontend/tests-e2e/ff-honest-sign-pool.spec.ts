@@ -10,7 +10,7 @@ test('FF honest sign pool card: tabs and CSV export', async ({ page }) => {
   test.setTimeout(90_000)
   const email = `e2e-pool-${Date.now()}@example.com`
   const password = 'password123'
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
 
   await page.goto('/')
   await openFulfillmentRegistration(page)

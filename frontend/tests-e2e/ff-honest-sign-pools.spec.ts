@@ -9,7 +9,7 @@ test('FF honest sign: product list row, link product via API, open pool card', a
   test.setTimeout(90_000)
   const email = `e2e-pools-${Date.now()}@example.com`
   const password = 'password123'
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
   const sku = `SKU-PL-${Date.now()}`
 
   await page.goto('/')

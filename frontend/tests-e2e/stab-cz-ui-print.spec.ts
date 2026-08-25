@@ -12,7 +12,7 @@ test('stab cz ui print — product row, pool card, marking constructor, no repri
 
   const email = `e2e-stab-cz-${Date.now()}@example.com`;
   const password = 'password123';
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000';
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`;
   const skuPrefix = `STAB-CZ-${Date.now()}`;
 
   await page.goto('/');

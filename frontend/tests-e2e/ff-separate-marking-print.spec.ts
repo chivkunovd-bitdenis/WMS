@@ -9,7 +9,7 @@ test('FF settings: separate marking print shows split print sections', async ({ 
   test.setTimeout(120_000)
   const email = `e2e-sep-${Date.now()}@example.com`
   const password = 'password123'
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
   const sku = `SKU-SEP-${Date.now()}`
 
   await page.goto('/')

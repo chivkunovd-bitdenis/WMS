@@ -16,7 +16,7 @@ test('FF prints operational outbound waybill from ops screen', async ({ page }) 
   await page.getByTestId('register-form').getByLabel('Email администратора').fill(email);
   await page.getByTestId('register-form').getByLabel('Пароль').fill('password123');
   const regClick = page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click();
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000';
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`;
   const [regRes] = await Promise.all([
     waitForPostOk(page, '/api/auth/register'),
     waitForGetOk(page, '/api/auth/me'),

@@ -22,7 +22,7 @@ test('FF honest sign: import dialog uploads CSV into pool', async ({ page }) => 
     page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
   ])
   const token = String(((await regRes.json()) as { access_token: string }).access_token)
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
   const auth = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 
   const sellerRes = await page.request.post(`${e2eApi}/sellers`, {
@@ -115,7 +115,7 @@ test('FF honest sign: reset after aborted preview re-enables import dialog actio
   test.setTimeout(90_000)
   const email = `e2e-abort-${Date.now()}@example.com`
   const password = 'password123'
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
 
   await page.goto('/')
   await openFulfillmentRegistration(page)
@@ -196,7 +196,7 @@ test('FF honest sign: import dialog explains when seller has no honest-sign prod
   test.setTimeout(90_000)
   const email = `e2e-no-cz-${Date.now()}@example.com`
   const password = 'password123'
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
 
   await page.goto('/')
   await openFulfillmentRegistration(page)
@@ -256,7 +256,7 @@ test('FF honest sign: unlinked available pool is visible and opens product linki
   test.setTimeout(90_000)
   const email = `e2e-unlinked-${Date.now()}@example.com`
   const password = 'password123'
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
 
   await page.goto('/')
   await openFulfillmentRegistration(page)
@@ -312,7 +312,7 @@ test('FF honest sign: re-import same codes reports duplicates', async ({ page })
   test.setTimeout(90_000)
   const email = `e2e-dup-${Date.now()}@example.com`
   const password = 'password123'
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
 
   await page.goto('/')
   await openFulfillmentRegistration(page)

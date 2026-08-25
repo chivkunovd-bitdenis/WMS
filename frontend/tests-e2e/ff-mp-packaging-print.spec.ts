@@ -14,7 +14,7 @@ test('MP packaging: print icon opens qty-only dialog for non-marked product', as
   const adminEmail = `e2e-mp-print-${Date.now()}@example.com`
   const sellerEmail = `e2e-mp-print-sl-${Date.now()}@example.com`
   const password = 'password123'
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
   const barcode = 'E2E-MOCK-BARCODE'
   const sku = `SKU-MP-PR-${Date.now()}`
   const planQty = 3
@@ -244,7 +244,7 @@ test('MP packaging: marked product uses separate CZ/WB print when FF setting is 
 
   const adminEmail = `e2e-mp-sep-print-${Date.now()}@example.com`
   const password = 'password123'
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
   const barcode = 'E2E-MOCK-BARCODE'
   const sku = `SKU-MP-SEP-${Date.now()}`
   const planQty = 2

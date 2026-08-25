@@ -7,7 +7,7 @@ import {beginInboundReceivingWithBoxes,  fulfillInboundViaBoxScans } from './inb
 // TC-NEW-MP-006 / MP-005: короба доступны до завершения упаковки.
 test('FF marketplace unload: box create enabled before packaging done', async ({ page }) => {
   const email = `e2e-mp-pkg-gate-${Date.now()}@example.com`
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
   const barcode = 'E2E-MOCK-BARCODE'
 
   await page.goto('/')

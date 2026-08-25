@@ -8,7 +8,7 @@ test('S-12 keeps warehouse name beside the marketplace chip', async ({ page }) =
   const warehouseName = `Склад Ozon ${suffix}`
   const email = `e2e-s12-chip-${suffix}@example.com`
   const password = 'password123'
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
 
   await page.goto('/')
   await openFulfillmentRegistration(page)

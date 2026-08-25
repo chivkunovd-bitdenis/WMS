@@ -8,7 +8,7 @@ import {beginInboundReceivingWithBoxes,  fulfillInboundViaBoxScans } from './inb
 test('FF marketplace unload keeps packaging print controls without final waybill step', async ({ page }) => {
   const email = `e2e-wb-${Date.now()}@example.com`;
   const password = 'password123';
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000';
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`;
   const sku = `SKU-WB-${Date.now()}`;
   const barcode = 'E2E-MOCK-BARCODE';
 

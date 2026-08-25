@@ -25,7 +25,7 @@ test('seller product card upload opens import and accepts pool GTIN file', async
     page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
   ])
   const token = String(((await regRes.json()) as { access_token: string }).access_token)
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
   const auth = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 
   const created = await page.request.post('/api/sellers/with-account', {

@@ -14,7 +14,7 @@ test('FF honest sign product-first: list, product card, shared basket pool', asy
   test.setTimeout(180_000)
   const email = `e2e-hs-pf-${Date.now()}@example.com`
   const password = 'password123'
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
   const skuPrefix = `HS-PF-${Date.now()}`
 
   await page.goto('/')
@@ -130,7 +130,7 @@ test('FF honest sign multi-pool product: product page threshold persists after r
   test.setTimeout(180_000)
   const email = `e2e-hs-mp-${Date.now()}@example.com`
   const password = 'password123'
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
   const skuPrefix = `HS-MP-${Date.now()}`
 
   await page.goto('/')

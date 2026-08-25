@@ -15,7 +15,7 @@ test('seller products table and next MP picker show current stock after MP plan'
   const adminEmail = `e2e-sav-${Date.now()}@example.com`;
   const sellerEmail = `e2e-sav-sl-${Date.now()}@example.com`;
   const password = 'password123';
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000';
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`;
   const barcode = 'E2E-MOCK-BARCODE';
   const sku = `SKU-SAV-${Date.now()}`;
 

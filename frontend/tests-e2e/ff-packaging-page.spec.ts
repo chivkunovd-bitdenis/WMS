@@ -31,7 +31,7 @@ test('FF packaging page: create from sorting and pack line', async ({ page }) =>
   test.setTimeout(120_000);
   const email = `e2e-pkg-${Date.now()}@example.com`;
   const password = 'password123';
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000';
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`;
   const sku = `SKU-PKG-${Date.now()}`;
 
   await page.goto('/');
@@ -253,7 +253,7 @@ test('FF packaging page: create from storage cell', async ({ page }) => {
   test.setTimeout(120_000);
   const email = `e2e-pkg-cell-${Date.now()}@example.com`;
   const password = 'password123';
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000';
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`;
   const sku = `SKU-CELL-${Date.now()}`;
   const locCode = `A-${Date.now().toString().slice(-4)}`;
 
@@ -348,7 +348,7 @@ test('FF packaging page: cancel manual task', async ({ page }) => {
   test.setTimeout(120_000);
   const email = `e2e-pkg-cancel-${Date.now()}@example.com`;
   const password = 'password123';
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000';
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`;
   const sku = `SKU-CAN-${Date.now()}`;
 
   await page.goto('/');

@@ -14,7 +14,7 @@ test('FF packaging: marking print constructor shortage and pairs preview', async
   })
   const email = `e2e-cz-short-${Date.now()}@example.com`
   const password = 'password123'
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
   const sku = `SKU-CZ-S-${Date.now()}`
 
   await page.goto('/')

@@ -143,7 +143,7 @@ test('ff products: catalog separates product fields and hides stock columns', as
 test('ff products: marking icon shows count and opens honest sign product card', async ({ page }) => {
   const email = `e2e-ff-catalog-chz-${Date.now()}@example.com`
   const password = 'password123'
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
 
   await page.goto('/')
   await openFulfillmentRegistration(page)

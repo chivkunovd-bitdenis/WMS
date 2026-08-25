@@ -15,7 +15,7 @@ test('outbound submit without cell reserves warehouse; post needs cell', async (
   const email = `e2e-oss-${Date.now()}@example.com`;
   const sku = `SKU-OSS-${Date.now()}`;
   const whCode = `wh-oss-${Date.now()}`;
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000';
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`;
 
   await page.goto('/');
   await openFulfillmentRegistration(page);

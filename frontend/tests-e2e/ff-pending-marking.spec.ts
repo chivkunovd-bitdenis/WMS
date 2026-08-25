@@ -9,7 +9,7 @@ test('FF pending marking worklist row disappears after print', async ({ page }) 
   test.setTimeout(120_000)
   const email = `e2e-pending-${Date.now()}@example.com`
   const password = 'password123'
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
   const sku = `SKU-PND-${Date.now()}`
 
   await page.goto('/')
@@ -132,7 +132,7 @@ test('FF pending marking shows no-codes owner handoff and task link', async ({ p
   test.setTimeout(120_000)
   const email = `e2e-pending-zero-${Date.now()}@example.com`
   const password = 'password123'
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
   const sku = `SKU-PND-ZERO-${Date.now()}`
 
   await page.goto('/')
@@ -228,7 +228,7 @@ test('FF pending marking bulk print selected rows', async ({ page }) => {
   test.setTimeout(180_000)
   const email = `e2e-pending-bulk-${Date.now()}@example.com`
   const password = 'password123'
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
   const ts = Date.now()
 
   await page.goto('/')

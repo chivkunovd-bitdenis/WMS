@@ -157,7 +157,7 @@ test.describe('FF inbound box piece intake', () => {
 
 // TC-NEW-STAB-IN-FE-03 — модалка «Добавить в короб»: фото/название/артикул/размер, hover, qty только в выбранный короб.
 test('STAB-IN-FE-03 box add modal product row and target box qty', async ({ page }) => {
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000';
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`;
   const seed = await seedFfSellerInbound(page, `stab-in-fe03-${Date.now()}`);
   const auth = { Authorization: `Bearer ${seed.token}`, 'Content-Type': 'application/json' };
 

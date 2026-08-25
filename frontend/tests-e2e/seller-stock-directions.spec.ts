@@ -18,7 +18,7 @@ test('seller creates, edits and deletes stock directions with compact FBS public
   const sellerEmail = `e2e-stock-dir-seller-${suffix}@example.com`
   const password = 'password123'
   const sku = `SKU-DIR-${suffix}`
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
 
   await page.goto('/')
   await openFulfillmentRegistration(page)

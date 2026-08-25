@@ -7,7 +7,7 @@ import {beginInboundReceivingWithBoxes,  fulfillInboundViaBoxScans } from './inb
 // TC-NEW-MP-003 — TASK-003: при выкл. адресном хранении UI ячеек скрыт на отгрузке МП.
 test('address storage off hides cell UI on marketplace unload', async ({ page }) => {
   const email = `e2e-mp-ui-cells-${Date.now()}@example.com`
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
   const barcode = 'E2E-MOCK-BARCODE'
 
   await page.goto('/')

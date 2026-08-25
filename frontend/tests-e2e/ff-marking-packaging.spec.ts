@@ -10,7 +10,7 @@ test('FF packaging: print honest sign codes for line quantity', async ({ page })
   test.setTimeout(120_000)
   const email = `e2e-cz-${Date.now()}@example.com`
   const password = 'password123'
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
   const sku = `SKU-CZ-${Date.now()}`
 
   await page.goto('/')
@@ -158,7 +158,7 @@ test('FF packaging: reprint selected marking codes', async ({ page }) => {
   test.setTimeout(120_000)
   const email = `e2e-reprint1-${Date.now()}@example.com`
   const password = 'password123'
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
   const sku = `SKU-REP1-${Date.now()}`
 
   await page.goto('/')
@@ -326,7 +326,7 @@ test('FF packaging: block complete when honest sign codes missing', async ({ pag
   test.setTimeout(120_000)
   const email = `e2e-cz-block-${Date.now()}@example.com`
   const password = 'password123'
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
   const sku = `SKU-CZ-BLK-${Date.now()}`
 
   await page.goto('/')

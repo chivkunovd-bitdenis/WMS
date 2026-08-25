@@ -108,7 +108,7 @@ async function postInboundLineToStorage(
 // TC-NEW-MP-007 — TASK-012: вкладки документа отгрузки на МП без потери контекста.
 test('FF marketplace unload: tabs switch without losing document context', async ({ page }) => {
   const email = `e2e-mp-tabs-${Date.now()}@example.com`
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
 
   await page.goto('/')
   await openFulfillmentRegistration(page)
@@ -327,7 +327,7 @@ test('FF marketplace unload: tabs switch without losing document context', async
 // TC-NEW-MP-011 / MP-012: на черновике нет плашки прогресса упаковки.
 test('FF marketplace unload: no packaging progress banner on draft', async ({ page }) => {
   const email = `e2e-mp-draft-pkg-${Date.now()}@example.com`
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
 
   await page.goto('/')
   await openFulfillmentRegistration(page)
@@ -482,7 +482,7 @@ test('FF marketplace unload: no packaging progress banner on draft', async ({ pa
 // TC-NEW-MP-015 — MP-020: главный scan на «Товарах» не принимает штрихкод товара.
 test('FF marketplace unload: main scan rejects product barcode', async ({ page }) => {
   const email = `e2e-mp-mainscan-${Date.now()}@example.com`
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
   const barcode = 'E2E-MOCK-BARCODE'
 
   await page.goto('/')
@@ -644,7 +644,7 @@ test('FF marketplace unload: main scan rejects product barcode', async ({ page }
 // TC-NEW-OUT-FE-02 — OUT-FE-02: confirmed unload product table — no early red rows; qty columns aligned.
 test('TC-NEW-OUT-FE-02: shipment table columns no early red', async ({ page }) => {
   const email = `e2e-out-fe-02-${Date.now()}@example.com`
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
 
   await page.goto('/')
   await openFulfillmentRegistration(page)

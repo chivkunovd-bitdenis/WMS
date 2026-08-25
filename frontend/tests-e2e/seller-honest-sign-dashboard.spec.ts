@@ -22,7 +22,7 @@ test('seller honest sign dashboard shows product card and upload opens import', 
   ])
   const token = String(((await regRes.json()) as { access_token: string }).access_token)
   const auth = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
-  const e2eApi = process.env.E2E_API_ORIGIN ?? 'http://127.0.0.1:18000'
+  const e2eApi = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
 
   const created = await page.request.post('/api/sellers/with-account', {
     headers: auth,
