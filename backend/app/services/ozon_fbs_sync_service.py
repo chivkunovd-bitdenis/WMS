@@ -14,10 +14,11 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_CANCELLED,
     FBS_ORDER_STATUS_DONE,
@@ -35,8 +36,12 @@ from app.models.fbs_order import (
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.schemas.ozon_fbs_api import OzonPostingV4PostingFbsUnfulfilledListResponsePostingsProducts
+from app.services.fbs_stock_sync_service import (
+    STOCK_SYNC_STATUS_NOTHING_TO_PUBLISH,
+    FbsStockSyncResult,
+)
 from app.services.marketplace_account_service import MarketplaceAccountService
-from app.services.marketplace_provider import OzonMarketplaceProvider
+from app.services.marketplace_provider import MarketplaceProviderError, OzonMarketplaceProvider
 from app.services.wb_marketplace_orders_service import _release_reservation, _try_reserve_order
 
 OZON_FBS_DEADLINE_HOURS = 120
@@ -95,6 +100,126 @@ async def _credentials(
     seller_id: uuid.UUID,
 ) -> tuple[str, str]:
     return await MarketplaceAccountService(session).stored_credentials(tenant_id, seller_id)
+
+
+def _stock_error_code(error: MarketplaceProviderError) -> str:
+    if error.is_account_blocked:
+        return "ozon_account_blocked"
+    if error.status_code in {401, 403}:
+        return "ozon_auth_failed"
+    if error.status_code == 429:
+        return "ozon_rate_limited"
+    return "ozon_unavailable"
+
+
+async def sync_ozon_stocks(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    provider: OzonMarketplaceProvider,
+) -> FbsStockSyncResult:
+    """Publish each Ozon binding's explicitly allocated pool through the provider boundary."""
+    bindings = list(
+        (
+            await session.execute(
+                select(FbsWarehouseBinding)
+                .where(
+                    FbsWarehouseBinding.tenant_id == tenant_id,
+                    FbsWarehouseBinding.seller_id == seller_id,
+                    FbsWarehouseBinding.marketplace == "ozon",
+                    FbsWarehouseBinding.is_active.is_(True),
+                    FbsWarehouseBinding.stock_sync_enabled.is_(True),
+                )
+                .order_by(FbsWarehouseBinding.external_warehouse_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    result = FbsStockSyncResult()
+    if not bindings:
+        return result
+
+    client_id, api_key = await _credentials(session, tenant_id, seller_id)
+    for binding in bindings:
+        result.bindings_processed += 1
+        if binding.external_warehouse_id is None or not binding.external_warehouse_id.isdigit():
+            binding.last_sync_status = "error"
+            binding.last_error_code = "ozon_warehouse_id_invalid"
+            binding.last_sync_at = datetime.now(tz=UTC)
+            result.binding_errors += 1
+            result.errors += 1
+            continue
+
+        rows = list(
+            (
+                await session.execute(
+                    select(FbsBindingStockPool, ProductMarketplaceLink)
+                    .outerjoin(
+                        ProductMarketplaceLink,
+                        and_(
+                            ProductMarketplaceLink.tenant_id == tenant_id,
+                            ProductMarketplaceLink.seller_id == seller_id,
+                            ProductMarketplaceLink.product_id == FbsBindingStockPool.product_id,
+                            ProductMarketplaceLink.marketplace == "ozon",
+                            ProductMarketplaceLink.is_active.is_(True),
+                        ),
+                    )
+                    .where(FbsBindingStockPool.binding_id == binding.id)
+                    .order_by(FbsBindingStockPool.product_id)
+                )
+            ).all()
+        )
+        stocks: list[dict[str, object]] = []
+        missing_links = 0
+        for pool, link in rows:
+            if link is None or (not link.external_offer_id and not link.external_sku):
+                missing_links += 1
+                continue
+            stock: dict[str, object] = {
+                "warehouse_id": int(binding.external_warehouse_id),
+                "stock": max(int(pool.quantity), 0),
+            }
+            if link.external_offer_id:
+                stock["offer_id"] = link.external_offer_id
+            if link.external_sku and link.external_sku.isdigit():
+                stock["product_id"] = int(link.external_sku)
+            stocks.append(stock)
+
+        result.products_targeted += len(stocks)
+        result.products_zeroed += sum(stock.get("stock") == 0 for stock in stocks)
+        if missing_links:
+            result.errors += missing_links
+            result.binding_errors += 1
+            binding.last_sync_status = "error"
+            binding.last_error_code = "product_mapping_missing"
+        if not stocks:
+            if not missing_links:
+                binding.last_sync_status = STOCK_SYNC_STATUS_NOTHING_TO_PUBLISH
+                binding.last_error_code = None
+            binding.last_sync_at = datetime.now(tz=UTC)
+            continue
+
+        try:
+            await provider.publish_stocks(
+                client_id=client_id,
+                api_key=api_key,
+                stocks=stocks,
+            )
+        except MarketplaceProviderError as error:
+            result.errors += len(stocks)
+            result.binding_errors += 1
+            binding.last_sync_status = "error"
+            binding.last_error_code = _stock_error_code(error)
+        else:
+            result.products_confirmed += len(stocks)
+            if not missing_links:
+                binding.last_sync_status = "confirmed"
+                binding.last_error_code = None
+        binding.last_sync_at = datetime.now(tz=UTC)
+
+    await session.commit()
+    return result
 
 
 async def _product_id_for_row(

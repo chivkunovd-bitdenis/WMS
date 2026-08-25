@@ -43,8 +43,6 @@ type WbCatalogRow = {
   wb_nm_id: number | null
   ozon_sku: string | null
   ozon_offer_id: string | null
-  wb_connected: boolean
-  ozon_connected: boolean
   wb_subject_name: string | null
   wb_primary_image_url: string | null
   wb_barcodes: string[]
@@ -86,8 +84,6 @@ function matchesCatalogSearch(
   row: {
     name: string
     wb_vendor_code: string | null
-    ozon_sku: string | null
-    ozon_offer_id: string | null
     sku_code: string
     wb_primary_barcode: string | null
     wb_barcodes: string[]
@@ -99,8 +95,6 @@ function matchesCatalogSearch(
   const haystack = [
     row.name,
     row.wb_vendor_code ?? '',
-    row.ozon_sku ?? '',
-    row.ozon_offer_id ?? '',
     row.sku_code,
     row.wb_primary_barcode ?? '',
     ...row.wb_barcodes,
@@ -136,7 +130,6 @@ export function SellerProductsStockScreen({
   // ── Фильтры над таблицей (перенесены из каталога фулфилмента, CAT-20) ─────
   const [filterSearch, setFilterSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
-  const [filterMarketplace, setFilterMarketplace] = useState<'wildberries' | 'ozon' | ''>('')
 
   // ── Резервы: список направлений остатка, только чтение (CAT-20) ──────────
   const [reservesProductId, setReservesProductId] = useState<string | null>(null)
@@ -208,29 +201,19 @@ export function SellerProductsStockScreen({
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'ru'))
   }, [rows])
 
-  const hasMixedMarketplaces = rows.some((row) => row.wb_connected && row.ozon_connected)
-
-  useEffect(() => {
-    if (!hasMixedMarketplaces) setFilterMarketplace('')
-  }, [hasMixedMarketplaces])
-
   const filteredRows = useMemo(
     () =>
       rows.filter(
         (row) =>
           matchesCatalogSearch(row, filterSearch) &&
-          (!filterMarketplace ||
-            (filterMarketplace === 'wildberries'
-              ? Boolean(row.wb_nm_id != null || row.wb_vendor_code)
-              : Boolean(row.ozon_sku || row.ozon_offer_id))) &&
           (!filterCategory || row.wb_subject_name === filterCategory),
       ),
-    [rows, filterSearch, filterMarketplace, filterCategory],
+    [rows, filterSearch, filterCategory],
   )
 
   useEffect(() => {
     setPage(0)
-  }, [filterSearch, filterMarketplace, filterCategory])
+  }, [filterSearch, filterCategory])
 
   const pagedRows = useMemo(() => {
     const start = page * rowsPerPage
@@ -526,24 +509,6 @@ export function SellerProductsStockScreen({
               ))}
             </Select>
           </FormControl>
-          {hasMixedMarketplaces ? (
-            <FormControl size="small" sx={{ minWidth: 170 }}>
-              <InputLabel id="seller-catalog-marketplace-filter-label">Маркетплейс</InputLabel>
-              <Select
-                labelId="seller-catalog-marketplace-filter-label"
-                label="Маркетплейс"
-                value={filterMarketplace}
-                onChange={(event) =>
-                  setFilterMarketplace(event.target.value as 'wildberries' | 'ozon' | '')
-                }
-                data-testid="seller-catalog-marketplace-filter"
-              >
-                <MenuItem value="">Все</MenuItem>
-                <MenuItem value="wildberries">Wildberries</MenuItem>
-                <MenuItem value="ozon">Ozon</MenuItem>
-              </Select>
-            </FormControl>
-          ) : null}
           <Typography variant="body2" color="text.secondary" data-testid="seller-catalog-filter-count">
             Найдено: {filteredRows.length} из {rows.length}
           </Typography>

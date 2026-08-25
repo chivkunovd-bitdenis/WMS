@@ -469,6 +469,12 @@ class FbsOrderMarking(Base):
         nullable=False,
         index=True,
     )
+    order_product_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("fbs_order_products.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("tenants.id", ondelete="CASCADE"),
@@ -507,6 +513,7 @@ class FbsOrderMarking(Base):
     )
 
     order: Mapped[FbsOrder] = relationship("FbsOrder", back_populates="markings")
+    order_product: Mapped[FbsOrderProduct | None] = relationship("FbsOrderProduct")
     marking_code: Mapped[MarkingCode | None] = relationship("MarkingCode")
 
 

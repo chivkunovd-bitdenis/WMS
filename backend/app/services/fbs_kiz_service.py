@@ -23,6 +23,7 @@ from app.models.fbs_order import (
     META_STATUS_REPLACEMENT_REQUIRED,
     FbsOrder,
     FbsOrderMarking,
+    FbsOrderProduct,
     current_order_marking,
 )
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
@@ -588,12 +589,18 @@ async def _ensure_kiz_not_occupied_in_pool(
         return
     if code.seller_id != order.seller_id:
         raise FbsKizError("cross_seller_code")
-    if (
-        order.product_id is not None
-        and code.product_id is not None
-        and code.product_id != order.product_id
-    ):
-        raise FbsKizError("code_product_mismatch")
+    if code.product_id is not None:
+        if order.marketplace == "ozon":
+            position_match = await session.scalar(
+                select(FbsOrderProduct.id).where(
+                    FbsOrderProduct.order_id == order.id,
+                    FbsOrderProduct.product_id == code.product_id,
+                )
+            )
+            if position_match is None:
+                raise FbsKizError("code_product_mismatch")
+        elif order.product_id is not None and code.product_id != order.product_id:
+            raise FbsKizError("code_product_mismatch")
     if code.status != STATUS_AVAILABLE:
         raise FbsKizError(
             "duplicate_kiz",
@@ -643,6 +650,8 @@ async def validate_kiz_pair(
 async def _current_sgtin_marking_for_update(
     session: AsyncSession,
     order_id: uuid.UUID,
+    *,
+    order_product_id: uuid.UUID | None = None,
 ) -> FbsOrderMarking | None:
     stmt = (
         select(FbsOrderMarking)
@@ -656,13 +665,82 @@ async def _current_sgtin_marking_for_update(
         .limit(1)
         .with_for_update()
     )
+    if order_product_id is not None:
+        stmt = stmt.where(FbsOrderMarking.order_product_id == order_product_id)
     return (await session.execute(stmt)).scalar_one_or_none()
+
+
+def _barcode_matches_gtin(barcode: str | None, gtin: str) -> bool:
+    if barcode is None:
+        return False
+    normalized = "".join(char for char in barcode if char.isdigit())
+    return bool(normalized) and normalized.lstrip("0") == gtin.lstrip("0")
+
+
+async def _ozon_marking_position(
+    session: AsyncSession,
+    order: FbsOrder,
+    value: str,
+) -> FbsOrderProduct | None:
+    if order.marketplace != "ozon":
+        return None
+    positions = list(
+        (
+            await session.execute(
+                select(FbsOrderProduct)
+                .where(FbsOrderProduct.order_id == order.id)
+                .order_by(FbsOrderProduct.position_index)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not positions:
+        return None
+    if len(positions) == 1:
+        return positions[0]
+
+    code = await _get_marking_code_by_cis(session, order.tenant_id, value)
+    if code is not None and code.product_id is not None:
+        matches = [position for position in positions if position.product_id == code.product_id]
+        if len(matches) == 1:
+            return matches[0]
+
+    gtin = value[2:16] if value.startswith("01") and len(value) >= 16 else ""
+    product_ids = [position.product_id for position in positions if position.product_id is not None]
+    products = {
+        product.id: product
+        for product in (
+            (
+                await session.execute(select(Product).where(Product.id.in_(product_ids)))
+            )
+            .scalars()
+            .all()
+            if product_ids
+            else []
+        )
+    }
+    matches = [
+        position
+        for position in positions
+        if position.product_id is not None
+        and (product := products.get(position.product_id)) is not None
+        and _barcode_matches_gtin(product.wb_barcode, gtin)
+    ]
+    if len(matches) == 1:
+        return matches[0]
+    raise FbsKizError(
+        "ozon_marking_product_ambiguous",
+        message="Не удалось определить позицию Ozon для этого кода маркировки.",
+    )
 
 
 async def _packaging_line_for_order(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     order: FbsOrder,
+    *,
+    product_id: uuid.UUID | None = None,
 ) -> _PackagingLineRef:
     fulfilled_stmt = (
         select(PackagingTaskLine, PackagingTask.document_number)
@@ -680,11 +758,14 @@ async def _packaging_line_for_order(
         .limit(1)
         .with_for_update()
     )
+    if product_id is not None:
+        fulfilled_stmt = fulfilled_stmt.where(PackagingTaskLine.product_id == product_id)
     fulfilled = (await session.execute(fulfilled_stmt)).first()
     if fulfilled is not None:
         return _PackagingLineRef(line=fulfilled[0], document_number=fulfilled[1])
 
-    if order.supply_id is None or order.product_id is None:
+    target_product_id = product_id or order.product_id
+    if order.supply_id is None or target_product_id is None:
         raise FbsKizError("packaging_line_not_found")
 
     supply_stmt = (
@@ -694,7 +775,7 @@ async def _packaging_line_for_order(
         .where(
             FbsSupply.tenant_id == tenant_id,
             FbsSupply.id == order.supply_id,
-            PackagingTaskLine.product_id == order.product_id,
+            PackagingTaskLine.product_id == target_product_id,
         )
         .order_by(PackagingTaskLine.id)
         .limit(1)
@@ -712,12 +793,14 @@ async def _create_or_apply_external_code(
     order: FbsOrder,
     value: str,
     line: PackagingTaskLine,
+    *,
+    product_id: uuid.UUID | None = None,
 ) -> MarkingCode:
     now = datetime.now(tz=UTC)
     code = MarkingCode(
         tenant_id=tenant_id,
         seller_id=order.seller_id,
-        product_id=order.product_id,
+        product_id=product_id or order.product_id,
         cis_code=value,
         source=_EXTERNAL_FBS_MARKING_SOURCE,
         status=STATUS_APPLIED,
@@ -738,6 +821,8 @@ async def _prepare_code_for_binding(
     order: FbsOrder,
     value: str,
     line: PackagingTaskLine,
+    *,
+    product_id: uuid.UUID | None = None,
 ) -> tuple[MarkingCode, bool]:
     try:
         pool_code = await marking_svc._claim_pool_code_if_present(
@@ -759,6 +844,7 @@ async def _prepare_code_for_binding(
             order,
             value,
             line,
+            product_id=product_id,
         ),
         False,
     )
@@ -928,7 +1014,14 @@ async def _commit_one_kiz_pair(
         check_marking_code_occupancy=False,
     )
     order = validated.order
-    current = await _current_sgtin_marking_for_update(session, order.id)
+    target_position = await _ozon_marking_position(session, order, validated.value)
+    target_position_id = target_position.id if target_position is not None else None
+    target_product_id = target_position.product_id if target_position is not None else None
+    current = await _current_sgtin_marking_for_update(
+        session,
+        order.id,
+        order_product_id=target_position_id,
+    )
     if (
         current is not None
         and current.value == validated.value
@@ -944,16 +1037,24 @@ async def _commit_one_kiz_pair(
             context={"current_kiz": _mask_kiz(current.value)},
         )
 
-    line_ref = await _packaging_line_for_order(session, tenant_id, order)
+    line_ref = await _packaging_line_for_order(
+        session,
+        tenant_id,
+        order,
+        product_id=target_product_id,
+    )
     code, from_pool = await _prepare_code_for_binding(
         session,
         tenant_id,
         order,
         validated.value,
         line_ref.line,
+        product_id=target_product_id,
     )
-    token = await marking_svc.require_marketplace_token(
-        session, tenant_id, order.seller_id
+    token = (
+        ""
+        if order.marketplace == "ozon"
+        else await marking_svc.require_marketplace_token(session, tenant_id, order.seller_id)
     )
     await marking_code_svc.record_event(
         session,
@@ -966,6 +1067,7 @@ async def _commit_one_kiz_pair(
     )
     marking = FbsOrderMarking(
         order_id=order.id,
+        order_product_id=target_position_id,
         tenant_id=tenant_id,
         kind=MARKING_KIND_SGTIN,
         value=validated.value,
@@ -980,7 +1082,7 @@ async def _commit_one_kiz_pair(
 
     new_error: FbsKizError | None = None
     try:
-        if current is not None:
+        if current is not None and order.marketplace != "ozon":
             await _delete_sgtin_from_wb(order, http_client, token)
         await marking_svc.attach_order_meta_to_wb_and_sync(
             session,
@@ -997,7 +1099,7 @@ async def _commit_one_kiz_pair(
     except WildberriesClientError as exc:
         new_error = FbsKizError(marking_svc._wb_error_code(exc))
     if new_error is not None:
-        if current is None:
+        if current is None or order.marketplace == "ozon":
             raise new_error
         try:
             await _restore_previous_wb_marking(

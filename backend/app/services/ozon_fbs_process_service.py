@@ -143,7 +143,55 @@ def _decode_file(value: str | None) -> bytes | None:
         ) from exc
 
 
-async def _ozon_product_id(session: AsyncSession, order: FbsOrder) -> int:
+async def _ozon_product_id(
+    session: AsyncSession,
+    order: FbsOrder,
+    marking: FbsOrderMarking | None = None,
+) -> int:
+    if marking is not None and marking.order_product_id is not None:
+        position = await session.scalar(
+            select(FbsOrderProduct).where(
+                FbsOrderProduct.id == marking.order_product_id,
+                FbsOrderProduct.order_id == order.id,
+            )
+        )
+        if position is None:
+            raise OzonFbsProcessError(
+                "ozon_marking_position_invalid",
+                "Позиция кода маркировки не входит в это отправление Ozon.",
+            )
+        if position.ozon_sku is None:
+            raise OzonFbsProcessError(
+                "ozon_product_id_missing",
+                "У позиции кода маркировки нет числового Ozon SKU.",
+            )
+        return int(position.ozon_sku)
+
+    positions = list(
+        (
+            await session.execute(
+                select(FbsOrderProduct)
+                .where(FbsOrderProduct.order_id == order.id)
+                .order_by(FbsOrderProduct.position_index)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if marking is not None and len(positions) > 1:
+        raise OzonFbsProcessError(
+            "ozon_marking_position_missing",
+            "Код маркировки не привязан к позиции многотоварного отправления Ozon.",
+        )
+    if marking is not None and len(positions) == 1:
+        if positions[0].ozon_sku is None:
+            raise OzonFbsProcessError(
+                "ozon_product_id_missing",
+                "У позиции кода маркировки нет числового Ozon SKU.",
+            )
+        marking.order_product_id = positions[0].id
+        return int(positions[0].ozon_sku)
+
     details = order.meta_details_json or {}
     direct = details.get("ozon_product_id")
     if direct is not None and str(direct).isdigit():
@@ -212,7 +260,7 @@ async def submit_marking(
     posting_number = order.external_order_id or ""
     if not posting_number:
         raise OzonFbsProcessError("ozon_posting_number_missing", "Нет номера отправления Ozon.")
-    product_id = await _ozon_product_id(session, order)
+    product_id = await _ozon_product_id(session, order, marking)
     mark_type = {"sgtin": "mandatory_mark", "uin": "jw_uin", "imei": "imei"}.get(marking.kind)
     if mark_type is None:
         return OzonMarkingResult(False, False, "unsupported_mark_type", {})

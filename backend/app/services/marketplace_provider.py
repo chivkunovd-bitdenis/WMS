@@ -142,6 +142,7 @@ class FakeMarketplaceTransport:
     endpoint_responses: dict[str, object] = field(default_factory=dict)
     endpoint_response_queues: dict[str, list[object]] = field(default_factory=dict)
     endpoint_calls: list[tuple[str, dict[str, object]]] = field(default_factory=list)
+    published_stocks: list[dict[str, object]] = field(default_factory=list)
 
     async def call(
         self,
@@ -190,8 +191,9 @@ class FakeMarketplaceTransport:
         api_key: str,
         stocks: Sequence[Mapping[str, object]],
     ) -> None:
-        _ = api_key, stocks
+        _ = api_key
         self.calls.append(("publish_stocks", client_id))
+        self.published_stocks.extend(dict(stock) for stock in stocks)
         if error := self.errors.get("publish_stocks"):
             raise error
 

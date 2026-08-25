@@ -34,6 +34,7 @@ from app.services.marketplace_seller_lock_service import marketplace_seller_lock
 from app.services.ozon_fbs_sync_service import (
     sync_ozon_order_statuses,
     sync_ozon_orders,
+    sync_ozon_stocks,
 )
 from app.services.wb_marketplace_orders_service import (
     WbMarketplaceOrdersError,
@@ -470,11 +471,23 @@ async def sync_marketplace_stocks_for_target(
             target.seller_id,
             http_client,
         )
-    # Ozon FBS stocks are intentionally never published by WMS.  The account
-    # stays in the polling set for orders/statuses only; WB keeps its existing
-    # stock publication path above.
-    del session, http_client, ozon_provider
-    return SellerStockSyncResult()
+    del http_client
+    provider = ozon_provider or _blocked_ozon_provider("publish_stocks")
+    ozon_result = await sync_ozon_stocks(
+        session,
+        target.tenant_id,
+        target.seller_id,
+        provider,
+    )
+    return SellerStockSyncResult(
+        bindings_processed=ozon_result.bindings_processed,
+        products_targeted=ozon_result.products_targeted,
+        products_confirmed=ozon_result.products_confirmed,
+        products_zeroed=ozon_result.products_zeroed,
+        conflicts=ozon_result.conflicts,
+        errors=ozon_result.errors,
+        binding_errors=int(ozon_result.binding_errors),
+    )
 
 
 async def poll_fbs_orders_all_sellers(*, include_history: bool = False) -> FbsAutopollCycleResult:

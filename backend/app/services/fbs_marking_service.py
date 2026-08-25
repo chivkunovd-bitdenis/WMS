@@ -30,6 +30,7 @@ from app.models.fbs_order import (
     META_STATUS_UNKNOWN,
     FbsOrder,
     FbsOrderMarking,
+    FbsOrderProduct,
     current_order_marking,
 )
 from app.models.marking_code import (
@@ -485,12 +486,18 @@ async def _claim_pool_code_if_present(
         return None
     if code.seller_id != order.seller_id:
         raise FbsMarkingError("cross_seller_code")
-    if (
-        order.product_id is not None
-        and code.product_id is not None
-        and code.product_id != order.product_id
-    ):
-        raise FbsMarkingError("code_product_mismatch")
+    if code.product_id is not None:
+        if order.marketplace == "ozon":
+            position_match = await session.scalar(
+                select(FbsOrderProduct.id).where(
+                    FbsOrderProduct.order_id == order.id,
+                    FbsOrderProduct.product_id == code.product_id,
+                )
+            )
+            if position_match is None:
+                raise FbsMarkingError("code_product_mismatch")
+        elif order.product_id is not None and code.product_id != order.product_id:
+            raise FbsMarkingError("code_product_mismatch")
     stmt = select(MarkingCode).where(MarkingCode.id == code.id).with_for_update()
     locked = (await session.execute(stmt)).scalar_one_or_none()
     if locked is None:

@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.fbs_orders import _run_blocked_ozon_fake
 from app.db.session import SessionLocal, engine
 from app.models import Base
+from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_order import (
     CHECK_STATUS_ERROR,
     CHECK_STATUS_OK,
@@ -39,6 +40,7 @@ from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
 )
+from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.marketplace_account import MarketplaceAccount
 from app.models.product import Product
 from app.models.product_marketplace_link import ProductMarketplaceLink
@@ -69,6 +71,10 @@ from app.services.fbs_supply_validator_service import (
     SupplyPreflightSummary,
     validate_supply_composition,
 )
+from app.services.fbs_warehouse_binding_service import (
+    FbsWarehouseBindingError,
+    set_binding_stock_pool_quantity,
+)
 from app.services.integration_fernet import encrypt_secret
 from app.services.marketplace_provider import (
     FakeMarketplaceTransport,
@@ -76,6 +82,7 @@ from app.services.marketplace_provider import (
     OzonMarketplaceProvider,
     provider_error_message,
 )
+from app.services.ozon_fbs_process_service import submit_marking
 
 
 @pytest_asyncio.fixture
@@ -350,21 +357,63 @@ async def test_ozon_autopoll_positive_fake_upserts_shared_order_and_status(
 
 
 @pytest.mark.asyncio
-async def test_ozon_autopoll_does_not_publish_fbs_stocks(db_session: AsyncSession) -> None:
-    """TC-S03-OZON-030: Ozon polling imports orders/statuses but never publishes FBS stock."""
-    tenant = Tenant(name="Ozon no stock publish", slug=f"ozon-no-stock-{uuid.uuid4().hex[:8]}")
+async def test_ozon_stock_dispatch_uses_binding_pool_with_fake_transport(
+    db_session: AsyncSession,
+) -> None:
+    """TC-S04-OZON-030: the shared action dispatches Ozon stock only to a fake provider."""
+    tenant = Tenant(name="Ozon stock dispatch", slug=f"ozon-stock-{uuid.uuid4().hex[:8]}")
     seller = Seller(tenant=tenant, name="Seller")
-    db_session.add_all([tenant, seller])
-    await db_session.commit()
-    transport = FakeMarketplaceTransport(
-        errors={
-            "publish_stocks": MarketplaceProviderError(
-                "ozon",
-                500,
-                {"code": "must_not_be_called"},
-            )
-        }
+    warehouse = Warehouse(tenant=tenant, name="FBS", code=f"fbs-{uuid.uuid4().hex[:8]}")
+    product = Product(
+        tenant=tenant,
+        seller=seller,
+        name="Product",
+        sku_code=f"sku-{uuid.uuid4().hex[:8]}",
+        fbs_stock_limit=3,
     )
+    db_session.add_all([tenant, seller, warehouse, product])
+    await db_session.flush()
+    account = MarketplaceAccount(
+        tenant_id=tenant.id,
+        seller_id=seller.id,
+        marketplace="ozon",
+        account_slot="primary",
+        external_account_id="ozon-client",
+        secret_encrypted=encrypt_secret("ozon-key"),
+        is_active=True,
+        validation_status="valid",
+    )
+    binding = FbsWarehouseBinding(
+        tenant_id=tenant.id,
+        seller_id=seller.id,
+        marketplace="ozon",
+        external_warehouse_id="900001",
+        wb_warehouse_id=-900001,
+        wms_warehouse_id=warehouse.id,
+        is_active=True,
+        stock_sync_enabled=True,
+    )
+    link = ProductMarketplaceLink(
+        tenant_id=tenant.id,
+        seller_id=seller.id,
+        product_id=product.id,
+        marketplace="ozon",
+        external_offer_id="offer-1",
+        external_sku="3001",
+        is_active=True,
+    )
+    db_session.add_all([account, binding, link])
+    await db_session.flush()
+    db_session.add(
+        FbsBindingStockPool(
+            tenant_id=tenant.id,
+            binding_id=binding.id,
+            product_id=product.id,
+            quantity=2,
+        )
+    )
+    await db_session.commit()
+    transport = FakeMarketplaceTransport()
 
     result = await sync_marketplace_stocks_for_target(
         db_session,
@@ -373,8 +422,73 @@ async def test_ozon_autopoll_does_not_publish_fbs_stocks(db_session: AsyncSessio
         ozon_provider=OzonMarketplaceProvider(transport=transport),
     )
 
-    assert result.bindings_processed == 0
-    assert transport.calls == []
+    assert result.bindings_processed == 1
+    assert result.products_targeted == 1
+    assert result.products_confirmed == 1
+    assert transport.calls == [("publish_stocks", "ozon-client")]
+    assert transport.published_stocks == [
+        {
+            "warehouse_id": 900001,
+            "offer_id": "offer-1",
+            "product_id": 3001,
+            "stock": 2,
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_wb_and_ozon_cannot_allocate_the_same_last_physical_unit(
+    db_session: AsyncSession,
+) -> None:
+    """TC-S04-OZON-031: one physical unit can belong to only one provider binding."""
+    tenant = Tenant(name="Shared FBS stock", slug=f"shared-stock-{uuid.uuid4().hex[:8]}")
+    seller = Seller(tenant=tenant, name="Seller")
+    warehouse = Warehouse(tenant=tenant, name="FBS", code=f"fbs-{uuid.uuid4().hex[:8]}")
+    product = Product(
+        tenant=tenant,
+        seller=seller,
+        name="Last unit",
+        sku_code=f"last-{uuid.uuid4().hex[:8]}",
+        fbs_stock_limit=1,
+    )
+    db_session.add_all([tenant, seller, warehouse, product])
+    await db_session.flush()
+    wb_binding = FbsWarehouseBinding(
+        tenant_id=tenant.id,
+        seller_id=seller.id,
+        marketplace="wb",
+        external_warehouse_id="101",
+        wb_warehouse_id=101,
+        wms_warehouse_id=warehouse.id,
+    )
+    ozon_binding = FbsWarehouseBinding(
+        tenant_id=tenant.id,
+        seller_id=seller.id,
+        marketplace="ozon",
+        external_warehouse_id="202",
+        wb_warehouse_id=-202,
+        wms_warehouse_id=warehouse.id,
+    )
+    db_session.add_all([wb_binding, ozon_binding])
+    await db_session.commit()
+
+    await set_binding_stock_pool_quantity(
+        db_session,
+        tenant.id,
+        seller.id,
+        wb_binding.id,
+        product.id,
+        1,
+    )
+    with pytest.raises(FbsWarehouseBindingError, match="pool_quota_exceeded"):
+        await set_binding_stock_pool_quantity(
+            db_session,
+            tenant.id,
+            seller.id,
+            ozon_binding.id,
+            product.id,
+            1,
+        )
 
 
 async def _sync_ozon_posting_with_products(
@@ -1276,6 +1390,64 @@ async def test_ozon_marking_uses_exemplar_flow_and_preserves_gs(
     assert "\x1d" in sent_mark
     assert "\\u001d" in json.dumps(validate_payload)
     wb_put.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_ozon_marking_targets_its_exact_multi_product_position(
+    db_session: AsyncSession,
+) -> None:
+    """TC-S03-OZON-032: a code for position two is never sent as position one."""
+    order, _ = await _sync_ozon_posting_with_products(
+        db_session,
+        positions=[
+            {"sku": 4001, "offer_id": "offer-1", "name": "Футболка", "quantity": 1},
+            {"sku": 4002, "offer_id": "offer-2", "name": "Носки", "quantity": 1},
+        ],
+    )
+    second_position = order.product_positions[1]
+    marking = FbsOrderMarking(
+        tenant_id=order.tenant_id,
+        order_id=order.id,
+        order_product_id=second_position.id,
+        kind="sgtin",
+        value="010460123456789021SECOND",
+    )
+    db_session.add(marking)
+    await db_session.flush()
+    transport = FakeMarketplaceTransport(
+        endpoint_responses={
+            "/v6/fbs/posting/product/exemplar/create-or-get": {
+                "posting_number": order.external_order_id,
+                "products": [
+                    {"product_id": 4001, "exemplars": [{"exemplar_id": 81}]},
+                    {"product_id": 4002, "exemplars": [{"exemplar_id": 82}]},
+                ],
+            },
+            "/v5/fbs/posting/product/exemplar/validate": {
+                "products": [{"product_id": 4002, "valid": True, "exemplars": []}]
+            },
+            "/v6/fbs/posting/product/exemplar/set": {},
+            "/v5/fbs/posting/product/exemplar/status": {
+                "posting_number": order.external_order_id,
+                "status": "ship_available",
+                "products": [],
+            },
+        }
+    )
+
+    await submit_marking(
+        db_session,
+        order=order,
+        marking=marking,
+        provider=OzonMarketplaceProvider(transport=transport),
+        client_id="client-id",
+        api_key="api-key",
+    )
+
+    validate_payload = transport.endpoint_calls[1][1]
+    set_payload = transport.endpoint_calls[2][1]
+    assert validate_payload["products"][0]["product_id"] == 4002
+    assert set_payload["products"][0]["product_id"] == 4002
 
 
 @pytest.mark.asyncio
