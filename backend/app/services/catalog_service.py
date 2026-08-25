@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import String, cast, func, or_, select, update
+from sqlalchemy import String, cast, exists, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -17,6 +17,7 @@ from app.models.inventory_balance import InventoryBalance
 from app.models.outbound_shipment import OutboundShipmentRequest
 from app.models.product import Product
 from app.models.product_dimension_event import ProductDimensionEvent
+from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
@@ -528,6 +529,7 @@ async def list_products(
     seller_id: uuid.UUID | None = None,
     product_ids: set[uuid.UUID] | None = None,
     search: str | None = None,
+    marketplace: str | None = None,
     limit: int | None = None,
 ) -> list[Product]:
     """Товары тенанта. ``search`` и ``limit`` фильтруют в БД, а не в памяти.
@@ -548,6 +550,32 @@ async def list_products(
         if not product_ids:
             return []
         stmt = stmt.where(Product.id.in_(product_ids))
+    if marketplace == "ozon":
+        stmt = stmt.where(
+            exists(
+                select(ProductMarketplaceLink.id).where(
+                    ProductMarketplaceLink.tenant_id == tenant_id,
+                    ProductMarketplaceLink.product_id == Product.id,
+                    ProductMarketplaceLink.marketplace == "ozon",
+                    ProductMarketplaceLink.is_active.is_(True),
+                )
+            )
+        )
+    elif marketplace == "wildberries":
+        stmt = stmt.where(
+            or_(
+                Product.wb_nm_id.is_not(None),
+                Product.wb_vendor_code.is_not(None),
+                exists(
+                    select(ProductMarketplaceLink.id).where(
+                        ProductMarketplaceLink.tenant_id == tenant_id,
+                        ProductMarketplaceLink.product_id == Product.id,
+                        ProductMarketplaceLink.marketplace == "wildberries",
+                        ProductMarketplaceLink.is_active.is_(True),
+                    )
+                ),
+            )
+        )
     needle = (search or "").strip()
     if needle:
         like = f"%{needle}%"
@@ -558,6 +586,18 @@ async def list_products(
                 Product.wb_barcode.ilike(like),
                 Product.wb_vendor_code.ilike(like),
                 cast(Product.wb_nm_id, String).ilike(like),
+                exists(
+                    select(ProductMarketplaceLink.id).where(
+                        ProductMarketplaceLink.tenant_id == tenant_id,
+                        ProductMarketplaceLink.product_id == Product.id,
+                        ProductMarketplaceLink.marketplace == "ozon",
+                        ProductMarketplaceLink.is_active.is_(True),
+                        or_(
+                            ProductMarketplaceLink.external_sku.ilike(like),
+                            ProductMarketplaceLink.external_offer_id.ilike(like),
+                        ),
+                    )
+                ),
             )
         )
     if limit is not None:
@@ -635,6 +675,8 @@ async def create_product(
     wb_barcode: str | None = None,
     wb_size: str | None = None,
     wb_vendor_code: str | None = None,
+    ozon_sku: str | None = None,
+    ozon_offer_id: str | None = None,
     packaging_instructions: str | None = None,
     requires_honest_sign: bool = False,
     commit: bool = True,
@@ -648,6 +690,10 @@ async def create_product(
     barcode = (wb_barcode or "").strip() or None
     size = (wb_size or "").strip() or None
     vendor = (wb_vendor_code or "").strip() or None
+    ozon_sku_value = (ozon_sku or "").strip() or None
+    ozon_offer_id_value = (ozon_offer_id or "").strip() or None
+    if (ozon_sku_value or ozon_offer_id_value) and seller_id is None:
+        raise CatalogError("ozon_link_requires_seller")
     tz = (packaging_instructions or "").strip() or None
     p = Product(
         tenant_id=tenant_id,
@@ -667,6 +713,18 @@ async def create_product(
     )
     session.add(p)
     try:
+        await session.flush()
+        if ozon_sku_value or ozon_offer_id_value:
+            session.add(
+                ProductMarketplaceLink(
+                    tenant_id=tenant_id,
+                    seller_id=seller_id,
+                    product_id=p.id,
+                    marketplace="ozon",
+                    external_sku=ozon_sku_value,
+                    external_offer_id=ozon_offer_id_value,
+                )
+            )
         if commit:
             await session.commit()
         else:
@@ -683,6 +741,24 @@ async def create_product(
     if commit:
         await session.refresh(p)
     return p
+
+
+async def list_ozon_product_links(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_ids: set[uuid.UUID],
+) -> dict[uuid.UUID, ProductMarketplaceLink]:
+    if not product_ids:
+        return {}
+    result = await session.execute(
+        select(ProductMarketplaceLink).where(
+            ProductMarketplaceLink.tenant_id == tenant_id,
+            ProductMarketplaceLink.product_id.in_(product_ids),
+            ProductMarketplaceLink.marketplace == "ozon",
+            ProductMarketplaceLink.is_active.is_(True),
+        )
+    )
+    return {link.product_id: link for link in result.scalars().all()}
 
 
 async def get_product(
