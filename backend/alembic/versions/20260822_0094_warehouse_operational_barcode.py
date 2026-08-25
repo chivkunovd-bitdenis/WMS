@@ -41,7 +41,14 @@ def upgrade() -> None:
     # ``FBS WB *`` routing stub merely to manufacture an operational warehouse:
     # the operator must create the real physical warehouse explicitly.
     op.alter_column("warehouses", "is_operational", nullable=False, server_default=sa.true())
-    op.alter_column("warehouses", "barcode", nullable=False)
+    op.alter_column(
+        "warehouses",
+        "barcode",
+        nullable=False,
+        server_default=sa.text(
+            "'WH-' || upper(substr(md5(random()::text || clock_timestamp()::text), 1, 32))"
+        ),
+    )
     op.create_index("ix_warehouses_barcode", "warehouses", ["barcode"], unique=True)
 
 def downgrade() -> None:
