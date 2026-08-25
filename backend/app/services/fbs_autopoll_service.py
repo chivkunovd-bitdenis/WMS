@@ -31,6 +31,7 @@ from app.services.marketplace_provider import (
     provider_error_message,
 )
 from app.services.marketplace_seller_lock_service import marketplace_seller_lock
+from app.services.marketplace_stock_sync_result import SellerStockSyncResult
 from app.services.ozon_fbs_sync_service import (
     sync_ozon_order_statuses,
     sync_ozon_orders,
@@ -62,17 +63,6 @@ class FbsAutopollCycleResult:
     stocks_bindings_processed: int = 0
     stock_errors: int = 0
     marketplace_breakdown: dict[str, dict[str, int]] = field(default_factory=dict)
-
-
-@dataclass
-class SellerStockSyncResult:
-    bindings_processed: int = 0
-    products_targeted: int = 0
-    products_confirmed: int = 0
-    products_zeroed: int = 0
-    conflicts: int = 0
-    errors: int = 0
-    binding_errors: int = 0
 
 
 def _marketplace_bucket(
@@ -473,20 +463,11 @@ async def sync_marketplace_stocks_for_target(
         )
     del http_client
     provider = ozon_provider or _blocked_ozon_provider("publish_stocks")
-    ozon_result = await sync_ozon_stocks(
+    return await sync_ozon_stocks(
         session,
         target.tenant_id,
         target.seller_id,
         provider,
-    )
-    return SellerStockSyncResult(
-        bindings_processed=ozon_result.bindings_processed,
-        products_targeted=ozon_result.products_targeted,
-        products_confirmed=ozon_result.products_confirmed,
-        products_zeroed=ozon_result.products_zeroed,
-        conflicts=ozon_result.conflicts,
-        errors=ozon_result.errors,
-        binding_errors=int(ozon_result.binding_errors),
     )
 
 

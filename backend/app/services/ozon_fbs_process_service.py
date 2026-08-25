@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import base64
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TypeVar
@@ -60,16 +59,15 @@ from app.schemas.ozon_fbs_api import (
     OzonV6FbsPostingProductExemplarSetV6Request,
 )
 from app.services.marketplace_provider import MarketplaceProviderError, OzonMarketplaceProvider
+from app.services.ozon_fbs_errors import OzonFbsProcessError
+from app.services.ozon_fbs_errors import decode_file as _decode_file
+from app.services.ozon_marking_position_service import (
+    OzonMarkingPositionError,
+    marking_position_sku,
+)
 
 TResponse = TypeVar("TResponse", bound=BaseModel)
-
-
-class OzonFbsProcessError(Exception):
-    def __init__(self, code: str, message: str, *, status_code: int | None = None) -> None:
-        self.code = code
-        self.message = message
-        self.status_code = status_code
-        super().__init__(code)
+__all__ = ["OzonFbsProcessError", "handoff_supply", "read_marking_status", "submit_marking"]
 
 
 @dataclass(frozen=True)
@@ -132,65 +130,18 @@ async def _call(
     raise AssertionError("unreachable")
 
 
-def _decode_file(value: str | None) -> bytes | None:
-    if not value:
-        return None
-    try:
-        return base64.b64decode(value, validate=True)
-    except ValueError as exc:
-        raise OzonFbsProcessError(
-            "ozon_invalid_file", "Ozon вернул повреждённый печатный файл."
-        ) from exc
-
-
 async def _ozon_product_id(
     session: AsyncSession,
     order: FbsOrder,
     marking: FbsOrderMarking | None = None,
 ) -> int:
-    if marking is not None and marking.order_product_id is not None:
-        position = await session.scalar(
-            select(FbsOrderProduct).where(
-                FbsOrderProduct.id == marking.order_product_id,
-                FbsOrderProduct.order_id == order.id,
-            )
-        )
-        if position is None:
-            raise OzonFbsProcessError(
-                "ozon_marking_position_invalid",
-                "Позиция кода маркировки не входит в это отправление Ozon.",
-            )
-        if position.ozon_sku is None:
-            raise OzonFbsProcessError(
-                "ozon_product_id_missing",
-                "У позиции кода маркировки нет числового Ozon SKU.",
-            )
-        return int(position.ozon_sku)
-
-    positions = list(
-        (
-            await session.execute(
-                select(FbsOrderProduct)
-                .where(FbsOrderProduct.order_id == order.id)
-                .order_by(FbsOrderProduct.position_index)
-            )
-        )
-        .scalars()
-        .all()
-    )
-    if marking is not None and len(positions) > 1:
-        raise OzonFbsProcessError(
-            "ozon_marking_position_missing",
-            "Код маркировки не привязан к позиции многотоварного отправления Ozon.",
-        )
-    if marking is not None and len(positions) == 1:
-        if positions[0].ozon_sku is None:
-            raise OzonFbsProcessError(
-                "ozon_product_id_missing",
-                "У позиции кода маркировки нет числового Ozon SKU.",
-            )
-        marking.order_product_id = positions[0].id
-        return int(positions[0].ozon_sku)
+    if marking is not None:
+        try:
+            position_sku = await marking_position_sku(session, order, marking)
+        except OzonMarkingPositionError as error:
+            raise OzonFbsProcessError(error.code, error.message) from error
+        if position_sku is not None:
+            return position_sku
 
     details = order.meta_details_json or {}
     direct = details.get("ozon_product_id")

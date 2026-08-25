@@ -38,10 +38,10 @@ from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.schemas.ozon_fbs_api import OzonPostingV4PostingFbsUnfulfilledListResponsePostingsProducts
 from app.services.fbs_stock_sync_service import (
     STOCK_SYNC_STATUS_NOTHING_TO_PUBLISH,
-    FbsStockSyncResult,
 )
 from app.services.marketplace_account_service import MarketplaceAccountService
 from app.services.marketplace_provider import MarketplaceProviderError, OzonMarketplaceProvider
+from app.services.marketplace_stock_sync_result import SellerStockSyncResult
 from app.services.wb_marketplace_orders_service import _release_reservation, _try_reserve_order
 
 OZON_FBS_DEADLINE_HOURS = 120
@@ -117,7 +117,7 @@ async def sync_ozon_stocks(
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
     provider: OzonMarketplaceProvider,
-) -> FbsStockSyncResult:
+) -> SellerStockSyncResult:
     """Publish each Ozon binding's explicitly allocated pool through the provider boundary."""
     bindings = list(
         (
@@ -136,7 +136,7 @@ async def sync_ozon_stocks(
         .scalars()
         .all()
     )
-    result = FbsStockSyncResult()
+    result = SellerStockSyncResult()
     if not bindings:
         return result
 

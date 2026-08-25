@@ -94,7 +94,6 @@ class FbsStockSyncResult:
     skipped_missing_chrt_id: list[uuid.UUID] = field(default_factory=list)
     conflicts: int = 0
     errors: int = 0
-    binding_errors: int = 0
     skipped_busy: bool = False
     error_code: str | None = None
 
