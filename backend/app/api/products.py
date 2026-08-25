@@ -38,6 +38,7 @@ from app.services.catalog_service import (
     bulk_update_products_requires_honest_sign,
     create_product,
     get_product,
+    list_ozon_product_links,
     list_product_dimension_events,
     list_products,
     restore_latest_wb_dimensions,
@@ -91,6 +92,8 @@ class ProductCreate(BaseModel):
     wb_barcode: str | None = Field(default=None, max_length=64)
     wb_size: str | None = Field(default=None, max_length=64)
     wb_vendor_code: str | None = Field(default=None, max_length=255)
+    ozon_sku: str | None = Field(default=None, max_length=255)
+    ozon_offer_id: str | None = Field(default=None, max_length=255)
     packaging_instructions: str | None = Field(default=None, max_length=8000)
     requires_honest_sign: bool = False
 
@@ -130,6 +133,8 @@ class FfCatalogOut(BaseModel):
     sku_code: str
     wb_nm_id: int | None = None
     wb_vendor_code: str | None = None
+    ozon_sku: str | None = None
+    ozon_offer_id: str | None = None
     wb_subject_name: str | None = None
     wb_primary_image_url: str | None = None
     wb_barcodes: list[str]
@@ -161,6 +166,8 @@ class ProductOut(BaseModel):
     seller_name: str | None
     wb_nm_id: int | None = None
     wb_vendor_code: str | None = None
+    ozon_sku: str | None = None
+    ozon_offer_id: str | None = None
     wb_barcode: str | None = None
     wb_size: str | None = None
     wb_country_of_origin: str | None = None
@@ -340,7 +347,12 @@ class StockDirectionOut(BaseModel):
     updated_at: str
 
 
-def _product_out(p: object) -> ProductOut:
+def _product_out(
+    p: object,
+    *,
+    ozon_sku: str | None = None,
+    ozon_offer_id: str | None = None,
+) -> ProductOut:
     from app.models.product import Product
 
     assert isinstance(p, Product)
@@ -356,6 +368,8 @@ def _product_out(p: object) -> ProductOut:
         seller_name=p.seller.name if p.seller is not None else None,
         wb_nm_id=int(p.wb_nm_id) if p.wb_nm_id is not None else None,
         wb_vendor_code=p.wb_vendor_code,
+        ozon_sku=ozon_sku,
+        ozon_offer_id=ozon_offer_id,
         wb_barcode=p.wb_barcode,
         wb_size=p.wb_size,
         wb_country_of_origin=p.wb_country_of_origin,
@@ -464,10 +478,26 @@ async def get_products(
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
     seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
+    search: Annotated[str | None, Query()] = None,
+    marketplace: Annotated[Literal["wildberries", "ozon"] | None, Query()] = None,
 ) -> list[ProductOut]:
     await assert_product_catalog_read_access(session, user)
-    rows = await list_products(session, user.tenant_id, seller_id=seller_scope)
-    return [_product_out(p) for p in rows]
+    rows = await list_products(
+        session,
+        user.tenant_id,
+        seller_id=seller_scope,
+        search=search,
+        marketplace=marketplace,
+    )
+    ozon_links = await list_ozon_product_links(session, user.tenant_id, {p.id for p in rows})
+    return [
+        _product_out(
+            p,
+            ozon_sku=ozon_links[p.id].external_sku if p.id in ozon_links else None,
+            ozon_offer_id=ozon_links[p.id].external_offer_id if p.id in ozon_links else None,
+        )
+        for p in rows
+    ]
 
 
 @router.get("/wb-catalog", response_model=list[SellerWbCatalogOut])
@@ -517,9 +547,13 @@ async def get_linked_wb_catalog(
     user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
     seller_id: uuid.UUID | None = _seller_id_query,
+    search: Annotated[str | None, Query()] = None,
+    marketplace: Annotated[Literal["wildberries", "ozon"] | None, Query()] = None,
 ) -> list[FfCatalogOut]:
     """WB enrichment for all products (barcodes/photo) — including before first stock movement."""
-    rows = await list_linked_wb_catalog_rows(session, user.tenant_id, seller_id=seller_id)
+    rows = await list_linked_wb_catalog_rows(
+        session, user.tenant_id, seller_id=seller_id, search=search, marketplace=marketplace
+    )
     return await _ff_catalog_out_rows(session, user.tenant_id, rows)
 
 
@@ -528,10 +562,14 @@ async def get_ff_catalog(
     user: Annotated[User, Depends(require_catalog_cells_read_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
     seller_id: uuid.UUID | None = _seller_id_query,
+    search: Annotated[str | None, Query()] = None,
+    marketplace: Annotated[Literal["wildberries", "ozon"] | None, Query()] = None,
 ) -> list[FfCatalogOut]:
     if seller_id is not None and user.role != FULFILLMENT_ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
-    rows = await list_ff_catalog_rows(session, user.tenant_id, seller_id=seller_id)
+    rows = await list_ff_catalog_rows(
+        session, user.tenant_id, seller_id=seller_id, search=search, marketplace=marketplace
+    )
     return await _ff_catalog_out_rows(session, user.tenant_id, rows)
 
 
@@ -555,6 +593,8 @@ async def post_product(
             wb_barcode=body.wb_barcode,
             wb_size=body.wb_size,
             wb_vendor_code=body.wb_vendor_code,
+            ozon_sku=body.ozon_sku,
+            ozon_offer_id=body.ozon_offer_id,
             packaging_instructions=body.packaging_instructions,
             requires_honest_sign=body.requires_honest_sign,
         )
@@ -576,7 +616,13 @@ async def post_product(
             ) from None
         raise
     await session.refresh(p, attribute_names=["seller"])
-    return _product_out(p)
+    ozon_links = await list_ozon_product_links(session, user.tenant_id, {p.id})
+    ozon_link = ozon_links.get(p.id)
+    return _product_out(
+        p,
+        ozon_sku=ozon_link.external_sku if ozon_link is not None else None,
+        ozon_offer_id=ozon_link.external_offer_id if ozon_link is not None else None,
+    )
 
 
 def _tz_preview_out(result: object) -> ProductTzImportPreviewOut:

@@ -263,6 +263,71 @@ test('ff products: manual create adds a catalog product', async ({ page }) => {
   void seller
 })
 
+test('ff products: filters and marks Ozon-linked catalog items without changing columns', async ({ page }) => {
+  const email = `e2e-ff-ozon-catalog-${Date.now()}@example.com`
+  const password = 'password123'
+  await page.goto('/')
+  await openFulfillmentRegistration(page)
+  await page.getByTestId('register-form').getByLabel('Организация').fill('E2E FF Ozon Catalog')
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email)
+  await page.getByTestId('register-form').getByLabel('Пароль').fill(password)
+  await Promise.all([
+    waitForPostOk(page, '/api/auth/register'),
+    waitForGetOk(page, '/api/auth/me'),
+    page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
+  ])
+
+  const token = (await page.evaluate(() => localStorage.getItem('wms_token_ff'))) ?? ''
+  const headers = { Authorization: `Bearer ${token}` }
+  const seller = await page.request.post('/api/sellers', { headers, data: { name: 'Ozon seller' } })
+  expect(seller.ok()).toBeTruthy()
+  const sellerId = String(((await seller.json()) as { id: string }).id)
+  const ozonSku = `OZON-SKU-${Date.now()}`
+  const ozonProduct = await page.request.post('/api/products', {
+    headers,
+    data: {
+      name: 'Ozon linked item',
+      sku_code: `LOCAL-${Date.now()}`,
+      length_mm: 1,
+      width_mm: 1,
+      height_mm: 1,
+      seller_id: sellerId,
+      ozon_sku: ozonSku,
+      ozon_offer_id: `OZON-OFFER-${Date.now()}`,
+    },
+  })
+  expect(ozonProduct.ok()).toBeTruthy()
+  const wbOnlyProduct = await page.request.post('/api/products', {
+    headers,
+    data: {
+      name: 'Wildberries only item',
+      sku_code: `WB-ONLY-${Date.now()}`,
+      length_mm: 1,
+      width_mm: 1,
+      height_mm: 1,
+      seller_id: sellerId,
+      wb_vendor_code: `WB-ONLY-${Date.now()}`,
+    },
+  })
+  expect(wbOnlyProduct.ok()).toBeTruthy()
+
+  await page.reload()
+  await page.getByTestId('nav-ff-products').click()
+  await expect(page.getByTestId('ff-products-list')).toBeVisible()
+  await expect(page.getByTestId('ff-catalog-marketplace-filter')).toBeVisible()
+  const wbOnlyRow = page.getByTestId('ff-product-row').filter({ hasText: 'Wildberries only item' })
+  await expect(wbOnlyRow.getByTestId('ff-catalog-marketplace-ozon')).toHaveCount(0)
+  const tableHead = page.getByTestId('ff-products-table').locator('thead')
+  await expect(tableHead).not.toContainText('Маркетплейс')
+  await page.getByTestId('ff-catalog-search').fill(ozonSku)
+  const ozonRow = page.getByTestId('ff-product-row').filter({ hasText: 'Ozon linked item' })
+  await expect(ozonRow).toBeVisible()
+  await expect(ozonRow.getByTestId('ff-catalog-marketplace-ozon')).toHaveText('Ozon')
+  await page.getByTestId('ff-catalog-marketplace-filter').click()
+  await page.getByRole('option', { name: 'Ozon', exact: true }).click()
+  await expect(ozonRow).toBeVisible()
+})
+
 // TC-CAT-04 — массовый путь каталога: скачать шаблон → загрузить Excel → preview → apply.
 // TC-NEW-MAN-02 — FF загружает Excel ТЗ: preview → apply → товары с ТЗ.
 // TC-NEW-PRODUCT-TZ-02 — повтор файла защищён backend-идемпотентностью (API regression test).

@@ -62,6 +62,8 @@ type FfCatalogRow = {
   sku_code: string
   wb_nm_id: number | null
   wb_vendor_code: string | null
+  ozon_sku?: string | null
+  ozon_offer_id?: string | null
   wb_subject_name: string | null
   wb_primary_image_url: string | null
   wb_barcodes: string[]
@@ -137,6 +139,8 @@ function matchesCatalogSearch(
   row: {
     name: string
     wb_vendor_code: string | null
+    ozon_sku?: string | null
+    ozon_offer_id?: string | null
     sku_code: string
     wb_primary_barcode: string | null
     wb_barcodes: string[]
@@ -145,7 +149,15 @@ function matchesCatalogSearch(
 ): boolean {
   const needle = query.trim().toLowerCase()
   if (!needle) return true
-  const haystack = [row.name, row.wb_vendor_code ?? '', row.sku_code, row.wb_primary_barcode ?? '', ...row.wb_barcodes]
+  const haystack = [
+    row.name,
+    row.wb_vendor_code ?? '',
+    row.ozon_sku ?? '',
+    row.ozon_offer_id ?? '',
+    row.sku_code,
+    row.wb_primary_barcode ?? '',
+    ...row.wb_barcodes,
+  ]
     .join(' ')
     .toLowerCase()
   return haystack.includes(needle)
@@ -216,6 +228,7 @@ export function FfProductsCatalogScreen({
   // ── Фильтры над таблицей (CAT-12, часть 2) ──────────────────────────────
   const [filterSearch, setFilterSearch] = useState('')
   const [filterSellerId, setFilterSellerId] = useState('')
+  const [filterMarketplace, setFilterMarketplace] = useState<'wildberries' | 'ozon' | ''>('')
   const [filterCategory, setFilterCategory] = useState('')
   const [catalogView, setCatalogView] = useState<'products' | 'packages'>('products')
 
@@ -234,7 +247,10 @@ export function FfProductsCatalogScreen({
       // seller_id можно передавать бэкенду только с роли фулфилмент-админа —
       // для остальных ролей эндпоинт и так отдаёт каталог по всем селлерам,
       // поэтому для них фильтрация по селлеру остаётся клиентской (см. filteredRows).
-      const qs = canManageCatalog && filterSellerId ? `?seller_id=${encodeURIComponent(filterSellerId)}` : ''
+      const params = new URLSearchParams()
+      if (canManageCatalog && filterSellerId) params.set('seller_id', filterSellerId)
+      if (filterMarketplace) params.set('marketplace', filterMarketplace)
+      const qs = params.size ? `?${params}` : ''
       const res = await fetch(apiUrl(`/products/ff-catalog${qs}`), {
         headers: { ...authHeaders(token) },
       })
@@ -249,7 +265,7 @@ export function FfProductsCatalogScreen({
     } finally {
       setBusy(false)
     }
-  }, [authHeaders, token, canManageCatalog, filterSellerId])
+  }, [authHeaders, token, canManageCatalog, filterSellerId, filterMarketplace])
 
   useEffect(() => {
     void load()
@@ -455,9 +471,13 @@ export function FfProductsCatalogScreen({
         (row) =>
           matchesCatalogSearch(row, filterSearch) &&
           (!filterSellerId || row.seller_id === filterSellerId) &&
+          (!filterMarketplace ||
+            (filterMarketplace === 'wildberries'
+              ? Boolean(row.wb_nm_id != null || row.wb_vendor_code)
+              : Boolean(row.ozon_sku || row.ozon_offer_id))) &&
           (!filterCategory || row.wb_subject_name === filterCategory),
       ),
-    [rows, filterSearch, filterSellerId, filterCategory],
+    [rows, filterSearch, filterSellerId, filterMarketplace, filterCategory],
   )
 
   const markDirectionBusy = useCallback((productId: string, pending: boolean) => {
@@ -772,6 +792,20 @@ export function FfProductsCatalogScreen({
                 ))}
               </Select>
             </FormControl>
+            <FormControl size="small" sx={{ minWidth: 170 }}>
+              <InputLabel id="ff-catalog-marketplace-filter-label">Маркетплейс</InputLabel>
+              <Select
+                labelId="ff-catalog-marketplace-filter-label"
+                label="Маркетплейс"
+                value={filterMarketplace}
+                onChange={(e) => setFilterMarketplace(e.target.value as 'wildberries' | 'ozon' | '')}
+                data-testid="ff-catalog-marketplace-filter"
+              >
+                <MenuItem value="">Все</MenuItem>
+                <MenuItem value="wildberries">Wildberries</MenuItem>
+                <MenuItem value="ozon">Ozon</MenuItem>
+              </Select>
+            </FormControl>
             <FormControl size="small" sx={{ minWidth: 200 }}>
               <InputLabel id="ff-catalog-category-filter-label">Категория</InputLabel>
               <Select
@@ -889,9 +923,19 @@ export function FfProductsCatalogScreen({
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
-                        {p.wb_vendor_code ?? '—'}
-                      </Typography>
+                      <Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}>
+                        <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                          {p.wb_vendor_code ?? '—'}
+                        </Typography>
+                        {p.ozon_sku || p.ozon_offer_id ? (
+                          <Chip
+                            size="small"
+                            label="Ozon"
+                            variant="outlined"
+                            data-testid="ff-catalog-marketplace-ozon"
+                          />
+                        ) : null}
+                      </Stack>
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: 'break-word' }}>

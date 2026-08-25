@@ -14,7 +14,7 @@ from app.models.fbs_stock_sync_item import STOCK_SYNC_STATUS_CONFIRMED, FbsStock
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.product import Product
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
-from app.services.catalog_service import list_products
+from app.services.catalog_service import list_ozon_product_links, list_products
 from app.services.wb_card_enrichment import (
     brand_from_card,
     collect_skus_from_card,
@@ -310,6 +310,8 @@ class FfCatalogRow:
     wb_primary_image_url: str | None
     wb_barcodes: tuple[str, ...]
     wb_primary_barcode: str | None
+    ozon_sku: str | None = None
+    ozon_offer_id: str | None = None
     wb_size: str | None = None
     wb_color: str | None = None
     wb_brand: str | None = None
@@ -330,6 +332,8 @@ class FfCatalogRow:
             "sku_code": self.sku_code,
             "wb_nm_id": self.wb_nm_id,
             "wb_vendor_code": self.wb_vendor_code,
+            "ozon_sku": self.ozon_sku,
+            "ozon_offer_id": self.ozon_offer_id,
             "wb_subject_name": self.wb_subject_name,
             "wb_primary_image_url": self.wb_primary_image_url,
             "wb_barcodes": list(self.wb_barcodes),
@@ -354,11 +358,22 @@ async def list_linked_wb_catalog_rows(
     tenant_id: uuid.UUID,
     *,
     seller_id: uuid.UUID | None = None,
+    search: str | None = None,
+    marketplace: str | None = None,
 ) -> list[FfCatalogRow]:
     """All tenant products enriched from imported WB cards (no stock-movement gate)."""
-    scoped_products = await list_products(session, tenant_id, seller_id=seller_id)
+    scoped_products = await list_products(
+        session,
+        tenant_id,
+        seller_id=seller_id,
+        search=search,
+        marketplace=marketplace,
+    )
     if not scoped_products:
         return []
+    ozon_links = await list_ozon_product_links(
+        session, tenant_id, {product.id for product in scoped_products}
+    )
     sync_state_by_key = await _load_fbs_sync_state_by_seller_chrt(
         session,
         tenant_id,
@@ -420,6 +435,8 @@ async def list_linked_wb_catalog_rows(
                 sku_code=p.sku_code,
                 wb_nm_id=nm,
                 wb_vendor_code=p.wb_vendor_code,
+                ozon_sku=ozon_links[p.id].external_sku if p.id in ozon_links else None,
+                ozon_offer_id=ozon_links[p.id].external_offer_id if p.id in ozon_links else None,
                 wb_subject_name=subj,
                 wb_primary_image_url=img,
                 wb_barcodes=barcodes,
@@ -448,6 +465,10 @@ async def list_ff_catalog_rows(
     tenant_id: uuid.UUID,
     *,
     seller_id: uuid.UUID | None = None,
+    search: str | None = None,
+    marketplace: str | None = None,
 ) -> list[FfCatalogRow]:
     """FF warehouse catalog: all tenant products enriched from imported WB cards."""
-    return await list_linked_wb_catalog_rows(session, tenant_id, seller_id=seller_id)
+    return await list_linked_wb_catalog_rows(
+        session, tenant_id, seller_id=seller_id, search=search, marketplace=marketplace
+    )
