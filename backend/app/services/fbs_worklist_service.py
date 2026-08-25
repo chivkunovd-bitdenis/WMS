@@ -140,6 +140,7 @@ async def fetch_worklist_page(
     tenant_id: uuid.UUID,
     *,
     seller_id: uuid.UUID | None = None,
+    marketplace: str | None = None,
     status_group: str | None = None,
     wb_warehouse_id: int | None = None,
     search: str | None = None,
@@ -151,6 +152,7 @@ async def fetch_worklist_page(
         session,
         tenant_id,
         seller_id=seller_id,
+        marketplace=marketplace,
         status_group=status_group,
         wb_warehouse_id=wb_warehouse_id,
         search=search,
@@ -183,6 +185,7 @@ async def _fetch_orders_page(
     tenant_id: uuid.UUID,
     *,
     seller_id: uuid.UUID | None,
+    marketplace: str | None,
     status_group: str | None,
     wb_warehouse_id: int | None,
     search: str | None,
@@ -193,6 +196,8 @@ async def _fetch_orders_page(
     stmt = select(FbsOrder).where(FbsOrder.tenant_id == tenant_id)
     if seller_id is not None:
         stmt = stmt.where(FbsOrder.seller_id == seller_id)
+    if marketplace is not None:
+        stmt = stmt.where(FbsOrder.marketplace == marketplace)
     if status_group:
         allowed = STATUS_GROUP_MAP.get(status_group)
         if allowed is None:
@@ -713,6 +718,8 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
     picked_at = order.picked_at or (pick_row.picked_at if pick_row else None)
     return {
         "id": str(order.id),
+        "marketplace": order.marketplace,
+        "external_order_id": order.external_order_id,
         "wb_order_id": int(order.wb_order_id),
         "status": order.status,
         "wb_status": order.wb_status,

@@ -329,6 +329,8 @@ export function FfFbsSupplyWorkspace({
   const [skipHonestSignOpen, setSkipHonestSignOpen] = useState(false)
   const [skipHonestSignBusy, setSkipHonestSignBusy] = useState(false)
   const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
+  const isOzonSupply = workspace?.supply.marketplace === 'ozon'
+  const providerName = isOzonSupply ? 'Ozon' : 'WB'
 
   const load = useCallback(
     async (silent = false) => {
@@ -1476,7 +1478,7 @@ export function FfFbsSupplyWorkspace({
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   {workspace
-                    ? `${workspace.supply.seller.name}${workspace.supply.wb_supply_id ? ` · № WB ${workspace.supply.wb_supply_id}` : ''}`
+                    ? `${workspace.supply.seller.name}${workspace.supply.wb_supply_id ? ` · № ${providerName} ${workspace.supply.wb_supply_id}` : ''}`
                     : 'Загружаем данные поставки…'}
                 </Typography>
               </Box>
@@ -2029,6 +2031,11 @@ export function FfFbsSupplyWorkspace({
 
           {workspace && stage === 'boxes' ? (
             <Stack spacing={2}>
+              {isOzonSupply ? (
+                <Alert severity="warning" data-testid="fbs-ozon-boxes-blocked">
+                  Для Ozon правила грузомест не подтверждены
+                </Alert>
+              ) : null}
               <Paper variant="outlined" sx={{ overflow: 'hidden' }} data-testid="fbs-boxes">
                 <Box sx={{ px: 2.5, py: 2, borderBottom: 1, borderColor: 'divider' }}>
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
@@ -2043,7 +2050,7 @@ export function FfFbsSupplyWorkspace({
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }} useFlexGap>
                       <Button
                         startIcon={<PrintOutlinedIcon />}
-                        disabled={busy || workspace.boxes.length === 0}
+                        disabled={isOzonSupply || busy || workspace.boxes.length === 0}
                         onClick={() => void openAllBoxQrPreview()}
                         data-testid="fbs-boxes-print-all-qr"
                       >
@@ -2054,7 +2061,7 @@ export function FfFbsSupplyWorkspace({
                           <Checkbox
                             checked={boxesWithoutDistribution}
                             onChange={(event) => setBoxesWithoutDistribution(event.target.checked)}
-                            disabled={!stageIsCurrent || !packagingEditable || workspace.boxes.length > 0}
+                            disabled={isOzonSupply || !stageIsCurrent || !packagingEditable || workspace.boxes.length > 0}
                             data-testid="fbs-boxes-without-distribution"
                             data-task-id="FBS-12"
                           />
@@ -2062,8 +2069,8 @@ export function FfFbsSupplyWorkspace({
                         label="Без распределения"
                         data-task-id="FBS-12"
                       />
-                      <TextField label="Коробов" value={boxCount} size="small" type="number" disabled={!stageIsCurrent || !packagingEditable} onChange={(e) => setBoxCount(e.target.value)} slotProps={{ htmlInput: { min: 1, max: 100 } }} sx={{ width: 104 }} data-task-id="FBS-12" />
-                      <Button variant="contained" disabled={!stageIsCurrent || !packagingEditable || !Number(boxCount)} onClick={() => void createBoxes()} data-task-id="FBS-12">Добавить короба</Button>
+                      <TextField label="Коробов" value={boxCount} size="small" type="number" disabled={isOzonSupply || !stageIsCurrent || !packagingEditable} onChange={(e) => setBoxCount(e.target.value)} slotProps={{ htmlInput: { min: 1, max: 100 } }} sx={{ width: 104 }} data-task-id="FBS-12" />
+                      <Button variant="contained" disabled={isOzonSupply || !stageIsCurrent || !packagingEditable || !Number(boxCount)} onClick={() => void createBoxes()} data-task-id="FBS-12">Добавить короба</Button>
                     </Stack>
                   </Stack>
                 </Box>
@@ -2111,7 +2118,7 @@ export function FfFbsSupplyWorkspace({
                           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                             <Button
                               size="small"
-                              disabled={busy}
+                              disabled={isOzonSupply || busy}
                               onClick={() => {
                                 // Real WB cargo-place QR whenever this box has one linked
                                 // (any delivery_type); otherwise fall back to the local
@@ -2130,7 +2137,7 @@ export function FfFbsSupplyWorkspace({
                             </Button>
                             <Button
                               size="small"
-                              disabled={!stageIsCurrent || !packagingEditable || busy || box.without_distribution}
+                              disabled={isOzonSupply || !stageIsCurrent || !packagingEditable || busy || box.without_distribution}
                               onClick={() => {
                                 setBoxAssignTarget(box.id)
                                 setBoxProductSearch('')
@@ -2142,7 +2149,7 @@ export function FfFbsSupplyWorkspace({
                             </Button>
                             <IconButton
                               size="small"
-                              disabled={!packagingEditable || busy}
+                              disabled={isOzonSupply || !packagingEditable || busy}
                               onClick={(event: MouseEvent<HTMLElement>) => setBoxMenu({ boxId: box.id, anchorEl: event.currentTarget })}
                               aria-label={`Действия короба ${box.box_number}`}
                             >
@@ -2187,7 +2194,7 @@ export function FfFbsSupplyWorkspace({
                     onClick={() => void openDeliveryConfirmation()}
                     data-testid="fbs-deliver-open"
                   >
-                    Передать в WB
+                    Передать в {providerName}
                   </Button>
                 </Stack>
               ) : null}
@@ -2195,7 +2202,7 @@ export function FfFbsSupplyWorkspace({
                 <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 } }} data-testid="fbs-supply-qr">
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
                     <Box>
-                      <Typography variant="h6">QR поставки WB</Typography>
+                      <Typography variant="h6">QR поставки {providerName}</Typography>
                       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                         Распечатайте QR для сдачи всей поставки.
                       </Typography>

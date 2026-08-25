@@ -104,9 +104,20 @@ const SUPPLY_EMPTY_STATE: Record<'active' | 'delivery' | 'done', { title: string
   },
 }
 
-const EXTERNAL_WB_SUPPLY_HINT =
-  'Поставку создали в кабинете Wildberries, а в WMS она не привязана. Открыть её здесь нельзя.'
 const SEARCH_NO_MATCH_NOTICE = 'Совпадений не найдено, список не изменён.'
+
+function marketplaceLabel(marketplace: 'wb' | 'ozon'): string {
+  return marketplace === 'ozon' ? 'Ozon' : 'Wildberries'
+}
+
+function orderNumberLabel(order: FbsWorklistOrder): string {
+  return `${marketplaceLabel(order.marketplace)} №${order.external_order_id ?? order.wb_order_id}`
+}
+
+function externalSupplyHint(order: FbsWorklistOrder): string {
+  const marketplace = marketplaceLabel(order.marketplace)
+  return `Поставку создали в кабинете ${marketplace}, а в WMS она не привязана. Открыть её здесь нельзя.`
+}
 
 function MissingText({ children }: { children: string }) {
   return (
@@ -287,7 +298,7 @@ const NewOrderRow = memo(function NewOrderRow({
       </TableCell>
       <TableCell>
         <Typography variant="body2" sx={{ fontWeight: 700 }}>
-          WB №{order.wb_order_id}
+          {orderNumberLabel(order)}
         </Typography>
         <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 170 }}>
           ШК: {order.product.barcode ?? '—'}
@@ -308,6 +319,7 @@ const NewOrderRow = memo(function NewOrderRow({
         <Tooltip title={order.seller.name ?? '—'}>
           <Typography variant="body2" noWrap sx={{ maxWidth: 100 }}>{order.seller.name ?? '—'}</Typography>
         </Tooltip>
+        <Chip size="small" variant="outlined" label={marketplaceLabel(order.marketplace)} sx={{ mt: 0.5 }} />
         {order.buyer_type === 'legal' ? (
           <Typography variant="caption" color="text.secondary">
             Юридическое лицо
@@ -488,6 +500,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
   const navigate = useNavigate()
   const [statusGroup, setStatusGroup] = useState<(typeof TABS)[number]['key']>('new')
   const [sellerId, setSellerId] = useState('__all__')
+  const [marketplace, setMarketplace] = useState<'__all__' | 'wb' | 'ozon'>('__all__')
   const [wbWarehouseId, setWbWarehouseId] = useState('__all__')
   const [search, setSearch] = useState('')
   const [activeSearch, setActiveSearch] = useState('')
@@ -544,6 +557,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         // только чтобы найти заказы WB без локальной карточки поставки в WMS.
         const params = {
           seller_id: sellerId === '__all__' ? null : sellerId,
+          marketplace: marketplace === '__all__' ? null : marketplace,
           status_group: statusGroup,
           limit: 500,
         }
@@ -561,6 +575,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       }
       const page = await fetchFbsWorklist(token, authHeaders, {
         seller_id: sellerId === '__all__' ? null : sellerId,
+        marketplace: marketplace === '__all__' ? null : marketplace,
         status_group: statusGroup,
         wb_warehouse_id: statusGroup === 'new' && wbWarehouseId !== '__all__' ? wbWarehouseId : null,
         limit: statusGroup === 'new' ? NEW_ORDERS_PAGE_LIMIT : 500,
@@ -589,7 +604,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       setBusy(false)
       loadingRef.current = false
     }
-  }, [token, authHeaders, sellerId, statusGroup, wbWarehouseId])
+  }, [token, authHeaders, sellerId, marketplace, statusGroup, wbWarehouseId])
 
   useEffect(() => {
     void load()
@@ -722,6 +737,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     const sameSelection = selectedOrders.every(
       (order) =>
         order.seller.id === first.seller.id &&
+        order.marketplace === first.marketplace &&
         Number(order.wb_warehouse.id) === Number(first.wb_warehouse.id),
     )
     if (!sameSelection) return []
@@ -729,6 +745,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
       (supply) =>
         supply.can_add_orders &&
         supply.seller.id === first.seller.id &&
+        supply.marketplace === first.marketplace &&
         Number(supply.wb_warehouse.id) === Number(first.wb_warehouse.id),
     )
   }, [activeSupplies, selectedOrders])
@@ -984,6 +1001,23 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                   {seller.name}
                 </MenuItem>
               ))}
+            </Select>
+          </FormControl>
+          <FormControl sx={{ minWidth: 170 }}>
+            <InputLabel id="fbs-worklist-marketplace-label">Маркетплейс</InputLabel>
+            <Select
+              labelId="fbs-worklist-marketplace-label"
+              label="Маркетплейс"
+              value={marketplace}
+              onChange={(event) => {
+                setMarketplace(event.target.value as '__all__' | 'wb' | 'ozon')
+                setWbWarehouseId('__all__')
+              }}
+              data-testid="fbs-worklist-marketplace"
+            >
+              <MenuItem value="__all__">Все</MenuItem>
+              <MenuItem value="wb">Wildberries</MenuItem>
+              <MenuItem value="ozon">Ozon</MenuItem>
             </Select>
           </FormControl>
           {statusGroup === 'new' ? (
@@ -1337,14 +1371,14 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
                           <FbsStatusChip status={order.status} />
                         ) : null}
                         {localSupplyMissing ? (
-                          <Tooltip title={EXTERNAL_WB_SUPPLY_HINT}>
+                          <Tooltip title={externalSupplyHint(order)}>
                             <Typography
                               variant="caption"
                               color="text.secondary"
                               sx={{ display: 'block', mt: 0.75 }}
                               data-testid={`fbs-order-${order.id}-external-supply`}
                             >
-                              Поставка создана в WB, недоступна в WMS
+                              Поставка создана в {marketplaceLabel(order.marketplace)}, недоступна в WMS
                             </Typography>
                           </Tooltip>
                         ) : null}
@@ -1354,7 +1388,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               )
               return (
                 localSupplyMissing ? (
-                  <Tooltip key={order.id} title={EXTERNAL_WB_SUPPLY_HINT} placement="top" arrow>
+                  <Tooltip key={order.id} title={externalSupplyHint(order)} placement="top" arrow>
                     {row}
                   </Tooltip>
                 ) : row

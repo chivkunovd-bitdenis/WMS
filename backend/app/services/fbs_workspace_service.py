@@ -150,6 +150,7 @@ async def get_supply_workspace(
     return {
         "supply": {
             "id": str(supply.id),
+            "marketplace": supply.marketplace,
             "wb_supply_id": supply.wb_supply_id,
             "name": supply.name,
             "status": supply.status,
