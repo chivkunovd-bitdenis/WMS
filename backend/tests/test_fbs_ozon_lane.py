@@ -813,6 +813,39 @@ async def test_ozon_handoff_blocks_when_required_product_country_is_missing(
 
 
 @pytest.mark.asyncio
+async def test_ozon_handoff_blocks_when_posting_has_restrictions(
+    db_session: AsyncSession,
+) -> None:
+    """TC-S03-OZON-031: provider restrictions stop assembly before /ship."""
+    tenant, _, _, _, _, supply = await _seed_ozon_supply_case(db_session, packed=True)
+    assert supply is not None
+    responses = _ozon_handoff_responses()
+    responses["/v1/posting/fbs/restrictions"] = {
+        "result": {
+            "posting_number": "ozon-posting-dispatch",
+            "max_posting_weight": 1000,
+        }
+    }
+    transport = FakeMarketplaceTransport(endpoint_responses=responses)
+
+    with pytest.raises(shipment_svc.FbsShipmentError, match="ozon_posting_restricted") as caught:
+        await shipment_svc.deliver_supply(
+            db_session,
+            tenant.id,
+            supply.id,
+            AsyncMock(),
+            idempotency_key=f"ozon-restricted-{uuid.uuid4()}",
+            ozon_provider=OzonMarketplaceProvider(transport=transport),
+        )
+
+    assert caught.value.message == (
+        "Отправление Ozon имеет ограничения (максимальный вес: 1000); "
+        "проверьте состав в кабинете Ozon до сборки."
+    )
+    assert all(path != "/v4/posting/fbs/ship" for path, _ in transport.endpoint_calls)
+
+
+@pytest.mark.asyncio
 async def test_wb_order_keeps_legacy_single_product_shape(db_session: AsyncSession) -> None:
     """TC-S03-OZON-025: the additive Ozon relation does not change WB orders."""
     tenant = Tenant(name="WB regression", slug=f"wb-regression-{uuid.uuid4().hex[:8]}")

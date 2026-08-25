@@ -468,6 +468,26 @@ def _required_country_skus(response: OzonV3GetFbsPostingResponseV3) -> set[str]:
     }
 
 
+def _restriction_summary(response: OzonV1GetRestrictionsResponse) -> list[str]:
+    result = response.result
+    if result is None:
+        return []
+    labels = (
+        ("max_posting_weight", "максимальный вес"),
+        ("min_posting_weight", "минимальный вес"),
+        ("width", "ширина"),
+        ("length", "длина"),
+        ("height", "высота"),
+        ("max_posting_price", "максимальная стоимость"),
+        ("min_posting_price", "минимальная стоимость"),
+    )
+    return [
+        f"{label}: {value:g}"
+        for field, label in labels
+        if (value := getattr(result, field, None)) is not None
+    ]
+
+
 async def _set_required_countries(
     session: AsyncSession,
     order: FbsOrder,
@@ -591,6 +611,15 @@ async def handoff_supply(
             raise OzonFbsProcessError(
                 "ozon_restrictions_missing",
                 "Ozon не вернул ограничения отправления; сборка остановлена.",
+                status_code=409,
+            )
+        restriction_summary = _restriction_summary(restrictions)
+        if restriction_summary:
+            raise OzonFbsProcessError(
+                "ozon_posting_restricted",
+                "Отправление Ozon имеет ограничения ("
+                + ", ".join(restriction_summary)
+                + "); проверьте состав в кабинете Ozon до сборки.",
                 status_code=409,
             )
         await _set_required_countries(
