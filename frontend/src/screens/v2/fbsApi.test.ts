@@ -6,6 +6,7 @@ import {
   FbsApiError,
   fetchFbsWorklist,
   retryFbsSupplyQr,
+  runFbsOrdersSync,
   validateFbsKiz,
 } from './fbsApi'
 
@@ -16,6 +17,29 @@ afterEach(() => {
 })
 
 describe('FBS API client', () => {
+  it('sends marketplace identity and treats an unconnected provider as skipped', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: '', status: 'skipped' }), {
+        status: 202,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(runFbsOrdersSync('token', authHeaders, 'seller-1', 'ozon')).resolves.toMatchObject({
+      skipped: true,
+      ordersReceived: 0,
+    })
+    expect(fetchMock).toHaveBeenCalledWith('/api/operations/fbs-orders/sync', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ seller_id: 'seller-1', marketplace: 'ozon' }),
+    })
+  })
+
   it('returns scanner normalization hints from KIZ validation', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(

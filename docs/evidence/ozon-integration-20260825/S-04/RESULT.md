@@ -2,9 +2,11 @@
 
 Проверенный срез: API существующей привязки склада выдаёт `marketplace` и
 `external_warehouse_id`; существующая таблица stock-sync показывает нейтральный
-Chip WB/Ozon и безопасные статусы Ozon. Тест `TC-NEW-OZON-STOCK-001` сохраняет
-независимость WB/Ozon для последней физической единицы, а
-`TC-NEW-OZON-STOCK-002` проверяет, что UI не должен угадывать провайдера по WB ID.
+Chip WB/Ozon и безопасные статусы Ozon. Обязательный wave0-тест последней
+физической единицы уже находится в
+`backend/tests/test_fbs_stock_models.py::test_one_physical_unit_cannot_be_allocated_to_wb_and_ozon`.
+Добавленный в этой лане `test_ozon_binding_api_output_keeps_provider_identity`
+проверяет только поля provider identity в API привязки.
 
 - `pytest backend/tests/test_fbs_stock_models.py backend/tests/test_marketplace_foundation.py -q`: 24 passed, exit 0.
 - `ruff check --ignore RUF100 backend/app/api/fbs_sellers.py backend/tests/test_fbs_stock_models.py`: exit 0.

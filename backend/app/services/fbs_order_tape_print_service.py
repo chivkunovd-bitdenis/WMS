@@ -103,6 +103,9 @@ async def print_fbs_order_tape(
     supply = await _load_supply(session, tenant_id, supply_id)
     if supply is None:
         raise FbsOrderTapePrintError("supply_not_found")
+    provider_name = (
+        "Ozon" if getattr(supply, "marketplace", "wb") == "ozon" else "Wildberries"
+    )
     ordered = _orders_in_requested_order(supply, order_ids)
     if len(ordered) != len(dict.fromkeys(order_ids)):
         raise FbsOrderTapePrintError("order_not_in_supply")
@@ -166,7 +169,7 @@ async def print_fbs_order_tape(
                     order_id=order.id,
                     wb_order_id=int(order.wb_order_id),
                     code="order_qr_missing",
-                    message="QR заказа WB не получен.",
+                    message=f"Этикетка заказа {provider_name} не получена.",
                 )
             )
             continue

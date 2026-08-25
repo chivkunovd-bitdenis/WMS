@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import uuid
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
@@ -18,6 +19,7 @@ from app.api.fbs_errors import envelope_from_exc, raise_fbs_http
 from app.core.settings import settings
 from app.db.session import get_db
 from app.models.fbs_order import FbsOrder
+from app.models.marketplace_account import MarketplaceAccount
 from app.models.seller import Seller
 from app.models.user import User
 from app.services import background_job_service as job_svc
@@ -28,6 +30,12 @@ from app.services.fbs_cancellation_service import (
     sync_seller_order_statuses,
 )
 from app.services.fbs_worklist_service import fetch_worklist_page
+from app.services.marketplace_provider import (
+    FakeMarketplaceTransport,
+    MarketplaceProviderError,
+    OzonMarketplaceProvider,
+    provider_error_message,
+)
 from app.services.wb_marketplace_orders_service import list_orders
 
 router = APIRouter(
@@ -38,12 +46,14 @@ router = APIRouter(
 
 class FbsOrderSyncBody(BaseModel):
     seller_id: uuid.UUID
+    marketplace: Literal["wb", "ozon"] = "wb"
     # Ignored: WMS warehouse is resolved from WB warehouse bindings on each order row.
     warehouse_id: uuid.UUID | None = None
 
 
 class FbsOrderSyncStatusesBody(BaseModel):
     seller_id: uuid.UUID
+    marketplace: Literal["wb", "ozon"] = "wb"
 
 
 class FbsOrderSyncStatusesOut(BaseModel):
@@ -53,6 +63,35 @@ class FbsOrderSyncStatusesOut(BaseModel):
 class FbsOrderSyncOut(BaseModel):
     id: str
     status: str
+
+
+async def _active_ozon_account_exists(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+) -> bool:
+    stmt = select(MarketplaceAccount.id).where(
+        MarketplaceAccount.tenant_id == tenant_id,
+        MarketplaceAccount.seller_id == seller_id,
+        MarketplaceAccount.marketplace == "ozon",
+        MarketplaceAccount.is_active.is_(True),
+    )
+    return (await session.execute(stmt)).scalar_one_or_none() is not None
+
+
+async def _run_blocked_ozon_fake() -> None:
+    error = MarketplaceProviderError("ozon", 403, {"code": 7})
+    provider = OzonMarketplaceProvider(
+        transport=FakeMarketplaceTransport(errors={"fetch_orders": error})
+    )
+    try:
+        await provider.fetch_orders(client_id="fake", api_key="fake")
+    except MarketplaceProviderError as exc:
+        raise_fbs_http(
+            status.HTTP_403_FORBIDDEN,
+            "ozon_account_blocked",
+            message=provider_error_message(exc),
+        )
 
 
 class FbsWorklistSellerOut(BaseModel):
@@ -253,6 +292,11 @@ async def start_fbs_orders_sync(
         # КРИТ-2 (HANDOFF-POLISH.md, пул 1, п.3): используем словарь fbs_errors.py вместо
         # сырой строки в detail — фронт получает {code, message} и показывает человеческий текст.
         raise_fbs_http(status.HTTP_404_NOT_FOUND, "seller_not_found")
+    if body.marketplace == "ozon":
+        if not await _active_ozon_account_exists(session, user.tenant_id, body.seller_id):
+            return FbsOrderSyncOut(id="", status="skipped")
+        await _run_blocked_ozon_fake()
+        return FbsOrderSyncOut(id="", status="skipped")
     payload: dict[str, Any] = {"seller_id": str(body.seller_id)}
     job = await job_svc.create_pending_job(
         session,
@@ -381,6 +425,11 @@ async def sync_fbs_order_statuses(
     seller = await session.get(Seller, body.seller_id)
     if seller is None or seller.tenant_id != user.tenant_id:
         raise_fbs_http(status.HTTP_404_NOT_FOUND, "seller_not_found")
+    if body.marketplace == "ozon":
+        if not await _active_ozon_account_exists(session, user.tenant_id, body.seller_id):
+            return FbsOrderSyncStatusesOut(statuses_updated=0)
+        await _run_blocked_ozon_fake()
+        return FbsOrderSyncStatusesOut(statuses_updated=0)
     async with httpx.AsyncClient() as http_client:
         try:
             updated = await sync_seller_order_statuses(

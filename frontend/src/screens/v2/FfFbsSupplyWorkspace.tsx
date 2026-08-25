@@ -46,7 +46,7 @@ import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import type { ProductThermalLabelData } from '../../utils/printProductThermalLabel'
 import { FbsPrintPreviewDialog } from './FbsPrintPreviewDialog'
-import { buildFbsPickingListPrintHtml, ordersWord } from './fbsUx'
+import { buildFbsPickingListPrintHtml, fbsBoxOperationsDisabled, ordersWord } from './fbsUx'
 import {
   confirmFbsPrintApplied,
   confirmFbsManualPick,
@@ -331,6 +331,9 @@ export function FfFbsSupplyWorkspace({
   const { openPrint, dialog: markingPrintDialog } = useMarkingCodePrint()
   const isOzonSupply = workspace?.supply.marketplace === 'ozon'
   const providerName = isOzonSupply ? 'Ozon' : 'WB'
+  const boxOperationsDisabled = fbsBoxOperationsDisabled(
+    workspace?.supply.marketplace ?? 'wb',
+  )
 
   const load = useCallback(
     async (silent = false) => {
@@ -664,7 +667,7 @@ export function FfFbsSupplyWorkspace({
       })
       setPrintBatch(batch)
       if (batch.ready === 0) {
-        setError('WB не вернул ни одного готового стикера. Печать не открыта.')
+        setError(`${providerName} не вернул готовых этикеток заказов. Печать не открыта.`)
       } else {
         setPrintPreviewOpen(true)
       }
@@ -705,6 +708,7 @@ export function FfFbsSupplyWorkspace({
   }
 
   const openBoxQrPreview = async (box: FbsWorkspace['boxes'][number]) => {
+    if (boxOperationsDisabled) return
     setBusy(true)
     setError(null)
     try {
@@ -741,6 +745,7 @@ export function FfFbsSupplyWorkspace({
   // только разом. Берём настоящий стикер грузоместа от WB, свой QR из внутреннего
   // штрихкода рисуем лишь для коробов без грузоместа — как и в одиночной кнопке.
   const openAllBoxQrPreview = async () => {
+    if (boxOperationsDisabled) return
     const boxes = workspace?.boxes ?? []
     if (boxes.length === 0) return
     const notReady = boxes.filter((box) => box.wb_trbx_id && !box.qr_asset?.preview_url)
@@ -783,7 +788,7 @@ export function FfFbsSupplyWorkspace({
   }
 
   const createBoxes = async () => {
-    if (!workspace) return
+    if (!workspace || boxOperationsDisabled) return
     const count = Math.min(100, Math.max(1, Number(boxCount) || 1))
     const boxMode = boxesWithoutDistribution ? 'no-distribution' : 'distribution'
     const key = persistentOperationKey(workspace.supply.id, 'box-create', `${boxMode}:${count}`)
@@ -799,7 +804,7 @@ export function FfFbsSupplyWorkspace({
   }
 
   const assignBoxOrders = async () => {
-    if (!workspace || !boxAssignTarget || boxAssignSelectedOrderIds.length === 0) return
+    if (boxOperationsDisabled || !workspace || !boxAssignTarget || boxAssignSelectedOrderIds.length === 0) return
     const next = await run(
       () => assignFbsPackingBoxOrders(token, authHeaders, workspace.supply.id, boxAssignTarget, boxAssignSelectedOrderIds),
       '',
@@ -814,7 +819,7 @@ export function FfFbsSupplyWorkspace({
   }
 
   const removeBoxOrders = async (boxId: string, orderIds: string[]) => {
-    if (!workspace || orderIds.length === 0) return
+    if (boxOperationsDisabled || !workspace || orderIds.length === 0) return
     await run(
       async () => {
         let next = workspace
@@ -828,7 +833,7 @@ export function FfFbsSupplyWorkspace({
   }
 
   const clearBox = async (boxId: string) => {
-    if (!workspace) return
+    if (!workspace || boxOperationsDisabled) return
     setBoxMenu(null)
     await run(
       () => clearFbsPackingBox(token, authHeaders, workspace.supply.id, boxId),
@@ -837,7 +842,7 @@ export function FfFbsSupplyWorkspace({
   }
 
   const deleteBox = async (boxId: string) => {
-    if (!workspace) return
+    if (!workspace || boxOperationsDisabled) return
     setBoxMenu(null)
     const key = persistentOperationKey(workspace.supply.id, 'box-delete', boxId)
     const next = await run(
@@ -855,7 +860,7 @@ export function FfFbsSupplyWorkspace({
   }
 
   const retryBoxQr = async (boxId: string) => {
-    if (!workspace) return
+    if (!workspace || boxOperationsDisabled) return
     const next = await run(
       () => retryFbsPackingBoxQr(token, authHeaders, workspace.supply.id, boxId),
       '',
@@ -894,7 +899,7 @@ export function FfFbsSupplyWorkspace({
       setDeliveryPreflight(await preflightFbsDelivery(token, authHeaders, workspace.supply.id))
     } catch (cause) {
       setDeliveryPreflightError(
-        cause instanceof Error ? cause.message : 'Не удалось получить ответ Wildberries.',
+        cause instanceof Error ? cause.message : `Не удалось получить ответ ${providerName}.`,
       )
     } finally {
       setDeliveryPreflightLoading(false)
@@ -2050,7 +2055,7 @@ export function FfFbsSupplyWorkspace({
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }} useFlexGap>
                       <Button
                         startIcon={<PrintOutlinedIcon />}
-                        disabled={isOzonSupply || busy || workspace.boxes.length === 0}
+                        disabled={boxOperationsDisabled || busy || workspace.boxes.length === 0}
                         onClick={() => void openAllBoxQrPreview()}
                         data-testid="fbs-boxes-print-all-qr"
                       >
@@ -2061,7 +2066,7 @@ export function FfFbsSupplyWorkspace({
                           <Checkbox
                             checked={boxesWithoutDistribution}
                             onChange={(event) => setBoxesWithoutDistribution(event.target.checked)}
-                            disabled={isOzonSupply || !stageIsCurrent || !packagingEditable || workspace.boxes.length > 0}
+                            disabled={boxOperationsDisabled || !stageIsCurrent || !packagingEditable || workspace.boxes.length > 0}
                             data-testid="fbs-boxes-without-distribution"
                             data-task-id="FBS-12"
                           />
@@ -2069,8 +2074,8 @@ export function FfFbsSupplyWorkspace({
                         label="Без распределения"
                         data-task-id="FBS-12"
                       />
-                      <TextField label="Коробов" value={boxCount} size="small" type="number" disabled={isOzonSupply || !stageIsCurrent || !packagingEditable} onChange={(e) => setBoxCount(e.target.value)} slotProps={{ htmlInput: { min: 1, max: 100 } }} sx={{ width: 104 }} data-task-id="FBS-12" />
-                      <Button variant="contained" disabled={isOzonSupply || !stageIsCurrent || !packagingEditable || !Number(boxCount)} onClick={() => void createBoxes()} data-task-id="FBS-12">Добавить короба</Button>
+                      <TextField label="Коробов" value={boxCount} size="small" type="number" disabled={boxOperationsDisabled || !stageIsCurrent || !packagingEditable} onChange={(e) => setBoxCount(e.target.value)} slotProps={{ htmlInput: { min: 1, max: 100 } }} sx={{ width: 104 }} data-task-id="FBS-12" />
+                      <Button variant="contained" disabled={boxOperationsDisabled || !stageIsCurrent || !packagingEditable || !Number(boxCount)} onClick={() => void createBoxes()} data-task-id="FBS-12">Добавить короба</Button>
                     </Stack>
                   </Stack>
                 </Box>
@@ -2118,7 +2123,7 @@ export function FfFbsSupplyWorkspace({
                           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                             <Button
                               size="small"
-                              disabled={isOzonSupply || busy}
+                              disabled={boxOperationsDisabled || busy}
                               onClick={() => {
                                 // Real WB cargo-place QR whenever this box has one linked
                                 // (any delivery_type); otherwise fall back to the local
@@ -2137,7 +2142,7 @@ export function FfFbsSupplyWorkspace({
                             </Button>
                             <Button
                               size="small"
-                              disabled={isOzonSupply || !stageIsCurrent || !packagingEditable || busy || box.without_distribution}
+                              disabled={boxOperationsDisabled || !stageIsCurrent || !packagingEditable || busy || box.without_distribution}
                               onClick={() => {
                                 setBoxAssignTarget(box.id)
                                 setBoxProductSearch('')
@@ -2149,7 +2154,7 @@ export function FfFbsSupplyWorkspace({
                             </Button>
                             <IconButton
                               size="small"
-                              disabled={isOzonSupply || !packagingEditable || busy}
+                              disabled={boxOperationsDisabled || !packagingEditable || busy}
                               onClick={(event: MouseEvent<HTMLElement>) => setBoxMenu({ boxId: box.id, anchorEl: event.currentTarget })}
                               aria-label={`Действия короба ${box.box_number}`}
                             >
@@ -2169,7 +2174,7 @@ export function FfFbsSupplyWorkspace({
                                   <Typography variant="body2" color="text.secondary">{row.orderIds.length} шт</Typography>
                                   <IconButton
                                     size="small"
-                                    disabled={!stageIsCurrent || !packagingEditable || busy}
+                                    disabled={boxOperationsDisabled || !stageIsCurrent || !packagingEditable || busy}
                                     onClick={() => void removeBoxOrders(box.id, row.orderIds)}
                                     aria-label={`Убрать ${row.name} из короба ${box.box_number}`}
                                   >

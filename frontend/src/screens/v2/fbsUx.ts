@@ -1,3 +1,26 @@
+export type FbsMarketplace = 'wb' | 'ozon'
+
+export function buildFbsSyncTargets(
+  sellerIds: string[],
+  selectedSellerId: string,
+): Array<{ sellerId: string; marketplace: FbsMarketplace }> {
+  const targets = selectedSellerId === '__all__' ? sellerIds : [selectedSellerId]
+  return targets.flatMap((sellerId) => ([
+    { sellerId, marketplace: 'wb' as const },
+    { sellerId, marketplace: 'ozon' as const },
+  ]))
+}
+
+export function mixedMarketplaceSelectionMessage(marketplaces: FbsMarketplace[]): string | null {
+  return new Set(marketplaces).size > 1
+    ? 'Нельзя объединить заказы Wildberries и Ozon в одну поставку.'
+    : null
+}
+
+export function fbsBoxOperationsDisabled(marketplace: FbsMarketplace): boolean {
+  return marketplace === 'ozon'
+}
+
 export function ordersWord(count: number) {
   const lastTwo = Math.abs(count) % 100
   if (lastTwo >= 11 && lastTwo <= 14) return 'заказов'

@@ -1437,6 +1437,7 @@ export type BackgroundJobRow = {
 }
 
 export type FbsOrdersSyncOutcome = {
+  skipped: boolean
   ordersReceived: number
   ordersCreated: number
   ordersUpserted: number
@@ -1449,11 +1450,12 @@ export async function startFbsOrdersSync(
   token: string,
   ah: (t: string) => Record<string, string>,
   sellerId: string,
+  marketplace: 'wb' | 'ozon',
 ): Promise<{ id: string; status: string }> {
   const res = await fetch(apiUrl('/operations/fbs-orders/sync'), {
     method: 'POST',
     headers: { ...ah(token), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ seller_id: sellerId }),
+    body: JSON.stringify({ seller_id: sellerId, marketplace }),
   })
   return jsonOrThrow<{ id: string; status: string }>(res)
 }
@@ -1498,12 +1500,12 @@ export async function waitForBackgroundJob(
     const job = await fetchBackgroundJob(token, ah, jobId)
     if (JOB_TERMINAL_STATUSES.has(job.status)) {
       if (JOB_FAILED_STATUSES.has(job.status)) {
-        throw new Error(job.error_message || 'Синхронизация с WB завершилась ошибкой.')
+        throw new Error(job.error_message || 'Синхронизация заказов завершилась ошибкой.')
       }
       return job
     }
     if (Date.now() > deadline) {
-      throw new Error('Синхронизация с WB не завершилась за 2 минуты. Проверьте фоновые задачи.')
+      throw new Error('Синхронизация заказов не завершилась за 2 минуты. Проверьте фоновые задачи.')
     }
     await new Promise((resolve) => setTimeout(resolve, intervalMs))
   }
@@ -1514,10 +1516,23 @@ export async function runFbsOrdersSync(
   token: string,
   ah: (t: string) => Record<string, string>,
   sellerId: string,
+  marketplace: 'wb' | 'ozon',
 ): Promise<FbsOrdersSyncOutcome> {
-  const started = await startFbsOrdersSync(token, ah, sellerId)
+  const started = await startFbsOrdersSync(token, ah, sellerId, marketplace)
+  if (!started.id || started.status === 'skipped') {
+    return {
+      skipped: true,
+      ordersReceived: 0,
+      ordersCreated: 0,
+      ordersUpserted: 0,
+      supplyLinkSkippedUnmappedWarehouse: 0,
+      supplyLinkSkippedUnmappedWarehouseSupplyIds: [],
+      supplyLinkSkippedWarehouseMismatchOrders: 0,
+    }
+  }
   const job = await waitForBackgroundJob(token, ah, started.id)
   return {
+    skipped: false,
     ordersReceived: readCount(job.result_json, 'orders_received'),
     ordersCreated: readCount(job.result_json, 'orders_created'),
     ordersUpserted: readCount(job.result_json, 'orders_upserted'),
@@ -1531,11 +1546,12 @@ export async function syncFbsOrderStatuses(
   token: string,
   ah: (t: string) => Record<string, string>,
   sellerId: string,
+  marketplace: 'wb' | 'ozon',
 ): Promise<number> {
   const res = await fetch(apiUrl('/operations/fbs-orders/sync-statuses'), {
     method: 'POST',
     headers: { ...ah(token), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ seller_id: sellerId }),
+    body: JSON.stringify({ seller_id: sellerId, marketplace }),
   })
   const payload = await jsonOrThrow<{ statuses_updated: number }>(res)
   return payload.statuses_updated
