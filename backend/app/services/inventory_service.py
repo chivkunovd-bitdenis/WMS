@@ -859,6 +859,58 @@ async def apply_putaway_from_sorting(
     )
 
 
+async def apply_return_defect_putaway(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    from_storage_location_id: uuid.UUID,
+    to_storage_location_id: uuid.UUID,
+    product_id: uuid.UUID,
+    quantity: int,
+    inbound_intake_line_id: uuid.UUID,
+) -> None:
+    """Move inspected defective return stock into the tenant's service warehouse."""
+    if quantity < 1:
+        raise ValueError("quantity must be positive")
+    if from_storage_location_id == to_storage_location_id:
+        raise ValueError("from and to must differ")
+    loc_from = await session.get(StorageLocation, from_storage_location_id)
+    loc_to = await session.get(StorageLocation, to_storage_location_id)
+    if (
+        loc_from is None
+        or loc_to is None
+        or loc_from.tenant_id != tenant_id
+        or loc_to.tenant_id != tenant_id
+    ):
+        raise ValueError("storage location not found")
+    available = await available_quantity_at_location(
+        session, tenant_id, product_id, from_storage_location_id
+    )
+    if available < quantity:
+        raise ValueError("insufficient stock")
+    group_id = uuid.uuid4()
+    await record_movement_and_adjust_balance(
+        session,
+        tenant_id=tenant_id,
+        product_id=product_id,
+        storage_location_id=from_storage_location_id,
+        quantity_delta=-quantity,
+        movement_type=MOVEMENT_TYPE_STOCK_TRANSFER_OUT,
+        transfer_group_id=group_id,
+        inbound_intake_line_id=inbound_intake_line_id,
+    )
+    await record_movement_and_adjust_balance(
+        session,
+        tenant_id=tenant_id,
+        product_id=product_id,
+        storage_location_id=to_storage_location_id,
+        quantity_delta=quantity,
+        movement_type=MOVEMENT_TYPE_STOCK_TRANSFER_IN,
+        transfer_group_id=group_id,
+        inbound_intake_line_id=inbound_intake_line_id,
+    )
+
+
 async def apply_stock_transfer(
     session: AsyncSession,
     tenant_id: uuid.UUID,

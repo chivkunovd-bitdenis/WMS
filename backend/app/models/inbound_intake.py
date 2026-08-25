@@ -21,6 +21,7 @@ from app.models.base import Base
 
 if TYPE_CHECKING:
     from app.models.inventory_movement import InventoryMovement
+    from app.models.ozon_return import InboundOzonReturnGiveout
     from app.models.product import Product
     from app.models.seller import Seller
     from app.models.storage_location import StorageLocation
@@ -57,6 +58,7 @@ class InboundIntakeRequest(Base):
         index=True,
     )
     status: Mapped[str] = mapped_column(String(32), nullable=False)
+    marketplace: Mapped[str | None] = mapped_column(String(32), nullable=True)
     operation_type: Mapped[str] = mapped_column(
         String(32), nullable=False, default="inbound", server_default="inbound"
     )
@@ -114,6 +116,11 @@ class InboundIntakeRequest(Base):
         back_populates="request",
         cascade="all, delete-orphan",
         order_by="InboundIntakeCargoPlace.place_number",
+    )
+    ozon_return_giveouts: Mapped[list[InboundOzonReturnGiveout]] = relationship(
+        "InboundOzonReturnGiveout",
+        back_populates="request",
+        cascade="all, delete-orphan",
     )
 
 
@@ -268,6 +275,9 @@ class InboundIntakeLine(Base):
     )
     expected_qty: Mapped[int] = mapped_column(Integer, nullable=False)
     actual_qty: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    defective_qty: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     added_by_fulfillment: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )

@@ -61,6 +61,7 @@ from app.models.marking_code import (
 )
 from app.models.notification import Notification
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
+from app.models.ozon_return import InboundOzonReturnGiveout, InboundOzonReturnItem
 from app.models.packaging_task import PackagingTask, PackagingTaskEvent, PackagingTaskLine
 from app.models.print_template import PrintTemplate
 from app.models.product import Product
@@ -122,6 +123,8 @@ __all__ = [
     "InboundIntakeBoxLine",
     "InboundIntakeLine",
     "InboundIntakeRequest",
+    "InboundOzonReturnGiveout",
+    "InboundOzonReturnItem",
     "InventoryBalance",
     "InventoryMovement",
     "InventoryReservation",

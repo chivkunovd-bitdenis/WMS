@@ -34,6 +34,7 @@ from app.services.catalog_service import (
     get_storage_location_in_warehouse,
     get_warehouse,
 )
+from app.services.defect_warehouse_service import get_or_create_defect_location
 from app.services.document_number_service import (
     DOC_TYPE_INBOUND,
     assign_display_number_if_missing,
@@ -50,6 +51,7 @@ STATUS_DONE = "done"
 OPERATION_TYPE_INBOUND = "inbound"
 OPERATION_TYPE_RETURN = "return"
 OPERATION_TYPES = frozenset({OPERATION_TYPE_INBOUND, OPERATION_TYPE_RETURN})
+RETURN_MARKETPLACES = frozenset({"wildberries", "ozon"})
 
 # Collapsed legacy names (same values — IN-BE-03 updates API labels)
 STATUS_PRIMARY_ACCEPTED = STATUS_RECEIVING
@@ -109,9 +111,7 @@ async def effective_actual_qty(
     raw = _loose_qty(line)
     status = request_status
     if status is None:
-        stmt = select(InboundIntakeRequest.status).where(
-            InboundIntakeRequest.id == request_id
-        )
+        stmt = select(InboundIntakeRequest.status).where(InboundIntakeRequest.id == request_id)
         res = await session.execute(stmt)
         status = res.scalar_one_or_none()
     if status in SORTING_STATUSES | DONE_STATUSES:
@@ -125,15 +125,52 @@ def _accepted_qty_for_line(line: InboundIntakeLine) -> int:
     return line.actual_qty if line.actual_qty is not None else 0
 
 
+async def _apply_line_putaway(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    line: InboundIntakeLine,
+    sorting_location_id: uuid.UUID,
+    normal_location_id: uuid.UUID | None,
+    quantity: int,
+) -> None:
+    """Put good units into the chosen cell and defective units into service stock."""
+    defective_total = min(max(0, line.defective_qty), _accepted_qty_for_line(line))
+    good_total = _accepted_qty_for_line(line) - defective_total
+    good_quantity = min(quantity, max(0, good_total - line.posted_qty))
+    defective_quantity = quantity - good_quantity
+    if good_quantity:
+        if normal_location_id is None:
+            raise InboundIntakeError("lines_missing_storage")
+        await inv_svc.apply_putaway_from_sorting(
+            session,
+            tenant_id,
+            from_storage_location_id=sorting_location_id,
+            to_storage_location_id=normal_location_id,
+            product_id=line.product_id,
+            quantity=good_quantity,
+            inbound_intake_line_id=line.id,
+        )
+    if defective_quantity:
+        defect_location = await get_or_create_defect_location(session, tenant_id)
+        await inv_svc.apply_return_defect_putaway(
+            session,
+            tenant_id,
+            from_storage_location_id=sorting_location_id,
+            to_storage_location_id=defect_location.id,
+            product_id=line.product_id,
+            quantity=defective_quantity,
+            inbound_intake_line_id=line.id,
+        )
+
+
 async def sync_request_actuals_from_boxes(
     session: AsyncSession,
     req: InboundIntakeRequest,
 ) -> None:
     """Validate posted qty against loose + boxes; does not overwrite loose intake."""
     for ln in req.lines:
-        total = await effective_actual_qty(
-            session, req.id, ln, request_status=req.status
-        )
+        total = await effective_actual_qty(session, req.id, ln, request_status=req.status)
         if ln.posted_qty > total:
             raise InboundIntakeError("actual_below_posted")
 
@@ -148,6 +185,7 @@ async def create_request(
     planned_delivery_date: date | None = None,
     waybill_number: str | None = None,
     operation_type: str = OPERATION_TYPE_INBOUND,
+    marketplace: str | None = None,
 ) -> InboundIntakeRequest:
     wh = await get_warehouse(session, tenant_id, warehouse_id)
     if wh is None:
@@ -155,6 +193,11 @@ async def create_request(
     normalized_operation_type = operation_type.strip().lower()
     if normalized_operation_type not in OPERATION_TYPES:
         raise InboundIntakeError("invalid_operation_type")
+    normalized_marketplace = marketplace.strip().lower() if marketplace else None
+    if normalized_marketplace is not None and normalized_marketplace not in RETURN_MARKETPLACES:
+        raise InboundIntakeError("invalid_marketplace")
+    if normalized_operation_type != OPERATION_TYPE_RETURN and normalized_marketplace is not None:
+        raise InboundIntakeError("marketplace_only_for_return")
     if seller_id is not None:
         sl = await session.get(Seller, seller_id)
         if sl is None or sl.tenant_id != tenant_id:
@@ -166,6 +209,7 @@ async def create_request(
         warehouse_id=warehouse_id,
         status=STATUS_DRAFT,
         operation_type=normalized_operation_type,
+        marketplace=normalized_marketplace,
         seller_id=seller_id,
         created_by_seller_id=created_by_seller_id,
         planned_delivery_date=planned_delivery_date,
@@ -173,12 +217,8 @@ async def create_request(
         planned_box_count=None,
     )
     session.add(req)
-    await assign_document_number_if_missing(
-        session, tenant_id, DOC_TYPE_INBOUND, req
-    )
-    await assign_display_number_if_missing(
-        session, tenant_id, DOC_TYPE_INBOUND, req
-    )
+    await assign_document_number_if_missing(session, tenant_id, DOC_TYPE_INBOUND, req)
+    await assign_display_number_if_missing(session, tenant_id, DOC_TYPE_INBOUND, req)
     await session.commit()
     reloaded = await get_request(session, tenant_id, req.id)
     if reloaded is None:
@@ -237,9 +277,7 @@ async def get_request(
                 selectinload(InboundIntakeLine.storage_location),
             ),
             selectinload(InboundIntakeRequest.boxes).options(
-                selectinload(InboundIntakeBox.lines).selectinload(
-                    InboundIntakeBoxLine.product
-                ),
+                selectinload(InboundIntakeBox.lines).selectinload(InboundIntakeBoxLine.product),
             ),
             selectinload(InboundIntakeRequest.cargo_places),
         )
@@ -248,10 +286,7 @@ async def get_request(
     req = res.scalar_one_or_none()
     if req is None:
         return None
-    if (
-        seller_product_owner_id is not None
-        and req.seller_id != seller_product_owner_id
-    ):
+    if seller_product_owner_id is not None and req.seller_id != seller_product_owner_id:
         return None
     return req
 
@@ -347,10 +382,7 @@ async def add_line(
     product = prod_res.scalar_one_or_none()
     if product is None:
         raise InboundIntakeError("product_not_found")
-    if (
-        seller_product_owner_id is not None
-        and product.seller_id != seller_product_owner_id
-    ):
+    if seller_product_owner_id is not None and product.seller_id != seller_product_owner_id:
         raise InboundIntakeError("product_seller_mismatch")
     if req.seller_id is None:
         req.seller_id = product.seller_id
@@ -370,6 +402,12 @@ async def add_line(
         request_id=request_id,
         product_id=product_id,
         expected_qty=expected_qty,
+        actual_qty=(
+            expected_qty
+            if req.operation_type == OPERATION_TYPE_RETURN
+            and req.marketplace in (None, "wildberries")
+            else None
+        ),
         posted_qty=0,
         storage_location_id=loc_id,
     )
@@ -405,6 +443,12 @@ async def update_line_expected_qty(
     if line.posted_qty != 0:
         raise InboundIntakeError("line_already_posted")
     line.expected_qty = expected_qty
+    if (
+        req.operation_type == OPERATION_TYPE_RETURN
+        and req.marketplace in (None, "wildberries")
+        and line.posted_qty == 0
+    ):
+        line.actual_qty = expected_qty
     await session.commit()
     await session.refresh(line)
     return line
@@ -530,9 +574,8 @@ async def set_line_storage_location(
         *SORTING_STATUSES,
     ):
         raise InboundIntakeError("not_editable")
-    if (
-        req.status in SORTING_STATUSES | DONE_STATUSES
-        and line.posted_qty >= _accepted_qty_for_line(line)
+    if req.status in SORTING_STATUSES | DONE_STATUSES and line.posted_qty >= _accepted_qty_for_line(
+        line
     ):
         raise InboundIntakeError("line_closed")
     loc = await get_storage_location_in_warehouse(
@@ -660,6 +703,8 @@ async def begin_receiving(
         req.primary_accepted_at = datetime.now(UTC)
         await session.commit()
         await session.refresh(req)
+        if req.operation_type == OPERATION_TYPE_RETURN and req.marketplace in (None, "wildberries"):
+            return await complete_receiving(session, tenant_id, request_id)
         return req
     return await primary_accept_request(session, tenant_id, request_id, actual_box_count=None)
 
@@ -678,9 +723,7 @@ async def create_cargo_places(
         raise InboundIntakeError("request_not_found")
     if req.status in DONE_STATUSES:
         raise InboundIntakeError("not_editable")
-    start_number = (
-        max((place.place_number for place in req.cargo_places), default=0) + 1
-    )
+    start_number = max((place.place_number for place in req.cargo_places), default=0) + 1
     created: list[InboundIntakeCargoPlace] = []
     for offset in range(quantity):
         place = InboundIntakeCargoPlace(
@@ -949,6 +992,38 @@ async def set_line_actual_qty(
     return line
 
 
+async def set_line_defective_qty(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    line_id: uuid.UUID,
+    *,
+    defective_qty: int,
+) -> InboundIntakeLine:
+    pair = await _line_on_request(session, tenant_id, request_id, line_id)
+    if pair is None:
+        raise InboundIntakeError("line_not_found")
+    req, line = pair
+    if req.operation_type != OPERATION_TYPE_RETURN:
+        raise InboundIntakeError("defect_only_for_return")
+    if req.status == STATUS_DONE:
+        raise InboundIntakeError("already_posted")
+    accepted = await effective_actual_qty(
+        session,
+        request_id,
+        line,
+        request_status=req.status,
+    )
+    if defective_qty < 0 or defective_qty > accepted:
+        raise InboundIntakeError("defective_qty_exceeds_accepted")
+    if line.posted_qty > accepted - defective_qty:
+        raise InboundIntakeError("defect_after_good_posted")
+    line.defective_qty = defective_qty
+    await session.commit()
+    await session.refresh(line)
+    return line
+
+
 async def complete_receiving(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -962,9 +1037,7 @@ async def complete_receiving(
     await sync_request_actuals_from_boxes(session, req)
     line_discrepancy = False
     for line in req.lines:
-        effective = await effective_actual_qty(
-            session, req.id, line, request_status=req.status
-        )
+        effective = await effective_actual_qty(session, req.id, line, request_status=req.status)
         line.actual_qty = effective
         if effective != line.expected_qty:
             line_discrepancy = True
@@ -1032,14 +1105,13 @@ async def receive_line(
     sorting_loc = await sorting_loc_svc.get_or_create_sorting_location(
         session, tenant_id, req.warehouse_id
     )
-    await inv_svc.apply_putaway_from_sorting(
+    await _apply_line_putaway(
         session,
         tenant_id,
-        from_storage_location_id=sorting_loc.id,
-        to_storage_location_id=line.storage_location_id,
-        product_id=line.product_id,
+        line=line,
+        sorting_location_id=sorting_loc.id,
+        normal_location_id=line.storage_location_id,
         quantity=quantity,
-        inbound_intake_line_id=line.id,
     )
     line.posted_qty += quantity
     _maybe_complete_request(req)
@@ -1069,11 +1141,16 @@ async def post_all_remaining(
         rem = accepted - line.posted_qty
         if rem <= 0:
             continue
-        if line.storage_location_id is None:
+        good_remaining = max(
+            0,
+            accepted - min(line.defective_qty, accepted) - line.posted_qty,
+        )
+        if line.storage_location_id is None and good_remaining > 0:
             raise InboundIntakeError("lines_missing_storage")
-        target_loc = await session.get(StorageLocation, line.storage_location_id)
-        if target_loc is None or sorting_loc_svc.is_sorting_location(target_loc):
-            raise InboundIntakeError("sorting_location_reserved")
+        if line.storage_location_id is not None:
+            target_loc = await session.get(StorageLocation, line.storage_location_id)
+            if target_loc is None or sorting_loc_svc.is_sorting_location(target_loc):
+                raise InboundIntakeError("sorting_location_reserved")
         to_receive.append((line, rem))
     if not to_receive:
         _maybe_complete_request(req)
@@ -1087,16 +1164,13 @@ async def post_all_remaining(
         session, tenant_id, req.warehouse_id
     )
     for line, rem in to_receive:
-        sid = line.storage_location_id
-        assert sid is not None
-        await inv_svc.apply_putaway_from_sorting(
+        await _apply_line_putaway(
             session,
             tenant_id,
-            from_storage_location_id=sorting_loc.id,
-            to_storage_location_id=sid,
-            product_id=line.product_id,
+            line=line,
+            sorting_location_id=sorting_loc.id,
+            normal_location_id=line.storage_location_id,
             quantity=rem,
-            inbound_intake_line_id=line.id,
         )
         line.posted_qty += rem
     _maybe_complete_request(req)
@@ -1289,19 +1363,16 @@ async def apply_box_putaway(
         if line.posted_qty + qty > accepted:
             raise InboundIntakeError("qty_exceeds_accepted")
 
-        await _top_up_sorting_for_putaway(
-            session, tenant_id, sorting_loc.id, line, product_id, qty
-        )
+        await _top_up_sorting_for_putaway(session, tenant_id, sorting_loc.id, line, product_id, qty)
 
         try:
-            await inv_svc.apply_putaway_from_sorting(
+            await _apply_line_putaway(
                 session,
                 tenant_id,
-                from_storage_location_id=sorting_loc.id,
-                to_storage_location_id=storage_location_id,
-                product_id=product_id,
+                line=line,
+                sorting_location_id=sorting_loc.id,
+                normal_location_id=storage_location_id,
                 quantity=qty,
-                inbound_intake_line_id=line.id,
             )
         except ValueError as exc:
             if str(exc) == "insufficient stock":
@@ -1483,9 +1554,7 @@ async def scan_distribution_barcode(
         raise InboundIntakeError("insufficient_sorting_stock")
 
     used_loose = sum(
-        int(r.quantity)
-        for r in rows
-        if r.product_id == product_id and r.box_id is None
+        int(r.quantity) for r in rows if r.product_id == product_id and r.box_id is None
     )
     used_by_box_product: dict[tuple[uuid.UUID, uuid.UUID], int] = {}
     for r in rows:
@@ -1717,14 +1786,13 @@ async def complete_distribution(
             if quantity_to_post < 1:
                 continue
         try:
-            await inv_svc.apply_putaway_from_sorting(
+            await _apply_line_putaway(
                 session,
                 tenant_id,
-                from_storage_location_id=sorting_loc.id,
-                to_storage_location_id=r.storage_location_id,
-                product_id=r.product_id,
+                line=line,
+                sorting_location_id=sorting_loc.id,
+                normal_location_id=r.storage_location_id,
                 quantity=quantity_to_post,
-                inbound_intake_line_id=line.id,
             )
         except ValueError as exc:
             await session.rollback()
