@@ -1180,6 +1180,7 @@ async def list_supply_worklist(
     tenant_id: uuid.UUID,
     *,
     seller_id: uuid.UUID | None = None,
+    marketplace: str | None = None,
     status_group: str = "active",
     limit: int = 100,
 ) -> dict[str, Any]:
@@ -1208,6 +1209,8 @@ async def list_supply_worklist(
     )
     if seller_id is not None:
         stmt = stmt.where(FbsSupply.seller_id == seller_id)
+    if marketplace is not None:
+        stmt = stmt.where(FbsSupply.marketplace == marketplace)
     supplies = list((await session.execute(stmt)).scalars().all())
     if not supplies:
         return {"items": [], "server_now": datetime.now(tz=UTC).isoformat()}
@@ -1250,6 +1253,7 @@ async def list_supply_worklist(
         items.append(
             {
                 "id": str(supply.id),
+                "marketplace": supply.marketplace,
                 "wb_supply_id": supply.wb_supply_id,
                 "name": supply.display_number or supply.name,
                 "status": supply.status,

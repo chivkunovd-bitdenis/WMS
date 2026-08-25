@@ -164,11 +164,20 @@ def _cross_order_issues(orders: list[FbsOrder]) -> list[SupplyValidationIssue]:
     first = orders[0]
     issues: list[SupplyValidationIssue] = []
     ref_seller = first.seller_id
+    ref_marketplace = first.marketplace
     ref_wb_wh = first.wb_warehouse_id
     ref_wms_wh = first.warehouse_id
     ref_buyer = _buyer_type(first)
     ref_cargo = first.cargo_type or "unknown"
     for order in orders[1:]:
+        if order.marketplace != ref_marketplace:
+            issues.append(
+                SupplyValidationIssue(
+                    order_id=order.id,
+                    code="different_marketplace",
+                    message="Нельзя смешивать заказы разных маркетплейсов в одной поставке.",
+                )
+            )
         if order.seller_id != ref_seller:
             issues.append(
                 SupplyValidationIssue(

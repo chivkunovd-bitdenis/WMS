@@ -199,6 +199,8 @@ export type FbsSellerOffice = {
 
 export type FbsWorklistOrder = {
   id: string
+  marketplace: 'wb' | 'ozon'
+  external_order_id: string | null
   wb_order_id: number
   status: string
   wb_status: string | null
@@ -291,6 +293,7 @@ export type FbsSupplyAddOrdersRequest = {
 
 export type FbsSupplyWorklistItem = {
   id: string
+  marketplace: 'wb' | 'ozon'
   wb_supply_id: string
   name: string
   status: string
@@ -453,6 +456,7 @@ export type FbsPartialRejection = {
 export type FbsWorkspace = {
   supply: {
     id: string
+    marketplace: 'wb' | 'ozon'
     wb_supply_id: string
     name: string
     status: string
@@ -515,6 +519,7 @@ export async function fetchFbsWorklist(
   ah: AuthHeaders,
   params: {
     seller_id?: string | null
+    marketplace?: 'wb' | 'ozon' | null
     status_group?: string | null
     wb_warehouse_id?: string | null
     search?: string | null
@@ -524,6 +529,7 @@ export async function fetchFbsWorklist(
 ): Promise<FbsWorklistPage> {
   const qs = new URLSearchParams({ limit: String(params.limit ?? 100) })
   if (params.seller_id) qs.set('seller_id', params.seller_id)
+  if (params.marketplace) qs.set('marketplace', params.marketplace)
   if (params.status_group) qs.set('status_group', params.status_group)
   if (params.wb_warehouse_id) qs.set('wb_warehouse_id', params.wb_warehouse_id)
   if (params.search) qs.set('search', params.search)
@@ -566,10 +572,16 @@ export async function createFbsSupplyFromOrders(
 export async function fetchFbsSupplyWorklist(
   token: string,
   ah: AuthHeaders,
-  params: { seller_id?: string | null; status_group?: string | null; limit?: number } = {},
+  params: {
+    seller_id?: string | null
+    marketplace?: 'wb' | 'ozon' | null
+    status_group?: string | null
+    limit?: number
+  } = {},
 ): Promise<FbsSupplyWorklistPage> {
   const qs = new URLSearchParams({ limit: String(params.limit ?? 100) })
   if (params.seller_id) qs.set('seller_id', params.seller_id)
+  if (params.marketplace) qs.set('marketplace', params.marketplace)
   if (params.status_group) qs.set('status_group', params.status_group)
   return jsonOrThrow<FbsSupplyWorklistPage>(
     await fetch(apiUrl(`/operations/fbs-supplies/worklist?${qs.toString()}`), {

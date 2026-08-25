@@ -134,6 +134,8 @@ class FbsWorklistBlockerOut(BaseModel):
 
 class FbsWorklistOrderOut(BaseModel):
     id: str
+    marketplace: str = "wb"
+    external_order_id: str | None = None
     wb_order_id: int
     status: str
     wb_status: str | None
@@ -171,6 +173,8 @@ class FbsWorklistPageOut(BaseModel):
 
 class FbsOrderOut(BaseModel):
     id: str
+    marketplace: str = "wb"
+    external_order_id: str | None = None
     seller_id: str
     warehouse_id: str | None
     product_id: str | None
@@ -202,6 +206,8 @@ class FbsOrderOut(BaseModel):
 def _order_out(order: FbsOrder) -> FbsOrderOut:
     return FbsOrderOut(
         id=str(order.id),
+        marketplace=order.marketplace,
+        external_order_id=order.external_order_id,
         seller_id=str(order.seller_id),
         warehouse_id=str(order.warehouse_id) if order.warehouse_id is not None else None,
         product_id=str(order.product_id) if order.product_id is not None else None,
@@ -271,6 +277,7 @@ async def get_fbs_orders_worklist(
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
     seller_id: Annotated[uuid.UUID | None, Query()] = None,
+    marketplace: Annotated[str | None, Query(pattern="^(wb|ozon)$")] = None,
     status_group: Annotated[str | None, Query()] = None,
     wb_warehouse_id: Annotated[int | None, Query(gt=0)] = None,
     search: Annotated[str | None, Query()] = None,
@@ -287,6 +294,7 @@ async def get_fbs_orders_worklist(
             session,
             user.tenant_id,
             seller_id=filter_seller,
+            marketplace=marketplace,
             status_group=status_group,
             wb_warehouse_id=wb_warehouse_id,
             search=search,
