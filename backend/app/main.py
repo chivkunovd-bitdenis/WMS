@@ -13,6 +13,7 @@ from app.api.auth import router as auth_router
 from app.api.background_jobs import router as background_jobs_router
 from app.api.billing import router as billing_router
 from app.api.discrepancy_acts import router as discrepancy_acts_router
+from app.api.document_events import router as document_events_router
 from app.api.fbs_kiz import router as fbs_kiz_router
 from app.api.fbs_marking import router as fbs_marking_router
 from app.api.fbs_orders import router as fbs_orders_router
@@ -49,6 +50,10 @@ from app.db.session import SessionLocal, engine
 from app.models import Base
 from app.models.tenant import Tenant
 from app.models.user import User
+from app.services.document_event_service import (
+    DocumentEventActorMiddleware,
+    install_document_event_tracking,
+)
 from app.services.passwords import hash_password
 
 logger = logging.getLogger(__name__)
@@ -95,7 +100,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
+    install_document_event_tracking()
     app = FastAPI(title="WMS API", lifespan=lifespan)
+    app.add_middleware(DocumentEventActorMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_allow_origins,
@@ -125,6 +132,7 @@ def create_app() -> FastAPI:
     app.include_router(notifications_router)
     app.include_router(wb_mp_warehouses_router)
     app.include_router(discrepancy_acts_router)
+    app.include_router(document_events_router)
     app.include_router(background_jobs_router)
     app.include_router(billing_router)
     app.include_router(storage_router)

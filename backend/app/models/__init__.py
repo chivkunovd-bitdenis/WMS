@@ -10,6 +10,7 @@ from app.models.billing import (
     BillingTariffVersion,
 )
 from app.models.discrepancy_act import DiscrepancyAct, DiscrepancyActLine
+from app.models.document_event import DocumentEvent
 from app.models.document_sequence import DocumentDisplaySequence, DocumentSequence
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.fbs_order import (
@@ -97,6 +98,7 @@ __all__ = [
     "DiscrepancyAct",
     "DiscrepancyActLine",
     "DocumentDisplaySequence",
+    "DocumentEvent",
     "DocumentSequence",
     "FbsBindingStockPool",
     "FbsOrder",
