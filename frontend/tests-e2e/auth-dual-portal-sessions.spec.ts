@@ -54,7 +54,9 @@ async function expectSellerInboundShell(page: Page, requestId: string): Promise<
 }
 
 async function expectSellerAccessDeniedWithFfToken(page: Page): Promise<void> {
-  await expect(page.getByTestId('ff-access-denied')).toContainText('Нет доступа к этому разделу.');
+  await expect(page.getByTestId('ff-access-denied')).toContainText(
+    'В этом браузере нет сессии селлера, но открыта сессия фулфилмента.',
+  );
   await expect(page.getByRole('heading', { name: 'WMS · Портал селлера' })).toHaveCount(0);
   await expect(page.getByTestId('login-form')).toHaveCount(0);
   await expect(page.getByTestId('app-frame')).toHaveCount(0);
