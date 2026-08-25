@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import date
-from typing import Annotated, Literal
+from typing import Annotated, Literal, cast
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 from pydantic import BaseModel, Field
@@ -46,11 +47,53 @@ from app.services import inventory_service as inv_svc
 from app.services.catalog_service import volume_liters_from_mm
 from app.services.inbound_intake_box_service import InboundIntakeBoxError
 from app.services.inbound_intake_service import InboundIntakeError
+from app.services.marketplace_provider import FakeMarketplaceTransport, OzonMarketplaceProvider
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/operations/inbound-intake-requests",
     tags=["operations"],
 )
+
+
+def _local_ozon_return_provider() -> OzonMarketplaceProvider:
+    """Return processing remains offline until a production transport is approved."""
+    return OzonMarketplaceProvider(transport=FakeMarketplaceTransport())
+
+
+async def _refresh_ozon_return_statuses_after_posting(
+    session: AsyncSession,
+    request: InboundIntakeRequest,
+) -> None:
+    """A provider read must never undo a completed local inbound document."""
+    if request.operation_type != svc.OPERATION_TYPE_RETURN or request.marketplace != "ozon":
+        return
+    from app.services import ozon_return_service
+
+    try:
+        await ozon_return_service.refresh_giveout_statuses(
+            session,
+            request,
+            _local_ozon_return_provider(),
+        )
+    except Exception:
+        logger.warning(
+            "Ozon return giveout status refresh failed after posting request %s",
+            request.id,
+            exc_info=True,
+        )
+
+
+async def _refresh_completed_ozon_return(
+    session: AsyncSession,
+    request: InboundIntakeRequest,
+) -> InboundIntakeRequest:
+    if request.status != svc.STATUS_DONE:
+        return request
+    await _refresh_ozon_return_statuses_after_posting(session, request)
+    reloaded = await svc.get_request(session, request.tenant_id, request.id)
+    return reloaded if reloaded is not None else request
 
 
 class InboundIntakeRequestCreate(BaseModel):
@@ -59,6 +102,7 @@ class InboundIntakeRequestCreate(BaseModel):
     planned_delivery_date: date | None = None
     waybill_number: str | None = Field(default=None, max_length=128)
     operation_type: str = Field(default=svc.OPERATION_TYPE_INBOUND, max_length=32)
+    marketplace: Literal["wildberries", "ozon"] | None = None
 
 
 class InboundIntakeRequestPlannedPatch(BaseModel):
@@ -87,6 +131,10 @@ class InboundIntakeLineReceiveBody(BaseModel):
 
 class InboundIntakeLineActualPatch(BaseModel):
     actual_qty: int = Field(ge=0, le=1_000_000_000)
+
+
+class InboundIntakeLineDefectivePatch(BaseModel):
+    defective_qty: int = Field(ge=0, le=1_000_000_000)
 
 
 class InboundIntakeBoxLineOut(BaseModel):
@@ -178,6 +226,7 @@ class InboundIntakeLineOut(BaseModel):
     expected_qty: int
     actual_qty: int | None
     effective_actual_qty: int | None = None
+    defective_qty: int = 0
     posted_qty: int
     storage_location_id: str | None
     storage_location_code: str | None
@@ -192,6 +241,7 @@ class InboundIntakeRequestSummaryOut(BaseModel):
     warehouse_name: str | None = None
     status: str
     operation_type: str = svc.OPERATION_TYPE_INBOUND
+    marketplace: Literal["wildberries", "ozon"] | None = None
     line_count: int
     goods_qty_total: int = 0
     planned_delivery_date: str | None = None
@@ -216,6 +266,7 @@ class InboundIntakeRequestOut(BaseModel):
     warehouse_name: str | None = None
     status: str
     operation_type: str = svc.OPERATION_TYPE_INBOUND
+    marketplace: Literal["wildberries", "ozon"] | None = None
     planned_delivery_date: str | None = None
     planned_box_count: int | None = None
     actual_box_count: int | None = None
@@ -411,6 +462,7 @@ def _request_out(
         warehouse_name=r.warehouse.name if r.warehouse is not None else None,
         status=r.status,
         operation_type=r.operation_type,
+        marketplace=cast(Literal["wildberries", "ozon"] | None, r.marketplace),
         planned_delivery_date=r.planned_delivery_date.isoformat()
         if r.planned_delivery_date is not None
         else None,
@@ -466,6 +518,7 @@ def _line_out_from_orm(
         expected_qty=line.expected_qty,
         actual_qty=line.actual_qty,
         effective_actual_qty=effective_actual_qty,
+        defective_qty=int(line.defective_qty or 0),
         posted_qty=line.posted_qty,
         storage_location_id=str(line.storage_location_id)
         if line.storage_location_id
@@ -569,6 +622,7 @@ async def list_inbound_requests(
             warehouse_name=r.warehouse.name if r.warehouse is not None else None,
             status=r.status,
             operation_type=r.operation_type,
+            marketplace=cast(Literal["wildberries", "ozon"] | None, r.marketplace),
             line_count=len(r.lines),
             goods_qty_total=sum(int(ln.expected_qty) for ln in r.lines),
             planned_delivery_date=r.planned_delivery_date.isoformat()
@@ -604,6 +658,12 @@ async def create_inbound_request(
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> InboundIntakeRequestOut:
+    normalized_operation_type = body.operation_type.strip().lower()
+    if body.marketplace is not None and normalized_operation_type != svc.OPERATION_TYPE_RETURN:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="marketplace_allowed_only_for_return",
+        )
     owning_seller_id: uuid.UUID | None
     created_by_seller_id: uuid.UUID | None
     if user.role == FULFILLMENT_SELLER:
@@ -627,6 +687,7 @@ async def create_inbound_request(
             planned_delivery_date=body.planned_delivery_date,
             waybill_number=body.waybill_number,
             operation_type=body.operation_type,
+            marketplace=body.marketplace,
         )
     except InboundIntakeError as exc:
         if exc.code == "warehouse_not_found":
@@ -1290,7 +1351,7 @@ async def putaway_inbound_box(
                 detail=exc.code,
             ) from None
         raise
-    return _request_out(r)
+    return _request_out(await _refresh_completed_ozon_return(session, r))
 
 
 @router.post(
@@ -1332,6 +1393,30 @@ async def patch_inbound_line_actual(
     user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> InboundIntakeLineOut:
+    current_request = await svc.get_request(session, user.tenant_id, request_id)
+    if current_request is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="request_not_found",
+        )
+    current_line = next((line for line in current_request.lines if line.id == line_id), None)
+    if current_line is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="line_not_found",
+        )
+    current_accepted = await svc.effective_actual_qty(
+        session,
+        request_id,
+        current_line,
+        request_status=current_request.status,
+    )
+    box_qty = current_accepted - int(current_line.actual_qty or 0)
+    if body.actual_qty + box_qty < int(current_line.defective_qty or 0):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="defective_qty_exceeds_accepted",
+        )
     try:
         line = await svc.set_line_actual_qty(
             session,
@@ -1376,6 +1461,54 @@ async def patch_inbound_line_actual(
     )
 
 
+@router.patch(
+    "/{request_id}/lines/{line_id}/defective",
+    response_model=InboundIntakeLineOut,
+)
+async def patch_inbound_line_defective(
+    request_id: uuid.UUID,
+    line_id: uuid.UUID,
+    body: InboundIntakeLineDefectivePatch,
+    user: Annotated[User, Depends(require_reception_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> InboundIntakeLineOut:
+    try:
+        line = await svc.set_line_defective_qty(
+            session,
+            user.tenant_id,
+            request_id,
+            line_id,
+            defective_qty=body.defective_qty,
+        )
+    except InboundIntakeError as exc:
+        if exc.code == "line_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="line_not_found",
+            ) from None
+        if exc.code in ("defect_only_for_return", "defective_qty_exceeds_accepted"):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=exc.code,
+            ) from None
+        if exc.code in ("already_posted", "defect_after_good_posted"):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=exc.code,
+            ) from None
+        raise
+    product = await session.get(Product, line.product_id)
+    if product is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="product_missing",
+    )
+    await session.refresh(line, attribute_names=["storage_location"])
+    request_status = await svc.get_request_status(session, user.tenant_id, request_id)
+    assert request_status is not None
+    return await _line_out_for_request(session, request_id, request_status, line, product)
+
+
 @router.post("/{request_id}/verify", response_model=InboundIntakeRequestOut)
 async def complete_inbound_verification(
     request_id: uuid.UUID,
@@ -1393,7 +1526,7 @@ async def complete_inbound_verification(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return _request_out(r2)
+    return _request_out(await _refresh_completed_ozon_return(session, r2))
 
 
 @router.get(
@@ -1732,7 +1865,7 @@ async def receive_inbound_line(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return _request_out(r2)
+    return _request_out(await _refresh_completed_ozon_return(session, r2))
 
 
 @router.post("/{request_id}/submit", response_model=InboundIntakeRequestOut)
@@ -1833,7 +1966,7 @@ async def post_inbound_request(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return _request_out(r2)
+    return _request_out(await _refresh_completed_ozon_return(session, r2))
 
 
 @router.get(
@@ -2021,7 +2154,7 @@ async def complete_distribution(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return _request_out(r2)
+    return _request_out(await _refresh_completed_ozon_return(session, r2))
 
 
 @router.post(

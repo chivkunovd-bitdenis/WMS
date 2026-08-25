@@ -30,6 +30,7 @@ from app.api.marking_credentials import router as marking_credentials_router
 from app.api.notifications import router as notifications_router
 from app.api.outbound_shipment import router as outbound_shipment_router
 from app.api.ozon_integration import router as ozon_integration_router
+from app.api.ozon_returns import router as ozon_returns_router
 from app.api.packaging_tasks import router as packaging_tasks_router
 from app.api.products import router as products_router
 from app.api.reports import router as reports_router
@@ -135,6 +136,7 @@ def create_app() -> FastAPI:
     app.include_router(fbs_print_assets_router)
     app.include_router(wildberries_integration_router)
     app.include_router(ozon_integration_router)
+    app.include_router(ozon_returns_router)
     return app
 
 
