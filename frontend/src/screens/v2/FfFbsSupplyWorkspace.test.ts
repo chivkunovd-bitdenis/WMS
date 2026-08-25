@@ -1,5 +1,34 @@
 import { describe, expect, it } from 'vitest'
-import { buildFbsPickingListPrintHtml, normalizeMetadataKind } from './fbsUx'
+import {
+  buildFbsPickingListPrintHtml,
+  buildFbsSyncTargets,
+  fbsBoxOperationsDisabled,
+  mixedMarketplaceSelectionMessage,
+  normalizeMetadataKind,
+} from './fbsUx'
+
+describe('Ozon FBS UI boundaries', () => {
+  it('syncs every seller and marketplace pair from one action', () => {
+    expect(buildFbsSyncTargets(['seller-a', 'seller-b'], '__all__')).toEqual([
+      { sellerId: 'seller-a', marketplace: 'wb' },
+      { sellerId: 'seller-a', marketplace: 'ozon' },
+      { sellerId: 'seller-b', marketplace: 'wb' },
+      { sellerId: 'seller-b', marketplace: 'ozon' },
+    ])
+  })
+
+  it('blocks creating and adding a mixed WB/Ozon selection', () => {
+    expect(mixedMarketplaceSelectionMessage(['wb', 'ozon'])).toBe(
+      'Нельзя объединить заказы Wildberries и Ozon в одну поставку.',
+    )
+    expect(mixedMarketplaceSelectionMessage(['ozon', 'ozon'])).toBeNull()
+  })
+
+  it('disables every box operation for Ozon, including removing an order', () => {
+    expect(fbsBoxOperationsDisabled('ozon')).toBe(true)
+    expect(fbsBoxOperationsDisabled('wb')).toBe(false)
+  })
+})
 
 describe('FBS required identifiers', () => {
   it('TC-FBS-UX-002 sends the API-supported kind when WB calls it KIZ', () => {

@@ -41,7 +41,7 @@ import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { FbsSupplyCreateDialog } from './FbsSupplyCreateDialog'
 import { FfFbsSectionNav } from './FfFbsSectionNav'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
-import { ordersWord } from './fbsUx'
+import { buildFbsSyncTargets, mixedMarketplaceSelectionMessage, ordersWord } from './fbsUx'
 import { plural } from '../../utils/plural'
 import {
   fetchFbsSellerWarehouses,
@@ -648,15 +648,12 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     return () => { cancelled = true }
   }, [token, authHeaders, sellerId, statusGroup])
 
-  // Ручной поход в Wildberries: тянем новые заказы и подтягиваем их статусы.
-  // Автоопрос делает то же самое раз в минуту, но оператору нужна кнопка на случай,
-  // когда ждать нельзя или фоновый воркер отвалился.
   const syncTargets = useMemo(
-    () => (sellerId === '__all__' ? sellers.map((seller) => seller.id) : [sellerId]),
+    () => buildFbsSyncTargets(sellers.map((seller) => seller.id), sellerId),
     [sellerId, sellers],
   )
 
-  const syncWithWb = useCallback(async () => {
+  const syncOrders = useCallback(async () => {
     if (syncTargets.length === 0) {
       setSyncError('Нет ни одного селлера, по которому можно запросить заказы.')
       return
@@ -666,28 +663,37 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     setSyncNote(null)
     setSyncError(null)
     setSyncWarning(null)
-    let received = 0
-    let created = 0
-    let statusesUpdated = 0
+    const received = { wb: 0, ozon: 0 }
+    const created = { wb: 0, ozon: 0 }
+    const statusesUpdated = { wb: 0, ozon: 0 }
+    const completedMarketplaces = new Set<'wb' | 'ozon'>()
     let skippedUnmappedWarehouse = 0
     let skippedMismatchOrders = 0
     const skippedSupplyIds: string[] = []
     const failures: string[] = []
-    for (const targetSellerId of syncTargets) {
-      const sellerName = sellers.find((seller) => seller.id === targetSellerId)?.name ?? 'селлер'
+    for (const target of syncTargets) {
+      const sellerName = sellers.find((seller) => seller.id === target.sellerId)?.name ?? 'селлер'
+      const targetProvider = marketplaceLabel(target.marketplace)
       try {
-        const outcome = await runFbsOrdersSync(token, authHeaders, targetSellerId)
-        received += outcome.ordersReceived
-        created += outcome.ordersCreated
+        const outcome = await runFbsOrdersSync(token, authHeaders, target.sellerId, target.marketplace)
+        if (outcome.skipped) continue
+        completedMarketplaces.add(target.marketplace)
+        received[target.marketplace] += outcome.ordersReceived
+        created[target.marketplace] += outcome.ordersCreated
         skippedUnmappedWarehouse += outcome.supplyLinkSkippedUnmappedWarehouse
         skippedMismatchOrders += outcome.supplyLinkSkippedWarehouseMismatchOrders
         skippedSupplyIds.push(...outcome.supplyLinkSkippedUnmappedWarehouseSupplyIds)
       } catch (cause) {
-        failures.push(`${sellerName}: ${cause instanceof Error ? cause.message : 'ошибка синхронизации'}`)
+        failures.push(`${sellerName} · ${targetProvider}: ${cause instanceof Error ? cause.message : 'ошибка синхронизации'}`)
         continue
       }
       try {
-        statusesUpdated += await syncFbsOrderStatuses(token, authHeaders, targetSellerId)
+        statusesUpdated[target.marketplace] += await syncFbsOrderStatuses(
+          token,
+          authHeaders,
+          target.sellerId,
+          target.marketplace,
+        )
       } catch {
         // Статусы — не критично: заказы уже приехали, покажем их и без обновлённых статусов.
       }
@@ -699,23 +705,23 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     if (failures.length > 0) {
       setSyncError(failures.join(' · '))
     }
-    if (failures.length < syncTargets.length) {
-      setSyncNote(
-        `WB отдал заказов: ${received}, из них новых: ${created}. Обновлено статусов: ${statusesUpdated}.`,
-      )
+    if (completedMarketplaces.size > 0) {
+      setSyncNote([...completedMarketplaces].map((provider) => (
+        `${marketplaceLabel(provider)}: получено ${received[provider]}, новых ${created[provider]}, обновлено статусов ${statusesUpdated[provider]}`
+      )).join(' · '))
       // Предупреждение о пропущенных поставках из-за непривязанных складов.
       if (skippedUnmappedWarehouse > 0) {
         const displayedSupplyIds = skippedSupplyIds.slice(0, 5)
         const displayedIds = displayedSupplyIds.join(', ')
         const remaining = skippedSupplyIds.length - displayedSupplyIds.length
         const supplyWord = plural(skippedUnmappedWarehouse, ['поставка', 'поставки', 'поставок'])
-        let supplyWarning = `Из кабинета WB не подхватилось ${skippedUnmappedWarehouse} ${supplyWord} — у их складов нет привязки к WMS. Номера: ${displayedIds}`
+        let supplyWarning = `Из кабинетов маркетплейсов не подхватилось ${skippedUnmappedWarehouse} ${supplyWord} — у их складов нет привязки к WMS. Номера: ${displayedIds}`
         if (remaining > 0) {
           supplyWarning += `, и ещё ${remaining}.`
         } else {
           supplyWarning += '.'
         }
-        supplyWarning += ' Привязка делается на вкладке «Остатки WB».'
+        supplyWarning += ' Привязка делается на вкладке «Остатки».'
         if (skippedMismatchOrders > 0) {
           const orderWord = plural(skippedMismatchOrders, ['заказ', 'заказа', 'заказов'])
           supplyWarning += ` Кроме того, ${skippedMismatchOrders} ${orderWord} не привязались к своим поставкам из-за несовпадения склада.`
@@ -731,6 +737,10 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
     [selected, selectedCache],
   )
   const selectedOrderIds = useMemo(() => [...selected], [selected])
+  const mixedMarketplaceMessage = useMemo(
+    () => mixedMarketplaceSelectionMessage(selectedOrders.map((order) => order.marketplace)),
+    [selectedOrders],
+  )
   const compatibleExistingSupplies = useMemo(() => {
     if (selectedOrders.length === 0) return []
     const first = selectedOrders[0]
@@ -943,12 +953,12 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               startIcon={
                 syncing ? <CircularProgress size={18} color="inherit" /> : <CloudSyncOutlinedIcon />
               }
-              onClick={() => void syncWithWb()}
+              onClick={() => void syncOrders()}
               disabled={syncing || busy}
               data-testid="fbs-orders-sync-wb"
               sx={{ minWidth: 214 }}
             >
-              {syncing ? 'Забираем заказы…' : 'Забрать заказы из WB'}
+              {syncing ? 'Синхронизируем заказы…' : 'Синхронизировать заказы'}
             </Button>
           ) : null}
         </Stack>
@@ -1433,7 +1443,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
             px: 2.5,
             py: 1.5,
             border: 1,
-            borderColor: selectionBlockers.length ? 'error.light' : 'primary.light',
+            borderColor: selectionBlockers.length || mixedMarketplaceMessage ? 'error.light' : 'primary.light',
           }}
           data-testid="fbs-selection-bar"
         >
@@ -1449,20 +1459,23 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
               </Typography>
               <Tooltip
                 title={
-                  selectionBlockers.length
+                  mixedMarketplaceMessage
+                    ? mixedMarketplaceMessage
+                    : selectionBlockers.length
                     ? selectionBlockers[0].blocker.message
                     : 'Следующий шаг — серверная проверка селлера, складов и состава.'
                 }
               >
                 <Typography
                   variant="caption"
-                  color={selectionBlockers.length ? 'error.main' : 'text.secondary'}
+                  color={selectionBlockers.length || mixedMarketplaceMessage ? 'error.main' : 'text.secondary'}
                   noWrap
                   sx={{ display: 'block' }}
                 >
-                  {selectionBlockers.length
+                  {mixedMarketplaceMessage
+                    ?? (selectionBlockers.length
                     ? selectionBlockers[0].blocker.message
-                    : 'Следующий шаг — серверная проверка селлера, складов и состава.'}
+                    : 'Следующий шаг — серверная проверка селлера, складов и состава.')}
                 </Typography>
               </Tooltip>
             </Box>
@@ -1473,7 +1486,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
             <Button
               variant="outlined"
               size="large"
-              disabled={selectionBlockers.length > 0 || selectedOrders.length !== selected.size}
+              disabled={Boolean(mixedMarketplaceMessage) || selectionBlockers.length > 0 || selectedOrders.length !== selected.size}
               onClick={() => void openAddExistingDialog()}
               data-testid="fbs-05-add-existing-open"
             >
@@ -1482,7 +1495,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
             <Button
               variant="contained"
               size="large"
-              disabled={selectionBlockers.length > 0 || selectedOrders.length !== selected.size}
+              disabled={Boolean(mixedMarketplaceMessage) || selectionBlockers.length > 0 || selectedOrders.length !== selected.size}
               onClick={() => setCreateOpen(true)}
             >
               Сформировать поставку
@@ -1547,7 +1560,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, isAdmin = false
         <DialogContent dividers>
           <Stack spacing={2}>
             <Typography variant="body2" color="text.secondary">
-              Выбрано {selectedOrders.length} {ordersWord(selectedOrders.length)}. WMS покажет только поставки того же селлера, WB-склада и допустимого статуса.
+              Выбрано {selectedOrders.length} {ordersWord(selectedOrders.length)}. WMS покажет только поставки того же селлера, маркетплейса, склада и допустимого статуса.
             </Typography>
             {compatibleExistingSupplies.length === 0 ? (
               <Alert severity="info" data-testid="fbs-05-no-compatible-supply">

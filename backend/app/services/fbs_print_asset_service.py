@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -50,6 +51,12 @@ from app.services.fbs_sticker_code_service import (
     sticker_barcode_from_wb_row,
     sticker_code_from_wb_row,
 )
+from app.services.marketplace_provider import (
+    FakeMarketplaceTransport,
+    MarketplaceProviderError,
+    OzonMarketplaceProvider,
+    provider_error_message,
+)
 from app.services.wildberries_client import (
     WildberriesClientError,
     fetch_marketplace_order_stickers,
@@ -61,6 +68,44 @@ from app.services.wildberries_credentials_service import (
 )
 
 WB_STICKER_CHUNK_SIZE = 100
+
+OrderLabelFetch = Callable[[list[str]], Awaitable[list[dict[str, Any]]]]
+
+
+async def fetch_order_label_rows_for_marketplace(
+    marketplace: str,
+    *,
+    external_order_ids: list[str],
+    wb_fetch: OrderLabelFetch,
+    ozon_fetch: OrderLabelFetch,
+) -> list[dict[str, Any]]:
+    if marketplace == "wb":
+        return await wb_fetch(external_order_ids)
+    if marketplace == "ozon":
+        return await ozon_fetch(external_order_ids)
+    raise FbsPrintAssetError(
+        "unsupported_marketplace",
+        message="Маркетплейс поставки не поддерживает печать этикеток.",
+    )
+
+
+async def _blocked_ozon_order_label_fetch(
+    external_order_ids: list[str],
+) -> list[dict[str, Any]]:
+    provider = OzonMarketplaceProvider(
+        transport=FakeMarketplaceTransport(
+            errors={
+                "fetch_statuses": MarketplaceProviderError(
+                    "ozon", 403, {"code": 7}
+                )
+            }
+        )
+    )
+    return await provider.fetch_statuses(
+        client_id="fake",
+        api_key="fake",
+        order_ids=external_order_ids,
+    )
 
 
 class FbsPrintAssetSupplyError(Exception):
@@ -480,6 +525,7 @@ async def request_supply_print_batch(
         raise FbsPrintAssetError("invalid_order_ids", message="Список заказов пуст.")
 
     supply = await _get_supply(session, tenant_id, supply_id)
+    marketplace = getattr(supply, "marketplace", "wb")
     supply_orders = {order.id: order for order in supply.orders}
     if order_ids is None:
         target_orders = list(supply.orders)
@@ -524,20 +570,46 @@ async def request_supply_print_batch(
         order.sticker_status = STICKER_STATUS_REQUESTING
 
     if to_fetch:
-        try:
-            token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
-        except FbsPrintAssetSupplyError as exc:
-            raise FbsPrintAssetError(exc.code, message="Нет доступа к маркетплейсу.") from exc
+        token: str | None = None
+        if marketplace == "wb":
+            try:
+                token = await _require_marketplace_token(
+                    session, tenant_id, supply.seller_id
+                )
+            except FbsPrintAssetSupplyError as exc:
+                raise FbsPrintAssetError(
+                    exc.code, message="Нет доступа к маркетплейсу."
+                ) from exc
+
+        async def wb_fetch(external_order_ids: list[str]) -> list[dict[str, Any]]:
+            if token is None:
+                raise FbsPrintAssetError(
+                    "missing_marketplace_token",
+                    message="Нет доступа к Wildberries.",
+                )
+            return await fetch_marketplace_order_stickers(
+                http_client,
+                api_token=token,
+                order_ids=[int(order_id) for order_id in external_order_ids],
+            )
 
         fetched_at = datetime.now(tz=UTC)
         for chunk_start in range(0, len(to_fetch), WB_STICKER_CHUNK_SIZE):
             chunk = to_fetch[chunk_start : chunk_start + WB_STICKER_CHUNK_SIZE]
-            wb_ids = [int(order.wb_order_id) for order in chunk]
+            external_order_ids = [
+                (
+                    str(order.wb_order_id)
+                    if marketplace == "wb"
+                    else order.external_order_id or str(order.wb_order_id)
+                )
+                for order in chunk
+            ]
             try:
-                sticker_rows = await fetch_marketplace_order_stickers(
-                    http_client,
-                    api_token=token,
-                    order_ids=wb_ids,
+                sticker_rows = await fetch_order_label_rows_for_marketplace(
+                    marketplace,
+                    external_order_ids=external_order_ids,
+                    wb_fetch=wb_fetch,
+                    ozon_fetch=_blocked_ozon_order_label_fetch,
                 )
             except WildberriesClientError as exc:
                 suffix = f"_{exc.status_code}" if exc.status_code else ""
@@ -554,23 +626,54 @@ async def request_supply_print_batch(
                     )
                     order.sticker_status = STICKER_STATUS_ERROR
                 continue
-
-            by_wb_id: dict[int, dict[str, Any]] = {}
-            for row in sticker_rows:
-                oid_raw = row.get("orderId") or row.get("order_id")
-                if oid_raw is not None:
-                    by_wb_id[int(oid_raw)] = row
-
-            for order in chunk:
-                sticker_row = by_wb_id.get(int(order.wb_order_id))
-                if sticker_row is None:
+            except MarketplaceProviderError as exc:
+                message = provider_error_message(exc)
+                for order in chunk:
                     result.failed += 1
                     result.order_errors.append(
                         PrintOrderError(
                             order_id=order.id,
                             wb_order_id=int(order.wb_order_id),
-                            code="wb_stickers_incomplete",
-                            message="Стикер не найден в ответе WB.",
+                            code=(
+                                "ozon_account_blocked"
+                                if exc.is_account_blocked
+                                else exc.code
+                            ),
+                            message=message,
+                        )
+                    )
+                    order.sticker_status = STICKER_STATUS_ERROR
+                continue
+
+            by_external_id: dict[str, dict[str, Any]] = {}
+            for row in sticker_rows:
+                oid_raw = (
+                    row.get("orderId")
+                    or row.get("order_id")
+                    or row.get("posting_number")
+                    or row.get("external_order_id")
+                )
+                if oid_raw is not None:
+                    by_external_id[str(oid_raw)] = row
+
+            for order in chunk:
+                external_order_id = (
+                    str(order.wb_order_id)
+                    if marketplace == "wb"
+                    else order.external_order_id or str(order.wb_order_id)
+                )
+                sticker_row = by_external_id.get(external_order_id)
+                if sticker_row is None:
+                    provider_name = (
+                        "Ozon" if marketplace == "ozon" else "Wildberries"
+                    )
+                    result.failed += 1
+                    result.order_errors.append(
+                        PrintOrderError(
+                            order_id=order.id,
+                            wb_order_id=int(order.wb_order_id),
+                            code=f"{marketplace}_stickers_incomplete",
+                            message=f"Этикетка не найдена в ответе {provider_name}.",
                         )
                     )
                     order.sticker_status = STICKER_STATUS_ERROR
@@ -587,14 +690,18 @@ async def request_supply_print_batch(
                         await session.flush()
                     _mark_asset_error(
                         asset,
-                        code="wb_stickers_incomplete",
-                        message="Стикер не найден в ответе WB.",
+                        code=f"{marketplace}_stickers_incomplete",
+                        message="Этикетка заказа не найдена в ответе маркетплейса.",
                     )
                     continue
 
                 sticker_code = sticker_code_from_wb_row(sticker_row)
                 sticker_barcode = sticker_barcode_from_wb_row(sticker_row)
-                png_bytes = decode_png_payload(sticker_row.get("file"))
+                png_bytes: bytes | None = None
+                for payload_key in ("file", "label", "image"):
+                    png_bytes = decode_png_payload(sticker_row.get(payload_key))
+                    if png_bytes is not None:
+                        break
                 asset = await _find_order_sticker_asset(session, tenant_id, order.id)
                 if asset is None:
                     asset = FbsPrintAsset(
