@@ -26,6 +26,11 @@ from app.db.session import SessionLocal
 from app.models.billing import BillingLedgerEntry, BillingRunIssue
 from app.services import marketplace_unload_service as unload_svc
 from app.services.billing_ledger_service import BillingLedgerError
+from app.services.marketplace_provider import (
+    FakeMarketplaceTransport,
+    MarketplaceProviderError,
+    OzonMarketplaceProvider,
+)
 from app.services.marketplace_unload_service import (
     MarketplaceUnloadError,
     complete_unload,
@@ -40,6 +45,7 @@ async def _confirmed_unload_with_stock(
     monkeypatch: pytest.MonkeyPatch,
     *,
     plan_qty: int,
+    marketplace: str = "wb",
 ) -> tuple[dict[str, str], uuid.UUID, str]:
     suffix = str(int(time.time() * 1000))
     reg = await async_client.post(
@@ -86,10 +92,17 @@ async def _confirmed_unload_with_stock(
         async_client, h, warehouse_id=wid, product_id=pid, qty=max(plan_qty, 5)
     )
 
+    unload_body: dict[str, object] = {
+        "warehouse_id": wid,
+        "seller_id": sid,
+        "marketplace": marketplace,
+    }
+    if marketplace == "wb":
+        unload_body["wb_mp_warehouse_id"] = wb_wid
     mu = await async_client.post(
         "/operations/marketplace-unload-requests",
         headers=h,
-        json={"warehouse_id": wid, "seller_id": sid, "wb_mp_warehouse_id": wb_wid},
+        json=unload_body,
     )
     mid = mu.json()["id"]
     await async_client.post(
@@ -230,6 +243,74 @@ async def test_complete_unload_without_discrepancy(
         assert req.status == "shipped"
         assert req.has_discrepancy is False
         assert compute_has_discrepancy(req) is False
+
+
+@pytest.mark.asyncio
+async def test_ozon_complete_dispatches_via_fake_before_local_shipped(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    h, mid, loc_id = await _confirmed_unload_with_stock(
+        async_client, monkeypatch, plan_qty=2, marketplace="ozon"
+    )
+    await _collect_qty_via_scan(async_client, h, mid, loc_id=loc_id, qty=2)
+    tenant_id = uuid.UUID((await async_client.get("/auth/me", headers=h)).json()["tenant_id"])
+    transport = FakeMarketplaceTransport()
+    provider = OzonMarketplaceProvider(transport=transport)
+
+    async with SessionLocal() as session:
+        completed = await complete_unload(
+            session,
+            tenant_id,
+            mid,
+            ozon_provider=provider,
+        )
+
+    assert completed.status == "shipped"
+    assert transport.calls == [("dispatch_unload", str(mid))]
+
+
+@pytest.mark.asyncio
+async def test_ozon_complete_blocked_keeps_document_open_and_stock_intact(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    h, mid, loc_id = await _confirmed_unload_with_stock(
+        async_client, monkeypatch, plan_qty=2, marketplace="ozon"
+    )
+    await _collect_qty_via_scan(async_client, h, mid, loc_id=loc_id, qty=2)
+    tenant_id = uuid.UUID((await async_client.get("/auth/me", headers=h)).json()["tenant_id"])
+    transport = FakeMarketplaceTransport(
+        errors={"dispatch_unload": MarketplaceProviderError("ozon", 403, {"code": 7})}
+    )
+    provider = OzonMarketplaceProvider(transport=transport)
+
+    async with SessionLocal() as session:
+        with pytest.raises(MarketplaceUnloadError) as exc:
+            await complete_unload(session, tenant_id, mid, ozon_provider=provider)
+        assert exc.value.code == "provider_dispatch_blocked"
+        current = await get_request(session, tenant_id, mid)
+        assert current is not None
+        assert current.status == "collecting"
+
+    assert transport.calls == [("dispatch_unload", str(mid))]
+
+
+@pytest.mark.asyncio
+async def test_ozon_complete_uses_blocked_provider_in_normal_composition(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    h, mid, loc_id = await _confirmed_unload_with_stock(
+        async_client, monkeypatch, plan_qty=1, marketplace="ozon"
+    )
+    await _collect_qty_via_scan(async_client, h, mid, loc_id=loc_id, qty=1)
+    tenant_id = uuid.UUID((await async_client.get("/auth/me", headers=h)).json()["tenant_id"])
+
+    async with SessionLocal() as session:
+        with pytest.raises(MarketplaceUnloadError) as exc:
+            await complete_unload(session, tenant_id, mid)
+        assert exc.value.code == "provider_dispatch_blocked"
+        current = await get_request(session, tenant_id, mid)
+        assert current is not None
+        assert current.status == "collecting"
 
 
 @pytest.mark.asyncio

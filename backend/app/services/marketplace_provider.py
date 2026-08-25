@@ -81,6 +81,14 @@ class MarketplaceTransport(Protocol):
         stocks: Sequence[Mapping[str, object]],
     ) -> None: ...
 
+    async def dispatch_unload(
+        self,
+        *,
+        client_id: str,
+        api_key: str,
+        document_id: str,
+    ) -> None: ...
+
 
 @dataclass
 class FakeMarketplaceTransport:
@@ -119,6 +127,18 @@ class FakeMarketplaceTransport:
         _ = api_key, stocks
         self.calls.append(("publish_stocks", client_id))
         if error := self.errors.get("publish_stocks"):
+            raise error
+
+    async def dispatch_unload(
+        self,
+        *,
+        client_id: str,
+        api_key: str,
+        document_id: str,
+    ) -> None:
+        _ = client_id, api_key
+        self.calls.append(("dispatch_unload", document_id))
+        if error := self.errors.get("dispatch_unload"):
             raise error
 
 
@@ -176,6 +196,24 @@ class OzonMarketplaceProvider:
                 client_id=client_id,
                 api_key=api_key,
                 stocks=stocks,
+            )
+        except MarketplaceProviderError as error:
+            self._remember_blocked(error)
+            raise
+
+    async def dispatch_unload(
+        self,
+        *,
+        client_id: str,
+        api_key: str,
+        document_id: str,
+    ) -> None:
+        self._raise_if_blocked()
+        try:
+            await self.transport.dispatch_unload(
+                client_id=client_id,
+                api_key=api_key,
+                document_id=document_id,
             )
         except MarketplaceProviderError as error:
             self._remember_blocked(error)
