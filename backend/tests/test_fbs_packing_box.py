@@ -209,6 +209,132 @@ async def test_without_distribution_boxes_do_not_accept_order_assignment(
     assert assigned.json()["detail"]["code"] == "box_without_distribution"
 
 
+@pytest.mark.asyncio
+async def test_boxes_without_distribution_toggle_after_creation(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """Дефект I15: режим должен переключаться и после того, как короба уже
+    созданы — не только галкой перед первым созданием короба."""
+    headers, supply_id, _ = await _packed_supply(async_client)
+
+    created = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes",
+        headers=headers,
+        json={"count": 2, "idempotency_key": "toggle-boxes-1"},
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["supply"]["boxes_without_distribution"] is False
+    assert all(box["without_distribution"] is False for box in created.json()["boxes"])
+
+    enabled = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes-without-distribution",
+        headers=headers,
+        json={"enabled": True},
+    )
+    assert enabled.status_code == 200, enabled.text
+    assert enabled.json()["supply"]["boxes_without_distribution"] is True
+    assert all(box["without_distribution"] is True for box in enabled.json()["boxes"])
+
+    # Идемпотентность: повторное включение ничего не ломает.
+    enabled_again = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes-without-distribution",
+        headers=headers,
+        json={"enabled": True},
+    )
+    assert enabled_again.status_code == 200, enabled_again.text
+    assert enabled_again.json()["supply"]["boxes_without_distribution"] is True
+
+    # И обратно выключить — тоже можно, пока ничего не разложено.
+    disabled = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes-without-distribution",
+        headers=headers,
+        json={"enabled": False},
+    )
+    assert disabled.status_code == 200, disabled.text
+    assert disabled.json()["supply"]["boxes_without_distribution"] is False
+    assert all(box["without_distribution"] is False for box in disabled.json()["boxes"])
+
+
+@pytest.mark.asyncio
+async def test_boxes_without_distribution_toggle_rejected_once_distributed(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """Если оператор уже разложил заказы по коробам, переключение запрещено
+    понятной ошибкой — молчаливая потеря раскладки недопустима."""
+    headers, supply_id, order_ids = await _packed_supply(async_client)
+
+    created = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes",
+        headers=headers,
+        json={"count": 1, "idempotency_key": "toggle-boxes-2"},
+    )
+    assert created.status_code == 201, created.text
+    box_id = created.json()["boxes"][0]["id"]
+
+    assigned = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes/{box_id}/orders",
+        headers=headers,
+        json={"order_ids": [str(order_ids[0])]},
+    )
+    assert assigned.status_code == 200, assigned.text
+
+    blocked = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes-without-distribution",
+        headers=headers,
+        json={"enabled": True},
+    )
+    assert blocked.status_code == 409, blocked.text
+    assert blocked.json()["detail"]["code"] == "boxes_already_distributed"
+    # Ошибка понятная, не голый код.
+    assert blocked.json()["detail"]["message"]
+
+    # После освобождения короба переключение снова разрешено.
+    await async_client.delete(
+        f"/operations/fbs-supplies/{supply_id}/boxes/{box_id}/orders/{order_ids[0]}",
+        headers=headers,
+    )
+    unblocked = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes-without-distribution",
+        headers=headers,
+        json={"enabled": True},
+    )
+    assert unblocked.status_code == 200, unblocked.text
+    assert unblocked.json()["supply"]["boxes_without_distribution"] is True
+
+
+@pytest.mark.asyncio
+async def test_boxes_without_distribution_flag_survives_empty_box_list(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    """Дефект I15, третье: режим включён на поставке переключателем ДО того,
+    как создан хоть один короб — раньше признак «без распределения» читался
+    только с самих коробов (`bool(boxes) and any(...)`), поэтому пустой
+    список коробов гасил флаг и шапка вкладки снова показывала «Распределено
+    0 из N», хотя раскладка не требуется. Флаг на поставке обязан быть
+    источником истины сам по себе, независимо от того, есть ли уже короба."""
+    headers, supply_id, _ = await _packed_supply(async_client)
+
+    enabled = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/boxes-without-distribution",
+        headers=headers,
+        json={"enabled": True},
+    )
+    assert enabled.status_code == 200, enabled.text
+    assert enabled.json()["boxes"] == []
+    assert enabled.json()["supply"]["boxes_without_distribution"] is True
+
+    workspace = await async_client.get(
+        f"/operations/fbs-supplies/{supply_id}/workspace",
+        headers=headers,
+    )
+    assert workspace.status_code == 200, workspace.text
+    assert workspace.json()["boxes"] == []
+    assert workspace.json()["supply"]["boxes_without_distribution"] is True
+
+
 def test_workspace_handoff_requires_boxes_and_every_packed_order_assignment() -> None:
     order_id = uuid.uuid4()
     supply = SimpleNamespace(

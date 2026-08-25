@@ -608,7 +608,7 @@ async def _sync_and_validate_deliver(
             session, tenant_id, supply
         )
     box_readiness = await packing_box_svc.get_delivery_box_readiness(
-        session, tenant_id, supply.id, orders
+        session, tenant_id, supply, orders
     )
     if confirmed_preflight_version is not None:
         current_version = _compute_preflight_version(
@@ -676,7 +676,7 @@ async def preflight_delivery(
             session, tenant_id, supply
         )
     box_readiness = await packing_box_svc.get_delivery_box_readiness(
-        session, tenant_id, supply.id, orders
+        session, tenant_id, supply, orders
     )
 
     checks = _build_delivery_checks(

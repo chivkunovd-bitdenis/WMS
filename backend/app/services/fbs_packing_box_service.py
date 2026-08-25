@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import httpx
 from sqlalchemy import delete, func, select
@@ -38,13 +39,18 @@ class DeliveryBoxReadiness:
     unassigned_packed_order_ids: frozenset[uuid.UUID]
 
 
+# До 2026-08-21 режим «без распределения» жил не полем, а служебной пропиской
+# к creation_idempotency_key короба — отсюда терялся при пересоздании коробов
+# (дефект I15). Теперь источник истины — FbsSupply.boxes_without_distribution_at
+# (см. модель и миграцию 20260821_0094). Приписку оставляем только на чтение —
+# так короба, созданные до переноса, не теряют режим без миграции данных.
 WITHOUT_DISTRIBUTION_KEY_PREFIX = "no-distribution:"
 
 
 async def get_delivery_box_readiness(
     session: AsyncSession,
     tenant_id: uuid.UUID,
-    supply_id: uuid.UUID,
+    supply: FbsSupply,
     orders: list[FbsOrder],
 ) -> DeliveryBoxReadiness:
     """Return the durable box membership gate used by preflight and delivery."""
@@ -53,12 +59,13 @@ async def get_delivery_box_readiness(
             await session.scalars(
                 select(FbsPackingBox).where(
                     FbsPackingBox.tenant_id == tenant_id,
-                    FbsPackingBox.supply_id == supply_id,
+                    FbsPackingBox.supply_id == supply.id,
                 )
             )
         ).all()
     )
-    without_distribution = _boxes_without_distribution(boxes)
+    supply_flag = supply.boxes_without_distribution_at is not None
+    without_distribution = _boxes_without_distribution(boxes, supply_flag)
     packed_order_ids = {order.id for order in orders if order.pack_status == PACK_STATUS_PACKED}
     if not packed_order_ids or without_distribution:
         return DeliveryBoxReadiness(bool(boxes), without_distribution, frozenset())
@@ -69,7 +76,7 @@ async def get_delivery_box_readiness(
                 .join(FbsPackingBox, FbsPackingBox.id == FbsPackingBoxItem.box_id)
                 .where(
                     FbsPackingBoxItem.tenant_id == tenant_id,
-                    FbsPackingBox.supply_id == supply_id,
+                    FbsPackingBox.supply_id == supply.id,
                     FbsPackingBoxItem.fbs_order_id.in_(packed_order_ids),
                 )
             )
@@ -97,14 +104,30 @@ async def create_boxes(
         raise FbsPackingBoxError("missing_idempotency_key")
     supply = await _get_supply(session, tenant_id, supply_id)
     _assert_supply_mutable(supply)
-    stored_key = _stored_creation_key(idempotency_key, without_distribution=without_distribution)
+    # Новые ключи больше не несут приписку — режим живёт полем на поставке
+    # (см. комментарий у WITHOUT_DISTRIBUTION_KEY_PREFIX выше).
+    stored_key = idempotency_key.strip()
     boxes = await _boxes_by_creation_key(session, tenant_id, supply_id, stored_key)
     if boxes:
         if len(boxes) != count:
             raise FbsPackingBoxError("idempotency_key_reused")
-        if _boxes_without_distribution(boxes) != without_distribution:
+        # Повтор уже использованного ключа с другим смыслом флага — это не тот
+        # же запрос, значит ключ переиспользован для другого действия.
+        if (supply.boxes_without_distribution_at is not None) != without_distribution:
             raise FbsPackingBoxError("idempotency_key_reused")
     else:
+        if without_distribution:
+            # Первая партия коробов с галкой «без распределения» включает режим
+            # на поставке. Идемпотентно и с той же охраной «ничего не разложено»,
+            # что и у явного переключателя — если где-то в поставке уже есть
+            # разложенные заказы, включать режим тут не даём.
+            await _ensure_without_distribution_flag(
+                session,
+                tenant_id,
+                supply,
+                enabled=True,
+                actor_user_id=actor_user_id,
+            )
         max_number = await session.scalar(
             select(func.max(FbsPackingBox.box_number)).where(
                 FbsPackingBox.tenant_id == tenant_id,
@@ -155,7 +178,8 @@ async def assign_orders(
     actor_user_id: uuid.UUID | None,
 ) -> None:
     box = await _get_box(session, tenant_id, supply_id, box_id)
-    if _box_without_distribution(box):
+    supply = await _get_supply(session, tenant_id, supply_id)
+    if _box_without_distribution(box, supply.boxes_without_distribution_at is not None):
         raise FbsPackingBoxError("box_without_distribution")
     if not order_ids:
         raise FbsPackingBoxError("empty_order_set")
@@ -191,6 +215,37 @@ async def assign_orders(
                     assigned_by_user_id=actor_user_id,
                 )
             )
+
+
+async def set_boxes_without_distribution(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    *,
+    enabled: bool,
+    actor_user_id: uuid.UUID | None,
+) -> None:
+    """Включить или выключить режим «без распределения» на поставке.
+
+    Дефект I15: раньше режим фиксировался только в момент создания первой
+    партии коробов и дальше был не переключаем — оператор, передумавший уже
+    после того как короба созданы, упирался в тупик (удалить и пересоздать).
+    Теперь переключатель работает в любой момент, пока короба ещё пустые.
+
+    Идемпотентна: повторный вызов с уже установленным значением ничего не
+    меняет. Запрещена, если хотя бы в одном коробе поставки уже есть
+    назначенный заказ — переключение потеряло бы уже сделанную раскладку.
+    """
+    supply = await _get_supply(session, tenant_id, supply_id)
+    _assert_supply_mutable(supply)
+    await _ensure_without_distribution_flag(
+        session,
+        tenant_id,
+        supply,
+        enabled=enabled,
+        actor_user_id=actor_user_id,
+    )
+    await session.flush()
 
 
 async def remove_order(
@@ -294,6 +349,8 @@ async def get_boxes_for_workspace(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
+    *,
+    supply_without_distribution: bool = False,
 ) -> list[dict[str, object]]:
     boxes = await _load_boxes(session, tenant_id, supply_id)
     return [
@@ -305,29 +362,66 @@ async def get_boxes_for_workspace(
             "trbx_id": str(box.trbx_id) if box.trbx_id else None,
             "wb_trbx_id": box.trbx.wb_trbx_id if box.trbx else None,
             "qr_asset": None,
-            "without_distribution": _box_without_distribution(box),
+            "without_distribution": _box_without_distribution(box, supply_without_distribution),
         }
         for box in boxes
     ]
 
 
-def _stored_creation_key(idempotency_key: str, *, without_distribution: bool) -> str:
-    key = idempotency_key.strip()
-    if not without_distribution:
-        return key
-    max_raw_len = 128 - len(WITHOUT_DISTRIBUTION_KEY_PREFIX)
-    return f"{WITHOUT_DISTRIBUTION_KEY_PREFIX}{key[:max_raw_len]}"
+async def _ensure_without_distribution_flag(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply: FbsSupply,
+    *,
+    enabled: bool,
+    actor_user_id: uuid.UUID | None,
+) -> None:
+    """Общий переключатель поля на поставке — используют и create_boxes (когда
+    флаг включают вместе с первой партией коробов), и set_boxes_without_distribution
+    (явный переключатель после того как короба уже есть)."""
+    currently_enabled = supply.boxes_without_distribution_at is not None
+    if currently_enabled == enabled:
+        return
+    # «Ничего не разложено» = ни в одном коробе поставки нет назначенного
+    # заказа. Пока режим включён, assign_orders и так блокирует назначение
+    # (см. box_without_distribution выше), так что нарушить условие можно
+    # только выключенным режимом — но проверяем в обе стороны для симметрии
+    # и на случай гонки двух вкладок.
+    assigned_count = await session.scalar(
+        select(func.count(FbsPackingBoxItem.id))
+        .join(FbsPackingBox, FbsPackingBox.id == FbsPackingBoxItem.box_id)
+        .where(
+            FbsPackingBoxItem.tenant_id == tenant_id,
+            FbsPackingBox.supply_id == supply.id,
+        )
+    )
+    if assigned_count:
+        raise FbsPackingBoxError("boxes_already_distributed")
+    supply.boxes_without_distribution_at = datetime.now(UTC) if enabled else None
+    supply.boxes_without_distribution_by_user_id = actor_user_id if enabled else None
 
 
-def _box_without_distribution(box: FbsPackingBox) -> bool:
+def _box_without_distribution(box: FbsPackingBox, supply_without_distribution: bool) -> bool:
+    if supply_without_distribution:
+        return True
+    # Совместимость со старыми коробами (см. комментарий у
+    # WITHOUT_DISTRIBUTION_KEY_PREFIX): режим на поставке ещё не выставлен,
+    # но короб мог быть создан до переноса — читаем старую приписку.
     return bool(
         box.creation_idempotency_key
         and box.creation_idempotency_key.startswith(WITHOUT_DISTRIBUTION_KEY_PREFIX)
     )
 
 
-def _boxes_without_distribution(boxes: list[FbsPackingBox]) -> bool:
-    return bool(boxes) and any(_box_without_distribution(box) for box in boxes)
+def _boxes_without_distribution(
+    boxes: list[FbsPackingBox], supply_without_distribution: bool
+) -> bool:
+    # Флаг на поставке — источник истины сам по себе: режим может быть включён
+    # переключателем ДО того, как создан хоть один короб (или после того, как
+    # все короба удалены), и тогда пустой список коробов не должен гасить его.
+    return supply_without_distribution or any(
+        _box_without_distribution(box, False) for box in boxes
+    )
 
 
 async def _link_or_create_cargo_places(
