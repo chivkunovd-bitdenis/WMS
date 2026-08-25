@@ -93,8 +93,6 @@ class ProductCreate(BaseModel):
     wb_barcode: str | None = Field(default=None, max_length=64)
     wb_size: str | None = Field(default=None, max_length=64)
     wb_vendor_code: str | None = Field(default=None, max_length=255)
-    ozon_sku: str | None = Field(default=None, max_length=255)
-    ozon_offer_id: str | None = Field(default=None, max_length=255)
     packaging_instructions: str | None = Field(default=None, max_length=8000)
     requires_honest_sign: bool = False
 
@@ -107,6 +105,8 @@ class SellerWbCatalogOut(BaseModel):
     sku_code: str
     wb_nm_id: int | None = None
     wb_vendor_code: str | None = None
+    ozon_sku: str | None = None
+    ozon_offer_id: str | None = None
     wb_subject_name: str | None = None
     wb_primary_image_url: str | None = None
     wb_barcodes: list[str]
@@ -601,8 +601,6 @@ async def post_product(
             wb_barcode=body.wb_barcode,
             wb_size=body.wb_size,
             wb_vendor_code=body.wb_vendor_code,
-            ozon_sku=body.ozon_sku,
-            ozon_offer_id=body.ozon_offer_id,
             packaging_instructions=body.packaging_instructions,
             requires_honest_sign=body.requires_honest_sign,
         )
@@ -622,11 +620,6 @@ async def post_product(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="seller_not_found",
             ) from None
-        if exc.code == "ozon_link_requires_seller":
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="ozon_link_requires_seller",
-            ) from None
         raise
     await session.refresh(p, attribute_names=["seller"])
     ozon_links = await list_ozon_product_links(session, user.tenant_id, {p.id})
@@ -642,12 +635,9 @@ async def post_product(
 async def patch_product_ozon_link(
     product_id: uuid.UUID,
     body: ProductOzonLinkPatch,
-    user: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
-    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> ProductOut:
-    await assert_seller_permission(session, user, PERM_PRODUCTS)
-    await _product_seller_scope_for_write(user, session, product_id, effective_seller_id)
     try:
         product = await update_ozon_product_link(
             session,
@@ -661,6 +651,8 @@ async def patch_product_ozon_link(
             raise HTTPException(status_code=404, detail=exc.code) from None
         if exc.code in {"ozon_link_requires_seller", "ozon_link_required"}:
             raise HTTPException(status_code=422, detail=exc.code) from None
+        if exc.code == "ozon_sku_taken":
+            raise HTTPException(status_code=409, detail=exc.code) from None
         raise
     link = (await list_ozon_product_links(session, user.tenant_id, {product.id})).get(product.id)
     return _product_out(

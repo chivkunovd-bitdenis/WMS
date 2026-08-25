@@ -2454,7 +2454,7 @@ export function FfFbsSupplyWorkspace({
         <DialogActions><Button onClick={() => setUndoOrderId(null)}>Не отменять</Button><Button color="error" variant="contained" onClick={() => { const orderId = undoOrderId; setUndoOrderId(null); if (orderId && workspace) void run(() => undoFbsPick(token, authHeaders, workspace.supply.id, orderId, createFbsIdempotencyKey()), 'Подбор отменён, остаток возвращён в исходную ячейку.') }}>Вернуть в ячейку</Button></DialogActions>
       </Dialog>
       <Dialog open={deliverConfirmOpen} onClose={() => setDeliverConfirmOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Передать поставку в WB?</DialogTitle>
+        <DialogTitle>Передать поставку в {providerName}?</DialogTitle>
         <DialogContent>
           <Typography variant="body2">
             После передачи поставку нельзя будет отменить или вернуть в работу. Убедитесь, что все короба готовы к отгрузке.
@@ -2466,11 +2466,11 @@ export function FfFbsSupplyWorkspace({
             data-testid="fbs-delivery-marking-status"
           >
             {deliveryPreflightLoading
-              ? 'Проверяем маркировку в Wildberries…'
+              ? `Проверяем маркировку в ${providerName}…`
               : deliveryPreflightError
                 ?? deliveryPreflight?.checks.find((check) => check.code === 'marking_not_allowed')?.message
                 ?? deliveryPreflight?.checks.find((check) => check.code === 'marking_allowed')?.message
-                ?? (deliveryPreflight ? 'WB: маркировка не требуется.' : '')}
+                ?? (deliveryPreflight ? `${providerName}: маркировка не требуется.` : '')}
           </Typography>
         </DialogContent>
         <DialogActions>
@@ -2484,7 +2484,7 @@ export function FfFbsSupplyWorkspace({
             }}
             data-testid="fbs-deliver-confirm"
           >
-            Передать в WB
+            Передать в {providerName}
           </Button>
         </DialogActions>
       </Dialog>

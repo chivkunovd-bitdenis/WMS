@@ -223,6 +223,9 @@ export function FfProductsCatalogScreen({
   const [editProduct, setEditProduct] = useState<FfCatalogRow | null>(null)
   const [editText, setEditText] = useState('')
   const [editRequiresHonestSign, setEditRequiresHonestSign] = useState(false)
+  const [editOzonSku, setEditOzonSku] = useState('')
+  const [editOzonOfferId, setEditOzonOfferId] = useState('')
+  const [editOzonError, setEditOzonError] = useState<string | null>(null)
   const [editBusy, setEditBusy] = useState(false)
 
   // ── Фильтры над таблицей (CAT-12, часть 2) ──────────────────────────────
@@ -399,6 +402,9 @@ export function FfProductsCatalogScreen({
     setEditProduct(p)
     setEditText(p.packaging_instructions ?? '')
     setEditRequiresHonestSign(Boolean(p.requires_honest_sign))
+    setEditOzonSku(p.ozon_sku ?? '')
+    setEditOzonOfferId(p.ozon_offer_id ?? '')
+    setEditOzonError(null)
   }
 
   function printPackagingTz() {
@@ -416,7 +422,36 @@ export function FfProductsCatalogScreen({
     if (!editProduct) return
     setEditBusy(true)
     setError(null)
+    setEditOzonError(null)
     try {
+      const normalizedOzonSku = editOzonSku.trim()
+      const normalizedOzonOfferId = editOzonOfferId.trim()
+      const ozonLinkChanged =
+        normalizedOzonSku !== (editProduct.ozon_sku ?? '') ||
+        normalizedOzonOfferId !== (editProduct.ozon_offer_id ?? '')
+      if (ozonLinkChanged) {
+        if (!normalizedOzonSku && !normalizedOzonOfferId) {
+          setEditOzonError('Укажите SKU или артикул Ozon.')
+          return
+        }
+        const linkRes = await fetch(apiUrl(`/products/${editProduct.id}/ozon-link`), {
+          method: 'PATCH',
+          headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ozon_sku: normalizedOzonSku || null,
+            ozon_offer_id: normalizedOzonOfferId || null,
+          }),
+        })
+        if (!linkRes.ok) {
+          const raw = await readApiErrorMessage(linkRes)
+          setEditOzonError(
+            raw === 'ozon_sku_taken'
+              ? 'Этот SKU уже привязан к другому товару.'
+              : humanFfCatalogError(raw),
+          )
+          return
+        }
+      }
       const res = await fetch(apiUrl(`/products/${editProduct.id}/packaging-instructions`), {
         method: 'PATCH',
         headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
@@ -428,6 +463,9 @@ export function FfProductsCatalogScreen({
       if (!res.ok) {
         setError(humanFfCatalogError(await readApiErrorMessage(res)))
         return
+      }
+      if (ozonLinkChanged) {
+        setImportNotice(`Привязка Ozon для «${editProduct.sku_code}» сохранена.`)
       }
       setEditProduct(null)
       await load()
@@ -471,13 +509,9 @@ export function FfProductsCatalogScreen({
         (row) =>
           matchesCatalogSearch(row, filterSearch) &&
           (!filterSellerId || row.seller_id === filterSellerId) &&
-          (!filterMarketplace ||
-            (filterMarketplace === 'wildberries'
-              ? Boolean(row.wb_nm_id != null || row.wb_vendor_code)
-              : Boolean(row.ozon_sku || row.ozon_offer_id))) &&
           (!filterCategory || row.wb_subject_name === filterCategory),
       ),
-    [rows, filterSearch, filterSellerId, filterMarketplace, filterCategory],
+    [rows, filterSearch, filterSellerId, filterCategory],
   )
 
   const markDirectionBusy = useCallback((productId: string, pending: boolean) => {
@@ -1230,16 +1264,49 @@ export function FfProductsCatalogScreen({
 
         <Dialog
           open={editProduct !== null}
-          onClose={() => setEditProduct(null)}
+          onClose={() => !editBusy && setEditProduct(null)}
           fullWidth
           maxWidth="sm"
           data-testid="ff-packaging-dialog"
         >
-          <DialogTitle>ТЗ на упаковку</DialogTitle>
+          <DialogTitle>Карточка товара</DialogTitle>
           <DialogContent>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
               {editProduct?.sku_code} · {editProduct?.name}
             </Typography>
+            {editOzonError ? (
+              <Alert severity="error" sx={{ mb: 2 }} data-testid="ff-ozon-link-error">
+                {editOzonError}
+              </Alert>
+            ) : null}
+            <Stack spacing={1.5} sx={{ mb: 2 }}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Артикул Wildberries"
+                value={editProduct?.wb_vendor_code ?? ''}
+                disabled
+              />
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="SKU Ozon"
+                  value={editOzonSku}
+                  onChange={(event) => setEditOzonSku(event.target.value)}
+                  slotProps={{ htmlInput: { 'data-testid': 'ff-product-ozon-sku' } }}
+                />
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Артикул Ozon"
+                  value={editOzonOfferId}
+                  onChange={(event) => setEditOzonOfferId(event.target.value)}
+                  slotProps={{ htmlInput: { 'data-testid': 'ff-product-ozon-offer' } }}
+                />
+              </Stack>
+            </Stack>
+            <Divider sx={{ mb: 1 }} />
             <FormControlLabel
               control={
                 <Checkbox

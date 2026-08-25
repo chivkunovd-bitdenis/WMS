@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import uuid
+from base64 import b64decode
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -54,6 +55,16 @@ from app.services.fbs_supply_reconcile_service import (
     reconcile_supply_delivered,
     request_hash_for_deliver,
 )
+from app.services.marketplace_account_service import (
+    MarketplaceAccountError,
+    MarketplaceAccountService,
+)
+from app.services.marketplace_provider import (
+    FakeMarketplaceTransport,
+    MarketplaceProviderError,
+    OzonMarketplaceProvider,
+    provider_error_message,
+)
 from app.services.wb_marketplace_orders_service import (
     _apply_wb_status_to_order,
     _supplier_status_from_row,
@@ -95,6 +106,10 @@ _DELIVER_BLOCKED_SUPPLY_STATUSES = frozenset(
 logger = logging.getLogger(__name__)
 
 _WB_DISPATCH_PENDING_MESSAGE = "fix them to dispatch items"
+_FAKE_OZON_SUPPLY_QR = b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAE"
+    "hQGAhKmMIQAAAABJRU5ErkJggg=="
+)
 
 
 class FbsShipmentError(Exception):
@@ -400,6 +415,7 @@ def _build_delivery_checks(
     orders: list[FbsOrder],
     *,
     cargo_qr_ready: bool,
+    boxes_required: bool = True,
     has_physical_boxes: bool = True,
     without_distribution: bool = False,
     unassigned_packed_order_ids: frozenset[uuid.UUID] = frozenset(),
@@ -542,7 +558,7 @@ def _build_delivery_checks(
                 )
             )
 
-    if not has_physical_boxes:
+    if boxes_required and not has_physical_boxes:
         checks.append(
             DeliveryCheck(
                 code="physical_boxes_required",
@@ -550,7 +566,7 @@ def _build_delivery_checks(
                 ok=False,
             )
         )
-    if without_distribution and has_physical_boxes:
+    if boxes_required and without_distribution and has_physical_boxes:
         checks.append(
             DeliveryCheck(
                 code="boxes_without_distribution",
@@ -666,10 +682,33 @@ async def preflight_delivery(
     if supply.delivery_type not in _DELIVER_ALLOWED_DELIVERY_TYPES:
         raise FbsShipmentError("wrong_delivery_type")
 
+    if supply.marketplace == "ozon":
+        await _ozon_credentials(session, tenant_id, supply.seller_id)
+        orders = await _load_supply_orders_read(session, tenant_id, supply.id)
+        checks = _build_delivery_checks(
+            supply,
+            orders,
+            cargo_qr_ready=True,
+            boxes_required=False,
+        )
+        checked_at = datetime.now(UTC)
+        version = _compute_preflight_version(
+            supply,
+            orders,
+            cargo_qr_ready=True,
+            has_physical_boxes=False,
+            without_distribution=False,
+            unassigned_packed_order_ids=frozenset(),
+        )
+        return DeliveryPreflightResult(
+            can_deliver=all(check.ok for check in checks),
+            version=version,
+            checked_at=checked_at,
+            checks=tuple(checks),
+        )
+
     token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
-    orders = await _sync_supply_orders_from_wb(
-        session, tenant_id, supply, http_client, token
-    )
+    orders = await _sync_supply_orders_from_wb(session, tenant_id, supply, http_client, token)
     cargo_qr_ready = True
     if supply.delivery_type == FBS_DELIVERY_TYPE_PVZ:
         cargo_qr_ready = await pvz_svc.supply_has_ready_cargo_place_qrs(
@@ -773,7 +812,7 @@ async def _persist_confirmed_delivery(
     orders: list[FbsOrder],
     operation: Any,
 ) -> None:
-    """Durably checkpoint WB delivery before fetching its optional QR asset."""
+    """Durably checkpoint marketplace delivery before fetching its optional QR asset."""
     await _apply_local_delivered(session, supply, orders)
     await mark_deliver_operation_confirmed(
         session,
@@ -786,6 +825,168 @@ async def _persist_confirmed_delivery(
     await session.commit()
 
 
+async def _ozon_credentials(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+) -> tuple[str, str]:
+    try:
+        return await MarketplaceAccountService(session).stored_credentials(
+            tenant_id,
+            seller_id,
+        )
+    except MarketplaceAccountError as exc:
+        raise FbsShipmentError(
+            exc.code,
+            message="Кабинет Ozon не подключён.",
+            http_status=409,
+        ) from exc
+
+
+async def _store_ozon_supply_qr(
+    session: AsyncSession,
+    supply: FbsSupply,
+    provider: OzonMarketplaceProvider,
+    *,
+    client_id: str,
+    api_key: str,
+) -> bytes:
+    external_supply_id = supply.external_supply_id or supply.wb_supply_id
+    try:
+        png_bytes = await provider.fetch_supply_qr(
+            client_id=client_id,
+            api_key=api_key,
+            supply_id=external_supply_id,
+        )
+    except MarketplaceProviderError as exc:
+        raise FbsShipmentError(
+            exc.code,
+            message=provider_error_message(exc),
+            retryable=exc.status_code in {429, 500, 502, 503, 504},
+            http_status=exc.status_code or 502,
+        ) from exc
+    if not png_bytes:
+        raise FbsShipmentError(
+            "ozon_supply_qr_missing",
+            message="Ozon не вернул QR поставки.",
+            http_status=502,
+        )
+    try:
+        await upsert_supply_qr_asset_from_bytes(
+            session,
+            tenant_id=supply.tenant_id,
+            supply=supply,
+            png_bytes=png_bytes,
+        )
+    except FbsPrintAssetStorageError as exc:
+        raise FbsShipmentError(exc.code) from exc
+    await session.flush()
+    return png_bytes
+
+
+async def _deliver_ozon_supply(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    *,
+    idempotency_key: str,
+    request_hash: str,
+    existing: Any,
+    provider: OzonMarketplaceProvider | None,
+) -> FbsSupply:
+    supply = await _get_supply_for_update(
+        session,
+        tenant_id,
+        supply_id,
+        with_trbxes=True,
+    )
+    if supply is None:
+        raise FbsShipmentError("supply_not_found")
+    if supply.delivery_type not in _DELIVER_ALLOWED_DELIVERY_TYPES:
+        raise FbsShipmentError("wrong_delivery_type")
+
+    client_id, api_key = await _ozon_credentials(
+        session,
+        tenant_id,
+        supply.seller_id,
+    )
+    selected_provider = provider or OzonMarketplaceProvider(
+        transport=FakeMarketplaceTransport(supply_qr=_FAKE_OZON_SUPPLY_QR)
+    )
+    if existing is not None:
+        if existing.request_hash and existing.request_hash != request_hash:
+            raise FbsShipmentError("idempotency_key_reused", http_status=409)
+        if existing.state == WB_OPERATION_STATE_CONFIRMED:
+            if supply.barcode_asset_id is None:
+                await _store_ozon_supply_qr(
+                    session,
+                    supply,
+                    selected_provider,
+                    client_id=client_id,
+                    api_key=api_key,
+                )
+            return supply
+        if existing.state == WB_OPERATION_STATE_PENDING:
+            raise FbsShipmentError(
+                "operation_in_progress",
+                message="Передача в Ozon уже выполняется.",
+                retryable=True,
+                http_status=503,
+            )
+
+    if supply.status in _DELIVER_BLOCKED_SUPPLY_STATUSES:
+        raise FbsShipmentError("supply_bad_status", http_status=409)
+    orders = await _load_locked_supply_orders(session, tenant_id, supply.id)
+    _validate_checks_pass(
+        _build_delivery_checks(
+            supply,
+            orders,
+            cargo_qr_ready=True,
+            boxes_required=False,
+        )
+    )
+    operation = existing or await create_pending_deliver_operation(
+        session,
+        tenant_id=tenant_id,
+        seller_id=supply.seller_id,
+        idempotency_key=idempotency_key,
+        request_hash=request_hash,
+        local_supply_id=supply.id,
+        confirmed_preflight_version=None,
+    )
+    external_supply_id = supply.external_supply_id or supply.wb_supply_id
+    try:
+        await selected_provider.deliver_supply(
+            client_id=client_id,
+            api_key=api_key,
+            supply_id=external_supply_id,
+        )
+    except MarketplaceProviderError as exc:
+        await mark_operation_failed(
+            session,
+            operation,
+            error_code=exc.code,
+            local_supply_id=supply.id,
+            wb_supply_id=external_supply_id,
+        )
+        raise FbsShipmentError(
+            exc.code,
+            message=provider_error_message(exc),
+            retryable=exc.status_code in {429, 500, 502, 503, 504},
+            http_status=exc.status_code or 502,
+        ) from exc
+
+    await _persist_confirmed_delivery(session, supply, orders, operation)
+    await _store_ozon_supply_qr(
+        session,
+        supply,
+        selected_provider,
+        client_id=client_id,
+        api_key=api_key,
+    )
+    return supply
+
+
 async def deliver_supply(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -794,6 +995,7 @@ async def deliver_supply(
     *,
     idempotency_key: str,
     confirmed_preflight_version: str | None = None,
+    ozon_provider: OzonMarketplaceProvider | None = None,
 ) -> FbsSupply:
     if not idempotency_key.strip():
         raise FbsShipmentError("missing_idempotency_key")
@@ -809,6 +1011,16 @@ async def deliver_supply(
     existing = await get_deliver_operation_by_idempotency(
         session, supply_read.seller_id, idempotency_key
     )
+    if supply_read.marketplace == "ozon":
+        return await _deliver_ozon_supply(
+            session,
+            tenant_id,
+            supply_id,
+            idempotency_key=idempotency_key,
+            request_hash=request_hash,
+            existing=existing,
+            provider=ozon_provider,
+        )
     if existing is not None:
         if (
             existing.request_hash
@@ -1086,6 +1298,26 @@ async def get_supply_barcode(
         if cached.is_file():
             return cached.read_bytes()
 
+    if supply.marketplace == "ozon":
+        client_id, api_key = await _ozon_credentials(
+            session,
+            tenant_id,
+            supply.seller_id,
+        )
+        provider = OzonMarketplaceProvider(
+            transport=FakeMarketplaceTransport(supply_qr=_FAKE_OZON_SUPPLY_QR)
+        )
+        png_bytes = await _store_ozon_supply_qr(
+            session,
+            supply,
+            provider,
+            client_id=client_id,
+            api_key=api_key,
+        )
+        supply.barcode_file = _save_barcode_png(supply.id, png_bytes)
+        await session.flush()
+        return png_bytes
+
     token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
     try:
         png_bytes = await fetch_marketplace_supply_barcode(
@@ -1121,6 +1353,23 @@ async def retry_supply_qr(
         raise FbsShipmentError("supply_not_found")
     if supply.status not in {FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE}:
         raise FbsShipmentError("supply_bad_status", http_status=409)
+
+    if supply.marketplace == "ozon":
+        client_id, api_key = await _ozon_credentials(
+            session,
+            tenant_id,
+            supply.seller_id,
+        )
+        await _store_ozon_supply_qr(
+            session,
+            supply,
+            OzonMarketplaceProvider(
+                transport=FakeMarketplaceTransport(supply_qr=_FAKE_OZON_SUPPLY_QR)
+            ),
+            client_id=client_id,
+            api_key=api_key,
+        )
+        return supply
 
     token = await _require_marketplace_token(session, tenant_id, supply.seller_id)
     await _fetch_supply_qr_after_deliver(session, supply, http_client, token)

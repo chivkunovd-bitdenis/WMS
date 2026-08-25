@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import httpx
 from sqlalchemy import or_, select
@@ -23,7 +23,11 @@ from app.services.fbs_cancellation_service import FbsCancellationError, sync_sel
 from app.services.fbs_stock_sync_service import FbsStockSyncError, sync_binding_stocks
 from app.services.fbs_tracking_service import FbsTrackingError, sync_in_delivery_supplies
 from app.services.fbs_warehouse_binding_service import is_auto_fbs_wms_warehouse
-from app.services.marketplace_provider import MarketplaceProviderError
+from app.services.marketplace_provider import (
+    MarketplaceBackoff,
+    MarketplaceProviderError,
+    provider_error_message,
+)
 from app.services.marketplace_seller_lock_service import marketplace_seller_lock
 from app.services.wb_marketplace_orders_service import (
     WbMarketplaceOrdersError,
@@ -31,6 +35,7 @@ from app.services.wb_marketplace_orders_service import (
 )
 
 logger = logging.getLogger(__name__)
+_MARKETPLACE_BACKOFF = MarketplaceBackoff()
 
 
 @dataclass(frozen=True)
@@ -49,6 +54,7 @@ class FbsAutopollCycleResult:
     seller_errors: int
     stocks_bindings_processed: int = 0
     stock_errors: int = 0
+    marketplace_breakdown: dict[str, dict[str, int]] = field(default_factory=dict)
 
 
 @dataclass
@@ -60,6 +66,36 @@ class SellerStockSyncResult:
     conflicts: int = 0
     errors: int = 0
     binding_errors: int = 0
+
+
+def _marketplace_bucket(
+    breakdown: dict[str, dict[str, int]],
+    marketplace: str,
+) -> dict[str, int]:
+    return breakdown.setdefault(
+        marketplace,
+        {
+            "pairs": 0,
+            "successful_pairs": 0,
+            "orders_upserted": 0,
+            "orders_created": 0,
+            "statuses_updated": 0,
+            "bindings_processed": 0,
+            "errors": 0,
+            "backoff_skips": 0,
+        },
+    )
+
+
+def _record_provider_backoff(error: MarketplaceProviderError) -> None:
+    if error.status_code != 429:
+        return
+    retry_after = error.payload.get("retry_after_seconds", 60)
+    delay = float(retry_after) if isinstance(retry_after, (int, float)) else 60.0
+    _MARKETPLACE_BACKOFF.record_rate_limit(
+        error.marketplace,
+        retry_after_seconds=delay,
+    )
 
 
 async def list_sellers_with_marketplace_token(
@@ -412,11 +448,21 @@ async def poll_fbs_orders_all_sellers(
     seller_errors = 0
     stocks_bindings_processed = 0
     stock_errors = 0
+    marketplace_breakdown: dict[str, dict[str, int]] = {}
 
     logger.info("fbs autopoll orders: starting cycle for %s seller/provider pairs", len(targets))
 
     async with httpx.AsyncClient() as http_client:
         for target in targets:
+            bucket = _marketplace_bucket(marketplace_breakdown, target.marketplace)
+            bucket["pairs"] += 1
+            if _MARKETPLACE_BACKOFF.remaining_seconds(target.marketplace) > 0:
+                bucket["backoff_skips"] += 1
+                logger.info(
+                    "fbs autopoll orders skipped provider backoff marketplace %s",
+                    target.marketplace,
+                )
+                continue
             try:
                 async with (
                     SessionLocal() as session,
@@ -439,10 +485,26 @@ async def poll_fbs_orders_all_sellers(
                         http_client,
                         include_history=include_history,
                     )
-            except (WbMarketplaceOrdersError, MarketplaceProviderError) as exc:
+            except MarketplaceProviderError as exc:
+                _record_provider_backoff(exc)
                 seller_errors += 1
+                bucket["errors"] += 1
+                log = logger.warning if exc.is_account_blocked else logger.error
+                log(
+                    "fbs autopoll orders failed for seller %s marketplace %s "
+                    "(tenant %s): %s",
+                    target.seller_id,
+                    target.marketplace,
+                    target.tenant_id,
+                    provider_error_message(exc),
+                )
+                continue
+            except WbMarketplaceOrdersError as exc:
+                seller_errors += 1
+                bucket["errors"] += 1
                 logger.error(
-                    "fbs autopoll orders failed for seller %s marketplace %s (tenant %s): %s",
+                    "fbs autopoll orders failed for seller %s marketplace %s "
+                    "(tenant %s): %s",
                     target.seller_id,
                     target.marketplace,
                     target.tenant_id,
@@ -451,6 +513,7 @@ async def poll_fbs_orders_all_sellers(
                 continue
             except Exception:
                 seller_errors += 1
+                bucket["errors"] += 1
                 logger.exception(
                     "fbs autopoll orders failed for seller %s marketplace %s (tenant %s)",
                     target.seller_id,
@@ -460,15 +523,20 @@ async def poll_fbs_orders_all_sellers(
                 continue
 
             sellers_polled += 1
+            bucket["successful_pairs"] += 1
             orders_upserted += stats["orders_upserted"]
             orders_created += stats["orders_created"]
             statuses_updated += stats["statuses_updated"]
             stocks_bindings_processed += stats["stocks_bindings_processed"]
             stock_errors += stats["stock_errors"]
+            bucket["orders_upserted"] += stats["orders_upserted"]
+            bucket["orders_created"] += stats["orders_created"]
+            bucket["statuses_updated"] += stats["statuses_updated"]
+            bucket["bindings_processed"] += stats["stocks_bindings_processed"]
 
     logger.info(
         "fbs autopoll orders done: sellers=%s upserted=%s created=%s statuses=%s "
-        "stocks_bindings=%s stock_errors=%s errors=%s",
+        "stocks_bindings=%s stock_errors=%s errors=%s marketplace=%s",
         sellers_polled,
         orders_upserted,
         orders_created,
@@ -476,6 +544,7 @@ async def poll_fbs_orders_all_sellers(
         stocks_bindings_processed,
         stock_errors,
         seller_errors,
+        marketplace_breakdown,
     )
     return FbsAutopollCycleResult(
         sellers_polled=sellers_polled,
@@ -485,6 +554,7 @@ async def poll_fbs_orders_all_sellers(
         seller_errors=seller_errors,
         stocks_bindings_processed=stocks_bindings_processed,
         stock_errors=stock_errors,
+        marketplace_breakdown=marketplace_breakdown,
     )
 
 
@@ -500,11 +570,17 @@ async def sync_fbs_order_statuses_all_sellers() -> FbsAutopollCycleResult:
     sellers_polled = 0
     statuses_updated = 0
     seller_errors = 0
+    marketplace_breakdown: dict[str, dict[str, int]] = {}
 
     logger.info("fbs autopoll statuses: starting cycle for %s sellers", len(targets))
 
     async with httpx.AsyncClient() as http_client:
         for target in targets:
+            bucket = _marketplace_bucket(marketplace_breakdown, target.marketplace)
+            bucket["pairs"] += 1
+            if _MARKETPLACE_BACKOFF.remaining_seconds(target.marketplace) > 0:
+                bucket["backoff_skips"] += 1
+                continue
             try:
                 async with (
                     SessionLocal() as session,
@@ -525,14 +601,26 @@ async def sync_fbs_order_statuses_all_sellers() -> FbsAutopollCycleResult:
                         session, target, http_client
                     )
                     await session.commit()
-            except (
-                WbMarketplaceOrdersError,
-                FbsCancellationError,
-                MarketplaceProviderError,
-            ) as exc:
+            except MarketplaceProviderError as exc:
+                _record_provider_backoff(exc)
                 seller_errors += 1
+                bucket["errors"] += 1
+                log = logger.warning if exc.is_account_blocked else logger.error
+                log(
+                    "fbs autopoll statuses failed for seller %s marketplace %s "
+                    "(tenant %s): %s",
+                    target.seller_id,
+                    target.marketplace,
+                    target.tenant_id,
+                    provider_error_message(exc),
+                )
+                continue
+            except (WbMarketplaceOrdersError, FbsCancellationError) as exc:
+                seller_errors += 1
+                bucket["errors"] += 1
                 logger.error(
-                    "fbs autopoll statuses failed for seller %s marketplace %s (tenant %s): %s",
+                    "fbs autopoll statuses failed for seller %s marketplace %s "
+                    "(tenant %s): %s",
                     target.seller_id,
                     target.marketplace,
                     target.tenant_id,
@@ -541,6 +629,7 @@ async def sync_fbs_order_statuses_all_sellers() -> FbsAutopollCycleResult:
                 continue
             except Exception:
                 seller_errors += 1
+                bucket["errors"] += 1
                 logger.exception(
                     "fbs autopoll statuses failed for seller %s (tenant %s)",
                     target.seller_id,
@@ -550,12 +639,15 @@ async def sync_fbs_order_statuses_all_sellers() -> FbsAutopollCycleResult:
 
             sellers_polled += 1
             statuses_updated += updated
+            bucket["successful_pairs"] += 1
+            bucket["statuses_updated"] += updated
 
     logger.info(
-        "fbs autopoll statuses done: sellers=%s statuses=%s errors=%s",
+        "fbs autopoll statuses done: sellers=%s statuses=%s errors=%s marketplace=%s",
         sellers_polled,
         statuses_updated,
         seller_errors,
+        marketplace_breakdown,
     )
     return FbsAutopollCycleResult(
         sellers_polled=sellers_polled,
@@ -563,6 +655,7 @@ async def sync_fbs_order_statuses_all_sellers() -> FbsAutopollCycleResult:
         orders_created=0,
         statuses_updated=statuses_updated,
         seller_errors=seller_errors,
+        marketplace_breakdown=marketplace_breakdown,
     )
 
 
@@ -581,11 +674,17 @@ async def reconcile_fbs_stocks_all_sellers() -> FbsAutopollCycleResult:
     bindings_processed = 0
     seller_errors = 0
     stock_errors = 0
+    marketplace_breakdown: dict[str, dict[str, int]] = {}
 
     logger.info("fbs stock reconcile: starting cycle for %s sellers", len(targets))
 
     async with httpx.AsyncClient() as http_client:
         for target in targets:
+            bucket = _marketplace_bucket(marketplace_breakdown, target.marketplace)
+            bucket["pairs"] += 1
+            if _MARKETPLACE_BACKOFF.remaining_seconds(target.marketplace) > 0:
+                bucket["backoff_skips"] += 1
+                continue
             try:
                 async with (
                     SessionLocal() as session,
@@ -608,11 +707,28 @@ async def reconcile_fbs_stocks_all_sellers() -> FbsAutopollCycleResult:
                         http_client,
                     )
                     await session.commit()
+            except MarketplaceProviderError as exc:
+                _record_provider_backoff(exc)
+                seller_errors += 1
+                bucket["errors"] += 1
+                log = logger.warning if exc.is_account_blocked else logger.error
+                log(
+                    "fbs stock reconcile failed for seller %s marketplace %s "
+                    "(tenant %s): %s",
+                    target.seller_id,
+                    target.marketplace,
+                    target.tenant_id,
+                    provider_error_message(exc),
+                )
+                continue
             except Exception:
                 seller_errors += 1
+                bucket["errors"] += 1
                 logger.exception(
-                    "fbs stock reconcile failed for seller %s (tenant %s)",
+                    "fbs stock reconcile failed for seller %s marketplace %s "
+                    "(tenant %s)",
                     target.seller_id,
+                    target.marketplace,
                     target.tenant_id,
                 )
                 continue
@@ -620,13 +736,18 @@ async def reconcile_fbs_stocks_all_sellers() -> FbsAutopollCycleResult:
             sellers_polled += 1
             bindings_processed += result.bindings_processed
             stock_errors += result.binding_errors
+            bucket["successful_pairs"] += 1
+            bucket["bindings_processed"] += result.bindings_processed
+            bucket["errors"] += result.binding_errors
 
     logger.info(
-        "fbs stock reconcile done: sellers=%s bindings=%s stock_errors=%s errors=%s",
+        "fbs stock reconcile done: sellers=%s bindings=%s stock_errors=%s "
+        "errors=%s marketplace=%s",
         sellers_polled,
         bindings_processed,
         stock_errors,
         seller_errors,
+        marketplace_breakdown,
     )
     return FbsAutopollCycleResult(
         sellers_polled=sellers_polled,
@@ -636,4 +757,5 @@ async def reconcile_fbs_stocks_all_sellers() -> FbsAutopollCycleResult:
         seller_errors=seller_errors,
         stocks_bindings_processed=bindings_processed,
         stock_errors=stock_errors,
+        marketplace_breakdown=marketplace_breakdown,
     )

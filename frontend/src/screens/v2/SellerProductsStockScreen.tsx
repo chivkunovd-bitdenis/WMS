@@ -40,6 +40,8 @@ type WbCatalogRow = {
   name: string
   wb_vendor_code: string | null
   wb_nm_id: number | null
+  ozon_sku: string | null
+  ozon_offer_id: string | null
   wb_subject_name: string | null
   wb_primary_image_url: string | null
   wb_barcodes: string[]
@@ -81,6 +83,8 @@ function matchesCatalogSearch(
   row: {
     name: string
     wb_vendor_code: string | null
+    ozon_sku: string | null
+    ozon_offer_id: string | null
     sku_code: string
     wb_primary_barcode: string | null
     wb_barcodes: string[]
@@ -89,7 +93,15 @@ function matchesCatalogSearch(
 ): boolean {
   const needle = query.trim().toLowerCase()
   if (!needle) return true
-  const haystack = [row.name, row.wb_vendor_code ?? '', row.sku_code, row.wb_primary_barcode ?? '', ...row.wb_barcodes]
+  const haystack = [
+    row.name,
+    row.wb_vendor_code ?? '',
+    row.ozon_sku ?? '',
+    row.ozon_offer_id ?? '',
+    row.sku_code,
+    row.wb_primary_barcode ?? '',
+    ...row.wb_barcodes,
+  ]
     .join(' ')
     .toLowerCase()
   return haystack.includes(needle)
@@ -121,6 +133,7 @@ export function SellerProductsStockScreen({
   // ── Фильтры над таблицей (перенесены из каталога фулфилмента, CAT-20) ─────
   const [filterSearch, setFilterSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
+  const [filterMarketplace, setFilterMarketplace] = useState<'wildberries' | 'ozon' | ''>('')
 
   // ── Резервы: список направлений остатка, только чтение (CAT-20) ──────────
   const [reservesProductId, setReservesProductId] = useState<string | null>(null)
@@ -190,19 +203,34 @@ export function SellerProductsStockScreen({
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'ru'))
   }, [rows])
 
+  const hasMixedMarketplaces = useMemo(
+    () =>
+      rows.some((row) => row.wb_nm_id != null || Boolean(row.wb_vendor_code)) &&
+      rows.some((row) => Boolean(row.ozon_sku || row.ozon_offer_id)),
+    [rows],
+  )
+
+  useEffect(() => {
+    if (!hasMixedMarketplaces) setFilterMarketplace('')
+  }, [hasMixedMarketplaces])
+
   const filteredRows = useMemo(
     () =>
       rows.filter(
         (row) =>
           matchesCatalogSearch(row, filterSearch) &&
+          (!filterMarketplace ||
+            (filterMarketplace === 'wildberries'
+              ? Boolean(row.wb_nm_id != null || row.wb_vendor_code)
+              : Boolean(row.ozon_sku || row.ozon_offer_id))) &&
           (!filterCategory || row.wb_subject_name === filterCategory),
       ),
-    [rows, filterSearch, filterCategory],
+    [rows, filterSearch, filterMarketplace, filterCategory],
   )
 
   useEffect(() => {
     setPage(0)
-  }, [filterSearch, filterCategory])
+  }, [filterSearch, filterMarketplace, filterCategory])
 
   const pagedRows = useMemo(() => {
     const start = page * rowsPerPage
@@ -423,7 +451,7 @@ export function SellerProductsStockScreen({
         Товары
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Каталог товаров, синхронизированных из WB. Остаток и резервы здесь только для
+        Каталог товаров, синхронизированных из маркетплейсов. Остаток и резервы здесь только для
         просмотра — их настраивает фулфилмент на своём экране каталога.
       </Typography>
 
@@ -498,6 +526,24 @@ export function SellerProductsStockScreen({
               ))}
             </Select>
           </FormControl>
+          {hasMixedMarketplaces ? (
+            <FormControl size="small" sx={{ minWidth: 170 }}>
+              <InputLabel id="seller-catalog-marketplace-filter-label">Маркетплейс</InputLabel>
+              <Select
+                labelId="seller-catalog-marketplace-filter-label"
+                label="Маркетплейс"
+                value={filterMarketplace}
+                onChange={(event) =>
+                  setFilterMarketplace(event.target.value as 'wildberries' | 'ozon' | '')
+                }
+                data-testid="seller-catalog-marketplace-filter"
+              >
+                <MenuItem value="">Все</MenuItem>
+                <MenuItem value="wildberries">Wildberries</MenuItem>
+                <MenuItem value="ozon">Ozon</MenuItem>
+              </Select>
+            </FormControl>
+          ) : null}
           <Typography variant="body2" color="text.secondary" data-testid="seller-catalog-filter-count">
             Найдено: {filteredRows.length} из {rows.length}
           </Typography>
@@ -597,9 +643,19 @@ export function SellerProductsStockScreen({
                   <ProductPhotoThumb src={p.wb_primary_image_url} />
                 </TableCell>
                 <TableCell>
-                  <Typography variant="body2" sx={{ fontWeight: 600 }} title={p.name} noWrap>
-                    {p.name}
-                  </Typography>
+                  <Stack spacing={0.5} sx={{ alignItems: 'flex-start', minWidth: 0 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }} title={p.name} noWrap>
+                      {p.name}
+                    </Typography>
+                    {p.ozon_sku || p.ozon_offer_id ? (
+                      <Chip
+                        size="small"
+                        label="Ozon"
+                        variant="outlined"
+                        data-testid="seller-catalog-marketplace-ozon"
+                      />
+                    ) : null}
+                  </Stack>
                 </TableCell>
                 <TableCell>
                   <Typography variant="body2" title={p.wb_vendor_code ?? '—'} noWrap>

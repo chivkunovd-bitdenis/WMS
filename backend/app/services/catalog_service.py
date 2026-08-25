@@ -798,6 +798,19 @@ async def update_ozon_product_link(
     normalized_offer = (ozon_offer_id or "").strip() or None
     if normalized_sku is None and normalized_offer is None:
         raise CatalogError("ozon_link_required")
+    if normalized_sku is not None:
+        existing_product_id = await session.scalar(
+            select(ProductMarketplaceLink.product_id).where(
+                ProductMarketplaceLink.tenant_id == tenant_id,
+                ProductMarketplaceLink.seller_id == product.seller_id,
+                ProductMarketplaceLink.marketplace == "ozon",
+                ProductMarketplaceLink.external_sku == normalized_sku,
+                ProductMarketplaceLink.product_id != product_id,
+                ProductMarketplaceLink.is_active.is_(True),
+            )
+        )
+        if existing_product_id is not None:
+            raise CatalogError("ozon_sku_taken")
     link = (
         await session.execute(
             select(ProductMarketplaceLink).where(

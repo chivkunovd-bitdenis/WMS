@@ -1,15 +1,13 @@
 import { expect, test } from '@playwright/test'
 
 import { waitForGetOk, waitForPostOk } from './api-waits'
-import { openFulfillmentRegistration } from './auth-flow'
+import { loginAsSeller, openFulfillmentRegistration } from './auth-flow'
 
-test('catalog products: filter works before search and Ozon link is edited in the SKU card', async ({ page }) => {
-  const stamp = Date.now()
-  const email = `e2e-catalog-ozon-${stamp}@example.com`
+async function registerAdmin(page: import('@playwright/test').Page, stamp: number) {
   await page.goto('/')
   await openFulfillmentRegistration(page)
   await page.getByTestId('register-form').getByLabel('Организация').fill('E2E Catalog Ozon')
-  await page.getByTestId('register-form').getByLabel('Email администратора').fill(email)
+  await page.getByTestId('register-form').getByLabel('Email администратора').fill(`e2e-catalog-ozon-${stamp}@example.com`)
   await page.getByTestId('register-form').getByLabel('Пароль').fill('password123')
   await Promise.all([
     waitForPostOk(page, '/api/auth/register'),
@@ -17,93 +15,117 @@ test('catalog products: filter works before search and Ozon link is edited in th
     page.getByTestId('register-form').getByRole('button', { name: 'Создать аккаунт' }).click(),
   ])
   const token = (await page.evaluate(() => localStorage.getItem('wms_token_ff'))) ?? ''
-  const headers = { Authorization: `Bearer ${token}` }
-  const seller = await page.request.post('/api/sellers', { headers, data: { name: 'Catalog Ozon seller' } })
-  const wbSeller = await page.request.post('/api/sellers', { headers, data: { name: 'WB-only seller' } })
+  return { Authorization: `Bearer ${token}` }
+}
+
+async function createProduct(
+  page: import('@playwright/test').Page,
+  headers: Record<string, string>,
+  sellerId: string,
+  name: string,
+  sku: string,
+  wbVendorCode?: string,
+) {
+  const response = await page.request.post('/api/products', {
+    headers,
+    data: {
+      name,
+      sku_code: sku,
+      seller_id: sellerId,
+      length_mm: 1,
+      width_mm: 1,
+      height_mm: 1,
+      ...(wbVendorCode ? { wb_vendor_code: wbVendorCode } : {}),
+    },
+  })
+  expect(response.ok()).toBeTruthy()
+  return (await response.json()) as { id: string }
+}
+
+test('S-16: server marketplace filter and warehouse-only Ozon binding feedback', async ({ page }) => {
+  const stamp = Date.now()
+  const headers = await registerAdmin(page, stamp)
+  const seller = await page.request.post('/api/sellers', { headers, data: { name: 'Catalog seller' } })
   expect(seller.ok()).toBeTruthy()
-  expect(wbSeller.ok()).toBeTruthy()
-  const sellerId = (await seller.json()).id
-  const wbSellerId = (await wbSeller.json()).id
-  const sellerEmail = `e2e-catalog-ozon-seller-${stamp}@example.com`
-  const sellerAccount = await page.request.post('/api/auth/seller-accounts', {
+  const sellerId = String(((await seller.json()) as { id: string }).id)
+  const linked = await createProduct(page, headers, sellerId, 'Already linked', `LINKED-${stamp}`, `WB-LINKED-${stamp}`)
+  const editable = await createProduct(page, headers, sellerId, 'Warehouse editable', `EDIT-${stamp}`, `WB-EDIT-${stamp}`)
+  const duplicateSku = `OZON-DUP-${stamp}`
+  const link = await page.request.patch(`/api/products/${linked.id}/ozon-link`, {
+    headers,
+    data: { ozon_sku: duplicateSku, ozon_offer_id: `OFFER-DUP-${stamp}` },
+  })
+  expect(link.ok()).toBeTruthy()
+
+  await page.goto('/app/ff/products')
+  await expect(page.getByTestId('ff-products-table')).toBeVisible()
+  const filterResponse = page.waitForResponse((response) =>
+    response.url().includes('/api/products/ff-catalog?marketplace=ozon') && response.ok(),
+  )
+  await page.getByTestId('ff-catalog-marketplace-filter').click()
+  await page.getByRole('option', { name: 'Ozon', exact: true }).click()
+  await filterResponse
+  const linkedRow = page.getByTestId('ff-product-row').filter({ hasText: 'Already linked' })
+  await expect(linkedRow).toBeVisible()
+  await expect(linkedRow).toContainText(`WB-LINKED-${stamp}`)
+  await expect(linkedRow.getByTestId('ff-catalog-marketplace-ozon')).toHaveText('Ozon')
+
+  await page.getByTestId('ff-catalog-marketplace-filter').click()
+  await page.getByRole('option', { name: 'Все', exact: true }).click()
+  const editableRow = page.getByTestId('ff-product-row').filter({ hasText: 'Warehouse editable' })
+  await editableRow.getByTestId(`ff-packaging-edit-${editable.id}`).click()
+  await page.getByTestId('ff-product-ozon-sku').fill(duplicateSku)
+  await page.getByTestId('ff-product-ozon-offer').fill(`EDIT-OFFER-${stamp}`)
+  await page.getByTestId('ff-packaging-save').click()
+  await expect(page.getByTestId('ff-ozon-link-error')).toHaveText('Этот SKU уже привязан к другому товару.')
+
+  const uniqueSku = `OZON-UNIQUE-${stamp}`
+  await page.getByTestId('ff-product-ozon-sku').fill(uniqueSku)
+  await page.getByTestId('ff-packaging-save').click()
+  await expect(page.getByTestId('ff-products-import-notice')).toContainText('Привязка Ozon')
+  await page.screenshot({
+    path: '../docs/evidence/ozon-integration-20260825/S-16/live-browser-corrected.png',
+    fullPage: true,
+  })
+})
+
+test('S-31: seller sees Ozon chip in Name and never receives binding controls', async ({ page }) => {
+  const stamp = Date.now()
+  const headers = await registerAdmin(page, stamp)
+  const seller = await page.request.post('/api/sellers', { headers, data: { name: 'Seller portal catalog' } })
+  expect(seller.ok()).toBeTruthy()
+  const sellerId = String(((await seller.json()) as { id: string }).id)
+  const ozonProduct = await createProduct(page, headers, sellerId, 'Ozon visible item', `OZON-ITEM-${stamp}`)
+  await createProduct(page, headers, sellerId, 'WB visible item', `WB-ITEM-${stamp}`, `WB-OFFER-${stamp}`)
+  const ozonSku = `OZON-S31-${stamp}`
+  const link = await page.request.patch(`/api/products/${ozonProduct.id}/ozon-link`, {
+    headers,
+    data: { ozon_sku: ozonSku, ozon_offer_id: `OZON-OFFER-${stamp}` },
+  })
+  expect(link.ok()).toBeTruthy()
+  const sellerEmail = `e2e-seller-catalog-${stamp}@example.com`
+  const account = await page.request.post('/api/auth/seller-accounts', {
     headers,
     data: { seller_id: sellerId, email: sellerEmail, password: 'password123' },
   })
-  expect(sellerAccount.ok()).toBeTruthy()
-  const sellerLogin = await page.request.post('/api/auth/login', {
-    data: { email: sellerEmail, password: 'password123' },
-  })
-  expect(sellerLogin.ok()).toBeTruthy()
-  const sellerToken = (await sellerLogin.json()).access_token
-  const ozonAccount = await page.request.put('/api/integrations/ozon/self/account', {
-    headers: { Authorization: `Bearer ${sellerToken}` },
-    data: { client_id: 'e2e-client', api_key: 'e2e-key' },
-  })
-  expect(ozonAccount.ok()).toBeTruthy()
-  const ozonSku = `OZON-S31-${stamp}`
-  const product = await page.request.post('/api/products', {
-    headers,
-    data: {
-      name: 'S31 Ozon product', sku_code: `S31-${stamp}`, seller_id: sellerId,
-      length_mm: 1, width_mm: 1, height_mm: 1, ozon_sku: ozonSku, ozon_offer_id: `OFFER-${stamp}`,
-    },
-  })
-  expect(product.ok()).toBeTruthy()
-  const editable = await page.request.post('/api/products', {
-    headers,
-    data: {
-      name: 'S31 existing WMS product', sku_code: `EDIT-${stamp}`, seller_id: sellerId,
-      length_mm: 1, width_mm: 1, height_mm: 1,
-    },
-  })
-  const wbOnly = await page.request.post('/api/products', {
-    headers,
-    data: {
-      name: 'S31 WB-only product', sku_code: `WB-${stamp}`, seller_id: wbSellerId,
-      length_mm: 1, width_mm: 1, height_mm: 1, wb_vendor_code: `WB-OFFER-${stamp}`,
-    },
-  })
-  expect(editable.ok()).toBeTruthy()
-  expect(wbOnly.ok()).toBeTruthy()
-  const editableId = (await editable.json()).id
-  await page.goto('/app/catalog/products')
-  await expect(page.getByTestId('product-table')).toBeVisible()
+  expect(account.ok()).toBeTruthy()
 
-  await page.getByTestId('products-marketplace-filter').selectOption('ozon')
-  await expect(page.getByLabel('Поиск SKU')).toHaveValue('')
-  await expect(page.getByTestId('product-item')).toHaveCount(1)
-  await expect(page.getByTestId('product-item')).toContainText('S31 Ozon product')
+  await loginAsSeller(page, sellerEmail, 'password123', { firstTime: false })
+  await page.goto('/seller/products')
+  await expect(page.getByTestId('seller-products-table')).toBeVisible()
+  const ozonRow = page.getByTestId('seller-product-row').filter({ hasText: 'Ozon visible item' })
+  await expect(ozonRow).toContainText('Ozon visible item')
+  await expect(ozonRow.getByTestId('seller-catalog-marketplace-ozon')).toHaveText('Ozon')
+  await expect(page.getByTestId('seller-catalog-marketplace-filter')).toBeVisible()
+  await expect(page.getByText('Сохранить Ozon', { exact: true })).toHaveCount(0)
+  await expect(page.getByLabel('SKU Ozon')).toHaveCount(0)
+
+  await page.getByTestId('seller-catalog-marketplace-filter').click()
+  await page.getByRole('option', { name: 'Ozon', exact: true }).click()
+  await expect(ozonRow).toBeVisible()
+  await expect(page.getByTestId('seller-product-row').filter({ hasText: 'WB visible item' })).toHaveCount(0)
   await page.screenshot({
-    path: '../docs/evidence/ozon-integration-20260825/S-31/catalog-ozon-filter-before-search.png',
-    fullPage: true,
-  })
-  await page.getByLabel('Поиск SKU').fill(ozonSku)
-  const row = page.getByTestId('product-item').filter({ hasText: 'S31 Ozon product' })
-  await expect(row).toBeVisible()
-  await expect(row.getByTestId('product-marketplace-ozon')).toHaveText('Ozon')
-  await row.click()
-  await expect(page.getByTestId('product-ozon-link')).toContainText(ozonSku)
-
-  await page.getByLabel('Поиск SKU').fill('')
-  await page.getByTestId('products-marketplace-filter').selectOption('')
-  const wbRow = page.getByTestId('product-item').filter({ hasText: 'S31 WB-only product' })
-  await wbRow.click()
-  await expect(page.getByTestId('product-ozon-link-form')).toHaveCount(0)
-  await expect(page.getByTestId('products-marketplace-filter')).toBeVisible()
-
-  const editableRow = page.getByTestId('product-item').filter({ hasText: 'S31 existing WMS product' })
-  await editableRow.click()
-  await expect(page.getByTestId('product-ozon-link-form')).toBeVisible()
-  const updatedSku = `UPDATED-OZON-${stamp}`
-  await page.getByTestId('product-link-ozon-sku').fill(updatedSku)
-  await page.getByTestId('product-link-ozon-offer').fill(`UPDATED-OFFER-${stamp}`)
-  await Promise.all([
-    page.waitForResponse((response) => response.url().includes(`/api/products/${editableId}/ozon-link`) && response.ok()),
-    page.getByTestId('product-link-ozon-submit').click(),
-  ])
-  await expect(page.getByTestId('product-ozon-link')).toContainText(updatedSku)
-  await page.screenshot({
-    path: '../docs/evidence/ozon-integration-20260825/S-31/catalog-ozon-correction.png',
+    path: '../docs/evidence/ozon-integration-20260825/S-31/live-browser-corrected.png',
     fullPage: true,
   })
 })

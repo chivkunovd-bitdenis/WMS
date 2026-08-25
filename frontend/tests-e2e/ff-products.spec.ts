@@ -294,11 +294,18 @@ test('ff products: filters and marks Ozon-linked catalog items without changing 
       width_mm: 1,
       height_mm: 1,
       seller_id: sellerId,
+    },
+  })
+  expect(ozonProduct.ok()).toBeTruthy()
+  const ozonProductId = String(((await ozonProduct.json()) as { id: string }).id)
+  const ozonLink = await page.request.patch(`/api/products/${ozonProductId}/ozon-link`, {
+    headers,
+    data: {
       ozon_sku: ozonSku,
       ozon_offer_id: `OZON-OFFER-${Date.now()}`,
     },
   })
-  expect(ozonProduct.ok()).toBeTruthy()
+  expect(ozonLink.ok()).toBeTruthy()
   const wbOnlyProduct = await page.request.post('/api/products', {
     headers,
     data: {

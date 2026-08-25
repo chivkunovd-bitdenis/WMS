@@ -65,6 +65,63 @@ async def test_autopoll_failure_is_isolated_by_seller_and_marketplace(
     assert result.sellers_polled == 1
     assert result.seller_errors == 1
     assert result.orders_created == 1
+    assert result.marketplace_breakdown["ozon"]["errors"] == 1
+    assert result.marketplace_breakdown["wb"]["successful_pairs"] == 1
+    assert result.marketplace_breakdown["wb"]["orders_created"] == 1
+
+
+@pytest.mark.asyncio
+async def test_autopoll_429_backoff_skips_only_limited_marketplace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services import fbs_autopoll_service as autopoll
+
+    seller_id = uuid.uuid4()
+    tenant_id = uuid.uuid4()
+    targets = [
+        autopoll.SellerPollTarget(tenant_id, seller_id, "ozon"),
+        autopoll.SellerPollTarget(tenant_id, seller_id, "wb"),
+    ]
+    calls: list[str] = []
+
+    async def fake_targets(session: object) -> list[autopoll.SellerPollTarget]:
+        _ = session
+        return targets
+
+    async def fake_poll(
+        session: object,
+        target: autopoll.SellerPollTarget,
+        http_client: object,
+        *,
+        include_history: bool = False,
+    ) -> dict[str, int]:
+        _ = session, http_client, include_history
+        calls.append(target.marketplace)
+        if target.marketplace == "ozon":
+            raise MarketplaceProviderError(
+                "ozon",
+                429,
+                {"retry_after_seconds": 30},
+            )
+        return {
+            "orders_upserted": 0,
+            "orders_created": 0,
+            "statuses_updated": 0,
+            "stocks_bindings_processed": 0,
+            "stock_errors": 0,
+        }
+
+    monkeypatch.setattr(autopoll, "_MARKETPLACE_BACKOFF", MarketplaceBackoff())
+    monkeypatch.setattr(autopoll, "list_marketplace_poll_targets", fake_targets)
+    monkeypatch.setattr(autopoll, "poll_marketplace_orders_for_target", fake_poll)
+
+    first = await autopoll.poll_fbs_orders_all_sellers()
+    second = await autopoll.poll_fbs_orders_all_sellers()
+
+    assert calls == ["ozon", "wb", "wb"]
+    assert first.marketplace_breakdown["ozon"]["errors"] == 1
+    assert second.marketplace_breakdown["ozon"]["backoff_skips"] == 1
+    assert second.marketplace_breakdown["wb"]["successful_pairs"] == 1
 
 
 @pytest.mark.asyncio

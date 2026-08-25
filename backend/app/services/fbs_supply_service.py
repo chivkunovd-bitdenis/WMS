@@ -81,6 +81,17 @@ from app.services.fbs_supply_validator_service import (
 )
 from app.services.fbs_wb_seller_lock_service import wb_seller_lock
 from app.services.fbs_workspace_service import get_supply_workspace
+from app.services.marketplace_account_service import (
+    MarketplaceAccountError,
+    MarketplaceAccountService,
+)
+from app.services.marketplace_provider import (
+    FakeMarketplaceTransport,
+    MarketplaceProviderError,
+    OzonMarketplaceProvider,
+    provider_error_message,
+)
+from app.services.marketplace_seller_lock_service import marketplace_seller_lock
 from app.services.wildberries_client import (
     WildberriesClientError,
     add_order_to_marketplace_supply,
@@ -480,6 +491,7 @@ async def create_supply_from_orders(
     planned_destination: dict[str, Any] | None,
     idempotency_key: str,
     http_client: httpx.AsyncClient,
+    ozon_provider: OzonMarketplaceProvider | None = None,
 ) -> dict[str, Any]:
     if not idempotency_key.strip():
         raise FbsSupplyError("missing_idempotency_key", http_status=400)
@@ -500,6 +512,7 @@ async def create_supply_from_orders(
         raise FbsSupplyError(exc.code) from exc
 
     seller_id = stub_orders[0].seller_id
+    marketplace = stub_orders[0].marketplace or "wb"
     existing_op = await get_operation_by_idempotency(session, seller_id, idempotency_key)
     if existing_op is not None:
         if existing_op.request_hash and existing_op.request_hash != request_hash:
@@ -508,6 +521,29 @@ async def create_supply_from_orders(
                 message="Ключ идемпотентности уже использован с другими параметрами.",
                 retryable=False,
                 http_status=409,
+            )
+        if marketplace == "ozon":
+            if (
+                existing_op.state == WB_OPERATION_STATE_CONFIRMED
+                and existing_op.local_entity_id is not None
+            ):
+                return await get_supply_workspace(
+                    session,
+                    tenant_id,
+                    existing_op.local_entity_id,
+                )
+            if existing_op.state == WB_OPERATION_STATE_FAILED:
+                raise FbsSupplyError(
+                    existing_op.error_code or "operation_failed",
+                    message="Предыдущая попытка создания поставки Ozon завершилась ошибкой.",
+                    retryable=False,
+                    http_status=502,
+                )
+            raise FbsSupplyError(
+                "operation_in_progress",
+                message="Создание поставки Ozon уже выполняется.",
+                retryable=True,
+                http_status=503,
             )
         return await _resume_from_orders_operation(
             session,
@@ -539,13 +575,19 @@ async def create_supply_from_orders(
     # строки заказов на запись. Иначе ожидание очереди (до полутора минут) держало бы
     # заблокированными строки заказов и соединение с базой — как раз в момент, когда
     # несколько операторов жмут «Создать поставку» одновременно.
-    async with wb_seller_lock(
-        session, seller_id, wait_timeout_sec=WB_LOCK_WAIT_FOR_OPERATOR_SEC
-    ) as wb_lock_acquired:
-        if not wb_lock_acquired:
+    async with marketplace_seller_lock(
+        session,
+        seller_id,
+        marketplace,
+        wait_timeout_sec=WB_LOCK_WAIT_FOR_OPERATOR_SEC,
+    ) as provider_lock_acquired:
+        if not provider_lock_acquired:
             raise FbsSupplyError(
                 "operation_in_progress",
-                message="WB-синхронизация по селлеру ещё идёт — повторите через несколько секунд.",
+                message=(
+                    f"Синхронизация {marketplace.upper()} по селлеру ещё идёт — "
+                    "повторите через несколько секунд."
+                ),
                 retryable=True,
                 http_status=503,
             )
@@ -568,7 +610,12 @@ async def create_supply_from_orders(
         orders = list(locked.orders)
         summary = locked.summary
         assert summary is not None
-        token = await _require_marketplace_token(session, tenant_id, seller_id)
+        marketplace = orders[0].marketplace or "wb"
+        token = (
+            await _require_marketplace_token(session, tenant_id, seller_id)
+            if marketplace == "wb"
+            else None
+        )
         operation = await create_pending_operation(
             session,
             tenant_id=tenant_id,
@@ -579,6 +626,7 @@ async def create_supply_from_orders(
                 "name": name,
                 "order_ids": [str(oid) for oid in order_ids],
                 "planned_delivery_type": planned_delivery_type,
+                "marketplace": marketplace,
             },
         )
 
@@ -602,6 +650,7 @@ async def create_supply_from_orders(
             tenant_id=tenant_id,
             seller_id=seller_id,
             warehouse_id=summary.wms_warehouse_id,
+            marketplace=marketplace,
             wb_supply_id=f"PENDING-{operation.id}",
             name=name,
             source=FBS_SUPPLY_SOURCE_WMS,
@@ -619,6 +668,79 @@ async def create_supply_from_orders(
         operation.local_entity_type = "fbs_supply"
         operation.local_entity_id = supply.id
         await session.flush()
+
+        if marketplace == "ozon":
+            try:
+                client_id, api_key = await MarketplaceAccountService(
+                    session
+                ).stored_credentials(tenant_id, seller_id)
+            except MarketplaceAccountError as exc:
+                await mark_operation_failed(
+                    session,
+                    operation,
+                    error_code=exc.code,
+                    local_supply_id=supply.id,
+                )
+                raise FbsSupplyError(
+                    exc.code,
+                    message="Кабинет Ozon не подключён.",
+                    retryable=False,
+                    http_status=409,
+                ) from exc
+
+            provider = ozon_provider or OzonMarketplaceProvider(
+                transport=FakeMarketplaceTransport(
+                    created_supply_id=f"ozon-{operation.id}",
+                )
+            )
+            posting_numbers = [
+                order.external_order_id or str(order.wb_order_id) for order in orders
+            ]
+            try:
+                provider_row = await provider.create_supply(
+                    client_id=client_id,
+                    api_key=api_key,
+                    name=name,
+                    posting_numbers=posting_numbers,
+                )
+            except MarketplaceProviderError as exc:
+                await mark_operation_failed(
+                    session,
+                    operation,
+                    error_code=exc.code,
+                    local_supply_id=supply.id,
+                )
+                raise FbsSupplyError(
+                    exc.code,
+                    message=provider_error_message(exc),
+                    retryable=exc.status_code in {429, 500, 502, 503, 504},
+                    http_status=exc.status_code or 502,
+                ) from exc
+
+            external_supply_id = str(provider_row.get("id") or "").strip()
+            if not external_supply_id:
+                await mark_operation_failed(
+                    session,
+                    operation,
+                    error_code="ozon_invalid_response",
+                    local_supply_id=supply.id,
+                )
+                raise FbsSupplyError("ozon_invalid_response", http_status=502)
+            supply.external_supply_id = external_supply_id
+            supply.wb_supply_id = external_supply_id
+            operation.wb_object_id = external_supply_id
+            operation.wb_object_kind = "supply"
+            await _bind_orders_to_supply(session, supply, orders)
+            await mark_operation_confirmed(
+                session,
+                operation,
+                wb_supply_id=external_supply_id,
+                local_supply_id=supply.id,
+                response_summary={"external_order_ids": posting_numbers},
+            )
+            return await get_supply_workspace(session, tenant_id, supply.id)
+
+        assert token is not None
 
         try:
             wb_row = await create_marketplace_supply(http_client, api_token=token, name=name)

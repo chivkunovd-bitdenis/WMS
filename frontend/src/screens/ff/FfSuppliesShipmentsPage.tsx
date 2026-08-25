@@ -265,7 +265,10 @@ type Props = {
   discrepancyActSummaries: FfDiscrepancyActSummary[]
   onOpenInbound: (id: string) => void
   onOpenOutbound: (id: string) => void
-  onCreateMpShipment: (sellerId: string) => Promise<{ id: string } | null>
+  onCreateMpShipment: (
+    sellerId: string,
+    marketplace: 'wb' | 'ozon',
+  ) => Promise<{ id: string } | null>
   onCreateDiverge: () => Promise<{ id: string } | null>
   initialMarketplaceUnloadId?: string | null
   onInitialMarketplaceUnloadOpened?: () => void
@@ -299,6 +302,7 @@ export function FfSuppliesShipmentsPage({
   const [kind, setKind] = useState<QuickFilterKind>(isMpShipmentsPage ? 'marketplace_unload' : 'all')
   const [sellerFilter, setSellerFilter] = useState<string>('all')
   const [mpCreateSellerId, setMpCreateSellerId] = useState<string>('')
+  const [mpCreateMarketplace, setMpCreateMarketplace] = useState<'wb' | 'ozon'>('wb')
   const [sortKey, setSortKey] = useState<'planned_desc' | 'planned_asc' | 'created_desc' | 'created_asc'>(
     'created_desc',
   )
@@ -800,7 +804,7 @@ export function FfSuppliesShipmentsPage({
       setModalError('Выберите селлера (ИП) для отгрузки.')
       return
     }
-    const created = await onCreateMpShipment(mpCreateSellerId)
+    const created = await onCreateMpShipment(mpCreateSellerId, mpCreateMarketplace)
     if (!created?.id) {
       return
     }
@@ -2106,6 +2110,21 @@ export function FfSuppliesShipmentsPage({
                   ))}
                 </Select>
               </FormControl>
+              <FormControl size="small" sx={{ minWidth: 180 }} required>
+                <InputLabel id="ff-mp-create-marketplace-label">Маркетплейс</InputLabel>
+                <Select
+                  labelId="ff-mp-create-marketplace-label"
+                  label="Маркетплейс"
+                  value={mpCreateMarketplace}
+                  onChange={(event) =>
+                    setMpCreateMarketplace(event.target.value as 'wb' | 'ozon')
+                  }
+                  data-testid="ff-mp-create-marketplace"
+                >
+                  <MenuItem value="wb">Wildberries</MenuItem>
+                  <MenuItem value="ozon">Ozon</MenuItem>
+                </Select>
+              </FormControl>
               <Button
                 variant="contained"
                 color="primary"
@@ -2281,12 +2300,21 @@ export function FfSuppliesShipmentsPage({
                 <TableCell>{row.sellerName ?? '—'}</TableCell>
                 <TableCell sx={{ color: 'text.secondary', maxWidth: 200 }}>
                   {row.kind === 'marketplace_unload' ? (
-                    <Chip
-                      size="small"
-                      label={marketplaceLabel(row.marketplace)}
-                      variant="outlined"
-                      data-testid="ff-mp-marketplace-chip"
-                    />
+                    <Stack
+                      direction="row"
+                      spacing={0.75}
+                      sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}
+                    >
+                      <Typography variant="body2" color="text.secondary">
+                        {row.extraLabel ?? '—'}
+                      </Typography>
+                      <Chip
+                        size="small"
+                        label={marketplaceLabel(row.marketplace)}
+                        variant="outlined"
+                        data-testid="ff-mp-marketplace-chip"
+                      />
+                    </Stack>
                   ) : (
                     row.extraLabel ?? '—'
                   )}

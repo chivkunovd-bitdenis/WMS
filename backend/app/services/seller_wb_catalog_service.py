@@ -34,6 +34,8 @@ class SellerWbCatalogRow:
     sku_code: str
     wb_nm_id: int | None
     wb_vendor_code: str | None
+    ozon_sku: str | None
+    ozon_offer_id: str | None
     wb_subject_name: str | None
     wb_primary_image_url: str | None
     wb_barcodes: tuple[str, ...]
@@ -56,6 +58,8 @@ class SellerWbCatalogRow:
             "sku_code": self.sku_code,
             "wb_nm_id": self.wb_nm_id,
             "wb_vendor_code": self.wb_vendor_code,
+            "ozon_sku": self.ozon_sku,
+            "ozon_offer_id": self.ozon_offer_id,
             "wb_subject_name": self.wb_subject_name,
             "wb_primary_image_url": self.wb_primary_image_url,
             "wb_barcodes": list(self.wb_barcodes),
@@ -224,6 +228,9 @@ async def list_seller_wb_catalog_rows(
         limit=limit,
         product_ids=product_ids,
     )
+    ozon_links = await list_ozon_product_links(
+        session, tenant_id, {product.id for product in products}
+    )
     sync_state_by_key = await _load_fbs_sync_state_by_seller_chrt(
         session,
         tenant_id,
@@ -274,6 +281,10 @@ async def list_seller_wb_catalog_rows(
                 sku_code=p.sku_code,
                 wb_nm_id=nm,
                 wb_vendor_code=p.wb_vendor_code,
+                ozon_sku=ozon_links[p.id].external_sku if p.id in ozon_links else None,
+                ozon_offer_id=(
+                    ozon_links[p.id].external_offer_id if p.id in ozon_links else None
+                ),
                 wb_subject_name=subj,
                 wb_primary_image_url=img,
                 wb_barcodes=barcodes,

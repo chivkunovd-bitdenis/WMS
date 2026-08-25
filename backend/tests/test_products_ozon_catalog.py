@@ -46,13 +46,20 @@ async def _create_product(
             "length_mm": 10,
             "width_mm": 10,
             "height_mm": 10,
-            "ozon_sku": ozon_sku,
-            "ozon_offer_id": ozon_offer_id,
             "wb_vendor_code": wb_vendor_code,
         },
     )
     assert response.status_code == 200, response.text
-    return response.json()
+    product = response.json()
+    if ozon_sku or ozon_offer_id:
+        linked = await async_client.patch(
+            f"/products/{product['id']}/ozon-link",
+            headers=headers,
+            json={"ozon_sku": ozon_sku, "ozon_offer_id": ozon_offer_id},
+        )
+        assert linked.status_code == 200, linked.text
+        product = linked.json()
+    return product
 
 
 async def _create_seller_account(
@@ -191,27 +198,11 @@ async def test_ozon_catalog_links_do_not_cross_seller_or_tenant_boundaries(
 
 
 @pytest.mark.asyncio
-async def test_ozon_link_requires_seller_with_explicit_422(
+async def test_warehouse_ozon_link_requires_seller_with_explicit_422(
     async_client: AsyncClient,
 ) -> None:
     suffix = str(time.time_ns())
     headers = await _register_admin(async_client, suffix)
-
-    response = await async_client.post(
-        "/products",
-        headers=headers,
-        json={
-            "name": "Ozon without seller",
-            "sku_code": f"NO-SELLER-{suffix}",
-            "length_mm": 10,
-            "width_mm": 10,
-            "height_mm": 10,
-            "ozon_sku": f"OZON-{suffix}",
-        },
-    )
-
-    assert response.status_code == 422, response.text
-    assert response.json()["detail"] == "ozon_link_requires_seller"
 
     product = await async_client.post(
         "/products",
@@ -235,7 +226,7 @@ async def test_ozon_link_requires_seller_with_explicit_422(
 
 
 @pytest.mark.asyncio
-async def test_existing_product_ozon_link_update_is_tenant_and_seller_scoped(
+async def test_existing_product_ozon_link_update_is_warehouse_only_and_tenant_scoped(
     async_client: AsyncClient,
 ) -> None:
     suffix = str(time.time_ns())
@@ -265,9 +256,16 @@ async def test_existing_product_ozon_link_update_is_tenant_and_seller_scoped(
         email=f"update-b-{suffix}@example.com",
     )
 
-    added = await async_client.patch(
+    seller_attempt = await async_client.patch(
         f"/products/{product['id']}/ozon-link",
         headers=seller_a_headers,
+        json={"ozon_sku": f"OZON-1-{suffix}", "ozon_offer_id": f"OFFER-1-{suffix}"},
+    )
+    assert seller_attempt.status_code == 403, seller_attempt.text
+
+    added = await async_client.patch(
+        f"/products/{product['id']}/ozon-link",
+        headers=owner_headers,
         json={"ozon_sku": f"OZON-1-{suffix}", "ozon_offer_id": f"OFFER-1-{suffix}"},
     )
     assert added.status_code == 200, added.text
@@ -299,6 +297,79 @@ async def test_existing_product_ozon_link_update_is_tenant_and_seller_scoped(
         json={"ozon_sku": "FOREIGN"},
     )
     assert other_tenant.status_code == 404, other_tenant.text
+
+
+@pytest.mark.asyncio
+async def test_ozon_sku_cannot_be_linked_to_two_products(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(time.time_ns())
+    headers = await _register_admin(async_client, f"duplicate-{suffix}")
+    seller = await async_client.post("/sellers", headers=headers, json={"name": "Seller"})
+    assert seller.status_code == 201, seller.text
+    seller_id = seller.json()["id"]
+    first = await _create_product(
+        async_client,
+        headers,
+        name="First",
+        sku_code=f"FIRST-{suffix}",
+        seller_id=seller_id,
+    )
+    second = await _create_product(
+        async_client,
+        headers,
+        name="Second",
+        sku_code=f"SECOND-{suffix}",
+        seller_id=seller_id,
+    )
+    ozon_sku = f"OZON-DUPLICATE-{suffix}"
+    first_link = await async_client.patch(
+        f"/products/{first['id']}/ozon-link",
+        headers=headers,
+        json={"ozon_sku": ozon_sku},
+    )
+    second_link = await async_client.patch(
+        f"/products/{second['id']}/ozon-link",
+        headers=headers,
+        json={"ozon_sku": ozon_sku},
+    )
+
+    assert first_link.status_code == 200, first_link.text
+    assert second_link.status_code == 409, second_link.text
+    assert second_link.json()["detail"] == "ozon_sku_taken"
+
+
+@pytest.mark.asyncio
+async def test_seller_catalog_keeps_ozon_marker_without_connected_account(
+    async_client: AsyncClient,
+) -> None:
+    suffix = str(time.time_ns())
+    headers = await _register_admin(async_client, f"seller-view-{suffix}")
+    seller = await async_client.post("/sellers", headers=headers, json={"name": "Seller"})
+    assert seller.status_code == 201, seller.text
+    seller_id = seller.json()["id"]
+    product = await _create_product(
+        async_client,
+        headers,
+        name="Visible Ozon link",
+        sku_code=f"VISIBLE-{suffix}",
+        seller_id=seller_id,
+        ozon_sku=f"OZON-VISIBLE-{suffix}",
+        ozon_offer_id=f"OFFER-VISIBLE-{suffix}",
+    )
+    seller_headers = await _create_seller_account(
+        async_client,
+        headers,
+        seller_id=seller_id,
+        email=f"seller-view-{suffix}@example.com",
+    )
+
+    response = await async_client.get("/products/wb-catalog", headers=seller_headers)
+
+    assert response.status_code == 200, response.text
+    row = next(item for item in response.json() if item["id"] == product["id"])
+    assert row["ozon_sku"] == f"OZON-VISIBLE-{suffix}"
+    assert row["ozon_offer_id"] == f"OFFER-VISIBLE-{suffix}"
 
 
 @pytest.mark.asyncio

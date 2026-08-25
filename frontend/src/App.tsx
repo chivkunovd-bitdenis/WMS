@@ -1320,12 +1320,6 @@ export default function App() {
       const width_mm = Number(fd.get('product_width_mm'))
       const height_mm = Number(fd.get('product_height_mm'))
       const seller_raw = String(fd.get('product_seller_id') ?? '').trim()
-      const ozon_sku = String(fd.get('product_ozon_sku') ?? '').trim()
-      const ozon_offer_id = String(fd.get('product_ozon_offer_id') ?? '').trim()
-      if ((ozon_sku || ozon_offer_id) && !seller_raw) {
-        setCatalogError('Для привязки Ozon выберите селлера.')
-        return
-      }
       const body: Record<string, unknown> = {
         name,
         sku_code,
@@ -1336,8 +1330,6 @@ export default function App() {
       if (seller_raw) {
         body.seller_id = seller_raw
       }
-      if (ozon_sku) body.ozon_sku = ozon_sku
-      if (ozon_offer_id) body.ozon_offer_id = ozon_offer_id
       const res = await fetch(apiUrl('/products'), {
         method: 'POST',
         headers: {
@@ -1357,54 +1349,6 @@ export default function App() {
         e instanceof Error
           ? e.message
           : 'Сеть: не удалось создать товар.',
-      )
-    } finally {
-      setCatalogBusy(false)
-    }
-  }
-
-  async function onUpdateOzonLink(
-    productId: string,
-    e: React.FormEvent<HTMLFormElement>,
-  ) {
-    e.preventDefault()
-    if (!token) {
-      return
-    }
-    const product = products.find((row) => row.id === productId)
-    const fd = new FormData(e.currentTarget)
-    const ozon_sku = String(fd.get('product_link_ozon_sku') ?? '').trim()
-    const ozon_offer_id = String(fd.get('product_link_ozon_offer_id') ?? '').trim()
-    setCatalogError(null)
-    if (!product?.seller_id) {
-      setCatalogError('Для привязки Ozon у товара должен быть селлер.')
-      return
-    }
-    if (!ozon_sku && !ozon_offer_id) {
-      setCatalogError('Укажите SKU или предложение Ozon.')
-      return
-    }
-    setCatalogBusy(true)
-    try {
-      const res = await fetch(apiUrl(`/products/${productId}/ozon-link`), {
-        method: 'PATCH',
-        headers: {
-          ...authHeaders(token),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ozon_sku: ozon_sku || null,
-          ozon_offer_id: ozon_offer_id || null,
-        }),
-      })
-      if (!res.ok) {
-        setCatalogError(await readApiErrorMessage(res))
-        return
-      }
-      await refreshProducts(token)
-    } catch (error) {
-      setCatalogError(
-        error instanceof Error ? error.message : 'Сеть: не удалось сохранить привязку Ozon.',
       )
     } finally {
       setCatalogBusy(false)
@@ -2586,7 +2530,10 @@ export default function App() {
     }
   }
 
-  const onCreateFfMpShipment = useCallback(async (sellerId: string): Promise<{ id: string } | null> => {
+  const onCreateFfMpShipment = useCallback(async (
+    sellerId: string,
+    marketplace: 'wb' | 'ozon',
+  ): Promise<{ id: string } | null> => {
     if (!token) {
       return null
     }
@@ -2616,36 +2563,40 @@ export default function App() {
     setOpsError(null)
     setOpsBusy(true)
     try {
-      const tokRes = await fetch(
-        apiUrl(`/integrations/wildberries/sellers/${sellerId}/tokens`),
-        {
-          method: 'PATCH',
-          headers: {
-            ...authHeaders(token),
-            'Content-Type': 'application/json',
+      if (marketplace === 'wb') {
+        const tokRes = await fetch(
+          apiUrl(`/integrations/wildberries/sellers/${sellerId}/tokens`),
+          {
+            method: 'PATCH',
+            headers: {
+              ...authHeaders(token),
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ supplies_api_token: 'ff-mp-shipment-token' }),
           },
-          body: JSON.stringify({ supplies_api_token: 'ff-mp-shipment-token' }),
-        },
-      )
-      if (!tokRes.ok) {
-        setOpsError(await readApiErrorMessage(tokRes))
-        return null
+        )
+        if (!tokRes.ok) {
+          setOpsError(await readApiErrorMessage(tokRes))
+          return null
+        }
       }
 
       // WB MP warehouse may be unavailable (no supplies token / not imported yet).
       // We still allow creating a draft and selecting WB warehouse later.
       type WbMpRow = { wb_warehouse_id: number }
       let wbMpId: number | null = null
-      try {
-        const whRes = await fetch(apiUrl('/operations/wb-mp-warehouses'), {
-          headers: authHeaders(token),
-        })
-        if (whRes.ok) {
-          const rows = (await whRes.json()) as WbMpRow[]
-          wbMpId = rows[0]?.wb_warehouse_id ?? null
+      if (marketplace === 'wb') {
+        try {
+          const whRes = await fetch(apiUrl('/operations/wb-mp-warehouses'), {
+            headers: authHeaders(token),
+          })
+          if (whRes.ok) {
+            const rows = (await whRes.json()) as WbMpRow[]
+            wbMpId = rows[0]?.wb_warehouse_id ?? null
+          }
+        } catch {
+          wbMpId = null
         }
-      } catch {
-        wbMpId = null
       }
 
       const res = await fetch(apiUrl('/operations/marketplace-unload-requests'), {
@@ -2657,6 +2608,7 @@ export default function App() {
         body: JSON.stringify({
           warehouse_id: wid,
           seller_id: sellerId,
+          marketplace,
           ...(wbMpId != null ? { wb_mp_warehouse_id: wbMpId } : { wb_mp_warehouse_id: null }),
         }),
       })
@@ -2667,9 +2619,11 @@ export default function App() {
       const created = (await res.json()) as { id: string }
       await refreshMarketplaceUnloadList(token)
       setFfSuppliesNotice(
-        wbMpId == null
-          ? 'Отгрузка на маркетплейс создана (черновик). Выберите склад WB в документе, когда они подгрузятся.'
-          : 'Отгрузка на маркетплейс создана (черновик). Состав по строкам — на следующем этапе.',
+        marketplace === 'ozon'
+          ? 'Отгрузка Ozon создана (черновик). Состав по строкам — на следующем этапе.'
+          : wbMpId == null
+            ? 'Отгрузка на маркетплейс создана (черновик). Выберите склад WB в документе, когда они подгрузятся.'
+            : 'Отгрузка на маркетплейс создана (черновик). Состав по строкам — на следующем этапе.',
       )
       return created
     } catch (e) {
@@ -2868,7 +2822,8 @@ export default function App() {
                     created_at: r.created_at,
                     warehouse_name: r.warehouse_name,
                     seller_name: r.seller_name,
-                    marketplace_label: 'Wildberries',
+                    marketplace_label:
+                      r.marketplace === 'ozon' ? 'Ozon' : 'Wildberries',
                     goods_qty_total: r.line_count,
                   }))}
                 onOpenInbound={(id) => {
@@ -3338,7 +3293,6 @@ export default function App() {
                   sellers={sellers}
                   products={products}
                   onCreateProduct={(e) => void onCreateProduct(e)}
-                  onUpdateOzonLink={(productId, e) => void onUpdateOzonLink(productId, e)}
                 />
               ) : (
                 ffAccessDenied

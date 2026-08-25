@@ -97,12 +97,39 @@ class MarketplaceTransport(Protocol):
         document_id: str,
     ) -> None: ...
 
+    async def create_supply(
+        self,
+        *,
+        client_id: str,
+        api_key: str,
+        name: str,
+        posting_numbers: Sequence[str],
+    ) -> dict[str, Any]: ...
+
+    async def deliver_supply(
+        self,
+        *,
+        client_id: str,
+        api_key: str,
+        supply_id: str,
+    ) -> None: ...
+
+    async def fetch_supply_qr(
+        self,
+        *,
+        client_id: str,
+        api_key: str,
+        supply_id: str,
+    ) -> bytes: ...
+
 
 @dataclass
 class FakeMarketplaceTransport:
     orders: list[dict[str, Any]] = field(default_factory=list)
     statuses: list[dict[str, Any]] = field(default_factory=list)
     order_labels: list[dict[str, Any]] = field(default_factory=list)
+    created_supply_id: str = "ozon-fake-supply"
+    supply_qr: bytes = b""
     errors: dict[str, MarketplaceProviderError] = field(default_factory=dict)
     calls: list[tuple[str, str]] = field(default_factory=list)
 
@@ -162,6 +189,45 @@ class FakeMarketplaceTransport:
         if error := self.errors.get("fetch_order_labels"):
             raise error
         return list(self.order_labels)
+
+    async def create_supply(
+        self,
+        *,
+        client_id: str,
+        api_key: str,
+        name: str,
+        posting_numbers: Sequence[str],
+    ) -> dict[str, Any]:
+        _ = api_key, name, posting_numbers
+        self.calls.append(("create_supply", client_id))
+        if error := self.errors.get("create_supply"):
+            raise error
+        return {"id": self.created_supply_id}
+
+    async def deliver_supply(
+        self,
+        *,
+        client_id: str,
+        api_key: str,
+        supply_id: str,
+    ) -> None:
+        _ = api_key
+        self.calls.append(("deliver_supply", supply_id))
+        if error := self.errors.get("deliver_supply"):
+            raise error
+
+    async def fetch_supply_qr(
+        self,
+        *,
+        client_id: str,
+        api_key: str,
+        supply_id: str,
+    ) -> bytes:
+        _ = api_key
+        self.calls.append(("fetch_supply_qr", supply_id))
+        if error := self.errors.get("fetch_supply_qr"):
+            raise error
+        return self.supply_qr
 
 
 class OzonMarketplaceProvider:
@@ -254,6 +320,62 @@ class OzonMarketplaceProvider:
                 client_id=client_id,
                 api_key=api_key,
                 posting_numbers=posting_numbers,
+            )
+        except MarketplaceProviderError as error:
+            self._remember_blocked(error)
+            raise
+
+    async def create_supply(
+        self,
+        *,
+        client_id: str,
+        api_key: str,
+        name: str,
+        posting_numbers: Sequence[str],
+    ) -> dict[str, Any]:
+        self._raise_if_blocked()
+        try:
+            return await self.transport.create_supply(
+                client_id=client_id,
+                api_key=api_key,
+                name=name,
+                posting_numbers=posting_numbers,
+            )
+        except MarketplaceProviderError as error:
+            self._remember_blocked(error)
+            raise
+
+    async def deliver_supply(
+        self,
+        *,
+        client_id: str,
+        api_key: str,
+        supply_id: str,
+    ) -> None:
+        self._raise_if_blocked()
+        try:
+            await self.transport.deliver_supply(
+                client_id=client_id,
+                api_key=api_key,
+                supply_id=supply_id,
+            )
+        except MarketplaceProviderError as error:
+            self._remember_blocked(error)
+            raise
+
+    async def fetch_supply_qr(
+        self,
+        *,
+        client_id: str,
+        api_key: str,
+        supply_id: str,
+    ) -> bytes:
+        self._raise_if_blocked()
+        try:
+            return await self.transport.fetch_supply_qr(
+                client_id=client_id,
+                api_key=api_key,
+                supply_id=supply_id,
             )
         except MarketplaceProviderError as error:
             self._remember_blocked(error)
