@@ -148,6 +148,9 @@ export function SellerLayout({
                 <ListItemText primary="Настройки" />
               </ListItemButton>
             ) : null}
+            <ListItemButton component={NavLink} to={`${base}/knowledge`} data-testid="nav-seller-knowledge">
+              <ListItemText primary="База знаний" />
+            </ListItemButton>
           </List>
           {onToggleShop && onSwitchShop ? (
             <SellerShopSidebar

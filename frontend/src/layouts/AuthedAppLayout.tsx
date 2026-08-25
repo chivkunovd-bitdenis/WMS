@@ -288,6 +288,9 @@ export function AuthedAppLayout({
                 <ListItemText primary="Упаковка" />
               </ListItemButton>
             ) : null}
+            <ListItemButton component={NavLink} to={`${base}/knowledge`} data-testid="nav-ff-knowledge">
+              <ListItemText primary="База знаний" />
+            </ListItemButton>
           </List>
         </Box>
       </Drawer>

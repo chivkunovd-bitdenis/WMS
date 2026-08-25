@@ -39,6 +39,7 @@ import { FfHonestSignLedgerPage } from './screens/ff/FfHonestSignLedgerPage'
 import { FfReportsPage } from './screens/ff/FfReportsPage'
 import { FfHonestSignReprintsPage } from './screens/ff/FfHonestSignReprintsPage'
 import { NotificationsPage } from './screens/shared/NotificationsPage'
+import { KnowledgeBaseScreen } from './screens/shared/KnowledgeBaseScreen'
 import { HonestSignPoolPage } from './screens/shared/HonestSignPoolPage'
 import { HonestSignProductPage } from './screens/shared/HonestSignProductPage'
 import { FfPlaceholderPage } from './screens/ff/FfPlaceholderPage'
@@ -3154,6 +3155,8 @@ export default function App() {
               )
             }
           />
+
+          <Route path="ff/knowledge" element={<KnowledgeBaseScreen portal="ff" />} />
 
           <Route
             path="ff/inventory"

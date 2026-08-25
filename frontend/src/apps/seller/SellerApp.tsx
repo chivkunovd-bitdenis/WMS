@@ -16,6 +16,7 @@ import { SellerProductsStockScreen } from '../../screens/v2/SellerProductsStockS
 import { SellerHonestSignScreen } from '../../screens/v2/SellerHonestSignScreen'
 import { SellerSettingsScreen } from '../../screens/v2/SellerSettingsScreen'
 import { NotificationsPage } from '../../screens/shared/NotificationsPage'
+import { KnowledgeBaseScreen } from '../../screens/shared/KnowledgeBaseScreen'
 import { FfReportsPage } from '../../screens/ff/FfReportsPage'
 import { SellerLayout } from './SellerLayout'
 
@@ -526,6 +527,7 @@ export function SellerApp({ navigationBasePath = '' }: SellerAppProps) {
               ) : null
             }
           />
+          <Route path="/knowledge" element={<KnowledgeBaseScreen portal="seller" />} />
           <Route
             path="*"
             element={<Navigate to={sellerPath(firstAllowedSellerPath(sellerPermissions))} replace />}
