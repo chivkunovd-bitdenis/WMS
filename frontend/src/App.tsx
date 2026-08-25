@@ -2645,6 +2645,7 @@ export default function App() {
   const onCreateFfInboundDraft = useCallback(async (
     operationType: InboundOperationType,
     sellerId: string,
+    marketplace?: 'wildberries' | 'ozon',
   ): Promise<{ id: string } | null> => {
     if (!token) {
       return null
@@ -2672,6 +2673,7 @@ export default function App() {
           warehouse_id: wid,
           operation_type: operationType,
           seller_id: sellerId,
+          ...(operationType === 'return' && marketplace ? { marketplace } : {}),
         }),
       })
       if (!res.ok) {
@@ -2921,8 +2923,8 @@ export default function App() {
                       await refreshInboundList(token)
                     }
                   }}
-                  onCreateDraft={async (operationType, sellerId) => {
-                    const created = await onCreateFfInboundDraft(operationType, sellerId)
+                  onCreateDraft={async (operationType, sellerId, marketplace) => {
+                    const created = await onCreateFfInboundDraft(operationType, sellerId, marketplace)
                     if (!created?.id) {
                       return
                     }

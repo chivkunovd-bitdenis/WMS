@@ -44,12 +44,17 @@ import {
 import type { InboundOperationType } from '../../utils/inboundOperationType'
 
 export type InboundWorkspace = 'reception' | 'sorting'
+export type ReturnMarketplace = '' | 'wildberries' | 'ozon'
 
 type Props = {
   workspace: InboundWorkspace
   rows: InboundQueueRow[]
   onOpen: (id: string) => void
-  onCreateDraft?: (operationType: InboundOperationType, sellerId: string) => void | Promise<void>
+  onCreateDraft?: (
+    operationType: InboundOperationType,
+    sellerId: string,
+    marketplace?: Exclude<ReturnMarketplace, ''>,
+  ) => void | Promise<void>
   creatingDraft?: boolean
   sellers?: { id: string; name: string }[]
   loading?: boolean
@@ -135,6 +140,7 @@ export function FfInboundQueuePage({
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [draftOperationType, setDraftOperationType] = useState<InboundOperationType | null>(null)
   const [draftSellerId, setDraftSellerId] = useState('')
+  const [draftMarketplace, setDraftMarketplace] = useState<ReturnMarketplace>('')
 
   useEffect(() => {
     if (workspace === 'reception' && onRetry) {
@@ -161,7 +167,7 @@ export function FfInboundQueuePage({
   const sellerOptions = useMemo(() => {
     const fromRows = baseRows
       .filter((row) => row.seller_id && row.seller_name)
-      .map((row) => ({ id: String(row.seller_id), name: String(row.seller_name) }))
+      .map((row) => ({ id: String(row.seller_id), name: String(row.seller_name), }))
     const byId = new Map<string, { id: string; name: string }>()
     for (const seller of [...sellers, ...fromRows]) byId.set(seller.id, seller)
     return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name, 'ru'))
@@ -200,16 +206,19 @@ export function FfInboundQueuePage({
   const openCreateDialog = (operationType: InboundOperationType) => {
     setDraftOperationType(operationType)
     setDraftSellerId(sellerOptions.length === 1 ? sellerOptions[0].id : '')
+    setDraftMarketplace('')
   }
 
   const closeCreateDialog = () => {
     setDraftOperationType(null)
     setDraftSellerId('')
+    setDraftMarketplace('')
   }
 
   const submitCreateDialog = async () => {
     if (!draftOperationType || !draftSellerId || !onCreateDraft) return
-    await onCreateDraft(draftOperationType, draftSellerId)
+    await onCreateDraft(draftOperationType, draftSellerId,
+      draftOperationType === 'return' && draftMarketplace ? draftMarketplace : undefined,)
     closeCreateDialog()
   }
 
@@ -218,7 +227,7 @@ export function FfInboundQueuePage({
       <PageHeader title={title} description={subtitle} />
 
       {workspace === 'reception' && onCreateDraft ? (
-        <Stack direction="row" spacing={1} sx={{ mb: 2, justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+        <Stack direction="row" spacing={1} sx={{ mb: 2, justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, }}>
           <Typography variant="body2" sx={{ fontWeight: 700 }} data-testid="ff-inbound-new-count">
             Новые приёмки: {newCount}
           </Typography>
@@ -331,6 +340,30 @@ export function FfInboundQueuePage({
                 ))}
               </Select>
             </FormControl>
+            {draftOperationType === 'return' ? (
+              <FormControl fullWidth size="small" sx={{ mt: 1 }}>
+                <InputLabel id="ff-inbound-create-marketplace-label" shrink>
+                  Маркетплейс
+                </InputLabel>
+                <Select
+                  labelId="ff-inbound-create-marketplace-label"
+                  label="Маркетплейс"
+                  value={draftMarketplace}
+                  onChange={(event) => setDraftMarketplace(event.target.value as ReturnMarketplace)}
+                  displayEmpty
+                  renderValue={(value) => {
+                    const marketplace = String(value) as ReturnMarketplace
+                    if (!marketplace) return 'Без маркетплейса'
+                    return marketplace === 'wildberries' ? 'Wildberries' : 'Ozon'
+                  }}
+                  data-testid="ff-inbound-create-marketplace"
+                >
+                  <MenuItem value="">Без маркетплейса</MenuItem>
+                  <MenuItem value="wildberries">Wildberries</MenuItem>
+                  <MenuItem value="ozon">Ozon</MenuItem>
+                </Select>
+              </FormControl>
+            ) : null}
           </DialogContent>
           <DialogActions>
             <Button
