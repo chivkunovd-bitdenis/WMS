@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
-import type { FormEventHandler } from 'react'
+import type { FormEvent, FormEventHandler } from 'react'
 import { Button } from '../../ui/Button'
 import { Card } from '../../ui/Card'
 import { Input } from '../../ui/Input'
 import { Select } from '../../ui/Select'
 import { Screen } from '../AppV2Screens'
 
-type SellerRow = { id: string; name: string }
+type SellerRow = { id: string; name: string; ozon_connected?: boolean | null }
 
 type ProductRow = {
   id: string
@@ -31,6 +31,7 @@ type Props = {
   sellers: SellerRow[]
   products: ProductRow[]
   onCreateProduct: FormEventHandler<HTMLFormElement>
+  onUpdateOzonLink: (productId: string, event: FormEvent<HTMLFormElement>) => void
 }
 
 export function ProductsScreen({
@@ -40,24 +41,31 @@ export function ProductsScreen({
   sellers,
   products,
   onCreateProduct,
+  onUpdateOzonLink,
 }: Props) {
   const [q, setQ] = useState('')
   const [marketplace, setMarketplace] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [createSellerId, setCreateSellerId] = useState('')
+
+  const ozonSellerIds = useMemo(
+    () => new Set(sellers.filter((seller) => seller.ozon_connected).map((seller) => seller.id)),
+    [sellers],
+  )
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase()
-    if (!s) {
-      return products
-    }
     return products.filter((p) => {
-      const hay = `${p.name} ${p.sku_code} ${p.seller_name ?? ''} ${p.wb_vendor_code ?? ''} ${p.ozon_sku ?? ''} ${p.ozon_offer_id ?? ''}`.toLowerCase()
       const matchesMarketplace = marketplace === 'ozon'
         ? Boolean(p.ozon_sku || p.ozon_offer_id)
         : marketplace === 'wildberries'
           ? Boolean(p.wb_nm_id != null || p.wb_vendor_code)
           : true
-      return matchesMarketplace && hay.includes(s)
+      if (!matchesMarketplace || !s) {
+        return matchesMarketplace
+      }
+      const hay = `${p.name} ${p.sku_code} ${p.seller_name ?? ''} ${p.wb_vendor_code ?? ''} ${p.ozon_sku ?? ''} ${p.ozon_offer_id ?? ''}`.toLowerCase()
+      return hay.includes(s)
     })
   }, [products, q, marketplace])
 
@@ -125,7 +133,7 @@ export function ProductsScreen({
                   <td data-testid="product-sku-cell">{p.sku_code}</td>
                   <td>
                     {p.name}
-                    {p.ozon_sku || p.ozon_offer_id ? <span className="ui-badge" data-testid="product-marketplace-ozon">Ozon</span> : null}
+                    {(p.ozon_sku || p.ozon_offer_id) && p.seller_id && ozonSellerIds.has(p.seller_id) ? <span className="ui-badge" data-testid="product-marketplace-ozon">Ozon</span> : null}
                   </td>
                   <td>
                     <span data-testid="product-volume">
@@ -168,7 +176,7 @@ export function ProductsScreen({
                         {selected.wb_vendor_code ? ` (${selected.wb_vendor_code})` : ''}
                       </span>
                     ) : null}
-                    {selected.ozon_sku || selected.ozon_offer_id ? (
+                    {(selected.ozon_sku || selected.ozon_offer_id) && selected.seller_id && ozonSellerIds.has(selected.seller_id) ? (
                       <span data-testid="product-ozon-link"> · Ozon {selected.ozon_sku ?? '—'}{selected.ozon_offer_id ? ` (${selected.ozon_offer_id})` : ''}</span>
                     ) : null}
                   </div>
@@ -184,6 +192,35 @@ export function ProductsScreen({
                           : `${selected.volume_liters.toFixed(2)} л`
                       }`}
                 </div>
+                {selected.seller_id && ozonSellerIds.has(selected.seller_id) ? (
+                  <form
+                    key={`${selected.id}:${selected.ozon_sku ?? ''}:${selected.ozon_offer_id ?? ''}`}
+                    data-testid="product-ozon-link-form"
+                    onSubmit={(event) => onUpdateOzonLink(selected.id, event)}
+                  >
+                    <label>
+                      SKU Ozon
+                      <Input
+                        name="product_link_ozon_sku"
+                        data-testid="product-link-ozon-sku"
+                        defaultValue={selected.ozon_sku ?? ''}
+                        autoComplete="off"
+                      />
+                    </label>
+                    <label>
+                      Предложение Ozon
+                      <Input
+                        name="product_link_ozon_offer_id"
+                        data-testid="product-link-ozon-offer"
+                        defaultValue={selected.ozon_offer_id ?? ''}
+                        autoComplete="off"
+                      />
+                    </label>
+                    <Button type="submit" data-testid="product-link-ozon-submit" disabled={catalogBusy}>
+                      {catalogBusy ? '…' : 'Сохранить Ozon'}
+                    </Button>
+                  </form>
+                ) : null}
               </div>
             ) : (
               <p className="subtle">Выбери строку в таблице слева.</p>
@@ -242,7 +279,12 @@ export function ProductsScreen({
                 {sellers.length > 0 ? (
                   <label>
                     Селлер (необязательно)
-                    <Select name="product_seller_id" data-testid="product-seller" defaultValue="">
+                    <Select
+                      name="product_seller_id"
+                      data-testid="product-seller"
+                      value={createSellerId}
+                      onChange={(event) => setCreateSellerId(event.target.value)}
+                    >
                       <option value="">— нет —</option>
                       {sellers.map((s) => (
                         <option key={s.id} value={s.id}>
@@ -252,14 +294,18 @@ export function ProductsScreen({
                     </Select>
                   </label>
                 ) : null}
-                <label>
-                  SKU Ozon
-                  <Input name="product_ozon_sku" data-testid="product-ozon-sku" autoComplete="off" />
-                </label>
-                <label>
-                  Предложение Ozon
-                  <Input name="product_ozon_offer_id" data-testid="product-ozon-offer" autoComplete="off" />
-                </label>
+                {ozonSellerIds.has(createSellerId) ? (
+                  <>
+                    <label>
+                      SKU Ozon
+                      <Input name="product_ozon_sku" data-testid="product-ozon-sku" autoComplete="off" />
+                    </label>
+                    <label>
+                      Предложение Ozon
+                      <Input name="product_ozon_offer_id" data-testid="product-ozon-offer" autoComplete="off" />
+                    </label>
+                  </>
+                ) : null}
                 <Button type="submit" data-testid="product-submit" disabled={catalogBusy}>
                   {catalogBusy ? '…' : 'Добавить товар'}
                 </Button>

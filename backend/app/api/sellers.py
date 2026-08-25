@@ -12,7 +12,11 @@ from app.db.session import get_db
 from app.models.seller import Seller
 from app.models.user import User
 from app.services.auth_service import AuthError, create_seller_with_account
-from app.services.catalog_service import create_seller, list_sellers
+from app.services.catalog_service import (
+    create_seller,
+    list_ozon_connected_seller_ids,
+    list_sellers,
+)
 from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
 
 router = APIRouter(prefix="/sellers", tags=["sellers"])
@@ -43,6 +47,7 @@ class SellerWithAccountCreate(BaseModel):
 class SellerOut(BaseModel):
     id: str
     name: str
+    ozon_connected: bool | None = None
 
 
 class SellerWithAccountOut(BaseModel):
@@ -74,7 +79,13 @@ async def get_sellers(
     seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
 ) -> list[SellerOut]:
     rows = await list_sellers(session, user.tenant_id, seller_id=seller_scope)
-    return [SellerOut(id=str(s.id), name=s.name) for s in rows]
+    connected_ids = await list_ozon_connected_seller_ids(
+        session, user.tenant_id, {seller.id for seller in rows}
+    )
+    return [
+        SellerOut(id=str(s.id), name=s.name, ozon_connected=s.id in connected_ids)
+        for s in rows
+    ]
 
 
 @router.get(

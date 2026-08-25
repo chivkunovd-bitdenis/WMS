@@ -14,6 +14,7 @@ from sqlalchemy.orm import selectinload
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
 from app.models.inbound_intake import InboundIntakeRequest
 from app.models.inventory_balance import InventoryBalance
+from app.models.marketplace_account import MarketplaceAccount
 from app.models.outbound_shipment import OutboundShipmentRequest
 from app.models.product import Product
 from app.models.product_dimension_event import ProductDimensionEvent
@@ -619,6 +620,25 @@ async def list_sellers(
     return list(res.scalars().all())
 
 
+async def list_ozon_connected_seller_ids(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_ids: set[uuid.UUID],
+) -> set[uuid.UUID]:
+    if not seller_ids:
+        return set()
+    result = await session.execute(
+        select(MarketplaceAccount.seller_id).where(
+            MarketplaceAccount.tenant_id == tenant_id,
+            MarketplaceAccount.seller_id.in_(seller_ids),
+            MarketplaceAccount.marketplace == "ozon",
+            MarketplaceAccount.account_slot == "primary",
+            MarketplaceAccount.is_active.is_(True),
+        )
+    )
+    return set(result.scalars().all())
+
+
 async def create_seller(session: AsyncSession, tenant_id: uuid.UUID, *, name: str) -> Seller:
     s = Seller(tenant_id=tenant_id, name=name.strip())
     session.add(s)
@@ -759,6 +779,49 @@ async def list_ozon_product_links(
         )
     )
     return {link.product_id: link for link in result.scalars().all()}
+
+
+async def update_ozon_product_link(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    *,
+    ozon_sku: str | None,
+    ozon_offer_id: str | None,
+) -> Product:
+    product = await get_product(session, tenant_id, product_id)
+    if product is None:
+        raise CatalogError("product_not_found")
+    if product.seller_id is None:
+        raise CatalogError("ozon_link_requires_seller")
+    normalized_sku = (ozon_sku or "").strip() or None
+    normalized_offer = (ozon_offer_id or "").strip() or None
+    if normalized_sku is None and normalized_offer is None:
+        raise CatalogError("ozon_link_required")
+    link = (
+        await session.execute(
+            select(ProductMarketplaceLink).where(
+                ProductMarketplaceLink.tenant_id == tenant_id,
+                ProductMarketplaceLink.seller_id == product.seller_id,
+                ProductMarketplaceLink.product_id == product_id,
+                ProductMarketplaceLink.marketplace == "ozon",
+            )
+        )
+    ).scalar_one_or_none()
+    if link is None:
+        link = ProductMarketplaceLink(
+            tenant_id=tenant_id,
+            seller_id=product.seller_id,
+            product_id=product_id,
+            marketplace="ozon",
+        )
+        session.add(link)
+    link.external_sku = normalized_sku
+    link.external_offer_id = normalized_offer
+    link.is_active = True
+    await session.commit()
+    await session.refresh(product, attribute_names=["seller"])
+    return product
 
 
 async def get_product(
