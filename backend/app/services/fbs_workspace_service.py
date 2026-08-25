@@ -380,7 +380,11 @@ def _compute_stage(
         unassigned_packed_order_ids and not without_distribution
     ):
         return "handoff_prep"
-    if supply.delivery_type == FBS_DELIVERY_TYPE_PVZ and not supply.trbxes:
+    if (
+        supply.delivery_type == FBS_DELIVERY_TYPE_PVZ
+        and not supply.trbxes
+        and not without_distribution
+    ):
         return "handoff_prep"
     if supply.status == FBS_SUPPLY_STATUS_PACKED:
         return "delivery"
@@ -444,6 +448,7 @@ def _compute_workspace_blockers(
         supply.delivery_type == FBS_DELIVERY_TYPE_PVZ
         and stage in {"handoff_prep", "delivery"}
         and not supply.trbxes
+        and not without_distribution
     ):
         blockers.append(
             {

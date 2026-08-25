@@ -30,6 +30,7 @@ from app.models.fbs_order import (
 )
 from app.models.fbs_print_asset import PRINT_ASSET_STATUS_READY
 from app.models.fbs_supply import (
+    FBS_DELIVERY_TYPE_PVZ,
     FBS_DELIVERY_TYPE_WAREHOUSE_SC,
     FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_IN_DELIVERY,
@@ -458,7 +459,7 @@ async def test_ozon_supply_creation_never_calls_wb(
 
     assert workspace["supply"]["marketplace"] == "ozon"
     assert transport.calls == []
-    assert workspace["supply"]["wb_supply_id"] is None
+    assert str(workspace["supply"]["wb_supply_id"]).startswith("PENDING-")
     assert workspace["supply"]["external_supply_id"] is None
     assert workspace["supply"]["boxes_without_distribution"] is True
     wb_create.assert_not_awaited()
@@ -525,6 +526,25 @@ def test_ozon_without_distribution_does_not_require_physical_boxes() -> None:
 
     assert stage == "delivery"
     assert all(item["code"] != "physical_boxes_required" for item in blockers)
+
+    supply.delivery_type = FBS_DELIVERY_TYPE_PVZ
+    pvz_stage = workspace_svc._compute_stage(
+        supply,
+        [SimpleNamespace()],
+        progress,
+        has_physical_boxes=False,
+        without_distribution=True,
+    )
+    pvz_blockers = workspace_svc._compute_workspace_blockers(
+        supply,
+        [],
+        pvz_stage,
+        progress,
+        has_physical_boxes=False,
+        without_distribution=True,
+    )
+    assert pvz_stage == "delivery"
+    assert all(item["code"] != "cargo_places_required" for item in pvz_blockers)
 
 
 def _ozon_handoff_responses(*, substatus: str = "posting_in_carriage") -> dict[str, object]:

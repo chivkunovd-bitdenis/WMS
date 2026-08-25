@@ -633,7 +633,7 @@ async def create_supply_from_orders(
             seller_id=seller_id,
             warehouse_id=summary.wms_warehouse_id,
             marketplace=marketplace,
-            wb_supply_id=None if marketplace == "ozon" else f"PENDING-{operation.id}",
+            wb_supply_id=f"PENDING-{operation.id}",
             name=name,
             source=FBS_SUPPLY_SOURCE_WMS,
             status=FBS_SUPPLY_STATUS_DRAFT,
@@ -660,7 +660,7 @@ async def create_supply_from_orders(
             await mark_operation_confirmed(
                 session,
                 operation,
-                wb_supply_id=None,
+                wb_supply_id=supply.wb_supply_id,
                 local_supply_id=supply.id,
                 response_summary={"external_order_ids": posting_numbers},
             )
