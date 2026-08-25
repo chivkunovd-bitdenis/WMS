@@ -226,3 +226,9 @@
 08:59   09-billing · dev: фича 6/7 сохранена 8789d53bf359
 09:01   09-billing · screen-dev: готово
 09:01   09-billing · dev: фича 7/7 сохранена 4c0a9c8063b8
+09:14   09-billing · reviewer: готово
+09:14 09-billing: отложено — reviewer, эскалация не помогла
+10:31   09-billing · repair-plan: новый вердикт дорезается до dev
+10:35   09-billing · splitter: готово
+10:35   09-billing · resume: поатомный rework Terra по сохранённым находкам
+10:38   09-billing · backend-dev: готово

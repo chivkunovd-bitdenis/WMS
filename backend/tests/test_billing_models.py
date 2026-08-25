@@ -68,12 +68,12 @@ def test_billing_ledger_rejects_duplicate_source_event_and_second_reversal() -> 
             "source_id": source_id,
             "unit": "liter_day",
             "quantity": Decimal("1.0000"),
-            "rate": Decimal("10.00"),
-            "amount": Decimal("10.00"),
+            "rate": 1000,
+            "amount": 1000,
             "occurred_at": datetime(2026, 8, 1, tzinfo=UTC),
         }
         values.update(overrides)
-        return BillingLedgerEntry(**values)  # type: ignore[arg-type]
+        return BillingLedgerEntry(**values)
 
     with Session(engine) as session:
         original = entry()
@@ -91,7 +91,7 @@ def test_billing_ledger_rejects_duplicate_source_event_and_second_reversal() -> 
             source_id=uuid.uuid4(),
             reversal_of_id=original.id,
             quantity=Decimal("-1.0000"),
-            amount=Decimal("-10.00"),
+            amount=-1000,
         )
         session.add(reversal)
         session.commit()
@@ -99,7 +99,7 @@ def test_billing_ledger_rejects_duplicate_source_event_and_second_reversal() -> 
 
         assert original.entry_type == "charge"
         assert original.quantity == Decimal("1.0000")
-        assert original.amount == Decimal("10.00")
+        assert original.amount == 1000
 
         session.add(
             entry(
@@ -108,7 +108,7 @@ def test_billing_ledger_rejects_duplicate_source_event_and_second_reversal() -> 
                 source_id=uuid.uuid4(),
                 reversal_of_id=original.id,
                 quantity=Decimal("-1.0000"),
-                amount=Decimal("-10.00"),
+                amount=-1000,
             )
         )
         with pytest.raises(IntegrityError):
