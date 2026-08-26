@@ -3,5 +3,5 @@ Shipment date: 2026-08-25
 Source: direct read-only Wildberries API calls.
 No WMS or WB create/deliver/assignment operation was invoked.
 
-Supply WB-GI-269199701; cargo: WB-MP-51385121
-Supply WB-GI-269328273; cargo: WB-MP-51445723
+WB-GI-269199701: cargo WB-MP-51385121; orders 5573013416, 5575818213, 5577139483, 5577997178
+WB-GI-269328273: cargo WB-MP-51445723; orders 5579532892, 5580148251, 5580173851
