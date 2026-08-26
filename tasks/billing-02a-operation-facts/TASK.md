@@ -11,14 +11,19 @@
 После принятого ревью открыть ровно такой наряд:
 
 ```bash
-python3 scripts/naryad.py new "Волна 2А модуля «Расчёты»: надёжные факты операций без нового экрана" --lane обычная --files backend/app/models/operation_fact.py,backend/app/models/__init__.py,backend/app/services/operation_fact_service.py,backend/app/services/operation_fact_recovery_service.py,backend/app/services/inbound_intake_service.py,backend/app/services/fbs_picking_service.py,backend/app/services/fbs_supply_service.py,backend/app/services/packaging_task_service.py,backend/app/services/marketplace_unload_service.py,backend/app/services/storage_statement_service.py
+python3 scripts/naryad.py new "Волна 2А модуля «Расчёты»: надёжные факты операций без нового экрана" --lane обычная --files backend/app/models/operation_fact.py,backend/app/models/__init__.py,backend/app/models/inbound_intake.py,backend/app/models/fbs_order.py,backend/app/models/marketplace_unload.py,backend/app/services/operation_fact_service.py,backend/app/services/operation_fact_recovery_service.py,backend/app/services/inbound_intake_service.py,backend/app/services/fbs_picking_service.py,backend/app/services/fbs_supply_service.py,backend/app/services/packaging_task_service.py,backend/app/services/marketplace_unload_service.py,backend/app/services/storage_statement_service.py
 ```
 
 `backend/alembic/versions/20260826_0110_operation_facts.py` и новые тесты
 `backend/tests/test_operation_facts.py`, `backend/tests/test_operation_fact_recovery.py` входят в
 границы волны, хотя хук наряда охраняет только `backend/app`. Хук, его конфигурацию, baseline
-сторожей и файлы `frontend/src` менять запрещено. Если наряд не открыт, статус только `BLOCKED`;
-обходить защиту нельзя.
+сторожей и файлы `frontend/src` менять запрещено. Исключение возможно только после доказанной
+технической необходимости: если минимальная точка записи неизбежно добавляет строки ровно в один из
+уже больших разрешённых сервисов и только поэтому краснеет `back_guard`, разрешён отдельный
+baseline-коммит с **одной** правкой `docs/backend-guard-baseline.json`. До него обязателен
+построчный diff «было → стало» для конкретного файла в evidence; массовый `--update`, изменения
+прочих baseline-записей и смешение baseline с продуктовым commit запрещены. Если наряд не открыт,
+статус только `BLOCKED`; обходить защиту нельзя.
 
 Не запускать `wms_lead`, `scripts/sol_pipeline.py`, оркестраторы, модераторов или агентов,
 управляющих агентами. Не писать `ARCH.md`, классификаторы, глобальный реестр экранов, дельта-матрицы
@@ -94,10 +99,40 @@ nullable `billable_service_code`, `source_kind`, `source_event_id`, `idempotency
 сервисе, отдельные индексы для seller- и employee-отчётов и стабильный порядок восстановления
 обязательны. Миграция строго добавляющая и продолжает единственный head.
 
+Чтобы recovery не выдумывал автора, миграция также добавляет nullable durable author fields только
+в канонические источники, где их сейчас нет: terminal `completed_by_user_id` у
+`InboundIntakeRequest`; `completed_by_user_id` и `cancelled_by_user_id` у
+`MarketplaceUnloadRequest`; `picked_by_user_id` и `undone_by_user_id` у
+`FbsOrderProductPick`. Сервисы заполняют их в том же commit, что и реальное действие.
+Исторические source rows до миграции лежат до cutover и не backfill-ятся: recovery не создаёт по
+ним fact с выдуманным автором или source. `FbsOrderPickEvent` и `PackagingTaskEvent` уже хранят
+нужного автора и новых полей не требуют.
+
 Таксономия фиксируется константами и тестами: завершённая приёмка и возврат; `fbs_pick` и его
-отмена/сторно; фактическая упаковка, undo/cancel и завершение; завершённая отгрузка и её отмена;
-зафиксированное хранение; system/user. Повтор после отмены создаёт новый факт с новым источником,
-а не изменяет старый. `DocumentEvent` не читается и не записывается как часть этого контура.
+отмена/сторно; фактическая упаковка и её undo; завершённая отгрузка и её отмена; зафиксированное
+хранение; system/user. Повтор после отмены создаёт новый факт с новым источником, а не изменяет
+старый. `DocumentEvent` не читается и не записывается как часть этого контура.
+
+### Исчерпывающая матрица реальных источников 2А
+
+| Реальное событие или переход в текущем коде | `operation_code` | `source_kind` / `source_event_id` | Количество и lines | Момент записи | Автор и source | Сторно, отмена, повтор |
+|---|---|---|---|---|---|---|
+| `InboundIntakeRequest` достигает `STATUS_DONE` через `receive_line`, `post_all_remaining` или `complete_distribution`; `operation_type=inbound` | `inbound_completed` | `inbound_intake_request` / `req.id` | `sum(line.posted_qty)`; по одной line на `InboundIntakeLine` с `posted_qty>0` | после `_maybe_complete_request`, до существующего `session.commit()` | новый durable `req.completed_by_user_id` из `performer_id`; user при непустом ID, иначе system | В текущем коде DONE не переоткрывается; `reopen_receiving` доступен только из sorting и не сторнирует ещё не созданный terminal fact. Повтор terminal-вызова после DONE ошибки/возвращает существующее состояние, writer идемпотентен по `req.id`. |
+| То же terminal-переход, но `operation_type=return` | `return_completed` | `inbound_intake_request` / `req.id` | те же фактические `posted_qty` и lines | тот же commit | тот же durable `completed_by_user_id` / user-or-system | Та же фактическая граница; возврат не маскируется кодом приёмки. |
+| WB-ветка `fbs_picking_service.scan_pick_product` либо `_auto_pass_picking_if_needed`: создан `FbsOrderPick` и `FbsOrderPickEvent(event_type=picked)` | `fbs_pick` | `fbs_order_pick_event` / ID события `picked` после flush | 1 штука и line из связанного `FbsOrderPick.product_id` | после flush `FbsOrderPickEvent`, до возврата workspace/commit вызывающего запроса | `FbsOrderPickEvent.actor_user_id`; user при непустом ID, иначе system для auto-pass | Повторный scan/auto key не создаёт новый pick/event/fact. |
+| WB-ветка `undo_pick`: создан `FbsOrderPickEvent(event_type=undone)` | `fbs_pick_reversal` | `fbs_order_pick_event` / ID события `undone` после flush | 1 штука и та же product line | после flush undo-event, до возврата workspace | `FbsOrderPickEvent.actor_user_id` / user | `reversal_of_id` указывает на fact `picked` связанного pick. Повтор undo-key возвращает существующее состояние; новый pick после undo создаёт новый event и новый `fbs_pick`. |
+| Ozon-ветка `scan_pick_product`: создан `FbsOrderProductPick` | `fbs_pick` | `fbs_order_product_pick` / `FbsOrderProductPick.id` после flush | 1 штука и line из `order_product_id` | после flush нового position-pick, до возврата workspace | новый durable `FbsOrderProductPick.picked_by_user_id=actor.id` / user | Повтор `scan_idempotency_key` не создаёт второй source/fact. |
+| Ozon-ветка `undo_pick`: у того же `FbsOrderProductPick` установлены `undone_at`, `undo_idempotency_key`, `undone_by_user_id` | `fbs_pick_reversal` | `fbs_order_product_pick` / тот же ID; operation code отличает reversal от pick | 1 штука и line того же order product | после flush изменения undo-полей, до возврата workspace | новый durable `undone_by_user_id=actor.id` / user | `reversal_of_id` указывает на исходный fact; повтор undo-key не дублирует. Новый pick после отмены — новая row `FbsOrderProductPick`, следовательно новый fact. |
+| `record_pack_progress`/`mark_line_prepacked_external` добавляет `PackagingTaskEvent` с `manual_pack`, `scan_pack` или `prepacked_external` и положительным quantity | `packing_completed` | `packaging_task_event` / `PackagingTaskEvent.id` после `_add_task_event` flush | event quantity и ровно одна line из `event.line_id`/`event.product_id` | сразу после `_add_task_event`, до commit этого сервисного вызова | `created_by_user_id`; user при непустом ID, иначе system | Каждое новое action-event — новый факт; label-print и `complete` не создают второй факт, потому что не несут нового построчного physical work. |
+| `undo_last_pack_action` помечает исходный pack-event `reversed_at` и добавляет `PackagingTaskEvent(action=undo_last)` | `packing_reversal` | `packaging_task_event` / ID нового `undo_last` event | quantity и line исходного reversible event | после flush нового undo-event, до commit | `reversed_by_user_id` исходного event (если задан), иначе `created_by_user_id` нового; без ID system | `reversal_of_id` на fact отменённого pack-event. Повтор невозможен, потому что исходный event уже `reversed_at`; следующий pack создаёт новый event/fact. |
+| `cancel_task` создаёт `PackagingTaskEvent(action=cancel, quantity=0)`; `complete_task` создаёт `complete` без product line; `confirm_line_packed_from_shelf` не создаёт task event | не создаётся | не создаётся | не создаётся | не создаётся | не создаётся | Эти текущие записи не содержат доказанного нового item-level work или однозначного обратного quantity. Их запрещено превращать в фиктивный факт/сторно; отмена уже выполненной упаковки покрывается только явным `undo_last_pack_action`. |
+| `complete_unload` переводит `MarketplaceUnloadRequest` в `STATUS_SHIPPED` | `marketplace_outbound_completed` | `marketplace_unload_request` / `req.id` | `sum(distributed_qty_by_product(req).values())`; lines только по фактически distributed product quantities | после `req.status=STATUS_SHIPPED` и до commit, рядом с существующим `record_operational_charge` | новый durable `req.completed_by_user_id=performer_id`; user при непустом ID, иначе system | Повтор невозможен вне `EXECUTION_STATUSES`; fact по `req.id` идемпотентен. |
+| `cancel_request` для shipped request вызывает существующий `record_operational_reversal` | `marketplace_outbound_reversal` | `marketplace_unload_request` / `req.id`, code отличает reversal | исходные distributed lines и quantity исходного outbound fact, не пересчёт плана | в той же транзакции рядом с существующим reversal, до commit | новый durable `req.cancelled_by_user_id=performer_id`; user при непустом ID, иначе system | `reversal_of_id` на outbound fact; повторный cancelled request сразу возвращается. Cancel до shipment факта не создаёт reversal. Текущий код не имеет повторной отгрузки этого же cancelled request. |
+| `fix_storage_statement` фиксирует `StorageStatement`; каждая существующая `StorageMeasurement` получает публикацию | `storage_fixed` | `storage_measurement` / `measurement.id`; при нулевом statement — `storage_statement` / `statement.id` | `StorageMeasurement` содержит только `quantity_days`/`liter_days`, не фактические штуки: в 2А `item_quantity=0` и lines нет, чтобы не выдать литро-дни за штуки | после проверки draft/calculated и до единственного commit, одновременно с фиксацией statement, но не из `BillingLedgerEntry` | в текущей сигнатуре нет actor; system | Fixed statement идемпотентно возвращается без нового source/fact. В текущем коде нет операции отмены fixed storage statement, поэтому 2А не выдумывает storage reversal. |
+
+Ни одна строка матрицы не использует `DocumentEvent` или `BillingLedgerEntry` как source. В частности,
+`FbsSupply` status и `DocumentEvent` trigger не заменяют реальный pick/undo source; для автоматического
+подбора, где `fbs_supply_service` создаёт тот же `FbsOrderPickEvent`, применяется WB-строка таблицы.
 
 Запись факта находится в той же транзакционной единице работы, что и подтверждённое каноническое
 действие. Для старых потерянных записей отдельный recovery-service сверяет только канонические
@@ -129,9 +164,11 @@ nullable `billable_service_code`, `source_kind`, `source_event_id`, `idempotency
 5. Выполнить миграционные и тестовые гейты, независимое ревью, доказательство PostgreSQL и
    сохранить evidence. Затем отдельный commit и push.
 
-Разрешённые продуктовые файлы названы в команде наряда; единственная миграция и два новых test-файла
-названы в разделе 0. `storage_statement_service.py` создаёт лишь факт за уже зафиксированное
-хранение и не меняет месячный расчёт или `BillingLedgerEntry`.
+Разрешённые продуктовые файлы названы в команде наряда; список повторно сверён с матрицей: три
+модели автора (`inbound_intake.py`, `fbs_order.py`, `marketplace_unload.py`) нужны для
+восстановимости, а пять сервисов-источников и storage service — для точек записи. Единственная
+миграция и два новых test-файла названы в разделе 0. `storage_statement_service.py` создаёт лишь
+факт за уже зафиксированное хранение и не меняет месячный расчёт или `BillingLedgerEntry`.
 
 ## 7. Что остаётся неизменным
 
@@ -140,7 +177,8 @@ nullable `billable_service_code`, `source_kind`, `source_event_id`, `idempotency
 операции склада, состояния FBS, `DocumentEvent`, существующие специализированные журналы и
 упаковочная зарплата. Факт не является денежным начислением: ни ставка, ни сумма, ни tariff-version
 в 2А не создаются. Старые ledger-строки остаются историей до cutover, новые факты не
-реконструируют прошлое. Никаких baseline/guard правок.
+реконструируют прошлое. Baseline/guard не меняются, кроме узкого отдельного случая из §0; он не
+разрешает массовую нормализацию или смешение с продуктовым commit.
 
 ## 8. Тесты, машинные гейты, PostgreSQL и живой браузер
 
@@ -152,10 +190,10 @@ nullable `billable_service_code`, `source_kind`, `source_event_id`, `idempotency
 Обязательные команды с фактическими exit code:
 
 ```bash
-cd backend && uv run ruff check .
-cd backend && uv run mypy .
-cd backend && uv run pytest backend/tests/test_operation_facts.py backend/tests/test_operation_fact_recovery.py
-cd backend && uv run pytest
+(cd backend && uv run ruff check .)
+(cd backend && uv run mypy .)
+(cd backend && uv run pytest tests/test_operation_facts.py tests/test_operation_fact_recovery.py)
+(cd backend && uv run pytest)
 python3 scripts/ci/back_guard.py
 python3 scripts/ci/check_migrations.py
 ```
@@ -166,6 +204,11 @@ inspection всех индексов/unique constraints/FK и сценарий �
 неприменимы; это фиксируется, а не заменяется фиктивным скриншотом. В evidence сохранить команды,
 exit codes, миграционный proof, выборку фактов и независимый review:
 `docs/evidence/billing-02a-operation-facts/OPERATION-FACTS-PROOF.md`.
+
+Если сработало единственное исключение §0, добавить туда отдельный подраздел
+`BACK_GUARD_BASELINE.md`: конкретный сервис, почему вынести минимальный вызов невозможно, каждая
+строка `docs/backend-guard-baseline.json` «было → стало», SHA отдельного baseline commit и
+доказательство, что иных baseline-файлов/записей не менялось. `back_guard.py --update` не запускать.
 
 До закрытия реализации обязательны: независимое содержательное ревью диффа и отдельный независимый
 прогон существующего регресса. Красный тест, в том числе унаследованный, закрытие запрещает.

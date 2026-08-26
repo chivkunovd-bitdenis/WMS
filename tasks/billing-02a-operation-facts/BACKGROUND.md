@@ -11,21 +11,25 @@
 
 ## Источники и дедупликация
 
-| Операция | Канонический источник | Исход факта |
+Это сводная таблица границы надёжности; полная исполняемая матрица «реальное событие → code →
+source ID → quantity/lines → actor → reversal» находится в §5 `TASK.md` и имеет приоритет.
+
+| Операция | Реальный источник в текущем коде | Разрешённый исход факта |
 |---|---|---|
-| Приёмка, возврат | `InboundIntakeRequest` и фактические строки | завершение/повторное открытие по устойчивому действию документа |
-| Подбор FBS WB | `FbsOrderPick` + `FbsOrderPickEvent` | `picked`, `undone` |
-| Подбор FBS Ozon | `FbsOrderProductPick` | подбор, отмена и повтор после отмены |
-| Упаковка | `PackagingTaskEvent` | pack, undo/cancel, complete без создания зарплаты |
-| Отгрузка | `MarketplaceUnloadRequest` и строки | `shipped`, отмена/сторно при возвращающем переходе |
-| Хранение | `StorageStatement` и `StorageMeasurement` | только зафиксированный statement/measurement |
+| Приёмка, возврат | terminal `STATUS_DONE` у `InboundIntakeRequest`, его `posted_qty` и новый durable `completed_by_user_id` | документ `req.id`, отдельно по `operation_type` |
+| Подбор FBS WB | `FbsOrderPickEvent` | ID отдельного `picked`/`undone` event |
+| Подбор FBS Ozon | `FbsOrderProductPick` с новыми durable `picked_by_user_id`/`undone_by_user_id` | ID строки pick; undo различается operation code |
+| Упаковка | только item-level `PackagingTaskEvent` pack и explicit undo | ID отдельного event; cancel/complete/label/confirm без lines не являются source |
+| Отгрузка | `MarketplaceUnloadRequest` с `STATUS_SHIPPED`/shipped cancellation и новыми durable авторами | `req.id`, code различает completed/reversal |
+| Хранение | fixed `StorageStatement` + `StorageMeasurement` | measurement ID, либо statement ID для нулевого документа |
 
 Факт получает один `source_kind`, один устойчивый `source_event_id` и одну операцию. Идемпотентный
 ключ хранится и в сервисе проверяется вместе с immutable source tuple. Одинаковый retry возвращает
 тот же факт; другой новый физический action после отмены имеет новый source-id и создаёт новый факт.
-Для undo/cancel создаётся отдельный reversal-fact со ссылкой `reversal_of_id`; исходный факт не
-редактируется. Одна строка не может одновременно прийти из `DocumentEvent` и специализированного
-источника — `DocumentEvent` сознательно исключён из reader/recovery.
+Только explicit undo/cancel, у которого текущий источник содержит однозначные quantity и исходный
+action, создаёт reversal-fact со ссылкой `reversal_of_id`; исходный факт не редактируется. Одна
+строка не может одновременно прийти из `DocumentEvent` и специализированного источника —
+`DocumentEvent` сознательно исключён из reader/recovery.
 
 ## Количество, снимки и tenant isolation
 
@@ -51,11 +55,12 @@ legacy `BillingLedgerEntry`; начиная с него — только `Operat
 ## Recovery
 
 Recovery является повторяемым сервисом, а не фоновым бесконтрольным job и не HTTP API. Он принимает
-явный tenant и строгий период/набор исходных ID, берёт только канонические источники этой волны,
+явный tenant и строгий период/набор исходных ID, берёт только реальный source из таблицы выше,
 создаёт отсутствующие факты через штатный writer и возвращает детерминированную сверку. Он не
 редактирует факты, не пересчитывает тарифы, не переписывает ledger и не «угадывает» несуществующий
-источник. Повтор recovery не создаёт дубликат; конфликт source tuple/idempotency key завершает
-операцию именованной ошибкой и попадает в proof.
+источник: например не создаёт fact по `PackagingTaskEvent.complete`, по `cancel` с quantity zero
+или по `DocumentEvent`. Повтор recovery не создаёт дубликат; конфликт source tuple/idempotency key
+завершает операцию именованной ошибкой и попадает в proof.
 
 ## Миграция
 

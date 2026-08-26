@@ -17,6 +17,8 @@
    reversal, не переписывая исходник.
 8. Recovery для явного tenant и периода находит пропущенные факты, создаёт их один раз, сообщает
    `found/created/already_present/conflicted`, а второй запуск даёт `created=0`.
+9. Recovery воспроизводит автора из durable source для inbound, Ozon pick и unload; source rows
+   до cutover не backfill-ятся и не получают выдуманного автора или `source`.
 
 ## Негативные
 
