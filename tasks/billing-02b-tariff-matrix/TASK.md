@@ -32,13 +32,14 @@ zero diff в обоих; для любой правки нужен новый ow
 
 `docs/backend-guard-baseline.json` разрешён ровно для отдельного baseline-only
 commit после accepted integration: только фактические entries
-`backend/app/services/inbound_intake_service.py` и
-`backend/app/services/marketplace_unload_service.py`, с line-by-line evidence
-и причиной в proof. `--update`, любые другие entries и смешивание этого файла
-с product commit запрещены. Два исчерпанных подхода зафиксированы: explicit
-line list и helper `product_billing_lines` уменьшают diff, но оба неизбежно
-оставляют вызов в двух единственных actual aggregate writers под monolith
-ratchet.
+`backend/app/services/inbound_intake_service.py` = `1902` и
+`backend/app/services/marketplace_unload_service.py` = `1235` — ровно эти
+`файл-монолит` значения, с line-by-line evidence и причиной в proof. Более
+высокие/низкие произвольные значения, `--update`, любые другие entries и
+смешивание этого файла с product commit запрещены. Два исчерпанных подхода
+зафиксированы: explicit line list и helper `product_billing_lines` уменьшают
+diff, но оба неизбежно оставляют вызов в двух единственных actual aggregate
+writers под monolith ratchet.
 
 ## 1. Цель и бизнес-результат
 
@@ -98,7 +99,9 @@ package/evidence, `tasks/billing-module-20260825/TASK.FINAL.md`, `AGENTS.md`,
 соседних Settings/Billing flow, удаление/изменение старых версий, пересчёт уже
 выписанных ledger/invoice строк, ослабление уникальностей, внутридневное
 хранение, silent default при отсутствии tenant configuration, частичное
-сохранение матрицы, UI-kit/refactor «заодно» и baseline update.
+сохранение матрицы, UI-kit/refactor «заодно» и baseline update. Единственное
+исключение — описанный в §0 separate baseline-only commit с двумя pinned
+`файл-монолит` entries; все остальные baseline updates запрещены.
 
 ## 5. Данные, API и поведение
 
