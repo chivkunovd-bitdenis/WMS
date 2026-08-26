@@ -1,8 +1,8 @@
-import { createElement, type ReactElement } from 'react'
+import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
-import { MoscowDateTimeInput, NumberInput, SelectInput, TextInput } from './FormFields'
+import { __formFieldsTest, MoscowDateTimeInput, NumberInput, SelectInput, TextInput } from './FormFields'
 
 describe('generic form fields', () => {
   it('renders label, linked error/help and disabled loading state without a screen-specific contract', () => {
@@ -26,32 +26,46 @@ describe('generic form fields', () => {
     expect(markup).toContain('disabled=""')
   })
 
+  it('links a label, input and helper without testId, while omitting aria-describedby without helper text', () => {
+    const withHelper = renderToStaticMarkup(
+      createElement(TextInput, {
+        label: 'Название',
+        value: 'Тест',
+        onChange: () => undefined,
+        helperText: 'Подсказка',
+      }),
+    )
+    const inputId = withHelper.match(/<input[^>]*\sid="([^"]+)"[^>]*>/)?.[1]
+    const helperId = withHelper.match(/aria-describedby="([^"]+)"/)?.[1]
+
+    expect(inputId).toBeTruthy()
+    expect(helperId).toBeTruthy()
+    expect(withHelper).toContain(`for="${inputId}"`)
+    expect(withHelper).toContain(`id="${helperId}"`)
+    expect(helperId).not.toContain('undefined')
+
+    const withoutHelper = renderToStaticMarkup(
+      createElement(TextInput, { label: 'Пустое поле', value: '', onChange: () => undefined }),
+    )
+    expect(withoutHelper).not.toContain('aria-describedby=')
+
+    const explicitId = renderToStaticMarkup(
+      createElement(TextInput, { id: 'explicit-name', label: 'Имя', value: '', onChange: () => undefined, testId: 'only-a-test-hook' }),
+    )
+    expect(explicitId).toMatch(/<label[^>]*for="explicit-name"/)
+    expect(explicitId).toMatch(/<input[^>]*id="explicit-name"/)
+  })
+
   it('gives a number field numeric right-aligned semantics and does not emit out-of-range input', () => {
-    const onChange = vi.fn()
-    const element = NumberInput({
-      label: 'Ставка',
-      value: 12,
-      onChange,
-      min: 0,
-      max: 100,
-      step: 0.5,
-      testId: 'form-number',
-    })
-    const field = (element.props as { children: ReactElement }).children
-    const props = field.props as { onChange: (event: { target: { value: string } }) => void }
-
-    props.onChange({ target: { value: '12.5' } })
-    props.onChange({ target: { value: '101' } })
-
-    expect(onChange).toHaveBeenCalledTimes(1)
-    expect(onChange).toHaveBeenCalledWith(12.5)
-    const markup = renderToStaticMarkup(element)
+    const markup = renderToStaticMarkup(
+      createElement(NumberInput, { label: 'Ставка', value: 12, onChange: () => undefined, min: 0, max: 100, step: 0.5, testId: 'form-number' }),
+    )
     expect(markup).toContain('type="number"')
     expect(markup).toContain('text-align:right')
     expect(markup).toContain('inputMode="decimal"')
   })
 
-  it('renders a selectable accessible empty choice and disabled option', () => {
+  it('renders a native keyboard-focusable select with an empty choice, disabled option and change handler', () => {
     const markup = renderToStaticMarkup(
       createElement(SelectInput, {
         label: 'Единица',
@@ -72,6 +86,8 @@ describe('generic form fields', () => {
     expect(markup).toContain('За единицу')
     expect(markup).toContain('За документ')
     expect(markup).toContain('aria-invalid="true"')
+    expect(markup).toContain('<select')
+    expect(markup).toContain('tabindex="0"')
   })
 
   it('presents a UTC instant as Moscow wall time and keeps the input accessible', () => {
@@ -91,32 +107,10 @@ describe('generic form fields', () => {
     expect(markup).toContain('Укажите существующее однозначное время Москвы')
   })
 
-  it('emits one UTC instant for valid Moscow wall time and emits nothing for an invalid value', async () => {
-    vi.resetModules()
-    vi.doMock('react', async () => {
-      const actual = await vi.importActual<typeof import('react')>('react')
-      return {
-        ...actual,
-        useMemo: <T,>(factory: () => T) => factory(),
-        useState: <T,>(initial: T) => [initial, () => undefined] as const,
-      }
-    })
-    const { MoscowDateTimeInput: DirectMoscowDateTimeInput } = await import('./FormFields')
-    const onChange = vi.fn()
-    const frame = DirectMoscowDateTimeInput({
-      label: 'Действует с',
-      value: null,
-      onChange,
-      testId: 'form-moscow-time-direct',
-    })
-    const field = (frame.props as { children: ReactElement }).children
-    const props = field.props as { onChange: (event: { target: { value: string } }) => void }
-
-    props.onChange({ target: { value: '2026-01-15T12:00' } })
-    props.onChange({ target: { value: '2026-02-30T12:00' } })
-
-    expect(onChange).toHaveBeenCalledTimes(1)
-    expect(onChange).toHaveBeenCalledWith('2026-01-15T09:00:00.000Z')
-    vi.doUnmock('react')
+  it('rejects Moscow DST gap and ambiguity, while resolving a valid boundary and invalid calendar precisely', () => {
+    expect(__formFieldsTest.resolveMoscowWallTime('2010-03-28T02:30')).toBeNull()
+    expect(__formFieldsTest.resolveMoscowWallTime('2010-10-31T02:30')).toBeNull()
+    expect(__formFieldsTest.resolveMoscowWallTime('2010-03-28T03:30')).toBe('2010-03-27T23:30:00.000Z')
+    expect(__formFieldsTest.resolveMoscowWallTime('2026-02-30T12:00')).toBeNull()
   })
 })

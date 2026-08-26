@@ -1,8 +1,9 @@
 import { Box, TextField } from '@mui/material'
 import type { ChangeEvent } from 'react'
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 
 type FieldProps = {
+  id?: string
   label: string
   error?: string
   helperText?: string
@@ -41,12 +42,25 @@ type MoscowDateTimeInputProps = FieldProps & {
 const MOSCOW_TIME_ZONE = 'Europe/Moscow'
 const WALL_TIME_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/
 
-function helperId(testId?: string) {
-  return testId ? `${testId}-helper` : undefined
-}
-
 function visibleHelp({ error, helperText, loading }: FieldProps) {
   return error ?? helperText ?? (loading ? 'Загрузка…' : undefined)
+}
+
+type FieldMetadata = {
+  inputId: string
+  helperId?: string
+  helperText?: string
+}
+
+function useFieldMetadata(props: FieldProps): FieldMetadata {
+  const generatedId = useId().replace(/[^A-Za-z0-9_-]/g, '')
+  const inputId = props.id ?? `ui-field-${generatedId}`
+  const helperText = visibleHelp(props)
+  return {
+    inputId,
+    helperId: helperText ? `${inputId}-helper` : undefined,
+    helperText,
+  }
 }
 
 function FieldFrame({ children, loading, testId }: { children: React.ReactNode; loading?: boolean; testId?: string }) {
@@ -57,36 +71,37 @@ function FieldFrame({ children, loading, testId }: { children: React.ReactNode; 
   )
 }
 
-function inputA11y(props: FieldProps) {
-  const describedBy = helperId(props.testId)
+function inputA11y(props: FieldProps, metadata: FieldMetadata) {
   return {
     'data-testid': props.testId,
     'aria-invalid': Boolean(props.error),
-    'aria-describedby': describedBy,
+    ...(metadata.helperId ? { 'aria-describedby': metadata.helperId } : {}),
   }
 }
 
-function commonProps(props: FieldProps) {
+function commonProps(props: FieldProps, metadata: FieldMetadata) {
   return {
+    id: metadata.inputId,
     label: props.label,
     required: props.required,
     disabled: Boolean(props.disabled || props.loading),
     error: Boolean(props.error),
-    helperText: visibleHelp(props),
+    helperText: metadata.helperText,
     size: 'small' as const,
     fullWidth: true,
     slotProps: {
-      htmlInput: inputA11y(props),
-      formHelperText: { id: helperId(props.testId) },
+      htmlInput: inputA11y(props, metadata),
+      ...(metadata.helperId ? { formHelperText: { id: metadata.helperId } } : {}),
     },
   }
 }
 
 export function TextInput({ value, onChange, multiline = false, ...props }: TextInputProps) {
+  const metadata = useFieldMetadata(props)
   return (
     <FieldFrame loading={props.loading} testId={props.testId}>
       <TextField
-        {...commonProps(props)}
+        {...commonProps(props, metadata)}
         value={value}
         multiline={multiline}
         minRows={multiline ? 2 : undefined}
@@ -97,6 +112,7 @@ export function TextInput({ value, onChange, multiline = false, ...props }: Text
 }
 
 export function NumberInput({ value, onChange, min, max, step = 1, ...props }: NumberInputProps) {
+  const metadata = useFieldMetadata(props)
   function handleChange(event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
     const raw = event.target.value.trim()
     if (!raw) {
@@ -113,14 +129,14 @@ export function NumberInput({ value, onChange, min, max, step = 1, ...props }: N
   return (
     <FieldFrame loading={props.loading} testId={props.testId}>
       <TextField
-        {...commonProps(props)}
+        {...commonProps(props, metadata)}
         type="number"
         value={value ?? ''}
         onChange={handleChange}
         slotProps={{
-          ...commonProps(props).slotProps,
+          ...commonProps(props, metadata).slotProps,
           htmlInput: {
-            ...inputA11y(props),
+            ...inputA11y(props, metadata),
             min,
             max,
             step,
@@ -134,16 +150,17 @@ export function NumberInput({ value, onChange, min, max, step = 1, ...props }: N
 }
 
 export function SelectInput({ value, onChange, options, emptyLabel, ...props }: SelectInputProps) {
+  const metadata = useFieldMetadata(props)
   return (
     <FieldFrame loading={props.loading} testId={props.testId}>
       <TextField
-        {...commonProps(props)}
+        {...commonProps(props, metadata)}
         select
         value={value}
         onChange={(event) => onChange(event.target.value)}
         slotProps={{
-          ...commonProps(props).slotProps,
-          select: { native: true },
+          ...commonProps(props, metadata).slotProps,
+          select: { native: true, tabIndex: 0 },
         }}
       >
         {emptyLabel ? <option value="">{emptyLabel}</option> : null}
@@ -227,11 +244,15 @@ function formatMoscowWallTime(value: string | null) {
   return `${parts.year.toString().padStart(4, '0')}-${parts.month.toString().padStart(2, '0')}-${parts.day.toString().padStart(2, '0')}T${parts.hour.toString().padStart(2, '0')}:${parts.minute.toString().padStart(2, '0')}`
 }
 
+// Test-only seam; it is deliberately not re-exported by ui-kit/index.
+export const __formFieldsTest = { resolveMoscowWallTime }
+
 export function MoscowDateTimeInput({ value, onChange, ...props }: MoscowDateTimeInputProps) {
   const [localError, setLocalError] = useState<string | undefined>()
   const wallValue = useMemo(() => formatMoscowWallTime(value), [value])
   const error = localError ?? props.error
   const fieldProps = { ...props, error }
+  const metadata = useFieldMetadata(fieldProps)
 
   function handleChange(event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
     const next = event.target.value
@@ -252,7 +273,7 @@ export function MoscowDateTimeInput({ value, onChange, ...props }: MoscowDateTim
   return (
     <FieldFrame loading={fieldProps.loading} testId={fieldProps.testId}>
       <TextField
-        {...commonProps(fieldProps)}
+        {...commonProps(fieldProps, metadata)}
         type="datetime-local"
         value={wallValue}
         onChange={handleChange}
