@@ -12,10 +12,12 @@ marketplace outbound и storage; storage дополнительно зависи
 
 `FfSettingsScreen` — фактический owner S-19 (`/app/ff/settings`). В нём уже
 есть header, warehouse panel и staff panel. `FfBillingScreen` уже умеет вести
-пользователя к `settings?tab=tariffs`, но остаётся старым экраном начислений и
-счетов; он не является частью 2Б. Реестр экранов назначает только S-19 на
-`FfSettingsScreen`, следовательно добавление панели в эту зону не захватывает
-чужой экран или route.
+пользователя к `/app/ff/settings?tab=tariffs`; ссылка уже правильна, но
+`FfSettingsScreen` ещё не читает этот query parameter. 2Б добавляет только
+обработку query и stable anchor с scroll/focus в owner S-19. `FfBillingScreen`
+остаётся старым экраном начислений и счетов и не является частью 2Б. Реестр
+экранов назначает только S-19 на `FfSettingsScreen`, следовательно добавление
+панели в эту зону не захватывает чужой экран или route.
 
 ## Почему V2, а не правка legacy версии
 
@@ -24,7 +26,22 @@ marketplace outbound и storage; storage дополнительно зависи
 links и позволило бы storage сменить цену посреди дня — это запрещено. Поэтому
 V2 живёт рядом: non-storage получает timestamp intervals в UTC с Moscow input,
 storage остаётся daily exception в `BillingTariffVersion`. Ledger хранит
-nullable V2 link наряду со старой ссылкой, а не теряет историю.
+nullable V2 link наряду со старой ссылкой, а не теряет историю. Для
+product-level money V2 добавляет child `BillingLedgerLine`: parent сохраняет
+неизменяемый source-event unique, а immutable lines хранят quantity/unit,
+product и тарифный snapshot. Historical ledger lines не подлежат guessed
+backfill, если у источника нет доказуемой product-level разбивки.
+
+## Явная matrix для каждого tenant
+
+Новая tenant matrix не может быть «отсутствующей, но будто выключенной»:
+отсутствие строки неотличимо от дефекта bootstrap и опасно для денег. Поэтому
+оба фактических создания `Tenant` — обычный `register_fulfillment` в
+`auth_service.py` и bootstrap-admin из lifespan `main.py` — обязаны атомарно
+сохранить одну tenant-scoped configuration и disabled state каждой non-storage
+услуги. Unique constraint и transaction делают concurrent/repeated bootstrap
+идемпотентным; сбой конфигурации откатывает tenant. Для уже существующих tenants
+migration создаёт явные состояния, сохраняя доказуемое legacy поведение.
 
 Legacy non-storage copy — именно migration/backfill, не догадка: старый start
 становится Moscow `00:00`, включительный old end — следующей исключающей
@@ -46,6 +63,12 @@ and treats `valid_to_at` as exclusive. Exact no-change retry is a no-op; a
 changed matrix creates a new immutable version; any bad element rolls back the
 whole payload. This makes a matrix save atomic rather than a sequence of
 independent settings forms.
+
+Реальные aggregate charge writers сейчас только два: posted request lines в
+`inbound_intake_service.py` и distributed product quantities в
+`marketplace_unload_service.py`. Они должны передавать structured lines в один
+atomic ledger write; parent и все children создаются либо вместе, либо ни один.
+Retry не добавляет lines, reversal один раз воспроизводит signed snapshots.
 
 ## Moscow time and money boundary
 

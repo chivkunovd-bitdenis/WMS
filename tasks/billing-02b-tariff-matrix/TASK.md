@@ -11,7 +11,7 @@
 После `ACCEPTED` открыть ровно такой наряд:
 
 ```bash
-python3 scripts/naryad.py new "Волна 2Б модуля «Расчёты»: тарифная матрица на экране Настройки ФФ" --screens S-19 --lane обычная --files backend/app/models/billing.py,backend/app/models/__init__.py,backend/app/models/packaging_task.py,backend/app/services/billing_tariff_matrix_service.py,backend/app/services/billing_configuration_service.py,backend/app/services/billing_ledger_service.py,backend/app/api/billing.py,backend/alembic/versions/20260826_0112_billing_tariff_matrix.py,backend/tests/test_billing_tariff_matrix.py,backend/tests/test_billing_configuration_api.py,backend/tests/test_billing_ledger_service.py,backend/tests/test_billing_invoice_service.py,backend/tests/test_billing_invoice_api.py,backend/tests/test_staff_packaging_billing.py,frontend/src/screens/ff/FfSettingsScreen.tsx,frontend/src/screens/ff/FfSettingsScreen.test.tsx,frontend/src/api.ts,frontend/tests-e2e/ff-billing-tariff-matrix.spec.ts,frontend/tests-e2e/billing-ledger.spec.ts,frontend/tests-e2e/billing-invoices.spec.ts,docs/evidence/billing-02b-tariff-matrix/OPERATION-FACTS-PROOF.md
+python3 scripts/naryad.py new "Волна 2Б модуля «Расчёты»: тарифная матрица на экране Настройки ФФ" --screens S-19 --lane обычная --files backend/app/models/billing.py,backend/app/models/__init__.py,backend/app/models/packaging_task.py,backend/app/services/auth_service.py,backend/app/services/billing_tariff_matrix_service.py,backend/app/services/billing_configuration_service.py,backend/app/services/billing_ledger_service.py,backend/app/services/inbound_intake_service.py,backend/app/services/marketplace_unload_service.py,backend/app/api/billing.py,backend/app/main.py,backend/alembic/versions/20260826_0112_billing_tariff_matrix.py,backend/tests/test_auth.py,backend/tests/test_bootstrap_billing_tariff_matrix.py,backend/tests/test_billing_tariff_matrix.py,backend/tests/test_billing_configuration_api.py,backend/tests/test_billing_ledger_service.py,backend/tests/test_billing_invoice_service.py,backend/tests/test_billing_invoice_api.py,backend/tests/test_staff_packaging_billing.py,backend/tests/test_inbound_intake_service_sort_be01.py,backend/tests/test_marketplace_unload_and_discrepancy_acts.py,frontend/src/screens/ff/FfSettingsScreen.tsx,frontend/src/screens/ff/FfSettingsScreen.test.tsx,frontend/src/api.ts,frontend/tests-e2e/ff-billing-tariff-matrix.spec.ts,frontend/tests-e2e/ff-staff-users.spec.ts,frontend/tests-e2e/billing-ledger.spec.ts,frontend/tests-e2e/billing-invoices.spec.ts,docs/evidence/billing-02b-tariff-matrix/OPERATION-FACTS-PROOF.md
 ```
 
 Только перечисленные файлы разрешены для реализации. `frontend/src/ui-kit/**`,
@@ -97,21 +97,52 @@ timestamp indexes на область+service+unit+`valid_from_at` обязат�
 блокирует поток версий и отклоняет пересекающиеся интервалы; он закрывает только
 предыдущую версию, никогда не редактирует использованную.
 
-В `BillingLedgerEntry` добавляется nullable v2-FK, сохраняя legacy
-`tariff_version_id`, старые строки и `uq_billing_ledger_source_event` буквально
-без ослабления. В `PackagingTask` добавляется только
+Добавить tenant-scoped `BillingTariffMatrixConfig` и явные строки состояния
+non-storage услуг: для **каждого** нового `Tenant` матрица и все сервисы
+создаются disabled в той же transaction, что и tenant. Это обязательно для
+обоих фактических путей создания tenant: `register_fulfillment` в
+`auth_service.py` и bootstrap-admin в lifespan `main.py`. Отсутствующая строка
+не означает default: reader возвращает явную domain error
+`billing_tariff_matrix_config_missing`. Unique tenant constraint и
+transaction/locking делают повтор bootstrap и конкурентное создание
+идемпотентными; ошибка создания configuration откатывает и tenant. Миграция
+создаёт явные состояния для существующих tenants, сохраняя доказуемо
+настроенное legacy поведение, а не подменяя его silent default.
+
+В `BillingLedgerEntry` добавляется nullable v2-FK и additive child
+`BillingLedgerLine`, сохраняя legacy `tariff_version_id`, старые строки и
+`uq_billing_ledger_source_event` буквально без ослабления. У строки есть
+`tenant_id`, parent `ledger_entry_id`, nullable `operation_fact_line_id` и
+`product_id`, immutable product/SKU/name snapshots, physical и billing
+quantity, billing unit, applied V2 tariff-version и product-override/scope
+snapshot, unit price в копейках, independently rounded line amount в копейках,
+source/audit snapshots и timestamp. Tenant-scoped FK/checks не допускают
+foreign parent/product/fact/tariff. Для разных product rates parent хранит
+`rate=null`, `amount=sum(rounded child amounts)`; parent unique остаётся
+единственным idempotency key source event. В `PackagingTask` добавляется только
 `billing_rate_configured`: историческое ненулевое packaging rate = configured,
 исторический ноль = «нет ставки/не подтверждено»; новый явный ноль возможен
 только через настроенную версию. Packaging money не дублируется в employee
 matrix.
 
-Миграция: создаёт V2 и ограничения; копирует legacy non-storage тарифы без
+`billing_ledger_service.py` создаёт parent и все lines одной DB transaction:
+invalid product/scope/rate или conflict оставляет ноль parent/lines. В V2
+structured lines передают только реальные aggregate writers: posted request
+lines из `inbound_intake_service.py` и distributed product quantities из
+`marketplace_unload_service.py`; иных нынешних writer-ов charge contract не
+имеет. Retry возвращает тот же parent с теми же lines, не добавляя дублей.
+Reversal один раз воспроизводит immutable signed lines; legacy parents без
+lines остаются читаемы, не получают guessed child backfill и не меняют суммы.
+
+Миграция: создаёт V2, явную tenant configuration/service states, child lines и
+их tenant constraints/indexes; копирует legacy non-storage тарифы без
 разрыва/наложения, переводя `valid_from` в московскую полночь и включительный
 `valid_to` в исключающую следующую московскую полночь; проставляет nullable V2
 ссылки только там, где это безопасно, legacy FK оставляет; добавляет
-`billing_rate_configured`. Новые `packing` и `return` выключены, legacy
-`inbound`/`marketplace_outbound` сохраняют действие. Storage остаётся в
-`BillingTariffVersion` с московскими днями, не V2.
+`billing_rate_configured`. Child lines для historical ledger не backfill-ятся:
+без product-level source truth это небезопасно. Новые `packing` и `return`
+выключены, legacy `inbound`/`marketplace_outbound` сохраняют действие. Storage
+остаётся в `BillingTariffVersion` с московскими днями, не V2.
 
 ### API layer
 
@@ -134,20 +165,25 @@ product exceptions) и отдельная компактная таблица em
 существующий экран. Для `document` product exception недоступен с объяснением;
 service disabled остаётся visible «Не тарифицируется» для будущего отчёта.
 Нет custom tabs/dropdowns/filters/buttons/tables: только описанный existing
-UI-kit/MUI composition. Нет нового route или нового URL-поведения; существующие
-ссылки на Settings не превращаются в отдельный экран.
+UI-kit/MUI composition. `FfBillingScreen` не меняется: его существующая ссылка
+`/app/ff/settings?tab=tariffs` уже верна. `FfSettingsScreen` читает только
+`tab=tariffs`, после render/fetch scrolls и переводит focus на стабильный
+tariff-section anchor (`id`/`data-testid`, `tabIndex=-1`); иные Settings content
+и normal scroll без query остаются как были. Нет нового route или нового
+URL-поведения помимо обработки уже существующего query.
 
 ## 6. Точные границы реализации и зависимости
 
 | Слой | Разрешённые файлы | Результат |
 |---|---|---|
-| Models/migration | `backend/app/models/billing.py`, `backend/app/models/__init__.py`, `backend/app/models/packaging_task.py`, `backend/alembic/versions/20260826_0112_billing_tariff_matrix.py` | additive V2, v2-FK, configured marker, single head |
-| Service | `backend/app/services/billing_tariff_matrix_service.py`, `billing_configuration_service.py`, `billing_ledger_service.py` | atomic tenant-scoped save, interval resolver, non-storage reader/writer bridge |
+| Models/migration | `backend/app/models/billing.py`, `backend/app/models/__init__.py`, `backend/app/models/packaging_task.py`, `backend/alembic/versions/20260826_0112_billing_tariff_matrix.py` | additive V2, persisted disabled tenant matrix, v2-FK/`BillingLedgerLine`, configured marker, single head |
+| Tenant creation | `backend/app/services/auth_service.py`, `backend/app/main.py` | registration and bootstrap both atomically persist disabled matrix; duplicate/concurrent bootstrap is idempotent |
+| Service | `backend/app/services/billing_tariff_matrix_service.py`, `backend/app/services/billing_configuration_service.py`, `backend/app/services/billing_ledger_service.py`, `backend/app/services/inbound_intake_service.py`, `backend/app/services/marketplace_unload_service.py` | atomic tenant-scoped save, interval resolver and exactly the two existing aggregate charge writers pass product lines |
 | API | `backend/app/api/billing.py` | admin-only matrix Pydantic/OpenAPI contract |
-| Backend tests | named six billing/staff test files in §0 | matrix, migration, tenant/RBAC, legacy ledger/invoice regressions |
-| S-19 | `frontend/src/screens/ff/FfSettingsScreen.tsx`, `.test.tsx`, `frontend/src/api.ts` | compact panel only; existing UI-kit imports only |
-| Browser | `frontend/tests-e2e/ff-billing-tariff-matrix.spec.ts`, `billing-ledger.spec.ts`, `billing-invoices.spec.ts` | visible matrix plus old screens unchanged |
-| Evidence | `docs/evidence/billing-02b-tariff-matrix/OPERATION-FACTS-PROOF.md` | commands, exits, PostgreSQL and browser proof |
+| Backend tests | `backend/tests/test_auth.py`, `backend/tests/test_bootstrap_billing_tariff_matrix.py`, `backend/tests/test_billing_tariff_matrix.py`, `backend/tests/test_billing_configuration_api.py`, `backend/tests/test_billing_ledger_service.py`, `backend/tests/test_billing_invoice_service.py`, `backend/tests/test_billing_invoice_api.py`, `backend/tests/test_staff_packaging_billing.py`, `backend/tests/test_inbound_intake_service_sort_be01.py`, `backend/tests/test_marketplace_unload_and_discrepancy_acts.py` | creation rollback/concurrency, matrix/migration, product-line writer and reversal idempotency, tenant/RBAC and legacy invoice regressions |
+| S-19 | `frontend/src/screens/ff/FfSettingsScreen.tsx`, `.test.tsx`, `frontend/src/api.ts` | compact panel only; query anchor scroll/focus; existing UI-kit imports only |
+| Browser | `frontend/tests-e2e/ff-billing-tariff-matrix.spec.ts`, `frontend/tests-e2e/ff-staff-users.spec.ts`, `frontend/tests-e2e/billing-ledger.spec.ts`, `frontend/tests-e2e/billing-invoices.spec.ts` | visible matrix/deep link plus old Settings, staff, ledger and invoices unchanged |
+| Evidence | `docs/evidence/billing-02b-tariff-matrix/OPERATION-FACTS-PROOF.md` | commands, exits, PostgreSQL and 1600px browser proof |
 
 Dependency is exactly accepted 2А SHA `60f82566e9adc65706b00ebb679c6725062801e6`.
 If a missing source needs another file, stop for amendment instead of broadening.
@@ -165,12 +201,19 @@ readable. Existing user/seller/warehouse permissions do not widen.
 ## 8. Тесты, гейты, PostgreSQL и browser proof
 
 Сначала CASES red tests, затем minimal implementation. Обязательны targeted
-backend tests, billing ledger/invoice regressions, frontend unit/type/build,
-targeted Playwright, `ui_guard`, backend ruff/mypy/full pytest,
-`check_migrations`, exactly one Alembic head, `back_guard`, diff check и полный
-frontend e2e. PostgreSQL proof: upgrade 2А→0112, V2 indexes/FKs/checks,
-legacy backfill intervals, overlap/atomic rollback, tenant rejection, DST and
-Moscow boundaries, unchanged `uq_billing_ledger_source_event`.
+backend tests: оба пути создания Tenant дают persisted disabled matrix; ошибка
+configuration откатывает tenant, concurrent/repeated bootstrap не создаёт
+дубликат; no-row даёт явную domain error. Проверить product lines на одном
+parent для нескольких products с разными rates, atomic rollback без partial
+lines, retry idempotency, reversal и legacy coexistence; inbound posted lines и
+marketplace-unload distribution — реальные writer inputs. Обязательны billing
+ledger/invoice regressions, frontend unit/type/build (включая `?tab=tariffs`
+anchor focus/scroll и no-query scroll), targeted Playwright, `ui_guard`, backend
+ruff/mypy/full pytest, `check_migrations`, exactly one Alembic head,
+`back_guard`, diff check и полный frontend e2e. PostgreSQL proof: upgrade
+2А→0112, V2/config/line indexes/FKs/checks, safe legacy backfill intervals,
+overlap/atomic rollback, tenant rejection, DST and Moscow boundaries, child-line
+retry/reversal and unchanged `uq_billing_ledger_source_event`.
 
 На 1600px отдельный Terra ui-critic сверяет канон и отдельный Terra judge в
 живом browser вручную проходит admin success/disabled/error/empty/loading;

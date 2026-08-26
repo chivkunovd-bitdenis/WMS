@@ -18,6 +18,13 @@
    PackagingTask is `billing_rate_configured=false`; historical nonzero is true.
 6. Storage остаётся в legacy daily table: ставка действует целый Moscow day,
    storage product override/employee rate/intraday V2 не появляются.
+7. Обычная регистрация и bootstrap-admin создают один persisted tenant matrix
+   со всеми non-storage services disabled; повтор bootstrap возвращает тот же
+   state, а не missing-row default.
+8. Один inbound request и один shipped marketplace unload с несколькими
+   products создают один ledger parent и immutable child lines с разными
+   product overrides/rates; parent amount равен сумме independently rounded
+   lines, parent rate при разных rates равен `null`.
 
 ## Негативные и atomicity
 
@@ -34,6 +41,11 @@
    changes after rollback.
 5. Concurrent saves one stream serialize: one succeeds, other gets named
    conflict/reloads draft; partial configuration never appears.
+6. Сбой configuration во время registration/bootstrap откатывает и Tenant;
+   concurrent/repeated bootstrap не создаёт второй config или service states.
+7. Foreign parent/product/fact/tariff для `BillingLedgerLine`, отсутствующая
+   tenant matrix или aggregate write с невалидной product line отклоняются без
+   parent и без частичных lines.
 
 ## Регрессия финансов и миграции
 
@@ -50,6 +62,10 @@
    timezone/DST-validity cases resolve one active rate, not browser-local day.
 5. Existing storage tariff API/screen, monthly storage statement and packaging
    payroll regression pass untouched.
+6. Повтор source event возвращает исходный parent с исходным набором child
+   lines; reversal создаёт signed immutable counterparts ровно один раз.
+   Legacy parent без child lines, его amount/rate/snapshot и invoices остаются
+   без guessed backfill и без изменения.
 
 ## API, RBAC and OpenAPI
 
@@ -66,13 +82,17 @@
 1. Admin opens existing `/app/ff/settings`: panel follows staff, has expected
    headers/columns and horizontal overflow inside table container only; header,
    warehouse and staff zones have unchanged geometry.
-2. Admin enables a service, selects allowed unit, enters rate/time and saves:
+2. Existing `/app/ff/settings?tab=tariffs` scrolls and focuses the stable
+   tariff panel anchor after it is rendered; without the query normal Settings
+   content and scroll remain unchanged. `FfBillingScreen` and routes are not
+   edited.
+3. Admin enables a service, selects allowed unit, enters rate/time and saves:
    loading disables only save/action with explanation; success reloads visible
    version. A document unit disables product override with reason.
-3. Network/API error is `ErrorNotice` in panel, does not erase last rendered
+4. Network/API error is `ErrorNotice` in panel, does not erase last rendered
    matrix; empty config explains what to configure; loading is table skeleton.
-4. Staff/seller do not see the panel or its values. Existing staff permissions,
+5. Staff/seller do not see the panel or its values. Existing staff permissions,
    Billing ledger and invoices Playwright scenarios remain green.
-5. Separate Terra ui-critic checks UX canon and separate Terra judge manually
+6. Separate Terra ui-critic checks UX canon and separate Terra judge manually
    checks live browser success/error/empty/disabled at 1600px; both save
    screenshots plus invariants/ui_guard output to evidence.
