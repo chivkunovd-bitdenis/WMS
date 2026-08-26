@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Text, and_, cast, false, func, or_, select
+from sqlalchemy import Text, and_, cast, false, func, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -382,23 +382,22 @@ async def _enrich_linked_products(
         seller_id=seller_id,
     )
 
-    seller_ids: set[uuid.UUID] = set()
-    for p in scoped_products:
-        if p.seller_id is not None:
-            seller_ids.add(p.seller_id)
-
-    card_stmt = select(SellerWildberriesImportedCard).where(
-        SellerWildberriesImportedCard.tenant_id == tenant_id,
-    )
-    if seller_id is not None:
-        card_stmt = card_stmt.where(SellerWildberriesImportedCard.seller_id == seller_id)
-    elif seller_ids:
-        card_stmt = card_stmt.where(SellerWildberriesImportedCard.seller_id.in_(seller_ids))
-    else:
-        card_stmt = card_stmt.where(false())
-
-    card_res = await session.execute(card_stmt)
-    cards = list(card_res.scalars().all())
+    card_keys = {
+        (p.seller_id, int(p.wb_nm_id))
+        for p in scoped_products
+        if p.seller_id is not None and p.wb_nm_id is not None
+    }
+    cards: list[SellerWildberriesImportedCard] = []
+    if card_keys:
+        card_stmt = select(SellerWildberriesImportedCard).where(
+            SellerWildberriesImportedCard.tenant_id == tenant_id,
+            tuple_(
+                SellerWildberriesImportedCard.seller_id,
+                SellerWildberriesImportedCard.nm_id,
+            ).in_(card_keys),
+        )
+        card_res = await session.execute(card_stmt)
+        cards = list(card_res.scalars().all())
     by_seller_nm: dict[tuple[uuid.UUID, int], dict[str, Any] | None] = {}
     for c in cards:
         raw = c.raw_json if isinstance(c.raw_json, dict) else None
