@@ -22,6 +22,14 @@ python3 scripts/naryad.py new "Волна 2Б модуля «Расчёты»: �
 `20260826_0112` продолжает единственный head 2А. Никаких production/staging,
 секретов, Ozon или UI-kit правок.
 
+Фактическая граница — ровно 33 пути generated NARYAD. Два из них добавлены
+механически registry для `--screens S-19`: `frontend/src/utils/ffPermissions.ts`
+и `frontend/src/utils/separateMarkingPrint.ts`. Они не являются feature scope
+2Б и остаются immutable/prohibited: implementation и review обязаны показать
+zero diff в обоих; для любой правки нужен новый owner-approved amendment. Единственный
+новый feature path этого amendment —
+`frontend/src/screens/ff/FfBillingTariffMatrixPanel.tsx`.
+
 ## 1. Цель и бизнес-результат
 
 Администратор ФФ на существующем экране «Настройки ФФ» получает одну компактную
@@ -181,7 +189,7 @@ URL-поведения помимо обработки уже существую
 | Service | `backend/app/services/billing_tariff_matrix_service.py`, `backend/app/services/billing_configuration_service.py`, `backend/app/services/billing_ledger_service.py`, `backend/app/services/inbound_intake_service.py`, `backend/app/services/marketplace_unload_service.py` | atomic tenant-scoped save, interval resolver and exactly the two existing aggregate charge writers pass product lines |
 | API | `backend/app/api/billing.py` | admin-only matrix Pydantic/OpenAPI contract |
 | Backend tests | `backend/tests/test_auth.py`, `backend/tests/test_bootstrap_billing_tariff_matrix.py`, `backend/tests/test_billing_tariff_matrix.py`, `backend/tests/test_billing_configuration_api.py`, `backend/tests/test_billing_ledger_service.py`, `backend/tests/test_billing_invoice_service.py`, `backend/tests/test_billing_invoice_api.py`, `backend/tests/test_staff_packaging_billing.py`, `backend/tests/test_inbound_intake_service_sort_be01.py`, `backend/tests/test_marketplace_unload_and_discrepancy_acts.py` | creation rollback/concurrency, matrix/migration, product-line writer and reversal idempotency, tenant/RBAC and legacy invoice regressions |
-| S-19 | `frontend/src/screens/ff/FfSettingsScreen.tsx`, `frontend/src/screens/ff/FfBillingTariffMatrixPanel.tsx`, `.test.tsx`, `frontend/src/api.ts` | panel is extracted only to keep S-19 under the ui_guard monolith ratchet; it is not a screen, route or UI primitive and composes existing UI-kit only |
+| S-19 | `frontend/src/screens/ff/FfSettingsScreen.tsx`, `frontend/src/screens/ff/FfBillingTariffMatrixPanel.tsx`, `.test.tsx`, `frontend/src/api.ts`; registry-auto-included `frontend/src/utils/ffPermissions.ts`, `frontend/src/utils/separateMarkingPrint.ts` are zero-diff prohibited | panel is extracted only to keep S-19 under the ui_guard monolith ratchet; it is not a screen, route or UI primitive and composes existing UI-kit only |
 | Browser | `frontend/tests-e2e/ff-billing-tariff-matrix.spec.ts`, `frontend/tests-e2e/ff-staff-users.spec.ts`, `frontend/tests-e2e/billing-ledger.spec.ts`, `frontend/tests-e2e/billing-invoices.spec.ts` | visible matrix/deep link plus old Settings, staff, ledger and invoices unchanged |
 | Evidence | `docs/evidence/billing-02b-tariff-matrix/OPERATION-FACTS-PROOF.md` | commands, exits, PostgreSQL and 1600px browser proof |
 
