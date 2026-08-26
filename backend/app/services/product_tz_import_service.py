@@ -408,13 +408,20 @@ async def _find_by_barcode_tenant(
 async def _find_by_sku(
     session: AsyncSession,
     tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
     sku_code: str,
 ) -> Product | None:
+    # Артикул уникален внутри продавца, поэтому и «занят» он может быть только своим:
+    # без фильтра по продавцу запрос вернул бы товар чужого юрлица и ложно объявил
+    # артикул занятым (а после снятия тенантного ограничения — ещё и упал бы на
+    # нескольких строках).
     stmt = select(Product).where(
-        Product.tenant_id == tenant_id, Product.sku_code == sku_code
+        Product.tenant_id == tenant_id,
+        Product.seller_id == seller_id,
+        Product.sku_code == sku_code,
     )
     res = await session.execute(stmt)
-    return res.scalar_one_or_none()
+    return res.scalars().first()
 
 
 def _error_preview(
@@ -644,10 +651,10 @@ async def build_product_tz_preview(
             )
             continue
 
-        by_sku = await _find_by_sku(session, tenant_id, sku)
+        by_sku = await _find_by_sku(session, tenant_id, seller_id, sku)
         if by_sku is not None and (by_sku.wb_barcode or "").strip() != barcode:
             sku_alt = _sku_for_row(vendor=vendor, size=None, barcode=barcode)
-            by_sku_alt = await _find_by_sku(session, tenant_id, sku_alt)
+            by_sku_alt = await _find_by_sku(session, tenant_id, seller_id, sku_alt)
             if by_sku_alt is not None and (by_sku_alt.wb_barcode or "").strip() != barcode:
                 error_count += 1
                 msg = "Артикул уже занят другим товаром."
