@@ -1,65 +1,42 @@
-# Волна 2А — доказательства реализации
+# Волна 2А — correction round 1: доказательства
 
 Дата: 2026-08-26. Worktree: `billing-module-20260826`.
 
-Исходная принятая продуктовая база —
-`772a2982ea2a2a11be17664f5f44aa302f427be7`; перед product commit HEAD содержит
-только принятый amendment наряда `f8e9fb66324d5d30549f8cf02553bf25cac5f68d`.
-Frontend, маршруты и OpenAPI не менялись: browser/Playwright/ui_guard и OpenAPI
-diff не применимы к backend/data волне 2А.
+Исходный product SHA: `b35302b145b5f353b5577c11b4584cfc11f6125a`.
+Исходный baseline SHA: `b532addd7862d807e8b3933faf272a50bb2421d5`.
+Correction product SHA: `0f0fc49135c4b577304431d96d1e1e48f1ad5798`;
+additive migration guard fix: `aa5d0925582ceaec31fa2c36caf3fdde7d0bf5c1`.
+Отдельный baseline SHA: `a07b0c5c06ca4e9170971f7eb95c7e4f9d6072a0`.
 
-## Поведенческие проверки
+Frontend, routes, OpenAPI, legacy ledger и `DocumentEvent` не менялись.
 
-| Команда | Exit code | Результат |
-|---|---:|---|
-| `cd backend && uv run pytest tests/test_operation_facts.py tests/test_storage_statement_service.py::test_concurrent_fix_publishes_one_immutable_ledger_and_repeatable_print -q` | 0 | 6 passed |
-| `cd backend && uv run pytest tests/test_fbs_picking.py -q` | 0 | 9 passed |
-| `cd backend && uv run pytest tests/test_fbs_supply_from_orders.py -q` | 0 | 16 passed, 1 skipped |
-| `cd backend && uv run pytest tests/test_operation_facts.py tests/test_operation_fact_recovery.py tests/test_packaging_tasks.py tests/test_fbs_packaging_integration.py tests/test_marketplace_unload_completion.py tests/test_seller_marketplace_unload.py tests/test_ozon_marketplace_unload.py tests/test_storage_statement_service.py -q` | 0 | 69 passed |
-| `cd backend && uv run pytest` | 0 | 1152 passed, 6 skipped, 9 inherited deprecation warnings, 1884.56 s |
-
-`test_wb_fbs_pick_undo_and_redo_write_three_real_source_facts` выполняет реальные
-HTTP-переходы WB `pick → undo → repeat undo with same key → redo` и находит ровно
-`fbs_pick`, `fbs_pick_reversal`, `fbs_pick`. SQLite fidelity для уже существующего
-PostgreSQL partial unique index подтверждена добавлением только
-`sqlite_where=text('undone_at IS NULL')` к индексу модели; production schema и
-поведение от этого не изменяются.
-
-## Машинные гейты
+## Тесты и машинные гейты
 
 | Команда | Exit code | Результат |
 |---|---:|---|
+| `cd backend && uv run pytest tests/test_operation_facts.py tests/test_operation_fact_recovery.py -q` | 0 | 12 passed |
+| `cd backend && uv run pytest` | 0 | 1156 passed, 6 skipped, 9 warnings, 1092.00 s |
 | `cd backend && uv run ruff check .` | 0 | All checks passed |
-| `cd backend && uv run mypy .` | 0 | Success: no issues found in 339 source files |
-| `python3 scripts/ci/check_migrations.py` | 0 | 22 migrations checked; destructive operations not found |
-| `cd backend && uv run alembic heads` | 0 | exactly one head: `20260826_0110` |
+| `cd backend && uv run mypy .` | 0 | Success: no issues found in 340 source files |
+| `python3 scripts/ci/check_migrations.py` | 0 | 24 migrations checked; destructive operations not found |
+| `cd backend && uv run alembic heads` | 0 | exactly `20260826_0111 (head)` |
+| `python3 scripts/ci/back_guard.py` | 0 | no new deviations |
 | `git diff --check` | 0 | empty output |
-| `python3 scripts/ci/back_guard.py` before the separate baseline commit | 1 | only the four approved source-service line baselines below are new |
 
-## PostgreSQL upgrade and constraint proof
+## PostgreSQL migration and behavior proof
 
-Local compose service `billing-module-20260826-db-1` (host port 5433) was created
-solely for this proof; production and staging were not touched.
+Only the local compose PostgreSQL service was used; staging and production were not touched.
+On a fresh local database, `alembic upgrade 20260825_0109` followed by
+`alembic upgrade head` exited 0 and produced the single `20260826_0111` head.
+Inspection confirmed tenant-scoped fact seller/actor/reversal FKs, tenant-scoped
+line fact/product FKs and `ck_operation_fact_lines_tenant_required`.
 
-| Команда | Exit code | Результат |
-|---|---:|---|
-| `DATABASE_URL=...localhost:5433/wms uv run alembic upgrade 20260825_0109` | 0 | migration chain reached previous head |
-| `DATABASE_URL=...localhost:5433/wms uv run alembic upgrade 20260826_0110` | 0 | additive operation-facts migration applied immediately |
-| `DATABASE_URL=...localhost:5433/wms uv run alembic heads` | 0 | exactly `20260826_0110 (head)` |
-| `docker compose exec -T db psql ... pg_indexes/pg_constraint/alembic_version` | 0 | source unique, partial idempotency, report indexes, FK/check constraints and version verified |
-| `DATABASE_URL=...localhost:5433/wms uv run pytest tests/test_operation_fact_recovery.py::test_wb_fbs_pick_undo_and_redo_write_three_real_source_facts tests/test_storage_statement_service.py::test_concurrent_fix_publishes_one_immutable_ledger_and_repeatable_print -q` | 0 | 2 passed on PostgreSQL |
+The behavior script exited 0 and proved:
 
-The PostgreSQL inspection returned `uq_operation_facts_source_operation`, partial
-`uq_operation_facts_tenant_idempotency WHERE idempotency_key IS NOT NULL`, all three
-tenant/seller/actor/operation report indexes, fact/line foreign keys, quantity and
-source checks, cutover singleton check, and `alembic_version=20260826_0110`.
+- strict `source_event_ids` recovery created one shipped unload fact, then one
+  system-cancel reversal, and a third identical recovery created zero facts;
+- PostgreSQL rejected both a cross-tenant seller relation and a cross-tenant fact line;
+- writer snapshot kept the original tenant-scoped actor email after that user was renamed and deleted.
 
-## Scope and remaining baseline step
-
-The product diff contains the additive migration, fact/line metadata, writer and
-recovery services, source integrations, and 2А tests only. There is no API/UI
-addition, no `DocumentEvent` dependency, and the existing
-`staff_packaging_billing_service` regression passed in the full suite.
-
-The only open mechanical step is the explicit separate baseline commit documented
-in `BACK_GUARD_BASELINE.md`; its JSON is deliberately still unchanged at this point.
+The correction adds only durable unload timestamps, tenant-scoped fact relations,
+actor snapshots and recovery filtering. It does not add money, UI, API or 2B work.
