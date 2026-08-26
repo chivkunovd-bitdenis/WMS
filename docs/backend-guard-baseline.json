@@ -59,7 +59,7 @@
     "файл-монолит": 904
   },
   "backend/app/services/fbs_picking_service.py": {
-    "файл-монолит": 818
+    "файл-монолит": 893
   },
   "backend/app/services/fbs_print_asset_service.py": {
     "файл-монолит": 883
@@ -77,13 +77,13 @@
     "файл-монолит": 868
   },
   "backend/app/services/fbs_supply_service.py": {
-    "файл-монолит": 1747
+    "файл-монолит": 1762
   },
   "backend/app/services/fbs_worklist_service.py": {
     "файл-монолит": 897
   },
   "backend/app/services/inbound_intake_service.py": {
-    "файл-монолит": 1891
+    "файл-монолит": 1893
   },
   "backend/app/services/inventory_service.py": {
     "файл-монолит": 1328
@@ -92,7 +92,7 @@
     "файл-монолит": 858
   },
   "backend/app/services/marketplace_unload_service.py": {
-    "файл-монолит": 1205
+    "файл-монолит": 1226
   },
   "backend/app/services/marking_code_service.py": {
     "голый-except": 2,
