@@ -259,6 +259,7 @@ async def list_balances_total(
     *,
     seller_product_owner_id: uuid.UUID | None = None,
     warehouse_id: uuid.UUID | None = None,
+    product_ids: list[uuid.UUID] | None = None,
 ) -> list[tuple[uuid.UUID, str, str, int, int, int, int, int]]:
     """Итоговые остатки по SKU (сумма по всем ячейкам, в т.ч. зона сортировки).
 
@@ -297,6 +298,10 @@ async def list_balances_total(
     )
     if seller_product_owner_id is not None:
         stmt = stmt.where(Product.seller_id == seller_product_owner_id)
+    if product_ids is not None:
+        if not product_ids:
+            return []
+        stmt = stmt.where(Product.id.in_(product_ids))
     if warehouse_id is not None:
         stmt = stmt.where(StorageLocation.warehouse_id == warehouse_id)
     res = await session.execute(stmt)

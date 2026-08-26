@@ -28,6 +28,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   Tabs,
   TextField,
@@ -78,6 +79,15 @@ type FfCatalogRow = {
   fbs_stock_limit?: number | null
   fbs_published_amount?: number | null
   fbs_sync_status?: string | null
+}
+
+type FfCatalogPage = {
+  items: FfCatalogRow[]
+  total: number
+  scope_total: number
+  limit: number
+  offset: number
+  categories: string[]
 }
 
 // Остаток на ФФ по товару — из /operations/inventory-balances/summary. Тот же
@@ -133,24 +143,6 @@ function directionQuantityFromDraft(raw: string): number | null {
   return Number.isInteger(qty) && qty >= 0 ? qty : null
 }
 
-function matchesCatalogSearch(
-  row: {
-    name: string
-    wb_vendor_code: string | null
-    sku_code: string
-    wb_primary_barcode: string | null
-    wb_barcodes: string[]
-  },
-  query: string,
-): boolean {
-  const needle = query.trim().toLowerCase()
-  if (!needle) return true
-  const haystack = [row.name, row.wb_vendor_code ?? '', row.sku_code, row.wb_primary_barcode ?? '', ...row.wb_barcodes]
-    .join(' ')
-    .toLowerCase()
-  return haystack.includes(needle)
-}
-
 type Props = {
   token: string
   authHeaders: (t: string) => Record<string, string>
@@ -197,6 +189,9 @@ export function FfProductsCatalogScreen({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [catalog, setCatalog] = useState<FfCatalogRow[]>([])
+  const [catalogTotal, setCatalogTotal] = useState(0)
+  const [catalogScopeTotal, setCatalogScopeTotal] = useState(0)
+  const [categoryOptions, setCategoryOptions] = useState<string[]>([])
   const [packageProducts, setPackageProducts] = useState<FfCatalogRow[]>([])
   const [stock, setStock] = useState<StockSummaryRow[]>([])
   const [dialogSellers, setDialogSellers] = useState<SellerRow[]>(sellers)
@@ -215,9 +210,14 @@ export function FfProductsCatalogScreen({
 
   // ── Фильтры над таблицей (CAT-12, часть 2) ──────────────────────────────
   const [filterSearch, setFilterSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [filterSellerId, setFilterSellerId] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
+  const [page, setPage] = useState(0)
+  const [rowsPerPage, setRowsPerPage] = useState(100)
   const [catalogView, setCatalogView] = useState<'products' | 'packages'>('products')
+  const catalogAbortRef = useRef<AbortController | null>(null)
+  const packageAbortRef = useRef<AbortController | null>(null)
 
   // ── FBS-пул: направления остатка (перенесено из SellerProductsStockScreen) ──
   const [directionProductId, setDirectionProductId] = useState<string | null>(null)
@@ -227,56 +227,96 @@ export function FfProductsCatalogScreen({
   const [editingDirectionId, setEditingDirectionId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<DirectionDeleteTarget | null>(null)
 
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedSearch(filterSearch.trim()), 250)
+    return () => window.clearTimeout(timeout)
+  }, [filterSearch])
+
+  useEffect(() => {
+    setPage(0)
+  }, [debouncedSearch, filterCategory, filterSellerId, rowsPerPage])
+
   const load = useCallback(async () => {
+    catalogAbortRef.current?.abort()
+    const controller = new AbortController()
+    catalogAbortRef.current = controller
     setError(null)
     setBusy(true)
     try {
-      // seller_id можно передавать бэкенду только с роли фулфилмент-админа —
-      // для остальных ролей эндпоинт и так отдаёт каталог по всем селлерам,
-      // поэтому для них фильтрация по селлеру остаётся клиентской (см. filteredRows).
-      const qs = canManageCatalog && filterSellerId ? `?seller_id=${encodeURIComponent(filterSellerId)}` : ''
-      const res = await fetch(apiUrl(`/products/ff-catalog${qs}`), {
+      const params = new URLSearchParams({
+        limit: String(rowsPerPage),
+        offset: String(page * rowsPerPage),
+      })
+      if (filterSellerId) params.set('seller_id', filterSellerId)
+      if (debouncedSearch) params.set('search', debouncedSearch)
+      if (filterCategory) params.set('category', filterCategory)
+      const res = await fetch(apiUrl(`/products/ff-catalog-page?${params.toString()}`), {
         headers: { ...authHeaders(token) },
+        signal: controller.signal,
       })
       if (!res.ok) {
         throw new Error(humanFfCatalogError(await readApiErrorMessage(res)))
       }
-      const loadedCatalog = (await res.json()) as FfCatalogRow[]
-      setCatalog(loadedCatalog)
-      if (!filterSellerId) setPackageProducts(loadedCatalog)
+      const loadedPage = (await res.json()) as FfCatalogPage
+      if (controller.signal.aborted) return
+
+      const stockParams = new URLSearchParams()
+      for (const item of loadedPage.items) stockParams.append('product_id', item.id)
+      let loadedStock: StockSummaryRow[] = []
+      if (loadedPage.items.length > 0) {
+        const stockRes = await fetch(
+          apiUrl(`/operations/inventory-balances/summary?${stockParams.toString()}`),
+          { headers: { ...authHeaders(token) }, signal: controller.signal },
+        )
+        if (!stockRes.ok) {
+          throw new Error(humanFfCatalogError(await readApiErrorMessage(stockRes)))
+        }
+        loadedStock = (await stockRes.json()) as StockSummaryRow[]
+      }
+      if (controller.signal.aborted) return
+      setCatalog(loadedPage.items)
+      setCatalogTotal(loadedPage.total)
+      setCatalogScopeTotal(loadedPage.scope_total)
+      setCategoryOptions(loadedPage.categories)
+      setStock(loadedStock)
     } catch (e) {
+      if ((e as { name?: string }).name === 'AbortError') return
       setError(e instanceof Error ? e.message : 'Не удалось загрузить товары.')
     } finally {
-      setBusy(false)
+      if (catalogAbortRef.current === controller) setBusy(false)
     }
-  }, [authHeaders, token, canManageCatalog, filterSellerId])
+  }, [authHeaders, debouncedSearch, filterCategory, filterSellerId, page, rowsPerPage, token])
 
   useEffect(() => {
     void load()
+    return () => catalogAbortRef.current?.abort()
   }, [load])
 
-  const loadStock = useCallback(async () => {
-    try {
-      const res = await fetch(apiUrl('/operations/inventory-balances/summary'), {
-        headers: { ...authHeaders(token) },
-      })
-      if (!res.ok) {
-        setError(humanFfCatalogError(await readApiErrorMessage(res)))
-        return
-      }
-      setStock((await res.json()) as StockSummaryRow[])
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось загрузить остатки.')
-    }
-  }, [authHeaders, token])
-
   useEffect(() => {
-    void loadStock()
-  }, [loadStock])
+    if (catalogView !== 'packages' || packageProducts.length > 0) return
+    packageAbortRef.current?.abort()
+    const controller = new AbortController()
+    packageAbortRef.current = controller
+    void (async () => {
+      try {
+        const res = await fetch(apiUrl('/products/ff-catalog'), {
+          headers: { ...authHeaders(token) },
+          signal: controller.signal,
+        })
+        if (!res.ok) throw new Error(humanFfCatalogError(await readApiErrorMessage(res)))
+        if (!controller.signal.aborted) setPackageProducts((await res.json()) as FfCatalogRow[])
+      } catch (e) {
+        if ((e as { name?: string }).name !== 'AbortError') {
+          setError(e instanceof Error ? e.message : 'Не удалось загрузить товары коробов.')
+        }
+      }
+    })()
+    return () => controller.abort()
+  }, [authHeaders, catalogView, packageProducts.length, token])
 
   const refreshAll = useCallback(async () => {
-    await Promise.all([load(), loadStock()])
-  }, [load, loadStock])
+    await load()
+  }, [load])
 
   const openFbsLimitDialog = useCallback((product: FfCatalogRow) => {
     setFbsLimitProduct(product)
@@ -440,25 +480,7 @@ export function FfProductsCatalogScreen({
     })
   }, [catalog, stock])
 
-  const categoryOptions = useMemo(() => {
-    const set = new Set<string>()
-    for (const row of rows) {
-      const value = row.wb_subject_name?.trim()
-      if (value) set.add(value)
-    }
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ru'))
-  }, [rows])
-
-  const filteredRows = useMemo(
-    () =>
-      rows.filter(
-        (row) =>
-          matchesCatalogSearch(row, filterSearch) &&
-          (!filterSellerId || row.seller_id === filterSellerId) &&
-          (!filterCategory || row.wb_subject_name === filterCategory),
-      ),
-    [rows, filterSearch, filterSellerId, filterCategory],
-  )
+  const filteredRows = rows
 
   const markDirectionBusy = useCallback((productId: string, pending: boolean) => {
     setDirectionBusy((current) => {
@@ -761,7 +783,10 @@ export function FfProductsCatalogScreen({
                 labelId="ff-catalog-seller-filter-label"
                 label="Селлер"
                 value={filterSellerId}
-                onChange={(e) => setFilterSellerId(e.target.value)}
+                onChange={(e) => {
+                  setFilterSellerId(e.target.value)
+                  setFilterCategory('')
+                }}
                 data-testid="ff-catalog-seller-filter"
               >
                 <MenuItem value="">Все селлеры</MenuItem>
@@ -790,7 +815,7 @@ export function FfProductsCatalogScreen({
               </Select>
             </FormControl>
             <Typography variant="body2" color="text.secondary" data-testid="ff-catalog-filter-count">
-              Найдено: {filteredRows.length} из {rows.length}
+              {busy ? 'Загрузка…' : `Найдено: ${catalogTotal} из ${catalogScopeTotal}`}
             </Typography>
           </Stack>
         </Paper>
@@ -1072,7 +1097,7 @@ export function FfProductsCatalogScreen({
               {filteredRows.length === 0 && !busy ? (
                 <TableRow>
                   <TableCell colSpan={12}>
-                    {rows.length === 0 ? (
+                    {catalogScopeTotal === 0 ? (
                       canManageCatalog ? (
                         <Typography variant="body2" color="text.secondary" data-testid="ff-products-empty">
                           В каталоге пока нет товаров. Скачайте шаблон, загрузите Excel или создайте
@@ -1083,16 +1108,28 @@ export function FfProductsCatalogScreen({
                           В каталоге пока нет товаров.
                         </Typography>
                       )
-                    ) : (
+                    ) : catalogTotal === 0 ? (
                       <Typography variant="body2" color="text.secondary" data-testid="ff-products-empty">
                         Ничего не найдено.
                       </Typography>
-                    )}
+                    ) : null}
                   </TableCell>
                 </TableRow>
               ) : null}
             </TableBody>
           </Table>
+          <TablePagination
+            component="div"
+            count={catalogTotal}
+            page={page}
+            onPageChange={(_, nextPage) => setPage(nextPage)}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={(event) => setRowsPerPage(Number(event.target.value))}
+            rowsPerPageOptions={[50, 100, 200]}
+            labelRowsPerPage="На странице"
+            labelDisplayedRows={({ from, to, count }) => `${from}–${to} из ${count}`}
+            data-testid="ff-catalog-pagination"
+          />
         </TableContainer>
 
         </Box>

@@ -58,6 +58,7 @@ from app.services.seller_staff_permissions_service import PERM_PRODUCTS
 from app.services.seller_wb_catalog_service import (
     FfCatalogRow,
     list_ff_catalog_rows,
+    list_linked_wb_catalog_page_rows,
     list_linked_wb_catalog_rows,
     list_seller_wb_catalog_rows,
 )
@@ -147,6 +148,15 @@ class FfCatalogOut(BaseModel):
     has_packaging_instructions: bool = False
     marking_available_count: int = 0
     is_manual: bool = False
+
+
+class FfCatalogPageOut(BaseModel):
+    items: list[FfCatalogOut]
+    total: int
+    scope_total: int
+    limit: int
+    offset: int
+    categories: list[str]
 
 
 class ProductOut(BaseModel):
@@ -533,6 +543,35 @@ async def get_ff_catalog(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     rows = await list_ff_catalog_rows(session, user.tenant_id, seller_id=seller_id)
     return await _ff_catalog_out_rows(session, user.tenant_id, rows)
+
+
+@router.get("/ff-catalog-page", response_model=FfCatalogPageOut)
+async def get_ff_catalog_page(
+    user: Annotated[User, Depends(require_catalog_cells_read_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    seller_id: uuid.UUID | None = _seller_id_query,
+    search: Annotated[str | None, Query(max_length=255)] = None,
+    category: Annotated[str | None, Query(max_length=255)] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> FfCatalogPageOut:
+    rows, total, scope_total, categories = await list_linked_wb_catalog_page_rows(
+        session,
+        user.tenant_id,
+        seller_id=seller_id,
+        search=search,
+        category=category,
+        limit=limit,
+        offset=offset,
+    )
+    return FfCatalogPageOut(
+        items=await _ff_catalog_out_rows(session, user.tenant_id, rows),
+        total=total,
+        scope_total=scope_total,
+        limit=limit,
+        offset=offset,
+        categories=categories,
+    )
 
 
 @router.post("", response_model=ProductOut)
