@@ -49,23 +49,25 @@ async def test_same_vendor_and_size_imports_for_both_sellers(
 
     vendor = f"J308-24-{suffix}"
 
-    def card(barcode: str) -> dict[str, object]:
-        # Один артикул, один размер, но у каждого продавца свой штрихкод — как в WB.
+    shared_barcode = f"1{suffix}"
+
+    def card() -> dict[str, object]:
+        # Один артикул, размер и WB-штрихкод могут принадлежать двум продавцам.
         return {
             "nmID": 900_500_001,
             "vendorCode": vendor,
             "title": "Туфли",
-            "sizes": [{"skus": [barcode], "chrtID": 1, "techSize": "36"}],
+            "sizes": [{"skus": [shared_barcode], "chrtID": 1, "techSize": "36"}],
         }
 
     async with SessionLocal() as session:
         first = await upsert_products_from_wb_cards(
-            session, tenant_id, sid_a, [card(f"1{suffix}")]
+            session, tenant_id, sid_a, [card()]
         )
         assert first["products_created"] == 1
 
         second = await upsert_products_from_wb_cards(
-            session, tenant_id, sid_b, [card(f"2{suffix}")]
+            session, tenant_id, sid_b, [card()]
         )
         assert second["products_created"] == 1, "второй продавец не должен пропускаться"
         assert second["products_skipped"] == 0
@@ -85,7 +87,7 @@ async def test_same_vendor_and_size_imports_for_both_sellers(
     assert {r.seller_id for r in rows} == {sid_a, sid_b}
     # Артикул у обоих одинаковый — именно это и запрещало старое ограничение.
     assert len({r.sku_code for r in rows}) == 1
-    assert {r.wb_barcode for r in rows} == {f"1{suffix}", f"2{suffix}"}
+    assert {r.wb_barcode for r in rows} == {shared_barcode}
 
 
 @pytest.mark.asyncio

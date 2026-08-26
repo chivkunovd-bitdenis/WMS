@@ -42,7 +42,12 @@ class Product(Base):
         UniqueConstraint(
             "tenant_id", "seller_id", "sku_code", name="uq_products_tenant_seller_sku"
         ),
-        UniqueConstraint("tenant_id", "wb_barcode", name="uq_products_tenant_wb_barcode"),
+        UniqueConstraint(
+            "tenant_id",
+            "seller_id",
+            "wb_barcode",
+            name="uq_products_tenant_wb_barcode",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
