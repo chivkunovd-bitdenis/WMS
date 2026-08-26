@@ -96,3 +96,6 @@
 6. Separate Terra ui-critic checks UX canon and separate Terra judge manually
    checks live browser success/error/empty/disabled at 1600px; both save
    screenshots plus invariants/ui_guard output to evidence.
+7. `FfBillingTariffMatrixPanel` remains an internal S-19 composition only:
+   it adds no route/screen/UI primitive and the Settings monolith guard stays at
+   its approved baseline.

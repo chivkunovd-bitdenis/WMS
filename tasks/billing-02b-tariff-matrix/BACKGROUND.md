@@ -87,5 +87,8 @@ Settings app. Existing UI-kit gives table density, fixed headers/columns,
 overflow, skeleton loading, Russian error and empty states, status and actions.
 The implementation may compose those pieces, but it must not add an in-screen
 custom table, filter, dropdown, button or tab, nor modify `ui-kit/**`.
+`FfBillingTariffMatrixPanel.tsx` is the sole feature-composition extraction:
+it is mounted only by S-19, creates neither a screen nor route nor UI primitive,
+and exists only to preserve the Settings-screen ui_guard monolith ratchet.
 Separate ui-critic and live-browser judge verify the exact rendered state; unit
 tests and Playwright do not replace that human browser check.
