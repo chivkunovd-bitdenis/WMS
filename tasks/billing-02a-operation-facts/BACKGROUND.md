@@ -62,6 +62,12 @@ Recovery является повторяемым сервисом, а не фо�
 или по `DocumentEvent`. Повтор recovery не создаёт дубликат; конфликт source tuple/idempotency key
 завершает операцию именованной ошибкой и попадает в proof.
 
+У shipped `MarketplaceUnloadRequest` текущий `cancel_request` делает ledger reversal, но не меняет
+статус на `cancelled`: документ остаётся `shipped`, и тот же запрос может прийти повторно. Поэтому
+2А записывает `marketplace_outbound_reversal` по прежнему `(tenant_id, source_kind, source_event_id,
+operation_code)`: writer и recovery возвращают исходный reversal-fact, а не добавляют новый.
+`cancelled_by_user_id` проставляется только в первый такой переход и повтором не меняется.
+
 ## Миграция
 
 Миграция только добавляет таблицы, FK, constraints и индексы и продолжает единственный Alembic head

@@ -11,18 +11,21 @@
 После принятого ревью открыть ровно такой наряд:
 
 ```bash
-python3 scripts/naryad.py new "Волна 2А модуля «Расчёты»: надёжные факты операций без нового экрана" --lane обычная --files backend/app/models/operation_fact.py,backend/app/models/__init__.py,backend/app/models/inbound_intake.py,backend/app/models/fbs_order.py,backend/app/models/marketplace_unload.py,backend/app/services/operation_fact_service.py,backend/app/services/operation_fact_recovery_service.py,backend/app/services/inbound_intake_service.py,backend/app/services/fbs_picking_service.py,backend/app/services/fbs_supply_service.py,backend/app/services/packaging_task_service.py,backend/app/services/marketplace_unload_service.py,backend/app/services/storage_statement_service.py
+python3 scripts/naryad.py new "Волна 2А модуля «Расчёты»: надёжные факты операций без нового экрана" --lane обычная --files backend/app/models/operation_fact.py,backend/app/models/__init__.py,backend/app/models/inbound_intake.py,backend/app/models/fbs_order.py,backend/app/models/marketplace_unload.py,backend/app/services/operation_fact_service.py,backend/app/services/operation_fact_recovery_service.py,backend/app/services/inbound_intake_service.py,backend/app/services/fbs_picking_service.py,backend/app/services/fbs_supply_service.py,backend/app/services/packaging_task_service.py,backend/app/services/marketplace_unload_service.py,backend/app/services/storage_statement_service.py,docs/backend-guard-baseline.json
 ```
 
 `backend/alembic/versions/20260826_0110_operation_facts.py` и новые тесты
 `backend/tests/test_operation_facts.py`, `backend/tests/test_operation_fact_recovery.py` входят в
 границы волны, хотя хук наряда охраняет только `backend/app`. Хук, его конфигурацию, baseline
 сторожей и файлы `frontend/src` менять запрещено. Исключение возможно только после доказанной
-технической необходимости: если минимальная точка записи неизбежно добавляет строки ровно в один из
-уже больших разрешённых сервисов и только поэтому краснеет `back_guard`, разрешён отдельный
-baseline-коммит с **одной** правкой `docs/backend-guard-baseline.json`. До него обязателен
-построчный diff «было → стало» для конкретного файла в evidence; массовый `--update`, изменения
-прочих baseline-записей и смешение baseline с продуктовым commit запрещены. Если наряд не открыт,
+технической необходимости: если минимальная writer-интеграция неизбежно добавляет строки в уже
+большой source-сервис и только поэтому краснеет `back_guard`, разрешён один отдельный
+baseline-коммит. Он меняет только заранее названные записи реально затронутых writer-интеграцией
+файлов: `inbound_intake_service.py`, `fbs_picking_service.py`, `fbs_supply_service.py`,
+`packaging_task_service.py`, `marketplace_unload_service.py`, — и только
+`docs/backend-guard-baseline.json`. Для каждой изменённой записи до commit обязательны отдельная
+доказанная причина и построчная сверка «было → стало» в evidence. Массовый `--update`, любые
+другие baseline entries и смешение baseline с продуктовым commit запрещены. Если наряд не открыт,
 статус только `BLOCKED`; обходить защиту нельзя.
 
 Не запускать `wms_lead`, `scripts/sol_pipeline.py`, оркестраторы, модераторов или агентов,
@@ -127,7 +130,7 @@ nullable `billable_service_code`, `source_kind`, `source_event_id`, `idempotency
 | `undo_last_pack_action` помечает исходный pack-event `reversed_at` и добавляет `PackagingTaskEvent(action=undo_last)` | `packing_reversal` | `packaging_task_event` / ID нового `undo_last` event | quantity и line исходного reversible event | после flush нового undo-event, до commit | `reversed_by_user_id` исходного event (если задан), иначе `created_by_user_id` нового; без ID system | `reversal_of_id` на fact отменённого pack-event. Повтор невозможен, потому что исходный event уже `reversed_at`; следующий pack создаёт новый event/fact. |
 | `cancel_task` создаёт `PackagingTaskEvent(action=cancel, quantity=0)`; `complete_task` создаёт `complete` без product line; `confirm_line_packed_from_shelf` не создаёт task event | не создаётся | не создаётся | не создаётся | не создаётся | не создаётся | Эти текущие записи не содержат доказанного нового item-level work или однозначного обратного quantity. Их запрещено превращать в фиктивный факт/сторно; отмена уже выполненной упаковки покрывается только явным `undo_last_pack_action`. |
 | `complete_unload` переводит `MarketplaceUnloadRequest` в `STATUS_SHIPPED` | `marketplace_outbound_completed` | `marketplace_unload_request` / `req.id` | `sum(distributed_qty_by_product(req).values())`; lines только по фактически distributed product quantities | после `req.status=STATUS_SHIPPED` и до commit, рядом с существующим `record_operational_charge` | новый durable `req.completed_by_user_id=performer_id`; user при непустом ID, иначе system | Повтор невозможен вне `EXECUTION_STATUSES`; fact по `req.id` идемпотентен. |
-| `cancel_request` для shipped request вызывает существующий `record_operational_reversal` | `marketplace_outbound_reversal` | `marketplace_unload_request` / `req.id`, code отличает reversal | исходные distributed lines и quantity исходного outbound fact, не пересчёт плана | в той же транзакции рядом с существующим reversal, до commit | новый durable `req.cancelled_by_user_id=performer_id`; user при непустом ID, иначе system | `reversal_of_id` на outbound fact; повторный cancelled request сразу возвращается. Cancel до shipment факта не создаёт reversal. Текущий код не имеет повторной отгрузки этого же cancelled request. |
+| `cancel_request` для shipped request вызывает существующий `record_operational_reversal` и сохраняет `STATUS_SHIPPED` | `marketplace_outbound_reversal` | `marketplace_unload_request` / `req.id`, code отличает reversal | исходные distributed lines и quantity исходного outbound fact, не пересчёт плана | в той же транзакции рядом с существующим reversal, до commit | при первом cancel установить `req.cancelled_by_user_id=performer_id` только если поле пусто; user при непустом ID, иначе system | `reversal_of_id` на outbound fact. Повторный cancel идёт из всё ещё `STATUS_SHIPPED`: writer/recovery по тому же source tuple возвращает тот же reversal-fact, а `cancelled_by_user_id` не перезаписывается. Cancel до shipment факта не создаёт reversal. Текущий код не имеет повторной отгрузки этого же cancelled request. |
 | `fix_storage_statement` фиксирует `StorageStatement`; каждая существующая `StorageMeasurement` получает публикацию | `storage_fixed` | `storage_measurement` / `measurement.id`; при нулевом statement — `storage_statement` / `statement.id` | `StorageMeasurement` содержит только `quantity_days`/`liter_days`, не фактические штуки: в 2А `item_quantity=0` и lines нет, чтобы не выдать литро-дни за штуки | после проверки draft/calculated и до единственного commit, одновременно с фиксацией statement, но не из `BillingLedgerEntry` | в текущей сигнатуре нет actor; system | Fixed statement идемпотентно возвращается без нового source/fact. В текущем коде нет операции отмены fixed storage statement, поэтому 2А не выдумывает storage reversal. |
 
 Ни одна строка матрицы не использует `DocumentEvent` или `BillingLedgerEntry` как source. В частности,
@@ -177,7 +180,8 @@ nullable `billable_service_code`, `source_kind`, `source_event_id`, `idempotency
 операции склада, состояния FBS, `DocumentEvent`, существующие специализированные журналы и
 упаковочная зарплата. Факт не является денежным начислением: ни ставка, ни сумма, ни tariff-version
 в 2А не создаются. Старые ledger-строки остаются историей до cutover, новые факты не
-реконструируют прошлое. Baseline/guard не меняются, кроме узкого отдельного случая из §0; он не
+реконструируют прошлое. Baseline/guard не меняются, кроме одного отдельного случая из §0: один
+commit может обновить только реально затронутые записи пяти заранее названных source-сервисов и не
 разрешает массовую нормализацию или смешение с продуктовым commit.
 
 ## 8. Тесты, машинные гейты, PostgreSQL и живой браузер
@@ -206,9 +210,10 @@ exit codes, миграционный proof, выборку фактов и не�
 `docs/evidence/billing-02a-operation-facts/OPERATION-FACTS-PROOF.md`.
 
 Если сработало единственное исключение §0, добавить туда отдельный подраздел
-`BACK_GUARD_BASELINE.md`: конкретный сервис, почему вынести минимальный вызов невозможно, каждая
-строка `docs/backend-guard-baseline.json` «было → стало», SHA отдельного baseline commit и
-доказательство, что иных baseline-файлов/записей не менялось. `back_guard.py --update` не запускать.
+`BACK_GUARD_BASELINE.md`: для **каждой** изменённой записи одного из пяти названных source-сервисов
+— конкретную причину, почему вынести минимальный writer-вызов невозможно, строку
+`docs/backend-guard-baseline.json` «было → стало» и SHA отдельного baseline commit. Доказать, что
+других baseline-файлов/записей не менялось. `back_guard.py --update` не запускать.
 
 До закрытия реализации обязательны: независимое содержательное ревью диффа и отдельный независимый
 прогон существующего регресса. Красный тест, в том числе унаследованный, закрытие запрещает.

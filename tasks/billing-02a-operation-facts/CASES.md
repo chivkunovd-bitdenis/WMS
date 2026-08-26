@@ -32,6 +32,9 @@
    документу, не захватывает чужой tenant и не превращает старый ledger в факт.
 5. Ошибка recovery не удаляет уже созданные факты и не меняет складской документ, ledger, тариф или
    упаковочную выплату.
+6. Shipped unload после первого `cancel_request` остаётся `STATUS_SHIPPED`; повтор того же cancel
+   возвращает ровно тот же `marketplace_outbound_reversal` по source tuple и не перезаписывает
+   `cancelled_by_user_id`, даже если retry пришёл с другим performer.
 
 ## Регрессия и граница cutover
 
