@@ -26,6 +26,7 @@ from app.services.billing_ledger_service import (
     postgres_integer,
     postgres_numeric,
 )
+from app.services.operation_fact_service import record_storage_fixed
 from app.services.staff_packaging_billing_service import rub_to_kopecks
 from app.services.storage_measurement_service import (
     MOSCOW,
@@ -333,7 +334,9 @@ async def reprice_open_storage_drafts(
                     StorageStatement.id,
                 )
             )
-        ).unique().all()
+        )
+        .unique()
+        .all()
     )
 
     repriced: list[RepricedStorageDraft] = []
@@ -355,7 +358,9 @@ async def reprice_open_storage_drafts(
                     )
                     .order_by(StorageMeasurement.product_id)
                 )
-            ).unique().all()
+            )
+            .unique()
+            .all()
         )
         priceable_rows = [row for row in measurements if row.status == "calculated"]
         pricing = (
@@ -386,6 +391,7 @@ async def fix_storage_statement(
     """Fix one clean draft and publish its ledger rows in the same transaction."""
     statement = await session.scalar(
         select(StorageStatement)
+        .options(joinedload(StorageStatement.seller))
         .where(StorageStatement.id == statement_id, StorageStatement.tenant_id == tenant_id)
         .with_for_update()
     )
@@ -529,9 +535,24 @@ async def fix_storage_statement(
         )
     # Validate the complete publication before attaching a row or mutating the
     # statement. An overflow in a later SKU therefore leaves no partial state.
+    occurred_at = datetime.now(UTC)
+    for measurement in measurements:
+        await record_storage_fixed(
+            session,
+            statement=statement,
+            source_event_id=measurement.id,
+            occurred_at=occurred_at,
+        )
+    if not measurements:
+        await record_storage_fixed(
+            session,
+            statement=statement,
+            source_event_id=statement.id,
+            occurred_at=occurred_at,
+        )
     session.add_all(pending_entries)
     statement.status = "fixed"
-    statement.fixed_at = datetime.now(UTC)
+    statement.fixed_at = occurred_at
     try:
         await session.commit()
     except IntegrityError as exc:
@@ -682,11 +703,7 @@ async def create_storage_tariff(
             warehouse_id,
             valid_from,
             seller_exception,
-            tuple(
-                tariff
-                for tariff in (warehouse_tariff, seller_tariff)
-                if tariff is not None
-            ),
+            tuple(tariff for tariff in (warehouse_tariff, seller_tariff) if tariff is not None),
         )
         await session.commit()
     except IntegrityError as exc:

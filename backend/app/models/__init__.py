@@ -61,6 +61,7 @@ from app.models.marking_code import (
     MarkingReprintRequest,
 )
 from app.models.notification import Notification
+from app.models.operation_fact import OperationFact, OperationFactCutover, OperationFactLine
 from app.models.outbound_shipment import OutboundShipmentLine, OutboundShipmentRequest
 from app.models.ozon_return import InboundOzonReturnGiveout, InboundOzonReturnItem
 from app.models.packaging_task import PackagingTask, PackagingTaskEvent, PackagingTaskLine
@@ -145,6 +146,9 @@ __all__ = [
     "MarkingPoolProduct",
     "MarkingReprintRequest",
     "Notification",
+    "OperationFact",
+    "OperationFactCutover",
+    "OperationFactLine",
     "OutboundShipmentLine",
     "OutboundShipmentRequest",
     "PackagingTask",

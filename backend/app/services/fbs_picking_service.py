@@ -34,6 +34,7 @@ from app.models.storage_location import StorageLocation
 from app.models.user import User
 from app.services import inventory_service
 from app.services.fbs_workspace_service import FbsWorkspaceError, get_supply_workspace
+from app.services.operation_fact_service import record_fbs_pick
 from app.services.sorting_location_service import (
     get_or_create_sorting_location,
 )
@@ -334,19 +335,19 @@ async def scan_pick_product(
     picked_at = datetime.now(tz=UTC)
     if supply.marketplace == "ozon":
         assert target_position is not None
-        session.add(
-            FbsOrderProductPick(
-                tenant_id=tenant_id,
-                order_product_id=target_position.id,
-                fbs_supply_id=supply.id,
-                source_storage_location_id=location.id,
-                sorting_storage_location_id=sorting_location.id,
-                product_id=product.id,
-                inventory_movement_id=movement_id,
-                scan_idempotency_key=idempotency_key,
-                picked_at=picked_at,
-            )
+        position_pick = FbsOrderProductPick(
+            tenant_id=tenant_id,
+            order_product_id=target_position.id,
+            fbs_supply_id=supply.id,
+            source_storage_location_id=location.id,
+            sorting_storage_location_id=sorting_location.id,
+            product_id=product.id,
+            inventory_movement_id=movement_id,
+            scan_idempotency_key=idempotency_key,
+            picked_at=picked_at,
+            picked_by_user_id=actor.id,
         )
+        session.add(position_pick)
         target_position.picked_quantity += 1
         if all(
             position.picked_quantity >= position.quantity
@@ -355,6 +356,16 @@ async def scan_pick_product(
             target_order.pick_status = PICK_STATUS_PICKED
             target_order.picked_at = picked_at
         await session.flush()
+        await record_fbs_pick(
+            session,
+            supply=supply,
+            pick=position_pick,
+            source_event_id=position_pick.id,
+            source_kind="fbs_order_product_pick",
+            actor_user_id=actor.id,
+            occurred_at=picked_at,
+            product=product,
+        )
         return await get_supply_workspace(session, tenant_id, supply_id)
 
     pick = FbsOrderPick(
@@ -372,20 +383,29 @@ async def scan_pick_product(
     )
     session.add(pick)
     await session.flush()
-    session.add(
-        FbsOrderPickEvent(
-            pick_id=pick.id,
-            event_type=PICK_EVENT_PICKED,
-            actor_user_id=actor.id,
-            idempotency_key=idempotency_key,
-            source_storage_location_id=location.id,
-            sorting_storage_location_id=sorting_location.id,
-            inventory_movement_id=movement_id,
-        )
+    event = FbsOrderPickEvent(
+        pick_id=pick.id,
+        event_type=PICK_EVENT_PICKED,
+        actor_user_id=actor.id,
+        idempotency_key=idempotency_key,
+        source_storage_location_id=location.id,
+        sorting_storage_location_id=sorting_location.id,
+        inventory_movement_id=movement_id,
     )
+    session.add(event)
     target_order.pick_status = PICK_STATUS_PICKED
     target_order.picked_at = picked_at
     await session.flush()
+    await record_fbs_pick(
+        session,
+        supply=supply,
+        pick=pick,
+        source_event_id=event.id,
+        source_kind="fbs_order_pick_event",
+        actor_user_id=actor.id,
+        occurred_at=picked_at,
+        product=product,
+    )
     return await get_supply_workspace(session, tenant_id, supply_id)
 
 
@@ -524,12 +544,46 @@ async def undo_pick(
             )
         position_pick.undo_idempotency_key = idempotency_key
         position_pick.undone_at = datetime.now(tz=UTC)
+        if position_pick.undone_by_user_id is None:
+            position_pick.undone_by_user_id = actor.id
         position = await session.get(FbsOrderProduct, position_pick.order_product_id)
         assert position is not None
         position.picked_quantity = max(0, position.picked_quantity - 1)
         order.pick_status = PICK_STATUS_PENDING
         order.picked_at = None
         await session.flush()
+        await record_fbs_pick(
+            session,
+            supply=supply,
+            pick=position_pick,
+            source_event_id=position_pick.id,
+            source_kind="fbs_order_product_pick",
+            actor_user_id=position_pick.undone_by_user_id,
+            occurred_at=position_pick.undone_at,
+            reversal=True,
+            product=await session.get(Product, position_pick.product_id),
+        )
+        return await get_supply_workspace(session, tenant_id, supply_id)
+
+    replayed_undo = await session.scalar(
+        select(FbsOrderPickEvent)
+        .join(FbsOrderPick, FbsOrderPick.id == FbsOrderPickEvent.pick_id)
+        .where(
+            FbsOrderPickEvent.event_type == PICK_EVENT_UNDONE,
+            FbsOrderPickEvent.idempotency_key == idempotency_key,
+            FbsOrderPick.tenant_id == tenant_id,
+            FbsOrderPick.fbs_supply_id == supply_id,
+        )
+    )
+    if replayed_undo is not None:
+        replayed_pick = await session.get(FbsOrderPick, replayed_undo.pick_id)
+        assert replayed_pick is not None
+        if replayed_pick.fbs_order_id != order_id:
+            raise FbsPickingError(
+                "idempotency_key_reused",
+                "Ключ идемпотентности уже использован для другого подбора.",
+                context={"idempotency_key": idempotency_key},
+            )
         return await get_supply_workspace(session, tenant_id, supply_id)
 
     pick = await _load_active_pick_for_order(session, tenant_id, order_id)
@@ -591,20 +645,40 @@ async def undo_pick(
         ) from exc
     undone_at = datetime.now(tz=UTC)
     pick.undone_at = undone_at
-    session.add(
-        FbsOrderPickEvent(
-            pick_id=pick.id,
-            event_type=PICK_EVENT_UNDONE,
-            actor_user_id=actor.id,
-            idempotency_key=idempotency_key,
-            source_storage_location_id=pick.source_storage_location_id,
-            sorting_storage_location_id=pick.sorting_storage_location_id,
-            inventory_movement_id=movement_id,
-        )
+    undo_event = FbsOrderPickEvent(
+        pick_id=pick.id,
+        event_type=PICK_EVENT_UNDONE,
+        actor_user_id=actor.id,
+        idempotency_key=idempotency_key,
+        source_storage_location_id=pick.source_storage_location_id,
+        sorting_storage_location_id=pick.sorting_storage_location_id,
+        inventory_movement_id=movement_id,
     )
+    session.add(undo_event)
     order.pick_status = PICK_STATUS_PENDING
     order.picked_at = None
     await session.flush()
+    original_event_id = await session.scalar(
+        select(FbsOrderPickEvent.id)
+        .where(
+            FbsOrderPickEvent.pick_id == pick.id,
+            FbsOrderPickEvent.event_type == PICK_EVENT_PICKED,
+        )
+        .order_by(FbsOrderPickEvent.created_at)
+        .limit(1)
+    )
+    await record_fbs_pick(
+        session,
+        supply=supply,
+        pick=pick,
+        source_event_id=undo_event.id,
+        source_kind="fbs_order_pick_event",
+        actor_user_id=actor.id,
+        occurred_at=undone_at,
+        reversal=True,
+        original_source_event_id=original_event_id,
+        product=await session.get(Product, pick.product_id),
+    )
     return await get_supply_workspace(session, tenant_id, supply_id)
 
 
@@ -642,6 +716,7 @@ async def _load_supply(
         select(FbsSupply)
         .options(
             selectinload(FbsSupply.orders).selectinload(FbsOrder.product_positions),
+            selectinload(FbsSupply.seller),
             selectinload(FbsSupply.warehouse),
         )
         .where(FbsSupply.id == supply_id, FbsSupply.tenant_id == tenant_id)

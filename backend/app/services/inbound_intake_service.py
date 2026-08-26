@@ -40,6 +40,7 @@ from app.services.document_number_service import (
     assign_display_number_if_missing,
     assign_document_number_if_missing,
 )
+from app.services.operation_fact_service import record_inbound_completion
 from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
 
 STATUS_DRAFT = "draft"
@@ -658,6 +659,7 @@ async def _record_charge_if_done(
                 seller_id=req.seller_id,
                 occurred_at=occurred_at,
             )
+    await record_inbound_completion(session, req, performer_id)
 
 
 async def primary_accept_request(

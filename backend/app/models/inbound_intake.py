@@ -34,9 +34,7 @@ class InboundIntakeRequest(Base):
 
     __tablename__ = "inbound_intake_requests"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), index=True
     )
@@ -65,15 +63,14 @@ class InboundIntakeRequest(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    submitted_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     primary_accepted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    posted_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+    posted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     distribution_completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -141,9 +138,7 @@ class InboundIntakeCargoPlace(Base):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), index=True
     )
@@ -183,9 +178,7 @@ class InboundIntakeBox(Base):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), index=True
     )
@@ -229,9 +222,7 @@ class InboundIntakeBoxLine(Base):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     box_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("inbound_intake_boxes.id", ondelete="CASCADE"),
@@ -255,14 +246,10 @@ class InboundIntakeBoxLine(Base):
 class InboundIntakeLine(Base):
     __tablename__ = "inbound_intake_lines"
     __table_args__ = (
-        UniqueConstraint(
-            "request_id", "product_id", name="uq_inbound_intake_line_req_product"
-        ),
+        UniqueConstraint("request_id", "product_id", name="uq_inbound_intake_line_req_product"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     request_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("inbound_intake_requests.id", ondelete="CASCADE"),
@@ -295,9 +282,7 @@ class InboundIntakeLine(Base):
     request: Mapped[InboundIntakeRequest] = relationship(
         "InboundIntakeRequest", back_populates="lines"
     )
-    product: Mapped[Product] = relationship(
-        "Product", back_populates="inbound_intake_lines"
-    )
+    product: Mapped[Product] = relationship("Product", back_populates="inbound_intake_lines")
     storage_location: Mapped[StorageLocation | None] = relationship(
         "StorageLocation", back_populates="inbound_intake_lines"
     )
@@ -310,9 +295,7 @@ class InboundIntakeLine(Base):
 class InboundIntakeDistributionLine(Base):
     __tablename__ = "inbound_intake_distribution_lines"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     request_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("inbound_intake_requests.id", ondelete="CASCADE"),

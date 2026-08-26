@@ -87,6 +87,7 @@ from app.services.marketplace_unload_status import (
 from app.services.marketplace_unload_status import (
     STATUS_SUBMITTED as STATUS_SUBMITTED,
 )
+from app.services.operation_fact_service import record_marketplace_unload
 from app.services.wb_mp_warehouse_service import get_cached_mp_warehouse
 
 if TYPE_CHECKING:
@@ -1051,6 +1052,15 @@ async def complete_unload(
     await delete_empty_boxes_for_ship(session, req)
     req.status = STATUS_SHIPPED
     occurred_at = datetime.now(UTC)
+    if req.completed_by_user_id is None:
+        req.completed_by_user_id = performer_id
+    await record_marketplace_unload(
+        session,
+        request=req,
+        distributed=distributed,
+        occurred_at=occurred_at,
+        performer_id=req.completed_by_user_id,
+    )
     try:
         await record_operational_charge(
             session,
@@ -1148,13 +1158,24 @@ async def cancel_request(
         raise MarketplaceUnloadError("bad_status")
 
     if req.status in BILLING_REVERSIBLE_STATUSES:
+        occurred_at = datetime.now(UTC)
         await record_operational_reversal(
             session,
             tenant_id=tenant_id,
             source_type="marketplace_unload",
             source_id=req.id,
-            occurred_at=datetime.now(UTC),
+            occurred_at=occurred_at,
             performer_id=performer_id,
+        )
+        if req.cancelled_by_user_id is None:
+            req.cancelled_by_user_id = performer_id
+        await record_marketplace_unload(
+            session,
+            request=req,
+            distributed=distributed_qty_by_product(req),
+            occurred_at=occurred_at,
+            performer_id=req.cancelled_by_user_id,
+            reversal=True,
         )
     else:
         from app.services import marketplace_unload_collect_service as collect_svc

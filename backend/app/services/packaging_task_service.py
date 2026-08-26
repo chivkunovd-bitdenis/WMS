@@ -45,6 +45,7 @@ from app.services.document_number_service import (
     assign_display_number_if_missing,
     assign_document_number_if_missing,
 )
+from app.services.operation_fact_service import record_packaging_event
 
 PackagingTaskError = Literal[
     "not_found",
@@ -226,6 +227,12 @@ async def _add_task_event(
     )
     session.add(event)
     await session.flush()
+    if action in {
+        PACKAGING_EVENT_MANUAL_PACK,
+        PACKAGING_EVENT_SCAN_PACK,
+        PACKAGING_EVENT_PREPACKED_EXTERNAL,
+    }:
+        await record_packaging_event(session, task=task, event=event, line=line)
     return event
 
 
@@ -245,12 +252,8 @@ async def get_task(
             selectinload(PackagingTask.warehouse),
             selectinload(PackagingTask.events).selectinload(PackagingTaskEvent.line),
             selectinload(PackagingTask.events).selectinload(PackagingTaskEvent.product),
-            selectinload(PackagingTask.events).selectinload(
-                PackagingTaskEvent.storage_location
-            ),
-            selectinload(PackagingTask.events).selectinload(
-                PackagingTaskEvent.created_by_user
-            ),
+            selectinload(PackagingTask.events).selectinload(PackagingTaskEvent.storage_location),
+            selectinload(PackagingTask.events).selectinload(PackagingTaskEvent.created_by_user),
         )
         .execution_options(populate_existing=True)
     )
@@ -332,9 +335,7 @@ async def list_tasks(
             selectinload(PackagingTask.lines)
             .selectinload(PackagingTaskLine.product)
             .selectinload(Product.seller),
-            selectinload(PackagingTask.lines).selectinload(
-                PackagingTaskLine.storage_location
-            ),
+            selectinload(PackagingTask.lines).selectinload(PackagingTaskLine.storage_location),
             selectinload(PackagingTask.warehouse),
             selectinload(PackagingTask.events).selectinload(PackagingTaskEvent.created_by_user),
         )
@@ -419,12 +420,8 @@ async def create_manual_task(
     )
     session.add(task)
     await session.flush()
-    await assign_document_number_if_missing(
-        session, tenant_id, DOC_TYPE_PACKAGING, task
-    )
-    await assign_display_number_if_missing(
-        session, tenant_id, DOC_TYPE_PACKAGING, task
-    )
+    await assign_document_number_if_missing(session, tenant_id, DOC_TYPE_PACKAGING, task)
+    await assign_display_number_if_missing(session, tenant_id, DOC_TYPE_PACKAGING, task)
     for product_id, location_id, qty in lines:
         if qty < 1:
             raise PackagingTaskServiceError("invalid_qty")
@@ -433,9 +430,7 @@ async def create_manual_task(
                 session, tenant_id, warehouse_id
             )
             location_id = loc.id
-        _unpacked, packed = await _get_balance_split(
-            session, tenant_id, product_id, location_id
-        )
+        _unpacked, packed = await _get_balance_split(session, tenant_id, product_id, location_id)
         if qty > _unpacked:
             raise PackagingTaskServiceError("insufficient_unpacked")
         suggested = min(packed, qty)
@@ -482,9 +477,7 @@ async def sync_lines_from_unload_plan(
     unload_lines = list(
         (
             await session.execute(
-                select(MarketplaceUnloadLine).where(
-                    MarketplaceUnloadLine.request_id == unload_id
-                )
+                select(MarketplaceUnloadLine).where(MarketplaceUnloadLine.request_id == unload_id)
             )
         )
         .scalars()
@@ -498,9 +491,7 @@ async def sync_lines_from_unload_plan(
 
     line_stmt = select(PackagingTaskLine).where(PackagingTaskLine.task_id == task.id)
     db_lines = list((await session.execute(line_stmt)).scalars().all())
-    existing = {
-        ln.product_id: ln for ln in db_lines if ln.storage_location_id == location_id
-    }
+    existing = {ln.product_id: ln for ln in db_lines if ln.storage_location_id == location_id}
     plan_qty_before = {pid: int(ln.qty_total) for pid, ln in existing.items()}
     seen: set[uuid.UUID] = set()
 
@@ -508,16 +499,12 @@ async def sync_lines_from_unload_plan(
         product_id = ul.product_id
         seen.add(product_id)
         qty = int(ul.quantity)
-        _unpacked, packed = await _get_balance_split(
-            session, tenant_id, product_id, location_id
-        )
+        _unpacked, packed = await _get_balance_split(session, tenant_id, product_id, location_id)
         suggested = min(packed, qty)
         if product_id in existing:
             ln = existing[product_id]
             has_progress = ln.qty_packed_in_task > 0 or ln.qty_confirmed_packed > 0
-            if has_progress and (
-                ln.qty_total != qty or ln.qty_suggested_packed != suggested
-            ):
+            if has_progress and (ln.qty_total != qty or ln.qty_suggested_packed != suggested):
                 pick_changed_with_progress = True
             if (ln.qty_packed_in_task == 0 and ln.qty_confirmed_packed == 0) or has_progress:
                 ln.qty_total = qty
@@ -587,8 +574,8 @@ async def sync_lines_from_pick_allocations(
 
     qty_by_product: dict[uuid.UUID, int] = {}
     for alloc in allocs:
-        qty_by_product[alloc.product_id] = (
-            qty_by_product.get(alloc.product_id, 0) + int(alloc.quantity)
+        qty_by_product[alloc.product_id] = qty_by_product.get(alloc.product_id, 0) + int(
+            alloc.quantity
         )
 
     line_stmt = select(PackagingTaskLine).where(PackagingTaskLine.task_id == task.id)
@@ -613,16 +600,12 @@ async def sync_lines_from_pick_allocations(
     seen: set[uuid.UUID] = set()
     for product_id, qty in qty_by_product.items():
         seen.add(product_id)
-        _unpacked, packed = await _get_balance_split(
-            session, tenant_id, product_id, location_id
-        )
+        _unpacked, packed = await _get_balance_split(session, tenant_id, product_id, location_id)
         suggested = min(packed, qty)
         if product_id in existing:
             ln = existing[product_id]
             has_progress = ln.qty_packed_in_task > 0 or ln.qty_confirmed_packed > 0
-            if has_progress and (
-                ln.qty_total != qty or ln.qty_suggested_packed != suggested
-            ):
+            if has_progress and (ln.qty_total != qty or ln.qty_suggested_packed != suggested):
                 pick_changed_with_progress = True
             if (ln.qty_packed_in_task == 0 and ln.qty_confirmed_packed == 0) or has_progress:
                 ln.qty_total = qty
@@ -725,12 +708,8 @@ async def ensure_task_for_unload(
     )
     session.add(task)
     await session.flush()
-    await assign_document_number_if_missing(
-        session, tenant_id, DOC_TYPE_PACKAGING, task
-    )
-    await assign_display_number_if_missing(
-        session, tenant_id, DOC_TYPE_PACKAGING, task
-    )
+    await assign_document_number_if_missing(session, tenant_id, DOC_TYPE_PACKAGING, task)
+    await assign_display_number_if_missing(session, tenant_id, DOC_TYPE_PACKAGING, task)
     await sync_lines_from_unload_plan(session, tenant_id, task)
     await session.commit()
     loaded = await get_task(session, tenant_id, task.id)
@@ -794,9 +773,7 @@ async def confirm_line_packed_from_shelf(
     line.qty_confirmed_packed = confirmed
     _touch_task(task)
     if acting_user_id is not None:
-        await billing_svc.finalize_task_billing(
-            session, task, completed_by_user_id=acting_user_id
-        )
+        await billing_svc.finalize_task_billing(session, task, completed_by_user_id=acting_user_id)
     await session.commit()
     loaded = await get_task(session, tenant_id, task_id)
     assert loaded is not None
@@ -854,9 +831,7 @@ async def mark_line_prepacked_external(
         acting_user_id=acting_user_id,
     )
     if acting_user_id is not None:
-        await billing_svc.finalize_task_billing(
-            session, task, completed_by_user_id=acting_user_id
-        )
+        await billing_svc.finalize_task_billing(session, task, completed_by_user_id=acting_user_id)
     await session.commit()
     loaded = await get_task(session, tenant_id, task_id)
     assert loaded is not None
@@ -968,9 +943,7 @@ async def record_pack_progress(
         acting_user_id=acting_user_id,
     )
     if acting_user_id is not None:
-        await billing_svc.finalize_task_billing(
-            session, task, completed_by_user_id=acting_user_id
-        )
+        await billing_svc.finalize_task_billing(session, task, completed_by_user_id=acting_user_id)
     await session.commit()
     loaded = await get_task(session, tenant_id, task_id)
     assert loaded is not None
@@ -1002,11 +975,7 @@ async def record_pack_scan(
     if not matching:
         raise PackagingTaskServiceError("unknown_barcode")
     open_line = next(
-        (
-            line
-            for line in matching
-            if qty_need_pack(line) - int(line.qty_packed_in_task) > 0
-        ),
+        (line for line in matching if qty_need_pack(line) - int(line.qty_packed_in_task) > 0),
         None,
     )
     if open_line is None:
@@ -1119,7 +1088,7 @@ async def undo_last_pack_action(
     event.reversed_at = now
     event.reversed_by_user_id = acting_user_id
     _touch_task(task)
-    await _add_task_event(
+    undo_event = await _add_task_event(
         session,
         task,
         action=PACKAGING_EVENT_UNDO_LAST,
@@ -1127,6 +1096,13 @@ async def undo_last_pack_action(
         line=line,
         acting_user_id=acting_user_id,
         note=f"undo {event.action}",
+    )
+    await record_packaging_event(
+        session,
+        task=task,
+        event=undo_event,
+        line=line,
+        original_event_id=event.id,
     )
     await session.commit()
     loaded = await get_task(session, tenant_id, task_id)
@@ -1239,9 +1215,7 @@ async def complete_task(
         acting_user_id=acting_user_id,
     )
     if acting_user_id is not None:
-        await billing_svc.finalize_task_billing(
-            session, task, completed_by_user_id=acting_user_id
-        )
+        await billing_svc.finalize_task_billing(session, task, completed_by_user_id=acting_user_id)
     else:
         task.completed_at = datetime.now(UTC)
         task.completed_by_user_id = None

@@ -47,6 +47,7 @@ class FbsOrderPick(Base):
             "fbs_order_id",
             unique=True,
             postgresql_where=text("undone_at IS NULL"),
+            sqlite_where=text("undone_at IS NULL"),
         ),
         Index("ix_fbs_order_picks_tenant_supply", "tenant_id", "fbs_supply_id"),
     )

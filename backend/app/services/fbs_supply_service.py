@@ -47,6 +47,7 @@ from app.models.fbs_wb_operation import (
     WB_OPERATION_STATE_PENDING_CONFIRMATION,
 )
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
+from app.models.product import Product
 from app.models.tenant import Tenant
 from app.models.tenant_wb_mp_warehouse import TenantWbMpWarehouse
 from app.services import sorting_location_service as sorting_loc_svc
@@ -85,6 +86,7 @@ from app.services.marketplace_provider import (
     OzonMarketplaceProvider,
 )
 from app.services.marketplace_seller_lock_service import marketplace_seller_lock
+from app.services.operation_fact_service import record_fbs_pick
 from app.services.wildberries_client import (
     WildberriesClientError,
     add_order_to_marketplace_supply,
@@ -229,7 +231,10 @@ async def _get_supply(
         FbsSupply.tenant_id == tenant_id,
     )
     if with_orders:
-        stmt = stmt.options(selectinload(FbsSupply.orders).selectinload(FbsOrder.product))
+        stmt = stmt.options(
+            selectinload(FbsSupply.orders).selectinload(FbsOrder.product),
+            selectinload(FbsSupply.seller),
+        )
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
 
@@ -1079,16 +1084,26 @@ async def _auto_pass_picking_if_needed(
         )
         session.add(pick)
         await session.flush()
-        session.add(
-            FbsOrderPickEvent(
-                pick_id=pick.id,
-                event_type=PICK_EVENT_PICKED,
-                actor_user_id=actor_user_id,
-                idempotency_key=idempotency_key,
-                source_storage_location_id=sorting_loc.id,
-                sorting_storage_location_id=sorting_loc.id,
-                inventory_movement_id=None,
-            )
+        event = FbsOrderPickEvent(
+            pick_id=pick.id,
+            event_type=PICK_EVENT_PICKED,
+            actor_user_id=actor_user_id,
+            idempotency_key=idempotency_key,
+            source_storage_location_id=sorting_loc.id,
+            sorting_storage_location_id=sorting_loc.id,
+            inventory_movement_id=None,
+        )
+        session.add(event)
+        await session.flush()
+        await record_fbs_pick(
+            session,
+            supply=supply,
+            pick=pick,
+            source_event_id=event.id,
+            source_kind="fbs_order_pick_event",
+            actor_user_id=actor_user_id,
+            occurred_at=picked_at,
+            product=await session.get(Product, order.product_id),
         )
         order.pick_status = PICK_STATUS_PICKED
         order.picked_at = picked_at
