@@ -301,6 +301,172 @@ test('fbs orders: active supplies table explains external WB supply without loca
   expect(workspaceRequests).toBe(1)
 })
 
+// FBS-QR-REPRINT — supply and existing WB cargo-place QR are printable from the worklist.
+test('fbs orders: reprints supply and cargo-place QR from supply row', async ({ page }) => {
+  await registerFf(page, 'supply-qr-reprint')
+
+  const supplyAsset = {
+    id: 'asset-supply-qr',
+    kind: 'supply_qr',
+    status: 'ready',
+    content_type: 'image/png',
+    width_mm: 58,
+    height_mm: 40,
+    preview_url: '/operations/fbs-print-assets/asset-supply-qr/content',
+    download_url: '/operations/fbs-print-assets/asset-supply-qr/content',
+    checksum: 'supply-checksum',
+    applied_at: null,
+    error: null,
+  }
+  const cargoAsset = {
+    ...supplyAsset,
+    id: 'asset-cargo-qr',
+    kind: 'cargo_place_qr',
+    preview_url: '/operations/fbs-print-assets/asset-cargo-qr/content',
+    download_url: '/operations/fbs-print-assets/asset-cargo-qr/content',
+    checksum: 'cargo-checksum',
+  }
+  let workspaceRequests = 0
+  let syncRequests = 0
+  let retryRequests = 0
+  let cargoReads = 0
+  let cargoWrites = 0
+
+  await page.route('**/operations/fbs-orders/worklist**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(worklist([])) })
+  })
+  await page.route('**/operations/fbs-supplies/worklist**', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(supplyWorklist([supplyRow('sup-qr', { boxes_count: 0 })])),
+    })
+  })
+  await page.route('**/operations/fbs-supplies/sup-qr/workspace', async (route) => {
+    workspaceRequests += 1
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(workspace([])) })
+  })
+  await page.route('**/operations/fbs-supplies/sup-qr/sync-tracking', async (route) => {
+    expect(route.request().method()).toBe('POST')
+    syncRequests += 1
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(workspace([])) })
+  })
+  await page.route('**/operations/fbs-supplies/sup-qr/retry-supply-qr', async (route) => {
+    expect(route.request().method()).toBe('POST')
+    retryRequests += 1
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ supply: { barcode_asset: supplyAsset } }),
+    })
+  })
+  await page.route('**/operations/fbs-supplies/sup-qr/cargo-places', async (route) => {
+    if (route.request().method() !== 'GET') {
+      cargoWrites += 1
+      await route.fulfill({ status: 500, body: 'cargo place creation is forbidden in reprint' })
+      return
+    }
+    cargoReads += 1
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        cargo_places: [{ id: 'trbx-1', wb_trbx_id: 'WB-MP-1', qr_asset: cargoAsset }],
+      }),
+    })
+  })
+  await page.route('**/operations/fbs-print-assets/*/content', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'image/png',
+      body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64'),
+    })
+  })
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await page.getByRole('tab', { name: 'В работе' }).click()
+  await page.getByTestId('fbs-supply-qr-print-sup-qr').click()
+
+  await expect(page.getByRole('dialog', { name: 'Проверка перед печатью' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Печать всех готовых' })).toBeVisible()
+  await expect(page.getByText('Печать QR поставки WB')).toBeVisible()
+  await expect(page.getByText('Печать QR грузоместа WB')).toBeVisible()
+  await page.getByRole('button', { name: 'Закрыть' }).click()
+  await page.getByTestId('fbs-supply-qr-print-sup-qr').click()
+  await expect(page.getByRole('dialog', { name: 'Проверка перед печатью' })).toBeVisible()
+  await expect(page.getByText('Печать QR грузоместа WB')).toBeVisible()
+  expect(workspaceRequests).toBe(0)
+  expect(syncRequests).toBe(2)
+  expect(retryRequests).toBe(2)
+  expect(cargoReads).toBe(2)
+  expect(cargoWrites).toBe(0)
+})
+
+test('fbs orders: one broken QR preview does not block the ready QR', async ({ page }) => {
+  await registerFf(page, 'supply-qr-partial-preview')
+  const asset = (id: string, kind: 'supply_qr' | 'cargo_place_qr') => ({
+    id,
+    kind,
+    status: 'ready',
+    content_type: 'image/png',
+    width_mm: 58,
+    height_mm: 40,
+    preview_url: `/operations/fbs-print-assets/${id}/content`,
+    download_url: `/operations/fbs-print-assets/${id}/content`,
+    checksum: `${id}-checksum`,
+    applied_at: null,
+    error: null,
+  })
+  const supplyAsset = asset('asset-partial-supply', 'supply_qr')
+  const cargoAsset = asset('asset-partial-cargo', 'cargo_place_qr')
+
+  await page.route('**/operations/fbs-orders/worklist**', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(worklist([])),
+  }))
+  await page.route('**/operations/fbs-supplies/worklist**', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(supplyWorklist([supplyRow('sup-partial')])),
+  }))
+  await page.route('**/operations/fbs-supplies/sup-partial/sync-tracking', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(workspace([])),
+  }))
+  await page.route('**/operations/fbs-supplies/sup-partial/retry-supply-qr', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ supply: { barcode_asset: supplyAsset } }),
+  }))
+  await page.route('**/operations/fbs-supplies/sup-partial/cargo-places', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ cargo_places: [{ id: 'trbx-partial', wb_trbx_id: 'WB-MP-PARTIAL', qr_asset: cargoAsset }] }),
+  }))
+  await page.route('**/operations/fbs-print-assets/asset-partial-supply/content', (route) => route.fulfill({
+    status: 200,
+    contentType: 'image/png',
+    body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64'),
+  }))
+  await page.route('**/operations/fbs-print-assets/asset-partial-cargo/content', (route) => route.fulfill({
+    status: 404,
+    body: 'missing cargo image',
+  }))
+
+  await page.getByTestId('nav-ff-fbs').click()
+  await page.getByRole('tab', { name: 'В работе' }).click()
+  await page.getByTestId('fbs-supply-qr-print-sup-partial').click()
+
+  const dialog = page.getByRole('dialog', { name: 'Проверка перед печатью' })
+  await expect(dialog.getByText('Печать QR поставки WB')).toBeVisible()
+  await expect(dialog.getByText('Не загрузилось изображений: 1. Остальные QR можно напечатать.')).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Печать' })).toBeEnabled()
+})
+
 // TC-NEW-FBS-05-001 — selected new orders can be added to a compatible existing supply.
 test('fbs orders: add selected new orders to existing supply', async ({ page }) => {
   await registerFf(page, 'add-existing')

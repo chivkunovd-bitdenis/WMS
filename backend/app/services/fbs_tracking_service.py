@@ -1,8 +1,9 @@
-"""FBS post-delivery tracking: sync in-delivery supplies and partial acceptance summary."""
+"""FBS tracking: reconcile active local supplies with authoritative WB state."""
 
 from __future__ import annotations
 
 import uuid
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -35,6 +36,7 @@ from app.services.wb_marketplace_orders_service import (
 from app.services.wildberries_client import (
     WildberriesClientError,
     fetch_marketplace_orders_status,
+    fetch_marketplace_supply_details,
 )
 from app.services.wildberries_credentials_service import (
     _seller_in_tenant,
@@ -226,10 +228,39 @@ async def _sync_supply_orders_from_wb(
     supply: FbsSupply,
     http_client: httpx.AsyncClient,
     token: str,
+    *,
+    sync_orders: bool = True,
 ) -> int:
+    wb_supply_done: bool | None = None
+    # Supply details are an additional reconciliation signal. A temporary
+    # failure here must not regress the existing per-order status sync.
+    with suppress(WildberriesClientError):
+        wb_supply_done = (
+            await fetch_marketplace_supply_details(
+                http_client,
+                api_token=token,
+                supply_id=supply.wb_supply_id,
+            )
+        ).done
+
+    # The seller autopoll has already synchronized all order statuses in one
+    # batch. For draft/assembling/packed supplies this pass only reconciles the
+    # authoritative supply flag, avoiding another WB request per supply.
+    if not sync_orders:
+        if wb_supply_done is None:
+            raise FbsTrackingError("wb_supply_details_unavailable")
+        supply.last_wb_sync_at = datetime.now(tz=UTC)
+        if wb_supply_done:
+            supply.status = FBS_SUPPLY_STATUS_DONE
+        await session.flush()
+        return 0
+
     orders = list(supply.orders)
     if not orders:
         supply.last_wb_sync_at = datetime.now(tz=UTC)
+        if wb_supply_done:
+            supply.status = FBS_SUPPLY_STATUS_DONE
+        await session.flush()
         return 0
 
     processed = 0
@@ -242,6 +273,11 @@ async def _sync_supply_orders_from_wb(
                 order_ids=batch,
             )
         except WildberriesClientError as exc:
+            if wb_supply_done:
+                supply.status = FBS_SUPPLY_STATUS_DONE
+                supply.last_wb_sync_at = datetime.now(tz=UTC)
+                await session.flush()
+                return processed
             suffix = f"_{exc.status_code}" if exc.status_code else ""
             raise FbsTrackingError(f"wb_{exc.code}{suffix}") from exc
 
@@ -268,7 +304,10 @@ async def _sync_supply_orders_from_wb(
             processed += 1
 
     supply.last_wb_sync_at = datetime.now(tz=UTC)
-    await _maybe_complete_supply(session, supply)
+    if wb_supply_done:
+        supply.status = FBS_SUPPLY_STATUS_DONE
+    else:
+        await _maybe_complete_supply(session, supply)
     await session.flush()
     return processed
 
@@ -285,6 +324,8 @@ async def sync_supply_tracking(
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
     http_client: httpx.AsyncClient,
+    *,
+    sync_orders: bool | None = None,
 ) -> TrackingSyncResult:
     stmt = (
         select(FbsSupply)
@@ -296,13 +337,19 @@ async def sync_supply_tracking(
     supply = result.scalar_one_or_none()
     if supply is None:
         raise FbsTrackingError("supply_not_found")
-    if supply.status != FBS_SUPPLY_STATUS_IN_DELIVERY:
-        raise FbsTrackingError("supply_not_in_delivery")
-
+    if sync_orders is None:
+        # The legacy order-tracking behavior belongs only to supplies already
+        # handed to WB. For earlier local stages a manual reconcile must not
+        # close the supply from order statuses while WB still says done=false.
+        sync_orders = supply.status == FBS_SUPPLY_STATUS_IN_DELIVERY
     token = await _resolve_marketplace_api_token(session, tenant_id, supply.seller_id)
     try:
         updated = await _sync_supply_orders_from_wb(
-            session, supply, http_client, token
+            session,
+            supply,
+            http_client,
+            token,
+            sync_orders=sync_orders,
         )
     except FbsTrackingError:
         raise
@@ -323,7 +370,7 @@ async def sync_in_delivery_supplies(
         .where(
             FbsSupply.tenant_id == tenant_id,
             FbsSupply.seller_id == seller_id,
-            FbsSupply.status == FBS_SUPPLY_STATUS_IN_DELIVERY,
+            FbsSupply.status != FBS_SUPPLY_STATUS_DONE,
         )
         .options(selectinload(FbsSupply.orders))
         .order_by(FbsSupply.delivered_at.asc())
@@ -334,7 +381,11 @@ async def sync_in_delivery_supplies(
     for supply in supplies:
         try:
             result = await sync_supply_tracking(
-                session, tenant_id, supply.id, http_client
+                session,
+                tenant_id,
+                supply.id,
+                http_client,
+                sync_orders=supply.status == FBS_SUPPLY_STATUS_IN_DELIVERY,
             )
             supplies_synced += 1
             orders_updated += result.orders_updated
