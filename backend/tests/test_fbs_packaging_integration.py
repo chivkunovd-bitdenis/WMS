@@ -39,10 +39,7 @@ from app.services import inventory_service
 from app.services.fbs_packaging_integration_service import create_packaging_task_for_supply
 from app.services.fbs_stock_availability_service import fbs_available_qty_for_product
 from app.services.sorting_location_service import get_or_create_sorting_location
-from app.services.wb_marketplace_orders_service import (
-    _release_reservation,
-    upsert_order_from_wb_row,
-)
+from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 from tests.test_fbs_shipment_warehouse_sc import (
     _create_and_fill_physical_box,
@@ -845,13 +842,13 @@ async def test_fbs_supply_promoted_after_marking_when_honest_sign_required(
     assert supply_done.json()["status"] == FBS_SUPPLY_STATUS_PACKED
 
 
-# TC-NEW-FBS-STOCK-035 — STOCKFIX-035: promote write-off after per-order pack
+# TC-NEW-FBS-SHIP-STOCK-001 — packaging keeps physical stock and reservation.
 @pytest.mark.asyncio
-async def test_fbs_promote_write_off_shelf_confirm_sold_does_not_resurrect_available(
+async def test_fbs_packaging_keeps_physical_stock_reserved_until_delivery(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
-    """Per-order pack → fbs_shipment write-off → sold → avail 4 not 5."""
+    """Per-order pack changes no physical stock; the order remains reserved."""
     headers, suffix = await _register_ff_admin(async_client)
     seller_id, warehouse_id = await _setup_seller_with_token(async_client, headers, suffix)
     token_payload = await async_client.get("/auth/me", headers=headers)
@@ -964,18 +961,19 @@ async def test_fbs_promote_write_off_shelf_confirm_sold_does_not_resurrect_avail
                 InventoryMovement.movement_type == MOVEMENT_TYPE_FBS_SHIPMENT,
             )
         )
-        assert int(write_off_qty) == -1
+        assert int(write_off_qty) == 0
 
         order = await session.get(FbsOrder, order_id)
         assert order is not None
-        await _release_reservation(session, order)
-        await session.commit()
+        reservation = await session.scalar(
+            select(FbsOrderReservation).where(FbsOrderReservation.fbs_order_id == order.id)
+        )
+        assert reservation is not None
 
-        available_after_sold = await fbs_available_qty_for_product(
+        available_before_delivery = await fbs_available_qty_for_product(
             session, tenant_id, uuid.UUID(warehouse_id), product_id
         )
-        assert available_after_sold == 4
-        assert available_after_sold != 5
+        assert available_before_delivery == 4
 
 
 # Упаковка без остатка в строке задания должна проходить с предупреждением

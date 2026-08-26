@@ -47,12 +47,12 @@ from app.models.inventory_movement import MOVEMENT_TYPE_FBS_SHIPMENT, InventoryM
 from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.product import Product
 from app.models.storage_location import StorageLocation
-from app.services import inventory_service, stock_direction_service
+from app.services import inventory_service
 from app.services.fbs_packaging_integration_service import (
-    _write_off_active_orders_once,
     detach_cancelled_order_from_supply,
     try_promote_fbs_supply_if_ready,
 )
+from app.services.fbs_shipment_service import _write_off_delivered_orders_once
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import (
     _apply_wb_status_to_order,
@@ -376,6 +376,17 @@ async def test_cancel_last_order_in_assembling_reverts_supply_to_draft(
         supply = await session.get(FbsSupply, supply_id)
         assert supply is not None
         assert supply.status == FBS_SUPPLY_STATUS_DRAFT
+        shipment_movements = list(
+            (
+                await session.execute(
+                    select(InventoryMovement).where(
+                        InventoryMovement.tenant_id == tenant_id,
+                        InventoryMovement.movement_type == MOVEMENT_TYPE_FBS_SHIPMENT,
+                    )
+                )
+            ).scalars()
+        )
+        assert shipment_movements == []
 
 
 # TC-NEW-FBS-FIX-002 — concurrent reserve does not oversell
@@ -922,7 +933,7 @@ async def test_fbs_shipment_uses_each_order_fulfillment_location(
                 .options(selectinload(FbsSupply.orders))
             )
         ).scalar_one()
-        await _write_off_active_orders_once(session, tenant_id, supply, task)
+        await _write_off_delivered_orders_once(session, supply, orders)
         ledgers = list(
             (
                 await session.execute(
@@ -935,6 +946,7 @@ async def test_fbs_shipment_uses_each_order_fulfillment_location(
         assert {ledger.fbs_order_id: ledger.storage_location_id for ledger in ledgers} == {
             order.id: location.id for order, location in zip(orders, locations, strict=True)
         }
+        assert all(ledger.shipment_movement_id is not None for ledger in ledgers)
 
         await _apply_wb_status_to_order(session, orders[0], "canceled")
         await _apply_wb_status_to_order(session, orders[0], "canceled")

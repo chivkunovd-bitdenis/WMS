@@ -85,6 +85,82 @@ def _build_positive_balance_upsert(
     raise RuntimeError(msg)
 
 
+def _build_negative_balance_upsert(
+    *,
+    dialect_name: str,
+    tenant_id: uuid.UUID,
+    product_id: uuid.UUID,
+    storage_location_id: uuid.UUID,
+    quantity_to_deduct: int,
+    deduct_prefer: DeductPrefer,
+) -> Insert:
+    """Atomically deduct stock, creating a negative balance when necessary."""
+    unpacked = InventoryBalance.quantity_unpacked
+    packed = InventoryBalance.quantity_packed
+    preferred = unpacked if deduct_prefer == "unpacked" else packed
+    secondary = packed if deduct_prefer == "unpacked" else unpacked
+    preferred_available = case((preferred > 0, preferred), else_=0)
+    deducted_from_preferred = case(
+        (preferred_available >= quantity_to_deduct, quantity_to_deduct),
+        else_=preferred_available,
+    )
+    remaining_after_preferred = quantity_to_deduct - deducted_from_preferred
+    secondary_available = case((secondary > 0, secondary), else_=0)
+    deducted_from_secondary = case(
+        (secondary_available >= remaining_after_preferred, remaining_after_preferred),
+        else_=secondary_available,
+    )
+    deficit = quantity_to_deduct - deducted_from_preferred - deducted_from_secondary
+
+    next_preferred = preferred - deducted_from_preferred
+    next_secondary = secondary - deducted_from_secondary
+    if deduct_prefer == "unpacked":
+        next_unpacked = next_preferred - deficit
+        next_packed = next_secondary
+    else:
+        # A physical shortage belongs to unpacked stock.  Future inbound stock is
+        # posted there as well, so a later receipt naturally closes the deficit.
+        next_unpacked = next_secondary - deficit
+        next_packed = next_preferred
+
+    values = {
+        "id": uuid.uuid4(),
+        "tenant_id": tenant_id,
+        "product_id": product_id,
+        "storage_location_id": storage_location_id,
+        "quantity": -quantity_to_deduct,
+        "quantity_unpacked": -quantity_to_deduct,
+        "quantity_packed": 0,
+        "updated_at": datetime.now(UTC),
+    }
+    update_values = {
+        "quantity_unpacked": next_unpacked,
+        "quantity_packed": next_packed,
+        "quantity": unpacked + packed - quantity_to_deduct,
+        "updated_at": datetime.now(UTC),
+    }
+    if dialect_name == "postgresql":
+        stmt = postgresql_insert(InventoryBalance).values(**values)
+        return stmt.on_conflict_do_update(
+            index_elements=[
+                InventoryBalance.storage_location_id,
+                InventoryBalance.product_id,
+            ],
+            set_=update_values,
+        )
+    if dialect_name == "sqlite":
+        sqlite_stmt = sqlite_insert(InventoryBalance).values(**values)
+        return sqlite_stmt.on_conflict_do_update(
+            index_elements=[
+                InventoryBalance.storage_location_id,
+                InventoryBalance.product_id,
+            ],
+            set_=update_values,
+        )
+    msg = f"unsupported inventory balance dialect: {dialect_name}"
+    raise RuntimeError(msg)
+
+
 async def _physical_on_hand(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -547,6 +623,7 @@ async def record_movement_and_adjust_balance(
     transfer_group_id: uuid.UUID | None = None,
     marketplace_unload_request_id: uuid.UUID | None = None,
     deduct_prefer: DeductPrefer = "unpacked",
+    allow_negative: bool = False,
 ) -> InventoryMovement:
     """Запись в журнал и изменение остатка (delta может быть отрицательным)."""
     if quantity_delta == 0:
@@ -592,6 +669,20 @@ async def record_movement_and_adjust_balance(
                 product_id=product_id,
                 storage_location_id=storage_location_id,
                 quantity_delta=quantity_delta,
+            )
+        )
+        return movement
+
+    if allow_negative:
+        bind = session.get_bind()
+        await session.execute(
+            _build_negative_balance_upsert(
+                dialect_name=bind.dialect.name,
+                tenant_id=tenant_id,
+                product_id=product_id,
+                storage_location_id=storage_location_id,
+                quantity_to_deduct=-quantity_delta,
+                deduct_prefer=deduct_prefer,
             )
         )
         return movement
@@ -1002,13 +1093,9 @@ async def apply_fbs_supply_write_off(
     storage_location_id: uuid.UUID,
     quantity: int,
 ) -> InventoryMovement:
-    """Списание упакованного FBS-товара при завершении упаковки поставки."""
+    """Списать подтверждённую FBS-отгрузку, разрешая фактическую недостачу."""
     if quantity < 1:
         msg = "quantity must be positive"
-        raise ValueError(msg)
-    bal = await _lock_inventory_balance(session, tenant_id, product_id, storage_location_id)
-    if bal is None or int(bal.quantity) < quantity:
-        msg = "insufficient stock"
         raise ValueError(msg)
     from app.services import stock_direction_service
 
@@ -1020,10 +1107,8 @@ async def apply_fbs_supply_write_off(
             quantity,
         )
     except stock_direction_service.StockDirectionError as exc:
-        if exc.code == "insufficient_fbs_pool":
-            msg = "insufficient_fbs_pool"
-            raise ValueError(msg) from exc
-        raise
+        if exc.code != "insufficient_fbs_pool":
+            raise
     return await record_movement_and_adjust_balance(
         session,
         tenant_id=tenant_id,
@@ -1032,6 +1117,7 @@ async def apply_fbs_supply_write_off(
         quantity_delta=-quantity,
         movement_type=MOVEMENT_TYPE_FBS_SHIPMENT,
         deduct_prefer="packed",
+        allow_negative=True,
     )
 
 

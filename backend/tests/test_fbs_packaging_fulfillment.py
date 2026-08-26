@@ -170,7 +170,7 @@ def enable_wb_marketplace_supplies_mock(monkeypatch: pytest.MonkeyPatch) -> None
 
 # TC-10 — picked item packed via PackagingTask; inventory unpacked→packed
 @pytest.mark.asyncio
-async def test_fbs_pack_picked_item_inventory_unpacked_to_packed(
+async def test_fbs_pack_picked_item_keeps_packed_stock_until_delivery(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
@@ -305,7 +305,7 @@ async def test_fbs_pack_picked_item_inventory_unpacked_to_packed(
                 InventoryMovement.movement_type == MOVEMENT_TYPE_FBS_SHIPMENT,
             )
         )
-        assert int(write_off_qty) == -1
+        assert int(write_off_qty) == 0
 
 
 # TC-10 negative — cannot pack without pick

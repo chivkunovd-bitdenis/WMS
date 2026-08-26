@@ -27,6 +27,9 @@ from app.models.fbs_order import (
     FbsOrder,
     current_order_marking,
 )
+from app.models.fbs_order_pick import FbsOrderPick
+from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
+from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger
 from app.models.fbs_supply import (
     FBS_DELIVERY_TYPE_PVZ,
     FBS_DELIVERY_TYPE_WAREHOUSE_SC,
@@ -40,9 +43,11 @@ from app.models.fbs_wb_operation import (
     WB_OPERATION_STATE_PENDING,
     WB_OPERATION_STATE_PENDING_CONFIRMATION,
 )
+from app.models.packaging_task import PackagingTaskLine
 from app.services import fbs_marking_service as marking_svc
 from app.services import fbs_packing_box_service as packing_box_svc
 from app.services import fbs_shipment_pvz_service as pvz_svc
+from app.services import inventory_service as inventory_svc
 from app.services.fbs_print_asset_service import upsert_supply_qr_asset_from_bytes
 from app.services.fbs_print_asset_storage import FbsPrintAssetStorageError
 from app.services.fbs_supply_reconcile_service import (
@@ -54,8 +59,10 @@ from app.services.fbs_supply_reconcile_service import (
     reconcile_supply_delivered,
     request_hash_for_deliver,
 )
+from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import (
     _apply_wb_status_to_order,
+    _release_reservation,
     _supplier_status_from_row,
     _wb_status_from_row,
 )
@@ -719,12 +726,141 @@ async def _apply_local_delivered(
     supply: FbsSupply,
     orders: list[FbsOrder],
 ) -> None:
+    await _write_off_delivered_orders_once(session, supply, orders)
     now = datetime.now(UTC)
     supply.status = FBS_SUPPLY_STATUS_IN_DELIVERY
     supply.delivered_at = now
     for order in orders:
         if order.status == FBS_ORDER_STATUS_PACKED:
             order.status = FBS_ORDER_STATUS_IN_DELIVERY
+    await session.flush()
+
+
+async def _shipment_locations_by_order(
+    session: AsyncSession,
+    order_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, tuple[uuid.UUID, uuid.UUID]]:
+    """Return order -> (product, physical shipment location), preferring packing."""
+    if not order_ids:
+        return {}
+    fulfillment_rows = (
+        await session.execute(
+            select(
+                FbsPackagingFulfillment.fbs_order_id,
+                PackagingTaskLine.product_id,
+                PackagingTaskLine.storage_location_id,
+            )
+            .join(
+                PackagingTaskLine,
+                PackagingTaskLine.id == FbsPackagingFulfillment.packaging_task_line_id,
+            )
+            .where(
+                FbsPackagingFulfillment.fbs_order_id.in_(order_ids),
+                FbsPackagingFulfillment.undone_at.is_(None),
+            )
+        )
+    ).all()
+    result = {
+        order_id: (product_id, storage_location_id)
+        for order_id, product_id, storage_location_id in fulfillment_rows
+    }
+    missing_ids = [order_id for order_id in order_ids if order_id not in result]
+    if not missing_ids:
+        return result
+    pick_rows = (
+        await session.execute(
+            select(
+                FbsOrderPick.fbs_order_id,
+                FbsOrderPick.product_id,
+                FbsOrderPick.sorting_storage_location_id,
+            ).where(
+                FbsOrderPick.fbs_order_id.in_(missing_ids),
+                FbsOrderPick.undone_at.is_(None),
+            )
+        )
+    ).all()
+    result.update(
+        {
+            order_id: (product_id, storage_location_id)
+            for order_id, product_id, storage_location_id in pick_rows
+        }
+    )
+    return result
+
+
+async def _write_off_delivered_orders_once(
+    session: AsyncSession,
+    supply: FbsSupply,
+    orders: list[FbsOrder],
+) -> None:
+    """Create exactly one physical write-off per confirmed FBS order."""
+    active_orders = [
+        order
+        for order in orders
+        if order.status != FBS_ORDER_STATUS_CANCELLED and order.product_id is not None
+    ]
+    order_ids = [order.id for order in active_orders]
+    existing_ledgers = {
+        ledger.fbs_order_id: ledger
+        for ledger in (
+            (
+                await session.execute(
+                    select(FbsShipmentReversalLedger)
+                    .where(
+                        FbsShipmentReversalLedger.tenant_id == supply.tenant_id,
+                        FbsShipmentReversalLedger.fbs_order_id.in_(order_ids),
+                    )
+                    .with_for_update()
+                )
+            )
+            .scalars()
+            .all()
+        )
+    }
+    locations = await _shipment_locations_by_order(session, order_ids)
+    fallback_location_id: uuid.UUID | None = None
+
+    for order in active_orders:
+        ledger = existing_ledgers.get(order.id)
+        if ledger is None:
+            shipment_location = locations.get(order.id)
+            if shipment_location is not None:
+                fulfilled_product_id, storage_location_id = shipment_location
+                if fulfilled_product_id != order.product_id:
+                    raise FbsShipmentError("fbs_shipment_product_mismatch", http_status=409)
+            else:
+                if fallback_location_id is None:
+                    fallback_location = await get_or_create_sorting_location(
+                        session,
+                        supply.tenant_id,
+                        supply.warehouse_id,
+                    )
+                    fallback_location_id = fallback_location.id
+                storage_location_id = fallback_location_id
+            ledger = FbsShipmentReversalLedger(
+                tenant_id=supply.tenant_id,
+                fbs_order_id=order.id,
+                product_id=order.product_id,
+                storage_location_id=storage_location_id,
+                quantity=1,
+            )
+            session.add(ledger)
+            await session.flush()
+            existing_ledgers[order.id] = ledger
+
+        if ledger.reversed_at is not None:
+            raise FbsShipmentError("fbs_shipment_already_reversed", http_status=409)
+        if ledger.shipment_movement_id is None:
+            movement = await inventory_svc.apply_fbs_supply_write_off(
+                session,
+                tenant_id=supply.tenant_id,
+                product_id=ledger.product_id,
+                storage_location_id=ledger.storage_location_id,
+                quantity=int(ledger.quantity),
+            )
+            await session.flush()
+            ledger.shipment_movement_id = movement.id
+        await _release_reservation(session, order)
     await session.flush()
 
 

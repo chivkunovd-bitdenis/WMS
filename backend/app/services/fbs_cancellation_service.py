@@ -70,7 +70,7 @@ async def reverse_fbs_shipment_if_needed(
     session: AsyncSession,
     order: FbsOrder,
 ) -> bool:
-    """Reverse one packed physical unit exactly once; caller owns the order lock."""
+    """Reverse one physically written-off unit exactly once; caller owns the order lock."""
     stmt = (
         select(FbsShipmentReversalLedger)
         .where(
@@ -80,7 +80,11 @@ async def reverse_fbs_shipment_if_needed(
         .with_for_update()
     )
     ledger = (await session.execute(stmt)).scalar_one_or_none()
-    if ledger is None or ledger.reversed_at is not None:
+    if (
+        ledger is None
+        or ledger.shipment_movement_id is None
+        or ledger.reversed_at is not None
+    ):
         return False
     reversal_movement = await inv_svc.record_movement_and_adjust_balance(
         session,
