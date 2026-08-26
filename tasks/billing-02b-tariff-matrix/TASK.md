@@ -32,14 +32,26 @@ scope. В audit существующего kit отсутствуют reusable t
 select/dropdown и Moscow date-time input, без которых невозможно честно
 редактировать требуемую matrix.
 
-До следующей правки S-19 должен быть отдельно принят и исполнен собственный
-наряд UI-kit, а его результат сохранён отдельным commit. Открыть его ровно
-так (это самостоятельная prerequisite без экрана, поэтому `--files` задаёт
-всю и только всю его границу):
+До следующей правки S-19 действует ровно один current NARYAD state. Его
+буквальная последовательность обязательна и не допускает silent overlap:
 
-```bash
-python3 scripts/naryad.py new "Владелец 27.08.2026: «делай что надо в рамках этой сессии не спрашивай больше». Общая UI-kit prerequisite: доступные поля формы для тарифной матрицы 2Б" --lane обычная --files frontend/src/ui-kit/FormFields.tsx,frontend/src/ui-kit/FormFields.test.tsx,frontend/src/ui-kit/index.ts,frontend/src/ui-kit/UiKitShowcase.tsx
-```
+1. Закрыть текущий main 2Б наряд: `python3 scripts/naryad.py close`.
+2. Открыть самостоятельную prerequisite без экрана (поэтому `--files` задаёт
+   всю и только всю её границу) ровно этой командой:
+
+   ```bash
+   python3 scripts/naryad.py new "Владелец 27.08.2026: «делай что надо в рамках этой сессии не спрашивай больше». Общая UI-kit prerequisite: доступные поля формы для тарифной матрицы 2Б" --lane обычная --files frontend/src/ui-kit/FormFields.tsx,frontend/src/ui-kit/FormFields.test.tsx,frontend/src/ui-kit/index.ts,frontend/src/ui-kit/UiKitShowcase.tsx
+   ```
+
+3. Исполнить и проверить только prerequisite, получить independent `ACCEPTED`,
+   сохранить отдельным UI-kit commit и push.
+4. Закрыть prerequisite: `python3 scripts/naryad.py close`.
+5. Официально открыть main 2Б заново ровно полной исходной командой, а не
+   ссылкой на другую команду:
+
+   ```bash
+   python3 scripts/naryad.py new "Волна 2Б модуля «Расчёты»: тарифная матрица на экране Настройки ФФ" --screens S-19 --lane обычная --files backend/app/models/billing.py,backend/app/models/__init__.py,backend/app/models/packaging_task.py,backend/app/services/auth_service.py,backend/app/services/billing_tariff_matrix_service.py,backend/app/services/billing_configuration_service.py,backend/app/services/billing_ledger_service.py,backend/app/services/inbound_intake_service.py,backend/app/services/marketplace_unload_service.py,backend/app/api/billing.py,backend/app/main.py,backend/alembic/versions/20260826_0112_billing_tariff_matrix.py,backend/tests/test_auth.py,backend/tests/test_bootstrap_billing_tariff_matrix.py,backend/tests/test_billing_tariff_matrix.py,backend/tests/test_billing_configuration_api.py,backend/tests/test_billing_ledger_service.py,backend/tests/test_billing_invoice_service.py,backend/tests/test_billing_invoice_api.py,backend/tests/test_staff_packaging_billing.py,backend/tests/test_inbound_intake_service_sort_be01.py,backend/tests/test_marketplace_unload_and_discrepancy_acts.py,frontend/src/screens/ff/FfSettingsScreen.tsx,frontend/src/screens/ff/FfBillingTariffMatrixPanel.tsx,frontend/src/screens/ff/FfSettingsScreen.test.tsx,frontend/src/api.ts,frontend/tests-e2e/ff-billing-tariff-matrix.spec.ts,frontend/tests-e2e/ff-staff-users.spec.ts,frontend/tests-e2e/billing-ledger.spec.ts,frontend/tests-e2e/billing-invoices.spec.ts,docs/backend-guard-baseline.json,docs/evidence/billing-02b-tariff-matrix/OPERATION-FACTS-PROOF.md
+   ```
 
 `FormFields.tsx` вводит ровно четыре screen-agnostic exports: `TextInput`,
 `NumberInput`, `SelectInput` и `MoscowDateTimeInput`. У всех обязательны
@@ -58,11 +70,8 @@ kit или legacy screens: только новый source, его unit test, bar
 Prerequisite tests покрывают label/error/help/disabled/loading, keyboard and
 screen-reader semantics, numeric alignment/bounds, select options и Moscow
 conversion/invalid wall time; затем `ui_guard`, typecheck и isolated showcase
-visual check. Лишь после independent `ACCEPTED`, отдельного UI-kit commit и
-`naryad.py close` этот наряд закрывается; затем официальный main 2Б наряд
-закрывается и открывается заново буквально командой выше. Main S-19 code
-использует только эти exports и уже существующие kit components. До этого
-никакой panel/API/model correction не меняется.
+visual check. Main S-19 code использует только эти exports и уже существующие
+kit components. До шага 5 никакой panel/API/model correction не меняется.
 
 Фактическая граница — ровно 34 пути generated NARYAD. Два из них добавлены
 механически registry для `--screens S-19`: `frontend/src/utils/ffPermissions.ts`
