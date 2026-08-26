@@ -25,7 +25,11 @@ def upgrade() -> None:
         WHERE fact.id = line.operation_fact_id
         """
     )
-    op.alter_column("operation_fact_lines", "tenant_id", nullable=False)
+    op.create_check_constraint(
+        "ck_operation_fact_lines_tenant_required",
+        "operation_fact_lines",
+        "tenant_id IS NOT NULL",
+    )
     op.create_foreign_key(
         "fk_operation_fact_lines_tenant",
         "operation_fact_lines",
