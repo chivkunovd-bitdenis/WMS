@@ -325,7 +325,7 @@ async def sync_supply_tracking(
     supply_id: uuid.UUID,
     http_client: httpx.AsyncClient,
     *,
-    sync_orders: bool = True,
+    sync_orders: bool | None = None,
 ) -> TrackingSyncResult:
     stmt = (
         select(FbsSupply)
@@ -337,6 +337,11 @@ async def sync_supply_tracking(
     supply = result.scalar_one_or_none()
     if supply is None:
         raise FbsTrackingError("supply_not_found")
+    if sync_orders is None:
+        # The legacy order-tracking behavior belongs only to supplies already
+        # handed to WB. For earlier local stages a manual reconcile must not
+        # close the supply from order statuses while WB still says done=false.
+        sync_orders = supply.status == FBS_SUPPLY_STATUS_IN_DELIVERY
     token = await _resolve_marketplace_api_token(session, tenant_id, supply.seller_id)
     try:
         updated = await _sync_supply_orders_from_wb(

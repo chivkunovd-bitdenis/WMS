@@ -397,9 +397,14 @@ async def test_wb_done_is_authoritative_for_assembling_supply(
             session, tenant_id, seller_id, http_client
         )
         await session.commit()
+        manual = await sync_supply_tracking(
+            session, tenant_id, supply_id, http_client
+        )
+        await session.commit()
 
     assert result.supplies_synced == 1
     assert result.orders_updated == 0
+    assert manual.orders_updated == 0
     assert order_status_calls == 0
     async with SessionLocal() as session:
         supply = await session.get(FbsSupply, supply_id)
