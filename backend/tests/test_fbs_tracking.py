@@ -19,7 +19,12 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_SORTED,
     FbsOrder,
 )
-from app.models.fbs_supply import FBS_SUPPLY_STATUS_IN_DELIVERY, FbsSupply
+from app.models.fbs_supply import (
+    FBS_SUPPLY_STATUS_ASSEMBLING,
+    FBS_SUPPLY_STATUS_DONE,
+    FBS_SUPPLY_STATUS_IN_DELIVERY,
+    FbsSupply,
+)
 from app.services.fbs_tracking_service import (
     TRACKING_STATUS_PARTIALLY_REJECTED,
     build_partial_rejection_summary,
@@ -28,6 +33,8 @@ from app.services.fbs_tracking_service import (
     sync_supply_tracking,
 )
 from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
+from app.services.wildberries_client import WildberriesClientError
+from app.services.wildberries_fbs_client import MarketplaceSupplyDetails
 from tests.fbs_seed_helpers import seed_fbs_warehouse_binding
 from tests.test_fbs_shipment_warehouse_sc import (
     _register_ff_admin,
@@ -42,6 +49,7 @@ async def _seed_in_delivery_supply(
     seller_id: uuid.UUID,
     warehouse_id: uuid.UUID,
     wb_order_ids: list[int],
+    supply_status: str = FBS_SUPPLY_STATUS_IN_DELIVERY,
 ) -> uuid.UUID:
     supply_id = uuid.uuid4()
     async with SessionLocal() as session:
@@ -58,9 +66,13 @@ async def _seed_in_delivery_supply(
             warehouse_id=warehouse_id,
             wb_supply_id=f"WB-SUP-{supply_id.hex[:8]}",
             name="TC-22 tracking supply",
-            status=FBS_SUPPLY_STATUS_IN_DELIVERY,
+            status=supply_status,
             delivery_type="warehouse_sc",
-            delivered_at=datetime.now(tz=UTC),
+            delivered_at=(
+                datetime.now(tz=UTC)
+                if supply_status == FBS_SUPPLY_STATUS_IN_DELIVERY
+                else None
+            ),
         )
         session.add(supply)
         for wb_order_id in wb_order_ids:
@@ -80,6 +92,34 @@ async def _seed_in_delivery_supply(
 
 def _status_map(*pairs: tuple[int, str]) -> dict[int, str]:
     return {order_id: status for order_id, status in pairs}
+
+
+def _patch_supply_details(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    done: bool = False,
+    error: WildberriesClientError | None = None,
+) -> None:
+    async def _mock_details(
+        _client: httpx.AsyncClient,
+        *,
+        api_token: str,
+        supply_id: str,
+        marketplace_api_base: str | None = None,
+    ) -> MarketplaceSupplyDetails:
+        _ = api_token, marketplace_api_base
+        if error is not None:
+            raise error
+        return MarketplaceSupplyDetails(
+            supply_id=supply_id,
+            name="tracking supply",
+            done=done,
+        )
+
+    monkeypatch.setattr(
+        "app.services.fbs_tracking_service.fetch_marketplace_supply_details",
+        _mock_details,
+    )
 
 
 # TC-22 — mixed accepted/rejected preserved; repeated sync idempotent
@@ -130,6 +170,7 @@ async def test_tc22_partial_acceptance_mixed_orders_preserved(
         "app.services.fbs_tracking_service._resolve_marketplace_api_token",
         _token,
     )
+    _patch_supply_details(monkeypatch)
 
     async with SessionLocal() as session, httpx.AsyncClient() as http_client:
         first = await sync_supply_tracking(
@@ -272,6 +313,7 @@ async def test_tc22_autopoll_sync_in_delivery_supplies_per_seller(
         "app.services.fbs_tracking_service._resolve_marketplace_api_token",
         _token,
     )
+    _patch_supply_details(monkeypatch)
 
     async with SessionLocal() as session, httpx.AsyncClient() as http_client:
         result = await sync_in_delivery_supplies(
@@ -291,6 +333,138 @@ async def test_tc22_autopoll_sync_in_delivery_supplies_per_seller(
         assert order.status == FBS_ORDER_STATUS_SORTED
         supply = await session.get(FbsSupply, supply_id)
         assert supply is not None
+        assert supply.last_wb_sync_at is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("wb_done", "expected_status"),
+    [
+        (True, FBS_SUPPLY_STATUS_DONE),
+        (False, FBS_SUPPLY_STATUS_ASSEMBLING),
+    ],
+)
+async def test_wb_done_is_authoritative_for_assembling_supply(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    wb_done: bool,
+    expected_status: str,
+) -> None:
+    _ = async_client
+    tenant_id = uuid.uuid4()
+    seller_id = uuid.uuid4()
+    warehouse_id = uuid.uuid4()
+    supply_id = await _seed_in_delivery_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        wb_order_ids=[994001],
+        supply_status=FBS_SUPPLY_STATUS_ASSEMBLING,
+    )
+
+    order_status_calls = 0
+
+    async def _mock_status(
+        _client: httpx.AsyncClient,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[dict[str, Any]]:
+        nonlocal order_status_calls
+        order_status_calls += 1
+        _ = api_token, marketplace_api_base
+        return [
+            {"id": order_id, "supplierStatus": "confirm", "wbStatus": "waiting"}
+            for order_id in order_ids
+        ]
+
+    async def _token(*_args: object, **_kwargs: object) -> str:
+        return "token"
+
+    monkeypatch.setattr(
+        "app.services.fbs_tracking_service.fetch_marketplace_orders_status",
+        _mock_status,
+    )
+    monkeypatch.setattr(
+        "app.services.fbs_tracking_service._resolve_marketplace_api_token",
+        _token,
+    )
+    _patch_supply_details(monkeypatch, done=wb_done)
+
+    async with SessionLocal() as session, httpx.AsyncClient() as http_client:
+        result = await sync_in_delivery_supplies(
+            session, tenant_id, seller_id, http_client
+        )
+        await session.commit()
+
+    assert result.supplies_synced == 1
+    assert result.orders_updated == 0
+    assert order_status_calls == 0
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, supply_id)
+        assert supply is not None
+        assert supply.status == expected_status
+
+
+@pytest.mark.asyncio
+async def test_supply_details_error_keeps_order_sync_working(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _ = async_client
+    tenant_id = uuid.uuid4()
+    seller_id = uuid.uuid4()
+    warehouse_id = uuid.uuid4()
+    supply_id = await _seed_in_delivery_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        wb_order_ids=[995001],
+        supply_status=FBS_SUPPLY_STATUS_IN_DELIVERY,
+    )
+
+    async def _mock_status(
+        _client: httpx.AsyncClient,
+        *,
+        api_token: str,
+        order_ids: list[int],
+        marketplace_api_base: str | None = None,
+    ) -> list[dict[str, Any]]:
+        _ = api_token, marketplace_api_base
+        return [
+            {"id": order_id, "supplierStatus": "confirm", "wbStatus": "waiting"}
+            for order_id in order_ids
+        ]
+
+    async def _token(*_args: object, **_kwargs: object) -> str:
+        return "token"
+
+    monkeypatch.setattr(
+        "app.services.fbs_tracking_service.fetch_marketplace_orders_status",
+        _mock_status,
+    )
+    monkeypatch.setattr(
+        "app.services.fbs_tracking_service._resolve_marketplace_api_token",
+        _token,
+    )
+    _patch_supply_details(
+        monkeypatch,
+        error=WildberriesClientError("transport_error"),
+    )
+
+    async with SessionLocal() as session, httpx.AsyncClient() as http_client:
+        result = await sync_in_delivery_supplies(
+            session, tenant_id, seller_id, http_client
+        )
+        await session.commit()
+
+    assert result.supplies_synced == 1
+    assert result.orders_updated == 1
+    async with SessionLocal() as session:
+        supply = await session.get(FbsSupply, supply_id)
+        assert supply is not None
+        assert supply.status == FBS_SUPPLY_STATUS_IN_DELIVERY
         assert supply.last_wb_sync_at is not None
 
 

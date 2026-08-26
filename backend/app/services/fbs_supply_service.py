@@ -41,6 +41,7 @@ from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
 )
+from app.models.fbs_trbx import FbsTrbx
 from app.models.fbs_wb_operation import (
     WB_OPERATION_STATE_CONFIRMED,
     WB_OPERATION_STATE_FAILED,
@@ -1222,6 +1223,12 @@ async def list_supply_worklist(
         .group_by(FbsPackingBox.supply_id)
     )
     boxes_by_supply = {supply_id: int(count) for supply_id, count in box_rows.all()}
+    trbx_rows = await session.execute(
+        select(FbsTrbx.supply_id, func.count(FbsTrbx.id))
+        .where(FbsTrbx.supply_id.in_(supply_ids))
+        .group_by(FbsTrbx.supply_id)
+    )
+    trbxes_by_supply = {supply_id: int(count) for supply_id, count in trbx_rows.all()}
     wb_ids = {
         int(order.wb_warehouse_id)
         for supply in supplies
@@ -1267,7 +1274,13 @@ async def list_supply_worklist(
                 },
                 "orders_count": len(orders),
                 "units_count": len(orders),
-                "boxes_count": boxes_by_supply.get(supply.id, 0),
+                # A PVZ cargo place may already exist in WB before WMS has a
+                # local physical packing box. Show the greater count without
+                # double-counting linked representations of the same boxes.
+                "boxes_count": max(
+                    boxes_by_supply.get(supply.id, 0),
+                    trbxes_by_supply.get(supply.id, 0),
+                ),
                 "planned_shipment_date": (
                     supply.planned_shipment_date.isoformat()
                     if supply.planned_shipment_date is not None

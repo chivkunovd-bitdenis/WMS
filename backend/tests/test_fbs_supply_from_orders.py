@@ -21,6 +21,7 @@ from app.models.fbs_order import (
     FbsOrder,
 )
 from app.models.fbs_supply import FbsSupply
+from app.models.fbs_trbx import FbsTrbx
 from app.models.fbs_wb_operation import (
     WB_OPERATION_STATE_CONFIRMED,
     WB_OPERATION_STATE_FAILED,
@@ -1230,6 +1231,10 @@ async def test_supply_worklist_groups_active_orders_by_supply(
         },
     )
     assert create.status_code == 201, create.text
+    supply_id = uuid.UUID(create.json()["supply"]["id"])
+    async with SessionLocal() as session:
+        session.add(FbsTrbx(supply_id=supply_id, wb_trbx_id="WB-MP-WORKLIST-1"))
+        await session.commit()
 
     worklist = await async_client.get(
         "/operations/fbs-supplies/worklist?status_group=active",
@@ -1241,6 +1246,7 @@ async def test_supply_worklist_groups_active_orders_by_supply(
     assert rows[0]["name"] == "Grouped active supply"
     assert rows[0]["orders_count"] == 2
     assert rows[0]["units_count"] == 2
+    assert rows[0]["boxes_count"] == 1
     assert rows[0]["planned_shipment_date"] is None
 
 
