@@ -22,6 +22,48 @@ python3 scripts/naryad.py new "Волна 2Б модуля «Расчёты»: �
 `20260826_0112` продолжает единственный head 2А. Никаких production/staging,
 секретов, Ozon или UI-kit правок.
 
+### Amendment 27.08.2026: общая prerequisite UI-kit
+
+Владелец 27.08.2026 явно разрешил необходимую работу в этой сессии:
+«делай что надо в рамках этой сессии не спрашивай больше». Это отменяет только
+прежний запрет на **минимальную общую prerequisite UI-kit**, но не разрешает
+прямой MUI в S-19, local/custom controls, route, refactor или иной UI-kit
+scope. В audit существующего kit отсутствуют reusable text/numeric input,
+select/dropdown и Moscow date-time input, без которых невозможно честно
+редактировать требуемую matrix.
+
+До следующей правки S-19 должен быть отдельно принят и исполнен собственный
+наряд UI-kit, а его результат сохранён отдельным commit. Открыть его ровно
+так (это самостоятельная prerequisite без экрана, поэтому `--files` задаёт
+всю и только всю его границу):
+
+```bash
+python3 scripts/naryad.py new "Владелец 27.08.2026: «делай что надо в рамках этой сессии не спрашивай больше». Общая UI-kit prerequisite: доступные поля формы для тарифной матрицы 2Б" --lane обычная --files frontend/src/ui-kit/FormFields.tsx,frontend/src/ui-kit/FormFields.test.tsx,frontend/src/ui-kit/index.ts,frontend/src/ui-kit/UiKitShowcase.tsx
+```
+
+`FormFields.tsx` вводит ровно четыре screen-agnostic exports: `TextInput`,
+`NumberInput`, `SelectInput` и `MoscowDateTimeInput`. У всех обязательны
+visible `label`, controlled `value`/`onChange`, `error`/`helperText`,
+`disabled`, `loading`, `required` и optional `testId`; label/error должны быть
+связаны доступными именами и `aria-describedby`, invalid state —
+`aria-invalid`. `NumberInput` принимает numeric bounds/step и выравнивает
+значение вправо; `SelectInput` принимает typed `{ value, label, disabled? }`
+options и не даёт screen локально собирать dropdown; `MoscowDateTimeInput`
+показывает/принимает Moscow wall time независимо от timezone браузера и
+возвращает explicit UTC ISO instant. Props, подписи, styles и test ids не
+содержат слов tariff/billing/seller/employee. Никакого refactor существующих
+kit или legacy screens: только новый source, его unit test, barrel export и
+изолированные visual examples в уже существующем `UiKitShowcase`.
+
+Prerequisite tests покрывают label/error/help/disabled/loading, keyboard and
+screen-reader semantics, numeric alignment/bounds, select options и Moscow
+conversion/invalid wall time; затем `ui_guard`, typecheck и isolated showcase
+visual check. Лишь после independent `ACCEPTED`, отдельного UI-kit commit и
+`naryad.py close` этот наряд закрывается; затем официальный main 2Б наряд
+закрывается и открывается заново буквально командой выше. Main S-19 code
+использует только эти exports и уже существующие kit components. До этого
+никакой panel/API/model correction не меняется.
+
 Фактическая граница — ровно 34 пути generated NARYAD. Два из них добавлены
 механически registry для `--screens S-19`: `frontend/src/utils/ffPermissions.ts`
 и `frontend/src/utils/separateMarkingPrint.ts`. Они не являются feature scope
@@ -29,6 +71,10 @@ python3 scripts/naryad.py new "Волна 2Б модуля «Расчёты»: �
 zero diff в обоих; для любой правки нужен новый owner-approved amendment. Единственный
 новый feature path этого amendment —
 `frontend/src/screens/ff/FfBillingTariffMatrixPanel.tsx`.
+
+Граница main 2Б после prerequisite остаётся этими 34 путями: четыре UI-kit
+пути выше принадлежат только отдельному prerequisite наряду и не становятся
+поводом расширять main implementation scope.
 
 `docs/backend-guard-baseline.json` разрешён ровно для отдельного baseline-only
 commit после accepted integration: только фактические entries
@@ -61,11 +107,17 @@ writers под monolith ratchet.
 > screenshots/evidence. Не править ui-kit в этой волне без отдельного owner
 > decision.»
 
+Отдельное owner decision от 27.08.2026 зафиксировано в §0 и ограничено
+самостоятельной prerequisite; экран не получает права на raw MUI form
+controls даже в этом случае.
+
 Нормализованный критерий: меняется только зона панели S-19; используются
 `ScreenHeader`, `DataTable`, `FilterBar`, `EmptyState`, `TableSkeletonBody`,
 `ErrorNotice`, `StatusChip`, `PrimaryAction`, `SecondaryAction`, `ActionGroup`,
 `MoneyCell` из уже существующего UI-kit. Нельзя собирать локальные аналоги этих
-элементов или трогать сами их реализации. API для матрицы добавляется к
+элементов. После принятой prerequisite к этому списку добавляются только
+`TextInput`, `NumberInput`, `SelectInput`, `MoscowDateTimeInput`; экран не
+трогает их реализации. API для матрицы добавляется к
 существующему `/billing`, не создаёт URL экрана и не меняет старые ответы без
 нового параметра.
 
@@ -202,7 +254,8 @@ URL-поведения помимо обработки уже существую
 | Service | `backend/app/services/billing_tariff_matrix_service.py`, `backend/app/services/billing_configuration_service.py`, `backend/app/services/billing_ledger_service.py`, `backend/app/services/inbound_intake_service.py`, `backend/app/services/marketplace_unload_service.py` | atomic tenant-scoped save, interval resolver and exactly the two existing aggregate charge writers pass product lines |
 | API | `backend/app/api/billing.py` | admin-only matrix Pydantic/OpenAPI contract |
 | Backend tests | `backend/tests/test_auth.py`, `backend/tests/test_bootstrap_billing_tariff_matrix.py`, `backend/tests/test_billing_tariff_matrix.py`, `backend/tests/test_billing_configuration_api.py`, `backend/tests/test_billing_ledger_service.py`, `backend/tests/test_billing_invoice_service.py`, `backend/tests/test_billing_invoice_api.py`, `backend/tests/test_staff_packaging_billing.py`, `backend/tests/test_inbound_intake_service_sort_be01.py`, `backend/tests/test_marketplace_unload_and_discrepancy_acts.py` | creation rollback/concurrency, matrix/migration, product-line writer and reversal idempotency, tenant/RBAC and legacy invoice regressions |
-| S-19 | `frontend/src/screens/ff/FfSettingsScreen.tsx`, `frontend/src/screens/ff/FfBillingTariffMatrixPanel.tsx`, `.test.tsx`, `frontend/src/api.ts`; registry-auto-included `frontend/src/utils/ffPermissions.ts`, `frontend/src/utils/separateMarkingPrint.ts` are zero-diff prohibited | panel is extracted only to keep S-19 under the ui_guard monolith ratchet; it is not a screen, route or UI primitive and composes existing UI-kit only |
+| UI-kit prerequisite (separate narяд/commit) | `frontend/src/ui-kit/FormFields.tsx`, `frontend/src/ui-kit/FormFields.test.tsx`, `frontend/src/ui-kit/index.ts`, `frontend/src/ui-kit/UiKitShowcase.tsx` | exactly four generic accessible form exports, barrel and isolated visual examples; no tariff props/styles and no existing-kit/legacy refactor |
+| S-19 | `frontend/src/screens/ff/FfSettingsScreen.tsx`, `frontend/src/screens/ff/FfBillingTariffMatrixPanel.tsx`, `.test.tsx`, `frontend/src/api.ts`; registry-auto-included `frontend/src/utils/ffPermissions.ts`, `frontend/src/utils/separateMarkingPrint.ts` are zero-diff prohibited | panel is extracted only to keep S-19 under the ui_guard monolith ratchet; it is not a screen, route or UI primitive and composes existing UI-kit only, including accepted prerequisite form exports |
 | Browser | `frontend/tests-e2e/ff-billing-tariff-matrix.spec.ts`, `frontend/tests-e2e/ff-staff-users.spec.ts`, `frontend/tests-e2e/billing-ledger.spec.ts`, `frontend/tests-e2e/billing-invoices.spec.ts` | visible matrix/deep link plus old Settings, staff, ledger and invoices unchanged |
 | Evidence | `docs/evidence/billing-02b-tariff-matrix/OPERATION-FACTS-PROOF.md` | commands, exits, PostgreSQL and 1600px browser proof |
 
@@ -235,6 +288,11 @@ ruff/mypy/full pytest, `check_migrations`, exactly one Alembic head,
 2А→0112, V2/config/line indexes/FKs/checks, safe legacy backfill intervals,
 overlap/atomic rollback, tenant rejection, DST and Moscow boundaries, child-line
 retry/reversal and unchanged `uq_billing_ledger_source_event`.
+
+До S-19 correction prerequisite запускает red→green unit tests только для
+`FormFields`, затем `ui_guard`, frontend typecheck и isolated visual examples
+in `UiKitShowcase`; это не заменяет S-19/browser gates и не даёт менять
+соседние экраны.
 
 На 1600px отдельный Terra ui-critic сверяет канон и отдельный Terra judge в
 живом browser вручную проходит admin success/disabled/error/empty/loading;

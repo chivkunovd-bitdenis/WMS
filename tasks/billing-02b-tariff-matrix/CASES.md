@@ -99,3 +99,18 @@
 7. `FfBillingTariffMatrixPanel` remains an internal S-19 composition only:
    it adds no route/screen/UI primitive and the Settings monolith guard stays at
    its approved baseline.
+
+## UI-kit prerequisite before S-19 correction
+
+1. Separate prerequisite tests prove generic `TextInput`, `NumberInput`,
+   `SelectInput` and `MoscowDateTimeInput`: every field has a programmatic
+   label, linked help/error text, invalid and disabled/loading state; numeric
+   value is right-aligned and respects bounds; select options are keyboard
+   reachable and expose disabled choices.
+2. Moscow field renders Moscow wall time regardless of browser timezone and
+   returns an explicit UTC ISO instant; invalid/ambiguous wall time stays an
+   accessible validation error rather than silently using browser-local time.
+3. `UiKitShowcase` renders isolated examples of all four primitives. `ui_guard`
+   and typecheck stay green. No existing kit component or legacy screen is
+   refactored, and the S-19 panel does not import raw MUI input/select/date
+   controls after the prerequisite.

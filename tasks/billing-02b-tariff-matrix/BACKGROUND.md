@@ -85,8 +85,14 @@ before any write.
 At 1600px the new panel is a normal S-19 section after staff, not a second
 Settings app. Existing UI-kit gives table density, fixed headers/columns,
 overflow, skeleton loading, Russian error and empty states, status and actions.
+The 27.08.2026 audit also established that it did not yet expose reusable form
+inputs required by this matrix. The owner approved a minimal, separately
+narядed prerequisite before S-19 correction: generic `TextInput`,
+`NumberInput`, `SelectInput` and `MoscowDateTimeInput`, with their own tests,
+barrel export and isolated showcase examples. This is a shared component
+precondition, not permission for raw MUI or local controls in the screen.
 The implementation may compose those pieces, but it must not add an in-screen
-custom table, filter, dropdown, button or tab, nor modify `ui-kit/**`.
+custom table, filter, dropdown, button or tab, nor modify any other `ui-kit/**`.
 `FfBillingTariffMatrixPanel.tsx` is the sole feature-composition extraction:
 it is mounted only by S-19, creates neither a screen nor route nor UI primitive,
 and exists only to preserve the Settings-screen ui_guard monolith ratchet.
