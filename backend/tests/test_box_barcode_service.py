@@ -11,7 +11,6 @@ from app.services.box_barcode_service import (
     generate_box_barcode,
     is_wb_compatible_box_barcode,
 )
-from app.services.fbs_packing_box_service import _internal_barcode as new_fbs_barcode
 from app.services.inbound_intake_box_service import _new_barcode as new_inbound_barcode
 from app.services.warehouse_box_service import (
     _new_barcode as new_warehouse_barcode,
@@ -21,7 +20,7 @@ from app.services.warehouse_box_service import (
 )
 
 
-@pytest.mark.parametrize("prefix", ["WHB", "INB", "FBS"])
+@pytest.mark.parametrize("prefix", ["WHB", "INB"])
 def test_generated_box_barcodes_are_wb_compatible_and_unique(prefix: str) -> None:
     barcodes = {generate_box_barcode(prefix) for _ in range(1_000)}
 
@@ -36,7 +35,6 @@ def test_every_physical_box_generator_uses_the_shared_format() -> None:
     generated = {
         "WHB": new_warehouse_barcode(),
         "INB": new_inbound_barcode(),
-        "FBS": new_fbs_barcode(),
     }
 
     for prefix, barcode in generated.items():
@@ -50,7 +48,6 @@ def test_every_physical_box_generator_uses_the_shared_format() -> None:
     [
         "WHB-ABCDEF123456",
         "INB-ABCDEF123456",
-        "FBS-12345678-001",
         "custom_box-123",
     ],
 )
@@ -59,10 +56,7 @@ def test_existing_box_barcode_shapes_remain_valid_inputs(barcode: str) -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("legacy_barcode", ["WHB-ABCDEF123456", "FBS-12345678-001"])
-async def test_legacy_warehouse_box_barcode_is_still_resolved(
-    legacy_barcode: str,
-) -> None:
+async def test_legacy_warehouse_box_barcode_is_still_resolved() -> None:
     old_box = MagicMock()
     result = MagicMock()
     result.scalar_one_or_none.return_value = old_box
@@ -72,7 +66,7 @@ async def test_legacy_warehouse_box_barcode_is_still_resolved(
     warehouse_box, inbound_box = await resolve_barcode(
         session,
         uuid.uuid4(),
-        legacy_barcode,
+        "WHB-ABCDEF123456",
     )
 
     assert warehouse_box is old_box
@@ -122,7 +116,7 @@ def test_uuid_encoder_preserves_all_128_bits() -> None:
     assert _encode_uuid(uuid.UUID(int=(1 << 128) - 1)) == "7" + "Z" * 25
 
 
-@pytest.mark.parametrize("prefix", ["", "TOOLONG", "W-B", "ШК"])
+@pytest.mark.parametrize("prefix", ["", "FBS", "TOOLONG", "W-B", "ШК"])
 def test_generator_rejects_invalid_prefix(prefix: str) -> None:
     with pytest.raises(ValueError):
         generate_box_barcode(prefix)

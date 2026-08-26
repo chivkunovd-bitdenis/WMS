@@ -4,11 +4,11 @@
 
 ## Проверка результата
 
-Целевой набор охватывает общий генератор, все три места создания физических коробов,
-API-ответы, уникальность серии, старые сохранённые форматы и FBS idempotency key.
+Целевой набор охватывает общий генератор `WHB`/`INB`, API-ответы, уникальность серии
+и старые сохранённые форматы. FBS строго исключён из изменения.
 
 ```text
-31 passed in 11.67s
+30 passed in 44.21s
 ```
 
 Ruff по всем изменённым Python-файлам:
@@ -28,8 +28,18 @@ Success: no issues found in 1 source file
 ```text
 WHB WHB-3N5DWWDH3T8WG9HXM05MTXTEB6 30 True
 INB INB-6BHHZQ5RSF9A3RMMZ4J0EAABA6 30 True
-FBS FBS-0QHE55NHAS9AK8ZXJAK64723YX 30 True
 ```
+
+Проверка отсутствия изменений FBS относительно `origin/etalon`:
+
+```text
+git diff origin/etalon -- \
+  backend/app/services/fbs_packing_box_service.py \
+  backend/tests/test_fbs_packing_box.py
+# пустой вывод
+```
+
+Получение и печать официальных QR грузомест и QR поставки FBS не изменялись.
 
 ## Полный backend-гейт
 

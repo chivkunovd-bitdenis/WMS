@@ -7,7 +7,7 @@ import uuid
 
 _CROCKFORD_BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 _WB_BOX_BARCODE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{6,30}$")
-_PREFIX_PATTERN = re.compile(r"^[A-Z0-9]{1,3}$")
+_ALLOWED_PREFIXES = frozenset({"WHB", "INB"})
 
 
 def is_wb_compatible_box_barcode(value: str) -> bool:
@@ -21,8 +21,8 @@ def is_wb_compatible_box_barcode(value: str) -> bool:
 def generate_box_barcode(prefix: str) -> str:
     """Return ``PREFIX-`` plus the complete 128-bit UUIDv4 in Base32."""
     normalized_prefix = prefix.upper()
-    if not _PREFIX_PATTERN.fullmatch(normalized_prefix):
-        raise ValueError("box barcode prefix must contain 1-3 Latin letters or digits")
+    if normalized_prefix not in _ALLOWED_PREFIXES:
+        raise ValueError("WB-compatible generation is limited to WHB and INB boxes")
 
     suffix = _encode_uuid(uuid.uuid4())
     barcode = f"{normalized_prefix}-{suffix}"

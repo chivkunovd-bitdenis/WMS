@@ -24,7 +24,6 @@ from app.models.fbs_supply import (
 from app.models.fbs_trbx import FbsTrbx
 from app.models.warehouse_box import WarehouseBox
 from app.services import fbs_shipment_pvz_service as pvz_svc
-from app.services.box_barcode_service import generate_box_barcode
 from app.services.fbs_supply_reconcile_service import get_cargo_operation_by_idempotency
 
 
@@ -143,7 +142,7 @@ async def create_boxes(
             warehouse_box = WarehouseBox(
                 tenant_id=tenant_id,
                 warehouse_id=supply.warehouse_id,
-                internal_barcode=_internal_barcode(),
+                internal_barcode=_internal_barcode(supply_id, number),
             )
             box = FbsPackingBox(
                 tenant_id=tenant_id,
@@ -577,5 +576,5 @@ def _assert_supply_mutable(supply: FbsSupply) -> None:
         raise FbsPackingBoxError("supply_not_editable")
 
 
-def _internal_barcode() -> str:
-    return generate_box_barcode("FBS")
+def _internal_barcode(supply_id: uuid.UUID, box_number: int) -> str:
+    return f"FBS-{str(supply_id).split('-')[0].upper()}-{box_number:03d}"
