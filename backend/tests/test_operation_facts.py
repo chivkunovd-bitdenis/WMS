@@ -3,15 +3,20 @@ from __future__ import annotations
 import uuid
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from inspect import signature
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from sqlalchemy import text
 
+from app.db.session import SessionLocal
 from app.models.marketplace_unload import MarketplaceUnloadRequest
 from app.models.operation_fact import OperationFact, OperationFactLine
-from app.services.operation_fact_recovery_service import recover_operation_facts
+from app.models.product import Product
+from app.models.seller import Seller
+from app.models.tenant import Tenant
+from app.models.user import User
+from app.models.warehouse import Warehouse
 from app.services.operation_fact_service import (
     OperationFactError,
     OperationFactLineInput,
@@ -285,57 +290,117 @@ def test_correction_schema_exposes_tenant_lines_and_durable_unload_markers() -> 
     assert "cancelled_at" in MarketplaceUnloadRequest.__table__.c
 
 
-def test_recovery_accepts_explicit_source_filters() -> None:
-    assert "source_event_ids" in signature(recover_operation_facts).parameters
-
-
 @pytest.mark.asyncio
-async def test_writer_uses_tenant_scoped_actor_email_snapshot() -> None:
-    session = _session()
-    actor_id = uuid.uuid4()
-    actor = SimpleNamespace(id=actor_id, email="before-rename@example.test")
-    session.scalar = AsyncMock(
-        side_effect=[None, None, actor]
-    )
-
-    fact = await write_operation_fact(
-        session,
-        tenant_id=uuid.uuid4(),
-        operation_code="fbs_pick",
-        source_kind="fbs_order_pick_event",
-        source_event_id=uuid.uuid4(),
-        idempotency_key="actor-snapshot",
-        document_type="fbs_supply",
-        document_id=uuid.uuid4(),
-        actor_user_id=actor_id,
-        occurred_at=datetime.now(UTC),
-        item_quantity=1,
-    )
-
-    assert fact.actor_name_snapshot == "before-rename@example.test"
-    actor.email = "after-rename@example.test"
-    fact.actor_user_id = None
-    assert fact.actor_name_snapshot == "before-rename@example.test"
-
-
-@pytest.mark.asyncio
-async def test_writer_rejects_cross_tenant_actor() -> None:
-    session = _session()
-    session.scalar = AsyncMock(side_effect=[None, None, None])
-
-    with pytest.raises(OperationFactError, match="actor_tenant_mismatch"):
-        await write_operation_fact(
-            session,
-            tenant_id=uuid.uuid4(),
-            operation_code="fbs_pick",
-            source_kind="fbs_order_pick_event",
-            source_event_id=uuid.uuid4(),
-            idempotency_key="foreign-actor",
-            document_type="fbs_supply",
-            document_id=uuid.uuid4(),
-            actor_user_id=uuid.uuid4(),
-            occurred_at=datetime.now(UTC),
-            item_quantity=1,
+async def test_writer_rejects_foreign_relations_and_keeps_actor_snapshot_after_delete(
+    async_client,
+) -> None:
+    suffix = uuid.uuid4().hex[:12]
+    async with SessionLocal() as session:
+        await session.execute(text("PRAGMA foreign_keys = ON"))
+        assert await session.scalar(text("PRAGMA foreign_keys")) == 1
+        tenant_a = Tenant(name="Tenant A", slug=f"tenant-a-{suffix}")
+        tenant_b = Tenant(name="Tenant B", slug=f"tenant-b-{suffix}")
+        session.add_all([tenant_a, tenant_b])
+        await session.flush()
+        seller_a = Seller(tenant_id=tenant_a.id, name="Seller A")
+        seller_b = Seller(tenant_id=tenant_b.id, name="Seller B")
+        warehouse_a = Warehouse(tenant_id=tenant_a.id, name="Warehouse A", code="TA")
+        warehouse_b = Warehouse(tenant_id=tenant_b.id, name="Warehouse B", code="TB")
+        actor_a = User(
+            tenant_id=tenant_a.id,
+            email=f"actor-a-{suffix}@example.test",
+            password_hash="test",
+            role="ff_admin",
         )
+        actor_b = User(
+            tenant_id=tenant_b.id,
+            email=f"actor-b-{suffix}@example.test",
+            password_hash="test",
+            role="ff_admin",
+        )
+        session.add_all([seller_a, seller_b, warehouse_a, warehouse_b, actor_a, actor_b])
+        await session.flush()
+        product_a = Product(
+            tenant_id=tenant_a.id,
+            seller_id=seller_a.id,
+            name="Product A",
+            sku_code=f"A-{suffix}",
+        )
+        product_b = Product(
+            tenant_id=tenant_b.id,
+            seller_id=seller_b.id,
+            name="Product B",
+            sku_code=f"B-{suffix}",
+        )
+        foreign_fact = OperationFact(
+            tenant_id=tenant_b.id,
+            operation_code="foreign",
+            source_kind="test",
+            source_event_id=uuid.uuid4(),
+            document_type="test",
+            document_id=uuid.uuid4(),
+            source="system",
+            occurred_at=datetime.now(UTC),
+            item_quantity=0,
+        )
+        session.add_all([product_a, product_b, foreign_fact])
+        await session.commit()
 
-    session.add.assert_not_called()
+        common = dict(
+            tenant_id=tenant_a.id,
+            operation_code="tenant_check",
+            source_kind="test",
+            document_type="test",
+            document_id=uuid.uuid4(),
+            occurred_at=datetime.now(UTC),
+            item_quantity=0,
+        )
+        with pytest.raises(OperationFactError, match="seller_tenant_mismatch"):
+            await write_operation_fact(
+                session, **common, source_event_id=uuid.uuid4(), seller_id=seller_b.id
+            )
+        with pytest.raises(OperationFactError, match="warehouse_tenant_mismatch"):
+            await write_operation_fact(
+                session, **common, source_event_id=uuid.uuid4(), warehouse_id=warehouse_b.id
+            )
+        with pytest.raises(OperationFactError, match="actor_tenant_mismatch"):
+            await write_operation_fact(
+                session, **common, source_event_id=uuid.uuid4(), actor_user_id=actor_b.id
+            )
+        with pytest.raises(OperationFactError, match="product_tenant_mismatch"):
+            await write_operation_fact(
+                session,
+                **common,
+                source_event_id=uuid.uuid4(),
+                lines=[OperationFactLineInput(product_b.id, "B", "Product B", 0)],
+            )
+        with pytest.raises(OperationFactError, match="reversal_fact_not_found"):
+            await write_operation_fact(
+                session,
+                **common,
+                source_event_id=uuid.uuid4(),
+                reversal_of_id=foreign_fact.id,
+            )
+
+        fact = await write_operation_fact(
+            session,
+            **common,
+            source_event_id=uuid.uuid4(),
+            actor_user_id=actor_a.id,
+            lines=[OperationFactLineInput(product_a.id, "A", "Product A", 0)],
+        )
+        fact_id = fact.id
+        original_email = actor_a.email
+        await session.commit()
+        actor_a.email = f"renamed-{suffix}@example.test"
+        await session.commit()
+        await session.delete(actor_a)
+        await session.commit()
+
+    async with SessionLocal() as session:
+        fact = await session.get(OperationFact, fact_id)
+        assert fact is not None
+        assert fact.actor_user_id is None
+        assert fact.actor_name_snapshot == original_email
+        await session.commit()
+        await session.execute(text("PRAGMA foreign_keys = OFF"))

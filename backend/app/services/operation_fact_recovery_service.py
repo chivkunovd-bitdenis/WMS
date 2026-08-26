@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -86,12 +86,37 @@ async def recover_operation_facts(
         selected_ids = source_event_ids.get(source_kind)
         return selected_ids is not None and source_event_id in selected_ids
 
+    def normalized_utc(occurred_at: datetime) -> datetime:
+        """Compare SQLite's timezone-less persisted timestamps as UTC.
+
+        PostgreSQL returns timezone-aware values for these columns, while the
+        SQLite test backend returns the same durable values without tzinfo.
+        The operation-fact contract stores and accepts UTC timestamps, so make
+        the comparison representation consistent without widening its bounds.
+        """
+        if occurred_at.tzinfo is None:
+            return occurred_at.replace(tzinfo=UTC)
+        return occurred_at.astimezone(UTC)
+
     def occurred_in_scope(occurred_at: datetime | None) -> bool:
+        if occurred_at is None:
+            return False
+        normalized_occurred_at = normalized_utc(occurred_at)
+        normalized_cutover = normalized_utc(cutover.occurred_at)
+        normalized_period_start = (
+            normalized_utc(period_start) if period_start is not None else None
+        )
+        normalized_period_end = normalized_utc(period_end) if period_end is not None else None
         return (
-            occurred_at is not None
-            and occurred_at >= cutover.occurred_at
-            and (period_start is None or occurred_at >= period_start)
-            and (period_end is None or occurred_at < period_end)
+            normalized_occurred_at >= normalized_cutover
+            and (
+                normalized_period_start is None
+                or normalized_occurred_at >= normalized_period_start
+            )
+            and (
+                normalized_period_end is None
+                or normalized_occurred_at < normalized_period_end
+            )
         )
 
     async def source_present(
