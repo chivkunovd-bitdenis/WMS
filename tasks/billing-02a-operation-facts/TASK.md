@@ -11,11 +11,14 @@
 После принятого ревью открыть ровно такой наряд:
 
 ```bash
-python3 scripts/naryad.py new "Волна 2А модуля «Расчёты»: надёжные факты операций без нового экрана" --lane обычная --files backend/app/models/operation_fact.py,backend/app/models/__init__.py,backend/app/models/inbound_intake.py,backend/app/models/fbs_order.py,backend/app/models/fbs_order_pick.py,backend/app/models/marketplace_unload.py,backend/app/services/operation_fact_service.py,backend/app/services/operation_fact_recovery_service.py,backend/app/services/inbound_intake_service.py,backend/app/services/fbs_picking_service.py,backend/app/services/fbs_supply_service.py,backend/app/services/packaging_task_service.py,backend/app/services/marketplace_unload_service.py,backend/app/services/storage_statement_service.py,docs/backend-guard-baseline.json
+python3 scripts/naryad.py new "Волна 2А модуля «Расчёты»: надёжные факты операций без нового экрана" --lane обычная --files backend/app/models/operation_fact.py,backend/app/models/__init__.py,backend/app/models/inbound_intake.py,backend/app/models/fbs_order.py,backend/app/models/fbs_order_pick.py,backend/app/models/marketplace_unload.py,backend/app/services/operation_fact_service.py,backend/app/services/operation_fact_recovery_service.py,backend/app/services/inbound_intake_service.py,backend/app/services/fbs_picking_service.py,backend/app/services/fbs_supply_service.py,backend/app/services/packaging_task_service.py,backend/app/services/marketplace_unload_service.py,backend/app/services/storage_statement_service.py,docs/backend-guard-baseline.json,backend/alembic/versions/20260826_0111_operation_fact_tenant_recovery.py,docs/evidence/billing-02a-operation-facts/OPERATION-FACTS-PROOF.md,docs/evidence/billing-02a-operation-facts/BACK_GUARD_BASELINE.md
 ```
 
-`backend/alembic/versions/20260826_0110_operation_facts.py` и новые тесты
-`backend/tests/test_operation_facts.py`, `backend/tests/test_operation_fact_recovery.py` входят в
+`backend/alembic/versions/20260826_0110_operation_facts.py`,
+`backend/alembic/versions/20260826_0111_operation_fact_tenant_recovery.py`, новые тесты
+`backend/tests/test_operation_facts.py`, `backend/tests/test_operation_fact_recovery.py` и evidence
+`docs/evidence/billing-02a-operation-facts/OPERATION-FACTS-PROOF.md`,
+`docs/evidence/billing-02a-operation-facts/BACK_GUARD_BASELINE.md` входят в
 границы волны, хотя хук наряда охраняет только `backend/app`. Хук, его конфигурацию, baseline
 сторожей и файлы `frontend/src` менять запрещено. Исключение возможно только после доказанной
 технической необходимости: если минимальная writer-интеграция неизбежно добавляет строки в уже
@@ -180,6 +183,13 @@ nullable `billable_service_code`, `source_kind`, `source_event_id`, `idempotency
 `uq_fbs_order_picks_active_order` (`undone_at IS NULL`). Без этого WB `pick → undo → redo`
 некорректно блокируется глобальным unique index в SQLite. Production schema и FBS-поведение этим
 amendment не расширяются и не меняются; CASES уже содержит требуемый redo-сценарий.
+
+### Amendment — additive correction migration and evidence
+
+Опубликованная ревизия `20260826_0110_operation_facts.py` не переписывается.
+`backend/alembic/versions/20260826_0111_operation_fact_tenant_recovery.py` допускается только как
+additive-миграция для tenant/recovery fields. Evidence-пути обязательны по исходному контракту и
+нужны для записи фактических SHA и гейтов correction round.
 
 ## 7. Что остаётся неизменным
 

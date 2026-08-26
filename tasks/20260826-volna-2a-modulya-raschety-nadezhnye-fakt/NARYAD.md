@@ -2,7 +2,7 @@
 
 **Полоса:** обычная
 **Тип:** экран
-**Заведён:** 26.08.2026 16:43
+**Заведён:** 26.08.2026 20:48
 
 ## Просили дословно
 
@@ -16,6 +16,7 @@
 
 Разрешено трогать только эти файлы:
 
+- `backend/alembic/versions/20260826_0111_operation_fact_tenant_recovery.py`
 - `backend/app/models/__init__.py`
 - `backend/app/models/fbs_order.py`
 - `backend/app/models/fbs_order_pick.py`
@@ -31,6 +32,8 @@
 - `backend/app/services/packaging_task_service.py`
 - `backend/app/services/storage_statement_service.py`
 - `docs/backend-guard-baseline.json`
+- `docs/evidence/billing-02a-operation-facts/BACK_GUARD_BASELINE.md`
+- `docs/evidence/billing-02a-operation-facts/OPERATION-FACTS-PROOF.md`
 
 ## Статус
 
