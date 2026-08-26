@@ -16,6 +16,7 @@ from app.models.inbound_intake import (
 )
 from app.models.product import Product
 from app.services import inbound_intake_service as intake_svc
+from app.services.box_barcode_service import generate_box_barcode
 from app.services.seller_wb_catalog_service import list_seller_wb_catalog_rows
 
 # IN-BE-01 collapsed chain — keep in sync with inbound_intake_service status constants.
@@ -38,7 +39,7 @@ class InboundIntakeBoxError(Exception):
 
 
 def _new_barcode() -> str:
-    return f"INB-{uuid.uuid4().hex[:12].upper()}"
+    return generate_box_barcode("INB")
 
 
 async def _next_box_number(session: AsyncSession, request_id: uuid.UUID) -> int:

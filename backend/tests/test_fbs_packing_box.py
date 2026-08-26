@@ -24,6 +24,7 @@ from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_PACKED,
     FbsSupply,
 )
+from app.services.box_barcode_service import is_wb_compatible_box_barcode
 from app.services.fbs_packing_box_service import (
     FbsPackingBoxError,
     set_boxes_without_distribution,
@@ -120,6 +121,7 @@ async def test_warehouse_boxes_get_cargo_places_and_orders_are_exclusive(
     assert len(boxes) == 2
     assert [box["box_number"] for box in boxes] == [1, 2]
     assert all(box["barcode"].startswith("FBS-") for box in boxes)
+    assert all(is_wb_compatible_box_barcode(box["barcode"]) for box in boxes)
     assert all(box["trbx_id"] is not None and box["wb_trbx_id"] is not None for box in boxes)
     assert all(box["qr_asset"] is not None for box in boxes)
 
