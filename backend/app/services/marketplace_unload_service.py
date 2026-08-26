@@ -29,6 +29,7 @@ from app.models.user import User
 from app.services import inventory_service, stock_direction_service
 from app.services.billing_ledger_service import (
     BillingLedgerError,
+    product_billing_lines,
     record_operational_billing_issue,
     record_operational_charge,
     record_operational_reversal,
@@ -1075,6 +1076,10 @@ async def complete_unload(
             quantity=Decimal(sum(distributed.values())),
             occurred_at=occurred_at,
             performer_id=performer_id,
+            lines=product_billing_lines(
+                (product_id, Decimal(quantity), {"marketplace_unload_request_id": str(req.id)})
+                for product_id, quantity in distributed.items() if quantity
+            ),
         )
     except BillingLedgerError:
         if req.seller_id is not None:

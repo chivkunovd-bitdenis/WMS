@@ -50,6 +50,7 @@ from app.db.session import SessionLocal, engine
 from app.models import Base
 from app.models.tenant import Tenant
 from app.models.user import User
+from app.services.billing_tariff_matrix_service import ensure_disabled_tariff_matrix
 from app.services.document_event_service import (
     DocumentEventActorMiddleware,
     install_document_event_tracking,
@@ -79,8 +80,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             if tenant is None:
                 tenant = Tenant(name=org, slug=slug)
                 session.add(tenant)
+                await session.flush()
+                await ensure_disabled_tariff_matrix(session, tenant=tenant)
                 await session.commit()
                 await session.refresh(tenant)
+            else:
+                await ensure_disabled_tariff_matrix(session, tenant=tenant)
+                await session.commit()
 
             user_res = await session.execute(select(User).where(User.email == email))
             user = user_res.scalar_one_or_none()

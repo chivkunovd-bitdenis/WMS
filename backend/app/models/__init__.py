@@ -5,9 +5,13 @@ from app.models.base import Base
 from app.models.billing import (
     BillingInvoice,
     BillingLedgerEntry,
+    BillingLedgerLine,
     BillingProfile,
     BillingRunIssue,
+    BillingTariffMatrixConfig,
+    BillingTariffServiceState,
     BillingTariffVersion,
+    BillingTariffVersionV2,
 )
 from app.models.discrepancy_act import DiscrepancyAct, DiscrepancyActLine
 from app.models.document_event import DocumentEvent
@@ -93,9 +97,13 @@ __all__ = [
     "Base",
     "BillingInvoice",
     "BillingLedgerEntry",
+    "BillingLedgerLine",
     "BillingProfile",
     "BillingRunIssue",
+    "BillingTariffMatrixConfig",
+    "BillingTariffServiceState",
     "BillingTariffVersion",
+    "BillingTariffVersionV2",
     "DiscrepancyAct",
     "DiscrepancyActLine",
     "DocumentDisplaySequence",

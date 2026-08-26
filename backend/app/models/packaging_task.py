@@ -52,9 +52,7 @@ class PackagingTask(Base):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), index=True
     )
@@ -92,6 +90,9 @@ class PackagingTask(Base):
     )
     billing_units_packed: Mapped[int | None] = mapped_column(Integer, nullable=True)
     billing_rate_kopecks: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    billing_rate_configured: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     billing_earned_kopecks: Mapped[int | None] = mapped_column(Integer, nullable=True)
     document_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
     display_number: Mapped[str | None] = mapped_column(String(16), nullable=True)
@@ -140,9 +141,7 @@ class PackagingTaskLine(Base):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     task_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("packaging_tasks.id", ondelete="CASCADE"),
@@ -196,9 +195,7 @@ class PackagingTaskEvent(Base):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), index=True
     )
@@ -249,9 +246,5 @@ class PackagingTaskEvent(Base):
     line: Mapped[PackagingTaskLine | None] = relationship("PackagingTaskLine")
     product: Mapped[Product | None] = relationship("Product")
     storage_location: Mapped[StorageLocation | None] = relationship("StorageLocation")
-    created_by_user: Mapped[User | None] = relationship(
-        "User", foreign_keys=[created_by_user_id]
-    )
-    reversed_by_user: Mapped[User | None] = relationship(
-        "User", foreign_keys=[reversed_by_user_id]
-    )
+    created_by_user: Mapped[User | None] = relationship("User", foreign_keys=[created_by_user_id])
+    reversed_by_user: Mapped[User | None] = relationship("User", foreign_keys=[reversed_by_user_id])

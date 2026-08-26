@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import inspect
 import uuid
+from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
-from typing import cast
+from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, case, select
@@ -11,7 +14,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from app.models.billing import BillingLedgerEntry, BillingRunIssue, BillingTariffVersion
+from app.models.billing import (
+    BillingLedgerEntry,
+    BillingLedgerLine,
+    BillingRunIssue,
+    BillingTariffVersion,
+    BillingTariffVersionV2,
+)
 from app.models.tenant import Tenant
 
 MOSCOW = ZoneInfo("Europe/Moscow")
@@ -19,8 +28,7 @@ POSTGRES_INTEGER_MIN = -(2**31)
 POSTGRES_INTEGER_MAX = 2**31 - 1
 OPERATIONAL_BILLING_ISSUE_REASON = "billing_calculation_overflow"
 OPERATIONAL_BILLING_ISSUE_MESSAGE = (
-    "Начисление не рассчитано: значение превышает допустимый предел. "
-    "Складская операция завершена."
+    "Начисление не рассчитано: значение превышает допустимый предел. Складская операция завершена."
 )
 
 
@@ -32,9 +40,24 @@ class BillingLedgerError(ValueError):
         self.code = code
 
 
-def postgres_numeric(
-    value: Decimal, *, precision: int, scale: int, field: str
-) -> Decimal:
+@dataclass(frozen=True)
+class OperationalBillingLine:
+    product_id: uuid.UUID | None
+    quantity: Decimal
+    source_snapshot: dict[str, object]
+    operation_fact_line_id: uuid.UUID | None = None
+
+
+def product_billing_lines(
+    items: Iterable[tuple[uuid.UUID, Decimal, dict[str, object]]],
+) -> list[OperationalBillingLine]:
+    return [
+        OperationalBillingLine(product_id=item[0], quantity=item[1], source_snapshot=item[2])
+        for item in items
+    ]
+
+
+def postgres_numeric(value: Decimal, *, precision: int, scale: int, field: str) -> Decimal:
     """Validate and normalize a Decimal before a PostgreSQL NUMERIC write."""
     if precision <= 0 or scale < 0 or scale > precision or not value.is_finite():
         raise BillingLedgerError(f"{field}_overflow")
@@ -116,8 +139,7 @@ async def resolve_active_tariff(
         BillingTariffVersion.seller_id.is_(None)
         if seller_id is None
         else (
-            (BillingTariffVersion.seller_id == seller_id)
-            | BillingTariffVersion.seller_id.is_(None)
+            (BillingTariffVersion.seller_id == seller_id) | BillingTariffVersion.seller_id.is_(None)
         )
     )
     warehouse_scope = (
@@ -239,6 +261,51 @@ async def _latest_reversal_for_source(
     )
 
 
+async def _resolve_v2_tariff(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID | None,
+    product_id: uuid.UUID | None,
+    service_code: str,
+    occurred_at: datetime,
+) -> BillingTariffVersionV2 | None:
+    scope: list[Any] = [BillingTariffVersionV2.product_id.is_(None)]
+    if product_id is not None:
+        scope = [
+            (BillingTariffVersionV2.product_id == product_id)
+            | BillingTariffVersionV2.product_id.is_(None)
+        ]
+    seller_scope = (
+        BillingTariffVersionV2.seller_id.is_(None)
+        if seller_id is None
+        else (
+            (BillingTariffVersionV2.seller_id == seller_id)
+            | BillingTariffVersionV2.seller_id.is_(None)
+        )
+    )
+    specificity = case((BillingTariffVersionV2.product_id == product_id, 0), else_=1)
+    return cast(
+        BillingTariffVersionV2 | None,
+        await session.scalar(
+            select(BillingTariffVersionV2)
+            .where(
+                BillingTariffVersionV2.tenant_id == tenant_id,
+                BillingTariffVersionV2.service_code == service_code,
+                BillingTariffVersionV2.enabled.is_(True),
+                BillingTariffVersionV2.valid_from_at <= occurred_at,
+                (
+                    BillingTariffVersionV2.valid_to_at.is_(None)
+                    | (BillingTariffVersionV2.valid_to_at > occurred_at)
+                ),
+                seller_scope,
+                *scope,
+            )
+            .order_by(specificity, BillingTariffVersionV2.valid_from_at.desc())
+        ),
+    )
+
+
 async def record_operational_charge(
     session: AsyncSession,
     *,
@@ -252,6 +319,7 @@ async def record_operational_charge(
     occurred_at: datetime,
     performer_id: uuid.UUID | None,
     warehouse_id: uuid.UUID | None = None,
+    lines: list[OperationalBillingLine] | None = None,
 ) -> BillingLedgerEntry | None:
     """Record the first final operational fact, without blocking on a missing tariff."""
     fact_date = occurred_at.astimezone(MOSCOW).date()
@@ -320,6 +388,78 @@ async def record_operational_charge(
         amount=amount,
         occurred_at=occurred_at,
     )
+    if lines:
+        line_models: list[BillingLedgerLine] = []
+        amounts: list[int | None] = []
+        rates: set[int | None] = set()
+        for line in lines:
+            line_tariff = await _resolve_v2_tariff(
+                session,
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                product_id=line.product_id,
+                service_code=service_code,
+                occurred_at=occurred_at,
+            )
+            line_quantity = postgres_numeric(
+                line.quantity, precision=14, scale=4, field="billing_quantity"
+            )
+            line_rate = line_tariff.rate if line_tariff is not None else rate
+            line_amount = (
+                None
+                if line_rate is None
+                else postgres_integer(
+                    Decimal(line_rate)
+                    * (
+                        Decimal("1")
+                        if (
+                            line_tariff.unit
+                            if line_tariff is not None
+                            else (tariff.unit if tariff is not None else "item")
+                        )
+                        == "document"
+                        else line_quantity
+                    ),
+                    field="billing_amount",
+                )
+            )
+            line_models.append(
+                BillingLedgerLine(
+                    tenant_id=tenant_id,
+                    product_id=line.product_id,
+                    operation_fact_line_id=line.operation_fact_line_id,
+                    product_snapshot=line.source_snapshot,
+                    physical_quantity=line_quantity,
+                    billing_quantity=Decimal("1")
+                    if (
+                        line_tariff.unit
+                        if line_tariff is not None
+                        else (tariff.unit if tariff is not None else "item")
+                    )
+                    == "document"
+                    else line_quantity,
+                    billing_unit=line_tariff.unit
+                    if line_tariff is not None
+                    else (tariff.unit if tariff is not None else "item"),
+                    tariff_version_v2_id=line_tariff.id if line_tariff is not None else None,
+                    tariff_snapshot={
+                        "service_code": service_code,
+                        "source": source,
+                        "legacy_tariff_id": str(tariff.id) if tariff is not None else None,
+                    },
+                    rate=line_rate,
+                    amount=line_amount,
+                )
+            )
+            amounts.append(line_amount)
+            rates.add(line_rate)
+        entry.lines = line_models
+        if all(value is not None for value in amounts):
+            entry.amount = sum(cast(int, value) for value in amounts)
+            entry.rate = next(iter(rates)) if len(rates) == 1 else None
+        else:
+            entry.amount = None
+            entry.rate = None
     # The unique source-event constraint is the concurrency guard.  Flush in a
     # savepoint so a concurrent finalisation can safely turn its constraint
     # error into the already committed ledger row without aborting the caller's
@@ -398,6 +538,27 @@ async def record_operational_reversal(
         amount=-original.amount if original.amount is not None else None,
         occurred_at=occurred_at,
     )
+    line_result = await session.scalars(
+        select(BillingLedgerLine).where(BillingLedgerLine.ledger_entry_id == original.id)
+    )
+    # Lightweight unit-session doubles intentionally do not model child rows.
+    original_lines = [] if inspect.iscoroutinefunction(line_result.all) else line_result.all()
+    reversal.lines = [
+        BillingLedgerLine(
+            tenant_id=line.tenant_id,
+            operation_fact_line_id=line.operation_fact_line_id,
+            product_id=line.product_id,
+            product_snapshot=line.product_snapshot,
+            physical_quantity=-line.physical_quantity,
+            billing_quantity=-line.billing_quantity,
+            billing_unit=line.billing_unit,
+            tariff_version_v2_id=line.tariff_version_v2_id,
+            tariff_snapshot=line.tariff_snapshot,
+            rate=line.rate,
+            amount=-line.amount if line.amount is not None else None,
+        )
+        for line in original_lines
+    ]
     nested = await session.begin_nested()
     try:
         session.add(reversal)

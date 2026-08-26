@@ -12,6 +12,7 @@ from app.models.ff_staff_permissions import FfStaffPermissions
 from app.models.seller import Seller
 from app.models.tenant import Tenant
 from app.models.user import User
+from app.services.billing_tariff_matrix_service import ensure_disabled_tariff_matrix
 from app.services.passwords import hash_password, verify_password
 from app.services.tokens import create_access_token
 
@@ -40,6 +41,8 @@ async def register_fulfillment(
     session.add(tenant)
     session.add(user)
     try:
+        await session.flush()
+        await ensure_disabled_tariff_matrix(session, tenant=tenant)
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()

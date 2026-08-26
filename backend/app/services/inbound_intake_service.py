@@ -27,6 +27,7 @@ from app.services import inventory_service as inv_svc
 from app.services import sorting_location_service as sorting_loc_svc
 from app.services.billing_ledger_service import (
     BillingLedgerError,
+    product_billing_lines,
     record_operational_billing_issue,
     record_operational_charge,
 )
@@ -650,6 +651,14 @@ async def _record_charge_if_done(
             quantity=Decimal(sum(line.posted_qty for line in req.lines)),
             occurred_at=occurred_at,
             performer_id=performer_id,
+            lines=product_billing_lines(
+                (
+                    line.product_id,
+                    Decimal(line.posted_qty),
+                    {"inbound_intake_line_id": str(line.id)},
+                )
+                for line in req.lines if line.posted_qty
+            ),
         )
     except BillingLedgerError:
         if req.seller_id is not None:

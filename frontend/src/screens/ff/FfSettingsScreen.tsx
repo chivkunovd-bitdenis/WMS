@@ -20,6 +20,7 @@ import {
 } from '@mui/material'
 import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { FfBillingTariffMatrixPanel } from './FfBillingTariffMatrixPanel'
 import {
   FF_STAFF_ACCESS_BLOCKS,
   applyFfStaffAccessChange,
@@ -27,13 +28,11 @@ import {
   type FfPermissions,
   type FfStaffAccessKey,
 } from '../../utils/ffPermissions'
-
 type StaffPackagingBilling = {
   billing_month: string
   units_packed: number
   earned_rub: string
 }
-
 type StaffAccountRow = {
   id: string
   email: string
@@ -695,6 +694,7 @@ export function FfSettingsScreen({
           </Snackbar>
         </Box>
       )}
+      {isFulfillmentAdmin ? <FfBillingTariffMatrixPanel token={token} authHeaders={authHeaders} focusTariffs={typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('tab') === 'tariffs'} onSaved={() => setSuccess('Тарифы сохранены')} /> : null}
     </Box>
   )
 }

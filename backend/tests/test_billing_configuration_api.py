@@ -138,6 +138,42 @@ async def test_billing_configuration_api_validates_profiles_tariffs_and_tenant_b
 
 
 @pytest.mark.asyncio
+async def test_tariff_matrix_api_is_explicit_tenant_scoped_and_atomic(
+    async_client: AsyncClient,
+) -> None:
+    headers = await _register_admin(async_client, "matrix-api")
+    matrix = await async_client.get("/billing/tariff-matrix", headers=headers)
+    assert matrix.status_code == 200, matrix.text
+    assert {row["service_code"] for row in matrix.json()["services"]} == {
+        "inbound", "marketplace_outbound", "packing", "return"
+    }
+    assert not any(row["enabled"] for row in matrix.json()["services"])
+    saved = await async_client.put(
+        "/billing/tariff-matrix",
+        headers=headers,
+        json={
+            "revision": matrix.json()["revision"],
+            "services": [
+                {"service_code": "inbound", "enabled": True},
+                {"service_code": "marketplace_outbound", "enabled": False},
+                {"service_code": "packing", "enabled": False},
+                {"service_code": "return", "enabled": False},
+            ],
+            "versions": [],
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["revision"] == 1
+    stale = await async_client.put(
+        "/billing/tariff-matrix", headers=headers,
+        json={**saved.json(), "revision": 0, "versions": []},
+    )
+    assert stale.status_code == 400
+    unchanged = await async_client.get("/billing/tariff-matrix", headers=headers)
+    assert unchanged.json()["revision"] == 1
+
+
+@pytest.mark.asyncio
 async def test_creating_covering_tariffs_reprices_unpriced_entries_in_kopecks(
     async_client: AsyncClient,
 ) -> None:
