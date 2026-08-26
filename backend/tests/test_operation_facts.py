@@ -3,12 +3,15 @@ from __future__ import annotations
 import uuid
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from inspect import signature
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from app.models.operation_fact import OperationFact
+from app.models.marketplace_unload import MarketplaceUnloadRequest
+from app.models.operation_fact import OperationFact, OperationFactLine
+from app.services.operation_fact_recovery_service import recover_operation_facts
 from app.services.operation_fact_service import (
     OperationFactError,
     OperationFactLineInput,
@@ -34,7 +37,16 @@ async def _nested_transaction():
 @pytest.mark.asyncio
 async def test_writer_creates_immutable_fact_with_item_lines() -> None:
     session = _session()
-    session.scalar = AsyncMock(return_value=None)
+    session.scalar = AsyncMock(
+        side_effect=[
+            None,
+            None,
+            SimpleNamespace(name="Seller"),
+            SimpleNamespace(),
+            SimpleNamespace(email="picker@example.test"),
+            SimpleNamespace(),
+        ]
+    )
     tenant_id = uuid.uuid4()
     actor_id = uuid.uuid4()
     product_id = uuid.uuid4()
@@ -70,9 +82,11 @@ async def test_writer_creates_immutable_fact_with_item_lines() -> None:
     assert isinstance(fact, OperationFact)
     assert fact.source == "user"
     assert fact.actor_user_id == actor_id
+    assert fact.actor_name_snapshot == "picker@example.test"
     assert fact.item_quantity == 1
     assert len(fact.lines) == 1
     assert fact.lines[0].product_id == product_id
+    assert fact.lines[0].tenant_id == tenant_id
     session.add.assert_called_once_with(fact)
 
 
@@ -161,7 +175,16 @@ async def test_marketplace_cancel_retry_returns_same_reversal_and_preserves_acto
         lines=[SimpleNamespace(product_id=product_id, product=product)],
     )
     shipped_session = _session()
-    shipped_session.scalar = AsyncMock(side_effect=[None, None])
+    shipped_session.scalar = AsyncMock(
+        side_effect=[
+            None,
+            None,
+            SimpleNamespace(name="Seller"),
+            SimpleNamespace(),
+            SimpleNamespace(email="completed@example.test"),
+            SimpleNamespace(),
+        ]
+    )
     shipped = await record_marketplace_unload(
         shipped_session,
         request=request,
@@ -171,7 +194,18 @@ async def test_marketplace_cancel_retry_returns_same_reversal_and_preserves_acto
     )
     shipped.id = uuid.uuid4()
     reversal_session = _session()
-    reversal_session.scalar = AsyncMock(side_effect=[shipped.id, None, None, shipped])
+    reversal_session.scalar = AsyncMock(
+        side_effect=[
+            shipped.id,
+            None,
+            None,
+            shipped,
+            SimpleNamespace(name="Seller"),
+            SimpleNamespace(),
+            SimpleNamespace(email="cancelled@example.test"),
+            SimpleNamespace(),
+        ]
+    )
     reversal = await record_marketplace_unload(
         reversal_session,
         request=request,
@@ -225,11 +259,83 @@ async def test_packaging_event_source_tuple_does_not_create_duplicate() -> None:
     )
     line = SimpleNamespace(product=product)
     session = _session()
-    session.scalar = AsyncMock(side_effect=[None, None, None])
+    session.scalar = AsyncMock(
+        side_effect=[
+            "Seller",
+            None,
+            None,
+            SimpleNamespace(name="Seller"),
+            SimpleNamespace(),
+            SimpleNamespace(email="packer@example.test"),
+            SimpleNamespace(),
+        ]
+    )
     fact = await record_packaging_event(session, task=task, event=event, line=line)
     retry_session = _session()
-    retry_session.scalar = AsyncMock(side_effect=[None, fact])
+    retry_session.scalar = AsyncMock(side_effect=["Seller", fact])
     retried = await record_packaging_event(retry_session, task=task, event=event, line=line)
 
     assert retried is fact
     assert retry_session.add.call_count == 0
+
+
+def test_correction_schema_exposes_tenant_lines_and_durable_unload_markers() -> None:
+    assert "tenant_id" in OperationFactLine.__table__.c
+    assert "shipped_at" in MarketplaceUnloadRequest.__table__.c
+    assert "cancelled_at" in MarketplaceUnloadRequest.__table__.c
+
+
+def test_recovery_accepts_explicit_source_filters() -> None:
+    assert "source_event_ids" in signature(recover_operation_facts).parameters
+
+
+@pytest.mark.asyncio
+async def test_writer_uses_tenant_scoped_actor_email_snapshot() -> None:
+    session = _session()
+    actor_id = uuid.uuid4()
+    actor = SimpleNamespace(id=actor_id, email="before-rename@example.test")
+    session.scalar = AsyncMock(
+        side_effect=[None, None, actor]
+    )
+
+    fact = await write_operation_fact(
+        session,
+        tenant_id=uuid.uuid4(),
+        operation_code="fbs_pick",
+        source_kind="fbs_order_pick_event",
+        source_event_id=uuid.uuid4(),
+        idempotency_key="actor-snapshot",
+        document_type="fbs_supply",
+        document_id=uuid.uuid4(),
+        actor_user_id=actor_id,
+        occurred_at=datetime.now(UTC),
+        item_quantity=1,
+    )
+
+    assert fact.actor_name_snapshot == "before-rename@example.test"
+    actor.email = "after-rename@example.test"
+    fact.actor_user_id = None
+    assert fact.actor_name_snapshot == "before-rename@example.test"
+
+
+@pytest.mark.asyncio
+async def test_writer_rejects_cross_tenant_actor() -> None:
+    session = _session()
+    session.scalar = AsyncMock(side_effect=[None, None, None])
+
+    with pytest.raises(OperationFactError, match="actor_tenant_mismatch"):
+        await write_operation_fact(
+            session,
+            tenant_id=uuid.uuid4(),
+            operation_code="fbs_pick",
+            source_kind="fbs_order_pick_event",
+            source_event_id=uuid.uuid4(),
+            idempotency_key="foreign-actor",
+            document_type="fbs_supply",
+            document_id=uuid.uuid4(),
+            actor_user_id=uuid.uuid4(),
+            occurred_at=datetime.now(UTC),
+            item_quantity=1,
+        )
+
+    session.add.assert_not_called()

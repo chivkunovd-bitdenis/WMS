@@ -1052,13 +1052,15 @@ async def complete_unload(
     await delete_empty_boxes_for_ship(session, req)
     req.status = STATUS_SHIPPED
     occurred_at = datetime.now(UTC)
+    if req.shipped_at is None:
+        req.shipped_at = occurred_at
     if req.completed_by_user_id is None:
         req.completed_by_user_id = performer_id
     await record_marketplace_unload(
         session,
         request=req,
         distributed=distributed,
-        occurred_at=occurred_at,
+        occurred_at=req.shipped_at,
         performer_id=req.completed_by_user_id,
     )
     try:
@@ -1169,11 +1171,13 @@ async def cancel_request(
         )
         if req.cancelled_by_user_id is None:
             req.cancelled_by_user_id = performer_id
+        if req.cancelled_at is None:
+            req.cancelled_at = occurred_at
         await record_marketplace_unload(
             session,
             request=req,
             distributed=distributed_qty_by_product(req),
-            occurred_at=occurred_at,
+            occurred_at=req.cancelled_at,
             performer_id=req.cancelled_by_user_id,
             reversal=True,
         )

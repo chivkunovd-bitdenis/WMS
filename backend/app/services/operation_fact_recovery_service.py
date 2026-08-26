@@ -4,7 +4,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -17,6 +17,7 @@ from app.models.fbs_order_pick import (
 )
 from app.models.fbs_supply import FbsSupply
 from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
+from app.models.marketplace_unload import MarketplaceUnloadLine, MarketplaceUnloadRequest
 from app.models.operation_fact import OperationFact, OperationFactCutover
 from app.models.packaging_task import (
     PACKAGING_EVENT_MANUAL_PACK,
@@ -34,6 +35,7 @@ from app.services.operation_fact_service import (
     OperationFactError,
     record_fbs_pick,
     record_inbound_completion,
+    record_marketplace_unload,
     record_packaging_event,
     record_storage_fixed,
 )
@@ -61,6 +63,7 @@ async def recover_operation_facts(
     *,
     period_start: datetime | None = None,
     period_end: datetime | None = None,
+    source_event_ids: dict[str, set[uuid.UUID]] | None = None,
 ) -> OperationFactRecoveryResult:
     """Rebuild post-cutover facts only from canonical source documents.
 
@@ -76,6 +79,20 @@ async def recover_operation_facts(
     already_present = 0
     conflicted = 0
     found = 0
+
+    def source_is_selected(source_kind: str, source_event_id: uuid.UUID) -> bool:
+        if source_event_ids is None:
+            return True
+        selected_ids = source_event_ids.get(source_kind)
+        return selected_ids is not None and source_event_id in selected_ids
+
+    def occurred_in_scope(occurred_at: datetime | None) -> bool:
+        return (
+            occurred_at is not None
+            and occurred_at >= cutover.occurred_at
+            and (period_start is None or occurred_at >= period_start)
+            and (period_end is None or occurred_at < period_end)
+        )
 
     async def source_present(
         source_kind: str, source_event_id: uuid.UUID, operation_code: str
@@ -109,6 +126,9 @@ async def recover_operation_facts(
         inbound_stmt = inbound_stmt.where(InboundIntakeRequest.posted_at >= period_start)
     if period_end is not None:
         inbound_stmt = inbound_stmt.where(InboundIntakeRequest.posted_at < period_end)
+    if source_event_ids is not None:
+        inbound_ids = source_event_ids.get("inbound_intake_request")
+        inbound_stmt = inbound_stmt.where(InboundIntakeRequest.id.in_(inbound_ids or ()))
     for request in (await session.scalars(inbound_stmt)).all():
         found += 1
         operation_code = (
@@ -133,6 +153,13 @@ async def recover_operation_facts(
         )
         .order_by(FbsOrderPickEvent.created_at, FbsOrderPickEvent.id)
     )
+    if period_start is not None:
+        wb_events = wb_events.where(FbsOrderPickEvent.created_at >= period_start)
+    if period_end is not None:
+        wb_events = wb_events.where(FbsOrderPickEvent.created_at < period_end)
+    if source_event_ids is not None:
+        wb_ids = source_event_ids.get("fbs_order_pick_event")
+        wb_events = wb_events.where(FbsOrderPickEvent.id.in_(wb_ids or ()))
     for event, pick in (await session.execute(wb_events)).all():
         found += 1
         operation_code = (
@@ -188,41 +215,54 @@ async def recover_operation_facts(
         select(FbsOrderProductPick)
         .where(
             FbsOrderProductPick.tenant_id == tenant_id,
-            FbsOrderProductPick.picked_at >= cutover.occurred_at,
+            or_(
+                FbsOrderProductPick.picked_at >= cutover.occurred_at,
+                FbsOrderProductPick.undone_at >= cutover.occurred_at,
+            ),
         )
         .order_by(FbsOrderProductPick.picked_at, FbsOrderProductPick.id)
     )
+    if source_event_ids is not None:
+        ozon_ids = source_event_ids.get("fbs_order_product_pick")
+        ozon_picks = ozon_picks.where(FbsOrderProductPick.id.in_(ozon_ids or ()))
     for pick in (await session.scalars(ozon_picks)).all():
-        found += 1
-        if await source_present("fbs_order_product_pick", pick.id, "fbs_pick"):
-            already_present += 1
-        else:
-            supply = await session.scalar(
-                select(FbsSupply)
-                .options(selectinload(FbsSupply.seller))
-                .where(FbsSupply.id == pick.fbs_supply_id, FbsSupply.tenant_id == tenant_id)
-            )
-            product = await session.get(Product, pick.product_id)
-            if supply is None or product is None:
-                conflicted += 1
+        if occurred_in_scope(pick.picked_at) and source_is_selected(
+            "fbs_order_product_pick", pick.id
+        ):
+            found += 1
+            if await source_present("fbs_order_product_pick", pick.id, "fbs_pick"):
+                already_present += 1
             else:
-                try:
-                    await record_fbs_pick(
-                        session,
-                        supply=supply,
-                        pick=pick,
-                        source_event_id=pick.id,
-                        source_kind="fbs_order_product_pick",
-                        actor_user_id=pick.picked_by_user_id,
-                        occurred_at=pick.picked_at,
-                        product=product,
-                    )
-                except OperationFactError:
+                supply = await session.scalar(
+                    select(FbsSupply)
+                    .options(selectinload(FbsSupply.seller))
+                    .where(FbsSupply.id == pick.fbs_supply_id, FbsSupply.tenant_id == tenant_id)
+                )
+                product = await session.get(Product, pick.product_id)
+                if supply is None or product is None:
                     conflicted += 1
                 else:
-                    created += 1
-        if pick.undone_at is None or pick.undone_at < cutover.occurred_at:
+                    try:
+                        await record_fbs_pick(
+                            session,
+                            supply=supply,
+                            pick=pick,
+                            source_event_id=pick.id,
+                            source_kind="fbs_order_product_pick",
+                            actor_user_id=pick.picked_by_user_id,
+                            occurred_at=pick.picked_at,
+                            product=product,
+                        )
+                    except OperationFactError:
+                        conflicted += 1
+                    else:
+                        created += 1
+        if not occurred_in_scope(pick.undone_at) or not source_is_selected(
+            "fbs_order_product_pick", pick.id
+        ):
             continue
+        undone_at = pick.undone_at
+        assert undone_at is not None
         found += 1
         if await source_present("fbs_order_product_pick", pick.id, "fbs_pick_reversal"):
             already_present += 1
@@ -247,7 +287,7 @@ async def recover_operation_facts(
                 source_event_id=pick.id,
                 source_kind="fbs_order_product_pick",
                 actor_user_id=pick.undone_by_user_id,
-                occurred_at=pick.undone_at,
+                occurred_at=undone_at,
                 reversal=True,
                 product=product,
             )
@@ -272,6 +312,13 @@ async def recover_operation_facts(
         )
         .order_by(PackagingTaskEvent.created_at, PackagingTaskEvent.id)
     )
+    if period_start is not None:
+        packaging_events = packaging_events.where(PackagingTaskEvent.created_at >= period_start)
+    if period_end is not None:
+        packaging_events = packaging_events.where(PackagingTaskEvent.created_at < period_end)
+    if source_event_ids is not None:
+        packaging_ids = source_event_ids.get("packaging_task_event")
+        packaging_events = packaging_events.where(PackagingTaskEvent.id.in_(packaging_ids or ()))
     for event in (await session.scalars(packaging_events)).all():
         found += 1
         operation_code = (
@@ -330,6 +377,85 @@ async def recover_operation_facts(
         else:
             created += 1
 
+    unloads = (
+        select(MarketplaceUnloadRequest)
+        .where(
+            MarketplaceUnloadRequest.tenant_id == tenant_id,
+            MarketplaceUnloadRequest.status == "shipped",
+            or_(
+                MarketplaceUnloadRequest.shipped_at >= cutover.occurred_at,
+                MarketplaceUnloadRequest.cancelled_at >= cutover.occurred_at,
+            ),
+        )
+        .options(
+            selectinload(MarketplaceUnloadRequest.seller),
+            selectinload(MarketplaceUnloadRequest.lines).selectinload(MarketplaceUnloadLine.product),
+        )
+        .order_by(MarketplaceUnloadRequest.shipped_at, MarketplaceUnloadRequest.id)
+    )
+    if source_event_ids is not None:
+        unload_ids = source_event_ids.get("marketplace_unload_request")
+        unloads = unloads.where(MarketplaceUnloadRequest.id.in_(unload_ids or ()))
+    for unload_request in (await session.scalars(unloads)).all():
+        distributed = {
+            line.product_id: line.quantity
+            for line in unload_request.lines
+            if line.quantity > 0
+        }
+        if occurred_in_scope(unload_request.shipped_at) and source_is_selected(
+            "marketplace_unload_request", unload_request.id
+        ):
+            shipped_at = unload_request.shipped_at
+            assert shipped_at is not None
+            found += 1
+            if await source_present(
+                "marketplace_unload_request", unload_request.id, "marketplace_outbound_completed"
+            ):
+                already_present += 1
+            else:
+                try:
+                    await record_marketplace_unload(
+                        session,
+                        request=unload_request,
+                        distributed=distributed,
+                        occurred_at=shipped_at,
+                        performer_id=unload_request.completed_by_user_id,
+                    )
+                except OperationFactError:
+                    conflicted += 1
+                else:
+                    created += 1
+        if not occurred_in_scope(unload_request.cancelled_at) or not source_is_selected(
+            "marketplace_unload_request", unload_request.id
+        ):
+            continue
+        cancelled_at = unload_request.cancelled_at
+        assert cancelled_at is not None
+        found += 1
+        if await source_present(
+            "marketplace_unload_request", unload_request.id, "marketplace_outbound_reversal"
+        ):
+            already_present += 1
+            continue
+        if not await source_present(
+            "marketplace_unload_request", unload_request.id, "marketplace_outbound_completed"
+        ):
+            conflicted += 1
+            continue
+        try:
+            await record_marketplace_unload(
+                session,
+                request=unload_request,
+                distributed=distributed,
+                occurred_at=cancelled_at,
+                performer_id=unload_request.cancelled_by_user_id,
+                reversal=True,
+            )
+        except OperationFactError:
+            conflicted += 1
+        else:
+            created += 1
+
     storage_stmt = (
         select(StorageStatement)
         .where(
@@ -344,11 +470,16 @@ async def recover_operation_facts(
         storage_stmt = storage_stmt.where(StorageStatement.fixed_at >= period_start)
     if period_end is not None:
         storage_stmt = storage_stmt.where(StorageStatement.fixed_at < period_end)
+    if source_event_ids is not None and not {
+        "storage_measurement",
+        "storage_statement",
+    }.intersection(source_event_ids):
+        storage_stmt = storage_stmt.where(StorageStatement.id.in_(()))
     for statement in (await session.scalars(storage_stmt)).all():
         if statement.fixed_at is None:
             conflicted += 1
             continue
-        measurements = list(
+        all_measurements = list(
             (
                 await session.scalars(
                     select(StorageMeasurement)
@@ -363,7 +494,21 @@ async def recover_operation_facts(
                 )
             ).all()
         )
-        source_ids = [measurement.id for measurement in measurements] or [statement.id]
+        measurements = all_measurements
+        if source_event_ids is not None:
+            measurement_ids = source_event_ids.get("storage_measurement")
+            measurements = [
+                measurement
+                for measurement in measurements
+                if measurement_ids is not None and measurement.id in measurement_ids
+            ]
+        source_ids = [measurement.id for measurement in measurements]
+        if (
+            not all_measurements
+            and not source_ids
+            and source_is_selected("storage_statement", statement.id)
+        ):
+            source_ids = [statement.id]
         for source_id in source_ids:
             found += 1
             source_kind = "storage_measurement" if measurements else "storage_statement"

@@ -19,7 +19,10 @@ from app.models.operation_fact import (
     OperationFact,
     OperationFactLine,
 )
+from app.models.product import Product
 from app.models.seller import Seller
+from app.models.user import User
+from app.models.warehouse import Warehouse
 
 
 class OperationFactError(ValueError):
@@ -366,6 +369,35 @@ async def write_operation_fact(
         if reversal_of is None:
             raise OperationFactError("reversal_fact_not_found")
 
+    if seller_id is not None:
+        seller = await session.scalar(
+            select(Seller).where(Seller.id == seller_id, Seller.tenant_id == tenant_id)
+        )
+        if seller is None:
+            raise OperationFactError("seller_tenant_mismatch")
+    if warehouse_id is not None:
+        warehouse = await session.scalar(
+            select(Warehouse).where(Warehouse.id == warehouse_id, Warehouse.tenant_id == tenant_id)
+        )
+        if warehouse is None:
+            raise OperationFactError("warehouse_tenant_mismatch")
+    resolved_actor_snapshot = actor_name_snapshot
+    if actor_user_id is not None:
+        actor = await session.scalar(
+            select(User).where(User.id == actor_user_id, User.tenant_id == tenant_id)
+        )
+        if actor is None:
+            raise OperationFactError("actor_tenant_mismatch")
+        resolved_actor_snapshot = actor.email
+    for line in materialized_lines:
+        if line.product_id is None:
+            continue
+        product = await session.scalar(
+            select(Product).where(Product.id == line.product_id, Product.tenant_id == tenant_id)
+        )
+        if product is None:
+            raise OperationFactError("product_tenant_mismatch")
+
     fact = OperationFact(
         tenant_id=tenant_id,
         operation_code=operation_code,
@@ -381,7 +413,7 @@ async def write_operation_fact(
         document_id=document_id,
         document_number_snapshot=document_number_snapshot,
         actor_user_id=actor_user_id,
-        actor_name_snapshot=actor_name_snapshot,
+        actor_name_snapshot=resolved_actor_snapshot,
         source=resolved_source,
         occurred_at=occurred_at,
         item_quantity=item_quantity,
@@ -389,6 +421,7 @@ async def write_operation_fact(
         integrity_status=integrity_status,
         lines=[
             OperationFactLine(
+                tenant_id=tenant_id,
                 product_id=line.product_id,
                 sku_snapshot=line.sku_snapshot,
                 product_name_snapshot=line.product_name_snapshot,
