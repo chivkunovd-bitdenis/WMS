@@ -11,7 +11,7 @@
 После принятого ревью открыть ровно такой наряд:
 
 ```bash
-python3 scripts/naryad.py new "Волна 2А модуля «Расчёты»: надёжные факты операций без нового экрана" --lane обычная --files backend/app/models/operation_fact.py,backend/app/models/__init__.py,backend/app/models/inbound_intake.py,backend/app/models/fbs_order.py,backend/app/models/marketplace_unload.py,backend/app/services/operation_fact_service.py,backend/app/services/operation_fact_recovery_service.py,backend/app/services/inbound_intake_service.py,backend/app/services/fbs_picking_service.py,backend/app/services/fbs_supply_service.py,backend/app/services/packaging_task_service.py,backend/app/services/marketplace_unload_service.py,backend/app/services/storage_statement_service.py,docs/backend-guard-baseline.json
+python3 scripts/naryad.py new "Волна 2А модуля «Расчёты»: надёжные факты операций без нового экрана" --lane обычная --files backend/app/models/operation_fact.py,backend/app/models/__init__.py,backend/app/models/inbound_intake.py,backend/app/models/fbs_order.py,backend/app/models/fbs_order_pick.py,backend/app/models/marketplace_unload.py,backend/app/services/operation_fact_service.py,backend/app/services/operation_fact_recovery_service.py,backend/app/services/inbound_intake_service.py,backend/app/services/fbs_picking_service.py,backend/app/services/fbs_supply_service.py,backend/app/services/packaging_task_service.py,backend/app/services/marketplace_unload_service.py,backend/app/services/storage_statement_service.py,docs/backend-guard-baseline.json
 ```
 
 `backend/alembic/versions/20260826_0110_operation_facts.py` и новые тесты
@@ -172,6 +172,14 @@ nullable `billable_service_code`, `source_kind`, `source_event_id`, `idempotency
 восстановимости, а пять сервисов-источников и storage service — для точек записи. Единственная
 миграция и два новых test-файла названы в разделе 0. `storage_statement_service.py` создаёт лишь
 факт за уже зафиксированное хранение и не меняет месячный расчёт или `BillingLedgerEntry`.
+
+### Amendment — fidelity SQLite-тестов WB redo
+
+`backend/app/models/fbs_order_pick.py` добавлен в границы только для того, чтобы SQLite metadata
+в тестовом контуре повторяла уже существующий PostgreSQL partial unique index
+`uq_fbs_order_picks_active_order` (`undone_at IS NULL`). Без этого WB `pick → undo → redo`
+некорректно блокируется глобальным unique index в SQLite. Production schema и FBS-поведение этим
+amendment не расширяются и не меняются; CASES уже содержит требуемый redo-сценарий.
 
 ## 7. Что остаётся неизменным
 
