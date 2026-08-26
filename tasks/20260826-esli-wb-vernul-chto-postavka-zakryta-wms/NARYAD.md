@@ -51,4 +51,4 @@
 - [x] критик исполнения
 - [ ] судья в живом браузере
 - [x] доказательства в `docs/evidence/20260826-esli-wb-vernul-chto-postavka-zakryta-wms/`
-- [ ] влито
+- [x] влито в `etalon` после code review; живой browser-check остаётся отдельной стадией после деплоя
