@@ -2,21 +2,35 @@ from __future__ import annotations
 
 import re
 import uuid
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from httpx import AsyncClient
 
+from app.db.session import SessionLocal
+from app.models.inbound_intake import (
+    InboundIntakeBox,
+    InboundIntakeDistributionLine,
+    InboundIntakeRequest,
+)
+from app.models.inventory_balance import InventoryBalance
+from app.models.marketplace_unload import MarketplaceUnloadLine, MarketplaceUnloadRequest
+from app.models.product import Product
+from app.models.seller import Seller
+from app.models.storage_location import StorageLocation
+from app.models.tenant import Tenant
+from app.models.warehouse import Warehouse
+from app.models.warehouse_box import WarehouseBox
 from app.services.box_barcode_service import (
     _encode_uuid,
     generate_box_barcode,
     is_wb_compatible_box_barcode,
 )
 from app.services.inbound_intake_box_service import _new_barcode as new_inbound_barcode
-from app.services.warehouse_box_service import (
-    _new_barcode as new_warehouse_barcode,
+from app.services.marketplace_unload_box_service import (
+    attach_existing_box_by_barcode,
 )
 from app.services.warehouse_box_service import (
-    resolve_barcode,
+    _new_barcode as new_warehouse_barcode,
 )
 
 
@@ -27,7 +41,10 @@ def test_generated_box_barcodes_are_wb_compatible_and_unique(prefix: str) -> Non
     assert len(barcodes) == 1_000
     assert all(len(barcode) == 30 for barcode in barcodes)
     assert all(barcode.startswith(f"{prefix}-") for barcode in barcodes)
-    assert all(re.fullmatch(r"[A-Z0-9-]+", barcode) for barcode in barcodes)
+    assert all(
+        re.fullmatch(rf"{prefix}-[0-7][0-9A-HJKMNP-TV-Z]{{25}}", barcode)
+        for barcode in barcodes
+    )
     assert all(is_wb_compatible_box_barcode(barcode) for barcode in barcodes)
 
 
@@ -56,41 +73,113 @@ def test_existing_box_barcode_shapes_remain_valid_inputs(barcode: str) -> None:
 
 
 @pytest.mark.asyncio
-async def test_legacy_warehouse_box_barcode_is_still_resolved() -> None:
-    old_box = MagicMock()
-    result = MagicMock()
-    result.scalar_one_or_none.return_value = old_box
-    session = MagicMock()
-    session.execute = AsyncMock(return_value=result)
+async def test_legacy_box_barcodes_attach_through_real_database_path(
+    async_client: AsyncClient,
+) -> None:
+    """TC-NEW-B02-WB-BOX-02: old WHB/INB labels still scan into an MP shipment."""
+    assert async_client.base_url == "http://test"
 
-    warehouse_box, inbound_box = await resolve_barcode(
-        session,
-        uuid.uuid4(),
-        "WHB-ABCDEF123456",
-    )
+    async with SessionLocal() as session:
+        tenant = Tenant(name="Legacy box tenant", slug=f"legacy-box-{uuid.uuid4().hex}")
+        session.add(tenant)
+        await session.flush()
 
-    assert warehouse_box is old_box
-    assert inbound_box is None
+        warehouse = Warehouse(
+            tenant_id=tenant.id,
+            name="Legacy box warehouse",
+            code=f"LEG-{uuid.uuid4().hex[:8]}",
+        )
+        seller = Seller(tenant_id=tenant.id, name="Legacy box seller")
+        session.add_all([warehouse, seller])
+        await session.flush()
 
+        product = Product(
+            tenant_id=tenant.id,
+            seller_id=seller.id,
+            name="Legacy box product",
+            sku_code=f"LEGACY-{uuid.uuid4().hex[:8]}",
+        )
+        location = StorageLocation(
+            tenant_id=tenant.id,
+            warehouse_id=warehouse.id,
+            code="LEGACY-LOC",
+            barcode=f"LOC-{uuid.uuid4().hex[:12]}",
+        )
+        inbound_request = InboundIntakeRequest(
+            tenant_id=tenant.id,
+            warehouse_id=warehouse.id,
+            seller_id=seller.id,
+            status="done",
+        )
+        unload_request = MarketplaceUnloadRequest(
+            tenant_id=tenant.id,
+            warehouse_id=warehouse.id,
+            seller_id=seller.id,
+            status="confirmed",
+        )
+        session.add_all([product, location, inbound_request, unload_request])
+        await session.flush()
 
-@pytest.mark.asyncio
-async def test_legacy_inbound_box_barcode_is_still_resolved() -> None:
-    old_box = MagicMock()
-    not_found = MagicMock()
-    not_found.scalar_one_or_none.return_value = None
-    found = MagicMock()
-    found.scalar_one_or_none.return_value = old_box
-    session = MagicMock()
-    session.execute = AsyncMock(side_effect=[not_found, found])
+        legacy_warehouse_box = WarehouseBox(
+            tenant_id=tenant.id,
+            warehouse_id=warehouse.id,
+            internal_barcode="WHB-ABCDEF123456",
+        )
+        legacy_inbound_box = InboundIntakeBox(
+            tenant_id=tenant.id,
+            request_id=inbound_request.id,
+            box_number=1,
+            internal_barcode="INB-ABCDEF123456",
+        )
+        session.add_all([legacy_warehouse_box, legacy_inbound_box])
+        await session.flush()
 
-    warehouse_box, inbound_box = await resolve_barcode(
-        session,
-        uuid.uuid4(),
-        "INB-ABCDEF123456",
-    )
+        session.add_all(
+            [
+                InventoryBalance(
+                    tenant_id=tenant.id,
+                    storage_location_id=location.id,
+                    product_id=product.id,
+                    quantity=1,
+                    quantity_unpacked=1,
+                    quantity_packed=0,
+                ),
+                InboundIntakeDistributionLine(
+                    request_id=inbound_request.id,
+                    product_id=product.id,
+                    storage_location_id=location.id,
+                    quantity=1,
+                    box_id=legacy_inbound_box.id,
+                ),
+                MarketplaceUnloadLine(
+                    request_id=unload_request.id,
+                    product_id=product.id,
+                    quantity=1,
+                ),
+            ]
+        )
+        await session.commit()
 
-    assert warehouse_box is None
-    assert inbound_box is old_box
+        attached_whb = await attach_existing_box_by_barcode(
+            session,
+            tenant.id,
+            unload_request.id,
+            barcode="WHB-ABCDEF123456",
+        )
+        assert attached_whb.warehouse_box_id == legacy_warehouse_box.id
+        assert attached_whb.warehouse_box is not None
+        assert attached_whb.warehouse_box.internal_barcode == "WHB-ABCDEF123456"
+
+        attached_inb = await attach_existing_box_by_barcode(
+            session,
+            tenant.id,
+            unload_request.id,
+            barcode="INB-ABCDEF123456",
+        )
+        assert attached_inb.warehouse_box_id is None
+        assert len(attached_inb.lines) == 1
+        assert attached_inb.lines[0].product_id == product.id
+        assert attached_inb.lines[0].quantity == 1
 
 
 @pytest.mark.parametrize(

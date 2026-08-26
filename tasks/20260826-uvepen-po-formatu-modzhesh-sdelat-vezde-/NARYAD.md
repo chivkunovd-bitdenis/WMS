@@ -21,6 +21,7 @@
 - `backend/app/services/warehouse_box_service.py`
 - `backend/app/services/inbound_intake_box_service.py`
 - `backend/tests/test_box_barcode_service.py`
+- `frontend/tests-e2e/ff-inbound-boxes.spec.ts`
 - относящиеся к генерации коробов проверки в существующих backend-тестах
 - `tasks/20260826-uvepen-po-formatu-modzhesh-sdelat-vezde-/`
 - `docs/evidence/20260826-uvepen-po-formatu-modzhesh-sdelat-vezde-/`
@@ -36,7 +37,7 @@
 - [x] арх-решение — не требуется (единое правило существующих коробов)
 - [x] контракт
 - [x] разработка — код и целевые тесты; общий backend-гейт красный на базовых ошибках
-- [ ] критик исполнения
+- [x] критик исполнения — `CODE_REVIEW_PASSED` после одного раунда test-only rework
 - [ ] судья в живом браузере
 - [x] доказательства — автоматические проверки и полный backend-прогон
 - [ ] влито
