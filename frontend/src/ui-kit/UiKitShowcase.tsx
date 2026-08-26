@@ -16,6 +16,10 @@ import {
   ScannerLine,
   ScreenHeader,
   SecondaryAction,
+  MoscowDateTimeInput,
+  NumberInput,
+  SelectInput,
+  TextInput,
   TextCell,
 } from './index'
 import type { Column } from './index'
@@ -124,6 +128,10 @@ const LOWERCASE_CHIPS = INVENTORY.chips.filter((item) => /^[а-яёa-z]/.test(it
 
 export function UiKitShowcase() {
   const [search, setSearch] = useState('')
+  const [formText, setFormText] = useState('')
+  const [formNumber, setFormNumber] = useState<number | null>(null)
+  const [formSelect, setFormSelect] = useState('')
+  const [formTime, setFormTime] = useState<string | null>(null)
 
   return (
     <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 1400, mx: 'auto' }}>
@@ -224,6 +232,22 @@ export function UiKitShowcase() {
         <ActionGroup>
           <PrintAction what="ЧЗ и ШК" placement="panel" disabledReason="Нет кодов ЧЗ на складе — загрузите коды" />
         </ActionGroup>
+      </Section>
+
+      <Section title="Поля формы" note="Общие поля с label, подсказкой, ошибкой, disabled и loading; без screen-specific поведения.">
+        <Stack spacing={2} sx={{ maxWidth: 440 }}>
+          <TextInput label="Название" value={formText} onChange={setFormText} helperText="Короткое понятное название" testId="showcase-text-input" />
+          <NumberInput label="Количество" value={formNumber} onChange={setFormNumber} min={0} step={1} testId="showcase-number-input" />
+          <SelectInput
+            label="Тип"
+            value={formSelect}
+            onChange={setFormSelect}
+            emptyLabel="Выберите тип"
+            options={[{ value: 'standard', label: 'Обычный' }, { value: 'restricted', label: 'Недоступный', disabled: true }]}
+            testId="showcase-select-input"
+          />
+          <MoscowDateTimeInput label="Дата и время Москвы" value={formTime} onChange={setFormTime} testId="showcase-moscow-time-input" />
+        </Stack>
       </Section>
 
       <Section title="Сканер и ошибка">

@@ -17,3 +17,4 @@ export type { ReportMetricItem, ReportMetricStripProps } from './ReportMetricStr
 export { MovementFlowChart } from './MovementFlowChart'
 export type { MovementFlowChartProps, MovementFlowPoint } from './MovementFlowChart'
 export { ScannerLine } from './ScannerLine'
+export { TextInput, NumberInput, SelectInput, MoscowDateTimeInput } from './FormFields'
