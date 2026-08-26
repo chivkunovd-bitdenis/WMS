@@ -99,6 +99,7 @@ async def get_inventory_balances_summary(
     seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
     warehouse_id: Annotated[uuid.UUID | None, Query()] = None,
     seller_id: Annotated[uuid.UUID | None, Query()] = None,
+    product_ids: Annotated[list[uuid.UUID] | None, Query(alias="product_id")] = None,
 ) -> list[InventoryBalanceRowOut]:
     await assert_inventory_read_access(session, user)
     effective_seller = seller_scope
@@ -114,6 +115,7 @@ async def get_inventory_balances_summary(
         user.tenant_id,
         seller_product_owner_id=effective_seller,
         warehouse_id=warehouse_id,
+        product_ids=product_ids,
     )
     product_ids = [pid for pid, *_ in rows]
     distribution_map = await stock_direction_service.distributions_by_product(
