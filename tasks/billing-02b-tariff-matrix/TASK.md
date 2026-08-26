@@ -11,24 +11,34 @@
 После `ACCEPTED` открыть ровно такой наряд:
 
 ```bash
-python3 scripts/naryad.py new "Волна 2Б модуля «Расчёты»: тарифная матрица на экране Настройки ФФ" --screens S-19 --lane обычная --files backend/app/models/billing.py,backend/app/models/__init__.py,backend/app/models/packaging_task.py,backend/app/services/auth_service.py,backend/app/services/billing_tariff_matrix_service.py,backend/app/services/billing_configuration_service.py,backend/app/services/billing_ledger_service.py,backend/app/services/inbound_intake_service.py,backend/app/services/marketplace_unload_service.py,backend/app/api/billing.py,backend/app/main.py,backend/alembic/versions/20260826_0112_billing_tariff_matrix.py,backend/tests/test_auth.py,backend/tests/test_bootstrap_billing_tariff_matrix.py,backend/tests/test_billing_tariff_matrix.py,backend/tests/test_billing_configuration_api.py,backend/tests/test_billing_ledger_service.py,backend/tests/test_billing_invoice_service.py,backend/tests/test_billing_invoice_api.py,backend/tests/test_staff_packaging_billing.py,backend/tests/test_inbound_intake_service_sort_be01.py,backend/tests/test_marketplace_unload_and_discrepancy_acts.py,frontend/src/screens/ff/FfSettingsScreen.tsx,frontend/src/screens/ff/FfBillingTariffMatrixPanel.tsx,frontend/src/screens/ff/FfSettingsScreen.test.tsx,frontend/src/api.ts,frontend/tests-e2e/ff-billing-tariff-matrix.spec.ts,frontend/tests-e2e/ff-staff-users.spec.ts,frontend/tests-e2e/billing-ledger.spec.ts,frontend/tests-e2e/billing-invoices.spec.ts,docs/evidence/billing-02b-tariff-matrix/OPERATION-FACTS-PROOF.md
+python3 scripts/naryad.py new "Волна 2Б модуля «Расчёты»: тарифная матрица на экране Настройки ФФ" --screens S-19 --lane обычная --files backend/app/models/billing.py,backend/app/models/__init__.py,backend/app/models/packaging_task.py,backend/app/services/auth_service.py,backend/app/services/billing_tariff_matrix_service.py,backend/app/services/billing_configuration_service.py,backend/app/services/billing_ledger_service.py,backend/app/services/inbound_intake_service.py,backend/app/services/marketplace_unload_service.py,backend/app/api/billing.py,backend/app/main.py,backend/alembic/versions/20260826_0112_billing_tariff_matrix.py,backend/tests/test_auth.py,backend/tests/test_bootstrap_billing_tariff_matrix.py,backend/tests/test_billing_tariff_matrix.py,backend/tests/test_billing_configuration_api.py,backend/tests/test_billing_ledger_service.py,backend/tests/test_billing_invoice_service.py,backend/tests/test_billing_invoice_api.py,backend/tests/test_staff_packaging_billing.py,backend/tests/test_inbound_intake_service_sort_be01.py,backend/tests/test_marketplace_unload_and_discrepancy_acts.py,frontend/src/screens/ff/FfSettingsScreen.tsx,frontend/src/screens/ff/FfBillingTariffMatrixPanel.tsx,frontend/src/screens/ff/FfSettingsScreen.test.tsx,frontend/src/api.ts,frontend/tests-e2e/ff-billing-tariff-matrix.spec.ts,frontend/tests-e2e/ff-staff-users.spec.ts,frontend/tests-e2e/billing-ledger.spec.ts,frontend/tests-e2e/billing-invoices.spec.ts,docs/backend-guard-baseline.json,docs/evidence/billing-02b-tariff-matrix/OPERATION-FACTS-PROOF.md
 ```
 
 Только перечисленные файлы разрешены для реализации. `frontend/src/ui-kit/**`,
 существующий экран начислений/счетов, route-конфигурация, legacy storage UI,
-`docs/backend-guard-baseline.json`, 2А и будущие волны в границы не входят.
+2А и будущие волны в границы не входят.
 Если необходим иной файл или пересекается ownership S-19 — `BLOCKED` с точным
 узким amendment; не расширять список молча. Миграция только добавляющая,
 `20260826_0112` продолжает единственный head 2А. Никаких production/staging,
 секретов, Ozon или UI-kit правок.
 
-Фактическая граница — ровно 33 пути generated NARYAD. Два из них добавлены
+Фактическая граница — ровно 34 пути generated NARYAD. Два из них добавлены
 механически registry для `--screens S-19`: `frontend/src/utils/ffPermissions.ts`
 и `frontend/src/utils/separateMarkingPrint.ts`. Они не являются feature scope
 2Б и остаются immutable/prohibited: implementation и review обязаны показать
 zero diff в обоих; для любой правки нужен новый owner-approved amendment. Единственный
 новый feature path этого amendment —
 `frontend/src/screens/ff/FfBillingTariffMatrixPanel.tsx`.
+
+`docs/backend-guard-baseline.json` разрешён ровно для отдельного baseline-only
+commit после accepted integration: только фактические entries
+`backend/app/services/inbound_intake_service.py` и
+`backend/app/services/marketplace_unload_service.py`, с line-by-line evidence
+и причиной в proof. `--update`, любые другие entries и смешивание этого файла
+с product commit запрещены. Два исчерпанных подхода зафиксированы: explicit
+line list и helper `product_billing_lines` уменьшают diff, но оба неизбежно
+оставляют вызов в двух единственных actual aggregate writers под monolith
+ratchet.
 
 ## 1. Цель и бизнес-результат
 

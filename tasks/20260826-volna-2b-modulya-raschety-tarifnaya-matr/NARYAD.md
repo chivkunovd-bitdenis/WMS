@@ -2,7 +2,7 @@
 
 **Полоса:** обычная
 **Тип:** экран
-**Заведён:** 26.08.2026 23:28
+**Заведён:** 26.08.2026 23:40
 
 ## Просили дословно
 
@@ -38,6 +38,7 @@
 - `backend/tests/test_inbound_intake_service_sort_be01.py`
 - `backend/tests/test_marketplace_unload_and_discrepancy_acts.py`
 - `backend/tests/test_staff_packaging_billing.py`
+- `docs/backend-guard-baseline.json`
 - `docs/evidence/billing-02b-tariff-matrix/OPERATION-FACTS-PROOF.md`
 - `frontend/src/api.ts`
 - `frontend/src/screens/ff/FfBillingTariffMatrixPanel.tsx`

@@ -1,2 +1,3 @@
+frontend/src/screens/ff/FfBillingTariffMatrixPanel.tsx
 frontend/src/screens/ff/FfSettingsScreen.test.tsx
 frontend/src/screens/ff/FfSettingsScreen.tsx
