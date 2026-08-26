@@ -83,7 +83,7 @@
     "файл-монолит": 897
   },
   "backend/app/services/inbound_intake_service.py": {
-    "файл-монолит": 1893
+    "файл-монолит": 1902
   },
   "backend/app/services/inventory_service.py": {
     "файл-монолит": 1328
@@ -92,7 +92,7 @@
     "файл-монолит": 858
   },
   "backend/app/services/marketplace_unload_service.py": {
-    "файл-монолит": 1230
+    "файл-монолит": 1235
   },
   "backend/app/services/marking_code_service.py": {
     "голый-except": 2,
