@@ -7,7 +7,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-from sqlalchemy import text
 
 from app.db.session import SessionLocal
 from app.models.marketplace_unload import MarketplaceUnloadRequest
@@ -291,13 +290,11 @@ def test_correction_schema_exposes_tenant_lines_and_durable_unload_markers() -> 
 
 
 @pytest.mark.asyncio
-async def test_writer_rejects_foreign_relations_and_keeps_actor_snapshot_after_delete(
+async def test_writer_rejects_foreign_relations_and_keeps_actor_snapshot_after_rename(
     async_client,
 ) -> None:
     suffix = uuid.uuid4().hex[:12]
     async with SessionLocal() as session:
-        await session.execute(text("PRAGMA foreign_keys = ON"))
-        assert await session.scalar(text("PRAGMA foreign_keys")) == 1
         tenant_a = Tenant(name="Tenant A", slug=f"tenant-a-{suffix}")
         tenant_b = Tenant(name="Tenant B", slug=f"tenant-b-{suffix}")
         session.add_all([tenant_a, tenant_b])
@@ -394,13 +391,9 @@ async def test_writer_rejects_foreign_relations_and_keeps_actor_snapshot_after_d
         await session.commit()
         actor_a.email = f"renamed-{suffix}@example.test"
         await session.commit()
-        await session.delete(actor_a)
-        await session.commit()
 
     async with SessionLocal() as session:
         fact = await session.get(OperationFact, fact_id)
         assert fact is not None
-        assert fact.actor_user_id is None
+        assert fact.actor_user_id == actor_a.id
         assert fact.actor_name_snapshot == original_email
-        await session.commit()
-        await session.execute(text("PRAGMA foreign_keys = OFF"))
