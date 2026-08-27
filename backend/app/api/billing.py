@@ -5,12 +5,13 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Annotated, Any, cast
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.billing_invoice_v2_schemas import InvoiceV2DraftRequest, InvoiceV2Out
 from app.api.billing_seller_report_schemas import (
     SellerReportFinancialDetailsOut,
     SellerReportFinancialSummaryOut,
@@ -42,6 +43,14 @@ from app.services.billing_invoice_service import (
     cancel_invoice,
     current_blocking_reasons,
     form_invoice,
+)
+from app.services.billing_invoice_v2_service import (
+    BillingInvoiceV2Error,
+    cancel_invoice_v2,
+    create_invoice_v2,
+    get_invoice_v2,
+    invoice_v2_out,
+    preview_invoice_v2,
 )
 from app.services.billing_seller_report_service import (
     SellerReportError,
@@ -591,6 +600,80 @@ async def get_billing_ledger(
             if document_number.lower() in entry["document_number"].lower()
         ]
     return {"entries": entries}
+
+
+def _invoice_v2_error(exc: BillingInvoiceV2Error) -> HTTPException:
+    detail = str(exc)
+    if detail in {"seller_not_found", "invoice_not_found"}:
+        return HTTPException(status_code=404, detail=detail)
+    if detail in {"idempotency_key_payload_mismatch", "idempotency_conflict"}:
+        return HTTPException(status_code=409, detail=detail)
+    return HTTPException(status_code=422, detail=detail)
+
+
+@router.post("/invoices-v2/preview", response_model=InvoiceV2Out)
+async def preview_billing_invoice_v2(
+    body: InvoiceV2DraftRequest,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    try:
+        return await preview_invoice_v2(
+            session, tenant_id=user.tenant_id, request=body.model_dump(mode="json")
+        )
+    except BillingInvoiceV2Error as exc:
+        raise _invoice_v2_error(exc) from exc
+
+
+@router.post("/invoices-v2", response_model=InvoiceV2Out, status_code=status.HTTP_201_CREATED)
+async def create_billing_invoice_v2(
+    body: InvoiceV2DraftRequest,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+) -> dict[str, Any]:
+    try:
+        invoice = await create_invoice_v2(
+            session,
+            tenant_id=user.tenant_id,
+            user_id=user.id,
+            request=body.model_dump(mode="json"),
+            idempotency_key=idempotency_key or "",
+        )
+        await session.commit()
+        return invoice_v2_out(invoice)
+    except BillingInvoiceV2Error as exc:
+        await session.rollback()
+        raise _invoice_v2_error(exc) from exc
+
+
+@router.get("/invoices-v2/{invoice_id}", response_model=InvoiceV2Out)
+async def get_billing_invoice_v2(
+    invoice_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    try:
+        return invoice_v2_out(
+            await get_invoice_v2(session, tenant_id=user.tenant_id, invoice_id=invoice_id)
+        )
+    except BillingInvoiceV2Error as exc:
+        raise _invoice_v2_error(exc) from exc
+
+
+@router.post("/invoices-v2/{invoice_id}/cancel", response_model=InvoiceV2Out)
+async def cancel_billing_invoice_v2(
+    invoice_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    try:
+        invoice = await cancel_invoice_v2(session, tenant_id=user.tenant_id, invoice_id=invoice_id)
+        await session.commit()
+        return invoice_v2_out(invoice)
+    except BillingInvoiceV2Error as exc:
+        await session.rollback()
+        raise _invoice_v2_error(exc) from exc
 
 
 @router.get("/invoices", response_model=None)
