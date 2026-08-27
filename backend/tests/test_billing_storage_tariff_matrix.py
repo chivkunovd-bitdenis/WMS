@@ -179,3 +179,105 @@ async def test_storage_is_not_an_employee_rate(async_client: AsyncClient) -> Non
     )
     assert rejected.status_code >= 400, rejected.text
     assert datetime.now(UTC) is not None
+
+
+@pytest.mark.asyncio
+async def test_report_prices_storage_by_the_matrix_and_prefers_the_seller_rate(
+    async_client: AsyncClient,
+) -> None:
+    """TC-NEW-405: хранение в отчёте считается по матрице, своя ставка бьёт общую."""
+    from datetime import time as datetime_time
+    from datetime import timedelta
+    from decimal import Decimal
+
+    from app.models.inventory_movement import InventoryMovement
+    from app.models.product import Product
+    from app.models.warehouse import Warehouse
+    from app.services.sorting_location_service import get_or_create_sorting_location
+    from app.services.storage_measurement_service import MOSCOW
+
+    suffix = f"storage-price-{uuid.uuid4().hex[:8]}"
+    headers, tenant_id = await _admin(async_client, suffix)
+    warehouse = await async_client.post(
+        "/warehouses", headers=headers, json={"name": f"Склад {suffix}", "code": f"W{suffix[-6:]}"}
+    )
+    warehouse_id = uuid.UUID(warehouse.json()["id"])
+    seller = await async_client.post("/sellers", headers=headers, json={"name": "Луна"})
+    seller_id = uuid.UUID(seller.json()["id"])
+
+    today = datetime.now(MOSCOW).date()
+    date_from = today - timedelta(days=2)
+    async with SessionLocal() as session:
+        product = Product(
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            name="Товар хранения",
+            sku_code=f"sku-{suffix}",
+            volume_liters=Decimal("2"),
+            dimensions_source="manual",
+        )
+        session.add(product)
+        await session.flush()
+        location = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
+        session.add(
+            InventoryMovement(
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                warehouse_id=warehouse_id,
+                storage_location_id=location.id,
+                product_id=product.id,
+                quantity_delta=3,
+                movement_type="matrix_storage_price_test",
+                created_at=datetime.combine(date_from, datetime_time.min, MOSCOW),
+            )
+        )
+        await session.commit()
+
+    params = f"date_from={date_from.isoformat()}&date_to={today.isoformat()}&include_finance=true"
+
+    async def storage_row() -> dict[str, object]:
+        response = await async_client.get(
+            f"/billing/seller-report/sellers/{seller_id}/details?{params}", headers=headers
+        )
+        assert response.status_code == 200, response.text
+        return response.json()["storage_row"]
+
+    # Без ставки в матрице хранение стоит ноль: старые складские тарифы больше
+    # не читаются, и это осознанное решение владельца, а не потеря данных.
+    assert (await storage_row())["amount_kopecks"] == 0
+
+    matrix = await async_client.get("/billing/tariff-matrix", headers=headers)
+    common_only = await async_client.put(
+        "/billing/tariff-matrix",
+        headers=headers,
+        json={
+            "revision": matrix.json()["revision"],
+            "services": FULL_SERVICES,
+            "versions": [
+                _storage_version(rate=100, valid_from_at="2020-01-01T00:00:00Z"),
+            ],
+        },
+    )
+    assert common_only.status_code == 200, common_only.text
+    with_common = (await storage_row())["amount_kopecks"]
+    assert isinstance(with_common, int) and with_common > 0
+
+    matrix = await async_client.get("/billing/tariff-matrix", headers=headers)
+    with_seller = await async_client.put(
+        "/billing/tariff-matrix",
+        headers=headers,
+        json={
+            "revision": matrix.json()["revision"],
+            "services": FULL_SERVICES,
+            "versions": [
+                _storage_version(rate=100, valid_from_at="2020-01-01T00:00:00Z"),
+                # Своя ставка вдвое дешевле и заведена РАНЬШЕ общей по дате:
+                # точность обязана победить дату.
+                _storage_version(
+                    seller_id=str(seller_id), rate=50, valid_from_at="2019-01-01T00:00:00Z"
+                ),
+            ],
+        },
+    )
+    assert with_seller.status_code == 200, with_seller.text
+    assert (await storage_row())["amount_kopecks"] == with_common // 2

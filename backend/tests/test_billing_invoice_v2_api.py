@@ -15,7 +15,7 @@ from app.models.billing import (
     BillingInvoice,
     BillingInvoiceV2Source,
     BillingLedgerEntry,
-    BillingTariffVersion,
+    BillingTariffVersionV2,
 )
 from app.models.inventory_movement import InventoryMovement
 from app.models.product import Product
@@ -243,15 +243,19 @@ async def _storage_ready_tenant(async_client: AsyncClient, suffix: str):
                 created_at=datetime.combine(date(2026, 8, 20), datetime_time.min, MOSCOW),
             )
         )
+        # Ставка хранения живёт в общей матрице: старые складские тарифы с
+        # 27.08.2026 в расчёте не участвуют.
         session.add(
-            BillingTariffVersion(
+            BillingTariffVersionV2(
                 tenant_id=tenant_id,
                 seller_id=None,
-                warehouse_id=warehouse_id,
-                service_code="storage_liter_day",
+                product_id=None,
+                employee_user_id=None,
+                service_code="storage",
                 unit="liter_day",
-                amount=100,
-                valid_from=date(2026, 8, 1),
+                enabled=True,
+                rate=100,
+                valid_from_at=datetime(2026, 8, 1, tzinfo=UTC),
             )
         )
         await session.commit()

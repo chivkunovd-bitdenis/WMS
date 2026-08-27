@@ -22,7 +22,7 @@ from app.models.billing import (
     BillingInvoiceV2Source,
     BillingLedgerEntry,
     BillingLedgerLine,
-    BillingTariffVersion,
+    BillingTariffVersionV2,
 )
 from app.models.inventory_movement import InventoryMovement
 from app.models.operation_fact import OperationFact, OperationFactCutover, OperationFactLine
@@ -330,6 +330,54 @@ async def _invoice_history(session: AsyncSession, *, tenant_id: uuid.UUID, selle
     return {"state": "known", "count": count}
 
 
+async def _storage_matrix_rates(
+    session: AsyncSession, *, tenant_id: uuid.UUID, seller_id: uuid.UUID
+) -> list[BillingTariffVersionV2]:
+    """Ставки хранения из общей матрицы: свои у селлера и общие.
+
+    Старые складские тарифы (`BillingTariffVersion` с `storage_liter_day`) здесь
+    больше не читаются: владелец 27.08.2026 решил, что все тарифы задаются в
+    Настройках, а привязка к складу отключается. Строки остаются в базе как
+    история начислений и на расчёт не влияют.
+    """
+    rows = await session.scalars(
+        select(BillingTariffVersionV2).where(
+            BillingTariffVersionV2.tenant_id == tenant_id,
+            BillingTariffVersionV2.service_code == "storage",
+            BillingTariffVersionV2.employee_user_id.is_(None),
+            BillingTariffVersionV2.product_id.is_(None),
+            BillingTariffVersionV2.enabled.is_(True),
+            (BillingTariffVersionV2.seller_id == seller_id)
+            | BillingTariffVersionV2.seller_id.is_(None),
+        )
+    )
+    return list(rows.all())
+
+
+def _storage_rate_for_day(rates: list[BillingTariffVersionV2], day: date) -> int | None:
+    """Ставка на конкретный день: своя у селлера бьёт общую независимо от дат.
+
+    Внутри одного уровня точности решает дата: побеждает последняя версия,
+    начавшаяся не позже конца этого дня.
+    """
+    day_end = datetime.combine(day, time.max, MOSCOW)
+    day_start = datetime.combine(day, time.min, MOSCOW)
+    best: tuple[int, datetime] | None = None
+    best_rate: int | None = None
+    for row in rates:
+        started = _as_moscow(row.valid_from_at)
+        if started > day_end:
+            continue
+        if row.valid_to_at is not None and _as_moscow(row.valid_to_at) <= day_start:
+            continue
+        specificity = 0 if row.seller_id is not None else 1
+        candidate = (specificity, started)
+        if best is None or (specificity, -started.timestamp()) < (best[0], -best[1].timestamp()):
+            best = candidate
+            best_rate = row.rate
+    return best_rate
+
+
 async def _storage_row(
     session: AsyncSession, *, tenant_id: uuid.UUID, seller_id: uuid.UUID, date_from: date, date_to: date, start: datetime, end: datetime, include_finance: bool,
 ) -> dict[str, Any]:
@@ -358,7 +406,7 @@ async def _storage_row(
         liter_days += calculated
         missing = missing or product_missing
         fingerprint_sources.append({"product": str(product_id), "moves": [(str(m.id), _as_moscow(m.created_at).isoformat(), m.quantity_delta) for m in product_movements], "dimensions": [(str(e.id), _as_moscow(e.observed_at).isoformat(), str(e.volume_liters)) for e in events_by_product[product_id]]})
-    tariff_rows = list((await session.scalars(select(BillingTariffVersion).where(BillingTariffVersion.tenant_id == tenant_id, BillingTariffVersion.service_code == "storage_liter_day", BillingTariffVersion.valid_from <= date_to).order_by(BillingTariffVersion.valid_from, BillingTariffVersion.id))).all())
+    tariff_rows = await _storage_matrix_rates(session, tenant_id=tenant_id, seller_id=seller_id)
     amount = 0
     if not missing:
         for offset in range((date_to - date_from).days + 1):
@@ -373,11 +421,10 @@ async def _storage_row(
                     if absent:
                         missing = True
                     daily_liters += value
-            effective = [tariff for tariff in tariff_rows if tariff.valid_from <= day and (tariff.valid_to is None or tariff.valid_to >= day)]
-            if effective:
-                rate = effective[-1].amount
+            rate = _storage_rate_for_day(tariff_rows, day)
+            if rate is not None:
                 amount += int((daily_liters * Decimal(rate)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-    payload = {"tenant_id": str(tenant_id), "seller_id": str(seller_id), "date_from": date_from.isoformat(), "date_to": date_to.isoformat(), "liter_days": str(liter_days), "amount_kopecks": None if missing else amount, "sources": fingerprint_sources, "tariffs": [(str(t.id), t.valid_from.isoformat(), t.valid_to.isoformat() if t.valid_to else None, t.amount) for t in tariff_rows]}
+    payload = {"tenant_id": str(tenant_id), "seller_id": str(seller_id), "date_from": date_from.isoformat(), "date_to": date_to.isoformat(), "liter_days": str(liter_days), "amount_kopecks": None if missing else amount, "sources": fingerprint_sources, "tariffs": [(str(t.id), _as_moscow(t.valid_from_at).isoformat(), _as_moscow(t.valid_to_at).isoformat() if t.valid_to_at else None, t.rate, str(t.seller_id) if t.seller_id else None) for t in tariff_rows]}
     row: dict[str, Any] = {"kind": "storage", "date_from": date_from.isoformat(), "date_to": date_to.isoformat(), "liter_days": float(liter_days), "status": "missing_dimensions" if missing else "calculated", "calculation_token": _token(payload)}
     if include_finance and not missing:
         row["amount_kopecks"] = amount
