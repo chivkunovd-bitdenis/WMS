@@ -55,7 +55,7 @@ async def update_tenant_settings(
     separate_marking_print_enabled: bool | None = None,
     fbs_shipment_cutoff_time: time | None = None,
     set_fbs_shipment_cutoff_time: bool = False,
-    actor_user_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None,
 ) -> TenantSettingsData:
     tenant = await get_tenant(session, tenant_id)
     if address_storage_enabled is not None:

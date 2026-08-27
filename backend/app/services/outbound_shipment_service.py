@@ -312,7 +312,7 @@ async def ship_line(
     line_id: uuid.UUID,
     *,
     quantity: int,
-    actor_user_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None,
 ) -> OutboundShipmentRequest:
     pair = await _line_on_request(session, tenant_id, request_id, line_id)
     if pair is None:
@@ -361,7 +361,7 @@ async def post_request(
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
     *,
-    actor_user_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None,
 ) -> OutboundShipmentRequest:
     req = await get_request(session, tenant_id, request_id)
     if req is None:

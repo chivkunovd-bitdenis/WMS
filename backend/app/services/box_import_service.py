@@ -340,7 +340,7 @@ async def apply_marketplace_box_import(
     *,
     ignore_errors: bool = False,
     box_preset: str = DEFAULT_MP_BOX_PRESET,
-    actor_user_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None,
 ) -> tuple[list[MarketplaceUnloadBox], list[BoxImportRowError]]:
     if preview.errors and not ignore_errors:
         raise BoxImportError("row_errors")

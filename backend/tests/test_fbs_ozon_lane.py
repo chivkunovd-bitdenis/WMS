@@ -86,6 +86,7 @@ from app.services.marketplace_provider import (
     provider_error_message,
 )
 from app.services.ozon_fbs_process_service import submit_marking
+from tests.inventory_actor_helpers import resolve_test_actor_user_id
 
 
 @pytest_asyncio.fixture
@@ -645,6 +646,7 @@ async def test_ozon_repeat_sync_replaces_changed_quantity_and_rereserves(
         storage_location_id=location.id,
         quantity_delta=10,
         movement_type="inbound_intake",
+        actor_user_id=await resolve_test_actor_user_id(db_session, order.tenant_id),
     )
     await ozon_sync_svc._try_reserve_order(db_session, order)
     await db_session.commit()
@@ -733,6 +735,7 @@ async def test_ozon_ship_keeps_quantity_above_one(db_session: AsyncSession) -> N
         supply.id,
         AsyncMock(),
         idempotency_key=f"ozon-quantity-{uuid.uuid4()}",
+        actor_user_id=None,
         ozon_provider=OzonMarketplaceProvider(transport=transport),
     )
 
@@ -782,6 +785,7 @@ async def test_ozon_multi_position_ship_keeps_complete_posting_composition(
         supply.id,
         AsyncMock(),
         idempotency_key=f"ozon-partial-{uuid.uuid4()}",
+        actor_user_id=None,
         ozon_provider=OzonMarketplaceProvider(transport=transport),
     )
 
@@ -856,6 +860,7 @@ async def test_ozon_handoff_sets_required_product_country_before_ship(
         supply.id,
         AsyncMock(),
         idempotency_key=f"ozon-country-{uuid.uuid4()}",
+        actor_user_id=None,
         ozon_provider=OzonMarketplaceProvider(transport=transport),
     )
 
@@ -923,6 +928,7 @@ async def test_ozon_handoff_blocks_when_required_product_country_is_missing(
             supply.id,
             AsyncMock(),
             idempotency_key=f"ozon-country-missing-{uuid.uuid4()}",
+            actor_user_id=None,
             ozon_provider=OzonMarketplaceProvider(transport=transport),
         )
 
@@ -953,6 +959,7 @@ async def test_ozon_handoff_blocks_when_posting_has_restrictions(
             supply.id,
             AsyncMock(),
             idempotency_key=f"ozon-restricted-{uuid.uuid4()}",
+            actor_user_id=None,
             ozon_provider=OzonMarketplaceProvider(transport=transport),
         )
 
@@ -1134,6 +1141,7 @@ async def test_ozon_boxes_mode_is_automatic_and_cannot_be_disabled(
             1,
             "ozon-box",
             AsyncMock(),
+            actor_user_id=None,
         )
     with pytest.raises(box_svc.FbsPackingBoxError, match="ozon_boxes_managed_automatically"):
         await box_svc.set_boxes_without_distribution(
@@ -1266,6 +1274,7 @@ async def test_ozon_supply_handoff_ships_rechecks_and_creates_carriage_without_w
         supply.id,
         AsyncMock(),
         idempotency_key=f"ozon-deliver-{uuid.uuid4()}",
+        actor_user_id=None,
         ozon_provider=OzonMarketplaceProvider(transport=transport),
     )
 
@@ -1308,6 +1317,7 @@ async def test_ozon_live_handoff_never_falls_back_to_fake_success(
             supply.id,
             AsyncMock(),
             idempotency_key=f"ozon-live-blocked-{uuid.uuid4()}",
+            actor_user_id=None,
         )
 
     assert supply.status != FBS_SUPPLY_STATUS_IN_DELIVERY
@@ -1330,6 +1340,7 @@ async def test_ozon_ship_failed_readback_stays_visible_and_blocks_handoff(
             supply.id,
             AsyncMock(),
             idempotency_key=f"ozon-failed-{uuid.uuid4()}",
+            actor_user_id=None,
             ozon_provider=OzonMarketplaceProvider(transport=transport),
         )
 
@@ -1384,6 +1395,7 @@ async def test_ozon_marking_uses_exemplar_flow_and_preserves_gs(
         order,
         marking,
         AsyncMock(),
+        actor_user_id=None,
         ozon_provider=OzonMarketplaceProvider(transport=transport),
     )
 
@@ -1604,6 +1616,7 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
             tenant_id,
             supply_id,
             AsyncMock(),
+            actor_user_id=None,
         )
     assert preflight.can_deliver is True
     assert all(check.code != "marking_not_allowed" for check in preflight.checks)
@@ -1617,6 +1630,7 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
             tenant_id,
             supply_id,
             AsyncMock(),
+            actor_user_id=None,
         )
     assert incomplete.can_deliver is False
     assert any(
@@ -1633,6 +1647,7 @@ async def test_ozon_scanner_binds_every_required_code_without_wb_path(
             tenant_id,
             supply_id,
             AsyncMock(),
+            actor_user_id=None,
         )
     assert blocked.can_deliver is False
     assert any(
@@ -1667,6 +1682,7 @@ async def test_ozon_preflight_blocks_required_marking_without_product_positions(
         tenant.id,
         supply.id,
         AsyncMock(),
+        actor_user_id=None,
     )
 
     assert result.can_deliver is False
@@ -1789,6 +1805,7 @@ async def test_ozon_status_sync_updates_only_current_rows_and_preserves_exemplar
         order.tenant_id,
         order.id,
         AsyncMock(),
+        actor_user_id=None,
         ozon_provider=provider,
     )
 
@@ -1872,6 +1889,7 @@ async def test_ozon_negative_sync_does_not_fall_back_to_accepted_history(
             order.tenant_id,
             order.id,
             AsyncMock(),
+            actor_user_id=None,
             ozon_provider=provider,
         )
         assert current.meta_status == META_STATUS_REJECTED
@@ -1893,6 +1911,7 @@ async def test_ozon_negative_sync_does_not_fall_back_to_accepted_history(
             order.tenant_id,
             supply.id,
             AsyncMock(),
+            actor_user_id=None,
         )
     assert preflight.can_deliver is False
     assert any(check.code == "marking_not_allowed" for check in preflight.checks)
@@ -1937,6 +1956,7 @@ async def test_ozon_marking_rejection_uses_existing_visible_status(
             order,
             marking,
             AsyncMock(),
+            actor_user_id=None,
             ozon_provider=OzonMarketplaceProvider(transport=transport),
         )
 

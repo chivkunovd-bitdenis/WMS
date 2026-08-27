@@ -44,6 +44,7 @@ from app.services.wb_marketplace_orders_service import (
     upsert_order_from_wb_row,
 )
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
+from tests.inventory_actor_helpers import resolve_test_actor_user_id
 from tests.test_fbs_shipment_warehouse_sc import (
     _create_and_fill_physical_box,
     _deliver_with_preflight,
@@ -437,6 +438,7 @@ async def test_fbs_supply_packed_after_packaging_complete(
                 storage_location_id=sorting.id,
                 quantity_delta=qty,
                 movement_type="inbound_intake",
+                actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
             )
         await session.commit()
 
@@ -745,6 +747,7 @@ async def test_fbs_supply_promoted_after_marking_when_honest_sign_required(
             storage_location_id=sorting.id,
             quantity_delta=1,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         await session.commit()
         order_id = order.id
@@ -911,6 +914,7 @@ async def test_fbs_promote_write_off_shelf_confirm_sold_does_not_resurrect_avail
             storage_location_id=sorting.id,
             quantity_delta=5,
             movement_type="inbound_intake",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         await session.commit()
         order_id = order.id
@@ -1168,6 +1172,7 @@ async def test_fbs_packing_takes_stock_from_other_warehouse_sorting(
                 storage_location_id=other_sorting.id,
                 quantity_delta=5,
                 movement_type="inbound_intake",
+                actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
             )
         await session.commit()
         own_sorting_id = own_sorting.id

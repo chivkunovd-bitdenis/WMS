@@ -16,7 +16,7 @@ from app.services.defect_warehouse_service import DEFECT_WAREHOUSE_CODE
 from app.services.tokens import decode_access_token
 
 
-async def _tenant_id(async_client: AsyncClient) -> uuid.UUID:
+async def _auth_ids(async_client: AsyncClient) -> tuple[uuid.UUID, uuid.UUID]:
     suffix = uuid.uuid4().hex[:10]
     response = await async_client.post(
         "/auth/register",
@@ -28,7 +28,8 @@ async def _tenant_id(async_client: AsyncClient) -> uuid.UUID:
         },
     )
     assert response.status_code == 200, response.text
-    return uuid.UUID(str(decode_access_token(response.json()["access_token"])["tenant_id"]))
+    payload = decode_access_token(response.json()["access_token"])
+    return uuid.UUID(str(payload["tenant_id"])), uuid.UUID(str(payload["sub"]))
 
 
 @pytest.mark.asyncio
@@ -37,7 +38,7 @@ async def test_manual_and_wb_returns_skip_separate_receiving(
     async_client: AsyncClient,
     marketplace: str | None,
 ) -> None:
-    tenant_id = await _tenant_id(async_client)
+    tenant_id, actor_user_id = await _auth_ids(async_client)
     async with SessionLocal() as session:
         warehouse = await create_warehouse(
             session, tenant_id, name="Main", code=f"main-{uuid.uuid4().hex[:6]}"
@@ -68,7 +69,9 @@ async def test_manual_and_wb_returns_skip_separate_receiving(
         assert line.actual_qty == 4
         request_id = request.id
     async with SessionLocal() as session:
-        started = await svc.begin_receiving(session, tenant_id, request_id)
+        started = await svc.begin_receiving(
+            session, tenant_id, request_id, actor_user_id=actor_user_id
+        )
         assert started.status == svc.STATUS_SORTING
         assert started.lines[0].actual_qty == 4
 
@@ -77,7 +80,7 @@ async def test_manual_and_wb_returns_skip_separate_receiving(
 async def test_regular_inbound_keeps_expected_and_actual_separate(
     async_client: AsyncClient,
 ) -> None:
-    tenant_id = await _tenant_id(async_client)
+    tenant_id, actor_user_id = await _auth_ids(async_client)
     async with SessionLocal() as session:
         warehouse = await create_warehouse(
             session, tenant_id, name="Main", code=f"main-{uuid.uuid4().hex[:6]}"
@@ -102,7 +105,9 @@ async def test_regular_inbound_keeps_expected_and_actual_separate(
         assert line.actual_qty is None
         request_id = request.id
     async with SessionLocal() as session:
-        started = await svc.begin_receiving(session, tenant_id, request_id)
+        started = await svc.begin_receiving(
+            session, tenant_id, request_id, actor_user_id=actor_user_id
+        )
         assert started.status == svc.STATUS_RECEIVING
 
 
@@ -110,7 +115,7 @@ async def test_regular_inbound_keeps_expected_and_actual_separate(
 async def test_return_defects_are_posted_to_one_non_operational_warehouse(
     async_client: AsyncClient,
 ) -> None:
-    tenant_id = await _tenant_id(async_client)
+    tenant_id, actor_user_id = await _auth_ids(async_client)
     async with SessionLocal() as session:
         warehouse = await create_warehouse(
             session, tenant_id, name="Main", code=f"main-{uuid.uuid4().hex[:6]}"
@@ -151,8 +156,12 @@ async def test_return_defects_are_posted_to_one_non_operational_warehouse(
         await svc.set_line_defective_qty(
             session, tenant_id, request_id, line_id, defective_qty=2
         )
-        await svc.begin_receiving(session, tenant_id, request_id)
-        done = await svc.post_all_remaining(session, tenant_id, request_id)
+        await svc.begin_receiving(
+            session, tenant_id, request_id, actor_user_id=actor_user_id
+        )
+        done = await svc.post_all_remaining(
+            session, tenant_id, request_id, performer_id=actor_user_id
+        )
         assert done.status == svc.STATUS_DONE
 
         balances = list(

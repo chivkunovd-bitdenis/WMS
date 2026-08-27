@@ -158,7 +158,7 @@ async def approve_act(
     tenant_id: uuid.UUID,
     act_id: uuid.UUID,
     *,
-    actor_user_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None,
 ) -> DiscrepancyAct:
     act = await get_act(session, tenant_id, act_id)
     if act is None:

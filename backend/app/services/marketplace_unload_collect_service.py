@@ -266,7 +266,7 @@ async def collect_into_box(
     quantity: int,
     require_open_box: bool = False,
     allow_over_plan: bool = False,
-    actor_user_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None,
 ) -> CollectResult:
     if quantity < 1:
         raise MarketplaceUnloadPickError("invalid_quantity")
@@ -428,7 +428,7 @@ async def record_pick_allocation(
     product_id: uuid.UUID,
     quantity: int,
     allow_over_plan: bool = False,
-    actor_user_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None,
 ) -> PickAllocationResult:
     """Подбор двигает товар со склада в аллокацию подбора и НЕ трогает короба.
 
@@ -566,7 +566,7 @@ async def set_pick_allocation(
     product_id: uuid.UUID,
     storage_location_id: uuid.UUID,
     quantity: int,
-    actor_user_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None,
 ) -> SetPickAllocationResult:
     """Задать итоговое количество подбора по паре товар+ячейка (не прибавку, а
     итог) — PICK-01. Разница > 0 идёт через record_pick_allocation как есть,
@@ -734,7 +734,7 @@ async def remove_from_box(
     box_id: uuid.UUID,
     line_id: uuid.UUID,
     quantity: int | None = None,
-    actor_user_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None,
 ) -> MarketplaceUnloadBoxLine | None:
     """Remove qty from box line and reverse inventory/reservation (DEC-016)."""
     req = await _request_for_collect(session, tenant_id, request_id)
@@ -818,7 +818,7 @@ async def rollback_all_collected_for_cancel(
     warehouse_id: uuid.UUID,
     request_id: uuid.UUID,
     *,
-    actor_user_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None,
 ) -> None:
     """TASK-019: on cancel, box stock returns to sorting (virtual buffer), not source cells."""
     lock_stmt = (

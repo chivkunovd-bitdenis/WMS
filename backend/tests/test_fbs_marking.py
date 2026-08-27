@@ -539,7 +539,14 @@ async def test_fbs_marking_autopoll_batches_unique_ids_and_skips_partial_or_fail
         synced_wb_order_ids.append(order.wb_order_id)
         return []
 
-    async def fake_notify(session: object, tenant: uuid.UUID, order_id: uuid.UUID) -> None:
+    async def fake_notify(
+        session: object,
+        tenant: uuid.UUID,
+        order_id: uuid.UUID,
+        *,
+        actor_user_id: uuid.UUID | None,
+    ) -> None:
+        assert actor_user_id is None
         notified_order_ids.append(order_id)
 
     async def fake_list_markings(

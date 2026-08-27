@@ -204,7 +204,7 @@ async def collect_ready_box_into_open_box(
     *,
     barcode: str,
     allow_over_plan: bool = False,
-    actor_user_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None,
 ) -> BoxScanResult:
     """Развернуть состав готового короба (WHB / приёмочный) в открытый короб отгрузки."""
     raw = barcode.strip()
@@ -297,7 +297,7 @@ async def scan_barcode_into_box(
     storage_location_id: uuid.UUID | None,
     quantity: int = 1,
     allow_over_plan: bool = False,
-    actor_user_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None,
 ) -> BoxScanResult:
     """Scan flow for TSD/web: optional location barcode, then product → box line."""
     raw = barcode.strip()
@@ -375,7 +375,7 @@ async def add_manual_qty_to_box(
     product_id: uuid.UUID,
     storage_location_id: uuid.UUID | None,
     quantity: int,
-    actor_user_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None,
 ) -> MarketplaceUnloadBoxLine:
     if quantity < 1:
         raise MarketplaceUnloadBoxError("invalid_quantity")
@@ -412,7 +412,7 @@ async def attach_existing_box_by_barcode(
     barcode: str,
     box_preset: str = "60_40_40",
     allow_over_plan: bool = False,
-    actor_user_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None,
 ) -> MarketplaceUnloadBox:
     """Привязать существующий короб (WHB или приёмочный) и развернуть состав в подбор."""
     preset = box_preset.strip()
@@ -552,7 +552,7 @@ async def remove_box_line(
     line_id: uuid.UUID,
     *,
     quantity: int | None = None,
-    actor_user_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None,
 ) -> MarketplaceUnloadBoxLine | None:
     box = await session.get(MarketplaceUnloadBox, box_id)
     if box is None:
@@ -601,7 +601,7 @@ async def copy_box(
     tenant_id: uuid.UUID,
     box_id: uuid.UUID,
     *,
-    actor_user_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None,
 ) -> MarketplaceUnloadBox:
     """Duplicate a closed source box into a new closed box (REV-FIX-015).
 

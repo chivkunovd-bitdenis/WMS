@@ -26,7 +26,7 @@ from app.services.catalog_service import (
 from app.services.tokens import decode_access_token
 
 
-async def _tenant_id(async_client: AsyncClient) -> uuid.UUID:
+async def _auth_ids(async_client: AsyncClient) -> tuple[uuid.UUID, uuid.UUID]:
     email = f"sortbe01-{uuid.uuid4().hex[:8]}@example.com"
     reg = await async_client.post(
         "/auth/register",
@@ -39,12 +39,14 @@ async def _tenant_id(async_client: AsyncClient) -> uuid.UUID:
     )
     assert reg.status_code in (200, 201), reg.text
     token = reg.json()["access_token"]
-    return uuid.UUID(str(decode_access_token(token)["tenant_id"]))
+    payload = decode_access_token(token)
+    return uuid.UUID(str(payload["tenant_id"])), uuid.UUID(str(payload["sub"]))
 
 
 async def _mixed_sorting_request(
     async_client: AsyncClient,
     tenant_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
     *,
     loose_qty: int = 4,
     box_qty: int = 6,
@@ -91,7 +93,9 @@ async def _mixed_sorting_request(
             planned_box_count_set=True,
         )
         await svc.submit_request(session, tenant_id, request_id)
-        await svc.begin_receiving(session, tenant_id, request_id)
+        await svc.begin_receiving(
+            session, tenant_id, request_id, actor_user_id=actor_user_id
+        )
         req_loaded = await svc.get_request(session, tenant_id, request_id)
         assert req_loaded is not None
         line = req_loaded.lines[0]
@@ -109,7 +113,9 @@ async def _mixed_sorting_request(
         )
         await session.flush()
         await svc.sync_request_actuals_from_boxes(session, req_loaded)
-        done = await svc.complete_receiving(session, tenant_id, request_id)
+        done = await svc.complete_receiving(
+            session, tenant_id, request_id, actor_user_id=actor_user_id
+        )
         assert done.status == svc.STATUS_SORTING
         assert done.lines[0].actual_qty == loose_qty + box_qty
 
@@ -120,7 +126,7 @@ async def _mixed_sorting_request(
 async def test_complete_receiving_exposes_sorting_remaining_qty(
     async_client: AsyncClient,
 ) -> None:
-    tenant_id = await _tenant_id(async_client)
+    tenant_id, actor_user_id = await _auth_ids(async_client)
 
     async with SessionLocal() as session:
         wh = await create_warehouse(
@@ -155,11 +161,15 @@ async def test_complete_receiving_exposes_sorting_remaining_qty(
             planned_box_count_set=True,
         )
         await svc.submit_request(session, tenant_id, request_id)
-        await svc.begin_receiving(session, tenant_id, request_id)
+        await svc.begin_receiving(
+            session, tenant_id, request_id, actor_user_id=actor_user_id
+        )
         await svc.set_line_actual_qty(
             session, tenant_id, request_id, line.id, actual_qty=4
         )
-        done = await svc.complete_receiving(session, tenant_id, request_id)
+        done = await svc.complete_receiving(
+            session, tenant_id, request_id, actor_user_id=actor_user_id
+        )
         assert done.status == svc.STATUS_SORTING
         assert svc.sorting_remaining_qty(done) == 4
         assert done.lines[0].posted_qty == 0
@@ -171,9 +181,9 @@ async def test_complete_receiving_exposes_sorting_remaining_qty(
 
 @pytest.mark.asyncio
 async def test_mixed_distribution_lines_across_cells(async_client: AsyncClient) -> None:
-    tenant_id = await _tenant_id(async_client)
+    tenant_id, actor_user_id = await _auth_ids(async_client)
     request_id, product_id, box_id, loc_a, loc_b = await _mixed_sorting_request(
-        async_client, tenant_id, loose_qty=4, box_qty=6
+        async_client, tenant_id, actor_user_id, loose_qty=4, box_qty=6
     )
 
     async with SessionLocal() as session:
@@ -200,9 +210,9 @@ async def test_mixed_distribution_lines_across_cells(async_client: AsyncClient) 
 async def test_mixed_distribution_rejects_over_accepted(
     async_client: AsyncClient,
 ) -> None:
-    tenant_id = await _tenant_id(async_client)
+    tenant_id, actor_user_id = await _auth_ids(async_client)
     request_id, product_id, box_id, loc_a, _loc_b = await _mixed_sorting_request(
-        async_client, tenant_id
+        async_client, tenant_id, actor_user_id
     )
 
     async with SessionLocal() as session:
@@ -223,9 +233,9 @@ async def test_mixed_distribution_rejects_over_accepted(
 async def test_mixed_distribution_rejects_loose_over_pool(
     async_client: AsyncClient,
 ) -> None:
-    tenant_id = await _tenant_id(async_client)
+    tenant_id, actor_user_id = await _auth_ids(async_client)
     request_id, product_id, _box_id, loc_a, loc_b = await _mixed_sorting_request(
-        async_client, tenant_id, loose_qty=4, box_qty=6
+        async_client, tenant_id, actor_user_id, loose_qty=4, box_qty=6
     )
 
     async with SessionLocal() as session:
@@ -246,9 +256,9 @@ async def test_mixed_distribution_rejects_loose_over_pool(
 async def test_complete_distribution_mixed_box_and_loose(
     async_client: AsyncClient,
 ) -> None:
-    tenant_id = await _tenant_id(async_client)
+    tenant_id, actor_user_id = await _auth_ids(async_client)
     request_id, product_id, box_id, loc_a, loc_b = await _mixed_sorting_request(
-        async_client, tenant_id, loose_qty=4, box_qty=6
+        async_client, tenant_id, actor_user_id, loose_qty=4, box_qty=6
     )
 
     async with SessionLocal() as session:
@@ -261,7 +271,9 @@ async def test_complete_distribution_mixed_box_and_loose(
                 (box_id, product_id, loc_b, 6),
             ],
         )
-        done = await svc.complete_distribution(session, tenant_id, request_id)
+        done = await svc.complete_distribution(
+            session, tenant_id, request_id, performer_id=actor_user_id
+        )
         assert done.lines[0].posted_qty == 10
         assert done.status == svc.STATUS_DONE
         req = await svc.get_request(session, tenant_id, request_id)
@@ -275,9 +287,9 @@ async def test_complete_distribution_mixed_box_and_loose(
 async def test_billing_overflow_does_not_block_completed_inbound(
     async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    tenant_id = await _tenant_id(async_client)
+    tenant_id, actor_user_id = await _auth_ids(async_client)
     request_id, product_id, box_id, loc_a, loc_b = await _mixed_sorting_request(
-        async_client, tenant_id, loose_qty=4, box_qty=6
+        async_client, tenant_id, actor_user_id, loose_qty=4, box_qty=6
     )
     async with SessionLocal() as session:
         seller = await create_seller(session, tenant_id, name="Overflow intake seller")
@@ -301,7 +313,9 @@ async def test_billing_overflow_does_not_block_completed_inbound(
                 (box_id, product_id, loc_b, 6),
             ],
         )
-        done = await svc.complete_distribution(session, tenant_id, request_id)
+        done = await svc.complete_distribution(
+            session, tenant_id, request_id, performer_id=actor_user_id
+        )
         assert done.status == svc.STATUS_DONE
 
         charge = await session.scalar(
@@ -325,8 +339,8 @@ async def _zero_actual_intake(
     async_client: AsyncClient,
     *,
     tariff_unit: str,
-) -> tuple[uuid.UUID, uuid.UUID]:
-    tenant_id = await _tenant_id(async_client)
+) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
+    tenant_id, actor_user_id = await _auth_ids(async_client)
     async with SessionLocal() as session:
         seller = await create_seller(session, tenant_id, name="Zero intake seller")
         warehouse = await create_warehouse(
@@ -375,26 +389,32 @@ async def _zero_actual_intake(
             planned_box_count_set=True,
         )
         await svc.submit_request(session, tenant_id, request.id)
-        await svc.begin_receiving(session, tenant_id, request.id)
+        await svc.begin_receiving(
+            session, tenant_id, request.id, actor_user_id=actor_user_id
+        )
         await svc.set_line_actual_qty(
             session, tenant_id, request.id, line.id, actual_qty=0
         )
-        verified = await svc.complete_receiving(session, tenant_id, request.id)
+        verified = await svc.complete_receiving(
+            session, tenant_id, request.id, actor_user_id=actor_user_id
+        )
         assert verified.status == svc.STATUS_SORTING
 
-    return tenant_id, request.id
+    return tenant_id, actor_user_id, request.id
 
 
 @pytest.mark.asyncio
 async def test_zero_actual_intake_closes_and_charges_document_tariff_once(
     async_client: AsyncClient,
 ) -> None:
-    tenant_id, request_id = await _zero_actual_intake(
+    tenant_id, actor_user_id, request_id = await _zero_actual_intake(
         async_client, tariff_unit="document"
     )
 
     async with SessionLocal() as session:
-        done = await svc.post_all_remaining(session, tenant_id, request_id)
+        done = await svc.post_all_remaining(
+            session, tenant_id, request_id, performer_id=actor_user_id
+        )
         assert done.status == svc.STATUS_DONE
 
         entries = list(
@@ -413,7 +433,9 @@ async def test_zero_actual_intake_closes_and_charges_document_tariff_once(
         assert entries[0].amount == 4500
 
         with pytest.raises(svc.InboundIntakeError, match="already_posted"):
-            await svc.post_all_remaining(session, tenant_id, request_id)
+            await svc.post_all_remaining(
+                session, tenant_id, request_id, performer_id=actor_user_id
+            )
 
         repeated_entries = list(
             (
@@ -432,10 +454,14 @@ async def test_zero_actual_intake_closes_and_charges_document_tariff_once(
 async def test_zero_actual_intake_closes_with_zero_item_tariff_amount(
     async_client: AsyncClient,
 ) -> None:
-    tenant_id, request_id = await _zero_actual_intake(async_client, tariff_unit="item")
+    tenant_id, actor_user_id, request_id = await _zero_actual_intake(
+        async_client, tariff_unit="item"
+    )
 
     async with SessionLocal() as session:
-        done = await svc.post_all_remaining(session, tenant_id, request_id)
+        done = await svc.post_all_remaining(
+            session, tenant_id, request_id, performer_id=actor_user_id
+        )
         assert done.status == svc.STATUS_DONE
         entry = await session.scalar(
             select(BillingLedgerEntry).where(

@@ -266,7 +266,7 @@ async def add_pick_qty(
     storage_location_id: uuid.UUID | None,
     product_id: uuid.UUID,
     quantity: int,
-    actor_user_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None,
 ) -> MarketplaceUnloadPickAllocation:
     from app.services import marketplace_unload_collect_service as collect_svc
 
@@ -292,7 +292,7 @@ async def pick_scan(
     barcode: str,
     product_id_hint: uuid.UUID | None = None,
     storage_location_id: uuid.UUID | None,
-    actor_user_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None,
 ) -> PickScanResult:
     raw = barcode.strip()
     if not raw:
@@ -352,7 +352,7 @@ async def save_pick_allocations(
     request_id: uuid.UUID,
     rows: list[PickAllocationRow],
     *,
-    actor_user_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None,
 ) -> list[MarketplaceUnloadPickAllocation]:
     req = await _request_for_picking(session, tenant_id, request_id)
     line_products = {ln.product_id for ln in req.lines}

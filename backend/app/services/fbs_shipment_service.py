@@ -677,7 +677,7 @@ async def preflight_delivery(
     supply_id: uuid.UUID,
     http_client: httpx.AsyncClient,
     *,
-    actor_user_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
 ) -> DeliveryPreflightResult:
     supply = await _get_supply_read(session, tenant_id, supply_id, with_trbxes=True)
     if supply is None:
@@ -1032,7 +1032,7 @@ async def deliver_supply(
     http_client: httpx.AsyncClient,
     *,
     idempotency_key: str,
-    actor_user_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
     confirmed_preflight_version: str | None = None,
     ozon_provider: OzonMarketplaceProvider | None = None,
 ) -> FbsSupply:

@@ -146,7 +146,7 @@ async def cancel_order(
     order_id: uuid.UUID,
     http_client: httpx.AsyncClient,
     *,
-    actor_user_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
 ) -> FbsOrder:
     stmt = (
         select(FbsOrder)

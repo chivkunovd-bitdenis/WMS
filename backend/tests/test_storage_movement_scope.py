@@ -15,6 +15,7 @@ from app.models.seller import Seller
 from app.models.warehouse import Warehouse
 from app.services import inventory_service
 from app.services.sorting_location_service import get_or_create_sorting_location
+from tests.inventory_actor_helpers import resolve_test_actor_user_id
 
 
 def test_inventory_movement_has_frozen_storage_dimensions() -> None:
@@ -107,6 +108,7 @@ async def test_movement_freezes_seller_and_warehouse_at_write_time(
             storage_location_id=location.id,
             quantity_delta=2,
             movement_type="storage_scope_test",
+            actor_user_id=await resolve_test_actor_user_id(session, tenant_id),
         )
         await session.flush()
         movement_id = movement.id

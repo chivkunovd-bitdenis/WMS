@@ -749,7 +749,6 @@ async def _write_off_active_orders_once(
                 product_id=order.product_id,
                 storage_location_id=storage_location_id,
                 quantity=1,
-                actor_user_id=actor_user_id,
             )
         )
         await session.flush()

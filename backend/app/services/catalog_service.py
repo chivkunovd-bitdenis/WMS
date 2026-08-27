@@ -435,7 +435,7 @@ async def delete_location(
     location_id: uuid.UUID,
     *,
     move_stock_to: str | None = None,
-    actor_user_id: uuid.UUID | None = None,
+    actor_user_id: uuid.UUID | None,
 ) -> None:
     loc = await get_storage_location_in_warehouse(session, tenant_id, warehouse_id, location_id)
     if loc is None:

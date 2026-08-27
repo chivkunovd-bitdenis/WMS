@@ -819,7 +819,7 @@ async def get_order_metadata(
     http_client: httpx.AsyncClient,
     *,
     sync_wb: bool = True,
-    actor_user_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
 ) -> dict[str, Any]:
     order = await _get_order(session, tenant_id, order_id)
     if order is None:

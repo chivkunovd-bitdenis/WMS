@@ -1970,6 +1970,7 @@ async def sync_fbs_supply_tracking(
                 user.tenant_id,
                 supply_id,
                 http_client,
+                actor_user_id=user.id,
             )
         except FbsTrackingError as exc:
             if exc.code == "supply_not_found":
