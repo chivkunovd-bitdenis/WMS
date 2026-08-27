@@ -4,7 +4,7 @@
 
 export type SortSource = { kind: 'loose' | 'box'; label: string }
 
-export type AlreadyAt = { cellId: string; code: string; qty: number }
+export type AlreadyAt = { cellId: string; code: string; qty: number; warehouseId?: string; warehouseName?: string }
 
 export type SortProduct = {
   id: string
@@ -140,4 +140,79 @@ export function findByBarcode(code: string): { kind: 'cell' | 'product'; id: str
   )
   if (product) return { kind: 'product', id: product.id }
   return null
+}
+
+// --- палеты и короба -------------------------------------------------------
+
+export type ContainerKind = 'pallet' | 'box'
+
+/** Палета или короб, созданные при раскладке. Родитель — ячейка или палета. */
+export type Container = {
+  id: string
+  kind: ContainerKind
+  code: string
+  parentId: string
+}
+
+/** Место, куда можно положить: ячейка, палета или короб. */
+export type PlaceRef = { id: string; code: string; kind: 'cell' | ContainerKind }
+
+/** Что сейчас несут рукой. */
+export type Carried =
+  | { kind: 'product'; product: SortProduct }
+  | { kind: 'container'; container: Container }
+
+export const CONTAINER_TITLE: Record<ContainerKind, string> = {
+  pallet: 'Палета',
+  box: 'Короб',
+}
+
+export const INITIAL_CONTAINERS: Container[] = [
+  { id: 'plt-1', kind: 'pallet', code: 'П-000131', parentId: 'c-a11' },
+  { id: 'box-1', kind: 'box', code: 'КР-000472', parentId: 'plt-1' },
+  { id: 'box-2', kind: 'box', code: 'КР-000473', parentId: 'c-a12' },
+]
+
+/**
+ * Что можно положить в это место.
+ *
+ * Правила складские: товар ложится куда угодно, короб — на ячейку или на
+ * палету, палета — только на ячейку. Внутрь самой себя не кладётся ничего.
+ */
+export function canDropInto(carried: Carried, place: PlaceRef, containers: Container[]): boolean {
+  if (carried.kind === 'product') return true
+  const moving = carried.container
+  if (moving.id === place.id) return false
+  if (moving.parentId === place.id) return false
+  // Нельзя положить палету внутрь короба, который лежит на ней самой.
+  let cursor: string | undefined = place.id
+  const byId = new Map(containers.map((one) => [one.id, one]))
+  while (cursor) {
+    if (cursor === moving.id) return false
+    cursor = byId.get(cursor)?.parentId
+  }
+  if (moving.kind === 'pallet') return place.kind === 'cell'
+  return place.kind === 'cell' || place.kind === 'pallet'
+}
+
+/** Где можно создать что: в коробе не создают ничего, на палете — только короб. */
+export function creatableIn(place: PlaceRef): ContainerKind[] {
+  if (place.kind === 'cell') return ['pallet', 'box']
+  if (place.kind === 'pallet') return ['box']
+  return []
+}
+
+/** Суммарное количество в контейнере вместе со вложенными. */
+export function containerQty(
+  containerId: string,
+  placements: Placement[],
+  containers: Container[],
+): number {
+  const own = placements
+    .filter((one) => one.cellId === containerId)
+    .reduce((sum, one) => sum + one.qty, 0)
+  const inner = containers
+    .filter((one) => one.parentId === containerId)
+    .reduce((sum, one) => sum + containerQty(one.id, placements, containers), 0)
+  return own + inner
 }

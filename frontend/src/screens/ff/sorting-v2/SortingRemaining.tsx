@@ -1,4 +1,5 @@
 import { Box, LinearProgress, Stack, Typography } from '@mui/material'
+import type { ReactNode } from 'react'
 import { DataTable, IconAction, QtyCell, StatusChip } from '../../../ui-kit'
 import type { Column } from '../../../ui-kit'
 import { ProductPhotoThumb } from '../../../components/ProductPhotoThumb'
@@ -20,6 +21,9 @@ export function SortingRemaining({
   products,
   placements,
   activeCell,
+  summary,
+  footer,
+  activeWarehouseId,
   onPlaceAll,
   onPickCell,
   onDragProduct,
@@ -28,6 +32,11 @@ export function SortingRemaining({
   products: SortProduct[]
   placements: Placement[]
   activeCell: SortCell | null
+  /** Итоги по всей приёмке, когда в таблице показана одна страница из многих. */
+  summary?: { left: number; total: number }
+  footer?: ReactNode
+  /** Чтобы отличить подсказку «лежит здесь» от «лежит на другом складе». */
+  activeWarehouseId?: string
   onPlaceAll: (product: SortProduct) => void
   onPickCell: (cellId: string) => void
   onDragProduct: (product: SortProduct) => void
@@ -38,8 +47,8 @@ export function SortingRemaining({
     remaining: remainingFor(product, placements),
     placed: placedFor(placements, product.id),
   }))
-  const left = rows.reduce((sum, row) => sum + row.remaining, 0)
-  const total = products.reduce((sum, product) => sum + product.accepted, 0)
+  const left = summary ? summary.left : rows.reduce((sum, row) => sum + row.remaining, 0)
+  const total = summary ? summary.total : products.reduce((sum, product) => sum + product.accepted, 0)
   const done = total - left
 
   const columns: Column<RemainingRow>[] = [
@@ -86,20 +95,34 @@ export function SortingRemaining({
           />
         ) : (
           <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
-            {product.alreadyAt.map((place) => (
-              <Box
-                key={place.cellId}
-                onClick={() => onPickCell(place.cellId)}
-                sx={{ cursor: 'pointer' }}
-                data-testid={`sorting-already-${place.cellId}`}
-              >
-                <StatusChip
-                  label={`${place.code} · ${place.qty}`}
-                  tone="ok"
-                  hint={`Положить туда же, где уже лежит ${place.qty} шт`}
-                />
-              </Box>
-            ))}
+            {product.alreadyAt.map((place) => {
+              // Чужой склад — не подсказка, а предупреждение: положить туда
+              // отсюда нельзя, и молча красить это в «зелёное, жми сюда» нельзя.
+              const elsewhere =
+                Boolean(activeWarehouseId) &&
+                Boolean(place.warehouseId) &&
+                place.warehouseId !== activeWarehouseId
+              return (
+                <Box
+                  key={place.cellId}
+                  onClick={() => onPickCell(place.cellId)}
+                  sx={{ cursor: 'pointer' }}
+                  data-testid={`sorting-already-${place.cellId}`}
+                >
+                  <StatusChip
+                    label={
+                      elsewhere ? `${place.warehouseName} · ${place.code}` : `${place.code} · ${place.qty}`
+                    }
+                    tone={elsewhere ? 'warn' : 'ok'}
+                    hint={
+                      elsewhere
+                        ? `Лежит на складе «${place.warehouseName}» — ${place.qty} шт. Здесь положить туда нельзя.`
+                        : `Положить туда же, где уже лежит ${place.qty} шт`
+                    }
+                  />
+                </Box>
+              )
+            })}
           </Stack>
         ),
     },
@@ -181,8 +204,9 @@ export function SortingRemaining({
         columns={columns}
         rows={rows}
         getRowKey={(row) => row.product.id}
-        empty={{ title: 'Раскладывать нечего', hint: 'В приёмке нет строк товара.' }}
+        empty={{ title: 'Раскладывать нечего', hint: 'Под фильтры ничего не подошло.' }}
       />
+      {footer}
     </Stack>
   )
 }

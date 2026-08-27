@@ -11,53 +11,100 @@ import {
   StatusChip,
 } from '../../../ui-kit'
 import { SortingRemaining } from './SortingRemaining'
-import { SortingCellPanel } from './SortingCellPanel'
+import { SortingCellPicker } from './SortingCellPicker'
+import { SortingPlacePanel } from './SortingPlacePanel'
 import {
   CELLS,
+  INITIAL_CONTAINERS,
   PRODUCTS,
+  canDropInto,
   findByBarcode,
   remainingFor,
   totalAccepted,
   totalRemaining,
+  type Carried,
+  type Container,
+  type ContainerKind,
+  type PlaceRef,
   type Placement,
   type SortProduct,
 } from './sortingStub'
 
-// Раскладка по ячейкам, собранная от ячейки, а не от товара.
+// Раскладка по ячейкам, собранная от места, а не от товара.
 //
 // Сегодня экран устроен наоборот: стопка карточек по одной на товар, и в каждой
 // выпадающий список из всех ячеек склада. На приёмке в тридцать позиций это
-// тридцать карточек и тридцать раз пролистать двести ячеек. А кладовщик работает
-// не так: он подходит к полке и кладёт туда то, что принёс. Здесь единица работы
-// — ячейка: выбрал её один раз, сложил в неё всё, что к ней относится, записал.
+// тридцать карточек и тридцать раз пролистать двести ячеек. Кладовщик работает
+// не так: он подходит к полке и кладёт туда то, что принёс. Единица работы —
+// место: ячейка, палета на ней или короб внутри.
+
+let created = 0
 
 export function SortingScreen({ onNote }: { onNote: (note: string) => void }) {
   const [placements, setPlacements] = useState<Placement[]>([])
-  const [activeCellId, setActiveCellId] = useState<string | null>(null)
+  const [containers, setContainers] = useState<Container[]>(INITIAL_CONTAINERS)
+  const [path, setPath] = useState<PlaceRef[]>([])
   const [scanValue, setScanValue] = useState('')
   const [scanError, setScanError] = useState<string | null>(null)
   const [scanNotice, setScanNotice] = useState<string | null>(null)
-  const [carried, setCarried] = useState<SortProduct | null>(null)
+  const [carried, setCarried] = useState<Carried | null>(null)
   const [asking, setAsking] = useState<SortProduct | null>(null)
   const [askQty, setAskQty] = useState<number | null>(null)
-  const [committed, setCommitted] = useState<string[]>([])
+  const [recent, setRecent] = useState<string[]>([])
 
-  const activeCell = CELLS.find((cell) => cell.id === activeCellId) ?? null
+  const place = path.length > 0 ? path[path.length - 1]! : null
+  const cell = path.length > 0 ? (CELLS.find((one) => one.id === path[0]!.id) ?? null) : null
   const left = totalRemaining(PRODUCTS, placements)
   const accepted = totalAccepted(PRODUCTS)
 
-  function put(product: SortProduct, qty: number, cellId: string) {
+  function put(product: SortProduct, qty: number, placeId: string) {
     const capped = Math.min(qty, remainingFor(product, placements))
     if (capped <= 0) return
     setPlacements((current) => {
-      const twin = current.find((one) => one.productId === product.id && one.cellId === cellId)
-      if (twin) {
-        return current.map((one) =>
-          one === twin ? { ...one, qty: one.qty + capped } : one,
-        )
-      }
-      return [...current, { productId: product.id, cellId, qty: capped }]
+      const twin = current.find((one) => one.productId === product.id && one.cellId === placeId)
+      if (twin) return current.map((one) => (one === twin ? { ...one, qty: one.qty + capped } : one))
+      return [...current, { productId: product.id, cellId: placeId, qty: capped }]
     })
+    setRecent((current) => (current.includes(placeId) ? current : [placeId, ...current].slice(0, 8)))
+  }
+
+  function pickCell(cellId: string) {
+    const target = CELLS.find((one) => one.id === cellId)
+    if (!target) return
+    const ref: PlaceRef = { id: target.id, code: target.code, kind: 'cell' }
+    setPath([ref])
+    if (carried) dropOnto(ref)
+  }
+
+  function dropOnto(target: PlaceRef) {
+    if (!carried) return
+    if (!canDropInto(carried, target, containers)) {
+      setCarried(null)
+      return
+    }
+    if (carried.kind === 'product') {
+      put(carried.product, remainingFor(carried.product, placements), target.id)
+    } else {
+      const moving = carried.container
+      setContainers((current) =>
+        current.map((one) => (one.id === moving.id ? { ...one, parentId: target.id } : one)),
+      )
+      onNote(`${moving.kind === 'pallet' ? 'Палета' : 'Короб'} ${moving.code} → ${target.code}`)
+    }
+    setCarried(null)
+  }
+
+  function createContainer(kind: ContainerKind) {
+    if (!place) return
+    created += 1
+    const container: Container = {
+      id: `new-${kind}-${created}`,
+      kind,
+      code: kind === 'pallet' ? `П-${String(200 + created).padStart(6, '0')}` : `КР-${String(500 + created).padStart(6, '0')}`,
+      parentId: place.id,
+    }
+    setContainers((current) => [...current, container])
+    onNote(`Заглушка: создан ${kind === 'pallet' ? 'палета' : 'короб'} ${container.code} в ${place.code}`)
   }
 
   function handleScan(code: string) {
@@ -69,15 +116,13 @@ export function SortingScreen({ onNote }: { onNote: (note: string) => void }) {
       return
     }
     if (hit.kind === 'cell') {
-      const cell = CELLS.find((one) => one.id === hit.id)!
-      setActiveCellId(cell.id)
+      const target = CELLS.find((one) => one.id === hit.id)!
+      setPath([{ id: target.id, code: target.code, kind: 'cell' }])
       setScanError(null)
-      setScanNotice(`Ячейка ${cell.code} — кладите товар`)
+      setScanNotice(`Ячейка ${target.code} — кладите товар`)
       return
     }
-    // Товар без выбранной ячейки класть некуда, и молчать об этом нельзя:
-    // оператор будет пикать дальше и решит, что всё уходит куда надо.
-    if (!activeCell) {
+    if (!place) {
       setScanNotice(null)
       setScanError('Сначала пикните ячейку — иначе непонятно, куда кладём')
       return
@@ -88,23 +133,19 @@ export function SortingScreen({ onNote }: { onNote: (note: string) => void }) {
       setScanError(`${product.name} уже разложен весь`)
       return
     }
-    put(product, 1, activeCell.id)
+    put(product, 1, place.id)
     setScanError(null)
-    setScanNotice(`${product.name} → ${activeCell.code}, +1`)
+    setScanNotice(`${product.name} → ${place.code}, +1`)
   }
 
   function changeQty(productId: string, qty: number) {
-    if (!activeCell) return
-    if (qty <= 0) {
-      setPlacements((current) =>
-        current.filter((one) => !(one.productId === productId && one.cellId === activeCell.id)),
-      )
-      return
-    }
+    if (!place) return
     setPlacements((current) =>
-      current.map((one) =>
-        one.productId === productId && one.cellId === activeCell.id ? { ...one, qty } : one,
-      ),
+      qty <= 0
+        ? current.filter((one) => !(one.productId === productId && one.cellId === place.id))
+        : current.map((one) =>
+            one.productId === productId && one.cellId === place.id ? { ...one, qty } : one,
+          ),
     )
   }
 
@@ -124,7 +165,7 @@ export function SortingScreen({ onNote }: { onNote: (note: string) => void }) {
               setScanError(null)
             }}
             onScan={handleScan}
-            expects={activeCell ? 'товар или другую ячейку' : 'ячейку с полки'}
+            expects={place ? 'товар или другую ячейку' : 'ячейку с полки'}
             error={scanError}
             notice={scanNotice}
             testId="sorting-scan"
@@ -138,11 +179,6 @@ export function SortingScreen({ onNote }: { onNote: (note: string) => void }) {
             <Typography variant="body2" color="text.secondary">
               принято {accepted} шт
             </Typography>
-            {committed.length > 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                · записано ячеек: {committed.length}
-              </Typography>
-            ) : null}
           </Stack>
         </Stack>
       </Paper>
@@ -152,45 +188,46 @@ export function SortingScreen({ onNote }: { onNote: (note: string) => void }) {
           <SortingRemaining
             products={PRODUCTS}
             placements={placements}
-            activeCell={activeCell}
+            activeCell={place ? { id: place.id, code: place.code, barcode: '', occupied: [] } : null}
             onPlaceAll={(product) => {
               setAsking(product)
               setAskQty(remainingFor(product, placements))
             }}
-            onPickCell={setActiveCellId}
-            onDragProduct={setCarried}
+            onPickCell={pickCell}
+            onDragProduct={(product) => setCarried({ kind: 'product', product })}
             onDragEnd={() => setCarried(null)}
           />
         </Box>
-        <Box sx={{ width: { lg: 440 }, flexShrink: 0, minWidth: 0 }}>
-          <SortingCellPanel
+        <Stack spacing={2} sx={{ width: { lg: 460 }, flexShrink: 0, minWidth: 0 }}>
+          <SortingCellPicker
             cells={CELLS}
-            activeCell={activeCell}
+            activeCellId={path[0]?.id ?? null}
+            suggestedIds={[]}
+            recentIds={recent}
+            carried={carried !== null}
+            onPick={pickCell}
+            onCreateCell={() => onNote('Заглушка: та же модалка создания ячейки, что на карте склада')}
+          />
+          <SortingPlacePanel
+            cell={cell}
+            path={path}
+            place={place}
+            containers={containers}
             placements={placements}
             products={PRODUCTS}
             carried={carried}
-            onPickCell={(cellId) => {
-              setActiveCellId(cellId)
-              if (carried) {
-                put(carried, remainingFor(carried, placements), cellId)
-                setCarried(null)
-              }
-            }}
+            onEnter={(next) => setPath((current) => [...current, next])}
+            onLeaveTo={(index) => setPath((current) => current.slice(0, index + 1))}
+            onCreate={createContainer}
             onChangeQty={changeQty}
             onRemove={(productId) => changeQty(productId, 0)}
-            onCommit={() => {
-              if (!activeCell) return
-              setCommitted((current) =>
-                current.includes(activeCell.id) ? current : [...current, activeCell.id],
-              )
-              onNote(`Заглушка: ячейка ${activeCell.code} записана — на сервер ничего не ушло`)
-            }}
-            onPrint={() =>
-              onNote(`Заглушка: печать ШК ячейки ${activeCell?.code ?? ''} — принтера в макете нет`)
-            }
-            onCreateCell={() => onNote('Заглушка: тут откроется та же модалка создания ячейки, что на карте склада')}
+            onDropHere={dropOnto}
+            onDragContainer={(container) => setCarried({ kind: 'container', container })}
+            onDragEnd={() => setCarried(null)}
+            onCommit={() => onNote(`Заглушка: ячейка ${path[0]?.code ?? ''} записана`)}
+            onPrint={() => onNote(`Заглушка: печать ШК ячейки ${path[0]?.code ?? ''}`)}
           />
-        </Box>
+        </Stack>
       </Stack>
 
       <AppDialog
@@ -205,7 +242,7 @@ export function SortingScreen({ onNote }: { onNote: (note: string) => void }) {
             </SecondaryAction>
             <PrimaryAction
               onClick={() => {
-                if (asking && activeCell && askQty) put(asking, askQty, activeCell.id)
+                if (asking && place && askQty) put(asking, askQty, place.id)
                 setAsking(null)
               }}
               data-testid="sorting-qty-confirm"
@@ -219,7 +256,7 @@ export function SortingScreen({ onNote }: { onNote: (note: string) => void }) {
           <Stack spacing={0.5}>
             <Typography variant="subtitle2">{asking?.name}</Typography>
             <Typography variant="body2" color="text.secondary">
-              Куда: {activeCell?.code ?? '—'}
+              Куда: {place ? path.map((one) => one.code).join(' › ') : '—'}
             </Typography>
           </Stack>
           <NumberInput
@@ -228,9 +265,7 @@ export function SortingScreen({ onNote }: { onNote: (note: string) => void }) {
             onChange={setAskQty}
             min={1}
             max={asking ? remainingFor(asking, placements) : undefined}
-            helperText={
-              asking ? `Осталось разложить ${remainingFor(asking, placements)} шт` : undefined
-            }
+            helperText={asking ? `Осталось разложить ${remainingFor(asking, placements)} шт` : undefined}
             testId="sorting-qty-input"
           />
         </Stack>
