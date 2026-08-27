@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import { __formFieldsTest, MoscowDateTimeInput, NumberInput, SelectInput, TextInput } from './FormFields'
+import { __formFieldsTest, MoscowDateInput, MoscowDateRangeInput, MoscowDateTimeInput, NumberInput, PreferenceSwitch, SelectInput, TextInput } from './FormFields'
 
 describe('generic form fields', () => {
   it('renders label, linked error/help and disabled loading state without a screen-specific contract', () => {
@@ -114,5 +114,71 @@ describe('generic form fields', () => {
     expect(__formFieldsTest.resolveMoscowWallTime('2010-10-31T02:30')).toBeNull()
     expect(__formFieldsTest.resolveMoscowWallTime('2010-03-28T03:30')).toBe('2010-03-27T23:30:00.000Z')
     expect(__formFieldsTest.resolveMoscowWallTime('2026-02-30T12:00')).toBeNull()
+  })
+
+  it('renders stable native Moscow date values with labelled help and bounds', () => {
+    const markup = renderToStaticMarkup(
+      createElement(MoscowDateInput, {
+        label: 'Дата', value: '2026-08-27', onChange: () => undefined,
+        minDate: '2026-01-01', maxDate: '2026-12-31', helperText: 'Выберите календарную дату', testId: 'form-date',
+      }),
+    )
+
+    expect(markup).toContain('type="date"')
+    expect(markup).toContain('value="2026-08-27"')
+    expect(markup).toContain('min="2026-01-01"')
+    expect(markup).toContain('max="2026-12-31"')
+    expect(markup).toContain('Выберите календарную дату')
+    expect(markup).toContain('aria-describedby=')
+  })
+
+  it('validates date-only calendar, range order, inclusive length and caller-supplied future bound', () => {
+    expect(__formFieldsTest.validateIsoDate('2026-02-30')).toBe('Укажите корректную дату')
+    expect(__formFieldsTest.validateDateRange(
+      { start: '2026-08-12', end: '2026-08-11' }, {},
+    )).toBe('Дата окончания не может быть раньше даты начала')
+    expect(__formFieldsTest.validateDateRange(
+      { start: '2026-01-01', end: '2027-01-02' }, { maxDays: 366 },
+    )).toBe('Период превышает допустимую длину')
+    expect(__formFieldsTest.validateDateRange(
+      { start: '2026-08-01', end: '2026-08-01' }, { maxDate: '2026-07-31' },
+    )).toBe('Дата вне допустимого диапазона')
+    expect(__formFieldsTest.validateDateRange(
+      { start: '2026-01-01', end: '2027-01-01' }, { maxDays: 367 },
+    )).toBeUndefined()
+  })
+
+  it('renders a controlled labelled switch with accessible help and loading disablement', () => {
+    const markup = renderToStaticMarkup(
+      createElement(PreferenceSwitch, {
+        label: 'Дополнительные сведения', checked: true, onChange: () => undefined,
+        helperText: 'Можно изменить', loading: true, testId: 'form-preference',
+      }),
+    )
+
+    expect(markup).toContain('type="checkbox"')
+    expect(markup).toContain('checked=""')
+    expect(markup).toContain('Дополнительные сведения')
+    expect(markup).toContain('Можно изменить')
+    expect(markup).toContain('aria-describedby=')
+    expect(markup).toContain('disabled=""')
+    expect(markup).toContain('aria-busy="true"')
+  })
+
+  it('renders a labelled controlled range with stable start and end inputs', () => {
+    const markup = renderToStaticMarkup(
+      createElement(MoscowDateRangeInput, {
+        label: 'Период', value: { start: '2026-08-01', end: '2026-08-07' }, onChange: () => undefined,
+        maxDays: 31, helperText: 'Не более месяца', testId: 'form-range',
+      }),
+    )
+
+    expect(markup).toContain('<fieldset')
+    expect(markup).toContain('<legend')
+    expect(markup).toContain('Период')
+    expect(markup).toContain('value="2026-08-01"')
+    expect(markup).toContain('value="2026-08-07"')
+    expect(markup).toContain('data-testid="form-range-start"')
+    expect(markup).toContain('data-testid="form-range-end"')
   })
 })

@@ -17,7 +17,10 @@ import {
   ScreenHeader,
   SecondaryAction,
   MoscowDateTimeInput,
+  MoscowDateInput,
+  MoscowDateRangeInput,
   NumberInput,
+  PreferenceSwitch,
   SelectInput,
   TextInput,
   TextCell,
@@ -132,6 +135,9 @@ export function UiKitShowcase() {
   const [formNumber, setFormNumber] = useState<number | null>(null)
   const [formSelect, setFormSelect] = useState('')
   const [formTime, setFormTime] = useState<string | null>(null)
+  const [formDate, setFormDate] = useState<string | null>(null)
+  const [formRange, setFormRange] = useState<{ start: string | null; end: string | null }>({ start: '2026-08-01', end: '2026-08-07' })
+  const [formPreference, setFormPreference] = useState(false)
 
   return (
     <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 1400, mx: 'auto' }}>
@@ -247,6 +253,9 @@ export function UiKitShowcase() {
             testId="showcase-select-input"
           />
           <MoscowDateTimeInput label="Дата и время Москвы" value={formTime} onChange={setFormTime} testId="showcase-moscow-time-input" />
+          <MoscowDateInput label="Дата Москвы" value={formDate} onChange={setFormDate} maxDate="2026-12-31" testId="showcase-moscow-date-input" />
+          <MoscowDateRangeInput label="Период Москвы" value={formRange} onChange={setFormRange} maxDays={31} maxDate="2026-12-31" testId="showcase-moscow-date-range" />
+          <PreferenceSwitch label="Показывать дополнительные сведения" checked={formPreference} onChange={setFormPreference} helperText="Состояние задаёт внешний владелец формы" testId="showcase-preference-switch" />
         </Stack>
       </Section>
 

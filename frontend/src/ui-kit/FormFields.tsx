@@ -1,4 +1,4 @@
-import { Box, TextField } from '@mui/material'
+import { Box, FormControlLabel, FormHelperText, Stack, Switch, TextField } from '@mui/material'
 import type { ChangeEvent } from 'react'
 import { useId, useMemo, useState } from 'react'
 
@@ -39,8 +39,37 @@ type MoscowDateTimeInputProps = FieldProps & {
   onChange: (utcIso: string | null) => void
 }
 
+type MoscowDateInputProps = FieldProps & {
+  value: string | null
+  onChange: (value: string | null) => void
+  minDate?: string
+  maxDate?: string
+}
+
+export type MoscowDateRangeValue = {
+  start: string | null
+  end: string | null
+}
+
+type MoscowDateRangeInputProps = FieldProps & {
+  value: MoscowDateRangeValue
+  onChange: (value: MoscowDateRangeValue) => void
+  startLabel?: string
+  endLabel?: string
+  minDate?: string
+  maxDate?: string
+  /** Maximum number of calendar dates in the inclusive range. */
+  maxDays?: number
+}
+
+type PreferenceSwitchProps = FieldProps & {
+  checked: boolean
+  onChange: (checked: boolean) => void
+}
+
 const MOSCOW_TIME_ZONE = 'Europe/Moscow'
 const WALL_TIME_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/
+const DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/
 
 function visibleHelp({ error, helperText, loading }: FieldProps) {
   return error ?? helperText ?? (loading ? 'Загрузка…' : undefined)
@@ -175,6 +204,153 @@ export function SelectInput({ value, onChange, options, emptyLabel, ...props }: 
   )
 }
 
+function parseIsoDate(value: string) {
+  const match = DATE_PATTERN.exec(value)
+  if (!match) return null
+  const [, rawYear, rawMonth, rawDay] = match
+  const year = Number(rawYear)
+  const month = Number(rawMonth)
+  const day = Number(rawDay)
+  const probe = new Date(Date.UTC(year, month - 1, day))
+  if (probe.getUTCFullYear() !== year || probe.getUTCMonth() + 1 !== month || probe.getUTCDate() !== day) return null
+  return probe
+}
+
+function validateIsoDate(value: string | null, minDate?: string, maxDate?: string) {
+  if (value == null || value === '') return undefined
+  const parsed = parseIsoDate(value)
+  if (parsed == null) return 'Укажите корректную дату'
+  if ((minDate && value < minDate) || (maxDate && value > maxDate)) return 'Дата вне допустимого диапазона'
+  return undefined
+}
+
+function validateDateRange(
+  value: MoscowDateRangeValue,
+  { minDate, maxDate, maxDays }: Pick<MoscowDateRangeInputProps, 'minDate' | 'maxDate' | 'maxDays'>,
+) {
+  const startError = validateIsoDate(value.start, minDate, maxDate)
+  const endError = validateIsoDate(value.end, minDate, maxDate)
+  if (startError || endError) return startError ?? endError
+  if (!value.start || !value.end) return undefined
+  const start = parseIsoDate(value.start)
+  const end = parseIsoDate(value.end)
+  if (start == null || end == null) return 'Укажите корректную дату'
+  if (end < start) return 'Дата окончания не может быть раньше даты начала'
+  const inclusiveDays = Math.floor((end.getTime() - start.getTime()) / 86_400_000) + 1
+  if (maxDays != null && inclusiveDays > maxDays) return 'Период превышает допустимую длину'
+  return undefined
+}
+
+export function MoscowDateInput({ value, onChange, minDate, maxDate, ...props }: MoscowDateInputProps) {
+  const [localError, setLocalError] = useState<string | undefined>()
+  const error = localError ?? props.error
+  const fieldProps = { ...props, error }
+  const metadata = useFieldMetadata(fieldProps)
+
+  function handleChange(event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
+    const next = event.target.value || null
+    const validation = validateIsoDate(next, minDate, maxDate)
+    setLocalError(validation)
+    if (!validation) onChange(next)
+  }
+
+  return (
+    <FieldFrame loading={fieldProps.loading} testId={fieldProps.testId}>
+      <TextField
+        {...commonProps(fieldProps, metadata)}
+        type="date"
+        value={value ?? ''}
+        onChange={handleChange}
+        slotProps={{
+          ...commonProps(fieldProps, metadata).slotProps,
+          inputLabel: { shrink: true },
+          htmlInput: { ...inputA11y(fieldProps, metadata), min: minDate, max: maxDate },
+        }}
+      />
+    </FieldFrame>
+  )
+}
+
+export function MoscowDateRangeInput({
+  value,
+  onChange,
+  startLabel = 'Начало',
+  endLabel = 'Окончание',
+  minDate,
+  maxDate,
+  maxDays,
+  ...props
+}: MoscowDateRangeInputProps) {
+  const validation = validateDateRange(value, { minDate, maxDate, maxDays })
+  const error = validation ?? props.error
+  const fieldProps = { ...props, error }
+  const metadata = useFieldMetadata(fieldProps)
+
+  function changePart(part: keyof MoscowDateRangeValue, next: string | null) {
+    onChange({ ...value, [part]: next })
+  }
+
+  return (
+    <FieldFrame loading={fieldProps.loading} testId={fieldProps.testId}>
+      <Box component="fieldset" sx={{ border: 0, m: 0, p: 0 }} aria-invalid={Boolean(error)} aria-describedby={metadata.helperId}>
+        <Box component="legend" sx={{ typography: 'body2', color: error ? 'error.main' : 'text.primary', mb: 0.75 }}>
+          {fieldProps.label}
+        </Box>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+          <MoscowDateInput
+            id={`${metadata.inputId}-start`}
+            label={startLabel}
+            value={value.start}
+            onChange={(next) => changePart('start', next)}
+            minDate={minDate}
+            maxDate={maxDate}
+            disabled={fieldProps.disabled}
+            loading={fieldProps.loading}
+            required={fieldProps.required}
+            testId={fieldProps.testId ? `${fieldProps.testId}-start` : undefined}
+          />
+          <MoscowDateInput
+            id={`${metadata.inputId}-end`}
+            label={endLabel}
+            value={value.end}
+            onChange={(next) => changePart('end', next)}
+            minDate={minDate}
+            maxDate={maxDate}
+            disabled={fieldProps.disabled}
+            loading={fieldProps.loading}
+            required={fieldProps.required}
+            testId={fieldProps.testId ? `${fieldProps.testId}-end` : undefined}
+          />
+        </Stack>
+        {metadata.helperId ? <FormHelperText id={metadata.helperId} error={Boolean(error)}>{metadata.helperText}</FormHelperText> : null}
+      </Box>
+    </FieldFrame>
+  )
+}
+
+export function PreferenceSwitch({ checked, onChange, ...props }: PreferenceSwitchProps) {
+  const metadata = useFieldMetadata(props)
+  const disabled = Boolean(props.disabled || props.loading)
+  return (
+    <FieldFrame loading={props.loading} testId={props.testId}>
+      <Box>
+        <FormControlLabel
+          label={props.label}
+          control={
+            <Switch
+              checked={checked}
+              onChange={(event) => onChange(event.target.checked)}
+              disabled={disabled}
+              slotProps={{ input: { ...inputA11y(props, metadata), id: metadata.inputId } }}
+            />
+          }
+        />
+        {metadata.helperId ? <FormHelperText id={metadata.helperId} error={Boolean(props.error)}>{metadata.helperText}</FormHelperText> : null}
+      </Box>
+    </FieldFrame>
+  )
+}
+
 function localPartsAt(utcMillis: number) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: MOSCOW_TIME_ZONE,
@@ -246,7 +422,7 @@ function formatMoscowWallTime(value: string | null) {
 }
 
 // Test-only seam; it is deliberately not re-exported by ui-kit/index.
-export const __formFieldsTest = { resolveMoscowWallTime }
+export const __formFieldsTest = { resolveMoscowWallTime, validateDateRange, validateIsoDate }
 
 export function MoscowDateTimeInput({ value, onChange, ...props }: MoscowDateTimeInputProps) {
   const [localError, setLocalError] = useState<string | undefined>()
