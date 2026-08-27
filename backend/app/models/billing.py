@@ -517,6 +517,156 @@ class BillingInvoice(Base):
     lines: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
 
 
+class BillingInvoiceV2(Base):
+    """Immutable, additive invoice snapshot; legacy monthly invoices stay untouched."""
+
+    __tablename__ = "billing_invoices_v2"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "id", name="uq_billing_invoices_v2_tenant_id_id"),
+        UniqueConstraint("tenant_id", "number", name="uq_billing_invoices_v2_tenant_number"),
+        CheckConstraint(
+            "creation_mode IN ('selected_operations', 'manual')", name="ck_billing_invoice_v2_mode"
+        ),
+        CheckConstraint("status IN ('issued', 'cancelled')", name="ck_billing_invoice_v2_status"),
+        CheckConstraint(
+            "total_amount_kopecks >= 0", name="ck_billing_invoice_v2_total_nonnegative"
+        ),
+        CheckConstraint(
+            "(period_start IS NULL) = (period_end IS NULL) OR period_end >= period_start",
+            name="ck_billing_invoice_v2_period",
+        ),
+        Index("ix_billing_invoices_v2_tenant_issued", "tenant_id", "issued_at", "id"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    seller_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("sellers.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    number: Mapped[str] = mapped_column(String(64), nullable=False)
+    creation_mode: Mapped[str] = mapped_column(String(32), nullable=False)
+    period_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    period_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="issued")
+    issued_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    issued_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    ff_profile_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    seller_profile_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    total_amount_kopecks: Mapped[int] = mapped_column(Integer, nullable=False)
+    lines_v2: Mapped[list[BillingInvoiceV2Line]] = relationship(
+        "BillingInvoiceV2Line", back_populates="invoice", cascade="all, delete-orphan"
+    )
+
+
+class BillingInvoiceV2Line(Base):
+    __tablename__ = "billing_invoice_v2_lines"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "id", name="uq_billing_invoice_v2_lines_tenant_id_id"),
+        ForeignKeyConstraint(
+            ["tenant_id", "invoice_id"],
+            ["billing_invoices_v2.tenant_id", "billing_invoices_v2.id"],
+            name="fk_billing_invoice_v2_line_tenant_invoice",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "total_amount_kopecks >= 0", name="ck_billing_invoice_v2_line_total_nonnegative"
+        ),
+        Index("ix_billing_invoice_v2_lines_tenant_invoice", "tenant_id", "invoice_id"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    invoice_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    description_snapshot: Mapped[str] = mapped_column(String(255), nullable=False)
+    unit_price_kopecks: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_amount_kopecks: Mapped[int] = mapped_column(Integer, nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    invoice: Mapped[BillingInvoiceV2] = relationship("BillingInvoiceV2", back_populates="lines_v2")
+    sources: Mapped[list[BillingInvoiceV2Source]] = relationship(
+        "BillingInvoiceV2Source", back_populates="invoice_line", cascade="all, delete-orphan"
+    )
+
+
+class BillingInvoiceV2Source(Base):
+    __tablename__ = "billing_invoice_v2_sources"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "id", name="uq_billing_invoice_v2_sources_tenant_id_id"),
+        ForeignKeyConstraint(
+            ["tenant_id", "invoice_line_id"],
+            ["billing_invoice_v2_lines.tenant_id", "billing_invoice_v2_lines.id"],
+            name="fk_billing_invoice_v2_source_tenant_line",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "operation_fact_id"],
+            ["operation_facts.tenant_id", "operation_facts.id"],
+            name="fk_billing_invoice_v2_source_tenant_fact",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "billing_ledger_entry_id"],
+            ["billing_ledger_entries.tenant_id", "billing_ledger_entries.id"],
+            name="fk_billing_invoice_v2_source_tenant_ledger",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "(CASE WHEN operation_fact_id IS NOT NULL THEN 1 ELSE 0 END + "
+            "CASE WHEN billing_ledger_entry_id IS NOT NULL THEN 1 ELSE 0 END + "
+            "CASE WHEN storage_calculation_token IS NOT NULL THEN 1 ELSE 0 END) = 1",
+            name="ck_billing_invoice_v2_source_one_target",
+        ),
+        Index("ix_billing_invoice_v2_sources_tenant_fact", "tenant_id", "operation_fact_id"),
+        Index(
+            "ix_billing_invoice_v2_sources_tenant_ledger", "tenant_id", "billing_ledger_entry_id"
+        ),
+        Index("ix_billing_invoice_v2_sources_tenant_line", "tenant_id", "invoice_line_id"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    invoice_line_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    operation_fact_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    billing_ledger_entry_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), nullable=True
+    )
+    storage_calculation_token: Mapped[str | None] = mapped_column(String(4096), nullable=True)
+    signed_amount_kopecks_snapshot: Mapped[int] = mapped_column(Integer, nullable=False)
+    invoice_line: Mapped[BillingInvoiceV2Line] = relationship(
+        "BillingInvoiceV2Line", back_populates="sources"
+    )
+
+
+class BillingInvoiceV2Idempotency(Base):
+    __tablename__ = "billing_invoice_v2_idempotency"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id", "user_id", "request_key", name="uq_billing_invoice_v2_idempotency_request"
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    request_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    invoice_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+
+
 class BillingRunIssue(Base):
     __tablename__ = "billing_run_issues"
     __table_args__ = (

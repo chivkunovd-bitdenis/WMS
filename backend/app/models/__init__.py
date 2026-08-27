@@ -4,6 +4,10 @@ from app.models.background_job import BackgroundJob
 from app.models.base import Base
 from app.models.billing import (
     BillingInvoice,
+    BillingInvoiceV2,
+    BillingInvoiceV2Idempotency,
+    BillingInvoiceV2Line,
+    BillingInvoiceV2Source,
     BillingLedgerEntry,
     BillingLedgerLine,
     BillingProfile,
@@ -96,6 +100,10 @@ __all__ = [
     "BackgroundJob",
     "Base",
     "BillingInvoice",
+    "BillingInvoiceV2",
+    "BillingInvoiceV2Idempotency",
+    "BillingInvoiceV2Line",
+    "BillingInvoiceV2Source",
     "BillingLedgerEntry",
     "BillingLedgerLine",
     "BillingProfile",

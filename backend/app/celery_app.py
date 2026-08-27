@@ -15,12 +15,6 @@ celery_app = Celery(
 )
 celery_app.conf.task_ignore_result = True
 celery_app.conf.beat_schedule = {
-    "billing-invoices-daily": {
-        "task": "wms.billing_invoices_daily",
-        # Celery remains on its existing UTC clock. Moscow has no DST, so
-        # 23:30 UTC is always 02:30 on the next Moscow calendar day.
-        "schedule": crontab(hour=23, minute=30),
-    },
     "wb-mp-warehouses-daily": {
         "task": "wms.wb_mp_warehouses_daily_sync",
         "schedule": crontab(hour=3, minute=0),

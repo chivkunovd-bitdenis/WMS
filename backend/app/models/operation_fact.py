@@ -47,6 +47,7 @@ class OperationFactCutover(Base):
 class OperationFact(Base):
     __tablename__ = "operation_facts"
     __table_args__ = (
+        UniqueConstraint("tenant_id", "id", name="uq_operation_facts_tenant_id_id"),
         Index(
             "uq_operation_facts_tenant_idempotency",
             "tenant_id",
