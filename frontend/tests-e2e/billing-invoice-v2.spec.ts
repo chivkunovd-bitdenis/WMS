@@ -188,3 +188,94 @@ test('TC-NEW-208 фильтры истории отсекают чужие сч�
   ])
   await expect(table).toContainText('Счета ещё не выставлены')
 })
+
+// TC-NEW-209 — Дано вкладку «Селлеры» с включёнными финансами, Когда ничего не
+// выбрано и нажата «Выставить счёт», Тогда открывается ручная форма, счёт
+// сохраняется и появляется в истории.
+// Ограничение: кнопка доступна всегда при включённых финансах — иначе, пока у
+// селлеров нет ни одной операции, ручной счёт выставить было бы нечем.
+test('TC-NEW-209 ручной счёт выставляется с вкладки «Селлеры» и попадает в историю', async ({
+  page,
+  request,
+}) => {
+  const suffix = String(Date.now())
+  const token = await registerAdmin(page, suffix)
+  await createSeller(request, token, `Ручной ${suffix}`)
+
+  await page.goto('/app/ff/billing')
+  await page.getByTestId('billing-seller-finance').click()
+  const issue = page.getByTestId('billing-issue-invoice')
+  await expect(issue).toBeVisible()
+  await issue.click()
+
+  const manual = page.getByTestId('billing-invoice-manual')
+  await expect(manual).toBeVisible()
+  await manual.getByTestId('billing-manual-seller').selectOption({ label: `Ручной ${suffix}` })
+  await manual.getByTestId('billing-manual-description-0').fill('Погрузка паллет')
+  await manual.getByTestId('billing-manual-amount-0').fill('740.50')
+
+  await Promise.all([
+    waitForPostOk(page, '/api/billing/invoices-v2/preview'),
+    manual.getByTestId('billing-manual-preview').click(),
+  ])
+  const preview = page.getByTestId('billing-invoice-preview')
+  await expect(preview).toContainText('Погрузка паллет')
+  await expect(preview).toContainText('Итого: 740,50')
+
+  await Promise.all([
+    waitForPostOk(page, '/api/billing/invoices-v2'),
+    preview.getByTestId('billing-invoice-save').click(),
+  ])
+  await expect(preview).toContainText('выставлен')
+  await preview.getByRole('button', { name: 'Закрыть' }).click()
+
+  await Promise.all([
+    waitForGetOk(page, '/api/billing/invoices-v2'),
+    page.getByTestId('billing-tab-invoices').click(),
+  ])
+  const table = page.getByTestId('billing-invoices-table')
+  await expect(table).toContainText('740,50')
+  await expect(table).toContainText(`Ручной ${suffix}`)
+})
+
+// TC-NEW-210 — Дано выключённые «Финансы», Когда открыта вкладка «Селлеры»,
+// Тогда кнопки выставления счёта нет.
+// Негатив: денежное действие не должно быть доступно в режиме без денег.
+test('TC-NEW-210 без «Финансов» кнопка выставления счёта скрыта', async ({ page }) => {
+  const suffix = String(Date.now())
+  await registerAdmin(page, suffix)
+
+  await page.goto('/app/ff/billing')
+  await expect(page.getByTestId('billing-issue-invoice')).toBeHidden()
+
+  await page.getByTestId('billing-seller-finance').click()
+  await expect(page.getByTestId('billing-issue-invoice')).toBeVisible()
+
+  await page.getByTestId('billing-seller-finance').click()
+  await expect(page.getByTestId('billing-issue-invoice')).toBeHidden()
+})
+
+// TC-NEW-211 — Дано ручную форму, Когда сумма указана мельче копейки,
+// Тогда поле помечено недопустимым и счёт не собирается.
+// Негатив: сумма с третьим знаком не должна доезжать до сохранения.
+test('TC-NEW-211 ручная форма не пропускает сумму мельче копейки', async ({ page, request }) => {
+  const suffix = String(Date.now())
+  const token = await registerAdmin(page, suffix)
+  await createSeller(request, token, `Копейки ${suffix}`)
+
+  await page.goto('/app/ff/billing')
+  await page.getByTestId('billing-seller-finance').click()
+  await page.getByTestId('billing-issue-invoice').click()
+
+  const manual = page.getByTestId('billing-invoice-manual')
+  await manual.getByTestId('billing-manual-seller').selectOption({ label: `Копейки ${suffix}` })
+  await manual.getByTestId('billing-manual-description-0').fill('Услуга')
+  await manual.getByTestId('billing-manual-amount-0').fill('10.005')
+  await expect(manual.getByTestId('billing-manual-amount-0')).toHaveAttribute('aria-invalid', 'true')
+
+  await manual.getByTestId('billing-manual-preview').click()
+  await expect(manual.getByTestId('billing-manual-error')).toContainText(
+    'Сумма указывается с точностью до копеек',
+  )
+  await expect(page.getByTestId('billing-invoice-preview')).toBeHidden()
+})

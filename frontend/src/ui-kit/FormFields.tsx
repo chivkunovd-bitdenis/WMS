@@ -76,6 +76,12 @@ type CheckboxInputProps = FieldProps & {
   onChange: (checked: boolean) => void
   /** Explains why a non-interactive choice is unavailable. */
   disabledReason?: string
+  /**
+   * Заголовок колонки уже назвал выбор, поэтому в ячейке таблицы подпись рядом
+   * с квадратом только шумит. Имя всё равно обязано существовать: без него
+   * программа чтения объявит «флажок» и промолчит о том, что выбирается.
+   */
+  hideLabel?: boolean
 }
 
 type MoneyInputProps = FieldProps & {
@@ -229,7 +235,7 @@ export function MoneyInput({ value, onChange, allowNegative = false, ...props }:
   )
 }
 
-export function CheckboxInput({ checked, onChange, disabledReason, ...props }: CheckboxInputProps) {
+export function CheckboxInput({ checked, onChange, disabledReason, hideLabel, ...props }: CheckboxInputProps) {
   const fieldProps = {
     ...props,
     helperText: props.helperText ?? disabledReason,
@@ -241,14 +247,14 @@ export function CheckboxInput({ checked, onChange, disabledReason, ...props }: C
       checked={checked}
       onChange={(event) => onChange(event.target.checked)}
       disabled={disabled}
-      slotProps={{ input: { ...inputA11y(fieldProps, metadata), id: metadata.inputId } }}
+      slotProps={{ input: { ...inputA11y(fieldProps, metadata), id: metadata.inputId, ...(hideLabel ? { 'aria-label': fieldProps.label } : {}) } }}
     />
   )
 
   return (
     <FieldFrame loading={fieldProps.loading} testId={fieldProps.testId}>
       <Box>
-        {disabledReason ? <Tooltip title={disabledReason}><span><FormControlLabel label={fieldProps.label} control={control} /></span></Tooltip> : <FormControlLabel label={fieldProps.label} control={control} />}
+        {disabledReason ? <Tooltip title={disabledReason}><span>{hideLabel ? control : <FormControlLabel label={fieldProps.label} control={control} />}</span></Tooltip> : hideLabel ? control : <FormControlLabel label={fieldProps.label} control={control} />}
         {metadata.helperId ? <FormHelperText id={metadata.helperId} error={Boolean(fieldProps.error)}>{metadata.helperText}</FormHelperText> : null}
       </Box>
     </FieldFrame>

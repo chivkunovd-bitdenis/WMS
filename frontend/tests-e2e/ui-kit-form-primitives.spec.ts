@@ -44,6 +44,24 @@ test('TC-NEW-102 недоступный CheckboxInput не переключае�
   await expect(page.locator(`#${describedBy}`)).toHaveText('Операция не рассчитана')
 })
 
+// TC-NEW-108 — Дано чекбокс в колонке таблицы, Когда подпись скрыта,
+// Тогда у него всё равно есть доступное имя и он переключается.
+// Ограничение: без имени программа чтения объявит «флажок» и промолчит о том,
+// что именно выбирается.
+test('TC-NEW-108 CheckboxInput без видимой подписи сохраняет доступное имя', async ({ page }) => {
+  await openShowcase(page)
+  const checkbox = page.getByTestId('showcase-hidden-label-checkbox-input')
+  await expect(checkbox).toHaveAttribute('aria-label', 'Выбрать строку таблицы')
+  await expect(page.getByRole('checkbox', { name: 'Выбрать строку таблицы' })).toBeVisible()
+
+  // Видимого текста подписи рядом с квадратом нет — колонка не раздувается.
+  await expect(page.getByText('Выбрать строку таблицы', { exact: true })).toHaveCount(0)
+
+  const before = await checkbox.isChecked()
+  await checkbox.click()
+  expect(await checkbox.isChecked()).toBe(!before)
+})
+
 // TC-NEW-103 — Дано денежное поле, Когда вводится сумма с копейками,
 // Тогда строка сохраняется посимвольно и не проходит через число.
 // Ограничение: `12.20` обязано остаться `12.20`, а не превратиться в `12.2`.

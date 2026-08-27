@@ -291,6 +291,7 @@ export function UiKitShowcase() {
           <PreferenceSwitch label="Показывать дополнительные сведения" checked={formPreference} onChange={setFormPreference} helperText="Состояние задаёт внешний владелец формы" testId="showcase-preference-switch" />
           <CheckboxInput label="Выбрать операцию" checked={formCheckbox} onChange={setFormCheckbox} helperText="Выбор задаёт внешний владелец формы" testId="showcase-checkbox-input" />
           <CheckboxInput label="Недоступная операция" checked={false} onChange={() => undefined} disabledReason="Операция не рассчитана" testId="showcase-disabled-checkbox-input" />
+          <CheckboxInput label="Выбрать строку таблицы" hideLabel checked={formCheckbox} onChange={setFormCheckbox} testId="showcase-hidden-label-checkbox-input" />
         </Stack>
       </Section>
 

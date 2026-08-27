@@ -44,8 +44,9 @@ test('seller report switches finance shape and renders one storage row', async (
   await page.getByRole('button', { name: 'Показать операции' }).click()
   await expect(page.getByRole('columnheader', { name: 'Счёт выставлялся' })).toBeVisible()
   await expect(page.getByText('✓ 1')).toBeVisible()
-  await expect(page.getByTestId('billing-seller-entries').getByRole('checkbox')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: /Выставить счёт/ })).toHaveCount(0)
+  // Волна 4: при включённых финансах операции выбираются, а счёт выставляется.
+  await expect(page.getByTestId('billing-seller-entries').getByRole('checkbox')).toHaveCount(1)
+  await expect(page.getByRole('button', { name: /Выставить счёт/ })).toHaveCount(1)
   await page.getByRole('button', { name: 'Загрузить ещё' }).click()
   await expect(page.getByTestId('billing-seller-entries').locator('tbody tr')).toHaveCount(2)
   await expect(page.getByTestId('billing-seller-storage').locator('tbody tr')).toHaveCount(1)

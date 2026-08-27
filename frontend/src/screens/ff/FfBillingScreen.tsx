@@ -17,7 +17,10 @@ import {
   ReportMetricStrip,
   SecondaryAction,
   SelectInput,
+  CheckboxInput,
+  ActionGroup,
 } from '../../ui-kit'
+import { FfBillingInvoiceCreate } from './FfBillingInvoiceCreate'
 import { FfBillingInvoicesPanel } from './FfBillingInvoicesPanel'
 
 type Seller = { id: string; name: string }
@@ -241,10 +244,15 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
   const [detailsCursor, setDetailsCursor] = useState<string | null>(null)
   const [detailsLoading, setDetailsLoading] = useState(false)
   const [detailsError, setDetailsError] = useState(false)
+  const [selectedRootIds, setSelectedRootIds] = useState<string[]>([])
+  const [storageSelected, setStorageSelected] = useState(false)
+  const [invoicesRefresh, setInvoicesRefresh] = useState(0)
   const summaryRequestId = useRef(0)
   const detailsRequestId = useRef(0)
   const clearSellerReportDetails = () => {
     detailsRequestId.current += 1
+    setSelectedRootIds([])
+    setStorageSelected(false)
     setSelectedReportSeller(null)
     setReportDetails(null)
     setDetailsCursor(null)
@@ -320,7 +328,20 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
     }[row.result]
     return <StatusChip label={presentation.label} tone={presentation.tone} />
   }
+  const entrySelectionReason = (row: SellerReportEntry): string | undefined => {
+    if (!row.billing_ledger_entry_id) return 'Операция ещё не начислена — счёт собирается из начислений'
+    if (row.result === 'unpriced') return 'Нет ставки — задайте тариф в настройках'
+    if (row.result === 'not_billable') return 'Операция не тарифицируется'
+    if (row.result === 'reversed') return 'Сторно попадёт в счёт вместе со своим начислением'
+    return undefined
+  }
+  const toggleRoot = (rootId: string, checked: boolean) => setSelectedRootIds((ids) => checked ? [...new Set([...ids, rootId])] : ids.filter((id) => id !== rootId))
   const reportEntryColumns = [
+    // Чекбоксы и кнопка выставления живут только при включённых финансах.
+    ...(includeFinance ? [{ key: 'pick', header: '', width: 60, render: (row: SellerReportEntry) => {
+      const reason = entrySelectionReason(row)
+      return <CheckboxInput label={`Выбрать операцию ${sourceLabel(row)}`} hideLabel checked={selectedRootIds.includes(row.billing_ledger_entry_id ?? '')} onChange={(checked) => toggleRoot(row.billing_ledger_entry_id ?? '', checked)} disabledReason={reason} testId={`billing-pick-${row.id}`} />
+    } }] : []),
     { key: 'date', header: 'Дата и время', width: 180, render: (row: SellerReportEntry) => <TextCell value={formatMoscowDateTime(row.occurred_at)} /> },
     { key: 'document', header: 'Документ / источник', width: 190, render: (row: SellerReportEntry) => <TextCell value={sourceLabel(row)} /> },
     { key: 'service', header: 'Услуга', width: 150, render: (row: SellerReportEntry) => <TextCell value={serviceLabels[row.service_code] ?? '—'} /> },
@@ -345,6 +366,6 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
       <><MoscowDateRangeInput label="Период" startLabel="С" endLabel="По" value={reportRange} onChange={(value) => { clearSellerReportDetails(); setReportRange({ start: value.start ?? today, end: value.end ?? today }) }} maxDate={today} maxDays={366} testId="billing-seller-range" /><Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }} aria-label="Быстрый период">{([['today', 'Сегодня'], ['seven_days', '7 дней'], ['thirty_days', '30 дней'], ['current_month', 'Этот месяц'], ['previous_month', 'Прошлый месяц']] as Array<[SellerQuickPeriod, string]>).map(([period, label]) => <SecondaryAction key={period} onClick={() => { clearSellerReportDetails(); setReportRange(sellerQuickRange(period, today)) }}>{label}</SecondaryAction>)}</Stack><PreferenceSwitch label="Финансы" checked={includeFinance} onChange={(value) => { clearSellerReportDetails(); setIncludeFinance(value) }} testId="billing-seller-finance" /></>
       <SelectInput label="Селлер" value={sellerId} onChange={(value) => { clearSellerReportDetails(); setSellerId(value) }} options={[{ value: 'all', label: 'Все селлеры' }, ...sellers.map((seller) => ({ value: seller.id, label: seller.name }))]} testId="billing-seller" />
     </FilterBar> : null}
-    {tab === 'charges' ? <>{error ? <ErrorNotice testId="billing-seller-report-error">Не удалось загрузить отчёт по селлерам. Повторите попытку</ErrorNotice> : null}<ReportMetricStrip items={[{ key: 'sellers', label: 'Селлеров', value: report.totals.seller_count }, { key: 'operations', label: 'Операций', value: report.totals.operation_count }, { key: 'items', label: 'Штук', value: report.totals.item_quantity }, ...(includeFinance ? [{ key: 'accrued', label: 'Начислено', moneyMinor: report.totals.net_total_kopecks ?? 0 }] : [])]} loading={loading} testId="billing-seller-metrics" /><DataTable columns={sellerColumns} rows={report.rows} loading={loading} getRowKey={(row) => row.seller_id} testId="billing-seller-summary" empty={{ title: 'За выбранный период операций нет', hint: 'Измените период или фильтр селлера.' }} />{selectedReportSeller ? <Stack spacing={1} sx={{ mt: 3 }} data-testid="billing-seller-details"><Typography variant="h6">Операции селлера</Typography>{detailsError ? <ErrorNotice>Не удалось загрузить детализацию. Сводка сохранена.</ErrorNotice> : null}{reportDetails?.storage_row ? <DataTable columns={[{ key: 'storage', header: 'Услуга', width: 220, render: () => 'Хранение' }, { key: 'period', header: 'Период', width: 200, render: (row: StorageReportRow) => `${row.date_from} — ${row.date_to}` }, { key: 'literDays', header: 'Литро-дни', width: 130, align: 'right' as const, render: (row: StorageReportRow) => <TextCell value={String(row.liter_days)} /> }, ...(includeFinance ? [{ key: 'amount', header: 'Сумма', width: 130, align: 'right' as const, render: (row: StorageReportRow) => <MoneyCell minor={row.amount_kopecks ?? null} /> }] : []), { key: 'status', header: 'Статус', width: 180, render: (row: StorageReportRow) => row.status === 'missing_dimensions' ? <StatusChip label="Нет габаритов" tone="warn" hint="У товара нет габаритов для точного расчёта" /> : <StatusChip label="Рассчитано" tone="ok" /> }]} rows={[reportDetails.storage_row]} loading={detailsLoading} getRowKey={() => 'storage'} testId="billing-seller-storage" empty={{ title: 'Хранение не рассчитано' }} /> : null}<DataTable columns={reportEntryColumns} rows={reportDetails?.entries ?? []} loading={detailsLoading} getRowKey={(row) => row.id} testId="billing-seller-entries" empty={{ title: 'Операций нет' }} />{reportDetails?.next_cursor ? <SecondaryAction disabledReason={detailsLoading ? 'Загрузка операций' : undefined} onClick={() => setDetailsCursor(reportDetails.next_cursor)}>Загрузить ещё</SecondaryAction> : null}</Stack> : null}</> : <FfBillingInvoicesPanel token={token} sellers={sellers} />}
+    {tab === 'charges' ? <>{error ? <ErrorNotice testId="billing-seller-report-error">Не удалось загрузить отчёт по селлерам. Повторите попытку</ErrorNotice> : null}<ReportMetricStrip items={[{ key: 'sellers', label: 'Селлеров', value: report.totals.seller_count }, { key: 'operations', label: 'Операций', value: report.totals.operation_count }, { key: 'items', label: 'Штук', value: report.totals.item_quantity }, ...(includeFinance ? [{ key: 'accrued', label: 'Начислено', moneyMinor: report.totals.net_total_kopecks ?? 0 }] : [])]} loading={loading} testId="billing-seller-metrics" /><ActionGroup>{includeFinance ? <FfBillingInvoiceCreate token={token} sellers={sellers} sellerId={selectedReportSeller} sellerName={reportDetails?.seller_name ?? ''} dateFrom={reportRange.start} dateTo={reportRange.end} selectedRootIds={selectedRootIds} storageToken={storageSelected ? reportDetails?.storage_row?.calculation_token ?? null : null} onIssued={() => { setSelectedRootIds([]); setStorageSelected(false); setInvoicesRefresh((value) => value + 1) }} /> : null}</ActionGroup><DataTable columns={sellerColumns} rows={report.rows} loading={loading} getRowKey={(row) => row.seller_id} testId="billing-seller-summary" empty={{ title: 'За выбранный период операций нет', hint: 'Измените период или фильтр селлера.' }} />{selectedReportSeller ? <Stack spacing={1} sx={{ mt: 3 }} data-testid="billing-seller-details"><Typography variant="h6">Операции селлера</Typography>{detailsError ? <ErrorNotice>Не удалось загрузить детализацию. Сводка сохранена.</ErrorNotice> : null}{reportDetails?.storage_row ? <DataTable columns={[...(includeFinance ? [{ key: 'pick', header: '', width: 60, render: (row: StorageReportRow) => <CheckboxInput label="Выбрать хранение за период" hideLabel checked={storageSelected} onChange={setStorageSelected} disabledReason={row.status === 'missing_dimensions' ? 'Нет габаритов у товара — хранение в счёт не включить' : undefined} testId="billing-pick-storage" /> }] : []), { key: 'storage', header: 'Услуга', width: 220, render: () => 'Хранение' }, { key: 'period', header: 'Период', width: 200, render: (row: StorageReportRow) => `${row.date_from} — ${row.date_to}` }, { key: 'literDays', header: 'Литро-дни', width: 130, align: 'right' as const, render: (row: StorageReportRow) => <TextCell value={String(row.liter_days)} /> }, ...(includeFinance ? [{ key: 'amount', header: 'Сумма', width: 130, align: 'right' as const, render: (row: StorageReportRow) => <MoneyCell minor={row.amount_kopecks ?? null} /> }] : []), { key: 'status', header: 'Статус', width: 180, render: (row: StorageReportRow) => row.status === 'missing_dimensions' ? <StatusChip label="Нет габаритов" tone="warn" hint="У товара нет габаритов для точного расчёта" /> : <StatusChip label="Рассчитано" tone="ok" /> }]} rows={[reportDetails.storage_row]} loading={detailsLoading} getRowKey={() => 'storage'} testId="billing-seller-storage" empty={{ title: 'Хранение не рассчитано' }} /> : null}<DataTable columns={reportEntryColumns} rows={reportDetails?.entries ?? []} loading={detailsLoading} getRowKey={(row) => row.id} testId="billing-seller-entries" empty={{ title: 'Операций нет' }} />{reportDetails?.next_cursor ? <SecondaryAction disabledReason={detailsLoading ? 'Загрузка операций' : undefined} onClick={() => setDetailsCursor(reportDetails.next_cursor)}>Загрузить ещё</SecondaryAction> : null}</Stack> : null}</> : <FfBillingInvoicesPanel token={token} sellers={sellers} refreshToken={invoicesRefresh} />}
   </Box>
 }

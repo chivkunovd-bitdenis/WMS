@@ -156,7 +156,10 @@ test('billing seller report keeps an unpriced operation visible', async ({ page 
   await expect(page.getByText('warehouse_magic_fee', { exact: true })).toHaveCount(0)
   await page.getByText('Недоступен', { exact: true }).hover()
   await expect(page.getByRole('tooltip')).toContainText('Первоисточник недоступен')
-  await expect(page.getByRole('button', { name: /Выставить счёт/ })).toHaveCount(0)
+  // Непроценённую операцию видно, но выбрать в счёт нельзя — причина названа.
+  const unpriced = page.getByTestId('billing-seller-entries').getByRole('checkbox')
+  await expect(unpriced).toBeDisabled()
+  await expect(page.getByRole('button', { name: /Выставить счёт/ })).toHaveCount(1)
 })
 
 // S-31-TC-006 — Given the seller's blocking causes are resolved, When the admin retries formation,

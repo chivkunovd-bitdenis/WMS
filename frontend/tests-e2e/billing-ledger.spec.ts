@@ -40,5 +40,8 @@ test('billing sellers show finance-on detail without a legacy performer view', a
   await expect(page.getByTestId('billing-seller-storage').locator('tbody tr')).toHaveCount(1)
   await expect(page.getByTestId('billing-seller-entries').getByRole('columnheader', { name: 'Счёт выставлялся' })).toBeVisible()
   await expect(page.getByText('По исполнителям')).toHaveCount(0)
-  await expect(page.getByTestId('billing-seller-entries').getByRole('checkbox')).toHaveCount(0)
+  // Волна 4: выбор операции появился, но подпись чекбокса скрыта — колонка узкая.
+  const pick = page.getByTestId('billing-seller-entries').getByRole('checkbox')
+  await expect(pick).toHaveCount(1)
+  await expect(pick).toHaveAttribute('aria-label', /Выбрать операцию/)
 })
