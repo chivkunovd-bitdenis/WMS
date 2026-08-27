@@ -77,8 +77,11 @@ from app.services.wildberries_fbs_client import (
 
 FBS_DEADLINE_HOURS = 120
 MAX_ORDERS_PAGES = 10
-# Окно полного обхода заданий: столько дней назад просим у WB.
+# Окно полного обхода заданий: столько дней назад просим у WB. Совпадает с
+# умолчанием WB и с его же ограничением «максимум 30 календарных дней за запрос».
 ORDERS_SWEEP_WINDOW_DAYS = 30
+# Максимальный размер страницы по документации WB (limit 1..1000).
+ORDERS_SWEEP_PAGE_LIMIT = 1000
 MAX_SUPPLIES_PAGES = 10
 
 RESERVE_STATUS_WAREHOUSE_REMAP_CONFLICT = "warehouse_remap_conflict"
@@ -1522,9 +1525,11 @@ async def sync_seller_orders(
         await session.commit()
 
     if include_history:
-        # Обход идёт по свежему окну: в нём живут заказы, у которых ещё может
-        # поменяться состав поставки. Без окна страницы упирались в самые ранние
-        # задания селлера, и supplyId свежих заказов до WMS не доезжал вовсе.
+        # WB и без dateFrom отдаёт последние 30 дней (это его умолчание), поэтому
+        # дело было не в диапазоне, а в глубине: страницами по сто штук обход
+        # прочитывал тысячу самых ранних заданий окна и до свежих не доходил —
+        # у крупного селлера их под четыре тысячи за месяц. Просим окно явно и
+        # берём максимальную страницу, которую WB разрешает (1000).
         sweep_date_from = int(
             (datetime.now(tz=UTC) - timedelta(days=ORDERS_SWEEP_WINDOW_DAYS)).timestamp()
         )
@@ -1536,6 +1541,7 @@ async def sync_seller_orders(
                     api_token=api_token,
                     next_token=next_token,
                     date_from=sweep_date_from,
+                    limit=ORDERS_SWEEP_PAGE_LIMIT,
                 )
             except WildberriesClientError as exc:
                 ref = wb_error_ref()
