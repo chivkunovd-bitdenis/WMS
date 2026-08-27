@@ -10,6 +10,16 @@ async function authenticate(page: Page, sellers = [{ id: 'seller-1', name: 'Лу
 }
 
 // TC-NEW-001 — Given a seller report, When finance is off, Then money and invoice history are absent.
+/**
+ * Раскрыть строку селлера. Кнопки «Показать операции» и отдельной секции внизу
+ * больше нет: подробности разворачиваются под самой строкой (ТЗ владельца
+ * 27.08.2026, раздел 2).
+ */
+async function expandSeller(page: Page, name: string) {
+  const row = page.getByTestId('billing-seller-summary').locator('tbody tr', { hasText: name }).first()
+  await row.getByRole('button').first().click()
+}
+
 test('seller report switches finance shape and renders one storage row', async ({ page }) => {
   await authenticate(page)
   let lastSummary = ''
@@ -27,39 +37,44 @@ test('seller report switches finance shape and renders one storage row', async (
   await page.goto('/app/ff/billing')
   await expect(page.getByRole('tab', { name: 'Селлеры' })).toBeVisible()
   await expect(page.getByTestId('billing-seller-summary')).toContainText('Луна')
-  await expect(page.getByRole('columnheader', { name: 'Начислено' })).toHaveCount(0)
+  await expect(page.getByRole('columnheader', { name: 'Стоимость услуг' })).toHaveCount(0)
   await expect.poll(() => new URL(lastSummary).searchParams.get('include_finance')).toBe('false')
-  await page.getByRole('button', { name: 'Показать операции' }).click()
-  await expect(page.getByTestId('billing-seller-storage')).toContainText('Хранение')
-  await expect(page.getByTestId('billing-seller-storage')).toContainText('Рассчитано')
-  await expect(page.getByTestId('billing-seller-storage').locator('tbody tr')).toHaveCount(1)
-  await expect(page.getByRole('columnheader', { name: 'Документ / источник' })).toBeVisible()
-  await expect(page.getByRole('columnheader', { name: 'Товар / SKU' })).toBeVisible()
+  await expandSeller(page, 'Луна')
+  await expect(page.getByTestId('billing-seller-entries')).toContainText('Хранение')
+  await expect(page.getByTestId('billing-seller-entries')).toContainText('Рассчитано')
+  await expect(page.getByTestId('billing-seller-entries').locator('tbody tr', { hasText: 'Хранение' })).toHaveCount(1)
+  await expect(page.getByTestId('billing-seller-entries').getByRole('columnheader', { name: 'Документ', exact: true })).toBeVisible()
+  // Товарной детализации в раскрывашке нет: артикулы уводят в проваливание по
+  // каждому документу (ТЗ владельца 27.08.2026, раздел 2).
+  await expect(page.getByRole('columnheader', { name: 'Товар / SKU' })).toHaveCount(0)
   await expect(page.getByTestId('billing-seller-entries')).toContainText('Выполнено')
   await expect(page.getByRole('columnheader', { name: 'Счёт выставлялся' })).toHaveCount(0)
   await page.getByTestId('billing-seller-finance').click()
-  await expect(page.getByRole('columnheader', { name: 'Начислено' })).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: 'Стоимость услуг' })).toBeVisible()
   await expect(page.getByTestId('billing-seller-metrics')).toContainText('630,00 ₽')
-  await expect(page.getByTestId('billing-seller-details')).toHaveCount(0)
-  await page.getByRole('button', { name: 'Показать операции' }).click()
+  await expect(page.locator('[data-testid^="billing-seller-details-"]')).toHaveCount(0)
+  await expandSeller(page, 'Луна')
   await expect(page.getByRole('columnheader', { name: 'Счёт выставлялся' })).toBeVisible()
   await expect(page.getByText('✓ 1')).toBeVisible()
   // Волна 4: при включённых финансах операции выбираются, а счёт выставляется.
-  await expect(page.getByTestId('billing-seller-entries').getByRole('checkbox')).toHaveCount(1)
+  // Две галочки: строка хранения и один документ — обе живут в одной таблице.
+  await expect(page.getByTestId('billing-seller-entries').getByRole('checkbox')).toHaveCount(2)
+  await expect(page.getByTestId('billing-pick-storage')).toBeVisible()
   await expect(page.getByRole('button', { name: /Выставить счёт/ })).toHaveCount(1)
   await page.getByRole('button', { name: 'Загрузить ещё' }).click()
-  await expect(page.getByTestId('billing-seller-entries').locator('tbody tr')).toHaveCount(2)
-  await expect(page.getByTestId('billing-seller-storage').locator('tbody tr')).toHaveCount(1)
+  await expect(page.getByTestId('billing-seller-entries').locator('tbody tr')).toHaveCount(3)
+  await expect(page.getByTestId('billing-seller-entries').locator('tbody tr', { hasText: 'Хранение' })).toHaveCount(1)
   await page.reload()
-  await expect(page.getByRole('columnheader', { name: 'Начислено' })).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: 'Стоимость услуг' })).toBeVisible()
 })
 
 test('seller report ignores a held stale summary and detail response', async ({ page }) => {
   await authenticate(page)
   await page.route('**/api/billing/seller-report/summary?**', async (route) => {
-    const search = new URL(route.request().url()).searchParams.get('search')
-    if (search === 'старый') await new Promise((resolve) => setTimeout(resolve, 350))
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rows: [{ seller_id: 'seller-1', seller_name: search === 'старый' ? 'Старый селлер' : 'Новый селлер', operation_count: 1, item_quantity: 1, not_billable_count: 0, details_target: '/api/billing/seller-report/sellers/seller-1/details' }], totals: { seller_count: 1, operation_count: 1, item_quantity: 1, not_billable_count: 0 } }) })
+    const requested = new URL(route.request().url()).searchParams.get('seller_id')
+    const stale = requested === 'seller-1'
+    if (stale) await new Promise((resolve) => setTimeout(resolve, 350))
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rows: [{ seller_id: 'seller-1', seller_name: stale ? 'Старый селлер' : 'Новый селлер', operation_count: 1, item_quantity: 1, not_billable_count: 0, details_target: '/api/billing/seller-report/sellers/seller-1/details' }], totals: { seller_count: 1, operation_count: 1, item_quantity: 1, not_billable_count: 0 } }) })
   })
   await page.route('**/api/billing/seller-report/sellers/seller-1/details?**', async (route) => {
     const finance = new URL(route.request().url()).searchParams.get('include_finance') === 'true'
@@ -67,15 +82,15 @@ test('seller report ignores a held stale summary and detail response', async ({ 
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ seller_id: 'seller-1', seller_name: 'Новый селлер', next_cursor: null, totals: { operation_count: 1, item_quantity: 1, not_billable_count: 0 }, storage_row: null, entries: [{ id: finance ? 'new-entry' : 'old-entry', kind: 'legacy_billing', occurred_at: '2026-08-20T10:00:00+03:00', service_code: 'inbound', item_quantity: 1, source_type: 'inbound_intake', source_id: 'inbound-1', document_number: finance ? 'НОВЫЙ-1' : 'СТАРЫЙ-1', product_name: null, sku: null, source_target: { kind: 'inbound', source_id: 'inbound-1' }, result: 'completed', ...(finance ? { unit: 'item', rate_kopecks: 100, amount_kopecks: 100, invoice_history: { state: 'known', count: 0 } } : {}) }] }) })
   })
   await page.goto('/app/ff/billing')
-  await page.getByPlaceholder('Селлер').fill('старый')
-  await page.getByPlaceholder('Селлер').fill('новый')
+  await page.getByTestId('billing-seller').selectOption('seller-1')
+  await page.getByTestId('billing-seller').selectOption('all')
   await expect(page.getByTestId('billing-seller-summary')).toContainText('Новый селлер')
   await page.waitForTimeout(450)
   await expect(page.getByTestId('billing-seller-summary')).not.toContainText('Старый селлер')
-  await page.getByRole('button', { name: 'Показать операции' }).click()
+  await expandSeller(page, 'Новый селлер')
   await page.getByTestId('billing-seller-finance').click()
-  await expect(page.getByTestId('billing-seller-details')).toHaveCount(0)
-  await page.getByRole('button', { name: 'Показать операции' }).click()
+  await expect(page.locator('[data-testid^="billing-seller-details-"]')).toHaveCount(0)
+  await expandSeller(page, 'Новый селлер')
   await expect(page.getByTestId('billing-seller-entries')).toContainText('НОВЫЙ-1')
   await page.waitForTimeout(450)
   await expect(page.getByTestId('billing-seller-entries')).not.toContainText('СТАРЫЙ-1')
@@ -97,19 +112,19 @@ test('seller report clears Luna details when the seller or period becomes empty'
   }))
 
   await page.goto('/app/ff/billing')
-  await page.getByRole('button', { name: 'Показать операции' }).click()
-  await expect(page.getByTestId('billing-seller-details')).toContainText('ЛУНА-1')
-  await expect(page.getByTestId('billing-seller-storage')).toContainText('Хранение')
+  await expandSeller(page, 'Луна')
+  await expect(page.locator('[data-testid^="billing-seller-details-"]')).toContainText('ЛУНА-1')
+  await expect(page.getByTestId('billing-seller-entries')).toContainText('Хранение')
 
-  await page.getByLabel('Селлер').selectOption('seller-empty')
-  await expect(page.getByTestId('billing-seller-summary')).toContainText('За выбранный период операций нет')
-  await expect(page.getByTestId('billing-seller-details')).toHaveCount(0)
+  await page.getByTestId('billing-seller').selectOption('seller-empty')
+  await expect(page.getByTestId('billing-seller-summary')).toContainText('За выбранный период документов нет')
+  await expect(page.locator('[data-testid^="billing-seller-details-"]')).toHaveCount(0)
 
-  await page.getByLabel('Селлер').selectOption('all')
-  await expect(page.getByRole('button', { name: 'Показать операции' })).toBeVisible()
-  await page.getByRole('button', { name: 'Показать операции' }).click()
-  await expect(page.getByTestId('billing-seller-details')).toContainText('ЛУНА-1')
+  await page.getByTestId('billing-seller').selectOption('all')
+  await expect(page.getByTestId('billing-seller-summary').locator('tbody tr', { hasText: 'Луна' }).first().getByRole('button').first()).toBeVisible()
+  await expandSeller(page, 'Луна')
+  await expect(page.locator('[data-testid^="billing-seller-details-"]')).toContainText('ЛУНА-1')
   await page.getByRole('button', { name: '7 дней' }).click()
-  await expect(page.getByTestId('billing-seller-summary')).toContainText('За выбранный период операций нет')
-  await expect(page.getByTestId('billing-seller-details')).toHaveCount(0)
+  await expect(page.getByTestId('billing-seller-summary')).toContainText('За выбранный период документов нет')
+  await expect(page.locator('[data-testid^="billing-seller-details-"]')).toHaveCount(0)
 })

@@ -10,8 +10,10 @@ export function FilterBar({
   children,
   testId,
 }: {
-  search: string
-  onSearchChange: (value: string) => void
+  /** Без поиска: на экране, где отбор идёт только выпадающими списками,
+      пустое текстовое поле лишь дублирует соседний фильтр. */
+  search?: string
+  onSearchChange?: (value: string) => void
   searchPlaceholder?: string
   children?: ReactNode
   testId?: string
@@ -23,13 +25,15 @@ export function FilterBar({
         spacing={1.5}
         sx={{ alignItems: { sm: 'center' }, flexWrap: 'wrap' }}
       >
-        <TextField
-          value={search}
-          onChange={(event) => onSearchChange(event.target.value)}
-          placeholder={searchPlaceholder}
-          sx={{ minWidth: 240 }}
-          slotProps={{ htmlInput: { 'data-testid': 'filter-search' } }}
-        />
+        {onSearchChange ? (
+          <TextField
+            value={search ?? ''}
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder={searchPlaceholder}
+            sx={{ minWidth: 240 }}
+            slotProps={{ htmlInput: { 'data-testid': 'filter-search' } }}
+          />
+        ) : null}
         {children}
       </Stack>
     </Paper>

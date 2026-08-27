@@ -12,6 +12,16 @@ async function authenticateBillingAdmin(page: Page) {
 test.beforeEach(async ({ page }) => authenticateBillingAdmin(page))
 
 // TC-NEW-001 — Given seller aggregates, When the admin opens billing, Then the Sellers tab uses the additive report API.
+/**
+ * Раскрыть строку селлера. Кнопки «Показать операции» и отдельной секции внизу
+ * больше нет: подробности разворачиваются под самой строкой (ТЗ владельца
+ * 27.08.2026, раздел 2).
+ */
+async function expandSeller(page: Page, name: string) {
+  const row = page.getByTestId('billing-seller-summary').locator('tbody tr', { hasText: name }).first()
+  await row.getByRole('button').first().click()
+}
+
 test('billing sellers keeps server totals and fixed physical columns', async ({ page }) => {
   let summaryUrl = ''
   await page.route('**/api/billing/seller-report/summary?**', async (route) => {
@@ -22,9 +32,9 @@ test('billing sellers keeps server totals and fixed physical columns', async ({ 
   const table = page.getByTestId('billing-seller-summary')
   await expect(page.getByRole('tab', { name: 'Селлеры' })).toBeVisible()
   await expect(table).toContainText('Луна')
-  await expect(table.getByRole('columnheader', { name: 'Операций' })).toHaveAttribute('width', '110')
+  await expect(table.getByRole('columnheader', { name: 'Документов' })).toHaveAttribute('width', '130')
   await expect(table.getByRole('columnheader', { name: 'Штук' })).toHaveAttribute('width', '100')
-  await expect(table.getByRole('columnheader', { name: 'Начислено' })).toHaveCount(0)
+  await expect(table.getByRole('columnheader', { name: 'Стоимость услуг' })).toHaveCount(0)
   await expect.poll(() => new URL(summaryUrl).searchParams.get('include_finance')).toBe('false')
   await expect.poll(() => new URL(summaryUrl).searchParams.has('period')).toBe(false)
 })
@@ -35,13 +45,14 @@ test('billing sellers show finance-on detail without a legacy performer view', a
   await page.route('**/api/billing/seller-report/sellers/seller-1/details?**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ seller_id: 'seller-1', seller_name: 'Луна', next_cursor: null, totals: { operation_count: 1, item_quantity: 2, not_billable_count: 0, net_total_kopecks: 1200 }, storage_row: { kind: 'storage', date_from: '2026-08-20', date_to: '2026-08-22', liter_days: 6, status: 'calculated', amount_kopecks: 300, calculation_token: 'opaque' }, entries: [{ id: 'legacy_billing:1', kind: 'legacy_billing', occurred_at: '2026-08-20T10:00:00+03:00', service_code: 'inbound', item_quantity: 2, source_type: 'inbound_intake', source_id: 'inbound-1', source_target: { kind: 'inbound', source_id: 'inbound-1' }, result: 'completed', rate_kopecks: 600, amount_kopecks: 1200, invoice_history: { state: 'known', count: 0 } }] }) }))
   await page.goto('/app/ff/billing')
   await page.getByTestId('billing-seller-finance').click()
-  await expect(page.getByRole('columnheader', { name: 'Начислено' })).toBeVisible()
-  await page.getByRole('button', { name: 'Показать операции' }).click()
-  await expect(page.getByTestId('billing-seller-storage').locator('tbody tr')).toHaveCount(1)
+  await expect(page.getByRole('columnheader', { name: 'Стоимость услуг' })).toBeVisible()
+  await expandSeller(page, 'Луна')
+  await expect(page.getByTestId('billing-seller-entries').locator('tbody tr', { hasText: 'Хранение' })).toHaveCount(1)
   await expect(page.getByTestId('billing-seller-entries').getByRole('columnheader', { name: 'Счёт выставлялся' })).toBeVisible()
   await expect(page.getByText('По исполнителям')).toHaveCount(0)
   // Волна 4: выбор операции появился, но подпись чекбокса скрыта — колонка узкая.
+  // Две галочки в одной таблице: строка хранения и документ.
   const pick = page.getByTestId('billing-seller-entries').getByRole('checkbox')
-  await expect(pick).toHaveCount(1)
-  await expect(pick).toHaveAttribute('aria-label', /Выбрать операцию/)
+  await expect(pick).toHaveCount(2)
+  await expect(pick.last()).toHaveAttribute('aria-label', /Выбрать документ/)
 })

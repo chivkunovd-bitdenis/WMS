@@ -41,6 +41,16 @@ test.beforeEach(async ({ page }) => authenticateBillingAdmin(page))
 // причина недоступного чекбокса операции. Пока выбор операций не сделан,
 // этой информации на экране нет — это известный пробел, а не решённый вопрос.
 
+/**
+ * Раскрыть строку селлера. Кнопки «Показать операции» и отдельной секции внизу
+ * больше нет: подробности разворачиваются под самой строкой (ТЗ владельца
+ * 27.08.2026, раздел 2).
+ */
+async function expandSeller(page: Page, name: string) {
+  const row = page.getByTestId('billing-seller-summary').locator('tbody tr', { hasText: name }).first()
+  await row.getByRole('button').first().click()
+}
+
 test('billing seller report displays kopecks exactly once', async ({ page }) => {
   await authenticateBillingAdmin(page)
   await page.route('**/api/billing/seller-report/summary?**', async (route) => route.fulfill({
@@ -61,8 +71,8 @@ test('billing seller report displays kopecks exactly once', async ({ page }) => 
   await page.goto('/app/ff/billing')
   await page.getByTestId('billing-seller-finance').click()
   const cells = page.getByTestId('billing-seller-summary').locator('tbody tr').first().getByRole('cell')
-  await expect(cells.nth(5)).toHaveText('630,00 ₽')
-  await expect(cells.nth(5)).not.toHaveText('63 000,00 ₽')
+  await expect(cells.nth(6)).toHaveText('630,00 ₽')
+  await expect(cells.nth(6)).not.toHaveText('63 000,00 ₽')
 })
 
 // S-31-TC-017 — Given the seller billing profile blocks formation, Then the corrective action targets that seller.
@@ -151,13 +161,13 @@ test('billing seller report keeps an unpriced operation visible', async ({ page 
 
   await page.goto('/app/ff/billing')
   await page.getByTestId('billing-seller-finance').click()
-  await page.getByRole('button', { name: 'Показать операции' }).click()
+  await expandSeller(page, 'Луна')
   await expect(page.getByTestId('billing-seller-entries')).toContainText('Нет ставки')
   await expect(page.getByText('warehouse_magic_fee', { exact: true })).toHaveCount(0)
   await page.getByText('Недоступен', { exact: true }).hover()
-  await expect(page.getByRole('tooltip')).toContainText('Первоисточник недоступен')
+  await expect(page.getByRole('tooltip', { name: /Первоисточник недоступен/ })).toBeVisible()
   // Непроценённую операцию видно, но выбрать в счёт нельзя — причина названа.
-  const unpriced = page.getByTestId('billing-seller-entries').getByRole('checkbox')
+  const unpriced = page.getByTestId('billing-seller-entries').getByRole('checkbox').last()
   await expect(unpriced).toBeDisabled()
   await expect(page.getByRole('button', { name: /Выставить счёт/ })).toHaveCount(1)
 })
