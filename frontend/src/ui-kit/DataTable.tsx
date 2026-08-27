@@ -7,7 +7,9 @@ import {
   TableHead,
   TableRow,
 } from '@mui/material'
-import type { ReactNode } from 'react'
+import ExpandMore from '@mui/icons-material/ExpandMore'
+import { Fragment, type ReactNode } from 'react'
+import { IconAction } from './Actions'
 import { EmptyState, TableSkeletonBody } from './States'
 
 // Единственная таблица системы. Всё, что раньше собиралось руками на 33 экранах,
@@ -33,6 +35,20 @@ type Props<Row> = {
   hasDiscrepancy?: (row: Row) => boolean
   empty?: { title: string; hint?: string; action?: ReactNode }
   testId?: string
+  /**
+   * Раскрытие строки под собой.
+   *
+   * Второй таблице с собственной шапкой под основной таблицей взяться неоткуда:
+   * оператор читает подробности там же, где выбрал строку, а не в оторванной
+   * секции внизу экрана. Состояние держит экран — раскрытие обычно тянет данные.
+   */
+  expand?: {
+    isExpanded: (row: Row) => boolean
+    onToggle: (row: Row) => void
+    render: (row: Row) => ReactNode
+    /** Доступное имя стрелки: «флажок» без имени программе чтения бесполезен. */
+    label: (row: Row) => string
+  }
 }
 
 export function DataTable<Row>({
@@ -43,8 +59,10 @@ export function DataTable<Row>({
   hasDiscrepancy,
   empty,
   testId,
+  expand,
 }: Props<Row>) {
   const showEmpty = !loading && rows.length === 0
+  const spanWidth = columns.length + (expand ? 1 : 0)
 
   return (
     <TableContainer component={Paper} variant="outlined" data-testid={testId}>
@@ -53,6 +71,7 @@ export function DataTable<Row>({
       <Table stickyHeader size="small">
         <TableHead>
           <TableRow>
+            {expand ? <TableCell width={56} sx={{ whiteSpace: 'nowrap' }} /> : null}
             {columns.map((column) => (
               <TableCell
                 key={column.key}
@@ -66,29 +85,61 @@ export function DataTable<Row>({
           </TableRow>
         </TableHead>
         {loading ? (
-          <TableSkeletonBody columns={columns.length} />
+          <TableSkeletonBody columns={spanWidth} />
         ) : (
           <TableBody>
-            {rows.map((row) => (
-              <TableRow
-                key={getRowKey(row)}
-                hover
-                sx={
-                  hasDiscrepancy?.(row)
-                    ? { backgroundColor: 'rgba(163, 42, 32, 0.10)' }
-                    : undefined
-                }
-              >
-                {columns.map((column) => (
-                  <TableCell key={column.key} align={column.align ?? 'left'}>
-                    {column.render(row)}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
+            {rows.map((row) => {
+              const expanded = Boolean(expand?.isExpanded(row))
+              return (
+                <Fragment key={getRowKey(row)}>
+                  <TableRow
+                    hover
+                    sx={
+                      hasDiscrepancy?.(row)
+                        ? { backgroundColor: 'rgba(163, 42, 32, 0.10)' }
+                        : undefined
+                    }
+                  >
+                    {expand ? (
+                      <TableCell padding="checkbox">
+                        <IconAction
+                          title={expand.label(row)}
+                          onClick={() => expand.onToggle(row)}
+                          testId={`${testId ?? 'table'}-expand-${getRowKey(row)}`}
+                        >
+                          <ExpandMore
+                            fontSize="small"
+                            sx={{
+                              transition: 'transform 120ms',
+                              transform: expanded ? 'rotate(180deg)' : 'none',
+                            }}
+                          />
+                        </IconAction>
+                      </TableCell>
+                    ) : null}
+                    {columns.map((column) => (
+                      <TableCell key={column.key} align={column.align ?? 'left'}>
+                        {column.render(row)}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                  {expanded && expand ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={spanWidth}
+                        sx={{ p: 0, backgroundColor: 'action.hover' }}
+                        data-testid={`${testId ?? 'table'}-expanded-${getRowKey(row)}`}
+                      >
+                        {expand.render(row)}
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </Fragment>
+              )
+            })}
             {showEmpty && empty ? (
               <TableRow>
-                <TableCell colSpan={columns.length} sx={{ borderBottom: 'none' }}>
+                <TableCell colSpan={spanWidth} sx={{ borderBottom: 'none' }}>
                   <EmptyState title={empty.title} hint={empty.hint} action={empty.action} />
                 </TableCell>
               </TableRow>
