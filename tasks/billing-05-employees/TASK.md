@@ -23,22 +23,27 @@
 наряду автоматически захватить чужой экран «Настройки».
 
 ```bash
-python3 scripts/naryad.py new "Волна 5 модуля «Расчёты»: вкладка сотрудников, неизменяемые выплаты и сверка упаковки" --lane обычная --files backend/app/models/billing.py,backend/app/models/operation_fact.py,backend/app/models/__init__.py,backend/app/services/operation_fact_service.py,backend/app/services/staff_packaging_billing_service.py,backend/app/services/staff_earning_service.py,backend/app/services/billing_staff_report_service.py,backend/app/api/billing.py,backend/app/api/billing_staff_report_schemas.py,backend/alembic/versions/20260827_0115_staff_earnings.py,backend/tests/test_operation_facts.py,backend/tests/test_staff_packaging_billing.py,backend/tests/test_staff_earning_service.py,backend/tests/test_billing_staff_report_api.py,backend/tests/test_billing_staff_report_service.py,backend/tests/test_billing_tariff_matrix.py,frontend/src/screens/ff/FfBillingScreen.tsx,frontend/src/screens/ff/FfBillingScreen.test.ts,frontend/tests-e2e/billing-staff-report.spec.ts,frontend/tests-e2e/ff-staff-packaging-billing.spec.ts,frontend/tests-e2e/billing-seller-report.spec.ts,frontend/tests-e2e/billing-invoices.spec.ts,docs/evidence/billing-05-employees/STAFF-EARNINGS-PROOF.md,docs/evidence/20260827-volna-5-modulya-raschety-vkladka-sotrudn/BILLING-STAFF-1600.jpg,docs/evidence/20260827-volna-5-modulya-raschety-vkladka-sotrudn/BILLING-STAFF-FINANCE-OFF-1280.jpg,docs/evidence/20260827-volna-5-modulya-raschety-vkladka-sotrudn/VERDICT.md,tasks/billing-05-employees/TASK.md
+python3 scripts/naryad.py new "Волна 5 модуля «Расчёты»: вкладка сотрудников, неизменяемые выплаты и сверка упаковки" --lane обычная --files backend/app/models/billing.py,backend/app/models/operation_fact.py,backend/app/models/packaging_task.py,backend/app/models/user.py,backend/app/models/__init__.py,backend/app/services/operation_fact_service.py,backend/app/services/packaging_task_service.py,backend/app/services/staff_packaging_billing_service.py,backend/app/services/staff_earning_service.py,backend/app/services/billing_staff_report_service.py,backend/app/api/billing.py,backend/app/api/billing_staff_report_schemas.py,backend/app/api/staff_accounts.py,backend/alembic/versions/20260827_0115_staff_earnings.py,backend/tests/test_operation_facts.py,backend/tests/test_packaging_tasks.py,backend/tests/test_staff_packaging_billing.py,backend/tests/test_staff_users.py,backend/tests/test_billing_financial_core_migration.py,backend/tests/test_staff_earning_service.py,backend/tests/test_billing_staff_report_api.py,backend/tests/test_billing_staff_report_service.py,backend/tests/test_billing_tariff_matrix.py,frontend/src/screens/ff/FfBillingScreen.tsx,frontend/src/screens/ff/FfBillingScreen.test.ts,frontend/tests-e2e/billing-staff-report.spec.ts,frontend/tests-e2e/ff-staff-packaging-billing.spec.ts,frontend/tests-e2e/billing-seller-report.spec.ts,frontend/tests-e2e/billing-invoices.spec.ts,docs/evidence/billing-05-employees/STAFF-EARNINGS-PROOF.md,docs/evidence/20260827-volna-5-modulya-raschety-vkladka-sotrudn/BILLING-STAFF-1600.jpg,docs/evidence/20260827-volna-5-modulya-raschety-vkladka-sotrudn/BILLING-STAFF-FINANCE-OFF-1280.jpg,docs/evidence/20260827-volna-5-modulya-raschety-vkladka-sotrudn/VERDICT.md,tasks/billing-05-employees/TASK.md
 ```
 
 `frontend/src/ui-kit/**`, экран настроек, тарифная матрица,
 route-конфигурация, `App.tsx`, screen registry, Wave 3/4 product code, legacy
-invoice/storage UI, `User` и `PackagingTask` schema, baseline-guards, secrets,
-staging и production в эту волну не входят.
+invoice/storage UI, baseline-guards, secrets, staging и production в эту волну
+не входят. Исключение внутри указанной boundary только одно: минимальные
+additive поля `User`/`PackagingTask` и их completion writer требуются для
+долговечного configured-zero и employee snapshot упаковки; они не меняют
+экран настроек, его колонки или flow.
 Если требуемого UI-kit primitive нет, developer останавливает этот наряд:
 отдельная общая prerequisite проходит свой наряд, review, commit/push и только
 затем Wave 5 открывается заново. Локальные MUI-аналоги таблицы, фильтра,
 кнопки, dropdown, chip или switch запрещены.
 
 Миграция только добавляющая: `0115` имеет единственный parent `0114`, не
-переписывает 0110–0114 и не меняет существующие таблицы упаковки, тарифов,
-операций, ledger или invoices. Никаких mass-reprice, реконструкции старой
-истории или смены активной ставки задним числом.
+переписывает 0110–0114. Она добавляет staff journal, composite unique
+`PackagingTask(tenant_id, id)`, employee/history snapshots и configured-state,
+но не меняет ни существующую сумму упаковки, ни тарифы, операции, ledger или
+invoices. Никаких mass-reprice, реконструкции старой истории или смены
+активной ставки задним числом.
 
 ## 1. Цель и явные нецели
 
@@ -49,11 +54,13 @@ staging и production в эту волну не входят.
 упаковку с уже существующим расчётом по завершённым упаковочным заданиям.
 
 Не входят: изменение ставок в самом отчёте, создание/отмена счетов,
-чекбоксы, начисления селлеру, пересчёт архивной упаковки, изменение
-`staff_packaging_billing_service`, расширение ролей, новый маршрут, экспорт,
-выплата денег, платёжная ведомость, удаление сотрудника и какая-либо новая
-автоматизация. Настройка ставок остаётся в уже существующем месте;
-упаковка остаётся её отдельной ставкой и не переносится в матрицу.
+чекбоксы, начисления селлеру, пересчёт архивной упаковки, расширение ролей,
+новый маршрут, экспорт, выплата
+денег, платёжная ведомость, удаление сотрудника и какая-либо новая
+автоматизация. Допустим только узкий server-side completion path: explicit
+сохранение уже введённой ставки (включая 0), configured-state и имени в
+`PackagingTask`; это не меняет настройку ставки или её UI. Упаковка остаётся
+отдельной ставкой и не переносится в матрицу.
 
 ## 2. Экран: только существующий каркас и UI-kit
 
