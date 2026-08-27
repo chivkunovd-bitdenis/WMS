@@ -5,6 +5,7 @@ import {
   MoscowDateTimeInput,
   NumberInput,
   SecondaryAction,
+  StatusChip,
   SelectInput,
   TextCell,
 } from '../../ui-kit'
@@ -26,6 +27,53 @@ export type TariffVersionRow = {
   service_code: string
   rate: number
   valid_from_at: string
+  valid_to_at?: string | null
+}
+
+type RateState = 'active' | 'superseded' | 'planned'
+
+/**
+ * Состояние каждой версии ставки внутри своей области.
+ *
+ * Область — это пара «на что» + услуга: ставка селлера на приёмку и цена того
+ * же селлера на приёмку конкретного товара живут отдельно и обе действуют, а
+ * перебивает одна другую уже при расчёте. Внутри одной области действует
+ * последняя версия, начавшаяся не позже сейчас; всё, что раньше неё, перебито.
+ * Версия с будущей датой ещё не вступила в силу — это не то же самое, что
+ * перебитая, и называть её «не действует» было бы враньём.
+ */
+export function withRateState(
+  rows: TariffVersionRow[],
+  now: Date,
+): Array<TariffVersionRow & { state: RateState }> {
+  const scope = (row: TariffVersionRow) => `${row.product_id ?? 'all'}::${row.service_code}`
+  const activeStart = new Map<string, number>()
+  for (const row of rows) {
+    const startedAt = new Date(row.valid_from_at).getTime()
+    if (startedAt > now.getTime()) continue
+    if (row.valid_to_at && new Date(row.valid_to_at).getTime() <= now.getTime()) continue
+    const key = scope(row)
+    if (!activeStart.has(key) || startedAt > (activeStart.get(key) as number)) {
+      activeStart.set(key, startedAt)
+    }
+  }
+  return rows.map((row) => {
+    const startedAt = new Date(row.valid_from_at).getTime()
+    if (startedAt > now.getTime()) return { ...row, state: 'planned' as const }
+    const active = activeStart.get(scope(row))
+    return { ...row, state: active === startedAt ? ('active' as const) : ('superseded' as const) }
+  })
+}
+
+/** Действующие — внизу: оператор ищет глазами то, что применяется сейчас. */
+const STATE_ORDER: Record<RateState, number> = { superseded: 0, planned: 1, active: 2 }
+
+export function sortRateRows<T extends { state: RateState; valid_from_at: string }>(rows: T[]): T[] {
+  return [...rows].sort(
+    (a, b) =>
+      STATE_ORDER[a.state] - STATE_ORDER[b.state] ||
+      new Date(a.valid_from_at).getTime() - new Date(b.valid_from_at).getTime(),
+  )
 }
 
 const rubleFormatter = new Intl.NumberFormat('ru-RU', {
@@ -97,14 +145,35 @@ function SellerRatesDetails({
   const productLabel = (product: ProductOption) =>
     [product.sku, product.name].filter(Boolean).join(' · ')
 
-  const rows = versions.filter(
-    (row) => row.seller_id === seller.id && row.employee_user_id == null,
+  const rows = sortRateRows(
+    withRateState(
+      versions.filter((row) => row.seller_id === seller.id && row.employee_user_id == null),
+      new Date(),
+    ),
   )
   const unitAllowsProduct =
     (services.find((item) => item.service_code === service)?.unit ?? 'item') === 'item'
   const label = (code: string) => serviceName[code] ?? code
 
-  const columns: Column<TariffVersionRow>[] = [
+  type Row = (typeof rows)[number]
+  const columns: Column<Row>[] = [
+    {
+      key: 'state',
+      header: 'Состояние',
+      width: 170,
+      render: (row) =>
+        row.state === 'active' ? (
+          <StatusChip label="✓ Действует" tone="ok" />
+        ) : row.state === 'planned' ? (
+          <StatusChip label="Запланирована" tone="neutral" hint="Вступит в силу в указанную дату" />
+        ) : (
+          <StatusChip
+            label="Перебита"
+            tone="neutral"
+            hint="Заменена более поздней ставкой для того же товара и услуги"
+          />
+        ),
+    },
     {
       key: 'target',
       header: 'На что',
