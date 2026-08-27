@@ -24,7 +24,9 @@ class SelectedOperationsInvoiceV2DraftIn(BaseModel):
     seller_id: uuid.UUID
     date_from: date
     date_to: date
-    selected_root_ids: list[uuid.UUID] = Field(min_length=1, max_length=100)
+    # Пустой список допустим, когда выбрана только строка хранения. Отказ на
+    # «не выбрано вообще ничего» даёт сервис: он видит обе части сразу.
+    selected_root_ids: list[uuid.UUID] = Field(default_factory=list, max_length=100)
     storage_calculation_token: str | None = Field(default=None, max_length=4096)
 
 
@@ -55,6 +57,31 @@ class InvoiceV2Out(BaseModel):
     ff_profile: dict[str, str | None]
     seller_profile: dict[str, str | None]
     lines: list[InvoiceV2LineOut]
+
+
+class InvoiceHistoryItemOut(BaseModel):
+    """Строка вкладки «Выставленные счета»: и старые месячные, и новые.
+
+    `origin` говорит экрану, за какой карточкой идти при «Открыть»: legacy
+    лежит в `/billing/invoices/{id}`, новый — в `/billing/invoices-v2/{id}`.
+    """
+
+    id: uuid.UUID
+    origin: Literal["legacy", "v2"]
+    number: str
+    seller_id: uuid.UUID
+    seller_name: str
+    issued_at: datetime
+    period_start: date | None
+    period_end: date | None
+    creation_mode: Literal["monthly", "manual", "selected_operations"]
+    status: Literal["issued", "cancelled"]
+    total_amount_kopecks: int
+
+
+class InvoiceHistoryOut(BaseModel):
+    invoices: list[InvoiceHistoryItemOut]
+    next_cursor: str | None = None
 
 
 class InvoiceV2ListOut(BaseModel):

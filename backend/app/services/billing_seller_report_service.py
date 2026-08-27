@@ -94,6 +94,10 @@ async def verify_storage_calculation_token(
         raise SellerReportError("storage_calculation_stale") from None
     start, end = moscow_interval(date_from, date_to)
     current = await _storage_row(session, tenant_id=tenant_id, seller_id=seller_id, date_from=date_from, date_to=date_to, start=start, end=end, include_finance=True)
+    # Причины разделены намеренно: «нет габаритов» чинит каталог, «расчёт
+    # устарел» чинит перезагрузка отчёта. Общий текст заставлял бы гадать.
+    if current["status"] == "missing_dimensions":
+        raise SellerReportError("storage_missing_dimensions")
     if current["status"] != "calculated" or current["calculation_token"] != token:
         raise SellerReportError("storage_calculation_stale")
     return int(current["amount_kopecks"])

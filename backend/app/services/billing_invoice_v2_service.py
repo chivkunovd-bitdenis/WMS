@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import re
 import uuid
-from datetime import date
+from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
@@ -15,6 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.billing import (
+    BillingInvoice,
     BillingInvoiceV2,
     BillingInvoiceV2Idempotency,
     BillingInvoiceV2Line,
@@ -23,9 +25,25 @@ from app.models.billing import (
     BillingProfile,
 )
 from app.models.seller import Seller
+from app.services.billing_seller_report_service import (
+    SellerReportError,
+    verify_storage_calculation_token,
+)
 from app.services.document_number_service import DOC_TYPE_INVOICE, next_document_number
 
 DECIMAL_RE = re.compile(r"^-?\d+(\.\d{1,2})?$")
+
+# Печатная форма показывает услугу человеку, а не код таблицы. Подпись
+# снимается в момент выставления и дальше не пересчитывается.
+SERVICE_LABELS = {
+    "inbound": "Приёмка",
+    "marketplace_outbound": "Отгрузка",
+    "storage_liter_day": "Хранение",
+}
+
+# Хранение приходит в счёт ровно одной агрегированной строкой за весь период,
+# без разбивки по товарам, дням и тарифам.
+STORAGE_LINE_DESCRIPTION = "Хранение товара за выбранный период"
 
 
 class BillingInvoiceV2Error(ValueError):
@@ -151,6 +169,54 @@ async def preview_invoice_v2(
     }
 
 
+async def _storage_line(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    date_from: date,
+    date_to: date,
+    token: Any,
+    sort_order: int,
+) -> dict[str, Any] | None:
+    """Пересчитать хранение на сервере и превратить его в одну строку счёта.
+
+    Токен из запроса — только заявка «я видел вот этот расчёт», а не цена.
+    Сумма всегда берётся из свежего серверного пересчёта; расходится хоть в
+    копейке, хоть по границам периода или селлеру — счёт не сохраняется.
+    Пересчёт повторяется и при сохранении, поэтому расчёт, устаревший между
+    предпросмотром и кнопкой «Сохранить», тоже будет отклонён.
+    """
+    if token in (None, ""):
+        return None
+    try:
+        amount_kopecks = await verify_storage_calculation_token(
+            session,
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            date_from=date_from,
+            date_to=date_to,
+            token=str(token),
+        )
+    except SellerReportError as exc:
+        # Сюда же приходит хранение без габаритов: у него статус не
+        # `calculated`, поэтому верификатор отказывает, а не молча берёт ноль.
+        raise BillingInvoiceV2Error(str(exc)) from exc
+    return {
+        "id": uuid.uuid4(),
+        "description": STORAGE_LINE_DESCRIPTION,
+        "unit_price_kopecks": None,
+        "total_amount_kopecks": amount_kopecks,
+        "sort_order": sort_order,
+        "sources": [
+            {
+                "storage_calculation_token": str(token),
+                "signed_amount_kopecks_snapshot": amount_kopecks,
+            }
+        ],
+    }
+
+
 async def _preview_selected_operations(
     session: AsyncSession, *, tenant_id: uuid.UUID, request: dict[str, Any]
 ) -> dict[str, Any]:
@@ -209,7 +275,7 @@ async def _preview_selected_operations(
         lines.append(
             {
                 "id": uuid.uuid4(),
-                "description": service_code,
+                "description": SERVICE_LABELS.get(service_code, service_code),
                 "unit_price_kopecks": None,
                 "total_amount_kopecks": sum(int(entry.amount or 0) for entry in entries),
                 "sort_order": order,
@@ -222,6 +288,17 @@ async def _preview_selected_operations(
                 ],
             }
         )
+    storage_line = await _storage_line(
+        session,
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        date_from=date_from,
+        date_to=date_to,
+        token=request.get("storage_calculation_token"),
+        sort_order=len(lines),
+    )
+    if storage_line is not None:
+        lines.append(storage_line)
     if not lines:
         raise BillingInvoiceV2Error("selected_operations_required")
     return {
@@ -303,8 +380,8 @@ async def create_invoice_v2(
                     tenant_id=tenant_id,
                     invoice_line_id=persisted_line.id,
                     operation_fact_id=None,
-                    billing_ledger_entry_id=source["billing_ledger_entry_id"],
-                    storage_calculation_token=None,
+                    billing_ledger_entry_id=source.get("billing_ledger_entry_id"),
+                    storage_calculation_token=source.get("storage_calculation_token"),
                     signed_amount_kopecks_snapshot=source["signed_amount_kopecks_snapshot"],
                 )
             )
@@ -346,3 +423,134 @@ async def cancel_invoice_v2(
     if invoice.status == "issued":
         invoice.status = "cancelled"
     return invoice
+
+
+def _list_cursor(issued_at: datetime, origin: str, invoice_id: uuid.UUID) -> str:
+    """Позиция в объединённой истории.
+
+    Курсор не подписывается намеренно: в отличие от токена хранения он не
+    заявляет сумму и не влияет на фильтры. Арендатор берётся из токена
+    доступа, фильтры приходят явными параметрами, поэтому подделать здесь
+    нечего — курсор указывает только место в уже разрешённой выборке.
+    """
+    payload = {"issued_at": issued_at.isoformat(), "origin": origin, "id": str(invoice_id)}
+    return base64.urlsafe_b64encode(_canonical(payload).encode()).decode().rstrip("=")
+
+
+def _parse_list_cursor(cursor: str) -> tuple[datetime, str, uuid.UUID]:
+    try:
+        payload = json.loads(base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)))
+        return (
+            datetime.fromisoformat(payload["issued_at"]),
+            str(payload["origin"]),
+            uuid.UUID(str(payload["id"])),
+        )
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+        raise BillingInvoiceV2Error("invalid_cursor") from None
+
+
+def _sort_key(row: dict[str, Any]) -> tuple[datetime, str, str]:
+    # Убывание по дате выставления; origin и id только разводят совпадения,
+    # чтобы страница не «дрожала» между запросами.
+    return (row["issued_at"], row["origin"], str(row["id"]))
+
+
+async def list_invoices_v2(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID | None = None,
+    status: str | None = None,
+    number: str | None = None,
+    cursor: str | None = None,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """Единая история выставленных счетов: старые месячные и новые вместе.
+
+    Разрыв истории на «до» и «после» смены механизма — это потерянные для
+    оператора документы, поэтому обе таблицы читаются в один список.
+    Суммы приводятся к копейкам: legacy хранит рубли `Numeric(14, 2)`.
+    """
+    limit = max(1, min(limit, 200))
+    after = _parse_list_cursor(cursor) if cursor else None
+
+    legacy_query = (
+        select(BillingInvoice, Seller.name)
+        .join(Seller, BillingInvoice.seller_id == Seller.id)
+        .where(BillingInvoice.tenant_id == tenant_id)
+    )
+    v2_query = (
+        select(BillingInvoiceV2, Seller.name)
+        .join(Seller, BillingInvoiceV2.seller_id == Seller.id)
+        .where(BillingInvoiceV2.tenant_id == tenant_id)
+    )
+    if seller_id is not None:
+        legacy_query = legacy_query.where(BillingInvoice.seller_id == seller_id)
+        v2_query = v2_query.where(BillingInvoiceV2.seller_id == seller_id)
+    if status not in (None, "", "all"):
+        legacy_query = legacy_query.where(BillingInvoice.status == status)
+        v2_query = v2_query.where(BillingInvoiceV2.status == status)
+    if number:
+        legacy_query = legacy_query.where(BillingInvoice.number.ilike(f"%{number}%"))
+        v2_query = v2_query.where(BillingInvoiceV2.number.ilike(f"%{number}%"))
+
+    rows: list[dict[str, Any]] = []
+    for invoice, seller_name in (
+        await session.execute(
+            legacy_query.order_by(BillingInvoice.issued_at.desc()).limit(limit + 1)
+        )
+    ).all():
+        month_start = invoice.period.replace(day=1)
+        next_month = date(
+            month_start.year + (month_start.month == 12),
+            1 if month_start.month == 12 else month_start.month + 1,
+            1,
+        )
+        rows.append(
+            {
+                "id": invoice.id,
+                "origin": "legacy",
+                "number": invoice.number,
+                "seller_id": invoice.seller_id,
+                "seller_name": seller_name,
+                "issued_at": invoice.issued_at,
+                "period_start": month_start,
+                "period_end": next_month - timedelta(days=1),
+                "creation_mode": "monthly",
+                "status": invoice.status,
+                "total_amount_kopecks": int(
+                    (Decimal(invoice.total_amount) * 100).quantize(
+                        Decimal("1"), rounding=ROUND_HALF_UP
+                    )
+                ),
+            }
+        )
+    for invoice, seller_name in (
+        await session.execute(
+            v2_query.order_by(BillingInvoiceV2.issued_at.desc()).limit(limit + 1)
+        )
+    ).all():
+        rows.append(
+            {
+                "id": invoice.id,
+                "origin": "v2",
+                "number": invoice.number,
+                "seller_id": invoice.seller_id,
+                "seller_name": seller_name,
+                "issued_at": invoice.issued_at,
+                "period_start": invoice.period_start,
+                "period_end": invoice.period_end,
+                "creation_mode": invoice.creation_mode,
+                "status": invoice.status,
+                "total_amount_kopecks": invoice.total_amount_kopecks,
+            }
+        )
+
+    rows.sort(key=_sort_key, reverse=True)
+    if after is not None:
+        rows = [row for row in rows if _sort_key(row) < (after[0], after[1], str(after[2]))]
+    page, tail = rows[:limit], rows[limit:]
+    next_cursor = (
+        _list_cursor(page[-1]["issued_at"], page[-1]["origin"], page[-1]["id"]) if tail else None
+    )
+    return {"invoices": page, "next_cursor": next_cursor}
