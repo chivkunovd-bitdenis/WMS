@@ -11,7 +11,7 @@
 После `ACCEPTED` открыть ровно такой наряд:
 
 ```bash
-python3 scripts/naryad.py new "Волна 2Б модуля «Расчёты»: тарифная матрица на экране Настройки ФФ" --screens S-19 --lane обычная --files backend/app/models/billing.py,backend/app/models/__init__.py,backend/app/models/packaging_task.py,backend/app/services/auth_service.py,backend/app/services/billing_tariff_matrix_service.py,backend/app/services/billing_configuration_service.py,backend/app/services/billing_ledger_service.py,backend/app/services/inbound_intake_service.py,backend/app/services/marketplace_unload_service.py,backend/app/api/billing.py,backend/app/main.py,backend/alembic/versions/20260826_0112_billing_tariff_matrix.py,backend/tests/test_auth.py,backend/tests/test_bootstrap_billing_tariff_matrix.py,backend/tests/test_billing_tariff_matrix.py,backend/tests/test_billing_configuration_api.py,backend/tests/test_billing_ledger_service.py,backend/tests/test_billing_invoice_service.py,backend/tests/test_billing_invoice_api.py,backend/tests/test_staff_packaging_billing.py,backend/tests/test_inbound_intake_service_sort_be01.py,backend/tests/test_marketplace_unload_and_discrepancy_acts.py,frontend/src/screens/ff/FfSettingsScreen.tsx,frontend/src/screens/ff/FfBillingTariffMatrixPanel.tsx,frontend/src/screens/ff/FfSettingsScreen.test.tsx,frontend/src/api.ts,frontend/tests-e2e/ff-billing-tariff-matrix.spec.ts,frontend/tests-e2e/ff-staff-users.spec.ts,frontend/tests-e2e/billing-ledger.spec.ts,frontend/tests-e2e/billing-invoices.spec.ts,docs/backend-guard-baseline.json,docs/evidence/billing-02b-tariff-matrix/OPERATION-FACTS-PROOF.md
+python3 scripts/naryad.py new "Волна 2Б модуля «Расчёты»: тарифная матрица на экране Настройки ФФ" --screens S-19 --lane обычная --files backend/app/models/billing.py,backend/app/models/operation_fact.py,backend/app/models/__init__.py,backend/app/models/packaging_task.py,backend/app/services/auth_service.py,backend/app/services/billing_tariff_matrix_service.py,backend/app/services/billing_configuration_service.py,backend/app/services/billing_ledger_service.py,backend/app/services/inbound_intake_service.py,backend/app/services/marketplace_unload_service.py,backend/app/api/billing.py,backend/app/main.py,backend/alembic/versions/20260826_0112_billing_tariff_matrix.py,backend/alembic/versions/20260827_0113_billing_tariff_matrix_integrity.py,backend/tests/test_auth.py,backend/tests/test_bootstrap_billing_tariff_matrix.py,backend/tests/test_billing_configuration_api.py,backend/tests/test_billing_ledger_service.py,backend/tests/test_billing_invoice_service.py,backend/tests/test_billing_invoice_api.py,backend/tests/test_staff_packaging_billing.py,backend/tests/test_inbound_intake_service_sort_be01.py,backend/tests/test_marketplace_unload_and_discrepancy_acts.py,backend/tests/test_billing_tariff_matrix.py,frontend/src/screens/ff/FfSettingsScreen.tsx,frontend/src/screens/ff/FfBillingTariffMatrixPanel.tsx,frontend/src/screens/ff/FfSettingsScreen.test.tsx,frontend/src/api.ts,frontend/tests-e2e/ff-billing-tariff-matrix.spec.ts,frontend/tests-e2e/ff-staff-users.spec.ts,frontend/tests-e2e/billing-ledger.spec.ts,frontend/tests-e2e/billing-invoices.spec.ts,docs/backend-guard-baseline.json,docs/evidence/billing-02b-tariff-matrix/OPERATION-FACTS-PROOF.md,docs/evidence/billing-02b-tariff-matrix/BACK_GUARD_BASELINE.md,docs/evidence/20260827-volna-2b-modulya-raschety-tarifnaya-matr/S19-TARIFF-MATRIX-1600.jpg,docs/evidence/20260827-volna-2b-modulya-raschety-tarifnaya-matr/S19-TARIFF-MATRIX-375.jpg,docs/evidence/20260827-volna-2b-modulya-raschety-tarifnaya-matr/VERDICT.md,tasks/billing-02b-tariff-matrix/TASK.md
 ```
 
 Только перечисленные файлы разрешены для реализации. `frontend/src/ui-kit/**`,
@@ -21,6 +21,39 @@ python3 scripts/naryad.py new "Волна 2Б модуля «Расчёты»: �
 узким amendment; не расширять список молча. Миграция только добавляющая,
 `20260826_0112` продолжает единственный head 2А. Никаких production/staging,
 секретов, Ozon или UI-kit правок.
+
+### Amendment 27.08.2026: reviewer P0 integrity migration
+
+Опубликованная `20260826_0112_billing_tariff_matrix.py` immutable и не
+переписывается. Единственный разрешённый дополнительный путь —
+`backend/alembic/versions/20260827_0113_billing_tariff_matrix_integrity.py`:
+она имеет единственный parent `0112`, сохраняет один head и добавляет только
+legacy non-storage → V2 backfill, tenant-composite integrity для ledger lines
+и требуемые индексы/constraints. Никаких иных schema/data изменений в 0113;
+downgrade откатывает лишь созданные ею additive objects и их data consequences
+без изменения опубликованной 0112.
+
+### Amendment 27.08.2026: operation-fact line composite key
+
+Для точного tenant-composite FK `billing_ledger_lines → operation_fact_lines`
+добавлен единственный model path `backend/app/models/operation_fact.py`. Он
+содержит только `uq_operation_fact_lines_tenant_id_id`, совпадающий с additive
+constraint 0113; иных Operation Fact behaviour, recovery или 2А scope это
+расширение не открывает. Effective main boundary после штатного reopen — 36
+paths (включая два screen-registry auto paths).
+
+### Amendment 27.08.2026: final integrity proof and evidence
+
+Финальный round 2 добавляет только допустимые DB CHECK branches V2 и
+изолированный real PostgreSQL Alembic proof `0110 → 0111 → 0112 → 0113`,
+включая downgrade/re-upgrade. Обязательные evidence paths:
+`docs/evidence/billing-02b-tariff-matrix/OPERATION-FACTS-PROOF.md` (migration,
+Moscow/DST, constraints, race) и
+`docs/evidence/billing-02b-tariff-matrix/BACK_GUARD_BASELINE.md` (final gates).
+Stage-5 browser evidence принадлежит только canonical naryad folder:
+`docs/evidence/20260827-volna-2b-modulya-raschety-tarifnaya-matr/`
+`S19-TARIFF-MATRIX-1600.jpg`, `S19-TARIFF-MATRIX-375.jpg`, `VERDICT.md`.
+Сам TASK включён в effective boundary только для этого formal amendment.
 
 ### Amendment 27.08.2026: общая prerequisite UI-kit
 
@@ -50,7 +83,7 @@ select/dropdown и Moscow date-time input, без которых невозмо�
    ссылкой на другую команду:
 
    ```bash
-   python3 scripts/naryad.py new "Волна 2Б модуля «Расчёты»: тарифная матрица на экране Настройки ФФ" --screens S-19 --lane обычная --files backend/app/models/billing.py,backend/app/models/__init__.py,backend/app/models/packaging_task.py,backend/app/services/auth_service.py,backend/app/services/billing_tariff_matrix_service.py,backend/app/services/billing_configuration_service.py,backend/app/services/billing_ledger_service.py,backend/app/services/inbound_intake_service.py,backend/app/services/marketplace_unload_service.py,backend/app/api/billing.py,backend/app/main.py,backend/alembic/versions/20260826_0112_billing_tariff_matrix.py,backend/tests/test_auth.py,backend/tests/test_bootstrap_billing_tariff_matrix.py,backend/tests/test_billing_tariff_matrix.py,backend/tests/test_billing_configuration_api.py,backend/tests/test_billing_ledger_service.py,backend/tests/test_billing_invoice_service.py,backend/tests/test_billing_invoice_api.py,backend/tests/test_staff_packaging_billing.py,backend/tests/test_inbound_intake_service_sort_be01.py,backend/tests/test_marketplace_unload_and_discrepancy_acts.py,frontend/src/screens/ff/FfSettingsScreen.tsx,frontend/src/screens/ff/FfBillingTariffMatrixPanel.tsx,frontend/src/screens/ff/FfSettingsScreen.test.tsx,frontend/src/api.ts,frontend/tests-e2e/ff-billing-tariff-matrix.spec.ts,frontend/tests-e2e/ff-staff-users.spec.ts,frontend/tests-e2e/billing-ledger.spec.ts,frontend/tests-e2e/billing-invoices.spec.ts,docs/backend-guard-baseline.json,docs/evidence/billing-02b-tariff-matrix/OPERATION-FACTS-PROOF.md
+   python3 scripts/naryad.py new "Волна 2Б модуля «Расчёты»: тарифная матрица на экране Настройки ФФ" --screens S-19 --lane обычная --files backend/app/models/billing.py,backend/app/models/operation_fact.py,backend/app/models/__init__.py,backend/app/models/packaging_task.py,backend/app/services/auth_service.py,backend/app/services/billing_tariff_matrix_service.py,backend/app/services/billing_configuration_service.py,backend/app/services/billing_ledger_service.py,backend/app/services/inbound_intake_service.py,backend/app/services/marketplace_unload_service.py,backend/app/api/billing.py,backend/app/main.py,backend/alembic/versions/20260826_0112_billing_tariff_matrix.py,backend/alembic/versions/20260827_0113_billing_tariff_matrix_integrity.py,backend/tests/test_auth.py,backend/tests/test_bootstrap_billing_tariff_matrix.py,backend/tests/test_billing_configuration_api.py,backend/tests/test_billing_ledger_service.py,backend/tests/test_billing_invoice_service.py,backend/tests/test_billing_invoice_api.py,backend/tests/test_staff_packaging_billing.py,backend/tests/test_inbound_intake_service_sort_be01.py,backend/tests/test_marketplace_unload_and_discrepancy_acts.py,backend/tests/test_billing_tariff_matrix.py,frontend/src/screens/ff/FfSettingsScreen.tsx,frontend/src/screens/ff/FfBillingTariffMatrixPanel.tsx,frontend/src/screens/ff/FfSettingsScreen.test.tsx,frontend/src/api.ts,frontend/tests-e2e/ff-billing-tariff-matrix.spec.ts,frontend/tests-e2e/ff-staff-users.spec.ts,frontend/tests-e2e/billing-ledger.spec.ts,frontend/tests-e2e/billing-invoices.spec.ts,docs/backend-guard-baseline.json,docs/evidence/billing-02b-tariff-matrix/OPERATION-FACTS-PROOF.md,docs/evidence/billing-02b-tariff-matrix/BACK_GUARD_BASELINE.md,docs/evidence/20260827-volna-2b-modulya-raschety-tarifnaya-matr/S19-TARIFF-MATRIX-1600.jpg,docs/evidence/20260827-volna-2b-modulya-raschety-tarifnaya-matr/S19-TARIFF-MATRIX-375.jpg,docs/evidence/20260827-volna-2b-modulya-raschety-tarifnaya-matr/VERDICT.md,tasks/billing-02b-tariff-matrix/TASK.md
    ```
 
 `FormFields.tsx` вводит ровно четыре screen-agnostic exports: `TextInput`,

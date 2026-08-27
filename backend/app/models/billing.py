@@ -11,6 +11,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     Numeric,
@@ -224,17 +225,77 @@ class BillingTariffVersionV2(Base):
             "valid_to_at IS NULL OR valid_to_at > valid_from_at",
             name="ck_billing_tariff_v2_interval",
         ),
+        CheckConstraint(
+            "("
+            "employee_user_id IS NOT NULL "
+            "AND seller_id IS NULL "
+            "AND product_id IS NULL "
+            "AND unit = 'item' "
+            "AND service_code IN ('inbound', 'picking', 'marketplace_outbound', 'return')"
+            ") OR ("
+            "employee_user_id IS NULL "
+            "AND service_code IN ('inbound', 'marketplace_outbound', 'packing', 'return') "
+            "AND (product_id IS NULL OR (seller_id IS NOT NULL AND unit = 'item'))"
+            ")",
+            name="ck_billing_tariff_v2_scope",
+        ),
         Index(
-            "uq_billing_tariff_v2_scope_start",
+            "uq_billing_tariff_v2_common_start",
+            "tenant_id",
+            "service_code",
+            "valid_from_at",
+            unique=True,
+            postgresql_where=text(
+                "seller_id IS NULL AND product_id IS NULL AND employee_user_id IS NULL"
+            ),
+            sqlite_where=text(
+                "seller_id IS NULL AND product_id IS NULL AND employee_user_id IS NULL"
+            ),
+        ),
+        Index(
+            "uq_billing_tariff_v2_seller_start",
+            "tenant_id",
+            "seller_id",
+            "service_code",
+            "valid_from_at",
+            unique=True,
+            postgresql_where=text(
+                "seller_id IS NOT NULL AND product_id IS NULL AND employee_user_id IS NULL"
+            ),
+            sqlite_where=text(
+                "seller_id IS NOT NULL AND product_id IS NULL AND employee_user_id IS NULL"
+            ),
+        ),
+        Index(
+            "uq_billing_tariff_v2_product_start",
             "tenant_id",
             "seller_id",
             "product_id",
-            "employee_user_id",
             "service_code",
-            "unit",
             "valid_from_at",
             unique=True,
+            postgresql_where=text(
+                "seller_id IS NOT NULL AND product_id IS NOT NULL AND employee_user_id IS NULL"
+            ),
+            sqlite_where=text(
+                "seller_id IS NOT NULL AND product_id IS NOT NULL AND employee_user_id IS NULL"
+            ),
         ),
+        Index(
+            "uq_billing_tariff_v2_employee_start",
+            "tenant_id",
+            "employee_user_id",
+            "service_code",
+            "valid_from_at",
+            unique=True,
+            postgresql_where=text(
+                "seller_id IS NULL AND product_id IS NULL AND employee_user_id IS NOT NULL"
+            ),
+            sqlite_where=text(
+                "seller_id IS NULL AND product_id IS NULL AND employee_user_id IS NOT NULL"
+            ),
+        ),
+        UniqueConstraint("tenant_id", "id", name="uq_billing_tariff_v2_tenant_id_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -269,6 +330,7 @@ class BillingLedgerEntry(Base):
 
     __tablename__ = "billing_ledger_entries"
     __table_args__ = (
+        UniqueConstraint("tenant_id", "id", name="uq_billing_ledger_entries_tenant_id_id"),
         UniqueConstraint(
             "tenant_id",
             "service_code",
@@ -347,7 +409,10 @@ class BillingLedgerEntry(Base):
         "BillingTariffVersionV2"
     )
     lines: Mapped[list[BillingLedgerLine]] = relationship(
-        "BillingLedgerLine", cascade="all, delete-orphan", back_populates="ledger_entry"
+        "BillingLedgerLine",
+        cascade="all, delete-orphan",
+        back_populates="ledger_entry",
+        foreign_keys="BillingLedgerLine.ledger_entry_id",
     )
     reversal_of: Mapped[BillingLedgerEntry | None] = relationship(
         "BillingLedgerEntry", remote_side=[id]
@@ -363,6 +428,27 @@ class BillingLedgerLine(Base):
             "amount IS NULL OR rate IS NOT NULL", name="ck_billing_ledger_line_amount_rate"
         ),
         Index("ix_billing_ledger_lines_tenant_entry", "tenant_id", "ledger_entry_id"),
+        ForeignKeyConstraint(
+            ["tenant_id", "ledger_entry_id"],
+            ["billing_ledger_entries.tenant_id", "billing_ledger_entries.id"],
+            name="fk_billing_ledger_lines_tenant_entry",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "operation_fact_line_id"],
+            ["operation_fact_lines.tenant_id", "operation_fact_lines.id"],
+            name="fk_billing_ledger_lines_tenant_fact_line",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "product_id"],
+            ["products.tenant_id", "products.id"],
+            name="fk_billing_ledger_lines_tenant_product",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "tariff_version_v2_id"],
+            ["billing_tariff_versions_v2.tenant_id", "billing_tariff_versions_v2.id"],
+            name="fk_billing_ledger_lines_tenant_tariff_v2",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -399,7 +485,7 @@ class BillingLedgerLine(Base):
     )
 
     ledger_entry: Mapped[BillingLedgerEntry] = relationship(
-        "BillingLedgerEntry", back_populates="lines"
+        "BillingLedgerEntry", back_populates="lines", foreign_keys=[ledger_entry_id]
     )
 
 

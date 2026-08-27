@@ -4,11 +4,13 @@ import time
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
+from app.api.billing import _matrix_out
 from app.db.session import SessionLocal
 from app.models.billing import BillingLedgerEntry, BillingTariffVersion
 from app.models.tenant import Tenant
@@ -105,13 +107,15 @@ async def test_billing_configuration_api_validates_profiles_tariffs_and_tenant_b
     assert future_tariff.json()["amount"] == 4500
 
     async with SessionLocal() as session:
-        persisted_tariffs = (await session.scalars(
-            select(BillingTariffVersion).where(
-                BillingTariffVersion.id.in_(
-                    (uuid.UUID(created.json()["id"]), uuid.UUID(future_tariff.json()["id"]))
+        persisted_tariffs = (
+            await session.scalars(
+                select(BillingTariffVersion).where(
+                    BillingTariffVersion.id.in_(
+                        (uuid.UUID(created.json()["id"]), uuid.UUID(future_tariff.json()["id"]))
+                    )
                 )
             )
-        )).all()
+        ).all()
     assert {tariff.amount for tariff in persisted_tariffs} == {0, 4500}
 
     for invalid_amount in ("-0.01", "45.001"):
@@ -145,9 +149,13 @@ async def test_tariff_matrix_api_is_explicit_tenant_scoped_and_atomic(
     matrix = await async_client.get("/billing/tariff-matrix", headers=headers)
     assert matrix.status_code == 200, matrix.text
     assert {row["service_code"] for row in matrix.json()["services"]} == {
-        "inbound", "marketplace_outbound", "packing", "return"
+        "inbound",
+        "marketplace_outbound",
+        "packing",
+        "return",
     }
     assert not any(row["enabled"] for row in matrix.json()["services"])
+    assert {row["unit"] for row in matrix.json()["services"]} == {"item"}
     saved = await async_client.put(
         "/billing/tariff-matrix",
         headers=headers,
@@ -165,12 +173,377 @@ async def test_tariff_matrix_api_is_explicit_tenant_scoped_and_atomic(
     assert saved.status_code == 200, saved.text
     assert saved.json()["revision"] == 1
     stale = await async_client.put(
-        "/billing/tariff-matrix", headers=headers,
+        "/billing/tariff-matrix",
+        headers=headers,
         json={**saved.json(), "revision": 0, "versions": []},
     )
     assert stale.status_code == 400
     unchanged = await async_client.get("/billing/tariff-matrix", headers=headers)
     assert unchanged.json()["revision"] == 1
+
+
+@pytest.mark.asyncio
+async def test_tariff_matrix_api_returns_and_atomically_persists_full_versioned_draft(
+    async_client: AsyncClient,
+) -> None:
+    headers = await _register_admin(async_client, "matrix-full-draft")
+    initial = await async_client.get("/billing/tariff-matrix", headers=headers)
+    assert initial.status_code == 200, initial.text
+    assert initial.json()["versions"] == []
+    assert initial.json()["storage"] == {
+        "mode": "legacy_daily",
+        "editable_in_matrix": False,
+    }
+
+    draft = {
+        "revision": initial.json()["revision"],
+        "services": [
+            {"service_code": "inbound", "enabled": True},
+            {"service_code": "marketplace_outbound", "enabled": False},
+            {"service_code": "packing", "enabled": False},
+            {"service_code": "return", "enabled": False},
+        ],
+        "versions": [
+            {
+                "service_code": "inbound",
+                "unit": "document",
+                "enabled": True,
+                "rate": 1250,
+                "valid_from_at": "2026-08-27T09:00:00Z",
+            }
+        ],
+    }
+    saved = await async_client.put("/billing/tariff-matrix", headers=headers, json=draft)
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["revision"] == 1
+    assert saved.json()["versions"] == [
+        {
+            "seller_id": None,
+            "product_id": None,
+            "employee_user_id": None,
+            "service_code": "inbound",
+            "unit": "document",
+            "enabled": True,
+            "rate": 1250,
+            "valid_from_at": "2026-08-27T09:00:00Z",
+            "valid_to_at": None,
+        }
+    ]
+
+    invalid = await async_client.put(
+        "/billing/tariff-matrix",
+        headers=headers,
+        json={
+            **draft,
+            "revision": 1,
+            "versions": [
+                draft["versions"][0],
+                {
+                    "service_code": "storage_liter_day",
+                    "unit": "item",
+                    "enabled": True,
+                    "rate": 10,
+                    "valid_from_at": "2026-08-27T10:00:00Z",
+                },
+            ],
+        },
+    )
+    assert invalid.status_code == 400
+    after_invalid = await async_client.get("/billing/tariff-matrix", headers=headers)
+    assert after_invalid.json()["revision"] == 1
+    assert after_invalid.json()["versions"] == saved.json()["versions"]
+
+    overflow = await async_client.put(
+        "/billing/tariff-matrix",
+        headers=headers,
+        json={
+            **draft,
+            "revision": 1,
+            "versions": [
+                {
+                    **draft["versions"][0],
+                    "rate": 2_147_483_648,
+                }
+            ],
+        },
+    )
+    assert overflow.status_code == 422
+    after_overflow = await async_client.get("/billing/tariff-matrix", headers=headers)
+    assert after_overflow.json()["revision"] == 1
+    assert after_overflow.json()["versions"] == saved.json()["versions"]
+
+
+@pytest.mark.asyncio
+async def test_tariff_matrix_api_persists_product_and_employee_rates_without_cross_tenant_leak(
+    async_client: AsyncClient,
+) -> None:
+    headers = await _register_admin(async_client, "matrix-scopes")
+    seller = await async_client.post("/sellers", headers=headers, json={"name": "Matrix seller"})
+    assert seller.status_code == 201, seller.text
+    product = await async_client.post(
+        "/products",
+        headers=headers,
+        json={
+            "name": "Matrix product",
+            "sku_code": f"matrix-{uuid.uuid4().hex}",
+            "seller_id": seller.json()["id"],
+        },
+    )
+    assert product.status_code == 200, product.text
+    employee = await async_client.post(
+        "/auth/staff-accounts",
+        headers=headers,
+        json={"email": f"matrix-{uuid.uuid4().hex}@example.com"},
+    )
+    assert employee.status_code == 201, employee.text
+    initial = await async_client.get("/billing/tariff-matrix", headers=headers)
+    assert initial.status_code == 200, initial.text
+
+    payload = {
+        "revision": initial.json()["revision"],
+        "services": [
+            {"service_code": "inbound", "enabled": True},
+            {"service_code": "marketplace_outbound", "enabled": False},
+            {"service_code": "packing", "enabled": False},
+            {"service_code": "return", "enabled": False},
+        ],
+        "versions": [
+            {
+                "service_code": "inbound",
+                "unit": "item",
+                "enabled": True,
+                "rate": 1000,
+                "valid_from_at": "2026-08-27T09:00:00Z",
+            },
+            {
+                "seller_id": seller.json()["id"],
+                "product_id": product.json()["id"],
+                "service_code": "inbound",
+                "unit": "item",
+                "enabled": True,
+                "rate": 175,
+                "valid_from_at": "2026-08-27T09:00:00Z",
+            },
+            {
+                "employee_user_id": employee.json()["id"],
+                "service_code": "inbound",
+                "unit": "item",
+                "enabled": True,
+                "rate": 55,
+                "valid_from_at": "2026-08-27T09:00:00Z",
+            },
+        ],
+    }
+    saved = await async_client.put("/billing/tariff-matrix", headers=headers, json=payload)
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["revision"] == 1
+    assert {row["rate"] for row in saved.json()["versions"]} == {55, 175, 1000}
+    assert saved.json()["products"] == [
+        {
+            "id": product.json()["id"],
+            "seller_id": seller.json()["id"],
+            "seller_name": "Matrix seller",
+            "sku": product.json()["sku_code"],
+            "name": "Matrix product",
+            "label": f"Matrix seller · {product.json()['sku_code']} · Matrix product",
+        }
+    ]
+    assert saved.json()["storage"] == {"mode": "legacy_daily", "editable_in_matrix": False}
+
+    retry = await async_client.put(
+        "/billing/tariff-matrix",
+        headers=headers,
+        json={"revision": 1, "services": payload["services"], "versions": saved.json()["versions"]},
+    )
+    assert retry.status_code == 200, retry.text
+    assert retry.json()["revision"] == 1
+
+    foreign_headers = await _register_admin(async_client, "matrix-scopes-foreign")
+    foreign_seller = await async_client.post(
+        "/sellers", headers=foreign_headers, json={"name": "Foreign seller"}
+    )
+    foreign_product = await async_client.post(
+        "/products",
+        headers=foreign_headers,
+        json={
+            "name": "Foreign product",
+            "sku_code": f"foreign-{uuid.uuid4().hex}",
+            "seller_id": foreign_seller.json()["id"],
+        },
+    )
+    assert foreign_product.status_code == 200, foreign_product.text
+    rejected = await async_client.put(
+        "/billing/tariff-matrix",
+        headers=headers,
+        json={
+            **payload,
+            "revision": 1,
+            "versions": [
+                {
+                    **payload["versions"][1],
+                    "product_id": foreign_product.json()["id"],
+                }
+            ],
+        },
+    )
+    assert rejected.status_code == 400
+    assert rejected.json()["detail"] == "billing_tariff_matrix_product_not_found"
+    after_rejected = await async_client.get("/billing/tariff-matrix", headers=headers)
+    assert after_rejected.json()["revision"] == 1
+    assert {row["rate"] for row in after_rejected.json()["versions"]} == {55, 175, 1000}
+
+
+@pytest.mark.asyncio
+async def test_tariff_matrix_rate_edit_closes_old_interval_and_rejects_document_product_override(
+    async_client: AsyncClient,
+) -> None:
+    headers = await _register_admin(async_client, "matrix-version-edit")
+    seller = await async_client.post("/sellers", headers=headers, json={"name": "Version seller"})
+    product = await async_client.post(
+        "/products",
+        headers=headers,
+        json={
+            "name": "Version product",
+            "sku_code": f"version-{uuid.uuid4().hex}",
+            "seller_id": seller.json()["id"],
+        },
+    )
+    initial = await async_client.get("/billing/tariff-matrix", headers=headers)
+    services = [
+        {"service_code": "inbound", "enabled": True},
+        {"service_code": "marketplace_outbound", "enabled": False},
+        {"service_code": "packing", "enabled": False},
+        {"service_code": "return", "enabled": False},
+    ]
+    first = {
+        "service_code": "inbound",
+        "unit": "item",
+        "enabled": True,
+        "rate": 1000,
+        "valid_from_at": "2026-08-27T09:00:00Z",
+    }
+    created = await async_client.put(
+        "/billing/tariff-matrix",
+        headers=headers,
+        json={"revision": initial.json()["revision"], "services": services, "versions": [first]},
+    )
+    assert created.status_code == 200, created.text
+    edited = await async_client.put(
+        "/billing/tariff-matrix",
+        headers=headers,
+        json={
+            "revision": 1,
+            "services": services,
+            "versions": [
+                first,
+                {**first, "rate": 1500, "valid_from_at": "2026-08-27T10:00:00Z"},
+            ],
+        },
+    )
+    assert edited.status_code == 200, edited.text
+    assert edited.json()["revision"] == 2
+    assert [(row["rate"], row["valid_to_at"]) for row in edited.json()["versions"]] == [
+        (1000, "2026-08-27T10:00:00Z"),
+        (1500, None),
+    ]
+    inserted = await async_client.put(
+        "/billing/tariff-matrix",
+        headers=headers,
+        json={
+            "revision": 2,
+            "services": services,
+            "versions": [
+                *edited.json()["versions"],
+                {**first, "rate": 900, "valid_from_at": "2026-08-27T08:00:00Z"},
+            ],
+        },
+    )
+    assert inserted.status_code == 200, inserted.text
+    assert inserted.json()["revision"] == 3
+    assert (900, "2026-08-27T09:00:00Z") in [
+        (row["rate"], row["valid_to_at"]) for row in inserted.json()["versions"]
+    ]
+
+    invalid_override = await async_client.put(
+        "/billing/tariff-matrix",
+        headers=headers,
+        json={
+            "revision": 3,
+            "services": services,
+            "versions": [
+                *inserted.json()["versions"],
+                {
+                    "service_code": "inbound",
+                    "unit": "document",
+                    "enabled": True,
+                    "rate": 1200,
+                    "valid_from_at": "2026-08-27T11:00:00Z",
+                },
+                {
+                    "seller_id": seller.json()["id"],
+                    "product_id": product.json()["id"],
+                    "service_code": "inbound",
+                    "unit": "item",
+                    "enabled": True,
+                    "rate": 175,
+                    "valid_from_at": "2026-08-27T11:00:00Z",
+                },
+            ],
+        },
+    )
+    assert invalid_override.status_code == 400
+    assert invalid_override.json()["detail"] == "billing_tariff_matrix_product_requires_item"
+    after_invalid = await async_client.get("/billing/tariff-matrix", headers=headers)
+    assert after_invalid.json()["revision"] == 3
+
+
+def test_matrix_out_uses_interval_active_common_not_a_future_version() -> None:
+    """A scheduled rate is returned as history until its Moscow/UTC interval begins."""
+    config = SimpleNamespace(
+        revision=7,
+        service_states=[SimpleNamespace(service_code="inbound", enabled=True)],
+    )
+    current = SimpleNamespace(
+        seller_id=None,
+        product_id=None,
+        employee_user_id=None,
+        service_code="inbound",
+        unit="item",
+        enabled=True,
+        rate=125,
+        valid_from_at=datetime(2026, 8, 27, 9, tzinfo=UTC),
+        valid_to_at=datetime(2026, 9, 1, 9, tzinfo=UTC),
+    )
+    future = SimpleNamespace(
+        seller_id=None,
+        product_id=None,
+        employee_user_id=None,
+        service_code="inbound",
+        unit="document",
+        enabled=True,
+        rate=900,
+        valid_from_at=datetime(2026, 9, 1, 9, tzinfo=UTC),
+        valid_to_at=None,
+    )
+
+    before = _matrix_out(
+        config, [current, future], [], now=datetime(2026, 8, 31, 12, tzinfo=UTC)
+    )
+    after = _matrix_out(
+        config, [current, future], [], now=datetime(2026, 9, 1, 9, tzinfo=UTC)
+    )
+
+    assert before["services"] == [
+        {
+            "service_code": "inbound",
+            "enabled": True,
+            "unit": "item",
+            "rate": 125,
+            "valid_from_at": datetime(2026, 8, 27, 9, tzinfo=UTC),
+        }
+    ]
+    assert after["services"][0]["unit"] == "document"
+    assert after["services"][0]["rate"] == 900
 
 
 @pytest.mark.asyncio
@@ -352,9 +725,7 @@ async def test_tariff_and_repricing_overflow_are_rejected_without_partial_state(
         unchanged_tenant = await session.get(Tenant, tenant_id)
         tariffs = (
             await session.scalars(
-                select(BillingTariffVersion).where(
-                    BillingTariffVersion.tenant_id == tenant_id
-                )
+                select(BillingTariffVersion).where(BillingTariffVersion.tenant_id == tenant_id)
             )
         ).all()
 

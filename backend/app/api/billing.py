@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Annotated, Any, cast
 
@@ -20,6 +20,7 @@ from app.models.billing import (
     BillingRunIssue,
     BillingTariffVersion,
 )
+from app.models.product import Product
 from app.models.seller import Seller
 from app.models.user import User
 from app.services.billing_configuration_service import (
@@ -37,9 +38,11 @@ from app.services.billing_invoice_service import (
     form_invoice,
 )
 from app.services.billing_tariff_matrix_service import (
+    MAX_TARIFF_RATE_KOPECKS,
     BillingTariffMatrixError,
     TariffVersionDraft,
     get_tariff_matrix,
+    list_tariff_matrix_versions,
     save_tariff_matrix,
 )
 
@@ -104,7 +107,7 @@ class TariffMatrixVersionBody(BaseModel):
     service_code: str
     unit: str
     enabled: bool = True
-    rate: int = Field(ge=0)
+    rate: int = Field(ge=0, le=MAX_TARIFF_RATE_KOPECKS)
     valid_from_at: datetime
     valid_to_at: datetime | None = None
 
@@ -115,13 +118,98 @@ class TariffMatrixSaveBody(BaseModel):
     versions: list[TariffMatrixVersionBody] = Field(default_factory=list)
 
 
-def _matrix_out(config: Any) -> dict[str, Any]:
+async def _matrix_products(
+    session: AsyncSession, *, tenant_id: uuid.UUID
+) -> list[dict[str, str | None]]:
+    rows = await session.execute(
+        select(Product.id, Product.seller_id, Product.name, Product.sku_code, Seller.name)
+        .outerjoin(Seller, Seller.id == Product.seller_id)
+        .where(Product.tenant_id == tenant_id)
+        .order_by(Seller.name, Product.sku_code, Product.name)
+    )
+    return [
+        {
+            "id": str(product_id),
+            "seller_id": str(seller_id) if seller_id is not None else None,
+            "name": name,
+            "sku": sku_code,
+            "seller_name": seller_name,
+            "label": " · ".join(part for part in (seller_name, sku_code, name) if part),
+        }
+        for product_id, seller_id, name, sku_code, seller_name in rows
+    ]
+
+
+def _matrix_out(
+    config: Any,
+    versions: list[Any],
+    products: list[dict[str, str | None]],
+    *,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    def utc_value(value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+    effective_now = datetime.now(UTC) if now is None else utc_value(now)
+    assert effective_now is not None
+    active_common: dict[str, Any] = {}
+    for row in versions:
+        if (
+            row.seller_id is not None
+            or row.product_id is not None
+            or row.employee_user_id is not None
+        ):
+            continue
+        valid_from = utc_value(row.valid_from_at)
+        valid_to = utc_value(row.valid_to_at)
+        if valid_from is None:
+            continue
+        if valid_from > effective_now:
+            continue
+        if valid_to is not None and effective_now >= valid_to:
+            continue
+        existing = active_common.get(row.service_code)
+        existing_from = utc_value(existing.valid_from_at) if existing is not None else None
+        if existing is None or existing_from is None or existing_from < valid_from:
+            active_common[row.service_code] = row
     return {
         "revision": config.revision,
         "services": [
-            {"service_code": row.service_code, "enabled": row.enabled}
+            {
+                "service_code": row.service_code,
+                "enabled": row.enabled,
+                "unit": active_common[row.service_code].unit
+                if row.service_code in active_common
+                else "item",
+                "rate": active_common[row.service_code].rate
+                if row.service_code in active_common
+                else None,
+                "valid_from_at": (
+                    utc_value(active_common[row.service_code].valid_from_at)
+                    if row.service_code in active_common
+                    else None
+                ),
+            }
             for row in sorted(config.service_states, key=lambda value: value.service_code)
         ],
+        "versions": [
+            {
+                "seller_id": row.seller_id,
+                "product_id": row.product_id,
+                "employee_user_id": row.employee_user_id,
+                "service_code": row.service_code,
+                "unit": row.unit,
+                "enabled": row.enabled,
+                "rate": row.rate,
+                "valid_from_at": utc_value(row.valid_from_at),
+                "valid_to_at": utc_value(row.valid_to_at),
+            }
+            for row in versions
+        ],
+        "products": products,
+        "storage": {"mode": "legacy_daily", "editable_in_matrix": False},
     }
 
 
@@ -135,7 +223,12 @@ async def get_tariff_matrix_route(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
     try:
-        return _matrix_out(await get_tariff_matrix(session, tenant_id=user.tenant_id))
+        config = await get_tariff_matrix(session, tenant_id=user.tenant_id)
+        return _matrix_out(
+            config,
+            await list_tariff_matrix_versions(session, tenant_id=user.tenant_id),
+            await _matrix_products(session, tenant_id=user.tenant_id),
+        )
     except BillingTariffMatrixError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
@@ -155,7 +248,11 @@ async def put_tariff_matrix_route(
             versions=[cast(TariffVersionDraft, item.model_dump()) for item in body.versions],
         )
         await session.commit()
-        return _matrix_out(config)
+        return _matrix_out(
+            config,
+            await list_tariff_matrix_versions(session, tenant_id=user.tenant_id),
+            await _matrix_products(session, tenant_id=user.tenant_id),
+        )
     except BillingTariffMatrixError as exc:
         await session.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc

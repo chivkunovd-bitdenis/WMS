@@ -11,6 +11,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    UniqueConstraint,
     Uuid,
     func,
     text,
@@ -127,6 +128,7 @@ class OperationFact(Base):
 class OperationFactLine(Base):
     __tablename__ = "operation_fact_lines"
     __table_args__ = (
+        UniqueConstraint("tenant_id", "id", name="uq_operation_fact_lines_tenant_id_id"),
         Index("ix_operation_fact_lines_fact", "operation_fact_id"),
         CheckConstraint(
             "item_quantity >= 0", name="ck_operation_fact_lines_item_quantity_nonnegative"

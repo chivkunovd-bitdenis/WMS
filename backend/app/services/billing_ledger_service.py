@@ -292,6 +292,9 @@ async def _resolve_v2_tariff(
             .where(
                 BillingTariffVersionV2.tenant_id == tenant_id,
                 BillingTariffVersionV2.service_code == service_code,
+                # Employee rates are a separate pay matrix; they never price a
+                # seller operation just because their seller/product scope is null.
+                BillingTariffVersionV2.employee_user_id.is_(None),
                 BillingTariffVersionV2.enabled.is_(True),
                 BillingTariffVersionV2.valid_from_at <= occurred_at,
                 (
@@ -392,6 +395,7 @@ async def record_operational_charge(
         line_models: list[BillingLedgerLine] = []
         amounts: list[int | None] = []
         rates: set[int | None] = set()
+        v2_tariff_ids: set[uuid.UUID] = set()
         for line in lines:
             line_tariff = await _resolve_v2_tariff(
                 session,
@@ -446,6 +450,16 @@ async def record_operational_charge(
                         "service_code": service_code,
                         "source": source,
                         "legacy_tariff_id": str(tariff.id) if tariff is not None else None,
+                        "v2_tariff_id": str(line_tariff.id) if line_tariff is not None else None,
+                        "scope": {
+                            "seller_id": str(seller_id),
+                            "product_id": str(line.product_id)
+                            if line.product_id is not None
+                            else None,
+                            "unit": line_tariff.unit
+                            if line_tariff is not None
+                            else (tariff.unit if tariff is not None else "item"),
+                        },
                     },
                     rate=line_rate,
                     amount=line_amount,
@@ -453,7 +467,14 @@ async def record_operational_charge(
             )
             amounts.append(line_amount)
             rates.add(line_rate)
+            if line_tariff is not None:
+                v2_tariff_ids.add(line_tariff.id)
         entry.lines = line_models
+        # Parent keeps a convenient V2 pointer only when every product line used
+        # the same version.  The immutable per-line pointer/snapshot remains the
+        # source of truth for mixed product overrides.
+        if len(v2_tariff_ids) == 1:
+            entry.tariff_version_v2_id = next(iter(v2_tariff_ids))
         if all(value is not None for value in amounts):
             entry.amount = sum(cast(int, value) for value in amounts)
             entry.rate = next(iter(rates)) if len(rates) == 1 else None
@@ -524,6 +545,7 @@ async def record_operational_reversal(
         seller_id=original.seller_id,
         warehouse_id=original.warehouse_id,
         tariff_version_id=original.tariff_version_id,
+        tariff_version_v2_id=original.tariff_version_v2_id,
         reversal_of_id=original.id,
         performer_id=performer_id,
         entry_type="reversal",
