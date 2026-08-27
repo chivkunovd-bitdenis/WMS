@@ -469,7 +469,8 @@ async def list_invoices_v2(
 
     Разрыв истории на «до» и «после» смены механизма — это потерянные для
     оператора документы, поэтому обе таблицы читаются в один список.
-    Суммы приводятся к копейкам: legacy хранит рубли `Numeric(14, 2)`.
+    Обе таблицы уже в копейках: legacy держит их в `Numeric(14, 2)`, новый
+    счёт — целым числом.
     """
     limit = max(1, min(limit, 200))
     after = _parse_list_cursor(cursor) if cursor else None
@@ -518,10 +519,11 @@ async def list_invoices_v2(
                 "period_end": next_month - timedelta(days=1),
                 "creation_mode": "monthly",
                 "status": invoice.status,
+                # Legacy держит копейки в колонке Numeric(14, 2): всё денежное
+                # ядро биллинга считает в целых копейках. Умножать на 100 здесь
+                # значит завысить каждую строку истории в сто раз.
                 "total_amount_kopecks": int(
-                    (Decimal(invoice.total_amount) * 100).quantize(
-                        Decimal("1"), rounding=ROUND_HALF_UP
-                    )
+                    Decimal(invoice.total_amount).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
                 ),
             }
         )

@@ -421,7 +421,7 @@ async def test_invoice_history_merges_legacy_and_v2_without_losing_documents(
                 period=date(2026, 7, 1),
                 status="issued",
                 issued_at=datetime(2026, 8, 1, 10, tzinfo=UTC),
-                total_amount=Decimal("184.00"),
+                total_amount=Decimal("18400.00"),
                 ff_profile_snapshot={},
                 seller_profile_snapshot={},
                 lines=[],
@@ -449,7 +449,8 @@ async def test_invoice_history_merges_legacy_and_v2_without_losing_documents(
     legacy = by_origin["legacy"]
     assert legacy["number"] == "СЧ-СТАРЫЙ-1"
     assert legacy["creation_mode"] == "monthly"
-    # Рубли Numeric(14,2) приводятся к копейкам, иначе колонка «Сумма» врёт.
+    # Legacy хранит копейки в Numeric(14, 2). Приведение «как рубли» завысило
+    # бы каждую строку истории в сто раз, поэтому проверяем один к одному.
     assert legacy["total_amount_kopecks"] == 18400
     # Месяц раскрывается в границы периода: колонка «Период» одна на обе эпохи.
     assert legacy["period_start"] == "2026-07-01"
