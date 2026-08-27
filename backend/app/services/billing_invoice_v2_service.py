@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import uuid
+from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
@@ -17,6 +18,8 @@ from app.models.billing import (
     BillingInvoiceV2,
     BillingInvoiceV2Idempotency,
     BillingInvoiceV2Line,
+    BillingInvoiceV2Source,
+    BillingLedgerEntry,
     BillingProfile,
 )
 from app.models.seller import Seller
@@ -106,8 +109,10 @@ def invoice_v2_out(invoice: BillingInvoiceV2) -> dict[str, Any]:
 async def preview_invoice_v2(
     session: AsyncSession, *, tenant_id: uuid.UUID, request: dict[str, Any]
 ) -> dict[str, Any]:
+    if request.get("creation_mode") == "selected_operations":
+        return await _preview_selected_operations(session, tenant_id=tenant_id, request=request)
     if request.get("creation_mode") != "manual":
-        raise BillingInvoiceV2Error("selected_operations_not_implemented")
+        raise BillingInvoiceV2Error("invalid_creation_mode")
     seller_id = uuid.UUID(str(request["seller_id"]))
     ff_profile, seller_profile = await _profiles(session, tenant_id=tenant_id, seller_id=seller_id)
     lines: list[dict[str, Any]] = []
@@ -137,6 +142,95 @@ async def preview_invoice_v2(
         "creation_mode": "manual",
         "period_start": None,
         "period_end": None,
+        "status": "issued",
+        "issued_at": None,
+        "total_amount_kopecks": sum(line["total_amount_kopecks"] for line in lines),
+        "ff_profile": ff_profile,
+        "seller_profile": seller_profile,
+        "lines": lines,
+    }
+
+
+async def _preview_selected_operations(
+    session: AsyncSession, *, tenant_id: uuid.UUID, request: dict[str, Any]
+) -> dict[str, Any]:
+    seller_id = uuid.UUID(str(request["seller_id"]))
+    date_from = date.fromisoformat(str(request["date_from"]))
+    date_to = date.fromisoformat(str(request["date_to"]))
+    if date_to < date_from:
+        raise BillingInvoiceV2Error("invalid_date_range")
+    ff_profile, seller_profile = await _profiles(session, tenant_id=tenant_id, seller_id=seller_id)
+    root_ids = {uuid.UUID(str(value)) for value in request.get("selected_root_ids", [])}
+    roots = list(
+        (
+            await session.scalars(
+                select(BillingLedgerEntry).where(
+                    BillingLedgerEntry.tenant_id == tenant_id, BillingLedgerEntry.id.in_(root_ids)
+                )
+            )
+        ).all()
+    )
+    if len(roots) != len(root_ids):
+        raise BillingInvoiceV2Error("selected_source_not_found")
+    selected: dict[uuid.UUID, BillingLedgerEntry] = {}
+    for root in roots:
+        if root.seller_id != seller_id:
+            raise BillingInvoiceV2Error("selected_source_not_found")
+        if root.entry_type == "reversal" or root.reversal_of_id is not None:
+            raise BillingInvoiceV2Error("standalone_reversal")
+        if not date_from <= root.occurred_at.date() <= date_to:
+            raise BillingInvoiceV2Error("selected_source_outside_period")
+        frontier = {root.id}
+        while frontier:
+            members = list(
+                (
+                    await session.scalars(
+                        select(BillingLedgerEntry).where(
+                            BillingLedgerEntry.tenant_id == tenant_id,
+                            (BillingLedgerEntry.id.in_(frontier))
+                            | (BillingLedgerEntry.reversal_of_id.in_(frontier)),
+                        )
+                    )
+                ).all()
+            )
+            next_frontier: set[uuid.UUID] = set()
+            for member in members:
+                if member.seller_id != seller_id or member.amount is None:
+                    raise BillingInvoiceV2Error("unpriced_or_cross_seller_chain")
+                if member.id not in selected:
+                    selected[member.id] = member
+                    next_frontier.add(member.id)
+            frontier = next_frontier - set(selected)
+    grouped: dict[str, list[BillingLedgerEntry]] = {}
+    for entry in selected.values():
+        grouped.setdefault(entry.service_code, []).append(entry)
+    lines: list[dict[str, Any]] = []
+    for order, (service_code, entries) in enumerate(sorted(grouped.items())):
+        lines.append(
+            {
+                "id": uuid.uuid4(),
+                "description": service_code,
+                "unit_price_kopecks": None,
+                "total_amount_kopecks": sum(int(entry.amount or 0) for entry in entries),
+                "sort_order": order,
+                "sources": [
+                    {
+                        "billing_ledger_entry_id": entry.id,
+                        "signed_amount_kopecks_snapshot": int(entry.amount or 0),
+                    }
+                    for entry in entries
+                ],
+            }
+        )
+    if not lines:
+        raise BillingInvoiceV2Error("selected_operations_required")
+    return {
+        "id": uuid.uuid4(),
+        "seller_id": seller_id,
+        "number": "Новый счёт",
+        "creation_mode": "selected_operations",
+        "period_start": date_from,
+        "period_end": date_to,
         "status": "issued",
         "issued_at": None,
         "total_amount_kopecks": sum(line["total_amount_kopecks"] for line in lines),
@@ -182,9 +276,9 @@ async def create_invoice_v2(
         tenant_id=tenant_id,
         seller_id=preview["seller_id"],
         number=await next_document_number(session, tenant_id, DOC_TYPE_INVOICE),
-        creation_mode="manual",
-        period_start=None,
-        period_end=None,
+        creation_mode=preview["creation_mode"],
+        period_start=preview["period_start"],
+        period_end=preview["period_end"],
         issued_by_user_id=user_id,
         ff_profile_snapshot=preview["ff_profile"],
         seller_profile_snapshot=preview["seller_profile"],
@@ -193,16 +287,27 @@ async def create_invoice_v2(
     session.add(invoice)
     await session.flush()
     for line in preview["lines"]:
-        session.add(
-            BillingInvoiceV2Line(
-                tenant_id=tenant_id,
-                invoice_id=invoice.id,
-                description_snapshot=line["description"],
-                unit_price_kopecks=line["unit_price_kopecks"],
-                total_amount_kopecks=line["total_amount_kopecks"],
-                sort_order=line["sort_order"],
-            )
+        persisted_line = BillingInvoiceV2Line(
+            tenant_id=tenant_id,
+            invoice_id=invoice.id,
+            description_snapshot=line["description"],
+            unit_price_kopecks=line["unit_price_kopecks"],
+            total_amount_kopecks=line["total_amount_kopecks"],
+            sort_order=line["sort_order"],
         )
+        session.add(persisted_line)
+        await session.flush()
+        for source in line.get("sources", []):
+            session.add(
+                BillingInvoiceV2Source(
+                    tenant_id=tenant_id,
+                    invoice_line_id=persisted_line.id,
+                    operation_fact_id=None,
+                    billing_ledger_entry_id=source["billing_ledger_entry_id"],
+                    storage_calculation_token=None,
+                    signed_amount_kopecks_snapshot=source["signed_amount_kopecks_snapshot"],
+                )
+            )
     session.add(
         BillingInvoiceV2Idempotency(
             tenant_id=tenant_id,
