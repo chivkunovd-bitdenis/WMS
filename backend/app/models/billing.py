@@ -194,7 +194,8 @@ class BillingTariffServiceState(Base):
     __table_args__ = (
         UniqueConstraint("tenant_id", "service_code", name="uq_billing_tariff_service_state"),
         CheckConstraint(
-            "service_code IN ('inbound', 'marketplace_outbound', 'packing', 'return')",
+            "service_code IN "
+            "('inbound', 'marketplace_outbound', 'packing', 'return', 'storage')",
             name="ck_billing_tariff_service_state_code",
         ),
     )
@@ -219,7 +220,14 @@ class BillingTariffServiceState(Base):
 class BillingTariffVersionV2(Base):
     __tablename__ = "billing_tariff_versions_v2"
     __table_args__ = (
-        CheckConstraint("unit IN ('document', 'item')", name="ck_billing_tariff_v2_unit"),
+        # Хранение считается за литро-день — это факт предметной области, а не
+        # оформление. Подгонять его под «за штуку» значило бы врать в расчёте,
+        # поэтому единица добавлена, но разрешена только хранению.
+        CheckConstraint(
+            "(service_code = 'storage' AND unit = 'liter_day')"
+            " OR (service_code <> 'storage' AND unit IN ('document', 'item'))",
+            name="ck_billing_tariff_v2_unit",
+        ),
         CheckConstraint("rate >= 0", name="ck_billing_tariff_v2_rate_nonnegative"),
         CheckConstraint(
             "valid_to_at IS NULL OR valid_to_at > valid_from_at",
@@ -234,7 +242,8 @@ class BillingTariffVersionV2(Base):
             "AND service_code IN ('inbound', 'picking', 'marketplace_outbound', 'return')"
             ") OR ("
             "employee_user_id IS NULL "
-            "AND service_code IN ('inbound', 'marketplace_outbound', 'packing', 'return') "
+            "AND service_code IN "
+            "('inbound', 'marketplace_outbound', 'packing', 'return', 'storage') "
             "AND (product_id IS NULL OR (seller_id IS NOT NULL AND unit = 'item'))"
             ")",
             name="ck_billing_tariff_v2_scope",

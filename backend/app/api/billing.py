@@ -214,9 +214,13 @@ def _matrix_out(
             {
                 "service_code": row.service_code,
                 "enabled": row.enabled,
+                # У услуги без действующей версии единица берётся по её природе:
+                # хранение считается за литро-день, остальное — за штуку.
+                # Подставлять «за штуку» хранению значит уронить сохранение об
+                # ограничение базы и соврать в расчёте.
                 "unit": active_common[row.service_code].unit
                 if row.service_code in active_common
-                else "item",
+                else ("liter_day" if row.service_code == "storage" else "item"),
                 "rate": active_common[row.service_code].rate
                 if row.service_code in active_common
                 else None,

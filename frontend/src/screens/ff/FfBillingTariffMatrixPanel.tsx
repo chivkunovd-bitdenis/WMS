@@ -93,7 +93,7 @@ function matrixForSave(matrix: TariffMatrix) {
 }
 
 const serviceName: Record<string, string> = {
-  inbound: 'Приёмка', marketplace_outbound: 'Отгрузка', packing: 'Упаковка', return: 'Возврат', picking: 'Комплектация',
+  inbound: 'Приёмка', marketplace_outbound: 'Отгрузка', packing: 'Упаковка', return: 'Возврат', picking: 'Комплектация', storage: 'Хранение',
 }
 const employeeServices = ['inbound', 'picking', 'marketplace_outbound', 'return']
 const employeeServiceName: Record<string, string> = { ...serviceName, picking: 'Подбор' }
@@ -312,9 +312,6 @@ export function FfBillingTariffMatrixPanel({ token, authHeaders, focusTariffs, o
       />
       <h3>Ставки сотрудников</h3>
       <DataTable columns={employeeColumns} rows={employeeRows} getRowKey={(row) => row.id} loading={loading} empty={{ title: 'Сотрудников пока нет', hint: 'Ставки появятся после добавления сотрудников.' }} testId="ff-settings-tariff-employee-rates" />
-      <h3>Хранение</h3>
-      <StatusChip label="Отдельно" tone="neutral" testId="ff-settings-tariff-storage-state" />
-      <a href="/app/ff/inventory" data-testid="ff-settings-tariff-storage-link">Открыть суточное хранение</a>
       <ActionGroup><PrimaryAction disabledReason={saving || !matrix || !dirty ? 'Нет несохранённых изменений' : undefined} onClick={() => void save()} data-testid="ff-settings-tariffs-save">{saving ? 'Сохранение' : 'Сохранить матрицу'}</PrimaryAction></ActionGroup>
     </section>
   )

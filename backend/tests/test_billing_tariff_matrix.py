@@ -37,7 +37,7 @@ from app.services.billing_tariff_matrix_service import (
 
 
 @pytest.mark.asyncio
-async def test_new_tenant_gets_persisted_disabled_non_storage_matrix(async_client) -> None:
+async def test_new_tenant_gets_persisted_disabled_matrix_including_storage(async_client) -> None:
     response = await async_client.post(
         "/auth/register",
         json={
@@ -70,11 +70,14 @@ async def test_new_tenant_gets_persisted_disabled_non_storage_matrix(async_clien
                 )
             )
         ).all()
+    # Хранение переехало в общую матрицу: держать его на отдельном экране
+    # означало единственную услугу с другим местом настройки.
     assert {state.service_code for state in states} == {
         "inbound",
         "marketplace_outbound",
         "packing",
         "return",
+        "storage",
     }
     assert all(not state.enabled for state in states)
 

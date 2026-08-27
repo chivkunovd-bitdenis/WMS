@@ -153,9 +153,11 @@ async def test_tariff_matrix_api_is_explicit_tenant_scoped_and_atomic(
         "marketplace_outbound",
         "packing",
         "return",
+        "storage",
     }
     assert not any(row["enabled"] for row in matrix.json()["services"])
-    assert {row["unit"] for row in matrix.json()["services"]} == {"item"}
+    # Хранение считается за литро-день, остальные услуги — за штуку.
+    assert {row["unit"] for row in matrix.json()["services"]} == {"item", "liter_day"}
     saved = await async_client.put(
         "/billing/tariff-matrix",
         headers=headers,
@@ -166,6 +168,7 @@ async def test_tariff_matrix_api_is_explicit_tenant_scoped_and_atomic(
                 {"service_code": "marketplace_outbound", "enabled": False},
                 {"service_code": "packing", "enabled": False},
                 {"service_code": "return", "enabled": False},
+                {"service_code": "storage", "enabled": False},
             ],
             "versions": [],
         },
@@ -202,6 +205,7 @@ async def test_tariff_matrix_api_returns_and_atomically_persists_full_versioned_
             {"service_code": "marketplace_outbound", "enabled": False},
             {"service_code": "packing", "enabled": False},
             {"service_code": "return", "enabled": False},
+            {"service_code": "storage", "enabled": False},
         ],
         "versions": [
             {
@@ -306,6 +310,7 @@ async def test_tariff_matrix_api_persists_product_and_employee_rates_without_cro
             {"service_code": "marketplace_outbound", "enabled": False},
             {"service_code": "packing", "enabled": False},
             {"service_code": "return", "enabled": False},
+            {"service_code": "storage", "enabled": False},
         ],
         "versions": [
             {
@@ -414,6 +419,7 @@ async def test_tariff_matrix_rate_edit_closes_old_interval_and_rejects_document_
         {"service_code": "marketplace_outbound", "enabled": False},
         {"service_code": "packing", "enabled": False},
         {"service_code": "return", "enabled": False},
+        {"service_code": "storage", "enabled": False},
     ]
     first = {
         "service_code": "inbound",
@@ -527,10 +533,10 @@ def test_matrix_out_uses_interval_active_common_not_a_future_version() -> None:
     )
 
     before = _matrix_out(
-        config, [current, future], [], now=datetime(2026, 8, 31, 12, tzinfo=UTC)
+        config, [current, future], [], [], now=datetime(2026, 8, 31, 12, tzinfo=UTC)
     )
     after = _matrix_out(
-        config, [current, future], [], now=datetime(2026, 9, 1, 9, tzinfo=UTC)
+        config, [current, future], [], [], now=datetime(2026, 9, 1, 9, tzinfo=UTC)
     )
 
     assert before["services"] == [

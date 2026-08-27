@@ -19,7 +19,10 @@ from app.models.seller import Seller
 from app.models.tenant import Tenant
 from app.models.user import User
 
-NON_STORAGE_SERVICE_CODES = ("inbound", "marketplace_outbound", "packing", "return")
+# Хранение живёт в общей матрице вместе с остальными услугами: держать его
+# на отдельном экране означало единственную услугу с другим местом настройки.
+MATRIX_SERVICE_CODES = ("inbound", "marketplace_outbound", "packing", "return", "storage")
+STORAGE_SERVICE_CODE = "storage"
 EMPLOYEE_SERVICE_CODES = ("inbound", "picking", "marketplace_outbound", "return")
 MAX_TARIFF_RATE_KOPECKS = 2_147_483_647
 
@@ -40,11 +43,24 @@ async def ensure_disabled_tariff_matrix(
         .options(selectinload(BillingTariffMatrixConfig.service_states))
     )
     if existing is not None:
+        # Матрица уже есть, но список услуг мог расшириться после её создания
+        # (так пришло хранение). Без дозаполнения у давнего арендатора новая
+        # услуга просто не появилась бы на экране, и он не понял бы почему.
+        known = {state.service_code for state in existing.service_states}
+        missing = [code for code in MATRIX_SERVICE_CODES if code not in known]
+        if missing:
+            existing.service_states.extend(
+                BillingTariffServiceState(
+                    tenant_id=tenant.id, service_code=service_code, enabled=False
+                )
+                for service_code in missing
+            )
+            await session.flush()
         return existing
     config = BillingTariffMatrixConfig(tenant_id=tenant.id)
     config.service_states = [
         BillingTariffServiceState(tenant_id=tenant.id, service_code=service_code, enabled=False)
-        for service_code in NON_STORAGE_SERVICE_CODES
+        for service_code in MATRIX_SERVICE_CODES
     ]
     session.add(config)
     try:
@@ -185,7 +201,7 @@ async def save_tariff_matrix(
     config = await get_tariff_matrix(session, tenant_id=tenant_id)
     if config.revision != revision:
         raise BillingTariffMatrixError("billing_tariff_matrix_stale_revision")
-    if set(services) != set(NON_STORAGE_SERVICE_CODES):
+    if set(services) != set(MATRIX_SERVICE_CODES):
         raise BillingTariffMatrixError("billing_tariff_matrix_services_incomplete")
     current_versions = await list_tariff_matrix_versions(session, tenant_id=tenant_id)
     normalized_versions: list[TariffVersionDraft] = []
@@ -193,10 +209,16 @@ async def save_tariff_matrix(
         product: Product | None = None
         employee_scope = draft["employee_user_id"] is not None
         if draft["service_code"] not in (
-            EMPLOYEE_SERVICE_CODES if employee_scope else NON_STORAGE_SERVICE_CODES
+            EMPLOYEE_SERVICE_CODES if employee_scope else MATRIX_SERVICE_CODES
         ):
             raise BillingTariffMatrixError("billing_tariff_matrix_service_invalid")
-        if draft["unit"] not in {"document", "item"}:
+        # Единица привязана к природе услуги: хранение считается за литро-день,
+        # остальное — за документ или за штуку. Разрешить хранению «за штуку»
+        # значит соврать в расчёте, а не просто нарушить формат.
+        if draft["service_code"] == STORAGE_SERVICE_CODE:
+            if draft["unit"] != "liter_day":
+                raise BillingTariffMatrixError("billing_tariff_matrix_storage_unit_invalid")
+        elif draft["unit"] not in {"document", "item"}:
             raise BillingTariffMatrixError("billing_tariff_matrix_rate_invalid")
         if employee_scope and (draft["seller_id"] is not None or draft["product_id"] is not None):
             raise BillingTariffMatrixError("billing_tariff_matrix_employee_scope_invalid")
