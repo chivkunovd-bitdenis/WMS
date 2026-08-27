@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from datetime import time as datetime_time
 from decimal import Decimal
 
@@ -504,3 +504,72 @@ async def test_invoice_history_merges_legacy_and_v2_without_losing_documents(
     assert (
         await async_client.get("/billing/invoices-v2?cursor=не-курсор", headers=headers)
     ).status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_v2_invoice_marks_the_operation_as_already_billed(async_client: AsyncClient) -> None:
+    """TC-NEW-212: операция, попавшая в счёт V2, помечена в отчёте по селлерам."""
+    suffix = f"invoice-v2-history-mark-{time.time_ns()}"
+    registered = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Invoice mark",
+            "slug": suffix,
+            "admin_email": f"{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    headers = {"Authorization": f"Bearer {registered.json()['access_token']}"}
+    tenant_id = uuid.UUID((await async_client.get("/auth/me", headers=headers)).json()["tenant_id"])
+    seller = await async_client.post("/sellers", headers=headers, json={"name": "Селлер отметки"})
+    seller_id = uuid.UUID(seller.json()["id"])
+    root_id = uuid.uuid4()
+    occurred = datetime.now(MOSCOW) - timedelta(days=1)
+    async with SessionLocal() as session:
+        session.add(
+            BillingLedgerEntry(
+                id=root_id,
+                tenant_id=tenant_id,
+                seller_id=seller_id,
+                service_code="inbound",
+                source="test",
+                source_type="inbound_intake",
+                source_id=uuid.uuid4(),
+                unit="item",
+                quantity=Decimal("2"),
+                rate=1000,
+                amount=2000,
+                occurred_at=occurred,
+            )
+        )
+        await session.commit()
+
+    date_from = (occurred - timedelta(days=1)).date().isoformat()
+    date_to = datetime.now(MOSCOW).date().isoformat()
+    params = f"date_from={date_from}&date_to={date_to}&include_finance=true"
+
+    before = await async_client.get(
+        f"/billing/seller-report/sellers/{seller_id}/details?{params}", headers=headers
+    )
+    assert before.status_code == 200, before.text
+    assert before.json()["entries"][0]["invoice_history"] == {"state": "known", "count": 0}
+
+    saved = await async_client.post(
+        "/billing/invoices-v2",
+        headers={**headers, "Idempotency-Key": "mark-1"},
+        json={
+            "creation_mode": "selected_operations",
+            "seller_id": str(seller_id),
+            "date_from": date_from,
+            "date_to": date_to,
+            "selected_root_ids": [str(root_id)],
+        },
+    )
+    assert saved.status_code == 201, saved.text
+
+    after = await async_client.get(
+        f"/billing/seller-report/sellers/{seller_id}/details?{params}", headers=headers
+    )
+    # Без этой отметки оператор не увидит, что операция уже в счёте, и выставит
+    # её второй раз: повторное выставление разрешено, поэтому сервер не откажет.
+    assert after.json()["entries"][0]["invoice_history"] == {"state": "known", "count": 1}

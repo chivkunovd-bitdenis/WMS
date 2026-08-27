@@ -292,6 +292,7 @@ export function UiKitShowcase() {
           <CheckboxInput label="Выбрать операцию" checked={formCheckbox} onChange={setFormCheckbox} helperText="Выбор задаёт внешний владелец формы" testId="showcase-checkbox-input" />
           <CheckboxInput label="Недоступная операция" checked={false} onChange={() => undefined} disabledReason="Операция не рассчитана" testId="showcase-disabled-checkbox-input" />
           <CheckboxInput label="Выбрать строку таблицы" hideLabel checked={formCheckbox} onChange={setFormCheckbox} testId="showcase-hidden-label-checkbox-input" />
+          <CheckboxInput label="Выбрать недоступную строку таблицы" hideLabel checked={false} onChange={() => undefined} disabledReason="Операция уже включена в счёт" testId="showcase-hidden-label-disabled-checkbox-input" />
         </Stack>
       </Section>
 

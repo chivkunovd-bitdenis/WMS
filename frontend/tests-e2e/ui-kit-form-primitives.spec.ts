@@ -62,6 +62,48 @@ test('TC-NEW-108 CheckboxInput без видимой подписи сохран
   expect(await checkbox.isChecked()).toBe(!before)
 })
 
+// TC-NEW-109 — Дано скрытую подпись, Когда рядом есть причина недоступности,
+// Тогда она не занимает места и не расширяет страницу.
+// Ограничение: живой экран показал, что видимая подсказка в колонке таблицы
+// переносится и растягивает строку втрое, а `width: 1` в MUI `sx` — это 100%,
+// а не один пиксель, из-за чего скрытый текст уводил страницу вправо на 300 px.
+test('TC-NEW-109 скрытая подсказка не занимает места и не расширяет страницу', async ({ page }) => {
+  await openShowcase(page)
+  const before = await page.evaluate(() => document.documentElement.scrollWidth)
+
+  const field = page.getByTestId('showcase-hidden-label-disabled-checkbox-input-field')
+  const helper = field.locator('.MuiFormHelperText-root')
+  if (await helper.count()) {
+    const box = await helper.boundingBox()
+    expect(box?.width ?? 0, 'скрытая подсказка шире пикселя').toBeLessThanOrEqual(2)
+  }
+
+  // Ширину здесь мерить нечего: на витрине поле лежит в колонке 440 px, а в
+  // ячейке таблицы его ширину задаёт колонка. Дефект проявлялся в высоте —
+  // перенос подсказки растягивал строку с 58 px до 151 px.
+  const fieldBox = await field.boundingBox()
+  expect(fieldBox?.height ?? 0, 'поле со скрытой подписью раздувает строку').toBeLessThanOrEqual(60)
+
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(before)
+
+  // Сама витрина шире окна по своим причинам, поэтому проверяем адресно: именно
+  // скрытая подсказка не должна торчать за правый край. С `width: 1` она была
+  // 1600 px шириной и уводила страницу на 300 px вправо.
+  const stickingOut = await page.evaluate(() => {
+    const helperEl = document.querySelector(
+      '[data-testid="showcase-hidden-label-disabled-checkbox-input-field"] .MuiFormHelperText-root',
+    )
+    if (!helperEl) return null
+    const box = helperEl.getBoundingClientRect()
+    return { right: Math.round(box.right), clientW: document.documentElement.clientWidth }
+  })
+  if (stickingOut) {
+    expect(stickingOut.right, 'скрытая подсказка торчит за правый край').toBeLessThanOrEqual(
+      stickingOut.clientW,
+    )
+  }
+})
+
 // TC-NEW-103 — Дано денежное поле, Когда вводится сумма с копейками,
 // Тогда строка сохраняется посимвольно и не проходит через число.
 // Ограничение: `12.20` обязано остаться `12.20`, а не превратиться в `12.2`.

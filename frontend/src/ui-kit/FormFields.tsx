@@ -116,6 +116,25 @@ function useFieldMetadata(props: FieldProps): FieldMetadata {
   }
 }
 
+// Со скрытой подписью причина недоступности обязана остаться программе чтения
+// через aria-describedby, но не может быть видимым текстом: в колонке таблицы
+// она переносится и растягивает строку втрое по высоте.
+// Пиксели записаны строками намеренно: в MUI `sx` число не больше единицы для
+// width/height означает долю, то есть `width: 1` — это 100%, а не один пиксель.
+// С долей скрытая подсказка растягивается на всю ширину и уводит страницу вправо.
+const VISUALLY_HIDDEN = {
+  position: 'absolute',
+  width: '1px',
+  height: '1px',
+  margin: '-1px',
+  padding: 0,
+  border: 0,
+  overflow: 'hidden',
+  clip: 'rect(0 0 0 0)',
+  whiteSpace: 'nowrap',
+} as const
+
+
 function FieldFrame({ children, loading, testId }: { children: React.ReactNode; loading?: boolean; testId?: string }) {
   return (
     <Box data-testid={testId ? `${testId}-field` : undefined} aria-busy={loading || undefined}>
@@ -255,7 +274,7 @@ export function CheckboxInput({ checked, onChange, disabledReason, hideLabel, ..
     <FieldFrame loading={fieldProps.loading} testId={fieldProps.testId}>
       <Box>
         {disabledReason ? <Tooltip title={disabledReason}><span>{hideLabel ? control : <FormControlLabel label={fieldProps.label} control={control} />}</span></Tooltip> : hideLabel ? control : <FormControlLabel label={fieldProps.label} control={control} />}
-        {metadata.helperId ? <FormHelperText id={metadata.helperId} error={Boolean(fieldProps.error)}>{metadata.helperText}</FormHelperText> : null}
+        {metadata.helperId ? <FormHelperText id={metadata.helperId} error={Boolean(fieldProps.error)} sx={hideLabel ? VISUALLY_HIDDEN : undefined}>{metadata.helperText}</FormHelperText> : null}
       </Box>
     </FieldFrame>
   )

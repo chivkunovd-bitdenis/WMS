@@ -18,6 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.settings import settings
 from app.models.billing import (
     BillingInvoice,
+    BillingInvoiceV2Line,
+    BillingInvoiceV2Source,
     BillingLedgerEntry,
     BillingLedgerLine,
     BillingTariffVersion,
@@ -312,6 +314,19 @@ async def _invoice_history(session: AsyncSession, *, tenant_id: uuid.UUID, selle
                 invoice_ids.add(str(document["id"]))
         if chain & invoice_ids:
             count += 1
+    # Счета V2 держат источники строками, а не JSON внутри счёта. Без этого
+    # запроса операция, уже включённая в новый счёт, выглядела бы невыставленной,
+    # и оператор спокойно выставил бы её второй раз.
+    v2_rows = await session.execute(
+        select(BillingInvoiceV2Line.invoice_id)
+        .join(BillingInvoiceV2Source, BillingInvoiceV2Source.invoice_line_id == BillingInvoiceV2Line.id)
+        .where(
+            BillingInvoiceV2Line.tenant_id == tenant_id,
+            BillingInvoiceV2Source.billing_ledger_entry_id.in_({uuid.UUID(value) for value in chain}),
+        )
+        .distinct()
+    )
+    count += len(list(v2_rows))
     return {"state": "known", "count": count}
 
 
