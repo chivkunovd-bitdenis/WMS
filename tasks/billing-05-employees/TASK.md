@@ -18,24 +18,22 @@
 статус `BLOCKED`, а не угадывание parent миграции.
 
 После независимого `CONTRACT_ACCEPTED` и после принятия Wave 4 открыть ровно
-один наряд следующей командой. `S-19` указан потому, что источник ставок
-сотрудников живёт в существующей панели настроек; механически добавленные
-registry paths не дают права менять соседние зоны экрана.
+один наряд следующей командой. У `/app/ff/billing` нет отдельного S-ID в
+реестре, поэтому его точная граница задаётся только `--files`: это не даёт
+наряду автоматически захватить чужой экран «Настройки».
 
 ```bash
-python3 scripts/naryad.py new "Волна 5 модуля «Расчёты»: вкладка сотрудников, неизменяемые выплаты и сверка упаковки" --screens S-19 --lane обычная --files backend/app/models/billing.py,backend/app/models/operation_fact.py,backend/app/models/__init__.py,backend/app/services/operation_fact_service.py,backend/app/services/staff_packaging_billing_service.py,backend/app/services/staff_earning_service.py,backend/app/services/billing_staff_report_service.py,backend/app/api/billing.py,backend/app/api/billing_staff_report_schemas.py,backend/alembic/versions/20260827_0115_staff_earnings.py,backend/tests/test_operation_facts.py,backend/tests/test_staff_packaging_billing.py,backend/tests/test_staff_earning_service.py,backend/tests/test_billing_staff_report_api.py,backend/tests/test_billing_staff_report_service.py,backend/tests/test_billing_tariff_matrix.py,frontend/src/screens/ff/FfBillingScreen.tsx,frontend/src/screens/ff/FfBillingScreen.test.ts,frontend/src/screens/ff/FfSettingsScreen.tsx,frontend/src/screens/ff/FfSettingsScreen.test.tsx,frontend/src/screens/ff/FfBillingTariffMatrixPanel.tsx,frontend/tests-e2e/billing-staff-report.spec.ts,frontend/tests-e2e/ff-staff-packaging-billing.spec.ts,frontend/tests-e2e/ff-billing-tariff-matrix.spec.ts,frontend/tests-e2e/billing-seller-report.spec.ts,frontend/tests-e2e/billing-invoices.spec.ts,docs/evidence/billing-05-employees/STAFF-EARNINGS-PROOF.md,docs/evidence/20260827-volna-5-modulya-raschety-vkladka-sotrudn/BILLING-STAFF-1600.jpg,docs/evidence/20260827-volna-5-modulya-raschety-vkladka-sotrudn/BILLING-STAFF-FINANCE-OFF-1280.jpg,docs/evidence/20260827-volna-5-modulya-raschety-vkladka-sotrudn/VERDICT.md,tasks/billing-05-employees/TASK.md
+python3 scripts/naryad.py new "Волна 5 модуля «Расчёты»: вкладка сотрудников, неизменяемые выплаты и сверка упаковки" --lane обычная --files backend/app/models/billing.py,backend/app/models/operation_fact.py,backend/app/models/__init__.py,backend/app/services/operation_fact_service.py,backend/app/services/staff_packaging_billing_service.py,backend/app/services/staff_earning_service.py,backend/app/services/billing_staff_report_service.py,backend/app/api/billing.py,backend/app/api/billing_staff_report_schemas.py,backend/alembic/versions/20260827_0115_staff_earnings.py,backend/tests/test_operation_facts.py,backend/tests/test_staff_packaging_billing.py,backend/tests/test_staff_earning_service.py,backend/tests/test_billing_staff_report_api.py,backend/tests/test_billing_staff_report_service.py,backend/tests/test_billing_tariff_matrix.py,frontend/src/screens/ff/FfBillingScreen.tsx,frontend/src/screens/ff/FfBillingScreen.test.ts,frontend/tests-e2e/billing-staff-report.spec.ts,frontend/tests-e2e/ff-staff-packaging-billing.spec.ts,frontend/tests-e2e/billing-seller-report.spec.ts,frontend/tests-e2e/billing-invoices.spec.ts,docs/evidence/billing-05-employees/STAFF-EARNINGS-PROOF.md,docs/evidence/20260827-volna-5-modulya-raschety-vkladka-sotrudn/BILLING-STAFF-1600.jpg,docs/evidence/20260827-volna-5-modulya-raschety-vkladka-sotrudn/BILLING-STAFF-FINANCE-OFF-1280.jpg,docs/evidence/20260827-volna-5-modulya-raschety-vkladka-sotrudn/VERDICT.md,tasks/billing-05-employees/TASK.md
 ```
 
-`frontend/src/utils/ffPermissions.ts` и
-`frontend/src/utils/separateMarkingPrint.ts` могут быть добавлены нарядом
-только как registry dependencies S-19. Они не относятся к функции и обязаны
-остаться с zero diff. `frontend/src/ui-kit/**`, route-конфигурация, `App.tsx`,
-screen registry, Wave 3/4 product code, legacy invoice/storage UI, `User` и
-`PackagingTask` schema, baseline-guards, secrets, staging и production в эту
-волну не входят. Если требуемого UI-kit primitive нет, developer останавливает
-этот наряд: отдельная общая prerequisite проходит свой наряд, review,
-commit/push и только затем Wave 5 открывается заново. Локальные MUI-аналоги
-таблицы, фильтра, кнопки, dropdown, chip или switch запрещены.
+`frontend/src/ui-kit/**`, экран настроек, тарифная матрица,
+route-конфигурация, `App.tsx`, screen registry, Wave 3/4 product code, legacy
+invoice/storage UI, `User` и `PackagingTask` schema, baseline-guards, secrets,
+staging и production в эту волну не входят.
+Если требуемого UI-kit primitive нет, developer останавливает этот наряд:
+отдельная общая prerequisite проходит свой наряд, review, commit/push и только
+затем Wave 5 открывается заново. Локальные MUI-аналоги таблицы, фильтра,
+кнопки, dropdown, chip или switch запрещены.
 
 Миграция только добавляющая: `0115` имеет единственный parent `0114`, не
 переписывает 0110–0114 и не меняет существующие таблицы упаковки, тарифов,
@@ -54,9 +52,8 @@ commit/push и только затем Wave 5 открывается занов�
 чекбоксы, начисления селлеру, пересчёт архивной упаковки, изменение
 `staff_packaging_billing_service`, расширение ролей, новый маршрут, экспорт,
 выплата денег, платёжная ведомость, удаление сотрудника и какая-либо новая
-автоматизация. Настройка ставок остаётся компактной панелью S-19 Wave 2Б;
-упаковка остаётся её существующей отдельной ставкой и не переносится в
-матрицу.
+автоматизация. Настройка ставок остаётся в уже существующем месте;
+упаковка остаётся её отдельной ставкой и не переносится в матрицу.
 
 ## 2. Экран: только существующий каркас и UI-kit
 
@@ -104,11 +101,9 @@ commit/push и только затем Wave 5 открывается занов�
 Никакого микрошрифта, изменения ширины существующих seller/invoice колонок,
 глобального горизонтального scroll, перестановки шапки или «заодно» правки
 старых экранов. Горизонтальная прокрутка допустима только в штатном
-`DataTable`-контейнере. S-19 сохраняет её компактную таблицу ставок без новых
-колонок/контролов: Wave 5 может лишь провести регрессионную проверку того, что
-«Упаковка» остаётся объясняющей ссылкой на current profile rate, а employee
-rates `inbound/picking/marketplace_outbound/return` не исчезли и не стали
-источником оплаты упаковки.
+`DataTable`-контейнере. Ставки не редактируются на этой вкладке; отчёт лишь
+показывает snapshot фактического действия и не трактует employee rates
+`inbound/picking/marketplace_outbound/return` как источник оплаты упаковки.
 
 ## 3. Данные: неизменяемая выплата и единственный источник упаковки
 
@@ -283,8 +278,7 @@ loading, error preserving summary, `Load more`, known zero vs missing rate and
 stable source navigation. E2E contains the TC IDs above and passes through UI,
 not direct HTTP: admin selects period/search/employee, switches finance,
 opens detail, loads next page, validates no invoice action; it also checks
-regular employee/seller denial, S-19 existing rate panel, seller report and
-invoice regressions.
+regular employee/seller denial plus seller-report and invoice regressions.
 
 Required technical gates after implementation:
 
@@ -308,9 +302,8 @@ screenshots, database or baseline side-effect is staged unless listed in the
 и не пересказ developer. Он руками проходит: finance-on и finance-off,
 today/7/30/current/previous/arbitrary Moscow period, employee search/filter,
 sort, detail/load-more, zero rate, missing rate, deleted snapshot, packaging
-row, source navigation, error and empty retry. Он также открывает S-19 и
-проверяет, что упаковка по-прежнему настраивается только старой user-rate, а
-матрица не получила новую ставку упаковки.
+row, source navigation, error and empty retry. Проверка ограничена новым
+billing screen: настройки и тарифная матрица не открываются и не меняются.
 
 На ширинах **1600 px и 1280 px** судья фиксирует `document.scrollWidth <=
 clientWidth`, отсутствие пересечений/обрезания, видимые подписи, правильные
