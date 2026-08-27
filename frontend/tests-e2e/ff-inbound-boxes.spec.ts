@@ -125,7 +125,7 @@ test.describe('US-B-01 FF receiving creates on-demand boxes', () => {
   });
 });
 
-// TC-NEW-B02-WB-BOX-01 — новые INB-короба используют точный WB-совместимый Crockford Base32.
+// TC-NEW-B02-WB-BOX-01 — новые INB-короба используют короткий WB-совместимый Crockford Base32.
 test.describe('US-B-02 inbound box barcodes and print actions', () => {
   test('INB barcodes, print one and print all call mark-label-printed', async ({
     page,
@@ -149,7 +149,7 @@ test.describe('US-B-02 inbound box barcodes and print actions', () => {
     const barcodes = await rows.locator('code').allTextContents();
     expect(barcodes).toHaveLength(3);
     for (const code of barcodes) {
-      expect(code).toMatch(/^INB-[0-7][0-9A-HJKMNP-TV-Z]{25}$/);
+      expect(code).toMatch(/^INB-[0-9A-HJKMNP-TV-Z]{14}$/);
     }
     expect(new Set(barcodes).size).toBe(3);
 

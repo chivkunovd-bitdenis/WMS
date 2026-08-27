@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from math import expm1
 
 import pytest
 from httpx import AsyncClient
@@ -21,7 +22,7 @@ from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
 from app.models.warehouse_box import WarehouseBox
 from app.services.box_barcode_service import (
-    _encode_uuid,
+    _encode_number,
     generate_box_barcode,
     is_wb_compatible_box_barcode,
 )
@@ -39,10 +40,10 @@ def test_generated_box_barcodes_are_wb_compatible_and_unique(prefix: str) -> Non
     barcodes = {generate_box_barcode(prefix) for _ in range(1_000)}
 
     assert len(barcodes) == 1_000
-    assert all(len(barcode) == 30 for barcode in barcodes)
+    assert all(len(barcode) == 18 for barcode in barcodes)
     assert all(barcode.startswith(f"{prefix}-") for barcode in barcodes)
     assert all(
-        re.fullmatch(rf"{prefix}-[0-7][0-9A-HJKMNP-TV-Z]{{25}}", barcode)
+        re.fullmatch(rf"{prefix}-[0-9A-HJKMNP-TV-Z]{{14}}", barcode)
         for barcode in barcodes
     )
     assert all(is_wb_compatible_box_barcode(barcode) for barcode in barcodes)
@@ -56,8 +57,18 @@ def test_every_physical_box_generator_uses_the_shared_format() -> None:
 
     for prefix, barcode in generated.items():
         assert barcode.startswith(f"{prefix}-")
-        assert len(barcode) == 30
+        assert len(barcode) == 18
         assert is_wb_compatible_box_barcode(barcode)
+
+
+def test_collision_budget_is_below_one_in_twenty_million_at_ten_million_boxes() -> None:
+    possible_suffixes = 1 << 70
+    generated_boxes = 10_000_000
+    collision_probability = -expm1(
+        -(generated_boxes * (generated_boxes - 1)) / (2 * possible_suffixes)
+    )
+
+    assert collision_probability < 1 / 20_000_000
 
 
 @pytest.mark.parametrize(
@@ -200,9 +211,9 @@ def test_validator_rejects_values_wb_will_not_accept(barcode: str) -> None:
     assert not is_wb_compatible_box_barcode(barcode)
 
 
-def test_uuid_encoder_preserves_all_128_bits() -> None:
-    assert _encode_uuid(uuid.UUID(int=0)) == "0" * 26
-    assert _encode_uuid(uuid.UUID(int=(1 << 128) - 1)) == "7" + "Z" * 25
+def test_suffix_encoder_preserves_all_70_random_bits() -> None:
+    assert _encode_number(0, 14) == "0" * 14
+    assert _encode_number((1 << 70) - 1, 14) == "Z" * 14
 
 
 @pytest.mark.parametrize("prefix", ["", "FBS", "TOOLONG", "W-B", "ШК"])

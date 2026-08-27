@@ -22,6 +22,7 @@
 - `backend/app/services/inbound_intake_box_service.py`
 - `backend/tests/test_box_barcode_service.py`
 - `frontend/tests-e2e/ff-inbound-boxes.spec.ts`
+- `frontend/tests-e2e/ff-inbound-box-intake.spec.ts`
 - относящиеся к генерации коробов проверки в существующих backend-тестах
 - `tasks/20260826-uvepen-po-formatu-modzhesh-sdelat-vezde-/`
 - `docs/evidence/20260826-uvepen-po-formatu-modzhesh-sdelat-vezde-/`
@@ -36,14 +37,15 @@
 
 - [x] арх-решение — не требуется (единое правило существующих коробов)
 - [x] контракт
-- [x] разработка — код и целевые тесты; общий backend-гейт красный на базовых ошибках
-- [x] критик исполнения — `CODE_REVIEW_PASSED` после одного раунда test-only rework
-- [ ] судья в живом браузере
-- [x] доказательства — автоматические проверки и полный backend-прогон
+- [x] разработка — 18-символьный формат и физический 203-dpi regression
+- [x] критик исполнения — `CODE_REVIEW_PASSED` после печатного rework
+- [x] судья в живом браузере — `PRODUCT_BROWSER_APPROVED`
+- [x] доказательства — полный backend/frontend-гейт и живые скриншоты
 - [ ] влито
 
-## Текущий блокер
+## Текущее состояние
 
-Релизная готовность не подтверждена: полный backend-гейт содержит 69 ошибок Ruff,
-19 ошибок mypy и 6 упавших тестов вне изменённой зоны. Живой браузер и вливание
-не выполняются до зелёного обязательного гейта.
+Полный backend-гейт зелёный: Ruff, mypy, `1054 passed, 5 skipped`.
+Production build и полный Playwright зелёные: `202 passed, 7 skipped`.
+Код, полные гейты, финальный review и независимый живой браузер зелёные.
+Остаются Git commit/push, PR/CI, вливание и production deploy.

@@ -1,14 +1,15 @@
 # Доказательства · WB-совместимые ШК коробов
 
-Дата проверки: 26.08.2026.
+Дата финальной проверки: 27.08.2026.
 
 ## Проверка результата
 
-Целевой набор охватывает общий генератор `WHB`/`INB`, API-ответы, уникальность серии
-и старые сохранённые форматы. FBS строго исключён из изменения.
+Целевой набор охватывает общий генератор `WHB`/`INB`, API-ответы, уникальность,
+старые сохранённые форматы и реальную печать Code 128 на 58x40 мм при 203 dpi.
+FBS строго исключён из изменения.
 
 ```text
-30 passed in 44.21s
+23 passed in 0.57s
 ```
 
 Ruff по всем изменённым Python-файлам:
@@ -17,17 +18,17 @@ Ruff по всем изменённым Python-файлам:
 All checks passed!
 ```
 
-Mypy для нового общего модуля:
+Mypy для нового общего модуля и полный mypy:
 
 ```text
 Success: no issues found in 1 source file
+Success: no issues found in 307 source files
 ```
 
 Примеры реально сгенерированных значений:
 
 ```text
-WHB WHB-3N5DWWDH3T8WG9HXM05MTXTEB6 30 True
-INB INB-6BHHZQ5RSF9A3RMMZ4J0EAABA6 30 True
+INB INB-CP2AXF4WG3JQSZ 18 True
 ```
 
 Проверка отсутствия изменений FBS относительно `origin/etalon`:
@@ -41,31 +42,44 @@ git diff origin/etalon -- \
 
 Получение и печать официальных QR грузомест и QR поставки FBS не изменялись.
 
-## Полный backend-гейт
+## Физическая читаемость
 
-Полный `ruff check .` не прошёл: 69 ошибок в несвязанных существующих файлах.
+Первый вариант на 30 символов остановлен review: он формально разрешён WB, но
+слишком плотный для Code 128 на стандартной этикетке. Финальный вариант содержит
+14 Crockford Base32 символов после префикса, всего 18 символов и 70 случайных битов.
 
-Полный `mypy .` не прошёл: 19 ошибок в четырёх несвязанных существующих файлах.
-
-Полный `pytest -q` завершился так:
+Playwright берёт настоящий `internalBox` renderer и печатный HTML, растрирует
+58x40 мм при `203/96` device scale и декодирует результат ZXing:
 
 ```text
-6 failed, 1042 passed, 5 skipped, 9 warnings in 1413.96s (0:23:33)
+TC-NEW-INTERNAL-LABEL-01: actual batch print HTML decoded at 58x40/203 dpi
+Single print action: exercised by full E2E and uses the same production internalBox helper
+TC-NEW-INTERNAL-LABEL-02: 4 worst patterns + 256 deterministic codes decoded
+negative canary WHB-A8SB4F33NCXJ506A: decode rejected
+2 passed in 32.3s
 ```
 
-Упавшие тесты:
+## Полные гейты после rework
 
-- `test_exported_fbs_openapi_file_matches_live_schema` — экспорт OpenAPI не содержит уже
-  существующий route `boxes-without-distribution`.
-- `test_fbs_cutoff_autoplans_supply_manual_date_and_calendar` — тестовая дата 15.08.2026
-  стала прошедшей относительно текущей даты.
-- `test_marketplace_unload_pick_set_allocation_increase_decrease_zero` — `MissingGreenlet`.
-- `test_marketplace_unload_pick_allocations_admin_only` — `MissingGreenlet`.
-- `test_marketplace_unload_packaging_one_row_per_product_across_cells` — `MissingGreenlet`.
-- `test_marketplace_unload_box_remove_copy_delete` — `MissingGreenlet`.
+```text
+Ruff: All checks passed!
+Mypy: Success: no issues found in 307 source files
+Pytest: 1054 passed, 5 skipped in 732.94s (0:12:12)
+Frontend production build: passed
+Playwright: 202 passed, 7 skipped in 14.4m
+```
 
-Ни одно падение не проходит через изменённый генератор ШК. По правилам проекта общий
-красный гейт всё равно блокирует живую браузерную приёмку и релизный статус.
+## Живой браузер
+
+- `inbound-box-live.png` — один документ одновременно показывает старый сохранённый
+  30-символьный короб и новый `INB-CP2AXF4WG3JQSZ`; оба значения читаются полностью.
+- `inbound-box-label-live.png` — диалог печати нового короба открывается с размером
+  по умолчанию 58x40 мм.
+
+После двух неуспешных попыток подключения свежий независимый судья прошёл сценарий
+в живом Browser при 1280x720 и выдал `PRODUCT_BROWSER_APPROVED`: новый и старый
+коды видны полностью, печать нового короба открывается на 58x40 мм, горизонтального
+переполнения нет, FBS-вкладки работают без ошибок и предупреждений в консоли.
 
 ## Повторное code review · 27.08.2026
 
@@ -74,13 +88,13 @@ git diff origin/etalon -- \
 - e2e ожидал старый `INB-` + 12 hex-символов;
 - mocked lookup не доказывал сканирование старых сохранённых ШК.
 
-После rework regex точно проверяет 128-битный суффикс
-`[0-7][0-9A-HJKMNP-TV-Z]{25}`, а старые `WHB-ABCDEF123456` и
+После финального rework regex точно проверяет 70-битный суффикс
+`[0-9A-HJKMNP-TV-Z]{14}`, а старые `WHB-ABCDEF123456` и
 `INB-ABCDEF123456` реально сохраняются в SQLite и проходят production
 `attach_existing_box_by_barcode`.
 
 ```text
-22 passed in 1.02s
+23 passed in 0.57s
 Ruff: All checks passed!
-CODE_REVIEW_PASSED
+Final rereview: CODE_REVIEW_PASSED, no P0/P1/P2 findings
 ```

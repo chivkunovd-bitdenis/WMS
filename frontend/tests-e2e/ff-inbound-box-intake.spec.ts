@@ -222,8 +222,6 @@ test('TC-NEW-INTERNAL-LABEL-01 bulk box labels are large, decodable and one prin
   await page.getByTestId('ff-inbound-boxes-print-all').click();
   const dialog = page.getByTestId('ff-inbound-box-print-dialog');
   await expect(dialog).toBeVisible();
-  await dialog.getByTestId('ff-inbound-box-print-dialog-size').click();
-  await page.getByTestId('ff-inbound-box-print-dialog-size-option-60x40').click();
   await dialog.getByTestId('ff-inbound-box-print-dialog-confirm').click();
 
   await expect.poll(async () => page.evaluate(() => {
@@ -238,7 +236,7 @@ test('TC-NEW-INTERNAL-LABEL-01 bulk box labels are large, decodable and one prin
     };
     return { html: capture.__WMS_LAST_PRINT_HTML__ ?? '', jobs: capture.__WMS_PRINT_JOB_COUNT__ ?? 0 };
   });
-  expect(printHtml.html).toContain(`@page { size: 60mm 40mm; margin: 0; }`);
+  expect(printHtml.html).toContain(`@page { size: 58mm 40mm; margin: 0; }`);
   expect(printHtml.html).toContain('.barcode { width: 100%; max-width: none;');
   expect(printHtml.html).toContain('page-break-after: always;');
   for (const box of boxes) expect(printHtml.html).toContain(`data-barcode="${box.internal_barcode}"`);
@@ -249,7 +247,8 @@ test('TC-NEW-INTERNAL-LABEL-01 bulk box labels are large, decodable and one prin
   if (!browser) throw new Error('Chromium browser недоступен для проверки печати.');
   const printContext = await browser.newContext({
     viewport: { width: 600, height: 500 },
-    deviceScaleFactor: 4,
+    // 203 dpi is the common low-resolution thermal-printer contract.
+    deviceScaleFactor: 203 / 96,
   });
   const preview = await printContext.newPage();
   await preview.setContent(printHtml.html);
@@ -258,9 +257,10 @@ test('TC-NEW-INTERNAL-LABEL-01 bulk box labels are large, decodable and one prin
   const barcodeBox = await barcodeImage.boundingBox();
   expect(barcodeBox?.width).toBeGreaterThan(200);
   const renderedBarcodePng = await barcodeImage.screenshot({
-    path: testInfo.outputPath('internal-box-label-chromium-crop.png'),
+    path: testInfo.outputPath('internal-box-label-58x40-203dpi.png'),
     scale: 'device',
   });
+  expect(PNG.sync.read(renderedBarcodePng).width).toBeGreaterThanOrEqual(430);
   await preview.close();
   await printContext.close();
 
@@ -293,6 +293,78 @@ test('TC-NEW-INTERNAL-LABEL-01 bulk box labels are large, decodable and one prin
   await expandInboundPackages(page);
   await expect(page.getByTestId('ff-inbound-status-chip')).toContainText('В сортировке');
   await expect(page.getByTestId('ff-inbound-boxes-print-all')).toBeEnabled();
+});
+
+// TC-NEW-INTERNAL-LABEL-02 — безопасная длина нового ШК остаётся читаемой на
+// штатной этикетке 58x40 мм при 203 dpi, включая худшие рисунки полос.
+test('TC-NEW-INTERNAL-LABEL-02 18-char box codes decode at 58x40 and 203 dpi', async ({ page }) => {
+  await page.goto('/');
+  const alphabet = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+  const deterministicSuffix = (seed: number): string => {
+    let value = seed >>> 0;
+    let suffix = '';
+    for (let index = 0; index < 14; index += 1) {
+      value = (Math.imul(value, 1_664_525) + 1_013_904_223) >>> 0;
+      suffix += alphabet[value % alphabet.length];
+    }
+    return suffix;
+  };
+  const codes = [
+    `INB-${'Z'.repeat(14)}`,
+    `WHB-${'A0'.repeat(7)}`,
+    'INB-01234567890123',
+    'WHB-00000000000000',
+    ...Array.from({ length: 256 }, (_, index) =>
+      `${index % 2 === 0 ? 'INB' : 'WHB'}-${deterministicSuffix(index + 1)}`),
+  ];
+  const negativeCanary = 'WHB-A8SB4F33NCXJ506A';
+  const renderedCodes = [...codes, negativeCanary];
+
+  const dataUrls = await page.evaluate(async (values) => {
+    const modulePath = '/src/utils/renderBarcodeDataUrl.ts';
+    const renderer = await import(/* @vite-ignore */ modulePath) as {
+      renderBarcodeDataUrl: (
+        barcode: string,
+        options: { variant: 'internalBox' },
+      ) => string;
+    };
+    return values.map((barcode) =>
+      renderer.renderBarcodeDataUrl(barcode, { variant: 'internalBox' }));
+  }, renderedCodes);
+
+  const browser = page.context().browser();
+  if (!browser) throw new Error('Chromium browser недоступен для проверки печати.');
+  const printContext = await browser.newContext({
+    viewport: { width: 600, height: 500 },
+    deviceScaleFactor: 203 / 96,
+  });
+  const preview = await printContext.newPage();
+  const captureAt203Dpi = async (code: string, dataUrl: string): Promise<Buffer> => {
+    await preview.setContent(`<style>
+      html, body { margin: 0; }
+      .label { width: 58mm; height: 40mm; box-sizing: border-box; }
+      .wrap { width: 100%; height: 100%; box-sizing: border-box; padding: 1.5mm; display: grid; grid-template-rows: auto 1fr auto; gap: 1mm; justify-items: stretch; align-items: center; }
+      .title, .code { text-align: center; }
+      .barcode { width: 100%; max-width: none; height: auto; max-height: none; display: block; image-rendering: pixelated; }
+    </style>
+    <section class="label"><div class="wrap"><div class="title">Короб № 1</div><img class="barcode" src="${dataUrl}" alt="barcode" /><div class="code">${code}</div></div></section>`);
+    return preview.locator('img.barcode').screenshot({ scale: 'device' });
+  };
+
+  try {
+    for (const [index, code] of codes.entries()) {
+      const barcodePng = await captureAt203Dpi(code, dataUrls[index]!);
+      expect(decodeCode128FromPng(barcodePng), `203 dpi decode failed for ${code}`).toBe(code);
+    }
+    const canaryPng = await captureAt203Dpi(negativeCanary, dataUrls[codes.length]!);
+    expect(
+      () => decodeCode128FromPng(canaryPng),
+      'known unsafe 20-character Code 128 unexpectedly decoded at 203 dpi',
+    ).toThrow();
+  } finally {
+    await preview.close();
+    await printContext.close();
+  }
 });
 
 // TC-NEW-STAB-IN-FE-03 — модалка «Добавить в короб»: фото/название/артикул/размер, hover, qty только в выбранный короб.
