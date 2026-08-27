@@ -119,12 +119,13 @@ test('ff products: catalog separates product fields and shows compact stock', as
   await expect(page.getByTestId('ff-products-table')).toContainText(skuPrivate)
 
   const alphaRow = page.getByTestId('ff-product-row').filter({ hasText: skuA })
-  await expect(alphaRow.locator('td').nth(1)).toContainText('Alpha product')
-  await expect(alphaRow.locator('td').nth(1)).not.toContainText('ART-A')
-  await expect(alphaRow.locator('td').nth(1)).not.toContainText('46')
-  await expect(alphaRow.locator('td').nth(2)).toContainText('ART-A')
-  await expect(alphaRow.locator('td').nth(3)).toContainText(skuA)
-  await expect(alphaRow.locator('td').nth(4)).toContainText(barcodeA)
+  // Нулевая колонка — чекбокс массового выбора, поэтому фото идёт первым, а не нулевым.
+  await expect(alphaRow.locator('td').nth(2)).toContainText('Alpha product')
+  await expect(alphaRow.locator('td').nth(2)).not.toContainText('ART-A')
+  await expect(alphaRow.locator('td').nth(2)).not.toContainText('46')
+  await expect(alphaRow.locator('td').nth(3)).toContainText('ART-A')
+  await expect(alphaRow.locator('td').nth(4)).toContainText(skuA)
+  await expect(alphaRow.locator('td').nth(5)).toContainText(barcodeA)
   await expect(alphaRow.getByTestId(/ff-catalog-stock-in-storage-/)).toHaveText('В ячейках 0')
   await expect(alphaRow.getByTestId(/ff-catalog-stock-on-hand-/)).toHaveText('На ФФ 0')
   await expect(alphaRow.getByTestId(/ff-catalog-stock-free-fbo-/)).toHaveText('Свободный FBO 0')
@@ -134,7 +135,12 @@ test('ff products: catalog separates product fields and shows compact stock', as
   await expect(alphaRow).toContainText('46')
 
   // Photo cell exists even if WB photo is missing in mocks.
-  await expect(page.getByTestId('ff-product-row').first().locator('td').nth(0)).toBeVisible()
+  await expect(page.getByTestId('ff-product-row').first().locator('td').nth(1)).toBeVisible()
+  // Чекбокс массового выбора — первым в строке, им отмечают товары для простановки
+  // остатка FBS пачкой.
+  await expect(
+    page.getByTestId('ff-product-row').first().locator('td').nth(0).locator('input[type="checkbox"]'),
+  ).toBeVisible()
 })
 
 // TC-CAT-03 — строка каталога ведёт в карточку кодов маркировки одной иконкой.
