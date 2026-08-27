@@ -486,6 +486,7 @@ async def create_supply_from_orders(
     planned_destination: dict[str, Any] | None,
     idempotency_key: str,
     http_client: httpx.AsyncClient,
+    created_by_user_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
     if not idempotency_key.strip():
         raise FbsSupplyError("missing_idempotency_key", http_status=400)
@@ -586,6 +587,7 @@ async def create_supply_from_orders(
                 "order_ids": [str(oid) for oid in order_ids],
                 "planned_delivery_type": planned_delivery_type,
             },
+            created_by_user_id=created_by_user_id,
         )
 
         wb_office_id = None

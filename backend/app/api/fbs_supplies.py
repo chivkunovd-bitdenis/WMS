@@ -920,6 +920,7 @@ async def create_fbs_supply_from_orders(
                 planned_destination=planned_dest,
                 idempotency_key=body.idempotency_key,
                 http_client=http_client,
+                created_by_user_id=user.id,
             )
         except supply_svc.FbsSupplyError as exc:
             if exc.code in {"wb_timeout", "wb_pending_confirmation"} or (
@@ -1750,6 +1751,7 @@ async def delete_fbs_cargo_places(
                 body.wb_trbx_ids,
                 body.idempotency_key,
                 http_client,
+                actor_user_id=user.id,
             )
         except pvz_svc.FbsShipmentPvzError as exc:
             if exc.code in {"wb_timeout", "wb_pending_confirmation"}:
@@ -1963,6 +1965,7 @@ async def deliver_fbs_supply(
                 http_client,
                 idempotency_key=body.idempotency_key,
                 confirmed_preflight_version=body.confirmed_preflight_version,
+                actor_user_id=user.id,
             )
         except shipment_svc.FbsShipmentError as exc:
             if exc.code in {"wb_timeout", "wb_pending_confirmation", "meta_validation_fail"}:

@@ -682,7 +682,13 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
     if order.seller_id and order.wb_nm_id is not None:
         card = ctx["cards"].get((order.seller_id, int(order.wb_nm_id)))
     card_raw = card.raw_json if card and isinstance(card.raw_json, dict) else None
-    barcode = order.wb_barcode or (product.wb_barcode if product else None)
+    # Штрихкод товара берём из карточки WMS, а не из задания WB. У позиции в
+    # карточке WB может лежать два кода: настоящий производственный (префикс 463…)
+    # и внутренний, сгенерированный самим WB (префикс 20…, по GS1 это код
+    # ограниченного обращения). В задание WB кладёт свой внутренний, и печать по
+    # нему давала на складе наклейку, не совпадающую с коробкой производителя.
+    # От WB на упаковке нужен только QR стикера заказа; штрихкод — всегда наш.
+    barcode = (product.wb_barcode if product else None) or order.wb_barcode
     image_url = first_photo_url_from_card(card_raw) if card_raw else None
     category = subject_name_from_card(card_raw) if card_raw else None
     color = color_from_card(card_raw) if card_raw else None

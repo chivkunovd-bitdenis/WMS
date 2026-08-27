@@ -435,7 +435,9 @@ async def _image_url_for_order(session: AsyncSession, order: FbsOrder) -> str | 
 
 def _product_payload(order: FbsOrder, image_url: str | None) -> FbsKizProduct:
     product: Product | None = order.product
-    barcode = order.wb_barcode or (product.wb_barcode if product is not None else None)
+    # Тот же порядок, что и в списке заказов: карточка товара главнее задания WB —
+    # иначе оператор видит внутренний код WB вместо штрихкода с коробки.
+    barcode = (product.wb_barcode if product is not None else None) or order.wb_barcode
     seller_article = product.sku_code if product is not None else order.wb_article
     name = (
         product.name

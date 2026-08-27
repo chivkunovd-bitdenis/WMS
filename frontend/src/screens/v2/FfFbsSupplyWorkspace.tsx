@@ -1776,7 +1776,7 @@ export function FfFbsSupplyWorkspace({
 
           {workspace && stage === 'packing' ? (
             <Stack spacing={2}>
-              {!packagingEditable ? <Alert severity="success">Поставка уже передана в WB. Упаковка доступна только для просмотра.</Alert> : null}
+              {!packagingEditable ? <Alert severity="success">Поставка уже передана в WB. Состав менять нельзя, печать этикеток и стикеров доступна.</Alert> : null}
               {packagingTask ? (
                 <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
                   <Box sx={{ px: 2, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
@@ -1799,7 +1799,7 @@ export function FfFbsSupplyWorkspace({
                       </Box>
                       <Stack direction="row" spacing={1}>
                         <Button
-                          disabled={!packagingEditable || busy || packingOrders.length === 0}
+                          disabled={busy || packingOrders.length === 0}
                           onClick={() => openBulkOrderMarkingPrint(
                             // L8 (21.08.2026): в ленту идут ВСЕ заказы поставки, а не только
                             // ненапечатанные. Иначе после первой печати (или после зажёванной
@@ -1999,15 +1999,15 @@ export function FfFbsSupplyWorkspace({
                             <Button size="small" variant="outlined" disabled={!line} onClick={() => line && setTzLine(line)}>
                               ТЗ
                             </Button>
-                            <Button size="small" variant="outlined" disabled={!packagingEditable || busy} onClick={() => void requestPrintBatch([order.id])} data-task-id="FBS-09">
+                            <Button size="small" variant="outlined" disabled={busy} onClick={() => void requestPrintBatch([order.id])} data-task-id="FBS-09">
                               QR
                             </Button>
-                            <IconButton size="small" disabled={!packagingEditable || busy || !line} onClick={() => line && openOrderMarkingPrint(order, line)} aria-label="Печать ЧЗ и ШК" data-task-id="FBS-10">
+                            <IconButton size="small" disabled={busy || !line} onClick={() => line && openOrderMarkingPrint(order, line)} aria-label="Печать ЧЗ и ШК" data-task-id="FBS-10">
                               <PrintOutlinedIcon fontSize="small" />
                             </IconButton>
                             <IconButton
                               size="small"
-                              disabled={!packagingEditable || busy || !line}
+                              disabled={busy || !line}
                               onClick={(event: MouseEvent<HTMLElement>) => setReprintMenu({ orderId: order.id, anchorEl: event.currentTarget })}
                               aria-label="Перепечатать"
                               data-task-id="FBS-11"
