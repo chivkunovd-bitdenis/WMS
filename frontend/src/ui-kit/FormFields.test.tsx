@@ -88,6 +88,7 @@ describe('generic form fields', () => {
     expect(markup).toContain('aria-invalid="true"')
     expect(markup).toContain('<select')
     expect(markup).toContain('tabindex="0"')
+    expect(markup).toMatch(/<label[^>]*data-shrink="true"/)
   })
 
   it('presents a UTC instant as Moscow wall time and keeps the input accessible', () => {
@@ -105,6 +106,7 @@ describe('generic form fields', () => {
     expect(markup).toContain('data-testid="form-moscow-time"')
     expect(markup).toContain('value="2026-01-15T12:00"')
     expect(markup).toContain('Укажите существующее однозначное время Москвы')
+    expect(markup).toMatch(/<label[^>]*data-shrink="true"/)
   })
 
   it('rejects Moscow DST gap and ambiguity, while resolving a valid boundary and invalid calendar precisely', () => {

@@ -160,6 +160,7 @@ export function SelectInput({ value, onChange, options, emptyLabel, ...props }: 
         onChange={(event) => onChange(event.target.value)}
         slotProps={{
           ...commonProps(props, metadata).slotProps,
+          inputLabel: { shrink: true },
           select: { native: true, tabIndex: 0 },
         }}
       >
@@ -277,6 +278,10 @@ export function MoscowDateTimeInput({ value, onChange, ...props }: MoscowDateTim
         type="datetime-local"
         value={wallValue}
         onChange={handleChange}
+        slotProps={{
+          ...commonProps(fieldProps, metadata).slotProps,
+          inputLabel: { shrink: true },
+        }}
       />
     </FieldFrame>
   )
