@@ -1,6 +1,7 @@
 import { Box, Stack, Tooltip, Typography } from '@mui/material'
 import ExpandMore from '@mui/icons-material/ExpandMore'
 import AddOutlined from '@mui/icons-material/AddOutlined'
+import ArrowUpwardOutlined from '@mui/icons-material/ArrowUpwardOutlined'
 import DragIndicator from '@mui/icons-material/DragIndicator'
 import Inventory2Outlined from '@mui/icons-material/Inventory2Outlined'
 import LayersOutlined from '@mui/icons-material/LayersOutlined'
@@ -37,6 +38,7 @@ export function ObjectsTree({
   onDragStart,
   onDragEnd,
   onDropOn,
+  onTakeOut,
   onPickCell,
 }: {
   rows: ObjectRow[]
@@ -47,6 +49,7 @@ export function ObjectsTree({
   onDragStart: (row: ObjectRow) => void
   onDragEnd: () => void
   onDropOn: (target: Holder) => void
+  onTakeOut: (row: ObjectRow) => void
   onPickCell: (cellId: string) => void
   testId: string
   empty: { title: string; hint?: string }
@@ -200,17 +203,38 @@ export function ObjectsTree({
     {
       key: 'actions',
       header: '',
-      width: 52,
+      width: 92,
       align: 'right',
-      render: (row) => (
-        <IconAction
-          title="Положить в место"
-          onClick={() => onPlace(row)}
-          testId={`${testId}-place-${row.key}`}
-        >
-          <AddOutlined fontSize="small" />
-        </IconAction>
-      ),
+      render: (row) => {
+        const holder = row.kind === 'object' ? row.object.holder : row.line.holder
+        // Кнопка «вынуть» есть только у того, что лежит внутри короба или палеты:
+        // у строки на полке вынимать не из чего, и серая кнопка «на всякий
+        // случай» только заставляет проверять, работает она сейчас или нет.
+        const host =
+          holder && holder.startsWith('obj:')
+            ? objects.find((one) => objRef(one.id) === holder)
+            : undefined
+        return (
+          <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'flex-end' }}>
+            {host ? (
+              <IconAction
+                title={`Вынуть из ${host.kind === 'pallet' ? 'палеты' : host.kind === 'box' ? 'короба' : 'грузоместа'}`}
+                onClick={() => onTakeOut(row)}
+                testId={`${testId}-out-${row.key}`}
+              >
+                <ArrowUpwardOutlined fontSize="small" />
+              </IconAction>
+            ) : null}
+            <IconAction
+              title="Положить в место"
+              onClick={() => onPlace(row)}
+              testId={`${testId}-place-${row.key}`}
+            >
+              <AddOutlined fontSize="small" />
+            </IconAction>
+          </Stack>
+        )
+      },
     },
   ]
 

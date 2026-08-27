@@ -116,6 +116,14 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
     setCarried(null)
   }
 
+  /** Вынуть наружу: то же окно, но место уже выбрано — россыпь. */
+  function takeOut(row: ObjectRow) {
+    openDialog(
+      row.kind === 'goods' ? { kind: 'goods', line: row.line } : { kind: 'object', object: row.object },
+      null,
+    )
+  }
+
   /** Нажали плюс: то же самое, только место выбирается в диалоге. */
   function openDialog(what: Carried, target?: Holder) {
     setAsking(what)
@@ -247,6 +255,7 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
             }
             onDragEnd={() => setCarried(null)}
             onDropOn={drop}
+            onTakeOut={takeOut}
             onPickCell={setActiveCellId}
           />
         </Box>
@@ -348,6 +357,7 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
                 }
                 onDragEnd={() => setCarried(null)}
                 onDropOn={drop}
+                onTakeOut={takeOut}
                 onPickCell={setActiveCellId}
               />
             </Paper>
