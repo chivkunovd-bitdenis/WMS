@@ -33,7 +33,6 @@ def upgrade() -> None:
         sa.UniqueConstraint("tenant_id", "number", name="uq_billing_invoices_v2_tenant_number"),
         sa.CheckConstraint("creation_mode IN ('selected_operations', 'manual')", name="ck_billing_invoice_v2_mode"),
         sa.CheckConstraint("status IN ('issued', 'cancelled')", name="ck_billing_invoice_v2_status"),
-        sa.CheckConstraint("total_amount_kopecks >= 0", name="ck_billing_invoice_v2_total_nonnegative"),
         sa.CheckConstraint("(period_start IS NULL AND period_end IS NULL) OR period_end >= period_start", name="ck_billing_invoice_v2_period"),
     )
     op.create_index("ix_billing_invoices_v2_tenant_issued", "billing_invoices_v2", ["tenant_id", "issued_at", "id"])
@@ -44,7 +43,6 @@ def upgrade() -> None:
         sa.Column("unit_price_kopecks", sa.Integer()), sa.Column("total_amount_kopecks", sa.Integer(), nullable=False), sa.Column("sort_order", sa.Integer(), nullable=False),
         sa.UniqueConstraint("tenant_id", "id", name="uq_billing_invoice_v2_lines_tenant_id_id"),
         sa.ForeignKeyConstraint(["tenant_id", "invoice_id"], ["billing_invoices_v2.tenant_id", "billing_invoices_v2.id"], name="fk_billing_invoice_v2_line_tenant_invoice", ondelete="RESTRICT"),
-        sa.CheckConstraint("total_amount_kopecks >= 0", name="ck_billing_invoice_v2_line_total_nonnegative"),
     )
     op.create_index("ix_billing_invoice_v2_lines_tenant_invoice", "billing_invoice_v2_lines", ["tenant_id", "invoice_id"])
     op.create_table(

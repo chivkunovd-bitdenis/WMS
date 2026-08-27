@@ -529,9 +529,6 @@ class BillingInvoiceV2(Base):
         ),
         CheckConstraint("status IN ('issued', 'cancelled')", name="ck_billing_invoice_v2_status"),
         CheckConstraint(
-            "total_amount_kopecks >= 0", name="ck_billing_invoice_v2_total_nonnegative"
-        ),
-        CheckConstraint(
             "(period_start IS NULL) = (period_end IS NULL) OR period_end >= period_start",
             name="ck_billing_invoice_v2_period",
         ),
@@ -577,9 +574,6 @@ class BillingInvoiceV2Line(Base):
             ["billing_invoices_v2.tenant_id", "billing_invoices_v2.id"],
             name="fk_billing_invoice_v2_line_tenant_invoice",
             ondelete="RESTRICT",
-        ),
-        CheckConstraint(
-            "total_amount_kopecks >= 0", name="ck_billing_invoice_v2_line_total_nonnegative"
         ),
         Index("ix_billing_invoice_v2_lines_tenant_invoice", "tenant_id", "invoice_id"),
     )
