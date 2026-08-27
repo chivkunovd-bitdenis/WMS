@@ -9,7 +9,7 @@ import {
   ScannerField,
   ScreenHeader,
   SecondaryAction,
-  StatusChip,
+  SelectInput,
 } from '../../../ui-kit'
 import { ObjectsTree } from './ObjectsTree'
 import {
@@ -20,21 +20,31 @@ import {
   cellQty,
   cellRef,
   productById,
-  type Cell,
   type GoodsLine,
   type Holder,
   type ObjKind,
   type WarehouseObject,
 } from './objectsStub'
-import { assembledRows, canPut, cellRows, creatableIn, looseRows, type Carried } from './objectsRows'
+import {
+  canPut,
+  cellRows,
+  destinationsFor,
+  objectTitle,
+  unplacedRows,
+  type Carried,
+  type ObjectRow,
+} from './objectsRows'
 
 // Раскладка объектами.
 //
-// Порядок работы обратный привычному: сначала собираем объект — кладём товар в
-// короб, короб на палету, — и только готовый объект ставим на полку. Где лежит
-// товар, отдельно не хранится: это вычисляется по цепочке держателей, поэтому
-// «что в коробе» и «где короб» не могут разъехаться. Это одно знание.
-
+// Порядок работы обратный привычному: сначала собираем объект — товар в короб,
+// короб на палету, — и только готовый объект ставим на полку. Где лежит товар,
+// отдельно не хранится: это вычисляется по цепочке держателей, поэтому «что в
+// коробе» и «где короб» не могут разъехаться. Это одно знание.
+//
+// Список один. Короба, палеты и грузоместа стоят в нём как агрегаты со своим
+// содержимым внутри, товар россыпью — такими же строками верхнего уровня, а
+// разница между «ещё не поставлено» и «стоит на полке» видна колонкой «Где».
 
 export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => void }) {
   const theme = useTheme()
@@ -46,15 +56,13 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
   const [scanValue, setScanValue] = useState('')
   const [scanError, setScanError] = useState<string | null>(null)
   const [scanNotice, setScanNotice] = useState<string | null>(null)
-  const [asking, setAsking] = useState<{ line: GoodsLine; target: Holder; label: string } | null>(null)
+  const [asking, setAsking] = useState<Carried | null>(null)
+  const [askTarget, setAskTarget] = useState('')
   const [askQty, setAskQty] = useState<number | null>(null)
-  // Счётчик номеров живёт в состоянии: переменная вне компонента менялась бы
-  // во время отрисовки, а это побочный эффект и непредсказуемый порядок.
   const [created, setCreated] = useState(0)
 
   const activeCell = CELLS.find((one) => one.id === activeCellId) ?? null
   const loose = lines.filter((line) => line.holder === null)
-  const looseQty = loose.reduce((sum, line) => sum + line.qty, 0)
   const unplaced = objects.filter((one) => one.holder === null)
 
   function toggle(objectId: string) {
@@ -78,41 +86,66 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
     })
   }
 
-  function put(target: Holder, label: string) {
+  function moveObject(object: WarehouseObject, target: Holder, label: string) {
+    setObjects((current) => current.map((one) => (one.id === object.id ? { ...one, holder: target } : one)))
+    onNote(`${KIND_TITLE[object.kind]} ${object.code} → ${label}`)
+  }
+
+  function labelOf(target: Holder): string {
+    if (!target) return 'россыпь'
+    if (target.startsWith('cell:')) {
+      const cell = CELLS.find((one) => cellRef(one.id) === target)
+      return cell ? `ячейку ${cell.code}` : 'ячейку'
+    }
+    const object = objects.find((one) => `obj:${one.id}` === target)
+    return object ? objectTitle(object) : 'объект'
+  }
+
+  /** Перетащили: контейнер едет целиком, у товара спрашиваем количество. */
+  function drop(target: Holder) {
     if (!carried) return
     if (!canPut(carried, target, objects)) {
       setCarried(null)
       return
     }
-    if (carried.kind === 'goods') {
-      // Количество спрашиваем всегда: перетащить — не значит «высыпать всё».
-      setAsking({ line: carried.line, target, label })
-      setAskQty(carried.line.qty)
+    if (carried.kind === 'object') {
+      moveObject(carried.object, target, labelOf(target))
     } else {
-      const moving = carried.object
-      setObjects((current) => current.map((one) => (one.id === moving.id ? { ...one, holder: target } : one)))
-      onNote(`${KIND_TITLE[moving.kind]} ${moving.code} → ${label}`)
+      openDialog(carried, target)
     }
     setCarried(null)
   }
 
-  function nextNumber() {
-    const value = created + 1
-    setCreated(value)
-    return value
+  /** Нажали плюс: то же самое, только место выбирается в диалоге. */
+  function openDialog(what: Carried, target?: Holder) {
+    setAsking(what)
+    setAskTarget(target === undefined ? (activeCell ? cellRef(activeCell.id) : '') : (target ?? 'none'))
+    setAskQty(what.kind === 'goods' ? what.line.qty : null)
+  }
+
+  function confirmDialog() {
+    if (!asking) return
+    const target: Holder = askTarget === 'none' || askTarget === '' ? null : askTarget
+    if (asking.kind === 'object') {
+      moveObject(asking.object, target, labelOf(target))
+    } else if (askQty && askQty > 0) {
+      moveGoods(asking.line, Math.min(askQty, asking.line.qty), target)
+    }
+    setAsking(null)
   }
 
   function createObject(kind: ObjKind) {
-    const created = nextNumber()
+    const number = created + 1
+    setCreated(number)
     const code =
       kind === 'pallet'
-        ? `П-${String(200 + created).padStart(6, '0')}`
+        ? `П-${String(200 + number).padStart(6, '0')}`
         : kind === 'box'
-          ? `КР-${String(500 + created).padStart(6, '0')}`
-          : `ГМ-${String(400 + created).padStart(6, '0')}`
+          ? `КР-${String(500 + number).padStart(6, '0')}`
+          : `ГМ-${String(400 + number).padStart(6, '0')}`
     setObjects((current) => [
       ...current,
-      { id: `new-${created}`, kind, code, barcode: `29${String(created).padStart(11, '0')}`, holder: null },
+      { id: `new-${number}`, kind, code, barcode: `29${String(number).padStart(11, '0')}`, holder: null },
     ])
     onNote(`Заглушка: создан ${KIND_TITLE[kind].toLowerCase()} ${code}`)
   }
@@ -123,7 +156,7 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
     if (cell) {
       setActiveCellId(cell.id)
       setScanError(null)
-      setScanNotice(`Ячейка ${cell.code} — ставьте объект`)
+      setScanNotice(`Ячейка ${cell.code} — плюс у строки поставит сюда`)
       return
     }
     const object = objects.find((one) => one.barcode === code)
@@ -133,9 +166,7 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
         setScanError('Сначала пикните ячейку — иначе непонятно, куда ставим')
         return
       }
-      setObjects((current) =>
-        current.map((one) => (one.id === object.id ? { ...one, holder: cellRef(activeCell.id) } : one)),
-      )
+      moveObject(object, cellRef(activeCell.id), `ячейку ${activeCell.code}`)
       setScanError(null)
       setScanNotice(`${KIND_TITLE[object.kind]} ${object.code} → ячейка ${activeCell.code}`)
       return
@@ -144,13 +175,13 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
     setScanError(`Штрихкод ${code} — ни ячейка, ни объект этой приёмки`)
   }
 
-  const cellDropReady = Boolean(carried && activeCell)
+  const destinations = asking ? destinationsFor(asking, objects, CELLS) : []
 
   return (
     <Box data-testid="sorting-objects-screen">
       <ScreenHeader
         title="Раскладка по ячейкам"
-        purpose="Собираем объект — товар в короб, короб на палету — и ставим готовый объект на полку."
+        purpose="Приёмка №1284 от 27.08.2026. Собираем объект и ставим готовый объект на полку."
       />
 
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
@@ -167,118 +198,69 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
             notice={scanNotice}
             testId="objects-scan"
           />
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-            <StatusChip
-              label={
-                unplaced.length + loose.length === 0
-                  ? 'всё расставлено'
-                  : `осталось поставить: ${unplaced.length} объектов и ${loose.length} позиций россыпью`
-              }
-              tone={unplaced.length + loose.length === 0 ? 'ok' : 'warn'}
-              testId="objects-total"
-            />
-            <Typography variant="body2" color="text.secondary">
-              россыпью {looseQty} шт
-            </Typography>
-          </Stack>
         </Stack>
       </Paper>
 
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} sx={{ alignItems: 'flex-start' }}>
-        <Stack spacing={2} sx={{ flexGrow: 1, minWidth: 0, width: '100%' }}>
-          <Paper
-            variant="outlined"
-            sx={{ p: 2 }}
-            onDragOver={(event) => {
-              if (carried) event.preventDefault()
-            }}
-            onDrop={() => put(null, 'россыпь')}
-            data-testid="objects-loose"
+        <Box sx={{ flexGrow: 1, minWidth: 0, width: '100%' }}>
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{ mb: 1.5, alignItems: 'center', flexWrap: 'wrap', gap: 1 }}
           >
-            <Typography variant="subtitle1" sx={{ mb: 1 }}>
-              Товары россыпью
+            <Typography variant="body2" color="text.secondary">
+              Осталось поставить: {unplaced.length} объектов и {loose.length} позиций россыпью
             </Typography>
-            <ObjectsTree
-              rows={looseRows(lines)}
-              carried={carried}
-              objects={objects}
-              placeLabel={activeCell ? `ячейку ${activeCell.code}` : null}
-              testId="objects-loose-tree"
-              empty={{ title: 'Россыпью ничего не осталось', hint: 'Всё убрано в короба или на полки.' }}
-              onToggle={toggle}
-              onDragStart={(row) => setCarried(row.kind === 'goods' ? { kind: 'goods', line: row.line } : { kind: 'object', object: row.object })}
-              onDragEnd={() => setCarried(null)}
-              onDropOn={(target) => put(target, 'объект')}
-              onPlace={(row) => {
-                if (!activeCell || row.kind !== 'goods') return
-                setAsking({ line: row.line, target: cellRef(activeCell.id), label: `ячейку ${activeCell.code}` })
-                setAskQty(row.line.qty)
-              }}
-              onTakeOut={(row) => {
-                if (row.kind === 'goods') moveGoods(row.line, row.line.qty, null)
-              }}
-            />
-          </Paper>
+            <Box sx={{ flexGrow: 1 }} />
+            <SecondaryAction onClick={() => createObject('pallet')} data-testid="objects-create-pallet">
+              Новая палета
+            </SecondaryAction>
+            <SecondaryAction onClick={() => createObject('box')} data-testid="objects-create-box">
+              Новый короб
+            </SecondaryAction>
+            <SecondaryAction
+              onClick={() => createObject('cargo_place')}
+              data-testid="objects-create-cargo_place"
+            >
+              Новое грузоместо
+            </SecondaryAction>
+          </Stack>
+          <ObjectsTree
+            rows={unplacedRows(objects, lines, collapsed)}
+            objects={objects}
+            carried={carried}
+            testId="objects-tree"
+            empty={{
+              title: 'Всё расставлено по ячейкам',
+              hint: 'Ни товара россыпью, ни собранных объектов не осталось.',
+            }}
+            onToggle={toggle}
+            onPlace={(row: ObjectRow) =>
+              openDialog(
+                row.kind === 'goods' ? { kind: 'goods', line: row.line } : { kind: 'object', object: row.object },
+              )
+            }
+            onDragStart={(row: ObjectRow) =>
+              setCarried(
+                row.kind === 'goods' ? { kind: 'goods', line: row.line } : { kind: 'object', object: row.object },
+              )
+            }
+            onDragEnd={() => setCarried(null)}
+            onDropOn={drop}
+            onPickCell={setActiveCellId}
+          />
+        </Box>
 
-          <Paper variant="outlined" sx={{ p: 2 }} data-testid="objects-assembled">
-            <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-              <Typography variant="subtitle1">Короба, палеты и грузоместа</Typography>
-              <Box sx={{ flexGrow: 1 }} />
-              {creatableIn(null, objects).map((kind) => (
-                <SecondaryAction
-                  key={kind}
-                  onClick={() => createObject(kind)}
-                  data-testid={`objects-create-${kind}`}
-                >
-                  {kind === 'pallet' ? 'Новая палета' : kind === 'box' ? 'Новый короб' : 'Новое грузоместо'}
-                </SecondaryAction>
-              ))}
-            </Stack>
-            <ObjectsTree
-              rows={assembledRows(objects, lines, collapsed)}
-              carried={carried}
-              objects={objects}
-              placeLabel={activeCell ? `ячейку ${activeCell.code}` : null}
-              testId="objects-tree"
-              empty={{
-                title: 'Собранных объектов нет',
-                hint: 'Создайте палету или короб и перетащите в них товар.',
-              }}
-              onToggle={toggle}
-              onDragStart={(row) => setCarried(row.kind === 'goods' ? { kind: 'goods', line: row.line } : { kind: 'object', object: row.object })}
-              onDragEnd={() => setCarried(null)}
-              onDropOn={(target) => put(target, 'объект')}
-              onPlace={(row) => {
-                if (!activeCell) return
-                if (row.kind === 'object') {
-                  setObjects((current) =>
-                    current.map((one) =>
-                      one.id === row.object.id ? { ...one, holder: cellRef(activeCell.id) } : one,
-                    ),
-                  )
-                  onNote(`${KIND_TITLE[row.object.kind]} ${row.object.code} → ячейка ${activeCell.code}`)
-                } else {
-                  setAsking({ line: row.line, target: cellRef(activeCell.id), label: `ячейку ${activeCell.code}` })
-                  setAskQty(row.line.qty)
-                }
-              }}
-              onTakeOut={(row) => {
-                if (row.kind === 'goods') moveGoods(row.line, row.line.qty, null)
-                else setObjects((current) => current.map((one) => (one.id === row.object.id ? { ...one, holder: null } : one)))
-              }}
-            />
-          </Paper>
-        </Stack>
-
-        <Stack spacing={2} sx={{ width: { lg: 340 }, flexShrink: 0, minWidth: 0 }}>
+        <Stack spacing={2} sx={{ width: { lg: 440 }, flexShrink: 0, minWidth: 0 }}>
           <Paper variant="outlined" sx={{ p: 2 }} data-testid="objects-cells">
-            <Typography variant="subtitle1" sx={{ mb: 1 }}>
+            <Typography variant="subtitle1" sx={{ mb: 1.5 }}>
               Ячейки склада
             </Typography>
             <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
               {CELLS.map((cell) => {
                 const active = activeCellId === cell.id
                 const qty = cellQty(cell.id, objects, lines)
+                const target = Boolean(carried && canPut(carried, cellRef(cell.id), objects))
                 return (
                   <Box
                     key={cell.id}
@@ -289,26 +271,26 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
                       if (event.key === 'Enter' || event.key === ' ') setActiveCellId(cell.id)
                     }}
                     onDragOver={(event) => {
-                      if (carried) event.preventDefault()
+                      if (target) event.preventDefault()
                     }}
                     onDrop={() => {
                       setActiveCellId(cell.id)
-                      put(cellRef(cell.id), `ячейку ${cell.code}`)
+                      drop(cellRef(cell.id))
                     }}
                     data-testid={`objects-cell-${cell.id}`}
                     sx={{
                       px: 1.25,
                       py: 0.6,
-                      borderRadius: 2,
+                      borderRadius: 1.5,
                       cursor: 'pointer',
                       border: '1px solid',
                       borderColor: active ? 'primary.main' : 'divider',
-                      backgroundColor: active ? alpha(theme.palette.primary.main, 0.12) : 'background.paper',
-                      outline: carried && !active ? `1px dashed ${alpha(theme.palette.primary.main, 0.45)}` : 'none',
+                      backgroundColor: active ? alpha(theme.palette.primary.main, 0.08) : 'transparent',
+                      outline: target && !active ? `1px dashed ${alpha(theme.palette.primary.main, 0.45)}` : 'none',
                       outlineOffset: '-3px',
                     }}
                   >
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
                       {cell.code}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
@@ -325,41 +307,48 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
               variant="outlined"
               sx={{
                 p: 2,
-                outline: cellDropReady ? `2px dashed ${alpha(theme.palette.primary.main, 0.5)}` : 'none',
+                outline:
+                  carried && canPut(carried, cellRef(activeCell.id), objects)
+                    ? `2px dashed ${alpha(theme.palette.primary.main, 0.5)}`
+                    : 'none',
                 outlineOffset: '-4px',
               }}
               onDragOver={(event) => {
-                if (carried) event.preventDefault()
+                if (carried && canPut(carried, cellRef(activeCell.id), objects)) event.preventDefault()
               }}
-              onDrop={() => put(cellRef(activeCell.id), `ячейку ${activeCell.code}`)}
+              onDrop={() => drop(cellRef(activeCell.id))}
               data-testid="objects-active-cell"
             >
-              <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
+              <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'baseline' }}>
                 <Typography variant="h6">{activeCell.code}</Typography>
-                <StatusChip
-                  label={`${cellQty(activeCell.id, objects, lines)} шт`}
-                  tone={cellQty(activeCell.id, objects, lines) > 0 ? 'ok' : 'neutral'}
-                />
+                <Typography variant="body2" color="text.secondary">
+                  {cellQty(activeCell.id, objects, lines)} шт — считается по составу того, что стоит
+                </Typography>
               </Stack>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                Количество на ячейке считается по составу объектов, которые на ней стоят.
-              </Typography>
               <ObjectsTree
-                rows={cellRows(activeCell as Cell, objects, lines, collapsed)}
-                carried={carried}
+                rows={cellRows(activeCell, objects, lines, collapsed)}
                 objects={objects}
-                placeLabel={null}
+                carried={carried}
                 testId="objects-cell-tree"
-                empty={{ title: 'На ячейке пусто', hint: 'Перетащите сюда объект или товар россыпью.' }}
+                empty={{ title: 'На ячейке пусто', hint: 'Перетащите сюда объект или нажмите плюс в списке.' }}
                 onToggle={toggle}
-                onDragStart={(row) => setCarried(row.kind === 'goods' ? { kind: 'goods', line: row.line } : { kind: 'object', object: row.object })}
+                onPlace={(row: ObjectRow) =>
+                  openDialog(
+                    row.kind === 'goods'
+                      ? { kind: 'goods', line: row.line }
+                      : { kind: 'object', object: row.object },
+                  )
+                }
+                onDragStart={(row: ObjectRow) =>
+                  setCarried(
+                    row.kind === 'goods'
+                      ? { kind: 'goods', line: row.line }
+                      : { kind: 'object', object: row.object },
+                  )
+                }
                 onDragEnd={() => setCarried(null)}
-                onDropOn={(target) => put(target, 'объект')}
-                onPlace={() => undefined}
-                onTakeOut={(row) => {
-                  if (row.kind === 'goods') moveGoods(row.line, row.line.qty, null)
-                  else setObjects((current) => current.map((one) => (one.id === row.object.id ? { ...one, holder: null } : one)))
-                }}
+                onDropOn={drop}
+                onPickCell={setActiveCellId}
               />
             </Paper>
           ) : null}
@@ -369,7 +358,7 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
       <AppDialog
         open={asking !== null}
         onClose={() => setAsking(null)}
-        title="Сколько переложить"
+        title="Куда положить"
         testId="objects-qty-dialog"
         actions={
           <ActionGroup>
@@ -377,35 +366,46 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
               Отмена
             </SecondaryAction>
             <PrimaryAction
-              onClick={() => {
-                if (asking && askQty) moveGoods(asking.line, Math.min(askQty, asking.line.qty), asking.target)
-                setAsking(null)
-              }}
+              onClick={confirmDialog}
+              disabledReason={askTarget === '' ? 'Выберите место' : undefined}
               data-testid="objects-qty-confirm"
             >
-              Переложить
+              Положить
             </PrimaryAction>
           </ActionGroup>
         }
       >
         <Stack spacing={2}>
-          <Stack spacing={0.5}>
-            <Typography variant="subtitle2">
-              {asking ? productById(asking.line.productId).name : ''}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Куда: {asking?.label ?? '—'}
-            </Typography>
-          </Stack>
-          <NumberInput
-            label="Сколько штук"
-            value={askQty}
-            onChange={setAskQty}
-            min={1}
-            max={asking?.line.qty}
-            helperText={asking ? `Всего ${asking.line.qty} — можно переложить часть` : undefined}
-            testId="objects-qty-input"
+          <Typography variant="subtitle2">
+            {asking
+              ? asking.kind === 'goods'
+                ? productById(asking.line.productId).name
+                : objectTitle(asking.object)
+              : ''}
+          </Typography>
+          <SelectInput
+            label="Место"
+            value={askTarget}
+            onChange={setAskTarget}
+            options={destinations}
+            emptyLabel="Выберите место"
+            testId="objects-target"
           />
+          {asking?.kind === 'goods' ? (
+            <NumberInput
+              label="Сколько штук"
+              value={askQty}
+              onChange={setAskQty}
+              min={1}
+              max={asking.line.qty}
+              helperText={`Всего ${asking.line.qty} — можно переложить часть`}
+              testId="objects-qty-input"
+            />
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              Переедет целиком, вместе со всем содержимым.
+            </Typography>
+          )}
         </Stack>
       </AppDialog>
     </Box>

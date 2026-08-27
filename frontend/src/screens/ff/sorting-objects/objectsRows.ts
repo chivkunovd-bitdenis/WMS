@@ -1,6 +1,7 @@
 import {
   KIND_TITLE,
   cellRef,
+  whereIs,
   isCellRef,
   objRef,
   objectQty,
@@ -26,6 +27,8 @@ export type ObjectRow =
       expandable: boolean
       expanded: boolean
       empty: boolean
+      /** Сколько строк внутри — для подписи под названием. */
+      inside: number
     }
   | {
       key: string
@@ -38,6 +41,8 @@ export type ObjectRow =
       barcode: string
       photo: string
       qty: number
+      alreadyAt: Array<{ cellId: string; code: string; qty: number }>
+      inside: number
     }
 
 export type Carried =
@@ -113,6 +118,7 @@ function walk(
       expandable: children > 0,
       expanded: children > 0 && expanded,
       empty: children === 0,
+      inside: children,
     })
     if (children > 0 && expanded) {
       walk(objRef(object.id), depth + 1, objects, lines, collapsed, out)
@@ -131,25 +137,24 @@ function walk(
       barcode: product.barcode,
       photo: product.photo,
       qty: line.qty,
+      alreadyAt: product.alreadyAt,
+      inside: 0,
     })
   }
 }
 
-/** Дерево «собрано, но ещё не поставлено на полку». */
-export function assembledRows(
+/**
+ * Всё, что ещё не поставлено на полку, одним списком: товар россыпью и
+ * собранные короба, палеты и грузоместа со своим содержимым внутри.
+ * Поставленное отсюда уходит — список тает по мере работы.
+ */
+export function unplacedRows(
   objects: WarehouseObject[],
   lines: GoodsLine[],
   collapsed: Set<string>,
 ): ObjectRow[] {
   const out: ObjectRow[] = []
   walk(null, 0, objects, lines, collapsed, out)
-  return out.filter((row) => row.kind === 'object' || row.depth > 0)
-}
-
-/** Товар, который приехал россыпью и ещё никуда не убран. */
-export function looseRows(lines: GoodsLine[]): ObjectRow[] {
-  const out: ObjectRow[] = []
-  walk(null, 0, [], lines, new Set(), out)
   return out
 }
 
@@ -163,4 +168,57 @@ export function cellRows(
   const out: ObjectRow[] = []
   walk(cellRef(cell.id), 0, objects, lines, collapsed, out)
   return out
+}
+
+
+/**
+ * Единый список: сначала то, что ещё не поставлено на полку, потом то, что уже
+ * стоит, по ячейкам. Две таблицы с двумя шапками оператор читает как два разных
+ * отчёта — здесь одна таблица и одна шапка, а разница видна колонкой «Где».
+ */
+export function allRows(
+  objects: WarehouseObject[],
+  lines: GoodsLine[],
+  cells: Cell[],
+  collapsed: Set<string>,
+): ObjectRow[] {
+  const out: ObjectRow[] = []
+  walk(null, 0, objects, lines, collapsed, out)
+  for (const cell of cells) {
+    walk(cellRef(cell.id), 0, objects, lines, collapsed, out)
+  }
+  return out
+}
+
+/** Ячейка, в которой физически стоит эта строка, или null — ещё не поставлено. */
+export function rowCell(
+  row: ObjectRow,
+  objects: WarehouseObject[],
+  cells: Cell[],
+): Cell | null {
+  const holder = row.kind === 'object' ? row.object.holder : row.line.holder
+  return whereIs(holder, objects, cells).cell
+}
+
+/** Куда вообще можно положить это — готовый список мест для выбора. */
+export function destinationsFor(
+  carried: Carried,
+  objects: WarehouseObject[],
+  cells: Cell[],
+): Array<{ value: string; label: string }> {
+  const options: Array<{ value: string; label: string }> = []
+  if (canPut(carried, null, objects)) {
+    options.push({ value: 'none', label: 'Россыпь — вынуть наружу' })
+  }
+  for (const cell of cells) {
+    if (canPut(carried, cellRef(cell.id), objects)) {
+      options.push({ value: cellRef(cell.id), label: `Ячейка ${cell.code}` })
+    }
+  }
+  for (const object of objects) {
+    if (canPut(carried, objRef(object.id), objects)) {
+      options.push({ value: objRef(object.id), label: objectTitle(object) })
+    }
+  }
+  return options
 }

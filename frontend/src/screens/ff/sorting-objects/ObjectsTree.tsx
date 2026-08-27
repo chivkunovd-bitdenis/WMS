@@ -1,54 +1,55 @@
 import { Box, Stack, Tooltip, Typography } from '@mui/material'
 import ExpandMore from '@mui/icons-material/ExpandMore'
+import AddOutlined from '@mui/icons-material/AddOutlined'
 import DragIndicator from '@mui/icons-material/DragIndicator'
 import Inventory2Outlined from '@mui/icons-material/Inventory2Outlined'
 import LayersOutlined from '@mui/icons-material/LayersOutlined'
 import WidgetsOutlined from '@mui/icons-material/WidgetsOutlined'
-import MoveDownOutlined from '@mui/icons-material/MoveDownOutlined'
-import ArrowUpwardOutlined from '@mui/icons-material/ArrowUpwardOutlined'
-import type { ReactNode } from 'react'
-import { DataTable, IconAction, QtyCell, StatusChip, TextCell } from '../../../ui-kit'
+import { DataTable, IconAction, QtyCell, StatusChip } from '../../../ui-kit'
 import type { Column } from '../../../ui-kit'
 import { ProductPhotoThumb } from '../../../components/ProductPhotoThumb'
-import { objRef, type Holder, type ObjKind } from './objectsStub'
+import { objRef, type Holder, type WarehouseObject } from './objectsStub'
 import { canPut, objectTitle, type Carried, type ObjectRow } from './objectsRows'
+
+// Одна таблица на весь экран. Вложенность видна отступом, где стоит объект —
+// колонкой, а не второй таблицей: две таблицы с двумя шапками читаются как два
+// разных отчёта.
+//
+// Цвета здесь намеренно почти нет. Это складской инструмент: значок отличает
+// палету от короба формой, а не цветом, и единственное, что имеет право быть
+// заметным, — то, что требует действия.
 
 const INDENT_STEP = 20
 const ROW_HEIGHT = 30
-
-const KIND_ICON: Record<ObjKind, ReactNode> = {
-  pallet: <LayersOutlined fontSize="small" color="primary" />,
-  box: <Inventory2Outlined fontSize="small" color="action" />,
-  cargo_place: <WidgetsOutlined fontSize="small" color="action" />,
-}
+// Направляющая вложенности — единственная линия, которую мы рисуем сами.
+// Берём цвет разделителя темы, чтобы она была ровно такой же силы, как границы
+// строк, и не читалась как ещё один смысл.
+const GUIDE = 'rgba(15, 23, 42, 0.11)'
 
 export function ObjectsTree({
   rows,
-  carried,
   objects,
-  placeLabel,
+  carried,
   testId,
   empty,
   onToggle,
+  onPlace,
   onDragStart,
   onDragEnd,
   onDropOn,
-  onPlace,
-  onTakeOut,
+  onPickCell,
 }: {
   rows: ObjectRow[]
+  objects: WarehouseObject[]
   carried: Carried | null
-  objects: Parameters<typeof canPut>[2]
-  /** Куда положит кнопка «поставить»: подпись активной ячейки или null. */
-  placeLabel: string | null
-  testId: string
-  empty: { title: string; hint?: string }
   onToggle: (objectId: string) => void
+  onPlace: (row: ObjectRow) => void
   onDragStart: (row: ObjectRow) => void
   onDragEnd: () => void
   onDropOn: (target: Holder) => void
-  onPlace: (row: ObjectRow) => void
-  onTakeOut: (row: ObjectRow) => void
+  onPickCell: (cellId: string) => void
+  testId: string
+  empty: { title: string; hint?: string }
 }) {
   const columns: Column<ObjectRow>[] = [
     {
@@ -58,9 +59,29 @@ export function ObjectsTree({
         <Stack
           direction="row"
           spacing={1}
-          sx={{ alignItems: 'center', minHeight: ROW_HEIGHT, pl: `${row.depth * INDENT_STEP}px` }}
+          sx={{
+            alignItems: 'center',
+            minHeight: ROW_HEIGHT,
+            pl: `${row.depth * INDENT_STEP}px`,
+            // Направляющие вложенности вместо голого отступа: на третьем уровне
+            // глаз перестаёт понимать, чьё это содержимое, и линия отвечает на
+            // это без единого лишнего слова и без единого лишнего цвета.
+            backgroundImage:
+              row.depth === 0
+                ? 'none'
+                : Array.from({ length: row.depth })
+                    .map(() => `linear-gradient(to bottom, ${GUIDE} 0 100%)`)
+                    .join(', '),
+            backgroundRepeat: 'no-repeat',
+            backgroundSize: Array.from({ length: row.depth })
+              .map(() => '1px 100%')
+              .join(', '),
+            backgroundPosition: Array.from({ length: row.depth })
+              .map((_, level) => `${level * INDENT_STEP + 14}px 0`)
+              .join(', '),
+          }}
         >
-          <Box sx={{ width: 30, display: 'flex', justifyContent: 'center' }}>
+          <Box sx={{ width: 26, display: 'flex', justifyContent: 'center' }}>
             {row.kind === 'object' && row.expandable ? (
               <IconAction
                 title={row.expanded ? `Свернуть ${objectTitle(row.object)}` : `Раскрыть ${objectTitle(row.object)}`}
@@ -74,52 +95,96 @@ export function ObjectsTree({
               </IconAction>
             ) : null}
           </Box>
-          <Tooltip title="Потяните строку в другой объект или на ячейку">
+          <Tooltip title="Можно перетащить в другой объект или на ячейку">
             <DragIndicator fontSize="small" sx={{ color: 'text.disabled' }} />
           </Tooltip>
-          <Box sx={{ width: 30, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <Box sx={{ width: 26, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
             {row.kind === 'object' ? (
-              KIND_ICON[row.object.kind]
+              row.object.kind === 'pallet' ? (
+                <LayersOutlined fontSize="small" sx={{ color: 'text.secondary' }} />
+              ) : row.object.kind === 'box' ? (
+                <Inventory2Outlined fontSize="small" sx={{ color: 'text.secondary' }} />
+              ) : (
+                <WidgetsOutlined fontSize="small" sx={{ color: 'text.secondary' }} />
+              )
             ) : (
-              <ProductPhotoThumb src={row.photo} alt={row.name} size={26} />
+              <ProductPhotoThumb src={row.photo} alt={row.name} size={24} />
             )}
           </Box>
-          {/* Длинное название не растягивает таблицу за край панели: под
-              многоточием всегда лежит подсказка с полным значением (канон R-02). */}
-          <Tooltip title={row.kind === 'object' ? objectTitle(row.object) : row.name}>
-            <Typography
-              variant="body2"
-              sx={{
-                fontWeight: row.kind === 'object' ? 700 : 400,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                maxWidth: 240,
-              }}
-            >
-              {row.kind === 'object' ? objectTitle(row.object) : row.name}
+          <Stack sx={{ minWidth: 0 }}>
+            <Tooltip title={row.kind === 'object' ? objectTitle(row.object) : row.name}>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: row.kind === 'object' ? 600 : 400,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  maxWidth: 230,
+                }}
+              >
+                {row.kind === 'object' ? objectTitle(row.object) : row.name}
+              </Typography>
+            </Tooltip>
+            {/* Селлер и состав — подписью, а не своими колонками: в узкой панели
+                каждая лишняя колонка отнимает у названия товара то, ради чего в
+                строку и смотрят. */}
+            <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+              {row.kind === 'object'
+                ? row.inside === 0
+                  ? 'пусто'
+                  : `внутри ${row.inside}`
+                : row.seller}
             </Typography>
-          </Tooltip>
-          {row.kind === 'object' && row.empty ? (
-            <StatusChip label="пустой" tone="neutral" hint="Внутри пока ничего нет" />
-          ) : null}
+          </Stack>
         </Stack>
       ),
     },
     {
-      key: 'seller',
-      header: 'Селлер',
-      width: 128,
-      render: (row) => (row.kind === 'goods' ? <TextCell value={row.seller} width={116} /> : null),
+      key: 'already',
+      header: 'Уже лежит',
+      width: 134,
+      render: (row) => {
+        if (row.kind !== 'goods') return null
+        if (row.alreadyAt.length === 0) {
+          return (
+            <Typography variant="body2" color="text.secondary">
+              новый
+            </Typography>
+          )
+        }
+        return (
+          <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+            {row.alreadyAt.map((place) => (
+              <Box
+                key={place.cellId}
+                onClick={() => onPickCell(place.cellId)}
+                sx={{ cursor: 'pointer' }}
+                data-testid={`objects-already-${place.cellId}`}
+              >
+                <StatusChip
+                  label={`${place.code} · ${place.qty}`}
+                  tone="neutral"
+                  hint={`Этот товар уже лежит в ${place.code} — ${place.qty} шт`}
+                />
+              </Box>
+            ))}
+          </Stack>
+        )
+      },
     },
     {
       key: 'barcode',
       header: 'ШК',
-      width: 122,
+      width: 120,
       render: (row) => (
         <Typography
           variant="body2"
-          sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12.5 }}
+          sx={{
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            fontSize: 12.5,
+            color: 'text.secondary',
+          }}
         >
           {row.kind === 'object' ? row.object.barcode : row.barcode}
         </Typography>
@@ -135,28 +200,16 @@ export function ObjectsTree({
     {
       key: 'actions',
       header: '',
-      width: 76,
+      width: 52,
       align: 'right',
       render: (row) => (
-        <Stack direction="row" spacing={0.25} sx={{ justifyContent: 'flex-end' }}>
-          {row.depth > 0 ? (
-            <IconAction
-              title="Вынуть наружу"
-              onClick={() => onTakeOut(row)}
-              testId={`${testId}-out-${row.key}`}
-            >
-              <ArrowUpwardOutlined fontSize="small" />
-            </IconAction>
-          ) : null}
-          <IconAction
-            title={placeLabel ? `Поставить в ${placeLabel}` : 'Сначала выберите ячейку'}
-            onClick={() => onPlace(row)}
-            disabledReason={placeLabel ? undefined : 'Сначала выберите ячейку справа'}
-            testId={`${testId}-place-${row.key}`}
-          >
-            <MoveDownOutlined fontSize="small" />
-          </IconAction>
-        </Stack>
+        <IconAction
+          title="Положить в место"
+          onClick={() => onPlace(row)}
+          testId={`${testId}-place-${row.key}`}
+        >
+          <AddOutlined fontSize="small" />
+        </IconAction>
       ),
     },
   ]
@@ -167,7 +220,6 @@ export function ObjectsTree({
       columns={columns}
       rows={rows}
       getRowKey={(row) => row.key}
-      empty={empty}
       drag={{
         active: carried !== null,
         canDrag: () => true,
@@ -179,6 +231,7 @@ export function ObjectsTree({
           if (row.kind === 'object') onDropOn(objRef(row.object.id))
         },
       }}
+      empty={empty}
     />
   )
 }

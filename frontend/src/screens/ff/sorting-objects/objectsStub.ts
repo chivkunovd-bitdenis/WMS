@@ -30,6 +30,8 @@ export type GoodsLine = {
   holder: Holder
 }
 
+export type AlreadyAt = { cellId: string; code: string; qty: number }
+
 export type Product = {
   id: string
   name: string
@@ -37,6 +39,8 @@ export type Product = {
   seller: string
   barcode: string
   photo: string
+  /** Где этот же товар уже лежит на складе — подсказка «положи туда же». */
+  alreadyAt: AlreadyAt[]
 }
 
 export type Cell = { id: string; code: string; barcode: string }
@@ -46,24 +50,23 @@ export const cellRef = (id: string) => `cell:${id}`
 export const isCellRef = (holder: Holder) => Boolean(holder && holder.startsWith('cell:'))
 export const refId = (holder: string) => holder.slice(holder.indexOf(':') + 1)
 
-function photo(background: string, accent: string, letters: string): string {
+function photo(letters: string): string {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240">
-    <rect width="240" height="240" fill="${background}"/>
-    <circle cx="120" cy="96" r="54" fill="${accent}" opacity="0.85"/>
-    <rect x="42" y="162" width="156" height="42" rx="12" fill="${accent}" opacity="0.55"/>
-    <text x="120" y="116" font-family="Inter, sans-serif" font-size="52" font-weight="700"
-      fill="${background}" text-anchor="middle">${letters}</text>
+    <rect width="240" height="240" fill="#eef1f6"/>
+    <rect x="48" y="60" width="144" height="120" rx="10" fill="#c7cedb"/>
+    <text x="120" y="141" font-family="Inter, sans-serif" font-size="46" font-weight="700"
+      fill="#5a6478" text-anchor="middle">${letters}</text>
   </svg>`
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg.replace(/\s+/g, ' '))}`
 }
 
 export const PRODUCTS: Product[] = [
-  { id: 'p-tshirt', name: 'Футболка хлопок белая, M', sku: 'TS-WHT-M', seller: 'ИП Горячкина', barcode: '4680123456789', photo: photo('#e2e8f0', '#5b21b6', 'ФБ') },
-  { id: 'p-hoodie', name: 'Худи оверсайз серое, L', sku: 'HD-GRY-L', seller: 'ИП Горячкина', barcode: '4680123456796', photo: photo('#ede9fe', '#4c1d95', 'ХД') },
-  { id: 'p-sneakers', name: 'Кроссовки беговые, 42', sku: 'SN-RUN-42', seller: 'ООО Ситипак', barcode: '4600987654321', photo: photo('#e0f2fe', '#0369a1', 'КР') },
-  { id: 'p-socks', name: 'Носки спортивные, 3 пары', sku: 'SK-SPT-3', seller: 'ООО Ситипак', barcode: '4600987654338', photo: photo('#dcfce7', '#15803d', 'НС') },
-  { id: 'p-mug', name: 'Термокружка 450 мл', sku: 'MG-450', seller: 'ИП Ларин', barcode: '4601122334455', photo: photo('#fef3c7', '#a16207', 'ТК') },
-  { id: 'p-belt', name: 'Ремень кожаный, 110 см', sku: 'BL-110', seller: 'ИП Ларин', barcode: '4601122334462', photo: photo('#fee2e2', '#9f1239', 'РМ') },
+  { id: 'p-tshirt', name: 'Футболка хлопок белая, M', sku: 'TS-WHT-M', seller: 'ИП Горячкина', barcode: '4680123456789', photo: photo('ФБ'), alreadyAt: [{ cellId: 'c-a11', code: 'А 1.1', qty: 24 }] },
+  { id: 'p-hoodie', name: 'Худи оверсайз серое, L', sku: 'HD-GRY-L', seller: 'ИП Горячкина', barcode: '4680123456796', photo: photo('ХД'), alreadyAt: [] },
+  { id: 'p-sneakers', name: 'Кроссовки беговые, 42', sku: 'SN-RUN-42', seller: 'ООО Ситипак', barcode: '4600987654321', photo: photo('КР'), alreadyAt: [{ cellId: 'c-b11', code: 'Б 1.1', qty: 36 }] },
+  { id: 'p-socks', name: 'Носки спортивные, 3 пары', sku: 'SK-SPT-3', seller: 'ООО Ситипак', barcode: '4600987654338', photo: photo('НС'), alreadyAt: [{ cellId: 'c-a12', code: 'А 1.2', qty: 60 }] },
+  { id: 'p-mug', name: 'Термокружка 450 мл', sku: 'MG-450', seller: 'ИП Ларин', barcode: '4601122334455', photo: photo('ТК'), alreadyAt: [] },
+  { id: 'p-belt', name: 'Ремень кожаный, 110 см', sku: 'BL-110', seller: 'ИП Ларин', barcode: '4601122334462', photo: photo('РМ'), alreadyAt: [{ cellId: 'c-a12', code: 'А 1.2', qty: 8 }] },
 ]
 
 export const CELLS: Cell[] = [
