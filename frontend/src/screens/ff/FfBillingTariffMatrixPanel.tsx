@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Stack } from '@mui/material'
 import { apiUrl } from '../../api'
 import {
   ActionGroup,
@@ -154,6 +155,7 @@ export function FfBillingTariffMatrixPanel({ token, authHeaders, focusTariffs, o
   const [sellerService, setSellerService] = useState('inbound')
   const [sellerRate, setSellerRate] = useState<number | null>(null)
   const [sellerStart, setSellerStart] = useState<string | null>(defaultStartsAt())
+  const [productSellerId, setProductSellerId] = useState('')
   const [productId, setProductId] = useState('')
   const [productService, setProductService] = useState('inbound')
   const [productRate, setProductRate] = useState<number | null>(null)
@@ -298,6 +300,9 @@ export function FfBillingTariffMatrixPanel({ token, authHeaders, focusTariffs, o
 
   const sellerRows = matrix?.versions.filter((item) => item.seller_id != null && item.product_id == null) ?? []
   const sellerById = new Map((matrix?.sellers ?? []).map((seller) => [seller.id, seller]))
+  const productOptions = (matrix?.products ?? []).filter(
+    (product) => !productSellerId || product.seller_id === productSellerId,
+  )
   const productRows = matrix?.versions.filter((item) => item.product_id != null) ?? []
   const productById = new Map((matrix?.products ?? []).map((product) => [product.id, product]))
   const productOverrideAllowed = (matrix?.services.find((service) => service.service_code === productService)?.unit ?? 'item') === 'item'
@@ -352,19 +357,24 @@ export function FfBillingTariffMatrixPanel({ token, authHeaders, focusTariffs, o
       <DataTable columns={serviceColumns} rows={matrix?.services ?? []} getRowKey={(row) => row.service_code} loading={loading} empty={{ title: 'Тарифы пока не настроены', hint: 'Сначала загрузите матрицу тарифов.' }} testId="ff-settings-tariffs-services" />
       <h3>Ставки селлеров</h3>
       <p>Ставка ниже действует только на выбранного селлера. У кого своей ставки нет — работает общая.</p>
+      <Stack spacing={2.5} sx={{ maxWidth: 520, my: 2 }}>
       <SelectInput label="Селлер" value={sellerId} onChange={setSellerId} options={(matrix?.sellers ?? []).map((seller) => ({ value: seller.id, label: seller.name }))} emptyLabel="Выберите селлера" disabled={saving} testId="ff-settings-tariff-seller-id" />
       <SelectInput label="Услуга для селлера" value={sellerService} onChange={setSellerService} options={(matrix?.services ?? []).map((service) => ({ value: service.service_code, label: serviceName[service.service_code] ?? service.service_code }))} disabled={saving} testId="ff-settings-tariff-seller-service" />
       <NumberInput label="Ставка селлера, ₽" value={sellerRate} onChange={setSellerRate} min={0} max={MAX_TARIFF_RATE_RUBLES} step={0.01} disabled={saving} testId="ff-settings-tariff-seller-rate" />
       <MoscowDateTimeInput label="Ставка селлера действует с" value={sellerStart} onChange={setSellerStart} disabled={saving} testId="ff-settings-tariff-seller-start" />
       <ActionGroup><SecondaryAction disabledReason={saving ? 'Матрица тарифов сохраняется' : undefined} onClick={addSellerOverride} data-testid="ff-settings-tariff-seller-add">Добавить ставку селлера</SecondaryAction></ActionGroup>
+      </Stack>
       <DataTable columns={sellerColumns} rows={sellerRows} getRowKey={(row) => `${row.seller_id}-${row.service_code}-${row.valid_from_at}`} loading={loading} empty={{ title: 'Индивидуальных ставок пока нет', hint: 'Все селлеры считаются по общей ставке.' }} testId="ff-settings-tariff-seller-overrides" />
       <h3>Товарные цены</h3>
-      <SelectInput label="Товар" value={productId} onChange={setProductId} options={(matrix?.products ?? []).map((product) => ({ value: product.id, label: product.label }))} emptyLabel="Выберите товар" disabled={saving} testId="ff-settings-tariff-product-id" />
+      <Stack spacing={2.5} sx={{ maxWidth: 520, my: 2 }}>
+      <SelectInput label="Селлер товара" value={productSellerId} onChange={(value) => { setProductSellerId(value); setProductId('') }} options={(matrix?.sellers ?? []).map((seller) => ({ value: seller.id, label: seller.name }))} emptyLabel="Все селлеры" disabled={saving} testId="ff-settings-tariff-product-seller" />
+      <SelectInput label="Товар" value={productId} onChange={setProductId} options={productOptions.map((product) => ({ value: product.id, label: productSellerId ? [product.sku, product.name].filter(Boolean).join(' · ') : product.label }))} emptyLabel={productSellerId && !productOptions.length ? 'У этого селлера нет товаров' : 'Выберите товар'} disabled={saving} testId="ff-settings-tariff-product-id" />
       <SelectInput label="Услуга для товара" value={productService} onChange={setProductService} options={(matrix?.services ?? []).map((service) => ({ value: service.service_code, label: serviceName[service.service_code] ?? service.service_code }))} disabled={saving} testId="ff-settings-tariff-product-service" />
       <NumberInput label="Товарная ставка, ₽" value={productRate} onChange={setProductRate} min={0} max={MAX_TARIFF_RATE_RUBLES} step={0.01} disabled={saving} testId="ff-settings-tariff-product-rate" />
       <MoscowDateTimeInput label="Товарная цена действует с" value={productStart} onChange={setProductStart} disabled={saving} testId="ff-settings-tariff-product-start" />
       {!productOverrideAllowed ? <StatusChip label="Товарная цена доступна только для тарифа за единицу" tone="warn" testId="ff-settings-tariff-product-unit-boundary" /> : null}
       <ActionGroup><SecondaryAction disabledReason={saving ? 'Матрица тарифов сохраняется' : !productOverrideAllowed ? 'Для товарной цены выберите единицу «За единицу»' : undefined} onClick={addProductOverride} data-testid="ff-settings-tariff-product-add">Добавить товарную цену</SecondaryAction></ActionGroup>
+      </Stack>
       <DataTable columns={productColumns} rows={productRows} getRowKey={(row) => `${row.product_id}-${row.service_code}-${row.valid_from_at}`} loading={loading} empty={{ title: 'Товарных цен пока нет', hint: 'Добавьте ставку для товара, если она отличается от общей.' }} testId="ff-settings-tariff-product-overrides" />
       <h3>Ставки сотрудников</h3>
       <DataTable columns={employeeColumns} rows={employeeRows} getRowKey={(row) => row.id} loading={loading} empty={{ title: 'Сотрудников пока нет', hint: 'Ставки появятся после добавления сотрудников.' }} testId="ff-settings-tariff-employee-rates" />
