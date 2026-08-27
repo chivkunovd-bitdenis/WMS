@@ -260,7 +260,7 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
           />
         </Box>
 
-        <Stack spacing={2} sx={{ width: { lg: 440 }, flexShrink: 0, minWidth: 0 }}>
+        <Stack spacing={2} sx={{ width: { lg: 560 }, flexShrink: 0, minWidth: 0 }}>
           <Paper variant="outlined" sx={{ p: 2 }} data-testid="objects-cells">
             <Typography variant="subtitle1" sx={{ mb: 1.5 }}>
               Ячейки склада
@@ -339,6 +339,7 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
                 objects={objects}
                 carried={carried}
                 testId="objects-cell-tree"
+                compact
                 empty={{ title: 'На ячейке пусто', hint: 'Перетащите сюда объект или нажмите плюс в списке.' }}
                 onToggle={toggle}
                 onPlace={(row: ObjectRow) =>
