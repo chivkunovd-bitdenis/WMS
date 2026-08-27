@@ -260,7 +260,7 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
           />
         </Box>
 
-        <Stack spacing={2} sx={{ width: { lg: 560 }, flexShrink: 0, minWidth: 0 }}>
+        <Stack spacing={2} sx={{ width: { lg: 552 }, flexShrink: 0, minWidth: 0 }}>
           <Paper variant="outlined" sx={{ p: 2 }} data-testid="objects-cells">
             <Typography variant="subtitle1" sx={{ mb: 1.5 }}>
               Ячейки склада

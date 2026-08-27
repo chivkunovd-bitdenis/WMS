@@ -80,6 +80,17 @@ type Props<Row> = {
     /** Доступное имя стрелки: «флажок» без имени программе чтения бесполезен. */
     label: (row: Row) => string
   }
+  /**
+   * Жёсткая раскладка колонок.
+   *
+   * По умолчанию браузер меряет таблицу по содержимому, и колонка с длинным
+   * названием растягивает её шире панели — панель приходится скроллить вбок.
+   * Лечить это ограничением ширины текста нельзя: тогда буквы обрезаются даже
+   * там, где место есть. С жёсткой раскладкой колонки получают заявленную
+   * ширину, колонка без ширины забирает остаток, и текст обрезается ровно по
+   * реальному краю, а не по выдуманному пределу.
+   */
+  fixedLayout?: boolean
   /** Перетаскивание строк (см. RowDrag). */
   drag?: RowDrag<Row>
   /**
@@ -102,6 +113,7 @@ export function DataTable<Row>({
   testId,
   expand,
   drag,
+  fixedLayout = false,
   highlightedKey = null,
   hideHeader = false,
 }: Props<Row>) {
@@ -142,7 +154,7 @@ export function DataTable<Row>({
     <TableContainer component={Paper} variant="outlined" data-testid={testId}>
       {/* stickyHeader по умолчанию: на двухстах строках без липкой шапки
           оператор читает число не из того столбца (канон R-05). */}
-      <Table stickyHeader size="small">
+      <Table stickyHeader size="small" sx={fixedLayout ? { tableLayout: 'fixed' } : undefined}>
         {hideHeader ? null : (
         <TableHead>
           <TableRow>

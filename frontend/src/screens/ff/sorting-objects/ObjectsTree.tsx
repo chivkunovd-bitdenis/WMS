@@ -26,10 +26,6 @@ const ROW_HEIGHT = 30
 // Берём цвет разделителя темы, чтобы она была ровно такой же силы, как границы
 // строк, и не читалась как ещё один смысл.
 const GUIDE = 'rgba(15, 23, 42, 0.11)'
-// Ширина названия ограничена намеренно: колонка с автоширинои растягивает
-// таблицу шире панели, и её приходится скроллить вбок. Полное значение всегда
-// лежит под подсказкой (канон R-02).
-const NAME_WIDTH = 200
 
 export function ObjectsTree({
   rows,
@@ -68,7 +64,7 @@ export function ObjectsTree({
   const alreadyColumn: Column<ObjectRow> = {
       key: 'already',
       header: 'Уже лежит',
-      width: 128,
+      width: 104,
       render: (row) => {
         if (row.kind !== 'goods') return null
         if (row.alreadyAt.length === 0) {
@@ -106,7 +102,7 @@ export function ObjectsTree({
       render: (row) => (
         <Stack
           direction="row"
-          spacing={1}
+          spacing={0.75}
           sx={{
             alignItems: 'center',
             minHeight: ROW_HEIGHT,
@@ -129,7 +125,7 @@ export function ObjectsTree({
               .join(', '),
           }}
         >
-          <Box sx={{ width: 26, display: 'flex', justifyContent: 'center' }}>
+          <Box sx={{ width: 24, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
             {row.kind === 'object' && row.expandable ? (
               <IconAction
                 title={row.expanded ? `Свернуть ${objectTitle(row.object)}` : `Раскрыть ${objectTitle(row.object)}`}
@@ -144,9 +140,9 @@ export function ObjectsTree({
             ) : null}
           </Box>
           <Tooltip title="Можно перетащить в другой объект или на ячейку">
-            <DragIndicator fontSize="small" sx={{ color: 'text.disabled' }} />
+            <DragIndicator sx={{ color: 'text.disabled', fontSize: 16, flexShrink: 0 }} />
           </Tooltip>
-          <Box sx={{ width: 26, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <Box sx={{ width: 24, display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
             {row.kind === 'object' ? (
               row.object.kind === 'pallet' ? (
                 <LayersOutlined fontSize="small" sx={{ color: 'text.secondary' }} />
@@ -159,7 +155,7 @@ export function ObjectsTree({
               <ProductPhotoThumb src={row.photo} alt={row.name} size={24} />
             )}
           </Box>
-          <Stack sx={{ minWidth: 0 }}>
+          <Stack sx={{ minWidth: 0, flexGrow: 1 }}>
             <Tooltip title={row.kind === 'object' ? objectTitle(row.object) : row.name}>
               <Typography
                 variant="body2"
@@ -168,29 +164,21 @@ export function ObjectsTree({
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
-                  maxWidth: NAME_WIDTH,
                 }}
               >
                 {row.kind === 'object' ? objectTitle(row.object) : row.name}
               </Typography>
             </Tooltip>
-            {/* Селлер, состав и штрихкод — подписью, а не своими колонками: в
-                узкой панели каждая лишняя колонка отнимает у названия товара то,
-                ради чего в строку и смотрят, и в какой-то момент от названия не
-                остаётся ничего. */}
             <Typography
               variant="caption"
               color="text.secondary"
-              sx={{
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                maxWidth: NAME_WIDTH,
-              }}
+              sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
             >
               {row.kind === 'object'
-                ? `${row.inside === 0 ? 'пусто' : `внутри ${row.inside}`} · ${row.object.barcode}`
-                : `${row.seller} · ${row.barcode}`}
+                ? row.inside === 0
+                  ? 'пусто'
+                  : `внутри ${row.inside}`
+                : row.seller}
             </Typography>
           </Stack>
         </Stack>
@@ -198,16 +186,36 @@ export function ObjectsTree({
     },
     ...(compact ? [] : [alreadyColumn]),
     {
+      key: 'barcode',
+      header: 'ШК',
+      width: 104,
+      render: (row) => (
+        <Typography
+          variant="body2"
+          sx={{
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            fontSize: 12.5,
+            color: 'text.secondary',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {row.kind === 'object' ? row.object.barcode : row.barcode}
+        </Typography>
+      ),
+    },
+    {
       key: 'qty',
       header: 'Штук',
-      width: 76,
+      width: 60,
       align: 'right',
       render: (row) => <QtyCell value={row.qty} muted={row.qty === 0} />,
     },
     {
       key: 'actions',
       header: '',
-      width: 84,
+      width: compact ? 44 : 70,
       align: 'right',
       render: (row) => {
         const holder = row.kind === 'object' ? row.object.holder : row.line.holder
@@ -229,13 +237,15 @@ export function ObjectsTree({
                 <ArrowUpwardOutlined fontSize="small" />
               </IconAction>
             ) : null}
-            <IconAction
-              title="Положить в место"
-              onClick={() => onPlace(row)}
-              testId={`${testId}-place-${row.key}`}
-            >
-              <AddOutlined fontSize="small" />
-            </IconAction>
+            {compact ? null : (
+              <IconAction
+                title="Положить в место"
+                onClick={() => onPlace(row)}
+                testId={`${testId}-place-${row.key}`}
+              >
+                <AddOutlined fontSize="small" />
+              </IconAction>
+            )}
           </Stack>
         )
       },
@@ -248,6 +258,7 @@ export function ObjectsTree({
       columns={columns}
       rows={rows}
       getRowKey={(row) => row.key}
+      fixedLayout
       drag={{
         active: carried !== null,
         canDrag: () => true,
