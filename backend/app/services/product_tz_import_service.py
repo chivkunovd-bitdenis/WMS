@@ -1,4 +1,3 @@
-# ruff: noqa: RUF001
 """Parse FF TZ template xlsx and create/update catalog products."""
 
 from __future__ import annotations

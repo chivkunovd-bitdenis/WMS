@@ -43,7 +43,6 @@ from app.services.fbs_stock_sync_service import (
     ERROR_READBACK_MISMATCH,
     ERROR_SYNC_BUSY,
     ERROR_UNSAFE_STOCK_UNKNOWN,
-    ERROR_UNSAFE_ZERO_BLOCKED,
     NoopStockSyncRateLimiter,
     _build_publish_plan,
     _try_acquire_lease,

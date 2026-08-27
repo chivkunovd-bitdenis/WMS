@@ -1,7 +1,5 @@
 """Product TZ import idempotency constraint and scope coverage."""
 
-# ruff: noqa: RUF001
-
 from __future__ import annotations
 
 import asyncio

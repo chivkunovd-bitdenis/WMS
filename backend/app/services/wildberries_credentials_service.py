@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from typing import cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -164,7 +165,7 @@ async def patch_seller_tokens(
         row.marketplace_token_encrypted = row.content_token_encrypted
 
     if marketplace_scope_ok is not SKIP:
-        row.marketplace_scope_ok = marketplace_scope_ok
+        row.marketplace_scope_ok = cast(bool, marketplace_scope_ok)
         row.marketplace_scope_checked_at = now
 
     row.updated_at = now

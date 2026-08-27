@@ -2055,6 +2055,64 @@
         }
       }
     },
+    "/operations/fbs-supplies/{supply_id}/boxes-without-distribution": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Toggle FBS supply boxes without distribution mode",
+        "operationId": "set_fbs_supply_boxes_without_distribution_operations_fbs_supplies__supply_id__boxes_without_distribution_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FbsSupplyBoxesWithoutDistributionBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsWorkspaceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/operations/fbs-supplies/{supply_id}/planned-shipment-date": {
       "patch": {
         "tags": [
@@ -7129,6 +7187,19 @@
         ],
         "title": "FbsSupplyAddOrdersBody"
       },
+      "FbsSupplyBoxesWithoutDistributionBody": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "FbsSupplyBoxesWithoutDistributionBody"
+      },
       "FbsSupplyCreateBody": {
         "properties": {
           "seller_id": {
@@ -8989,6 +9060,10 @@
             },
             "type": "array",
             "title": "Selection Blockers"
+          },
+          "tape_order_index": {
+            "type": "integer",
+            "title": "Tape Order Index"
           }
         },
         "type": "object",
@@ -9013,7 +9088,8 @@
           "created_at_wb",
           "deadline_at",
           "supply_id",
-          "selection_blockers"
+          "selection_blockers",
+          "tape_order_index"
         ],
         "title": "FbsWorkspaceOrderOut"
       },
@@ -9557,6 +9633,10 @@
           "honest_sign_skipped": {
             "type": "boolean",
             "title": "Honest Sign Skipped"
+          },
+          "boxes_without_distribution": {
+            "type": "boolean",
+            "title": "Boxes Without Distribution"
           }
         },
         "type": "object",
@@ -9574,7 +9654,8 @@
           "nearest_deadline_at",
           "packaging_task_id",
           "barcode_asset",
-          "honest_sign_skipped"
+          "honest_sign_skipped",
+          "boxes_without_distribution"
         ],
         "title": "FbsWorkspaceSupplyOut"
       },
@@ -9800,6 +9881,50 @@
         "title": "FfCatalogOut",
         "description": "FF warehouse catalog row: tenant products enriched from WB cards."
       },
+      "FfCatalogPageOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FfCatalogOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "scope_total": {
+            "type": "integer",
+            "title": "Scope Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          },
+          "categories": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Categories"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "scope_total",
+          "limit",
+          "offset",
+          "categories"
+        ],
+        "title": "FfCatalogPageOut"
+      },
       "FulfilledOrderOut": {
         "properties": {
           "id": {
@@ -9961,6 +10086,18 @@
             "maxLength": 128,
             "minLength": 1,
             "title": "Barcode"
+          },
+          "product_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Id"
           }
         },
         "type": "object",
@@ -11055,6 +11192,174 @@
         ],
         "title": "InboundIntakeRequestSummaryOut"
       },
+      "InboundPackageCatalogItemOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "box",
+              "cargo_place"
+            ],
+            "title": "Kind"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "internal_barcode": {
+            "type": "string",
+            "title": "Internal Barcode"
+          },
+          "request_id": {
+            "type": "string",
+            "title": "Request Id"
+          },
+          "request_display_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Display Number"
+          },
+          "warehouse_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Name"
+          },
+          "intake_status": {
+            "type": "string",
+            "title": "Intake Status"
+          },
+          "composition_tracked": {
+            "type": "boolean",
+            "title": "Composition Tracked"
+          },
+          "fully_distributed": {
+            "type": "boolean",
+            "title": "Fully Distributed"
+          },
+          "remaining_qty": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remaining Qty"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/InboundPackageCatalogLineOut"
+            },
+            "type": "array",
+            "title": "Lines"
+          },
+          "source_document": {
+            "$ref": "#/components/schemas/PackageSourceDocumentOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "number",
+          "internal_barcode",
+          "request_id",
+          "intake_status",
+          "composition_tracked",
+          "fully_distributed",
+          "source_document"
+        ],
+        "title": "InboundPackageCatalogItemOut"
+      },
+      "InboundPackageCatalogLineOut": {
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "title": "Product Id"
+          },
+          "remaining_qty": {
+            "type": "integer",
+            "title": "Remaining Qty"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "sku_code": {
+            "type": "string",
+            "title": "Sku Code"
+          },
+          "wb_vendor_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wb Vendor Code"
+          },
+          "wb_barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wb Barcode"
+          },
+          "wb_size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wb Size"
+          },
+          "seller_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "remaining_qty",
+          "name",
+          "sku_code"
+        ],
+        "title": "InboundPackageCatalogLineOut"
+      },
       "InboundReceivingLineBody": {
         "properties": {
           "product_id": {
@@ -11089,6 +11394,18 @@
             "maxLength": 128,
             "minLength": 1,
             "title": "Barcode"
+          },
+          "product_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Id"
           }
         },
         "type": "object",
@@ -12431,6 +12748,18 @@
             "minLength": 1,
             "title": "Barcode"
           },
+          "product_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Id"
+          },
           "storage_location_id": {
             "anyOf": [
               {
@@ -12890,6 +13219,18 @@
             "maxLength": 128,
             "minLength": 1,
             "title": "Barcode"
+          },
+          "product_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Id"
           },
           "storage_location_id": {
             "anyOf": [
@@ -13919,6 +14260,41 @@
           "packaging_task"
         ],
         "title": "PackProgressOut"
+      },
+      "PackageSourceDocumentOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Number"
+          },
+          "date": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "date"
+        ],
+        "title": "PackageSourceDocumentOut"
       },
       "PackagingInstructionsPatch": {
         "properties": {
@@ -15587,6 +15963,28 @@
         ],
         "title": "PrintedMarkingCodesOut"
       },
+      "ProductContainerDimensions": {
+        "properties": {
+          "volume_liters": {
+            "type": "number",
+            "maximum": 1000000.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Volume Liters"
+          },
+          "container_basis": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Container Basis"
+          }
+        },
+        "type": "object",
+        "required": [
+          "volume_liters",
+          "container_basis"
+        ],
+        "title": "ProductContainerDimensions"
+      },
       "ProductCreate": {
         "properties": {
           "name": {
@@ -15725,6 +16123,119 @@
           "sku_code"
         ],
         "title": "ProductCreate"
+      },
+      "ProductDimensionEventOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "author_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Name"
+          },
+          "length_mm": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Length Mm"
+          },
+          "width_mm": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width Mm"
+          },
+          "height_mm": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height Mm"
+          },
+          "weight_g": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weight G"
+          },
+          "volume_liters": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Volume Liters"
+          },
+          "container_basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Basis"
+          },
+          "is_current": {
+            "type": "boolean",
+            "title": "Is Current"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "source",
+          "created_at",
+          "author_name",
+          "length_mm",
+          "width_mm",
+          "height_mm",
+          "weight_g",
+          "volume_liters",
+          "container_basis",
+          "is_current"
+        ],
+        "title": "ProductDimensionEventOut"
       },
       "ProductDimensionsPatch": {
         "properties": {
@@ -16293,6 +16804,40 @@
               }
             ],
             "title": "Volume Liters"
+          },
+          "dimensions_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dimensions Source"
+          },
+          "dimensions_updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dimensions Updated At"
+          },
+          "dimensions_updated_by_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dimensions Updated By User Id"
           }
         },
         "type": "object",
@@ -16611,6 +17156,175 @@
         ],
         "title": "ProductTzRowPreviewOut"
       },
+      "ProfileBody": {
+        "properties": {
+          "legal_name": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Legal Name"
+          },
+          "inn": {
+            "type": "string",
+            "title": "Inn"
+          },
+          "kpp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kpp"
+          },
+          "bank_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Name"
+          },
+          "bik": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bik"
+          },
+          "settlement_account": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settlement Account"
+          },
+          "correspondent_account": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correspondent Account"
+          }
+        },
+        "type": "object",
+        "required": [
+          "legal_name",
+          "inn"
+        ],
+        "title": "ProfileBody"
+      },
+      "ProfileOut": {
+        "properties": {
+          "legal_name": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Legal Name"
+          },
+          "inn": {
+            "type": "string",
+            "title": "Inn"
+          },
+          "kpp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kpp"
+          },
+          "bank_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Name"
+          },
+          "bik": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bik"
+          },
+          "settlement_account": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Settlement Account"
+          },
+          "correspondent_account": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correspondent Account"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "seller_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "legal_name",
+          "inn",
+          "id",
+          "seller_id"
+        ],
+        "title": "ProfileOut"
+      },
       "RackOut": {
         "properties": {
           "name": {
@@ -16833,6 +17547,40 @@
           "name"
         ],
         "title": "SellerCreate"
+      },
+      "SellerExceptionBody": {
+        "properties": {
+          "seller_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Seller Id"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              }
+            ],
+            "title": "Amount"
+          },
+          "valid_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Valid From"
+          }
+        },
+        "type": "object",
+        "required": [
+          "seller_id",
+          "amount",
+          "valid_from"
+        ],
+        "title": "SellerExceptionBody"
       },
       "SellerMarketplaceUnloadRequestCreate": {
         "properties": {
@@ -17979,6 +18727,193 @@
         "type": "object",
         "title": "StockTransferOut"
       },
+      "StorageRebuildBody": {
+        "properties": {
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          },
+          "month": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Month"
+          },
+          "warehouse_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Id"
+          }
+        },
+        "type": "object",
+        "title": "StorageRebuildBody"
+      },
+      "StorageRebuildOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status"
+        ],
+        "title": "StorageRebuildOut"
+      },
+      "StorageStatementOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "fixed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fixed At"
+          },
+          "period_start": {
+            "type": "string",
+            "title": "Period Start"
+          },
+          "period_end": {
+            "type": "string",
+            "title": "Period End"
+          },
+          "seller_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Seller Id"
+          },
+          "warehouse_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Warehouse Id"
+          },
+          "seller_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Name"
+          },
+          "warehouse_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Name"
+          },
+          "measurements": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Measurements"
+          },
+          "total_liter_days": {
+            "type": "string",
+            "title": "Total Liter Days"
+          },
+          "total_amount": {
+            "type": "string",
+            "title": "Total Amount"
+          },
+          "problem_count": {
+            "type": "integer",
+            "title": "Problem Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "fixed_at",
+          "period_start",
+          "period_end",
+          "seller_id",
+          "warehouse_id",
+          "measurements",
+          "total_liter_days",
+          "total_amount",
+          "problem_count"
+        ],
+        "title": "StorageStatementOut"
+      },
+      "StorageStatementsOut": {
+        "properties": {
+          "tariff_configured": {
+            "type": "boolean",
+            "title": "Tariff Configured"
+          },
+          "warehouses": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Warehouses"
+          },
+          "statements": {
+            "items": {
+              "$ref": "#/components/schemas/StorageStatementOut"
+            },
+            "type": "array",
+            "title": "Statements"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tariff_configured",
+          "warehouses",
+          "statements"
+        ],
+        "title": "StorageStatementsOut"
+      },
       "SwitchSellerBody": {
         "properties": {
           "seller_id": {
@@ -17996,6 +18931,159 @@
         },
         "type": "object",
         "title": "SwitchSellerBody"
+      },
+      "TariffCreateOut": {
+        "properties": {
+          "warehouse_tariff": {
+            "$ref": "#/components/schemas/TariffVersionOut"
+          },
+          "seller_exception": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TariffVersionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recalculated_statements": {
+            "items": {
+              "$ref": "#/components/schemas/StorageStatementOut"
+            },
+            "type": "array",
+            "title": "Recalculated Statements"
+          }
+        },
+        "type": "object",
+        "required": [
+          "warehouse_tariff"
+        ],
+        "title": "TariffCreateOut"
+      },
+      "TariffOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "seller_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Id"
+          },
+          "warehouse_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Id"
+          },
+          "service_code": {
+            "type": "string",
+            "title": "Service Code"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "amount": {
+            "type": "integer",
+            "title": "Amount"
+          },
+          "valid_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Valid From"
+          },
+          "valid_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid To"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "seller_id",
+          "warehouse_id",
+          "service_code",
+          "unit",
+          "amount",
+          "valid_from",
+          "valid_to"
+        ],
+        "title": "TariffOut"
+      },
+      "TariffVersionOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "warehouse_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Id"
+          },
+          "seller_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Id"
+          },
+          "amount": {
+            "type": "string",
+            "title": "Amount"
+          },
+          "valid_from": {
+            "type": "string",
+            "title": "Valid From"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "warehouse_id",
+          "seller_id",
+          "amount",
+          "valid_from"
+        ],
+        "title": "TariffVersionOut"
       },
       "TenantSettingsOut": {
         "properties": {
@@ -18410,13 +19498,23 @@
           "code": {
             "type": "string",
             "title": "Code"
+          },
+          "barcode": {
+            "type": "string",
+            "title": "Barcode"
+          },
+          "is_operational": {
+            "type": "boolean",
+            "title": "Is Operational"
           }
         },
         "type": "object",
         "required": [
           "id",
           "name",
-          "code"
+          "code",
+          "barcode",
+          "is_operational"
         ],
         "title": "WarehouseOut"
       },
@@ -18434,6 +19532,45 @@
           "name"
         ],
         "title": "WarehousePatch"
+      },
+      "WarehouseScanOut": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "warehouse_id": {
+            "type": "string",
+            "title": "Warehouse Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "id",
+          "warehouse_id",
+          "code"
+        ],
+        "title": "WarehouseScanOut"
       },
       "WbMpWarehouseOut": {
         "properties": {
@@ -18845,6 +19982,114 @@
           "supplies_api_base"
         ],
         "title": "WildberriesStatusOut"
+      },
+      "app__api__billing__TariffCreateBody": {
+        "properties": {
+          "seller_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seller Id"
+          },
+          "warehouse_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warehouse Id"
+          },
+          "service_code": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Service Code"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,12}|(?=[\\d.]{1,15}0*$)\\d{0,12}\\.\\d{0,2}0*$)"
+              }
+            ],
+            "title": "Amount"
+          },
+          "valid_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Valid From"
+          }
+        },
+        "type": "object",
+        "required": [
+          "service_code",
+          "unit",
+          "amount",
+          "valid_from"
+        ],
+        "title": "TariffCreateBody"
+      },
+      "app__api__storage__TariffCreateBody": {
+        "properties": {
+          "warehouse_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Warehouse Id"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "string",
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+              }
+            ],
+            "title": "Amount"
+          },
+          "valid_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Valid From"
+          },
+          "seller_exception": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SellerExceptionBody"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "warehouse_id",
+          "amount",
+          "valid_from"
+        ],
+        "title": "TariffCreateBody"
       }
     },
     "securitySchemes": {

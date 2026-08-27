@@ -526,6 +526,9 @@ async def test_fbs_cutoff_autoplans_supply_manual_date_and_calendar(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
 ) -> None:
+    test_day = datetime.now(UTC).date() + timedelta(days=2)
+    next_day = test_day + timedelta(days=1)
+    moved_day = test_day + timedelta(days=2)
     headers, suffix = await _register_ff_admin(async_client)
     me = await async_client.get("/auth/me", headers=headers)
     tenant_id = uuid.UUID(me.json()["tenant_id"])
@@ -549,7 +552,10 @@ async def test_fbs_cutoff_autoplans_supply_manual_date_and_calendar(
         uuid.UUID(location_id),
         product,
         order_id=856101,
-        created_at=datetime(2026, 8, 15, 11, 30, tzinfo=UTC),
+        created_at=datetime.combine(test_day, datetime.min.time(), tzinfo=UTC).replace(
+            hour=11,
+            minute=30,
+        ),
     )
     before = await async_client.post(
         "/operations/fbs-supplies/from-orders",
@@ -562,7 +568,7 @@ async def test_fbs_cutoff_autoplans_supply_manual_date_and_calendar(
         },
     )
     assert before.status_code == 201, before.text
-    assert before.json()["supply"]["planned_shipment_date"] == "2026-08-15"
+    assert before.json()["supply"]["planned_shipment_date"] == test_day.isoformat()
 
     after_cutoff_order = await _create_ready_order(
         tenant_id,
@@ -571,7 +577,10 @@ async def test_fbs_cutoff_autoplans_supply_manual_date_and_calendar(
         uuid.UUID(location_id),
         product,
         order_id=856102,
-        created_at=datetime(2026, 8, 15, 14, 30, tzinfo=UTC),
+        created_at=datetime.combine(test_day, datetime.min.time(), tzinfo=UTC).replace(
+            hour=14,
+            minute=30,
+        ),
     )
     after = await async_client.post(
         "/operations/fbs-supplies/from-orders",
@@ -585,26 +594,27 @@ async def test_fbs_cutoff_autoplans_supply_manual_date_and_calendar(
     )
     assert after.status_code == 201, after.text
     after_supply_id = after.json()["supply"]["id"]
-    assert after.json()["supply"]["planned_shipment_date"] == "2026-08-16"
+    assert after.json()["supply"]["planned_shipment_date"] == next_day.isoformat()
 
     moved = await async_client.patch(
         f"/operations/fbs-supplies/{after_supply_id}/planned-shipment-date",
         headers=headers,
-        json={"planned_shipment_date": "2026-08-17"},
+        json={"planned_shipment_date": moved_day.isoformat()},
     )
     assert moved.status_code == 200, moved.text
-    assert moved.json()["supply"]["planned_shipment_date"] == "2026-08-17"
+    assert moved.json()["supply"]["planned_shipment_date"] == moved_day.isoformat()
 
     calendar = await async_client.get(
-        "/operations/fbs-supplies/calendar?start_date=2026-08-17&end_date=2026-08-17",
+        "/operations/fbs-supplies/calendar",
         headers=headers,
+        params={"start_date": moved_day.isoformat(), "end_date": moved_day.isoformat()},
     )
     assert calendar.status_code == 200, calendar.text
     rows = calendar.json()
     assert rows == [
         {
             "id": after_supply_id,
-            "date": "2026-08-17",
+            "date": moved_day.isoformat(),
             "direction": "WH",
             "boxes_count": 1,
             "shipment_type": "FBS",

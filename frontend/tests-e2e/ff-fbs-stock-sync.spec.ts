@@ -69,7 +69,7 @@ test('fbs seller warehouses: row binding, manual sync, status panel', async ({ p
     page.getByRole('option', { name: new RegExp(wh.name) }).click(),
   ])
 
-  await expect(row).toContainText('готов к публикации')
+  await expect(row).toContainText('публикация выключена')
   await Promise.all([
     waitForPutOk(page, '/warehouse-bindings/501001'),
     waitForGetOk(page, '/warehouse-bindings'),

@@ -63,6 +63,9 @@ allowed-confusables = ["а", "б", "в", "г", "е", "и", "к", "м", "н", "о
 # Repo root on sys.path before wb_emulator imports (STOCK-100 integration test).
 "tests/test_fbs_stock_emulator_integration.py" = ["E402"]
 "tests/test_fbs_operator_flow_handoff.py" = ["E402"]
+# Direct-run maintenance scripts add backend/ to sys.path before importing app modules.
+"scripts/cleanup_fbs_stub_test_orders.py" = ["E402"]
+"scripts/cleanup_fbs_wb_stub_warehouses.py" = ["E402"]
 
 [tool.mypy]
 python_version = "3.11"
