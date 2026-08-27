@@ -15,6 +15,14 @@ type FieldProps = {
   describedBy?: string
   /** Marks a field invalid when its group owns the explanatory error text. */
   invalid?: boolean
+  /**
+   * Прячет видимую подпись, сохраняя имя для программы чтения.
+   *
+   * Нужно полю внутри ячейки таблицы: заголовок колонки уже назвал его, а
+   * плавающая подпись MUI выносится за верхнюю границу поля и наползает на
+   * строку выше.
+   */
+  hideLabel?: boolean
 }
 
 type TextInputProps = FieldProps & {
@@ -147,6 +155,7 @@ function inputA11y(props: FieldProps, metadata: FieldMetadata) {
   const describedBy = [metadata.helperId, props.describedBy].filter(Boolean).join(' ')
   return {
     'data-testid': props.testId,
+    ...(props.hideLabel ? { 'aria-label': props.label } : {}),
     'aria-invalid': Boolean(props.error || props.invalid),
     ...(describedBy ? { 'aria-describedby': describedBy } : {}),
   }
@@ -155,7 +164,7 @@ function inputA11y(props: FieldProps, metadata: FieldMetadata) {
 function commonProps(props: FieldProps, metadata: FieldMetadata) {
   return {
     id: metadata.inputId,
-    label: props.label,
+    label: props.hideLabel ? undefined : props.label,
     required: props.required,
     disabled: Boolean(props.disabled || props.loading),
     error: Boolean(props.error || props.invalid),

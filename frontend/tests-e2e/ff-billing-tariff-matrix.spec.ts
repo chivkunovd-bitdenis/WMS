@@ -48,7 +48,8 @@ async function createSeller(request: APIRequestContext, token: string, name: str
  * Плоских форм с выпадающим списком селлера больше нет: его ставки и цены на
  * его товары живут под его же строкой (просьба владельца 27.08.2026).
  */
-async function expandSeller(page: Page, name: string) {
+async function expandSeller(page: Page, name: string, sellerId: string) {
+  if (await page.getByTestId(`ff-settings-tariff-seller-panel-${sellerId}`).count()) return
   await page
     .getByTestId('ff-settings-tariff-sellers')
     .locator('tbody tr', { hasText: name })
@@ -56,6 +57,7 @@ async function expandSeller(page: Page, name: string) {
     .getByRole('button')
     .first()
     .click()
+  await page.getByTestId(`ff-settings-tariff-seller-panel-${sellerId}`).waitFor()
 }
 
 // TC-NEW-2B-001 — Given an FF admin opens the existing settings tariff link,
@@ -91,7 +93,7 @@ test('S-19 tariff matrix accepts existing deep link', async ({ page }) => {
     responseMatrix = {
       revision: 1,
       services: matrix.services.map((service) => ({ ...service, enabled: savedPayload?.services.find((row) => row.service_code === service.service_code)?.enabled ?? service.enabled })),
-      versions: savedPayload?.versions ?? [], products: matrix.products, storage: matrix.storage,
+      versions: savedPayload?.versions ?? [], products: matrix.products, sellers: matrix.sellers, storage: matrix.storage,
     }
     await route.fulfill({
       status: 200, contentType: 'application/json',
@@ -118,7 +120,7 @@ test('S-19 tariff matrix accepts existing deep link', async ({ page }) => {
   await expect(panel.getByTestId('ff-settings-tariff-rate-inbound')).toHaveValue('12.5')
   await panel.getByTestId('ff-settings-tariff-rate-inbound').fill('33.50')
   await panel.getByTestId('ff-settings-tariff-unit-inbound').selectOption('item')
-  await expandSeller(page, 'Селлер Тест')
+  await expandSeller(page, 'Селлер Тест', 'seller-tariff-1')
   // Внутри селлера имя из подписи товара уходит: и так видно, чей это товар.
   await panel.getByTestId('ff-settings-tariff-target-seller-tariff-1').selectOption('product-tariff-1')
   await expect(panel.getByTestId('ff-settings-tariff-target-seller-tariff-1')).toContainText('SKU-001 · Куртка')
@@ -151,15 +153,17 @@ test('S-19 tariff matrix accepts existing deep link', async ({ page }) => {
   await expect(panel.getByTestId('ff-settings-tariffs-success')).toBeVisible()
   expect(putCount).toBe(3)
   expect(savedPayload?.versions.some((row) => row.product_id === null && row.employee_user_id === null && row.rate === 3400)).toBe(true)
-  await expect(panel.getByTestId('ff-settings-tariff-seller-own-seller-tariff-1')).toContainText('Селлер Тест · SKU-001 · Куртка')
+  await expandSeller(page, 'Селлер Тест', 'seller-tariff-1')
+  await expect(panel.getByTestId('ff-settings-tariff-seller-own-seller-tariff-1')).toContainText('SKU-001 · Куртка')
   await expect(panel.getByTestId('ff-settings-tariff-seller-own-seller-tariff-1')).not.toContainText('product-tariff-1')
   await expect(panel.getByTestId('ff-settings-tariff-seller-own-seller-tariff-1')).toContainText('17,50')
   await expect(panel.getByTestId('ff-settings-tariff-seller-own-seller-tariff-1')).toContainText(/\d{2}\.\d{2}\.\d{4}, \d{2}:\d{2}/)
   await expect(panel.getByTestId('ff-settings-tariff-seller-own-seller-tariff-1')).not.toContainText('T')
-  await expect(panel.getByTestId('ff-settings-tariff-storage-link')).toHaveAttribute('href', '/app/ff/inventory')
-  await expect(panel.getByTestId('ff-settings-tariff-storage-state')).toHaveText('Отдельно')
+  await expect(panel.getByTestId('ff-settings-tariff-storage-link')).toHaveCount(0)
+  await expect(panel.getByTestId('ff-settings-tariff-storage-state')).toHaveCount(0)
   await page.reload()
-  await expect(page.getByTestId('ff-settings-tariff-seller-own-seller-tariff-1')).toContainText('Селлер Тест · SKU-001 · Куртка')
+  await expandSeller(page, 'Селлер Тест', 'seller-tariff-1')
+  await expect(page.getByTestId('ff-settings-tariff-seller-own-seller-tariff-1')).toContainText('SKU-001 · Куртка')
   await expect(page.getByTestId('ff-settings-tariff-employee-rates')).toContainText('operator@example.test')
 })
 
@@ -191,9 +195,8 @@ test('S-19 keeps normal scroll, protects document product overrides and shows st
   const panel = page.getByTestId('ff-settings-tariffs-panel')
   await expect(panel).toBeVisible()
   await expect(panel).not.toBeFocused()
-  await expect(panel.getByTestId('ff-settings-tariff-product-unit-boundary')).toBeVisible()
-  await expect(panel.getByTestId('ff-settings-tariff-product-add')).toBeDisabled()
-  await expect(panel.getByTestId('ff-settings-tariff-storage-link')).toHaveAttribute('href', '/app/ff/inventory')
+  // Хранение переехало в матрицу: отдельной отсылки на экран «Хранение» нет.
+  await expect(panel.getByTestId('ff-settings-tariff-storage-link')).toHaveCount(0)
   await expect(panel.getByTestId('ff-settings-tariffs-services').getByRole('columnheader', { name: 'Ставка, ₽' })).toBeVisible()
   expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
@@ -213,8 +216,10 @@ test('S-19 brand-new per-item default permits a product override', async ({ page
   }) }))
   await page.goto('/app/ff/settings')
   const panel = page.getByTestId('ff-settings-tariffs-panel')
-  await expect(panel.getByTestId('ff-settings-tariff-product-unit-boundary')).toHaveCount(0)
-  await expect(panel.getByTestId('ff-settings-tariff-product-add')).toBeEnabled()
+  // Цена на товар заводится внутри селлера; отдельной плоской формы больше нет.
+  await expandSeller(page, 'Новый селлер', 'new-seller-1')
+  await expect(panel.getByTestId('ff-settings-tariff-target-new-seller-1')).toContainText('NEW-01 · Новый товар')
+  await expect(panel.getByTestId('ff-settings-tariff-add-new-seller-1')).toBeVisible()
 })
 
 // TC-NEW-2B-014 — Given a fully populated tariff matrix at the narrow operator viewport,
@@ -265,7 +270,8 @@ test('S-19 confines populated tariff matrix overflow to DataTable containers at 
   const panel = page.getByTestId('ff-settings-tariffs-panel')
   await expect(panel).toBeVisible()
   await expect(panel.getByTestId('ff-settings-tariffs-services').getByRole('row')).toHaveCount(5)
-  await expect(panel.getByTestId('ff-settings-tariff-seller-own-seller-tariff-1').getByRole('row')).toHaveCount(3)
+  // Ставки живут внутри селлера; в самом списке селлеров строк ровно два.
+  await expect(panel.getByTestId('ff-settings-tariff-sellers').getByRole('row')).toHaveCount(2)
   await expect(panel.getByTestId('ff-settings-tariff-employee-rates').getByRole('row')).toHaveCount(3)
 
   for (const width of [768, 1280, 1600]) {
@@ -347,7 +353,9 @@ test('S-19 confines populated tariff matrix overflow to DataTable containers at 
       'ff-settings-tariffs-save',
     ].map((testId) => document.querySelector<HTMLElement>(`[data-testid="${testId}"]`))
     const status = document.querySelector<HTMLElement>('[data-testid="ff-settings-tariff-state-inbound"]')
-    const storageStatus = document.querySelector<HTMLElement>('[data-testid="ff-settings-tariff-storage-state"]')
+    // Отдельного чипа хранения больше нет: оно стало услугой матрицы. Вместо
+    // него следим за списком селлеров — он тоже обязан жить внутри панели.
+    const storageStatus = document.querySelector('[data-testid="ff-settings-tariff-sellers"]')
     const nonTableOverflow = [...(panel?.querySelectorAll<HTMLElement>('*') ?? [])]
       .filter((element) => element.scrollWidth > element.clientWidth + 1)
       .filter((element) => ['auto', 'scroll'].includes(getComputedStyle(element).overflowX))
@@ -387,7 +395,7 @@ test('S-19 confines populated tariff matrix overflow to DataTable containers at 
   expect(narrow.contentRight).toBeLessThanOrEqual(narrow.withoutContentRight)
   expect(narrow.controlsInsidePanel).toBe(true)
   expect(narrow.statusInsidePanel).toBe(true)
-  expect(narrow.storageStatusInsidePanel).toBe(true)
+  expect(narrow.storageStatusInsidePanel, 'список селлеров вышел за панель').toBe(true)
   expect(narrow.nonTableOverflow).toEqual([])
 })
 
@@ -424,10 +432,10 @@ test('S-19 keeps product and employee tables loading until the matrix GET resolv
   await requested
   const panel = page.getByTestId('ff-settings-tariffs-panel')
   await expect(panel).toBeVisible()
-  await expect(panel.getByTestId('ff-settings-tariff-seller-own-seller-tariff-1')).not.toContainText('Товарных цен пока нет')
+  await expect(panel.getByTestId('ff-settings-tariff-sellers')).not.toContainText('Селлеров пока нет')
   await expect(panel.getByTestId('ff-settings-tariff-employee-rates')).not.toContainText('Сотрудников пока нет')
   releaseMatrix?.()
-  await expect(panel.getByTestId('ff-settings-tariff-seller-own-seller-tariff-1')).toContainText('Товарных цен пока нет')
+  await expect(panel.getByTestId('ff-settings-tariff-sellers')).toContainText('Селлеров пока нет')
   await expect(panel.getByTestId('ff-settings-tariff-employee-rates')).toContainText('Сотрудников пока нет')
 })
 

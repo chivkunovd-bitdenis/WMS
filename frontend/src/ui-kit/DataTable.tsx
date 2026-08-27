@@ -138,7 +138,7 @@ export function DataTable<Row>({
                     <TableRow>
                       <TableCell
                         colSpan={spanWidth}
-                        sx={{ p: 0, backgroundColor: 'action.hover' }}
+                        sx={{ p: 0, borderLeft: 3, borderLeftColor: 'primary.main' }}
                         data-testid={`${testId ?? 'table'}-expanded-${getRowKey(row)}`}
                       >
                         {expand.render(row)}

@@ -314,7 +314,9 @@ export function FfBillingTariffSellerRates({
       key: 'seller',
       header: 'Селлер',
       render: (row) => (
-        <Typography sx={{ fontWeight: 600 }}>{row.name}</Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+          {row.name}
+        </Typography>
       ),
     },
   ]
