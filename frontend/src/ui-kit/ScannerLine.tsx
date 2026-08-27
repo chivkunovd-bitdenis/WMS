@@ -83,7 +83,12 @@ export function ScannerField({
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
           if (event.key !== 'Enter') return
-          const code = value.trim()
+          // Значение берём из самого поля, а не из состояния React. «Клавиатурный»
+          // сканер печатает символы и жмёт Enter быстрее, чем происходит
+          // перерисовка, и последний символ штрихкода при чтении из состояния
+          // терялся бы молча — а молча потерянный символ на складе означает
+          // «короб не нашёлся», и оператор пикает второй раз, не понимая почему.
+          const code = (event.target as HTMLInputElement).value.trim()
           if (!code) return
           event.preventDefault()
           onScan(code)
@@ -93,8 +98,22 @@ export function ScannerField({
         helperText={error ?? notice ?? undefined}
         slotProps={{ htmlInput: { 'data-testid': testId, 'aria-label': `Сканер: ${expects}` } }}
       />
-      {/* Программе чтения нужно услышать результат пика: она не видит подсветку строки. */}
-      <Stack role="status" aria-live="polite" sx={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
+      {/* Программе чтения нужно услышать результат пика: она не видит подсветку строки.
+          Пиксели записаны строками намеренно: в MUI `sx` число не больше единицы для
+          width/height означает долю, то есть `width: 1` — это 100%, а не один пиксель,
+          и скрытый блок уводит страницу вбок. */}
+      <Stack
+        role="status"
+        aria-live="polite"
+        sx={{
+          position: 'absolute',
+          width: '1px',
+          height: '1px',
+          overflow: 'hidden',
+          clip: 'rect(0 0 0 0)',
+          whiteSpace: 'nowrap',
+        }}
+      >
         <Typography variant="body2">{error ?? notice ?? ''}</Typography>
       </Stack>
       {busy ? <Alert severity="info" sx={{ mt: 1 }}>Ищем…</Alert> : null}
