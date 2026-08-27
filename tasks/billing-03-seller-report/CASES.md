@@ -64,9 +64,17 @@
 2. API/service failure preserves rendered summary and produces `ErrorNotice`,
    not a false empty report. A fast filter change aborts/ignores stale response.
 3. Legacy `/api/billing/ledger` and `/api/billing/invoices`, invoice open,
-   cancel and print retain existing responses/behaviour; their current
-   Playwright regressions pass without edits.
-4. Finance-on shows `—` for known 0, `✓ 1`/`✓ N` for known positive and
+   cancel and print retain existing responses/behaviour. Backend API tests keep
+   the legacy ledger contract. `billing-ledger.spec.ts` replaces only stale
+   charges/performer DOM coverage with Sellers contract coverage; it does not
+   redefine the backend endpoint.
+4. In `billing-invoices.spec.ts` only two stale non-invoice charges-zone cases
+   may move to seller-report or invoice-line money coverage: kopecks display at
+   line 30 and `billing charge tariff issue targets tariff settings` at line
+   119. Invoice tab list, columns, open, source snapshots, print, cancel and
+   error cases stay intact. Any other changed/deleted invoice scenario is a
+   regression failure.
+5. Finance-on shows `—` for known 0, `✓ 1`/`✓ N` for known positive and
    tooltip-explained «Нет данных о старом счёте» for unknown. It remains
    read-only: no checkbox, selection or button blocks/creates a repeated
    invoice; Wave 3 creates no invoice, V2 source or employee data.

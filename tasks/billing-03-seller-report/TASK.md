@@ -10,15 +10,16 @@
 independent review этого пакета, затем открывается ровно один наряд:
 
 ```bash
-python3 scripts/naryad.py new "Волна 3 модуля «Расчёты»: отчёт по селлерам на существующем /app/ff/billing" --lane обычная --files backend/app/api/billing.py,backend/app/services/billing_seller_report_service.py,backend/app/services/storage_measurement_service.py,backend/tests/test_billing_seller_report_api.py,backend/tests/test_billing_seller_report_service.py,backend/tests/test_billing_invoice_service.py,frontend/src/screens/ff/FfBillingScreen.tsx,frontend/src/screens/ff/FfBillingScreen.test.ts,frontend/tests-e2e/billing-seller-report.spec.ts,docs/evidence/billing-03-seller-report/SELLER-REPORT-PROOF.md,docs/evidence/20260827-volna-3-otchet-po-selleram/BILLING-SELLERS-1600.jpg,docs/evidence/20260827-volna-3-otchet-po-selleram/BILLING-SELLERS-FINANCE-OFF-1600.jpg,docs/evidence/20260827-volna-3-otchet-po-selleram/VERDICT.md
+python3 scripts/naryad.py new "Волна 3 модуля «Расчёты»: отчёт по селлерам на существующем /app/ff/billing" --lane обычная --files backend/app/api/billing.py,backend/app/services/billing_seller_report_service.py,backend/app/services/storage_measurement_service.py,backend/tests/test_billing_seller_report_api.py,backend/tests/test_billing_seller_report_service.py,backend/tests/test_billing_invoice_service.py,frontend/src/screens/ff/FfBillingScreen.tsx,frontend/src/screens/ff/FfBillingScreen.test.ts,frontend/tests-e2e/billing-seller-report.spec.ts,frontend/tests-e2e/billing-ledger.spec.ts,frontend/tests-e2e/billing-invoices.spec.ts,docs/evidence/billing-03-seller-report/SELLER-REPORT-PROOF.md,docs/evidence/20260827-volna-3-otchet-po-selleram/BILLING-SELLERS-1600.jpg,docs/evidence/20260827-volna-3-otchet-po-selleram/BILLING-SELLERS-FINANCE-OFF-1600.jpg,docs/evidence/20260827-volna-3-otchet-po-selleram/VERDICT.md
 ```
 
 Это осознанно **без** `--screens`: `/app/ff/billing` отсутствует в
-`frontend/screens.registry.json`, ему нельзя присваивать чужой S-ID. Все 12
+`frontend/screens.registry.json`, ему нельзя присваивать чужой S-ID. Все 15
 путей выше — полная граница main-волны. Новая миграция, модель, маршрут,
-`App.tsx`, legacy invoice/ledger service и соседние Playwright-файлы не нужны и
-запрещены. Если наряд не открывается, статус — `BLOCKED`; хук, его настройки и
-baseline обходить нельзя.
+`App.tsx` и legacy invoice/ledger service запрещены. Разрешены только два
+соседних Playwright-файла из literal list и только для узкой регрессии §8;
+другие соседние E2E не трогаются. Если наряд не открывается, статус —
+`BLOCKED`; хук, его настройки и baseline обходить нельзя.
 
 До main-наряда обязателен отдельный owner-approved shared prerequisite: в
 текущем ui-kit нет generic Moscow date-only/range control и labelled controlled
@@ -276,7 +277,7 @@ Implement `CASES.md` before code. Required targeted commands:
 ```bash
 cd backend && uv run pytest tests/test_billing_seller_report_service.py tests/test_billing_seller_report_api.py tests/test_billing_invoice_service.py -q
 cd frontend && npm run test:unit -- FfBillingScreen.test.ts
-cd frontend && npx playwright test tests-e2e/billing-seller-report.spec.ts
+cd frontend && npx playwright test tests-e2e/billing-seller-report.spec.ts tests-e2e/billing-ledger.spec.ts tests-e2e/billing-invoices.spec.ts
 ```
 
 Then mandatory gates, all to exit code 0: `cd backend && uv run ruff check .`,
@@ -284,8 +285,19 @@ Then mandatory gates, all to exit code 0: `cd backend && uv run ruff check .`,
 `python3 scripts/ci/back_guard.py`, `python3 scripts/ci/check_migrations.py`,
 `cd frontend && npm run test:unit`, `cd frontend && npx tsc --noEmit -p
 tsconfig.app.json`, `cd frontend && npm run build`, `python3
-scripts/ui/ui_guard.py`, targeted Playwright plus unmodified
-`billing-ledger.spec.ts` and `billing-invoices.spec.ts` regressions.
+scripts/ui/ui_guard.py`, targeted Playwright and both named legacy regressions.
+
+`billing-ledger.spec.ts` may replace its stale charges/performer DOM cases with
+contract-aligned Sellers DOM regression (period, finance-off omission,
+finance-on and seller detail). This is a frontend-only screen assertion;
+backward compatibility of legacy `/api/billing/ledger` stays covered by backend
+API tests and is not removed. `billing-invoices.spec.ts` may replace or move
+**only** these two stale non-invoice charges-zone cases: kopecks display
+(line 30) and `billing charge tariff issue targets tariff settings` (line 119).
+They move into seller-report coverage or an invoice-line money assertion. Its
+true invoice-tab list/columns, open, source snapshots, print, cancel and error
+regressions remain unchanged. No other scenario in either file may be deleted,
+weakened or repurposed.
 
 At least one seller report uses real test DB/server aggregation, not mocked API;
 also run a disposable local PostgreSQL proof of tenant isolation, 366-day
