@@ -10,11 +10,11 @@
 independent review этого пакета, затем открывается ровно один наряд:
 
 ```bash
-python3 scripts/naryad.py new "Волна 3 модуля «Расчёты»: отчёт по селлерам на существующем /app/ff/billing" --lane обычная --files backend/app/api/billing.py,backend/app/services/billing_seller_report_service.py,backend/app/services/storage_measurement_service.py,backend/tests/test_billing_seller_report_api.py,backend/tests/test_billing_seller_report_service.py,backend/tests/test_billing_invoice_service.py,frontend/src/screens/ff/FfBillingScreen.tsx,frontend/src/screens/ff/FfBillingScreen.test.ts,frontend/tests-e2e/billing-seller-report.spec.ts,frontend/tests-e2e/billing-ledger.spec.ts,frontend/tests-e2e/billing-invoices.spec.ts,docs/evidence/billing-03-seller-report/SELLER-REPORT-PROOF.md,docs/evidence/20260827-volna-3-otchet-po-selleram/BILLING-SELLERS-1600.jpg,docs/evidence/20260827-volna-3-otchet-po-selleram/BILLING-SELLERS-FINANCE-OFF-1600.jpg,docs/evidence/20260827-volna-3-otchet-po-selleram/VERDICT.md
+python3 scripts/naryad.py new "Волна 3 модуля «Расчёты»: отчёт по селлерам на существующем /app/ff/billing" --lane обычная --files backend/app/api/billing.py,backend/app/api/billing_seller_report_schemas.py,backend/app/services/billing_seller_report_service.py,backend/app/services/storage_measurement_service.py,backend/tests/test_billing_seller_report_api.py,backend/tests/test_billing_seller_report_service.py,backend/tests/test_billing_invoice_service.py,frontend/src/screens/ff/FfBillingScreen.tsx,frontend/src/screens/ff/FfBillingScreen.test.ts,frontend/tests-e2e/billing-seller-report.spec.ts,frontend/tests-e2e/billing-ledger.spec.ts,frontend/tests-e2e/billing-invoices.spec.ts,docs/evidence/billing-03-seller-report/SELLER-REPORT-PROOF.md,docs/evidence/20260827-volna-3-otchet-po-selleram/BILLING-SELLERS-1600.jpg,docs/evidence/20260827-volna-3-otchet-po-selleram/BILLING-SELLERS-FINANCE-OFF-1600.jpg,docs/evidence/20260827-volna-3-otchet-po-selleram/VERDICT.md
 ```
 
 Это осознанно **без** `--screens`: `/app/ff/billing` отсутствует в
-`frontend/screens.registry.json`, ему нельзя присваивать чужой S-ID. Все 15
+`frontend/screens.registry.json`, ему нельзя присваивать чужой S-ID. Все 16
 путей выше — полная граница main-волны. Новая миграция, модель, маршрут,
 `App.tsx` и legacy invoice/ledger service запрещены. Разрешены только два
 соседних Playwright-файла из literal list и только для узкой регрессии §8;
@@ -183,15 +183,23 @@ timezone никогда не участвует. Invalid/overlong range — 422 
 Cursor содержит только signed/encoded stable key `(occurred_at,id,kind)` и
 filters; сортировка `(occurred_at DESC, kind, id DESC)` не пропускает и не
 повторяет строку при загрузке следующей страницы. Totals и summary всегда
-делает SQL/service на полном scope, не UI. Pydantic response models и OpenAPI
-tests обязательны.
+делает SQL/service на полном scope, не UI. Seller-report Pydantic/OpenAPI
+response models and their nested types live only in
+`billing_seller_report_schemas.py`; `billing.py` imports them but retains both
+endpoints and RBAC, while service logic remains in its service. API tests must
+import that module and assert generated OpenAPI resolves the summary/details
+response schemas and refs. No router/handler move, compact formatting or
+unrelated refactor is permitted: the sole purpose is `billing.py <800` and a
+green `back_guard` without any baseline update.
 
 `include_finance=false` сохраняет тот же состав sellers/operations/storage и
 возвращает только physical fields: counts, quantity, service/result/source.
 Ключей `rate_kopecks`, `amount_kopecks`, `accrued_*`, `unpriced_count`,
 `reversal_total_kopecks`, `net_total_kopecks` и денежных значений storage в
-JSON нет вообще. При `true` добавляются только integer kopecks fields: rate,
-amount, gross/reversal/net totals, `unpriced_count`; frontend показывает
+JSON нет вообще. При `true` добавляются integer kopecks fields: rate, amount,
+gross/reversal/net totals, `unpriced_count`; `rate_kopecks` is explicitly
+`null` (not omitted, zero or averaged) for an unpriced or mixed-rate
+`OperationFact`, because that detail row has no single honest rate. frontend показывает
 kopecks один раз через существующий formatter. Старые ledger/invoice endpoints
 не меняются: отсутствие нового параметра в них продолжает возвращать их
 сегодняшний денежный контракт.
@@ -277,9 +285,13 @@ its real `TableContainer` only.
 ## 6. Границы файлов, зависимости и порядок
 
 The literal main `--files` list in §0 is exhaustive after the separate ui-kit
-prerequisite closes. Only a new report service is
-allowed under `backend/app`; it must not turn `billing.py` legacy handlers into
-the report implementation. `storage_measurement_service.py` may receive only
+prerequisite closes. Under `backend/app`, only the new report service and the
+single `billing_seller_report_schemas.py` module are allowed: schemas contain
+only seller-report Pydantic/OpenAPI response models/types; `billing.py` keeps
+endpoints/RBAC and must not turn legacy handlers into the report implementation.
+The module exists solely to bring `billing.py` below 800 lines and make
+`back_guard` green. No baseline update, compact formatting or any other
+refactor is allowed. `storage_measurement_service.py` may receive only
 an extracted/reused pure interval helper with equivalent monthly behaviour;
 no rebuild, statement, storage pricing or monthly document semantics change.
 
@@ -327,7 +339,10 @@ regressions remain unchanged. No other scenario in either file may be deleted,
 weakened or repurposed.
 
 At least one seller report uses real test DB/server aggregation, not mocked API;
-also run a disposable local PostgreSQL proof of tenant isolation, 366-day
+the API suite imports the schema module and verifies generated OpenAPI resolves
+summary/details response schema refs. It explicitly proves `rate_kopecks:null`
+for unpriced and mixed-rate `OperationFact`, rather than a missing field, zero
+or an invented average. Also run a disposable local PostgreSQL proof of tenant isolation, 366-day
 boundary, cursor totals and exact three-day storage interval/fingerprint stale
 case. The focused suite additionally proves a real issued foreign cursor cannot
 be replayed across tenant/filter, a complete legacy charge/reversal chain,

@@ -22,7 +22,7 @@
    accessible tooltip text without screen or billing vocabulary. No showcase,
    product screen, route, primitive or screen-specific prop changes.
 3. Unit, tsc and ui_guard pass; independent acceptance and a separate
-   prerequisite commit/push precede its close and the literal 15-file main
+   prerequisite commit/push precede its close and the literal 16-file main
    Wave 3 NARYAD reopening.
 
 ## Позитивные и серверные
@@ -38,6 +38,9 @@
    returns integer kopecks. The accrued report metric passes minor units to the
    generic `ReportMetricStrip` money variant and reaches `formatMoney` exactly
    once; ordinary count metrics keep their generic number formatting.
+   An unpriced and a mixed-rate `OperationFact` each expose
+   `rate_kopecks: null` explicitly, never an omitted key, zero or averaged
+   rate.
 4. Summary totals cover all matching rows, not just the first 50 detail rows.
    Cursor next page has no duplicate/gap and does not recalculate a second
    storage row.
@@ -57,6 +60,10 @@
    substitutes for it. `OperationFact` and storage are unknown.
 9. Finance-off omits both `billing_ledger_entry_id` and `invoice_history`;
    finance-on returns the count only for known legacy rows.
+10. The API suite imports `billing_seller_report_schemas` and generates OpenAPI:
+    both seller-report endpoints resolve their response-schema refs. Only
+    response models/types live there; endpoint/RBAC behaviour remains covered
+    through `billing.py` routes.
 
 ## Storage
 
