@@ -12,6 +12,19 @@
 3. `FormFields.test.tsx`, tsc, ui_guard and isolated `UiKitShowcase` proof pass
    in the prerequisite commit. No existing screen is refactored there.
 
+## Отдельная Round 2 UI-kit prerequisite после закрытия main-наряда
+
+1. Only `ReportMetricStrip.tsx/.test.tsx` and `Cells.ts/.test.ts` change under
+   its literal four-file NARYAD. `ReportMetricStrip.test.tsx` proves integer
+   minor money delegates to canonical `formatMoney` once (including kopeck
+   scale and null), while count metrics retain number formatting.
+2. `Cells.test.ts` proves optional generic `TextCell` hint is rendered as
+   accessible tooltip text without screen or billing vocabulary. No showcase,
+   product screen, route, primitive or screen-specific prop changes.
+3. Unit, tsc and ui_guard pass; independent acceptance and a separate
+   prerequisite commit/push precede its close and the literal 15-file main
+   Wave 3 NARYAD reopening.
+
 ## Позитивные и серверные
 
 1. `fulfillment_admin` requests a three-day Moscow range containing operational
@@ -22,7 +35,9 @@
    end dates fail with 422 before a write.
 3. Finance-off and finance-on have identical seller/operation/storage
    composition. Finance-off JSON contains no money/unpriced keys; finance-on
-   returns integer kopecks, independently formatted once in UI.
+   returns integer kopecks. The accrued report metric passes minor units to the
+   generic `ReportMetricStrip` money variant and reaches `formatMoney` exactly
+   once; ordinary count metrics keep their generic number formatting.
 4. Summary totals cover all matching rows, not just the first 50 detail rows.
    Cursor next page has no duplicate/gap and does not recalculate a second
    storage row.
@@ -34,7 +49,8 @@
    returns `invoice_history={state:"known",count:N}`: zero is 0; two distinct
    invoices give 2 even if the entry appears twice within one invoice. Issued
    and cancelled invoices both count.
-8. The complete charge/reversal chain is considered. A cross-tenant or
+8. The complete charge/reversal chain is considered in a real service/API
+   fixture, not a fabricated UI count. A cross-tenant or
    other-seller invoice never counts. Any missing/malformed `documents[].id` in
    the same tenant/seller snapshot corpus makes the state unknown even for a
    seemingly matching row; same document number/date/amount/source text never
@@ -61,8 +77,12 @@
 
 1. unauthenticated, `fulfillment_staff`, seller and `shift_lead` get no new
    report data; guessed foreign seller/detail/cursor returns no foreign data.
+   A cursor actually issued by a first-page request for tenant A (and not a
+   hand-written token) cannot be replayed by tenant B or with altered filters.
 2. API/service failure preserves rendered summary and produces `ErrorNotice`,
-   not a false empty report. A fast filter change aborts/ignores stale response.
+   not a false empty report. A fast filter/seller/cursor change aborts the old
+   request and a delayed old completion is ignored by request-id/alive guard;
+   it cannot overwrite the newer detail.
 3. Legacy `/api/billing/ledger` and `/api/billing/invoices`, invoice open,
    cancel and print retain existing responses/behaviour. Backend API tests keep
    the legacy ledger contract. `billing-ledger.spec.ts` replaces only stale

@@ -40,6 +40,30 @@ showcase proof, independent acceptance, отдельного commit/push prerequ
 буквальная main-команда выше. Main imports the accepted exports but does not
 edit those four ui-kit paths.
 
+Round 2 обнаружил ещё две shared потребности, поэтому их нельзя выполнять
+под main-нарядом. Сначала закрывается текущий main-наряд `python3
+scripts/naryad.py close`, затем открывается отдельный owner-approved
+prerequisite:
+
+```bash
+python3 scripts/naryad.py new "Волна 3 «Расчёты»: generic ui-kit money metric и tooltip hint" --lane обычная --files frontend/src/ui-kit/ReportMetricStrip.tsx,frontend/src/ui-kit/ReportMetricStrip.test.tsx,frontend/src/ui-kit/Cells.tsx,frontend/src/ui-kit/Cells.test.ts
+```
+
+В нём допустимы ровно две generic доработки, без showcase: `ReportMetricItem`
+получает money/minor вариант, который передаёт integer minor units в уже
+существующий `formatMoney` ровно один раз, а `TextCell` получает optional
+explicit `hint` (либо строго эквивалентный generic API) для текста Tooltip.
+Ни billing/seller/finance/invoice wording, ни screen props/styles, ни новая
+control/table primitive не допускаются. `ReportMetricStrip` не делит kopecks и
+не форматирует деньги через общий number formatter; `Cells` остаётся
+единственным владельцем денежного formatter. Обязательны `cd frontend && npm
+run test:unit -- ReportMetricStrip.test.tsx Cells.test.ts`, `cd frontend && npx
+tsc --noEmit -p tsconfig.app.json`, `python3 scripts/ui/ui_guard.py` и
+independent acceptance;
+после них prerequisite получает отдельный commit/push и закрывается `python3
+scripts/naryad.py close`. Только затем literal main-команда выше открывается
+заново; main imports accepted generic API, но не редактирует эти четыре пути.
+
 Порядок main-волны: тест-кейсы из `CASES.md` до product code; реализация; целевые тесты;
 полный обязательный регресс; независимое review; живой браузер; evidence;
 отдельный commit и push. Никаких production/deploy, секретов, глобальных
@@ -239,11 +263,14 @@ composition, not a new chip/control; it has neither select checkbox nor
 Seller summary is `DataTable size=small` with fixed columns: Seller,
 Operations, Items, Not billable, Show operations; Finance-on adds Unpriced and
 Accrued. At most four `ReportMetricStrip` values: sellers, operations, items,
-and accrued only finance-on. Clicking a seller opens a separate detail block
+and accrued only finance-on; accrued uses its generic minor-money variant and
+the canonical `formatMoney` exactly once. Clicking a seller opens a separate detail block
 under the summary, not a custom expandable table. It keeps last successful
-summary on detail failure, aborts stale fetch on filter/seller change, uses
+summary on detail failure, aborts stale fetch and also ignores it with a
+request-id/alive guard on filter/seller/cursor change, uses
 skeletons for tables, `ErrorNotice` for errors, actionable empty text, and
-Tooltip explanation for unavailable source/missing dimensions. At 1600px each
+the generic `TextCell` explicit hint for unavailable source, unknown old invoice
+and missing dimensions. At 1600px each
 table follows existing ui-kit fixed columns; any horizontal overflow is inside
 its real `TableContainer` only.
 
@@ -302,7 +329,11 @@ weakened or repurposed.
 At least one seller report uses real test DB/server aggregation, not mocked API;
 also run a disposable local PostgreSQL proof of tenant isolation, 366-day
 boundary, cursor totals and exact three-day storage interval/fingerprint stale
-case. No migration is expected; `check_migrations` and single-head check prove
+case. The focused suite additionally proves a real issued foreign cursor cannot
+be replayed across tenant/filter, a complete legacy charge/reversal chain,
+malformed legacy invoice snapshot corpus becoming `unknown`, and request-id/
+alive protection against a stale detail response after filter/seller/cursor
+change. No migration is expected; `check_migrations` and single-head check prove
 that this statement stays true. Separate Terra ui-critic and live-browser judge
 inspect 1600px finance-off/on, loading/error/empty, one storage row and source
 links. Invoice print and employee browser evidence are explicitly deferred.
