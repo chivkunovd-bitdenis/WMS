@@ -1,4 +1,3 @@
-# ruff: noqa: RUF001
 """FBS cargo places (count-only trbx) and their QR print assets.
 
 Cargo place creation was historically restricted to `pvz` deliveries because

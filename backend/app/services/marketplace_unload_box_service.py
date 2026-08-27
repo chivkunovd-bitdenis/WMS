@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -569,15 +569,15 @@ async def delete_box(
     tenant_id: uuid.UUID,
     box_id: uuid.UUID,
 ) -> None:
-    box = await session.get(
-        MarketplaceUnloadBox,
-        box_id,
-        options=[selectinload(MarketplaceUnloadBox.lines)],
-    )
+    box = await session.get(MarketplaceUnloadBox, box_id)
     if box is None:
         raise MarketplaceUnloadBoxError("box_not_found")
     await _request_for_picking(session, tenant_id, box.request_id)
-    if _box_total_qty(box) > 0:
+    total_stmt = select(
+        func.coalesce(func.sum(MarketplaceUnloadBoxLine.quantity), 0)
+    ).where(MarketplaceUnloadBoxLine.box_id == box_id)
+    total_qty = int((await session.execute(total_stmt)).scalar_one())
+    if total_qty > 0:
         raise MarketplaceUnloadBoxError("box_not_empty")
     await session.delete(box)
     await session.commit()
@@ -593,14 +593,16 @@ async def copy_box(
     Intentionally closed: copy is a snapshot for shipping labels / repeat shipment,
     not for further manual add (use batch create for open boxes).
     """
-    src = await session.get(
-        MarketplaceUnloadBox,
-        box_id,
-        options=[
+    src_stmt = (
+        select(MarketplaceUnloadBox)
+        .where(MarketplaceUnloadBox.id == box_id)
+        .options(
             selectinload(MarketplaceUnloadBox.lines),
             selectinload(MarketplaceUnloadBox.warehouse_box),
-        ],
+        )
+        .execution_options(populate_existing=True)
     )
+    src = (await session.execute(src_stmt)).scalar_one_or_none()
     if src is None:
         raise MarketplaceUnloadBoxError("box_not_found")
     req = await _request_for_picking(session, tenant_id, src.request_id)
@@ -608,7 +610,14 @@ async def copy_box(
         raise MarketplaceUnloadBoxError("box_empty")
 
     picked = await collect_svc.picked_qty_by_product(session, req.id)
-    plan_by_product = {ln.product_id: int(ln.quantity) for ln in req.lines}
+    plan_stmt = select(
+        MarketplaceUnloadLine.product_id,
+        MarketplaceUnloadLine.quantity,
+    ).where(MarketplaceUnloadLine.request_id == req.id)
+    plan_by_product = {
+        product_id: int(quantity)
+        for product_id, quantity in (await session.execute(plan_stmt)).all()
+    }
     for ln in src.lines:
         pid = ln.product_id
         add_qty = int(ln.quantity)

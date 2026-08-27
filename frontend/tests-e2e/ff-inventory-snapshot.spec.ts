@@ -3,11 +3,10 @@ import { expect, test } from '@playwright/test'
 import { openFulfillmentRegistration } from './auth-flow'
 import { waitForGetOk, waitForPostOk } from './api-waits'
 
-// TC-NEW-CAT-02 — CAT-02: инвентаризация скрыта до отдельного ТЗ.
+// TC-S11-001 — FF admin открывает действующий экран расчёта хранения.
 // Given: FF admin is logged in; When: they inspect navigation and open /app/ff/inventory directly;
-// Then: no inventory menu item is visible and the direct route returns to the product catalog.
-// Negative/restriction: the half-ready inventory snapshot screen is not opened from UI routing.
-test('ff inventory snapshot route is hidden until a separate product spec', async ({ page }) => {
+// Then: the storage screen is visible and the obsolete snapshot prototype is not routed.
+test('ff inventory route opens the storage calculation screen', async ({ page }) => {
   const email = `e2e-ff-inventory-hidden-${Date.now()}@example.com`
   const password = 'password123'
 
@@ -23,10 +22,10 @@ test('ff inventory snapshot route is hidden until a separate product spec', asyn
   ])
 
   await expect(page.getByTestId('dashboard')).toBeVisible()
-  await expect(page.getByTestId('nav-ff-inventory')).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'Хранение', exact: true })).toBeVisible()
 
   await page.goto('/app/ff/inventory')
-  await expect(page).toHaveURL(/\/app\/ff\/products/)
-  await expect(page.getByTestId('ff-products-list')).toBeVisible()
+  await expect(page).toHaveURL(/\/app\/ff\/inventory/)
+  await expect(page.getByTestId('ff-storage-page')).toBeVisible()
   await expect(page.getByTestId('ff-inventory-snapshot-screen')).toHaveCount(0)
 })

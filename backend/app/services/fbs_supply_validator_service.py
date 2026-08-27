@@ -1,4 +1,3 @@
-# ruff: noqa: RUF001
 """Shared FBS supply composition validator for selection, preflight, and create-under-lock."""
 
 from __future__ import annotations

@@ -317,7 +317,7 @@ async def test_ledger_export_csv(async_client: AsyncClient) -> None:
     assert {row["cis_code"] for row in rows} == set(codes)
     assert all(row["event_type"] == "imported" for row in rows)
     assert all(row["actor_email"] for row in rows)
-    assert all("Read pool" == row["pool_title"] for row in rows)
+    assert all(row["pool_title"] == "Read pool" for row in rows)
 
 
 @pytest.mark.asyncio

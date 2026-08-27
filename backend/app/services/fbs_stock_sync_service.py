@@ -109,7 +109,7 @@ class _PublishTarget:
 @dataclass(frozen=True, slots=True)
 class _BlockedTarget:
     chrt_id: int
-    product_id: uuid.UUID
+    product_id: uuid.UUID | None
     error_code: str
 
 
@@ -614,7 +614,11 @@ async def sync_binding_stocks(
         for t in targets:
             if t.amount == 0 and not t.is_explicit_zero:
                 zero_guard_blocked.append(
-                    _BlockedTarget(chrt_id=t.chrt_id, product_id=t.product_id, error_code=ERROR_UNSAFE_ZERO_BLOCKED)
+                    _BlockedTarget(
+                        chrt_id=t.chrt_id,
+                        product_id=t.product_id,
+                        error_code=ERROR_UNSAFE_ZERO_BLOCKED,
+                    )
                 )
                 continue
             safe_targets.append(t)
