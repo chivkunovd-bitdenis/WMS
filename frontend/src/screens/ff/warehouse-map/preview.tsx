@@ -72,14 +72,17 @@ export function PreviewHarness() {
         sx={{
           px: 3,
           py: 1.5,
-          borderBottom: '1px solid',
-          borderColor: 'divider',
-          bgcolor: 'background.paper',
+          bgcolor: 'text.primary',
+          color: 'common.white',
         }}
       >
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-          <Typography variant="body2" color="text.secondary">
-            Превью макета · данные заглушечные, сервера нет
+          <Typography variant="body2" sx={{ fontWeight: 700 }}>
+            ЭТО НЕ ЭКРАН
+          </Typography>
+          <Typography variant="body2" sx={{ opacity: 0.75 }}>
+            Лента макета: данные выдуманные, сервера нет. Кнопки ниже показывают, как экран
+            выглядит в разных состояниях. На боевом экране этой ленты не будет.
           </Typography>
           <ToggleButtonGroup
             exclusive
@@ -97,7 +100,13 @@ export function PreviewHarness() {
               <ToggleButton
                 key={item.value}
                 value={item.value}
-                sx={{ textTransform: 'none' }}
+                sx={{
+                  textTransform: 'none',
+                  color: 'common.white',
+                  borderColor: 'rgba(255,255,255,0.35)',
+                  '&.Mui-selected': { color: 'common.white', bgcolor: 'rgba(255,255,255,0.22)' },
+                  '&.Mui-selected:hover': { bgcolor: 'rgba(255,255,255,0.3)' },
+                }}
                 data-testid={`preview-state-${item.value}`}
               >
                 {item.label}
@@ -105,7 +114,7 @@ export function PreviewHarness() {
             ))}
           </ToggleButtonGroup>
           {note ? (
-            <Typography variant="body2" color="text.secondary" data-testid="preview-note">
+            <Typography variant="body2" sx={{ opacity: 0.85 }} data-testid="preview-note">
               {note}
             </Typography>
           ) : null}
@@ -140,8 +149,8 @@ export function PreviewHarness() {
               setData((current) => addWarehouse(current, name))
               setNote(`Заглушка: склад «${name}» создан только в макете`)
             }}
-            onPrintCell={(row: MapRow) =>
-              setNote(`Заглушка: печать ШК ячейки ${row.title} — принтер в макете не подключён`)
+            onPrintCell={(row: MapRow, size) =>
+              setNote(`Заглушка: ШК ячейки ${row.title}, этикетка ${size.label} — принтера в макете нет`)
             }
             historyFor={(row: MapRow) =>
               shown.journal.filter((entry) => entry.subject === row.title)

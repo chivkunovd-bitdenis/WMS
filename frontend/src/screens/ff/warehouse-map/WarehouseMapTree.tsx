@@ -59,6 +59,8 @@ type Props = {
   rows: MapRow[]
   loading: boolean
   carried: MapRow | null
+  /** Строка, которую нашли сканером: подсвечена, пока не пикнут следующее. */
+  highlightedKey: string | null
   empty?: { title: string; hint?: string; action?: ReactNode }
   onToggle: (row: MapRow) => void
   onTakeOff: (row: MapRow) => void
@@ -74,6 +76,7 @@ export function WarehouseMapTree({
   rows,
   loading,
   carried,
+  highlightedKey,
   empty,
   onToggle,
   onTakeOff,
@@ -234,6 +237,7 @@ export function WarehouseMapTree({
       getRowKey={(row) => row.key}
       loading={loading}
       empty={empty}
+      highlightedKey={highlightedKey}
       drag={{
         active: carried !== null,
         canDrag: canDragRow,

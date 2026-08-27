@@ -11,6 +11,8 @@ export type ProductNode = {
   product_id: string
   name: string
   seller_name: string | null
+  /** Предмет с карточки маркетплейса: «Футболки», «Кроссовки». */
+  category: string | null
   barcode: string | null
   photo_url: string | null
   qty: number
@@ -59,6 +61,9 @@ export type MovementEntry = {
 
 export type WarehouseMapData = {
   warehouses: WarehouseOption[]
+  /** Списки для фильтров приходят с сервера: экран их из строк не собирает. */
+  sellers: string[]
+  categories: string[]
   cells: CellNode[]
   /** Принято, но никуда не положено, плюс всё, что сняли с ячеек. */
   unassigned: MapNode[]

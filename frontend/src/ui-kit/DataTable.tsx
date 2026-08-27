@@ -82,6 +82,14 @@ type Props<Row> = {
   }
   /** Перетаскивание строк (см. RowDrag). */
   drag?: RowDrag<Row>
+  /**
+   * Строка, которую только что нашли — сканером или поиском.
+   *
+   * Нужна именно подсветка, а не выделение чекбоксом: оператор пикает короб,
+   * чтобы глазами найти его в длинном списке, а не чтобы что-то с ним выбрать.
+   * Ключ строки уезжает в атрибут data-row-key, чтобы экран мог прокрутить к ней.
+   */
+  highlightedKey?: string | number | null
 }
 
 export function DataTable<Row>({
@@ -94,6 +102,7 @@ export function DataTable<Row>({
   testId,
   expand,
   drag,
+  highlightedKey = null,
   hideHeader = false,
 }: Props<Row>) {
   const theme = useTheme()
@@ -164,6 +173,7 @@ export function DataTable<Row>({
                 <Fragment key={rowKey}>
                   <TableRow
                     hover
+                    data-row-key={rowKey}
                     draggable={draggable || undefined}
                     data-drop-target={droppable ? 'true' : undefined}
                     onDragStart={
@@ -219,6 +229,13 @@ export function DataTable<Row>({
                     sx={{
                       ...(hasDiscrepancy?.(row)
                         ? { backgroundColor: 'rgba(163, 42, 32, 0.10)' }
+                        : null),
+                      ...(highlightedKey === rowKey
+                        ? {
+                            outline: `2px solid ${theme.palette.primary.main}`,
+                            outlineOffset: '-2px',
+                            backgroundColor: alpha(theme.palette.primary.main, 0.09),
+                          }
                         : null),
                       ...dragSx(row, rowKey),
                     }}

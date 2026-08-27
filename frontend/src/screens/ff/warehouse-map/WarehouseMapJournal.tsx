@@ -1,5 +1,8 @@
 import { Box, Paper, Stack, Typography } from '@mui/material'
+import ChevronLeft from '@mui/icons-material/ChevronLeft'
+import ChevronRight from '@mui/icons-material/ChevronRight'
 import ExpandMore from '@mui/icons-material/ExpandMore'
+import { useState } from 'react'
 import {
   ActionGroup,
   AppDialog,
@@ -75,6 +78,10 @@ const COLUMNS: Column<MovementEntry>[] = [
   },
 ]
 
+// Восемь строк на страницу: столько влезает под таблицу, не отжимая карту вниз.
+// Журнал — справка, а не второй экран, и занимать половину высоты он не должен.
+const PAGE_SIZE = 8
+
 export function WarehouseMapJournal({
   entries,
   loading,
@@ -86,6 +93,12 @@ export function WarehouseMapJournal({
   open: boolean
   onToggle: () => void
 }) {
+  const [page, setPage] = useState(0)
+  const pages = Math.max(1, Math.ceil(entries.length / PAGE_SIZE))
+  const current = Math.min(page, pages - 1)
+  const from = current * PAGE_SIZE
+  const shown = entries.slice(from, from + PAGE_SIZE)
+
   return (
     <Paper variant="outlined" sx={{ mt: 2, p: 2 }} data-testid="warehouse-map-journal">
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
@@ -104,16 +117,40 @@ export function WarehouseMapJournal({
           {loading
             ? 'загружается'
             : entries.length > 0
-              ? `последних записей: ${entries.length}`
+              ? `записей: ${entries.length}`
               : 'записей пока нет'}
         </Typography>
+        <Box sx={{ flexGrow: 1 }} />
+        {open && !loading && entries.length > PAGE_SIZE ? (
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+            <IconAction
+              title="Предыдущая страница"
+              onClick={() => setPage(current - 1)}
+              disabledReason={current === 0 ? 'Это первая страница' : undefined}
+              testId="warehouse-map-journal-prev"
+            >
+              <ChevronLeft fontSize="small" />
+            </IconAction>
+            <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+              {from + 1}–{Math.min(from + PAGE_SIZE, entries.length)} из {entries.length}
+            </Typography>
+            <IconAction
+              title="Следующая страница"
+              onClick={() => setPage(current + 1)}
+              disabledReason={current >= pages - 1 ? 'Это последняя страница' : undefined}
+              testId="warehouse-map-journal-next"
+            >
+              <ChevronRight fontSize="small" />
+            </IconAction>
+          </Stack>
+        ) : null}
       </Stack>
       {open ? (
         <Box sx={{ mt: 1.5 }}>
           <DataTable
             testId="warehouse-map-journal-table"
             columns={COLUMNS}
-            rows={entries}
+            rows={shown}
             getRowKey={(entry) => entry.id}
             loading={loading}
             empty={{

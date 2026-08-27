@@ -1,5 +1,5 @@
 import { Box, Paper } from '@mui/material'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { EmptyState, ErrorNotice, PrimaryAction, ScreenHeader } from '../../../ui-kit'
 import { WarehouseMapTree } from './WarehouseMapTree'
 import { WarehouseMapJournal, WarehouseMapHistoryDialog } from './WarehouseMapJournal'
@@ -9,7 +9,17 @@ import {
   CreateWarehouseDialog,
   WarehouseMapToolbar,
 } from './WarehouseMapToolbar'
-import { allExpandableKeys, buildRows, type MapRow } from './WarehouseMapRows'
+import { BoxLabelPrintDialog } from '../../../components/BoxLabelPrintDialog'
+import type { LabelSize } from '../../../utils/labelSize'
+import {
+  EMPTY_FILTERS,
+  allExpandableKeys,
+  buildRows,
+  findByBarcode,
+  missingTokens,
+  type MapFilters,
+  type MapRow,
+} from './WarehouseMapRows'
 import {
   UNASSIGNED_ID,
   UNASSIGNED_LABEL,
@@ -32,7 +42,7 @@ type Props = {
   onMove: (intent: MoveIntent, qty: number) => void
   onCreateCell: (code: string) => void
   onCreateWarehouse: (name: string, code: string) => void
-  onPrintCell: (row: MapRow) => void
+  onPrintCell: (row: MapRow, size: LabelSize) => void
   /** История одной строки. Пока сервера нет — журнал целиком. */
   historyFor: (row: MapRow) => MovementEntry[]
 }
@@ -53,7 +63,13 @@ export function FfWarehouseMapScreen({
   // умолчанию было раскрыто всё, и при таком хранении новые ячейки и короба
   // приезжают уже раскрытыми сами собой, без отдельной синхронизации.
   const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(new Set())
-  const [query, setQuery] = useState('')
+  const [filters, setFilters] = useState<MapFilters>(EMPTY_FILTERS)
+  const [scanValue, setScanValue] = useState('')
+  const [scanError, setScanError] = useState<string | null>(null)
+  const [scanNotice, setScanNotice] = useState<string | null>(null)
+  const [highlightedKey, setHighlightedKey] = useState<string | null>(null)
+  const [printRow, setPrintRow] = useState<MapRow | null>(null)
+  const tableRef = useRef<HTMLDivElement>(null)
   const [carried, setCarried] = useState<MapRow | null>(null)
   const [intent, setIntent] = useState<MoveIntent | null>(null)
   const [historyRow, setHistoryRow] = useState<MapRow | null>(null)
@@ -74,8 +90,12 @@ export function FfWarehouseMapScreen({
   }, [collapsedKeys, expandable])
 
   const rows = useMemo(
-    () => (data ? buildRows(data, { expandedKeys, query }) : []),
-    [data, expandedKeys, query],
+    () => (data ? buildRows(data, { expandedKeys, filters }) : []),
+    [data, expandedKeys, filters],
+  )
+  const missing = useMemo(
+    () => (data ? missingTokens(data, filters.query) : []),
+    [data, filters.query],
   )
   const rowsByKey = useMemo(() => new Map(rows.map((row) => [row.key, row])), [rows])
 
@@ -91,6 +111,35 @@ export function FfWarehouseMapScreen({
       else next.add(row.key)
       return next
     })
+  }
+
+  function handleScan(code: string) {
+    setScanValue('')
+    if (!data) return
+    const hit = findByBarcode(data, code)
+    if (!hit) {
+      setScanNotice(null)
+      setScanError(`Штрихкод ${code} на этом складе не нашёлся`)
+      setHighlightedKey(null)
+      return
+    }
+    // Путь к найденному раскрываем принудительно: пикнутый короб не должен
+    // остаться спрятанным под свёрнутой ячейкой — ровно это и просили перенести
+    // сюда из блока коробов в каталоге.
+    setCollapsedKeys((current) => {
+      const next = new Set(current)
+      hit.ancestorKeys.forEach((key) => next.delete(key))
+      return next
+    })
+    setScanError(null)
+    setScanNotice(`${hit.title} — ${hit.placeLabel}`)
+    setHighlightedKey(hit.key)
+    // Прокрутка после перерисовки: до неё строки найденного ещё нет в разметке.
+    window.setTimeout(() => {
+      tableRef.current
+        ?.querySelector(`[data-row-key="${CSS.escape(hit.key)}"]`)
+        ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }, 0)
   }
 
   function placeOf(row: MapRow): string {
@@ -138,8 +187,19 @@ export function FfWarehouseMapScreen({
             warehouses={warehouses}
             warehouseId={warehouseId}
             onWarehouseChange={onWarehouseChange}
-            query={query}
-            onQueryChange={setQuery}
+            sellers={data?.sellers ?? []}
+            categories={data?.categories ?? []}
+            filters={filters}
+            onFiltersChange={setFilters}
+            missing={missing}
+            scanValue={scanValue}
+            onScanValueChange={(value) => {
+              setScanValue(value)
+              setScanError(null)
+            }}
+            onScan={handleScan}
+            scanError={scanError}
+            scanNotice={scanNotice}
             allExpanded={allExpanded}
             onToggleAll={() =>
               setCollapsedKeys(allExpanded ? new Set(expandable) : new Set())
@@ -152,12 +212,14 @@ export function FfWarehouseMapScreen({
             createCellDisabledReason={currentWarehouse ? undefined : 'Сначала выберите склад'}
           />
 
+          <Box ref={tableRef}>
           <WarehouseMapTree
             rows={rows}
             loading={loading}
             carried={carried}
+            highlightedKey={highlightedKey}
             empty={
-              query
+              filters.query || filters.seller || filters.category
                 ? {
                     title: 'Ничего не нашлось',
                     hint: 'Поищите по названию товара, штрихкоду, номеру короба или коду ячейки.',
@@ -179,7 +241,7 @@ export function FfWarehouseMapScreen({
             onTakeOff={(row) => openIntent('takeOff', row, UNASSIGNED_ID, UNASSIGNED_LABEL)}
             onDisband={(row) => openIntent('disband', row, UNASSIGNED_ID, UNASSIGNED_LABEL)}
             onHistory={setHistoryRow}
-            onPrintCell={onPrintCell}
+            onPrintCell={setPrintRow}
             onDragStart={setCarried}
             onDragEnd={() => setCarried(null)}
             onDrop={(target) => {
@@ -188,6 +250,7 @@ export function FfWarehouseMapScreen({
               setCarried(null)
             }}
           />
+          </Box>
 
           <WarehouseMapJournal
             entries={data?.journal ?? []}
@@ -220,6 +283,18 @@ export function FfWarehouseMapScreen({
           onCreateCell(code)
           setCellDialogOpen(false)
         }}
+      />
+      <BoxLabelPrintDialog
+        open={printRow !== null}
+        title={printRow ? `Печать ШК ячейки ${printRow.title}` : ''}
+        description="Выберите размер этикетки. Напечатанное не отменить."
+        scope="label"
+        onClose={() => setPrintRow(null)}
+        onConfirm={(size) => {
+          if (printRow) onPrintCell(printRow, size)
+          setPrintRow(null)
+        }}
+        testId="warehouse-map-print-dialog"
       />
       <CreateWarehouseDialog
         open={warehouseDialogOpen}

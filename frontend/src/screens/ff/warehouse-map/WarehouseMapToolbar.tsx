@@ -7,11 +7,13 @@ import {
   FilterBar,
   IconAction,
   PrimaryAction,
+  ScannerField,
   SecondaryAction,
   SelectInput,
   TextInput,
   NumberInput,
 } from '../../../ui-kit'
+import { searchTokens, type MapFilters } from './WarehouseMapRows'
 import {
   formatLocationCode,
   normalizeRackName,
@@ -27,8 +29,16 @@ export function WarehouseMapToolbar({
   warehouses,
   warehouseId,
   onWarehouseChange,
-  query,
-  onQueryChange,
+  sellers,
+  categories,
+  filters,
+  onFiltersChange,
+  missing,
+  scanValue,
+  onScanValueChange,
+  onScan,
+  scanError,
+  scanNotice,
   allExpanded,
   onToggleAll,
   onCreateCell,
@@ -39,8 +49,17 @@ export function WarehouseMapToolbar({
   warehouses: WarehouseOption[]
   warehouseId: string | null
   onWarehouseChange: (id: string) => void
-  query: string
-  onQueryChange: (value: string) => void
+  sellers: string[]
+  categories: string[]
+  filters: MapFilters
+  onFiltersChange: (filters: MapFilters) => void
+  /** Значения из вставленной пачки, которых на складе нет. */
+  missing: string[]
+  scanValue: string
+  onScanValueChange: (value: string) => void
+  onScan: (code: string) => void
+  scanError: string | null
+  scanNotice: string | null
   allExpanded: boolean
   onToggleAll: () => void
   onCreateCell: () => void
@@ -48,59 +67,102 @@ export function WarehouseMapToolbar({
   createCellDisabledReason?: string
   toggleAllDisabledReason?: string
 }) {
+  const tokens = searchTokens(filters.query)
+  const searchHelperText =
+    tokens.length > 1
+      ? missing.length > 0
+        ? `Ищем ${tokens.length} значений. Не нашлось: ${missing.join(', ')}`
+        : `Ищем ${tokens.length} значений — нашлись все`
+      : 'Можно вставить сразу список: штрихкоды или названия через пробел или столбцом'
+
   return (
     <FilterBar
-      search={query}
-      onSearchChange={onQueryChange}
-      searchPlaceholder="Товар, ШК или ячейка"
+      search={filters.query}
+      onSearchChange={(query) => onFiltersChange({ ...filters, query })}
+      searchPlaceholder="Товар, артикул, ШК, короб или ячейка"
+      searchHelperText={searchHelperText}
       testId="warehouse-map-filters"
-    >
-      <ToggleButtonGroup
-        exclusive
-        size="small"
-        value={warehouseId}
-        onChange={(_event, value: string | null) => {
-          if (value) onWarehouseChange(value)
-        }}
-        aria-label="Склад"
-        data-testid="warehouse-map-warehouses"
-        sx={{ flexWrap: 'wrap' }}
-      >
-        {warehouses.map((warehouse) => (
-          <ToggleButton
-            key={warehouse.id}
-            value={warehouse.id}
-            data-testid={`warehouse-map-warehouse-${warehouse.id}`}
-            sx={{ textTransform: 'none', fontWeight: 600, px: 1.75 }}
+      scanner={
+        <ScannerField
+          value={scanValue}
+          onChange={onScanValueChange}
+          onScan={onScan}
+          expects="ШК короба, палеты, грузоместа или ячейки"
+          error={scanError}
+          notice={scanNotice}
+          testId="warehouse-map-scan"
+        />
+      }
+      actions={
+        <ActionGroup>
+          <SecondaryAction
+            onClick={onToggleAll}
+            disabledReason={toggleAllDisabledReason}
+            data-testid="warehouse-map-toggle-all"
           >
-            {warehouse.name}
-          </ToggleButton>
-        ))}
-      </ToggleButtonGroup>
-      <IconAction
-        title="Создать склад"
-        onClick={onCreateWarehouse}
-        testId="warehouse-map-create-warehouse"
-      >
-        <AddOutlined fontSize="small" />
-      </IconAction>
-      <Box sx={{ flexGrow: 1 }} />
-      <ActionGroup>
-        <SecondaryAction
-          onClick={onToggleAll}
-          disabledReason={toggleAllDisabledReason}
-          data-testid="warehouse-map-toggle-all"
+            {allExpanded ? 'Свернуть всё' : 'Развернуть всё'}
+          </SecondaryAction>
+          <PrimaryAction
+            onClick={onCreateCell}
+            disabledReason={createCellDisabledReason}
+            data-testid="warehouse-map-create-cell"
+          >
+            Создать ячейку
+          </PrimaryAction>
+        </ActionGroup>
+      }
+    >
+      <Box sx={{ minWidth: 210 }}>
+        <SelectInput
+          label="Селлер"
+          value={filters.seller}
+          onChange={(seller) => onFiltersChange({ ...filters, seller })}
+          options={sellers.map((seller) => ({ value: seller, label: seller }))}
+          emptyLabel="Все селлеры"
+          testId="warehouse-map-filter-seller"
+        />
+      </Box>
+      <Box sx={{ minWidth: 210 }}>
+        <SelectInput
+          label="Категория"
+          value={filters.category}
+          onChange={(category) => onFiltersChange({ ...filters, category })}
+          options={categories.map((category) => ({ value: category, label: category }))}
+          emptyLabel="Все категории"
+          testId="warehouse-map-filter-category"
+        />
+      </Box>
+      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          value={warehouseId}
+          onChange={(_event, value: string | null) => {
+            if (value) onWarehouseChange(value)
+          }}
+          aria-label="Склад"
+          data-testid="warehouse-map-warehouses"
+          sx={{ flexWrap: 'wrap' }}
         >
-          {allExpanded ? 'Свернуть всё' : 'Развернуть всё'}
-        </SecondaryAction>
-        <PrimaryAction
-          onClick={onCreateCell}
-          disabledReason={createCellDisabledReason}
-          data-testid="warehouse-map-create-cell"
+          {warehouses.map((warehouse) => (
+            <ToggleButton
+              key={warehouse.id}
+              value={warehouse.id}
+              data-testid={`warehouse-map-warehouse-${warehouse.id}`}
+              sx={{ textTransform: 'none', fontWeight: 600, px: 1.75 }}
+            >
+              {warehouse.name}
+            </ToggleButton>
+          ))}
+        </ToggleButtonGroup>
+        <IconAction
+          title="Создать склад"
+          onClick={onCreateWarehouse}
+          testId="warehouse-map-create-warehouse"
         >
-          Создать ячейку
-        </PrimaryAction>
-      </ActionGroup>
+          <AddOutlined fontSize="small" />
+        </IconAction>
+      </Stack>
     </FilterBar>
   )
 }

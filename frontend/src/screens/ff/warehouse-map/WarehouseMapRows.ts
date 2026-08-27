@@ -21,6 +21,7 @@ export type MapRow = {
   depth: number
   title: string
   seller: string | null
+  category: string | null
   barcode: string | null
   qty: number
   photoUrl: string | null
@@ -32,11 +33,25 @@ export type MapRow = {
   parentKey: string | null
   /** Ключи всех вышестоящих строк — чтобы палету нельзя было положить внутрь себя. */
   ancestorKeys: string[]
-  /** Как эта строка называется, когда она становится местом: «Ячейка А-01-02». */
+  /** Как эта строка называется, когда она становится местом: «Ячейка А 1.1». */
   placeLabel: string
 }
 
+export type MapFilters = {
+  /** Одно значение или пачка: «4680123456789 4600987654321», можно вставить столбцом. */
+  query: string
+  /** Пустая строка — фильтр не применён. */
+  seller: string
+  category: string
+}
+
+export const EMPTY_FILTERS: MapFilters = { query: '', seller: '', category: '' }
+
 const CONTAINER_KINDS: ContainerKind[] = ['pallet', 'box', 'cargo_place']
+
+function isContainerKind(kind: MapRowKind): kind is ContainerKind {
+  return (CONTAINER_KINDS as MapRowKind[]).includes(kind)
+}
 
 // Порядок внутри места продиктован владельцем и не зависит от того, в каком
 // порядке строки пришли с сервера: сначала палеты, потом короба и грузоместа,
@@ -52,40 +67,84 @@ function inOrder(nodes: MapNode[]): MapNode[] {
   return [...nodes].sort((left, right) => KIND_ORDER[left.kind] - KIND_ORDER[right.kind])
 }
 
-function isContainerKind(kind: MapRowKind): kind is ContainerKind {
-  return (CONTAINER_KINDS as MapRowKind[]).includes(kind)
-}
-
 export function nodeTitle(node: MapNode): string {
   return node.kind === 'product' ? node.name : `${KIND_TITLE[node.kind]} ${node.code}`
 }
 
-function matchesQuery(node: MapNode, query: string): boolean {
-  const haystack =
-    node.kind === 'product'
-      ? [node.name, node.seller_name, node.barcode]
-      : [node.code, node.seller_name, node.barcode]
-  return haystack.some((value) => (value ?? '').toLowerCase().includes(query))
+/** Поиск понимает пачку: значения разделяются пробелом, запятой, точкой с запятой или переводом строки. */
+export function searchTokens(query: string): string[] {
+  return [
+    ...new Set(
+      query
+        .split(/[\s,;]+/)
+        .map((token) => token.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  ]
 }
 
-/** Узел остаётся в выдаче, если совпал сам или совпало что-то внутри него. */
-function keepNode(node: MapNode, query: string): MapNode | null {
+function haystack(node: MapNode): string[] {
+  return node.kind === 'product'
+    ? [node.name, node.seller_name, node.category, node.barcode]
+        .filter(Boolean)
+        .map((value) => (value as string).toLowerCase())
+    : [node.code, node.seller_name, node.barcode]
+        .filter(Boolean)
+        .map((value) => (value as string).toLowerCase())
+}
+
+function matchesTokens(node: MapNode, tokens: string[]): boolean {
+  if (tokens.length === 0) return true
+  const values = haystack(node)
+  return tokens.some((token) => values.some((value) => value.includes(token)))
+}
+
+function matchesFacets(node: MapNode, filters: MapFilters): boolean {
+  if (node.kind !== 'product') return true
+  if (filters.seller && node.seller_name !== filters.seller) return false
+  if (filters.category && node.category !== filters.category) return false
+  return true
+}
+
+/** Узел остаётся в выдаче, если подошёл сам или подошло что-то внутри него. */
+function keepNode(node: MapNode, filters: MapFilters, tokens: string[]): MapNode | null {
   if (node.kind === 'product') {
-    return matchesQuery(node, query) ? node : null
+    return matchesFacets(node, filters) && matchesTokens(node, tokens) ? node : null
   }
-  if (matchesQuery(node, query)) {
-    return node
+  const children = node.children
+    .map((child) => keepNode(child, filters, tokens))
+    .filter(Boolean) as MapNode[]
+  if (children.length > 0) {
+    return { ...node, children }
   }
-  const children = node.children.map((child) => keepNode(child, query)).filter(Boolean) as MapNode[]
-  return children.length > 0 ? { ...node, children } : null
+  // Контейнер, который подошёл сам, остаётся даже пустым: оператор ищет короб,
+  // а не его содержимое, и должен увидеть, что короб пуст.
+  const selfMatch =
+    matchesTokens(node, tokens) && !filters.seller && !filters.category && tokens.length > 0
+  return selfMatch ? { ...node, children: [] } : null
 }
 
-function filterCell(cell: CellNode, query: string): CellNode | null {
-  if (cell.code.toLowerCase().includes(query)) {
-    return cell
+function filterCell(cell: CellNode, filters: MapFilters, tokens: string[]): CellNode | null {
+  const children = cell.children
+    .map((child) => keepNode(child, filters, tokens))
+    .filter(Boolean) as CellNode['children']
+  if (children.length > 0) {
+    return { ...cell, children }
   }
-  const children = cell.children.map((child) => keepNode(child, query)).filter(Boolean) as MapNode[]
-  return children.length > 0 ? { ...cell, children } : null
+  const selfMatch =
+    tokens.length > 0 &&
+    !filters.seller &&
+    !filters.category &&
+    tokens.some(
+      (token) =>
+        cell.code.toLowerCase().includes(token) ||
+        (cell.barcode ?? '').toLowerCase().includes(token),
+    )
+  return selfMatch ? { ...cell, children: [] } : null
+}
+
+function isFiltered(filters: MapFilters, tokens: string[]): boolean {
+  return tokens.length > 0 || Boolean(filters.seller) || Boolean(filters.category)
 }
 
 type WalkContext = {
@@ -112,6 +171,7 @@ function pushNode(
     depth,
     title: nodeTitle(node),
     seller: node.seller_name,
+    category: node.kind === 'product' ? node.category : null,
     barcode: node.barcode,
     qty: node.qty,
     photoUrl: node.kind === 'product' ? node.photo_url : null,
@@ -133,20 +193,22 @@ function pushNode(
 
 export function buildRows(
   data: WarehouseMapData,
-  options: { expandedKeys: Set<string>; query: string },
+  options: { expandedKeys: Set<string>; filters: MapFilters },
 ): MapRow[] {
-  const query = options.query.trim().toLowerCase()
+  const { filters } = options
+  const tokens = searchTokens(filters.query)
+  const filtered = isFiltered(filters, tokens)
   const context: WalkContext = {
     rows: [],
     expandedKeys: options.expandedKeys,
-    forceExpanded: query.length > 0,
+    forceExpanded: filtered,
   }
 
-  const unassigned = query
-    ? (data.unassigned.map((node) => keepNode(node, query)).filter(Boolean) as MapNode[])
+  const unassigned = filtered
+    ? (data.unassigned.map((node) => keepNode(node, filters, tokens)).filter(Boolean) as MapNode[])
     : data.unassigned
-  const cells = query
-    ? (data.cells.map((cell) => filterCell(cell, query)).filter(Boolean) as CellNode[])
+  const cells = filtered
+    ? (data.cells.map((cell) => filterCell(cell, filters, tokens)).filter(Boolean) as CellNode[])
     : data.cells
 
   // Совсем пустой склад показывает не строку «Без ячеек» с нулём, а пустое
@@ -166,6 +228,7 @@ export function buildRows(
     depth: 0,
     title: UNASSIGNED_LABEL,
     seller: null,
+    category: null,
     barcode: null,
     qty: unassignedQty,
     photoUrl: null,
@@ -191,6 +254,7 @@ export function buildRows(
       depth: 0,
       title: cell.code,
       seller: null,
+      category: null,
       barcode: cell.barcode,
       qty: cell.qty,
       photoUrl: null,
@@ -210,6 +274,82 @@ export function buildRows(
   }
 
   return context.rows
+}
+
+/**
+ * Значения пачки, по которым на складе ничего не нашлось.
+ *
+ * Оператор вставляет столбец штрихкодов и должен сразу видеть не только то, что
+ * нашлось, но и чего нет: молчаливый короткий список он прочитает как «всё тут».
+ */
+export function missingTokens(data: WarehouseMapData, query: string): string[] {
+  const tokens = searchTokens(query)
+  if (tokens.length === 0) return []
+  const found = new Set<string>()
+  const visit = (node: MapNode) => {
+    const values = haystack(node)
+    tokens.forEach((token) => {
+      if (values.some((value) => value.includes(token))) found.add(token)
+    })
+    if (node.kind !== 'product') node.children.forEach(visit)
+  }
+  data.unassigned.forEach(visit)
+  data.cells.forEach((cell) => {
+    const values = [cell.code.toLowerCase(), (cell.barcode ?? '').toLowerCase()]
+    tokens.forEach((token) => {
+      if (values.some((value) => value.includes(token))) found.add(token)
+    })
+    cell.children.forEach(visit)
+  })
+  return tokens.filter((token) => !found.has(token))
+}
+
+/**
+ * Найти по штрихкороду короб, палету, грузоместо, ячейку или товар.
+ *
+ * Это перенос уже существующего поведения из блока коробов в каталоге: пикнул
+ * короб — он раскрылся и подсветился. Здесь то же самое, только цель ещё и
+ * показывает, на какой ячейке лежит, потому что дерево видно целиком.
+ */
+export function findByBarcode(
+  data: WarehouseMapData,
+  barcode: string,
+): { key: string; ancestorKeys: string[]; title: string; placeLabel: string } | null {
+  const needle = barcode.trim().toLowerCase()
+  if (!needle) return null
+
+  const walk = (
+    node: MapNode,
+    parentKey: string,
+    ancestors: string[],
+    placeLabel: string,
+  ): { key: string; ancestorKeys: string[]; title: string; placeLabel: string } | null => {
+    const key = `${parentKey}/${node.id}`
+    if ((node.barcode ?? '').toLowerCase() === needle) {
+      return { key, ancestorKeys: ancestors, title: nodeTitle(node), placeLabel }
+    }
+    if (node.kind === 'product') return null
+    for (const child of node.children) {
+      const hit = walk(child, key, [...ancestors, key], nodeTitle(node))
+      if (hit) return hit
+    }
+    return null
+  }
+
+  for (const node of data.unassigned) {
+    const hit = walk(node, UNASSIGNED_ID, [UNASSIGNED_ID], UNASSIGNED_LABEL)
+    if (hit) return hit
+  }
+  for (const cell of data.cells) {
+    if ((cell.barcode ?? '').toLowerCase() === needle) {
+      return { key: cell.id, ancestorKeys: [], title: cell.code, placeLabel: `Ячейка ${cell.code}` }
+    }
+    for (const node of cell.children) {
+      const hit = walk(node, cell.id, [cell.id], `Ячейка ${cell.code}`)
+      if (hit) return hit
+    }
+  }
+  return null
 }
 
 /** Ключи всех строк, которые вообще можно раскрыть — для «развернуть всё». */
