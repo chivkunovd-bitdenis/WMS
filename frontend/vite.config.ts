@@ -76,6 +76,7 @@ export default defineConfig({
         moveLab: 'move-lab.html',
         sorting: 'sorting.html',
         sortingScale: 'sorting-scale.html',
+        sortingObjects: 'sorting-objects.html',
       },
     },
   },

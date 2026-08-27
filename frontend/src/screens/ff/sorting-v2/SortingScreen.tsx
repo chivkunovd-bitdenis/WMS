@@ -38,7 +38,6 @@ import {
 // не так: он подходит к полке и кладёт туда то, что принёс. Единица работы —
 // место: ячейка, палета на ней или короб внутри.
 
-let created = 0
 
 export function SortingScreen({ onNote }: { onNote: (note: string) => void }) {
   const [placements, setPlacements] = useState<Placement[]>([])
@@ -50,6 +49,11 @@ export function SortingScreen({ onNote }: { onNote: (note: string) => void }) {
   const [carried, setCarried] = useState<Carried | null>(null)
   const [asking, setAsking] = useState<SortProduct | null>(null)
   const [askQty, setAskQty] = useState<number | null>(null)
+  // Счётчик номеров живёт в состоянии: переменная вне компонента менялась бы
+  // во время отрисовки, а это побочный эффект и непредсказуемый порядок.
+  const [created, setCreated] = useState(0)
+  // Куда положим то, о чём спрашиваем: перетащили на одно место, а активно другое.
+  const [askPlace, setAskPlace] = useState<PlaceRef | null>(null)
   const [recent, setRecent] = useState<string[]>([])
 
   const place = path.length > 0 ? path[path.length - 1]! : null
@@ -83,7 +87,11 @@ export function SortingScreen({ onNote }: { onNote: (note: string) => void }) {
       return
     }
     if (carried.kind === 'product') {
-      put(carried.product, remainingFor(carried.product, placements), target.id)
+      // Количество спрашиваем всегда: перетащить — не значит «высыпать всё».
+      // Столько же раз, сколько кладут коробку целиком, кладут и её половину.
+      setAsking(carried.product)
+      setAskQty(remainingFor(carried.product, placements))
+      setAskPlace(target)
     } else {
       const moving = carried.container
       setContainers((current) =>
@@ -94,9 +102,15 @@ export function SortingScreen({ onNote }: { onNote: (note: string) => void }) {
     setCarried(null)
   }
 
+  function nextNumber() {
+    const value = created + 1
+    setCreated(value)
+    return value
+  }
+
   function createContainer(kind: ContainerKind) {
     if (!place) return
-    created += 1
+    const created = nextNumber()
     const container: Container = {
       id: `new-${kind}-${created}`,
       kind,
@@ -192,6 +206,7 @@ export function SortingScreen({ onNote }: { onNote: (note: string) => void }) {
             onPlaceAll={(product) => {
               setAsking(product)
               setAskQty(remainingFor(product, placements))
+              setAskPlace(place)
             }}
             onPickCell={pickCell}
             onDragProduct={(product) => setCarried({ kind: 'product', product })}
@@ -232,18 +247,29 @@ export function SortingScreen({ onNote }: { onNote: (note: string) => void }) {
 
       <AppDialog
         open={asking !== null}
-        onClose={() => setAsking(null)}
+        onClose={() => {
+          setAsking(null)
+          setAskPlace(null)
+        }}
         title="Сколько положить"
         testId="sorting-qty-dialog"
         actions={
           <ActionGroup>
-            <SecondaryAction onClick={() => setAsking(null)} data-testid="sorting-qty-cancel">
+            <SecondaryAction
+              onClick={() => {
+                setAsking(null)
+                setAskPlace(null)
+              }}
+              data-testid="sorting-qty-cancel"
+            >
               Отмена
             </SecondaryAction>
             <PrimaryAction
               onClick={() => {
-                if (asking && place && askQty) put(asking, askQty, place.id)
+                const target = askPlace ?? place
+                if (asking && target && askQty) put(asking, askQty, target.id)
                 setAsking(null)
+                setAskPlace(null)
               }}
               data-testid="sorting-qty-confirm"
             >
@@ -256,7 +282,7 @@ export function SortingScreen({ onNote }: { onNote: (note: string) => void }) {
           <Stack spacing={0.5}>
             <Typography variant="subtitle2">{asking?.name}</Typography>
             <Typography variant="body2" color="text.secondary">
-              Куда: {place ? path.map((one) => one.code).join(' › ') : '—'}
+              Куда: {(askPlace ?? place)?.code ?? '—'}
             </Typography>
           </Stack>
           <NumberInput

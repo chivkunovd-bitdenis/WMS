@@ -3,12 +3,16 @@ import ChevronLeft from '@mui/icons-material/ChevronLeft'
 import ChevronRight from '@mui/icons-material/ChevronRight'
 import { useMemo, useState } from 'react'
 import {
+  ActionGroup,
+  AppDialog,
   CheckboxInput,
   FilterBar,
+  NumberInput,
   IconAction,
   PrimaryAction,
   ScannerField,
   ScreenHeader,
+  SecondaryAction,
   SelectInput,
   StatusChip,
 } from '../../../ui-kit'
@@ -52,6 +56,8 @@ export function SortingScaleScreen({ onNote }: { onNote: (note: string) => void 
   const [path, setPath] = useState<PlaceRef[]>([])
   const [recent, setRecent] = useState<string[]>([])
   const [bulkOpen, setBulkOpen] = useState(false)
+  const [asking, setAsking] = useState<{ product: SortProduct; place: PlaceRef } | null>(null)
+  const [askQty, setAskQty] = useState<number | null>(null)
   const [page, setPage] = useState(0)
   const [query, setQuery] = useState('')
   const [seller, setSeller] = useState('')
@@ -131,7 +137,7 @@ export function SortingScaleScreen({ onNote }: { onNote: (note: string) => void 
       return
     }
     if (carried.kind === 'product') {
-      put(carried.product, remainingFor(carried.product, placements), target.id)
+      setAsking({ product: carried.product, place: target })
     } else {
       const moving = carried.container
       setContainers((currentList) =>
@@ -305,8 +311,10 @@ export function SortingScaleScreen({ onNote }: { onNote: (note: string) => void 
             activeWarehouseId={warehouseId}
             summary={{ left, total }}
             onPlaceAll={(product) => {
-              if (!activeCell) return
-              put(product, remainingFor(product, placements), activeCell.id)
+              const target = place ?? (activeCell ? { id: activeCell.id, code: activeCell.code, kind: 'cell' as const } : null)
+              if (!target) return
+              setAsking({ product, place: target })
+              setAskQty(remainingFor(product, placements))
             }}
             onPickCell={pickCell}
             onDragProduct={(product) => setCarried({ kind: 'product', product })}
@@ -383,6 +391,49 @@ export function SortingScaleScreen({ onNote }: { onNote: (note: string) => void 
           />
         </Stack>
       </Stack>
+
+      <AppDialog
+        open={asking !== null}
+        onClose={() => setAsking(null)}
+        title="Сколько положить"
+        testId="sorting-qty-dialog"
+        actions={
+          <ActionGroup>
+            <SecondaryAction onClick={() => setAsking(null)} data-testid="sorting-qty-cancel">
+              Отмена
+            </SecondaryAction>
+            <PrimaryAction
+              onClick={() => {
+                if (asking && askQty) put(asking.product, askQty, asking.place.id)
+                setAsking(null)
+              }}
+              data-testid="sorting-qty-confirm"
+            >
+              Положить
+            </PrimaryAction>
+          </ActionGroup>
+        }
+      >
+        <Stack spacing={2}>
+          <Stack spacing={0.5}>
+            <Typography variant="subtitle2">{asking?.product.name}</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Куда: {asking?.place.code ?? '—'}
+            </Typography>
+          </Stack>
+          <NumberInput
+            label="Сколько штук"
+            value={askQty}
+            onChange={setAskQty}
+            min={1}
+            max={asking ? remainingFor(asking.product, placements) : undefined}
+            helperText={
+              asking ? `Осталось разложить ${remainingFor(asking.product, placements)} шт` : undefined
+            }
+            testId="sorting-qty-input"
+          />
+        </Stack>
+      </AppDialog>
 
       <SortingBulkDialog
         open={bulkOpen}
