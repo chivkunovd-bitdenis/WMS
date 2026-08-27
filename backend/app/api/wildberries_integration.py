@@ -580,7 +580,7 @@ async def save_and_validate_self_content_token(
             status_code=status.HTTP_409_CONFLICT,
             code="product_conflict",
             message=(
-                "Не удалось завершить импорт товаров Wildberries: "  # noqa: RUF001
+                "Не удалось завершить импорт товаров Wildberries: "
                 "обнаружен конфликт артикулов."
             ),
         )
@@ -593,7 +593,7 @@ async def save_and_validate_self_content_token(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             code="token_save_failed",
             message=(
-                "Не удалось сохранить ключ Wildberries. "  # noqa: RUF001
+                "Не удалось сохранить ключ Wildberries. "
                 "Сообщите поддержке идентификатор ошибки из поля ref."
             ),
         )

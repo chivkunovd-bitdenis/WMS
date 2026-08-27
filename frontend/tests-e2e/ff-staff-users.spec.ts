@@ -68,6 +68,13 @@ async function expectDenied(page: Page, path: string): Promise<void> {
   await expect(page.getByTestId('ff-access-denied')).toContainText('Нет доступа к этому разделу.')
 }
 
+async function expectSellerPortalDenied(page: Page, path: string): Promise<void> {
+  await page.goto(path)
+  await expect(page.getByTestId('ff-access-denied')).toContainText(
+    'В этом браузере нет сессии селлера',
+  )
+}
+
 async function expectNoPayrollUi(page: Page): Promise<void> {
   await expect(page.getByText('Месяц расчёта')).toHaveCount(0)
   await expect(page.getByText('Ставка за ед.')).toHaveCount(0)
@@ -185,7 +192,7 @@ test('ff staff rights: four compact work blocks pass UI and direct-route gates',
   await expectDenied(page, '/app/ff/packaging')
   await expectDenied(page, '/app/ff/inventory')
   await expectDenied(page, '/app/ff/sellers')
-  await expectDenied(page, '/seller/products')
+  await expectSellerPortalDenied(page, '/seller/products')
 
   await useFulfillmentToken(page, shipmentsToken)
   await page.goto('/app/ff/mp-shipments')
@@ -261,8 +268,8 @@ test('ff staff rights: four compact work blocks pass UI and direct-route gates',
   await expect(page.locator('[data-testid^="ff-packaging-edit-"]')).toHaveCount(0)
   await expect(page.getByTestId('ff-products-error')).toHaveCount(0)
   await page.goto('/app/ff/inventory')
-  await expect(page).toHaveURL(/\/app\/ff\/products/)
-  await expect(page.getByTestId('ff-products-list')).toBeVisible()
+  await expect(page).toHaveURL(/\/app\/ff\/inventory/)
+  await expect(page.getByTestId('ff-storage-page')).toBeVisible()
   await expectDenied(page, '/app/ff/settings')
   await expectDenied(page, '/app/ff/mp-shipments')
   await expectDenied(page, '/app/ff/fbs')

@@ -1,4 +1,3 @@
-# ruff: noqa: RUF001
 """FBS print assets: batch fetch, binary content, applied confirmation."""
 
 from __future__ import annotations

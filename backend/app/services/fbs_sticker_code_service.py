@@ -1,4 +1,3 @@
-# ruff: noqa: RUF002
 """Human-readable WB FBS sticker code extraction."""
 
 from __future__ import annotations

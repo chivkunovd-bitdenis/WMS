@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.marketplace_unload import (
+    MarketplaceUnloadLine,
     MarketplaceUnloadPickAllocation,
     MarketplaceUnloadRequest,
 )
@@ -108,12 +109,22 @@ async def _barcode_index_for_seller(
 
 
 async def _request_for_picking(
-    session: AsyncSession, tenant_id: uuid.UUID, request_id: uuid.UUID
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    *,
+    load_lines: bool = False,
 ) -> MarketplaceUnloadRequest:
     stmt = select(MarketplaceUnloadRequest).where(
         MarketplaceUnloadRequest.id == request_id,
         MarketplaceUnloadRequest.tenant_id == tenant_id,
     )
+    if load_lines:
+        stmt = stmt.options(
+            selectinload(MarketplaceUnloadRequest.lines).selectinload(
+                MarketplaceUnloadLine.product
+            )
+        )
     req = (await session.execute(stmt)).scalar_one_or_none()
     if req is None:
         raise MarketplaceUnloadPickError("not_found")
@@ -158,7 +169,7 @@ async def get_pick_options(
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
 ) -> list[PickOptionProduct]:
-    req = await _request_for_picking(session, tenant_id, request_id)
+    req = await _request_for_picking(session, tenant_id, request_id, load_lines=True)
     product_ids = [ln.product_id for ln in req.lines]
     if not product_ids:
         return []
@@ -342,7 +353,7 @@ async def save_pick_allocations(
     request_id: uuid.UUID,
     rows: list[PickAllocationRow],
 ) -> list[MarketplaceUnloadPickAllocation]:
-    req = await _request_for_picking(session, tenant_id, request_id)
+    req = await _request_for_picking(session, tenant_id, request_id, load_lines=True)
     line_products = {ln.product_id for ln in req.lines}
     if not line_products:
         raise MarketplaceUnloadPickError("no_lines")

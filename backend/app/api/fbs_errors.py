@@ -1,4 +1,3 @@
-# ruff: noqa: RUF001
 """Stable FBS HTTP error envelope for operator-facing contract endpoints.
 
 Wire shape (BACKEND_CONTRACT.md §1):

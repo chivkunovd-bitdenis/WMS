@@ -1,4 +1,3 @@
-# ruff: noqa: RUF001
 """Shared Wildberries client exceptions."""
 
 from __future__ import annotations

@@ -22,6 +22,8 @@ function sqliteUuid(id: string): string {
 
 function allowSellerShop(userId: string, sellerId: string, enabled = false): void {
   execFileSync('sqlite3', [
+    '-cmd',
+    '.timeout 10000',
     e2eDbPath,
     `insert into seller_shop_delegations (id, user_id, target_seller_id, enabled) values ('${sqliteUuid(randomUUID())}', '${sqliteUuid(userId)}', '${sqliteUuid(sellerId)}', ${enabled ? 1 : 0})`,
   ]);

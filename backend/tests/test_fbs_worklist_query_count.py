@@ -312,7 +312,9 @@ async def test_fbs_worklist_delivery_and_done_groups(async_client: AsyncClient) 
 
 
 @pytest.mark.asyncio
-async def test_fbs_worklist_new_and_expired_groups_split_by_deadline(async_client: AsyncClient) -> None:
+async def test_fbs_worklist_new_and_expired_groups_split_by_deadline(
+    async_client: AsyncClient,
+) -> None:
     """BL-3/FBS-03: заказ с истёкшим сроком сборки уходит из "new" в "expired",
     статус в БД (FBS_ORDER_STATUS_NEW) не меняется."""
     headers, seller_id, _, _, _, order_ids = await _setup_ff_admin_with_stock(

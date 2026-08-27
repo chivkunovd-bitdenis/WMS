@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import TypedDict
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -20,11 +21,23 @@ AUTO_FBS_WAREHOUSE_CODE_PREFIX = "fbs-wb"
 
 
 class FbsWarehouseBindingError(Exception):
-    def __init__(self, code: str, context: dict | None = None, message: str | None = None) -> None:
+    def __init__(
+        self,
+        code: str,
+        context: dict[str, object] | None = None,
+        message: str | None = None,
+    ) -> None:
         self.code = code
         self.context = context
         self.message = message
         super().__init__(code)
+
+
+class FbsStockPoolSummary(TypedDict):
+    limit: int
+    allocated_total: int
+    available: int
+    by_binding: dict[uuid.UUID, int]
 
 
 def is_auto_fbs_wms_warehouse(warehouse: Warehouse) -> bool:
@@ -390,7 +403,7 @@ async def get_binding_stock_pool_summary(
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
     product_id: uuid.UUID,
-) -> dict:
+) -> FbsStockPoolSummary:
     """Get FBS stock pool summary: limit, total allocated, available, and per-binding breakdown.
 
     Returns a dictionary with:
