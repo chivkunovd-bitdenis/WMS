@@ -29,6 +29,13 @@
 - `frontend/vite.config.ts`
 - `frontend/warehouse-map.html`
 
+## Добавлено по ходу (замечания владельца на показе 27.08 и просьба про набросок)
+
+- `frontend/src/ui-kit/FilterBar.tsx` — полосы сканера и кнопок, чтобы не слипалось
+- `frontend/src/ui-kit/ScannerLine.tsx` — поле сканера как общий примитив
+- `frontend/src/screens/ff/warehouse-map/lab/*` — набросок «Пульт перемещений», не экран системы
+- `frontend/move-lab.html`
+
 ## Статус
 
 - [ ] арх-решение — не требуется (правка существующего)

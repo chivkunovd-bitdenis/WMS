@@ -73,6 +73,7 @@ export default defineConfig({
         seller: 'seller/index.html',
         uiKit: 'ui-kit.html',
         warehouseMap: 'warehouse-map.html',
+        moveLab: 'move-lab.html',
       },
     },
   },
