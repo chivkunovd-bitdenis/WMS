@@ -159,20 +159,12 @@ function SellerRatesDetails({
   const columns: Column<Row>[] = [
     {
       key: 'state',
-      header: 'Состояние',
-      width: 170,
-      render: (row) =>
-        row.state === 'active' ? (
-          <StatusChip label="✓ Действует" tone="ok" />
-        ) : row.state === 'planned' ? (
-          <StatusChip label="Запланирована" tone="neutral" hint="Вступит в силу в указанную дату" />
-        ) : (
-          <StatusChip
-            label="Перебита"
-            tone="neutral"
-            hint="Заменена более поздней ставкой для того же товара и услуги"
-          />
-        ),
+      header: '',
+      width: 130,
+      // Подпись только у действующей строки. Придумывать слово для остальных
+      // незачем: дата в соседней колонке сама говорит, прошлая она или будущая,
+      // а лишний ярлык на каждой строке — шум.
+      render: (row) => (row.state === 'active' ? <StatusChip label="✓ Действует" tone="ok" /> : null),
     },
     {
       key: 'target',
