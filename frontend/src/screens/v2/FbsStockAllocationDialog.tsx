@@ -10,6 +10,7 @@ import {
   DialogContent,
   DialogTitle,
   Link as MuiLink,
+  Stack,
   Table,
   TableBody,
   TableCell,
@@ -20,6 +21,8 @@ import {
   Typography,
 } from '@mui/material'
 import type { FbsStockPoolProduct } from './fbsApi'
+import { QtyCell } from '../../ui-kit'
+import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 
 // Карточка товара в каталоге ФФ — сюда ведём оператора, если у товара не задан
 // остаток FBS и поле распределения по складу недоступно для ввода.
@@ -48,7 +51,13 @@ function isItemDirty(item: FbsStockPoolProduct, drafts: Record<string, string>):
 function matchesSearch(item: FbsStockPoolProduct, query: string): boolean {
   const needle = query.trim().toLowerCase()
   if (!needle) return true
-  const haystack = [item.name, item.sku_code, item.wb_chrt_id != null ? String(item.wb_chrt_id) : '']
+  const haystack = [
+    item.name,
+    item.sku_code,
+    item.wb_chrt_id != null ? String(item.wb_chrt_id) : '',
+    item.wb_vendor_code ?? '',
+    item.wb_barcode ?? '',
+  ]
     .join(' ')
     .toLowerCase()
   return haystack.includes(needle)
@@ -76,7 +85,7 @@ export function FbsStockAllocationDialog({
   )
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth data-testid="fbs-stock-pool-panel">
+    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth data-testid="fbs-stock-pool-panel">
       <DialogTitle>
         Остатки по складу «{warehouseName}»
         {wbId != null ? (
@@ -119,9 +128,13 @@ export function FbsStockAllocationDialog({
               >
               <TableHead>
                 <TableRow>
-                  <TableCell>Товар</TableCell>
-                  <TableCell align="right">Остаток FBS в каталоге</TableCell>
-                  <TableCell align="right">Занято на других складах</TableCell>
+                  <TableCell sx={{ minWidth: 320 }}>Товар</TableCell>
+                  <TableCell align="right" sx={{ width: 170 }}>
+                    Остаток FBS в каталоге
+                  </TableCell>
+                  <TableCell align="right" sx={{ width: 170 }}>
+                    Занято на других складах
+                  </TableCell>
                   <TableCell align="right" sx={{ width: 220 }}>
                     Остаток на этом складе
                   </TableCell>
@@ -153,13 +166,41 @@ export function FbsStockAllocationDialog({
                         sx={dirty ? { backgroundColor: 'action.selected' } : undefined}
                       >
                         <TableCell>
-                          <Typography variant="body2">{item.name}</Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {item.sku_code}
-                          </Typography>
+                          <Stack direction="row" spacing={1.25} sx={{ alignItems: 'flex-start' }}>
+                            <ProductPhotoThumb
+                              src={item.image_url}
+                              alt={item.name}
+                              testId={`fbs-stock-pool-photo-${item.product_id}`}
+                            />
+                            <Box sx={{ minWidth: 0 }}>
+                              <Typography variant="body2">{item.name}</Typography>
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                {item.sku_code}
+                              </Typography>
+                              {item.wb_vendor_code ? (
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                  Артикул: {item.wb_vendor_code}
+                                </Typography>
+                              ) : null}
+                              {item.wb_barcode ? (
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                  ШК: {item.wb_barcode}
+                                </Typography>
+                              ) : null}
+                              {item.wb_size ? (
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                  Размер: {item.wb_size}
+                                </Typography>
+                              ) : null}
+                            </Box>
+                          </Stack>
                         </TableCell>
-                        <TableCell align="right">{item.pool_limit}</TableCell>
-                        <TableCell align="right">{item.allocated_elsewhere}</TableCell>
+                        <TableCell align="right">
+                          <QtyCell value={item.pool_limit} />
+                        </TableCell>
+                        <TableCell align="right">
+                          <QtyCell value={item.allocated_elsewhere} muted />
+                        </TableCell>
                         <TableCell align="right">
                           <TextField
                             type="number"

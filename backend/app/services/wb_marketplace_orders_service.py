@@ -1,3 +1,4 @@
+# ruff: noqa: RUF003
 """WB Marketplace FBS orders: sync, map products, reserve stock, status updates."""
 
 from __future__ import annotations
@@ -76,6 +77,8 @@ from app.services.wildberries_fbs_client import (
 
 FBS_DEADLINE_HOURS = 120
 MAX_ORDERS_PAGES = 10
+# Окно полного обхода заданий: столько дней назад просим у WB.
+ORDERS_SWEEP_WINDOW_DAYS = 30
 MAX_SUPPLIES_PAGES = 10
 
 RESERVE_STATUS_WAREHOUSE_REMAP_CONFLICT = "warehouse_remap_conflict"
@@ -1312,7 +1315,7 @@ async def link_confirmed_orders_to_wb_supplies(
                 supplies_dict.update(page.supplies)
                 # WB отдаёт курсор всегда, даже когда данные кончились: по одному
                 # только курсору цикл крутил все MAX_SUPPLIES_PAGES страниц на каждого
-                # селлера. На бою это 10 запросов × 20 селлеров за проход и 429  # noqa: RUF003
+                # селлера. На бою это 10 запросов × 20 селлеров за проход и 429
                 # от общего лимитера. Признак конца — пустая страница.
                 if not page.supplies or page.next_cursor is None:
                     break
@@ -1519,6 +1522,12 @@ async def sync_seller_orders(
         await session.commit()
 
     if include_history:
+        # Обход идёт по свежему окну: в нём живут заказы, у которых ещё может
+        # поменяться состав поставки. Без окна страницы упирались в самые ранние
+        # задания селлера, и supplyId свежих заказов до WMS не доезжал вовсе.
+        sweep_date_from = int(
+            (datetime.now(tz=UTC) - timedelta(days=ORDERS_SWEEP_WINDOW_DAYS)).timestamp()
+        )
         next_token: int | None = None
         for _page in range(MAX_ORDERS_PAGES):
             try:
@@ -1526,6 +1535,7 @@ async def sync_seller_orders(
                     http_client,
                     api_token=api_token,
                     next_token=next_token,
+                    date_from=sweep_date_from,
                 )
             except WildberriesClientError as exc:
                 ref = wb_error_ref()
