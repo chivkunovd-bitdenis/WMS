@@ -161,7 +161,13 @@ export function FbsPrintPreviewDialog({
       <DialogContent dividers>
         <Stack spacing={2}>
           <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }} useFlexGap>
-            <Chip label={`Готово ${batch?.ready ?? 0}`} color="success" />
+            {/* Считаем то, что реально скачалось: сервер может считать актив готовым,
+                а файла на диске не быть — тогда «Готово N» рядом с «готовых нет»
+                сбивало оператора с толку (бой 27.08.2026). */}
+            <Chip
+              label={`Готово ${loading ? (batch?.ready ?? 0) : previews.length}`}
+              color={!loading && previews.length === 0 ? 'default' : 'success'}
+            />
             {batch?.missing ? <Chip label={`Не получено ${batch.missing}`} color="warning" /> : null}
             {batch?.failed ? <Chip label={`Ошибок ${batch.failed}`} color="error" /> : null}
           </Stack>
@@ -197,7 +203,10 @@ export function FbsPrintPreviewDialog({
             </Stack>
           ) : null}
           {!loading && previews.length === 0 ? (
-            <Alert severity="warning">Готовых изображений нет. Печать не будет открыта.</Alert>
+            <Alert severity="warning">
+              Готовых изображений нет: файлы не пришли от WB или пропали из хранилища.
+              Запросите стикеры заново — кнопка запроса на вкладке упаковки.
+            </Alert>
           ) : null}
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 2 }}>
             {previews.map(({ asset, objectUrl }) => (
