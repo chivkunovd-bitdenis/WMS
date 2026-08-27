@@ -7,8 +7,9 @@ import {
   TableHead,
   TableRow,
 } from '@mui/material'
+import { alpha, useTheme } from '@mui/material/styles'
 import ExpandMore from '@mui/icons-material/ExpandMore'
-import { Fragment, type ReactNode } from 'react'
+import { Fragment, useState, type DragEvent, type ReactNode } from 'react'
 import { IconAction } from './Actions'
 import { EmptyState, TableSkeletonBody } from './States'
 
@@ -23,6 +24,28 @@ export type Column<Row> = {
   // Канон R-08: числа вправо.
   align?: 'left' | 'right' | 'center'
   render: (row: Row) => ReactNode
+}
+
+/**
+ * Перетаскивание строк — один механизм на всю систему.
+ *
+ * Складская правда переезжает между ячейками, коробами и палетами, и оператор
+ * делает это рукой: тянет строку и отпускает на другой. Если бы каждый экран
+ * писал свой drag, они бы выглядели по-разному и по-разному врали о том, куда
+ * можно положить. Поэтому подсветка целей и запрет неверных целей живут здесь,
+ * а экран отвечает только на два вопроса: что можно взять и куда это ляжет.
+ *
+ * Сам перенос таблица не выполняет — она сообщает о нём экрану. Количество,
+ * подтверждение и запись в журнал решает экран: таблица не знает склада.
+ */
+export type RowDrag<Row> = {
+  canDrag: (row: Row) => boolean
+  canDrop: (row: Row) => boolean
+  onDragStart: (row: Row) => void
+  onDragEnd: () => void
+  onDrop: (row: Row) => void
+  /** Что-то несут прямо сейчас: цели подсвечиваются только во время переноса. */
+  active: boolean
 }
 
 type Props<Row> = {
@@ -57,6 +80,8 @@ type Props<Row> = {
     /** Доступное имя стрелки: «флажок» без имени программе чтения бесполезен. */
     label: (row: Row) => string
   }
+  /** Перетаскивание строк (см. RowDrag). */
+  drag?: RowDrag<Row>
 }
 
 export function DataTable<Row>({
@@ -68,10 +93,41 @@ export function DataTable<Row>({
   empty,
   testId,
   expand,
+  drag,
   hideHeader = false,
 }: Props<Row>) {
+  const theme = useTheme()
   const showEmpty = !loading && rows.length === 0
   const spanWidth = columns.length + (expand ? 1 : 0)
+  const [carriedKey, setCarriedKey] = useState<string | number | null>(null)
+  const [overKey, setOverKey] = useState<string | number | null>(null)
+
+  function dragSx(row: Row, key: string | number) {
+    if (!drag) return null
+    const carried = carriedKey === key
+    const target = drag.active && !carried && drag.canDrop(row)
+    const over = target && overKey === key
+    return {
+      ...(drag.canDrag(row) ? { cursor: 'grab' } : null),
+      // Взятую строку видно, что она в руке, но она не исчезает: оператор должен
+      // помнить, откуда тянет, пока ищет глазами цель.
+      ...(carried ? { opacity: 0.45 } : null),
+      // Цели обведены, а не залиты: заливка строки в системе означает ровно одно —
+      // расхождение по количеству (канон R-11), и занимать её под подсказку нельзя.
+      ...(target
+        ? {
+            outline: `1px dashed ${alpha(theme.palette.primary.main, 0.45)}`,
+            outlineOffset: '-2px',
+          }
+        : null),
+      ...(over
+        ? {
+            outline: `2px solid ${theme.palette.primary.main}`,
+            backgroundColor: alpha(theme.palette.primary.main, 0.07),
+          }
+        : null),
+    }
+  }
 
   return (
     <TableContainer component={Paper} variant="outlined" data-testid={testId}>
@@ -100,23 +156,79 @@ export function DataTable<Row>({
         ) : (
           <TableBody>
             {rows.map((row) => {
+              const rowKey = getRowKey(row)
               const expanded = Boolean(expand?.isExpanded(row))
+              const draggable = Boolean(drag?.canDrag(row))
+              const droppable = Boolean(drag?.active && carriedKey !== rowKey && drag.canDrop(row))
               return (
-                <Fragment key={getRowKey(row)}>
+                <Fragment key={rowKey}>
                   <TableRow
                     hover
-                    sx={
-                      hasDiscrepancy?.(row)
-                        ? { backgroundColor: 'rgba(163, 42, 32, 0.10)' }
+                    draggable={draggable || undefined}
+                    data-drop-target={droppable ? 'true' : undefined}
+                    onDragStart={
+                      draggable && drag
+                        ? (event: DragEvent<HTMLTableRowElement>) => {
+                            event.dataTransfer.effectAllowed = 'move'
+                            // Пустой dataTransfer в Firefox отменяет перетаскивание молча,
+                            // поэтому кладём ключ строки — он же полезен при отладке.
+                            event.dataTransfer.setData('text/plain', String(rowKey))
+                            setCarriedKey(rowKey)
+                            drag.onDragStart(row)
+                          }
                         : undefined
                     }
+                    onDragEnd={
+                      draggable && drag
+                        ? () => {
+                            setCarriedKey(null)
+                            setOverKey(null)
+                            drag.onDragEnd()
+                          }
+                        : undefined
+                    }
+                    onDragOver={
+                      droppable
+                        ? (event: DragEvent<HTMLTableRowElement>) => {
+                            event.preventDefault()
+                            event.dataTransfer.dropEffect = 'move'
+                            setOverKey(rowKey)
+                          }
+                        : undefined
+                    }
+                    onDragLeave={
+                      droppable
+                        ? (event: DragEvent<HTMLTableRowElement>) => {
+                            // Переход на вложенный элемент внутри той же строки тоже
+                            // считается уходом — без этой проверки подсветка мигает.
+                            const next = event.relatedTarget as Node | null
+                            if (next && event.currentTarget.contains(next)) return
+                            setOverKey((current) => (current === rowKey ? null : current))
+                          }
+                        : undefined
+                    }
+                    onDrop={
+                      droppable && drag
+                        ? (event: DragEvent<HTMLTableRowElement>) => {
+                            event.preventDefault()
+                            setOverKey(null)
+                            drag.onDrop(row)
+                          }
+                        : undefined
+                    }
+                    sx={{
+                      ...(hasDiscrepancy?.(row)
+                        ? { backgroundColor: 'rgba(163, 42, 32, 0.10)' }
+                        : null),
+                      ...dragSx(row, rowKey),
+                    }}
                   >
                     {expand ? (
                       <TableCell padding="checkbox">
                         <IconAction
                           title={expand.label(row)}
                           onClick={() => expand.onToggle(row)}
-                          testId={`${testId ?? 'table'}-expand-${getRowKey(row)}`}
+                          testId={`${testId ?? 'table'}-expand-${rowKey}`}
                         >
                           <ExpandMore
                             fontSize="small"
@@ -139,7 +251,7 @@ export function DataTable<Row>({
                       <TableCell
                         colSpan={spanWidth}
                         sx={{ p: 0, borderLeft: 3, borderLeftColor: 'primary.main' }}
-                        data-testid={`${testId ?? 'table'}-expanded-${getRowKey(row)}`}
+                        data-testid={`${testId ?? 'table'}-expanded-${rowKey}`}
                       >
                         {expand.render(row)}
                       </TableCell>

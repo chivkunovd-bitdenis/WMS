@@ -72,6 +72,7 @@ export default defineConfig({
         ff: 'index.html',
         seller: 'seller/index.html',
         uiKit: 'ui-kit.html',
+        warehouseMap: 'warehouse-map.html',
       },
     },
   },
