@@ -16,38 +16,23 @@ read-model, в том числе его signed `storage_calculation_token`.
 принятый/опубликованный tip Wave 3, читает весь этот пакет и открывает ровно
 один наряд. Нельзя закрывать или подменять активный наряд другой волны.
 
-После принятия Wave 3 literal-команда наряда должна перечислять только
-фактически необходимые пути из следующей границы; если путь понадобился после
-открытия наряда, работа останавливается на узком amendment, а не расширяет
-границу молча:
+После принятия Wave 3 literal-команда наряда обязательна и исполнима именно
+так (одна строка, без placeholder). `S-19` нужен механике наряда; три
+автоматически добавленных пути S-19 ниже принадлежат settings-экрану и должны
+иметь **zero diff** — они не дают права трогать его:
 
-```text
-backend/app/models/billing.py
-backend/app/models/__init__.py
-backend/app/services/billing_invoice_v2_service.py
-backend/app/services/billing_invoice_service.py
-backend/app/services/billing_seller_report_service.py
-backend/app/api/billing.py
-backend/app/api/billing_invoice_v2_schemas.py
-backend/app/tasks/billing_tasks.py
-backend/app/celery_app.py
-backend/alembic/versions/20260827_0114_billing_invoice_v2.py
-backend/tests/test_billing_invoice_v2_service.py
-backend/tests/test_billing_invoice_v2_api.py
-backend/tests/test_billing_invoice_service.py
-backend/tests/test_billing_invoice_api.py
-backend/tests/test_billing_seller_report_service.py
-frontend/src/screens/ff/FfBillingScreen.tsx
-frontend/src/screens/ff/FfBillingScreen.test.ts
-frontend/tests-e2e/billing-invoice-v2.spec.ts
-frontend/tests-e2e/billing-seller-report.spec.ts
-frontend/tests-e2e/billing-invoices.spec.ts
-docs/evidence/billing-04-invoices/INVOICE-V2-PROOF.md
-docs/evidence/<wave-4-naryad>/BILLING-INVOICE-PREVIEW-1600.jpg
-docs/evidence/<wave-4-naryad>/BILLING-INVOICE-PRINT-1600.jpg
-docs/evidence/<wave-4-naryad>/VERDICT.md
-tasks/billing-04-invoices/TASK.md
+```bash
+python3 scripts/naryad.py new "Волна 4 модуля «Расчёты»: счета на существующем /app/ff/billing" --screens S-19 --lane обычная --files backend/app/models/billing.py,backend/app/models/operation_fact.py,backend/app/models/__init__.py,backend/app/services/billing_invoice_v2_service.py,backend/app/services/billing_invoice_service.py,backend/app/services/billing_seller_report_service.py,backend/app/api/billing.py,backend/app/api/billing_invoice_v2_schemas.py,backend/app/tasks/billing_tasks.py,backend/app/celery_app.py,backend/alembic/versions/20260827_0114_billing_invoice_v2.py,backend/tests/test_billing_invoice_v2_service.py,backend/tests/test_billing_invoice_v2_api.py,backend/tests/test_billing_invoice_service.py,backend/tests/test_billing_invoice_api.py,backend/tests/test_billing_seller_report_service.py,backend/tests/test_billing_tasks.py,frontend/src/screens/ff/FfBillingScreen.tsx,frontend/src/screens/ff/FfBillingScreen.test.ts,frontend/tests-e2e/billing-invoice-v2.spec.ts,frontend/tests-e2e/billing-seller-report.spec.ts,frontend/tests-e2e/billing-invoices.spec.ts,docs/evidence/billing-04-invoices/INVOICE-V2-PROOF.md,docs/evidence/20260827-volna-4-modulya-raschety-scheta-na-susch/BILLING-INVOICE-PREVIEW-1600.jpg,docs/evidence/20260827-volna-4-modulya-raschety-scheta-na-susch/BILLING-INVOICE-PREVIEW-1280.jpg,docs/evidence/20260827-volna-4-modulya-raschety-scheta-na-susch/BILLING-INVOICE-PRINT-1600.jpg,docs/evidence/20260827-volna-4-modulya-raschety-scheta-na-susch/VERDICT.md
 ```
+
+Фактическая allowlist — ровно все пути из команды плюс автоматически
+добавленные registry пути `frontend/src/screens/ff/FfSettingsScreen.tsx`,
+`frontend/src/utils/ffPermissions.ts` и
+`frontend/src/utils/separateMarkingPrint.ts`; у этих трёх обязательный zero
+diff. Если путь понадобился после открытия наряда, работа останавливается на
+узком amendment, а не расширяет границу молча. Детерминированный evidence path
+для этого текста наряда —
+`docs/evidence/20260827-volna-4-modulya-raschety-scheta-na-susch/`.
 
 `frontend/src/ui-kit/**` не входит в Wave 4. Перед кодом разработчик обязан
 зафиксировать audit нужных уже существующих primitives: labelled checkbox,
@@ -149,26 +134,41 @@ BillingInvoiceV2
   total_amount_kopecks: integer
 
 BillingInvoiceV2Line
-  id, invoice_id
+  id, tenant_id, invoice_id
   description_snapshot
   unit_price_kopecks nullable
   total_amount_kopecks: integer
   sort_order
 
 BillingInvoiceV2Source
-  id, invoice_line_id
+  id, tenant_id, invoice_line_id
   operation_fact_id nullable
   billing_ledger_entry_id nullable
   storage_calculation_token nullable
   signed_amount_kopecks_snapshot: integer
 ```
 
-Checks enforce exactly one source kind when a source exists; a manual line has
-no sources. A source is tenant-safe: composite tenant checks/service checks
-reject foreign fact, ledger, seller, storage token or actor before a write.
-Every table is tenant-indexed; v2 `number` is unique per tenant and v2 source
-indexes serve both invoice opening and Wave-3 prior-issuance lookup. A source
-may be referenced by arbitrarily many v2 invoices — no unique constraint on
+Every v2 table has required `tenant_id`, `UNIQUE (tenant_id, id)` and an index
+beginning with `tenant_id`. `BillingInvoiceV2Line` has composite FK
+`(tenant_id, invoice_id) → BillingInvoiceV2(tenant_id, id)`; source has
+`(tenant_id, invoice_line_id) → BillingInvoiceV2Line(tenant_id, id)`. 0114
+also adds `UNIQUE (tenant_id, id)` to `operation_facts` (and the matching model
+constraint), because it is absent today and is required for source safety.
+`BillingInvoiceV2Source(tenant_id, operation_fact_id)` then has composite FK
+to `operation_facts(tenant_id, id)`, and `(tenant_id,
+billing_ledger_entry_id)` has composite FK to the already tenant-unique ledger
+entry. The source-row CHECK enforces exactly one of fact, ledger or storage
+token; a manual line has no source. A storage token has no relational target,
+so its HMAC verification and recomputation under the same parent tenant/seller
+is the required service invariant, tested as strictly as the composite FKs.
+
+The invoice's `seller_id`, `issued_by_user_id`, every fact/ledger seller and
+the verified token seller are checked in the same transaction against the
+parent `tenant_id`; a direct single-column FK is never treated as tenant proof.
+V2 `number` is unique per tenant and source indexes `(tenant_id,
+operation_fact_id)`, `(tenant_id, billing_ledger_entry_id)` and `(tenant_id,
+invoice_line_id)` serve opening and Wave-3 prior-issuance lookup. A source may
+be referenced by arbitrarily many v2 invoices — no unique constraint on
 operation/ledger/storage source. FKs restrict deletion of retained facts but
 do not cascade-delete invoice history. `total_amount_kopecks` and all v2 money
 are integer kopecks, including negative chain net; float is forbidden.
@@ -180,10 +180,16 @@ head and preserve legacy invoice totals/JSON unchanged.
 
 ## 4. Источник суммы, selection и storage
 
-The client sends only typed candidate IDs and an idempotency key; it never
-sends rate, amount, chain members, seller, totals, snapshots or a trusted
-storage amount. Service reloads everything under tenant scope and creates the
-preview/save snapshot server-side.
+Preview and save share one discriminated, typed `InvoiceV2DraftRequest`; save
+adds only the HTTP `Idempotency-Key`. Both modes send `seller_id` as a context
+identifier. `selected_operations` also sends required `date_from`/`date_to`,
+selected root IDs and optional storage token; server validates the Moscow
+interval and that every root belongs to that seller/date scope. `manual` sends
+`seller_id` and 1..10 manual draft lines, with date context and selected IDs
+absent; the user may change that seller before preview. The client never sends
+rate, amount, chain members, totals, snapshots or a trusted storage amount.
+The service reloads everything under tenant scope and creates the preview/save
+snapshot server-side.
 
 For an `OperationFact` root, selection is the complete connected reversal
 chain rooted through `reversal_of_id`; its priced `BillingLedgerEntry`/line
@@ -224,28 +230,45 @@ baseline edit. Responses use integer `*_kopecks`, ISO date/date-time, explicit
 Required endpoints (names may be mechanically adjusted only if they collide
 with an existing route; semantics do not change):
 
-* `POST /api/billing/invoices-v2/preview/selected` — seller, selected root
-  IDs and optional storage token. Validates full chain and returns unsaved
-  preview; requires at least one eligible item.
-* `POST /api/billing/invoices-v2/preview/manual` — seller and 1..10 decimal
-  manual lines. Decimal grammar is `^-?\d+(\.\d{1,2})?$` but business amounts
-  must be non-negative; `Decimal` converts with exact two-place validation and
-  `ROUND_HALF_UP` to kopecks. No float or locale ambiguity.
-* `POST /api/billing/invoices-v2` — preview-equivalent typed payload plus
-  required opaque `Idempotency-Key`. It recomputes rather than trusts preview,
-  assigns the shared invoice document number under its existing locking
-  discipline, persists one snapshot transactionally, and returns it.
+* `POST /api/billing/invoices-v2/preview` — accepts the shared
+  `InvoiceV2DraftRequest`; validates context and returns an unsaved server
+  preview. `selected_operations` requires at least one eligible root;
+  `manual` requires 1..10 lines. Decimal grammar is `^-?\d+(\.\d{1,2})?$`,
+  business amounts are non-negative, and `Decimal` converts with exact
+  two-place validation and `ROUND_HALF_UP` to kopecks. No float or locale
+  ambiguity.
+* `POST /api/billing/invoices-v2` — accepts that **same**
+  `InvoiceV2DraftRequest` plus required opaque `Idempotency-Key`. It recomputes
+  rather than trusts preview, assigns the shared invoice document number under
+  its existing locking discipline, persists one snapshot transactionally, and
+  returns it.
 * `GET /api/billing/invoices-v2` — tenant-filtered cursor list with optional
   seller, date range, status, number search and limit 1..100; stable keyset
   order `(issued_at DESC, id DESC)` and signed cursor bound to all filters.
 * `GET /api/billing/invoices-v2/{id}` and
   `POST /api/billing/invoices-v2/{id}/cancel` — exact snapshot and idempotent
   cancellation. Concurrent cancel is safe: only `issued→cancelled` occurs.
-* `GET /api/billing/invoices` remains the compatibility facade: it merges
-  legacy monthly and v2 items into one stable paginated/list result while
-  preserving every existing legacy field/value and opening legacy rows by the
-  old endpoint. If a backward-compatible optional discriminator is necessary,
-  its absence must preserve the exact current old-client response contract.
+* `GET /api/billing/invoices` is the compatibility facade. Its envelope stays
+  `{"invoices": [...], "issues": [...]}`: `issues` retains the exact legacy
+  `BillingRunIssue` computation and shape, and every legacy invoice keeps all
+  current field names and values. `invoices` is the union of legacy monthly
+  rows and v2 rows, globally ordered by `(issued_at DESC, source_kind DESC,
+  id DESC)`, where the fixed source-kind tie-breaker is part of a signed cursor.
+  Optional `limit` (1..100) and `cursor` add pagination without removing
+  current filters; no foreign/filter-replayed cursor is accepted. V2 rows add
+  `creation_mode`, `period_start`, `period_end` and integer
+  `total_amount_kopecks`; legacy rows retain their old decimal `total_amount`
+  and need no new discriminator. The frontend opens a row carrying
+  `creation_mode` through `/invoices-v2/{id}` and every other row through the
+  untouched legacy endpoint.
+
+  Existing `period=YYYY-MM` semantics stay exact for legacy monthly rows.
+  For selected-operation v2 rows it means inclusive Moscow-period overlap with
+  that calendar month; manual v2 rows have no period and are excluded whenever
+  `period` is present. With no `period`, all three modes remain eligible. The
+  old `seller_id`, `status` and `number` filters apply identically to both
+  sources; `next_cursor` is an additive envelope key. This makes the merged
+  list deterministic without turning a manual invoice into a fictitious month.
 
 The idempotency record (or equally durable unique request-key storage) is
 tenant+user+idempotency-key scoped, hashes canonical request input and stores
@@ -275,12 +298,15 @@ omits all invoice-history identifiers/fields.
 Before removal from beat, `wms.billing_invoices_daily` receives a server-side
 kill switch at the task entry point. It is a durable code path that returns
 without querying/creating an invoice, even for a message enqueued by an older
-application. The test asserts it makes zero `form_invoice` calls and commits.
-Only after that check is committed in the same Wave 4 change, the beat entry is
-removed from `celery_app.conf.beat_schedule`; the task name stays registered as
-a safe no-op during the compatibility window. No feature flag default or
-environment setting may re-enable automatic creation silently. Existing
-automatically created legacy invoices remain visible.
+application. `backend/tests/test_billing_tasks.py` must prove a simulated
+already-queued task calls neither `SessionLocal` nor `form_invoice`, and that
+its public Celery wrapper is the same safe no-op. The same file must assert
+`celery_app.conf.beat_schedule` has no value or task equal to
+`wms.billing_invoices_daily` after the change. Only after both checks are green
+is the beat entry removed; the task name stays registered as a safe no-op
+during the compatibility window. No feature flag default or environment
+setting may re-enable automatic creation silently. Existing automatically
+created legacy invoices remain visible.
 
 ## 7. States, errors and consistency guarantees
 
@@ -316,12 +342,12 @@ Every automation maps to the test coverage table in the eventual PR.
 | TC-NEW-0401 | Y | Given one seller with charge+reversal chain, when root selected, then preview has one net service line and saves every exact source; reversal alone is rejected. |
 | TC-NEW-0402 | Y | Given an unpriced/not-billable/missing-dimension row, when selected, then checkbox/API reject it with named reason and no invoice is written. |
 | TC-NEW-0403 | Y | Given a valid signed storage token, when saved, then one aggregate storage line/source snapshot is stored; tampered, foreign or stale token returns `storage_calculation_stale` and writes nothing. |
-| TC-NEW-0404 | Y | Given no selected rows, when 1..10 valid manual rows are previewed/saved, then exact decimal strings become integer kopecks, no source exists, and invalid decimals/descriptions/11th row are blocked. |
+| TC-NEW-0404 | Y | Given no selected rows, when the same typed preview/save body contains a manually changeable seller and 1..10 valid lines, then exact decimal strings become integer kopecks, no source exists, and invalid decimals/descriptions/11th row are blocked. |
 | TC-NEW-0405 | Y | Given a request retried/raced, when same idempotency key and payload are submitted, then exactly one invoice/number exists; a changed payload with the same key is 409; a new key may reissue. |
 | TC-NEW-0406 | Y | Given an issued v2 invoice, when tariff/profile/source changes and later it is opened/printed, then snapshot/sum stay unchanged; cancellation preserves history and prior-issuance mark. |
 | TC-NEW-0407 | Y | Given two tenants or a non-admin, when reading/writing/listing/cancelling/cursor replaying, then foreign resources are undisclosed and finance/RBAC contracts hold. |
-| TC-NEW-0408 | Y | Given legacy monthly invoices and new v2 invoices, when filtered/listed/opened/printed/cancelled, then legacy JSON/print/sum remains unchanged and v2 shows «Ручной» or exact period. |
-| TC-NEW-0409 | Y | Given old scheduled task message and active beat config before Wave 4, when Wave 4 task code runs, then no invoice is created; after proof beat has no daily invoice entry. |
+| TC-NEW-0408 | Y | Given legacy monthly invoices and new v2 invoices, when the compatibility facade filters/lists with a signed global cursor, then its `invoices`+`issues` envelope and legacy values stay intact, selected v2 matches overlapping month, and manual v2 is excluded by `period`. |
+| TC-NEW-0409 | Y | Given an already queued old scheduled-task message, when Wave 4 task code runs, then it touches neither DB session nor `form_invoice`; beat has no daily invoice entry. |
 | TC-NEW-0410 | Y | Given 1600/1280 live browser, when finance-off/on, selection, preview, save, print, cancel and reissue are traversed, then all visible states are usable, focusable and have no page overflow/overlap. |
 
 Backend: focused service/API/OpenAPI/migration tests plus full `ruff check .`,
@@ -339,5 +365,6 @@ two tenants, one eligible chain, standalone reversal, unpriced row, storage
 row/token, manual seller, legacy invoice and cancelled/reissued v2 invoices.
 Verdict names URL, role, clicks, visible outcomes and either
 `PRODUCT_BROWSER_APPROVED`, `PRODUCT_REWORK_REQUIRED` or
-`PRODUCT_BROWSER_BLOCKED`, with the two prescribed screenshots. Only then may
-the Wave 4 commit be pushed. This is not deployment or permission to merge.
+`PRODUCT_BROWSER_BLOCKED`, with the prescribed 1600 preview, 1280 preview and
+1600 print screenshots at the exact evidence path above. Only then may the
+Wave 4 commit be pushed. This is not deployment or permission to merge.
