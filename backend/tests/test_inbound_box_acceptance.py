@@ -5,6 +5,8 @@ import time
 import pytest
 from httpx import AsyncClient
 
+from app.services.box_barcode_service import is_wb_compatible_box_barcode
+
 
 async def _seller_headers(
     async_client: AsyncClient,
@@ -133,6 +135,7 @@ async def test_inbound_box_plan_vs_actual_discrepancy(async_client: AsyncClient)
     assert nums == [1, 2]
     for b in body["boxes"]:
         assert b["internal_barcode"].startswith("INB-")
+        assert is_wb_compatible_box_barcode(b["internal_barcode"])
         assert b["label_printed_at"] is None
 
 

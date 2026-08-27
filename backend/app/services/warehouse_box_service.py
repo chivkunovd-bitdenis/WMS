@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.inbound_intake import InboundIntakeBox, InboundIntakeDistributionLine
 from app.models.warehouse_box import WarehouseBox
+from app.services.box_barcode_service import generate_box_barcode
 
 
 class WarehouseBoxError(Exception):
@@ -19,7 +20,7 @@ class WarehouseBoxError(Exception):
 
 
 def _new_barcode() -> str:
-    return f"WHB-{uuid.uuid4().hex[:12].upper()}"
+    return generate_box_barcode("WHB")
 
 
 async def create_warehouse_box(
