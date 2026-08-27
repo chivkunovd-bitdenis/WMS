@@ -70,9 +70,10 @@ test('billing seller report displays kopecks exactly once', async ({ page }) => 
 
   await page.goto('/app/ff/billing')
   await page.getByTestId('billing-seller-finance').click()
+  // Порядок колонок: раскрытие, Селлер, Документов, Штук, Стоимость услуг.
   const cells = page.getByTestId('billing-seller-summary').locator('tbody tr').first().getByRole('cell')
-  await expect(cells.nth(6)).toHaveText('630,00 ₽')
-  await expect(cells.nth(6)).not.toHaveText('63 000,00 ₽')
+  await expect(cells.nth(4)).toHaveText('630,00 ₽')
+  await expect(cells.nth(4)).not.toHaveText('63 000,00 ₽')
 })
 
 // S-31-TC-017 — Given the seller billing profile blocks formation, Then the corrective action targets that seller.

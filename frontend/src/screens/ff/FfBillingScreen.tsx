@@ -304,8 +304,12 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
     { key: 'seller', header: 'Селлер', width: 250, render: (row: SellerReportRow) => <TextCell value={row.seller_name} width={230} /> },
     { key: 'operations', header: 'Документов', width: 130, align: 'right' as const, render: (row: SellerReportRow) => <QtyCell value={row.operation_count} /> },
     { key: 'items', header: 'Штук', width: 100, align: 'right' as const, render: (row: SellerReportRow) => <QtyCell value={row.item_quantity} /> },
+    // Деньги стоят раньше счётчиков проблем намеренно: на 1280 таблица не
+    // помещается в карточку целиком, и вправо должно уезжать то, что смотрят
+    // реже, а не сумма, ради которой экран и открывают.
+    ...(includeFinance ? [{ key: 'accrued', header: 'Стоимость услуг', width: 170, align: 'right' as const, render: (row: SellerReportRow) => <MoneyCell minor={row.net_total_kopecks ?? null} /> }] : []),
     { key: 'notBillable', header: 'Не тарифицируется', width: 160, align: 'right' as const, render: (row: SellerReportRow) => <QtyCell value={row.not_billable_count} /> },
-    ...(includeFinance ? [{ key: 'unpriced', header: 'Нет ставки', width: 120, align: 'right' as const, render: (row: SellerReportRow) => <QtyCell value={row.unpriced_count ?? 0} /> }, { key: 'accrued', header: 'Стоимость услуг', width: 170, align: 'right' as const, render: (row: SellerReportRow) => <MoneyCell minor={row.net_total_kopecks ?? null} /> }] : []),
+    ...(includeFinance ? [{ key: 'unpriced', header: 'Нет ставки', width: 120, align: 'right' as const, render: (row: SellerReportRow) => <QtyCell value={row.unpriced_count ?? 0} /> }] : []),
   ]
   const toggleRoot = (rootId: string, checked: boolean) => setSelectedRootIds((ids) => checked ? [...new Set([...ids, rootId])] : ids.filter((id) => id !== rootId))
 
