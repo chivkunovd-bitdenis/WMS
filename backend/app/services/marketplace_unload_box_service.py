@@ -204,6 +204,7 @@ async def collect_ready_box_into_open_box(
     *,
     barcode: str,
     allow_over_plan: bool = False,
+    actor_user_id: uuid.UUID | None = None,
 ) -> BoxScanResult:
     """Развернуть состав готового короба (WHB / приёмочный) в открытый короб отгрузки."""
     raw = barcode.strip()
@@ -240,6 +241,7 @@ async def collect_ready_box_into_open_box(
                         product_id=dl.product_id,
                         quantity=qty,
                         allow_over_plan=allow_over_plan,
+                        actor_user_id=actor_user_id,
                     )
                 except MarketplaceUnloadPickError as exc:
                     raise _map_collect_err(exc) from None
@@ -265,6 +267,7 @@ async def collect_ready_box_into_open_box(
                             product_id=bl.product_id,
                             quantity=qty,
                             allow_over_plan=allow_over_plan,
+                            actor_user_id=actor_user_id,
                         )
                     except MarketplaceUnloadPickError as exc:
                         raise _map_collect_err(exc) from None
@@ -294,6 +297,7 @@ async def scan_barcode_into_box(
     storage_location_id: uuid.UUID | None,
     quantity: int = 1,
     allow_over_plan: bool = False,
+    actor_user_id: uuid.UUID | None = None,
 ) -> BoxScanResult:
     """Scan flow for TSD/web: optional location barcode, then product → box line."""
     raw = barcode.strip()
@@ -328,6 +332,7 @@ async def scan_barcode_into_box(
             box_id,
             barcode=raw,
             allow_over_plan=allow_over_plan,
+            actor_user_id=actor_user_id,
         )
 
     if product_id_hint is None:
@@ -350,6 +355,7 @@ async def scan_barcode_into_box(
             storage_location_id=storage_location_id,
             product_id=product_id,
             quantity=quantity,
+            actor_user_id=actor_user_id,
         )
     except MarketplaceUnloadPickError as exc:
         raise _map_collect_err(exc) from None
@@ -369,6 +375,7 @@ async def add_manual_qty_to_box(
     product_id: uuid.UUID,
     storage_location_id: uuid.UUID | None,
     quantity: int,
+    actor_user_id: uuid.UUID | None = None,
 ) -> MarketplaceUnloadBoxLine:
     if quantity < 1:
         raise MarketplaceUnloadBoxError("invalid_quantity")
@@ -390,6 +397,7 @@ async def add_manual_qty_to_box(
             storage_location_id=storage_location_id,
             product_id=product_id,
             quantity=quantity,
+            actor_user_id=actor_user_id,
         )
     except MarketplaceUnloadPickError as exc:
         raise _map_collect_err(exc) from None
@@ -404,6 +412,7 @@ async def attach_existing_box_by_barcode(
     barcode: str,
     box_preset: str = "60_40_40",
     allow_over_plan: bool = False,
+    actor_user_id: uuid.UUID | None = None,
 ) -> MarketplaceUnloadBox:
     """Привязать существующий короб (WHB или приёмочный) и развернуть состав в подбор."""
     preset = box_preset.strip()
@@ -444,6 +453,7 @@ async def attach_existing_box_by_barcode(
                         quantity=int(dl.quantity),
                         require_open_box=False,
                         allow_over_plan=allow_over_plan,
+                        actor_user_id=actor_user_id,
                     )
                 except MarketplaceUnloadPickError as exc:
                     raise _map_collect_err(exc) from None
@@ -469,6 +479,7 @@ async def attach_existing_box_by_barcode(
                             quantity=qty,
                             require_open_box=False,
                             allow_over_plan=allow_over_plan,
+                            actor_user_id=actor_user_id,
                         )
                     except MarketplaceUnloadPickError as exc:
                         raise _map_collect_err(exc) from None
@@ -541,6 +552,7 @@ async def remove_box_line(
     line_id: uuid.UUID,
     *,
     quantity: int | None = None,
+    actor_user_id: uuid.UUID | None = None,
 ) -> MarketplaceUnloadBoxLine | None:
     box = await session.get(MarketplaceUnloadBox, box_id)
     if box is None:
@@ -558,6 +570,7 @@ async def remove_box_line(
             box_id=box_id,
             line_id=line_id,
             quantity=quantity,
+            actor_user_id=actor_user_id,
         )
     except MarketplaceUnloadPickError as exc:
         raise _map_collect_err(exc) from None
@@ -587,6 +600,8 @@ async def copy_box(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     box_id: uuid.UUID,
+    *,
+    actor_user_id: uuid.UUID | None = None,
 ) -> MarketplaceUnloadBox:
     """Duplicate a closed source box into a new closed box (REV-FIX-015).
 
@@ -665,6 +680,7 @@ async def copy_box(
                     product_id=ln.product_id,
                     quantity=chunk,
                     require_open_box=False,
+                    actor_user_id=actor_user_id,
                 )
             except MarketplaceUnloadPickError as exc:
                 raise _map_collect_err(exc) from None

@@ -266,6 +266,7 @@ async def collect_into_box(
     quantity: int,
     require_open_box: bool = False,
     allow_over_plan: bool = False,
+    actor_user_id: uuid.UUID | None = None,
 ) -> CollectResult:
     if quantity < 1:
         raise MarketplaceUnloadPickError("invalid_quantity")
@@ -343,6 +344,7 @@ async def collect_into_box(
             storage_location_id=effective_location_id,
             quantity=quantity,
             marketplace_unload_request_id=request_id,
+            actor_user_id=actor_user_id,
         )
     except ValueError as exc:
         if str(exc) == "insufficient stock":
@@ -426,6 +428,7 @@ async def record_pick_allocation(
     product_id: uuid.UUID,
     quantity: int,
     allow_over_plan: bool = False,
+    actor_user_id: uuid.UUID | None = None,
 ) -> PickAllocationResult:
     """Подбор двигает товар со склада в аллокацию подбора и НЕ трогает короба.
 
@@ -505,6 +508,7 @@ async def record_pick_allocation(
             storage_location_id=effective_location_id,
             quantity=quantity,
             marketplace_unload_request_id=request_id,
+            actor_user_id=actor_user_id,
         )
     except ValueError as exc:
         if str(exc) == "insufficient stock":
@@ -562,6 +566,7 @@ async def set_pick_allocation(
     product_id: uuid.UUID,
     storage_location_id: uuid.UUID,
     quantity: int,
+    actor_user_id: uuid.UUID | None = None,
 ) -> SetPickAllocationResult:
     """Задать итоговое количество подбора по паре товар+ячейка (не прибавку, а
     итог) — PICK-01. Разница > 0 идёт через record_pick_allocation как есть,
@@ -619,6 +624,7 @@ async def set_pick_allocation(
             storage_location_id=storage_location_id,
             product_id=product_id,
             quantity=diff,
+            actor_user_id=actor_user_id,
         )
         return SetPickAllocationResult(
             id=result.allocation.id,
@@ -657,6 +663,7 @@ async def set_pick_allocation(
         storage_location_id=storage_location_id,
         quantity=remove_qty,
         marketplace_unload_request_id=request_id,
+        actor_user_id=actor_user_id,
     )
     await mu_svc.restore_reservation_for_remove(
         session,
@@ -727,6 +734,7 @@ async def remove_from_box(
     box_id: uuid.UUID,
     line_id: uuid.UUID,
     quantity: int | None = None,
+    actor_user_id: uuid.UUID | None = None,
 ) -> MarketplaceUnloadBoxLine | None:
     """Remove qty from box line and reverse inventory/reservation (DEC-016)."""
     req = await _request_for_collect(session, tenant_id, request_id)
@@ -766,6 +774,7 @@ async def remove_from_box(
             storage_location_id=loc_id,
             quantity=chunk_qty,
             marketplace_unload_request_id=request_id,
+            actor_user_id=actor_user_id,
         )
 
     await mu_svc.restore_reservation_for_remove(
@@ -808,6 +817,8 @@ async def rollback_all_collected_for_cancel(
     tenant_id: uuid.UUID,
     warehouse_id: uuid.UUID,
     request_id: uuid.UUID,
+    *,
+    actor_user_id: uuid.UUID | None = None,
 ) -> None:
     """TASK-019: on cancel, box stock returns to sorting (virtual buffer), not source cells."""
     lock_stmt = (
@@ -845,6 +856,7 @@ async def rollback_all_collected_for_cancel(
                 storage_location_id=sorting_loc.id,
                 quantity=qty,
                 marketplace_unload_request_id=request_id,
+                actor_user_id=actor_user_id,
             )
 
     box_line_stmt = (

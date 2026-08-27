@@ -705,6 +705,7 @@ async def attach_order_meta_to_wb_and_sync(
     marking: FbsOrderMarking,
     http_client: httpx.AsyncClient,
     *,
+    actor_user_id: uuid.UUID | None,
     api_token: str | None = None,
     ozon_provider: OzonMarketplaceProvider | None = None,
 ) -> list[FbsOrderMarking]:
@@ -752,7 +753,12 @@ async def attach_order_meta_to_wb_and_sync(
         )
         order.metadata_last_checked_at = datetime.now(tz=UTC)
         await session.flush()
-        await _notify_supply_marking_update(session, tenant_id, order.id)
+        await _notify_supply_marking_update(
+            session,
+            tenant_id,
+            order.id,
+            actor_user_id=actor_user_id,
+        )
         return await list_order_markings(session, tenant_id, order.id)
 
     token = api_token or await require_marketplace_token(session, tenant_id, order.seller_id)
@@ -780,7 +786,12 @@ async def attach_order_meta_to_wb_and_sync(
         raise FbsMarkingError(_wb_error_code(exc)) from exc
 
     markings = await _sync_order_meta_from_wb(session, order, http_client, token)
-    await _notify_supply_marking_update(session, tenant_id, order.id)
+    await _notify_supply_marking_update(
+        session,
+        tenant_id,
+        order.id,
+        actor_user_id=actor_user_id,
+    )
     return markings
 
 
@@ -808,6 +819,7 @@ async def get_order_metadata(
     http_client: httpx.AsyncClient,
     *,
     sync_wb: bool = True,
+    actor_user_id: uuid.UUID,
 ) -> dict[str, Any]:
     order = await _get_order(session, tenant_id, order_id)
     if order is None:
@@ -816,7 +828,12 @@ async def get_order_metadata(
     if sync_wb and markings:
         token = await require_marketplace_token(session, tenant_id, order.seller_id)
         markings = await _sync_order_meta_from_wb(session, order, http_client, token)
-        await _notify_supply_marking_update(session, tenant_id, order_id)
+        await _notify_supply_marking_update(
+            session,
+            tenant_id,
+            order_id,
+            actor_user_id=actor_user_id,
+        )
     return build_order_metadata(order, markings)
 
 
@@ -826,6 +843,7 @@ async def sync_order_marking_statuses(
     order_id: uuid.UUID,
     http_client: httpx.AsyncClient,
     *,
+    actor_user_id: uuid.UUID | None,
     ozon_provider: OzonMarketplaceProvider | None = None,
 ) -> list[FbsOrderMarking]:
     order = await _get_order(session, tenant_id, order_id)
@@ -861,7 +879,12 @@ async def sync_order_marking_statuses(
         order.metadata_delivery_allowed = compute_delivery_allowed(order, markings)
         order.metadata_last_checked_at = datetime.now(tz=UTC)
         await session.flush()
-        await _notify_supply_marking_update(session, tenant_id, order_id)
+        await _notify_supply_marking_update(
+            session,
+            tenant_id,
+            order_id,
+            actor_user_id=actor_user_id,
+        )
         return markings
 
     token = await require_marketplace_token(session, tenant_id, order.seller_id)
@@ -870,7 +893,12 @@ async def sync_order_marking_statuses(
     except WildberriesClientError as exc:
         raise FbsMarkingError(_wb_error_code(exc)) from exc
 
-    await _notify_supply_marking_update(session, tenant_id, order_id)
+    await _notify_supply_marking_update(
+        session,
+        tenant_id,
+        order_id,
+        actor_user_id=actor_user_id,
+    )
     return markings
 
 
@@ -878,6 +906,8 @@ async def _notify_supply_marking_update(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     order_id: uuid.UUID,
+    *,
+    actor_user_id: uuid.UUID | None,
 ) -> None:
     order = await session.get(FbsOrder, order_id)
     if order is None or order.supply_id is None:
@@ -886,4 +916,9 @@ async def _notify_supply_marking_update(
         sync_fbs_supply_after_order_marking_update,
     )
 
-    await sync_fbs_supply_after_order_marking_update(session, tenant_id, order_id)
+    await sync_fbs_supply_after_order_marking_update(
+        session,
+        tenant_id,
+        order_id,
+        actor_user_id=actor_user_id,
+    )

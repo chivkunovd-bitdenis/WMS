@@ -1190,7 +1190,11 @@ async def cancel_request(
         from app.services import marketplace_unload_collect_service as collect_svc
 
         await collect_svc.rollback_all_collected_for_cancel(
-            session, tenant_id, req.warehouse_id, request_id
+            session,
+            tenant_id,
+            req.warehouse_id,
+            request_id,
+            actor_user_id=performer_id,
         )
         await _release_reservations(session, request_id)
         req.status = STATUS_CANCELLED

@@ -223,6 +223,7 @@ async def commit_ozon_kiz(
             order,
             marking,
             http_client,
+            actor_user_id=actor_user_id,
             ozon_provider=provider,
         )
     except marking_svc.FbsMarkingError as error:

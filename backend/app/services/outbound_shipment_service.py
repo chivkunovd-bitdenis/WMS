@@ -312,6 +312,7 @@ async def ship_line(
     line_id: uuid.UUID,
     *,
     quantity: int,
+    actor_user_id: uuid.UUID | None = None,
 ) -> OutboundShipmentRequest:
     pair = await _line_on_request(session, tenant_id, request_id, line_id)
     if pair is None:
@@ -337,6 +338,7 @@ async def ship_line(
             storage_location_id=sid,
             quantity=quantity,
             outbound_shipment_line_id=line.id,
+            actor_user_id=actor_user_id,
         )
     except ValueError:
         raise OutboundShipmentError("insufficient_stock") from None
@@ -358,6 +360,8 @@ async def post_request(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
+    *,
+    actor_user_id: uuid.UUID | None = None,
 ) -> OutboundShipmentRequest:
     req = await get_request(session, tenant_id, request_id)
     if req is None:
@@ -387,6 +391,7 @@ async def post_request(
                 storage_location_id=sid,
                 quantity=rem,
                 outbound_shipment_line_id=line.id,
+                actor_user_id=actor_user_id,
             )
         except ValueError:
             raise OutboundShipmentError("insufficient_stock") from None

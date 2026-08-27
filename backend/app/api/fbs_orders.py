@@ -416,7 +416,13 @@ async def cancel_fbs_order(
 ) -> FbsOrderOut:
     async with httpx.AsyncClient() as http_client:
         try:
-            order = await cancel_order(session, user.tenant_id, order_id, http_client)
+            order = await cancel_order(
+                session,
+                user.tenant_id,
+                order_id,
+                http_client,
+                actor_user_id=user.id,
+            )
         except FbsCancellationError as exc:
             _raise_cancellation_http(exc)
     await session.commit()
@@ -445,6 +451,7 @@ async def sync_fbs_order_statuses(
                 user.tenant_id,
                 body.seller_id,
                 http_client,
+                actor_user_id=user.id,
             )
         except FbsCancellationError as exc:
             _raise_cancellation_http(exc)

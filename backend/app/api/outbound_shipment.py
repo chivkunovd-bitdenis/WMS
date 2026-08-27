@@ -90,6 +90,7 @@ class OutboundMovementOut(BaseModel):
     storage_location_id: str
     quantity_delta: int
     movement_type: str
+    actor_user_id: str | None = None
     outbound_shipment_line_id: str
     created_at: str
 
@@ -132,6 +133,7 @@ def _movement_out(m: InventoryMovement) -> OutboundMovementOut:
         storage_location_id=str(m.storage_location_id),
         quantity_delta=m.quantity_delta,
         movement_type=m.movement_type,
+        actor_user_id=str(m.actor_user_id) if m.actor_user_id else None,
         outbound_shipment_line_id=str(m.outbound_shipment_line_id),
         created_at=m.created_at.isoformat(),
     )
@@ -373,6 +375,7 @@ async def ship_outbound_line(
             request_id,
             line_id,
             quantity=body.quantity,
+            actor_user_id=user.id,
         )
     except OutboundShipmentError as exc:
         raise _map_out_err(exc) from None
@@ -466,7 +469,12 @@ async def post_outbound_request(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> OutboundShipmentRequestOut:
     try:
-        r = await svc.post_request(session, user.tenant_id, request_id)
+        r = await svc.post_request(
+            session,
+            user.tenant_id,
+            request_id,
+            actor_user_id=user.id,
+        )
     except OutboundShipmentError as exc:
         raise _map_out_err(exc) from None
     r2 = await svc.get_request(session, user.tenant_id, r.id)

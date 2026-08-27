@@ -988,6 +988,7 @@ async def _commit_one_kiz_pair(
             order,
             marking,
             http_client,
+            actor_user_id=actor_user_id,
             api_token=token,
         )
     except FbsKizError as exc:

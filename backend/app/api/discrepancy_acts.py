@@ -186,7 +186,12 @@ async def approve_discrepancy_act(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> DiscrepancyActDetailOut:
     try:
-        r = await svc.approve_act(session, user.tenant_id, act_id)
+        r = await svc.approve_act(
+            session,
+            user.tenant_id,
+            act_id,
+            actor_user_id=user.id,
+        )
     except DiscrepancyActError as exc:
         raise _map_da_err(exc) from None
     return _detail_out(

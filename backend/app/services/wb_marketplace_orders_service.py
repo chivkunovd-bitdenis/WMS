@@ -810,6 +810,7 @@ async def _apply_wb_row_to_existing(
             existing,
             wb_status,
             supplier_status=supplier_status,
+            actor_user_id=None,
         )
     apply_wb_meta_requirements_to_order(existing, row)
     await _assign_wms_warehouse_from_binding(
@@ -962,6 +963,7 @@ async def _apply_wb_status_to_order(
     wb_status: str | None,
     *,
     supplier_status: str | None = None,
+    actor_user_id: uuid.UUID | None,
 ) -> None:
     normalized_wb = (
         wb_status.strip().lower() if isinstance(wb_status, str) and wb_status.strip() else None
@@ -987,8 +989,17 @@ async def _apply_wb_status_to_order(
         )
 
         order.status = FBS_ORDER_STATUS_CANCELLED
-        await reverse_fbs_shipment_if_needed(session, order)
-        await detach_cancelled_order_from_supply(session, order.tenant_id, order)
+        await reverse_fbs_shipment_if_needed(
+            session,
+            order,
+            actor_user_id=actor_user_id,
+        )
+        await detach_cancelled_order_from_supply(
+            session,
+            order.tenant_id,
+            order,
+            actor_user_id=actor_user_id,
+        )
         await _release_reservation(session, order)
         return
     if normalized_wb == "sold":
@@ -1096,6 +1107,8 @@ async def sync_order_statuses(
     seller_id: uuid.UUID,
     http_client: httpx.AsyncClient,
     api_token: str,
+    *,
+    actor_user_id: uuid.UUID | None,
 ) -> int:
     updated = 0
     last_created_at: datetime | None = None
@@ -1173,6 +1186,7 @@ async def sync_order_statuses(
                 order,
                 wb_status,
                 supplier_status=supplier_status,
+                actor_user_id=actor_user_id,
             )
             updated += 1
 
@@ -1638,7 +1652,12 @@ async def sync_seller_orders(
     if include_history and orders_page_error is None:
         try:
             statuses_updated = await sync_order_statuses(
-                session, tenant_id, seller_id, http_client, api_token
+                session,
+                tenant_id,
+                seller_id,
+                http_client,
+                api_token,
+                actor_user_id=None,
             )
             await session.commit()
         except WbMarketplaceOrdersError as exc:

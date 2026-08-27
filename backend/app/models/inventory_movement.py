@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from app.models.product import Product
     from app.models.storage_location import StorageLocation
     from app.models.tenant import Tenant
+    from app.models.user import User
 
 
 class InventoryMovement(Base):
@@ -86,6 +87,12 @@ class InventoryMovement(Base):
         nullable=True,
         index=True,
     )
+    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -105,3 +112,4 @@ class InventoryMovement(Base):
         "OutboundShipmentLine",
         back_populates="inventory_movements",
     )
+    actor_user: Mapped[User | None] = relationship("User")

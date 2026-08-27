@@ -263,6 +263,7 @@ async def _sync_supply_orders_from_wb(
                 order,
                 wb_status,
                 supplier_status=supplier_status,
+                actor_user_id=None,
             )
             order.last_wb_sync_at = datetime.now(tz=UTC)
             processed += 1

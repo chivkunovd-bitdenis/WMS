@@ -81,6 +81,7 @@ async def create_stock_transfer(
             to_storage_location_id=body.to_storage_location_id,
             product_id=body.product_id,
             quantity=body.quantity,
+            actor_user_id=user.id,
         )
         await session.commit()
     except ValueError as exc:
