@@ -1,10 +1,9 @@
 import { Box, Paper, Skeleton, Stack, Typography } from '@mui/material'
+import { formatMoney } from './Cells'
 
-export type ReportMetricItem = {
+type ReportMetricBase = {
   key: string
   label: string
-  value: number | null
-  unit?: string
   delta?: {
     value: number
     direction: 'up' | 'down' | 'flat'
@@ -14,6 +13,19 @@ export type ReportMetricItem = {
   nullValueLabel?: string
 }
 
+export type ReportMetricItem =
+  | (ReportMetricBase & {
+    value: number | null
+    unit?: string
+    moneyMinor?: never
+  })
+  | (ReportMetricBase & {
+    /** Integer minor currency units rendered by the canonical money formatter. */
+    moneyMinor: number | string | null
+    value?: never
+    unit?: never
+  })
+
 export type ReportMetricStripProps = {
   items: ReportMetricItem[]
   loading?: boolean
@@ -22,8 +34,8 @@ export type ReportMetricStripProps = {
 
 const numberFormatter = new Intl.NumberFormat('ru-RU')
 
-function formatValue(value: number | null, unit: string) {
-  return value === null ? '—' : `${numberFormatter.format(value)} ${unit}`
+function formatValue(value: number | null | undefined, unit: string) {
+  return value == null ? '—' : `${numberFormatter.format(value)} ${unit}`
 }
 
 function formatDelta(delta: NonNullable<ReportMetricItem['delta']>, unit: string) {
@@ -47,6 +59,9 @@ export function ReportMetricStrip({ items, loading = false, testId }: ReportMetr
     >
       {items.slice(0, 4).map((item, index) => {
         const unit = item.unit ?? 'шт.'
+        const value = item.moneyMinor !== undefined
+          ? formatMoney(item.moneyMinor)
+          : formatValue(item.value, unit)
         return (
           <Box
             key={item.key}
@@ -74,7 +89,7 @@ export function ReportMetricStrip({ items, loading = false, testId }: ReportMetr
                   variant="h6"
                   sx={{ fontVariantNumeric: 'tabular-nums', textAlign: 'right', fontWeight: 700 }}
                 >
-                  {formatValue(item.value, unit)}
+                  {value}
                 </Typography>
                 {item.delta ? (
                   <Typography
@@ -86,7 +101,7 @@ export function ReportMetricStrip({ items, loading = false, testId }: ReportMetr
                     {formatDelta(item.delta, unit)}
                   </Typography>
                 ) : null}
-                {item.value === null && !item.delta ? (
+                {item.moneyMinor === undefined && item.value === null && !item.delta ? (
                   <Typography variant="caption" color="text.secondary">
                     {item.nullValueLabel ?? 'Недоступно для сравнения'}
                   </Typography>

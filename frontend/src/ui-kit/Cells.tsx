@@ -76,10 +76,10 @@ export function PlanFactCell({ fact, plan }: { fact: number; plan: number }) {
 
 // Канон R-02: длинный текст в ячейке не обрезается молча — под многоточием
 // всегда лежит подсказка с полным значением.
-export function TextCell({ value, width }: { value: string | null | undefined; width?: number }) {
+export function TextCell({ value, width, hint }: { value: string | null | undefined; width?: number; hint?: string }) {
   const text = value ?? '—'
   return (
-    <Tooltip title={text}>
+    <Tooltip title={hint ?? text}>
       <Box
         component="span"
         sx={{

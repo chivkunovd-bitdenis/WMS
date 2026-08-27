@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import { formatMoney, MoneyCell } from './Cells'
+import { formatMoney, MoneyCell, TextCell } from './Cells'
 
 describe('formatMoney', () => {
   it('formats integer kopecks, zero, reversal and missing amounts as RUB', () => {
@@ -29,5 +29,16 @@ describe('MoneyCell', () => {
     for (const [minor, expected] of cases) {
       expect(renderToStaticMarkup(createElement(MoneyCell, { minor }))).toContain(expected)
     }
+  })
+})
+
+describe('TextCell', () => {
+  it('uses an explicit generic hint instead of the visible shortened value', () => {
+    const markup = renderToStaticMarkup(createElement(TextCell, {
+      value: 'Недоступен', hint: 'Первоисточник недоступен или не поддерживает переход',
+    }))
+
+    expect(markup).toContain('Недоступен')
+    expect(markup).toContain('Первоисточник недоступен или не поддерживает переход')
   })
 })

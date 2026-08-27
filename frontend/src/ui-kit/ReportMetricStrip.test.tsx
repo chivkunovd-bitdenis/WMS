@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { ReportMetricStrip, type ReportMetricItem } from './ReportMetricStrip'
 
-const items: ReportMetricItem[] = [
+const items = [
   { key: 'current', label: 'Остаток сейчас', value: 12480 },
   { key: 'inbound', label: 'Приход за период', value: 0 },
   { key: 'outbound', label: 'Расход за период', value: 2918 },
@@ -12,7 +12,7 @@ const items: ReportMetricItem[] = [
     value: 184,
     delta: { value: 6.7, direction: 'up', a11yLabel: 'Расход вырос на 6,7 процента' },
   },
-]
+] satisfies ReportMetricItem[]
 
 describe('ReportMetricStrip', () => {
   it('renders four metrics, including zero, units, and accessible delta explanation', () => {
@@ -51,6 +51,31 @@ describe('ReportMetricStrip', () => {
     expect(markup).toContain('—')
     expect(markup).toContain('В прошлом периоде расхода не было')
     expect(markup).not.toContain('184 шт.')
+  })
+
+  it('formats a minor-money metric once through the canonical formatter', () => {
+    const markup = renderToStaticMarkup(
+      <ReportMetricStrip items={[
+        { key: 'money-null', label: 'Нет данных', moneyMinor: null },
+        { key: 'money-zero', label: 'Ноль', moneyMinor: 0 },
+        { key: 'money-string', label: 'Строка', moneyMinor: '63000.00' },
+        { key: 'money-reversal', label: 'Сторно', moneyMinor: -60000 },
+      ]} />,
+    )
+
+    expect(markup).toContain('—')
+    expect(markup).toContain('0,00 ₽')
+    expect(markup).toContain('630,00 ₽')
+    expect(markup).toContain('-600,00 ₽')
+    expect(markup).not.toContain('63000 ₽')
+    expect(markup).not.toContain('63 000 ₽')
+  })
+
+  it('does not permit a numeric value alongside a minor-money metric', () => {
+    // @ts-expect-error moneyMinor and value are intentionally mutually exclusive.
+    const invalid: ReportMetricItem = { key: 'invalid', label: 'Нельзя', value: 12, moneyMinor: 1200 }
+
+    expect(invalid).toBeDefined()
   })
 
   it('replaces all values with loading skeletons', () => {
