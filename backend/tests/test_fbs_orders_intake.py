@@ -190,6 +190,7 @@ def _patch_wb_order_fetches(
         marketplace_api_base: str | None = None,
         limit: int = 100,
         next_token: int | None = None,
+        date_from: int | None = None,
     ) -> tuple[list[dict[str, Any]], int | None]:
         if page_raises is not None:
             raise page_raises

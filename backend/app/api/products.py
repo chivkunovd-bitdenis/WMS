@@ -34,6 +34,7 @@ from app.services.catalog_service import (
 from app.services.catalog_service import (
     CatalogError,
     _SkipSentinel,
+    apply_products_fbs_stock_limit_from_balance,
     bulk_update_products_fbs_stock_sync,
     bulk_update_products_requires_honest_sign,
     create_product,
@@ -321,6 +322,32 @@ class ProductFbsStockSyncBulkPatch(BaseModel):
 
 class ProductFbsStockSyncBulkOut(BaseModel):
     updated_count: int
+
+
+class ProductFbsStockLimitFromBalanceBulkPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    product_ids: list[uuid.UUID] = Field(min_length=1, max_length=10000)
+
+
+class ProductFbsStockLimitFromBalanceUpdatedItem(BaseModel):
+    product_id: str
+    fbs_stock_limit: int
+    reset_warehouses_count: int
+
+
+class ProductFbsStockLimitFromBalanceSkippedItem(BaseModel):
+    product_id: str
+    reason: str
+
+
+class ProductFbsStockLimitFromBalanceBulkOut(BaseModel):
+    updated_count: int
+    updated: list[ProductFbsStockLimitFromBalanceUpdatedItem]
+    skipped: list[ProductFbsStockLimitFromBalanceSkippedItem]
+    # Сколько товаров из updated получили сброшенную (обнулённую) разнарядку по
+    # складам — фронту нужно отдельным числом для предупреждения оператору.
+    pool_reset_products_count: int
 
 
 class StockDirectionCreate(BaseModel):
@@ -1199,3 +1226,49 @@ async def patch_products_fbs_stock_sync_bulk(
             ) from None
         raise
     return ProductFbsStockSyncBulkOut(updated_count=updated_count)
+
+
+@router.patch(
+    "/fbs-stock-limit/from-balance/bulk",
+    response_model=ProductFbsStockLimitFromBalanceBulkOut,
+)
+async def patch_products_fbs_stock_limit_from_balance_bulk(
+    body: ProductFbsStockLimitFromBalanceBulkPatch,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> ProductFbsStockLimitFromBalanceBulkOut:
+    await assert_seller_permission(session, user, PERM_PRODUCTS)
+    if user.role != FULFILLMENT_SELLER:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    seller_scope = user.seller_id
+    if user_can_manage_seller_shops(user) and effective_seller_id is not None:
+        seller_scope = effective_seller_id
+    if seller_scope is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seller_not_linked")
+
+    result = await apply_products_fbs_stock_limit_from_balance(
+        session,
+        user.tenant_id,
+        seller_scope,
+        product_ids=body.product_ids,
+    )
+    return ProductFbsStockLimitFromBalanceBulkOut(
+        updated_count=len(result.updated),
+        updated=[
+            ProductFbsStockLimitFromBalanceUpdatedItem(
+                product_id=str(item.product_id),
+                fbs_stock_limit=item.fbs_stock_limit,
+                reset_warehouses_count=item.reset_warehouses_count,
+            )
+            for item in result.updated
+        ],
+        skipped=[
+            ProductFbsStockLimitFromBalanceSkippedItem(
+                product_id=str(item.product_id),
+                reason=item.reason,
+            )
+            for item in result.skipped
+        ],
+        pool_reset_products_count=result.reset_products_count,
+    )

@@ -1,3 +1,5 @@
+import { readApiErrorMessage } from './utils/readApiErrorMessage';
+
 const API_PREFIX = '/api';
 
 export type AuthStoragePortal = 'fulfillment' | 'seller';
@@ -46,4 +48,40 @@ export function setStoredToken(
   }
   localStorage.setItem(key, token);
   localStorage.removeItem(LEGACY_TOKEN_KEY);
+}
+
+// Пакетная простановка остатка FBS по фактическому остатку на складе
+// (каталог ФФ — экран FfProductsCatalogScreen).
+export type ProductFbsStockLimitFromBalanceUpdated = {
+  product_id: string;
+  fbs_stock_limit: number;
+  reset_warehouses_count: number;
+};
+
+export type ProductFbsStockLimitFromBalanceSkipped = {
+  product_id: string;
+  reason: string;
+};
+
+export type ProductFbsStockLimitFromBalanceResult = {
+  updated_count: number;
+  updated: ProductFbsStockLimitFromBalanceUpdated[];
+  skipped: ProductFbsStockLimitFromBalanceSkipped[];
+  pool_reset_products_count: number;
+};
+
+export async function applyFbsStockLimitFromBalance(
+  token: string,
+  authHeaders: (t: string) => Record<string, string>,
+  productIds: string[],
+): Promise<ProductFbsStockLimitFromBalanceResult> {
+  const res = await fetch(apiUrl('/products/fbs-stock-limit/from-balance/bulk'), {
+    method: 'PATCH',
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ product_ids: productIds }),
+  });
+  if (!res.ok) {
+    throw new Error(await readApiErrorMessage(res));
+  }
+  return (await res.json()) as ProductFbsStockLimitFromBalanceResult;
 }

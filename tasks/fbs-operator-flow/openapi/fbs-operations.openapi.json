@@ -1429,6 +1429,55 @@
         }
       }
     },
+    "/operations/fbs-supplies/{supply_id}/repair-from-wb": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Repair Fbs Supply From Wb",
+        "description": "Перечитать состав поставки у WB и восстановить связи с заказами.",
+        "operationId": "repair_fbs_supply_from_wb_operations_fbs_supplies__supply_id__repair_from_wb_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "supply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Supply Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FbsWorkspaceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/operations/fbs-supplies/{supply_id}/start-work": {
       "post": {
         "tags": [
@@ -6862,6 +6911,50 @@
               }
             ],
             "title": "Wb Chrt Id"
+          },
+          "wb_vendor_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wb Vendor Code"
+          },
+          "wb_barcode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wb Barcode"
+          },
+          "wb_size": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wb Size"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
           },
           "pool_limit": {
             "type": "integer",
@@ -16294,6 +16387,101 @@
         },
         "type": "object",
         "title": "ProductDimensionsPatch"
+      },
+      "ProductFbsStockLimitFromBalanceBulkOut": {
+        "properties": {
+          "updated_count": {
+            "type": "integer",
+            "title": "Updated Count"
+          },
+          "updated": {
+            "items": {
+              "$ref": "#/components/schemas/ProductFbsStockLimitFromBalanceUpdatedItem"
+            },
+            "type": "array",
+            "title": "Updated"
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/ProductFbsStockLimitFromBalanceSkippedItem"
+            },
+            "type": "array",
+            "title": "Skipped"
+          },
+          "pool_reset_products_count": {
+            "type": "integer",
+            "title": "Pool Reset Products Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "updated_count",
+          "updated",
+          "skipped",
+          "pool_reset_products_count"
+        ],
+        "title": "ProductFbsStockLimitFromBalanceBulkOut"
+      },
+      "ProductFbsStockLimitFromBalanceBulkPatch": {
+        "properties": {
+          "product_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 10000,
+            "minItems": 1,
+            "title": "Product Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "product_ids"
+        ],
+        "title": "ProductFbsStockLimitFromBalanceBulkPatch"
+      },
+      "ProductFbsStockLimitFromBalanceSkippedItem": {
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "title": "Product Id"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "reason"
+        ],
+        "title": "ProductFbsStockLimitFromBalanceSkippedItem"
+      },
+      "ProductFbsStockLimitFromBalanceUpdatedItem": {
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "title": "Product Id"
+          },
+          "fbs_stock_limit": {
+            "type": "integer",
+            "title": "Fbs Stock Limit"
+          },
+          "reset_warehouses_count": {
+            "type": "integer",
+            "title": "Reset Warehouses Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "fbs_stock_limit",
+          "reset_warehouses_count"
+        ],
+        "title": "ProductFbsStockLimitFromBalanceUpdatedItem"
       },
       "ProductFbsStockSyncBulkOut": {
         "properties": {

@@ -38,7 +38,7 @@ import {
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined'
 import QrCode2OutlinedIcon from '@mui/icons-material/QrCode2Outlined'
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined'
-import { apiUrl } from '../../api'
+import { apiUrl, applyFbsStockLimitFromBalance } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
 import { ProductBarcodeCell } from '../../components/ProductBarcodeCell'
 import { ProductBarcodePrintButton } from '../../components/ProductBarcodePrintButton'
@@ -174,6 +174,27 @@ function humanFfCatalogError(message: string): string {
   return normalized || 'Не удалось загрузить каталог.'
 }
 
+// Массовая простановка остатка FBS = фактический остаток на складе.
+function humanFbsBulkSkipReason(reason: string): string {
+  if (reason === 'not_found') return 'товар не найден или принадлежит другому продавцу'
+  return reason
+}
+
+function ruProductsWord(count: number): string {
+  const mod10 = count % 10
+  const mod100 = count % 100
+  if (mod100 >= 11 && mod100 <= 14) return 'товаров'
+  if (mod10 === 1) return 'товар'
+  if (mod10 >= 2 && mod10 <= 4) return 'товара'
+  return 'товаров'
+}
+
+type FbsBulkResultView = {
+  updatedCount: number
+  poolResetCount: number
+  skipped: Array<{ label: string; reason: string }>
+}
+
 export function FfProductsCatalogScreen({
   token,
   authHeaders,
@@ -185,7 +206,7 @@ export function FfProductsCatalogScreen({
   // Ширины колонок ужаты так, чтобы таблица целиком помещалась в контейнер —
   // тогда липкой колонке действий физически некуда сдвигаться, и она
   // не перекрывает соседей вовсе (тот же приём, что и в SellerInboundDraftScreen).
-  const tableMinWidth = 1284
+  const tableMinWidth = 1328
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [catalog, setCatalog] = useState<FfCatalogRow[]>([])
@@ -207,6 +228,12 @@ export function FfProductsCatalogScreen({
   const [editText, setEditText] = useState('')
   const [editRequiresHonestSign, setEditRequiresHonestSign] = useState(false)
   const [editBusy, setEditBusy] = useState(false)
+
+  // ── Массовая простановка остатка FBS по фактическому остатку на складе ──
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [fbsBulkConfirmOpen, setFbsBulkConfirmOpen] = useState(false)
+  const [fbsBulkBusy, setFbsBulkBusy] = useState(false)
+  const [fbsBulkResult, setFbsBulkResult] = useState<FbsBulkResultView | null>(null)
 
   // ── Фильтры над таблицей (CAT-12, часть 2) ──────────────────────────────
   const [filterSearch, setFilterSearch] = useState('')
@@ -235,6 +262,12 @@ export function FfProductsCatalogScreen({
   useEffect(() => {
     setPage(0)
   }, [debouncedSearch, filterCategory, filterSellerId, rowsPerPage])
+
+  // Выбор строк относится к тому, что видно на текущей странице сейчас —
+  // при смене страницы или фильтра он теряет смысл и снимается.
+  useEffect(() => {
+    setSelectedIds(new Set())
+  }, [page, rowsPerPage, debouncedSearch, filterCategory, filterSellerId])
 
   const load = useCallback(async () => {
     catalogAbortRef.current?.abort()
@@ -481,6 +514,74 @@ export function FfProductsCatalogScreen({
   }, [catalog, stock])
 
   const filteredRows = rows
+
+  const allVisibleSelected =
+    filteredRows.length > 0 && filteredRows.every((r) => selectedIds.has(r.id))
+  const someVisibleSelected = filteredRows.some((r) => selectedIds.has(r.id))
+
+  const toggleSelectAllVisible = useCallback(
+    (checked: boolean) => {
+      setSelectedIds((current) => {
+        const next = new Set(current)
+        for (const row of filteredRows) {
+          if (checked) next.add(row.id)
+          else next.delete(row.id)
+        }
+        return next
+      })
+    },
+    [filteredRows],
+  )
+
+  const toggleRowSelected = useCallback((id: string, checked: boolean) => {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      if (checked) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }, [])
+
+  const openFbsBulkConfirm = useCallback(() => {
+    if (selectedIds.size === 0) return
+    setFbsBulkResult(null)
+    setFbsBulkConfirmOpen(true)
+  }, [selectedIds])
+
+  const closeFbsBulkConfirm = useCallback(() => {
+    if (fbsBulkBusy) return
+    setFbsBulkConfirmOpen(false)
+  }, [fbsBulkBusy])
+
+  const confirmFbsBulkApply = useCallback(async () => {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    const labelById = new Map(rows.map((r) => [r.id, `${r.sku_code} · ${r.name}`]))
+    setFbsBulkBusy(true)
+    setError(null)
+    try {
+      const result = await applyFbsStockLimitFromBalance(token, authHeaders, ids)
+      setFbsBulkResult({
+        updatedCount: result.updated_count,
+        poolResetCount: result.pool_reset_products_count,
+        skipped: result.skipped.map((s) => ({
+          label: labelById.get(s.product_id) ?? s.product_id,
+          reason: humanFbsBulkSkipReason(s.reason),
+        })),
+      })
+      setFbsBulkConfirmOpen(false)
+      setSelectedIds(new Set())
+      await load()
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : 'Не удалось проставить остаток FBS по выбранным товарам.',
+      )
+    } finally {
+      setFbsBulkBusy(false)
+    }
+  }, [authHeaders, load, rows, selectedIds, token])
 
   const markDirectionBusy = useCallback((productId: string, pending: boolean) => {
     setDirectionBusy((current) => {
@@ -820,6 +921,55 @@ export function FfProductsCatalogScreen({
           </Stack>
         </Paper>
 
+        {fbsBulkResult ? (
+          <Alert
+            severity={fbsBulkResult.skipped.length > 0 ? 'warning' : 'success'}
+            sx={{ mb: 2 }}
+            onClose={() => setFbsBulkResult(null)}
+            data-testid="ff-catalog-fbs-bulk-result"
+          >
+            <Typography variant="body2">
+              Остаток FBS проставлен по факту склада у {fbsBulkResult.updatedCount}{' '}
+              {ruProductsWord(fbsBulkResult.updatedCount)}. Раскладка по складам сброшена у{' '}
+              {fbsBulkResult.poolResetCount} {ruProductsWord(fbsBulkResult.poolResetCount)}.
+            </Typography>
+            {fbsBulkResult.skipped.length > 0 ? (
+              <Box component="ul" sx={{ m: 0, mt: 1, pl: 2.5 }}>
+                {fbsBulkResult.skipped.map((s, i) => (
+                  <Typography component="li" variant="caption" key={`${s.label}-${i}`}>
+                    {s.label} — {s.reason}
+                  </Typography>
+                ))}
+              </Box>
+            ) : null}
+          </Alert>
+        ) : null}
+
+        {selectedIds.size > 0 ? (
+          <Paper
+            variant="outlined"
+            sx={{ p: 2, mb: 2, borderColor: 'primary.main' }}
+            data-testid="ff-catalog-selection-bar"
+          >
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={2}
+              sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
+            >
+              <Typography variant="subtitle2" data-testid="ff-catalog-selection-count">
+                Выбрано {selectedIds.size}
+              </Typography>
+              <Button
+                variant="contained"
+                onClick={openFbsBulkConfirm}
+                data-testid="ff-catalog-fbs-bulk-apply"
+              >
+                Весь остаток на FBS
+              </Button>
+            </Stack>
+          </Paper>
+        ) : null}
+
         <TableContainer
           component={Paper}
           variant="outlined"
@@ -847,6 +997,7 @@ export function FfProductsCatalogScreen({
             }}
           >
             <colgroup>
+              <col style={{ width: 44 }} />
               <col style={{ width: 56 }} />
               <col style={{ width: 200 }} />
               <col style={{ width: 130 }} />
@@ -862,6 +1013,15 @@ export function FfProductsCatalogScreen({
             </colgroup>
             <TableHead>
               <TableRow>
+                <TableCell padding="checkbox">
+                  <Checkbox
+                    checked={allVisibleSelected}
+                    indeterminate={someVisibleSelected && !allVisibleSelected}
+                    disabled={!canManageCatalog || filteredRows.length === 0}
+                    onChange={(_, checked) => toggleSelectAllVisible(checked)}
+                    data-testid="ff-catalog-select-all"
+                  />
+                </TableCell>
                 <TableCell>Фото</TableCell>
                 <TableCell>Название</TableCell>
                 <TableCell>Артикул продавца</TableCell>
@@ -893,6 +1053,14 @@ export function FfProductsCatalogScreen({
                 const markingCount = p.marking_available_count ?? 0
                 return (
                   <TableRow key={p.id} hover data-testid="ff-product-row">
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        checked={selectedIds.has(p.id)}
+                        disabled={!canManageCatalog}
+                        onChange={(e) => toggleRowSelected(p.id, e.target.checked)}
+                        data-testid={`ff-catalog-select-${p.id}`}
+                      />
+                    </TableCell>
                     <TableCell>
                       <ProductPhotoThumb src={p.wb_primary_image_url} />
                     </TableCell>
@@ -1096,7 +1264,7 @@ export function FfProductsCatalogScreen({
               })}
               {filteredRows.length === 0 && !busy ? (
                 <TableRow>
-                  <TableCell colSpan={12}>
+                  <TableCell colSpan={13}>
                     {catalogScopeTotal === 0 ? (
                       canManageCatalog ? (
                         <Typography variant="body2" color="text.secondary" data-testid="ff-products-empty">
@@ -1217,6 +1385,46 @@ export function FfProductsCatalogScreen({
               data-testid="ff-catalog-fbs-limit-save"
             >
               {fbsLimitSaving ? 'Сохраняем…' : 'Сохранить'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog
+          open={fbsBulkConfirmOpen}
+          onClose={closeFbsBulkConfirm}
+          maxWidth="xs"
+          fullWidth
+          data-testid="ff-catalog-fbs-bulk-confirm-dialog"
+        >
+          <DialogTitle>Проставить остаток FBS по факту склада?</DialogTitle>
+          <DialogContent>
+            <Stack spacing={1.5} sx={{ pt: 1 }}>
+              <Typography variant="body2">
+                Выбрано товаров: {selectedIds.size}. Остаток FBS станет равен фактически доступному
+                остатку на складе — за вычетом броней под сборку, отгрузок и именованных резервов.
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                Раскладка этих товаров по складам WB будет сброшена в ноль — её нужно будет сделать
+                заново.
+              </Typography>
+              <Typography variant="body2" color="error.main">
+                Остатки по этим товарам в кабинете WB тоже обнулятся, и продажи по ним остановятся до
+                новой раскладки. Не нажимайте на бегу — сначала проверьте список выбранных товаров.
+              </Typography>
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeFbsBulkConfirm} disabled={fbsBulkBusy}>
+              Отмена
+            </Button>
+            <Button
+              variant="contained"
+              color="warning"
+              disabled={fbsBulkBusy}
+              onClick={() => void confirmFbsBulkApply()}
+              data-testid="ff-catalog-fbs-bulk-confirm"
+            >
+              {fbsBulkBusy ? 'Проставляем…' : 'Проставить и сбросить раскладку'}
             </Button>
           </DialogActions>
         </Dialog>
