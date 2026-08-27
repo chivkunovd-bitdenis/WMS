@@ -12,6 +12,7 @@ from app.models.base import Base
 if TYPE_CHECKING:
     from app.models.seller import Seller
     from app.models.tenant import Tenant
+    from app.models.user import User
 
 WB_OPERATION_STATE_PENDING = "pending"
 WB_OPERATION_STATE_CONFIRMED = "confirmed"
@@ -69,6 +70,14 @@ class FbsWbOperation(Base):
         server_default=WB_OPERATION_STATE_PENDING,
     )
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Кто нажал кнопку в WMS. Nullable: старые строки заполнить нечем, а часть
+    # операций (фоновая сверка с WB) человеком не инициируется вовсе — для
+    # них поле осознанно остаётся пустым, а не подставляется системный
+    # псевдопользователь. ON DELETE SET NULL — увольнение сотрудника не
+    # должно стирать историю операции.
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     error_context_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     request_summary_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     response_summary_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
@@ -90,3 +99,4 @@ class FbsWbOperation(Base):
 
     tenant: Mapped[Tenant] = relationship("Tenant")
     seller: Mapped[Seller] = relationship("Seller")
+    created_by_user: Mapped[User | None] = relationship("User")

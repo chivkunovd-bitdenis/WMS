@@ -292,7 +292,10 @@ async def _create_order(
             wb_order_id=wb_order_id,
             product_id=product.id,
             product_name=product_name,
-            product_barcode=wb_barcode or product_barcode,
+            # Карточка товара главнее задания WB: в задании лежит внутренний код WB
+            # (префикс 20…), а на коробке — производственный из карточки. Печать и
+            # экран сборки должны показывать то, что наклеено на товаре.
+            product_barcode=product_barcode,
             seller_article=seller_article,
             packaging_task_id=packaging_task_id,
             packaging_task_line_id=packaging_task_line_id,

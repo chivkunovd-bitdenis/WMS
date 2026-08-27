@@ -291,6 +291,35 @@ async def sync_marking_statuses_for_assembling_supplies(
     return synced
 
 
+async def repair_pending_supplies(
+    session: AsyncSession,
+    target: SellerPollTarget,
+    http_client: httpx.AsyncClient,
+) -> int:
+    """Добрать состав поставок, у которых создание оборвалось на ответе WB.
+
+    Пока этого шага не было, оборванное создание оставляло пустую карточку навсегда:
+    ни автосинхронизация, ни оператор её не чинили.
+    """
+    from app.services.fbs_supply_service import repair_pending_supplies_for_seller
+
+    try:
+        result = await repair_pending_supplies_for_seller(
+            session,
+            target.tenant_id,
+            target.seller_id,
+            http_client=http_client,
+        )
+    except Exception:
+        logger.exception(
+            "fbs autopoll supply repair failed: seller=%s",
+            target.seller_id,
+        )
+        await session.rollback()
+        return 0
+    return int(result["orders_linked"])
+
+
 async def sync_fbs_order_statuses_for_seller(
     session: AsyncSession,
     target: SellerPollTarget,
@@ -303,6 +332,7 @@ async def sync_fbs_order_statuses_for_seller(
         http_client,
     )
     await sync_marking_statuses_for_assembling_supplies(session, target, http_client)
+    await repair_pending_supplies(session, target, http_client)
     try:
         await sync_in_delivery_supplies(
             session,

@@ -637,6 +637,7 @@ async def create_cargo_places(
             request_hash=req_hash,
             request_summary=request_summary,
             local_supply_id=supply.id,
+            created_by_user_id=actor_user_id,
         )
 
     try:
@@ -868,6 +869,8 @@ async def delete_cargo_places(
     wb_trbx_ids: list[str],
     idempotency_key: str,
     http_client: httpx.AsyncClient,
+    *,
+    actor_user_id: uuid.UUID | None = None,
 ) -> list[dict[str, Any]]:
     if not idempotency_key.strip():
         raise FbsShipmentPvzError("missing_idempotency_key")
@@ -929,6 +932,7 @@ async def delete_cargo_places(
                 "wb_trbx_ids": normalized_ids,
             },
             local_supply_id=supply.id,
+            created_by_user_id=actor_user_id,
         )
 
     try:

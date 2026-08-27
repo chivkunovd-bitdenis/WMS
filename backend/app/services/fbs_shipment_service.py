@@ -930,6 +930,7 @@ async def deliver_supply(
     *,
     idempotency_key: str,
     confirmed_preflight_version: str | None = None,
+    actor_user_id: uuid.UUID | None = None,
 ) -> FbsSupply:
     if not idempotency_key.strip():
         raise FbsShipmentError("missing_idempotency_key")
@@ -1112,6 +1113,7 @@ async def deliver_supply(
             request_hash=request_hash,
             local_supply_id=supply.id,
             confirmed_preflight_version=confirmed_preflight_version,
+            created_by_user_id=actor_user_id,
         )
 
     try:

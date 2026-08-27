@@ -920,6 +920,7 @@ async def create_fbs_supply_from_orders(
                 planned_destination=planned_dest,
                 idempotency_key=body.idempotency_key,
                 http_client=http_client,
+                created_by_user_id=user.id,
             )
         except supply_svc.FbsSupplyError as exc:
             if exc.code in {"wb_timeout", "wb_pending_confirmation"} or (
@@ -985,6 +986,32 @@ async def get_fbs_shipment_calendar(
             )
         )
     return result
+
+
+@router.post("/{supply_id}/repair-from-wb", response_model=FbsWorkspaceOut)
+async def repair_fbs_supply_from_wb(
+    supply_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> FbsWorkspaceOut:
+    """Перечитать состав поставки у WB и восстановить связи с заказами."""
+    async with httpx.AsyncClient() as http_client:
+        try:
+            await supply_svc.repair_supply_composition_from_wb(
+                session,
+                user.tenant_id,
+                supply_id,
+                http_client=http_client,
+            )
+            workspace = await get_supply_workspace(session, user.tenant_id, supply_id)
+        except supply_svc.FbsSupplyError as exc:
+            _raise_from_service(exc)
+        except FbsWorkspaceError as exc:
+            if exc.code == "supply_not_found":
+                raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
+            raise_fbs_http(status.HTTP_500_INTERNAL_SERVER_ERROR, exc.code)
+    await session.commit()
+    return FbsWorkspaceOut.model_validate(workspace)
 
 
 @router.post("/{supply_id}/start-work", response_model=FbsWorkspaceOut)
@@ -1724,6 +1751,7 @@ async def delete_fbs_cargo_places(
                 body.wb_trbx_ids,
                 body.idempotency_key,
                 http_client,
+                actor_user_id=user.id,
             )
         except pvz_svc.FbsShipmentPvzError as exc:
             if exc.code in {"wb_timeout", "wb_pending_confirmation"}:
@@ -1937,6 +1965,7 @@ async def deliver_fbs_supply(
                 http_client,
                 idempotency_key=body.idempotency_key,
                 confirmed_preflight_version=body.confirmed_preflight_version,
+                actor_user_id=user.id,
             )
         except shipment_svc.FbsShipmentError as exc:
             if exc.code in {"wb_timeout", "wb_pending_confirmation", "meta_validation_fail"}:

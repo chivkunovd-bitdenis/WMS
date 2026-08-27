@@ -1327,6 +1327,10 @@ export type FbsStockPoolProduct = {
   sku_code: string
   name: string
   wb_chrt_id: number | null
+  wb_vendor_code: string | null
+  wb_barcode: string | null
+  wb_size: string | null
+  image_url: string | null
   pool_limit: number
   allocated_this_binding: number
   allocated_elsewhere: number
