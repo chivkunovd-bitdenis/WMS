@@ -27,6 +27,19 @@ const ROW_HEIGHT = 30
 // строк, и не читалась как ещё один смысл.
 const GUIDE = 'rgba(15, 23, 42, 0.11)'
 
+/**
+ * Товар внутри короба нельзя переложить одним движением — сначала его надо
+ * вынуть. Это не придирка интерфейса, а порядок работы руками: короб закрыт, и
+ * «переложить из закрытого короба сразу на палету» на складе не происходит.
+ * Поэтому у такой строки нет ни плюса, ни возможности утащить её мышкой —
+ * доступно только «вынуть».
+ */
+function insideBox(row: ObjectRow, objects: WarehouseObject[]): boolean {
+  const holder = row.kind === 'object' ? row.object.holder : row.line.holder
+  if (row.kind !== 'goods' || !holder || !holder.startsWith('obj:')) return false
+  return objects.find((one) => objRef(one.id) === holder)?.kind === 'box'
+}
+
 export function ObjectsTree({
   rows,
   objects,
@@ -241,6 +254,9 @@ export function ObjectsTree({
               <IconAction
                 title="Положить в место"
                 onClick={() => onPlace(row)}
+                disabledReason={
+                  insideBox(row, objects) ? 'Сначала вытащите товар из короба' : undefined
+                }
                 testId={`${testId}-place-${row.key}`}
               >
                 <AddOutlined fontSize="small" />
@@ -261,7 +277,7 @@ export function ObjectsTree({
       fixedLayout
       drag={{
         active: carried !== null,
-        canDrag: () => true,
+        canDrag: (row) => !insideBox(row, objects),
         canDrop: (row) =>
           row.kind === 'object' && carried !== null && canPut(carried, objRef(row.object.id), objects),
         onDragStart,
