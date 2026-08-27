@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { buildInvoicePrintHtml, buildLedgerSearchParams, CANCEL_INVOICE_ERROR_MESSAGE, cancelInvoiceRequest, formatMoscowDate, initialBillingTabPeriods, InvoiceDocumentDetails, joinVisibleParts, ledgerDocumentTarget, parseApiDecimal, STORAGE_SERVICE_CODE, updateBillingTabPeriod } from './FfBillingScreen'
+import { buildInvoicePrintHtml, buildLedgerSearchParams, CANCEL_INVOICE_ERROR_MESSAGE, cancelInvoiceRequest, formatMoscowDate, formatMoscowDateTime, initialBillingTabPeriods, InvoiceDocumentDetails, joinVisibleParts, ledgerDocumentTarget, parseApiDecimal, sellerQuickRange, sellerReportSearchParams, STORAGE_SERVICE_CODE, updateBillingTabPeriod } from './FfBillingScreen'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -18,6 +18,13 @@ describe('FfBillingScreen billing contract', () => {
 
   it('uses the shared storage ledger service code', () => {
     expect(STORAGE_SERVICE_CODE).toBe('storage_liter_day')
+  })
+
+  it('sends Moscow date bounds and finance mode to the additive seller-report endpoint', () => {
+    const params = sellerReportSearchParams({ start: '2026-08-20', end: '2026-08-22' }, false, 'seller-1', 'Альфа')
+
+    expect(params.toString()).toBe('date_from=2026-08-20&date_to=2026-08-22&include_finance=false&seller_id=seller-1&search=%D0%90%D0%BB%D1%8C%D1%84%D0%B0')
+    expect(params.has('amount_kopecks')).toBe(false)
   })
 
   it('normalizes decimal strings returned by the invoice API', () => {
@@ -42,6 +49,15 @@ describe('FfBillingScreen billing contract', () => {
 
     expect(pacificResult).toBe('01.09.2026')
     expect(tokyoResult).toBe('01.09.2026')
+  })
+
+  it('keeps quick seller periods in Moscow calendar dates', () => {
+    expect(sellerQuickRange('today', '2026-08-31')).toEqual({ start: '2026-08-31', end: '2026-08-31' })
+    expect(sellerQuickRange('seven_days', '2026-08-31')).toEqual({ start: '2026-08-25', end: '2026-08-31' })
+    expect(sellerQuickRange('thirty_days', '2026-08-31')).toEqual({ start: '2026-08-02', end: '2026-08-31' })
+    expect(sellerQuickRange('current_month', '2026-08-31')).toEqual({ start: '2026-08-01', end: '2026-08-31' })
+    expect(sellerQuickRange('previous_month', '2026-01-15')).toEqual({ start: '2025-12-01', end: '2025-12-31' })
+    expect(formatMoscowDateTime('2026-08-20T10:00:00+03:00')).toContain('20.08.2026')
   })
 
   it('opens charges and invoices with Moscow months and preserves each manually selected month', () => {

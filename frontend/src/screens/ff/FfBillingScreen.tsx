@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link as RouterLink } from 'react-router-dom'
 import { Box, Dialog, DialogActions, DialogContent, DialogTitle, Link, MenuItem, Select, Stack, Tab, Tabs, Typography } from '@mui/material'
 import ExpandMore from '@mui/icons-material/ExpandMore'
@@ -16,8 +16,12 @@ import {
   TextCell,
   DangerAction,
   IconAction,
+  MoscowDateRangeInput,
+  PreferenceSwitch,
   PrintAction,
+  ReportMetricStrip,
   SecondaryAction,
+  SelectInput,
 } from '../../ui-kit'
 
 type Seller = { id: string; name: string }
@@ -39,12 +43,16 @@ type LedgerEntry = {
   performer_name: string | null
   problem: 'unpriced' | 'storage_period_not_closed' | null
 }
-type PerformerRow = { performer_name: string; service_code: string; unit: string; quantity: number; documents: number }
 type BillingProfileSnapshot = Record<string, string | null | undefined>
 type Invoice = { id: string; number: string; period: string; seller_name: string; issued_at: string; total_amount: ApiDecimal; status: 'issued' | 'cancelled'; issues?: { seller_name: string; period: string; reason: string }[]; lines?: InvoiceLine[]; ff_profile?: BillingProfileSnapshot; seller_profile?: BillingProfileSnapshot }
 type InvoiceLine = { id: string; service_code: string; unit: string; quantity: ApiDecimal; rate: ApiDecimal; amount: ApiDecimal; documents?: { date: string; number: string; quantity: ApiDecimal; amount: ApiDecimal }[] }
 type InvoiceIssue = { id?: string; seller_id?: string; seller_name: string; period: string; reason: string; message?: string }
 type BillingListResponse<T> = { entries?: T[]; invoices?: T[]; rows?: T[]; issues?: InvoiceIssue[] }
+type SellerReportRow = { seller_id: string; seller_name: string; operation_count: number; item_quantity: number; not_billable_count: number; details_target: string; unpriced_count?: number; net_total_kopecks?: number }
+type SellerReportEntry = { id: string; kind: 'operation_fact' | 'legacy_billing'; occurred_at: string; service_code: string; item_quantity: number | null; source_type: string; source_id: string; source_target: { kind: 'inbound'; source_id: string } | { kind: 'route'; to: string } | null; document_number: string | null; product_name: string | null; sku: string | null; result: 'completed' | 'reversed' | 'not_billable' | 'unpriced'; unit?: string | null; rate_kopecks?: number | null; amount_kopecks?: number | null; billing_ledger_entry_id?: string; invoice_history?: { state: 'known'; count: number } | { state: 'unknown' } }
+type StorageReportRow = { kind: 'storage'; date_from: string; date_to: string; liter_days: number; status: 'calculated' | 'missing_dimensions'; amount_kopecks?: number; calculation_token: string }
+type SellerReportSummary = { rows: SellerReportRow[]; totals: { seller_count: number; operation_count: number; item_quantity: number; not_billable_count: number; net_total_kopecks?: number } }
+type SellerReportDetails = { seller_id: string; seller_name: string; entries: SellerReportEntry[]; storage_row: StorageReportRow | null; next_cursor: string | null; totals: SellerReportSummary['totals'] }
 
 export const STORAGE_SERVICE_CODE = 'storage_liter_day'
 export const CANCEL_INVOICE_ERROR_MESSAGE = 'Отмена не подтверждена. Проверьте статус счёта перед повторной попыткой.'
@@ -63,8 +71,51 @@ export function formatMoscowDate(value: string): string {
   return new Intl.DateTimeFormat('ru-RU', { timeZone: MOSCOW_TIME_ZONE }).format(new Date(value))
 }
 
+export function formatMoscowDateTime(value: string): string {
+  return new Intl.DateTimeFormat('ru-RU', { timeZone: MOSCOW_TIME_ZONE, dateStyle: 'short', timeStyle: 'short' }).format(new Date(value))
+}
+
 export function buildLedgerSearchParams(month: string): URLSearchParams {
   return new URLSearchParams({ period: month })
+}
+
+export function sellerReportSearchParams(range: { start: string; end: string }, includeFinance: boolean, sellerId = 'all', search = ''): URLSearchParams {
+  const params = new URLSearchParams({ date_from: range.start, date_to: range.end, include_finance: String(includeFinance) })
+  if (sellerId !== 'all') params.set('seller_id', sellerId)
+  if (search) params.set('search', search)
+  return params
+}
+
+function moscowToday(): string {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: MOSCOW_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date())
+  return `${parts.find((part) => part.type === 'year')?.value}-${parts.find((part) => part.type === 'month')?.value}-${parts.find((part) => part.type === 'day')?.value}`
+}
+
+type SellerQuickPeriod = 'today' | 'seven_days' | 'thirty_days' | 'current_month' | 'previous_month'
+
+function dateAtUtc(iso: string): Date { return new Date(`${iso}T00:00:00Z`) }
+function asIsoDate(value: Date): string { return value.toISOString().slice(0, 10) }
+function minusDays(iso: string, days: number): string {
+  const value = dateAtUtc(iso)
+  value.setUTCDate(value.getUTCDate() - days)
+  return asIsoDate(value)
+}
+
+export function sellerQuickRange(period: SellerQuickPeriod, today = moscowToday()): { start: string; end: string } {
+  const value = dateAtUtc(today)
+  if (period === 'today') return { start: today, end: today }
+  if (period === 'seven_days') return { start: minusDays(today, 6), end: today }
+  if (period === 'thirty_days') return { start: minusDays(today, 29), end: today }
+  if (period === 'current_month') return { start: `${today.slice(0, 8)}01`, end: today }
+  value.setUTCDate(0)
+  return { start: `${value.getUTCFullYear()}-${String(value.getUTCMonth() + 1).padStart(2, '0')}-01`, end: asIsoDate(value) }
+}
+
+function sellerFinanceStorageKey(token: string) {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))) as { tenant_id?: string; sub?: string }
+    return `${payload.tenant_id ?? 'tenant'}:${payload.sub ?? 'user'}:billing:sellers:finance`
+  } catch { return 'tenant:user:billing:sellers:finance' }
 }
 
 type CancelInvoiceResult = { ok: true; status: Invoice['status'] } | { ok: false; message: string }
@@ -141,7 +192,6 @@ const serviceLabels: Record<string, string> = {
   storage_liter_day: 'Хранение',
 }
 const unitLabels: Record<string, string> = { document: 'За документ', item: 'За штуку', liter_day: 'За литр-день' }
-const problemLabels: Record<string, string> = { unpriced: 'Нет тарифа', storage_period_not_closed: 'Хранение не закрыто' }
 const profileFieldLabels: Record<string, string> = {
   legal_name: 'Юридическое наименование',
   inn: 'ИНН',
@@ -176,10 +226,6 @@ function invoiceIssueContext(sellerId: string, period: string): string {
   return `${sellerId}:${period}`
 }
 
-function ledgerDocumentLabel(entry: LedgerEntry): string {
-  return entry.entry_type === 'reversal' ? `Сторно ${entry.document_number}` : entry.document_number
-}
-
 export function InvoiceDocumentDetails({ line, period }: { line: InvoiceLine; period: string }) {
   return <Stack data-testid="billing-invoice-documents" spacing={0.5}>{(line.documents ?? []).map((doc) => {
     const quantity = parseApiDecimal(doc.quantity)
@@ -200,12 +246,21 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
   const month = months[tab]
   const setMonth = (period: string) => setMonths((periods) => updateBillingTabPeriod(periods, tab, period))
   const [sellerId, setSellerId] = useState('all')
-  const [service, setService] = useState('all')
-  const [mode, setMode] = useState<'operations' | 'performers'>('operations')
   const [search, setSearch] = useState('')
-  const [rows, setRows] = useState<LedgerEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const today = moscowToday()
+  const [reportRange, setReportRange] = useState({ start: today, end: today })
+  const financeStorageKey = sellerFinanceStorageKey(token)
+  const [includeFinance, setIncludeFinance] = useState(() => localStorage.getItem(financeStorageKey) === 'true')
+  const [report, setReport] = useState<SellerReportSummary>({ rows: [], totals: { seller_count: 0, operation_count: 0, item_quantity: 0, not_billable_count: 0 } })
+  const [selectedReportSeller, setSelectedReportSeller] = useState<string | null>(null)
+  const [reportDetails, setReportDetails] = useState<SellerReportDetails | null>(null)
+  const [detailsCursor, setDetailsCursor] = useState<string | null>(null)
+  const [detailsLoading, setDetailsLoading] = useState(false)
+  const [detailsError, setDetailsError] = useState(false)
+  const summaryRequestId = useRef(0)
+  const detailsRequestId = useRef(0)
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [invoiceLoading, setInvoiceLoading] = useState(false)
   const [invoiceError, setInvoiceError] = useState(false)
@@ -225,23 +280,47 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
   useEffect(() => {
     if (tab !== 'charges') return
     const controller = new AbortController()
+    const requestId = ++summaryRequestId.current
+    let alive = true
     setLoading(true)
     setError(false)
-    setRows([])
-    const params = buildLedgerSearchParams(month)
-    if (sellerId !== 'all') params.set('seller_id', sellerId)
-    if (service !== 'all') params.set('service_code', service)
-    if (search) params.set('document_number', search)
-    fetch(`/api/billing/ledger?${params}`, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
+    const params = sellerReportSearchParams(reportRange, includeFinance, sellerId, search)
+    fetch(`/api/billing/seller-report/summary?${params}`, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
       .then((response) => {
-        if (!response.ok) throw new Error('billing-ledger')
-        return response.json() as Promise<BillingListResponse<LedgerEntry> | LedgerEntry[]>
+        if (!response.ok) throw new Error('seller-report-summary')
+        return response.json() as Promise<SellerReportSummary>
       })
-      .then((data) => setRows(responseRows(data, 'entries')))
-      .catch((reason: unknown) => { if ((reason as Error).name !== 'AbortError') setError(true) })
-      .finally(() => setLoading(false))
-    return () => controller.abort()
-  }, [month, mode, search, service, sellerId, tab, token])
+      .then((data) => { if (alive && requestId === summaryRequestId.current) setReport(data) })
+      .catch((reason: unknown) => { if (alive && requestId === summaryRequestId.current && (reason as Error).name !== 'AbortError') setError(true) })
+      .finally(() => { if (alive && requestId === summaryRequestId.current) setLoading(false) })
+    return () => { alive = false; controller.abort() }
+  }, [includeFinance, reportRange, search, sellerId, tab, token])
+
+  useEffect(() => { localStorage.setItem(financeStorageKey, String(includeFinance)) }, [financeStorageKey, includeFinance])
+
+  useEffect(() => {
+    if (tab !== 'charges' || !selectedReportSeller) return
+    const controller = new AbortController()
+    const requestId = ++detailsRequestId.current
+    let alive = true
+    setDetailsLoading(true); setDetailsError(false)
+    const params = sellerReportSearchParams(reportRange, includeFinance)
+    if (detailsCursor) params.set('cursor', detailsCursor)
+    fetch(`/api/billing/seller-report/sellers/${selectedReportSeller}/details?${params}`, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
+      .then((response) => { if (!response.ok) throw new Error('seller-report-details'); return response.json() as Promise<SellerReportDetails> })
+      .then((data) => { if (alive && requestId === detailsRequestId.current) setReportDetails((current) => {
+        if (!detailsCursor) return data
+        const existing = new Set((current?.entries ?? []).map((entry) => entry.id))
+        return {
+          ...data,
+          entries: [...(current?.entries ?? []), ...data.entries.filter((entry) => !existing.has(entry.id))],
+          storage_row: current?.storage_row ?? data.storage_row,
+        }
+      }) })
+      .catch((reason: unknown) => { if (alive && requestId === detailsRequestId.current && (reason as Error).name !== 'AbortError') setDetailsError(true) })
+      .finally(() => { if (alive && requestId === detailsRequestId.current) setDetailsLoading(false) })
+    return () => { alive = false; controller.abort() }
+  }, [detailsCursor, includeFinance, reportRange, selectedReportSeller, tab, token])
 
   useEffect(() => {
     if (tab !== 'invoices') return
@@ -272,51 +351,6 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
     return () => controller.abort()
   }, [invoiceRefresh, invoiceSearch, invoiceStatus, month, sellerId, tab, token])
 
-  const performerRows = useMemo<PerformerRow[]>(() => {
-    const grouped = new Map<string, PerformerRow>()
-    rows.forEach((row) => {
-      if (row.entry_type === 'reversal') return
-      const key = `${row.performer_name ?? 'Исполнитель не зафиксирован'}|${row.service_code}|${row.unit}`
-      const current = grouped.get(key) ?? { performer_name: row.performer_name ?? 'Исполнитель не зафиксирован', service_code: row.service_code, unit: row.unit, quantity: 0, documents: 0 }
-      current.quantity += parseApiDecimal(row.quantity)
-      current.documents += 1
-      grouped.set(key, current)
-    })
-    return [...grouped.values()]
-  }, [rows])
-
-  const operationColumns = [
-    { key: 'document', header: 'Документ', width: 190, render: (row: LedgerEntry) => {
-      const target = ledgerDocumentTarget(row)
-      const document = target ? (
-        target.kind === 'inbound' ? (
-          <Link component="button" type="button" variant="body2" onClick={() => onOpenInbound(target.sourceId)} data-testid={`billing-document-${row.id}`}>
-            <TextCell value={ledgerDocumentLabel(row)} />
-          </Link>
-        ) : (
-          <Link component={RouterLink} to={target.to} variant="body2" data-testid={`billing-document-${row.id}`}>
-            <TextCell value={ledgerDocumentLabel(row)} />
-          </Link>
-        )
-      ) : <TextCell value={ledgerDocumentLabel(row)} />
-      return <Stack spacing={0.25}>{document}<Typography variant="caption" color="text.secondary">{formatMoscowDate(row.occurred_at)}</Typography></Stack>
-    } },
-    { key: 'seller', header: 'Селлер', width: 130, render: (row: LedgerEntry) => <TextCell value={row.seller_name} width={120} /> },
-    { key: 'service', header: 'Услуга', width: 110, render: (row: LedgerEntry) => serviceLabels[row.service_code] ?? '—' },
-    { key: 'calculation', header: 'Расчёт', width: 180, align: 'right' as const, render: (row: LedgerEntry) => <Stack spacing={0.25} sx={{ alignItems: 'flex-end' }}><QtyCell value={parseApiDecimal(row.quantity)} /><Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>{joinVisibleParts([unitLabels[row.unit] ?? '—', formatMoney(row.rate)])}</Typography></Stack> },
-    { key: 'amount', header: 'Сумма', width: 110, align: 'right' as const, render: (row: LedgerEntry) => <MoneyCell minor={row.amount} /> },
-    { key: 'performer', header: 'Исполнитель / проблема', width: 190, render: (row: LedgerEntry) => <Stack spacing={0.5}><TextCell value={row.performer_name ?? 'Исполнитель не зафиксирован'} width={180} />{row.problem ? <StatusChip label={problemLabels[row.problem]} tone="stop" /> : null}</Stack> },
-  ]
-  const performerColumns = [
-    { key: 'performer', header: 'Исполнитель', width: 220, render: (row: PerformerRow) => <TextCell value={row.performer_name} width={200} /> },
-    { key: 'service', header: 'Услуга', width: 150, render: (row: PerformerRow) => serviceLabels[row.service_code] ?? '—' },
-    { key: 'unit', header: 'Расчёт', width: 150, render: (row: PerformerRow) => unitLabels[row.unit] ?? '—' },
-    { key: 'quantity', header: 'Количество', width: 120, align: 'right' as const, render: (row: PerformerRow) => <QtyCell value={row.quantity} /> },
-    { key: 'documents', header: 'Документов', width: 120, align: 'right' as const, render: (row: PerformerRow) => <QtyCell value={row.documents} /> },
-  ]
-  const hasFilters = Boolean(search || sellerId !== 'all' || service !== 'all')
-  const hasUnpriced = rows.some((row) => row.problem === 'unpriced')
-  const hasUnknownLedgerCodes = rows.some((row) => serviceLabels[row.service_code] === undefined || unitLabels[row.unit] === undefined)
   const hasUnknownInvoiceLineCodes = selectedInvoice?.lines?.some((line) => serviceLabels[line.service_code] === undefined || unitLabels[line.unit] === undefined) ?? false
   const selectedInvoiceContext = sellerId === 'all' ? null : invoiceIssueContext(sellerId, month)
   const canRetryFormation = Boolean(
@@ -335,6 +369,43 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
     { key: 'amount', header: 'Сумма', width: 160, align: 'right' as const, render: (row: Invoice) => <MoneyCell minor={row.total_amount} /> },
     { key: 'status', header: 'Статус', width: 140, render: (row: Invoice) => <StatusChip label={row.status === 'issued' ? 'Выставлен' : 'Отменён'} tone={row.status === 'issued' ? 'ok' : 'neutral'} /> },
     { key: 'action', header: 'Действие', width: 70, render: (row: Invoice) => <IconAction title="Открыть счёт" testId={`billing-invoice-open-${row.id}`} onClick={() => { setSelectedInvoice(row); setExpandedLine(null) }}><ExpandMore fontSize="small" /></IconAction> },
+  ]
+  const sellerColumns = [
+    { key: 'seller', header: 'Селлер', width: 250, render: (row: SellerReportRow) => <TextCell value={row.seller_name} width={230} /> },
+    { key: 'operations', header: 'Операций', width: 110, align: 'right' as const, render: (row: SellerReportRow) => <QtyCell value={row.operation_count} /> },
+    { key: 'items', header: 'Штук', width: 100, align: 'right' as const, render: (row: SellerReportRow) => <QtyCell value={row.item_quantity} /> },
+    { key: 'notBillable', header: 'Не тарифицируется', width: 160, align: 'right' as const, render: (row: SellerReportRow) => <QtyCell value={row.not_billable_count} /> },
+    ...(includeFinance ? [{ key: 'unpriced', header: 'Нет ставки', width: 120, align: 'right' as const, render: (row: SellerReportRow) => <QtyCell value={row.unpriced_count ?? 0} /> }, { key: 'accrued', header: 'Начислено', width: 140, align: 'right' as const, render: (row: SellerReportRow) => <MoneyCell minor={row.net_total_kopecks ?? null} /> }] : []),
+    { key: 'action', header: 'Действие', width: 170, render: (row: SellerReportRow) => <PrimaryAction onClick={() => { setSelectedReportSeller(row.seller_id); setDetailsCursor(null); setReportDetails(null) }}>Показать операции</PrimaryAction> },
+  ]
+  const sourceLabel = (row: SellerReportEntry) => joinVisibleParts([
+    { inbound_intake: 'Приёмка', marketplace_unload: 'Разгрузка' }[row.source_type] ?? 'Документ',
+    row.document_number,
+  ]) || '—'
+  const productLabel = (row: SellerReportEntry) => joinVisibleParts([row.product_name, row.sku]) || '—'
+  const resultChip = (row: SellerReportEntry) => {
+    const presentation = {
+      completed: { label: 'Выполнено', tone: 'ok' as const },
+      reversed: { label: 'Сторно', tone: 'neutral' as const },
+      not_billable: { label: 'Не тарифицируется', tone: 'neutral' as const },
+      unpriced: { label: 'Нет ставки', tone: 'warn' as const },
+    }[row.result]
+    return <StatusChip label={presentation.label} tone={presentation.tone} />
+  }
+  const reportEntryColumns = [
+    { key: 'date', header: 'Дата и время', width: 180, render: (row: SellerReportEntry) => <TextCell value={formatMoscowDateTime(row.occurred_at)} /> },
+    { key: 'document', header: 'Документ / источник', width: 190, render: (row: SellerReportEntry) => <TextCell value={sourceLabel(row)} /> },
+    { key: 'service', header: 'Услуга', width: 150, render: (row: SellerReportEntry) => <TextCell value={serviceLabels[row.service_code] ?? '—'} /> },
+    { key: 'product', header: 'Товар / SKU', width: 210, render: (row: SellerReportEntry) => <TextCell value={productLabel(row)} /> },
+    { key: 'quantity', header: 'Штук', width: 90, align: 'right' as const, render: (row: SellerReportEntry) => <TextCell value={row.item_quantity == null ? '—' : String(row.item_quantity)} /> },
+    { key: 'result', header: 'Результат', width: 170, render: resultChip },
+    ...(includeFinance ? [{ key: 'unit', header: 'Единица', width: 110, render: (row: SellerReportEntry) => <TextCell value={row.unit ? (unitLabels[row.unit] ?? '—') : '—'} /> }, { key: 'rate', header: 'Ставка', width: 120, align: 'right' as const, render: (row: SellerReportEntry) => <MoneyCell minor={row.rate_kopecks ?? null} /> }, { key: 'amount', header: 'Сумма', width: 120, align: 'right' as const, render: (row: SellerReportEntry) => <MoneyCell minor={row.amount_kopecks ?? null} /> }, { key: 'invoice', header: 'Счёт выставлялся', width: 170, render: (row: SellerReportEntry) => row.invoice_history?.state === 'known' ? <TextCell value={row.invoice_history.count ? `✓ ${row.invoice_history.count}` : '—'} /> : <TextCell value="Нет данных о старом счёте" hint="Старые снимки счёта неполные или это новая операция" /> }] : []),
+    { key: 'source', header: 'Источник', width: 160, render: (row: SellerReportEntry) => {
+      const target = row.source_target
+      if (target?.kind === 'inbound') return <Link component="button" type="button" onClick={() => onOpenInbound(target.source_id)}>Открыть документ</Link>
+      if (target?.kind === 'route') return <Link component={RouterLink} to={target.to}>Открыть документ</Link>
+      return <TextCell value="Недоступен" hint="Первоисточник недоступен или не поддерживает переход" />
+    } },
   ]
   const issueLabels: Record<string, string> = {
     unpriced: 'Нет тарифа',
@@ -407,21 +478,14 @@ export function FfBillingScreen({ sellers = [], token, onOpenInbound }: Props) {
   return <Box data-testid="ff-billing-screen" sx={{ width: 'calc(100vw - 308px)', minWidth: 0 }}>
     <ScreenHeader title="Расчёты" purpose="Начисления за работу склада и автоматически выставленные счета селлерам." />
     <Tabs value={tab} onChange={(_, value: BillingTab) => setTab(value)} aria-label="Расчёты">
-      <Tab label="Начисления" value="charges" data-testid="billing-tab-charges" /><Tab label="Счета" value="invoices" data-testid="billing-tab-invoices" />
+      <Tab label="Селлеры" value="charges" data-testid="billing-tab-sellers" /><Tab label="Счета" value="invoices" data-testid="billing-tab-invoices" />
     </Tabs>
-    <FilterBar search={tab === 'charges' ? search : invoiceSearch} onSearchChange={tab === 'charges' ? setSearch : setInvoiceSearch} searchPlaceholder={tab === 'charges' ? 'Номер документа' : 'Номер счёта'} testId="billing-filter-bar">
-      <PeriodPicker value={month} onChange={setMonth} testId="billing-period" />
-      <Select size="small" value={sellerId} onChange={(event) => setSellerId(event.target.value)} inputProps={{ 'data-testid': 'billing-seller' }} sx={{ minWidth: 190 }} aria-label="Селлер">
-        <MenuItem value="all">Все селлеры</MenuItem>{sellers.map((seller) => <MenuItem key={seller.id} value={seller.id}>{seller.name}</MenuItem>)}
-      </Select>
-      {tab === 'charges' ? <Select size="small" value={service} onChange={(event) => setService(event.target.value)} inputProps={{ 'data-testid': 'billing-service' }} sx={{ minWidth: 160 }} aria-label="Услуга">
-        <MenuItem value="all">Все услуги</MenuItem><MenuItem value="inbound">Приёмка</MenuItem><MenuItem value="marketplace_outbound">Отгрузка</MenuItem><MenuItem value={STORAGE_SERVICE_CODE}>Хранение</MenuItem>
-      </Select> : <Select size="small" value={invoiceStatus} onChange={(event) => setInvoiceStatus(event.target.value)} inputProps={{ 'data-testid': 'billing-status' }} sx={{ minWidth: 160 }} aria-label="Статус"><MenuItem value="all">Все статусы</MenuItem><MenuItem value="issued">Выставлен</MenuItem><MenuItem value="cancelled">Отменён</MenuItem></Select>}
-      {tab === 'charges' ? <Select size="small" value={mode} onChange={(event) => setMode(event.target.value as typeof mode)} inputProps={{ 'data-testid': 'billing-mode' }} sx={{ minWidth: 190 }} aria-label="Режим">
-        <MenuItem value="operations">По операциям</MenuItem><MenuItem value="performers">По исполнителям</MenuItem>
-      </Select> : null}
+    <FilterBar search={tab === 'charges' ? search : invoiceSearch} onSearchChange={tab === 'charges' ? setSearch : setInvoiceSearch} searchPlaceholder={tab === 'charges' ? 'Селлер' : 'Номер счёта'} testId="billing-filter-bar">
+      {tab === 'charges' ? <><MoscowDateRangeInput label="Период" startLabel="С" endLabel="По" value={reportRange} onChange={(value) => { setDetailsCursor(null); setReportRange({ start: value.start ?? today, end: value.end ?? today }) }} maxDate={today} maxDays={366} testId="billing-seller-range" /><Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }} aria-label="Быстрый период">{([['today', 'Сегодня'], ['seven_days', '7 дней'], ['thirty_days', '30 дней'], ['current_month', 'Этот месяц'], ['previous_month', 'Прошлый месяц']] as Array<[SellerQuickPeriod, string]>).map(([period, label]) => <SecondaryAction key={period} onClick={() => { setDetailsCursor(null); setReportRange(sellerQuickRange(period, today)) }}>{label}</SecondaryAction>)}</Stack><PreferenceSwitch label="Финансы" checked={includeFinance} onChange={(value) => { setDetailsCursor(null); setIncludeFinance(value) }} testId="billing-seller-finance" /></> : <PeriodPicker value={month} onChange={setMonth} testId="billing-period" />}
+      {tab === 'charges' ? <SelectInput label="Селлер" value={sellerId} onChange={(value) => { setDetailsCursor(null); setSellerId(value) }} options={[{ value: 'all', label: 'Все селлеры' }, ...sellers.map((seller) => ({ value: seller.id, label: seller.name }))]} testId="billing-seller" /> : <Select size="small" value={sellerId} onChange={(event) => setSellerId(event.target.value)} inputProps={{ 'data-testid': 'billing-seller' }} sx={{ minWidth: 190 }} aria-label="Селлер"><MenuItem value="all">Все селлеры</MenuItem>{sellers.map((seller) => <MenuItem key={seller.id} value={seller.id}>{seller.name}</MenuItem>)}</Select>}
+      {tab === 'invoices' ? <Select size="small" value={invoiceStatus} onChange={(event) => setInvoiceStatus(event.target.value)} inputProps={{ 'data-testid': 'billing-status' }} sx={{ minWidth: 160 }} aria-label="Статус"><MenuItem value="all">Все статусы</MenuItem><MenuItem value="issued">Выставлен</MenuItem><MenuItem value="cancelled">Отменён</MenuItem></Select> : null}
     </FilterBar>
-    {tab === 'charges' ? <><>{error ? <ErrorNotice testId="billing-error">Не удалось загрузить начисления. Повторите попытку</ErrorNotice> : null}</>{hasUnknownLedgerCodes ? <ErrorNotice testId="billing-ledger-data-error">В некоторых начислениях не удалось распознать услугу или расчёт. Проверьте данные перед сверкой</ErrorNotice> : null}{hasUnpriced && mode === 'operations' ? <Stack direction="row" sx={{ mb: 2 }}><RouterLink to="/app/ff/settings?tab=tariffs" data-testid="billing-open-tariffs" style={{ textDecoration: 'none' }}><PrimaryAction>Открыть тарифы</PrimaryAction></RouterLink></Stack> : null}{mode === 'operations' ? <DataTable columns={operationColumns} rows={rows} loading={loading} getRowKey={(row) => row.id} testId="billing-ledger-table" empty={{ title: hasFilters ? 'По выбранным условиям начислений нет — измените фильтры' : 'За выбранный месяц начислений нет', hint: 'Начисления появятся после завершённой приёмки, отгрузки или фиксации хранения' }} /> : <DataTable columns={performerColumns} rows={performerRows} loading={loading} getRowKey={(row) => `${row.performer_name}-${row.service_code}-${row.unit}`} testId="billing-ledger-table" empty={{ title: 'За месяц нет завершённых операций с исполнителем' }} />}</> : <><>{invoiceError ? <ErrorNotice testId="billing-invoices-error">Не удалось загрузить счета. Повторите попытку</ErrorNotice> : null}</>{invoiceIssues.length ? <Stack spacing={1} sx={{ mb: 2 }} data-testid="billing-invoice-issues">{invoiceIssues.map((issue, index) => {
+    {tab === 'charges' ? <>{error ? <ErrorNotice testId="billing-seller-report-error">Не удалось загрузить отчёт по селлерам. Повторите попытку</ErrorNotice> : null}<ReportMetricStrip items={[{ key: 'sellers', label: 'Селлеров', value: report.totals.seller_count }, { key: 'operations', label: 'Операций', value: report.totals.operation_count }, { key: 'items', label: 'Штук', value: report.totals.item_quantity }, ...(includeFinance ? [{ key: 'accrued', label: 'Начислено', moneyMinor: report.totals.net_total_kopecks ?? 0 }] : [])]} loading={loading} testId="billing-seller-metrics" /><DataTable columns={sellerColumns} rows={report.rows} loading={loading} getRowKey={(row) => row.seller_id} testId="billing-seller-summary" empty={{ title: 'За выбранный период операций нет', hint: 'Измените период или фильтр селлера.' }} />{selectedReportSeller ? <Stack spacing={1} sx={{ mt: 3 }} data-testid="billing-seller-details"><Typography variant="h6">Операции селлера</Typography>{detailsError ? <ErrorNotice>Не удалось загрузить детализацию. Сводка сохранена.</ErrorNotice> : null}{reportDetails?.storage_row ? <DataTable columns={[{ key: 'storage', header: 'Услуга', width: 220, render: () => 'Хранение' }, { key: 'period', header: 'Период', width: 200, render: (row: StorageReportRow) => `${row.date_from} — ${row.date_to}` }, { key: 'literDays', header: 'Литро-дни', width: 130, align: 'right' as const, render: (row: StorageReportRow) => <TextCell value={String(row.liter_days)} /> }, ...(includeFinance ? [{ key: 'amount', header: 'Сумма', width: 130, align: 'right' as const, render: (row: StorageReportRow) => <MoneyCell minor={row.amount_kopecks ?? null} /> }] : []), { key: 'status', header: 'Статус', width: 180, render: (row: StorageReportRow) => row.status === 'missing_dimensions' ? <StatusChip label="Нет габаритов" tone="warn" hint="У товара нет габаритов для точного расчёта" /> : <StatusChip label="Рассчитано" tone="ok" /> }]} rows={[reportDetails.storage_row]} loading={detailsLoading} getRowKey={() => 'storage'} testId="billing-seller-storage" empty={{ title: 'Хранение не рассчитано' }} /> : null}<DataTable columns={reportEntryColumns} rows={reportDetails?.entries ?? []} loading={detailsLoading} getRowKey={(row) => row.id} testId="billing-seller-entries" empty={{ title: 'Операций нет' }} />{reportDetails?.next_cursor ? <SecondaryAction disabledReason={detailsLoading ? 'Загрузка операций' : undefined} onClick={() => setDetailsCursor(reportDetails.next_cursor)}>Загрузить ещё</SecondaryAction> : null}</Stack> : null}</> : <><>{invoiceError ? <ErrorNotice testId="billing-invoices-error">Не удалось загрузить счета. Повторите попытку</ErrorNotice> : null}</>{invoiceIssues.length ? <Stack spacing={1} sx={{ mb: 2 }} data-testid="billing-invoice-issues">{invoiceIssues.map((issue, index) => {
       const action = issueAction(issue)
       return <Stack key={`${issue.seller_name}-${issue.period}-${issue.reason}-${index}`} direction="row" spacing={1} sx={{ alignItems: 'center' }}><Typography>{issue.seller_name} · {issue.period}</Typography><StatusChip label={issueLabels[issue.reason] ?? 'Требуется исправление'} tone="stop" />{action ? <RouterLink to={action.to} data-testid={`billing-invoice-issue-action-${issue.id ?? index}`} style={{ textDecoration: 'none' }}><PrimaryAction>{action.label}</PrimaryAction></RouterLink> : null}</Stack>
     })}<PrimaryAction disabledReason="Сначала устраните причины, перечисленные выше" onClick={retryFormation}>{'Повторить формирование'}</PrimaryAction></Stack> : canRetryFormation && !invoiceLoading ? <Stack direction="row" spacing={1} sx={{ mb: 2 }}><Typography>Причины устранены — повторите формирование</Typography><PrimaryAction disabledReason={forming ? 'Формирование уже выполняется' : undefined} onClick={retryFormation}>Повторить формирование</PrimaryAction></Stack> : null}<DataTable columns={invoiceColumns} rows={invoices} loading={invoiceLoading} getRowKey={(row) => row.id} testId="billing-invoices-table" empty={{ title: 'За этот месяц счета не выставлены', hint: 'Нет начислений для формирования' }} /></>}

@@ -171,6 +171,33 @@ def _volume_segments(
     return result
 
 
+def interval_liter_days(
+    movements: list[InventoryMovement],
+    events: list[ProductDimensionEvent],
+    *,
+    legacy_volume_liters: Decimal | float | None,
+    start: datetime,
+    end: datetime,
+) -> tuple[Decimal, bool]:
+    """Pure exact-interval storage calculation shared by reports and monthly drafts.
+
+    It intentionally returns a missing-dimension flag instead of filling a later
+    measurement backwards.  Callers own aggregation and any money calculation.
+    """
+    liter_days = Decimal(0)
+    missing_dimensions = False
+    for segment_start, segment_end, held, volume, _event in _volume_segments(
+        movements, events, start, end, legacy_volume_liters=legacy_volume_liters
+    ):
+        if held <= 0:
+            continue
+        if volume is None:
+            missing_dimensions = True
+            continue
+        liter_days += Decimal(held) * _seconds(segment_start, segment_end) * volume
+    return liter_days, missing_dimensions
+
+
 async def rebuild_storage_measurements(
     session: AsyncSession,
     tenant_id: uuid.UUID,

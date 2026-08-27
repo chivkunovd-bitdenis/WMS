@@ -11,6 +11,12 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.billing_seller_report_schemas import (
+    SellerReportFinancialDetailsOut,
+    SellerReportFinancialSummaryOut,
+    SellerReportPhysicalDetailsOut,
+    SellerReportPhysicalSummaryOut,
+)
 from app.api.deps import require_fulfillment_admin
 from app.db.session import get_db
 from app.models.billing import (
@@ -36,6 +42,11 @@ from app.services.billing_invoice_service import (
     cancel_invoice,
     current_blocking_reasons,
     form_invoice,
+)
+from app.services.billing_seller_report_service import (
+    SellerReportError,
+    build_seller_report,
+    seller_details,
 )
 from app.services.billing_tariff_matrix_service import (
     MAX_TARIFF_RATE_KOPECKS,
@@ -116,6 +127,14 @@ class TariffMatrixSaveBody(BaseModel):
     revision: int = Field(ge=0)
     services: list[TariffMatrixServiceBody]
     versions: list[TariffMatrixVersionBody] = Field(default_factory=list)
+
+
+def _seller_report_error(exc: SellerReportError) -> HTTPException:
+    detail = str(exc)
+    return HTTPException(
+        status_code=404 if detail == "seller_not_found" else 422,
+        detail=detail,
+    )
 
 
 async def _matrix_products(
@@ -414,6 +433,78 @@ async def get_tariffs(
         .order_by(BillingTariffVersion.valid_from.desc())
     )
     return [TariffOut.from_model(value) for value in result]
+
+
+@router.get(
+    "/seller-report/summary",
+    response_model=SellerReportFinancialSummaryOut | SellerReportPhysicalSummaryOut,
+)
+async def get_seller_report_summary(
+    *,
+    date_from: date,
+    date_to: date,
+    seller_id: uuid.UUID | None = None,
+    search: str | None = None,
+    include_finance: bool = False,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> SellerReportFinancialSummaryOut | SellerReportPhysicalSummaryOut:
+    """Read-only seller aggregation; finance-off has an intentionally distinct shape."""
+    try:
+        report = await build_seller_report(
+            session,
+            tenant_id=user.tenant_id,
+            date_from=date_from,
+            date_to=date_to,
+            seller_id=seller_id,
+            search=search,
+            include_finance=include_finance,
+        )
+    except SellerReportError as exc:
+        raise _seller_report_error(exc) from exc
+    payload = {"rows": report["rows"], "totals": report["totals"]}
+    return (
+        SellerReportFinancialSummaryOut.model_validate(payload)
+        if include_finance
+        else SellerReportPhysicalSummaryOut.model_validate(payload)
+    )
+
+
+@router.get(
+    "/seller-report/sellers/{seller_id}/details",
+    response_model=SellerReportFinancialDetailsOut | SellerReportPhysicalDetailsOut,
+)
+async def get_seller_report_details(
+    seller_id: uuid.UUID,
+    *,
+    date_from: date,
+    date_to: date,
+    include_finance: bool = False,
+    limit: int = 50,
+    cursor: str | None = None,
+    user: Annotated[User, Depends(require_fulfillment_admin)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> SellerReportFinancialDetailsOut | SellerReportPhysicalDetailsOut:
+    if not 1 <= limit <= 100:
+        raise HTTPException(status_code=422, detail="invalid_limit")
+    try:
+        payload = await seller_details(
+            session,
+            tenant_id=user.tenant_id,
+            seller_id=seller_id,
+            date_from=date_from,
+            date_to=date_to,
+            include_finance=include_finance,
+            limit=limit,
+            cursor=cursor,
+        )
+    except SellerReportError as exc:
+        raise _seller_report_error(exc) from exc
+    return (
+        SellerReportFinancialDetailsOut.model_validate(payload)
+        if include_finance
+        else SellerReportPhysicalDetailsOut.model_validate(payload)
+    )
 
 
 @router.get("/ledger")

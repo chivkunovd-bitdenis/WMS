@@ -25,37 +25,29 @@ async function authenticateBillingAdmin(page: Page) {
 
 test.beforeEach(async ({ page }) => authenticateBillingAdmin(page))
 
-// S-31-TC-004 — Given ledger values are returned in kopecks, When the administrator opens charges,
-// Then the rate and amount are shown in rubles once, without a 100-fold overstatement.
-test('billing charges display kopecks exactly once', async ({ page }) => {
+// TC-NEW-007 — Given server seller totals in kopecks, When finance is on, Then money is formatted once.
+test('billing seller report displays kopecks exactly once', async ({ page }) => {
   await authenticateBillingAdmin(page)
-  await page.route('**/api/billing/ledger?**', async (route) => route.fulfill({
+  await page.route('**/api/billing/seller-report/summary?**', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
-    body: JSON.stringify({ entries: [{
-      id: 'ledger-kopecks',
-      entry_type: 'charge',
-      occurred_at: '2026-08-20T10:00:00Z',
+    body: JSON.stringify({ rows: [{
+      seller_id: 'seller-1',
       seller_name: 'Луна',
-      service_code: 'inbound',
-      source_type: 'inbound_intake',
-      source_id: 'inbound-1',
-      document_number: 'ПР-000141',
-      quantity: 1,
-      unit: 'item',
-      rate: 1200,
-      amount: 63000,
-      performer_name: null,
-      problem: null,
-    }] }),
+      operation_count: 1,
+      item_quantity: 1,
+      not_billable_count: 0,
+      unpriced_count: 0,
+      net_total_kopecks: 63000,
+      details_target: '/api/billing/seller-report/sellers/seller-1/details',
+    }], totals: { seller_count: 1, operation_count: 1, item_quantity: 1, not_billable_count: 0, net_total_kopecks: 63000 } }),
   }))
 
   await page.goto('/app/ff/billing')
-
-  const cells = page.getByTestId('billing-ledger-table').locator('tbody tr').first().getByRole('cell')
-  await expect(cells.nth(3)).toContainText('12,00 ₽')
-  await expect(cells.nth(4)).toHaveText('630,00 ₽')
-  await expect(cells.nth(4)).not.toHaveText('63 000,00 ₽')
+  await page.getByTestId('billing-seller-finance').click()
+  const cells = page.getByTestId('billing-seller-summary').locator('tbody tr').first().getByRole('cell')
+  await expect(cells.nth(5)).toHaveText('630,00 ₽')
+  await expect(cells.nth(5)).not.toHaveText('63 000,00 ₽')
 })
 
 // S-31-TC-017 — Given the seller billing profile blocks formation, Then the corrective action targets that seller.
@@ -115,33 +107,37 @@ test('billing invoice tariff issue targets tariff settings', async ({ page }) =>
     .toHaveAttribute('href', '/app/ff/settings?tab=tariffs')
 })
 
-// S-31-TC-012 — Given a charge has no tariff, Then the corrective action targets tariff settings.
-test('billing charge tariff issue targets tariff settings', async ({ page }) => {
+// TC-NEW-008 — Given an unpriced seller operation, Then the report keeps it visible without invoice controls.
+test('billing seller report keeps an unpriced operation visible', async ({ page }) => {
   await authenticateBillingAdmin(page)
-  await page.route('**/api/billing/ledger?**', async (route) => route.fulfill({
+  await page.route('**/api/billing/seller-report/summary?**', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
-    body: JSON.stringify({ entries: [{
-      id: 'unpriced-charge',
-      entry_type: 'charge',
-      occurred_at: '2026-08-20T10:00:00Z',
+    body: JSON.stringify({ rows: [{
+      seller_id: 'seller-1',
       seller_name: 'Луна',
-      service_code: 'inbound',
-      source_type: 'inbound',
-      source_id: 'inbound-1',
-      document_number: 'ПР-000141',
-      quantity: 1,
-      unit: 'item',
-      rate: null,
-      amount: null,
-      performer_name: null,
-      problem: 'unpriced',
-    }] }),
+      operation_count: 1,
+      item_quantity: 1,
+      not_billable_count: 0,
+      unpriced_count: 1,
+      net_total_kopecks: 0,
+      details_target: '/api/billing/seller-report/sellers/seller-1/details',
+    }], totals: { seller_count: 1, operation_count: 1, item_quantity: 1, not_billable_count: 0, unpriced_count: 1, net_total_kopecks: 0 } }),
+  }))
+  await page.route('**/api/billing/seller-report/sellers/seller-1/details?**', async (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ seller_id: 'seller-1', seller_name: 'Луна', next_cursor: null, totals: { operation_count: 1, item_quantity: 1, not_billable_count: 0, unpriced_count: 1, net_total_kopecks: 0 }, storage_row: null, entries: [{ id: 'legacy_billing:unpriced', kind: 'legacy_billing', occurred_at: '2026-08-20T10:00:00+03:00', service_code: 'warehouse_magic_fee', item_quantity: 1, source_type: 'inbound', source_id: 'inbound-1', source_target: null, result: 'unpriced', amount_kopecks: null, rate_kopecks: null, invoice_history: { state: 'unknown' } }] }),
   }))
 
   await page.goto('/app/ff/billing')
-  await expect(page.getByTestId('billing-open-tariffs'))
-    .toHaveAttribute('href', '/app/ff/settings?tab=tariffs')
+  await page.getByTestId('billing-seller-finance').click()
+  await page.getByRole('button', { name: 'Показать операции' }).click()
+  await expect(page.getByTestId('billing-seller-entries')).toContainText('Нет ставки')
+  await expect(page.getByText('warehouse_magic_fee', { exact: true })).toHaveCount(0)
+  await page.getByText('Недоступен', { exact: true }).hover()
+  await expect(page.getByRole('tooltip')).toContainText('Первоисточник недоступен')
+  await expect(page.getByRole('button', { name: /Выставить счёт/ })).toHaveCount(0)
 })
 
 // S-31-TC-006 — Given the seller's blocking causes are resolved, When the admin retries formation,
