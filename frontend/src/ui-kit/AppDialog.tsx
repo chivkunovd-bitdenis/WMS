@@ -2,15 +2,12 @@ import { Dialog, DialogActions, DialogContent, DialogTitle } from '@mui/material
 import type { ReactNode } from 'react'
 import { useId } from 'react'
 
-const DIALOG_ACCESSIBILITY = {
-  disableAutoFocus: false,
-  disableEnforceFocus: false,
-  disableRestoreFocus: false,
-  disableEscapeKeyDown: false,
-} as const
-
-// Единый диалог: MUI берёт фокус внутрь и возвращает его триггеру, Escape
-// всегда вызывает onClose. Экрану остаётся передать содержимое и штатные Actions.
+// Единый диалог: MUI сам берёт фокус внутрь модалки, возвращает его триггеру и
+// закрывает окно по Escape — это его поведение по умолчанию. Явные флаги
+// disableAutoFocus/disableEnforceFocus/disableRestoreFocus/disableEscapeKeyDown
+// в MUI 9 до Modal уже не доходят: они утекают на DOM-узел, и React их
+// отбрасывает с ошибкой в консоли. Поэтому здесь их нет, а само поведение
+// доказано браузером в tests-e2e/ui-kit-form-primitives.spec.ts.
 export function AppDialog({
   open,
   title,
@@ -37,7 +34,6 @@ export function AppDialog({
       fullWidth
       aria-labelledby={titleId}
       data-testid={testId}
-      {...DIALOG_ACCESSIBILITY}
     >
       <DialogTitle id={titleId}>{title}</DialogTitle>
       <DialogContent dividers>{children}</DialogContent>
@@ -45,6 +41,3 @@ export function AppDialog({
     </Dialog>
   )
 }
-
-// Test-only seam; this policy is intentionally not exported by ui-kit/index.
-export const __appDialogTest = { accessibility: DIALOG_ACCESSIBILITY }

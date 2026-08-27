@@ -1,6 +1,11 @@
 # UI-kit prerequisite · Wave 4 invoices
 
-**Статус:** `UIKIT_CANDIDATE` — ждёт независимого статического принятия.
+**Статус:** `UIKIT_ACCEPTED` — см. `VERDICT.md` рядом.
+
+Первая редакция получила `UIKIT_REWORK_REQUIRED`: тесты проверяли константы и
+SSR-разметку вместо поведения. Закрыто браузерными проверками в
+`frontend/tests-e2e/ui-kit-form-primitives.spec.ts`; попутно найден и удалён
+мёртвый `DIALOG_ACCESSIBILITY`, который в MUI 9 не доходил до `Modal`.
 
 ## Найденный пробел
 
@@ -23,12 +28,12 @@
 
 ## Проверки автора
 
-- `npm run test:unit -- --run src/ui-kit` — 27 passed, 6 files.
+- `npm run test:unit -- --run` — 214 passed, 35 files.
+- `npx playwright test ui-kit-form-primitives` — 7 passed (живой браузер).
 - `npx tsc -b` — success.
 - `npm run build` — success.
 - `python3 scripts/ui/ui_guard.py` — `новых отступлений нет`.
 - `git diff --check` — success; staged diff ограничен этим prerequisite и его
   нарядом.
 
-Независимый reviewer принимает или отклоняет этот shared prerequisite до
-использования Wave 4.
+Независимый reviewer принял этот shared prerequisite: `UIKIT_ACCEPTED`.
