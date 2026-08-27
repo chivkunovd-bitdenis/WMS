@@ -1,10 +1,62 @@
 import { readFileSync } from 'node:fs'
-import { expect, test } from '@playwright/test'
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
+import { openFulfillmentRegistration } from './auth-flow'
+import { waitForGetOk, waitForPostOk, waitForPutOk } from './api-waits'
 
 const UI_INVARIANTS_SOURCE = readFileSync(
   new URL('../../scripts/ui/invariants.js', import.meta.url),
   'utf8',
 )
+
+// Раздел «Ставки селлеров» ниже проверяется на НАСТОЯЩЕМ backend (uvicorn +
+// sqlite), как остальной файл уже проверяет через page.route на подменённых
+// данных — но именно подмена один раз скрыла реальную нестыковку экрана и
+// сервера. Новые тесты снизу используют реальные HTTP-запросы (регистрация,
+// создание селлера) по образцу frontend/tests-e2e/billing-invoice-v2.spec.ts.
+const API = process.env.E2E_API_ORIGIN ?? `http://127.0.0.1:${process.env.E2E_API_PORT ?? '18000'}`
+
+async function registerFfAdmin(page: Page, suffix: string): Promise<string> {
+  await page.goto('/')
+  await openFulfillmentRegistration(page)
+  const form = page.getByTestId('register-form')
+  await form.getByLabel('Организация').fill(`Тарифы селлеров ${suffix}`)
+  await form.getByLabel('Email администратора').fill(`tariff-seller-rate-${suffix}@example.com`)
+  await form.getByLabel('Пароль').fill('password123')
+  await Promise.all([
+    waitForPostOk(page, '/api/auth/register'),
+    waitForGetOk(page, '/api/auth/me'),
+    form.getByRole('button', { name: 'Создать аккаунт' }).click(),
+  ])
+  const token = await page.evaluate(() => localStorage.getItem('wms_token_ff'))
+  expect(token, 'после регистрации должен быть токен ФФ').toBeTruthy()
+  return token as string
+}
+
+async function createSeller(request: APIRequestContext, token: string, name: string): Promise<string> {
+  const response = await request.post(`${API}/sellers`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { name },
+  })
+  expect(response.ok(), await response.text()).toBeTruthy()
+  return (await response.json()).id as string
+}
+
+
+/**
+ * Раскрыть селлера в таблице «Ставки селлеров».
+ *
+ * Плоских форм с выпадающим списком селлера больше нет: его ставки и цены на
+ * его товары живут под его же строкой (просьба владельца 27.08.2026).
+ */
+async function expandSeller(page: Page, name: string) {
+  await page
+    .getByTestId('ff-settings-tariff-sellers')
+    .locator('tbody tr', { hasText: name })
+    .first()
+    .getByRole('button')
+    .first()
+    .click()
+}
 
 // TC-NEW-2B-001 — Given an FF admin opens the existing settings tariff link,
 // When the matrix loads, Then the stable S-19 section is visible without a new route.
@@ -25,7 +77,7 @@ test('S-19 tariff matrix accepts existing deep link', async ({ page }) => {
       { service_code: 'marketplace_outbound', enabled: false, unit: null, rate: null, valid_from_at: null },
       { service_code: 'packing', enabled: false, unit: null, rate: null, valid_from_at: null },
       { service_code: 'return', enabled: false, unit: null, rate: null, valid_from_at: null },
-    ], versions: [{ seller_id: null, product_id: null, employee_user_id: null, service_code: 'inbound', unit: 'document', enabled: true, rate: 1250, valid_from_at: '2026-08-27T09:00:00Z', valid_to_at: null }], products: [{ id: 'product-tariff-1', seller_id: 'seller-tariff-1', seller_name: 'Селлер Тест', sku: 'SKU-001', name: 'Куртка', label: 'Селлер Тест · SKU-001 · Куртка' }], storage: { mode: 'legacy_daily', editable_in_matrix: false } }
+    ], versions: [{ seller_id: null, product_id: null, employee_user_id: null, service_code: 'inbound', unit: 'document', enabled: true, rate: 1250, valid_from_at: '2026-08-27T09:00:00Z', valid_to_at: null }], products: [{ id: 'product-tariff-1', seller_id: 'seller-tariff-1', seller_name: 'Селлер Тест', sku: 'SKU-001', name: 'Куртка', label: 'Селлер Тест · SKU-001 · Куртка' }], sellers: [{ id: 'seller-tariff-1', name: 'Селлер Тест' }], storage: { mode: 'legacy_daily', editable_in_matrix: false } }
   let responseMatrix = matrix
   let putCount = 0
   let savedPayload: { services: Array<{ service_code: string; enabled: boolean }>; versions: Array<{ product_id: string | null; employee_user_id: string | null; rate: number }> } | null = null
@@ -52,8 +104,8 @@ test('S-19 tariff matrix accepts existing deep link', async ({ page }) => {
   await expect(panel).toBeFocused()
   await expect(panel.getByTestId('ff-settings-tariffs-services').getByRole('cell', { name: 'Приёмка', exact: true })).toBeVisible()
   await expect(panel.getByTestId('ff-settings-tariffs-services').getByRole('columnheader', { name: 'Ставка, ₽' })).toBeVisible()
-  await expect(panel.getByRole('heading', { name: 'Товарные цены' })).toBeVisible()
-  await expect(panel.getByTestId('ff-settings-tariff-product-id')).toBeVisible()
+  await expect(panel.getByRole('heading', { name: 'Ставки селлеров' })).toBeVisible()
+  await expect(panel.getByTestId('ff-settings-tariff-sellers')).toBeVisible()
   await expect(panel.getByTestId('ff-settings-tariff-employee-rates')).toBeVisible()
   await expect(panel.getByTestId('ff-settings-tariff-employee-rates').getByRole('columnheader', { name: 'Подбор', exact: true })).toBeVisible()
   await expect(panel.getByTestId('ff-settings-tariff-employee-rates').getByRole('columnheader', { name: 'Упаковка' })).toBeVisible()
@@ -66,10 +118,12 @@ test('S-19 tariff matrix accepts existing deep link', async ({ page }) => {
   await expect(panel.getByTestId('ff-settings-tariff-rate-inbound')).toHaveValue('12.5')
   await panel.getByTestId('ff-settings-tariff-rate-inbound').fill('33.50')
   await panel.getByTestId('ff-settings-tariff-unit-inbound').selectOption('item')
-  await panel.getByTestId('ff-settings-tariff-product-id').selectOption('product-tariff-1')
-  await expect(panel.getByTestId('ff-settings-tariff-product-id')).toContainText('Селлер Тест · SKU-001 · Куртка')
-  await panel.getByTestId('ff-settings-tariff-product-rate').fill('17.50')
-  await panel.getByTestId('ff-settings-tariff-product-add').click()
+  await expandSeller(page, 'Селлер Тест')
+  // Внутри селлера имя из подписи товара уходит: и так видно, чей это товар.
+  await panel.getByTestId('ff-settings-tariff-target-seller-tariff-1').selectOption('product-tariff-1')
+  await expect(panel.getByTestId('ff-settings-tariff-target-seller-tariff-1')).toContainText('SKU-001 · Куртка')
+  await panel.getByTestId('ff-settings-tariff-rate-seller-tariff-1').fill('17.50')
+  await panel.getByTestId('ff-settings-tariff-add-seller-tariff-1').click()
   await panel.getByTestId('ff-settings-tariff-employee-employee-tariff-1-inbound').fill('21.50')
   await panel.getByTestId('ff-settings-tariffs-save').click()
   await expect(panel.getByTestId('ff-settings-tariffs-success')).toBeVisible()
@@ -97,15 +151,15 @@ test('S-19 tariff matrix accepts existing deep link', async ({ page }) => {
   await expect(panel.getByTestId('ff-settings-tariffs-success')).toBeVisible()
   expect(putCount).toBe(3)
   expect(savedPayload?.versions.some((row) => row.product_id === null && row.employee_user_id === null && row.rate === 3400)).toBe(true)
-  await expect(panel.getByTestId('ff-settings-tariff-product-overrides')).toContainText('Селлер Тест · SKU-001 · Куртка')
-  await expect(panel.getByTestId('ff-settings-tariff-product-overrides')).not.toContainText('product-tariff-1')
-  await expect(panel.getByTestId('ff-settings-tariff-product-overrides')).toContainText('17,50')
-  await expect(panel.getByTestId('ff-settings-tariff-product-overrides')).toContainText(/\d{2}\.\d{2}\.\d{4}, \d{2}:\d{2}/)
-  await expect(panel.getByTestId('ff-settings-tariff-product-overrides')).not.toContainText('T')
+  await expect(panel.getByTestId('ff-settings-tariff-seller-own-seller-tariff-1')).toContainText('Селлер Тест · SKU-001 · Куртка')
+  await expect(panel.getByTestId('ff-settings-tariff-seller-own-seller-tariff-1')).not.toContainText('product-tariff-1')
+  await expect(panel.getByTestId('ff-settings-tariff-seller-own-seller-tariff-1')).toContainText('17,50')
+  await expect(panel.getByTestId('ff-settings-tariff-seller-own-seller-tariff-1')).toContainText(/\d{2}\.\d{2}\.\d{4}, \d{2}:\d{2}/)
+  await expect(panel.getByTestId('ff-settings-tariff-seller-own-seller-tariff-1')).not.toContainText('T')
   await expect(panel.getByTestId('ff-settings-tariff-storage-link')).toHaveAttribute('href', '/app/ff/inventory')
   await expect(panel.getByTestId('ff-settings-tariff-storage-state')).toHaveText('Отдельно')
   await page.reload()
-  await expect(page.getByTestId('ff-settings-tariff-product-overrides')).toContainText('Селлер Тест · SKU-001 · Куртка')
+  await expect(page.getByTestId('ff-settings-tariff-seller-own-seller-tariff-1')).toContainText('Селлер Тест · SKU-001 · Куртка')
   await expect(page.getByTestId('ff-settings-tariff-employee-rates')).toContainText('operator@example.test')
 })
 
@@ -123,7 +177,7 @@ test('S-19 keeps normal scroll, protects document product overrides and shows st
       { service_code: 'return', enabled: false, unit: null, rate: null, valid_from_at: null },
     ],
     versions: [{ seller_id: null, product_id: null, employee_user_id: null, service_code: 'inbound', unit: 'document', enabled: true, rate: 1250, valid_from_at: '2026-08-27T09:00:00Z', valid_to_at: null }],
-    products: [{ id: 'product-doc-1', seller_id: 'seller-doc-1', seller_name: 'Селлер Документ', sku: 'DOC-01', name: 'Платье', label: 'Селлер Документ · DOC-01 · Платье' }],
+    products: [{ id: 'product-doc-1', seller_id: 'seller-doc-1', seller_name: 'Селлер Документ', sku: 'DOC-01', name: 'Платье', label: 'Селлер Документ · DOC-01 · Платье' }], sellers: [{ id: 'seller-doc-1', name: 'Селлер Документ' }],
     storage: { mode: 'legacy_daily', editable_in_matrix: false },
   }
   await page.route('**/api/billing/tariff-matrix', async (route) => {
@@ -155,7 +209,7 @@ test('S-19 brand-new per-item default permits a product override', async ({ page
   await page.route('**/api/billing/tariff-matrix', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
     revision: 0,
     services: ['inbound', 'marketplace_outbound', 'packing', 'return'].map((service_code) => ({ service_code, enabled: false, unit: 'item', rate: null, valid_from_at: null })),
-    versions: [], products: [{ id: 'new-product-1', seller_id: 'new-seller-1', seller_name: 'Новый селлер', sku: 'NEW-01', name: 'Новый товар', label: 'Новый селлер · NEW-01 · Новый товар' }], storage: { mode: 'legacy_daily', editable_in_matrix: false },
+    versions: [], products: [{ id: 'new-product-1', seller_id: 'new-seller-1', seller_name: 'Новый селлер', sku: 'NEW-01', name: 'Новый товар', label: 'Новый селлер · NEW-01 · Новый товар' }], sellers: [{ id: 'new-seller-1', name: 'Новый селлер' }], storage: { mode: 'legacy_daily', editable_in_matrix: false },
   }) }))
   await page.goto('/app/ff/settings')
   const panel = page.getByTestId('ff-settings-tariffs-panel')
@@ -202,7 +256,7 @@ test('S-19 confines populated tariff matrix overflow to DataTable containers at 
       products: [
         { id: 'product-wide-1', seller_id: 'seller-wide-1', seller_name: 'Селлер Север', sku: 'NORTH-001', name: 'Куртка зимняя', label: 'Селлер Север · NORTH-001 · Куртка зимняя' },
         { id: 'product-wide-2', seller_id: 'seller-wide-2', seller_name: 'Селлер Юг', sku: 'SOUTH-002', name: 'Платье вечернее', label: 'Селлер Юг · SOUTH-002 · Платье вечернее' },
-      ],
+      ], sellers: [{ id: 'seller-wide-1', name: 'Селлер Север' }, { id: 'seller-wide-2', name: 'Селлер Юг' }],
       storage: { mode: 'legacy_daily', editable_in_matrix: false },
     }),
   }))
@@ -211,7 +265,7 @@ test('S-19 confines populated tariff matrix overflow to DataTable containers at 
   const panel = page.getByTestId('ff-settings-tariffs-panel')
   await expect(panel).toBeVisible()
   await expect(panel.getByTestId('ff-settings-tariffs-services').getByRole('row')).toHaveCount(5)
-  await expect(panel.getByTestId('ff-settings-tariff-product-overrides').getByRole('row')).toHaveCount(3)
+  await expect(panel.getByTestId('ff-settings-tariff-seller-own-seller-tariff-1').getByRole('row')).toHaveCount(3)
   await expect(panel.getByTestId('ff-settings-tariff-employee-rates').getByRole('row')).toHaveCount(3)
 
   for (const width of [768, 1280, 1600]) {
@@ -238,7 +292,7 @@ test('S-19 confines populated tariff matrix overflow to DataTable containers at 
   const geometry = await page.evaluate(() => {
     const panel = document.querySelector<HTMLElement>('[data-testid="ff-settings-tariffs-panel"]')
     const tables = [...document.querySelectorAll<HTMLElement>(
-      '[data-testid="ff-settings-tariffs-services"], [data-testid="ff-settings-tariff-product-overrides"], [data-testid="ff-settings-tariff-employee-rates"]',
+      '[data-testid="ff-settings-tariffs-services"], [data-testid="ff-settings-tariff-sellers"], [data-testid="ff-settings-tariff-employee-rates"]',
     )]
     return {
       documentWidth: document.documentElement.scrollWidth,
@@ -289,7 +343,7 @@ test('S-19 confines populated tariff matrix overflow to DataTable containers at 
     const panel = document.querySelector<HTMLElement>('[data-testid="ff-settings-tariffs-panel"]')
     const content = document.querySelector<HTMLElement>('[data-testid="app-content"]')
     const requiredControls = [
-      'ff-settings-tariff-product-add',
+      'ff-settings-tariff-sellers',
       'ff-settings-tariffs-save',
     ].map((testId) => document.querySelector<HTMLElement>(`[data-testid="${testId}"]`))
     const status = document.querySelector<HTMLElement>('[data-testid="ff-settings-tariff-state-inbound"]')
@@ -362,7 +416,7 @@ test('S-19 keeps product and employee tables loading until the matrix GET resolv
         services: ['inbound', 'marketplace_outbound', 'packing', 'return'].map((service_code) => ({
           service_code, enabled: false, unit: 'item', rate: null, valid_from_at: null,
         })),
-        versions: [], products: [], storage: { mode: 'legacy_daily', editable_in_matrix: false },
+        versions: [], products: [], sellers: [], storage: { mode: 'legacy_daily', editable_in_matrix: false },
       }),
     })
   })
@@ -370,10 +424,10 @@ test('S-19 keeps product and employee tables loading until the matrix GET resolv
   await requested
   const panel = page.getByTestId('ff-settings-tariffs-panel')
   await expect(panel).toBeVisible()
-  await expect(panel.getByTestId('ff-settings-tariff-product-overrides')).not.toContainText('Товарных цен пока нет')
+  await expect(panel.getByTestId('ff-settings-tariff-seller-own-seller-tariff-1')).not.toContainText('Товарных цен пока нет')
   await expect(panel.getByTestId('ff-settings-tariff-employee-rates')).not.toContainText('Сотрудников пока нет')
   releaseMatrix?.()
-  await expect(panel.getByTestId('ff-settings-tariff-product-overrides')).toContainText('Товарных цен пока нет')
+  await expect(panel.getByTestId('ff-settings-tariff-seller-own-seller-tariff-1')).toContainText('Товарных цен пока нет')
   await expect(panel.getByTestId('ff-settings-tariff-employee-rates')).toContainText('Сотрудников пока нет')
 })
 
@@ -405,7 +459,7 @@ test('S-19 tariff panel does not worsen inherited 1280 staff-table width', async
         service_code, enabled: true, unit: 'item', rate: 1000, valid_from_at: '2026-08-27T09:00:00Z',
       })),
       versions: [],
-      products: [{ id: 'product-baseline-1', seller_id: 'seller-baseline-1', seller_name: 'Селлер База', sku: 'BASE-01', name: 'Товар', label: 'Селлер База · BASE-01 · Товар' }],
+      products: [{ id: 'product-baseline-1', seller_id: 'seller-baseline-1', seller_name: 'Селлер База', sku: 'BASE-01', name: 'Товар', label: 'Селлер База · BASE-01 · Товар' }], sellers: [{ id: 'seller-baseline-1', name: 'Селлер База' }],
       storage: { mode: 'legacy_daily', editable_in_matrix: false },
     }),
   }))

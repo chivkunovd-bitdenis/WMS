@@ -36,6 +36,14 @@ type Props<Row> = {
   empty?: { title: string; hint?: string; action?: ReactNode }
   testId?: string
   /**
+   * Скрыть шапку.
+   *
+   * Нужно списку из одной колонки, который служит группировкой: там шапка
+   * повторяет очевидное, а рядом с шапкой раскрытой внутренней таблицы даёт
+   * две одинаковые полосы подряд и читается как таблица в таблице.
+   */
+  hideHeader?: boolean
+  /**
    * Раскрытие строки под собой.
    *
    * Второй таблице с собственной шапкой под основной таблицей взяться неоткуда:
@@ -60,6 +68,7 @@ export function DataTable<Row>({
   empty,
   testId,
   expand,
+  hideHeader = false,
 }: Props<Row>) {
   const showEmpty = !loading && rows.length === 0
   const spanWidth = columns.length + (expand ? 1 : 0)
@@ -69,6 +78,7 @@ export function DataTable<Row>({
       {/* stickyHeader по умолчанию: на двухстах строках без липкой шапки
           оператор читает число не из того столбца (канон R-05). */}
       <Table stickyHeader size="small">
+        {hideHeader ? null : (
         <TableHead>
           <TableRow>
             {expand ? <TableCell width={56} sx={{ whiteSpace: 'nowrap' }} /> : null}
@@ -84,6 +94,7 @@ export function DataTable<Row>({
             ))}
           </TableRow>
         </TableHead>
+        )}
         {loading ? (
           <TableSkeletonBody columns={spanWidth} />
         ) : (

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Stack } from '@mui/material'
 import { apiUrl } from '../../api'
 import {
   ActionGroup,
@@ -14,6 +13,7 @@ import {
 } from '../../ui-kit'
 import type { Column } from '../../ui-kit'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+import { FfBillingTariffSellerRates } from './FfBillingTariffSellerRates'
 
 type Unit = 'item' | 'document'
 type TariffServiceState = { service_code: string; enabled: boolean; unit: Unit | null; rate: number | null; valid_from_at: string | null }
@@ -44,35 +44,8 @@ type Props = {
 const MAX_TARIFF_RATE_KOPECKS = 2_147_483_647
 const MAX_TARIFF_RATE_RUBLES = MAX_TARIFF_RATE_KOPECKS / 100
 const RATE_VALIDATION_MESSAGE = 'Ставка указывается в рублях, не более 21 474 836,47 ₽ и двух знаков после запятой.'
-const rubleFormatter = new Intl.NumberFormat('ru-RU', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-})
-const moscowDateFormatter = new Intl.DateTimeFormat('ru-RU', {
-  timeZone: 'Europe/Moscow',
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-  hourCycle: 'h23',
-})
 
-function formatRubles(rate: number) {
-  return rubleFormatter.format(rate)
-}
 
-function formatMoscowDate(value: string) {
-  const instant = new Date(value)
-  if (Number.isNaN(instant.getTime())) return '—'
-  const parts = Object.fromEntries(
-    moscowDateFormatter
-      .formatToParts(instant)
-      .filter((part) => part.type !== 'literal')
-      .map((part) => [part.type, part.value]),
-  )
-  return `${parts.day}.${parts.month}.${parts.year}, ${parts.hour}:${parts.minute}`
-}
 
 function rublesFromKopecks(rate: number | null) {
   return rate == null ? null : rate / 100
@@ -151,15 +124,7 @@ export function FfBillingTariffMatrixPanel({ token, authHeaders, focusTariffs, o
   const [dirty, setDirty] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [sellerId, setSellerId] = useState('')
-  const [sellerService, setSellerService] = useState('inbound')
-  const [sellerRate, setSellerRate] = useState<number | null>(null)
-  const [sellerStart, setSellerStart] = useState<string | null>(defaultStartsAt())
-  const [productSellerId, setProductSellerId] = useState('')
-  const [productId, setProductId] = useState('')
-  const [productService, setProductService] = useState('inbound')
-  const [productRate, setProductRate] = useState<number | null>(null)
-  const [productStart, setProductStart] = useState<string | null>(defaultStartsAt())
+  const [expandedSellerId, setExpandedSellerId] = useState<string | null>(null)
   const anchorRef = useRef<HTMLElement>(null)
 
   const load = useCallback(async () => {
@@ -217,39 +182,34 @@ export function FfBillingTariffMatrixPanel({ token, authHeaders, focusTariffs, o
    * общую. У кого своей ставки нет — работает общая, отдельно её заводить не
    * нужно.
    */
-  function addSellerOverride() {
-    const seller = matrix?.sellers.find((item) => item.id === sellerId)
-    const service = matrix?.services.find((item) => item.service_code === sellerService)
-    if (!matrix || !seller || sellerRate == null || !sellerStart) {
-      setError('Для ставки селлера выберите селлера, ставку и время Москвы.')
-      return
-    }
+  function addSellerRate({ sellerId, serviceCode, rate, startsAt }: { sellerId: string; serviceCode: string; rate: number; startsAt: string }) {
+    const service = matrix?.services.find((item) => item.service_code === serviceCode)
     mutate((current) => ({
       ...current,
       versions: replaceVersion(current.versions, {
-        seller_id: seller.id, product_id: null, employee_user_id: null, service_code: sellerService,
-        unit: service?.unit ?? 'item', enabled: true, rate: sellerRate, valid_from_at: sellerStart, valid_to_at: null,
+        seller_id: sellerId, product_id: null, employee_user_id: null, service_code: serviceCode,
+        unit: service?.unit ?? 'item', enabled: true, rate, valid_from_at: startsAt, valid_to_at: null,
       }),
     }))
     setError(null)
   }
 
-  function addProductOverride() {
+  function addProductRate({ productId, serviceCode, rate, startsAt }: { productId: string; serviceCode: string; rate: number; startsAt: string }) {
     const product = matrix?.products.find((item) => item.id === productId)
-    const service = matrix?.services.find((item) => item.service_code === productService)
-    if (!matrix || !product || !product.seller_id || productRate == null || !productStart) {
-      setError('Для товарной цены выберите товар, ставку и время Москвы.')
+    const service = matrix?.services.find((item) => item.service_code === serviceCode)
+    if (!product?.seller_id) {
+      setError('У товара нет селлера, цену на него задать нельзя.')
       return
     }
     if (service?.unit !== 'item') {
-      setError('Товарная цена доступна только для тарифа за единицу.')
+      setError('Цена на товар возможна только когда услуга считается за единицу.')
       return
     }
     mutate((current) => ({
       ...current,
       versions: replaceVersion(current.versions, {
-        seller_id: product.seller_id, product_id: product.id, employee_user_id: null, service_code: productService,
-        unit: 'item', enabled: true, rate: productRate, valid_from_at: productStart, valid_to_at: null,
+        seller_id: product.seller_id, product_id: product.id, employee_user_id: null, service_code: serviceCode,
+        unit: 'item', enabled: true, rate, valid_from_at: startsAt, valid_to_at: null,
       }),
     }))
     setError(null)
@@ -298,14 +258,6 @@ export function FfBillingTariffMatrixPanel({ token, authHeaders, focusTariffs, o
     }
   }
 
-  const sellerRows = matrix?.versions.filter((item) => item.seller_id != null && item.product_id == null) ?? []
-  const sellerById = new Map((matrix?.sellers ?? []).map((seller) => [seller.id, seller]))
-  const productOptions = (matrix?.products ?? []).filter(
-    (product) => !productSellerId || product.seller_id === productSellerId,
-  )
-  const productRows = matrix?.versions.filter((item) => item.product_id != null) ?? []
-  const productById = new Map((matrix?.products ?? []).map((product) => [product.id, product]))
-  const productOverrideAllowed = (matrix?.services.find((service) => service.service_code === productService)?.unit ?? 'item') === 'item'
   const employeeRows = useMemo(() => {
     const known = new Map(employees.map((employee) => [employee.id, employee]))
     matrix?.versions.filter((item) => item.employee_user_id).forEach((item) => {
@@ -316,26 +268,12 @@ export function FfBillingTariffMatrixPanel({ token, authHeaders, focusTariffs, o
 
   const serviceColumns: Column<TariffServiceState>[] = [
     { key: 'service', header: 'Услуга', width: 150, render: (row) => serviceName[row.service_code] ?? row.service_code },
-    { key: 'basis', header: 'Считается', width: 150, render: (row) => row.unit === 'document' ? 'За документ' : 'За единицу' },
     { key: 'unit', header: 'Единица', width: 170, render: (row) => <SelectInput label="Единица" value={row.unit ?? 'item'} onChange={(value) => setService(row, { unit: value as Unit })} options={[{ value: 'item', label: 'За единицу' }, { value: 'document', label: 'За документ' }]} disabled={saving} testId={`ff-settings-tariff-unit-${row.service_code}`} /> },
     { key: 'rate', header: 'Ставка, ₽', width: 150, align: 'right', render: (row) => <NumberInput label="Ставка" value={row.rate} onChange={(value) => setService(row, { rate: value })} min={0} max={MAX_TARIFF_RATE_RUBLES} step={0.01} disabled={saving} testId={`ff-settings-tariff-rate-${row.service_code}`} /> },
     { key: 'start', header: 'Действует с', width: 205, render: (row) => <MoscowDateTimeInput label="Начало" value={row.valid_from_at} onChange={(value) => value && setService(row, { valid_from_at: value })} disabled={saving} testId={`ff-settings-tariff-start-${row.service_code}`} /> },
-    { key: 'products', header: 'Товарные цены', width: 150, align: 'right', render: (row) => productRows.filter((item) => item.service_code === row.service_code).length || '—' },
+    { key: 'products', header: 'Цен на товары', width: 150, align: 'right', render: (row) => (matrix?.versions ?? []).filter((item) => item.product_id != null && item.service_code === row.service_code).length || '—' },
     { key: 'state', header: 'Состояние', width: 155, render: (row) => <StatusChip label={row.enabled ? 'Тарифицируется' : 'Не тарифицируется'} tone={row.enabled ? 'ok' : 'neutral'} testId={`ff-settings-tariff-state-${row.service_code}`} /> },
     { key: 'action', header: 'Действие', width: 145, render: (row) => <SecondaryAction aria-pressed={row.enabled} disabledReason={saving ? 'Матрица тарифов сохраняется' : undefined} onClick={() => setService(row, { enabled: !row.enabled })} data-testid={`ff-settings-tariff-${row.service_code}`}>{row.enabled ? 'Выключить' : 'Включить'}</SecondaryAction> },
-  ]
-  const sellerColumns: Column<TariffVersion>[] = [
-    { key: 'seller', header: 'Селлер', width: 280, render: (row) => sellerById.get(row.seller_id ?? '')?.name ?? 'Селлер недоступен' },
-    { key: 'service', header: 'Услуга', width: 200, render: (row) => serviceName[row.service_code] ?? row.service_code },
-    { key: 'rate', header: 'Ставка, ₽', align: 'right', width: 150, render: (row) => formatRubles(row.rate) },
-    { key: 'start', header: 'Действует с', width: 205, render: (row) => formatMoscowDate(row.valid_from_at) },
-  ]
-  const productColumns: Column<TariffVersion>[] = [
-    { key: 'product', header: 'Товар', width: 280, render: (row) => productById.get(row.product_id ?? '')?.label ?? 'Товар недоступен' },
-    { key: 'seller', header: 'Селлер', width: 220, render: (row) => productById.get(row.product_id ?? '')?.seller_name ?? 'Селлер недоступен' },
-    { key: 'service', header: 'Услуга', width: 160, render: (row) => serviceName[row.service_code] ?? row.service_code },
-    { key: 'rate', header: 'Ставка, ₽', align: 'right', width: 140, render: (row) => formatRubles(row.rate) },
-    { key: 'start', header: 'Действует с', width: 205, render: (row) => formatMoscowDate(row.valid_from_at) },
   ]
   const employeeColumns: Column<Employee>[] = [
     { key: 'employee', header: 'Сотрудник', width: 260, render: (row) => row.email },
@@ -356,26 +294,22 @@ export function FfBillingTariffMatrixPanel({ token, authHeaders, focusTariffs, o
       {saved ? <StatusChip label="Матрица сохранена" tone="ok" testId="ff-settings-tariffs-success" /> : null}
       <DataTable columns={serviceColumns} rows={matrix?.services ?? []} getRowKey={(row) => row.service_code} loading={loading} empty={{ title: 'Тарифы пока не настроены', hint: 'Сначала загрузите матрицу тарифов.' }} testId="ff-settings-tariffs-services" />
       <h3>Ставки селлеров</h3>
-      <p>Ставка ниже действует только на выбранного селлера. У кого своей ставки нет — работает общая.</p>
-      <Stack spacing={2.5} sx={{ maxWidth: 520, my: 2 }}>
-      <SelectInput label="Селлер" value={sellerId} onChange={setSellerId} options={(matrix?.sellers ?? []).map((seller) => ({ value: seller.id, label: seller.name }))} emptyLabel="Выберите селлера" disabled={saving} testId="ff-settings-tariff-seller-id" />
-      <SelectInput label="Услуга для селлера" value={sellerService} onChange={setSellerService} options={(matrix?.services ?? []).map((service) => ({ value: service.service_code, label: serviceName[service.service_code] ?? service.service_code }))} disabled={saving} testId="ff-settings-tariff-seller-service" />
-      <NumberInput label="Ставка селлера, ₽" value={sellerRate} onChange={setSellerRate} min={0} max={MAX_TARIFF_RATE_RUBLES} step={0.01} disabled={saving} testId="ff-settings-tariff-seller-rate" />
-      <MoscowDateTimeInput label="Ставка селлера действует с" value={sellerStart} onChange={setSellerStart} disabled={saving} testId="ff-settings-tariff-seller-start" />
-      <ActionGroup><SecondaryAction disabledReason={saving ? 'Матрица тарифов сохраняется' : undefined} onClick={addSellerOverride} data-testid="ff-settings-tariff-seller-add">Добавить ставку селлера</SecondaryAction></ActionGroup>
-      </Stack>
-      <DataTable columns={sellerColumns} rows={sellerRows} getRowKey={(row) => `${row.seller_id}-${row.service_code}-${row.valid_from_at}`} loading={loading} empty={{ title: 'Индивидуальных ставок пока нет', hint: 'Все селлеры считаются по общей ставке.' }} testId="ff-settings-tariff-seller-overrides" />
-      <h3>Товарные цены</h3>
-      <Stack spacing={2.5} sx={{ maxWidth: 520, my: 2 }}>
-      <SelectInput label="Селлер товара" value={productSellerId} onChange={(value) => { setProductSellerId(value); setProductId('') }} options={(matrix?.sellers ?? []).map((seller) => ({ value: seller.id, label: seller.name }))} emptyLabel="Все селлеры" disabled={saving} testId="ff-settings-tariff-product-seller" />
-      <SelectInput label="Товар" value={productId} onChange={setProductId} options={productOptions.map((product) => ({ value: product.id, label: productSellerId ? [product.sku, product.name].filter(Boolean).join(' · ') : product.label }))} emptyLabel={productSellerId && !productOptions.length ? 'У этого селлера нет товаров' : 'Выберите товар'} disabled={saving} testId="ff-settings-tariff-product-id" />
-      <SelectInput label="Услуга для товара" value={productService} onChange={setProductService} options={(matrix?.services ?? []).map((service) => ({ value: service.service_code, label: serviceName[service.service_code] ?? service.service_code }))} disabled={saving} testId="ff-settings-tariff-product-service" />
-      <NumberInput label="Товарная ставка, ₽" value={productRate} onChange={setProductRate} min={0} max={MAX_TARIFF_RATE_RUBLES} step={0.01} disabled={saving} testId="ff-settings-tariff-product-rate" />
-      <MoscowDateTimeInput label="Товарная цена действует с" value={productStart} onChange={setProductStart} disabled={saving} testId="ff-settings-tariff-product-start" />
-      {!productOverrideAllowed ? <StatusChip label="Товарная цена доступна только для тарифа за единицу" tone="warn" testId="ff-settings-tariff-product-unit-boundary" /> : null}
-      <ActionGroup><SecondaryAction disabledReason={saving ? 'Матрица тарифов сохраняется' : !productOverrideAllowed ? 'Для товарной цены выберите единицу «За единицу»' : undefined} onClick={addProductOverride} data-testid="ff-settings-tariff-product-add">Добавить товарную цену</SecondaryAction></ActionGroup>
-      </Stack>
-      <DataTable columns={productColumns} rows={productRows} getRowKey={(row) => `${row.product_id}-${row.service_code}-${row.valid_from_at}`} loading={loading} empty={{ title: 'Товарных цен пока нет', hint: 'Добавьте ставку для товара, если она отличается от общей.' }} testId="ff-settings-tariff-product-overrides" />
+      <p>Раскройте селлера, чтобы задать ему свою ставку или цену на его товар. Приоритет: цена товара, затем ставка селлера, затем общая.</p>
+      <FfBillingTariffSellerRates
+        sellers={matrix?.sellers ?? []}
+        products={matrix?.products ?? []}
+        services={(matrix?.services ?? []).map((service) => ({ service_code: service.service_code, unit: service.unit }))}
+        versions={matrix?.versions ?? []}
+        loading={loading}
+        saving={saving}
+        expandedSellerId={expandedSellerId}
+        onToggleSeller={(id) => setExpandedSellerId((current) => current === id ? null : id)}
+        onAddSellerRate={addSellerRate}
+        onAddProductRate={addProductRate}
+        serviceName={serviceName}
+        defaultStartsAt={defaultStartsAt}
+        maxRate={MAX_TARIFF_RATE_RUBLES}
+      />
       <h3>Ставки сотрудников</h3>
       <DataTable columns={employeeColumns} rows={employeeRows} getRowKey={(row) => row.id} loading={loading} empty={{ title: 'Сотрудников пока нет', hint: 'Ставки появятся после добавления сотрудников.' }} testId="ff-settings-tariff-employee-rates" />
       <h3>Хранение</h3>
