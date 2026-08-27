@@ -9,7 +9,7 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any, cast
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, case, select
+from sqlalchemy import and_, case, literal, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -284,7 +284,25 @@ async def _resolve_v2_tariff(
             | BillingTariffVersionV2.seller_id.is_(None)
         )
     )
-    specificity = case((BillingTariffVersionV2.product_id == product_id, 0), else_=1)
+    # Приоритет: товар → селлер → общая; дата решает только внутри одного
+    # уровня точности.
+    #
+    # Ветки собираются условно намеренно. SQLAlchemy превращает `col == None` в
+    # `col IS NULL`, поэтому запись вида `product_id == product_id` при пустом
+    # product_id давала высшую точность КАЖДОЙ нетоварной ставке — все они
+    # оказывались равны, и побеждала просто самая свежая. Так общая ставка,
+    # заведённая позже, перебивала индивидуальную ставку селлера.
+    branches: list[Any] = []
+    if product_id is not None:
+        branches.append((BillingTariffVersionV2.product_id == product_id, 0))
+    if seller_id is not None:
+        branches.append(
+            (
+                BillingTariffVersionV2.seller_id == seller_id,
+                1,
+            )
+        )
+    specificity = case(*branches, else_=2) if branches else literal(2)
     return cast(
         BillingTariffVersionV2 | None,
         await session.scalar(
