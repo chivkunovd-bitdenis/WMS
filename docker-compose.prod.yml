@@ -40,6 +40,11 @@ services:
       WMS_S3_SECRET_ACCESS_KEY: ${WMS_S3_SECRET_ACCESS_KEY:-}
       # Optional: allow CORS for external dev tools; in prod behind same origin it can be empty.
       WMS_CORS_ORIGINS: ${WMS_CORS_ORIGINS:-}
+    # Стикеры и QR от WB лежат файлами в /app/var. Без тома они живут внутри
+    # контейнера и стираются при каждой выкатке: 27.08.2026 так пропало 1756
+    # файлов, и печать на складе встала посреди сборки.
+    volumes:
+      - wms_appdata:/app/var
     depends_on:
       db:
         condition: service_healthy
@@ -69,6 +74,9 @@ services:
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?set in .env}
       WMS_SECRETS_FERNET_KEY: ${WMS_SECRETS_FERNET_KEY:?set in .env}
+    # Фоновые задачи пишут те же файлы, что отдаёт API, — том общий.
+    volumes:
+      - wms_appdata:/app/var
     depends_on:
       db:
         condition: service_healthy
@@ -110,6 +118,7 @@ services:
       - wms_caddy_config:/config
 
 volumes:
+  wms_appdata:
   wms_pgdata:
   wms_redisdata:
   wms_caddy_data:

@@ -41,6 +41,7 @@ from app.services.fbs_print_asset_storage import (
     decode_png_payload,
     order_sticker_relative_path,
     read_png,
+    resolve_existing_storage_path,
     save_png,
     sha256_checksum,
     supply_qr_relative_path,
@@ -118,15 +119,22 @@ def print_asset_content_url(asset_id: uuid.UUID) -> str:
 
 
 def map_print_asset(asset: FbsPrintAsset) -> dict[str, Any]:
-    url = (
-        print_asset_content_url(asset.id)
-        if asset.status == PRINT_ASSET_STATUS_READY and asset.storage_path
-        else None
+    # «Готово» в базе ещё не значит, что файл на месте: 27.08.2026 выкатка стёрла
+    # 1756 PNG, а карточки остались готовыми — экран обещал печать, а запрос за
+    # картинкой отвечал 404. Считаем готовым только то, что реально лежит на диске.
+    file_ready = _asset_file_present(asset)
+    status = asset.status if file_ready or asset.status != PRINT_ASSET_STATUS_READY else (
+        PRINT_ASSET_STATUS_ERROR
+    )
+    url = print_asset_content_url(asset.id) if file_ready else None
+    error_code = asset.error_code or (None if file_ready else "file_missing")
+    error_message = asset.error_message or (
+        "" if file_ready else "Файл печати не найден — запросите его у WB заново."
     )
     return {
         "id": str(asset.id),
         "kind": asset.kind,
-        "status": asset.status,
+        "status": status,
         "content_type": asset.content_type,
         "width_mm": asset.width_mm,
         "height_mm": asset.height_mm,
@@ -135,8 +143,8 @@ def map_print_asset(asset: FbsPrintAsset) -> dict[str, Any]:
         "checksum": asset.checksum,
         "applied_at": asset.applied_at.isoformat() if asset.applied_at else None,
         "error": (
-            {"code": asset.error_code or "error", "message": asset.error_message or ""}
-            if asset.error_code
+            {"code": error_code, "message": error_message}
+            if error_code
             else None
         ),
     }
@@ -184,6 +192,16 @@ async def _find_order_sticker_asset(
     )
     result = await session.execute(stmt)
     return result.scalars().first()
+
+
+def _asset_file_present(asset: FbsPrintAsset) -> bool:
+    """Есть ли файл на диске. Дешёвая проверка для списков — без чтения PNG."""
+    if asset.status != PRINT_ASSET_STATUS_READY or not asset.storage_path:
+        return False
+    try:
+        return resolve_existing_storage_path(asset.storage_path).is_file()
+    except FbsPrintAssetStorageError:
+        return False
 
 
 def _asset_file_ready(asset: FbsPrintAsset) -> bool:
