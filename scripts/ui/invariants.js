@@ -75,12 +75,63 @@
     if (new Set(heights).size > 1) add('R-32', 'кнопки в ряду разной высоты', heights.join('/'));
   });
 
+  const isReachableDataTableOverflow = (el, paper) => {
+    if (getComputedStyle(el).position === 'fixed') return false;
+    const paperBox = paper.getBoundingClientRect();
+    const clippingAncestors = [];
+    let scrollport = el.parentElement;
+    while (scrollport && paper.contains(scrollport)) {
+      const style = getComputedStyle(scrollport);
+      // An inner clip is a permanent visual boundary: an outer table scrollbar
+      // can only make its descendant reachable when that descendant remains
+      // visible inside every clipping box at the same scroll endpoint.
+      if (style.overflowX === 'hidden' || style.overflowX === 'clip') {
+        clippingAncestors.push(scrollport);
+      }
+      const canScrollHorizontally = style.overflowX === 'auto' || style.overflowX === 'scroll';
+      if (canScrollHorizontally) {
+        // Only the shared DataTable container may own this exception.  A generic
+        // scrollable Paper is not a licence for a button or chip to leave its card.
+        if (
+          !scrollport.classList.contains('MuiTableContainer-root') ||
+          getComputedStyle(scrollport).position === 'fixed' ||
+          scrollport.scrollWidth <= scrollport.clientWidth + 1
+        ) return false;
+        const scrollportBox = scrollport.getBoundingClientRect();
+        if (
+          scrollportBox.left < paperBox.left - 1 ||
+          scrollportBox.right > paperBox.right + 1
+        ) return false;
+        const visibleInScrollport = (box) =>
+          box.right > scrollportBox.left + 1 && box.left < scrollportBox.right - 1;
+        const visibleAtEndpoint = () => {
+          const targetBox = el.getBoundingClientRect();
+          return visibleInScrollport(targetBox) && clippingAncestors.every((clip) => {
+            const clipBox = clip.getBoundingClientRect();
+            return targetBox.right > clipBox.left + 1 && targetBox.left < clipBox.right - 1;
+          });
+        };
+        const originalScrollLeft = scrollport.scrollLeft;
+        scrollport.scrollLeft = 0;
+        const visibleAtStart = visibleAtEndpoint();
+        scrollport.scrollLeft = scrollport.scrollWidth - scrollport.clientWidth;
+        const visibleAtEnd = visibleAtEndpoint();
+        scrollport.scrollLeft = originalScrollLeft;
+        return visibleAtStart || visibleAtEnd;
+      }
+      if (scrollport === paper) break;
+      scrollport = scrollport.parentElement;
+    }
+    return false;
+  };
+
   // Элемент, вылезший за пределы своей карточки.
   document.querySelectorAll('.MuiPaper-root').forEach((paper) => {
     const box = paper.getBoundingClientRect();
     paper.querySelectorAll('.MuiButton-root, .MuiChip-root').forEach((el) => {
       const inner = el.getBoundingClientRect();
-      if (inner.right > box.right + 1 || inner.left < box.left - 1) {
+      const outsidePaper = inner.right > box.right + 1 || inner.left < box.left - 1;
+      if (outsidePaper && !isReachableDataTableOverflow(el, paper)) {
         add('R-08', 'элемент вылезает за карточку', text(el));
       }
     });
