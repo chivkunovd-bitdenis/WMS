@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import { __formFieldsTest, MoscowDateInput, MoscowDateRangeInput, MoscowDateTimeInput, NumberInput, PreferenceSwitch, SelectInput, TextInput } from './FormFields'
+import { __formFieldsTest, CheckboxInput, MoneyInput, MoscowDateInput, MoscowDateRangeInput, MoscowDateTimeInput, NumberInput, PreferenceSwitch, SelectInput, TextInput } from './FormFields'
 
 describe('generic form fields', () => {
   it('renders label, linked error/help and disabled loading state without a screen-specific contract', () => {
@@ -63,6 +63,34 @@ describe('generic form fields', () => {
     expect(markup).toContain('type="number"')
     expect(markup).toContain('text-align:right')
     expect(markup).toContain('inputMode="decimal"')
+  })
+
+  it('keeps money as a labelled decimal string and rejects fractions beyond kopecks or negative values', () => {
+    const markup = renderToStaticMarkup(
+      createElement(MoneyInput, { label: 'Сумма', value: '-1.234', onChange: () => undefined, testId: 'form-money' }),
+    )
+    expect(markup).toContain('type="text"')
+    expect(markup).toContain('inputMode="decimal"')
+    expect(markup).toContain('Сумма не может быть отрицательной')
+    expect(markup).toContain('aria-invalid="true"')
+    expect(__formFieldsTest.validateMoney('12.20', false)).toBeUndefined()
+    expect(__formFieldsTest.validateMoney('12.200', false)).toBe('Укажите сумму с точностью до копеек')
+    expect(__formFieldsTest.validateMoney('-12.20', false)).toBe('Сумма не может быть отрицательной')
+    expect(__formFieldsTest.validateMoney('-12.20', true)).toBeUndefined()
+  })
+
+  it('renders a labelled checkbox with a visible disabled reason', () => {
+    const markup = renderToStaticMarkup(
+      createElement(CheckboxInput, {
+        label: 'Включить операцию', checked: false, onChange: () => undefined,
+        disabledReason: 'Операция не рассчитана', testId: 'form-checkbox',
+      }),
+    )
+    expect(markup).toContain('Включить операцию')
+    expect(markup).toContain('Операция не рассчитана')
+    expect(markup).toContain('type="checkbox"')
+    expect(markup).toContain('disabled=""')
+    expect(markup).toContain('aria-describedby=')
   })
 
   it('renders a native keyboard-focusable select with an empty choice, disabled option and change handler', () => {

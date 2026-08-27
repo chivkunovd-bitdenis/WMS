@@ -3,6 +3,8 @@ import { INVENTORY } from './inventory.generated'
 import type { InventoryItem } from './inventory.generated'
 import {
   ActionGroup,
+  AppDialog,
+  CheckboxInput,
   DangerAction,
   DataTable,
   EmptyState,
@@ -19,6 +21,7 @@ import {
   MoscowDateTimeInput,
   MoscowDateInput,
   MoscowDateRangeInput,
+  MoneyInput,
   NumberInput,
   PreferenceSwitch,
   SelectInput,
@@ -150,6 +153,9 @@ export function UiKitShowcase() {
   const [formDate, setFormDate] = useState<string | null>(null)
   const [formRange, setFormRange] = useState<DateRangeDemo>(DATE_RANGE_DEMOS[0].value)
   const [formPreference, setFormPreference] = useState(false)
+  const [formCheckbox, setFormCheckbox] = useState(false)
+  const [formMoney, setFormMoney] = useState('')
+  const [dialogOpen, setDialogOpen] = useState(false)
 
   return (
     <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 1400, mx: 'auto' }}>
@@ -256,6 +262,7 @@ export function UiKitShowcase() {
         <Stack spacing={2} sx={{ maxWidth: 440 }}>
           <TextInput label="Название" value={formText} onChange={setFormText} helperText="Короткое понятное название" testId="showcase-text-input" />
           <NumberInput label="Количество" value={formNumber} onChange={setFormNumber} min={0} step={1} testId="showcase-number-input" />
+          <MoneyInput label="Сумма" value={formMoney} onChange={setFormMoney} helperText="До двух знаков после запятой" testId="showcase-money-input" />
           <SelectInput
             label="Тип"
             value={formSelect}
@@ -282,7 +289,22 @@ export function UiKitShowcase() {
             ))}
           </Stack>
           <PreferenceSwitch label="Показывать дополнительные сведения" checked={formPreference} onChange={setFormPreference} helperText="Состояние задаёт внешний владелец формы" testId="showcase-preference-switch" />
+          <CheckboxInput label="Выбрать операцию" checked={formCheckbox} onChange={setFormCheckbox} helperText="Выбор задаёт внешний владелец формы" testId="showcase-checkbox-input" />
+          <CheckboxInput label="Недоступная операция" checked={false} onChange={() => undefined} disabledReason="Операция не рассчитана" testId="showcase-disabled-checkbox-input" />
         </Stack>
+      </Section>
+
+      <Section title="Диалог" note="Единая модалка с управлением фокусом и закрытием по Escape.">
+        <PrimaryAction onClick={() => setDialogOpen(true)}>Открыть окно</PrimaryAction>
+        <AppDialog
+          open={dialogOpen}
+          title="Подтвердите действие"
+          onClose={() => setDialogOpen(false)}
+          actions={<SecondaryAction onClick={() => setDialogOpen(false)}>Назад</SecondaryAction>}
+          testId="showcase-app-dialog"
+        >
+          <Typography>Диалог использует штатные действия и не создаёт отдельную стилистику.</Typography>
+        </AppDialog>
       </Section>
 
       <Section title="Сканер и ошибка">

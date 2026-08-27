@@ -1,4 +1,4 @@
-import { Box, FormControlLabel, FormHelperText, Stack, Switch, TextField } from '@mui/material'
+import { Box, Checkbox, FormControlLabel, FormHelperText, Stack, Switch, TextField, Tooltip } from '@mui/material'
 import type { ChangeEvent } from 'react'
 import { useEffect, useId, useMemo, useState } from 'react'
 
@@ -69,6 +69,20 @@ type MoscowDateRangeInputProps = FieldProps & {
 type PreferenceSwitchProps = FieldProps & {
   checked: boolean
   onChange: (checked: boolean) => void
+}
+
+type CheckboxInputProps = FieldProps & {
+  checked: boolean
+  onChange: (checked: boolean) => void
+  /** Explains why a non-interactive choice is unavailable. */
+  disabledReason?: string
+}
+
+type MoneyInputProps = FieldProps & {
+  /** Decimal string is deliberate: money must not pass through a JS float. */
+  value: string
+  onChange: (value: string) => void
+  allowNegative?: boolean
 }
 
 const MOSCOW_TIME_ZONE = 'Europe/Moscow'
@@ -179,6 +193,64 @@ export function NumberInput({ value, onChange, min, max, step = 1, ...props }: N
           },
         }}
       />
+    </FieldFrame>
+  )
+}
+
+// Денежная сумма остаётся строкой до границы API. Так нельзя незаметно потерять
+// копейки (например, «12.20») или превратить неверный ввод в другое число.
+function validateMoney(value: string, allowNegative: boolean) {
+  if (!value) return undefined
+  if (!allowNegative && value.startsWith('-')) return 'Сумма не может быть отрицательной'
+  return /^-?\d+(?:\.\d{1,2})?$/.test(value) ? undefined : 'Укажите сумму с точностью до копеек'
+}
+
+export function MoneyInput({ value, onChange, allowNegative = false, ...props }: MoneyInputProps) {
+  const localError = validateMoney(value, allowNegative)
+  const fieldProps = { ...props, error: props.error ?? localError }
+  const metadata = useFieldMetadata(fieldProps)
+  return (
+    <FieldFrame loading={fieldProps.loading} testId={fieldProps.testId}>
+      <TextField
+        {...commonProps(fieldProps, metadata)}
+        type="text"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        slotProps={{
+          ...commonProps(fieldProps, metadata).slotProps,
+          htmlInput: {
+            ...inputA11y(fieldProps, metadata),
+            inputMode: 'decimal',
+            style: { textAlign: 'right' },
+          },
+        }}
+      />
+    </FieldFrame>
+  )
+}
+
+export function CheckboxInput({ checked, onChange, disabledReason, ...props }: CheckboxInputProps) {
+  const fieldProps = {
+    ...props,
+    helperText: props.helperText ?? disabledReason,
+  }
+  const metadata = useFieldMetadata(fieldProps)
+  const disabled = Boolean(fieldProps.disabled || fieldProps.loading || disabledReason)
+  const control = (
+    <Checkbox
+      checked={checked}
+      onChange={(event) => onChange(event.target.checked)}
+      disabled={disabled}
+      slotProps={{ input: { ...inputA11y(fieldProps, metadata), id: metadata.inputId } }}
+    />
+  )
+
+  return (
+    <FieldFrame loading={fieldProps.loading} testId={fieldProps.testId}>
+      <Box>
+        {disabledReason ? <Tooltip title={disabledReason}><span><FormControlLabel label={fieldProps.label} control={control} /></span></Tooltip> : <FormControlLabel label={fieldProps.label} control={control} />}
+        {metadata.helperId ? <FormHelperText id={metadata.helperId} error={Boolean(fieldProps.error)}>{metadata.helperText}</FormHelperText> : null}
+      </Box>
     </FieldFrame>
   )
 }
@@ -448,7 +520,7 @@ function formatMoscowWallTime(value: string | null) {
 }
 
 // Test-only seam; it is deliberately not re-exported by ui-kit/index.
-export const __formFieldsTest = { resolveMoscowWallTime, resolvedDateInputError, validateDateRange, validateIsoDate }
+export const __formFieldsTest = { resolveMoscowWallTime, resolvedDateInputError, validateDateRange, validateIsoDate, validateMoney }
 
 export function MoscowDateTimeInput({ value, onChange, ...props }: MoscowDateTimeInputProps) {
   const [localError, setLocalError] = useState<string | undefined>()
