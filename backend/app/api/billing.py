@@ -159,10 +159,25 @@ async def _matrix_products(
     ]
 
 
+async def _matrix_sellers(
+    session: AsyncSession, *, tenant_id: uuid.UUID
+) -> list[dict[str, str]]:
+    """Все селлеры арендатора, а не только те, у кого есть товары.
+
+    Индивидуальную ставку заводят и селлеру без единой карточки: ставка на
+    приёмку от количества товаров в каталоге не зависит.
+    """
+    rows = await session.scalars(
+        select(Seller).where(Seller.tenant_id == tenant_id).order_by(Seller.name)
+    )
+    return [{"id": str(seller.id), "name": seller.name} for seller in rows]
+
+
 def _matrix_out(
     config: Any,
     versions: list[Any],
     products: list[dict[str, str | None]],
+    sellers: list[dict[str, str]],
     *,
     now: datetime | None = None,
 ) -> dict[str, Any]:
@@ -228,6 +243,7 @@ def _matrix_out(
             for row in versions
         ],
         "products": products,
+        "sellers": sellers,
         "storage": {"mode": "legacy_daily", "editable_in_matrix": False},
     }
 
@@ -247,6 +263,7 @@ async def get_tariff_matrix_route(
             config,
             await list_tariff_matrix_versions(session, tenant_id=user.tenant_id),
             await _matrix_products(session, tenant_id=user.tenant_id),
+            await _matrix_sellers(session, tenant_id=user.tenant_id),
         )
     except BillingTariffMatrixError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -271,6 +288,7 @@ async def put_tariff_matrix_route(
             config,
             await list_tariff_matrix_versions(session, tenant_id=user.tenant_id),
             await _matrix_products(session, tenant_id=user.tenant_id),
+            await _matrix_sellers(session, tenant_id=user.tenant_id),
         )
     except BillingTariffMatrixError as exc:
         await session.rollback()
