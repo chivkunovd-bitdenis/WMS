@@ -34,6 +34,18 @@ import { useState } from 'react'
 
 type MuiTone = 'default' | 'primary' | 'info' | 'success' | 'warning' | 'error'
 
+type DateRangeDemo = {
+  value: { start: string | null; end: string | null }
+  maxDate: string
+}
+
+const DATE_RANGE_DEMOS: Array<{ label: string; value: DateRangeDemo }> = [
+  { label: 'Обычный период', value: { value: { start: '2026-08-01', end: '2026-08-07' }, maxDate: '2027-12-31' } },
+  { label: 'Обратный порядок', value: { value: { start: '2026-08-12', end: '2026-08-11' }, maxDate: '2027-12-31' } },
+  { label: 'Слишком длинный', value: { value: { start: '2026-01-01', end: '2027-01-02' }, maxDate: '2027-12-31' } },
+  { label: 'После допустимой даты', value: { value: { start: '2026-12-31', end: '2027-01-01' }, maxDate: '2026-12-31' } },
+]
+
 function Section({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
   return (
     <Box sx={{ mb: 5 }}>
@@ -136,7 +148,7 @@ export function UiKitShowcase() {
   const [formSelect, setFormSelect] = useState('')
   const [formTime, setFormTime] = useState<string | null>(null)
   const [formDate, setFormDate] = useState<string | null>(null)
-  const [formRange, setFormRange] = useState<{ start: string | null; end: string | null }>({ start: '2026-08-01', end: '2026-08-07' })
+  const [formRange, setFormRange] = useState<DateRangeDemo>(DATE_RANGE_DEMOS[0].value)
   const [formPreference, setFormPreference] = useState(false)
 
   return (
@@ -254,7 +266,21 @@ export function UiKitShowcase() {
           />
           <MoscowDateTimeInput label="Дата и время Москвы" value={formTime} onChange={setFormTime} testId="showcase-moscow-time-input" />
           <MoscowDateInput label="Дата Москвы" value={formDate} onChange={setFormDate} maxDate="2026-12-31" testId="showcase-moscow-date-input" />
-          <MoscowDateRangeInput label="Период Москвы" value={formRange} onChange={setFormRange} maxDays={31} maxDate="2026-12-31" testId="showcase-moscow-date-range" />
+          <MoscowDateRangeInput
+            label="Период Москвы"
+            value={formRange.value}
+            onChange={(value) => setFormRange((current) => ({ ...current, value }))}
+            maxDays={366}
+            maxDate={formRange.maxDate}
+            testId="showcase-moscow-date-range"
+          />
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }} aria-label="Примеры периода Москвы">
+            {DATE_RANGE_DEMOS.map((demo) => (
+              <SecondaryAction key={demo.label} onClick={() => setFormRange(demo.value)}>
+                {demo.label}
+              </SecondaryAction>
+            ))}
+          </Stack>
           <PreferenceSwitch label="Показывать дополнительные сведения" checked={formPreference} onChange={setFormPreference} helperText="Состояние задаёт внешний владелец формы" testId="showcase-preference-switch" />
         </Stack>
       </Section>
