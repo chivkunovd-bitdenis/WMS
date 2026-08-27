@@ -17,21 +17,18 @@ read-model, в том числе его signed `storage_calculation_token`.
 один наряд. Нельзя закрывать или подменять активный наряд другой волны.
 
 После принятия Wave 3 literal-команда наряда обязательна и исполнима именно
-так (одна строка, без placeholder). `S-19` нужен механике наряда; три
-автоматически добавленных пути S-19 ниже принадлежат settings-экрану и должны
-иметь **zero diff** — они не дают права трогать его:
+так (одна строка, без placeholder). `/app/ff/billing` отсутствует в screen
+registry, поэтому команда задаёт полную узкую границу только через список
+файлов:
 
 ```bash
-python3 scripts/naryad.py new "Волна 4 модуля «Расчёты»: счета на существующем /app/ff/billing" --screens S-19 --lane обычная --files backend/app/models/billing.py,backend/app/models/operation_fact.py,backend/app/models/__init__.py,backend/app/services/billing_invoice_v2_service.py,backend/app/services/billing_invoice_service.py,backend/app/services/billing_seller_report_service.py,backend/app/api/billing.py,backend/app/api/billing_invoice_v2_schemas.py,backend/app/tasks/billing_tasks.py,backend/app/celery_app.py,backend/alembic/versions/20260827_0114_billing_invoice_v2.py,backend/tests/test_billing_invoice_v2_service.py,backend/tests/test_billing_invoice_v2_api.py,backend/tests/test_billing_invoice_service.py,backend/tests/test_billing_invoice_api.py,backend/tests/test_billing_seller_report_service.py,backend/tests/test_billing_tasks.py,frontend/src/screens/ff/FfBillingScreen.tsx,frontend/src/screens/ff/FfBillingScreen.test.ts,frontend/tests-e2e/billing-invoice-v2.spec.ts,frontend/tests-e2e/billing-seller-report.spec.ts,frontend/tests-e2e/billing-invoices.spec.ts,docs/evidence/billing-04-invoices/INVOICE-V2-PROOF.md,docs/evidence/20260827-volna-4-modulya-raschety-scheta-na-susch/BILLING-INVOICE-PREVIEW-1600.jpg,docs/evidence/20260827-volna-4-modulya-raschety-scheta-na-susch/BILLING-INVOICE-PREVIEW-1280.jpg,docs/evidence/20260827-volna-4-modulya-raschety-scheta-na-susch/BILLING-INVOICE-PRINT-1600.jpg,docs/evidence/20260827-volna-4-modulya-raschety-scheta-na-susch/VERDICT.md
+python3 scripts/naryad.py new "Волна 4 модуля «Расчёты»: счета на существующем /app/ff/billing" --lane обычная --files backend/app/models/billing.py,backend/app/models/operation_fact.py,backend/app/models/__init__.py,backend/app/services/billing_invoice_v2_service.py,backend/app/services/billing_invoice_service.py,backend/app/services/billing_seller_report_service.py,backend/app/api/billing.py,backend/app/api/billing_invoice_v2_schemas.py,backend/app/tasks/billing_tasks.py,backend/app/celery_app.py,backend/alembic/versions/20260827_0114_billing_invoice_v2.py,backend/tests/test_billing_invoice_v2_service.py,backend/tests/test_billing_invoice_v2_api.py,backend/tests/test_billing_invoice_service.py,backend/tests/test_billing_invoice_api.py,backend/tests/test_billing_seller_report_service.py,backend/tests/test_billing_tasks.py,frontend/src/screens/ff/FfBillingScreen.tsx,frontend/src/screens/ff/FfBillingScreen.test.ts,frontend/tests-e2e/billing-invoice-v2.spec.ts,frontend/tests-e2e/billing-seller-report.spec.ts,frontend/tests-e2e/billing-invoices.spec.ts,docs/evidence/billing-04-invoices/INVOICE-V2-PROOF.md,docs/evidence/20260827-volna-4-modulya-raschety-scheta-na-susch/BILLING-INVOICE-PREVIEW-1600.jpg,docs/evidence/20260827-volna-4-modulya-raschety-scheta-na-susch/BILLING-INVOICE-PREVIEW-1280.jpg,docs/evidence/20260827-volna-4-modulya-raschety-scheta-na-susch/BILLING-INVOICE-PRINT-1600.jpg,docs/evidence/20260827-volna-4-modulya-raschety-scheta-na-susch/VERDICT.md
 ```
 
-Фактическая allowlist — ровно все пути из команды плюс автоматически
-добавленные registry пути `frontend/src/screens/ff/FfSettingsScreen.tsx`,
-`frontend/src/utils/ffPermissions.ts` и
-`frontend/src/utils/separateMarkingPrint.ts`; у этих трёх обязательный zero
-diff. Если путь понадобился после открытия наряда, работа останавливается на
-узком amendment, а не расширяет границу молча. Детерминированный evidence path
-для этого текста наряда —
+Фактическая allowlist — ровно все пути из команды; пути чужих registry-экранов
+в неё не входят и запрещены. Если путь понадобился после открытия наряда,
+работа останавливается на узком amendment, а не расширяет границу молча.
+Детерминированный evidence path для этого текста наряда —
 `docs/evidence/20260827-volna-4-modulya-raschety-scheta-na-susch/`.
 
 `frontend/src/ui-kit/**` не входит в Wave 4. Перед кодом разработчик обязан
