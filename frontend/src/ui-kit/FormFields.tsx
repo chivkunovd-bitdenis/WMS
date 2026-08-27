@@ -1,6 +1,6 @@
 import { Box, FormControlLabel, FormHelperText, Stack, Switch, TextField } from '@mui/material'
 import type { ChangeEvent } from 'react'
-import { useId, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 
 type FieldProps = {
   id?: string
@@ -11,6 +11,10 @@ type FieldProps = {
   loading?: boolean
   required?: boolean
   testId?: string
+  /** Adds an existing group-level description without replacing this field's own help. */
+  describedBy?: string
+  /** Marks a field invalid when its group owns the explanatory error text. */
+  invalid?: boolean
 }
 
 type TextInputProps = FieldProps & {
@@ -101,10 +105,11 @@ function FieldFrame({ children, loading, testId }: { children: React.ReactNode; 
 }
 
 function inputA11y(props: FieldProps, metadata: FieldMetadata) {
+  const describedBy = [metadata.helperId, props.describedBy].filter(Boolean).join(' ')
   return {
     'data-testid': props.testId,
-    'aria-invalid': Boolean(props.error),
-    ...(metadata.helperId ? { 'aria-describedby': metadata.helperId } : {}),
+    'aria-invalid': Boolean(props.error || props.invalid),
+    ...(describedBy ? { 'aria-describedby': describedBy } : {}),
   }
 }
 
@@ -114,7 +119,7 @@ function commonProps(props: FieldProps, metadata: FieldMetadata) {
     label: props.label,
     required: props.required,
     disabled: Boolean(props.disabled || props.loading),
-    error: Boolean(props.error),
+    error: Boolean(props.error || props.invalid),
     helperText: metadata.helperText,
     size: 'small' as const,
     fullWidth: true,
@@ -241,16 +246,33 @@ function validateDateRange(
   return undefined
 }
 
+type DateInputLocalError = { value: string | null; message: string }
+
+function resolvedDateInputError(
+  value: string | null,
+  localError: DateInputLocalError | undefined,
+  propsError: string | undefined,
+  minDate?: string,
+  maxDate?: string,
+) {
+  return propsError ?? validateIsoDate(value, minDate, maxDate) ?? (
+    localError?.value === value ? localError.message : undefined
+  )
+}
+
 export function MoscowDateInput({ value, onChange, minDate, maxDate, ...props }: MoscowDateInputProps) {
-  const [localError, setLocalError] = useState<string | undefined>()
-  const error = localError ?? props.error
+  const [localError, setLocalError] = useState<DateInputLocalError | undefined>()
+  useEffect(() => {
+    setLocalError((current) => current?.value === value ? current : undefined)
+  }, [value])
+  const error = resolvedDateInputError(value, localError, props.error, minDate, maxDate)
   const fieldProps = { ...props, error }
   const metadata = useFieldMetadata(fieldProps)
 
   function handleChange(event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
     const next = event.target.value || null
     const validation = validateIsoDate(next, minDate, maxDate)
-    setLocalError(validation)
+    setLocalError(validation ? { value, message: validation } : undefined)
     if (!validation) onChange(next)
   }
 
@@ -308,6 +330,8 @@ export function MoscowDateRangeInput({
             loading={fieldProps.loading}
             required={fieldProps.required}
             testId={fieldProps.testId ? `${fieldProps.testId}-start` : undefined}
+            invalid={Boolean(error)}
+            describedBy={metadata.helperId}
           />
           <MoscowDateInput
             id={`${metadata.inputId}-end`}
@@ -320,6 +344,8 @@ export function MoscowDateRangeInput({
             loading={fieldProps.loading}
             required={fieldProps.required}
             testId={fieldProps.testId ? `${fieldProps.testId}-end` : undefined}
+            invalid={Boolean(error)}
+            describedBy={metadata.helperId}
           />
         </Stack>
         {metadata.helperId ? <FormHelperText id={metadata.helperId} error={Boolean(error)}>{metadata.helperText}</FormHelperText> : null}
@@ -422,7 +448,7 @@ function formatMoscowWallTime(value: string | null) {
 }
 
 // Test-only seam; it is deliberately not re-exported by ui-kit/index.
-export const __formFieldsTest = { resolveMoscowWallTime, validateDateRange, validateIsoDate }
+export const __formFieldsTest = { resolveMoscowWallTime, resolvedDateInputError, validateDateRange, validateIsoDate }
 
 export function MoscowDateTimeInput({ value, onChange, ...props }: MoscowDateTimeInputProps) {
   const [localError, setLocalError] = useState<string | undefined>()

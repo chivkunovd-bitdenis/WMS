@@ -181,4 +181,33 @@ describe('generic form fields', () => {
     expect(markup).toContain('data-testid="form-range-start"')
     expect(markup).toContain('data-testid="form-range-end"')
   })
+
+  it('links each focused date input to the range-level order error', () => {
+    const markup = renderToStaticMarkup(
+      createElement(MoscowDateRangeInput, {
+        label: 'Период', value: { start: '2026-08-12', end: '2026-08-11' }, onChange: () => undefined,
+        testId: 'range-error',
+      }),
+    )
+    const helperId = markup.match(/<p[^>]*id="([^"]+-helper)"[^>]*>Дата окончания не может быть раньше даты начала/)?.[1]
+    const startInput = markup.match(/<input[^>]*data-testid="range-error-start"[^>]*>/)?.[0]
+    const endInput = markup.match(/<input[^>]*data-testid="range-error-end"[^>]*>/)?.[0]
+
+    expect(helperId).toBeTruthy()
+    expect(startInput).toContain(`aria-describedby="${helperId}"`)
+    expect(endInput).toContain(`aria-describedby="${helperId}"`)
+    expect(startInput).toContain('aria-invalid="true"')
+    expect(endInput).toContain('aria-invalid="true"')
+  })
+
+  it('drops a stale local date error on controlled value rerender and gives a new props error priority', () => {
+    const staleLocalError = { value: '2026-08-01', message: 'Дата вне допустимого диапазона' }
+
+    expect(__formFieldsTest.resolvedDateInputError(
+      '2026-08-02', staleLocalError, undefined, '2026-01-01', '2026-12-31',
+    )).toBeUndefined()
+    expect(__formFieldsTest.resolvedDateInputError(
+      '2026-08-02', staleLocalError, 'Сервер отклонил дату', '2026-01-01', '2026-12-31',
+    )).toBe('Сервер отклонил дату')
+  })
 })
