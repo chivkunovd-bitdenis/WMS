@@ -875,6 +875,24 @@ async def record_pack_progress(
     )
 
     fbs_supply = await get_supply_for_packaging_task(session, tenant_id, task_id)
+    if fbs_supply is not None and order_id is not None:
+        from app.models.fbs_order import FBS_ORDER_STATUS_CANCELLED, FbsOrder
+        from app.services.fbs_cancelled_after_pack_service import (
+            cancelled_operation_message,
+            order_belonged_to_supply,
+        )
+
+        requested_order = await session.get(FbsOrder, order_id)
+        if (
+            requested_order is not None
+            and requested_order.tenant_id == tenant_id
+            and requested_order.status == FBS_ORDER_STATUS_CANCELLED
+            and await order_belonged_to_supply(session, requested_order, fbs_supply)
+        ):
+            raise PackagingTaskServiceError(
+                "order_cancelled",
+                message=cancelled_operation_message(requested_order, "упаковывать нельзя"),
+            )
     if remaining <= 0:
         if fbs_supply is not None:
             raise PackagingTaskServiceError("invalid_qty")

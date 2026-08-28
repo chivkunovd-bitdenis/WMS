@@ -46,6 +46,10 @@ from app.services.document_number_service import (
     assign_display_number_if_missing,
     assign_document_number_if_missing,
 )
+from app.services.fbs_cancelled_after_pack_service import (
+    cancelled_operation_message,
+    order_belonged_to_supply,
+)
 from app.services.fbs_ozon_packaging_service import (
     OzonPackagingError,
 )
@@ -270,6 +274,8 @@ async def create_packaging_task_for_supply(
 
     qty_by_product: dict[uuid.UUID, int] = defaultdict(int)
     for order in supply.orders:
+        if order.status == FBS_ORDER_STATUS_CANCELLED:
+            continue
         if order.marketplace == "ozon" and order.product_positions:
             for position in order.product_positions:
                 if position.product_id is None:
@@ -455,7 +461,24 @@ async def _resolve_order_for_pack_unit(
     if explicit_order_id is not None:
         order = next((row for row in supply.orders if row.id == explicit_order_id), None)
         if order is None:
+            detached_order = await session.get(FbsOrder, explicit_order_id)
+            if (
+                detached_order is not None
+                and detached_order.tenant_id == supply.tenant_id
+                and detached_order.status == FBS_ORDER_STATUS_CANCELLED
+                and await order_belonged_to_supply(session, detached_order, supply)
+            ):
+                raise FbsPackagingIntegrationError(
+                    "order_cancelled",
+                    cancelled_operation_message(detached_order, "упаковывать нельзя"),
+                )
+        if order is None:
             raise FbsPackagingIntegrationError("order_not_in_supply")
+        if order.status == FBS_ORDER_STATUS_CANCELLED:
+            raise FbsPackagingIntegrationError(
+                "order_cancelled",
+                cancelled_operation_message(order, "упаковывать нельзя"),
+            )
         if order.product_id != product_id:
             raise FbsPackagingIntegrationError("order_product_mismatch")
         if order.pick_status != PICK_STATUS_PICKED:

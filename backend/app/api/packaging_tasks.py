@@ -322,6 +322,7 @@ def _http_from_pkg_error(exc: pkg_svc.PackagingTaskServiceError) -> HTTPExceptio
         "order_not_picked",
         "order_already_packed",
         "order_not_in_supply",
+        "order_cancelled",
         "order_product_mismatch",
         "no_eligible_order",
         "fbs_acknowledge_not_allowed",

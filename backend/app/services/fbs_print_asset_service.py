@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.fbs_order import (
+    FBS_ORDER_STATUS_CANCELLED,
     STICKER_STATUS_APPLIED,
     STICKER_STATUS_ERROR,
     STICKER_STATUS_PRINT_OPENED,
@@ -33,6 +34,10 @@ from app.models.fbs_print_asset import (
 )
 from app.models.fbs_supply import FbsSupply
 from app.models.fbs_trbx import FbsTrbx
+from app.services.fbs_cancelled_after_pack_service import (
+    cancelled_operation_message,
+    order_belonged_to_supply,
+)
 from app.services.fbs_print_asset_storage import (
     ORDER_STICKER_CONTENT_TYPE,
     ORDER_STICKER_HEIGHT_MM,
@@ -553,26 +558,63 @@ async def request_supply_print_batch(
     supply = await _get_supply(session, tenant_id, supply_id)
     marketplace = getattr(supply, "marketplace", "wb")
     supply_orders = {order.id: order for order in supply.orders}
+    blocked_orders: list[FbsOrder] = []
     if order_ids is None:
-        target_orders = list(supply.orders)
+        requested_orders = list(supply.orders)
     else:
-        target_orders = []
+        requested_orders = []
+        detached_orders = {
+            order.id: order
+            for order in (
+                await session.execute(
+                    select(FbsOrder).where(
+                        FbsOrder.tenant_id == tenant_id,
+                        FbsOrder.id.in_(order_ids),
+                    )
+                )
+            ).scalars()
+        }
         for oid in order_ids:
-            order = supply_orders.get(oid)
+            order = supply_orders.get(oid) or detached_orders.get(oid)
             if order is None:
                 raise FbsPrintAssetError(
                     "order_not_in_supply",
                     message="Заказ не входит в поставку.",
                     context={"order_id": str(oid)},
                 )
+            if order.id not in supply_orders and not await order_belonged_to_supply(
+                session, order, supply
+            ):
+                raise FbsPrintAssetError(
+                    "order_not_in_supply",
+                    message="Заказ не входит в поставку.",
+                    context={"order_id": str(oid)},
+                )
+            requested_orders.append(order)
+
+    target_orders: list[FbsOrder] = []
+    for order in requested_orders:
+        if order.status == FBS_ORDER_STATUS_CANCELLED:
+            blocked_orders.append(order)
+        else:
             target_orders.append(order)
 
     result = PrintBatchResult(
-        requested=len(target_orders),
+        requested=len(requested_orders),
         ready=0,
         missing=0,
         failed=0,
     )
+    result.order_errors.extend(
+        PrintOrderError(
+            order_id=order.id,
+            wb_order_id=int(order.wb_order_id),
+            code="order_cancelled",
+            message=cancelled_operation_message(order, "клеить стикер нельзя"),
+        )
+        for order in blocked_orders
+    )
+    result.failed = len(result.order_errors)
     if not target_orders:
         return result
 
@@ -821,6 +863,14 @@ async def get_asset_binary_content(
             "asset_not_found",
             message="Печатный актив не найден.",
         )
+    if asset.fbs_order_id is not None:
+        order = await session.get(FbsOrder, asset.fbs_order_id)
+        if order is not None and order.status == FBS_ORDER_STATUS_CANCELLED:
+            raise FbsPrintAssetError(
+                "order_cancelled",
+                message=cancelled_operation_message(order, "клеить стикер нельзя"),
+                context={"order_id": str(order.id)},
+            )
     if asset.status != PRINT_ASSET_STATUS_READY or not asset.storage_path:
         raise FbsPrintAssetError(
             "asset_not_ready",
@@ -869,6 +919,14 @@ async def confirm_asset_applied(
             "asset_not_found",
             message="Печатный актив не найден.",
         )
+    if asset.fbs_order_id is not None:
+        order = await session.get(FbsOrder, asset.fbs_order_id)
+        if order is not None and order.status == FBS_ORDER_STATUS_CANCELLED:
+            raise FbsPrintAssetError(
+                "order_cancelled",
+                message=cancelled_operation_message(order, "клеить стикер нельзя"),
+                context={"order_id": str(order.id)},
+            )
     if asset.status != PRINT_ASSET_STATUS_READY:
         raise FbsPrintAssetError(
             "asset_not_ready",

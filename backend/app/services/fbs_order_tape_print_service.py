@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.fbs_order import (
     CHECK_STATUS_NEW,
+    FBS_ORDER_STATUS_CANCELLED,
     MARKING_KIND_SGTIN,
     META_STATUS_ASSIGNED,
     META_STATUS_PENDING,
@@ -26,6 +27,10 @@ from app.models.packaging_task import PackagingTaskLine
 from app.services import fbs_marking_service as marking_svc
 from app.services import fbs_packaging_integration_service as pack_int_svc
 from app.services import marking_code_service as mc_svc
+from app.services.fbs_cancelled_after_pack_service import (
+    cancelled_operation_message,
+    order_belonged_to_supply,
+)
 from app.services.fbs_picking_order_service import picking_list_order_key
 from app.services.fbs_print_asset_service import (
     FbsPrintAssetError,
@@ -103,13 +108,47 @@ async def print_fbs_order_tape(
     supply = await _load_supply(session, tenant_id, supply_id)
     if supply is None:
         raise FbsOrderTapePrintError("supply_not_found")
-    provider_name = (
-        "Ozon" if getattr(supply, "marketplace", "wb") == "ozon" else "Wildberries"
-    )
-    ordered = _orders_in_requested_order(supply, order_ids)
-    if len(ordered) != len(dict.fromkeys(order_ids)):
-        raise FbsOrderTapePrintError("order_not_in_supply")
-    if set(order_ids) == {order.id for order in supply.orders}:
+    provider_name = "Ozon" if getattr(supply, "marketplace", "wb") == "ozon" else "Wildberries"
+    supply_orders = {order.id: order for order in supply.orders}
+    current_requested = _orders_in_requested_order(supply, order_ids)
+    current_by_id = {order.id: order for order in current_requested}
+    missing_ids = [
+        order_id for order_id in dict.fromkeys(order_ids) if order_id not in current_by_id
+    ]
+    detached_orders: dict[uuid.UUID, FbsOrder] = {}
+    if missing_ids:
+        detached_orders = {
+            order.id: order
+            for order in (
+                await session.execute(
+                    select(FbsOrder).where(
+                        FbsOrder.tenant_id == tenant_id,
+                        FbsOrder.id.in_(missing_ids),
+                    )
+                )
+            ).scalars()
+        }
+    requested: list[FbsOrder] = []
+    for order_id in dict.fromkeys(order_ids):
+        order = current_by_id.get(order_id) or detached_orders.get(order_id)
+        if order is None:
+            raise FbsOrderTapePrintError("order_not_in_supply")
+        if order.id not in supply_orders and not await order_belonged_to_supply(
+            session, order, supply
+        ):
+            raise FbsOrderTapePrintError("order_not_in_supply")
+        requested.append(order)
+    cancelled_orders = [
+        order for order in requested if getattr(order, "status", None) == FBS_ORDER_STATUS_CANCELLED
+    ]
+    ordered = [
+        order for order in requested if getattr(order, "status", None) != FBS_ORDER_STATUS_CANCELLED
+    ]
+    if {order.id for order in ordered} == {
+        order.id
+        for order in supply.orders
+        if getattr(order, "status", None) != FBS_ORDER_STATUS_CANCELLED
+    }:
         ordered.sort(key=picking_list_order_key)
     line_by_product = await _line_by_product(session, tenant_id, supply)
     if not qr_only and not reprint and not allow_partial:
@@ -125,6 +164,16 @@ async def print_fbs_order_tape(
     batch: PrintBatchResult | None = None
     qr_asset_by_order: dict[uuid.UUID, uuid.UUID] = {}
     errors: list[FbsOrderTapeError] = []
+    if not include_order_qr:
+        errors.extend(
+            FbsOrderTapeError(
+                order_id=order.id,
+                wb_order_id=int(order.wb_order_id),
+                code="order_cancelled",
+                message=cancelled_operation_message(order, "клеить стикер нельзя"),
+            )
+            for order in cancelled_orders
+        )
     if include_order_qr:
         try:
             batch = await request_supply_print_batch(
