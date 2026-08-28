@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Box, Stack, ToggleButton, ToggleButtonGroup } from '@mui/material'
 import { apiUrl } from '../../../api'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
@@ -31,6 +32,7 @@ type Props = {
 }
 
 export function FfSortingObjectsPage({ token, warehouses }: Props) {
+  const navigate = useNavigate()
   // Склад выбирается руками, как на карте: раскладка идёт на конкретном складе,
   // и молча показывать первый попавшийся значит врать оператору.
   const [warehouseId, setWarehouseId] = useState<string | null>(warehouses[0]?.id ?? null)
@@ -172,6 +174,8 @@ export function FfSortingObjectsPage({ token, warehouses }: Props) {
           warehouseName={warehouseName}
           onCreateCell={(code) => void createCell(code)}
           onPrint={(title, barcode, size) => printLabel(title, barcode, size)}
+          onClose={() => navigate('/app/ff/sorting')}
+          savedImmediately
         />
       ) : (
         <EmptyState title="Загружаем склад" hint="Считаем, что где лежит." />

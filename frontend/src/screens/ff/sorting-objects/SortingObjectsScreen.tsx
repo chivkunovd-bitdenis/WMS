@@ -76,6 +76,16 @@ type SortingScreenProps = {
   onCreateCell?: (code: string) => void
   /** Напечатать штрихкод. Без него печать остаётся заглушкой превью. */
   onPrint?: (title: string, barcode: string, size: LabelSize) => void
+  /** Уйти с экрана. Без него «Закрыть» остаётся заглушкой превью. */
+  onClose?: () => void
+  /**
+   * Каждая постановка на полку уходит на сервер сразу.
+   *
+   * Тогда «Сохранить» и «Завершить» сохранять нечего: они бы только делали вид.
+   * Экран честно говорит об этом вместо того, чтобы показывать живую кнопку,
+   * которая ничего не делает.
+   */
+  savedImmediately?: boolean
   /** Поставить объект или товар на ячейку. Без него экран двигает только себя. */
   onPlace?: (payload: {
     kind: ObjKind | 'product'
@@ -97,6 +107,8 @@ export function SortingObjectsScreen({
   warehouseName,
   onCreateCell,
   onPrint,
+  onClose,
+  savedImmediately,
 }: SortingScreenProps) {
   const theme = useTheme()
   const products = productsProp ?? PRODUCTS
@@ -503,16 +515,31 @@ export function SortingObjectsScreen({
           Отдельной кнопки «записать ячейку» здесь нет — записывается документ. */}
       <Stack direction="row" sx={{ mt: 2, justifyContent: 'flex-end' }}>
         <ActionGroup>
-          <SecondaryAction onClick={() => onNote('Заглушка: документ закрыт')} data-testid="objects-close">
+          <SecondaryAction
+            onClick={() => (onClose ? onClose() : onNote('Заглушка: документ закрыт'))}
+            data-testid="objects-close"
+          >
             Закрыть
           </SecondaryAction>
-          <SecondaryAction onClick={() => onNote('Заглушка: раскладка сохранена')} data-testid="objects-save">
+          <SecondaryAction
+            onClick={() => onNote('Заглушка: раскладка сохранена')}
+            disabledReason={
+              savedImmediately
+                ? 'Сохранять нечего: каждая постановка на полку уходит на сервер сразу'
+                : undefined
+            }
+            data-testid="objects-save"
+          >
             Сохранить
           </SecondaryAction>
           <PrimaryAction
             onClick={() => onNote('Заглушка: распределение завершено')}
             disabledReason={
-              unplaced.length + loose.length > 0 ? 'Ещё не всё поставлено на полки' : undefined
+              unplaced.length + loose.length > 0
+                ? 'Ещё не всё поставлено на полки'
+                : savedImmediately
+                  ? 'Всё разложено и уже сохранено — завершать отдельно не нужно'
+                  : undefined
             }
             data-testid="objects-complete"
           >
