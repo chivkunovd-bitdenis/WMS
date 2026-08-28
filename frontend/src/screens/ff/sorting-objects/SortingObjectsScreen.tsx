@@ -223,7 +223,7 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
       </Paper>
 
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} sx={{ alignItems: 'flex-start' }}>
-        <Box sx={{ flexGrow: 1, minWidth: 0, width: '100%' }}>
+        <Box sx={{ width: { lg: 690 }, flexShrink: 0, minWidth: 0, maxWidth: '100%' }}>
           <Stack spacing={1} sx={{ mb: 1.5 }}>
             <Stack direction="row" spacing={2} sx={{ alignItems: 'baseline' }}>
               <Typography variant="h5" data-testid="objects-left-qty">
@@ -289,7 +289,7 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
           />
         </Box>
 
-        <Stack spacing={2} sx={{ width: { lg: 628 }, flexShrink: 0, minWidth: 0 }}>
+        <Stack spacing={2} sx={{ flexGrow: 1, minWidth: 0, width: '100%' }}>
           <Paper variant="outlined" sx={{ p: 2 }} data-testid="objects-cells">
             <Typography variant="subtitle1" sx={{ mb: 1.5 }}>
               Ячейки склада

@@ -40,6 +40,7 @@ export type ObjectRow =
       seller: string
       barcode: string
       photo: string
+      size: string | null
       qty: number
       alreadyAt: Array<{ cellId: string; code: string; qty: number }>
       inside: number
@@ -136,6 +137,7 @@ function walk(
       seller: product.seller,
       barcode: product.barcode,
       photo: product.photo,
+      size: product.size,
       qty: line.qty,
       alreadyAt: product.alreadyAt,
       inside: 0,

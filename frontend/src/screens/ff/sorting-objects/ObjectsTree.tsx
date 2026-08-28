@@ -80,7 +80,7 @@ export function ObjectsTree({
   const alreadyColumn: Column<ObjectRow> = {
       key: 'already',
       header: 'Уже лежит',
-      width: 96,
+      width: 88,
       render: (row) => {
         if (row.kind !== 'goods') return null
         if (row.alreadyAt.length === 0) {
@@ -114,7 +114,7 @@ export function ObjectsTree({
   const barcodeColumn: Column<ObjectRow> = {
       key: 'barcode',
       header: 'ШК',
-      width: 116,
+      width: 134,
       render: (row) => (
         <Typography
           variant="body2"
@@ -131,6 +131,20 @@ export function ObjectsTree({
         </Typography>
       ),
     }
+
+  const hasSize = rows.some((row) => row.kind === 'goods' && Boolean(row.size))
+
+  const sizeColumn: Column<ObjectRow> = {
+    key: 'size',
+    header: 'Размер',
+    width: 72,
+    render: (row) =>
+      row.kind === 'goods' && row.size ? (
+        <Typography variant="body2" sx={{ whiteSpace: 'nowrap' }}>
+          {row.size}
+        </Typography>
+      ) : null,
+  }
 
   const columns: Column<ObjectRow>[] = [
     {
@@ -162,7 +176,14 @@ export function ObjectsTree({
               .join(', '),
           }}
         >
-          <Box sx={{ width: 22, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+          <Box
+            sx={{
+              width: row.kind === 'object' ? 22 : 0,
+              display: 'flex',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
             {row.kind === 'object' && row.expandable ? (
               <IconAction
                 title={row.expanded ? `Свернуть ${objectTitle(row.object)}` : `Раскрыть ${objectTitle(row.object)}`}
@@ -199,48 +220,49 @@ export function ObjectsTree({
               <ProductPhotoThumb src={row.photo} alt={row.name} size={24} />
             )}
           </Box>
-          <Stack sx={{ minWidth: 0, flexGrow: 1 }}>
+          <Stack sx={{ minWidth: 0, flexGrow: 1, flexBasis: 0 }}>
             <Tooltip title={row.kind === 'object' ? objectTitle(row.object) : row.name}>
               <Typography
                 variant="body2"
                 sx={{
                   fontWeight: row.kind === 'object' ? 600 : 400,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
+                  // Перенос по словам: длинное название уходит на вторую строку
+                  // целыми словами, а не рассыпается по буквам в столбик.
+                  whiteSpace: 'normal',
+                  overflowWrap: 'break-word',
+                  wordBreak: 'normal',
                 }}
               >
                 {row.kind === 'object' ? objectTitle(row.object) : row.name}
               </Typography>
             </Tooltip>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
-            >
-              {row.kind === 'object'
-                ? row.inside === 0
-                  ? 'пусто'
-                  : `внутри ${row.inside}`
-                : row.seller}
-            </Typography>
+            {row.kind === 'object' ? (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+              >
+                {row.inside === 0 ? 'пусто' : `внутри ${row.inside}`}
+              </Typography>
+            ) : null}
           </Stack>
         </Stack>
       ),
     },
     ...(compact ? [] : [alreadyColumn]),
-    ...(compact ? [] : [barcodeColumn]),
+    ...(hasSize ? [sizeColumn] : []),
+    ...[barcodeColumn],
     {
       key: 'qty',
       header: 'Штук',
-      width: 60,
+      width: 56,
       align: 'right',
       render: (row) => <QtyCell value={row.qty} muted={row.qty === 0} />,
     },
     {
       key: 'actions',
       header: '',
-      width: compact ? 74 : 96,
+      width: compact ? 74 : 88,
       align: 'right',
       render: (row) => {
         const holder = row.kind === 'object' ? row.object.holder : row.line.holder

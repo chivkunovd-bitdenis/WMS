@@ -39,6 +39,8 @@ export type Product = {
   seller: string
   barcode: string
   photo: string
+  /** Размер с карточки маркетплейса. Есть не у всякого товара. */
+  size: string | null
   /** Где этот же товар уже лежит на складе — подсказка «положи туда же». */
   alreadyAt: AlreadyAt[]
 }
@@ -61,12 +63,12 @@ function photo(letters: string): string {
 }
 
 export const PRODUCTS: Product[] = [
-  { id: 'p-tshirt', name: 'Футболка хлопок белая, M', sku: 'TS-WHT-M', seller: 'ИП Горячкина', barcode: '4680123456789', photo: photo('ФБ'), alreadyAt: [{ cellId: 'c-a11', code: 'А 1.1', qty: 24 }] },
-  { id: 'p-hoodie', name: 'Худи оверсайз серое, L', sku: 'HD-GRY-L', seller: 'ИП Горячкина', barcode: '4680123456796', photo: photo('ХД'), alreadyAt: [] },
-  { id: 'p-sneakers', name: 'Кроссовки беговые, 42', sku: 'SN-RUN-42', seller: 'ООО Ситипак', barcode: '4600987654321', photo: photo('КР'), alreadyAt: [{ cellId: 'c-b11', code: 'Б 1.1', qty: 36 }] },
-  { id: 'p-socks', name: 'Носки спортивные, 3 пары', sku: 'SK-SPT-3', seller: 'ООО Ситипак', barcode: '4600987654338', photo: photo('НС'), alreadyAt: [{ cellId: 'c-a12', code: 'А 1.2', qty: 60 }] },
-  { id: 'p-mug', name: 'Термокружка 450 мл', sku: 'MG-450', seller: 'ИП Ларин', barcode: '4601122334455', photo: photo('ТК'), alreadyAt: [] },
-  { id: 'p-belt', name: 'Ремень кожаный, 110 см', sku: 'BL-110', seller: 'ИП Ларин', barcode: '4601122334462', photo: photo('РМ'), alreadyAt: [{ cellId: 'c-a12', code: 'А 1.2', qty: 8 }] },
+  { id: 'p-tshirt', name: 'Футболка хлопок белая, M', sku: 'TS-WHT-M', seller: 'ИП Горячкина', barcode: '4680123456789', photo: photo('ФБ'), size: 'M', alreadyAt: [{ cellId: 'c-a11', code: 'А 1.1', qty: 24 }] },
+  { id: 'p-hoodie', name: 'Худи оверсайз серое, L', sku: 'HD-GRY-L', seller: 'ИП Горячкина', barcode: '4680123456796', photo: photo('ХД'), size: 'L', alreadyAt: [] },
+  { id: 'p-sneakers', name: 'Кроссовки беговые, 42', sku: 'SN-RUN-42', seller: 'ООО Ситипак', barcode: '4600987654321', photo: photo('КР'), size: '42', alreadyAt: [{ cellId: 'c-b11', code: 'Б 1.1', qty: 36 }] },
+  { id: 'p-socks', name: 'Носки спортивные, 3 пары', sku: 'SK-SPT-3', seller: 'ООО Ситипак', barcode: '4600987654338', photo: photo('НС'), size: null, alreadyAt: [{ cellId: 'c-a12', code: 'А 1.2', qty: 60 }] },
+  { id: 'p-mug', name: 'Термокружка 450 мл', sku: 'MG-450', seller: 'ИП Ларин', barcode: '4601122334455', photo: photo('ТК'), size: null, alreadyAt: [] },
+  { id: 'p-belt', name: 'Ремень кожаный, 110 см', sku: 'BL-110', seller: 'ИП Ларин', barcode: '4601122334462', photo: photo('РМ'), size: '110', alreadyAt: [{ cellId: 'c-a12', code: 'А 1.2', qty: 8 }] },
 ]
 
 export const CELLS: Cell[] = [
