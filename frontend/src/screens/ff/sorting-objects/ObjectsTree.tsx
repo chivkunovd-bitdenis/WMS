@@ -319,12 +319,16 @@ export function ObjectsTree({
   ]
 
   return (
+    // Отступы внутри ячеек поджаты именно здесь. По умолчанию их 16 слева и
+    // справа, на шести колонках это почти двести пикселей — больше, чем занимает
+    // само название товара. Для плотного дерева это непозволительная роскошь.
+    <Box sx={{ '& .MuiTableCell-root': { pl: 1, pr: 1 } }}>
     <DataTable
       testId={testId}
       columns={columns}
       rows={rows}
       getRowKey={(row) => row.key}
-      fixedLayout
+      fixedLayout={compact}
       drag={{
         active: carried !== null,
         canDrag: (row) => !insideBox(row, objects),
@@ -338,5 +342,6 @@ export function ObjectsTree({
       }}
       empty={empty}
     />
+    </Box>
   )
 }

@@ -222,8 +222,23 @@ export function SortingObjectsScreen({ onNote }: { onNote: (note: string) => voi
         </Stack>
       </Paper>
 
-      <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} sx={{ alignItems: 'flex-start' }}>
-        <Box sx={{ width: { lg: 690 }, flexShrink: 0, minWidth: 0, maxWidth: '100%' }}>
+      {/* Рядом — только когда обеим панелям хватает места. Шести колонкам слева
+          нужно около 790 пикселей, чтобы названия были в одну строку, панели
+          ячейки — около 460. На обычном мониторе столько рядом не набирается, и
+          тогда панели встают одна под другой, каждая во всю ширину: лучше
+          пролистать вниз, чем читать название по слогам в две строки. */}
+      <Stack direction={{ xs: 'column', xl: 'row' }} spacing={2} sx={{ alignItems: 'flex-start' }}>
+        <Box sx={{
+            flexShrink: 0,
+            minWidth: 0,
+            // Ширина по содержимому, но не больше доли строки: числом её задавать
+            // нельзя — при другой ширине окна число всегда неверное. Доля же
+            // работает и на ноутбуке, и на большом мониторе.
+            width: { xl: 'max-content' },
+            // Правой панели гарантируем минимум, при котором в ней читаются
+            // названия; всё остальное забирает левая по своему содержимому.
+            maxWidth: { xs: '100%', xl: 'calc(100% - 476px)' },
+          }}>
           <Stack spacing={1} sx={{ mb: 1.5 }}>
             <Stack direction="row" spacing={2} sx={{ alignItems: 'baseline' }}>
               <Typography variant="h5" data-testid="objects-left-qty">
