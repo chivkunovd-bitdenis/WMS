@@ -3,21 +3,29 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import Select, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.inbound_intake import (
+    InboundIntakeBox,
+    InboundIntakeCargoPlace,
+    InboundIntakeRequest,
+)
 from app.models.inventory_balance import InventoryBalance
 from app.models.inventory_count import InventoryCount, InventoryCountLine
 from app.models.inventory_movement import MOVEMENT_TYPE_INVENTORY_COUNT
+from app.models.pallet import Pallet
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.seller_wildberries_imported_card import SellerWildberriesImportedCard
 from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
+from app.models.warehouse_box import WarehouseBox
 from app.services import inventory_service, tenant_settings_service
+from app.services.inventory_container_service import ContainerKind
 from app.services.sorting_location_service import SORTING_LOCATION_CODE
 from app.services.wb_card_enrichment import subject_name_from_card
 
@@ -95,6 +103,89 @@ async def _validate_scope(
         warehouse = await session.get(Warehouse, warehouse_id)
         if warehouse is None or warehouse.tenant_id != tenant_id:
             raise InventoryCountError("warehouse_not_found")
+
+
+async def _container_scope(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    kind: ContainerKind,
+    container_id: uuid.UUID,
+) -> tuple[uuid.UUID, list[tuple[ContainerKind, uuid.UUID]]]:
+    refs: list[tuple[ContainerKind, uuid.UUID]] = [(kind, container_id)]
+    if kind == "pallet":
+        pallet = await session.scalar(
+            select(Pallet).where(
+                Pallet.id == container_id,
+                Pallet.tenant_id == tenant_id,
+                Pallet.disbanded_at.is_(None),
+            )
+        )
+        if pallet is None:
+            raise InventoryCountError("object_not_found")
+        warehouse_id = pallet.warehouse_id
+        warehouse_box_ids = await session.scalars(
+            select(WarehouseBox.id).where(
+                WarehouseBox.tenant_id == tenant_id,
+                WarehouseBox.warehouse_id == warehouse_id,
+                WarehouseBox.pallet_id == pallet.id,
+            )
+        )
+        inbound_box_ids = await session.scalars(
+            select(InboundIntakeBox.id)
+            .join(InboundIntakeRequest)
+            .where(
+                InboundIntakeBox.tenant_id == tenant_id,
+                InboundIntakeBox.pallet_id == pallet.id,
+                InboundIntakeRequest.tenant_id == tenant_id,
+                InboundIntakeRequest.warehouse_id == warehouse_id,
+            )
+        )
+        cargo_place_ids = await session.scalars(
+            select(InboundIntakeCargoPlace.id)
+            .join(InboundIntakeRequest)
+            .where(
+                InboundIntakeCargoPlace.tenant_id == tenant_id,
+                InboundIntakeCargoPlace.pallet_id == pallet.id,
+                InboundIntakeRequest.tenant_id == tenant_id,
+                InboundIntakeRequest.warehouse_id == warehouse_id,
+            )
+        )
+        refs.extend(("box", row_id) for row_id in warehouse_box_ids.all())
+        refs.extend(("box", row_id) for row_id in inbound_box_ids.all())
+        refs.extend(("cargo_place", row_id) for row_id in cargo_place_ids.all())
+        return warehouse_id, refs
+
+    if kind == "box":
+        warehouse_box = await session.scalar(
+            select(WarehouseBox).where(
+                WarehouseBox.id == container_id,
+                WarehouseBox.tenant_id == tenant_id,
+            )
+        )
+        if warehouse_box is not None:
+            return warehouse_box.warehouse_id, refs
+        request_warehouse_id = await session.scalar(
+            select(InboundIntakeRequest.warehouse_id)
+            .join(InboundIntakeBox)
+            .where(
+                InboundIntakeBox.id == container_id,
+                InboundIntakeBox.tenant_id == tenant_id,
+                InboundIntakeRequest.tenant_id == tenant_id,
+            )
+        )
+    else:
+        request_warehouse_id = await session.scalar(
+            select(InboundIntakeRequest.warehouse_id)
+            .join(InboundIntakeCargoPlace)
+            .where(
+                InboundIntakeCargoPlace.id == container_id,
+                InboundIntakeCargoPlace.tenant_id == tenant_id,
+                InboundIntakeRequest.tenant_id == tenant_id,
+            )
+        )
+    if request_warehouse_id is None:
+        raise InventoryCountError("object_not_found")
+    return request_warehouse_id, refs
 
 
 def _balance_query(
@@ -178,6 +269,7 @@ async def create_count(
         address_storage_enabled=address_enabled,
     )
 
+    container_object = False
     if object_scope is not None:
         if object_scope.type in {"storage_location", "location", "cell"}:
             location = await session.get(StorageLocation, object_scope.id)
@@ -200,12 +292,33 @@ async def create_count(
                     raise InventoryCountError("object_not_available_without_address_storage")
                 warehouse_id = location.warehouse_id
                 stmt = stmt.where(InventoryBalance.storage_location_id == location.id)
+        elif object_scope.type in {"pallet", "box", "cargo_place"}:
+            container_object = True
+            container_kind = cast(ContainerKind, object_scope.type)
+            warehouse_id, container_refs = await _container_scope(
+                session,
+                tenant_id,
+                container_kind,
+                object_scope.id,
+            )
+            predicates = [
+                and_(
+                    InventoryBalance.container_kind == ref_kind,
+                    InventoryBalance.container_id == ref_id,
+                )
+                for ref_kind, ref_id in container_refs
+            ]
+            stmt = stmt.where(
+                StorageLocation.warehouse_id == warehouse_id,
+                or_(*predicates),
+            )
         else:
-            # Контейнеры намеренно появятся только на шаге 2.
             raise InventoryCountError("unsupported_object_type")
 
     result = await session.execute(stmt)
     balances = list(result.all())
+    if container_object and not balances:
+        raise InventoryCountError("container_has_no_stock")
     if warehouse_id is None:
         warehouse_ids = {location.warehouse_id for _, _, location in balances}
         if len(warehouse_ids) == 1:
@@ -231,8 +344,8 @@ async def create_count(
                 count_id=count.id,
                 product_id=balance.product_id,
                 storage_location_id=balance.storage_location_id,
-                container_kind=None,
-                container_id=None,
+                container_kind=balance.container_kind,
+                container_id=balance.container_id,
                 expected_quantity=int(balance.quantity),
                 actual_quantity=None,
                 posted_delta=None,
@@ -360,6 +473,8 @@ async def _current_quantity(
         InventoryBalance.tenant_id == tenant_id,
         InventoryBalance.product_id == line.product_id,
         InventoryBalance.storage_location_id == line.storage_location_id,
+        InventoryBalance.container_kind == line.container_kind,
+        InventoryBalance.container_id == line.container_id,
     )
     if lock:
         stmt = stmt.with_for_update()
@@ -452,6 +567,8 @@ async def post_count(
                 movement_type=MOVEMENT_TYPE_INVENTORY_COUNT,
                 inventory_count_line_id=line.id,
                 actor_user_id=user_id,
+                container_kind=cast(ContainerKind | None, line.container_kind),
+                container_id=line.container_id,
             )
         except ValueError as exc:
             await session.rollback()
