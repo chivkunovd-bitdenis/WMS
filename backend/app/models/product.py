@@ -51,6 +51,7 @@ class Product(Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     sku_code: Mapped[str] = mapped_column(String(128), nullable=False)
+    category: Mapped[str | None] = mapped_column(String(255), nullable=True)
     wb_nm_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
     wb_vendor_code: Mapped[str | None] = mapped_column(String(255), nullable=True)
     wb_chrt_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
