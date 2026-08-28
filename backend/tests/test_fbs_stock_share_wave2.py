@@ -118,6 +118,13 @@ async def test_fbs_seller_warehouses_contract_get_and_put(
     assert row["served"] is False
     assert row["wms_warehouse_id"] is None
 
+    missing_wms = await async_client.put(
+        f"/fbs-sellers/{seller_id}/warehouses/{WB_WAREHOUSE_OURS}",
+        headers=headers,
+        json={"served": True, "wms_warehouse_id": None},
+    )
+    assert missing_wms.status_code == 422
+
     configured = await async_client.put(
         f"/operations/fbs-sellers/{seller_id}/warehouses/{WB_WAREHOUSE_OURS}",
         headers=headers,
@@ -299,6 +306,44 @@ async def test_fbs_assembly_time_period_and_seller_filter(async_client: AsyncCli
     )
     assert operations_alias.status_code == 200, operations_alias.text
     assert operations_alias.json() == response.json()
+
+
+# TC-NEW-FBS-SHARE-W2-005: warehouse and assembly routes never cross tenants.
+@pytest.mark.asyncio
+async def test_fbs_wave2_routes_are_tenant_isolated(async_client: AsyncClient) -> None:
+    owner_headers, owner_suffix = await _register_admin(async_client)
+    owner_seller_id = await _create_seller(
+        async_client, owner_headers, owner_suffix, "Owner seller"
+    )
+
+    outsider_headers, outsider_suffix = await _register_admin(async_client)
+    outsider_warehouse_id = await _create_warehouse(
+        async_client, outsider_headers, outsider_suffix
+    )
+
+    warehouses = await async_client.get(
+        f"/fbs-sellers/{owner_seller_id}/warehouses", headers=outsider_headers
+    )
+    assert warehouses.status_code == 404
+
+    configure = await async_client.put(
+        f"/fbs-sellers/{owner_seller_id}/warehouses/{WB_WAREHOUSE_OURS}",
+        headers=outsider_headers,
+        json={"served": True, "wms_warehouse_id": outsider_warehouse_id},
+    )
+    assert configure.status_code == 404
+
+    period_from = datetime(2026, 8, 20, tzinfo=UTC)
+    assembly = await async_client.get(
+        "/fbs/assembly-time",
+        headers=outsider_headers,
+        params={
+            "from": period_from.isoformat(),
+            "to": (period_from + timedelta(days=7)).isoformat(),
+            "seller_id": owner_seller_id,
+        },
+    )
+    assert assembly.status_code == 404
 
 
 # TC-NEW-FBS-SHARE-W2-004: legacy values reset only by the explicit second step.
