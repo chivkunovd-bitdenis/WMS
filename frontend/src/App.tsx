@@ -43,6 +43,7 @@ import { HonestSignPoolPage } from './screens/shared/HonestSignPoolPage'
 import { HonestSignProductPage } from './screens/shared/HonestSignProductPage'
 import { FfPlaceholderPage } from './screens/ff/FfPlaceholderPage'
 import { FfStoragePage } from './screens/ff/FfStoragePage'
+import { FfInventoryPage } from './screens/ff/inventory/FfInventoryPage'
 import { FfInboundRequestView, type InboundRequestWorkspace } from './screens/ff/FfInboundRequestView'
 import { FfInboundQueuePage } from './screens/ff/FfInboundQueuePage'
 import { FfProductsCatalogScreen } from './screens/v2/FfProductsCatalogScreen'
@@ -3171,6 +3172,23 @@ export default function App() {
           <Route
             path="ff/inventory"
             element={token && canInventoryOps ? <FfStoragePage isFulfillmentAdmin={isFulfillmentAdmin} token={token} /> : ffAccessDenied}
+          />
+
+          {/* Пересчёт живёт отдельным адресом: «ff/inventory» занят экраном
+              расчёта хранения, и отбирать у него адрес — ломать работающее. */}
+          <Route
+            path="ff/stocktaking"
+            element={
+              token && canInventoryOps ? (
+                <FfInventoryPage
+                  token={token}
+                  sellers={sellers.map((seller) => ({ id: seller.id, name: seller.name }))}
+                  warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))}
+                />
+              ) : (
+                ffAccessDenied
+              )
+            }
           />
 
           <Route
