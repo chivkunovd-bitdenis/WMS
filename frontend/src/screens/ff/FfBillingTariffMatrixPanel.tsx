@@ -100,10 +100,20 @@ const employeeServiceName: Record<string, string> = { ...serviceName, picking: '
 const defaultStartsAt = () => new Date().toISOString().replace(/:\d{2}\.\d{3}Z$/, ':00Z')
 
 export function humanTariffMatrixError(message: string) {
-  if (message.trim() === 'billing_tariff_matrix_stale_revision') {
+  const text = message.trim()
+  if (text === 'billing_tariff_matrix_stale_revision') {
     return 'Конфигурация тарифов уже изменилась. Обновите данные и повторите сохранение.'
   }
-  return message
+  // Сырой ответ сервера человеку не показываем. «Not Found» на этом экране
+  // означает одно: сервер старше самого экрана и про матрицу тарифов ещё не знает.
+  // Пользователь при этом видел красную полосу «Not Found» и не понимал ничего.
+  if (text === 'Not Found' || text === '404') {
+    return 'Сервер не знает про матрицу тарифов: на нём стоит версия старее этого экрана. Матрица появится после ближайшей выкатки.'
+  }
+  if (text === 'Unauthorized' || text === '401') {
+    return 'Сессия истекла. Войдите заново.'
+  }
+  return text
 }
 
 function nextVersionStart() {
@@ -292,7 +302,7 @@ export function FfBillingTariffMatrixPanel({ token, authHeaders, focusTariffs, o
       <h2>Тарифы</h2>
       {error ? <ErrorNotice testId="ff-settings-tariffs-error">{error}</ErrorNotice> : null}
       {saved ? <StatusChip label="Матрица сохранена" tone="ok" testId="ff-settings-tariffs-success" /> : null}
-      <DataTable columns={serviceColumns} rows={matrix?.services ?? []} getRowKey={(row) => row.service_code} loading={loading} empty={{ title: 'Тарифы пока не настроены', hint: 'Сначала загрузите матрицу тарифов.' }} testId="ff-settings-tariffs-services" />
+      <DataTable columns={serviceColumns} rows={matrix?.services ?? []} getRowKey={(row) => row.service_code} loading={loading} empty={{ title: 'Тарифы пока не настроены', hint: 'Список услуг приходит с сервера. Если он пуст, матрицу ещё не заводили — обратитесь к администратору.' }} testId="ff-settings-tariffs-services" />
       <h3>Ставки селлеров</h3>
       <p>Раскройте селлера, чтобы задать ему свою ставку или цену на его товар. Приоритет: цена товара, затем ставка селлера, затем общая.</p>
       <FfBillingTariffSellerRates
