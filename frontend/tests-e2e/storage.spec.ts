@@ -153,6 +153,7 @@ test('S-11-TC-021 blocks Moscow-past start dates with a visible explanation', as
 })
 
 // S-11-TC-002 — сохранённая поздняя ставка не подменяет серверное состояние закрытого месяца.
+// TC-NEW-A1-001 — storage statements use the shared tariff-matrix contract.
 test('S-11-TC-002 keeps a previous month without a tariff after saving a later rate', async ({ page }) => {
   await page.clock.install({ time: new Date('2026-08-31T21:30:00.000Z') })
   const validFrom = '2026-09-01'
