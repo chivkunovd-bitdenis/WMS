@@ -23,6 +23,7 @@ from app.services.wb_card_enrichment import (
     product_display_name,
     shelf_life_from_card,
     sku_code_for_wb_variant,
+    subject_name_from_card,
 )
 
 OLD_SKU_PREFIX = "OLD/"
@@ -174,6 +175,7 @@ def _apply_variant_fields(
     title: str,
     sku: str,
     variant: WbSizeVariant,
+    category: str | None,
 ) -> None:
     if p.seller_id is None:
         p.seller_id = seller_id
@@ -186,6 +188,8 @@ def _apply_variant_fields(
     p.wb_chrt_id = variant.chrt_id
     p.wb_barcode = variant.barcode
     p.wb_size = variant.size_label
+    if category is not None:
+        p.category = category
 
 
 async def upsert_products_from_wb_cards(
@@ -214,6 +218,7 @@ async def upsert_products_from_wb_cards(
         card_length_mm, card_width_mm, card_height_mm = _parse_dimensions_mm(item)
         card_country = country_of_origin_from_card(item)
         card_shelf_life = shelf_life_from_card(item)
+        category = subject_name_from_card(item)
         variants = iter_size_variants_from_card(item)
         if not variants:
             skipped += 1
@@ -238,6 +243,7 @@ async def upsert_products_from_wb_cards(
                     seller_id=seller_id,
                     name=title,
                     sku_code=sku,
+                    category=category,
                     wb_nm_id=nm,
                     wb_vendor_code=vendor,
                     wb_chrt_id=variant.chrt_id,
@@ -305,6 +311,7 @@ async def upsert_products_from_wb_cards(
                 title=title,
                 sku=sku,
                 variant=variant,
+                category=category,
             )
             # Fill empty dimension fields with values from WB card, and also correct
             # the legacy DEFAULT_PRODUCT_DIM_MM stub (10x10x10) that an old, now

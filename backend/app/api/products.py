@@ -9,7 +9,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.box_import_api_shared import read_xlsx_upload
@@ -26,6 +26,7 @@ from app.api.deps import (
 from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER, FULFILLMENT_STAFF
 from app.db.session import get_db
 from app.models.marketplace_account import MarketplaceAccount
+from app.models.product import Product
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.models.stock_direction import StockDirection
 from app.models.user import User
@@ -164,6 +165,7 @@ class ProductOut(BaseModel):
     id: str
     name: str
     sku_code: str
+    category: str | None = None
     length_mm: int | None = None
     width_mm: int | None = None
     height_mm: int | None = None
@@ -375,6 +377,7 @@ def _product_out(
         id=str(p.id),
         name=p.name,
         sku_code=p.sku_code,
+        category=p.category,
         length_mm=p.length_mm,
         width_mm=p.width_mm,
         height_mm=p.height_mm,
@@ -514,6 +517,30 @@ async def get_products(
         )
         for p in rows
     ]
+
+
+@router.get("/categories", response_model=list[str])
+async def get_product_categories(
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
+) -> list[str]:
+    await assert_product_catalog_read_access(session, user)
+    category = func.trim(Product.category)
+    stmt = (
+        select(category)
+        .where(
+            Product.tenant_id == user.tenant_id,
+            Product.category.is_not(None),
+            category != "",
+        )
+        .distinct()
+        .order_by(category)
+    )
+    if seller_scope is not None:
+        stmt = stmt.where(Product.seller_id == seller_scope)
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
 
 
 @router.get("/wb-catalog", response_model=list[SellerWbCatalogOut])

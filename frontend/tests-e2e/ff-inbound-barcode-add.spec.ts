@@ -17,7 +17,21 @@ test('ff inbound draft adds line from seller catalog picker', async ({ page }) =
   await loginFfAdmin(page, seed.adminEmail, seed.password);
   await page.getByTestId('nav-ff-reception').click();
   await expect(page.getByTestId('ff-reception-page')).toBeVisible();
-  await page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click();
+  const locationLoad = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      request.method() === 'GET' &&
+      `${url.pathname}${url.search}` ===
+        `/api/warehouses/${seed.warehouseId}/locations?exclude_sorting_zone=true`
+    );
+  });
+  const [locationLoadRequest] = await Promise.all([
+    locationLoad,
+    page.getByTestId('ff-inbound-queue-table').locator('tbody tr').first().click(),
+  ]);
+  expect(`${new URL(locationLoadRequest.url()).pathname}${new URL(locationLoadRequest.url()).search}`).toBe(
+    `/api/warehouses/${seed.warehouseId}/locations?exclude_sorting_zone=true`,
+  );
   await expect(page.getByTestId('ff-inbound-doc-root')).toBeVisible();
 
   await page.getByTestId('ff-inbound-add-products').click();

@@ -61,11 +61,30 @@
     "своя-кнопка": 5,
     "своя-таблица": 1
   },
-  "src/screens/ff/FfInboundRequestView.tsx": {
-    "свой-чип": 6,
-    "своя-кнопка": 36,
-    "своя-таблица": 4,
-    "экран-монолит": 3680
+  "src/screens/ff/FfInboundRequestDialogs.tsx": {
+    "своя-кнопка": 9,
+    "своя-таблица": 1
+  },
+  "src/screens/ff/FfInboundRequestDiscrepancies.tsx": {
+    "свой-чип": 1,
+    "своя-кнопка": 2,
+    "своя-таблица": 1
+  },
+  "src/screens/ff/FfInboundRequestDistribution.tsx": {
+    "свой-чип": 1,
+    "своя-кнопка": 6,
+    "своя-таблица": 1
+  },
+  "src/screens/ff/FfInboundRequestHeader.tsx": {
+    "свой-чип": 1,
+    "своя-кнопка": 10
+  },
+  "src/screens/ff/FfInboundRequestLines.tsx": {
+    "своя-таблица": 1
+  },
+  "src/screens/ff/FfInboundRequestPackages.tsx": {
+    "свой-чип": 3,
+    "своя-кнопка": 9
   },
   "src/screens/ff/FfInboundSortingPanel.tsx": {
     "свой-чип": 1,
