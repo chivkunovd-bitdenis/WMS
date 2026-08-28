@@ -38,7 +38,6 @@ USAGE EXAMPLES:
 """
 
 # Imports below ROOT setup are intentional: this standalone script must add the backend path first.
-# ruff: noqa: E402
 
 from __future__ import annotations
 
