@@ -18,6 +18,7 @@ from app.models.inbound_intake import (
     InboundIntakeCargoPlace,
     InboundIntakeRequest,
 )
+from app.models.pallet import Pallet
 from app.models.product import Product
 from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
@@ -100,6 +101,14 @@ async def _find_pallets(
     code: str,
     warehouse_id: uuid.UUID | None,
 ) -> list[ScanMatch]:
+    pallet_stmt = select(Pallet).where(
+        Pallet.tenant_id == tenant_id,
+        Pallet.barcode == code,
+        Pallet.disbanded_at.is_(None),
+    )
+    if warehouse_id is not None:
+        pallet_stmt = pallet_stmt.where(Pallet.warehouse_id == warehouse_id)
+    pallets = (await session.execute(pallet_stmt)).scalars().all()
     stmt = (
         select(InboundIntakeCargoPlace, InboundIntakeRequest.warehouse_id)
         .join(InboundIntakeCargoPlace.request)
@@ -112,7 +121,16 @@ async def _find_pallets(
     if warehouse_id is not None:
         stmt = stmt.where(InboundIntakeRequest.warehouse_id == warehouse_id)
     rows = (await session.execute(stmt)).all()
-    return [
+    matches = [
+        ScanMatch(
+            type="pallet",
+            id=pallet.id,
+            name=f"Палета {pallet.code}",
+            warehouse_id=pallet.warehouse_id,
+        )
+        for pallet in pallets
+    ]
+    matches.extend(
         ScanMatch(
             type="pallet",
             id=place.id,
@@ -120,7 +138,8 @@ async def _find_pallets(
             warehouse_id=place_warehouse_id,
         )
         for place, place_warehouse_id in rows
-    ]
+    )
+    return matches
 
 
 async def _find_boxes(
@@ -132,6 +151,7 @@ async def _find_boxes(
     warehouse_stmt = select(WarehouseBox).where(
         WarehouseBox.tenant_id == tenant_id,
         WarehouseBox.internal_barcode == code,
+        WarehouseBox.container_kind == "box",
     )
     if warehouse_id is not None:
         warehouse_stmt = warehouse_stmt.where(WarehouseBox.warehouse_id == warehouse_id)
@@ -177,6 +197,14 @@ async def _find_cargo_places(
     code: str,
     warehouse_id: uuid.UUID | None,
 ) -> list[ScanMatch]:
+    warehouse_stmt = select(WarehouseBox).where(
+        WarehouseBox.tenant_id == tenant_id,
+        WarehouseBox.internal_barcode == code,
+        WarehouseBox.container_kind == "cargo_place",
+    )
+    if warehouse_id is not None:
+        warehouse_stmt = warehouse_stmt.where(WarehouseBox.warehouse_id == warehouse_id)
+    warehouse_places = (await session.execute(warehouse_stmt)).scalars().all()
     stmt = (
         select(FbsTrbx, FbsSupply.warehouse_id)
         .join(FbsTrbx.supply)
@@ -188,7 +216,16 @@ async def _find_cargo_places(
     if warehouse_id is not None:
         stmt = stmt.where(FbsSupply.warehouse_id == warehouse_id)
     rows = (await session.execute(stmt)).all()
-    return [
+    matches = [
+        ScanMatch(
+            type="cargo_place",
+            id=place.id,
+            name=f"Складское грузоместо {place.internal_barcode}",
+            warehouse_id=place.warehouse_id,
+        )
+        for place in warehouse_places
+    ]
+    matches.extend(
         ScanMatch(
             type="cargo_place",
             id=place.id,
@@ -196,7 +233,8 @@ async def _find_cargo_places(
             warehouse_id=place_warehouse_id,
         )
         for place, place_warehouse_id in rows
-    ]
+    )
+    return matches
 
 
 async def _find_products(

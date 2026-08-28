@@ -227,6 +227,10 @@ class SortingObjectsOut(BaseModel):
     cells: list[SortingCellOut]
 
 
+class SortingObjectCreateIn(BaseModel):
+    kind: Literal["pallet", "box", "cargo_place"]
+
+
 class SortingPlaceIn(BaseModel):
     kind: Literal["product", "pallet", "box", "cargo_place"]
     id: uuid.UUID
@@ -333,6 +337,30 @@ async def get_sorting_objects_route(
     except WarehouseMapError as exc:
         raise _map_error(exc) from None
     return SortingObjectsOut.model_validate(data)
+
+
+@router.post(
+    "/{warehouse_id}/sorting-objects",
+    response_model=SortingObjectOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_sorting_object_route(
+    warehouse_id: uuid.UUID,
+    body: SortingObjectCreateIn,
+    user: Annotated[User, Depends(require_cells_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> SortingObjectOut:
+    try:
+        data = await warehouse_map_service.create_sorting_object(
+            session,
+            user.tenant_id,
+            warehouse_id,
+            kind=body.kind,
+        )
+    except WarehouseMapError as exc:
+        await session.rollback()
+        raise _map_error(exc) from None
+    return SortingObjectOut.model_validate(data)
 
 
 @router.post("/{warehouse_id}/sorting-objects/place", response_model=WarehouseMapMoveOut)

@@ -123,8 +123,8 @@ async def _container_scope(
         if pallet is None:
             raise InventoryCountError("object_not_found")
         warehouse_id = pallet.warehouse_id
-        warehouse_box_ids = await session.scalars(
-            select(WarehouseBox.id).where(
+        warehouse_containers = await session.scalars(
+            select(WarehouseBox).where(
                 WarehouseBox.tenant_id == tenant_id,
                 WarehouseBox.warehouse_id == warehouse_id,
                 WarehouseBox.pallet_id == pallet.id,
@@ -150,7 +150,7 @@ async def _container_scope(
                 InboundIntakeRequest.warehouse_id == warehouse_id,
             )
         )
-        refs.extend(("box", row_id) for row_id in warehouse_box_ids.all())
+        refs.extend((row.container_kind, row.id) for row in warehouse_containers.all())
         refs.extend(("box", row_id) for row_id in inbound_box_ids.all())
         refs.extend(("cargo_place", row_id) for row_id in cargo_place_ids.all())
         return warehouse_id, refs
@@ -160,6 +160,7 @@ async def _container_scope(
             select(WarehouseBox).where(
                 WarehouseBox.id == container_id,
                 WarehouseBox.tenant_id == tenant_id,
+                WarehouseBox.container_kind == "box",
             )
         )
         if warehouse_box is not None:
@@ -174,6 +175,15 @@ async def _container_scope(
             )
         )
     else:
+        warehouse_cargo_place = await session.scalar(
+            select(WarehouseBox).where(
+                WarehouseBox.id == container_id,
+                WarehouseBox.tenant_id == tenant_id,
+                WarehouseBox.container_kind == "cargo_place",
+            )
+        )
+        if warehouse_cargo_place is not None:
+            return warehouse_cargo_place.warehouse_id, refs
         request_warehouse_id = await session.scalar(
             select(InboundIntakeRequest.warehouse_id)
             .join(InboundIntakeCargoPlace)
